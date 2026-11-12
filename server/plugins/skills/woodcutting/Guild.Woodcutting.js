@@ -31,6 +31,7 @@ let core = null;
 let api = null;
 let DATA = null;
 let guildBoundary = null;
+const openingGates = new Set();
 
 function isInGuild(player) {
   return !!guildBoundary && guildBoundary.inside(player.getLocation());
@@ -70,19 +71,32 @@ function welcome(player, pair) {
 /** The gates open as the player steps through (a tick after arriving), and shut two ticks later. */
 function passGate(player, pair, entering, y) {
   const gates = DATA.gates;
+  const gateKey = pair.x;
   ObstacleRunner.run({ player }, [
     { wait: 1 },
     {
       run: () => {
-        const opened = pair.halves.map((half) => {
-          place(gates.invisibleWall, pair.x, half.y, gates.face);
-          return place(gates.open[half.id], pair.openX, half.y, gates.openFace[half.id]);
-        });
+        // Several players can queue the same gate before this run step. Only the first
+        // one should replace the shared map locs and schedule their restoration.
+        if (openingGates.has(gateKey)) return;
+        const closed = pair.halves.map((half) => core.MapObjects.get(
+          half.id, new core.Location(pair.x, half.y, 0), null
+        ));
+        // These are cache map locs, not runtime objects. Remove them explicitly so the
+        // client's scene receives a despawn before the open leaves are added.
+        if (closed.some((object) => !object)) return;
+        openingGates.add(gateKey);
+        for (const object of closed) core.ObjectManager.deregister(object, true);
+        const opened = pair.halves.flatMap((half) => [
+          place(gates.invisibleWall, pair.x, half.y, gates.face),
+          place(gates.open[half.id], pair.openX, half.y, gates.openFace[half.id]),
+        ]);
         player.getPacketSender().sendSound(gates.sound, 1, 0);
         if (entering) welcome(player, pair);
         later(gates.shutTicks, () => {
           for (const object of opened) core.ObjectManager.deregister(object, true);
-          for (const half of pair.halves) place(half.id, pair.x, half.y, gates.face);
+          for (const object of closed) core.ObjectManager.register(object, true);
+          openingGates.delete(gateKey);
         });
       },
     },

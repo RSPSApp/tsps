@@ -51,6 +51,7 @@ function fakePlayer() {
       delete: (_id, amount) => { coins.amount -= amount; },
       contains: () => false,
       getFreeSlots: () => 28,
+      getAddableAmount: (item) => item.amount,
       add: (item) => added.push(item.meta == null ? [item.id, item.amount] : [item.id, item.amount, item.meta]),
     }),
   };

@@ -14,8 +14,11 @@ const core = PluginManager.getCoreApi();
 const FightPits = require('../plugins/minigames/TzhaarFightPits.plugin');
 const T = FightPits._test;
 
+const events = {};
+
 before(() => {
-  const api = new Proxy({ core }, { get: (target, key) => target[key] ?? (() => {}) });
+  const onCustomEvent = (name, handler) => (events[name] ??= []).push(handler);
+  const api = new Proxy({ core, onCustomEvent }, { get: (target, key) => target[key] ?? (() => {}) });
   FightPits.register(api);
 });
 
@@ -153,4 +156,19 @@ test('TzHaar-Mej-Kah toggles combat experience inside the arena', () => {
   player.setAttribute(T.XP_DISABLED_ATTRIBUTE, true);
   T.blockFightPitXp(outside);
   assert.equal(outside.allow, null, 'nothing is blocked outside the arena');
+});
+
+test('no preset in the waiting room or the arena: the Fight Pits are fought in your own gear', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null);
+  const ask = (x, y) => {
+    player.setLocation(new core.Location(x, y, 0));
+    const request = { player, allow: true, message: null };
+    for (const handler of events['presets:can-use'] ?? []) handler(request);
+    return [request.allow, request.message];
+  };
+  const refused = [false, 'Leave the Fight Pits before loading a preset.'];
+  assert.deepEqual(ask(2399, 5172), refused, 'the waiting room');
+  assert.deepEqual(ask(...ARENA_TILE), refused, 'the arena');
+  assert.deepEqual(ask(...OUTSIDE_PITS), [true, null], 'the rest of Mor Ul Rek');
 });

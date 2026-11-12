@@ -360,17 +360,20 @@ test('projectiles use the OSRS projanim flight times', () => {
   assert.equal(RangedCombatMethod.projectileEnd(doubleArrowTwo, 5), 105);
 });
 
-test('ammo is consumed when the projectile lands, not at fire', () => {
+test('ammo is paid at fire; only the floor drop waits for the landing', () => {
+  // rsprox_transcripts/237/01156.txt: the worn count drops on the tick the arrow leaves, the arrow lands later.
   const { TaskManager } = require('../dist/game/task/TaskManager');
   const { CombatFactory: CF } = require('../dist/game/content/combat/CombatFactory');
+  drops.length = 0;
   const harness = ammoHarness({ amount: 5 });
-  CF.decrementAmmo(harness.player, POS, 1, 3);
-  assert.equal(harness.ammo().getAmount(), 5, 'still in the quiver while the arrow flies');
+  roll(0.50, () => CF.decrementAmmo(harness.player, POS, 1, 3));
+  assert.equal(harness.ammo().getAmount(), 4, 'paid as the arrow leaves');
   TaskManager.process();
   TaskManager.process();
-  assert.equal(harness.ammo().getAmount(), 5, 'not before the flight ends');
+  assert.deepEqual(drops, [], 'not on the floor before the flight ends');
   TaskManager.process();
   assert.equal(harness.ammo().getAmount(), 4);
+  assert.deepEqual(drops, [{ id: Items.BRONZE_ARROW, amount: 1, position: POS }]);
 });
 
 test('hits on NPCs take the processing-order tick; hits on players leave it to PID', () => {
@@ -562,11 +565,8 @@ function fireNativeArrow(player, rollValue) {
   const target = NPC.create(NpcIdentifiers.MAN, new Location(3204, 3200));
   const method = new RangedCombatMethod();
   assert.equal(method.canAttack(player, target), true);
-  const weaponAmount = player.getEquipment().get(Slots.WEAPON_SLOT).getAmount();
-  const ammoAmount = player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount();
-  roll(rollValue, () => method.start(player, target));
-  assert.equal(player.getEquipment().get(Slots.WEAPON_SLOT).getAmount(), weaponAmount, 'launch does not consume the weapon stack');
-  assert.equal(player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount(), ammoAmount, 'launch does not consume the quiver stack');
+  roll(rollValue, () => { method.start(player, target); method.hits(player, target); method.finished(player, target); });
+  assert.deepEqual(drops, [], 'nothing lands on the floor at launch');
   for (let tick = 0; tick < 3; tick++) TaskManager.process();
   return method;
 }
@@ -602,7 +602,7 @@ for (const { bow, travel, launch } of BOW_OF_FAERDHINEN_ARROWS) {
   });
 }
 
-test('native thrown and crossbow shots still consume their actual ammunition on impact', (t) => {
+test('native thrown and crossbow shots still consume their actual ammunition', (t) => {
   for (const [weaponId, ammoId, weaponAmount, weaponLeft, ammoLeft, droppedId] of [
     [Items.RUNE_KNIFE, -1, 5, 4, 0, Items.RUNE_KNIFE],
     [Items.DRAGON_CROSSBOW, Items.DRAGONSTONE_DRAGON_BOLTS_E_, 1, 1, 4, Items.DRAGONSTONE_DRAGON_BOLTS_E_],
@@ -843,7 +843,7 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
       const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
       const queued=npc.getCombat().getHitQueue().hasPendingHitFrom(p);
       assert.equal(equipment.get(core.Equipment.AMMUNITION_SLOT),stack);
-      assert.equal(stack.getAmount(),10,'the delayed debit has not happened at launch');
+      assert.equal(stack.getAmount(),8,'both arrows are paid at launch');
       // Stop only the next attack; the launched target hit and unkeyed ammo task remain queued.
       p.getCombat().reset();
       step(p,npc,6);

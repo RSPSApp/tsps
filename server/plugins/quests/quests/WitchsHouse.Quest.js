@@ -886,9 +886,14 @@ module.exports = function registerWitchsHouseQuest(api) {
 
   /** Out next to the Boy with the ball and the shed key taken; the stage stays (tick 958). */
   function sendToBoy(player) {
+    if (!caughtPlayers.has(player)) return; // already finished by a logout mid-catch
     caughtPlayers.delete(player);
     player.getMovementQueue().setBlockMovement(false);
     if (player.isRegistered?.() === false) return;
+    finishCatch(player);
+  }
+
+  function finishCatch(player) {
     player.moveTo(new Location(CAUGHT_TILE.x, CAUGHT_TILE.y, CAUGHT_TILE.z));
     for (const itemId of [BALL_ITEM_ID, SHED_KEY_ITEM_ID]) {
       player.getInventory().deleteNumber(itemId, player.getInventory().getAmount(itemId));
@@ -950,6 +955,13 @@ module.exports = function registerWitchsHouseQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    // Logging out mid-catch still ends the catch before the logout save: the ball and the shed key are taken and
+    // the player is saved next to the Boy, as the teleport would have left them.
+    if (caughtPlayers.has(player)) {
+      caughtPlayers.delete(player);
+      player.getMovementQueue().setBlockMovement(false);
+      finishCatch(player);
+    }
     const experiment = experimentByPlayer.get(player);
     if (experiment) api.removeNpc(experiment);
     const mouse = mouseByPlayer.get(player);

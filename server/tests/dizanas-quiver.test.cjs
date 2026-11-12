@@ -511,7 +511,7 @@ for (const outcome of ['break', 'drop']) {
         if (max === 99) { ammoRolls++; return outcome === 'break' ? 10 : 50; }
         return getRandom.call(this, max, ...args);
       };
-      try { method.start(player, target); } finally { Misc.getRandom = getRandom; }
+      try { method.start(player, target); method.finished(player, target); } finally { Misc.getRandom = getRandom; }
       assert.equal(ammoRolls, 1);
       const ammoTask = scheduled.find(x => x.key === Task.DEFAULT_KEY && x.getDelay() === flight);
       assert.ok(ammoTask?.isRunning(), 'real default-key deferred ammo task');

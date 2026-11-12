@@ -42,6 +42,10 @@ function locationOf(player, family) {
   api.emitCustomEvent("gravestones:state", storage);
   const stored = [...(storage.grave?.items ?? []), ...(storage.office ?? [])];
   if (variants.some(p => stored.some(entry => entry && entry.id === p.itemId && entry.amount > 0))) return 4;
+  // So is one an item-retrieval NPC keeps after a death (Zulrah, Vorkath, the Voice of Yama, ...).
+  const retrieval = {player, items: []};
+  api.emitCustomEvent("item-retrieval:items", retrieval);
+  if (variants.some(p => retrieval.items.some(entry => entry && entry.itemId === p.itemId && entry.amount > 0))) return 4;
   return 0;
 }
 function rows(player) {

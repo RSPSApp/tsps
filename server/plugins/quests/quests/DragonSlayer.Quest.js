@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
 const CameraShake = require("../../interface/CameraShake.plugin");
 
@@ -1066,7 +1067,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       crossMazeDoor(player, event.object, at);
       return;
     }
-    if (quest.getStage(player) < STAGE_OZIACH || !hasItem(player, ITEM.mazeKey)) {
+    if (quest.getStage(player) < STAGE_OZIACH || !hasKey(api, player, ITEM.mazeKey)) {
       // RSProx 468 (ticks 6449 and 6732): this message and sound 2402 on the front door.
       player.sendMessage("This door is securely locked.");
       player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);

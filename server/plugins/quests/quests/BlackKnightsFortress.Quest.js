@@ -446,7 +446,8 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
         player.getDialogueManager().reset();
         StatementDialogue.send(player, "", false);
         later(player, state, MEOW_FADE_OUT, () => fade(player, true));
-        later(player, state, MEOW_RETURN, () => { returnFromScene(player, state); fade(player, false); });
+        // The minimap comes back with the return, not with the rest of the controls (rev 242 953, rev 241 10103).
+        later(player, state, MEOW_RETURN, () => { returnFromScene(player, state); fade(player, false); player.getPacketSender().sendVarbit(6719, 0); });
         later(player, state, MEOW_DONE, () => {
           quest.setStage(player, STAGE_RETURN_TO_AMIK);
           scenes.delete(player);
@@ -466,13 +467,13 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     }
   }
 
-  /** `busy` (12393) is left to the caller when the scene starts: live sets it a tick after the rest. */
-  function controls(player, active, { busy = true } = {}) {
+  /** Starting the scene leaves `busy` (12393) to the caller: live sets it a tick after the rest. Ending clears it. */
+  function controls(player, active) {
     player.getMovementQueue().reset().setBlockMovement(active);
     player.setUntargetable(active);
     for (const id of [4606, 542, 12139, 18141]) player.getPacketSender().sendVarbit(id, active ? 1 : 0);
     player.getPacketSender().sendVarbit(6719, active ? 2 : 0);
-    if (busy || !active) player.getPacketSender().sendVarbit(12393, active ? 1 : 0);
+    if (!active) player.getPacketSender().sendVarbit(12393, 0);
   }
 
   function fade(player, out) {
@@ -534,7 +535,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     const state = { area: new SabotageScene(player), returnTile: player.getLocation().clone(), returning: false };
     scenes.set(player, state);
     player.setAttribute(SCENE_ATTRIBUTE, 1);
-    controls(player, true, { busy: false });
+    controls(player, true);
     throwCabbage(player, CABBAGE_HOLE_TILE);
     for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
     later(player, state, BUSY_DELAY, () => player.getPacketSender().sendVarbit(12393, 1));
@@ -543,13 +544,14 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       state.area.enter(player);
       player.moveTo(state.area.sourceTile(3017, 3497));
       player.getPacketSender().sendJingle(5, 0);
+    });
+    // The cat, witch and captain appear with the camera, two ticks after the instance (rev 242 894 -> 896, rev 240 3076 -> 3078).
+    later(player, state, 9, () => {
       for (const [key, id, x, y] of [["cat", NpcIdentifiers.BLACK_CAT, 3027, 3507], ["witch", FORTRESS_WITCH_NPC_ID, 3030, 3509], ["captain", NpcIdentifiers.BLACK_KNIGHT_CAPTAIN, 3028, 3509]]) {
         const tile = state.area.sourceTile(x, y);
         state[key] = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0, face: 6, wanderRadius: 0, owner: player, ownerOnly: true });
         if (state[key]) state.area.add(state[key]);
       }
-    });
-    later(player, state, 9, () => {
       const at = state.area.sourceTile(3035, 3499), look = state.area.sourceTile(3032, 3505);
       player.getPacketSender().sendCameraMoveTo(at.getX(), at.getY(), 1500, { rate: 100, rate2: 100, heightRelative: false }).sendCameraLookAt(look.getX(), look.getY(), 300, { rate: 100, rate2: 100, heightRelative: false });
     });

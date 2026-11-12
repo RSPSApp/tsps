@@ -204,7 +204,7 @@ test('Black Knights listening and private sabotage commit only when the captured
   assert.equal(h.quest.getStage(h.player), 1); h.runAt(2); assert.equal(h.quest.getStage(h.player), 1);
   h.line(N.WITCH_5, 'Yeth, Mithtreth.').after(); assert.equal(h.quest.getStage(h.player), 2);
   h.player.moveTo(new h.core.Location(3031, 3506, 1)); h.inventory.set(I.CABBAGE, 1); h.action(N.WITCH_5, 'lUsX9u');
-  assert.equal(h.inventory.get(I.CABBAGE), 0); assert.equal(h.quest.getStage(h.player), 2); h.runAt(7); assert.equal(h.spawned.length, 3);
+  assert.equal(h.inventory.get(I.CABBAGE), 0); assert.equal(h.quest.getStage(h.player), 2); h.runAt(7); assert.equal(h.spawned.length, 0); h.runAt(9); assert.equal(h.spawned.length, 3);
   assert.equal(h.player.getPrivateArea().getName(), "Black Knights' secret weapon");
   h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(7); assert.equal(h.varbits.get(2494), 1); assert.equal(h.quest.getStage(h.player), 2);
   h.line(N.WITCH_5, 'Meow!').after(); h.runAt(5); assert.equal(h.quest.getStage(h.player), 2); h.runAt(8);
@@ -237,7 +237,8 @@ test('Black Knights sabotage sends the recorded tick-nine camera and restores it
   // Rev 242: fade out 3 ticks after continuing past "Meow!", back at the hole at 5, the closing line at 8.
   h.line(N.WITCH_5, 'Meow!').after(); h.runAt(3);
   assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 0);
-  h.runAt(5); assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 1);
+  assert.equal(h.varbits.get(6719), 2);
+  h.runAt(5); assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 1); assert.equal(h.varbits.get(6719), 0);
   h.runAt(8); assert.deepEqual(h.packets.filter(row => /sendCamera(Unlock|Reset)/.test(row.key)), [
     { key: 'sendCameraReset', args: [] }, { key: 'sendCameraUnlock', args: [false] }, { key: 'sendCameraReset', args: [] },
   ]);

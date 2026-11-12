@@ -15,6 +15,7 @@
 
 const OrderedRewards = require("./OrderedRewards.NpcDrops");
 const SeedCategories = require("./SeedCategories.NpcDrops");
+const RollCounts = require("./RollCounts.NpcDrops");
 const fs = require("fs");
 const path = require("path");
 
@@ -805,7 +806,12 @@ function resolveEntry(entry, player, context = null) {
     return [];
   }
   if (entry.shared_table) {
-    return rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null });
+    // A row the Wiki gives several rolls of its shared table (the spectres' herb roll) rolls it that many times.
+    const drops = [];
+    for (let roll = RollCounts.pick(entry.roll_count_weights, randomInt); roll > 0; roll--) {
+      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null }));
+    }
+    return drops;
   }
   if (!Number.isInteger(entry.item_id)) {
     return [];

@@ -609,7 +609,7 @@ for (const mode of [0, 1]) {
       assert.equal(extra.getPrivateArea(), null);
       assert.equal(Match.dying.has(extra), false, 'final callback releases independent ownership');
       const expected = [0, 0];
-      if (mode && departure === 'channel leave') expected[1 - side] = 1;
+      if (mode && ['channel leave', 'logout'].includes(departure)) expected[1 - side] = 1;
       assert.deepEqual(game.kills, expected, 'departure is not credited again by the delayed death task');
       assert.equal(game.phase, 'combat');
     });

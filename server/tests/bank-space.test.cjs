@@ -59,6 +59,7 @@ function createPlayer() {
       if (prop === "sendString") strings.push(args);
       if (prop === "sendClientScript") scripts.push(args);
       if (prop === "sendSound") sounds.push(args);
+      if (prop === "sendTypedMessage") messages.push(args[1]);
       return sender;
     },
   });

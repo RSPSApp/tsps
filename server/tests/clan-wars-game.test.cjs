@@ -1829,7 +1829,7 @@ test('native Sylvan selection and Plateau reselection reset agreement and refuse
   assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Sylvan Glade/);
   tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
   await click(b,'clanwars_setup:arena',3);assert.equal(s.rules.arena,1);assert.equal(s.accepted.size,0);
-  for(const slot of [0,1,2,12,39,65535]) {
+  for(const slot of [0,1,2,12,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,1);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);
   }
@@ -1982,7 +1982,7 @@ test('native Quarry selection, delivered arena reselection and unsupported rows 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,39,65535]) {
+  for(const slot of [0,1,2,12,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,3);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),3);
   }
@@ -2130,7 +2130,7 @@ test('native Soggy Swamp selection resets agreement across delivered arenas and 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,39,65535]) {
+  for(const slot of [0,1,2,12,21,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,6);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),6);
   }
@@ -2299,7 +2299,7 @@ test('native Clan Cup selection resets agreement across all five arenas and reje
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,39,65535]) {
+  for(const slot of [0,1,2,12,21,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,5);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),5);
   }
@@ -2497,7 +2497,7 @@ test('native Classic selection resets agreement across all six arenas and reject
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,30,39,65535]) {
+  for(const slot of [0,1,2,12,21,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,11);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),11);
   }
@@ -2769,7 +2769,7 @@ test('native Lumbridge Castle selection resets agreement across all seven arenas
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,30,39,65535]) {
+  for(const slot of [0,1,2,12,21,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,12);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),12);
   }
@@ -3057,4 +3057,156 @@ test('native canonical lazy-template range cooks and removal cancels while world
     p.getPrivateArea()?.detach(p);p.setArea(null);p.moveTo(new core.Location(3128,3627,0));area.destroy();
     if(worldRange)core.ObjectManager.deregister(worldRange,true);
   }
+});
+
+// M: Falador Park source-qualified TSPS choices; no gameplay evidence borrowed from acquisition.
+const FALADOR_ORIGIN=[3456,4736];
+const FALADOR_LANDINGS=[[3472,4759,0],[3512,4759,0]];
+const FALADOR_JAILS=[[3461,4760,0],[3469,4745,0]];
+const faladorReachable=(game,from,to)=>layoutReachable(game,from,to,FALADOR_ORIGIN);
+// Existing native helpers are already area-relative and identity-aware.
+const faladorObject=lumbridgeObject, faladorWalk=lumbridgeWalk;
+function faladorMasks(area) {const masks=[];for(let y=0;y<64;y++)for(let x=0;x<128;x++)masks.push(area.getClip(area.tile(x,y,0)));return masks;}
+function faladorTemplate() {
+  const area=new core.TemplatedInstanceArea(16,8);
+  for(let z=0;z<2;z++)for(let x=0;x<16;x++)for(let y=0;y<8;y++)area.setChunk(z,x,y,{sourceChunkX:432+x,sourceChunkY:592+y,sourcePlane:z,rotation:0});
+  area.at=tile=>area.tile(tile[0]-3456,tile[1]-4736,tile[2]);return area;
+}
+test('native Falador Park selection resets agreement across all seven arenas and rejects unsupported rows',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');const session=C.negotiations.get(a);assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',39);assert.equal(session.rules.arena,13,'native Falador Park option reaches authoritative offer');
+  assert.equal(session.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Falador Park/);
+  for(const [slot,arena] of [[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[39,13]]) {
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+    await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
+  }
+  for(const slot of [0,1,2,12,21,30,42,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,13);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),13);
+  }
+});
+
+
+for(const mode of [0,1,16]) test(`native Falador Park mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},13);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3472,4759,0]));b.moveTo(game.area.at([3473,4759,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,FALADOR_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Falador Park side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const outsiders=[actor(),actor()];for(const p of outsiders) channel(p);
+  const foreignGame=await negotiate(outsiders[0],outsiders[1],null,1,null,2);for(const p of outsiders) await join(p);
+  const orbOutsiders=[actor(),actor()];for(const p of orbOutsiders)channel(p);const orbForeign=await negotiate(orbOutsiders[0],orbOutsiders[1],null,1,null,2);
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},13);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'falador'}));
+  await lethalMelee(killer,victim,game,true,[[3472,4759,0],[3473,4759,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,FALADOR_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'falador'});
+  const foreignPortal=mappedLayoutObjects(foreignGame,'clanwars_prisonportal_elfwood')[0],foreignOrb=mappedLayoutObjects(orbForeign,'clanwars_viewing_start_elfwood')[0];assert.ok(foreignPortal&&foreignOrb);
+  assert.equal(Match.exit({player:victim,object:foreignPortal}),false,'valid jailed member cannot use the real same-ID portal of another match');
+  assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false,'valid jailed member cannot use a real same-ID foreign orb');
+  assert.equal(C.matches.get(victim),game);assert.equal(game.jailed.has(victim),true);
+  const inactive=mappedLayoutObjects(game,'clanwars_viewing_elfwood')[0];assert.ok(inactive);
+  assert.equal(viewingUnit().use({player:victim,object:inactive}),false,'actual owned inactive orb is not an active Use target');
+  const scripts=scriptCalls(victim),orbXY=side===0?[3461,4761]:[3469,4744];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_elfwood',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9754));
+  console.log('FALADOR_ORB_APPROACH_QUALIFICATION '+JSON.stringify({side,source:orbXY,approach:[state.location.getX(),state.location.getY(),state.location.getZ()]}));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.deepEqual(position(victim),[state.location.getX(),state.location.getY(),state.location.getZ()]);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const ownedPortal=mappedLayoutObjects(game,'clanwars_prisonportal_elfwood').find(o=>o.getLocation().equals(game.area.at([...(side===0?[3462,4758]:[3472,4744]),0])));assert.ok(ownedPortal);
+  const fake=new core.GameObject(ownedPortal.getId(),ownedPortal.getLocation().clone(),ownedPortal.getType(),ownedPortal.getFace(),game.area);
+  try {assert.equal(Match.exit({player:victim,object:fake}),false);assert.equal(game.jailed.has(victim),true);} finally {game.area.detach(fake);}
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_elfwood',side===0?[3462,4758]:[3472,4744],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_elfwood',side===0?[3462,4758]:[3472,4744],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,FALADOR_LANDINGS[side]));
+});
+
+test('native Falador full8192 masks,23 owned walls and identical queued crossing preserve source geometry',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,13);await join(a);await join(b);
+  assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[16,8]);for(const p of [a,b])assert.deepEqual(position(p),positionAt(game,FALADOR_LANDINGS[game.members.get(p)]));
+  const reference=faladorTemplate();
+  try {
+    for(let z=0;z<2;z++)for(let x=0;x<16;x++)for(let y=0;y<8;y++)assert.deepEqual(game.area.getChunk(z,x,y),reference.getChunk(z,x,y));
+    const baseline=faladorMasks(reference),id=core.CacheDefinitions.getLocId('clanwars_barrier_elfwood'),definition=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
+    assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);assert.equal(definition.isSolid(),true);assert.equal(walls.length,23);
+    console.log('FALADOR_BARRIER_DEFINITION '+JSON.stringify({id,size:[definition.sizeX,definition.sizeY],clipType:definition.clipType,blocksProjectile:definition.blocksProjectile}));
+    for(const wall of walls){
+      assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),1);
+      assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getPrivateArea()===game.area).length,1);
+    }
+    for(let y=4743;y<=4767;y++){
+      const old=baseline[(y-4736)*128+3496-3456],at=game.area.at([3496,y,0]),found=walls.filter(w=>w.getLocation().equals(at));
+      assert.equal(found.length,old&core.RegionManager.BLOCKED_MASK?0:1);if(found.length)assert.equal(old&0x20100,0);
+    }
+    // Full native rotated footprint nonoverlap, including bridge-lowered source copies.
+    for(let x=0;x<16;x++)for(let y=0;y<8;y++)for(const object of reference.getChunkObjects(0,x,y)){
+      if(![10,11].includes(object.getType()))continue;
+      let {sizeX:w,sizeY:h}=object.getDefinition();if(object.getFace()%2)[w,h]=[h,w];const at=object.getLocation();
+      for(const wall of walls){const wx=wall.getLocation().getX()-game.area.getBaseX()+reference.getBaseX(),wy=wall.getLocation().getY()-game.area.getBaseY()+reference.getBaseY();assert.equal(wx>=at.getX()&&wx<at.getX()+w&&wy>=at.getY()&&wy<at.getY()+h,false,'no overlay on full source prop footprint');}
+    }
+    assert.deepEqual(FALADOR_JAILS.map(xy=>game.area.getClip(game.area.at(xy))),[0,0x10080]);
+    assert.equal(faladorReachable(game,FALADOR_LANDINGS[0],FALADOR_LANDINGS[1]),false);
+    for(const j of FALADOR_JAILS)for(const landing of FALADOR_LANDINGS)assert.equal(faladorReachable(game,j,landing),false);
+    for(const outside of [[3521,4758,0],[3477,4742,0],[3462,4750,0],[3480,4785,0]])assert.equal(faladorReachable(game,FALADOR_LANDINGS[0],outside),false);
+    for(const z of [2,3]){assert.equal(game.area.getChunk(z,0,0),null);assert.notEqual(game.area.getClip(game.area.at([3472,4759,z]))&0x200100,0);}
+    for(const [inside,outside]of [[[3456,4759,0],[3455,4759,0]],[[3583,4759,0],[3584,4759,0]],[[3496,4736,0],[3496,4735,0]],[[3496,4799,0],[3496,4800,0]]])assert.equal(core.RegionManager.canMovestart(game.area.at(inside),game.area.at(outside),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0);await faladorWalk(walker,game,[3495,4753]);const target=game.area.at([3497,4753,0]);
+    await wire(walker,walkClickFrame(target));tick(30);assert.equal(game.phase,'staging');assert.ok(walker.getLocation().getX()<game.area.at([3496,4753,0]).getX());
+    const state=()=>({position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}),staging=state();
+    completePreparation(game);assert.equal(game.walls.length,0);
+    for(const wall of walls){assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),null);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(core.World.getObjects().includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);}
+    const after=faladorMasks(game.area);assert.deepEqual(after,baseline,'full8192 native masks restored BEFORE deliberate door/resource mutation');
+    for(const [x,y,mask]of [[3496,4743,0x200000],[3496,4744,0x200002],[3496,4745,0x20],[3496,4766,0x804],[3496,4767,0x2],[3519,4758,0x1008],[3520,4758,0x210080]])assert.equal(after[(y-4736)*128+x-3456],mask);
+    assert.equal(faladorReachable(game,FALADOR_LANDINGS[0],FALADOR_LANDINGS[1]),true);
+    await faladorWalk(walker,game,[3497,4753]);console.log('FALADOR_MOVEMENT_QUALIFICATION '+JSON.stringify({requested:[target.getX(),target.getY(),0],staging,combat:state()}));
+    await faladorWalk(walker,game,FALADOR_LANDINGS[1].slice(0,2));
+  }finally{reference.destroy();}
+});
+
+test('native eight-layout coexistence retains old dimensions and exact axes while both sameID Falador Forfeit footprints remain owned',async()=>{
+  const players=Array.from({length:16},()=>actor());for(const p of players)channel(p);const old=[];
+  for(const [offset,arena,axis,coordinate,face,count]of [[0,1,'y',4959,0,52],[2,2,'y',5023,0,null],[4,3,'y',5087,0,24],[6,6,'y',4959,0,57],[8,5,'x',3167,1,43],[10,11,'y',4735,0,51],[12,12,'y',4826,0,29]]){
+    const team=players.slice(offset,offset+2),game=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team)await join(p);
+    assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[8,arena===11?16:8]);assert.equal(game.phase,'staging');if(count!==null)assert.equal(game.walls.length,count);
+    for(const wall of game.walls){assert.equal(wall.getFace(),face);const actual=axis==='x'?wall.getLocation().getX()-game.area.getBaseX()+game.layout.origin[0]:wall.getLocation().getY()-game.area.getBaseY()+game.layout.origin[1];assert.equal(actual,coordinate);}
+    old.push({game,team});
+  }
+  const [a,b]=players.slice(14),game=await negotiate(a,b,null,1,null,13);await join(a);await join(b);assert.equal(new Set([...old.map(x=>x.game.area),game.area]).size,8);
+  const foreign=mappedLayoutObjects(old.find(x=>x.game.rules.arena===12).game,'clanwars_exitportal_smallwood_s')[0];assert.equal(Match.forfeit({player:a,object:foreign}),false);
+  for(const [player,xy,face,approach,rotated]of [[a,[3469,4763],1,[3470,4763,0],[1,2]],[b,[3482,4749],0,[3482,4750,0],[2,1]]]){
+    const object=faladorObject(game,'clanwars_exitportal_smallwood_s',xy);assert.equal(object.getId(),7819);assert.equal(object.getFace(),face);let {sizeX:w,sizeY:h}=object.getDefinition();if(face%2)[w,h]=[h,w];assert.deepEqual([w,h],rotated);
+    const fake=new core.GameObject(object.getId(),object.getLocation().clone(),object.getType(),object.getFace(),game.area);try{assert.equal(Match.forfeit({player,object:fake}),false);}finally{game.area.detach(fake);}
+    // Both actual Forfeit copies are WEST in preparation. Supplied perimeter checkpoint, no natural east-side route claim.
+    player.moveTo(game.area.at(approach));tick(2);assert.equal(game.area.getClip(player.getLocation()),0);
+    await layoutObjectInput(player,game,'clanwars_exitportal_smallwood_s',xy,'Forfeit');assert.equal(C.matches.has(player),false);lobby(player);
+  }
+  assert.equal(game.phase,'staging');assert.equal(game.members.size,0);tick(game.starts-C.now());assert.equal(game.area.isDestroyed(),true);
+  for(const {game:other,team}of old){assert.notEqual(other.phase,'over');assert.equal(other.area.isDestroyed(),false);for(const p of team)assert.equal(C.matches.get(p),other);}
+});
+
+test('native Falador Ignore5 uses actual six versus six and real defeat threshold',async()=>{
+  const {b,teams,players,game}=await stragglerGame(6,1,3,{},13);completePreparation(game);assert.equal(game.fighters.size,12);
+  await lethalMelee(b,teams[0][1],game,true,[[3472,4759,0],[3473,4759,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of players)lobby(p);assert.equal(game.area.isDestroyed(),true);
 });

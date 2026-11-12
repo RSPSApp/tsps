@@ -13,11 +13,10 @@ wrought iron keys. Duplicates and items carrying metadata are retained. Removing
 requires inventory space and the currently open ring interface; losing a ring clears
 its keys unless another copy is banked. Death keeps the ring and its contents.
 
-The incorrect `dropable:false` legacy definition for 4446 overrode the cache's Drop.
-Its canonical field is corrected in `item-gameplay.json`: this is server-owned legacy data,
-explicitly **not** an osrsreboxed-db import (`rune-packs-and-stray-dogs.md`, source notes).
-The existing drop warning and `item:discarded` route own confirmation and completed loss.
-Generated dialogue, item alchemy, shops and other osrsreboxed outputs are unchanged.
+Drop remains owned by the cache's inventory action. The legacy `item-gameplay.json`
+row says `dropable:false`, but the current loader does not import that property, so it
+already drops correctly. The existing warning and `item:discarded` route own confirmation
+and completed loss. No legacy item data or generated osrsreboxed output is changed.
 
 ## Evidence and boundaries
 

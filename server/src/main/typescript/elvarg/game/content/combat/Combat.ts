@@ -1,4 +1,5 @@
 import { BoatManager } from "../sailing/BoatManager";
+import { ChatType } from "../../../net/protocol/ClientProtocol";
 import { CombatPosition } from "./CombatPosition";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { HitDamageCache } from "../../content/combat/hit/HitDamageCache";
@@ -1120,7 +1121,8 @@ export class Combat {
                 // Once per interaction: this is re-checked twice a cycle while pursuing.
                 if (this.deniedNoticeGeneration !== generation) {
                     this.deniedNoticeGeneration = generation;
-                    player?.sendMessage("I'm already under attack.");
+                    // Spam in 1,108 of 1,115 recordings (e.g. 224/01445.txt:12961).
+                    player?.getPacketSender().sendTypedMessage(ChatType.SPAM, "I'm already under attack.");
                 }
                 return;
             case CanAttackResponse.TARGET_IN_COMBAT:

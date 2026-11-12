@@ -125,6 +125,11 @@ api.onItemAction("Spade", { Dig: dig });
 api.onItemOnObject("Knife", "Web", slashWeb, { noted: false });
 ```
 
+An item option with a submenu (Rub > Xeric's Glade) reaches the handler as that option, with
+`event.subOption` set to the entry's cache label and `event.subOpId` its 1-based index. Answer
+the entry when it is set: a handler that only reads `event.option` reopens the option's own menu
+([docs/item-submenus.md](../../../docs/item-submenus.md)).
+
 `onNpcsInteraction` is the many-names-one-handler form: it registers the same actions for
 each exact, case-sensitive name, so a family of NPCs that share a transcript needs one line.
 
@@ -204,7 +209,7 @@ decides (what it lists is off, everything else on).
 ## Members content
 
 Every plugin whose content is members-only in OSRS (members skills, areas, bosses, minigames,
-members items) must export `members: true`. When world.json sets `"membersWorld": false`,
+members items) must export `members: true`. When world.json enables `plugins.FreeToPlay`,
 `PluginManager` skips those plugins entirely.
 
 - Check the OSRS wiki page's "Members" field when unsure; F2P content (e.g. Castle Wars,

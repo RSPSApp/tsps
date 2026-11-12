@@ -73,8 +73,15 @@ function spam(player, text) {
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
 }
 
+/**
+ * Experience from the mine. Mining XP asks the prospector outfit for its bonus ("mining:xp-multiplier"):
+ * the Wiki's Volcanic Mine page has 3.8 Mining XP a point, "3.895 with the prospector kit bonus".
+ */
 function xp(player, skill, amount) {
-  if (amount > 0) player.getSkillManager().addExperience(core.Skill[skill], amount);
+  if (!(amount > 0)) return;
+  const request = { player, multiplier: 1 };
+  if (skill === "MINING") api.emitCustomEvent("mining:xp-multiplier", request);
+  player.getSkillManager().addExperience(core.Skill[skill], amount * request.multiplier);
 }
 
 function level(player, skill) {

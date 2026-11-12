@@ -194,7 +194,7 @@ export class NPCOptionPacketListener {
     return true;
   }
 
-  private static castSpellOnScriptedNpc(player: any, index: number, npc: any, spell: any): boolean {
+  private static castSpellOnScriptedNpc(player: any, index: number, npc: any, spell: any, approached = false): boolean {
     const targetLocation = npc.getLocation();
     const playerLocation = player.getLocation();
     const privateArea = npc.getPrivateArea();
@@ -204,12 +204,27 @@ export class NPCOptionPacketListener {
     // for a combat line of sight.
     const needsLineOfSight = !(spell instanceof EffectSpells);
     if (playerLocation.getZ() !== targetLocation.getZ() ||
-        !playerLocation.isWithinDistance(targetLocation, 10) ||
         (privateArea && privateArea !== player.getPrivateArea()) ||
         (npc.getOwner() && npc.getOwner() !== player) ||
         (npcBoat && npcBoat !== playerBoat) ||
-        (needsLineOfSight && !RegionManager.canProjectileAttackTarget(player, npc)) ||
         !spell.canCastOnTarget(player, npc) || !spell.canCast(player, false)) return false;
+    const inApproachDistance = playerLocation.isWithinDistance(targetLocation, 10) &&
+        (!needsLineOfSight || RegionManager.canProjectileAttackTarget(player, npc));
+    if (!inApproachDistance) {
+      // A spell on an NPC is an approach-distance op (LostCity apnpct, live: Wind Strike on
+      // the Draynor tree): out of 10 tiles or out of sight, the player walks in and the cast
+      // resolves there - "You can't attack this npc." included - instead of being dropped.
+      if (approached) return false;
+      player.getMovementQueue().walkToEntity(
+        npc,
+        () => NPCOptionPacketListener.castSpellOnScriptedNpc(player, index, npc, spell, true),
+        10,
+        !needsLineOfSight,
+        false,
+        1,
+      );
+      return false;
+    }
 
     let consumed = false;
     let consumptionAttempted = false;

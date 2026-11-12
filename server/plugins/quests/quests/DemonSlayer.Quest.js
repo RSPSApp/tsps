@@ -1,4 +1,6 @@
 /** Demon Slayer. Capture evidence and remaining presentation gaps: docs/demon-slayer.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerDemonSlayerQuest(api) {
   const { Item, Location, World, Area, PrivateArea, Boundary, Animation, Graphic, NpcDialogue, PlayerDialogue, DialogueChainBuilder, ActionDialogue, ForceMovement, ForceMovementTask, Task, TaskManager, StatementDialogue, ItemStatementDialogue, GameObject, ObjectManager, Music, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, startDialogue } = require("../QuestRuntime");
@@ -178,7 +180,7 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   function restoreAreaSong(player) {
     const at = player.getLocation();
-    const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+    const track = Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
     if (track !== undefined) player.getPacketSender().sendSong(track);
   }
 
@@ -240,8 +242,8 @@ module.exports = function registerDemonSlayerQuest(api) {
       player.getPacketSender().sendSong(SONG_WALLY);
       player.getPacketSender().sendCameraMoveTo(3227, 3369, 300, { rate: 232, rate2: 232 });
       player.getPacketSender().sendCameraLookAt(3229, 3367, 250, { rate: 232, rate2: 232 });
-      player.getPacketSender().sendCameraShake(1, 0, 10, 10);
-      player.getPacketSender().sendCameraShake(3, 0, 90, 1);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 10, 10);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 3, 0, 90, 1);
       player.getPacketSender().sendSound(SOUND.cut, 1, 0);
       fade(player, false);
       resumeVision(player, "Wally managed to arrive at the stone circle just as Delrith was summoned by a cult of chaos druids...");
@@ -612,7 +614,7 @@ module.exports = function registerDemonSlayerQuest(api) {
         });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 200, { rate: 2, rate2: 10 });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 100, { rate: 1, rate2: 10 });
-        event.player.getPacketSender().sendCameraShake(3, 0, 0, 0);
+        CameraShake.send(event.player.getPacketSender(), "atmospheric", 3, 0, 0, 0);
         player.getDialogueManager().reset();
         new NpcDialogue(0, WALLY_NPC_ID, text).send(player);
         player.getPacketSender().sendString("", NPC_DIALOGUE_CONTINUE_UID).sendInterfaceFlagsRange(NPC_DIALOGUE_CONTINUE_UID, -1, -1, 0);
@@ -622,8 +624,8 @@ module.exports = function registerDemonSlayerQuest(api) {
       };
       if (text === "Now, what was that incantation again?") event.before = () => {
         event.player.getPacketSender().sendCameraMoveTo(3227, 3369, 100, { rate: 2, rate2: 10 });
-        event.player.getPacketSender().sendCameraShake(1, 0, 10, 5);
-        event.player.getPacketSender().sendCameraShake(3, 0, 2, 50);
+        CameraShake.send(event.player.getPacketSender(), "atmospheric", 1, 0, 10, 5);
+        CameraShake.send(event.player.getPacketSender(), "atmospheric", 3, 0, 2, 50);
         event.player.getPacketSender().sendSound(SOUND.cut, 1, 0);
       };
       if (text === "[word 1]... [word 2]... [word 3]... [word 4]... [word 5]!") event.after = () => {
@@ -639,8 +641,8 @@ module.exports = function registerDemonSlayerQuest(api) {
         event.player.performAnimation(new Animation(ANIMATION.sword));
         event.player.performGraphic(new Graphic(GRAPHIC.glint));
         event.player.getPacketSender().sendSound(SOUND.cut, 1, 0).sendSound(SOUND.glint, 1, 0).sendJingle(DEMON_SLAYER_JINGLE, 0);
-        event.player.getPacketSender().sendCameraShake(1, 0, 0, 0);
-        event.player.getPacketSender().sendCameraShake(3, 0, 0, 0);
+        CameraShake.send(event.player.getPacketSender(), "atmospheric", 1, 0, 0, 0);
+        CameraShake.send(event.player.getPacketSender(), "atmospheric", 3, 0, 0, 0);
         event.player.getPacketSender().sendCameraMoveTo(3225, 3363, 500, { rate: 232, rate2: 232 });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 200, { rate: 232, rate2: 232 });
       };
@@ -1079,8 +1081,8 @@ module.exports = function registerDemonSlayerQuest(api) {
     player.getPacketSender().sendSound(SOUND.spell, 1, 0).sendSound(SOUND.tableExplosion, 1, 0);
     player.getPacketSender().sendCameraLookAt(3227, 3369, 100, { rate: 232, rate2: 232 });
     player.getPacketSender().sendCameraMoveTo(3227, 3365, 500, { rate: 232, rate2: 232 });
-    later(tracked, 2, () => player.getPacketSender().sendCameraShake(0, 15));
-    later(tracked, 3, () => player.getPacketSender().sendCameraShake(0, 0));
+    later(tracked, 2, () => CameraShake.send(player.getPacketSender(), "atmospheric", 0, 15));
+    later(tracked, 3, () => CameraShake.send(player.getPacketSender(), "atmospheric", 0, 0));
     later(tracked, 6, () => {
       spawn();
       player.getPacketSender().sendSound(SOUND.delrithRising, 1, 10).sendSound(SOUND.delrithArrives, 1, 0);

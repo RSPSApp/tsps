@@ -16,10 +16,6 @@ const SOUND_DELAY = { CARVE: 15, DECORATE: 20 };
 /** The house's location varbit; 0 means no house (Construction). */
 const VARBIT_HOUSE_LOCATION = 2187;
 
-const NUMBER_WORDS = [
-  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
-];
 
 const ids = new Map();
 
@@ -85,11 +81,6 @@ function ownsHouse(player) {
 
 function itemName(id) {
   return core().ItemDefinition.forId(id)?.getName?.() ?? "item";
-}
-
-/** "ten" up to twenty, digits above (the captures only show small piles). */
-function numberWord(n) {
-  return NUMBER_WORDS[n] ?? n.toLocaleString("en-US");
 }
 
 function statement(player, text) {
@@ -165,6 +156,6 @@ function stopAction(player) {
 
 module.exports = {
   DATA, SEQ, SOUND, SOUND_DELAY,
-  init, api, core, obj, loc, npc, animate, sound, face, level, addXp, ownsHouse, itemName, numberWord,
+  init, api, core, obj, loc, npc, animate, sound, face, level, addXp, ownsHouse, itemName,
   statement, itemStatement, statementThenPlayer, hasRoomFor, later, startAction, stopAction,
 };

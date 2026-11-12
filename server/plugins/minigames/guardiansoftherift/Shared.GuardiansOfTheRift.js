@@ -91,6 +91,8 @@ const VARBIT = {
   FINISHED_GAME: "gotr_player_has_finished_game",
   IS_PLAYING: "gotr_is_playing",
   COLOURFUL_FADE_PROMPT_DISABLED: "gotr_colourful_fade_prompt_disabled",
+  /** All Settings' "Disable colourful fade effects". */
+  COLOURFUL_FADE_SETTING: "settings_colourful_fade_disabled",
 };
 
 const VARP = {
@@ -101,6 +103,7 @@ const VARP = {
 const INTERFACE = {
   HUD: "gotr_hud",
   OVERLAY: "gotr_overlay",
+  FADE: "fade_overlay",
 };
 
 /** Client scripts, by id: scripts have no gamevals. */
@@ -108,16 +111,13 @@ const SCRIPT = {
   HUD_UPDATE: 5980,
   OVERLAY_PORTAL: 5984,
   REMOVE_PORTAL: 5985,
+  FADE: 948,
 };
 
 const OVERLAY_HUD_UID = (161 << 16) | 8;
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 /** chatbox_transparency: live colours highlighted messages by it (@mes_hl_gre@ and so on). */
 const CHATBOX_TRANSPARENCY = 4608;
-const HIGHLIGHT = {
-  gre: { opaque: "06600c", transparent: "229628" },
-  red: { opaque: "ef1020", transparent: "ef1020" },
-};
 
 function idOf(kind, name) {
   const key = `${kind}:${name}`;
@@ -154,6 +154,41 @@ function getVarbit(player, name) {
 
 function setVarp(player, name, value) {
   player.getPacketSender().sendConfig(idOf("varp", name), value);
+}
+
+/** fade_overlay's fade length, in client cycles. */
+const FADE_CYCLES = 15;
+
+function blackFade(player) {
+  return getVarbit(player, VARBIT.COLOURFUL_FADE_SETTING) === 1;
+}
+
+function sendFade(player, out) {
+  const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
+  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, iface(INTERFACE.FADE), 1, {
+    postScripts: [{ scriptId: SCRIPT.FADE, args }],
+  });
+}
+
+/**
+ * A portal's full-screen effect as the player steps in: gotr_overlay in the portal's colours
+ * (`args`, script 5984), or with All Settings' "Disable colourful fade effects" on, a fade to
+ * black instead, as Barracuda Trials' portals do.
+ */
+function openPortalEffect(player, args) {
+  if (blackFade(player)) {
+    sendFade(player, true);
+    return;
+  }
+  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, iface(INTERFACE.OVERLAY), 1, {
+    postScripts: [{ scriptId: SCRIPT.OVERLAY_PORTAL, args }],
+  });
+}
+
+/** On arrival: the portal colours clear (script 5985), or the black fade lifts. */
+function clearPortalEffect(player) {
+  if (blackFade(player)) sendFade(player, false);
+  else player.getPacketSender().sendClientScript(SCRIPT.REMOVE_PORTAL);
 }
 
 function location(tile) {
@@ -294,7 +329,7 @@ function spam(player, text) {
 /** Live's @mes_hl_gre@ / @mes_hl_red@: the colour follows the chatbox's transparency. */
 function highlight(player, colour, text) {
   const transparent = player.getPacketSender().getVarbit(CHATBOX_TRANSPARENCY) === 1;
-  return `<col=${HIGHLIGHT[colour][transparent ? "transparent" : "opaque"]}>${text}</col>`;
+  return core().resolveChatHighlights(`@mes_hl_${colour}@${text}</col>`, transparent);
 }
 
 function animate(player, name) {
@@ -373,7 +408,7 @@ module.exports = {
   TEMPLE, BARRIER, LOBBY_TILE, REQUIRED_RUNECRAFT,
   MAX_ENERGY_PER_TYPE, MAX_ENERGY_TOTAL, REWARD_ENERGY, MINING_XP_CAP, HUD_PERIOD, RIFT_GUARDIAN_CAP,
   LOC, NPC, ITEM, STONES, NEW_GAME_ITEMS, GAME_ITEMS, VARBIT, VARP, INTERFACE, SCRIPT, OVERLAY_HUD_UID, OVERLAY_ATMOSPHERE_UID,
-  loc, isLoc, npc, obj, seq, spotanim, iface, setVarbit, getVarbit, setVarp,
+  loc, isLoc, npc, obj, seq, spotanim, iface, setVarbit, getVarbit, setVarp, openPortalEffect, clearPortalEffect,
   location, inTemple, inGameSide, now, later, repeat, startAction, stopAction, statement, itemStatement, options, npcSays, spam, highlight,
   animate, graphic, damageNpc, prepareNpc, sound, runecraftLevel, addXp, questComplete, count, removeItems, formatNumber, random,
 };

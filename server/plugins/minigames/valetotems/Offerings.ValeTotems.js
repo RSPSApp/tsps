@@ -6,7 +6,12 @@
  *
  * Captures (rsprox, Auburn Valley):
  * - Claim: a tick after arriving, human_pickupfloor with sound 2582, "You collect 40
- *   offerings." and the pile's varbit back to 0. Inspect: "There are ten offerings here." (mesbox).
+ *   offerings." and the pile's varbit back to 0. Inspect: "There are ten offerings here.".
+ *   RSProx 20261109T224258-5ab63b4 (rev 242): Inspect is an objectbox with the offerings
+ *   ("There are 100 offerings here.", tick 739; "There are 20 offerings here.", tick 1139), and
+ *   the miniquest's claim is one too ("You collect 100 offerings.", tick 743) where the
+ *   minigame's is a game message (tick 1150). Words up to ten, digits from 20 on; 11-19 are
+ *   not captured (ours: digits).
  * - Rummage: 100 offerings at a time, every 2 ticks while there are enough: sound 1412, "You
  *   rummage through the offerings...", "You find some loot: 26 x Dirty arrowtips" (or "Bird
  *   nest" for one) and a research point (varp ent_totems_research_points). The first point also
@@ -24,12 +29,14 @@
 const Shared = require("./Shared.ValeTotems");
 const State = require("./State.ValeTotems");
 const Loot = require("./Loot.ValeTotems");
+const Totems = require("./Totems.ValeTotems");
 
 const { DATA } = Shared;
 const CLAIM_DELAY = 1;
 const RUMMAGE_TICKS = 2;
 const GREEN = "<col=06600c>";
 const RUMMAGE_COUNTS = ["", "", "twice", "three times", "four times", "five times"];
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 
 function offeringsId() {
   return Shared.obj("ent_totems_loot");
@@ -64,7 +71,9 @@ function collect(player, site) {
   player.getInventory().adds(offeringsId(), points);
   player.getInventory().refreshItems();
   State.set(player, site, { points: 0 });
-  player.sendMessage(`You collect ${points} offerings.`);
+  const collected = `You collect ${points} offerings.`;
+  if (Totems.questTotem(player, site)) Shared.itemStatement(player, offeringsId(), collected);
+  else player.sendMessage(collected);
   Shared.api().emitCustomEvent("vale-totems:offerings-claimed", { player, site, points });
 }
 
@@ -73,7 +82,7 @@ function inspectPile(event) {
   const site = siteOf(event);
   if (site == null) return false;
   const points = State.totem(player, site).points;
-  Shared.statement(player, points === 1 ? "There is one offering here." : `There are ${Shared.numberWord(points)} offerings here.`);
+  Shared.itemStatement(player, offeringsId(), points === 1 ? "There is one offering here." : `There are ${NUMBER_WORDS[points] ?? points} offerings here.`);
   return true;
 }
 
@@ -95,6 +104,7 @@ function rummageOnce(player, announce = () => {}) {
   announce();
   player.getInventory().delete(offeringsId(), DATA.rummageCost);
   Loot.give(player, reward);
+  State.count(player, "rummages");
   const points = State.researchPoints(player) + 1;
   State.setResearchPoints(player, points);
   if (points === 1) {

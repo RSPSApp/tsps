@@ -177,6 +177,8 @@ function player() {
       getMaxLevel: () => p.level ?? 99,
       getCurrentLevel: () => p.level ?? 99,
       addExperience: (skill, amount) => xp.push([skill?.getIndex?.(), amount]),
+      // The tomes spend a chapter only when the XP lands (#4159), so they read it before and after.
+      getExperience: (skill) => xp.filter(([index]) => index === skill?.getIndex?.()).reduce((sum, [, amount]) => sum + amount, 0),
     }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
     getLocation: () => location, moveTo: to => { location = to; },
@@ -383,7 +385,14 @@ test('Sins tome mirrors the captured chapter varbits', () => {
   const tome = p.getInventory().get(0);
   const inventoryGet = p.getInventory().get.bind(p.getInventory());
   p.getInventory().get = slot => (slot === 0 ? tome : inventoryGet(slot));
-  h.events['xpreward:open'] = [event => event.onConfirm(core.Skill.THIEVING, 'Thieving')];
+  const boxes = [];
+  h.events['xpreward:open'] = [event => boxes.push(event.onConfirm(core.Skill.THIEVING, 'Thieving'))];
+  // Game lines and typed lines in one ordered list.
+  const chat = [];
+  const sendMessage = p.sendMessage;
+  p.sendMessage = text => { chat.push(['game', text]); sendMessage(text); };
+  const packet = p.getPacketSender();
+  packet.sendTypedMessage = (type, text) => { chat.push([type, text]); return packet; };
   const read = () => h.namedItemActions.get('Tome of Experience').Read({
     player: p, itemId: TOME_OF_EXPERIENCE, item: tome, slot: 0,
   });
@@ -404,6 +413,20 @@ test('Sins tome mirrors the captured chapter varbits', () => {
   read();
   assert.equal(p.varbits.get(14611), 3);
   assert.equal(p.items.get(TOME_OF_EXPERIENCE), 0, 'the sixth chapter consumes the tome');
+  // rsprox 226/01637.txt:137520-137521 and 138011: the chat line and the box, and the last chapter's crumble.
+  assert.equal(boxes[0], 'You read a fascinating chapter and earn some experience!<br>You have been awarded 15,000 Thieving experience!');
+  assert.equal(boxes.at(-1), 'You read a fascinating chapter and earn some experience!<br>You have been awarded 15,000 Thieving experience!<br>The book crumbles into a dust cloud of knowledge.');
+  assert.ok(p.messages.includes('You have been awarded 15,000 Thieving experience!'), JSON.stringify(p.messages));
+  // rsprox 226/01637.txt:137520-137521 and 138011-138012: each award line is followed by the box's mesbox line, its <br> a space.
+  assert.deepEqual(chat.slice(0, 2), [
+    ['game', 'You have been awarded 15,000 Thieving experience!'],
+    [core.ChatType.MESBOX, 'You read a fascinating chapter and earn some experience! You have been awarded 15,000 Thieving experience!'],
+  ]);
+  assert.deepEqual(chat.slice(-2), [
+    ['game', 'You have been awarded 15,000 Thieving experience!<br>The book crumbles into a dust cloud of knowledge.'],
+    [core.ChatType.MESBOX, 'You read a fascinating chapter and earn some experience! You have been awarded 15,000 Thieving experience! The book crumbles into a dust cloud of knowledge.'],
+  ]);
+  assert.equal(chat.filter(([type]) => type === core.ChatType.MESBOX).length, 6, 'one mesbox line per chapter');
 
   const restored = player();
   h.quest.setStage(restored, 138);

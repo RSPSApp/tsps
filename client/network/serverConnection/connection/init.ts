@@ -5,6 +5,7 @@ import { setPacketSocket } from "../../packet";
 import {
     DEFAULT_URL,
     KEEPALIVE_INTERVAL_MS,
+    RECONNECT_DELAY_INITIAL_MS,
     WS_GLOBAL_KEY,
     WS_SUPPRESS_RECONNECT_KEY,
     getEnv,
@@ -84,7 +85,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                 if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
             } catch {}
             state.reconnectTimer = null;
-            state.reconnectDelayMs = 250;
+            state.reconnectDelayMs = RECONNECT_DELAY_INITIAL_MS;
             state.reconnectAttempts = 0;
             state.isReconnecting = false;
             clearLoginConnectRetryTimer();

@@ -91,6 +91,16 @@ test("an item's own message replaces the two lines", () => {
   ]);
 });
 
+test("the heavy ballista refuses with the Wiki's line", () => {
+  reset({ equipmentRequirements: true, complete: { "Monkey Madness II": false } });
+  // Wiki: Heavy ballista.
+  for (const id of [Items.HEAVY_BALLISTA, Items.HEAVY_BALLISTA_OR_]) {
+    assert.deepEqual(equip(id).messages, [
+      "You must have completed Monkey Madness II and the advanced combat training from Duke to be able to wield this weapon.",
+    ]);
+  }
+});
+
 test("bots and ungated items are left alone", () => {
   reset({ equipmentRequirements: true, complete: { "Lost City": false } });
   assert.equal(equip(Items.DRAGON_DAGGER, { bot: true }).allow, null);

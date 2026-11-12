@@ -133,6 +133,49 @@ function extinguishTorch({ player, item }) {
   return true;
 }
 
+/**
+ * Lit item id -> its put-out form, for every flame a fall into water puts out (Wiki: failing a
+ * Lumbridge Swamp Caves stepping stone "will extinguish the player's light source"): torches,
+ * candles, candle lanterns, oil lamps and lanterns (left filled) and the mining helmet.
+ */
+function putOutForms(I) {
+  return new Map([
+    [I.LIT_TORCH, I.UNLIT_TORCH],
+    [I.LIT_CANDLE, I.CANDLE],
+    [I.LIT_BLACK_CANDLE, I.BLACK_CANDLE],
+    [I.CANDLE_LANTERN_3, I.CANDLE_LANTERN], // white
+    [I.CANDLE_LANTERN_6, I.CANDLE_LANTERN_4], // black
+    [I.OIL_LAMP_3, I.OIL_LAMP],
+    [I.OIL_LANTERN_3, I.OIL_LANTERN],
+    [I.BULLSEYE_LANTERN_3, I.BULLSEYE_LANTERN],
+    [I.SAPPHIRE_LANTERN_3, I.SAPPHIRE_LANTERN_2],
+    [I.EMERALD_LANTERN_2, I.EMERALD_LANTERN],
+    [I.MINING_HELMET, I.MINING_HELMET_2],
+  ].filter(([from, to]) => Number.isInteger(from) && Number.isInteger(to)));
+}
+
+let putOut;
+
+/** Puts out every lit light the player carries or wears. Returns how many went out. */
+function extinguishAll(player) {
+  if (!core || !player) return 0;
+  putOut ??= putOutForms(core.ItemIdentifiers);
+  let count = 0;
+  for (const container of [player.getInventory(), player.getEquipment()]) {
+    let changed = false;
+    for (const item of container?.getItems?.() ?? []) {
+      const unlit = item && putOut.get(item.getId());
+      if (unlit === undefined) continue;
+      item.setId(unlit);
+      changed = true;
+      count++;
+    }
+    if (changed) container.refreshItems();
+  }
+  if (count > 0 && player.getEquipment) player.getUpdateFlag?.().flag?.(core.Flag.APPEARANCE);
+  return count;
+}
+
 module.exports = {
   name: "LightSources",
   description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again.",
@@ -146,5 +189,6 @@ module.exports = {
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });
   },
-  _test: { build, lightOnObject },
+  extinguishAll,
+  _test: { build, lightOnObject, putOutForms },
 };

@@ -614,11 +614,13 @@ module.exports = function registerRegicideQuest(api) {
     const position = player.getLocation();
     const level = Math.max(1, Math.min(99, player.getSkillManager().getCurrentLevel(Skill.AGILITY)));
     const successChance = (31 + ((level - 1) * (156 - 31)) / 98) / 256;
+    // A snag still crosses: rsprox_transcripts/230/02969.txt tick 156-157 and 237/01105.txt tick 13814-13815
+    // step over (regicide_stepover), then "You snag the trip wire as you step over it.", "You have been
+    // poisoned!" and poison varp 0 -> 10. poisonEntity starts it, says the second line and honours immunity.
     if (Math.random() >= successChance) {
       player.getCombat().getHitQueue().addPendingDamage([new HitDamage(10, HitMask.RED)]);
-      const immunity = player.getCombat().getPoisonImmunityTimer?.();
-      if (!player.isPoisoned?.() && (!immunity || immunity.finished())) player.setPoisonDamage(2);
-      return;
+      player.sendMessage("You snag the trip wire as you step over it.");
+      api.core.CombatFactory.poisonEntity(player, 10);
     }
     const face = object?.getFace?.() ?? 0;
     // Cross past the wire's full local-Y footprint, rotated onto the crossing axis.

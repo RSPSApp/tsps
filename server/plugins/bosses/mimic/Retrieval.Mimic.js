@@ -5,6 +5,7 @@
 const Lair = require("./Lair.Mimic");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
 const Fees = require("../../world/gravestones/Fees.Gravestones");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR = "mimic:retrieval";
 const OWNER = "mimic";
@@ -277,7 +278,7 @@ function clickItem(event) {
   if (!entry || (event.itemId != null && event.itemId > 0 && event.itemId !== entry.id)) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(core.ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;

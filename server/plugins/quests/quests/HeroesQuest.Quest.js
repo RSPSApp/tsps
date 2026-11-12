@@ -15,8 +15,9 @@
  * Gaps (no dump/index support): Gerrant (2891) is not indexed, so he is replayed
  * from an interaction; the lava-fishing spot (2630) is not in ObjectIdentifiers,
  * so raw lava eels must be obtained elsewhere and only the cook step is wired.
- * Gang membership is inferred from which contact the player talks to (the
- * Shield of Arrav gang varp is not readable here).
+ * The gang route is the player's Shield of Arrav gang (shield-of-arrav.gang): Straven and the Phoenix steps are for
+ * Phoenix members, Katrine and the Black Arm steps for Black Arm members. Each gang step is written on the answer
+ * that earns it (see handleChoice).
  */
 module.exports = function registerHeroesQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
@@ -116,6 +117,59 @@ module.exports = function registerHeroesQuest(api) {
   const hasAllProofs = (player) =>
     has(player, FIRE_FEATHER) && has(player, COOKED_LAVA_EEL) && has(player, ARMBAND);
 
+  /** Shield of Arrav's gang attribute (ShieldOfArrav.Quest.js): 1 Phoenix, 2 Black Arm. Heroes' Quest needs Shield of Arrav done, so it is always set. */
+  const GANG_ATTRIBUTE = "shield-of-arrav.gang";
+  const GANG_PHOENIX = 1;
+  const GANG_BLACK_ARM = 2;
+  const gangOf = (player) => Number(player.getAttribute(GANG_ATTRIBUTE)) || 0;
+
+  const BLACK_ARMOUR = [ItemIdentifiers.BLACK_FULL_HELM, ItemIdentifiers.BLACK_PLATEBODY, ItemIdentifiers.BLACK_PLATELEGS];
+  const wearingBlackArmour = (player) => BLACK_ARMOUR.every((id) => player.getEquipment().contains(id));
+  /** Grip's "You hand the ID papers over to Grip." message step. */
+  const PAPERS_HANDED_OVER_ID = "7k6mux";
+
+  /**
+   * The gang steps are written on the answer that earns them (the choices and lines of the transcript), not when a
+   * conversation opens, so a wrong password or a declined mission moves nothing. Straven's variant has no menu and
+   * writes when it is picked.
+   */
+  function handleChoice({ player, npcId, option }) {
+    const stage = quest.getStage(player);
+    if (npcId === ALFONSE_NPC_ID && stage === STAGE_PHOENIX_STRAVEN && option === "Do you sell Gherkins?") {
+      quest.setStage(player, STAGE_PHOENIX_ALFONSE);
+    } else if (npcId === CHARLIE_NPC_ID && stage === STAGE_PHOENIX_ALFONSE && option === "I want to steal Scarface Pete's candlesticks.") {
+      quest.setStage(player, STAGE_PHOENIX_CHARLIE);
+    } else if (npcId === KATRINE_NPC_ID && stage === STAGE_STARTED && gangOf(player) === GANG_BLACK_ARM && option === "Is there any way I can get the rank of master thief?") {
+      quest.setStage(player, STAGE_BLACK_KATRINE);
+    } else if (npcId === GRUBOR_NPC_ID && stage === STAGE_BLACK_KATRINE && option === "Four leaved clover.") {
+      quest.setStage(player, STAGE_BLACK_HQ);
+    } else if (npcId === TROBERT_NPC_ID && option === "I volunteer to undertake that mission!") {
+      // Trobert hands over the Id papers here (no item step in the transcript); a lost set comes from him again.
+      // Up to the hand-over to Grip, so a player who loses them on the way to Grip is not stuck.
+      if (stage !== STAGE_BLACK_HQ && stage !== STAGE_BLACK_PAPERS && stage !== STAGE_BLACK_MANSION) return;
+      if (!has(player, ID_PAPERS)) {
+        player.getInventory().forceAdd(player, new Item(ID_PAPERS, 1));
+        // A full bag takes nothing: stay on the same stage, so asking again with room hands them over.
+        if (!has(player, ID_PAPERS)) {
+          player.sendMessage("You don't have room for the I.D. papers. Make some space and ask Trobert again.");
+          return;
+        }
+      }
+      if (stage === STAGE_BLACK_HQ) quest.setStage(player, STAGE_BLACK_PAPERS);
+    }
+  }
+
+  /** Garv lets a Hartigen in black armour with the papers through on his "You'd better come in then" line. */
+  function handleLine(request) {
+    if (request?.npcId !== GARV_NPC_ID || typeof request.text !== "string") return;
+    if (!request.text.startsWith("You'd better come in then")) return;
+    const { player } = request;
+    if (quest.getStage(player) !== STAGE_BLACK_PAPERS) return;
+    request.after = () => {
+      if (quest.getStage(player) === STAGE_BLACK_PAPERS) quest.setStage(player, STAGE_BLACK_MANSION);
+    };
+  }
+
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
@@ -165,7 +219,11 @@ module.exports = function registerHeroesQuest(api) {
     const stage = quest.getStage(player);
     // Straven also fronts Shield of Arrav's Phoenix Gang; defer until Heroes' Quest begins.
     if (stage < STAGE_STARTED) return null;
-    if (stage === STAGE_STARTED) return "master-thieves-armband-phoenix-gang-talking-to-straven";
+    if (stage === STAGE_STARTED) {
+      if (gangOf(player) !== GANG_PHOENIX) return null;
+      quest.setStage(player, STAGE_PHOENIX_STRAVEN);
+      return "master-thieves-armband-phoenix-gang-talking-to-straven";
+    }
     if (stage === STAGE_PHOENIX_GRIP && has(player, CANDLESTICK)) {
       take(player, CANDLESTICK);
       if (!has(player, ARMBAND)) give(player, ARMBAND);
@@ -194,6 +252,7 @@ module.exports = function registerHeroesQuest(api) {
     if (stage === STAGE_BLACK_CANDLESTICK) {
       return "master-thieves-armband-black-arm-gang-attempting-to-hand-in-pete-s-candlestick-if-you-ve-obtained-it-too-early";
     }
+    if (gangOf(player) !== GANG_BLACK_ARM) return null;
     return "master-thieves-armband-black-arm-gang-katrine-s-request";
   }
 
@@ -229,7 +288,7 @@ module.exports = function registerHeroesQuest(api) {
       return "master-thieves-armband-phoenix-gang-trying-to-enter-grubor-s-house";
     }
     if (npcId === TROBERT_NPC_ID) {
-      if (stage === STAGE_BLACK_HQ || (stage === STAGE_BLACK_PAPERS && !has(player, ID_PAPERS))) {
+      if (stage === STAGE_BLACK_HQ || ((stage === STAGE_BLACK_PAPERS || stage === STAGE_BLACK_MANSION) && !has(player, ID_PAPERS))) {
         return "master-thieves-armband-black-arm-gang-trobert-s-plan";
       }
       if (stage === STAGE_BLACK_PAPERS) {
@@ -250,6 +309,12 @@ module.exports = function registerHeroesQuest(api) {
   function answerCondition({ player, npcId, text }) {
     if (!DIALOGUE_NPC_IDS.has(npcId)) return null;
     const value = String(text).toLowerCase();
+    if (value.includes("not wearing black armour")) return !wearingBlackArmour(player);
+    if (value.includes("wearing black armour")) return wearingBlackArmour(player);
+    if (value.includes("do not have the id papers") || value.includes("lost the id papers")) return !has(player, ID_PAPERS);
+    if (value.includes("has the id papers")) return has(player, ID_PAPERS);
+    if (value.includes("does not have a miscellaneous key")) return !has(player, ItemIdentifiers.MISCELLANEOUS_KEY);
+    if (value.includes("has a miscellaneous key")) return has(player, ItemIdentifiers.MISCELLANEOUS_KEY);
     if (value.includes("skill levels are lower than the quest requirements")) return false;
     if (value.includes("full inventory")) return false;
     if (value.includes("quest requirements to start")) return !meetsRequirements(player);
@@ -306,6 +371,13 @@ module.exports = function registerHeroesQuest(api) {
       if (!has(player, BLAMISH_SLIME)) {
         give(player, BLAMISH_SLIME);
         player.sendMessage("Gerrant gives you a jar of blamish snail slime.");
+      }
+      return;
+    }
+    if (stepId === PAPERS_HANDED_OVER_ID && npcId === GRIP_NPC_ID) {
+      if (quest.getStage(player) === STAGE_BLACK_MANSION && has(player, ID_PAPERS)) {
+        take(player, ID_PAPERS);
+        quest.setStage(player, STAGE_BLACK_GRIP);
       }
       return;
     }
@@ -463,6 +535,8 @@ module.exports = function registerHeroesQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcInteraction("Gerrant", { "Talk-to": handleGerrant });
   api.onItemOnItem(handleSlimeOnPotion);
   api.onItemOnItem(handleOilOnRod);

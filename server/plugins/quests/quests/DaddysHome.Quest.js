@@ -538,9 +538,11 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   function describeRemaining(player) {
     const left = remainingFurniture(player);
-    const lines = [`You still need to remove: ${left.slice(0, 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" ")}`];
+    // rsprox 226/01702.txt:27405: each line of the box is its own row ("You still need to
+    // remove:<br>- The rotten carpet"); chat history shows the <br> as a space.
+    const lines = [["You still need to remove:", ...left.slice(0, 3).map(({ piece }) => `- ${piece.removalDescription}`)].join("<br>")];
     for (let index = 3; index < left.length; index += 3) {
-      lines.push(left.slice(index, index + 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" "));
+      lines.push(left.slice(index, index + 3).map(({ piece }) => `- ${piece.removalDescription}`).join("<br>"));
     }
     return lines;
   }

@@ -8,6 +8,8 @@ const PICK_SOUND = 2402;
 const FAILURE_SOUND = 2581;
 const SUCCESS_SOUND = 52;
 const ATTEMPT_MESSAGE = "You attempt to pick the lock on the trap door.";
+// rsprox 227/01723.txt:186365 (spam), Thieving 16 -> 15 at :186387.
+const NUMB_MESSAGE = "You fail to pick the lock - your fingers get numb from fumbling with the lock.";
 // shortcut: Wiki gives a nine-tick normal unlock; calibrate retry cadence with an uninterrupted normal-world capture.
 const ATTEMPT_TICKS = 9;
 const attempts = new WeakMap();
@@ -25,6 +27,19 @@ function successChance(level, lockpick) {
 
 function spam(player, text) {
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
+}
+
+/**
+ * Wiki (Trapdoor (H.A.M. Hideout)): "Failing to pick the lock on the trapdoor will numb the player's
+ * fingers, decreasing their Thieving level by 1 every time." The recorded failure line comes with it.
+ * The one recording drains only some failures; the Wiki's every time is followed.
+ */
+function fumbled(player) {
+  const skills = player.getSkillManager();
+  spam(player, NUMB_MESSAGE);
+  // Not below 1: the attempt needs Thieving 1 to go on, and no drain below it is recorded.
+  skills.setCurrentLevels(core.Skill.THIEVING, Math.max(1, skills.getCurrentLevel(core.Skill.THIEVING) - 1));
+  skills.updateSkill?.(core.Skill.THIEVING);
 }
 
 function pickLock(player) {
@@ -59,7 +74,7 @@ function pickLock(player) {
       } else {
         player.getPacketSender().sendSound(FAILURE_SOUND, 1, 0);
         player.getSkillManager().addExperiences(core.Skill.THIEVING, 0.5);
-        // shortcut: occasional numb-finger drain is omitted until its secondary trigger is verified.
+        fumbled(player);
         this.elapsed = 0;
         spam(player, ATTEMPT_MESSAGE);
       }
@@ -102,4 +117,4 @@ module.exports = function attach(api) {
   api.onCustomEvent("loc-teleports:arrived", arrived);
   api.onCustomEvent("player:world-input", cancel);
 };
-module.exports._test = { successChance };
+module.exports._test = { successChance, fumbled, NUMB_MESSAGE };

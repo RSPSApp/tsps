@@ -27,7 +27,10 @@ function openLockbox({ player, itemId }) {
   const reward = rollLockbox();
   // forceAdd keeps the whole reward: a stack at MAX_STACK_AMOUNT drops the overflow.
   inventory.forceAdd(player, new Common.core.Item(reward.itemId, reward.amount));
-  player.sendMessage(reward.message);
+  // Wiki Transcript:Forgotten lockbox: each reward line is an item box ({{tbox}}) with its item.
+  const { DialogueChainBuilder, ItemStatementDialogue } = Common.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new ItemStatementDialogue(0, reward.itemId, reward.message)));
   return true;
 }
 

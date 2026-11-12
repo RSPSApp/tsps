@@ -8,6 +8,7 @@
  * Bank-side loadouts and potion storage are separate content.
  */
 const Potions = require("./Potions.plugin");
+const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const CONTENTS_ATTRIBUTE = "chugging-barrel:potions";
 /** Wiki: a maximum of 100 doses per potion, and up to five different potions. */
@@ -52,10 +53,20 @@ const MESSAGE = {
   DRINK: (name) => `You drink some of your ${name}.`,
   /** Captured (4236): using a barrel away from a bank. */
   NEAR_BANK: "You must be near a bank to use that barrel.",
-  /** Captured (4236): the warning shown before dismantling a barrel that still holds potions. */
-  DISMANTLE_WARNING: "Are you sure you want to disassemble the barrel?<br>The potions stored will be lost.",
+  /** Captured (238/04236.txt tick 5395, line 51250): the objectbox warning before dismantling a barrel with potions, wrapped as sent. */
+  CONTAINS_POTIONS: "Your barrel contains potions.<br>If you disassemble it without emptying it first, they'll be<br>lost.",
+  /** Captured (tick 5398): confirmdestroy_init's question and note. */
+  DISMANTLE_QUESTION: "Are you sure you want to disassemble the barrel?",
+  DISMANTLE_NOTE: "The potions stored will be lost.",
 };
+/** The native confirmdestroy chatbox (584) and its setup script, as the destroy prompt uses them. */
+const CONFIRM_GROUP_ID = 584;
+const CONFIRM_SETUP_SCRIPT = 814;
+const CONFIRM_BUTTON = CONFIRM_GROUP_ID << 16;
+/** Player -> the barrel item and slot a confirm screen is open for. */
+const pendingDismantles = new WeakMap();
 
+const AUTO_SMASH_VIALS_VARBIT = 5668; // auto_smash_vials
 let api = null;
 let core = null;
 
@@ -118,30 +129,72 @@ function setItem(player, item, id) {
   player.getInventory().refreshItems();
 }
 
+/**
+ * A one- or two-item box (objectbox 193 / objectbox_double 11), as the captures show these lines, each after its
+ * mesbox chat line, the box's text with its <br> as spaces (238/04236.txt ticks 98, 339, 5395, 5703).
+ */
+function itemBox(player, items, text, then = null) {
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue, EndDialogue } = core;
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
+  const chain = new DialogueChainBuilder().add(items.length > 1
+    ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
+    : new ItemStatementDialogue(0, items[0], text));
+  chain.add(then ? new ActionDialogue(1, { execute: then }) : new EndDialogue(1));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+/** Captured (238/04236.txt ticks 98, 339): the grind, then objectbox_double, from one form to the other. */
 function assemble({ player, item }) {
   setItem(player, item, core.ItemIdentifiers.CHUGGING_BARREL);
   player.performAnimation(new core.Animation(ASSEMBLE_ANIMATION));
-  player.sendMessage(MESSAGE.ASSEMBLE);
+  itemBox(player, [core.ItemIdentifiers.CHUGGING_BARREL_DISASSEMBLED_, core.ItemIdentifiers.CHUGGING_BARREL], MESSAGE.ASSEMBLE);
 }
 
+function disassemble(player, item) {
+  logout({ player });
+  setItem(player, item, core.ItemIdentifiers.CHUGGING_BARREL_DISASSEMBLED_);
+  player.performAnimation(new core.Animation(ASSEMBLE_ANIMATION));
+  itemBox(player, [core.ItemIdentifiers.CHUGGING_BARREL, core.ItemIdentifiers.CHUGGING_BARREL_DISASSEMBLED_], MESSAGE.DISASSEMBLE);
+}
+
+/**
+ * Captured (238/04236.txt ticks 5395-5403): with potions inside, an objectbox warns first, then the
+ * confirmdestroy screen (script 814 with the barrel, its question and note) asks; only Yes dismantles.
+ */
 function dismantle({ player, item, slot }) {
   if (!isBarrelAtSlot(player, item, slot)) return;
-  const next = () => {
-    logout({ player });
-    setItem(player, item, core.ItemIdentifiers.CHUGGING_BARREL_DISASSEMBLED_);
-    player.performAnimation(new core.Animation(ASSEMBLE_ANIMATION));
-    player.sendMessage(MESSAGE.DISASSEMBLE);
-  };
   if (Object.keys(contents(player)).length === 0) {
-    next();
+    disassemble(player, item);
     return;
   }
   player.getPacketSender().sendInterfaceRemoval();
-  api.sendMultiChatboxPrompt(player, MESSAGE.DISMANTLE_WARNING, "Yes.", () => {
+  itemBox(player, [core.ItemIdentifiers.CHUGGING_BARREL], MESSAGE.CONTAINS_POTIONS, () => {
     if (!isBarrelAtSlot(player, item, slot)) return;
-    save(player, {});
-    next();
+    // Closing the box first clears any pending destroy, so Yes answers this screen.
+    player.getPacketSender().sendInterfaceRemoval();
+    pendingDismantles.set(player, { item, slot });
+    player.getPacketSender()
+      .sendChatboxInterface(CONFIRM_GROUP_ID)
+      .sendClientScript(CONFIRM_SETUP_SCRIPT, item.getId(), 1, MESSAGE.DISMANTLE_QUESTION, MESSAGE.DISMANTLE_NOTE);
   });
+}
+
+/** The confirm screen's resume: 1 is Yes, 0 is No (the destroy prompt's own convention). */
+function confirmDismantle({ player, action }) {
+  if (action !== 0 && action !== 1) return false;
+  const pending = pendingDismantles.get(player);
+  if (!pending || !player.getPacketSender().isChatboxInterface(CONFIRM_GROUP_ID)) return false;
+  pendingDismantles.delete(player);
+  player.getPacketSender().sendInterfaceRemoval();
+  if (action !== 1 || !isBarrelAtSlot(player, pending.item, pending.slot)) return true;
+  save(player, {});
+  disassemble(player, pending.item);
+  return true;
+}
+
+/** Another destroy prompt on group 584 replaces this one. */
+function forgetDismantle({ player }) {
+  pendingDismantles.delete(player);
 }
 
 /** The swig, its sound and the shared potion and food delays, once per click, when a first potion drinks. */
@@ -193,7 +246,8 @@ function drink({ player }) {
       startDrinking(player);
     }
     dose.potion.effect(player);
-    player.sendMessage(MESSAGE.DRINK(store.name));
+    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030).
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, MESSAGE.DRINK(store.name));
     api.emitCustomEvent("potions:drunk", {
       player,
       itemId: store.itemId,
@@ -230,8 +284,10 @@ function fill(player, item, slot) {
     return;
   }
   const current = stored[key]?.doses ?? 0;
+  // A sixth kind: the full line with the potion's own name, as captured (238/04236.txt:44376-44391,
+  // "Your chugging barrel doesn't have space to store any more Extreme energy potion(4).").
   if (!stored[key] && Object.keys(stored).length >= POTION_TYPES) {
-    player.sendMessage(MESSAGE.CANNOT_STORE);
+    player.sendMessage(MESSAGE.FULL(core.CacheDefinitions.getItem(item.getId()).name));
     return;
   }
   if (current + dose.doses > DOSES_PER_POTION) {
@@ -246,9 +302,20 @@ function fill(player, item, slot) {
     slot: stored[key]?.slot ?? freeSlot(stored),
   };
   save(player, stored);
-  const replacement = dose.emptyItemId;
+  const replacement = leftVessel(player, dose.emptyItemId);
   inventory.setItem(slot, new core.Item(replacement, replacement === -1 ? 0 : 1, item.getMeta?.())).refreshItems();
   player.sendMessage(MESSAGE.FILLED(dose.doses, oneDoseName(item)));
+}
+
+/**
+ * The vessel a stored potion's last dose leaves: none for a vial while the barbarian vial smashing
+ * setting is on (auto_smash_vials, varbit 5668), as drinking does. rsprox 238/04236.txt
+ * (37476-37477, 44334, 54579) and 238/04239.txt:5326: with it on, each store empties the slot.
+ */
+function leftVessel(player, emptyItemId) {
+  const smash = emptyItemId === core.ItemIdentifiers.VIAL
+    && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
+  return smash ? -1 : emptyItemId;
 }
 
 function useOnBarrel(event) {
@@ -400,8 +467,9 @@ function transfer(player, selected, quantity, mode) {
       const count = mode === "store" ? source.doses : Math.min(source.doses, left, room - moved);
       if (count > room - moved) continue;
       const remainder = source.doses - count;
-      items[slot] = new core.Item(remainder ? source.entry.chain[source.entry.chain.length - remainder] : source.emptyItemId,
-        remainder || source.emptyItemId > 0 ? 1 : 0, item.getMeta());
+      const vessel = leftVessel(player, source.emptyItemId);
+      items[slot] = new core.Item(remainder ? source.entry.chain[source.entry.chain.length - remainder] : vessel,
+        remainder || vessel > 0 ? 1 : 0, item.getMeta());
       store ??= { itemId: item.getId(), name: dose.potion.name.toLowerCase(), doses: 0, meta: item.getMeta(), slot: freeSlot(stored) };
       stored[key] = store;
       store.doses += count;
@@ -431,7 +499,9 @@ function click(event) {
   const selected = select(player, buttonId, slot, itemId);
   if (!selected) return;
   if (action === 10) {
-    player.sendMessage(core.ItemDefinition.forId(itemId).getExamine());
+    // A contents row shows its potion as the 1-dose form, stacked by the doses stored.
+    if (selected.store) examineItem(player, Number(selected.key), selected.store.doses);
+    else examineItem(player, itemId, 1);
     return;
   }
   if (action < 1 || action > 8) return;
@@ -503,5 +573,8 @@ module.exports = {
     api.onCustomEvent("player:widget-action", drag);
     api.onPlayerLogout(logout);
     api.onCustomEvent("interface:close", logout);
+    api.onInterfaceActionButton(CONFIRM_BUTTON, confirmDismantle);
+    api.onCustomEvent("destroy-item:prompt", forgetDismantle);
   },
+  _test: { confirmDismantle },
 };

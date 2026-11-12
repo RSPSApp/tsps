@@ -66,7 +66,7 @@ hops send the same `set`. Logging out from the helm sends the helm's reset first
 
 ## In tsps
 
-- **Helm** (`plugins/skills/sailing/Helm.plugin.js`): taking it sends the two sets, leaving it
+- **Helm** (`plugins/skills/sailing/Helm.Sailing.js`): taking it sends the two sets, leaving it
   the reset and the walk set. Leaving the boat while at the helm without leaving the helm
   first (Escape, a teleport that sinks it) sends the reset from the `sailing:left` event, which
   now carries `atHelm`.

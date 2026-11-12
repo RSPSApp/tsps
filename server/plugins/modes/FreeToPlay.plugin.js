@@ -1,5 +1,5 @@
 /**
- * Free-to-play world (world.json "membersWorld": false), after
+ * Free-to-play world (world.json plugins.FreeToPlay: true), after
  * https://oldschool.runescape.wiki/w/Free-to-play. Members plugins and quests are
  * left unloaded by the core; this plugin gates everything else through hooks.
  * Free land is the union of world.json zones tagged "f2p" (WorldDefinition.isMembersArea).
@@ -124,7 +124,8 @@ function evictFromMembersArea({ player }) {
 
 module.exports = {
   name: "FreeToPlay",
-  description: "Enforces a free-to-play world: members content and areas are blocked through hooks, with free land taken from the world's f2p zones.",
+  enabled: false,
+  description: "Switches this world to free-to-play. The spawn must be inside a free-to-play area.",
   ITEM_MESSAGE,
   register(api) {
     // Members worlds need none of these hooks.

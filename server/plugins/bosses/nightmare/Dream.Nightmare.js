@@ -43,6 +43,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: The Nightmare; rsprox_transcripts/227/01757.txt:128888 refuses entry with a pet): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     /** Everything spawned for the fight goes with it. */
     destroy() {
       if (this.isDestroyed()) return;

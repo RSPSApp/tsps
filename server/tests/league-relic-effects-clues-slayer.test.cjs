@@ -78,9 +78,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   // The drop table's own roller, without its kill hook (these kills are Slayer's).
   require("../plugins/npcs/NpcDrops.plugin").register(new Proxy(api, { get: (target, key) => (key === "onNpcDeath" ? () => {} : target[key]) }));
   require("../plugins/skills/Slayer.plugin").register(api);

@@ -9,6 +9,13 @@ const Tools = require("./Tools.Farming");
 const GARDENER_RANGE = 10;
 // Cache OC_ITEM_OP1; equipment op1 removes, op2 starts the item's worn options.
 const WORN_OPTION_PARAM = 451;
+/** All Settings > Gameplay: "Automatically smash empty plant pots", the same switch Otto toggles. */
+const AUTO_SMASH_POTS_SETTING = 381;
+const AUTO_SMASH_POTS_VARBIT = 9614; // brut_smash_pots_automatically
+const AUTO_SMASH_POTS_LOCKED = "You must complete the Farming portion of Barbarian Training to access this setting.";
+/** All Settings > Warnings: "Farming protection payment confirmation" (on: pay without asking). */
+const PROTECTION_SETTING = 295;
+const PROTECTION_NO_ASK_VARBIT = 98; // settings_warning_confirmation_farming_protection
 const COMPOST_NAMES = ["", "Compost", "Supercompost", "Ultracompost", "Rotten tomato"];
 const ROTTEN_TOMATO_TIER = 4;
 // Rev 241 gamevals human_push and human_pickuptable, with the sounds captured on the bin (recording 1858).
@@ -474,8 +481,7 @@ function farmingNpc(event) {
             if (!player.getLocation().isWithinDistance(npc.getLocation(), 5)) return;
             const training = Patches.farmFor(player).barbarian;
             if (!training?.smashing) { player.sendMessage("Learn pot-smashing first."); return; }
-            training.autoSmash = !training.autoSmash;
-            player.getPacketSender().sendVarbit(9614, training.autoSmash ? 1 : 0);
+            setAutoSmashPots(player, training, !training.autoSmash);
             player.sendMessage(`Automatic pot-smashing is ${training.autoSmash ? "enabled" : "disabled"}.`);
         }]]);
         return;
@@ -585,9 +591,41 @@ function askGardener(player, npc, p) {
         Patches.spam(player, `You pay the gardener ${paymentText(crop.payment)} to protect the patch.`);
         gardenerSays(player, npc, `That'll do nicely, ${player.getAppearance().isMale() ? "sir" : "madam"}. Leave it with me - I'll make sure that patch grows for you.`);
     };
-    if (farm.gardenerNoAsk) { accept(); return; }
-    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { farm.gardenerNoAsk = true; accept(); }]],
+    if (skipsProtectionConfirmation(player)) { accept(); return; }
+    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
         0, `Pay ${paymentText(crop.payment)}?`);
+}
+function skipsProtectionConfirmation(player) {
+    return player.getPacketSender().getVarbit(PROTECTION_NO_ASK_VARBIT) === 1;
+}
+/** The gardener's "don't ask again" turns the All Settings row on, which the Settings plugin saves. */
+function setSkipProtectionConfirmation(player) {
+    core.PluginManager.emitCustomEvent("settings:set", { player, settingId: PROTECTION_SETTING, value: 1 });
+}
+function setAutoSmashPots(player, training, on) {
+    training.autoSmash = on;
+    player.getPacketSender().sendVarbit(AUTO_SMASH_POTS_VARBIT, on ? 1 : 0);
+}
+function settingClicked(request) {
+    if (request.settingId !== AUTO_SMASH_POTS_SETTING) return;
+    request.handled = true;
+    const { player } = request;
+    const training = Patches.farmFor(player).barbarian;
+    if (training?.smashing !== 3) { player.sendMessage(AUTO_SMASH_POTS_LOCKED); return; }
+    setAutoSmashPots(player, training, !training.autoSmash);
+}
+/**
+ * Login: the pot-smashing switch, and the gardener's old per-player "don't ask again" moved onto the
+ * protection confirmation setting once.
+ */
+function settingsLogin({ player }) {
+    if (player.isPlayerBot?.() === true) return;
+    const farm = Patches.farmFor(player);
+    if (farm.barbarian?.autoSmash) player.getPacketSender().sendVarbit(AUTO_SMASH_POTS_VARBIT, 1);
+    if (farm.gardenerNoAsk !== undefined) {
+        if (farm.gardenerNoAsk) setSkipProtectionConfirmation(player);
+        delete farm.gardenerNoAsk;
+    }
 }
 function canPay(player, payment) {
     const inventory = player.getInventory();
@@ -662,6 +700,8 @@ function farmingItemAction(event) {
         }], ["Keep the compost", () => {}]]);
         return;
     }
+    if (action === "fill" && fillProduceContainer(player, event, item, name)) return;
+    if (action === "remove-one" && removeOneProduce(player, event, item, name)) return;
     for (const [produce, plural, capacity] of CONTAINERS) {
         if (!name.startsWith(`${plural}(`) || action !== "empty") continue;
         event.handled = true;
@@ -673,4 +713,66 @@ function farmingItemAction(event) {
     }
 }
 
-Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep });
+/** The sack or basket family a container belongs to: capacity, and its fill count (0 when empty), or null. */
+function produceContainer(name) {
+    if (name === "Empty sack") return { capacity: 10, current: 0, rows: CONTAINERS.filter(([, , capacity]) => capacity === 10) };
+    if (name === "Basket") return { capacity: 5, current: 0, rows: CONTAINERS.filter(([, , capacity]) => capacity === 5) };
+    const row = CONTAINERS.find(([, plural]) => name.startsWith(`${plural}(`));
+    const current = row && Number(name.match(/\((\d+)\)$/)?.[1]);
+    return row && current > 0 ? { capacity: row[2], current, rows: [row] } : null;
+}
+/** The container in its own slot becomes `${plural}(count)`, or the empty sack/basket at 0. */
+function setContainerCount(player, item, plural, capacity, count) {
+    item.setId(Data.itemId(count > 0 ? `${plural}(${count})` : capacity === 10 ? "Empty sack" : "Basket"));
+    player.getInventory().refreshItems();
+}
+/** Live's line when an empty sack finds nothing to take (rsprox captures: recording 20261111T230428, tick 26). */
+const EMPTY_SACK_NOTHING_MESSAGE = "You don't have any potatoes, onions or cabbages.";
+/** Ours: the basket's counterpart of that line; no capture or Wiki text has one. */
+const EMPTY_BASKET_NOTHING_MESSAGE = "You don't have any apples, bananas, oranges, strawberries or tomatoes.";
+/**
+ * Fill. An empty sack takes up to 10 of one vegetable from the inventory, cabbages first, then onions, then potatoes
+ * (Wiki, Empty sack; rsprox captures: recording 20261111T230428, ticks 64-79 and 117). An empty basket takes up to five
+ * of one fruit (ticks 133-153). A filled one tops up with its own produce (tick 43). It takes as many as are held, in
+ * the container's own slot, and says nothing. Noted produce doesn't count (tick 26, noted onions held). Draynor Manor
+ * cabbages are excluded (Wiki); Data.itemId resolves the plain Cabbage. A filled one with none of its produce held does
+ * nothing (ticks 69, 77, 81).
+ * Ours: the basket's fruit order (the Wiki gives none), its no-fruit line, and a full one's Fill doing nothing.
+ */
+function fillProduceContainer(player, event, item, name) {
+    const container = produceContainer(name);
+    if (!container) return false;
+    event.handled = true;
+    if (container.current >= container.capacity) return true;
+    const inventory = player.getInventory();
+    const rows = container.capacity === 10 && container.current === 0 ? [...container.rows].reverse() : container.rows;
+    const row = rows.find(([produce]) => inventory.getAmount(Data.itemId(produce)) > 0);
+    if (!row) {
+        if (container.current === 0) player.sendMessage(container.capacity === 10 ? EMPTY_SACK_NOTHING_MESSAGE : EMPTY_BASKET_NOTHING_MESSAGE);
+        return true;
+    }
+    const [produce, plural, capacity] = row;
+    const amount = Math.min(capacity - container.current, inventory.getAmount(Data.itemId(produce)));
+    inventory.deleteNumber(Data.itemId(produce), amount);
+    setContainerCount(player, item, plural, capacity, container.current + amount);
+    return true;
+}
+/**
+ * Remove-one: one piece of produce comes out into a free slot and the container drops a count. The spam line names it,
+ * "You take an onion out of the onion sack." / "a cabbage ... cabbage sack" / "a potato ... potato sack" /
+ * "a banana out of the banana basket." (rsprox captures: recording 20261111T230428, ticks 37, 58, 59, 127).
+ * Ours: the other fruit follow the same pattern, and a full inventory refuses with the usual full message.
+ */
+function removeOneProduce(player, event, item, name) {
+    const container = produceContainer(name);
+    if (!container || container.current === 0) return false;
+    event.handled = true;
+    const [produce, plural, capacity] = container.rows[0];
+    if (!Patches.give(player, Data.itemId(produce))) return true;
+    setContainerCount(player, item, plural, capacity, container.current - 1);
+    const noun = produce.toLowerCase();
+    Patches.spam(player, `You take ${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun} out of the ${noun} ${capacity === 10 ? "sack" : "basket"}.`);
+    return true;
+}
+
+Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep, settingClicked, settingsLogin });

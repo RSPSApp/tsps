@@ -162,7 +162,7 @@ function fakePlayer(name = 'Tester', { runecraft = 99, questDone = true, x = 361
   const attributes = new Map();
   let interfaceId = -1;
   const p = {
-    name, questDone, messages: [], statements: [], scripts: [], interfaces: [], animations: [], jingles: [],
+    name, questDone, messages: [], statements: [], scripts: [], postScripts: [], interfaces: [], animations: [], jingles: [],
     xpBySkill: {}, runEnergy: 50, special: 100, levels: {}, sounds: [],
     location: new Location(x, y, 0),
     inventory: container(28),
@@ -209,7 +209,11 @@ function fakePlayer(name = 'Tester', { runecraft = 99, questDone = true, x = 361
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
         getVarp: (id) => varbits.get(`varp${id}`) ?? varbits.get(id) ?? 0,
-        sendSubInterface: (uid, id) => { p.interfaces.push(id); return sender; },
+        sendSubInterface: (uid, id, type, options) => {
+          p.interfaces.push(id);
+          for (const script of options?.postScripts ?? []) p.postScripts.push([script.scriptId, ...script.args]);
+          return sender;
+        },
         closeSubInterface: () => { p.interfaces.push(-1); return sender; },
         sendInterfaceFlagsRange: () => sender,
         sendInterfaceScript: (id, args) => { p.scripts.push([id, args]); return sender; },
@@ -985,6 +989,73 @@ test('an active Guardian takes the player to its altar and stays in the game; th
   player.location = new Location(3222, 3218, 0);
   ticks(6);
   assert.equal(Game.isPlaying(player), false, 'teleporting away from the altar leaves the game');
+});
+
+/** What a Guardian's rift shows: the interfaces opened and the scripts run, from the step in to the arrival. */
+function riftEffect(setup) {
+  const player = fakePlayer();
+  attackPhase(player);
+  setup(player);
+  player.interfaces.length = 0;
+  player.postScripts.length = 0;
+  player.scripts.length = 0;
+  enter(player, EARTH);
+  ticks(3);
+  return {
+    interfaces: player.interfaces,
+    postScripts: player.postScripts,
+    scripts: player.scripts.filter((script) => script[0] !== Shared.SCRIPT.HUD_UPDATE),
+  };
+}
+
+const COLOURFUL_FADE_SETTING = () => Shared.core().CacheDefinitions.getVarbitId('settings_colourful_fade_disabled');
+const FADE_OVERLAY = () => Shared.iface('fade_overlay');
+const GOTR_OVERLAY = () => Shared.iface('gotr_overlay');
+
+test("a Guardian's rift shows the altar's colours, cleared on arrival (script 5984, then 5985)", () => {
+  const shown = riftEffect(() => {});
+  assert.ok(shown.interfaces.includes(GOTR_OVERLAY()));
+  assert.ok(!shown.interfaces.includes(FADE_OVERLAY()));
+  assert.deepEqual(shown.postScripts, [[Shared.SCRIPT.OVERLAY_PORTAL, ...EARTH.overlay]]);
+  assert.deepEqual(shown.scripts, [[Shared.SCRIPT.REMOVE_PORTAL]]);
+});
+
+test('with "Disable colourful fade effects" on, the rift fades to black and back instead', () => {
+  const shown = riftEffect((player) => player.getPacketSender().sendVarbit(COLOURFUL_FADE_SETTING(), 1));
+  assert.ok(!shown.interfaces.includes(GOTR_OVERLAY()), 'no colourful overlay');
+  assert.equal(shown.interfaces.filter((id) => id === FADE_OVERLAY()).length, 2);
+  assert.deepEqual(shown.postScripts, [[Shared.SCRIPT.FADE, 0, 255, 0, 0, 15], [Shared.SCRIPT.FADE, 0, 0, 0, 255, 15]]);
+  assert.deepEqual(shown.scripts, [], 'no 5985');
+  assert.ok(shown.interfaces.lastIndexOf(-1) > shown.interfaces.lastIndexOf(FADE_OVERLAY()), 'the fade closes with the overlay');
+});
+
+test("the barrier's Visual-effects off still shows nothing, whatever the setting", () => {
+  const shown = riftEffect((player) => {
+    Records.setSetting(player, 'gotr_colourful_fade_disabled', 1);
+    player.getPacketSender().sendVarbit(COLOURFUL_FADE_SETTING(), 1);
+  });
+  assert.ok(!shown.interfaces.includes(GOTR_OVERLAY()));
+  assert.ok(!shown.interfaces.includes(FADE_OVERLAY()));
+  assert.deepEqual(shown.postScripts, []);
+  assert.deepEqual(shown.scripts, []);
+});
+
+test('the huge-remains portal fades to black with "Disable colourful fade effects" on', () => {
+  const player = fakePlayer();
+  openGame(player);
+  Game._game.phase = Game.PHASE.ATTACK;
+  Game._game.portal.opensIn = 1;
+  ticks(1);
+  player.getPacketSender().sendVarbit(COLOURFUL_FADE_SETTING(), 1);
+  player.interfaces.length = 0;
+  player.postScripts.length = 0;
+  player.scripts.length = 0;
+  hooks.objects.Portal.Enter({ player, objectId: Shared.loc('gotr_agility_portal_top') });
+  ticks(3);
+  assert.ok(!player.interfaces.includes(GOTR_OVERLAY()), 'no colourful overlay');
+  assert.deepEqual(player.postScripts, [[Shared.SCRIPT.FADE, 0, 255, 0, 0, 15], [Shared.SCRIPT.FADE, 0, 0, 0, 255, 15]]);
+  assert.ok(!player.scripts.some((script) => script[0] === Shared.SCRIPT.REMOVE_PORTAL));
+  assert.equal(player.messages.at(-1), 'You step through the portal and find yourself in another part of the temple.');
 });
 
 test('a relog at the altar of a trip goes back to the lobby, not out through the ruins (issue 2698)', () => {
@@ -1832,9 +1903,12 @@ test("Atlax's diary: the captured 24 pages in indexed_book (680), with a content
     sendString: (text, uid) => { strings.set(uid & 0xffff, text); return packet; },
     sendInterfaceDisplayState: (uid, hide) => { hidden.set(uid & 0xffff, hide); return packet; },
     sendInterfaceScript: () => packet,
+    sendConfig: (id, value) => { configs.set(id, value); return packet; },
   };
+  const configs = new Map();
   player.getPacketSender = () => packet;
   hooks.items["Atlax's diary"].Read({ player });
+  assert.equal(configs.get(334), 0, "pagepos: the left page of the spread");
   assert.equal(player.interfaces.at(-1), 680);
   assert.ok(player.animations.includes(Shared.seq('human_readbook')));
   assert.equal(strings.get(6), "Atlax's Diary");
@@ -1847,8 +1921,11 @@ test("Atlax's diary: the captured 24 pages in indexed_book (680), with a content
   assert.equal(hidden.get(9), true, 'no index button on the contents');
 
   const click = (child) => buttons.get((680 << 16) | child)({ player, buttonId: (680 << 16) | child });
+  const opens = player.interfaces.length;
   click(110);
   assert.equal(strings.get(10), '3');
+  assert.equal(configs.get(334), 2);
+  assert.equal(player.interfaces.length, opens + 1, 'each spread is sent and then opened again, as live does');
   assert.equal(strings.get(45), "battle, but now there's just a");
   assert.equal(hidden.get(9), false, 'the index button past the contents');
   click(9);
@@ -1930,7 +2007,8 @@ test('the Amulet of the Eye teleports to the Temple of the Eye from the inventor
     const player = fakePlayer('Eye', { x: 3222, y: 3218 });
     const click = (name, extra) => hooks.itemHandlers.forEach((handler) => handler({ player, itemId: Shared.obj(name), item: new Item(Shared.obj(name), 1), ...extra }));
     click('gotr_amulet_of_the_eye', { option: 'Teleport', interfaceId: 3214 });
-    assert.deepEqual(arrivals.splice(0), [[Shared.LOBBY_TILE.x, Shared.LOBBY_TILE.y]], 'the inventory Teleport lands in the temple');
+    // Wiki (Amulet of the Eye): just south of the portal, TeleportLocationLine 3615,9460.
+    assert.deepEqual(arrivals.splice(0), [[3615, 9460]], 'the inventory Teleport lands south of the portal');
     click('gotr_amulet_of_the_eye', { option: 'Wear', interfaceId: 3214 });
     assert.deepEqual(arrivals, [], 'Wear does not teleport');
     for (const colour of ['red', 'green', 'blue']) {

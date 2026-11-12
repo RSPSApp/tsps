@@ -271,6 +271,13 @@ module.exports = function registerRatcatchersQuest(api) {
   const PORT_SARIM_ZONE = { minX: 2995, maxX: 3050, minY: 3190, maxY: 3245 };
   const MANSION_ARRIVAL = { x: 2848, y: 5108, z: 0 };
   const ARDOUGNE_ARRIVAL = { x: 2562, y: 3321, z: 0 };
+  // Wiki (Rat Pits): the pits need partial completion of Ratcatchers, each opening during the quest. The
+  // Port Sarim manhole (Varrock's pit shares the loc id, so match the tile) opens once Smokin' Joe sends
+  // the player to The Face (17), since the quest then has them climb down to Felkrash (Ratcatchers/Quick guide).
+  const PORT_SARIM_MANHOLE = { id: ObjectIdentifiers.MANHOLE_5, x: 3018, y: 3232, z: 0 };
+  const FACE_PAGE = "The Face";
+  // Transcript:The Face lists this line under historical dialogue; the Wiki gives no current refusal.
+  const FACE_MANHOLE_REFUSAL = "historical-dialogue-attempting-to-enter-the-manhole-before-smokin-joe-tells-the-player-about-the-face-in-ratcatchers";
 
   // Transcript step ids the plugin acts on.
   const SNIFF_ACTION_ID = "y8ZblR";
@@ -1170,6 +1177,17 @@ module.exports = function registerRatcatchersQuest(api) {
     player.moveTo(new Location(location.x, location.y - 1, 1));
   }
 
+  /** Ladders' "ladders:climb" claim: before stage 17 The Face turns the player away from the Port Sarim manhole. */
+  function guardPortSarimManhole(request) {
+    const { player, object, objectId } = request;
+    if (!quest || !player || objectId !== PORT_SARIM_MANHOLE.id) return;
+    const at = object?.getLocation?.();
+    if (!at || at.getX() !== PORT_SARIM_MANHOLE.x || at.getY() !== PORT_SARIM_MANHOLE.y || at.getZ() !== PORT_SARIM_MANHOLE.z) return;
+    if (quest.getStage(player) >= STAGE_JOE_TOLD) return;
+    request.handled = true;
+    startTranscript(api, player, FACE_NPC_ID, FACE_PAGE, FACE_MANHOLE_REFUSAL);
+  }
+
   function handleNpcDeath(event) {
     if (!quest) return;
     const player = event?.killer?.isPlayer?.() ? event.killer : null;
@@ -1404,6 +1422,7 @@ module.exports = function registerRatcatchersQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("ladders:climb", guardPortSarimManhole);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
   require("../ratcatchers/CatNaming.Ratcatchers")(api, {quest, felkrashId: FELKRASH_NPC_ID,

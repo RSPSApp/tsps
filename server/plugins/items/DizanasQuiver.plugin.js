@@ -26,6 +26,7 @@ const { EquipmentRequirements } = require("../../src/main/typescript/elvarg/game
 const { Ammunition, RangedWeapon } = require("../../src/main/typescript/elvarg/game/content/combat/ranged/RangedData");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
 const { TYPE_GRAPHIC, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../interface/widgetGroup");
+const { takeInto } = require("./TakeInto");
 
 const VARP = { AMOUNT: 4141, ITEM: 4142 };
 const PARAM_QUIVER = 1910;
@@ -47,6 +48,8 @@ const RANGED_STRENGTH = 11;
 const SUNFIRE_ATTACK = 10;
 const SUNFIRE_STRENGTH = 1;
 const COINS = 995;
+/** Settings > Gameplay > "Ammo-picking behaviour" (setting 305, `take_ammo_toggle`). */
+const AMMO_PICKUP_VARBIT = 5697;
 
 const OPEN_GROUP_ID = 30010;
 const OPEN_COMPONENT = { ROOT: 0, FRAME: 1, TITLE: 2, ITEM: 3, CONTENT: 4, CHARGES: 5 };
@@ -647,6 +650,24 @@ function deathItemDrop(event) {
   clearQuiverState(player, item);
 }
 
+/**
+ * With Ammo-picking behaviour on, ground ammo matching the worn quiver's goes into it. Ours:
+ * ammo that matches the worn ammo slot too goes there first (the Ranged combat tutor's pickup).
+ */
+function pickupIntoQuiver(event) {
+  const { player, groundItemId } = event;
+  if (player?.getPacketSender?.().getVarbit?.(AMMO_PICKUP_VARBIT) !== 1 || !wornQuiver(player)) return;
+  const ammo = stored(player);
+  if (!ammo || ammo.id !== groundItemId || wornAmmo(player)?.getId?.() === groundItemId) return;
+  takeInto(pluginApi, event, {
+    room: () => (wornQuiver(player) && stored(player)?.id === groundItemId ? MAX_AMOUNT - stored(player).amount : 0),
+    store: (amount) => {
+      store(player, { id: groundItemId, amount: stored(player).amount + amount }, true);
+      return amount;
+    },
+  });
+}
+
 function login({ player }) {
   sendSlot(player);
 }
@@ -660,6 +681,7 @@ module.exports = {
     api.persistAttribute(ATTRIBUTE);
     api.persistAttribute(AVA_ATTRIBUTE, 0);
     api.onPlayerLogin(login);
+    api.onGroundItemPickup(pickupIntoQuiver);
     api.onInterfaceActionClick(slotClicked);
     api.onItemOnItem(itemOnItem, { noted: false });
     api.onCombatHitResolved(spendCharge);
@@ -682,5 +704,5 @@ module.exports = {
   stored,
   firedAmmunition,
   slotClicked,
-  _test: { stageOf, idFor, itemCharges, blessingProgress, chargeWithSplinters, uncharge, blessAtShrine, upgradeWithAva, avaRecovery, hasSunfire, quiverBonuses, spendCharge, shouldKeepQuiver, deathItemDrop, openQuiver, renderOpen, activeAmmoId, brokenIdFor },
+  _test: { stageOf, idFor, itemCharges, blessingProgress, chargeWithSplinters, uncharge, blessAtShrine, upgradeWithAva, avaRecovery, hasSunfire, quiverBonuses, spendCharge, shouldKeepQuiver, deathItemDrop, openQuiver, renderOpen, activeAmmoId, brokenIdFor, pickupIntoQuiver },
 };

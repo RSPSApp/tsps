@@ -9,7 +9,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Thieving = require("../plugins/skills/Thieving.plugin");
-const Diary = require("../plugins/achievements/diaries/ArdougneHeroDiary.plugin");
+const Diary = require("../plugins/achievements/diaries/ArdougneHeroDiary.AchievementDiaries");
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 

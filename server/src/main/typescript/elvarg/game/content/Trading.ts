@@ -44,6 +44,9 @@ export class Trading {
     private static readonly CONFIRM_INTERFACE = 334;
     private static readonly INVENTORY_INTERFACE = 336;
     private static readonly TRADE_REQUEST_CHAT_TYPE = 101;
+    /** All Settings "Accept trade delay" (205): while 1, Accept waits 3 seconds after any change to the offers. */
+    private static readonly ACCEPT_DELAY_VARBIT = 13130;
+    public static readonly ACCEPT_DELAY_MS = 3000;
 
     // Text components the cache trade scripts leave to the server.
     private static readonly OFFER_FREE_SLOTS = (Trading.OFFER_INTERFACE << 16) | 9;
@@ -67,6 +70,8 @@ export class Trading {
     // Delays!!
     private button_delay: SecondsTimer = new SecondsTimer();
     private request_delay: SecondsTimer = new SecondsTimer();
+    /** When either player last changed this trade's offers (Date.now), for the accept trade delay. */
+    private offerChangedAt = 0;
 
     constructor(player: Player) {
         this.player = player;
@@ -258,6 +263,10 @@ export class Trading {
         if (!this.button_delay.finished()) {
             return;
         }
+        // Ours: a click during the delay does nothing, and says nothing.
+        if (this.state === TradeState.TRADE_SCREEN && this.acceptDelayed()) {
+            return;
+        }
         let interact_: Player = this.interact;
         let t_state = interact_.getTrading().getState();
         if (this.state == TradeState.TRADE_SCREEN) {
@@ -351,6 +360,17 @@ export class Trading {
         this.button_delay.start(1);
     }
 
+    /**
+     * Whether this player's accept trade delay is on and the offers changed less than 3 seconds ago.
+     * AI bots never wait: one may offer and accept in the same tick, and a dropped accept would leave
+     * the trade hanging.
+     */
+    private acceptDelayed(): boolean {
+        if (this.player.isPlayerBot?.()) return false;
+        return this.player.getPacketSender().getVarbit(Trading.ACCEPT_DELAY_VARBIT) === 1
+            && Date.now() - this.offerChangedAt < Trading.ACCEPT_DELAY_MS;
+    }
+
     private confirmScreen() {
         // Update state
         this.state = TradeState.CONFIRM_SCREEN;
@@ -393,7 +413,7 @@ export class Trading {
                 const offered = from.getItems()[slot];
                 if (offered.getId() === id) {
 
-                    if (!offered.isTradeable()) {
+                    if (!Trading.canOffer(offered)) {
                         this.player.sendMessage("You cannot trade that item.");
                         return;
                     }
@@ -412,6 +432,7 @@ export class Trading {
                     }
 
                     Trading.moveItems(from, to, slot, amount);
+                    this.offerChangedAt = this.interact.getTrading().offerChangedAt = Date.now();
 
                     // A bot with a trading handler re-judges the trade whenever the offer changes.
                     (this.interact as any).getTradingInteraction?.()?.offerChanged?.(this.player);
@@ -420,6 +441,15 @@ export class Trading {
                 this.player.getPacketSender().sendInterfaceRemoval();
             }
         }
+    }
+
+    private static canOffer(item: Item): boolean {
+        if (item.isTradeable()) return true;
+        if (item.isUntradeable()) return false;
+
+        const request = { item, allowed: false };
+        PluginManager.emitCustomEvent("trade:item-eligibility", request);
+        return request.allowed;
     }
 
     /**
@@ -440,7 +470,7 @@ export class Trading {
             for (const index of slots) {
                 if (moved >= amount || to.getFreeSlots() <= 0) break;
                 const item = from.getItems()[index];
-                if (item.getId() !== id || !item.isTradeable()) continue;
+                if (item.getId() !== id || !Trading.canOffer(item)) continue;
                 from.switchItem(to, item.clone(), false, index, false);
                 moved++;
             }
@@ -468,6 +498,7 @@ export class Trading {
     }
 
     resetAttributes() {
+        this.offerChangedAt = 0;
         // Reset trade attributes
         this.setInteract(null);
         this.setState(TradeState.NONE);

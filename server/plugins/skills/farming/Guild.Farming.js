@@ -161,9 +161,31 @@ function bankStorageOp(event) {
         if (!stored[key]) delete stored[key];
     }
     container.setMetaValue("farming:stored", stored);
-    if (seeds && Object.keys(stored).length === 0 && initial) player.sendMessage("Your seed box is now empty.");
+    if (seeds && Object.keys(stored).length === 0 && initial) Patches.spam(player, "Your seed box is now empty."); // spam, as recorded
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
+}
+/**
+ * A death that empties the herb sack or seed box (the storage items' death hook decides when)
+ * takes what it stores out of it. A PvP death moves a seed box's seeds to the bank where there is
+ * room (Wiki: Seed box, 7 March 2019).
+ */
+function emptyStored(player, container) {
+    const stored = container.getMetaValue("farming:stored") ?? {}, contents = [];
+    for (const [key, count] of Object.entries(stored)) {
+        const id = Number(key);
+        if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
+        contents.push({ id, amount: count });
+    }
+    if (Object.keys(stored).length) container.setMetaValue("farming:stored", {});
+    return contents;
+}
+const DEATH_CONTAINERS = [
+    { holds: item => containerKind(item) === "herb", empty: emptyStored, varbit: "emptyondeath_herbsack" },
+    { holds: item => containerKind(item) === "seed", empty: emptyStored, varbit: "emptyondeath_seedbox", toBankInPvp: true },
+];
+function deathContainers(query) {
+    query.containers.push(...DEATH_CONTAINERS);
 }
 /** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 function storeRoom(player, container, id) {
@@ -232,7 +254,9 @@ function pickup(event) {
         if (storeCrop(player, sack, itemId, 1) !== 1) return;
         manager.deregister(groundItem);
         core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
-        // Mirror this server's ordinary ground pickup; live sack audio is not established.
+        // rsprox 227/00560.txt:228486, 237/01102.txt:366961: the pickup tick's spam line, with the
+        // ordinary pickup sound (synth 2582).
+        Patches.spam(player, `You put the ${core.CacheDefinitions.getItem(itemId).name} herb into your herb sack.`);
         core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
         player.getLastItemPickup().reset();
         player.getInventory().refreshItems();
@@ -271,10 +295,11 @@ function storagePair(event) {
     const id = (container === a ? b : a).getId();
     const stored = storeCrop(event.player, container, id, inventory.getAmount(id));
     if (stored) inventory.deleteNumber(id, stored);
-    if (stored && containerKind(container) === "seed") event.player.sendMessage(storedLine(id, stored));
+    if (stored && containerKind(container) === "seed") Patches.spam(event.player, storedLine(id, stored));
     else if (!stored) event.player.sendMessage(containerKind(container) === "seed" && isSeed(id) ? NO_SEED_ROOM : "There is no room for that in this container.");
 }
-// Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines.
+// Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines. The
+// Stored, Emptied and "now empty" lines are spam (every recorded one); the refusals are game messages.
 const NO_SEED_ROOM = "You don't have space in your seed box for that.";
 const NO_SEEDS = "You have no seeds that will fit in the seed box.";
 const displayName = id => core.CacheDefinitions.getItem(id).name;
@@ -296,7 +321,7 @@ function storageAction(event) {
             if (!amount) continue;
             inventory.deleteNumber(id, amount);
             any = true;
-            if (kind === "seed") event.player.sendMessage(storedLine(id, amount));
+            if (kind === "seed") Patches.spam(event.player, storedLine(id, amount));
         }
         if (kind === "seed" && !any) event.player.sendMessage(refused ? NO_SEED_ROOM : NO_SEEDS);
     } else if (kind === "seed" && action === "check") {
@@ -309,7 +334,7 @@ function storageAction(event) {
             if (amount && Patches.give(event.player, +id, amount)) {
                 stored[id] -= amount;
                 if (!stored[id]) delete stored[id];
-                if (kind === "seed") event.player.sendMessage(`Emptied ${amount} x ${displayName(+id)} to your inventory.`);
+                if (kind === "seed") Patches.spam(event.player, `Emptied ${amount} x ${displayName(+id)} to your inventory.`);
             }
         }
     }
@@ -418,4 +443,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

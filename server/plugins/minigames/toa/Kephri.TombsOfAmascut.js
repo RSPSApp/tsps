@@ -130,7 +130,8 @@ const BOMBER_INTERVAL = 12;
 const BOMBER_FLIGHT = 4;
 const DEATH_TICKS = 3;
 const SPITTER_RANGE = 10;
-const SPITTER_POISON = 6;
+/** Severity 30, a 6 first hit (rsprox_transcripts/223/00014.txt tick 1056: poison varp 0 -> 30). */
+const SPITTER_POISON = 30;
 const SPIT_PRAYER_FACTOR = 0.2;
 const SPIT_MAX_HIT = 10;
 const SPITTER_SPEED = 3;

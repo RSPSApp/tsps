@@ -23,6 +23,8 @@ const pendingSpirits = new WeakMap();
 const SPIRIT_TRANSITION_TICKS = 2;
 
 const VARPS_ATTRIBUTE = "vale-totems:varps";
+/** What the Sacraments of Ent Folk's own notes count; server-side, as live sends no var for them. */
+const COUNTERS = { "totems-built": "vale-totems:totems-built", rummages: "vale-totems:rummages" };
 const SITES = Shared.DATA.sites.map((site) => site.site);
 const PIECES = ["low", "mid", "top"];
 const CARVED_OFFSET = 9;
@@ -85,6 +87,14 @@ function researchPoints(player) {
 function setResearchPoints(player, points) {
   player.getPacketSender().sendConfig(varpId("ent_totems_research_points"), points);
   save(player);
+}
+
+/** A counter's value, or one more of it with `add`. */
+function count(player, name, add = 1) {
+  const attribute = COUNTERS[name];
+  const value = Math.max(0, Math.floor(Number(player.getAttribute(attribute)) || 0)) + add;
+  if (add) player.setAttribute(attribute, value);
+  return value;
 }
 
 /** The totem at a site: its wood (1-6, 0 for none), carvings (0 uncarved, 1-5 animal) and so on. */
@@ -239,6 +249,7 @@ function activePlayers() {
 
 function attach(api) {
   api.persistAttribute(VARPS_ATTRIBUTE);
+  for (const attribute of Object.values(COUNTERS)) api.persistAttribute(attribute, 0);
   api.onPlayerLogin(restore);
   api.onPlayerMapSquareChange(enterSquare);
   api.onPlayerLogout(leave);
@@ -246,5 +257,5 @@ function attach(api) {
 
 module.exports = {
   SITES, attach, siteOfLoc, tileOf, get, set, totem, animals, erect, carve, collapse, rollAnimals,
-  researchPoints, setResearchPoints, join, activePlayers,
+  researchPoints, setResearchPoints, count, join, activePlayers,
 };

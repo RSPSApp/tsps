@@ -34,7 +34,9 @@ class Miasma {
       const [min, max] = (distance === 0 ? centre : outer)[step];
       const damage = Common.hurtPlayer(player, Common.randomInt(min, max), true);
       this.fight.stats.miasmaDamage += damage;
-      if (step === 0) Common.core.CombatFactory.poisonEntity(player, poison);
+      // Severity, not the hit: the miasma's 8 sets the poison varp 0 -> 36, 5 x 8 - 4 (rsprox_transcripts/227/00240.txt:9300,
+      // 22 times across the recordings), a first hit of 8 as the Wiki says.
+      if (step === 0) Common.core.CombatFactory.poisonEntity(player, poison * 5 - 4);
     }
   }
 

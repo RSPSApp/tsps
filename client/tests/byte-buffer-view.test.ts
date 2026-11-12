@@ -48,3 +48,11 @@ for (const kind of ["signed", "unsigned"] as const) {
         assert.equal(backing[2], 31);
     });
 }
+
+test("readSignedMedium reads a signed 24-bit value (loc opcodes 97/98)", () => {
+    const buffer = new ByteBuffer(new Int8Array([-1, -1, -1, 0x00, 0x24, 0x1b, -128, 0, 0]));
+    assert.equal(buffer.readSignedMedium(), -1);
+    assert.equal(buffer.readSignedMedium(), 0x241b);
+    assert.equal(buffer.readSignedMedium(), -0x800000);
+    assert.equal(buffer.offset, 9);
+});

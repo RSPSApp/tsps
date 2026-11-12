@@ -1,6 +1,6 @@
 import { RTCDataChannel, RTCPeerConnection } from "node-datachannel/polyfill";
 import { WebSocket } from "ws";
-import { getWorldDefinition } from "../../game/definition/WorldDefinition";
+import { getWorldDefinition, hasGlobalWorldTag } from "../../game/definition/WorldDefinition";
 import type { BinaryChannel } from "../BinaryChannel";
 import { DataChannelBinaryChannel } from "./DataChannelBinaryChannel";
 import { ContentApi } from "../http/ContentApi";
@@ -148,9 +148,11 @@ export class WebRtcGameConnector {
     if (message.type === "registered") {
       this.registrationAttempts = 0;
       console.info(`[webrtc] registered world ${this.worldId} with signalling relay`);
-      // The world list details /host sends; it also renders a spawn minimap preview, which a home server cannot.
-      const { description, spawn } = getWorldDefinition();
-      this.send({ type: "world-manifest", manifest: { description, maxPlayers: null, spawn } });
+      const { description, spawn, membersWorld, experienceMultiplier } = getWorldDefinition();
+      const tags = [membersWorld ? "Members" : "F2P"];
+      if (hasGlobalWorldTag("pvp")) tags.push("PvP");
+      if (experienceMultiplier > 1) tags.push("Boosted XP");
+      this.send({ type: "world-manifest", manifest: { description, maxPlayers: null, spawn, tags } });
       return;
     }
     // A bad listing only loses the world list details; a relay from before world-manifest answers invalid_signal.

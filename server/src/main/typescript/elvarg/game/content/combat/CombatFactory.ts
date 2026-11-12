@@ -257,6 +257,7 @@ export class CombatFactory {
         // We've got our damage. We can now create a HitDamage
         // instance.
         let hitDamage = new HitDamage(damage, damage == 0 ? HitMask.BLUE : HitMask.RED);
+        if (rolls && entity.isPlayer()) hitDamage.setRolledMaximum(range.maximum);
 
         /**
          * Prayers decreasing damage.
@@ -308,8 +309,10 @@ export class CombatFactory {
     /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
-     * hit, and before its XP); a hit queued when it lands (Scurrius' bolts, the Leviathan's bite) is read then. The
-     * impact pass only covers hits that skipped the queue (a manipulateHit replacement).
+     * hit, and before its XP), except an NPC's hit on a player whose turn this tick is still to come: HitQueue.process
+     * reads that one in the victim's turn, after their clicks. A hit queued when it lands (Scurrius' bolts, the
+     * Leviathan's bite) is read then. The impact pass only covers hits that skipped the queue (a manipulateHit
+     * replacement).
      */
     public static applyProtectionPrayer(hit: PendingHit): void {
         if (typeof hit.hasAppliedImpactProtection === "function" && hit.hasAppliedImpactProtection()) return;
@@ -922,7 +925,11 @@ export class CombatFactory {
         }
 
         // The protection prayer is read on the attack's tick, before the XP is paid on what the hit deals.
-        CombatFactory.applyProtectionPrayer(qHit);
+        // An NPC's attack on a player who has yet to take this tick's turn (NPCs go first) is read in that
+        // turn, after their clicks: live, a prayer switched on the tick the attack starts blocks it
+        // (rsprox captures: Scurrius' swipes, 23 of 23 such flicks blocked, recordings 3275 and 75).
+        // HitQueue.process reads it.
+        if (!CombatFactory.readsProtectionInVictimTurn(qHit)) CombatFactory.applyProtectionPrayer(qHit);
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
@@ -941,6 +948,14 @@ export class CombatFactory {
             qHit,
             World.getProcessCycle() + qHit.getDelay() + CombatFactory.hitProcessingDelay(qHit),
         );
+    }
+
+    /** An NPC's hit on a player whose turn this tick is still to come: the prayer is read in that turn. */
+    private static readsProtectionInVictimTurn(hit: PendingHit): boolean {
+        const attacker = hit.getAttacker();
+        const target = hit.getTarget();
+        if (!attacker?.isNpc?.() || !target?.isPlayer?.()) return false;
+        return !target.getCombat().getHitQueue().hasProcessed(World.getProcessCycle());
     }
 
     /**
@@ -1060,10 +1075,9 @@ export class CombatFactory {
                     playerAttacker.getWeapon() == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
-                    applyPoison = Misc.getRandom(3) === 0;
-                    poisonType = CombatPoisonData.getPoisonType(
-                        playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT)
-                    );
+                    const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
+                    applyPoison = Misc.getRandom(CombatPoisonData.getMeleeRollRange(meleeWeapon)) === 0;
+                    poisonType = CombatPoisonData.getPoisonType(meleeWeapon);
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
@@ -1248,8 +1262,10 @@ export class CombatFactory {
             }
             // An accepted venom replaces the ordinary negative poison counter.
             if (isVenom) protection.clearCounter();
+            // Live names venom, only when it starts from nothing (rsprox_transcripts/237/01087.txt line 30368;
+            // 275 recorded); a poison turned to venom, or venom reapplied, says nothing.
             if (!alreadyPoisoned) {
-                player.sendMessage("You have been poisoned!");
+                player.sendMessage(isVenom ? "You have been poisoned by venom!" : "You have been poisoned!");
             }
         }
 
@@ -1580,13 +1596,27 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen).
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable")) {
+        // The Wiki's freeze resistance (the NPC's status record): a whole percentage that shortens the
+        // freeze, 100 meaning never frozen even when the spell lands (Wiki: Freeze).
+        const resistance = character.isNpc?.()
+            ? character.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
+        if (resistance >= 100) {
             return;
         }
 
-        const freeze = { target: character, source, ticks, kind };
+        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
+        // Wiki gives them a partial resistance, which says they can be frozen.
+        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+            return;
+        }
+
+        // `resisted` is set by a listener that already models this NPC's resistance exactly (the
+        // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.
+        const freeze = { target: character, source, ticks, kind, resisted: false };
         PluginManager.emitCustomEvent("combat:freeze-duration", freeze);
+        if (resistance > 0 && freeze.resisted !== true) {
+            freeze.ticks = (freeze.ticks * (100 - resistance)) / 100;
+        }
         ticks = Math.max(1, Math.floor(freeze.ticks));
         character.getTimers().registers(TimerKey.FREEZE, ticks);
         character.getTimers().registers(TimerKey.FREEZE_IMMUNITY, ticks + Misc.getTicks(3));

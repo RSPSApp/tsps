@@ -383,6 +383,24 @@ function loadItemDefinitions() {
 
 function customItemsResource() { return CacheDefinitions.getCustomItems(); }
 
+let alchemyValues;
+/**
+ * /api/item-alchemy: what High and Low Alchemy pay for each tradeable item, as `[high, low]`
+ * (0 for an item the spells refuse, such as a bond). The client prices widget examines with it.
+ */
+function itemAlchemyResource() {
+  if (alchemyValues) return alchemyValues;
+  const { examinePrices } = requireGameModule(path.join("game", "content", "ExaminePrice"));
+  const values = {};
+  const count = CacheDefinitions.getCounts().items;
+  for (let id = 0; id < count; id++) {
+    if (getItemDefinition().forId(id).isNoted()) continue;
+    const item = examinePrices(id);
+    if (item && (item.prices.ha > 0 || item.prices.la > 0)) values[id] = [item.prices.ha, item.prices.la];
+  }
+  return (alchemyValues = values);
+}
+
 function customModelsResource(_query, segments) {
   const models = CacheDefinitions.getCustomModels();
   return segments.length ? models.find((model) => String(model.id) === segments[0]) : models;
@@ -400,7 +418,7 @@ function sendCustomItems({ player }) {
 module.exports = {
   name: "ItemDefinitionLoader",
   description: "Loads custom item definitions and models from the custom-items and custom-models content files and sends the custom items to players at login.",
-  _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack },
+  _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack, itemAlchemyResource },
   register(api) {
     const startedAt = Date.now();
     const result = loadItemDefinitions();
@@ -417,6 +435,7 @@ module.exports = {
     });
     api.registerContentEndpoint("custom-items", customItemsResource);
     api.registerContentEndpoint("custom-models", customModelsResource);
+    api.registerContentEndpoint("item-alchemy", itemAlchemyResource);
     api.onPlayerLogin(sendCustomItems);
     api.onServerStartup?.(warnMissingSpecials); // Absent in tests that load items with a minimal api.
   },

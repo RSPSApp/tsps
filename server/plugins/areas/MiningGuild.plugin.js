@@ -9,6 +9,8 @@
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
 const REQUIRED_LEVEL = 60;
+const MAIN_DOOR_SOUND = 81;
+const MAIN_DOOR_OPEN_ROTATION = 2;
 /** Wiki Mining Guild: the invisible boost inside the members' area. */
 const MEMBERS_AREA_BOOST = 7;
 /** Rocks that already have the area's own time on their Wiki page. */
@@ -81,6 +83,36 @@ function guardLadder(request) {
   if (!canEnter(request.player)) request.handled = true;
 }
 
+/** RSProx 3241 and 3131 show an invisible wall, a quarter-turned leaf and a two-tick close. */
+function passMainDoor(player, object, x, y) {
+  const { CacheDefinitions, GameObject, Location } = core;
+  const tile = object.getLocation();
+  const wall = new GameObject(CacheDefinitions.getLocId("inviswall"), tile, object.getType(), object.getFace(), null);
+  const leaf = new GameObject(CacheDefinitions.getLocId("inactivepoordoor"), new Location(x, tile.getY() + 1, tile.getZ()),
+    object.getType(), MAIN_DOOR_OPEN_ROTATION, null);
+  const sender = player.getPacketSender();
+  let opened = false;
+  ObstacleRunner.run({ player }, [
+    { wait: 1 },
+    { run: () => {
+      // Remove the cached door mesh before replacing it with the invisible wall.
+      sender.sendObjectRemoval(object);
+      sender.sendObject(wall);
+      sender.sendObject(leaf);
+      sender.sendSound(MAIN_DOOR_SOUND, 1, 0);
+      opened = true;
+    } },
+    { walk: [[x, y]], arrive: true },
+    { wait: 2 },
+  ], {
+    onFinish: () => {
+      if (!opened) return;
+      sender.sendObjectRemoval(leaf);
+      sender.sendObject(object);
+    },
+  });
+}
+
 function useDoor(request) {
   if (request.handled) return;
   const { DOOR_562, DOOR_563, DOOR_564 } = core.ObjectIdentifiers;
@@ -99,6 +131,10 @@ function useDoor(request) {
   }
   const x = door.getX(), y = door.getY() + (entering ? 0 : 1);
   if (from.getZ() !== door.getZ() || Math.abs(from.getX() - x) + Math.abs(from.getY() - y) !== 1) return;
+  if (request.objectId === DOOR_562) {
+    passMainDoor(player, object, x, y);
+    return;
+  }
   const sender = player.getPacketSender();
   sender.sendObjectRemoval(object);
   // Keep the shared wall closed so another player cannot bypass the entry check.

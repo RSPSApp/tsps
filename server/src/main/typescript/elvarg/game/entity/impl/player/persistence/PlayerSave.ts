@@ -184,6 +184,35 @@ export class PlayerSave {
     private flags: string[];
     public sailing?: SailingState;
 
+    /**
+     * Set on a save that only vouches for its account: its name, password, rights and remembered
+     * logins. Its character is made at the next login, as a new one (a Hardcore World's Reset), so
+     * the account never goes without a save that holds its credentials.
+     */
+    private unmade?: boolean;
+
+    public isUnmade(): boolean {
+        return this.unmade === true;
+    }
+
+    /**
+     * Empties this save down to its account: the inventory, worn items, bank and levels go (back
+     * to a new character's, so a character list shows no old life), and every attribute but the
+     * remembered logins. The fields a save must have stay in shape (the SQLite
+     * writer validates them); a login ignores them for an unmade save.
+     */
+    public unmake(): void {
+        this.unmade = true;
+        const tokens = this.attributes?.[LOGIN_TOKENS_ATTRIBUTE];
+        this.attributes = tokens === undefined ? {} : { [LOGIN_TOKENS_ATTRIBUTE]: tokens };
+        this.inventory = (this.inventory ?? []).map(() => new Item(-1, 0));
+        this.equipment = (this.equipment ?? []).map(() => new Item(-1, 0));
+        this.banks = new Map();
+        const skills = new Skills();
+        skills.level = [...skills.maxLevel];
+        this.skills = skills;
+    }
+
     public getDisplayName(): string {
         return this.displayName;
     }

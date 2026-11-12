@@ -72,6 +72,9 @@ const family = {
   names: [NAME],
   pairs: [],
   followsOnDeath: true,
+  /** A PvP death empties it even when the death keeps it. */
+  emptiedOnPvpDeath: true,
+  emptyOnDeathVarbit: "emptyondeath_tacklebox",
   /** Only bait is used from the box (Wiki); gear has to come out first. */
   usable: (id) => baitIds().has(id),
   accepts: (id) => tackleIds().has(id) && !Storage.isNoted(id),

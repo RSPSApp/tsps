@@ -65,6 +65,8 @@
  *    implemented; the owed partisan comes from the camp tent and the owed
  *    circlet from the Sophanem High Priest.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerBeneathCursedSandsQuest(api) {
   const {
     GameObject,
@@ -313,6 +315,11 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     "returned from whence they came. But where did they come from?",
   ];
   const NECROPOLIS_RUBBLE = ObjectIdentifiers.RUBBLE_60; // 44003, climbable
+  const RUBBLE_CROSS_TICKS = 2;
+  const RUBBLE_CROSS_CYCLES = 60;
+  const RUBBLE_CROSS_ANIMATION = 839; // human_walk_style
+  const RUBBLE_CROSS_SOUND = 2454;
+  const BUSY_VARBIT = 12393; // busy: 1 while the player crosses, as TeleportHandler and the bank use it
   const BLOCKED_ENTRY = 44008; // toa_entrance_blocked, Inspect at the Jaltevas Pyramid
   // Quest Helper DigStep and the Wiki: one tile north of the southern ritual pillar.
   const CHEST_DIG_TILE = new Location(3411, 2786, 0);
@@ -848,7 +855,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // Condition answers
   // ==========================================================================
 
-  function answerCondition({ player, text, stepId }) {
+  function answerCondition({ player, text, stepId, pages }) {
     const value = String(text ?? "").toLowerCase();
     switch (stepId) {
       case "EG72ae": // requirements not met
@@ -962,7 +969,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       default:
         break;
     }
-    if (value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
+    // Only for an NPC with this quest's page: the same words guard other quests' requirements
+    // (Twilight's Promise's ending, Prince Itzla Arkan's, Garden of Tranquillity's), theirs to answer.
+    const own = Array.isArray(pages) && pages.some((page) => page?.page === PAGE);
+    if (own && value.includes("does not meet all of the requirements")) return !meetsRequirements(player);
     return null;
   }
 
@@ -986,7 +996,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (options.shake) {
       for (const [ticks, axis, random] of options.shake) {
         Scenes.later(player, ticks, () => {
-          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(axis, random, 0, 0);
+          if (cameraWatch.get(player) === token) CameraShake.send(player.getPacketSender(), "atmospheric", axis, random, 0, 0);
         });
       }
     }
@@ -1747,8 +1757,29 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function climbNecropolisRubble(player) {
     if (quest.getStage(player) < STAGE_NECROPOLIS) return;
-    // Capture 101 ticks 9141/10674: the rubble crosses east-west, not south into the wall.
-    player.moveTo(new Location(player.getLocation().getX() > 3348 ? 3347 : 3349, 2759, 0));
+    // Capture 101 ticks 9141/10674: the rubble crosses east-west, not south into the wall. Tick 9141:
+    // busy, an exactmove from 3349 to 3347 over 60 cycles with human_walk_style (839), and sound
+    // 2454 (3 loops, delay 4); the player is free again two ticks later. Busy (12393) goes to 1 on the
+    // start tick and back to 0 when the move ends (227/00101.txt [9141]/[9143], [10674]/[10676]).
+    const { ForceMovement, ForceMovementTask, TaskManager } = api.core;
+    const sender = player.getPacketSender();
+    let busyCleared = false;
+    class RubbleCrossing extends ForceMovementTask {
+      stop() {
+        super.stop();
+        if (busyCleared) return;
+        busyCleared = true;
+        sender.sendVarbit(BUSY_VARBIT, 0);
+      }
+    }
+    const fromX = player.getLocation().getX() > 3348 ? 3349 : 3347;
+    const from = new Location(fromX, 2759, 0);
+    if (!player.getLocation().equals(from)) player.moveTo(from);
+    const west = fromX === 3349;
+    sender.sendVarbit(BUSY_VARBIT, 1);
+    TaskManager.submit(new RubbleCrossing(player, RUBBLE_CROSS_TICKS,
+      new ForceMovement(from.clone(), new Location(west ? -2 : 2, 0, 0), 0, RUBBLE_CROSS_CYCLES, west ? 3 : 1, RUBBLE_CROSS_ANIMATION)));
+    sender.sendSoundEffect(RUBBLE_CROSS_SOUND, 3, 4, 1);
     if (!entryInspected(player)) {
       flag(player, ENTRY_INSPECTED_ATTRIBUTE, true);
       if (quest.getStage(player) < STAGE_ENTRY_INSPECTED) setStage(player, STAGE_ENTRY_INSPECTED);

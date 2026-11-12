@@ -61,6 +61,7 @@ function mockApi() {
   const handlers = {
     variant: [],
     condition: [],
+    interfaceClicks: [],
     custom: new Map(),
     namedObjects: [],
     npcInteractions,
@@ -117,6 +118,7 @@ function mockApi() {
     onCanBankItem: h => handlers.canBankItem.push(h),
     onCanEquip: h => handlers.canEquip.push(h),
     getPluginConfig: (_key, fallback) => fallback,
+    onInterfaceActionClick: (h) => handlers.interfaceClicks.push(h),
     onItemOnItem: (h) => handlers.itemOnItem.push(h),
     onItemOnNpc: (h) => handlers.itemOnNpc.push(h),
     onItemOnObject: (...args) => handlers.itemOnObject.push(typeof args[0] === 'function' ? args[0] : args[2]),
@@ -13960,6 +13962,7 @@ test('Song of the Elves Iorwerth scroll lands on the walkable camp tile', () => 
     ...base.core,
     TeleportHandler: {
       checkReqs: () => true,
+      confirm: (player, destination, go, level, { item } = {}) => go(item),
       teleport: (player, location) => player.moveTo(location),
     },
   };
@@ -14338,11 +14341,12 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
 
 test('Regicide tripwires use the Agility success roll and apply the dart hit and poison on failure', () => {
   const { api: base } = mockApi();
-  const objectHooks = [];
+  const objectHooks = [], poisoned = [];
+  const core = { ...base.core, CombatFactory: { ...base.core.CombatFactory, poisonEntity: (target, severity) => poisoned.push([target, severity]) } };
   const api = new Proxy(base, {
     get: (target, prop) => prop === 'onObjectInteraction'
       ? (handler) => objectHooks.push(handler)
-      : target[prop],
+      : prop === 'core' ? core : target[prop],
   });
   require('../plugins/quests/quests/Regicide.Quest')(api);
   const interact = objectHooks[0];
@@ -14351,7 +14355,7 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
   const location = { x: 2285, y: 3187, z: 0 };
   const object = { getFace: () => 3 };
   const createPlayer = (agility) => {
-    const state = { moves: [], hits: [], poison: 0 };
+    const state = { moves: [], hits: [], poison: 0, said: [] };
     const position = { x: 2286, y: 3188, z: 0 };
     const player = {
       getLocation: () => ({ getX: () => position.x, getY: () => position.y, getZ: () => position.z }),
@@ -14362,6 +14366,7 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
       }),
       isPoisoned: () => false,
       setPoisonDamage: (amount) => { state.poison = amount; },
+      sendMessage: (text) => state.said.push(text),
       moveTo: (destination) => state.moves.push([destination.getX(), destination.getY(), destination.getZ()]),
     };
     return { player, state };
@@ -14392,8 +14397,10 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
     interact(failure);
     assert.equal(failure.handled, true);
     assert.equal(caught.state.hits[0][0].getDamage(), 10);
-    assert.equal(caught.state.poison, 2);
-    assert.deepEqual(caught.state.moves, [], 'a triggered tripwire leaves the player on the near side');
+    // rsprox_transcripts/230/02969.txt and 237/01105.txt: the snag line, real poison at 10, and the crossing.
+    assert.deepEqual(caught.state.said, ['You snag the trip wire as you step over it.']);
+    assert.deepEqual(poisoned, [[caught.player, 10]]);
+    assert.deepEqual(caught.state.moves, [[2284, 3188, 0]], 'a snag still steps over');
   } finally {
     Math.random = originalRandom;
   }
@@ -21497,12 +21504,8 @@ test('Song of the Elves prison entry keeps Elena visible and cannot release her 
 test('Song of the Elves prison stair routes to its open foot, not the exit landing behind the wall', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
-  const route = handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs');
-  const event = { player: { getLocation: () => new api.core.Location(2569, 3298, 0) },
-    object: { getLocation: () => new api.core.Location(2569, 3295, 0) },
-    objectId: 35791, sourceLocation: { x: 2569, y: 3298, z: 0 }, destination: null };
-  route(event);
-  assert.equal(event.destination, null, 'the prison stair keeps the normal walk-to-object route');
+  // No route override: the prison stair (and the castle's main staircase) keep the normal walk-to-object route.
+  assert.equal(handlers.routes.find(handler => handler.name === 'routeCastleThroneStairs'), undefined);
 
   const finder = new api.core.RsmodRouteFinding();
   const spec = { level: 0, srcSize: 1, moveNear: true, maxWaypoints: 25, privateArea: null,
@@ -21827,6 +21830,101 @@ test('Song of the Elves remembers Elena’s earlier answer and fills the cave di
   const line = { player, text: 'Is [Tim/Sue/Sam] here, [Tim/Sue/Sam]?' };
   fillName(line);
   assert.equal(line.text, 'Is Sam here, Sam?', 'the player gives the transcript fake identity instead of their actual name');
+});
+
+test('The Lost Tribe reads its symbol book and advances only when the reader closes', () => {
+  // Real-engine coverage, arrows included: lost-tribe-symbol-book.test.cjs.
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().filter(entry => entry.key === 'the_lost_tribe').at(-1);
+  const attrs = new Map([['quest.the_lost_tribe.stage', 7]]);
+  const hidden = new Map(), varbits = new Map();
+  let openInterface = -1;
+  const sender = new Proxy({
+    sendVarbit: (id, value) => varbits.set(id, value),
+    sendInterface: group => { openInterface = group; },
+    sendInterfaceDisplayState: (uid, hide) => hidden.set(uid, hide),
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  const player = {
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getPacketSender: () => sender,
+  };
+  handlers.playerLogin.find((handler) => handler.name === "handleLogin")({ player });
+  handlers.namedItemActions.get('Goblin symbol book').Read({ player });
+  assert.equal(openInterface, 183, 'Read opens lost_tribe_symbol_book');
+  assert.equal(hidden.get((183 << 16) | 33), false, 'on its title spread');
+  assert.equal(quest.getStage(player), 7, 'reading begins without skipping the book');
+  for (const handler of handlers.custom.get('interface:closed')) handler({ player, interfaceId: 183 });
+  assert.equal(quest.getStage(player), 8, 'closing the book completes the reading step');
+  assert.equal(varbits.get(532), 6);
+});
+
+test('The Lost Tribe login recovers the saved treaty scene exit', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const recovery = 'lost-tribe:treaty-scene-exit';
+  const attrs = new Map([[recovery, [3318, 9616, 0]], ['quest.the_lost_tribe.stage', 10]]);
+  const destinations = [];
+  const player = {
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    moveTo: (at) => destinations.push([at.getX(), at.getY(), at.getZ()]),
+  };
+  const recover = handlers.playerLogin.find((handler) => handler.name === 'recover');
+  recover({ player });
+  recover({ player });
+  assert.deepEqual(destinations, [[3318, 9616, 0]]);
+  assert.equal(attrs.get(recovery), null);
+  assert.equal(attrs.get('quest.the_lost_tribe.stage'), 10);
+});
+
+test('The Lost Tribe replaces a missing treaty after Kazgar has escorted the player', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const treaty = api.core.ItemIdentifiers.PEACE_TREATY;
+  let amount = 0;
+  const inventory = {
+    getAmount: (id) => id === treaty ? amount : 0,
+    getFreeSlots: () => 28,
+    adds(id, count) {
+      assert.equal(id, treaty);
+      amount += count;
+    },
+  };
+  const player = {
+    getAttribute: (key) => key === 'quest.the_lost_tribe.stage' ? 11 : undefined,
+    getInventory: () => inventory,
+  };
+  const event = { player, npcId: api.core.NpcIdentifiers.DUKE_HORACIO, stepId: 'cXIAOU' };
+  assert.equal(handlers.condition.at(-1)(event), true);
+  handlers.custom.get('npc-dialogue:condition').at(-1)(event);
+  assert.equal(amount, 1);
+  assert.equal(handlers.condition.at(-1)(event), false);
+});
+
+test('The Lost Tribe chest interaction supports the current and legacy castle locations', () => {
+  const { api, handlers } = mockApi();
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const original = runtime.startTranscript;
+  const transcripts = [];
+  runtime.startTranscript = (...args) => transcripts.push(args);
+  try {
+    require('../plugins/quests/quests/LostTribe.Quest')(api);
+    const player = { getAttribute: () => undefined };
+    const interact = handlers.objects.at(-1);
+    for (const [objectId, x, y] of [
+      [api.core.ObjectIdentifiers.CHEST_38, 3209, 3217],
+      [api.core.ObjectIdentifiers.CHEST_38, 3211, 3212],
+    ]) {
+      const event = { player, objectId, definition: { id: objectId }, location: { x, y, z: 1 } };
+      interact(event);
+      assert.equal(event.handled, true);
+    }
+    assert.equal(transcripts.length, 2);
+    assert.ok(transcripts.every(args => args[3] === 'The Lost Tribe' && args[4] === 'property-recovery-opening-sigmund-s-chest'));
+  } finally {
+    runtime.startTranscript = original;
+  }
 });
 
 test('Song of the Elves uses all six real waterfall pillars, reading, clue retries and the awakened Baxtorian',()=>{
@@ -22339,6 +22437,8 @@ test('Curator Haig belongs to the active Golem museum step, then The Dig Site, t
 
   attributes.set('quest.the_golem.stage', 0);
   attributes.set('quest.the_dig_site.stage', 1);
+  // The curator's approval belongs to the letter: stamped, and not yet back with the examiner.
+  attributes.set('quest.the_dig_site.letter_stamped', true);
   assert.equal(select().owner, 'The Dig Site', 'The Dig Site approval remains available through the curator');
 
   attributes.set('quest.the_dig_site.stage', 9);
@@ -23719,4 +23819,46 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
   assert.equal(condition(legacyAgain, first, 'jzxdAM'), true, 'migrated Purple bonus survives another save');
   assert.equal(condition(legacyAgain, blue, 'jzxdAM'), true, 'Blue delivery survives another save');
 
+});
+
+test('Giant Dwarf machine accepts coal or logs as the first used item without consuming repeats', t => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/GiantDwarf.Quest')(api);
+  const core = api.core;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'giant_dwarf');
+  const player = new (require('../dist/game/entity/impl/player/Player').Player)(null);
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  quest.setStage(player, 20); player.setAttribute('quest.giant_dwarf.clothes', 2);
+  const handler = handlers.itemOnObject.find(h => h.name === 'handleItemOnObject');
+  const use = itemId => {
+    const event = { player, itemId, objectId: core.ObjectIdentifiers.SPINNING_MACHINE, handled: false };
+    handler(event); return event;
+  };
+  for (const first of [core.ItemIdentifiers.LOGS, core.ItemIdentifiers.COAL]) {
+    player.setAttribute('quest.giant_dwarf.machine', 0);
+    player.getInventory().resetItems();
+    player.getInventory().adds(core.ItemIdentifiers.LOGS, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 2);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    assert.equal(use(core.ItemIdentifiers.TINDERBOX).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 0);
+    player.getInventory().adds(core.ItemIdentifiers.COAL, 2);
+    assert.equal(use(first).handled, true);
+    assert.equal(player.getAttribute('quest.giant_dwarf.machine'), 1);
+    use(first);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COAL), 1);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOGS), 1);
+  }
+});
+
+test('RFD Murphy leaves at-sea and wreck copies to their own dialogue handlers', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const core = api.core, attrs = new Map([['quest.recipe_for_disaster.stage', 4]]);
+  const player = { getAttribute: key => attrs.get(key), getInventory: () => ({ getAmount: () => 0 }) };
+  const variant = handlers.variant.at(-1);
+  for (const npcId of [core.NpcIdentifiers.MURPHY_2, core.NpcIdentifiers.MURPHY_3, core.NpcIdentifiers.MURPHY_4]) {
+    assert.equal(variant({ player, npcId, pages: [{ page: 'Recipe for Disaster/Freeing Pirate Pete' }] }), null);
+  }
 });

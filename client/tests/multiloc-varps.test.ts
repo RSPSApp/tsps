@@ -5,14 +5,15 @@ import { multiLocVariants, multiLocVarps } from "../render/loc/MultiLocVarps";
 const locs: Record<number, any> = {
     57028: { transforms: [57064, 57066], transformVarbit: 17649, transformVarp: -1 },
     100: { transforms: [1, 2], transformVarbit: -1, transformVarp: 42 },
+    57066: { seqId: -1, name: "Gate" },
     200: { transforms: undefined, transformVarbit: -1, transformVarp: -1 },
 };
 const locTypeLoader: any = { load: (id: number) => locs[id] };
 const varbitLoader: any = { load: (id: number) => (id === 17649 ? { baseVar: 4770 } : undefined) };
 
 const square = [Int32Array.from([200, 57028, 57028]), Int32Array.from([100])];
-assert.deepEqual([...multiLocVarps(square, locTypeLoader, varbitLoader)].sort((a, b) => a - b), [42, 4770],
-    "a multiloc's varbit counts as its base varp; plain locs read nothing");
+assert.deepEqual([...multiLocVarps(square, locTypeLoader, varbitLoader)], [[4770, "full"], [42, "loc"]],
+    "a door variant needs a full reload, ordinary variants only need loc geometry");
 assert.equal(multiLocVarps(square, locTypeLoader, varbitLoader), multiLocVarps(square, locTypeLoader, varbitLoader),
     "cached per build");
 assert.equal(multiLocVarps(undefined, locTypeLoader, varbitLoader).size, 0, "a square without loc data");
@@ -48,7 +49,7 @@ console.log("multiloc-varps: ok");
     };
     const loader: any = { load: (id: number) => remains[id] };
     const ids = [Int32Array.from([0])];
-    assert.deepEqual([...multiLocVarps(ids, loader, varbitLoader)], [0], "loc 0 reads varp 0");
+    assert.deepEqual([...multiLocVarps(ids, loader, varbitLoader)], [[0, "loc"]], "loc 0 reads varp 0");
     const vars = (value: number): any => ({ getVarp: () => value, getVarbit: () => 0 });
     assert.equal(multiLocVariants(ids, loader, vars(3)), "0:15596", "varp 0 = 3 shows the remains");
     assert.equal(multiLocVariants(ids, loader, vars(2)), "0:-1");

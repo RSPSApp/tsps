@@ -796,3 +796,143 @@ test('a skilling loc keeps its action going from any side of its footprint (5x5 
     ObjectDefinition.forId = originalSizes;
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// Interaction parity with live recordings (ultraviolet-jordan/testing-scenarios). Mechanism per
+// LostCity Player.processInteraction/validateTarget: a route that runs out short of its target
+// ends with "I can't reach that!" on the tick it stops; a target removed or changed on the way
+// ends the walk where the player stands, silently.
+
+/** A real MovementQueue on a mock player over a synthetic clipping map; `blocked` tiles are solid. */
+function parityScene(t, start, blocked) {
+  const messages = [];
+  let location = start;
+  const noop = () => {};
+  const player = {
+    isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false, getAsPlayer() { return this; },
+    getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
+    getLocation: () => location, setLocation: (value) => { location = value; },
+    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getForceMovement: () => null, getTimers: () => ({ has: () => false }), getFollowing: () => null,
+    getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
+    getTrading: () => ({ getButtonDelay: () => ({ finished: () => true }) }),
+    getCombat: () => ({ setCastSpell: noop, reset: noop, isAnimationStalled: () => false }),
+    getSkillManager: () => ({ stopSkillable: noop }),
+    setFollowing: noop, setCombatFollowing: noop, setPositionToFace: noop, setMobileInteraction: noop,
+    setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
+    isRunningReturn: () => false, sendMessage: (message) => messages.push(message),
+    getArea: () => null,
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+  };
+  const queue = new MovementQueue(player);
+  player.getMovementQueue = () => queue;
+  queue.handleRegionChange = noop;
+  queue.syncWildernessStateForMovedPlayer = noop;
+  queue.drainRunEnergy = noop;
+  queue.checkDestination = () => true;
+  const solid = new Set(blocked.map(([x, y]) => `${x},${y}`));
+  queue.canWalkTo = (next) => !solid.has(`${next.x},${next.y}`);
+  const oldRoute = PathFinder.rsmodRouteFinding;
+  const oldCycle = World.processCycle;
+  PathFinder.rsmodRouteFinding = new RsmodRouteFinding((x, y) => solid.has(`${x},${y}`) ? 0x100 : 0);
+  World.processCycle = 100;
+  t.after(() => {
+    PathFinder.rsmodRouteFinding = oldRoute; World.processCycle = oldCycle;
+    TaskManager.cancelTasks(player); TaskManager.cancelTasks(1);
+  });
+  const tick = () => {
+    World.processCycle++;
+    TaskManager.process();
+    queue.beginCycle();
+    queue.processEntityPursuit();
+    if (queue.hasPendingWork()) queue.process();
+    TaskManager.processWalkTo(1);
+  };
+  return { player, queue, messages, tick, where: () => [location.x, location.y] };
+}
+
+test('a ground item with no reachable side: the walk ends on the closest tile with "I can\'t reach that!" once', (t) => {
+  // Live (jug on the Lumbridge kitchen table, clicked from the corridor): the player walks to the
+  // nearest tile, is told once, and the take is dropped - it does not keep re-routing.
+  const table = [[100, 100], [99, 100], [101, 100], [100, 99], [100, 101]];
+  const scene = parityScene(t, new Location(103, 103, 0), table);
+  let taken = 0;
+  scene.queue.walkToGroundItem(new Location(100, 100, 0), () => { taken++; });
+  for (let i = 0; i < 12; i++) scene.tick();
+  assert.deepEqual(scene.where(), [101, 101], 'stops on the closest reachable tile');
+  assert.deepEqual(scene.messages, ["I can't reach that!"]);
+  assert.equal(taken, 0);
+  assert.equal(scene.queue.points.length, 0, 'no route is left queued');
+});
+
+test('a ground item reachable from a side is still taken on arrival', (t) => {
+  const scene = parityScene(t, new Location(103, 100, 0), [[100, 100]]);
+  let taken = 0;
+  scene.queue.walkToGroundItem(new Location(100, 100, 0), () => { taken++; });
+  for (let i = 0; i < 8; i++) scene.tick();
+  assert.equal(taken, 1);
+  assert.deepEqual(scene.messages, []);
+});
+
+test('a loc the player cannot get any closer to is answered on the first tick', (t) => {
+  // Live (West Ardougne drawers from 2472,3299): "I can't reach that!" a tick after the click,
+  // without moving - not after two fruitless re-routes, and not "You can't ...".
+  t.mock.method(ObjectDefinition, 'forId', () => ({ getSizeX: () => 1, getSizeY: () => 1, getBlockingMask: () => 0 }));
+  t.mock.method(PluginManager, 'emitObjectRoute', () => {});
+  const scene = parityScene(t, new Location(99, 99, 0), [[100, 100], [99, 100], [100, 99], [101, 100], [100, 101]]);
+  let operated = 0;
+  scene.queue.walkToObject(new GameObject(348, new Location(100, 100, 0), 10, 0, null), { execute: () => { operated++; } });
+  scene.tick();
+  assert.deepEqual(scene.messages, ["I can't reach that!"]);
+  assert.deepEqual(scene.where(), [99, 99]);
+  for (let i = 0; i < 4; i++) scene.tick();
+  assert.deepEqual(scene.messages, ["I can't reach that!"], 'said once');
+  assert.equal(operated, 0);
+});
+
+test('a loc removed while the player walks to it stops the walk where they stand', (t) => {
+  // Live (a tree felled into a stump mid-approach): the player stops on the spot, no message.
+  t.mock.method(ObjectDefinition, 'forId', () => ({ getSizeX: () => 1, getSizeY: () => 1, getBlockingMask: () => 0 }));
+  t.mock.method(PluginManager, 'emitObjectRoute', () => {});
+  let standing = true;
+  t.mock.method(MapObjects, 'stillStands', () => standing);
+  const scene = parityScene(t, new Location(100, 92, 0), [[100, 100]]);
+  let operated = 0;
+  scene.queue.walkToObject(new GameObject(1276, new Location(100, 100, 0), 10, 0, null), { execute: () => { operated++; } });
+  scene.tick();
+  scene.tick();
+  const [, y] = scene.where();
+  assert.ok(y > 92 && y < 99, 'walking towards the tree');
+  standing = false;
+  scene.tick();
+  assert.deepEqual(scene.where(), [100, y], 'no further step once it is gone');
+  for (let i = 0; i < 6; i++) scene.tick();
+  assert.deepEqual(scene.where(), [100, y]);
+  assert.equal(operated, 0);
+  assert.deepEqual(scene.messages, []);
+});
+
+test('an NPC that changes type during the approach ends it where the player stands', (t) => {
+  // Live (a sheep sheared by another player while being walked to): the follower stops, with
+  // no "Nothing interesting happens." - LostCity validateTarget compares the clicked type.
+  const scene = parityScene(t, new Location(100, 100, 0), []);
+  let transform = -1;
+  const sheep = {
+    isNpc: () => true, isPlayer: () => false, getId: () => 2693, getSize: () => 1,
+    getNpcTransformationId: () => transform, isRegistered: () => true, getHitpoints: () => 10,
+    getPrivateArea: () => null, getLocation: () => new Location(108, 100, 0), getOwner: () => null,
+    getArea: () => null,
+  };
+  let operated = 0;
+  scene.queue.walkToEntity(sheep, () => { operated++; });
+  scene.tick();
+  const [x] = scene.where();
+  assert.ok(x > 100 && x < 107);
+  transform = 1178;
+  scene.tick();
+  assert.deepEqual(scene.where(), [x, 100], 'stops on the tick it changes');
+  for (let i = 0; i < 8; i++) scene.tick();
+  assert.deepEqual(scene.where(), [x, 100]);
+  assert.equal(operated, 0);
+  assert.deepEqual(scene.messages, []);
+});

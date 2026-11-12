@@ -65,12 +65,20 @@ test('native Cure Me clears poison, consumes the Wiki runes and grants no protec
   assert.equal(f.amounts.get(core.ItemIdentifiers.LAW_RUNE), 99);
 });
 
+test('Cure Me converts venom from its last hit dealt, 5 x hit - 4 (rsprox_transcripts/234/03280.txt:69820)', async t => {
+  const f = actor(t); f.player.setPoisonDamage(12); f.player.setVenomed(true); f.player.setLastVenomDamage(10);
+  await cast(t, f, 'Cure Me');
+  assert.equal(f.player.isVenomed(), false);
+  assert.equal(f.player.getPoisonDamage(), 46, 'next 12, last 10: 46');
+});
+
 test('Cure Me downgrades venom at its current damage; a second cast removes poison', async t => {
   for (const damage of [6, 12, 20]) {
     const f = actor(t); f.player.setPoisonDamage(damage); f.player.setVenomed(true);
     await cast(t, f, 'Cure Me');
     assert.equal(f.player.isVenomed(), false);
     assert.equal(CombatPoisonEffect.damageFromSeverity(f.player.getPoisonDamage()), damage);
+    assert.equal(f.player.getPoisonDamage(), damage * 5 - 4, 'venom yet to hit converts from its first (6 becomes 26)');
     assert.equal(f.player.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
     const hits = [];
     t.mock.method(f.player.getCombat().getHitQueue(), 'addPendingDamage', values => hits.push(...values));

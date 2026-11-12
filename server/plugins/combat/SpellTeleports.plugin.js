@@ -5,6 +5,13 @@ let pluginApi;
 
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
+/**
+ * The house tablet's Group option goes to a Group Ironman teammate's house (Wiki). This server has
+ * no Ironman groups, so every player gets live's refusal: the line on the click tick, the tablet
+ * kept and no teleport (rsprox.net capture 2919, tick 2179).
+ */
+const HOUSE_TABLET_GROUP = "group";
+const NOT_IN_GROUP = "You are not in an Ironman Group.";
 /** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
 const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
 const POLLNIVNEACH_REDIRECT_TASK = "teleport-to-pollnivneach-with-a-redirected-telep";
@@ -16,17 +23,42 @@ const SPELL_CONFIGURE_OP = 10;
 // Teleport to House's op2 (interface magic_spellbook:teleport_to_your_house): "Outside", whatever the house's setting.
 const HOUSE_OUTSIDE_OP = 2;
 const ALTERNATES = new Map(Object.entries(TABLETS.alternates).map(([name, data], index) => [name, { ...data, name, bit: 1 << index }]));
-// The Wilderness teleports' op10 (client script magic_spellbook_modifyops): "Disable warning" while
-// the spell's varbit is 1, "Enable warning" while it is 0. It toggles the varbit and never casts.
-// One bit per spell, set while its warning is on.
-const WILDERNESS_WARNINGS_ATTRIBUTE = "spell-teleports:wilderness-warnings";
-const WILDERNESS_WARNINGS = new Map([
-  ["dareeyak teleport", "dareeyak_teleport_warning"],
-  ["carrallanger teleport", "carrallagar_teleport_warning"],
-  ["annakarl teleport", "annakarl_teleport_warning"],
-  ["ghorrock teleport", "ghorrock_teleport_warning"],
-  ["teleport to target", "bounty_teleport_warning"],
-].map(([name, varbit], index) => [name, { varbit, bit: 1 << index }]));
+/**
+ * Wilderness teleport warnings: each is an All Settings row (setting id) over its varbit, saved by the Settings
+ * plugin, so the row and the spellbook's op10 change the same value. A spell warns while its varbit is 1 (op10 then
+ * reads "Disable warning", client script magic_spellbook_modifyops), and is on by default. A tablet warns while its
+ * varbit is 0 (its row's struct reads it inverted), so it is on by default too.
+ */
+const SPELL_WARNINGS = new Map([
+  ["teleport to target", { setting: 60, varbit: "bounty_teleport_warning" }],
+  ["dareeyak teleport", { setting: 61, varbit: "dareeyak_teleport_warning" }],
+  ["carrallanger teleport", { setting: 62, varbit: "carrallagar_teleport_warning" }],
+  ["annakarl teleport", { setting: 63, varbit: "annakarl_teleport_warning" }],
+  ["ghorrock teleport", { setting: 64, varbit: "ghorrock_teleport_warning" }],
+].map(([name, warning]) => [name, { ...warning, warns: 1 }]));
+// `deep` picks the warning's line. Ours: the Ice Plateau, Cemetery and Wilderness crabs tablets, which land past
+// level 30, use the deep line, and Carrallanger (level 19) the other.
+const TABLET_WARNINGS = new Map([
+  ["ice plateau teleport", { setting: 67, varbit: "teletab_ice_plateau_warning", deep: true }],
+  ["cemetery teleport", { setting: 68, varbit: "teletab_cemetery_warning", deep: true }],
+  ["wilderness crabs teleport", { setting: 69, varbit: "teletab_wildycrabs_warning", deep: true }],
+  ["dareeyak teleport", { setting: 70, varbit: "teletab_dareeyak_warning", deep: false }],
+  ["carrallanger teleport", { setting: 71, varbit: "teletab_carrallangar_warning", deep: false }],
+  ["annakarl teleport", { setting: 72, varbit: "teletab_annakarl_warning", deep: true }],
+  ["ghorrock teleport", { setting: 73, varbit: "teletab_ghorrock_warning", deep: true }],
+].map(([name, warning]) => [name, { ...warning, warns: 0 }]));
+// All Settings' buttons: Enable/Disable Wilderness teleport warnings (77/76) and tablet warnings (75/74).
+const WARNING_BUTTONS = new Map([
+  [77, { warnings: SPELL_WARNINGS, on: true }],
+  [76, { warnings: SPELL_WARNINGS, on: false }],
+  [75, { warnings: TABLET_WARNINGS, on: true }],
+  [74, { warnings: TABLET_WARNINGS, on: false }],
+]);
+const SPELL_WARNING = ["Are you sure you wish to teleport to the Wilderness?", "Yes, teleport me now.", "No, I want to stay here."];
+const tabletWarning = (warning) => [warning.deep ? "Teleport into the DEEP wilderness?" : "Teleport into the wilderness?", "Yes", "No"];
+// The spells' warnings were kept here before All Settings had them (one bit per spell, off by default). Its "on"
+// bits match the new default and "off" was only the old default, so it is cleared at login.
+const LEGACY_WARNINGS_ATTRIBUTE = "spell-teleports:wilderness-warnings";
 
 function spellName(event) {
   const itemId = event.itemId ?? -1;
@@ -202,6 +234,7 @@ function useTablet(event) {
     return;
   }
   if (option === "revert" && TABLETS.redirects[name]) return revertTablet(event);
+  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return refuseGroupHouse(event);
   const alternate = ALTERNATES.get(name);
   if (alternate && option === "toggle") return toggleDestination(event, alternate);
   const target = tabletDestination(event, name, option);
@@ -214,10 +247,22 @@ function useTablet(event) {
       arrival?.();
     };
   }
-  if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, target.destination)) return;
+  const usable = () => player.getInventory().contains(event.itemId) && core.TeleportHandler.checkReqs(player, target.destination);
+  if (!usable()) return;
   // OSRS uses the tablet up two ticks in, as it is absorbed (docs/teleport-tablets.md).
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);
-  core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp);
+  // The Wilderness warning asks first, then any other (the boat-at-sea warning).
+  const breakTablet = () => core.TeleportHandler.confirm(player, target.destination,
+    () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp), 20, { item: event.itemId });
+  const warning = TABLET_WARNINGS.get(name);
+  if (!warning || !warningOn(player, warning)) return breakTablet();
+  const [title, yes, no] = tabletWarning(warning);
+  pluginApi.sendMultiChatboxPrompt(player, title, yes, () => usable() && breakTablet(), no, () => {});
+}
+
+function refuseGroupHouse(event) {
+  event.handled = true;
+  event.player.sendMessage(NOT_IN_GROUP);
 }
 
 /** A teleport scroll is used up on the click (docs/teleport-tablets.md). */
@@ -225,36 +270,55 @@ function readScroll(event, destination) {
   const { player } = event;
   event.handled = true;
   if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, destination)) return;
-  player.getInventory().deleteNumber(event.itemId, 1);
-  core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  core.TeleportHandler.confirm(player, destination, () => {
+    player.getInventory().deleteNumber(event.itemId, 1);
+    core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  }, 20, { item: event.itemId });
 }
 
 function syncAlternates({ player }) {
   for (const alternate of ALTERNATES.values()) {
     if (alternateChosen(player, alternate)) sendAlternate(player, alternate);
   }
-  for (const warning of WILDERNESS_WARNINGS.values()) {
-    if (warningOn(player, warning)) sendWarning(player, warning);
-  }
+}
+
+function clearLegacyWarnings({ player }) {
+  if (player.getAttribute(LEGACY_WARNINGS_ATTRIBUTE)) player.setAttribute(LEGACY_WARNINGS_ATTRIBUTE, 0);
 }
 
 function warningOn(player, warning) {
-  return ((Number(player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0) & warning.bit) !== 0;
+  const varbit = core.CacheDefinitions.getVarbitId(warning.varbit);
+  return varbit != null && player.getPacketSender().getVarbit(varbit) === warning.warns;
 }
 
-function sendWarning(player, warning) {
-  const varbit = core.CacheDefinitions.getVarbitId(warning.varbit);
-  if (varbit != null) player.getPacketSender().sendVarbit(varbit, warningOn(player, warning) ? 1 : 0);
+/** Through the Settings plugin, which sends and saves the row's varbit. */
+function setWarning(player, warning, on) {
+  pluginApi.emitCustomEvent("settings:set", { player, settingId: warning.setting, value: on ? warning.warns : 1 - warning.warns });
 }
 
 /** op10 on a Wilderness teleport: flip its warning (the client relabels the op from the varbit). */
 function toggleWarning(event) {
-  const warning = event.opId === SPELL_CONFIGURE_OP && WILDERNESS_WARNINGS.get(event.spellName?.trim().toLowerCase());
+  const warning = event.opId === SPELL_CONFIGURE_OP && SPELL_WARNINGS.get(event.spellName?.trim().toLowerCase());
   if (!warning) return;
   event.handled = true;
-  const bits = Number(event.player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0;
-  event.player.setAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, bits ^ warning.bit);
-  sendWarning(event.player, warning);
+  setWarning(event.player, warning, !warningOn(event.player, warning));
+}
+
+/** A Wilderness teleport spell about to be cast (nothing used yet): with its warning on, it waits for a yes. */
+function confirmSpell(request) {
+  const warning = SPELL_WARNINGS.get(request.name);
+  if (request.handled || !warning || !warningOn(request.player, warning)) return;
+  request.handled = true;
+  const [title, yes, no] = SPELL_WARNING;
+  pluginApi.sendMultiChatboxPrompt(request.player, title, yes, () => request.proceed(), no, () => {});
+}
+
+/** All Settings' enable/disable-all buttons set every spell's, or every tablet's, warning. */
+function setAllWarnings(request) {
+  const button = WARNING_BUTTONS.get(request.settingId);
+  if (request.handled || !button) return;
+  request.handled = true;
+  for (const warning of button.warnings.values()) setWarning(request.player, warning, button.on);
 }
 
 /**
@@ -410,12 +474,15 @@ module.exports = {
     core = api.core;
     pluginApi = api;
     api.persistAttribute(ALTERNATES_ATTRIBUTE, 0);
-    api.persistAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, 0);
+    api.persistAttribute(LEGACY_WARNINGS_ATTRIBUTE, 0);
     api.onItemAction(useTablet);
     api.onPlayerLogin(syncAlternates);
+    api.onPlayerLogin(clearLegacyWarnings);
     api.onSpellCast(toggleWarning);
     api.onSpellCast(castAlternate);
     api.onInterfaceActionClick(castSpell);
     api.onCustomEvent("magic:teleport-quest-lock", teleportQuestLock);
+    api.onCustomEvent("spell:teleport-confirm", confirmSpell);
+    api.onCustomEvent("settings:setting-clicked", setAllWarnings);
   },
 };

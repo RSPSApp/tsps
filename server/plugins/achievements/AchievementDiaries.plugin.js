@@ -116,11 +116,72 @@ function diaryCommand({ player, parts }) {
   return true;
 }
 
+const taskModules = [
+  require("./diaries/ArdougneAleckHunterEmporiumDiary.AchievementDiaries"),
+  require("./diaries/ArdougneBalloonDiary.AchievementDiaries"),
+  require("./diaries/ArdougneBertSandDiary.AchievementDiaries"),
+  require("./diaries/ArdougneCastleChestDiary.AchievementDiaries"),
+  require("./diaries/ArdougneCombatTrainingCampDiary.AchievementDiaries"),
+  require("./diaries/ArdougneDeathRunesDiary.AchievementDiaries"),
+  require("./diaries/ArdougneEliteMantaDiary.AchievementDiaries"),
+  require("./diaries/ArdougneEliteRuneCrossbowDiary.AchievementDiaries"),
+  require("./diaries/ArdougneEliteTaskProgress.AchievementDiaries"),
+  require("./diaries/ArdougneFishingPlatformDiary.AchievementDiaries"),
+  require("./diaries/ArdougneHeroDiary.AchievementDiaries"),
+  require("./diaries/ArdougneIbanStaffDiary.AchievementDiaries"),
+  require("./diaries/ArdougneIceBarrageDiary.AchievementDiaries"),
+  require("./diaries/ArdougneMagicGuildDiary.AchievementDiaries"),
+  require("./diaries/ArdougneMasterFarmerDiary.AchievementDiaries"),
+  require("./diaries/ArdougneNecromancerIslandDiary.AchievementDiaries"),
+  require("./diaries/ArdougneNightshadeDiary.AchievementDiaries"),
+  require("./diaries/ArdougnePalmHealthDiary.AchievementDiaries"),
+  require("./diaries/ArdougnePoisonIvyDiary.AchievementDiaries"),
+  require("./diaries/ArdougneRedSalamanderDiary.AchievementDiaries"),
+  require("./diaries/ArdougneSalveDiary.AchievementDiaries"),
+  require("./diaries/ArdougneSmithingDiary.AchievementDiaries"),
+  require("./diaries/ArdougneStrawberryFarmDiary.AchievementDiaries"),
+  require("./diaries/ArdougneTeleportDiary.AchievementDiaries"),
+  require("./diaries/ArdougneTorstolDiary.AchievementDiaries"),
+  require("./diaries/ArdougneUnicornPenFairyRingDiary.AchievementDiaries"),
+  require("./diaries/ArdougneWatchtowerDiary.AchievementDiaries"),
+  require("./diaries/ArdougneYanilleDoorDiary.AchievementDiaries"),
+  require("./diaries/ArdougneYanilleGrappleDiary.AchievementDiaries"),
+  require("./diaries/DesertFinish.AchievementDiaries"),
+  require("./diaries/FaladorDiary.AchievementDiaries"),
+  require("./diaries/FaladorDiaryRemainder.AchievementDiaries"),
+  require("./diaries/FremennikDiary.AchievementDiaries"),
+  require("./diaries/FremennikLighthouseDiary.AchievementDiaries"),
+  require("./diaries/KandarinDiary.AchievementDiaries"),
+  require("./diaries/KandarinDiaryFinish.AchievementDiaries"),
+  require("./diaries/KaramjaDiary.AchievementDiaries"),
+  require("./diaries/KaramjaDiaryFinish.AchievementDiaries"),
+  require("./diaries/KourendDiaryActivitiesFinish.AchievementDiaries"),
+  require("./diaries/KourendDiarySkillsFinish.AchievementDiaries"),
+  require("./diaries/KourendDiaryTravelFinish.AchievementDiaries"),
+  require("./diaries/KourendKebosDiary.AchievementDiaries"),
+  require("./diaries/LumbridgeDraynorDiary.AchievementDiaries"),
+  require("./diaries/MorytaniaActivities.AchievementDiaries"),
+  require("./diaries/VarrockDiary.AchievementDiaries"),
+  require("./diaries/VarrockDiaryFinish.AchievementDiaries"),
+  require("./diaries/WesternProvincesDiary.AchievementDiaries"),
+  require("./diaries/WildernessDiary.AchievementDiaries"),
+  require("./diaries/WildernessResourceDiary.AchievementDiaries"),
+  require("./diaries/WildernessTriosDiary.AchievementDiaries"),
+];
+
+function registerDiaryTasks(api, { names }) {
+  for (const task of taskModules) {
+    if (task.dependsOn?.some((name) => !names.has(name))) continue;
+    task.register(api);
+  }
+}
+
 module.exports = {
   name: "AchievementDiaries",
   description: "Achievement diaries: task lists, progress, tier reward claims and lamps, plus the ::diary command to inspect, complete or reset tiers.",
   members: true,
   register(api) {
+    api.onCustomEvent("plugins:loaded", registerDiaryTasks.bind(null, api));
     Progress(api);
     Journal(api);
     Rewards(api);

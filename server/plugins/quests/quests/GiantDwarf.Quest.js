@@ -1225,9 +1225,9 @@ module.exports = function registerGiantDwarfQuest(api) {
         player.setAttribute(PIE_ATTRIBUTE, true);
         syncVarbits(player);
         return;
-      case "z3YxxS":
+      case "e1zjyh": // "Return to Keldagrim immediately.": the fade to Blasidar's house
         event.handled = true;
-        event.end = true; // the parsed variant leaves a stray "Explore" menu after this
+        event.end = true;
         if (skipReturnState.has(player)) {
           skipReturnState.delete(player);
           return;
@@ -1431,11 +1431,19 @@ module.exports = function registerGiantDwarfQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (objectId !== SPINNING_MACHINE_OBJECT) return;
-    if (itemId === COAL_ITEM) {
+    // Vermundi: "Some coal and logs should do it! ... put them in the machine". Either item
+    // used on the machine loads both; any other order used to fall through silently.
+    if (itemId === COAL_ITEM || itemId === LOGS_ITEM) {
       if (stageOf(player) < STAGE_ITEMS || clothesState(player) < CLOTHES_BOOK) return;
-      if (machineState(player) >= MACHINE_LOADED) return;
-      if (!hasItem(player, LOGS_ITEM)) return;
       event.handled = true;
+      if (machineState(player) >= MACHINE_LOADED) {
+        player.sendMessage("The spinning machine already has coal and logs in it.");
+        return;
+      }
+      if (!hasItem(player, COAL_ITEM) || !hasItem(player, LOGS_ITEM)) {
+        player.sendMessage("You need both some coal and some logs to fuel the spinning machine.");
+        return;
+      }
       player.getInventory().deleteNumber(COAL_ITEM, 1);
       player.getInventory().deleteNumber(LOGS_ITEM, 1);
       setMachineState(player, MACHINE_LOADED);
@@ -1449,7 +1457,11 @@ module.exports = function registerGiantDwarfQuest(api) {
         startTranscript(api, player, VERMUNDI_NPC_ID, PAGE, LIGHT_AGAIN_VARIANT);
         return;
       }
-      if (machineState(player) !== MACHINE_LOADED) return;
+      if (machineState(player) !== MACHINE_LOADED) {
+        event.handled = true;
+        player.sendMessage("There is nothing in the spinning machine to light. It needs coal and logs first.");
+        return;
+      }
       event.handled = true;
       const success = skillLevel(player, Skill.FIREMAKING) >= LIGHT_LEVEL;
       lightingState.set(player, success);

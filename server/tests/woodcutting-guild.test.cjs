@@ -22,6 +22,7 @@ const GuildData = require("../plugins/skills/woodcutting/GuildData.Woodcutting")
 const core = PluginManager.getCoreApi();
 const events = [];
 const placed = [];
+const removed = [];
 const api = new Proxy({
   core,
   getTaskManager: () => TaskManager,
@@ -42,13 +43,20 @@ before(async () => {
   EntTrunk.attach(api, helpers);
   Shrine.attach(api);
   DATA = GuildData.load(core);
+  const mapObjectsGet = core.MapObjects.get;
+  core.MapObjects.get = (id, location) => {
+    const half = DATA.gates.pairs.flatMap((pair) => pair.halves.map((entry) => ({ pair, entry })))
+      .find(({ pair, entry }) => entry.id === id && pair.x === location.getX() && entry.y === location.getY());
+    return half ? new core.GameObject(id, location.clone(), 0, DATA.gates.face, null) : mapObjectsGet.call(core.MapObjects, id, location, null);
+  };
   core.ObjectManager.register = (object) => placed.push({ id: object.getId(), x: object.getLocation().getX(), y: object.getLocation().getY(), face: object.getFace() });
-  core.ObjectManager.deregister = (object) => placed.push({ removed: object.getId() });
+  core.ObjectManager.deregister = (object) => removed.push({ id: object.getId(), x: object.getLocation().getX(), y: object.getLocation().getY() });
 });
 
 beforeEach(() => {
   events.length = 0;
   placed.length = 0;
+  removed.length = 0;
 });
 
 function createPlayer(x, y, { level = 99, items = [], axe = true, npcs = [] } = {}) {
@@ -125,6 +133,23 @@ test("the data: every id as the cache names it", () => {
   assert.deepEqual(DATA.shrine.evilChicken.pieces.map(item).sort(), ["Evil chicken feet", "Evil chicken head", "Evil chicken legs", "Evil chicken wings"]);
 });
 
+test("both carved redwoods link the two scaffolding levels at their cache placements", () => {
+  core.RegionManager.init();
+  const x = 1570;
+  for (const y of [3484, 3490]) {
+    core.RegionManager.loadMapFiles(x, y);
+    const player = createPlayer(x - 1, y);
+    player.setLocation(new Location(x - 1, y, 1));
+    const enter = (objectId, z) => Guild.enterRedwood({ player, objectId, location: { x, y, z } });
+    assert.equal(enter(core.ObjectIdentifiers.CARVED_REDWOOD_2, 1), true);
+    assert.equal(player.getLocation().getZ(), 2);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+    assert.equal(enter(core.ObjectIdentifiers.CARVED_REDWOOD_3, 2), true);
+    assert.equal(player.getLocation().getZ(), 1);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+  }
+});
+
 test("as captured: Ents attack (12506), block (12504) and die (12508) with their own animations", () => {
   const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
   new NpcDefinitionLoader().load();
@@ -148,12 +173,16 @@ test("as captured: the east gate - refused below 60; at 60 the gates open, the g
     { id: 38848, x: 1657, y: 3504, face: 2 }, { id: 28854, x: 1658, y: 3504, face: 3 },
     { id: 38848, x: 1657, y: 3505, face: 2 }, { id: 28853, x: 1658, y: 3505, face: 1 },
   ]);
+  assert.deepEqual(removed.slice(0, 2), [
+    { id: 28852, x: 1657, y: 3504 }, { id: 28851, x: 1657, y: 3505 },
+  ], "the original closed map leaves are despawned before the open overlay is added");
   assert.ok(player.log.includes("sound 62"));
   assert.deepEqual(said, ["Welcome to the Woodcutting Guild, adventurer."]);
   assert.equal(player.getLocation().getX(), 1657, "one step in");
   assert.deepEqual(events.map((event) => event.task), ["enter-the-woodcutting-guild"]);
   runTicks(2);
-  assert.deepEqual(placed.slice(-4).map((entry) => entry.removed ?? entry.id), [28854, 28853, 28852, 28851]);
+  assert.deepEqual(removed.slice(-4).map((entry) => entry.id), [38848, 28854, 38848, 28853]);
+  assert.deepEqual(placed.slice(-2).map((entry) => entry.id), [28852, 28851], "the original leaves are restored after closing");
 });
 
 test("leaving needs no level, and the west gate opens inwards", () => {
@@ -167,6 +196,27 @@ test("leaving needs no level, and the west gate opens inwards", () => {
   runTicks(2);
   assert.equal(west.getLocation().getX(), 1563);
   assert.ok(placed.some((entry) => entry.id === 28853 && entry.x === 1563));
+});
+
+test("overlapping players share one opening and one close task", () => {
+  // Finish any close task left by the preceding gate test before counting this run.
+  runTicks(5);
+  placed.length = 0;
+  removed.length = 0;
+  const first = createPlayer(1658, 3505);
+  const second = createPlayer(1658, 3504);
+  gate(first, 1657, 3505);
+  gate(second, 1657, 3504, 28852);
+
+  runTicks();
+  assert.equal(placed.length, 4, "only one pair of temporary gates is placed");
+  assert.equal(removed.length, 2, "the original leaves are despawned once");
+
+  runTicks(2);
+  assert.equal(removed.length, 6, "the one close task removes the four overlays once");
+  assert.equal(placed.length, 6, "the original leaves are restored once");
+  assert.equal(first.getLocation().getX(), 1657);
+  assert.equal(second.getLocation().getX(), 1657);
 });
 
 test("as captured: the cave, the vine and the roots", () => {
@@ -195,7 +245,9 @@ test("as captured: the cave, the vine and the roots", () => {
 
 function deadEnt(id, killer) {
   let transform = -1;
-  const npc = { getId: () => (transform >= 0 ? transform : id), setNpcTransformationId: (value) => { transform = value; }, isRegistered: () => true, transform: () => transform };
+  const npc = { getId: () => (transform >= 0 ? transform : id), setNpcTransformationId: (value) => { transform = value; }, isRegistered: () => true, transform: () => transform,
+    // The trunk is remains: a locked 1 HP, so it can be walked to and chopped (issue #4357).
+    hp: 0, locked: false, setHitpoints(value) { this.hp = value; }, setHitpointsLocked(value) { this.locked = value; }, setPoisonDamage() {} };
   const event = { killer, npc, npcId: id, remains: null };
   EntTrunk.entDied(event);
   return { npc, event };
@@ -207,6 +259,7 @@ test("as captured: a dead Ent stays, becomes its trunk, and only its killer chop
   assert.deepEqual(event.remains, { ticks: 103, respawnTicks: 50 }, "trunk 4 ticks after the fall, for 101 ticks, then 50 to respawn");
   runTicks(2);
   assert.equal(npc.getId(), 9474);
+  assert.deepEqual([npc.hp, npc.locked], [1, true], "a locked 1 HP, so it can be walked to");
 
   const other = createPlayer(1590, 9890);
   EntTrunk.chopTrunk({ player: other, npc });

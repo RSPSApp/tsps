@@ -18,7 +18,7 @@ const VARBIT_NAMES = {
   merged: "gravestone_has_merged",
   autoEquip: "settings_gravestone_autoequip",
   supplyPilesDisabled: "gravestone_supplypiles_disabled",
-  warningDisabled: "gravestone_disable_warning",
+  retrievalWarningDisabled: "option_item_retrieval_warning_disabled",
   hintArrow: "current_hint_arrow",
 };
 const VARP_NAMES = { creationCoord: "gravestone_creation_death_coord" };

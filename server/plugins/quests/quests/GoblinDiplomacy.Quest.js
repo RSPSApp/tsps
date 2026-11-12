@@ -1,4 +1,6 @@
 /** Goblin Diplomacy: revision 240 capture 20260817T005704 and the OSRS Wiki. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerGoblinDiplomacyQuest(api) {
   const { Skill, Location, Animation, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Direction } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
@@ -337,7 +339,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     player.setAttribute(SCENE_ATTRIBUTE, 1);
     controls(player, true); fade(player, true);
     later(player, state, 1, () => {
-      for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+      for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
       state.area.enter(player); player.moveTo(state.area.sourceTile(2944, 3504));
       actor(player, state, NpcIdentifiers.GENERAL_BENTNOZE_7, 2958, 3512);
       actor(player, state, NpcIdentifiers.GENERAL_WARTFACE_7, 2958, 3511);

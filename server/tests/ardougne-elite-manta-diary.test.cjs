@@ -31,7 +31,7 @@ before(async () => {
   const api = { core, persistAttribute() {}, onPlayerLogin() {}, emitCustomEvent: dispatch };
   Progress(api);
   handlers.set("diary:task", [require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask]);
-  for (const name of ["ArdougneEliteTaskProgress.plugin", "ArdougneEliteMantaDiary.plugin"]) {
+  for (const name of ["ArdougneEliteTaskProgress.AchievementDiaries", "ArdougneEliteMantaDiary.AchievementDiaries"]) {
     require(`../plugins/achievements/diaries/${name}`).register({
       ...api,
       onCustomEvent: (eventName, handler) => handlers.set(eventName, [...(handlers.get(eventName) ?? []), handler]),

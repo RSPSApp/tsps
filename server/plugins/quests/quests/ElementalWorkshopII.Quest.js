@@ -46,10 +46,13 @@
  *     the book/scroll has no transcript of its own, so the search variant's own message
  *     lines are reused and the stage advances. The fan dries the bar instantly instead of
  *     on a timer. Random crate contents are rolled with Math.random once per player.
- *   - Post-quest mind shield smithing (slashed book) is not implemented.
+ *   - Mind shield smithing is supported only for item use after completion with the slashed book alone.
  */
 module.exports = function registerElementalWorkshopIIQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
+  const {
+    Animation, CacheDefinitions, CountdownTask, Item, ItemIdentifiers, Location, NpcIdentifiers,
+    ObjectIdentifiers, Skill, Sound, Sounds, TaskManager,
+  } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Elemental Workshop II";
@@ -114,6 +117,11 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const SMALL_COG = ItemIdentifiers.SMALL_COG; // 9726
   const PRIMED_BAR = ItemIdentifiers.PRIMED_BAR; // 9727
   const PRIMED_MIND_BAR = ItemIdentifiers.PRIMED_MIND_BAR; // 9728
+  const SLASHED_BOOK = ItemIdentifiers.SLASHED_BOOK;
+  const MIND_SHIELD = ItemIdentifiers.MIND_SHIELD;
+  const MIND_SHIELD_SMITH_TICKS = 4;
+  const MIND_SMITHING_LEVEL = 30;
+  const shieldSmithing = new WeakMap();
   const MIND_HELMET = ItemIdentifiers.MIND_HELMET; // 9733
   const ELEMENTAL_METAL = ItemIdentifiers.ELEMENTAL_METAL; // 2893
   const HAMMER = ItemIdentifiers.HAMMER; // 2347
@@ -169,7 +177,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     ObjectIdentifiers.PIN, ObjectIdentifiers.PIN_2, ObjectIdentifiers.PIN_3, // 18664-18666
   ]);
   // The wind tunnel pins and the crane's 5x5 base have no walkable tile of their own, and
-  // every adjacent tile fails the walk-to reach check for item use ("You can't reach that!").
+  // every adjacent tile fails the walk-to reach check for item use ("I can't reach that!").
   const ROUTE_ASSIST_IDS = new Set([...PIN_IDS, OLD_CRANE, PIPE_REPAIR]);
   const EXTRACTOR_HAT = ObjectIdentifiers.EXTRACTOR_HAT; // 18690
   const EXTRACTOR_HAT_IDS = new Set([EXTRACTOR_HAT, ObjectIdentifiers.EXTRACTOR_HAT_2]);
@@ -873,15 +881,20 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     play(player, "into-the-workshop-taking-the-mind-bar");
   }
 
-  function makeMindHelm(player) {
-    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 30) {
-      player.sendMessage("You need level 30 Smithing to work this metal.");
-      return;
+  function canWorkMindMetal(player) {
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < MIND_SMITHING_LEVEL) {
+      player.sendMessage(`You need level ${MIND_SMITHING_LEVEL} Smithing to work this metal.`);
+      return false;
     }
     if (!has(player, HAMMER)) {
       play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-a-hammer");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function makeMindHelm(player) {
+    if (!canWorkMindMetal(player)) return;
     if (!has(player, BEATEN_BOOK)) {
       play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-the-beaten-book");
       return;
@@ -892,6 +905,40 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "create-a-mind-helmet" });
     play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-with-the-proper-items");
     quest.complete(player);
+  }
+
+  function makeMindShield({ player, itemSlot, item }) {
+    const inventory = player.getInventory();
+    // Walking to the bench and smithing both defer the click. Only replace the original plain bar.
+    const holdsSelectedBar = () => Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
+      && item?.getId() === PRIMED_MIND_BAR && item.getAmount() === 1 && item.getMeta() == null;
+    if (!holdsSelectedBar() || !canWorkMindMetal(player)) return;
+
+    const start = player.getLocation().clone();
+    const teleportSerial = player.getTeleportSerial();
+    const staysAtWorkbench = () => player.isRegistered() && player.getHitpoints() > 0
+      && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
+      && player.getMovementQueue().size() === 0 && player.getForceMovement() == null;
+
+    const task = new CountdownTask(player, MIND_SHIELD_SMITH_TICKS, () => {
+      shieldSmithing.delete(player);
+      if (!staysAtWorkbench() || !holdsSelectedBar() || !quest.isComplete(player)
+        || !has(player, SLASHED_BOOK) || has(player, BEATEN_BOOK) || !canWorkMindMetal(player)) return;
+      inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
+      inventory.refreshItems();
+      player.getSkillManager().addExperiences(Skill.SMITHING, 30);
+      player.sendMessage("Following the instructions in the book, you make a mind shield.");
+    });
+    task.onTick = () => {
+      if (task.isRunning() && !staysAtWorkbench()) {
+        task.stop();
+        shieldSmithing.delete(player);
+      }
+    };
+    shieldSmithing.set(player, task);
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_smithing")));
+    Sounds.sendSound(player, Sound.SMITHING);
+    TaskManager.submit(task);
   }
 
   function smithWorkbench(player) {
@@ -915,7 +962,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
 
   /**
    * The pins and the old crane are set into blocking scenery, so the closest walkable tile
-   * is beside them and `walkToObject` rejects every adjacent tile ("You can't reach that!").
+   * is beside them and `walkToObject` rejects every adjacent tile ("I can't reach that!").
    * When the player is already at the object's footprint, route the use to the player's own
    * tile so the interaction runs (the CurrentAffairs aquarium / Underground Pass guide-rope
    * pattern). Covers both option clicks and item-on-object uses.
@@ -1100,7 +1147,12 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       }
       if (itemId === PRIMED_MIND_BAR) {
         event.handled = true;
-        makeMindHelm(player);
+        if (shieldSmithing.get(player)?.isRunning()) return;
+        if (quest.isComplete(player) && has(player, SLASHED_BOOK) && !has(player, BEATEN_BOOK)) {
+          makeMindShield(event);
+        } else {
+          makeMindHelm(player);
+        }
         return;
       }
     }

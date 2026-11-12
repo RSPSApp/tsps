@@ -10,9 +10,8 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const core = PluginManager.getCoreApi();
 const SAND_ITEM_ID = core.ItemIdentifiers.BUCKET_OF_SAND;
-const EMPTY_BUCKET_ITEM_ID = core.ItemIdentifiers.BUCKET;
 const YANILLE_SAND_PIT_OBJECT_ID = core.ObjectIdentifiers.SANDPIT;
-const plugin = require("../plugins/achievements/diaries/ArdougneBertSandDiary.plugin");
+const plugin = require("../plugins/achievements/diaries/ArdougneBertSandDiary.AchievementDiaries");
 const dialogueData = require("../data/definitions/npc-dialogues.json").Bert.variants;
 
 const hooks = {};
@@ -21,12 +20,9 @@ const persistedAttributes = [];
 const conditionTransitions = [];
 const api = PluginManager.createApi("ArdougneBertSandDiaryTest");
 const npcActions = {};
-let itemOnObject;
-let itemOnObjectFilter;
 api.onNpcDialogueVariant = (handler) => (hooks.variant ??= []).push(handler);
 api.onNpcDialogueCondition = (handler) => (hooks.condition ??= []).push(handler);
 api.onNpcInteraction = (name, actions) => { npcActions[name] = actions; };
-api.onItemOnObject = (handler, filter) => { itemOnObject = handler; itemOnObjectFilter = filter; };
 api.onCustomEvent = (key, handler) => ((events[key] ??= []).push(handler));
 api.emitCustomEvent = (key, event) => {
   if (key === "npc-dialogue:condition") conditionTransitions.push({ npcId: event.npcId, stepId: event.stepId, text: event.text });
@@ -252,44 +248,23 @@ test("Bert's delivery uses actual bank tabs and refuses a stack with room for on
   assert.equal(noSand.getAttribute(plugin._test.LAST_DELIVERY_ATTRIBUTE), undefined);
 });
 
-test("an Ultimate ironman fills a bucket at Bert's sandpit for the diary task", (t) => {
-  assert.equal(YANILLE_SAND_PIT_OBJECT_ID, 10814);
+test("successful sandpit fills credit only the public Yanille UIM alternative", (t) => {
   const player = realPlayer(t, "bert-uim");
   player.setAttribute("ironman:mode", "ultimate");
   player.setAttribute(plugin._test.QUEST_STAGE_ATTRIBUTE, 0);
-  const inventory = player.getInventory();
-  inventory.add(new core.Item(EMPTY_BUCKET_ITEM_ID, 1), false);
-  const bucketSlot = inventory.getSlotForItemId(EMPTY_BUCKET_ITEM_ID);
-  const event = {
-    player,
-    itemId: EMPTY_BUCKET_ITEM_ID,
-    objectId: YANILLE_SAND_PIT_OBJECT_ID,
-    itemSlot: bucketSlot,
-    location: { x: 2542, y: 3103, z: 0 },
-    handled: false,
-  };
-  assert.deepEqual(itemOnObjectFilter, { noted: false });
-  itemOnObject(event);
-  assert.equal(event.handled, true);
-  assert.equal(inventory.getAmount(EMPTY_BUCKET_ITEM_ID), 0);
-  assert.equal(inventory.getAmount(SAND_ITEM_ID), 1);
-  assert.equal(emittedTasks.at(-1).task, "claim-buckets-of-sand-from-bert-in-yanille");
+  const event = { player, objectId: YANILLE_SAND_PIT_OBJECT_ID, location: { x: 2542, y: 3103, z: 0 } };
+  const filled = e => events["sand-pit:filled"].forEach(handler => handler(e));
   const taskCount = emittedTasks.length;
-  const repeatedUse = { ...event, handled: false };
-  itemOnObject(repeatedUse);
-  assert.equal(repeatedUse.handled, false);
-  assert.equal(emittedTasks.length, taskCount, "a later click without a bucket cannot repeat the diary event");
-
-  const nonPit = { ...event, handled: false, location: { x: 2543, y: 3103, z: 0 } };
-  itemOnObject(nonPit);
-  assert.equal(nonPit.handled, false, "the alternate counts only the public Yanille sandpit");
-
-  const ordinaryPlayer = realPlayer(t, "bert-non-uim");
-  ordinaryPlayer.getInventory().add(new core.Item(EMPTY_BUCKET_ITEM_ID, 1), false);
-  const nonUimEvent = { ...event, player: ordinaryPlayer, handled: false };
-  itemOnObject(nonUimEvent);
-  assert.equal(nonUimEvent.handled, false);
-  assert.equal(ordinaryPlayer.getInventory().getAmount(EMPTY_BUCKET_ITEM_ID), 1);
+  filled(event);
+  assert.equal(emittedTasks.length, taskCount + 1);
+  assert.equal(emittedTasks.at(-1).task, "claim-buckets-of-sand-from-bert-in-yanille");
+  for (const outside of [
+    { ...event, objectId: core.ObjectIdentifiers.SANDPIT_2 },
+    { ...event, location: { x: 2543, y: 3103, z: 0 } },
+    { ...event, location: { x: 2542, y: 3103, z: 1 } },
+    { ...event, player: realPlayer(t, "bert-non-uim") },
+  ]) filled(outside);
+  assert.equal(emittedTasks.length, taskCount + 1);
 });
 
 test("Bert's Sand option on NPC 5819 deposits the daily delivery", (t) => {

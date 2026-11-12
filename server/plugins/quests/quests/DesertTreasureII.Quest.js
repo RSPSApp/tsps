@@ -137,6 +137,13 @@ module.exports = function registerDesertTreasureII(api) {
   };
   // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
   // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
+  /** "desert-treasure-ii:boss-defeated" { player, boss: chapter key }: whether the quest's fight is won. */
+  function answerBossDefeated(request) {
+    const chapter = CHAPTERS[request?.boss];
+    if (!request?.player || !chapter) return;
+    if (chapterValue(request.player, request.boss) >= chapter.killed) request.defeated = true;
+  }
+
   function chapterValue(player, key) {
     const s = stage(player);
     const chapter = CHAPTERS[key];
@@ -5820,8 +5827,10 @@ module.exports = function registerDesertTreasureII(api) {
       setLassar(p, { ...state, medallion: true });
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
-      // Rsprox 1703 t16262, there in an item box.
-      p.sendMessage("You find a medallion amongst the entrails.");
+      // Rsprox 1703 t16262 (341501-341515): the mesbox chat line, then an item box (objectbox 193) with the medallion.
+      p.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, "You find a medallion amongst the entrails.");
+      p.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+        new api.core.ItemStatementDialogue(0, I.WHISPERERS_MEDALLION, "You find a medallion amongst the entrails.")));
       return true;
     }
     if (inChapter(p, "whisperer") && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
@@ -5967,7 +5976,8 @@ module.exports = function registerDesertTreasureII(api) {
             return p.sendMessage("You don't have enough inventory space for any more mushrooms.");
           }
           p.getInventory().adds(mushroom, 1);
-          p.sendMessage("You pick a mushroom.");
+          // A spam line, as captured (226/01703.txt:221125, 227/00091.txt:257527).
+          p.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You pick a mushroom.");
           return true;
         }
         if ([O.SALT_DEPOSIT, O.SALT_DEPOSIT_2].includes(visibleId)) {
@@ -9023,6 +9033,7 @@ module.exports = function registerDesertTreasureII(api) {
   api.onCanBankItem(preventBankingMedallions);
   api.onCustomEvent("player:widget-action", onWidgetAction);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("desert-treasure-ii:boss-defeated", answerBossDefeated);
   api.onCustomEvent("interface:closed", closeGolemRecord);
   api.onNpcDialogueCondition(resolveGolemSearchCondition);
   api.onNpcDialogueCondition(resolveSerumSpaceCondition);

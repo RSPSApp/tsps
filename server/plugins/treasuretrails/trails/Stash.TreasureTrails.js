@@ -87,23 +87,45 @@ function restricted(item) {
   return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
 }
 
+/** All Settings "STASH units take equipped items" (451). */
+const TAKE_EQUIPPED_VARBIT = 17938;
+
+/**
+ * Each outfit item comes from the inventory first, then, with "STASH units take equipped items"
+ * on, from what the player wears.
+ */
 function deposit(player, unit) {
   const inventory = player.getInventory();
+  const equipment = player.getEquipment();
+  const sources = player.getPacketSender().getVarbit?.(TAKE_EQUIPPED_VARBIT) === 1 ? [inventory, equipment] : [inventory];
   const taken = [];
   for (const requirement of unit.step.equipment) {
     if (requirement.emptySlot != null) continue;
     const fits = id => requirement.anyOf ? requirement.anyOf.includes(id) :
       core.CacheDefinitions.getItem(id)?.params?.get?.(Catalogue.TRAIL_ITEM_GROUP_PARAM) === requirement.group;
-    const free = (item, index) => item && fits(item.getId()) && !taken.some(entry => entry.slot === index);
-    const slot = inventory.getItems().findIndex((item, index) => free(item, index) && !restricted(item));
-    if (slot < 0) {
-      player.sendMessage(inventory.getItems().some(free) ? PRESET_TEXT : "You need all the items for this STASH unit's emote clue to store them.");
+    let found = null, restrictedOnly = false;
+    for (const container of sources) {
+      const free = (item, index) => item && item.getAmount() > 0 && fits(item.getId())
+        && !taken.some(entry => entry.container === container && entry.slot === index);
+      const slot = container.getItems().findIndex((item, index) => free(item, index) && !restricted(item));
+      if (slot >= 0) { found = { container, slot, id: container.getItems()[slot].getId() }; break; }
+      if (container.getItems().some(free)) restrictedOnly = true;
+    }
+    if (!found) {
+      player.sendMessage(restrictedOnly ? PRESET_TEXT : "You need all the items for this STASH unit's emote clue to store them.");
       return;
     }
-    taken.push({ slot, id: inventory.getItems()[slot].getId() });
+    taken.push(found);
   }
-  for (const { slot } of taken) inventory.deleteAtSlot(slot, 1);
+  for (const { container, slot } of taken) container.deleteAtSlot(slot, 1);
   inventory.refreshItems();
+  if (taken.some(entry => entry.container === equipment)) {
+    equipment.refreshItems();
+    core.BonusManager.update(player);
+    core.WeaponInterfaceManager.assign(player);
+    player.getUpdateFlag().flag(core.Flag.APPEARANCE);
+    api.emitCustomEvent("equipment:changed", { player });
+  }
   player.setAttribute(STORED_ATTRIBUTE, { ...stored(player), [unit.step.stash.locId]: taken.map(entry => entry.id) });
   player.sendMessage("You store the items in the STASH unit.");
   // A STASH filled, by its tier ("fill a Medium STASH unit"): content that credits the deed.

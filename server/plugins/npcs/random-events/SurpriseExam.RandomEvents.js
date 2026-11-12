@@ -241,7 +241,8 @@ module.exports = function attach(api, Events) {
   }
 
   function praise(player) {
-    const pronoun = player.getAppearance?.()?.isMale?.() === false ? "her" : "his";
+    const appearance = player.getAppearance?.();
+    const pronoun = ["his", "her", "their"][appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0)];
     return pick(["Wonderful! Keep up the good work. Next question.",
       `Finally, a pupil using ${pronoun} brains rather than trying to eat them. Next question.`,
       "That's correct! Next question."]);

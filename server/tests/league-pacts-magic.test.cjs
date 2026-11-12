@@ -65,10 +65,10 @@ before(async () => {
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   custom["quest:is-complete"] = [(request) => { request.complete = false; }];
   custom["league:pact-heal"] = [(payload) => heals.push(payload)];
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueTasks.plugin").register(api);
-  require("../plugins/modes/LeaguePacts.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Tasks.LeagueMode").register(api);
+  require("../plugins/modes/Pacts.LeagueMode").register(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
 });
 

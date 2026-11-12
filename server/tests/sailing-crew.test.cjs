@@ -50,12 +50,12 @@ before(() => {
     },
   };
   // Boats as built (their facilities' locs) and the boarded varbits, as in game.
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  crewPlugin = require("../plugins/skills/sailing/Crew.plugin");
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  crewPlugin = require("../plugins/skills/sailing/Crew.Sailing");
   crewPlugin.register(api);
   // The helm plugin's crew handover event and the trim's crew share come through custom events.
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require("../plugins/skills/sailing/Salvaging.plugin").register({ ...api, onObjectInteraction() {}, onServerStartup() {} });
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Salvaging.Sailing").register({ ...api, onObjectInteraction() {}, onServerStartup() {} });
 });
 
 let nextIndex = 300;
@@ -467,7 +467,7 @@ test("the trimming lines come from the transcripts: Jim's own, Jenkins's at-sea 
 
 test("a crewmate on a salvaging hook casts at a wreck in range and fills the cargo hold (rsprox)", () => {
   const shipwrecks = require("../plugins/skills/sailing/Shipwrecks.Salvaging");
-  const salvaging = require("../plugins/skills/sailing/Salvaging.plugin");
+  const salvaging = require("../plugins/skills/sailing/Salvaging.Sailing");
   const player = captain({ level: 99 });
   recruited(player, JIM);
   common.update(player, (crew) => { crew.slots[0] = JIM; });
@@ -573,7 +573,7 @@ test("the crew tab's radio buttons show the players (0) or the crew (2) (rsprox)
 
 test("a crewmate on a hook won't salvage a wreck above the captain's level, and says so once", () => {
   const shipwrecks = require("../plugins/skills/sailing/Shipwrecks.Salvaging");
-  const salvaging = require("../plugins/skills/sailing/Salvaging.plugin");
+  const salvaging = require("../plugins/skills/sailing/Salvaging.Sailing");
   const player = captain({ level: 99 });
   recruited(player, JIM);
   common.update(player, (crew) => { crew.slots[0] = JIM; });
@@ -708,6 +708,18 @@ test("Bank-cargo needs a recruited crewmate with Deckhandiness 2 (Wiki: Crew Man
   recruited(other, ADA, JENKINS);
   bankCargo.startBanking(other, { getId: () => 0 }, common.byId(JENKINS));
   assert.notEqual(other.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.", "Jenkins has 4");
+});
+
+test("Bank-cargo counts a keg of whirlpool surprise lifting a Deckhandiness 1 crewmate (Wiki: Crew Management)", () => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const { ALES } = require("../plugins/skills/sailing/Kegs.Sailing");
+  const whirlpool = ALES.find((ale) => ale.key === "whirlpool_surprise");
+  const player = captain({ level: 99 });
+  recruited(player, ADA);
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [] }]), false, "Ada alone has Deckhandiness 1");
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [0, whirlpool.data] }]), true,
+    "\"can be used to boost any level 1 Deckhandiness crewmates to level 2\"");
+  assert.equal(bankCargo.hasDeckhand(player, []), false, "with no boat docked, her own level stands");
 });
 
 test("crewmates run to a job and walk when they wander (rsprox)", () => {

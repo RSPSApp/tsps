@@ -31,14 +31,23 @@ export function drawSpriteWithOverlay(host: LoginRendererHost, ctx: RenderContex
     
 }
 
-export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext): void {
+/** Live's world-list type bit for a Hardcore world (worlds 634-670 send 2049 with members). */
+const HARDCORE_WORLD_FLAG = 0x800;
+
+/** The title logo for the selected world: logo_hcmain on a Hardcore world, else the cache's logo. */
+function logoFor(host: LoginRendererHost, worldFlags: number) {
+    return (worldFlags & HARDCORE_WORLD_FLAG) !== 0 && host.hardcoreLogoSprite ? host.hardcoreLogoSprite : host.logoSprite;
+}
+
+export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext, worldFlags = 0): void {
 
         const drawLogo = (ctx: RenderContext) => {
             const logoY = 18;
+            const logo = logoFor(host, worldFlags);
             // The cache's logo sprite, as the OSRS client draws it; the bundled image only without one.
-            if (host.logoSprite) {
-                const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoSprite.subWidth / 2);
-                drawSprite(host, ctx, host.logoSprite, logoX, logoY);
+            if (logo) {
+                const logoX = host.LOGIN_BOX_CENTER - Math.floor(logo.subWidth / 2);
+                drawSprite(host, ctx, logo, logoX, logoY);
             } else if (host.logoImageLoaded && host.logoImage) {
                 const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoImage.width / 2);
                 ctx.drawImage(host.logoImage, logoX, logoY);

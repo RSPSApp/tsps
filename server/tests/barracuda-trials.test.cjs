@@ -40,9 +40,9 @@ before(() => {
   const real = PluginManager.createApi("BarracudaTrialsTest");
   api = { ...real, persistAttribute() {}, sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; return true; } };
   scoreboard.setFile(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "bt-")), "barracuda-trials.json"));
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require("../plugins/skills/sailing/BarracudaTrials.plugin").register(api);
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/BarracudaTrials.Sailing").register(api);
 });
 
 let nextIndex = 700;
@@ -136,7 +136,7 @@ function atTheHelm(player, parts = {}) {
   return boat;
 }
 
-const helm = require("../plugins/skills/sailing/Helm.plugin");
+const helm = require("../plugins/skills/sailing/Helm.Sailing");
 
 /** A run under way: started, the HUD up (T+2), and the sails set by the player, which starts the timer. */
 function begin(player, trial, rank) {
@@ -787,5 +787,21 @@ test("Collect-rum clicked on the rum boat's deck goes through the object listene
     assert.equal(player.messages().at(-1), "<col=3366ff>You collect the rum shipment. Now you need to deliver it to Rum-dashed Ralph!</col>");
   } finally {
     leave(player);
+  }
+});
+
+test("All Settings' Barracuda trials hint arrow off: the trial's boat gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_barracuda_trials_hintarrow_disabled"), off);
+      run.start(player, TEMPOR(), 1);
+      tick();
+      assert.equal(player.sent.some(([key]) => key === "sendWorldEntityHint"), off === 0);
+      assert.equal(player.varbits.get(varbit("current_hint_arrow")) ?? 0, off ? 0 : 6);
+    } finally {
+      leave(player);
+    }
   }
 });

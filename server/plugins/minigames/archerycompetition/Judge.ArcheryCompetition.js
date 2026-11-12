@@ -40,7 +40,8 @@ function show(player, steps, menu) {
     chain.add(new core.OptionDialogue(index, {
       executeOption(option) {
         player.getPacketSender().sendInterfaceRemoval();
-        const entry = menu[Number(option)];
+        // Native option resumes carry the one-based choice (DialogueManager.handleResume).
+        const entry = menu[Number(option) - 1];
         if (entry) entry[1]();
       },
     }, ...menu.map(([text]) => text)));

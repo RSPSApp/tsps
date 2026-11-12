@@ -38,3 +38,18 @@ test("a PUBLIC_HOST that isn't a bare host falls back to 127.0.0.1", () => {
   assert.equal(GatewayTarget.host(), "127.0.0.1");
   assert.match(javConfig(), /^codebase=http:\/\/127\.0\.0\.1\/$/m);
 });
+
+test("the world list carries the world type's flags and activity", () => {
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const flagsOf = () => GatewayTarget.resolve(GatewayTarget.WORLD_LIST_PATH, PORT).body.readUInt32BE(8);
+  const before = GameConstants.WORLD_TYPE;
+  try {
+    assert.equal(flagsOf(), 0x1, "a members world, no type of its own");
+    assert.match(worldList(), /\0tsps\0/);
+    GameConstants.setWorldType({ label: "HARDCORE WORLD", flags: 0x800, activity: "Hardcore World" });
+    assert.equal(flagsOf(), 0x801, "live Hardcore Worlds: 2049");
+    assert.match(worldList(), /\0Hardcore World\0/);
+  } finally {
+    GameConstants.WORLD_TYPE = before;
+  }
+});

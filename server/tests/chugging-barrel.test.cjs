@@ -12,6 +12,8 @@ const ATTRIBUTE = "chugging-barrel:potions";
 const BARREL_NAME = "Chugging barrel";
 const DISASSEMBLED_NAME = "Chugging barrel (disassembled)";
 let core;
+const AUTO_SMASH_VIALS = 5668;
+let smashVials = 0;
 let actions;
 let onItemOnItem;
 let rules;
@@ -72,15 +74,26 @@ function actor(t) {
   const inventory = player.getInventory();
   const messages = [];
   const packets = [];
-  const sender = {
-    sendInterfaceRemoval() { player.setInterfaceId(-1); return sender; },
+  let chatbox = -1;
+  const sender = new Proxy({
+    sendInterfaceRemoval() { player.setInterfaceId(-1); chatbox = -1; return sender; },
+    sendChatboxInterface(id) { chatbox = id; packets.push(["chatbox", id]); return sender; },
+    isChatboxInterface: (id) => chatbox === id,
+    sendClientScript(...args) { packets.push(["clientscript", ...args]); return sender; },
     sendSoundEffect() { return sender; },
     sendInterface(id) { player.setInterfaceId(id); packets.push(["open", id]); return sender; },
     sendInventory(...args) { packets.push(["inventory", ...args]); return sender; },
     sendInterfaceFlagsRange(...args) { packets.push(["flags", ...args]); return sender; },
     sendInterfaceScript(...args) { packets.push(["script", ...args]); return sender; },
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
-  };
+    // Examine price info: both settings on; barbarian vial smashing (5668) as the test sets it.
+    getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
+    // Spam and mesbox lines land in `messages` marked, so a test sees the type live sends.
+    sendTypedMessage(type, message) {
+      messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : type === core.ChatType.MESBOX ? `mesbox: ${message}` : message);
+      return sender;
+    },
+  }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
   t.mock.method(player, "getPacketSender", () => sender);
@@ -125,6 +138,24 @@ function itemAction(f, itemName, option, slot) {
 function seed(player, entries) {
   player.setAttribute(ATTRIBUTE, entries);
 }
+
+test("with vial smashing on, storing a potion's last dose leaves no vial (rsprox 238/04236)", (t) => {
+  smashVials = 1;
+  t.after(() => { smashVials = 0; });
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  put(f, I.PRAYER_POTION_3_, 0);
+  put(f, I.CHUGGING_BARREL, 1);
+  assert.equal(fill(f, 0, 1).handled, true);
+  assert.equal(f.inventory.getItems()[0]?.getId?.() ?? -1, -1, "the vial is smashed");
+  assert.equal(balance(f, "Prayer potion").doses, 3);
+  // The open barrel's store (op 1 on an inventory potion, as captured: prepot_device:inventory_contents).
+  openBarrel(f);
+  put(f, I.PRAYER_POTION_2_, 4);
+  ui(f, INVENTORY_WIDGET, 4, I.PRAYER_POTION_2_, 1);
+  assert.equal(f.inventory.getItems()[4]?.getId?.() ?? -1, -1, "stored from the barrel's screen, the vial is smashed too");
+  assert.equal(balance(f, "Prayer potion").doses, 5);
+});
 
 test("filling sums doses, persists contents and returns a marked empty vessel", (t) => {
   const f = actor(t);
@@ -226,7 +257,8 @@ test("fill enforces the 100-dose cap and five potion types", (t) => {
   fill(full, 0, 1);
   assert.equal(full.inventory.getItems()[0].getId(), I.MAGIC_POTION_4_);
   assert.equal(Object.keys(full.player.getAttribute(ATTRIBUTE)).length, 5);
-  assert.ok(full.messages.includes("You can't store that in the chugging barrel."));
+  // A sixth kind gets the full line with the potion's own name (rsprox 238/04236.txt:44376-44391).
+  assert.ok(full.messages.includes("Your chugging barrel doesn't have space to store any more Magic potion(4)."), full.messages.join(" | "));
 });
 
 test("Drink applies one dose per stored type, emits potion events and starts shared timers", (t) => {
@@ -282,10 +314,11 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
 
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
+  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message.
   assert.deepEqual(f.messages, [
-    "You drink some of your prayer potion.",
+    "spam: You drink some of your prayer potion.",
     "You need more than 10 hitpoints to survive the power of a divine potion.",
-    "You drink some of your energy potion.",
+    "spam: You drink some of your energy potion.",
   ]);
   assert.equal(balance(f, "Prayer potion").doses, 2);
   assert.equal(balance(f, divine.potion.name).doses, 2, "a refused potion keeps its dose");
@@ -395,14 +428,48 @@ test("Drink enforces bank, area, food permission, content and stun refusals", (t
   assert.ok(away.messages.includes("You must be near a bank to use that barrel."));
 });
 
-test("dismantling clears contents on confirmation and ignores a moved barrel", (t) => {
+// rsprox 238/04236.txt ticks 5395-5403: objectbox warning, then confirmdestroy (584, script 814);
+// ticks 98 and 339: assemble and disassemble are objectbox_double boxes, one form to the other.
+const box = (f) => {
+  const current = f.player.getDialogueManager().getCurrent();
+  return [current?.getItemIds?.() ?? [current?.getItemId?.()], current?.getText?.()];
+};
+const confirmScreen = (f, action) => ChuggingBarrel._test.confirmDismantle({ player: f.player, action });
+
+test("assembling and disassembling show the recorded two-item boxes", (t) => {
   const I = core.ItemIdentifiers;
   const f = actor(t);
-  const barrel = put(f, I.CHUGGING_BARREL, 0);
+  put(f, I.CHUGGING_BARREL_DISASSEMBLED_, 0);
+  itemAction(f, "Chugging barrel (disassembled)", "Assemble", 0);
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL_DISASSEMBLED_, I.CHUGGING_BARREL], "You assemble the Chugging barrel."]);
+  itemAction(f, BARREL_NAME, "Dismantle", 0);
+  assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, "an empty barrel needs no confirm");
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL, I.CHUGGING_BARREL_DISASSEMBLED_], "You disassemble the Chugging barrel."]);
+  // Each box's mesbox chat line goes with it (238/04236.txt ticks 98, 339).
+  assert.deepEqual(f.messages, ["mesbox: You assemble the Chugging barrel.", "mesbox: You disassemble the Chugging barrel."]);
+});
+
+test("dismantling a barrel with potions warns, asks on the confirm screen, and only Yes clears it", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = actor(t);
+  put(f, I.CHUGGING_BARREL, 0);
   seed(f.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
   itemAction(f, BARREL_NAME, "Dismantle", 0);
-  assert.equal(typeof confirm, "function");
-  confirm();
+  // Wrapped as sent (238/04236.txt line 51250); its mesbox chat line has the breaks as spaces (tick 5395).
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL], "Your barrel contains potions.<br>If you disassemble it without emptying it first, they'll be<br>lost."]);
+  assert.deepEqual(f.messages, ["mesbox: Your barrel contains potions. If you disassemble it without emptying it first, they'll be lost."]);
+  f.player.getDialogueManager().advance();
+  assert.deepEqual(f.packets.filter((p) => p[0] === "chatbox" || p[0] === "clientscript").slice(-2), [
+    ["chatbox", 584],
+    ["clientscript", 814, I.CHUGGING_BARREL, 1, "Are you sure you want to disassemble the barrel?", "The potions stored will be lost."],
+  ]);
+  assert.equal(confirmScreen(f, 0), true, "No");
+  assert.equal(balance(f, "Prayer potion").doses, 1, "No keeps the potions");
+  assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL);
+
+  itemAction(f, BARREL_NAME, "Dismantle", 0);
+  f.player.getDialogueManager().advance();
+  assert.equal(confirmScreen(f, 1), true, "Yes");
   assert.deepEqual(f.player.getAttribute(ATTRIBUTE), {});
   assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_);
 
@@ -410,10 +477,11 @@ test("dismantling clears contents on confirmation and ignores a moved barrel", (
   const moved = put(stale, I.CHUGGING_BARREL, 0);
   seed(stale.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
   itemAction(stale, BARREL_NAME, "Dismantle", 0);
+  stale.player.getDialogueManager().advance();
   stale.inventory.setItem(0, new core.Item(I.VIAL));
   stale.inventory.setItem(1, moved);
-  confirm();
-  assert.equal(balance(stale, "Prayer potion").doses, 1);
+  confirmScreen(stale, 1);
+  assert.equal(balance(stale, "Prayer potion").doses, 1, "a moved barrel is not dismantled");
   assert.equal(stale.inventory.getItems()[1].getId(), I.CHUGGING_BARREL);
 });
 
@@ -465,6 +533,25 @@ test("Open sends native 886/7338/911 and preserves old excess balances", (t) => 
   put(f, I.PRAYER_POTION_4_, 5);
   ui(f, INVENTORY_WIDGET, 5, I.PRAYER_POTION_4_, 5);
   assert.equal(storedDoses(f), 129, "legacy excess is withdrawable, never truncated or increased");
+});
+
+test("Examine (op 10): a contents row is priced as the stored doses of its 1-dose form; an inventory potion as one", (t) => {
+  const f = actor(t), I = core.ItemIdentifiers;
+  const examine = (id) => core.ItemDefinition.forId(id).getExamine();
+  seed(f.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 130 } });
+  openBarrel(f);
+  f.messages.length = 0;
+  ui(f, CONTENTS_WIDGET, 0, I.PRAYER_POTION_4_, 10);
+  assert.equal(f.messages.length, 2, f.messages.join(" | "));
+  assert.equal(f.messages[0], examine(I.PRAYER_POTION_1_));
+  assert.match(f.messages[1], /^Price of 130 x Prayer potion\(1\): /);
+  assert.equal(storedDoses(f), 130, "examining withdraws nothing");
+  f.messages.length = 0;
+  put(f, I.PRAYER_POTION_4_, 5);
+  ui(f, INVENTORY_WIDGET, 5, I.PRAYER_POTION_4_, 10);
+  assert.equal(f.messages.length, 2, f.messages.join(" | "));
+  assert.equal(f.messages[0], examine(I.PRAYER_POTION_4_));
+  assert.match(f.messages[1], /^Price of Prayer potion\(4\): /);
 });
 
 test("Store counts vials; Fill counts doses and keeps a partial marked vial", (t) => {
@@ -686,4 +773,48 @@ test("legacy name-key insertion order survives canonical numeric keys and later 
   t.mock.method(Potions.doseOf(I.PRAYER_POTION_4_).potion, "effect", () => effects.push("prayer"));
   itemAction(f, BARREL_NAME, "Drink", 27);
   assert.deepEqual(effects, ["energy", "prayer"]);
+});
+
+test("a destroy prompt left open or walked away from never takes the barrel's Yes (real PacketSender)", () => {
+  const I = core.ItemIdentifiers;
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const DestroyItem = require("../plugins/interface/DestroyItem.plugin");
+  // DestroyItem registers on the shared confirm button (584) ahead of the barrel, as in production.
+  let dropPolicy, destroyConfirm;
+  const destroyed = [];
+  DestroyItem.register(new Proxy({
+    core,
+    onItemDropPolicy: (handler) => { dropPolicy = handler; },
+    onInterfaceActionButton: (_button, handler) => { destroyConfirm = handler; },
+    emitCustomEvent: (name, event) => { if (name === "destroy-item:destroyed") destroyed.push(event.itemId); },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const yes = (player) => destroyConfirm({ player, action: 1 }) === false && ChuggingBarrel._test.confirmDismantle({ player, action: 1 });
+
+  for (const leave of ["walk-away", "still-open"]) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel), new core.Location(3200, 3200, 0));
+    player.setIndex(1801);
+    player.getSession().sendClientPacket = () => true;
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(I.CHUGGING_BARREL, 1));
+    const keep = new core.Item(I.FIRE_CAPE, 1, { [core.Item.UNTRADEABLE_META]: true });
+    inventory.setItem(1, keep);
+    seed(player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
+
+    // The cape's Drop opens DestroyItem's 584 prompt, armed for the cape.
+    const drop = { player, item: keep, itemId: keep.getId(), slot: 1, interfaceId: 149, handled: false };
+    dropPolicy(drop);
+    assert.equal(drop.handled, true);
+    assert.equal(player.getAttribute("destroy-item:pending"), keep.getId(), `${leave}: the destroy prompt is armed`);
+    if (leave === "walk-away") player.getPacketSender().sendInterfaceRemoval();
+
+    actions.get(BARREL_NAME).Dismantle({ player, item: inventory.getItems()[0], itemId: I.CHUGGING_BARREL, slot: 0, clickType: 1, handled: false });
+    player.getDialogueManager().advance();
+    assert.equal(player.getPacketSender().isChatboxInterface(584), true, `${leave}: the barrel's confirm is up`);
+    assert.notEqual(player.getAttribute("destroy-item:pending"), keep.getId(), `${leave}: the stale destroy is disarmed`);
+    assert.equal(yes(player), true, `${leave}: Yes answers the barrel`);
+    assert.equal(inventory.getItems()[1], keep, `${leave}: the cape is kept`);
+    assert.deepEqual(destroyed, [], `${leave}: nothing is destroyed`);
+    assert.equal(inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, `${leave}: the barrel is dismantled`);
+  }
 });

@@ -156,7 +156,9 @@
       "warnSlots": 11,
       "itemBox": {
         "plain": "You find treasure and supplies within the chest.",
-        "bonus": "You find treasure, supplies, and a weirdly coloured egg sac within the chest."
+        "bonus": "You find treasure, supplies, and a weirdly coloured egg sac within the chest.",
+        "plainItems": ["shark", "dragonhide_red"],
+        "bonusItems": ["hosdun_orange_egg_sac", "hosdun_blue_egg_sac"]
       },
       "loot": {
         "tables": [

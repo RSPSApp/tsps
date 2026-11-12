@@ -108,6 +108,7 @@ export class MovementQueue {
     private alternativeRoute = false;
     /** The next queued step may ignore a spell freeze, but no other movement lock. */
     private forceOneStepThroughFreeze = false;
+    /** Pre-step check of the current walk-to (re-pathing to an NPC, re-validating a loc). */
     private entityPursuit: (() => void) | null = null;
     /**
      * Set when a step toward the head checkpoint was rejected, plus whether an
@@ -120,6 +121,14 @@ export class MovementQueue {
     private lastSentDestY = Number.MIN_SAFE_INTEGER;
     /** Ctrl-click run choice for the current path only; null follows the run setting. */
     private runOverride: boolean | null = null;
+    /**
+     * A Ctrl-clicked interaction's run choice (an NPC, object, ground item or player); null
+     * follows the run setting. It holds through the interaction's re-paths (a walking NPC, a
+     * followed player, a fight's chase) and ends once the player is idle, or at the next click.
+     */
+    private clickRunOverride: boolean | null = null;
+    /** This turn's interaction click's run choice, until its walk starts; undefined when none. */
+    private pendingClickRunOverride: boolean | null | undefined = undefined;
 
     /**
      * Creates a walking queue for the specified character.
@@ -406,6 +415,8 @@ export class MovementQueue {
         }
         this.reset();
         this.walkToReset();
+        // A walk click replaces an interaction's run choice.
+        this.clickRunOverride = null;
         if (this.player && require("../../../plugins/PluginManager").PluginManager.emitWalkRoute({
             player: this.player,
             destination: { x: destination.getX(), y: destination.getY(), z: destination.getZ() },
@@ -693,7 +704,7 @@ export class MovementQueue {
             if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
                 return true;
             }
-            if (World.isPlayerOccupyingTile(next, null, size, privateArea)) {
+            if (World.isPlayerOccupyingTile(next, null, size, privateArea, true)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -801,6 +812,7 @@ export class MovementQueue {
             if (player.getRunEnergyUnits() <= 0) {
                 player.setRunEnergyUnits(0);
                 this.runOverride = null;
+                this.clickRunOverride = null;
                 player.setRunning(false);
                 player.getPacketSender().sendRunStatus();
             }
@@ -837,6 +849,12 @@ export class MovementQueue {
         this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
         this.runOverride = null;
+        // clickRunOverride outlives a reset: interactions reset the queue on every re-path. A
+        // click's walk starts with a reset, which is where its run choice takes over.
+        if (this.pendingClickRunOverride !== undefined) {
+            this.clickRunOverride = this.pendingClickRunOverride;
+            this.pendingClickRunOverride = undefined;
+        }
         this.points.clear();
         this.followX = -1;
         this.followY = -1;
@@ -890,6 +908,15 @@ export class MovementQueue {
         }
 
         const playerFollowingPlayer = this.character.isPlayer() && following.isPlayer();
+
+        // A pet does not follow its owner into an area that bars followers (a canoe ride): it waits where it
+        // is, still following, and catches up once the owner is somewhere it may go. An area that only
+        // refuses dropping a pet (allowSummonPet) still takes a pet already following in: Wiki (Pet), the
+        // Chambers of Xeric "with a pet already following you" and the Gauntlet's visible followers.
+        if (this.petBarredFrom(following)) {
+            this.reset();
+            return;
+        }
 
         if (following.getPrivateArea() != this.character.getPrivateArea()) {
             if (this.tryTeleportPetToFollower(following)) {
@@ -1021,6 +1048,14 @@ export class MovementQueue {
         return bestTile;
     }
 
+    private petBarredFrom(following: Mobile): boolean {
+        if (!this.character.isNpc() || !this.character.getAsNpc().isPet()) {
+            return false;
+        }
+        const area: any = following.getArea();
+        return typeof area?.barsFollowers === "function" && area.barsFollowers(following) === true;
+    }
+
     private tryTeleportPetToFollower(following: Mobile): boolean {
         if (!this.character.isNpc()) {
             return false;
@@ -1058,9 +1093,40 @@ export class MovementQueue {
         return this.points.length;
     }
 
+    /**
+     * Sets the run choice of an interaction click (see clickRunOverride); null follows the run setting.
+     * It takes effect when the click starts its walk (every walk to a target resets the queue
+     * first), so a click that walks nowhere leaves a walk in progress as it is.
+     */
+    public setClickRunOverride(run: boolean | null): void {
+        this.pendingClickRunOverride = run;
+    }
+
+    /** Drops a click's run choice that no walk took up this turn. */
+    public dropPendingClickRunOverride(): void {
+        this.pendingClickRunOverride = undefined;
+    }
+
+    /** Ends an interaction click's run choice, for a walk the click didn't start (a retaliation chase). */
+    public endClickRunOverride(): void {
+        this.clickRunOverride = null;
+        this.pendingClickRunOverride = undefined;
+    }
+
+    /**
+     * Ends an interaction click's run choice once the player is idle: no route, follow, fight
+     * or walk-to interaction left. Checked at the end of every turn, moving or not.
+     */
+    public endClickRunOverrideWhenIdle(): void {
+        if (this.clickRunOverride === null || this.points.length > 0) return;
+        if (this.character.getFollowing() != null || this.character.getCombat().getTarget() != null) return;
+        if (this.character.isPlayer() && TaskManager.hasWalkToTask(this.character.getIndex())) return;
+        this.clickRunOverride = null;
+    }
+
     public isRunToggled(): boolean {
         return this.character.isPlayer()
-            ? this.runOverride ?? (this.character as Player).isRunningReturn()
+            ? this.runOverride ?? this.clickRunOverride ?? (this.character as Player).isRunningReturn()
             : this.character.getAsNpc().getMovementSteps() > 1;
     }
 
@@ -1141,7 +1207,7 @@ export class MovementQueue {
     }
 
     public walkToGroundItem(pos: Location, action: () => void) {
-        this.walkToTile(pos, action, MovementQueue.reachedGroundItem);
+        this.walkToTile(pos, action, MovementQueue.reachedGroundItem, { failWhenUnreachable: true });
     }
 
     /**
@@ -1163,11 +1229,16 @@ export class MovementQueue {
      * @param reached decides when the destination counts as arrived at. Defaults to
      *   standing exactly on the tile, which is what a plugin-supplied route
      *   destination wants.
+     * @param options.failWhenUnreachable ends the walk with "I can't reach that!" once a
+     *   closest-tile route is used up without reaching the destination (live: a jug on the
+     *   Lumbridge kitchen table, clicked from the corridor behind the wall). Without it the
+     *   walk keeps re-routing, which plugin-supplied destinations rely on.
      */
     public walkToTile(
         pos: Location,
         action: () => void,
-        reached: (entity: Mobile, destination: Location) => boolean = PathFinder.reachedTile
+        reached: (entity: Mobile, destination: Location) => boolean = PathFinder.reachedTile,
+        options: { failWhenUnreachable?: boolean } = {}
     ) {
         // Call time, not tick time: only an exact tile match may skip the walk.
         // Anything looser would let an adjacent click resolve without stepping.
@@ -1207,6 +1278,19 @@ export class MovementQueue {
             if (reached(this.player, pos)) {
                 // The interaction resolves on the cycle after arrival.
                 reachedDestination = true;
+                return;
+            }
+
+            const queue = this.player.getMovementQueue();
+            // Out of steps, not stepping this cycle and still not there: live says so and stops
+            // (upstream's `stepsTaken === 0` with no waypoints left). A blocked step keeps its
+            // checkpoint, and a route cut at the checkpoint cap is not a closest-tile route, so
+            // both still re-route below.
+            if (options.failWhenUnreachable && queue.points.length === 0 && !queue.didMoveThisCycle() &&
+                queue.wasRouteEvaluated() && (queue.usedAlternativeRoute() || !queue.hasRoute())) {
+                this.player.sendMessage("I can't reach that!");
+                queue.reset();
+                task.stop();
                 return;
             }
 
@@ -1371,7 +1455,10 @@ export class MovementQueue {
         runnable?: () => void,
         range = 1,
         ignoreProjectileClip = false,
-        allowOverlappingTiles = false
+        allowOverlappingTiles = false,
+        // How close the route aims. Defaults to the interaction range; an approach-distance op
+        // (a spell) routes toward the target itself and stops once `range` and sight allow it.
+        routeRange = range
     ) {
         let mobility = this.getMobility();
         // Frozen players still interact with what they reach from their tile (see below),
@@ -1406,10 +1493,16 @@ export class MovementQueue {
 
         this.walkToReset();
 
+        // An NPC that changes type on the way (a sheep sheared by someone else) is no longer
+        // what was clicked: live drops the interaction and stops the walk on that tick, with no
+        // message (upstream's validateTarget compares the type it clicked).
+        const clickedType = MovementQueue.npcType(entity);
+        const targetValid = () => this.isInteractionTargetValid(entity) && MovementQueue.npcType(entity) === clickedType;
+
         const reached = () => (allowOverlappingTiles && this.overlapsEntity(entity)) || (
             range <= 1
                 ? PathFinder.reachedEntity(this.player, entity)
-                : this.isInteractionTargetValid(entity) &&
+                : targetValid() &&
                   this.player.getLocation().isWithinDistance(entity.getLocation(), range) &&
                   (ignoreProjectileClip || RegionManager.canProjectileAttack(this.player, this.player.getLocation(), entity.getLocation()))
         );
@@ -1424,7 +1517,7 @@ export class MovementQueue {
             return;
         }
 
-        PathFinder.calculateEntityRoute(this.player, entity, range);
+        PathFinder.calculateEntityRoute(this.player, entity, routeRange);
         if (this.canInteractWithUnreachableNpc(entity)) {
             this.reset();
             this.player.setMobileInteraction(entity);
@@ -1437,7 +1530,7 @@ export class MovementQueue {
         // step; try the op again. Re-pathing after the step instead leaves the
         // player a tick behind a walking NPC, trailing it before the op fires.
         const task = new MovementTask(this.player.getIndex(), (task: MovementTask) => {
-            if (!this.isInteractionTargetValid(entity)) {
+            if (!targetValid()) {
                 this.reset();
                 task.stop();
                 return;
@@ -1469,8 +1562,10 @@ export class MovementQueue {
                 this.entityPursuit = null;
                 return;
             }
-            if (!this.isInteractionTargetValid(entity)) {
-                return; // the post-step check ends it
+            if (!targetValid()) {
+                // Stop where we stand; the post-step check ends the interaction.
+                this.reset();
+                return;
             }
             if (reached()) {
                 this.entityPursuit = null;
@@ -1482,7 +1577,7 @@ export class MovementQueue {
             }
             // A step the clipping map rejected invalidates the corridor wherever we stand.
             if (this.points.length <= 1 || this.wasRouteInvalidated()) {
-                PathFinder.calculateEntityRoute(this.player, entity, range);
+                PathFinder.calculateEntityRoute(this.player, entity, routeRange);
             }
         };
         TaskManager.submit(task);
@@ -1544,7 +1639,7 @@ export class MovementQueue {
      * type while the player walks to it (a door opening, a stump replacing a tree),
      * and the captured reference would otherwise still resolve the original action.
      */
-    private isInteractionObjectValid(object: GameObject, id: number, type: number): boolean {
+    private isInteractionObjectValid(object: GameObject, id: number, type: number, stoodAtClick = false): boolean {
         if (!object) return false;
         const location = object.getLocation();
         if (!location || location.getZ() !== this.player.getLocation().getZ()) return false;
@@ -1552,7 +1647,18 @@ export class MovementQueue {
         // map, as the click lookup (MapObjects.getPrivateArea) treats it: the Inferno's exit.
         const area = object.getPrivateArea?.() ?? null;
         if (area !== null && area !== this.player.getPrivateArea()) return false;
-        return object.getId() === id && object.getType() === type;
+        if (object.getId() !== id || object.getType() !== type) return false;
+        // Removed or replaced on the way (a tree felled into a stump): live drops the
+        // interaction and stops the walk on that tick (upstream's validateTarget). The same
+        // check the arrival makes, run every tick for a loc that stood when it was clicked.
+        return !stoodAtClick || MapObjects.stillStands(this.player, id, location, object, true);
+    }
+
+    /** The type an NPC shows now (its transform, else its own id); -1 for players. */
+    private static npcType(entity: Mobile): number {
+        if (!entity?.isNpc?.()) return -1;
+        const transform = entity.getNpcTransformationId?.() ?? -1;
+        return transform !== -1 ? transform : (entity as NPC).getId?.() ?? -1;
     }
 
     private isInteractionTargetValid(entity: Mobile): boolean {
@@ -1682,9 +1788,10 @@ export class MovementQueue {
 
         this.player.setPositionToFace(new Location(objectX, objectY));
         const interactionArea = this.player.getPrivateArea();
+        const stoodAtClick = this.character.isPlayer() && MapObjects.stillStands(this.player, id, object.getLocation(), object, true);
         let repathAttempts = 0;
-        TaskManager.submit(new MovementTask(this.player.getIndex(), (task) => {
-            if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type)) {
+        const task = new MovementTask(this.player.getIndex(), (task) => {
+            if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
                 this.reset();
                 task.stop();
                 return;
@@ -1715,7 +1822,12 @@ export class MovementQueue {
                 return;
             }
 
-            if (repathAttempts < 2) {
+            // A closest-tile route that ran out is final: route it again and the same tile comes
+            // back. Only a path that was lost (reset, cut short) or invalidated by new collision
+            // (a shut door) is worth another search; live answers the rest on this tick.
+            const routeLost = this.wasRouteInvalidated() || !this.wasRouteEvaluated() ||
+                (this.hasRoute() && !this.usedAlternativeRoute());
+            if (routeLost && repathAttempts < 2) {
                 repathAttempts++;
                 queueObjectRoute();
                 if (this.points.length || this.player.getMovementQueue().hasRoute()) {
@@ -1744,10 +1856,23 @@ export class MovementQueue {
                     blockedByEntity: this.wasBlockedByDynamicOccupancy(),
                 });
             }
-            this.player.sendMessage("You can't reach that!");
+            this.player.sendMessage("I can't reach that!");
             task.stop();
             TaskManager.cancelTasks(this.player.getIndex());
-        }, false));
+        }, false);
+        // Checked again before this cycle's step, as upstream validates its target before moving:
+        // a loc felled mid-walk stops the player where they stand, not a step further on.
+        this.entityPursuit = () => {
+            if (!task.isRunning()) {
+                this.entityPursuit = null;
+                return;
+            }
+            if (this.player.getPrivateArea() !== interactionArea ||
+                !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
+                this.reset(); // the task's own check ends the interaction after this cycle
+            }
+        };
+        TaskManager.submit(task);
     }
 
     private isAtPointOfFocus(destX: number, destY: number): boolean {

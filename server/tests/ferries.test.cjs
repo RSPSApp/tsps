@@ -76,7 +76,11 @@ const api = {
     CacheDefinitions, Location, ItemDefinition, Equipment, ItemIdentifiers, Task, CountdownTask, TemplatedInstanceArea,
     ChatType: { SPAM: "spam" },
     TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop()) },
-    StatementDialogue: { send: (player, text) => player.sent.boxes.push(text) },
+    StatementDialogue: class {
+      constructor(index, text) { this.text = text; }
+      static send(player, text) { player.sent.boxes.push(text); }
+    },
+    DialogueChainBuilder: class { add(entry) { this.entry = entry; return this; } },
     TeleportHandler: { checkReqs: () => true, destinationAllowed: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
     TeleportType: { NORMAL: "NORMAL" },
   },
@@ -117,13 +121,15 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
   if (coins) inventory[27] = new Item(ItemIdentifiers.COINS, coins);
   const equipment = Array.from({ length: 14 }, () => new Item(-1, 0));
   for (const id of worn) equipment[ItemDefinition.forId(id).getEquipmentType().getSlot()] = new Item(id, 1);
-  const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), removals: 0 };
+  const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), configs: new Map(), sounds: [], removals: 0 };
   let location = at;
   let blocked = false;
   let registered = true;
   const sender = {
     sendTypedMessage: (type, text) => { sent.spam.push(text); return sender; },
     sendSong: (id) => { sent.songs.push(id); return sender; },
+    sendSoundEffect: (id) => { sent.sounds.push(id); return sender; },
+    sendConfig: (id, value) => { sent.configs.set(id, value); return sender; },
     sendJingle: (id) => { sent.jingles.push(id); return sender; },
     sendInterface: (id) => { sent.interfaces.push(id); return sender; },
     sendClientScript: (id, ...args) => { sent.scripts.push([id, ...args]); return sender; },
@@ -154,7 +160,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     getEquipment: () => container(equipment),
     getPacketSender: () => sender,
     getMovementQueue: () => movement,
-    getDialogueManager: () => ({ reset() {} }),
+    getDialogueManager: () => ({ reset() {}, startDialogues(chain) { sent.boxes.push(chain.entry.text); } }),
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     setUntargetable() {},
     isRegistered: () => registered,
@@ -424,6 +430,39 @@ test("Jeb rows across under seaslug_boat_travel and lands on the platform with i
   assert.equal(player.blocked, false);
 });
 
+test("Holgart's Sea Slug legs row under their own layers, play the silence song and land on the captured ticks", () => {
+  // Capture 20261110T112750 (rev 242): the platform -> Witchaven leg fades at 427, lands at 429 with
+  // song 147 and jingle 172 under layer 11, and shows its message box at 438 (eleven ticks on).
+  const player = createPlayer({ at: new Location(2782, 3274, 0) });
+  const request = { player, route: "sea-slug-witchaven", handled: false };
+  for (const handler of hooks.events.get("ferries:travel")) handler(request);
+  assert.equal(request.handled, true);
+  tick(2);
+  assert.deepEqual(at(player), [2722, 3305, 0]);
+  assert.deepEqual(player.sent.songs, [147]);
+  assert.deepEqual(player.sent.jingles, [172]);
+  assert.deepEqual(player.sent.shown, [CacheDefinitions.getComponentId("seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer")]);
+  tick(8);
+  assert.deepEqual(player.sent.boxes, [], "not yet at tick 10");
+  tick(1);
+  assert.deepEqual(player.sent.boxes, ["The boat arrives at Witchaven."]);
+  assert.equal(player.blocked, false);
+
+  // The island legs (ticks 172 and 220): layers 12 and 13.
+  for (const [route, layer, to] of [
+    ["sea-slug-island", "seaslug_fishpier_to_isle_layer", [2800, 3320, 0]],
+    ["sea-slug-island-return", "seaslug_isle_to_fishpier_layer", [2782, 3273, 0]],
+    ["sea-slug-platform", "seaslug_witchhaven_to_fishingpier_layer", [2782, 3273, 0]],
+  ]) {
+    const rower = createPlayer({ at: new Location(2782, 3274, 0) });
+    for (const handler of hooks.events.get("ferries:travel")) handler({ player: rower, route });
+    tick(2);
+    assert.deepEqual(at(rower), to, route);
+    assert.deepEqual(rower.sent.shown, [CacheDefinitions.getComponentId(`seaslug_boat_travel:${layer}`)], route);
+    tick(10);
+  }
+});
+
 test("a logout at sea lands the player at the destination; a shutdown lands everyone", () => {
   const player = createPlayer();
   click(player, "Squire", "Travel", { gameval: "pest_squire_ship_portsarim" });
@@ -452,14 +491,15 @@ test("quest plugins hand crossings over with ferries:travel", () => {
 });
 
 test("Barnaby's three destinations fade, sail and arrive without casting a teleport or charging twice", () => {
-  const destinations = [[2680, 3274, 0], [2768, 3227, 0], [2916, 3225, 0]];
+  // rsprox 224/01440.txt ticks 15777-15780: Brimhaven lands on the ship's deck.
+  const destinations = [[2680, 3274, 0], [2775, 3233, 1], [2916, 3225, 0]];
   for (const [index, port] of BarnabyFerry._test.PORTS.entries()) {
     const player = createPlayer({ coins: 100 });
     const sail = () => BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
     sail();
     sail();
     assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 70, "only the accepted voyage charges");
-    assert.deepEqual(player.sent.messages, ["You pay 30 coins and board the ship."]);
+    assert.deepEqual(player.sent.messages, ["You pay Captain Barnaby 30 coins."]);
     assert.equal(player.blocked, true);
     assert.equal(player.sent.subs.length, 1);
     assert.equal(player.sent.subs[0].id, 174, "fade overlay, not a spellbook animation");
@@ -468,6 +508,7 @@ test("Barnaby's three destinations fade, sail and arrive without casting a telep
     assert.deepEqual(at(player), [3046, 3236, 0], "the crossing takes time");
     tick(1);
     assert.deepEqual(at(player), destinations[index]);
+    assert.equal(player.sent.messages.at(-1), `You board the ship and sail to ${port.name}.`, "the boarding line comes with the move");
     assert.equal(player.blocked, true, "arrival remains held until fade-in");
     tick(1);
     assert.deepEqual(player.sent.subs[1].options.postScripts, [{ scriptId: 948, args: [0, 0, 0, 255, 50] }]);
@@ -486,7 +527,7 @@ test("logging out on Barnaby's discounted crossing lands the player and releases
   tick(1);
   for (const handler of hooks.logout) handler({ player });
   player.setRegistered(false);
-  assert.deepEqual(at(player), [2768, 3227, 0]);
+  assert.deepEqual(at(player), [2775, 3233, 1]);
   assert.equal(player.blocked, false);
   assert.equal(Common.travelling(player), false);
   tick(10);
@@ -681,4 +722,72 @@ test("Entrana boarding credit follows only an accepted outward voyage", () => {
   const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SHORTSWORD] });
   click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
   assert.deepEqual(boarded, [outward]);
+});
+
+
+test("Larry's Weiss voyage holds the player, shows the sailing overlay and lands on the captured coast", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-weiss"), true);
+  assert.equal(player.blocked, true);
+  assert.deepEqual(player.sent.sounds, [717, 2841]);
+  assert.deepEqual(player.sent.boxes, []);
+  tick(1);
+  assert.deepEqual(player.sent.boxes, ["You navigate Larry's boat to the coast near Weiss..."]);
+  assert.deepEqual(player.sent.songs, [203]);
+  tick(1);
+  assert.equal(player.sent.subs.at(-1).id, CacheDefinitions.getInterfaceId("my2arm_boatride"));
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), -1);
+  tick(8);
+  assert.notEqual(player.getLocation().getX(), 2849);
+  tick(1);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2849, 3968, 0]);
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), 0);
+  assert.equal(player.blocked, false);
+  tick(1);
+  assert.equal(player.sent.boxes.length, 2);
+});
+
+test("Larry's voyage lands safely on logout before boarding and cannot start later", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  Voyages.travel(player, "larry-weiss");
+  Voyages.landNow({ player });
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(player.blocked, false);
+  tick(15);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(Common.travelling(player), false);
+});
+
+test("an interrupted Larry departure cannot board a later voyage", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-weiss"), true);
+  Voyages.landNow({ player });
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), true);
+  tick(2);
+  assert.equal(player.sent.subs.some(({ id }) => id === CacheDefinitions.getInterfaceId("my2arm_boatride")), false);
+  assert.equal(Common.travelling(player), true);
+  Voyages.landNow({ player });
+});
+
+test("logging out on Larry's ship clears its journey varp", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  Voyages.travel(player, "larry-weiss");
+  tick(2);
+  Voyages.landNow({ player });
+  assert.equal(player.sent.configs.get(CacheDefinitions.getVarpId("journey_number")), 0);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2849, 3968]);
+  assert.equal(player.blocked, false);
+});
+
+
+test("Larry's iceberg voyage shows the captured ship interface before landing", () => {
+  const player = createPlayer({ at: new Location(2707, 3735, 0) });
+  assert.equal(Voyages.travel(player, "larry-iceberg"), true);
+  tick(2);
+  assert.equal(player.sent.interfaces.at(-1), CacheDefinitions.getInterfaceId("peng_ship_journey"));
+  tick(6);
+  assert.notEqual(player.getLocation().getX(), 2660);
+  tick(1);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2660, 3989, 1]);
+  assert.equal(player.blocked, false);
 });

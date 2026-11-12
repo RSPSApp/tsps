@@ -18,7 +18,7 @@ before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..'
 function harness(name) {
   const hooks = {}, events = {}, tasks = [], areas = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), buttons = new Map(), namedNpcs = new Map(), namedObjects = new Map();
   const objectManager = {register: object => objects.push(object), deregister: object => { const i=objects.indexOf(object); if(i>=0)objects.splice(i,1); }};
-  const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
+  const api = new Proxy({ core: { ...core, World: { ...core.World, getProcessCycle: () => core.World.getProcessCycle(), getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
   }, ObjectManager: { register: object => objects.push(object), deregister: noop } },

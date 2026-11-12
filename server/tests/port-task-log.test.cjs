@@ -22,7 +22,7 @@ before(async () => {
   core = PluginManager.getCoreApi();
   core.RegionManager.init();
   PluginManager.emitServerStartup({});
-  assert.ok(PluginManager.loadedPlugins.includes('SailingPortTasks'));
+  assert.ok(PluginManager.loadedPlugins.includes('Sailing'));
 });
 after(() => PluginManager.emitServerShutdown({}));
 function captain(t, level = 99) {

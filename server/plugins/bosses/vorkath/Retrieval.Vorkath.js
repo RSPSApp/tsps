@@ -19,6 +19,7 @@
  */
 const Area = require("./Area.Vorkath");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR = "vorkath:retrieval";
 const OWNER = "vorkath";
@@ -198,7 +199,7 @@ function clickItem(event) {
   if (!entry) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(core.ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;

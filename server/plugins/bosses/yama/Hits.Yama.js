@@ -92,10 +92,13 @@ function burn(fight, total) {
   fight.at(BURN_INTERVAL_TICKS, step);
 }
 
-/** Yama's poison (Wiki: from 20). */
-function poison(player, severity) {
+/**
+ * Yama's poison, from a first hit (Wiki: "starting at 20"). poisonEntity takes severity, hit x 5: the poison varp goes
+ * 0 -> 100 (rsprox_transcripts/234/00788.txt:374372, 11 times across the recordings).
+ */
+function poison(player, hit) {
   const { CombatFactory } = Common.core;
-  CombatFactory.poisonEntity(player, severity);
+  CombatFactory.poisonEntity(player, hit * 5);
 }
 
 /** Rooted in place for `ticks` (no message, no freeze immunity after). */

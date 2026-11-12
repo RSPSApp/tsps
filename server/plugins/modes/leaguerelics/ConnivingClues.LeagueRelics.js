@@ -80,9 +80,8 @@ function teleportToClue(event) {
   const contract = core.ItemIdentifiers[effect.contract];
   if (!player.getInventory().contains(contract)) return true;
   const { x, y, z } = step.location;
-  if (Teleports.go(player, KEY, { label: "Current step", location: new core.Location(x, y, z ?? 0), remember: false })) {
-    player.getInventory().deleteNumber(contract, 1);
-  }
+  Teleports.go(player, KEY, { label: "Current step", location: new core.Location(x, y, z ?? 0), remember: false },
+    { item: contract, onStart: () => player.getInventory().deleteNumber(contract, 1) });
   return true;
 }
 

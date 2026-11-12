@@ -10,7 +10,7 @@
  * offers are shop_frame (540:4) slots 0, 3, 6 and 9, a click sets varbit ii_elnex (3729) to
  * slot / 3 + 1, and Confirm (540:7) trades the selected one, or says "You don't have the
  * required implings in jars to trade for this.". The cache's enum 2752 lists the offers in
- * that order, each struct paying with any one of three jar stacks (3, 2 or 1 of rising
+ * that order, each struct requiring all three jar stacks (3, 2 and 1 of rising
  * implings); the fourth takes one jar of any impling. His Exchange option opens his impling
  * storage (interfaces 661/681), which tsps does not have, so it is left unhandled.
  *
@@ -21,6 +21,7 @@
  * (https://oldschool.runescape.wiki/w/Elnock_Inquisitor).
  */
 const Wheat = require("./Wheat.ImpetuousImpulses");
+const JarGenerator = require("./JarGenerator.ImpetuousImpulses");
 
 const GIFT_ATTRIBUTE = "impetuous-impulses:gift-claimed";
 
@@ -81,7 +82,7 @@ function build(coreApi) {
       give: [I.IMPLING_JAR, 3],
       message: "Elnock takes the impling and gives you three impling jars.",
     },
-    // Each `pay` lists alternatives (structs 1240-1242: params 901-903 items, 907-909 counts).
+    // All three stacks are required (Wiki transcript; structs 1240-1242 bind their item/count pairs).
     repellent: {
       pay: [[I.BABY_IMPLING_JAR, 3], [I.YOUNG_IMPLING_JAR, 2], [I.GOURMET_IMPLING_JAR, 1]],
       give: [I.IMP_REPELLENT, 1],
@@ -103,16 +104,32 @@ function build(coreApi) {
 function init(api) {
   core = api.core;
   build(core);
+  JarGenerator.init(api);
 }
 
-/** The first of the offer's jar stacks the player holds in full (any one jar for "jars"). */
+/** Equipment takes every listed stack; the jar offer takes one jar of any impling. */
 function paymentFor(player, recipe) {
-  const options = recipe.pay ?? jarIds.map((id) => [id, 1]);
-  return options.find(([id, amount]) => player.getInventory().getAmount(id) >= amount) ?? null;
+  const items = player.getInventory().getItems();
+  const available = (id) => items.reduce((sum, item) => sum + (item?.getId() === id && !JarGenerator.restricted(item) ? item.getAmount() : 0), 0);
+  const id = recipe.pay ? null : jarIds.find((id) => available(id) >= 1);
+  const required = recipe.pay ?? (id == null ? [] : [[id, 1]]);
+  if (!required.length || !required.every(([id, count]) => available(id) >= count)) return null;
+  const slots = [];
+  for (const [id, count] of required) {
+    let left = count;
+    for (let slot = 0; slot < items.length && left > 0; slot++) {
+      const item = items[slot];
+      if (item?.getId() !== id || JarGenerator.restricted(item)) continue;
+      const taken = Math.min(left, item.getAmount());
+      if (taken > 0) slots.push([slot, taken]);
+      left -= taken;
+    }
+  }
+  return slots;
 }
 
 /** Preflight the whole exchange, then consume and give; never a partial trade. */
-function trade(player, key) {
+function trade(player, key, recharge = null) {
   const recipe = trades[key];
   if (!recipe) return false;
   const payment = paymentFor(player, recipe);
@@ -120,15 +137,41 @@ function trade(player, key) {
     player.sendMessage(MISSING_JARS_MESSAGE);
     return false;
   }
-  const [id, amount] = payment;
+  const existing = key === "generator" ? JarGenerator.owned(player) : null;
+  if (existing) {
+    if (JarGenerator.restricted(existing.item)) { player.sendMessage("Preset items cannot be used for this."); return false; }
+    if (recharge !== existing.item) {
+      if (recharge) { player.sendMessage("Your jar generator has moved. Please trade Elnock again."); return false; }
+      player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+        new core.OptionDialogue(0, {
+          executeOption(option) {
+            player.getPacketSender().sendInterfaceRemoval();
+            if (Number(option) === 1) trade(player, key, existing.item);
+          },
+        }, "Recharge my jar generator.", "Cancel.").setTitle("You already own a jar generator."),
+      ));
+      return true;
+    }
+  } else if (recharge) {
+    player.sendMessage("You no longer own that jar generator.");
+    return false;
+  }
+  const amount = payment.reduce((sum, [, count]) => sum + count, 0);
   // Filled jars do not stack: paying frees a slot per jar.
-  if (player.getInventory().getFreeSlots() + amount < recipe.give[1]) {
+  if (!existing && player.getInventory().getFreeSlots() + amount < recipe.give[1]) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
-  player.getInventory().deleteNumber(id, amount);
-  player.getInventory().adds(recipe.give[0], recipe.give[1]);
-  player.sendMessage(recipe.message);
+  for (const [slot, count] of payment) player.getInventory().deleteAtSlot(slot, count, false);
+  player.getInventory().refreshItems();
+  if (existing) {
+    existing.item.setMetaValue(JarGenerator.CHARGES_META, JarGenerator.FULL_CHARGE);
+    existing.container.refreshItems();
+    player.sendMessage("Elnock recharges your jar generator.");
+  } else {
+    player.getInventory().adds(recipe.give[0], recipe.give[1]);
+    player.sendMessage(recipe.message);
+  }
   return true;
 }
 

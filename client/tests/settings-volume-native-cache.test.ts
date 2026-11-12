@@ -44,4 +44,7 @@ for (const [container, slider, mute, varp, volume] of [
     assert.deepEqual(transmitted, []);
 }
 assert.deepEqual(errors, []);
+// The music settings (loop, unlock message, area type, login mode ...) are varbits of varp 19 the
+// client's scripts set themselves; the server saves them from the transmitted varp.
+assert.equal(TRANSMIT_VARPS.has(19), true, "musicloop is transmitted");
 console.log("native cache Settings mute and slider persistence passed");

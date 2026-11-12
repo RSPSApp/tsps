@@ -1,13 +1,22 @@
 /**
  * No trading with other players, either way (captured): the Ironman asking is told "You are an
  * Ironman. You stand alone."; anyone asking an Ironman is told "<name> is an Ironman. He/She
- * stands alone."
+ * stands alone." (or "They stand alone.", by the Ironman's pronouns).
  *
  * The request hook answers the normal trade-request packet. The window hook is the backstop
  * for every other route into a trade (a mode set while a trade is open, content that starts
  * one directly), so no path can complete a trade involving an Ironman.
  */
 const Common = require("./Common.Ironman");
+
+/** By the appearance's pronouns (0 he, 1 she, 2 they). */
+const TRADE_PRONOUNS = [["He", "stands"], ["She", "stands"], ["They", "stand"]];
+
+function pronouns(player) {
+  const appearance = player.getAppearance?.();
+  const value = appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0);
+  return TRADE_PRONOUNS[value] ? value : 0;
+}
 
 /** Sends the captured refusal for whichever side is an Ironman; true when one was refused. */
 function refuse(player, target) {
@@ -16,8 +25,8 @@ function refuse(player, target) {
     return true;
   }
   if (Common.isIron(target)) {
-    const pronoun = target.getAppearance?.().isMale?.() === false ? "She" : "He";
-    player.sendMessage(Common.message("tradeOther", { name: target.getDisplayName(), pronoun }));
+    const [pronoun, stands] = TRADE_PRONOUNS[pronouns(target)];
+    player.sendMessage(Common.message("tradeOther", { name: target.getDisplayName(), pronoun, stands }));
     return true;
   }
   return false;

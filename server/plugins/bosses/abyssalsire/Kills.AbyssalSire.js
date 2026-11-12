@@ -8,6 +8,7 @@
  */
 const Common = require("./Common.AbyssalSire");
 const CombatAchievements = require("./CombatAchievements.AbyssalSire");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 function sireBeforeDeath(event) {
   const npc = event.npc;
@@ -25,7 +26,7 @@ function sireDeath({ npc, killer }) {
   const player = fight?.player ?? (killer?.isPlayer?.() ? killer : null);
   if (player?.isRegistered()) {
     const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
-    const total = CombatAchievements.killed(player, own, (kills) => player.sendMessage(Common.message("killCount", { kills })));
+    const total = CombatAchievements.killed(player, own, (kills) => sendBossKillCount(player, Common.message("killCount", { kills })));
     player.setAttribute(Common.KILLS_ATTRIBUTE, Math.max(own, total ?? 0));
     if (total == null) player.getPacketSender().sendConfig(Common.data.kill.killCountVarp, own);
     if (fight) CombatAchievements.judge(fight);

@@ -103,6 +103,21 @@ function dropsFor(t, h, player) {
   return drops.map((drop) => drop.itemId);
 }
 
+test("the base drops distinguish upstairs and basement cyclopes", () => {
+  const { loadDrops, tableForNpc } = require("../plugins/npcs/NpcDrops.plugin").__internals;
+  loadDrops();
+  const upstairs = [2463, 2464, 2465, 2466, 2467, 2468];
+  const basement = [2137, 2138, 2139, 2140, 2141, 2142];
+  for (const id of [...upstairs, ...basement]) {
+    const { entries } = tableForNpc(id);
+    const bones = entries.filter((entry) => entry.item_id === I.BIG_BONES);
+    assert.equal(bones.length, 1, `cyclops ${id} has one Big bones row`);
+    assert.ok(bones[0].always);
+    assert.deepEqual(bones[0].quantity, [1, 1]);
+    assert.equal(entries.some((entry) => entry.item_id === I.DRAGON_DEFENDER), basement.includes(id));
+  }
+});
+
 test("tokens keep crumbling on the minute clock after a relog inside the room", (t) => {
   const h = cyclopesHandlers();
   const first = enterTopRoom(t, h, { tokens: 200 });

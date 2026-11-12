@@ -446,6 +446,12 @@ function useObstacle(event) {
       }
     }
     steps ??= crossingSteps(line, route);
+    // Wiki (Plank (Brimhaven Agility Arena)): at 99 Agility any plank can be crossed, "however,
+    // choosing a broken plank takes 1 extra tick to cross".
+    if (!failed && kind === "PLANK" && Shared.agilityLevel(player) >= 99) {
+      initializePlanks();
+      if (brokenPlankOn(route.path)) steps = [steps[0], { wait: 1 }, ...steps.slice(1)];
+    }
     if (off === 1) steps = [{ walk: [route.approach], arrive: true }, ...steps];
   }
   const context = {

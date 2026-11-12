@@ -126,7 +126,7 @@ test("the seven finishing tasks are real catalogue keys", () => {
 
 test("diary remainder credits every producer event only when its full condition holds", () => {
   const api = makeApi();
-  require("../plugins/achievements/diaries/FaladorDiaryRemainder.plugin").register(api);
+  require("../plugins/achievements/diaries/FaladorDiaryRemainder.AchievementDiaries").register(api);
   makeQuestAnswers(api, { complete: { wanted: true } });
 
   assert.deepEqual(diaryEvents(api, "sir-renitee:crest-identified", { player: makePlayer() }), [KEYS.crestIdentified]);
@@ -200,7 +200,7 @@ test("diary remainder credits every producer event only when its full condition 
 test("Sir Renitee reveals the crest only with 16 Construction and records the Saradomin change", () => {
   const api = makeApi();
   makeQuestAnswers(api);
-  require("../plugins/achievements/diaries/FaladorDiaryRemainder.plugin").register(api);
+  require("../plugins/achievements/diaries/FaladorDiaryRemainder.AchievementDiaries").register(api);
   const plugin = require("../plugins/npcs/SirRenitee.plugin");
   plugin.register(api);
   const condition = api._handlers.get("condition")[0];
@@ -305,7 +305,7 @@ test("the White Knight armoury stays shut until Wanted! is complete", () => {
 
   const diaryApi = makeApi();
   makeQuestAnswers(diaryApi, { complete: { wanted: false } });
-  require("../plugins/achievements/diaries/FaladorDiaryRemainder.plugin").register(diaryApi);
+  require("../plugins/achievements/diaries/FaladorDiaryRemainder.AchievementDiaries").register(diaryApi);
   assert.deepEqual(
     diaryEvents(diaryApi, "shop:purchase", { player, shopId: 1376, itemId: 6609, amount: 1, originalStock: true }),
     [],

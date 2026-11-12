@@ -8,6 +8,9 @@
  *   first free slot, until the amount, the logs or the coins run out. Without logs: "You'll
  *   need to bring me some more logs."; coins running short: "Those planks cost 1500 coins. You
  *   don't have enough money for all of them.";
+ * - a sawmill coupon for the log's plank pays that plank's fee instead of the coins, one per log,
+ *   and is used before a voucher, which is then kept (Wiki, Sawmill coupon). The choice ends with
+ *   "You redeem 27 sawmill coupons to pay for some planks." (spam, as captured);
  * - a sawmill voucher carried, with room for the extra plank, doubles one log's planks (Wiki);
  * - a log used on an operator makes one plank straight away;
  * - a carried plank sack takes the planks before the inventory (Wiki, since 1 November 2023).
@@ -50,7 +53,12 @@ function givePlank(player, plankId) {
   if (request.stored === 0) player.getInventory().adds(plankId, 1);
 }
 
-/** Plank by plank until the amount, the logs or the coins run out; the vouchers double a log. */
+/**
+ * Plank by plank until the amount, the logs or the coins and coupons run out. A log with its
+ * coupon carried spends the coupon instead of the coins and makes one plank, the voucher kept
+ * (Wiki: coupons can't be combined with a voucher and are used first); otherwise vouchers double
+ * a log.
+ */
 function convert(player, npcId, plank, amount) {
   const { coins, voucher, messages, diary } = data();
   const inventory = player.getInventory();
@@ -59,8 +67,17 @@ function convert(player, npcId, plank, amount) {
     return 0;
   }
   let made = 0;
+  let redeemed = 0;
   let shortOfCoins = false;
   for (let i = 0; i < amount && inventory.contains(plank.log); i++) {
+    if (plank.coupon && inventory.contains(plank.coupon)) {
+      inventory.delete(plank.coupon, 1);
+      inventory.delete(plank.log, 1);
+      givePlank(player, plank.plank);
+      made += 1;
+      redeemed += 1;
+      continue;
+    }
     if (inventory.getAmount(coins) < plank.cost) {
       shortOfCoins = true;
       break;
@@ -72,6 +89,10 @@ function convert(player, npcId, plank, amount) {
     givePlank(player, plank.plank);
     if (doubled) givePlank(player, plank.plank);
     made += doubled ? 2 : 1;
+  }
+  // rsprox 20261105T005429 tick 9698: one spam line for the whole choice, on its tick.
+  if (redeemed > 0) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, messages.couponsRedeemed.replace("{count}", String(redeemed)));
   }
   if (shortOfCoins) say(player, npcId, messages.noCoins.replace("{cost}", String(plank.cost)));
   if (made > 0) {

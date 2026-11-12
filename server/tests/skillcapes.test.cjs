@@ -230,6 +230,27 @@ test("masters sell the cape and hood for 99,000, trimmed with a second 99", () =
   assert.equal(ask(poor, "If the player does not have at least 99,000 coins:"), true);
 });
 
+test("the Master Crafter's transcript has no hand-out step, so his sale and hood lines make it", () => {
+  const { sellerLine } = Sellers._test;
+  const definition = { getName: () => "Master Crafter" };
+  const sale = "Excellent! Wear that cape with pride my friend.";
+  const buyer = player({ ninetyNines: ["CRAFTING"], coins: 99000 });
+  sellerLine({ player: buyer, definition, text: "Not the sale line" });
+  assert.equal(buyer.getInventory().getAmount(core.ItemIdentifiers.COINS), 99000);
+  sellerLine({ player: buyer, definition, text: sale });
+  assert.equal(buyer.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
+  assert.equal(buyer.getInventory().contains(obj("skillcape_crafting")), true);
+  assert.equal(buyer.getInventory().contains(obj("skillcape_crafting_hood")), true);
+
+  const hood = "Most certainly, and free of charge!";
+  const another = player({ ninetyNines: ["CRAFTING"], coins: 0 });
+  sellerLine({ player: another, definition, text: hood });
+  assert.equal(another.getInventory().contains(obj("skillcape_crafting_hood")), false);
+  another.getInventory().adds(obj("skillcape_crafting"), 1);
+  sellerLine({ player: another, definition, text: hood });
+  assert.equal(another.getInventory().contains(obj("skillcape_crafting_hood")), true);
+});
+
 test("every skillcape master is named after an NPC in the active cache", () => {
   // Masters are found by cache name: rev 242 renamed the Melee combat and Woodsman tutors
   // (Captain Harlan, Wilfred), which left the Defence and Woodcutting capes unsold.

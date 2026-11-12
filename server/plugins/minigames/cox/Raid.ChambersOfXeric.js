@@ -200,6 +200,7 @@ function returnOnLogin({ player }) {
   if (!player.getAttribute(Shared.ATTR.INSIDE)) return;
   player.setAttribute(Shared.ATTR.INSIDE, null);
   removeRaidItems(player);
+  Shared.restoreStats(player);
   player.moveTo(Shared.loc(Shared.OUTSIDE));
   Shared.raidMessage(player, "Your party could not be re-found.");
 }

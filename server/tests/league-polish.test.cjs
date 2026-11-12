@@ -42,9 +42,23 @@ before(async () => {
     raidDeaths++;
     event.handled = true;
   });
-  for (const name of ["Ironman", "LeagueMode", "LeaguePoints", "LeagueRelics"]) {
-    require(`../plugins/modes/${name}.plugin`).register(PluginManager.createApi(name));
-  }
+  const arenaItems = require("../plugins/minigames/barbarianassault/Items.BarbarianAssault");
+  const plugins = [
+    ["minigames/BarbarianAssault.plugin.js", {
+      name: "BarbarianAssault",
+      dependsOn: ["Shopkeepers"],
+      register(api) {
+        arenaItems.init(api);
+        api.registerRangedAmmoHandler(arenaItems.rangedAmmoHandler);
+      },
+    }],
+    ["modes/Ironman.plugin.js", require("../plugins/modes/Ironman.plugin")],
+    ["modes/LeagueMode.plugin.js", require("../plugins/modes/LeagueMode.plugin")],
+    ["npcs/Shopkeepers.plugin.js", { name: "Shopkeepers", register() {} }],
+  ];
+  PluginManager.loadPluginCandidatesWithDependencies(plugins.map(([pluginPath, plugin]) => ({
+    pluginPath, plugin, pluginName: plugin.name, dependsOn: plugin.dependsOn ?? [],
+  })));
   require("../plugins/commands/AdminCommands.plugin").register(PluginManager.createApi("AdminCommands"));
   require("../plugins/commands/SaveHistory.plugin").register(PluginManager.createApi("SaveHistory"));
 });
@@ -90,6 +104,27 @@ function askAdamToLeaveIronman(player) {
 
 /** Typing ::text in the chatbox. */
 const type = (player, text) => CommandPacketListener.execute(player, text);
+
+test("Barbarian Assault claims arena ammo before the Raging Echoes saving passive", t => {
+  const { Equipment, Item, Location } = core;
+  const { ITEM, ROLE } = require("../plugins/minigames/barbarianassault/Data.BarbarianAssault");
+  const Match = require("../plugins/minigames/barbarianassault/Match.BarbarianAssault");
+  const player = character("echoesarcher", "league");
+  player.setAttribute("league:type", 5);
+  player.setAttribute("league:masteries", { ranged: 1 });
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(I.SHORTBOW));
+  player.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(ITEM.BULLET_ARROW, 10));
+  let match = { players: new Map([[player, { role: ROLE.ATTACKER }]]) };
+  t.mock.method(Match, "matchFor", who => who === player ? match : null);
+  t.mock.method(Math, "random", () => 0);
+
+  const location = new Location(3222, 3219, 0);
+  assert.equal(PluginManager.decrementRangedAmmo(player, location, 1), true);
+  assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9);
+  match = null;
+  assert.equal(PluginManager.decrementRangedAmmo(player, location, 1), true);
+  assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9, "the passive saves ammo outside the arena");
+});
 
 test("a league character logs in as a standard Ironman; a main character is untouched", () => {
   const league = character("leaguer", "league");

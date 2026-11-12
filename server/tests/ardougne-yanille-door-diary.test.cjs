@@ -18,7 +18,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
 const Doors = require("../plugins/objects/Doors.plugin");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const DoorDiary = require("../plugins/achievements/diaries/ArdougneYanilleDoorDiary.plugin");
+const DoorDiary = require("../plugins/achievements/diaries/ArdougneYanilleDoorDiary.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 

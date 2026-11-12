@@ -18,7 +18,7 @@ before(async () => {
   Data.initializeFarmingData();
   Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
   diary = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne');
-  const receiver = require('../plugins/achievements/diaries/ArdougnePalmHealthDiary.plugin');
+  const receiver = require('../plugins/achievements/diaries/ArdougnePalmHealthDiary.AchievementDiaries');
   receiver.register({
     onCustomEvent: (name, handler) => { if (name === 'farming:check-health') checkedHealth = handler; },
     emitCustomEvent: (name, request) => {

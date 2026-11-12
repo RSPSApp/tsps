@@ -52,6 +52,9 @@ function createTestHouseSave() {
   return { rooms };
 }
 
+/** Home Sweet Home, the music of every player-owned house. */
+const HOME_SWEET_HOME_TRACK = 454;
+
 class PlayerHouseInstance extends PrivateArea {
   owner = null;
   buildingMode = false;
@@ -66,6 +69,11 @@ class PlayerHouseInstance extends PrivateArea {
   /** Objects drawn over the furniture for now (open dungeon doors, a throne room cage); sent to everyone who enters. */
   extraObjects = [];
   allocation;
+
+  /** A house plays Home Sweet Home, in every room and on every floor. */
+  getMusicTrack() {
+    return HOME_SWEET_HOME_TRACK;
+  }
 
   /** Test-house allocations are process-local and must never be restored as normal map tiles. */
   static isAllocationLocation(location) {
@@ -608,9 +616,11 @@ class PlayerHouseInstance extends PrivateArea {
               ));
               continue;
             }
-            if (!buildingMode) {
+            if (!buildingMode || this.furnishedWithoutLoc(room, hotspot)) {
               // Templates contain ghosts even when the building-mode varbit is off.
-              // Remove them before replaying built furniture at the same tiles.
+              // Remove them before replaying built furniture at the same tiles. A furnished
+              // placement that draws nothing (the rug tiles round a hall's staircase, the stair
+              // tile under a hall rug) loses its ghost too: its space is taken (issue #4189).
               player.getSession().sendClientPacket(encodeLocDel(worldX, worldY, plane, hotspot.type, (hotspot.face + room.rotation) & 3));
               continue;
             }
@@ -754,10 +764,8 @@ class PlayerHouseInstance extends PrivateArea {
           for (const furniture of Object.values(room.furnitureByLocation ?? {})) {
             const buildable = Data.BUILDABLE_BY_KEY.get(furniture.buildableKey);
             if (!buildable || this.hiddenFurniture.has(furniture)) continue;
-            const hotspot = Data.HOTSPOT_BY_KEY.get(furniture.hotspotKey) ?? Data.hotspotIn(room.roomKey, furniture.sourceObjectId);
-            const variant = hotspot ? hotspot.objectIds.indexOf(furniture.sourceObjectId) : -1;
             const objectId = (this.litBurners.get(furniture) ?? 0) > World.getProcessCycle() ? buildable.objectIds[0] + 1
-              : furniture.displayObjectId ?? buildable.objectIds[variant] ?? buildable.objectIds.find((id) => id >= 0) ?? -1;
+              : this.furnitureObjectId(room, furniture, buildable);
             if (objectId < 0) continue;
             const local = this.rotatedFootprint(furniture.localX, furniture.localY, furniture.sourceObjectId, furniture.face, room.rotation);
             const object = new GameObject(
@@ -775,6 +783,23 @@ class PlayerHouseInstance extends PrivateArea {
         }
       }
     }
+  }
+
+  /**
+   * The loc a placement of saved furniture draws: the buildable's loc for the placement's hotspot
+   * variant, or -1 where it draws nothing (a hall rug's stair tile, a staircase's rug tiles).
+   */
+  furnitureObjectId(room, furniture, buildable = Data.BUILDABLE_BY_KEY.get(furniture.buildableKey)) {
+    if (!buildable) return -1;
+    const hotspot = Data.HOTSPOT_BY_KEY.get(furniture.hotspotKey) ?? Data.hotspotIn(room.roomKey, furniture.sourceObjectId);
+    const variant = hotspot ? hotspot.objectIds.indexOf(furniture.sourceObjectId) : -1;
+    return furniture.displayObjectId ?? buildable.objectIds[variant] ?? buildable.objectIds.find((id) => id >= 0) ?? -1;
+  }
+
+  /** Whether a template hotspot placement is furnished by a piece that draws no loc there. */
+  furnishedWithoutLoc(room, hotspot) {
+    const furniture = room.furnitureByLocation?.[this.furnitureKey(hotspot.localX, hotspot.localY, hotspot.type)];
+    return !!furniture && Data.BUILDABLE_BY_KEY.has(furniture.buildableKey) && this.furnitureObjectId(room, furniture) < 0;
   }
 
   clearFurniture() {
@@ -977,4 +1002,4 @@ class PlayerHouseInstance extends PrivateArea {
   }
 }
 
-Object.assign(module.exports, { createDefaultHouseSave, createTestHouseSave, PlayerHouseInstance });
+Object.assign(module.exports, { createDefaultHouseSave, createTestHouseSave, PlayerHouseInstance, HOME_SWEET_HOME_TRACK });

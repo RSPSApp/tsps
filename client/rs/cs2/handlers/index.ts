@@ -7,6 +7,7 @@ import { registerClientOps } from "./ClientOps";
 import { registerConfigOps } from "./ConfigOps";
 import { registerCoreOps } from "./CoreOps";
 import { registerDbOps } from "./DbOps";
+import { registerDisplayNameOps } from "./DisplayNameOps";
 import { registerLongOps } from "./LongOps";
 import type { HandlerMap } from "./HandlerTypes";
 import { registerMarketOps } from "./MarketOps";
@@ -42,6 +43,7 @@ export function createHandlerMap(): HandlerMap {
     registerMarketOps(handlers);
     registerDbOps(handlers);
     registerWorldListOps(handlers);
+    registerDisplayNameOps(handlers);
     // Last: only fills opcodes nothing above handles.
     registerUnsupportedOps(handlers);
 

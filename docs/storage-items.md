@@ -2,7 +2,8 @@
 
 `server/plugins/items/StorageItems.plugin.js`, with one unit per container in
 `server/plugins/items/storage/`: the coal bag, gem bag, gem pouch and its upgrades, gem sack, fish barrel
-(and fish sack barrel), log basket (and forestry basket), Forestry kit, plank sack and tackle box.
+(and fish sack barrel), log basket (and forestry basket), Forestry kit, plank sack, tackle box, and the
+Hunters' Guild meat and fur pouches (`HunterPouches.StorageItems.js`).
 The herb sack and seed box are in the Farming plugin.
 
 ## Replaces
@@ -27,7 +28,7 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 
 As with the rune pouch, a container's contents live on the player in the attribute
 `storage-items:<family>` (`coal-bag`, `gem-bag`, `gem-pouch`, `gem-sack`, `fish-barrel`, `log-basket`, `forestry-kit`,
-`plank-sack`, `tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
+`plank-sack`, `tackle-box`, `meat-pouch`, `fur-pouch`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
 
@@ -42,6 +43,8 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
+| Small and large meat pouch | 14 / 28 raw hunter meats (`hunterMeat`; no raw bird meat), by the largest carried | open: Hunter catches | - |
+| Small, medium and large fur pouch | 14 / 21 / 28 hunter furs (`hunterFur`; no tatty or combat fur), by the largest carried | open: Hunter catches | - |
 
 Upgrading a tote and real gem bag to a gem sack transfers both family stores to the sack. If no sack
 is owned but its store remains, the upgrade also preserves those gems, combining matching kinds up to
@@ -52,6 +55,47 @@ The sack's action, sewing and pickup messages follow this server's pouch and bag
 transcript is retained. Gem bag, gem sack and herb sack ground pickup use this server's ordinary
 pickup sound; live container audio is not established. Semi-precious auto-storage is limited to
 mining here; the source does not establish every live-game gather source.
+
+## Meat and fur pouches
+
+Sources: **rsprox captures** of the small and large meat pouch (recordings pyre-fur-and-smallpouch-1
+to -4, rev 242: sewing, every option, the bank panel, Destroy and pyre fox deadfall catches), and the
+OSRS Wiki (Small/Large meat pouch, Fur pouch, Small/Medium/Large fur pouch, Hunter meat, Bank-use item)
+for levels, XP, sizes, what each holds and the fur pouches, which weren't captured.
+
+- **Sewing** (`Leather.Crafting.js`, `skills/data/crafting.json` `huntersPouches`): a needle (with
+  thread, or a costume needle) on the fur, or the fur on the needle, makes one pouch with **no menu**:
+  `human_leather_crafting` at once, then 2 ticks later "You make a small meat pouch." (spam), the XP and
+  the pouch, with the reel counted as the other needle crafts ("You use up one of your reels of
+  thread." on the fifth). 4 fox fur make a small meat pouch (35 Crafting, 30 XP), 4 larupia fur a small
+  fur pouch (35, 20 XP). Upgrades use 3 fur and the **closed** pouch below; the pouch takes the first free slot: sunlight antelope fur for a large meat pouch (65, 60 XP), graahk fur for a medium fur pouch
+  (50, 40 XP), kyatt fur for a large fur pouch (65, 60 XP).
+  - Without thread: messagebox "You'll need a needle and some thread to craft a small meat pouch."
+  - Without the closed pouch below (an open one doesn't count): objectbox with that pouch, "You need a
+    small meat pouch to upgrade into a large pouch."
+  - Ours: the level box and the too-little-fur line; the fur pouches' versions of the lines above.
+- **One store per kind:** every meat pouch shares one store, as does every fur pouch. The largest pouch
+  carried sets the room. An upgrade keeps the contents (captured: 11 meat before and after); destroying
+  the only pouch loses them (captured: a new pouch then held only what went in).
+- **Fill**, or a meat used on the pouch (open or closed): every meat carried goes in, silently. With
+  none, "You don't have any meats that can go into this pouch."; with the pouch full, "Your pouch is
+  full.".
+- **Check:** "Your meat pouch is currently holding # meat." (0 included).
+- **Open / Close:** "You open your small meat pouch." / "You close your large meat pouch.", the item
+  swapped in place.
+- **Catches** (trap collection, falconry and noose-wand tracking, through `catchExchange` in
+  `Context.Hunter.js`): the catch needs inventory room for all of its loot, meat and fur included,
+  even with an open pouch that has room (captured: "You don't have enough inventory space. You need 3
+  more free slots." on a deadfall; rsprox.net rev 237 recordings 01102, 01108 and 01115 show it on
+  bird snares and net traps, "1 more free slot." for one). Once it fits, an open pouch takes the meat or fur
+  (`storage:gather`, skill Hunter), silently, also when that fills it.
+- **Empty:** an empty pouch says "Your meat pouch is empty." anywhere. Away from a bank, "You can't
+  empty your meat pouch here."; next to one with the bank closed (`league:near-bank`, as the chugging
+  barrel asks it) or on the Hunters' Guild's top floor (Wiki; plane 2 inside the guild's walls, x
+  1552-1564, y 3033-3053 in the cache map) the meat goes into the inventory silently; with no room the
+  inventory-full line is ours. The bank panel's op9 (param 595 "Empty") puts it in the bank, "You
+  deposit some meat into your bank." (spam), sound 2285. The fur pouch empties only into the bank (Wiki).
+- **Destroy:** "If you destroy this item, you will lose all contents stored within."
 
 ## Events
 
@@ -89,6 +133,8 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Log basket | "You empty some of your basket's contents into the bank." / "Your bank cannot hold the remaining contents of your basket." | Ours (not captured) |
 | Tackle box | "The tackle box is now empty." | captured |
 | Tackle box | "The tackle box cannot hold itself! How weird would that be?" | Wiki |
+| Meat pouch | the lines in "Meat and fur pouches" above | captured (rev 242) |
+| Fur pouches | the meat pouch's lines with "fur" | Ours (not captured) |
 
 The barrel's and basket's Check opens a box that starts "The barrel contains:" or "The basket
 contains:" and lists "# x Item" per kind.
@@ -138,8 +184,22 @@ with the clothes or cape pouch installed (Wiki); tsps has no pouches, so they st
 
 ## Death
 
-The fish barrel's and the tackle box's contents follow the container: when it falls to the floor,
-so do they. When it is kept, they stay. Every other container keeps its contents on the player.
+`deathDrops` in `Events.StorageItems.js` decides, once per death, what happens to the contents of
+the fish barrel and tackle box, and of the containers other plugins add through
+`storage:death-containers`: the rune pouch, the essence pouches, the herb sack and the seed box
+(`tests/container-death.test.cjs`).
+
+- **PvM deaths:** the contents stay in the container, kept or lost; a lost one goes to the grave
+  with them. With its "Always empty ... on death" setting on (All Settings 354-359), the contents
+  go to the grave as items, and the container, kept or lost, is left empty. A fish barrel or
+  tackle box that falls to the floor (no grave) takes its contents along.
+- **PvP deaths** always empty them, kept or lost, and the contents drop for the killer with the
+  rest of the loot ("The pouch is always emptied ... if the death is in PvP", the setting's own
+  text). A seed box's seeds go to the bank first, where it has room (Wiki: Seed box, 7 March 2019).
+  A fish barrel the death keeps keeps its fish.
+- **Safe deaths** change nothing.
+- Every other container (coal bag, gem bag, log basket, plank sack, ...) keeps its contents on the
+  player.
 
 ## Superheat Item
 
@@ -168,3 +228,4 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 - The Forestry kit's clothes and cape pouches, and Forester's ration run-energy effects while using a felling axe.
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.
+- The meat pouch's refusal at Emerald Benedict, Eniola and Odovacar and inside Mor Ul Rek (Wiki).

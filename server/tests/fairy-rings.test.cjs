@@ -623,7 +623,12 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     assert.deepEqual(at(p), [2500, 3896, 0], 'an unused combination also breaks the sequence');
     travel(p, 'AIR'); route(p); assert.deepEqual(at(p), [2328, 4426, 0]);
   });
-  for (const [name, options] of [['certificate', { certificate: false }], ['study', { study: false, sign: false }], ['sign', { sign: false }]]) {
+  await t.test('a studied certificate without the sign stays put with the Wiki line', t => {
+    const { p, messages } = actor(t, { sign: false }); route(p);
+    assert.deepEqual(at(p), [2213, 3099, 0], 'still at the DLR ring the sequence last reached'); assert.equal(quest.getStage(p), 40);
+    assert.equal(messages.at(-1), 'Maybe you need to investigate further first..');
+  });
+  for (const [name, options] of [['certificate', { certificate: false }], ['study', { study: false, sign: false }]]) {
     await t.test(`missing ${name} keeps AJS at its ordinary island`, t => {
       const { p } = actor(t, options); route(p);
       assert.deepEqual(at(p), [2500, 3896, 0]); assert.equal(quest.getStage(p), 40);

@@ -62,6 +62,36 @@ spot animations, enums, structs, varcs, ...) and fails on an unknown opcode or a
 not end where its bytes do. The normal decoder treats a dat2 overflow as the end of an entry, so a
 new opcode with a payload otherwise misreads silently. Add the opcode from zwyz/RuneLite.
 
+"Decodes" is not "decodes right". For each changed opcode, pick real entries that use it and check
+the decoded fields against zwyz/RuneLite: for multilocs, every transform is a loc id or -1, never
+`undefined`.
+
+#### In the browser
+
+The tests run the TypeScript sources through tsx, the browser runs what webpack bundles, and the
+client type loader keeps going when a type throws: it logs `Failed loading type <id>` and keeps
+the half-decoded type. A decoder that breaks only in the browser shows up as missing locs, NPCs or
+items, not as a crash. After 242, `ByteBuffer.readSignedMedium` existed only in `ByteBuffer.ts`, the
+browser bundled a stale `ByteBuffer.js` beside it, and every multiloc lost its model and options
+while every test passed (#4007). The `no-shadowed-js` test now keeps a `.js` from sitting beside a
+`.ts`.
+
+So load the client on the new cache, walk a few regions, and read the console: about two seconds
+after the last failure the loader logs one line, `type decode failures: locs=120, objs=3`: how many
+distinct types failed, by config archive. The vision tools report the same counts as `typeDecodeFailures` in their
+summary (`server/docs/agents/testing.md`). That count is the page's: the map-building workers keep
+their own and log their own line in the same console.
+
+The workers also store built map squares in IndexedDB (`game/worker/MapSquareCache.ts`). The key
+covers the cache and the build inputs, not the client code, so a square built while a decoder
+was broken keeps serving its missing locs after the fix. #4240 was this: WebGPU players who had
+visited Edgeville before #4135 still saw no poll booth or loot chest. Picking resolved them through
+the page's fixed loader, so they could still be hovered. Two guards cover it now:
+
+- A worker stores no squares once any type has failed to decode there (`shouldStore`).
+- A fix that changes what the loader builds bumps `CACHE_FORMAT`, so squares stored before the
+  fix are built again.
+
 ### 6. Client scripts
 
 ```bash
@@ -136,6 +166,17 @@ in game: the login screen (its art is the cache's `title.jpg`), world map (switc
 (all buttons, tags), GE (buy, sell, collect, abort), shops, a skill menu, settings, sailing, and an
 NPC whose name moved into a transform (see below).
 
+A changed config opcode can break content whose ids, models and placements did not change. Check
+a few entries that use each changed opcode in game. For locs that transform (242's opcodes 97/98):
+
+| What to see | Locs |
+|---|---|
+| The model draws | Falador's Statue of Saradomin 9250 |
+| Its options | Edgeville poll booth 8720, PvP loot chest 43486 |
+| Its state changes when used | H.A.M. trapdoor 5492, Draynor Manor basement doors 137–145 |
+| A quest picks the variant | Recruitment Drive statues 7290+ |
+| A farming state picks the variant | Draynor Manor belladonna patch 7572 |
+
 ### 11. Publish the client cache
 
 The production Deploy workflow runs `ensure-cache --publish /var/www/flarum/play/caches`
@@ -193,7 +234,7 @@ NPC questions; transcribe them with an RSProx build that has `protocol/osrs-242`
 
 | Change | Symptom | Fix |
 |---|---|---|
-| Loc opcodes 97/98: multiloc with 24-bit signed ids (98 adds the default). Every transforming loc (4,750) moved off 77/92 | Our decoders read 97/98 as the old payload-less flags: 120 locs fail, the rest misread silently | `LocType` (client and server), `ByteBuffer.readSignedMedium`; all but one of 4,725 transforms equal 241's (loc 5003 points at new ids) |
+| Loc opcodes 97/98: multiloc with 24-bit signed ids (98 adds the default). Every transforming loc (4,750) moved off 77/92 | Our decoders read 97/98 as the old payload-less flags: 120 locs fail, the rest misread silently | `LocType` (client and server), `ByteBuffer.readSignedMedium`; all but one of 4,725 transforms equal 241's (loc 5003 points at new ids). Shipped in `ByteBuffer.ts` only: the browser bundled a stale `ByteBuffer.js` without it, so every transforming loc lost its model and options (statues, doors, chests, the H.A.M. trapdoor) until #4007. The `.js` is gone (see step 5) |
 | Client script commands 5100–5108 `displaynames_*` | — | `UnsupportedOps`; `CommandSignatures` regenerated |
 | Gameval kinds 16–19 (sfx, midi, jingle, ambientsound) | — | none (we don't read them) |
 | No loc id above 63,333 yet | — | the protocol's three-byte loc ids (below) are headroom; our own packets stay u16 |

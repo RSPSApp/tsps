@@ -143,7 +143,7 @@ test("barehand shark: 96 Fishing and 76 Strength supplies the hand variant and r
 test("Morytania diary: the five new actions emit their catalogue tasks", () => {
   const events = bus();
   const api = fakeApi(events);
-  const Diary = require("../plugins/achievements/diaries/MorytaniaActivities.AchievementDiaries.plugin");
+  const Diary = require("../plugins/achievements/diaries/MorytaniaActivities.AchievementDiaries");
   const emitted = [];
   events.on("diary:task", (event) => emitted.push(event.task));
   Diary.register(api);

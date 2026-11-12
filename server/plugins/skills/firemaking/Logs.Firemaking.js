@@ -743,7 +743,8 @@ function handleItemOnItem(event, activeSessions) {
       item.getMetaValue(Item.UNBANKABLE_META) === true)) return;
     for (const [slot] of inputs) inventory.deleteAtSlot(slot, 1, false);
     inventory.add(new Item(coloured.itemId, 1), true);
-    player.sendMessage(`You coat the logs with the ${coloured.colour} chemicals.`);
+    // A spam (filterable) line, as live sends it (rsprox 227/00091.txt tick 24172).
+    spam(player, `You coat the logs with the ${coloured.colour} chemicals.`);
     return;
   }
 

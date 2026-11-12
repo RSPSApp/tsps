@@ -39,7 +39,7 @@ before(async () => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("ardougne");
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   Progress(api);
-  require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.plugin").register(api);
+  require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.AchievementDiaries").register(api);
   require("../plugins/combat/SpellTeleports.plugin").register(api);
   require("../plugins/quests/quests/Watchtower.Quest")(api);
   quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(({ key }) => key === "watchtower");
@@ -99,7 +99,7 @@ test("a Watchtower quest completion lets the real spell land and advances the ha
 });
 
 test("the quest gate does not depend on the diary plugin", (t) => {
-  const diaryPlugin = require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.plugin");
+  const diaryPlugin = require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.AchievementDiaries");
   assert.equal(diaryPlugin._test.beforeCast, undefined);
   const player = fixture(t, { stage: 12 });
   assert.equal(PluginManager.emitCanTeleport(player, 20, null, "watchtower teleport"), false);

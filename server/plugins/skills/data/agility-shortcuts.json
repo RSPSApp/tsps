@@ -161,10 +161,11 @@
           {"anim":"BALANCE_FALL"},
           {"wait":1},
           {"hit":[1,3]},
-          {"msg":"You slip and fall."}
+          {"msg":"You slip and fall."},
+          {"use":"extinguishLights"}
         ]
       },
-      "unverified": "the failure's steps (no capture)",
+      "unverified": "the failure's steps (no capture); the light going out is the Wiki's",
       "between": {"ends":[[3221,9556,0],[3221,9552,0]],"cross":[{"use":"hops","args":["object","to"]}]}
     },
     {
@@ -180,10 +181,11 @@
           {"anim":"BALANCE_FALL"},
           {"wait":1},
           {"hit":[1,3]},
-          {"msg":"You slip and fall."}
+          {"msg":"You slip and fall."},
+          {"use":"extinguishLights"}
         ]
       },
-      "unverified": "the failure's steps (no capture)",
+      "unverified": "the failure's steps (no capture); the light going out is the Wiki's",
       "between": {
         "ends": [[3208,9572,0],[3204,9572,0]],
         "cross": [
@@ -224,10 +226,11 @@
       "object": 16533,
       "level": 31,
       "xp": 3,
+      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, ending with the other-side line.",
       "start": "You attempt to balance on the stepping stone.",
-      "end": "You manage to make the jump.",
+      "end": "You manage to make it to the other side of the river.",
       "between": {
-        "ends": [[3149,3363,0],[3154,3363,0]],
+        "ends": [[3149,3363,0],[3155,3363,0]],
         "via": [[3151,3363]],
         "cross": [{"use":"hops","args":["...via","to"]}]
       }
@@ -676,6 +679,7 @@
       "between": {"ends":[[3759,5670,0],[3765,5671,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {"name":"Stile (Kandarin)","object":993,"level":1,"stile":{}},
+    {"name":"Stile (Piscatoris falconry)","object":19222,"level":1,"stile":{}},
     {
       "name": "Log balance (East Ardougne, heading east)",
       "object": 16546,
@@ -2237,12 +2241,12 @@
       "between": {
         "ends": [[1475,3687,0],[1470,3687,0]],
         "cross": {
-          "forward": [{"use":"climbOver","args":["to","CLIMB_ROCKS",2]}],
-          "back": [{"use":"climbOver","args":["to","CLIMB_WALL",2]}]
+          "forward": [{"render":"CLIMB_WALL"},{"walk":[[1474,3687],[1473,3687],[1472,3687],[1471,3687],[1470,3687]]},{"render":null}],
+          "back": [{"use":"crawlDown","args":[[1469,3687],"to","west"]}]
         }
       },
-      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. Locs and walkable ends checked in osrs-241_2026-10-20.",
-      "unverified": "climb animation and duration (no live capture)"
+      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. rsprox 231/00725 (and 00726): west to east faces west (tick 237, face_angle 512), then one exact move east over 4 ticks (delay2 120, angle 512: backwards, down the rocks) with sequence 1148 (tick 238); east to west is a 5-tick walk, a tile a tick, with an appearance change at each end (ticks 743-747).",
+      "unverified": "the east-to-west render animation: the recording shows only that the appearance changes; 737 (human_climbing) is the climbing walk used for the other rock climbs (crawlUp)"
     },
     {
       "name": "Handholds (Lizardman Canyon, west)",
@@ -2906,7 +2910,6 @@
       "at": [[1392,3323,0],[1395,3323,0]],
       "level": 41,
       "xp": 9.5,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
       "between": {
         "ends": [[1391,3323,0],[1396,3323,0]],
         "cross": [
@@ -2914,7 +2917,7 @@
           {"move":"to","anim":"CLIMB_LOOP","speed":[0,90],"ticks":3}
         ]
       },
-      "note": "rsprox captures 1105 (Leagues worlds only)"
+      "note": "rsprox captures 1105 (Leagues worlds only); RSProx 20261109T224258-5ab63b4 (rev 242) has both directions"
     },
     {
       "name": "Log balance (Nemus Retreat)",
@@ -2922,10 +2925,30 @@
       "at": [[1401,3284,0],[1401,3290,0]],
       "level": 45,
       "xp": 19.5,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
       "render": "BALANCE_WALK",
-      "between": {"ends":[[1401,3283,0],[1401,3291,0]],"cross":[{"walk":["to"]}]},
-      "note": "https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
+      "between": {
+        "ends": [[1401,3283,0],[1401,3291,0]],
+        "via": [[1401,3284,0],[1401,3285,0],[1401,3286,0],[1401,3287,0],[1401,3288,0],[1401,3289,0],[1401,3290,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["via4"]},
+          {"sound":2470},
+          {"walk":["via5"]},
+          {"sound":2470},
+          {"walk":["via6"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "RSProx 20261109T224258-5ab63b4 (rev 242) ticks 1377-1402: both ways between 1401,3291 and 1401,3283, a tile a tick with sound 2470 on each, 19.5 xp. https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
     },
     {
       "name": "Log balance (Auburn Valley)",
@@ -2933,9 +2956,28 @@
       "at": [[1453,3330,0],[1453,3335,0]],
       "level": 45,
       "xp": 19.5,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
       "render": "BALANCE_WALK",
-      "between": {"ends":[[1453,3329,0],[1453,3336,0]],"cross":[{"walk":["to"]}]}
+      "between": {
+        "ends": [[1453,3329,0],[1453,3336,0]],
+        "via": [[1453,3330,0],[1453,3331,0],[1453,3332,0],[1453,3333,0],[1453,3334,0],[1453,3335,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["via4"]},
+          {"sound":2470},
+          {"walk":["via5"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "RSProx 20261109T224258-5ab63b4 (rev 242) ticks 980-994 and 1332: 1453,3336 to 1453,3329, a tile a tick with sound 2470 on each, 19.5 xp; the reverse mirrors it."
     },
     {
       "name": "Rocks (The Proudspire, lower)",

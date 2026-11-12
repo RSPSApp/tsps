@@ -12,7 +12,7 @@ const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells")
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const Varrock = require("../plugins/achievements/diaries/VarrockDiary.plugin");
+const Varrock = require("../plugins/achievements/diaries/VarrockDiary.AchievementDiaries");
 
 const DIARY = Data.BY_KEY.get("varrock");
 const TASK = Varrock._test.TASK;

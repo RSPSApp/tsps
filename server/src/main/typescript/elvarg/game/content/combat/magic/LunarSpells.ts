@@ -82,6 +82,11 @@ const PLANKS = new Map<number, [number, number]>([
     [1511, [960, 70]], [1521, [8778, 175]], [6333, [8780, 350]], [6332, [8782, 1050]],
     [32904, [31432, 1750]], [32907, [31435, 3500]], [32910, [31438, 5250]],
 ]);
+/**
+ * All Settings' Plank Make confirmations (420-423), by log: basic, oak, teak and mahogany. With one
+ * on, the spell asks before it takes coins for that log.
+ */
+const PLANK_CONFIRM_VARBITS = new Map<number, number>([[1511, 624], [1521, 2319], [6333, 2320], [6332, 3939]]);
 const HUNTER_KIT = 11159;
 /** Hunter kit's contents; a player holding all of them is refused (Wiki: Hunter Kit). */
 const HUNTER_KIT_CONTENTS = [10150, 10010, 10006, 10031, 10029, 596, 11260, 10008, 34631];
@@ -145,13 +150,17 @@ class LunarSpell extends Spell {
     equipmentRequired(): Item[] { return []; }
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return MagicSpellbook.LUNAR; }
-    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
-    pay(player: Player): boolean {
+    /** Whether the player could cast it now (Defence, level, runes), without paying; the reason sent when not. */
+    castable(player: Player): boolean {
         if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 40) {
             player.sendMessage("You need at least level 40 Defence to cast Lunar spells.");
             return false;
         }
-        if (!this.canCast(player, false) || !this.canCast(player, true)) return false;
+        return this.canCast(player, false);
+    }
+    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
+    pay(player: Player): boolean {
+        if (!this.castable(player) || !this.canCast(player, true)) return false;
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
@@ -176,9 +185,12 @@ class LunarSpell extends Spell {
 class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
-        if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
-            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
+        // The cast's own checks come before anything asks (the boat-at-sea warning), so it never asks for a cast that
+        // can't happen; paying checks them again.
+        if (!TeleportHandler.checkReqs(player, this.teleport.destination) || !this.castable(player)) return true;
+        TeleportHandler.confirm(player, this.teleport.destination, () => this.cast(player, () => TeleportHandler.teleport(player,
+            this.teleport.destination, TeleportType.LUNAR, false, () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name }))));
+        return true;
     }
 }
 
@@ -284,16 +296,19 @@ export class LunarSpells {
     }
 
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
-        if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
-        return spell.cast(player, () => {
+        if (!TeleportHandler.checkReqs(player, spell.teleport.destination) || !spell.castable(player)) return true;
+        TeleportHandler.confirm(player, spell.teleport.destination, () => spell.cast(player, () => {
             TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
                 () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
+                // A passenger is asked too (the boat-at-sea warning) before they go.
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
-                    TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
+                    TeleportHandler.confirm(target, spell.teleport.destination,
+                        () => TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false));
                 }
             });
-        });
+        }));
+        return true;
     }
 
     /**
@@ -675,13 +690,27 @@ export class LunarSpells {
             PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) {
-            this.repeat(player, PLANK_TICKS, make,
-                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
-                PLANK_FIRST_REPEAT_TICKS);
-        } else {
-            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+        const start = (): void => {
+            if (make()) {
+                this.repeat(player, PLANK_TICKS, make,
+                    () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                    PLANK_FIRST_REPEAT_TICKS);
+            } else {
+                PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+            }
+        };
+        const confirm = PLANK_CONFIRM_VARBITS.get(logId);
+        if (confirm === undefined || player.getPacketSender().getVarbit?.(confirm) !== 1
+            || !inventory.contains(logId) || inventory.getAmount(COINS) < plank[1]) {
+            start();
+            return true;
         }
+        // Ours: the question and its options (no capture of the confirmation).
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
+                player.getPacketSender().sendInterfaceRemoval();
+                if ((option as number) === 1) start();
+            } }, "Yes", "No").setTitle(`Pay ${plank[1]} coins for each plank?`)));
         return true;
     }
 

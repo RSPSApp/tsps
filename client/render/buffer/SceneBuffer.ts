@@ -432,6 +432,7 @@ export class SceneBuffer {
             anim,
             seqId: loc.entity.seqId,
             randomStart: loc.entity.seqRandomStart,
+            preparedOrigin: loc.preparedOrigin,
 
             // Position and ID for ambient sounds
             locId: loc.interactId,

@@ -75,8 +75,8 @@ before(async () => {
     onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
     emitCustomEvent: (name, payload) => emit(name, payload),
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
   // Prayer's own "prayer:bury" answer; Thieving's own success chance.
   require("../plugins/skills/Prayer.plugin").register(new Proxy({ core }, {
     get: (target, key) => (key in target ? target[key] : key === "onCustomEvent"

@@ -57,11 +57,11 @@ before(() => {
   content();
   const real = PluginManager.createApi("SeaCombatTest");
   api = { ...real, persistAttribute() {}, sendMultiChatboxPrompt: () => true };
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  require("../plugins/skills/sailing/Crew.plugin").register(api);
-  require("../plugins/skills/sailing/SeaCombat.plugin").register(api);
-  require("../plugins/skills/sailing/StaticShips.plugin").register(api);
-  require("../plugins/skills/sailing/PortTasks.plugin").register(api);
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  require("../plugins/skills/sailing/Crew.Sailing").register(api);
+  require("../plugins/skills/sailing/SeaCombat.Sailing").register(api);
+  require("../plugins/skills/sailing/StaticShipHooks.Sailing").register(api);
+  require("../plugins/skills/sailing/PortTasks.Sailing").register(api);
   require("../plugins/npcs/NpcDrops.plugin").register(api);
 });
 
@@ -699,7 +699,7 @@ test("from a deck: ranged and magic at sea creatures are allowed, melee isn't, n
 });
 
 test("the first heading after taking the helm sets sail; a heading with the sails lowered only turns (rsprox)", () => {
-  const helm = require("../plugins/skills/sailing/Helm.plugin");
+  const helm = require("../plugins/skills/sailing/Helm.Sailing");
   const player = captain();
   const { boat } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
   const listeners = [];

@@ -26,6 +26,7 @@ import net.rsprot.protocol.game.outgoing.specific.ObjAddSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjCountSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjDelSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjEnabledOpsSpecific
+import net.rsprot.protocol.game.outgoing.zone.header.UpdateZoneFullFollows
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.OutgoingGameMessage
 import net.rsprox.cache.api.CacheProvider
@@ -56,6 +57,56 @@ class WorldTest {
         assertEquals((x - sceneX) and 7.inv(), zone.zoneX)
         assertEquals((z - sceneZ) and 7.inv(), zone.zoneZ)
         assertTrue(zone.payload.readableBytes() > 0)
+    }
+
+    @Test
+    fun `an instance rebuild resets the zones loc changes went to, so tsps's replay is all that stays`() {
+        // A POH chair (shape 10) then its removal: tsps rebuilds the house in place and no longer sends the chair.
+        val x = 3222
+        val z = 3218
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(x).u16(z).u8(1).u8(10 shl 2)))
+        world.handle(packet(TspsServerPacket.LOC_DEL, TspsWriter().u16(x + 8).u16(z).u8(0).u8(10 shl 2)))
+        world.flushZones()
+        sent.clear()
+
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        val sceneX = (LUMBRIDGE_ZONE_X - 6) shl 3
+        val sceneZ = (LUMBRIDGE_ZONE_Z - 6) shl 3
+        val resets = sent.map { it as UpdateZoneFullFollows }.map { Triple(it.zoneX, it.zoneZ, it.level) }.toSet()
+        assertEquals(
+            setOf(
+                Triple((x - sceneX) and 7.inv(), (z - sceneZ) and 7.inv(), 1),
+                Triple((x + 8 - sceneX) and 7.inv(), (z - sceneZ) and 7.inv(), 0),
+            ),
+            resets,
+        )
+
+        // Reset once: the next rebuild only resets what was sent since.
+        sent.clear()
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `loc changes a second rebuild in the tick dropped before they went out need no reset`() {
+        // Entering a house and ::maxhouse rebuild it twice in one tick; the first replay never reaches the client.
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(3222).u16(3218).u8(1).u8(10 shl 2)))
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        world.flushZones()
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `a static rebuild resets nothing, and zones the new scene drops are forgotten`() {
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(3222).u16(3218).u8(0).u8(10 shl 2)))
+        world.flushZones()
+        sent.clear()
+        world.rebuild(LUMBRIDGE_ZONE_X + 1, LUMBRIDGE_ZONE_Z)
+        assertTrue(sent.isEmpty(), "REBUILD_NORMAL: tsps doesn't replay, the client's own locs stay")
+        // Far away: the client discarded the loc change, so there is nothing to reset on the way back.
+        world.rebuild(LUMBRIDGE_ZONE_X + 40, LUMBRIDGE_ZONE_Z)
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        assertTrue(sent.isEmpty())
     }
 
     @Test

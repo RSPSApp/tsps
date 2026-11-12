@@ -53,7 +53,6 @@ const POINT_CURRENCIES = [
   "PvP Arena Points",
   "Speedrun Points",
   "Tithe",
-  "Vale Research Points",
   "Volcanic Mine points",
   "Zeal Tokens",
 ];

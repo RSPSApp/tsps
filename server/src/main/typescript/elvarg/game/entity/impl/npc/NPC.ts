@@ -137,6 +137,7 @@ export class NPC extends Mobile {
     private defenceBonusOverrides: Array<number | null> | null = null;
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
+    private telejumped = false;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
     private headbars: NpcHeadbar[] = [];
     /** This tick's fade, sent with the NPC's update and cleared after it. */
@@ -167,6 +168,8 @@ export class NPC extends Mobile {
     private pet: boolean;
     private movementSteps = 1;
     private scriptedMovement: boolean = false;
+    /** Held still by a player's dialogue: set by its first NPC line, as live's chatnpc does. */
+    private heldByDialogue: Player | null = null;
     /** Hits show their damage but never lower this NPC's hitpoints (a boss whose HP is a timer). */
     private hitpointsLocked: boolean = false;
     /** The headbar (healthbar config id and its width) shown over this NPC, when not the default. */
@@ -260,6 +263,42 @@ export class NPC extends Mobile {
                 && Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0);
     }
 
+    /**
+     * An NPC talking to a player stands still while the conversation lasts (live, and LostCity's
+     * chatnpc setting npc mode playerfaceclose): from its first line of the chat it takes no step,
+     * pausing any walk it had queued, until the dialogue closes or the player is more than a tile
+     * away. The player's own opening line does not hold it, so it may finish a step first.
+     */
+    private updateDialogueHold(): boolean {
+        const target = this.getInteractingMobile();
+        const player = target?.isPlayer?.() ? target.getAsPlayer() : null;
+        const dialogue = player?.getDialogueManager?.();
+        if (!player || !dialogue?.isActive()) {
+            this.heldByDialogue = null;
+            return false;
+        }
+        const here = this.getLocation();
+        const there = player.getLocation();
+        if (here.getZ() !== there.getZ()
+            || Math.max(Math.abs(here.getX() - there.getX()), Math.abs(here.getY() - there.getY())) > 1) {
+            this.heldByDialogue = null;
+            return false;
+        }
+        if (this.heldByDialogue !== player) {
+            // Only the NPC speaking is held (live's chatnpc sets the mode on that NPC alone), not
+            // a monster or pet that happens to face a player reading someone else's line.
+            const current: any = dialogue.getCurrent();
+            const speaker = typeof current?.getNpcId === "function" ? current.getNpcId() : null;
+            const speaking = speaker !== null && (
+                player.getInteractingMobile?.() === this
+                || speaker === this.getId()
+                || speaker === this.getNpcTransformationId()
+                || speaker === this.getContentId(player));
+            this.heldByDialogue = speaking ? player : null;
+        }
+        return this.heldByDialogue !== null;
+    }
+
     public process() {
         if (this.getDefinition() != null) {
             // Queued impacts land before this NPC acts - see HitQueue.process.
@@ -268,13 +307,15 @@ export class NPC extends Mobile {
             const movement = this.getMovementQueue();
             const combat = this.getCombat();
             movement.beginCycle();
+            const heldByDialogue = this.updateDialogueHold();
             // A plugin driving this NPC's walk owns its movement: no wandering or walking home.
-            if (!this.scriptedMovement) this.movementCoordinator.process();
+            if (!this.scriptedMovement && !heldByDialogue) this.movementCoordinator.process();
             const processCombat = combat.hasPendingWork();
             if (processCombat) {
                 combat.preMovementProcess();
             }
-            if (movement.hasPendingWork()) {
+            // A held NPC keeps its walk queued and finishes it once the conversation ends.
+            if (movement.hasPendingWork() && !heldByDialogue) {
                 movement.process();
             }
             if (processCombat) {
@@ -297,7 +338,8 @@ export class NPC extends Mobile {
                     this.getFollowing() === interactingMobile
                     || this.getCombatFollowing() === interactingMobile
                     || this.getCombat().getTarget() === interactingMobile
-                    || this.hasFlag("interaction:keep");
+                    || this.hasFlag("interaction:keep")
+                    || heldByDialogue;
                 const targetUnregistered =
                     typeof interactingMobile.isRegistered === "function"
                     && !interactingMobile.isRegistered();
@@ -452,6 +494,10 @@ export class NPC extends Mobile {
 
     public isNpc(): boolean {
         return true;
+    }
+
+    public isPlayer(): boolean {
+        return false;
     }
 
     public equals(other: Object): boolean {
@@ -841,6 +887,22 @@ export class NPC extends Mobile {
         return this.exactMoveState;
     }
 
+    /**
+     * Moves the NPC to `destination` at once, staying in view, as OSRS's NPC telejump does: clients
+     * see it snap there in place, its animation carrying on, rather than vanish for a tick and
+     * come back (a plain moveTo) or glide (exactMove).
+     */
+    public telejump(destination: Location): NPC {
+        this.moveTo(destination);
+        this.telejumped = true;
+        return this;
+    }
+
+    /** Whether the NPC telejumped this tick (cleared with the tick's update). */
+    public isTelejumping(): boolean {
+        return this.telejumped;
+    }
+
     /** The orientation facing along (dx, dy): 0 south, 512 west, 1024 north, 1536 east. */
     public static travelAngle(dx: number, dy: number): number {
         if (dx === 0 && dy === 0) return 0;
@@ -928,6 +990,7 @@ export class NPC extends Mobile {
     public resetUpdating() {
         super.resetUpdating();
         this.exactMoveState = null;
+        this.telejumped = false;
         this.headbars = [];
         this.faceTileState = null;
         this.transparencyState = null;

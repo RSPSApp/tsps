@@ -439,7 +439,7 @@ test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all
   const data = require("../data/definitions/shops.json").find((shop) => shop.name === "Dusuri's Star Shop");
   ShopDefinition.replace([new ShopDefinition(data.id, data.name, data.currency,
     data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test",
-    { generalStore: data.generalStore, sellMultiplier: data.sellMultiplier, priceChangePer: data.priceChangePer })]);
+    { generalStore: data.generalStore, buysAt: data.buysAt, changePer: data.changePer })]);
   ShopManager.initialize();
   ShopManager.registerItemCurrency(core.ItemIdentifiers.STARDUST);
   t.mock.method(PluginManager, "emitCustomEvent", () => {});
@@ -561,6 +561,22 @@ test("celestial signet: a celestial ring, elven signet, 1,000 stardust and 100 s
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - smithing, 5000);
   assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING) - crafting, 5000);
   assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+});
+
+test("celestial signet: a noted elven signet (cert_elven_signet) is not one to sing", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 1000);
+  p.getInventory().adds(I.CRYSTAL_SHARD, 100);
+  p.getInventory().adds(I.ELVEN_SIGNET_2, 1); // 23944, cert_elven_signet
+  p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 99);
+  p.getSkillManager().setLevel(core.Skill.CRAFTING, 99);
+  assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.ELVEN_SIGNET_2), 1, "the noted signet is not used up");
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 0);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 1000);
 });
 
 test("celestial ring: equipping the ring while the stardust prompt is open spends no stardust", () => {

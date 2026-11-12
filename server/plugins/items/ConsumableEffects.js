@@ -19,26 +19,34 @@ function curePoisonAndVenom(player) {
 
 /** Cure/reduce poison damage without immunity; venom is only converted to poison. */
 function curePoison(player, damageReduction = Infinity) {
-  // Ordinary poison stores five severity points per starting damage; venom
-  // stores its damage directly. A conversion retains that damage, without also
-  // reducing it during the same treatment.
+  // Ordinary poison stores severity (its hit is floor((severity + 4) / 5)); venom stores its next hit directly.
+  // A conversion turns the LAST venom hit dealt into poison at the lowest severity giving it, 5 x hit - 4,
+  // without also reducing it during the same treatment. The recordings step the venom back one hit, then convert:
+  // 1000003 (next 12) -> 1000002 (10) -> 46 (rsprox_transcripts/234/03280.txt:69820). Venom that hasn't hit yet
+  // converts from its first hit: 1000000 (6) -> 26 (223/00014.txt tick 3125). Read before setVenomed clears it.
   const stored = player.getPoisonDamage();
   const current = Number.isFinite(stored) ? Math.max(0, stored) : 0;
   const severity = player.isVenomed?.()
-    ? current * 5
+    ? Math.max(0, (player.getLastVenomDamage?.() ?? current) * 5 - 4)
     : Math.max(0, current - damageReduction * 5);
   player.setPoisonDamage(severity);
   player.setVenomed(false);
 }
 
-/** Raises a skill to base + flat + percent of base, unless it is already there. */
+/**
+ * Adds a boost of flat + percent of base to the current level, never past base + that boost. A drained stat gains the
+ * boost from where it stands, as recorded on normal worlds: a super combat potion at 97/99 gives 116, not 118
+ * (rsprox_transcripts/226/01702.txt:105119-105678); a divine super combat at 96 gives 115 and at 98 gives 117
+ * (226/01696.txt, ticks 827 and 977).
+ */
 function boostSkill(player, skill, flat, percent) {
   const skills = player.getSkillManager();
   const max = skills.getMaxLevel(skill);
   const current = skills.getCurrentLevel(skill);
-  const cap = max + Math.floor(max * percent) + flat;
+  const boost = Math.floor(max * percent) + flat;
+  const cap = max + boost;
   if (current < cap) {
-    skills.increaseCurrentLevel(skill, cap - current, cap);
+    skills.increaseCurrentLevel(skill, boost, cap);
   }
 }
 

@@ -7,11 +7,11 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const Elite = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
-const Varrock = require("../plugins/achievements/diaries/VarrockDiary.plugin");
-const Fremennik = require("../plugins/achievements/diaries/FremennikDiary.plugin");
-const KaramjaFinish = require("../plugins/achievements/diaries/KaramjaDiaryFinish.plugin");
-const Western = require("../plugins/achievements/diaries/WesternProvincesDiary.plugin");
+const Elite = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.AchievementDiaries");
+const Varrock = require("../plugins/achievements/diaries/VarrockDiary.AchievementDiaries");
+const Fremennik = require("../plugins/achievements/diaries/FremennikDiary.AchievementDiaries");
+const KaramjaFinish = require("../plugins/achievements/diaries/KaramjaDiaryFinish.AchievementDiaries");
+const Western = require("../plugins/achievements/diaries/WesternProvincesDiary.AchievementDiaries");
 
 const handlers = new Map();
 const progressedEvents = [];

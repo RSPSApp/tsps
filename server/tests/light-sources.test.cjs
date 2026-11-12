@@ -478,7 +478,7 @@ for (const [label, candle, result, level] of [
     f.inv.setItem(0, item(I.EMPTY_CANDLE_LANTERN)); f.inv.setItem(1, item(candle));
     await useOn(f, 1, 0);
     assert.deepEqual(carried(f), [I.EMPTY_CANDLE_LANTERN, candle]);
-    assert.ok(f.messages.length > 0);
+    assert.deepEqual(f.messages, ["You need 4 Firemaking to do this."]);
   });
 }
 
@@ -508,7 +508,7 @@ test('restricted selected candles cannot become unrestricted lanterns in either 
       assert.equal(f.inv.getItems()[0], lantern);
       assert.equal(f.inv.getItems()[1], candle);
       assert.equal(candle.getMetaValue(mark), true);
-      assert.ok(f.messages.length > 0);
+      assert.deepEqual(f.messages, ["You cannot use that candle to make a lantern."]);
     }
   }
 });
@@ -524,5 +524,26 @@ test('assembly preserves restrictions on the selected lantern', async t => {
       assert.equal(f.inv.getItems()[0], lantern);
       assert.equal(lantern.getMetaValue(mark), true);
     }
+  }
+});
+
+
+test('assembly uses the selected later lantern and candle in a full inventory', async t => {
+  for (const candleFirst of [true, false]) {
+    const f = actor(t);
+    for (let slot = 0; slot < 28; slot++) f.inv.setItem(slot, item(I.CANDLE));
+    const spareLantern = item(I.EMPTY_CANDLE_LANTERN);
+    const selected = item(I.EMPTY_CANDLE_LANTERN).setMetaValue(core.Item.PRESET_META, true);
+    f.inv.setItem(0, spareLantern); f.inv.setItem(26, selected);
+    const spareCandle = f.inv.getItems()[1];
+    await useOn(f, candleFirst ? 27 : 26, candleFirst ? 26 : 27);
+    assert.equal(f.inv.getItems()[0], spareLantern);
+    assert.equal(spareLantern.getId(), I.EMPTY_CANDLE_LANTERN);
+    assert.equal(f.inv.getItems()[26], selected);
+    assert.equal(selected.getId(), I.CANDLE_LANTERN);
+    assert.equal(selected.isPresetItem(), true);
+    assert.equal(f.inv.getItems()[1], spareCandle);
+    assert.equal(idAt(f, 27), -1);
+    assert.equal(carried(f).length, 27);
   }
 });

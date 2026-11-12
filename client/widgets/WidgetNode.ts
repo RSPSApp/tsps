@@ -38,8 +38,8 @@ export type WidgetEventType =
     | "onResize"
     | "onClanSettingsTransmit"
     | "onClanChannelTransmit"
-    | "onItemOnItem"
-    | "onClanSettings"
+    | "onKeyDown"
+    | "onKeyUp"
     | "onMapPost"
     // Input field listeners (opcodes 1436-1439 / 2436-2439)
     | "onInputSubmit"

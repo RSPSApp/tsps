@@ -46,9 +46,6 @@
  * - The star flower page says plants begin blooming within one minute, while the
  *   quick guide says 2-5 minutes; this plugin uses a one-minute timer and does not
  *   model the faster growth caused by more players being present.
- * - The Wiki confirms a first-entry scene in Nuff's room, but no first-entry
- *   capture or native client script establishes its camera track, so it is not
- *   implemented rather than guessed.
  * - The queen's awakening scene has several speakers (Queen, Nuff, Very Wise)
  *   but the shared transcript replay renders one chathead; the qUAH/lamp/complete
  *   step ids are hooked instead of re-authoring the scene.
@@ -70,6 +67,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     Misc,
     NpcIdentifiers,
     Skill,
+    Task,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -161,6 +160,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   // multi locs, so they have no generated identifier (as FT1's grove wall).
   const QUEEN_BED_OBJECT_ID = 16316; // fairytale2_cert_large_broken_a_multi's sibling, "Fairy Queen"
   const RIGHT_SHELF = { x: 2389, y: 4470 }; // the potion shelf the certificate fell from
+  const NUFFS_ROOM = { minX: 2384, maxX: 2389, minY: 4470, maxY: 4474, levels: [0] };
+  const ROOM_PAN_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:nuff-room-pan";
+  const ROOM_PAN_TICKS = 9;
 
   const START_HOOK = "quest:fairytale-ii-cure-a-queen:start";
   const MARTIN_QUEST_OPTION = "Ask about the quest.";
@@ -271,6 +273,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   let quest;
   let groundItems;
   const shelfSearch = new WeakMap();
+  const roomPans = new WeakMap();
   const pickpocket = new WeakMap();
   const starflowers = new Map(); // player -> spawned NPCs
   const awakeQueen = new Map(); // player -> spawned NPC
@@ -293,6 +296,12 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (quest.isComplete(player)
       || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
       request.destination = HIDEOUT_RING;
+    } else if (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player)) {
+      // Wiki (Fairytale II, Regrouping): with the right sequence but the Cosmic Altar sign skipped,
+      // "Maybe you need to investigate further first.." (the penguin island is for a missing or
+      // unstudied certificate). No recording; the ring keeping the player in place is assumed.
+      request.destination = request.origin ?? player.getLocation().clone();
+      player.sendMessage("Maybe you need to investigate further first..");
     }
   }
 
@@ -370,7 +379,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     sender.sendVarbit(VARBIT_CERT_EXAMINED, studied(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_CHEF_CHAT, Number(player.getAttribute(CHEF_ATTRIBUTE)) > 0 ? 1 : 0);
     sender.sendVarbit(VARBIT_SIGN_READ, Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0 ? 4 : 0);
-    sender.sendVarbit(VARBIT_TRASHED_PAN, stage >= STAGE_INVESTIGATING ? 1 : 0);
+    sender.sendVarbit(VARBIT_TRASHED_PAN, roomPanSeen(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_GORAK_KILLED, Number(player.getAttribute(GORAK_ATTRIBUTE)) > 0 ? 1 : 0);
     // FT1's Godfather spawn (5850) only offers Pick-pocket when 1808 is 2.
     if (stage >= STAGE_PICKPOCKET) sender.sendVarbit(VARBIT_FAIRY_GODFATHER_FT1, 2);
@@ -979,6 +988,55 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     );
   }
 
+  function roomPanSeen(player) {
+    return player.getAttribute(ROOM_PAN_ATTRIBUTE) === true
+      || quest.getStage(player) > STAGE_INVESTIGATING
+      || Number(player.getAttribute(CERT_TAKEN_ATTRIBUTE)) > 0;
+  }
+
+  function endRoomPan(player, completed, logout = false) {
+    const pan = roomPans.get(player);
+    if (!pan) return;
+    roomPans.delete(player);
+    pan.task.stop();
+    player.getMovementQueue().setBlockMovement(pan.wasBlocked);
+    if (logout) return;
+    const sender = player.getPacketSender().sendCameraReset();
+    if (completed) {
+      player.setAttribute(ROOM_PAN_ATTRIBUTE, true);
+      sender.sendVarbit(VARBIT_TRASHED_PAN, 1);
+    }
+  }
+
+  function startRoomPan({ player }) {
+    if (quest.getStage(player) !== STAGE_INVESTIGATING || roomPanSeen(player) || roomPans.has(player)) return;
+    const queue = player.getMovementQueue();
+    const task = new Task(1, player);
+    roomPans.set(player, { task, wasBlocked: queue.isMovementBlocked() });
+    queue.reset().setBlockMovement(true);
+    const sender = player.getPacketSender();
+    // The live guide shows a low sweep from the wall lamp and broken shelves to
+    // the spilled potion bench. The coordinates reproduce that framing in cache 242.
+    const snap = { rate: 232, rate2: 232 };
+    const pan = { rate: 5, rate2: 14 };
+    sender.sendCameraMoveTo(2386, 4472, 166, snap).sendCameraLookAt(2384, 4472, 120, snap);
+    let ticks = 0;
+    task.execute = () => {
+      if (++ticks === 2) {
+        sender.sendCameraMoveTo(2386, 4471, 144, pan).sendCameraLookAt(2386, 4474, 96, pan);
+      } else if (ticks === 5) {
+        sender.sendCameraMoveTo(2386, 4472, 164, pan).sendCameraLookAt(2389, 4471, 100, pan);
+      } else if (ticks === ROOM_PAN_TICKS) {
+        endRoomPan(player, true);
+      }
+    };
+    TaskManager.submit(task);
+  }
+
+  function cancelRoomPan({ player }) {
+    endRoomPan(player, false);
+  }
+
   function handleHideoutZoneEnter({ player }) {
     if (!questActive(player)) return;
     if (quest.getStage(player) === STAGE_PERMISSION) advance(player, STAGE_HIDEOUT);
@@ -1034,11 +1092,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleLogout({ player }) {
+    endRoomPan(player, false, true);
     hideoutSequence.delete(player);
     removePlayerSpawns(player);
   }
 
   function handlePlayerDeath({ player }) {
+    endRoomPan(player, false);
     removePlayerSpawns(player);
   }
 
@@ -1141,6 +1201,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   api.persistAttribute(CERT_TAKEN_ATTRIBUTE);
+  api.persistAttribute(ROOM_PAN_ATTRIBUTE, false);
   api.persistAttribute(STUDIED_ATTRIBUTE);
   api.persistAttribute(DENIED_ATTRIBUTE);
   api.persistAttribute(PLANES_ATTRIBUTE);
@@ -1214,6 +1275,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       STAR_PLANE_ZONE.levels[0],
     ),
   ]));
+  api.onZoneEnter(NUFFS_ROOM, startRoomPan);
+  api.onZoneExit(NUFFS_ROOM, cancelRoomPan);
   api.onZoneEnter(HIDEOUT_ZONE, handleHideoutZoneEnter);
   api.onZoneEnter(STAR_PLANE_ZONE, handleStarPlaneZoneEnter);
   api.onZoneEnter(GORAK_PLANE_ZONE, handleGorakPlaneZoneEnter);

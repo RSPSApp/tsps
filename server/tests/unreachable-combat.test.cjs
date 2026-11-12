@@ -218,3 +218,31 @@ test("a player with no route to its target is refused on the spot", (t) => {
   assert.equal(s.player.getCombat().getTarget(), null);
   assert.deepEqual(s.messages, ["I can't reach that!"]);
 });
+
+test("walking in on an NPC someone else is fighting: two lines on the click tick, the third the tick after arrival", async (t) => {
+  // Live (rsprox 83 t18212/18213, 1098 t4925/4926): a melee player clicking Attack on an NPC
+  // another player is fighting gets "Someone else is fighting that." twice on the click tick, walks
+  // in, and gets it once more on the tick after arriving, where the attack ends without a hit.
+  for (const gap of [2, 4]) {
+    await t.test(`gap ${gap}`, (st) => {
+      st.mock.method(core.CombatFactory, "canAttackPermission", () => core.CanAttackResponse.TARGET_IN_COMBAT);
+      const s = scene(st, { gap, npcImmobile: true, noRetreat: true });
+      s.player.getCombat().attack(s.npc);
+      const perTick = [];
+      let arrivedAt = -1;
+      for (let i = 1; i <= gap + 3; i++) {
+        const before = s.messages.length;
+        s.tick();
+        perTick.push(s.messages.length - before);
+        if (arrivedAt < 0 && s.player.getLocation().getDistance(s.npc.getLocation()) <= 1) arrivedAt = i;
+      }
+      assert.equal(perTick[0], 2, "both checks of the click tick");
+      assert.ok(arrivedAt > 0, "walked in");
+      assert.equal(perTick[arrivedAt], 1, "the tick after arrival");
+      assert.equal(s.messages.length, 3);
+      assert.ok(s.messages.every((m) => m === "Someone else is fighting that."));
+      assert.equal(s.player.getCombat().getTarget(), null, "the attack ends");
+      assert.equal(s.npc.getHitpoints(), 500, "no hit");
+    });
+  }
+});

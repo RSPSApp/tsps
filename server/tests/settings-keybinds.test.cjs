@@ -48,16 +48,18 @@ function registered({persistAttribute = () => {}} = {}) {
   const buttons = new Map();
   const events = new Map();
   const logins = [];
+  const interfaceClicks = [];
   const ids = (id) => (Array.isArray(id) ? id : [id]);
   const api = {
     persistAttribute,
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onCustomEvent: (name, handler) => events.set(name, handler),
     onPlayerLogin: (handler) => logins.push(handler),
-    core: { CacheDefinitions, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor },
+    onInterfaceActionClick: (handler) => interfaceClicks.push(handler),
+    core: { CacheDefinitions, Skill: require('../dist/game/model/Skill').Skill, SkillManager: require('../dist/game/content/skill/SkillManager').SkillManager, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor, dataOrbsHidden: require('../dist/net/protocol/ClientProtocol').dataOrbsHidden },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
-  return { buttons, events, logins };
+  return { buttons, events, logins, interfaceClicks };
 }
 
 function recordingPlayer() {
@@ -65,14 +67,100 @@ function recordingPlayer() {
   const attributes = new Map();
   const vars = new Map();
   const sender = {
-    sendVarbit: (id, value) => { vars.set(`varbit ${id}`, value); sent.push(`varbit ${id}=${value}`); return sender; },
+    sendVarbit: (id, value) => {
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      const mask = (2 ** (endBit - startBit + 1) - 1) << startBit;
+      const current = vars.get(`varp ${baseVar}`) ?? 0;
+      vars.set(`varp ${baseVar}`, (current & ~mask) | ((value << startBit) & mask));
+      vars.set(`varbit ${id}`, value);
+      sent.push(`varbit ${id}=${value}`);
+      return sender;
+    },
     sendConfig: (id, value) => { vars.set(`varp ${id}`, value); sent.push(`varp ${id}=${value}`); return sender; },
-    getVarbit: (id) => vars.get(`varbit ${id}`) ?? 0,
+    getVarbit: (id) => {
+      if (vars.has(`varbit ${id}`)) return vars.get(`varbit ${id}`);
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      return ((vars.get(`varp ${baseVar}`) ?? 0) >>> startBit) & (2 ** (endBit - startBit + 1) - 1);
+    },
     getVarp: (id) => vars.get(`varp ${id}`) ?? 0,
     sendClientScript: (id) => { sent.push(`script ${id}`); return sender; },
+    sendInterfaceFlagsRange: () => sender,
+    sendEnterAmountPrompt: (title) => { sent.push(`amount prompt ${title}`); return sender; },
   };
-  return { sent, getPacketSender: () => sender, setAttribute: (k, v) => attributes.set(k, v), getAttribute: (k) => attributes.get(k) };
+  const player = {
+    sent,
+    vars,
+    getPacketSender: () => sender,
+    setAttribute: (k, v) => attributes.set(k, v),
+    getAttribute: (k) => attributes.get(k),
+    setEnteredAmountAction: (action) => { player.enteredAmountAction = action; },
+    getSkillManager: () => ({ getExperience: (skill) => 1000 + skill.getClientId() }),
+  };
+  return player;
 }
+
+test('XP Drops Tracker and Goal start/end options prompt, store, and restore their skill XP varps', () => {
+  const { interfaceClicks, events, logins } = registered();
+  const player = recordingPlayer();
+  const select = (slot) => interfaceClicks[0]({
+    player, buttonId: (137 << 16) | 18, groupId: 137, childId: 18, action: 1, slot,
+  });
+  assert.equal(select(0), true, 'native Configure op on the first picker row selects Attack');
+  assert.equal(player.getPacketSender().getVarbit(4703), 1);
+  assert.equal(player.getAttribute('settings:xpdrops-setup')['638'], 8388608);
+  const click = (childId, action) => interfaceClicks[1]({
+    player, buttonId: (137 << 16) | childId, groupId: 137, childId, action,
+  });
+
+  player.sent.length = 0;
+  assert.equal(click(38, 7), true, 'Goal start: Set to XP value');
+  assert.deepEqual(player.sent, ['amount prompt Enter the XP value:']);
+  player.enteredAmountAction.execute(12345);
+  assert.deepEqual(player.sent, ['amount prompt Enter the XP value:', 'varp 1229=12345']);
+
+  player.sent.length = 0;
+  assert.equal(click(42, 7), true, 'Goal end: Set to XP value');
+  player.enteredAmountAction.execute(54321);
+  assert.deepEqual(player.sent, ['amount prompt Enter the XP value:', 'varp 1253=54321']);
+
+  player.sent.length = 0;
+  assert.equal(click(38, 10), true, 'Goal start: Set to current XP');
+  assert.deepEqual(player.sent, ['varp 1229=1000']);
+  assert.equal(click(42, 10), false, 'Goal end has no Set to current XP action in the cache');
+  assert.equal(click(38, 6), false, 'the default menu action is not treated as an XP value');
+  assert.equal(click(38, 7), true);
+  player.enteredAmountAction.execute(0);
+  assert.equal(player.getPacketSender().getVarp(1229), 0, 'zero clears the selected start point');
+  assert.equal(player.getAttribute('settings:xpdrops-setup')['1229'], 0);
+
+  assert.equal(select(1), true, 'the second picker row selects Strength by cache enum 681');
+  assert.equal(player.getPacketSender().getVarbit(4703), 2);
+  assert.equal(click(38, 7), true, 'Goal start now targets Strength');
+  player.enteredAmountAction.execute(33333);
+  assert.equal(player.getPacketSender().getVarp(1230), 33333);
+  assert.equal(click(42, 7), true, 'Goal end now targets Strength');
+  player.enteredAmountAction.execute(44444);
+  assert.equal(player.getPacketSender().getVarp(1254), 44444);
+  assert.equal(click(38, 10), true, 'Set to current XP uses the selected Strength skill');
+  assert.equal(player.getPacketSender().getVarp(1230), 1002);
+
+  assert.equal(select(24), true, 'the final picker row selects Total XP');
+  assert.equal(player.getPacketSender().getVarbit(4703), 25);
+  assert.equal(select(0), true, 'select Attack again for the persisted setup');
+
+  const transmit = events.get('player:varp-transmit');
+  const tracker = { player, varpId: 1253, value: 23456, handled: false };
+  transmit(tracker);
+  assert.equal(tracker.handled, true);
+  assert.equal(player.getAttribute('settings:xpdrops-setup')['1253'], 23456);
+  player.sent.length = 0;
+  player.getPacketSender().sendConfig(638, 32); // unrelated bits in this shared cache varp.
+  player.sent.length = 0;
+  logins[1]({ player });
+  assert.ok(player.sent.includes('varp 1229=0'));
+  assert.ok(player.sent.includes('varp 1253=23456'));
+  assert.ok(player.sent.includes('varp 638=8388640'), 'login restores XP setup bits without replacing unrelated varp bits');
+});
 
 test('responsive gameframes validate messages, ignore duplicates and restore the saved desktop layout', () => {
   const { events } = registered();
@@ -344,6 +432,38 @@ test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts an
   assert.equal(sender.getVarp(3410), 0, 'native Default colour restores cache default');
   row({ player, slot: reset });
   assert.equal(sender.getVarp(3410), 0, 'zero selects cache default');
+});
+
+test('music player track colours: each picker saves its varp as RGB+1 with its default, and the reset row clears all four', () => {
+  const { buttons } = registered();
+  const player = recordingPlayer();
+  player.setAttribute('settings-view', 6);
+  let amount;
+  player.setEnteredAmountAction = action => { amount = action; };
+  const sender = player.getPacketSender();
+  sender.sendSubInterface = () => sender;
+  sender.closeSubInterface = () => sender;
+  const scripts = [];
+  const sendClientScript = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push([id, ...args]); return sendClientScript(id, ...args); };
+  const row = buttons.get((134 << 16) | 20);
+  // Locked, unlocked, playing, unavailable: the music player's colour varps and cache defaults.
+  const colours = [[485, 5235, 0xff0000], [486, 5236, 901389], [487, 5401, 3991270], [488, 5237, 10461087]];
+  for (const [settingId, varp, defaultColour] of colours) {
+    scripts.length = 0;
+    row({ player, slot: interfacesRowOf(settingId) });
+    assert.ok(amount, `setting ${settingId} opens the colour picker`);
+    assert.deepEqual(scripts.find(([id]) => id === 4185)?.[2], defaultColour, 'the picker starts on the default colour');
+    amount.execute(0x123456);
+    assert.equal(sender.getVarp(varp), 0x123457);
+    scripts.length = 0;
+    row({ player, slot: interfacesRowOf(settingId) });
+    assert.equal(scripts.find(([id]) => id === 4185)?.[2], 0x123456, 'and on the chosen one next time');
+    amount.execute(2147483647);
+    assert.equal(sender.getVarp(varp), 0x123457, 'Cancel keeps the colour');
+  }
+  row({ player, slot: interfacesRowOf(489) });
+  for (const [, varp] of colours) assert.equal(sender.getVarp(varp), 0, 'Reset music player text colours');
 });
 
 test('all native quest preferences are mapped, constrained and restored including colours', () => {

@@ -137,7 +137,7 @@ const LUMBERJACK_SET_BONUS = 0.005;
 
 // OSRS Wiki (Woodcutting, Maple tree): the Kandarin Diary medium reward makes the maples in Seers'
 // Village give 110 XP per log; the Lumberjack outfit bonus applies on top. The box is the diary's
-// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.plugin.js).
+// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js).
 const SEERS_VILLAGE = { minX: 2670, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
 
 // OSRS Wiki seed nest table (1,011 slots). `text` is the seed as the search line names it (rsprox
@@ -765,6 +765,14 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
   return Math.min(GROUP_BONUS_MAX, chopping);
 }
 
+/**
+ * "woodcutting:group-bonus" ({ player, players }): the players at the tree the player is chopping, for the
+ * buff bar's Group Woodcutting Bonus; 0 when they aren't chopping a tree that gives one.
+ */
+function answerGroupBonus(request) {
+  request.players = groupBonus(request.player, activeSessionsRef?.get?.(request.player) ?? null);
+}
+
 function rollLog(player, tree, axe, state = null) {
   const level = getWoodcuttingLevel(player) + Guild.invisibleBoost(player) + groupBonus(player, state);
   return Math.random() < calculateCutChance(level, tree, axe);
@@ -834,6 +842,8 @@ function rollForesterRationEnergy(player, axe) {
   }
   player.addRunEnergyUnits(2000);
   player.getPacketSender().sendRunEnergy();
+  // Wiki (Forester's ration): "a game message in the chatbox will state" this, with a regular axe.
+  player.sendMessage("You consume a Forester's ration and feel energised.");
   return true;
 }
 
@@ -1445,6 +1455,7 @@ module.exports = {
     pluginApi = api;
     api.onCustomEvent("woodcutting:chop", requestedChop);
     api.onCustomEvent("woodcutting:axe", requestedAxe);
+    api.onCustomEvent("woodcutting:group-bonus", answerGroupBonus);
     TaskManager = api.getTaskManager();
     ObjectManager = api.getObjectManager();
     ItemOnGroundManager = api.getItemOnGroundManager();
@@ -1503,5 +1514,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { maybeDropBirdNest, groupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

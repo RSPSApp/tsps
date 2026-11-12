@@ -187,6 +187,8 @@ import {
     createProjectileProgram,
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
+import { preparedLocSequence } from "../../rs/scene/LocPacketAnimation";
+import { LocAnimated } from "../loc/LocAnimated";
 import { suppressShapeSlotAt } from "../loc/LocSlots";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
@@ -259,6 +261,13 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
 
         try {
             if ((shape | 0) < 0) return;
+            if (preparedLocSequence(locId, shape) === animId && !host.instanceActive &&
+                deckViewAt(host, tile) === undefined) {
+                const map = host.mapManager?.getMap(tile.x >> 6, tile.y >> 6);
+                if (LocAnimated.playPrepared(map?.locsAnimated, tile, locId, level, shape, rotation, animId, getClientCycle())) {
+                    return;
+                }
+            }
             const exactKey = `${tile.x | 0},${tile.y | 0},${level | 0},${locId | 0}`;
             const matchKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
             // A loc the server added is found by its own id. The tile-wide key there holds

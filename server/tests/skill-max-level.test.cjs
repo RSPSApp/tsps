@@ -113,7 +113,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       getPrivateArea: () => area, setArea(a) {area=a;}, getWildernessLevel: () => 0,
       getLocation: () => location, moveTo(p) { location = p; },
       getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), sendProjectile() {}, sendGraphic() {}, sendSound() {},
+      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), getVarbit: id => configs.get(id) ?? 0, sendProjectile() {}, sendGraphic() {}, sendSound() {},
         sendTypedMessage: (type, text) => messages.push(text), sendClientScript() {}, sendObjectAnimation() {} }),
       getCombat: () => ({ getTarget: () => null, getAttacker: () => null, getHitQueue: () => ({ addPendingDamage() {} }) }),
       getPrayerActive: () => ({}),
@@ -316,12 +316,13 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     api.emitCustomEvent=(name,event)=>{if(name==='hunter:success'){successEvents.push(event);Rumours.success(event);}};
     const spawned=[];
     function prey(id,location,privateArea=null) {
-      let visible=true,registered=true,blocked=false,where=location.clone(),area=privateArea;
-      const animations=[];
-      return {animations,getId:()=>id,getDefinition:()=>core.NpcDefinition.forId(id),getPrivateArea:()=>area,setArea(a){area=a;},
+      let visible=true,registered=true,blocked=false,where=location.clone(),area=privateArea,following=null;
+      const animations=[],graphics=[];
+      return {animations,graphics,getId:()=>id,getFollowing:()=>following,setFollowing(m){following=m;},setPositionToFace(){},
+        performGraphic(g){graphics.push(g.getId());},getDefinition:()=>core.NpcDefinition.forId(id),getPrivateArea:()=>area,setArea(a){area=a;},
         isRegistered:()=>registered,unregister(){registered=false;},isVisible:()=>visible,setVisible(v){visible=v;},
-        isDyingFunction:()=>false,getHitpoints:()=>1,getLocation:()=>where,moveTo(l){where=l;},getSpawnPosition:()=>location.clone(),
-        performAnimation(a){animations.push(a);},getMovementQueue:()=>({reset(){},isMovementBlocked:()=>blocked,setBlockMovement(v){blocked=v;}}),
+        isDyingFunction:()=>false,getHitpoints:()=>1,getLocation:()=>where,moveTo(l){where=l;},exactMove(l){where=l;},telejump(l){where=l;},getSize:()=>1,getSpawnPosition:()=>location.clone(),
+        performAnimation(a){animations.push(a);},getMovementQueue:()=>({reset(){},resetFollow(){following=null;},isMovementBlocked:()=>blocked,setBlockMovement(v){blocked=v;}}),
         getCombat:()=>({getTarget:()=>null,getAttacker:()=>null,reset(){}})};
     }
     api.spawnNpc=opts=>{const n=prey(opts.id,new core.Location(opts.x,opts.y,opts.z??0));spawned.push(n);return n;};
@@ -482,45 +483,53 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Traps.check({player:q,object:snare.objects[0]});advance(2);
     assert.equal(q.counts.get(I.RABBIT_FOOT),1);assert.equal(q.counts.get(I.RABBIT_SNARE),1);assert.equal(q.counts.get(I.FERRET),1);
 
-    // Pitfalls: build from the cache pit base, tease a creature, jump, then collect.
-    q.counts.clear();q.moveTo(new core.Location(3000,3000,0));
+    // Pitfalls: build on the cache pit base, tease a creature, jump, then collect. The base stays on the map and
+    // its varbit draws the state (rsprox captures 1108, 1757, 1858).
+    q.counts.clear();q.moveTo(new core.Location(3000,2999,0));
     q.counts.set(I.KNIFE,1);q.counts.set(I.LOGS,2);q.counts.set(I.TEASING_STICK,1);
     const pitBaseId=[...Array(core.CacheDefinitions.getCounts().objects).keys()].find(id=>{
       const transforms=core.CacheDefinitions.getObject(id).transforms;
       return transforms?.[0]===core.ObjectIdentifiers.PIT_4&&transforms.includes(core.ObjectIdentifiers.COLLAPSED_TRAP_4);});
     assert.ok(pitBaseId,"cache has a spined-larupia pit base");
-    const pitBase=new core.GameObject(pitBaseId,q.getLocation().clone(),10,0,null);
+    const pitVarbit=core.CacheDefinitions.getObject(pitBaseId).transformVarbit;
+    const pitBase=new core.GameObject(pitBaseId,new core.Location(3000,3000,0),10,0,null);
     objects.add(pitBase);
     Pitfalls.build({player:q,object:pitBase});advance(3);
     const pit=[...H.traps].find(t=>t.player===q&&t.kind==='pit');assert.ok(pit);assert.equal(pit.state,'idle');
-    assert.equal(objects.has(pitBase),false,"the mapped pit base is replaced while set");
-    const larupia=prey(core.NpcIdentifiers.SPINED_LARUPIA,new core.Location(3001,3000,0));
+    assert.equal(objects.has(pitBase),true,"the mapped pit base stays while set");
+    assert.equal(pit.objects[0],pitBase);assert.equal(q.configs.get(pitVarbit),1,"the varbit shows the spiked pit");
+    const larupia=prey(core.NpcIdentifiers.SPINED_LARUPIA,new core.Location(3000,2998,0));
     Pitfalls.tease({player:q,npc:larupia,npcId:larupia.getId()});advance(1);
     assert.equal(H.reserved.get(larupia)!=null,true,"a teased creature is reserved");
+    assert.equal(larupia.getFollowing(),q,"a teased creature follows the hunter");
     const prePit=q.experience.get(Skill.HUNTER);Math.random=()=>0;
-    Pitfalls.jump({player:q,object:pit.objects[0]});
+    Pitfalls.jump({player:q,object:pitBase});
     assert.ok(q.getForceMovement(),"jumping forces movement before it resolves");
     advance(1);assert.ok(q.getForceMovement(),"force movement resolves on the second tick");
-    assert.ok(q.getLocation().equals(new core.Location(3000,3000,0)));
-    advance(1);assert.equal(q.getForceMovement(),null);assert.equal(pit.state,'caught');
-    assert.ok(q.getLocation().equals(new core.Location(3000,3003,0)),"the hunter lands across the pit");
-    q.moveTo(pit.location.clone().add(1,0));Traps.check({player:q,object:pit.objects[0]});advance(2);
+    assert.ok(q.getLocation().equals(new core.Location(3000,2999,0)));
+    advance(1);assert.equal(q.getForceMovement(),null);assert.equal(pit.state,'closing',"the creature has not fallen yet");
+    assert.ok(q.getLocation().equals(new core.Location(3000,3002,0)),"the hunter lands across the pit");
+    advance(6);assert.equal(q.configs.get(pitVarbit),2,"the pit collapses 8 ticks after the jump");
+    assert.equal(larupia.animations.at(-1).getId(),5234);
+    advance(3);assert.equal(pit.state,'caught');assert.equal(q.configs.get(pitVarbit),4,"full, the other way from the loc");
+    q.moveTo(new core.Location(3000,3002,0));Traps.dismantle({player:q,object:pitBase});advance(2);
     assert.equal(q.experience.get(Skill.HUNTER)-prePit,180);
     assert.equal(q.counts.get(I.BIG_BONES),1);assert.equal(q.counts.get(I.LARUPIA_FUR),1);assert.equal(q.counts.get(I.RAW_LARUPIA),1);
-    assert.equal(H.traps.has(pit),false);assert.equal(objects.has(pitBase),true,"collecting restores the pit base");
+    assert.equal(H.traps.has(pit),false);assert.equal(objects.has(pitBase),true);assert.equal(q.configs.get(pitVarbit),0);
 
-    // A failed leap hides the creature until it lands on the far side; the pit stays set.
-    q.counts.set(I.LOGS,1);q.counts.set(I.TEASING_STICK,1);q.levels.set(Skill.HUNTER,50);
+    // A failed leap: the creature leaps across in view and lands beyond the pit; the pit stays set.
+    q.counts.set(I.LOGS,1);q.counts.set(I.TEASING_STICK,1);q.levels.set(Skill.HUNTER,50);q.moveTo(new core.Location(3000,2999,0));
     Pitfalls.build({player:q,object:pitBase});advance(3);
     const pit2=[...H.traps].find(t=>t.player===q&&t.kind==='pit');assert.ok(pit2);
-    const larupia2=prey(core.NpcIdentifiers.SPINED_LARUPIA,new core.Location(3001,3000,0));
+    const larupia2=prey(core.NpcIdentifiers.SPINED_LARUPIA,new core.Location(3000,2998,0));
     Pitfalls.tease({player:q,npc:larupia2,npcId:larupia2.getId()});advance(1);
-    Math.random=()=>0.99;Pitfalls.jump({player:q,object:pit2.objects[0]});advance(2);
+    Math.random=()=>0.99;Pitfalls.jump({player:q,object:pitBase});advance(2);
     assert.equal(pit2.state,'idle',"a missed pitfall stays set");
-    assert.equal(larupia2.isVisible(),false,"the creature is hidden mid-leap");
-    advance(3);assert.equal(larupia2.isVisible(),true);
-    assert.ok(larupia2.getLocation().equals(q.getLocation()),"the creature lands beside the hunter");
-    assert.equal(C.distance(larupia2.getLocation(),pit2.location),3);
+    advance(3);assert.equal(larupia2.isVisible(),true,"the creature stays in view mid-leap");
+    assert.equal(larupia2.animations.at(-1).getId(),5231);
+    advance(2);
+    assert.ok(larupia2.getLocation().equals(new core.Location(3000,3002,0)),"the creature lands beyond the pit");
+    assert.ok(q.getLocation().equals(new core.Location(3000,3004,0)),"landing on the hunter knocks them back two tiles");
     Pitfalls.clear({player:q});Math.random=()=>0.5;q.counts.clear();q.levels.delete(Skill.HUNTER);
 
     q.counts.clear();Math.random=()=>0.5;q.attrs.set('quest.bone_voyage.stage',2);
@@ -855,6 +864,7 @@ function levelledPlayer(core, { total = 101, combat = 3 } = {}) {
 }
 
 const POPUP_DISABLED = 20157;
+const CHATBOX_LIST = 20158;
 
 test("as captured: Disabled pop-ups keep the message and graphic, and interrupt nothing", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -933,6 +943,7 @@ test("as captured: every 25 total levels, and level 99, have their own message",
   assert.equal(between.messages.length, 1);
   const maxed = levelledPlayer(core);
   maxed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  maxed.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
   hooks.onPlayerLevelUp({ player: maxed, skill: Skill.ATTACK, oldLevel: 98, newLevel: 99 });
   assert.equal(maxed.messages[0], "Congratulations, you've reached the highest possible Attack level of 99.");
   assert.match(maxed.messages[1], /^Congratulations! You are now a master of Attack\./, "the master line follows");
@@ -952,6 +963,7 @@ test("a level-up says what it unlocked, and only the variant the player's own st
   function at(levels = {}, done = []) {
     const p = levelledPlayer(core);
     p.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+    p.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
     p.skills.getMaxLevel = (skill) => levels[skill.getName()] ?? 1;
     quests = new Set(done);
     return p;
@@ -964,6 +976,11 @@ test("a level-up says what it unlocked, and only the variant the player's own st
     "Congratulations, you've just advanced your Defence level. You are now level 40.",
     "You can now wear Rune Armour!",
   ]);
+  // With "Level-up chatbox list" off (the default) the chat gets only the level-up line.
+  const unlisted = at();
+  unlisted.getPacketSender().sendVarbit(CHATBOX_LIST, 0);
+  hooks.onPlayerLevelUp({ player: unlisted, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
+  assert.deepEqual(unlisted.messages, ["Congratulations, you've just advanced your Defence level. You are now level 40."]);
   // And a level with nothing to unlock adds nothing.
   const quiet = at();
   hooks.onPlayerLevelUp({ player: quiet, skill: Skill.DEFENCE, oldLevel: 40, newLevel: 41 });
@@ -1218,6 +1235,7 @@ test("Show level & unlocks: the setting at level-up decides, even if it changes 
     const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
     const p = levelledPlayer(core);
     p.getPacketSender().sendVarbit(4371, atLevelUp);
+    p.getPacketSender().sendVarbit(CHATBOX_LIST, 1);
     hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 39, newLevel: 40 });
     p.getPacketSender().sendVarbit(4371, beforeContinue);
     if (end === "continue") assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
@@ -1677,10 +1695,8 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
     }
   } finally { core.MagicSpellbook.changeSpellbook = change; PluginManager.emitCustomEvent = emit; }
 
-  const regions = require("../data/definitions/music-data.json").regions;
-  const [region, tracks] = Object.entries(regions).find(([, tracks]) => tracks.length > 0);
-  assert.equal(Music.forRegion(Number(region)), tracks[0]);
-  assert.equal(Music.forRegion(-1), undefined);
+  assert.deepEqual(Music.tracksAt(1310, 10205, 0).map(id => Music.trackNames()[id]), ['Ful to the Brim', 'Kanon of Kahlith', 'Way of the Wyrm']);
+  assert.deepEqual(Music.tracksAt(0, 0, 0), []);
 });
 
 test("the cache Shrine of Ralos Bask action restores Prayer without reducing boosts", async () => {

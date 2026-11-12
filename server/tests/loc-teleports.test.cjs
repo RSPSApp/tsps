@@ -47,6 +47,7 @@ before(async () => {
   LocTeleports.register({
     core,
     persistAttribute() {},
+    onPlayerLogin: (handler) => (hooks.login = handler),
     onObjectInteraction: (handler) => { hooks.object = handler; native.onObjectInteraction(handler); },
     onObjectRoute: (handler) => (hooks.route = handler),
     onItemOnObject: (handler) => (hooks.itemOnObject = handler),
@@ -128,7 +129,8 @@ test("every entry is a placed loc with that option in the rev 241 cache, once pe
     const cached = CacheDefinitions.getObject(entry.id);
     const variants = cached.transforms ? cached.transforms.filter((id) => id !== -1).map((id) => CacheDefinitions.getObject(id)) : [cached];
     assert.ok(variants.some((variant) => variant?.actions?.[entry.op - 1]), `${entry.name} (${entry.id}) has no option ${entry.op}`);
-    assert.ok(entry.to || entry.sides?.length, `${entry.name} goes nowhere`);
+    // A Toggle-warning option only flips its warning.
+    assert.ok(entry.to || entry.sides?.length || entry.toggle, `${entry.name} goes nowhere`);
   }
   // Left to their own work: the shipyard, spirit trees, the magic mushtree.
   assert.ok(!data.locs.some((entry) => /^(sailing_|spirittree|fossil_magic_mushtree)/.test(entry.name)));
@@ -682,7 +684,8 @@ test("a failed native H.A.M. attempt retries; an optional lockpick improves the 
   nativeTicks(player, 1);
   assert.equal(thievingXp(player), 0.5);
   assert.equal(player.getPacketSender().getVarbit(235), 0);
-  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "no invented numb-finger roll");
+  // #4523: each failure numbs the fingers (Wiki), but not below 1, so the attempt retries.
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "a level-one picker stays at 1");
   assert.deepEqual(sounds, [sound(2402), sound(2402), sound(2581)], "failure does not duplicate the next retry sound");
   player.getInventory().add(new core.Item(core.ItemIdentifiers.LOCKPICK, 1), false);
   nativeTicks(player, 1);
@@ -1267,4 +1270,90 @@ test("the Trahaearn mine cave entrance in Prifddinas leads in and its steps lead
   assert.equal(leave.handled, true, "the steps take the click");
   runTicks(out, exit.tick + 3);
   assert.deepEqual(where(out), exit.to);
+});
+
+test("the Mos Le'Harmless cave: Cavey Davey's warning, its toggle, and the way in and out (#4091)", () => {
+  const where = (visit) => { const at = visit.player.getLocation(); return [at.getX(), at.getY(), at.getZ()]; };
+  const cave = locAt(3650, 3748, 2973, 0);
+  assert.deepEqual(CacheDefinitions.getObject(3650).actions.slice(0, 2), ["Enter", "Toggle-warning"]);
+  const warningVarbit = CacheDefinitions.getVarbitId("cave_horror_warning");
+  assert.equal(warningVarbit, 4331);
+  /** An explorer whose warning varbit is kept, and whose conversations are collected. */
+  const visitor = (at) => {
+    const visit = explorer(at);
+    const sender = visit.player.getPacketSender();
+    const varbits = new Map();
+    const kept = new Proxy(sender, {
+      get: (target, key) => {
+        if (key === "getVarbit") return (id) => varbits.get(id) ?? 0;
+        if (key === "sendVarbit") return (id, value) => (varbits.set(id, value), target.sendVarbit(id, value), kept);
+        return target[key];
+      },
+    });
+    visit.player.getPacketSender = () => kept;
+    visit.said = [];
+    visit.player.getDialogueManager().startDialogues = (chain) => visit.said.push([...chain.getDialogues().values()]);
+    return visit;
+  };
+  const click = (visit, object, clickType) => {
+    const request = { player: visit.player, object, objectId: object.getId(), clickType, handled: false };
+    hooks.object(request);
+    return request.handled;
+  };
+
+  // Captured (4066): the warning plays before anything moves, and ends on the question.
+  const wary = visitor([3749, 2973, 0]);
+  assert.equal(click(wary, cave, 1), true, "the cave entrance takes the click");
+  const lines = wary.said.pop();
+  assert.equal(lines[0].text, "Be ye mad? There be Horrors in this cave!");
+  assert.equal(lines[0].getNpcId(), 1052);
+  assert.equal(lines.length, 16, "fifteen captured lines, then the question");
+  runTicks(wary, 3);
+  assert.deepEqual(where(wary), [3749, 2973, 0], "nobody goes in while Davey talks");
+  lines.at(-1).action.execute();
+  const proceed = prompts.pop();
+  assert.deepEqual([proceed.title, proceed.options], ["Do you still want to proceed?",
+    ["Yes, I am not afraid to be killed in nasty ways.", "No, I think I need to go get one of these Icon things."]]);
+  proceed.pick("No, I think I need to go get one of these Icon things.");
+  runTicks(wary, 3);
+  assert.deepEqual(where(wary), [3749, 2973, 0], "No stays outside");
+  click(wary, cave, 1);
+  wary.said.pop().at(-1).action.execute();
+  prompts.pop().pick("Yes, I am not afraid to be killed in nasty ways.");
+  runTicks(wary, 2);
+  assert.deepEqual(where(wary), [3748, 9373, 0], "Yes goes in");
+
+  // Captured (1846, 4066): Toggle-warning asks "Disable warnings?", and after Yes. Enter goes straight in.
+  const bold = visitor([3749, 2973, 0]);
+  assert.equal(click(bold, cave, 2), true, "Toggle-warning takes the click");
+  const disable = prompts.pop();
+  assert.deepEqual([disable.title, disable.options], ["Disable warnings?", ["Yes.", "No."]]);
+  disable.pick("No.");
+  assert.equal(bold.player.getPacketSender().getVarbit(warningVarbit), 0, "No. leaves the warning on");
+  click(bold, cave, 2);
+  prompts.pop().pick("Yes.");
+  assert.equal(bold.player.getPacketSender().getVarbit(warningVarbit), 1);
+  // A login starts with every varbit clear; the saved choice sends it again.
+  bold.player.getPacketSender().sendVarbit(warningVarbit, 0);
+  hooks.login({ player: bold.player });
+  assert.equal(bold.player.getPacketSender().getVarbit(warningVarbit), 1, "the choice outlasts a login");
+  click(bold, cave, 1);
+  assert.equal(bold.said.length, 0, "no warning once it is off");
+  runTicks(bold, 2);
+  assert.deepEqual(where(bold), [3748, 9373, 0], "in on the captured tick (1638)");
+  click(bold, cave, 2);
+  const enable = prompts.pop();
+  assert.equal(enable.title, "Enable warnings?");
+  enable.pick("Yes.");
+  assert.equal(bold.player.getPacketSender().getVarbit(warningVarbit), 0);
+
+  // Both halves of the way out lead to the tile beside the entrance (1638 for the north half).
+  for (const [id, y, from] of [[6702, 9374, [3748, 9374, 0]], [5553, 9373, [3748, 9373, 0]]]) {
+    const exit = locAt(id, 3749, y, 0);
+    assert.equal(CacheDefinitions.getObject(id).actions[0], "Exit");
+    const leaving = visitor(from);
+    assert.equal(click(leaving, exit, 1), true, `exit ${id} takes the click`);
+    runTicks(leaving, 2);
+    assert.deepEqual(where(leaving), [3749, 2973, 0]);
+  }
 });

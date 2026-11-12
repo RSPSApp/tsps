@@ -80,6 +80,8 @@ export class Combat {
     private previousCast: CombatSpell | null = null;
     private generation = 0;
     private deniedNoticeGeneration = -1;
+    private foughtNpcNoticeGeneration = -1;
+    private foughtNpcNoticeCycle = -1;
     private static combatDebugCache?: boolean;
     /** COMBAT_DEBUG=1. Read lazily so argv/env parsing order cannot defeat it. */
     private static get DEBUG(): boolean {
@@ -279,6 +281,8 @@ export class Combat {
         this.cycleState = null;
         if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
         this.character.getMovementQueue().reset();
+        // A retaliation chase isn't the player's click: it follows the run setting.
+        if (autoRetaliation) this.character.getMovementQueue().endClickRunOverride();
         this.character.setFollowing(null);
         this.faceTarget(target, true);
         if (this.character.isPlayer()) {
@@ -346,7 +350,10 @@ export class Combat {
         }
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
-        if (permission !== CanAttackResponse.CAN_ATTACK) {
+        if (permission !== CanAttackResponse.CAN_ATTACK && this.walksInOnFoughtNpc(permission, target, method)) {
+            this.trace(`approach=permission:${CanAttackResponse[permission]}`, target);
+            state.attackBlocked = true;
+        } else if (permission !== CanAttackResponse.CAN_ATTACK) {
             this.trace(`bail=permission:${CanAttackResponse[permission]}`, target);
             this.handleAttackDenied(permission, target, generation);
             if (!this.isTransientDenial(permission) ||
@@ -497,8 +504,16 @@ export class Combat {
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
         if (permission !== CanAttackResponse.CAN_ATTACK) {
-            this.handleAttackDenied(permission, target, generation);
-            return;
+            // Walking in on an NPC someone else is fighting: out of reach, it is an approach like
+            // any other, so a route that runs out still ends in "I can't reach that!" below. A step
+            // that arrived this cycle is answered on the next (live: the third line comes the
+            // tick after arrival, rsprox 83 t18213, 1098 t4926).
+            const stepped = this.character.getMovementQueue().didMoveThisCycle();
+            if (!this.walksInOnFoughtNpc(permission, target, method, stepped)) {
+                this.handleAttackDenied(permission, target, generation);
+                return;
+            }
+            if (CombatRange.canReach(this.character, method, target)) return;
         }
         if (state.attackBlocked && CombatRange.canReach(this.character, method, target)) {
             // Denied before movement but in range now; the next cycle re-evaluates.
@@ -1054,6 +1069,34 @@ export class Combat {
             response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED ||
             // An npc waits its turn; a player is turned away on the spot.
             (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
+    }
+
+    /**
+     * Single combat for a player attacking in melee an NPC someone else is fighting (live, and
+     * LostCity player_combat.rs2): the player still walks in. The refusal is said by both
+     * checks of the click tick (before and after its step), and again the tick after arrival, where the
+     * attack ends. Ranged and magic are refused on the spot, as before (rsprox 2745 t4982).
+     * True while the player keeps walking in.
+     */
+    private walksInOnFoughtNpc(
+        permission: CanAttackResponse,
+        target: Mobile,
+        method: CombatMethod,
+        steppedThisCycle = false
+    ): boolean {
+        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()
+            || method.type() !== CombatType.MELEE) {
+            return false;
+        }
+        // In reach without having stepped there this cycle: the refusal ends it here.
+        if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
+        const cycle = World.getProcessCycle();
+        if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
+            this.foughtNpcNoticeGeneration = this.generation;
+            this.foughtNpcNoticeCycle = cycle;
+            this.character.getAsPlayer().sendMessage("Someone else is fighting that.");
+        }
+        return true;
     }
 
     private cancelIfCurrent(target: Mobile, generation: number): void {

@@ -26,6 +26,7 @@ import {
     sendInteractStop,
     subscribeTick,
 } from "../../../network/ServerConnection";
+import { ProjectionType } from "../../../game/Camera";
 import { sendLogin } from "../../../network/ServerConnection";
 import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
@@ -296,6 +297,18 @@ export function screenToRay(host: WebGLOsrsRendererHost, mouseX: number, mouseY:
         const direction = vec3.create();
         vec3.subtract(direction, farPos, origin);
         vec3.normalize(direction, direction);
+
+        // An orthographic near plane sits thousands of tiles behind the camera, so its rays
+        // start out of the raycaster's reach (draw distance) and no loc or NPC is ever hit.
+        // Start them level with the camera instead, as perspective rays do.
+        if (camera.projectionType === ProjectionType.ORTHO) {
+            const toCamera = vec3.fromValues(
+                camera.getPosX() - origin[0],
+                camera.getPosY() - origin[1],
+                camera.getPosZ() - origin[2],
+            );
+            vec3.scaleAndAdd(origin, origin, direction, vec3.dot(toCamera, direction));
+        }
 
         return new Ray(origin, direction);
     

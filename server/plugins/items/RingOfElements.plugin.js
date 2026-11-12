@@ -11,8 +11,8 @@ const CHARGES_ATTRIBUTE = "ring-of-elements:charges";
 const LAST_DESTINATION_ATTRIBUTE = "ring-of-elements:last-destination";
 const CHARGES_VARBIT = "ring_of_the_elements_charges";
 const LAST_DESTINATION_VARBIT = "ring_of_elements_last_destination";
-/** Teleport message colour (game warning red), sent once five or fewer charges remain. */
-const LOW_CHARGES_COLOUR = "ef1c1c";
+/** Teleport message colour (rsprox 364: all five warnings), sent once five or fewer charges remain. */
+const LOW_CHARGES_COLOUR = "ef1020";
 const LOW_CHARGES_AT = 5;
 const CAST_GRAPHIC_HEIGHT = 92;
 /** A bank is a loc (booth, counter) or NPC with this option within this many tiles. */
@@ -137,7 +137,8 @@ function teleport(player, destination) {
     return false;
   }
   // The charge goes on arrival, like the other teleport jewellery (Jewellery.plugin.js).
-  core.TeleportHandler.teleport(player, destination.destination, destination.type, false, () => arrive(player, destination));
+  core.TeleportHandler.confirm(player, destination.destination,
+    () => core.TeleportHandler.teleport(player, destination.destination, destination.type, false, () => arrive(player, destination)));
   return true;
 }
 
@@ -185,14 +186,27 @@ function openTeleportPrompt(player) {
   );
 }
 
-/** Worn options in cache order: Last Destination, Air, Water, Earth, Fire. */
+/**
+ * The Rub submenu entry the player picked (cache subops: Air, Water, Earth, Fire Altar).
+ * `subOpId` is 1-based: the client sends the entry's 0-based index (rsprox 364: subop 0 lands
+ * at the air altar, 3 at the fire altar) and the server adds one.
+ */
+function subOpDestination(event) {
+  if (!Number.isInteger(event.subOpId) || event.subOpId <= 0) {
+    return null;
+  }
+  const definition = core.CacheDefinitions.getItem(Number(event.itemId));
+  const index = definition?.inventoryActions?.findIndex((action) => action?.toLowerCase() === String(event.option ?? "").toLowerCase()) ?? -1;
+  return destinationLabelled(definition?.subops?.[index]?.[event.subOpId - 1]);
+}
+
+/** Worn options in cache order (op 2 onward, after Remove): Last Destination, Air, Water, Earth, Fire. */
 function wornDestination(event) {
   const index = event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID ? event.clickType - 2 : -1;
-  const submenu = Number.isInteger(event.subOpId) ? event.subOpId - 1 : index;
-  if (submenu < 0 || submenu > teleports.length) {
+  if (index < 0 || index > teleports.length) {
     return undefined;
   }
-  return submenu === 0 ? null : teleports[submenu - 1];
+  return index === 0 ? null : teleports[index - 1];
 }
 
 function nearBank(player) {
@@ -307,7 +321,7 @@ function ringAction(event) {
     uncharge(event);
     return;
   }
-  const destination = destinationLabelled(option);
+  const destination = destinationLabelled(option) ?? subOpDestination(event);
   if (destination) {
     teleport(player, destination);
     return;

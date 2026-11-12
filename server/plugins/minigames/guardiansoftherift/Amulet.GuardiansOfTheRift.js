@@ -11,7 +11,8 @@ const UNLOCK = "gotr_amulet_of_the_eye_obtained";
 const OPENED = "gotr_locket_opened";
 const AMULETS = ["gotr_amulet_of_the_eye", "gotr_amulet_of_the_eye_red", "gotr_amulet_of_the_eye_green", "gotr_amulet_of_the_eye_blue"];
 const LOCKET = "gotr_tarnished_locket";
-const LOBBY_TILE = Shared.LOBBY_TILE;
+/** Wiki (Amulet of the Eye): "just south of the portal" (43692 at 3613,9468); TeleportLocationLine 3615,9460. */
+const ARRIVAL_TILE = { x: 3615, y: 9460 };
 // Cache params for equipment actions, shared with Jewellery.plugin.js.
 const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
@@ -72,13 +73,14 @@ function locketOnGuide(event) {
   });
   event.handled = true;
 }
-/** The Wiki gives the amulet unlimited teleports to the Temple of the Eye, the lobby of the minigame. */
+/** The Wiki gives the amulet unlimited teleports to the Temple of the Eye, just south of its portal. */
 function teleport(player) {
   const { Location, TeleportHandler, TeleportType } = Shared.core();
-  const target = new Location(LOBBY_TILE.x, LOBBY_TILE.y, 0);
+  const target = new Location(ARRIVAL_TILE.x, ARRIVAL_TILE.y, 0);
   if (!TeleportHandler.checkReqs(player, target)) return;
-  // The lobby is inside the temple Area, so its postLeave never fires: leaving the game on arrival matches walking out through the barrier.
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => Game.leave(player));
+  // Leave the game on arrival, as walking out through the barrier does: a teleport from inside the
+  // rift does not always pass the temple Area's postLeave (the arrival, by the portal, is south of it).
+  TeleportHandler.confirm(player, target, () => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => Game.leave(player)));
 }
 function wornOption(event) {
   const { CacheDefinitions, Equipment } = Shared.core();

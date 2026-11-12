@@ -126,6 +126,19 @@ export interface InputKeyHandler {
     onKeyUp?(event: KeyboardEvent): boolean;
 }
 
+/**
+ * Rewrites keys before filters, handlers or the game see them (RuneLite's Key Remapping
+ * listener). Each method returns the key to use instead, null to drop it, or undefined to keep it.
+ */
+export interface KeyRemapper {
+    remapKeyDown(event: KeyboardEvent): KeyboardEvent | null | undefined;
+    remapKeyUp(event: KeyboardEvent): KeyboardEvent | null | undefined;
+    /** Checked before each key is remapped: while true, it doesn't reach the chatbox's typing. */
+    isChatInputBlocked(): boolean;
+    /** The frame's queued keys have reached the game and are about to be cleared. */
+    keysProcessed?(): void;
+}
+
 export interface InputMouseHandler {
     onMouseDown?(event: MouseEvent): void;
     onMouseMove?(event: MouseEvent): void;
@@ -195,6 +208,8 @@ export class InputManager {
     saveClickX: number = -1;
     /** Frame-synchronized click Y position */
     saveClickY: number = -1;
+    /** The middle button turns the camera (mousecam, from varbit 4134 being 0). */
+    mouseCamEnabled: boolean = true;
     /** Middle mouse click X position for the current frame */
     middleClickX: number = -1;
     /** Middle mouse click Y position for the current frame */
@@ -285,8 +300,17 @@ export class InputManager {
 
     /** Map of held keys by code (for camera controls etc) */
     keys: Map<string, boolean> = new Map();
-    /** Key events queued this frame (for widget onKey handlers) */
-    keyEvents: { keyTyped: number; keyPressed: number; code: string }[] = [];
+    /**
+     * Key events queued this frame (for widget onKey handlers). `chatBlocked` keys skip the
+     * chatbox's own typing listener (see KeyRemapper).
+     */
+    keyEvents: { keyTyped: number; keyPressed: number; code: string; chatBlocked?: true }[] = [];
+    /** At most one: WASD camera's (All Settings > Controls). */
+    keyRemapper?: KeyRemapper;
+    /** OSRS key codes pressed this frame, for widget key-down listeners (if_setonkeydown). */
+    keyDownCodes: number[] = [];
+    /** OSRS key codes released this frame, for widget key-up listeners (if_setonkeyup). */
+    keyUpCodes: number[] = [];
     /** Shift key state (also OSRS keybind 81, ClientState.isShiftPressed; see setShiftHeld) */
     shiftDown: boolean = false;
     /** Shift went down or up: menus that follow it (shift-click drop) must be rebuilt. */
@@ -561,6 +585,14 @@ export class InputManager {
         return () => this.keyHandlers.delete(handler);
     }
 
+    /** The key to process in place of `event`, or null when the remapper dropped it. */
+    private remapKey(event: KeyboardEvent, down: boolean): KeyboardEvent | null {
+        const remapper = this.keyRemapper;
+        if (!remapper) return event;
+        const remapped = down ? remapper.remapKeyDown(event) : remapper.remapKeyUp(event);
+        return remapped === undefined ? event : remapped;
+    }
+
     addMouseHandler(handler: InputMouseHandler): () => void {
         this.mouseHandlers.add(handler);
         return () => this.mouseHandlers.delete(handler);
@@ -619,6 +651,8 @@ export class InputManager {
     flushInput(): void {
         this.readIndex = this.writeIndex;
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
     }
 
     /**
@@ -788,11 +822,8 @@ export class InputManager {
         this.clickY = y;
         this.clickTime = Date.now();
 
-        // Middle mouse: camera pan
+        // Middle mouse: camera pan, unless "Middle mouse button controls the camera" is off
         if (event.button === 1) {
-            this.mouseWheelDown = true;
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
             this.middleClickX = x;
             this.middleClickY = y;
             this.middleClickSequence++;
@@ -800,6 +831,10 @@ export class InputManager {
             this.mouseY = y;
             this.isTouch = false;
             event.preventDefault();
+            if (!this.mouseCamEnabled) return;
+            this.mouseWheelDown = true;
+            this.mouseWheelX = x;
+            this.mouseWheelY = y;
             this.installDocumentGrab();
             return;
         }
@@ -1151,6 +1186,16 @@ export class InputManager {
 
     onKeyDown = (event: KeyboardEvent, prioritizeChat = false) => {
         this.setShiftHeld(event.shiftKey === true || event.keyCode === 16);
+        // Read before remapping, so the Enter that ends typing still reaches the chat it sends.
+        // The construction build menu (prioritizeChat) owns every key: nothing is remapped there.
+        const chatBlocked = !prioritizeChat && this.keyRemapper?.isChatInputBlocked() === true;
+        const remapped = prioritizeChat ? event : this.remapKey(event, true);
+        if (!remapped) {
+            event.preventDefault();
+            return;
+        }
+        event = remapped;
+        const tag = chatBlocked ? { chatBlocked: true as const } : undefined;
         if (this.filterInput("keyPressed", event)) return;
         event.preventDefault();
         this.idleTime = 0;
@@ -1179,6 +1224,9 @@ export class InputManager {
             }
             this.osrsKeyState[osrsKeyCode] = 1;
             this.osrsKeyPressedThisFrame.add(osrsKeyCode);
+            // Ours: a held key's auto-repeat doesn't run key-down listeners again, so holding
+            // Ctrl+M opens the World Map once.
+            if (!event.repeat) this.keyDownCodes.push(osrsKeyCode);
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, true);
             }
@@ -1197,12 +1245,14 @@ export class InputManager {
                     keyTyped: osrsKeyCode,
                     keyPressed: 0,
                     code: event.code,
+                    ...tag,
                 });
             }
             this.keyEvents.push({
                 keyTyped: -1,
                 keyPressed: charCode,
                 code: event.code,
+                ...tag,
             });
             this.charQueue[this.writeIndex] = charCode;
             this.writeIndex = (this.writeIndex + 1) & 0x7f;
@@ -1211,6 +1261,7 @@ export class InputManager {
                 keyTyped: osrsKeyCode,
                 keyPressed: 0,
                 code: event.code,
+                ...tag,
             });
         }
 
@@ -1219,6 +1270,13 @@ export class InputManager {
     };
 
     private onKeyUp = (event: KeyboardEvent) => {
+        // A remapped key is released as the key it was pressed as.
+        const remapped = this.remapKey(event, false);
+        if (!remapped) {
+            event.preventDefault();
+            return;
+        }
+        event = remapped;
         // Consuming a release must not leave native camera, modifier or CS2 keys held.
         const keyCode = event.keyCode;
 
@@ -1237,6 +1295,7 @@ export class InputManager {
             if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, false);
             }
+            this.keyUpCodes.push(osrsKeyCode);
         }
 
         this.keys.delete(event.code);
@@ -1254,8 +1313,9 @@ export class InputManager {
         for (let i = 0; i < 128; i++) {
             this.keyArray[i] = 0;
         }
-        // Clear OSRS internal key states
+        // Clear OSRS internal key states; key-up listeners see every held key released.
         for (let i = 0; i < this.osrsKeyState.length; i++) {
+            if (this.osrsKeyState[i] === 1) this.keyUpCodes.push(i);
             this.osrsKeyState[i] = 0;
         }
         this.osrsKeyPressedThisFrame.clear();
@@ -1346,7 +1406,10 @@ export class InputManager {
         this.lastMouseY = this.mouseY;
 
         // Clear key events queue
+        this.keyRemapper?.keysProcessed?.();
         this.keyEvents.length = 0;
+        this.keyDownCodes.length = 0;
+        this.keyUpCodes.length = 0;
 
         // Clear per-frame OSRS key pressed tracking (for wasKeyPressed)
         this.osrsKeyPressedThisFrame.clear();

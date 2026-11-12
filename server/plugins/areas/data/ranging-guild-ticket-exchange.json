@@ -1,0 +1,8 @@
+[
+  { "item": "BARB_BOLTTIPS", "tickets": 140, "perSet": 30 },
+  { "item": "STUDDED_BODY", "tickets": 150, "perSet": 1 },
+  { "item": "RUNE_ARROW", "tickets": 2000, "perSet": 50 },
+  { "item": "COIF", "tickets": 100, "perSet": 1 },
+  { "item": "GREEN_DHIDE_BODY", "tickets": 2400, "perSet": 1 },
+  { "item": "ADAMANT_JAVELIN", "tickets": 2000, "perSet": 20 }
+]

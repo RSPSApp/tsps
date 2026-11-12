@@ -150,7 +150,6 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const TUNNEL_PORTAL_OBJECT_ID = ObjectIdentifiers.PORTAL_60; // 23095 "Portal", Use
   const CHAOS_ALTAR_OBJECT_ID = ObjectIdentifiers.ALTAR_55; // 34769 chaos runecraft altar
 
-  const SUROK_TILE = { x: 3210, y: 3495, z: 0 }; // Varrock Palace Library
   const KING_SPAWN_TILE = { x: 3209, y: 3495, z: 0 };
   const TUNNEL_ENTRY_TILE = { x: 3179, y: 5190, z: 0 };
   const CHAOS_MAZE_TILE = { x: 2276, y: 4848, z: 3 };
@@ -307,7 +306,6 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const prompted = new Set();
 
   let quest;
-  let worldInstalled = false;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const contextOf = (player) => interaction.get(player) || {};
@@ -1185,28 +1183,9 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   // Login / world setup
   // ==========================================================================
 
-  function ensureQuestSpawns() {
-    const npcs = api.getWorld()?.getNpcs ? [...api.getWorld().getNpcs()] : [];
-    const ids = new Set(npcs.map((npc) => npc?.getId?.()));
-    if (!ids.has(SUROK_NPC_ID)) {
-      api.spawnNpc({
-        id: SUROK_NPC_ID,
-        x: SUROK_TILE.x,
-        y: SUROK_TILE.y,
-        z: SUROK_TILE.z,
-        wanderRadius: 0,
-      });
-    }
-  }
-
-  function installWorld() {
-    if (worldInstalled) return;
-    worldInstalled = true;
-    ensureQuestSpawns();
-  }
-
+  // Surok himself is the Varrock Palace Library's own spawn (npc-spawns.json, the multi-NPC parent
+  // 6186 that shows as 4159/4160); the quest spawning a second one at login made two of him.
   function handleLogin({ player }) {
-    installWorld();
     player.getPacketSender().sendVarbit(VARBIT_FOLDER_CHECK, papersInFolder(player));
     setSurokClothes(player, quest.getStage(player) >= STAGE_FIGHT && quest.getStage(player) < STAGE_COMPLETE);
   }
@@ -1368,7 +1347,6 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleNpcBeforeDeath);
   api.onNpcHitModify(handleNpcHitModify);
-  api.onServerStartup(installWorld);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.onPlayerDeath(handlePlayerDeath);

@@ -16,7 +16,7 @@ before(async () => {
   Data.initializeFarmingData();
   Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
   diary = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne');
-  const receiver = require('../plugins/achievements/diaries/ArdougneStrawberryFarmDiary.plugin');
+  const receiver = require('../plugins/achievements/diaries/ArdougneStrawberryFarmDiary.AchievementDiaries');
   receiver.register({
     core,
     onCustomEvent: (name, handler) => { if (name === 'farming:harvested') harvested = handler; },

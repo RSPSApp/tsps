@@ -156,5 +156,11 @@
       39
     ],
     "varbit": 4543
+  },
+  "lundail": {
+    "npc": "Lundail",
+    "diary": "wilderness",
+    "perDay": [40, 80, 120, 200],
+    "runes": ["MIND_RUNE", "BODY_RUNE", "NATURE_RUNE", "CHAOS_RUNE", "LAW_RUNE", "COSMIC_RUNE", "DEATH_RUNE"]
   }
 }

@@ -118,16 +118,20 @@ function teleport(player, destinationKey, onArrival) {
   if (!destination) return false;
   const tile = landingTile(destination);
   if (!core.TeleportHandler.checkReqs(player, tile)) return false;
+  core.TeleportHandler.confirm(player, tile, () => cast(player, destination, tile, onArrival));
+  return true;
+}
+
+function cast(player, destination, tile, onArrival) {
   const type = CASTS.get(destination.cast);
   if (!DATA.casts[destination.cast]?.clap) {
     core.TeleportHandler.teleport(player, tile, type, false, onArrival);
-    return true;
+    return;
   }
   player.getMovementQueue().setBlockMovement(true).reset();
   player.performAnimation(new core.Animation(gamevalId("seq", CLAP_SEQ), core.Priority.HIGH));
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, CLAP_MESSAGE);
   later(player, CLAP_CAST_DELAY_TICKS, () => core.TeleportHandler.teleport(player, tile, type, false, onArrival));
-  return true;
 }
 
 function later(owner, ticks, action) {

@@ -390,7 +390,8 @@ class VespulaRoom extends Raid.Room {
         for (const raider of this.raiders()) {
           if (raider.getLocation().getDistance(near) > 1) continue;
           Shared.strike(npc, raider, "ranged", max, 0, { prayerMultiplier: 0.5 });
-          if (Shared.random(0, 3) === 0) CombatFactory.poisonEntity(raider, 20);
+          // Severity, hit x 5: Vespula's ranged poisons "starting at 20 damage" (Wiki: Vespula). No recording.
+          if (Shared.random(0, 3) === 0) CombatFactory.poisonEntity(raider, 20 * 5);
         }
       });
       return;
@@ -400,7 +401,8 @@ class VespulaRoom extends Raid.Room {
       Shared.animate(npc, 7454);
       Shared.sound(player, 819);
       Shared.strike(npc, player, "melee", this.raid.challenge ? SOLDIER_MAX.CHALLENGE : SOLDIER_MAX.NORMAL, 0, { prayerMultiplier: 0.5 });
-      if (Shared.random(0, 2) === 0) Shared.core().CombatFactory.poisonEntity(player, 15);
+      // Severity, hit x 5: the vespine soldier poisons "starting at 15 damage" (Wiki: Vespula). No recording.
+      if (Shared.random(0, 2) === 0) Shared.core().CombatFactory.poisonEntity(player, 15 * 5);
     }
   }
 

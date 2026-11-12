@@ -11,6 +11,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 
 let core;
 before(async () => {
@@ -50,4 +51,56 @@ test("below 25 Agility the watchtower tree refuses", (t) => {
 test("at 25 (boosted counts) it climbs", (t) => {
   const { climbs } = climb(t, 25);
   assert.equal(climbs.length, 1);
+});
+
+test("placed twigs display on the owner's pillars and restore from saved progress", (t) => {
+  const { ItemIdentifiers: I, ItemOnGroundManager: ground, Location, ObjectIdentifiers: O } = core;
+  const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "grand_tree");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  function player(name) {
+    const p = new Player(new PlayerSession(channel));
+    p.setUsername(name);
+    p.setAttribute("bot-skip-persistence", true);
+    p.setLocation(new Location(2485, 3466, 2));
+    p.setRegistered(true);
+    t.after(() => {
+      PM.emitPlayerLogout({ player: p, username: name });
+      p.setRegistered(false);
+    });
+    return p;
+  }
+  const owner = player("pillar owner");
+  const other = player("pillar visitor");
+  const twig = I.TWIGS;
+  const tile = new Location(2485, 3467, 2);
+  const pillar = new GameObject(O.PILLAR_2, tile, 10, 0, null);
+  const stack = () => ground.getGroundItem(owner.getUsername(), twig, tile, null);
+  const place = () => PM.emitItemOnObject({
+    player: owner, object: pillar, objectId: pillar.getId(), itemId: twig, location: { x: 2485, y: 3467, z: 2 }, handled: false,
+  });
+  assert.equal(CacheDefinitions.getObject(pillar.getId()).supportItems, 1);
+  quest.setStage(owner, 120);
+  assert.equal(place(), true);
+  assert.equal(stack(), null, "a stale use cannot place a missing item");
+  owner.getInventory().adds(twig, 1);
+  assert.equal(owner.getInventory().getAmount(twig), 1);
+  assert.equal(place(), true);
+  assert.equal(owner.getInventory().getAmount(twig), 0);
+  const placed = stack();
+  assert.ok(placed);
+  assert.equal(ground.canSee(owner, placed), true);
+  assert.equal(ground.canSee(other, placed), false);
+  assert.equal(ground.canInteract(owner, placed, "pickup"), false);
+  assert.equal(ground.canInteract(owner, placed, "telegrab"), false);
+  assert.equal(placed.getTiming().expiresTick, 0);
+
+  PM.emitPlayerLogout({ player: owner, username: owner.getUsername() });
+  assert.equal(stack(), null);
+  PM.emitPlayerLogin({ player: owner, username: owner.getUsername(), isNewAccount: false });
+  assert.ok(stack());
+  assert.notEqual(stack(), placed);
+  owner.setLocation(new Location(2485, 3466, 1));
+  assert.equal(stack(), null);
+  owner.setLocation(new Location(2485, 3466, 2));
+  assert.ok(stack());
 });

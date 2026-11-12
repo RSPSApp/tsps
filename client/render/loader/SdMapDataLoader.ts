@@ -18,6 +18,7 @@ import { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
 import { collectObjSurfaceHeights } from "../../rs/scene/ObjSurfaceHeights";
 import { LocLoadType } from "../../rs/scene/SceneBuilder";
+import { preparedLocSequence } from "../../rs/scene/LocPacketAnimation";
 import { SceneTile } from "../../rs/scene/SceneTile";
 import { getIdFromTag } from "../../rs/scene/entity/EntityTag";
 import { LocEntity } from "../../rs/scene/entity/LocEntity";
@@ -1093,7 +1094,13 @@ export function addLocEntities(
             entityZ: entityZ,
         };
         const lowDetail = isLowDetail(scene, level, tileX, tileY, locType, type);
-        if (entity.seqId !== -1) {
+        // The server starts these short swings in the same tick as player exact movement.
+        // Bake the mesh during the ordinary map load so the packet can play it immediately.
+        const preparedSequence = entity.seqId === -1 ? preparedLocSequence(id, type) : undefined;
+        const animatedEntity = preparedSequence !== undefined
+            ? new LocEntity(id, type, rotation, entity.level, tileX, tileY, preparedSequence, false)
+            : entity;
+        if (animatedEntity.seqId !== -1) {
             if (isDoor) {
                 const model = locModelLoader.getModelAnimated(
                     locType,
@@ -1121,6 +1128,12 @@ export function addLocEntities(
 
             const loc = {
                 ...sceneLocEntity,
+                entity: animatedEntity,
+                preparedOrigin: preparedSequence !== undefined ? {
+                    tileX: (sceneLocEntity.sceneX - (sizeX << 6)) >> 7,
+                    tileY: (sceneLocEntity.sceneZ - (sizeY << 6)) >> 7,
+                    shape: type,
+                } : undefined,
                 lowDetail,
                 interactId: locType.id,
             };
@@ -1133,7 +1146,7 @@ export function addLocEntities(
                 const anim = addLocAnimationFrames(
                     locModelLoader,
                     sceneBuf,
-                    entity,
+                    animatedEntity,
                     locType,
                     smoothAnimations,
                     maxSteps,

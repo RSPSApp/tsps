@@ -14,7 +14,7 @@
     {"name": "Whisperer", "x": 2656, "y": 6386, "z": 0, "source": "plugins/bosses/data/whisperer.json site.outside: just north of the Sunken Cathedral arena (2640-2676,6352-6385); escape/logout put the player here."}
   ] },
   { "name": "Desert", "region": "Kharidian Desert", "area": 6, "destinations": [
-    {"name": "Kalphite Queen", "x": 3508, "y": 9494, "z": 2, "source": "plugins/bosses/kalphitequeen/Encounter.KalphiteQueen.js CHAMBER_EXIT: the lair-side tile where the chamber rope (3832) puts you, beside the queen's tunnel (multiloc 23609 at 3509,9497,2)."},
+    {"name": "Kalphite Queen", "x": 3508, "y": 9497, "z": 2, "source": "plugins/bosses/kalphitequeen/Encounter.KalphiteQueen.js CHAMBER_EXIT: the lair-side tile where the chamber rope (3832) puts you (rsprox 95, 545, 1757), beside the queen's tunnel (multiloc 23609 at 3509,9497,2)."},
     {"name": "Leviathan", "x": 2063, "y": 6435, "z": 0, "source": "plugins/bosses/data/leviathan.json site.campReturn, beside the camp Rowboat 49212 (site.campBoat 2065,6435) in The Scar."},
     {"name": "Tempoross", "x": 3148, "y": 2840, "z": 0, "source": "Wiki pin, checked: walkable, inside tempoross.json lobby.zone (Ruins of Unkah lobby HUD zone), by the ferry arrival (lobby.ferryArrival 3148,2842)."},
     {"name": "Tombs of Amascut", "x": 3357, "y": 2713, "z": 0, "source": "plugins/minigames/toa/Shared.TombsOfAmascut.js NECROPOLIS_EXIT: the Necropolis tile outside the tomb entrance; also ::teleports ToA."}

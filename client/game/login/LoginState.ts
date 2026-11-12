@@ -22,6 +22,7 @@ import {
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
 import type { LoginScreenExtension } from "./LoginScreenExtension";
+import type { ServerListEntry } from "./renderer/types";
 import { LoginIndex } from "./GameState";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
@@ -170,11 +171,13 @@ export class LoginState {
             const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
             if (!response.ok) return;
             const metadata = await response.json();
+            const flags = transport === "webrtc" ? 0 : Number(metadata?.flags);
             const name = transport === "webrtc" ? metadata?.worlds?.find((world: any) => world.worldId === worldId)?.name : metadata?.name;
             if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) return;
             // A slow response must not rename a different world selected in the meantime.
             if (this.serverAddress !== address || this.serverSecure !== secure || this.serverTransport !== transport
                 || this.serverSignalUrl !== signalUrl || this.serverWorldId !== worldId) return;
+            this.serverWorldFlags = Number.isInteger(flags) ? flags >>> 0 : 0;
             this.serverName = name.trim();
             // Renaming must not pin the build's default server as a chosen world.
             if (getClientPreference("lastServer")) this.saveLastServer();
@@ -352,6 +355,9 @@ export class LoginState {
     /** Currently hovered server index (-1 = none) */
     hoveredServerIndex: number = -1;
 
+    /** In game, the server the World Switcher asks to confirm switching to */
+    serverSwitchConfirm: ServerListEntry | null = null;
+
     /** Current server address displayed on the button */
     serverAddress: string = getDefaultServerAddress();
 
@@ -374,6 +380,8 @@ export class LoginState {
     serverSignalUrl?: string;
     serverWorldId?: string;
     serverIceServers: RTCIceServer[] = [];
+    /** The selected world's type bits from its `/api/world-info` (live's world-list flags: 0x800 a Hardcore world). */
+    serverWorldFlags: number = 0;
 
     /** Persist the last selected server to localStorage */
     // ========== Remembered login ==========
@@ -545,6 +553,7 @@ export class LoginState {
         this.currentLoginField = 0;
         this.serverListOpen = false;
         this.hoveredServerIndex = -1;
+        this.serverSwitchConfirm = null;
         this.worldSelectOpen = false;
         this.hoveredWorldId = -1;
         this.worldSelectPage = 0;

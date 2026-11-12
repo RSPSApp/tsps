@@ -430,7 +430,7 @@ module.exports = function registerHolyGrailQuest(api) {
     const { TeleportHandler, TeleportType } = api.core;
     const destination = toLocation(tile);
     if (!TeleportHandler.checkReqs(player, destination)) return;
-    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false);
+    TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false));
   }
 
   function blowWhistle({ player }) {

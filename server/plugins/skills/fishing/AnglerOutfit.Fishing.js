@@ -29,6 +29,14 @@ let core = null;
 let gitaNpcId = GITA_NPC_ID;
 const pendingBranch = new WeakMap();
 const pendingMessage = new WeakMap();
+/**
+ * Transcript:Gita_Prymes's {{tbox}} pictures, by the record's message step: the angler piece, the
+ * spirit piece then the angler piece for an exchange, the headband and top for the outfit line,
+ * and none (a plain box) for the exchange-back warning.
+ */
+const BOX_STEPS = Object.freeze({
+  XVkgAH: "outfit", biLPTa: "angler", "y9-UMa": "angler", "3sMFrS": "exchange", "3jVjCF": "statement", eGmd8N: "exchange",
+});
 
 const SET_BONUS = 0.005;
 
@@ -65,6 +73,15 @@ function markPaid(player, piece) {
   player.setAttribute(PAID_ATTRIBUTE, all);
 }
 
+/** An item box out of a conversation (Use on Gita): one or two pictures, as the transcript's tbox. */
+function box(player, items, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, EndDialogue } = core;
+  const entry = items.length > 1
+    ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
+    : new ItemStatementDialogue(0, items[0], text);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(entry, new EndDialogue(1)));
+}
+
 function firstCarried(player, wantSpirit, { unpaidOnly = false } = {}) {
   return exchangePieces.find((piece) => {
     const id = wantSpirit ? piece.spirit : piece.angler;
@@ -80,7 +97,7 @@ function exchange(player, piece, toSpirit, { announce = true } = {}) {
   if (inventory.getAmount(from) <= 0) return false;
   const alreadyPaid = isPaid(player, piece);
   if (toSpirit && !alreadyPaid && inventory.getAmount(ids.SPIRIT_FLAKES) < SPIRIT_FLAKES_PER_PIECE) {
-    player.sendMessage(`Gita Prymes wants 1,200 spirit flakes to upgrade your ${itemName(from)}. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.`);
+    box(player, [piece.angler], `Gita Prymes wants 1,200 spirit flakes to upgrade your ${itemName(from)}. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.`);
     return false;
   }
   if (toSpirit && !alreadyPaid) {
@@ -91,10 +108,10 @@ function exchange(player, piece, toSpirit, { announce = true } = {}) {
   inventory.adds(to, 1);
   inventory.refreshItems();
   if (toSpirit) {
-    if (announce) player.sendMessage(`Gita Prymes exchanges your ${itemName(from)} for Spirit Angler kit.`);
+    if (announce) box(player, [piece.spirit, piece.angler], `Gita Prymes exchanges your ${itemName(from)} for Spirit Angler kit.`);
     api.emitCustomEvent("collection-log:obtain", { player, itemId: to, amount: 1 });
   } else if (announce) {
-    player.sendMessage(`Gita Prymes exchanges your ${itemName(from)} for regular Angler kit.`);
+    box(player, [piece.spirit, piece.angler], "Gita Prymes exchanges your Spirit Angler kit for regular Angler kit.");
   }
   return true;
 }
@@ -140,20 +157,31 @@ function onDialogueChoice(event) {
   pendingMessage.set(player, piece);
 }
 
+/** The transcript's message steps as its item boxes (BOX_STEPS), with the player's own piece named. */
 function onDialogueAction(event) {
   if (event.npcId !== gitaNpcId || event.kind !== "message") return;
-  if (typeof event.step?.text !== "string" || !event.step.text.includes("[outfit piece]")) return;
-  // The exchange message uses the piece just converted; the first-time and
+  const kind = BOX_STEPS[event.stepId ?? event.step?.id];
+  if (!kind || typeof event.step?.text !== "string") return;
+  if (kind === "statement") {
+    event.box = { statement: true };
+    return;
+  }
+  if (kind === "outfit") {
+    event.box = { items: [ids.SPIRIT_ANGLER_HEADBAND, ids.SPIRIT_ANGLER_TOP] };
+    return;
+  }
+  // The exchange boxes show the piece just converted; the first-time and
   // already-paid warnings name the piece that Proceed will convert.
-  const piece = pendingMessage.get(event.player)
+  const piece = (kind === "exchange" ? pendingMessage.get(event.player) : null)
     ?? firstCarried(event.player, false, { unpaidOnly: true })
-    ?? firstCarried(event.player, false);
+    ?? firstCarried(event.player, false)
+    ?? firstCarried(event.player, true);
   if (!piece) return;
-  if (pendingMessage.has(event.player)) pendingMessage.delete(event.player);
+  if (kind === "exchange") pendingMessage.delete(event.player);
   // Transcript message leaves are shared between conversations. Keep the
   // template intact so the next player sees their own outfit piece.
-  event.player.sendMessage(event.step.text.replace("[outfit piece]", itemName(piece.angler)));
-  event.handled = true;
+  event.text = event.step.text.replace("[outfit piece]", itemName(piece.angler));
+  event.box = { items: kind === "exchange" ? [piece.spirit, piece.angler] : [piece.angler] };
 }
 
 function onItemOnNpc(event) {

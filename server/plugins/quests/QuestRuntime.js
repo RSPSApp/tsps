@@ -391,13 +391,19 @@ function openJournal(player, quest) {
   packet.sendInterfaceScript(SCRIPT_QJ_SCROLL, [0, lines.length]);
 }
 
+/** The scroll's reward groups after the quest points, in live's usual order unless a quest sets its own. */
+const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
+
 function rewardLines(quest) {
   const lines = ["You are awarded:"];
   const points = quest.questPoints || 0;
   lines.push(`${points} Quest Point${points === 1 ? "" : "s"}`);
-  for (const reward of quest.xpRewards ?? []) lines.push(`${reward.amount.toLocaleString("en-US")} ${reward.label} XP`);
-  if (quest.rewardItemLabel) lines.push(quest.rewardItemLabel);
-  lines.push(...(quest.otherRewards ?? []));
+  const groups = {
+    xp: (quest.xpRewards ?? []).map((reward) => `${reward.amount.toLocaleString("en-US")} ${reward.label} XP`),
+    item: quest.rewardItemLabel ? [quest.rewardItemLabel] : [],
+    other: quest.otherRewards ?? [],
+  };
+  for (const group of quest.rewardOrder ?? DEFAULT_REWARD_ORDER) lines.push(...(groups[group] ?? []));
   return lines.slice(0, COMPLETED_LINE_COUNT);
 }
 
@@ -409,6 +415,10 @@ function openCompletedScroll(player, quest, questPoints) {
     packet.sendString(String(text ?? ""), uid);
   };
   packet.sendInterfaceRemoval();
+  // Live opens the scroll with toplevel_mainmodal_open [-1, -1] (Observatory Quest capture
+  // 20261110T110141-5ab63b4 tick 1644): the main modal's backdrop goes back to none, so one an
+  // earlier modal set (the telescope's black [0, 0], tick 1606) doesn't show around the scroll.
+  packet.sendInterfaceScript(2524, [-1, -1]);
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
@@ -604,7 +614,6 @@ function showBookPage(player) {
  */
 function openIndexedBook(player, { title, spreads, spreadOf }, onClose) {
   if (!spreads.length) return;
-  player.getPacketSender().sendInterface(INDEXED_BOOK_GROUP);
   openBooks.set(player, { indexed: true, title, spreads, spreadOf, page: 0, onClose });
   showIndexedBookPage(player);
 }
@@ -629,6 +638,10 @@ function showIndexedBookPage(player) {
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.previous), page === 0);
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.indexJump), page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Sacraments of Ent Folk, RSProx 20261109T224258-5ab63b4 ticks 826-847) sends each
+  // spread's content first and then opens the book again, the left page in varp pagepos.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(INDEXED_BOOK_GROUP);
 }
 
 function turnIndexedBookPage(event) {
@@ -648,8 +661,20 @@ function turnIndexedBookPage(event) {
     page = book.spreadOf(entry.index);
   }
   if (page < 0 || page >= book.spreads.length || page === book.page) return;
+  const forward = page > book.page;
   book.page = page;
+  turnAnimation(player, forward);
   showIndexedBookPage(player);
+}
+
+/** The reader's page-turn animation and spot effect, both books. */
+function turnAnimation(player, forward) {
+  if (!coreApi) return;
+  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
+  player.performAnimation?.(new coreApi.Animation(turn.animation));
+  const graphic = new coreApi.Graphic(turn.graphic);
+  graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
+  player.performGraphic?.(graphic);
 }
 
 function turnBookPage(event) {
@@ -668,13 +693,7 @@ function turnBookPage(event) {
   const page = book.page + (forward ? 1 : -1);
   if (page < 0 || page >= book.pages.length) return;
   book.page = page;
-  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
-  if (coreApi) {
-    player.performAnimation?.(new coreApi.Animation(turn.animation));
-    const graphic = new coreApi.Graphic(turn.graphic);
-    graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
-    player.performGraphic?.(graphic);
-  }
+  turnAnimation(player, forward);
   showBookPage(player);
 }
 
@@ -709,6 +728,7 @@ function sendQuestVarps({ player }) {
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest), onReward?(player, quest),
  *               varpValue?(stage, player) }
@@ -924,6 +944,7 @@ function giveReward(player, itemId, amount = 1) {
 }
 
 module.exports = {
+  rewardLines,
   openBook,
   openIndexedBook,
   journalWidgets,

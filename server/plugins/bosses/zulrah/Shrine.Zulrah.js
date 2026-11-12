@@ -23,6 +23,8 @@ const Access = require("./Access.Zulrah");
 const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
 const BOSS_NAME = "Zulrah";
@@ -179,7 +181,7 @@ function onZulrahDeath({ npc }) {
   const ticks = fight.duration();
   CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
-  player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR.BEST_TIME, ticks);
     Shared.api().emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
@@ -395,7 +397,7 @@ function retrievalItemAction(event) {
   if (!entry) return false;
   const op = event.opId ?? event.action;
   if (op === RETRIEVAL_EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry[0]).getExamine());
+    examineItem(player, entry[0], entry[1]);
     return true;
   }
   if (op !== RETRIEVAL_TAKE_OP) return false;

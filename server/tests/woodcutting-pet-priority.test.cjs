@@ -738,6 +738,24 @@ test('native seed nests conserve their rolled contents at stack capacity', async
 });
 
 // A members-only felling axe is not an ordinary free-world chopping tool.
+test('an ordinary axe spends a ration for run energy and says so (Wiki: Forester ration)', async t => {
+  const f=actor(t), ids=core.ItemIdentifiers;
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>true);
+  t.mock.method(Math,'random',()=>0.1); // under the 30% ration roll; the chop succeeds; no pet or nest
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  f.p.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
+  f.p.setRunEnergy(50);
+  const messages=[]; const sender=f.p.getPacketSender(), original=sender.sendMessage.bind(sender);
+  t.mock.method(sender,'sendMessage',m=>{messages.push(m);return original(m);});
+  const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+  core.ObjectManager.register(tree,true); t.after(()=>core.ObjectManager.deregister(tree,true));
+  await send(f,{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'});
+  for(let i=0;i<20&&f.p.getInventory().getAmount(ids.FORESTERS_RATION)===2;i++) core.TaskManager.process();
+  assert.equal(f.p.getInventory().getAmount(ids.FORESTERS_RATION),1,'one ration spent');
+  assert.ok(f.p.getRunEnergyUnits()>=7000,'20% run energy restored');
+  assert.ok(messages.includes("You consume a Forester's ration and feel energised."),messages.join(' | '));
+});
+
 test('free-world members felling axe leaves the ration and tree untouched', async t => {
   const f=actor(t), ids=core.ItemIdentifiers, Woodcutting=require('../plugins/skills/Woodcutting.plugin');
   assert.equal(core.CacheDefinitions.getItem(ids.BRONZE_FELLING_AXE).isMembers,true,'SETUP: active cache marks this axe members-only');

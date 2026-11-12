@@ -13,6 +13,7 @@
  *   a tick later. After 34 ticks, or when the shield goes up, they harden where they are.
  * Tiles here are the lair's own (the template square); the session turns them into the instance.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Common = require("./Common.PhantomMuspah");
 const Hits = require("./Hits.PhantomMuspah");
 
@@ -132,7 +133,7 @@ class SpikeField {
     const { player } = this;
     const sender = player.getPacketSender();
     Common.sounds(player, riseSounds);
-    for (const [slot, amount] of cameraShake) sender.sendCameraShake(slot, amount);
+    for (const [slot, amount] of cameraShake) CameraShake.send(sender, "combat", slot, amount);
     // On the world's clock, not the fight's: the shake must stop even if the fight ends now.
     Common.later(2, () => player.isRegistered() && sender.sendCameraReset());
   }

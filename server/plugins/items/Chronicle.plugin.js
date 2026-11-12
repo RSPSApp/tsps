@@ -8,8 +8,9 @@
  * rsprox 3203 (rev 232): every card in the inventory charges at once, the standard teleport plays
  * (714, spotanim 111), and the charges left show in red on landing. The landing is any free tile
  * in the Wiki's 2-tile square on (3201,3355); it landed on (3202,3355) and (3199,3356). "The book's powers
- * do not work in the Wilderness." and "Your book has N charges left." are also from that capture;
- * where it disagrees with the Wiki's "You have N charges left in your book." on landing, it wins.
+ * do not work in the Wilderness." and "Your book has N charges left." (Check) are also from that
+ * capture. On landing the Wiki's "You have N charges left in your book." is used; the capture's
+ * landing line read "Your book has 98 charges left." (232/03203.txt:9123).
  */
 const MAX_CHARGES = 1000;
 const CHARGES_ATTRIBUTE = "chronicle:charges";
@@ -62,7 +63,7 @@ function checkCharges({ player }) {
 function landingMessage(left) {
   if (left === 0) return "Your book has run out of charges.";
   if (left === 1) return "You have one charge left in your book.";
-  return `Your book has ${format(left)} charges left.`;
+  return `You have ${format(left)} charges left in your book.`; // Wiki Transcript:Chronicle
 }
 
 /** The charge goes on landing, like the other charged teleports (RingOfElements, Jewellery). */
@@ -95,7 +96,7 @@ function teleport({ player }) {
   }
   const destination = landingTile();
   if (TeleportHandler.checkReqs(player, destination)) {
-    TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => land(player));
+    TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => land(player)));
   }
   return true;
 }

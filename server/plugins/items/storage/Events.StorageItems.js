@@ -34,20 +34,100 @@ function bankOp(event) {
 }
 
 /**
- * A family whose contents follow its item (fish barrel, tackle box): when the last one carried
- * heads for the floor, so do its contents. One that is kept keeps them.
+ * Containers other plugins hold (rune pouch, essence pouches, herb sack, seed box) answer this
+ * with `containers.push({ holds(item), empty(player, item) -> [{ id, amount }], varbit?,
+ * keptInPvp?, toBankInPvp? })`. `empty` takes the contents out of the container and returns them;
+ * `varbit` is its "Always empty ... on death" setting.
+ */
+const DEATH_CONTAINERS_EVENT = "storage:death-containers";
+
+let pluginApi = null;
+/** A death's event is handled once, also when a retrieval hook runs this ahead of its own turn. */
+const handledDeaths = new WeakSet();
+
+function familyContainer(family) {
+  const isOurs = (item) => family.names.includes(Storage.nameOf(item));
+  return {
+    holds: isOurs,
+    empty(player) {
+      const contents = Storage.contents(player, family);
+      Storage.setContents(player, family, []);
+      return contents;
+    },
+    varbit: family.emptyOnDeathVarbit,
+    keptInPvp: !family.emptiedOnPvpDeath,
+    // A family's contents follow the last one carried when it heads for the floor (or a grave).
+    follows: (event) => event.items.some(isOurs) && !event.untradeables.some(isOurs),
+  };
+}
+
+function deathContainers() {
+  const families = [...Storage.FAMILIES.values()].filter((family) => family.followsOnDeath).map(familyContainer);
+  const query = { containers: [] };
+  pluginApi?.emitCustomEvent(DEATH_CONTAINERS_EVENT, query);
+  return [...families, ...query.containers];
+}
+
+function settingOn(player, varbit) {
+  if (!varbit) return false;
+  return player.getPacketSender?.()?.getVarbit?.(Storage.core.CacheDefinitions.getVarbitId(varbit)) === 1;
+}
+
+/**
+ * The seed box's PvP death puts what the bank has room for there first; an Ultimate Ironman has
+ * no bank, so theirs drop with the rest.
+ */
+function intoBank(player, { id, amount }) {
+  const mode = { player, mode: null };
+  pluginApi?.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode === "ultimate") return amount;
+  const { Bank, Item } = Storage.core;
+  const bank = player.getBank(Bank.getTabForItem(player, id));
+  const moved = Math.min(amount, bank.getAddableAmount(new Item(id, amount)));
+  if (moved > 0) bank.add(new Item(id, moved), false);
+  return amount - moved;
+}
+
+/**
+ * What a death does with a container's contents (Wiki: Settings, "Always empty ... on death"):
+ * - a PvP death always empties it, and the contents go to the killer with the rest of the loot;
+ *   a fish barrel the death keeps, or gives back as an untradeable, keeps them;
+ * - otherwise the contents stay in the container, kept or lost (a lost one goes to the grave
+ *   with them), unless its "Always empty" setting is on: then they go to the grave as they are,
+ *   even when the container is kept. A fish barrel or tackle box heading for the floor takes them
+ *   along.
  */
 function deathDrops(event) {
-  for (const family of Storage.FAMILIES.values()) {
-    if (!family.followsOnDeath) continue;
-    const isOurs = (item) => family.names.includes(Storage.nameOf(item));
-    if (!event.items.some(isOurs) || event.untradeables.some(isOurs)) continue;
-    for (const { id, amount } of Storage.contents(event.player, family)) event.items.push(new Storage.core.Item(id, amount));
-    Storage.setContents(event.player, family, []);
+  if (handledDeaths.has(event)) return;
+  handledDeaths.add(event);
+  const { player, killer } = event;
+  const pvp = !!killer && killer !== player;
+  const lost = new Set([...event.items, ...event.untradeables]);
+  const carried = [...new Set([
+    ...(player.getInventory?.()?.getValidItems?.() ?? []),
+    ...(player.getEquipment?.()?.getValidItems?.() ?? []),
+    ...lost,
+  ])];
+  for (const container of deathContainers()) {
+    const held = carried.filter((item) => container.holds(item));
+    if (held.length === 0) continue;
+    // A PvP death gives an untradeable back to the player, so that one is kept too.
+    const kept = held.some((item) => !event.items.includes(item));
+    let empty;
+    if (pvp) empty = !(container.keptInPvp && kept);
+    else empty = settingOn(player, container.varbit) || container.follows?.(event) === true;
+    if (!empty) continue;
+    for (const item of held) {
+      for (const entry of container.empty(player, item)) {
+        const left = pvp && container.toBankInPvp ? intoBank(player, entry) : entry.amount;
+        if (left > 0) event.items.push(new Storage.core.Item(entry.id, left));
+      }
+    }
   }
 }
 
 module.exports = (api) => {
+  pluginApi = api;
   api.onCustomEvent("storage:contents", Storage.answerContents);
   api.onCustomEvent(Storage.ROOM_EVENT, Storage.answerRoom);
   api.onCustomEvent(Storage.GATHER_EVENT, Storage.answerGather);
@@ -61,3 +141,4 @@ module.exports = (api) => {
 
 /** For a death-drops hook that takes the lost items before this one runs (a boss's deathbank). */
 module.exports.deathDrops = deathDrops;
+module.exports.DEATH_CONTAINERS_EVENT = DEATH_CONTAINERS_EVENT;

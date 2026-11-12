@@ -150,7 +150,8 @@ module.exports = function registerCabinFeverQuest(api) {
 
   const FUSE = ItemIdentifiers.FUSE; // 7109
   const GUNPOWDER = ItemIdentifiers.GUNPOWDER; // 7108
-  const CANISTER = ItemIdentifiers.CANISTER; // 7118
+  const CANISTER = ItemIdentifiers.CANISTER; // 7118, "Canister (animation item)"
+  const CANISTER_ALT = ItemIdentifiers.CANISTER_2; // 7149, the quest canister the locker gives in live
   const CF_CANNON_BALL = ItemIdentifiers.CANNON_BALL_2; // 7119
   const RAMROD = ItemIdentifiers.RAMROD; // 7120
   const REPAIR_PLANK = ItemIdentifiers.REPAIR_PLANK; // 7121
@@ -174,6 +175,7 @@ module.exports = function registerCabinFeverQuest(api) {
     GUNPOWDER,
     RAMROD,
     CANISTER,
+    CANISTER_ALT,
     CF_CANNON_BALL,
     STEEL_CANNONBALL,
     FUSE,
@@ -248,6 +250,7 @@ module.exports = function registerCabinFeverQuest(api) {
   // The canister round kills the level 57 pirate it hits (52 hitpoints).
   const CANISTER_DAMAGE = 52;
   const ENEMY_SHIP_BOUNDS = { minX: 1819, maxX: 1827, minY: 4824, maxY: 4843 };
+  const ENEMY_HOLD_CHEST_TILE = new Location(1823, 4840, 0);
 
   // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
   // Internal stages stay 0-9; this is the durable stage -> wire mapping.
@@ -931,12 +934,45 @@ module.exports = function registerCabinFeverQuest(api) {
   // Objects
   // ==========================================================================
 
+  /**
+   * The locker hands out the real quest plank (7148). 7121 is the animation dummy the
+   * client wields during the repair animation, and older saves still hold it, so both
+   * count towards the six and only the shortfall is topped up.
+   */
+  function givePlanks(player, amount) {
+    const have =
+      player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT);
+    if (have >= amount) return false;
+    player.getInventory().adds(REPAIR_PLANK_ALT, amount - have);
+    return true;
+  }
+
+  /**
+   * The locker hands out the real quest canister (7149). 7118 is the animation dummy the client
+   * wields while loading the cannon, and older saves still hold it, so both count towards the one.
+   */
+  function giveCanister(player) {
+    const inventory = player.getInventory();
+    const dummy = inventory.getAmount(CANISTER);
+    const real = inventory.getAmount(CANISTER_ALT);
+    // A save from before this fix holds the animation dummy: swap it for the real canister so
+    // Quest Helper's requirement passes.
+    if (dummy > 0 && real === 0) {
+      inventory.deleteNumber(CANISTER, dummy);
+      inventory.adds(CANISTER_ALT, dummy);
+      return true;
+    }
+    if (dummy + real >= 1) return false;
+    inventory.adds(CANISTER_ALT, 1);
+    return true;
+  }
+
   function openRepairLocker(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
     giveSupply(player, ROPE, 4);
     giveSupply(player, HAMMER, 1);
-    giveSupply(player, REPAIR_PLANK, 6);
+    givePlanks(player, 6);
     giveSupply(player, TACKS, 30);
     giveSupply(player, SWAMP_PASTE, 3);
   }
@@ -969,7 +1005,7 @@ module.exports = function registerCabinFeverQuest(api) {
     }
     if (stage === STAGE_FIRE) {
       giveSupply(player, RAMROD, 1);
-      giveSupply(player, CANISTER, 1);
+      giveCanister(player);
       giveSupply(player, FUSE, 4);
       return;
     }
@@ -1016,6 +1052,19 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, VARBIT_FUSE_2, 1);
     playVariant(player, "dealing-with-the-cannon-the-fuse-is-lit");
     return true;
+  }
+
+  function routePlunderChest(event) {
+    const { player, object, objectId, sourceLocation } = event;
+    if (objectId !== ENEMY_CHEST || quest.getStage(player) !== STAGE_PLUNDER
+      || optionOf(event) !== "plunder" || !object.getLocation().equals(ENEMY_HOLD_CHEST_TILE)) return;
+
+    // The transformed chest masks its only reachable side, on the east of the hold.
+    const { x, y, z } = sourceLocation;
+    if (z !== 0 || x < 1824 || x > 1825 || y < 4838 || y > 4840
+      || player.getPrivateArea() || object.getPrivateArea()
+      || !player.getMovementQueue().getMobility().canMove()) return;
+    event.destination = { x: 1824, y: 4840, z: 0 };
   }
 
   function lootPlunder(player, source) {
@@ -1253,10 +1302,10 @@ module.exports = function registerCabinFeverQuest(api) {
       }
       return false;
     }
-    if (itemId === CANISTER) {
+    if (itemId === CANISTER || itemId === CANISTER_ALT) {
       if (stage !== STAGE_FIRE) return false;
       if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
-      player.getInventory().deleteNumber(CANISTER, 1);
+      player.getInventory().deleteNumber(itemId, 1);
       setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_CANISTER);
       player.sendMessage("You roll the canister round into the cannon.");
       return true;
@@ -1286,83 +1335,104 @@ module.exports = function registerCabinFeverQuest(api) {
     return false;
   }
 
-  function useOnHole(player, itemId, objectId) {
+  /**
+   * Nail planks over a hull hole. Reached two ways, as in live: the hull's own Fill option
+   * (the cache gives the visible transform that action) and a repair plank used on it.
+   */
+  function plankHole(player, objectId) {
     const holeVarbit = HOLE_VARBIT_BY_OBJECT.get(objectId);
     if (holeVarbit === undefined) return false;
     const stage = quest.getStage(player);
-    if (stage === STAGE_LEAKS) {
-      const value = varbitValue(player, holeVarbit);
-      if (REPAIR_PLANKS.has(itemId)) {
-        if (value !== 0) {
-          player.sendMessage("This hole has already been planked.");
-          return true;
-        }
-        if (!held(player, HAMMER)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-repair-a-hole-without-a-hammer"
-          );
-          return true;
-        }
-        if (player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT) < 2) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-planks"
-          );
-          return true;
-        }
-        if (!held(player, TACKS, 10)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-tacks"
-          );
-          return true;
-        }
-        let remaining = 2;
-        for (const plankId of [REPAIR_PLANK, REPAIR_PLANK_ALT]) {
-          const take = Math.min(remaining, player.getInventory().getAmount(plankId));
-          if (take > 0) {
-            player.getInventory().deleteNumber(plankId, take);
-            remaining -= take;
-          }
-        }
-        player.getInventory().deleteNumber(TACKS, 10);
-        setVarbitValue(player, holeVarbit, 1);
-        syncHoleCounters(player);
-        playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
-        return true;
-      }
-      if (itemId === SWAMP_PASTE) {
-        if (value === 0) {
-          player.sendMessage("You need to nail planks over the hole first.");
-          return true;
-        }
-        if (value !== 1) {
-          player.sendMessage("This hole has already been waterproofed.");
-          return true;
-        }
-        if (!held(player, SWAMP_PASTE)) {
-          playVariant(
-            player,
-            "sort-out-the-leaks-planking-up-a-hole-trying-to-waterproof-a-hole-without-swamp-paste"
-          );
-          return true;
-        }
-        player.getInventory().deleteNumber(SWAMP_PASTE, 1);
-        setVarbitValue(player, holeVarbit, 2);
-        syncHoleCounters(player);
-        playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
-        return true;
-      }
-      return false;
-    }
-    if (stage === STAGE_CANNON && (REPAIR_PLANKS.has(itemId) || itemId === SWAMP_PASTE)) {
+    if (stage === STAGE_CANNON) {
       playVariant(
         player,
         "dealing-with-the-cannon-trying-to-fill-the-ship-hull-before-taking-out-the-cannon"
       );
       return true;
     }
+    if (stage !== STAGE_LEAKS) return false;
+    if (varbitValue(player, holeVarbit) !== 0) {
+      player.sendMessage("This hole has already been planked.");
+      return true;
+    }
+    if (!held(player, HAMMER)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-repair-a-hole-without-a-hammer"
+      );
+      return true;
+    }
+    if (player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT) < 2) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-planks"
+      );
+      return true;
+    }
+    if (!held(player, TACKS, 10)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-tacks"
+      );
+      return true;
+    }
+    let remaining = 2;
+    for (const plankId of [REPAIR_PLANK, REPAIR_PLANK_ALT]) {
+      const take = Math.min(remaining, player.getInventory().getAmount(plankId));
+      if (take > 0) {
+        player.getInventory().deleteNumber(plankId, take);
+        remaining -= take;
+      }
+    }
+    player.getInventory().deleteNumber(TACKS, 10);
+    setVarbitValue(player, holeVarbit, 1);
+    syncHoleCounters(player);
+    playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
+    return true;
+  }
+
+  /**
+   * Waterproof a planked hole. Reached two ways, as in live: the hull's own Waterproof option
+   * (the transform at varbit 1) and swamp paste used on it.
+   */
+  function waterproofHole(player, objectId) {
+    const holeVarbit = HOLE_VARBIT_BY_OBJECT.get(objectId);
+    if (holeVarbit === undefined) return false;
+    const stage = quest.getStage(player);
+    if (stage === STAGE_CANNON) {
+      playVariant(
+        player,
+        "dealing-with-the-cannon-trying-to-fill-the-ship-hull-before-taking-out-the-cannon"
+      );
+      return true;
+    }
+    if (stage !== STAGE_LEAKS) return false;
+    const value = varbitValue(player, holeVarbit);
+    if (value === 0) {
+      player.sendMessage("You need to nail planks over the hole first.");
+      return true;
+    }
+    if (value !== 1) {
+      player.sendMessage("This hole has already been waterproofed.");
+      return true;
+    }
+    if (!held(player, SWAMP_PASTE)) {
+      playVariant(
+        player,
+        "sort-out-the-leaks-planking-up-a-hole-trying-to-waterproof-a-hole-without-swamp-paste"
+      );
+      return true;
+    }
+    player.getInventory().deleteNumber(SWAMP_PASTE, 1);
+    setVarbitValue(player, holeVarbit, 2);
+    syncHoleCounters(player);
+    playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
+    return true;
+  }
+
+  function useOnHole(player, itemId, objectId) {
+    if (REPAIR_PLANKS.has(itemId)) return plankHole(player, objectId);
+    if (itemId === SWAMP_PASTE) return waterproofHole(player, objectId);
     return false;
   }
 
@@ -1457,6 +1527,19 @@ module.exports = function registerCabinFeverQuest(api) {
     const { player, objectId } = event;
     if (!player || event.handled) return false;
     const option = optionOf(event);
+    // The hull's own options: the visible transform offers Fill at varbit 0 and Waterproof at 1,
+    // so a plain click has to do what using the plank or the paste does.
+    if (HOLE_VARBIT_BY_OBJECT.has(objectId)) {
+      const handled =
+        option === "fill"
+          ? plankHole(player, objectId)
+          : option === "waterproof"
+            ? waterproofHole(player, objectId)
+            : false;
+      if (!handled) return false;
+      event.handled = true;
+      return true;
+    }
     if (objectId === ADVENTUROUS_CANNON) {
       event.handled = true;
       handleCannonClick(player, option);
@@ -1615,6 +1698,7 @@ module.exports = function registerCabinFeverQuest(api) {
       GUNPOWDER,
       RAMROD,
       CANISTER,
+      CANISTER_ALT,
       CF_CANNON_BALL,
       CANNON_BARREL,
       REPAIR_PLANK,
@@ -1808,6 +1892,7 @@ module.exports = function registerCabinFeverQuest(api) {
   });
   api.onObjectInteraction("Broken Cannon", { Repair: delegateObjectInteraction });
   api.onObjectInteraction("Crate", { Loot: delegateObjectInteraction });
+  api.onObjectRoute(routePlunderChest);
   api.onObjectInteraction("Closed chest", { Plunder: delegateObjectInteraction });
   api.onObjectInteraction("Open chest", { Plunder: delegateObjectInteraction });
   api.onObjectInteraction("Plunder Storage", {

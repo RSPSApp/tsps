@@ -44,7 +44,7 @@ before(() => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("fremennik");
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   Progress(api);
-  require("../plugins/achievements/diaries/FremennikLighthouseDiary.plugin").register(api);
+  require("../plugins/achievements/diaries/FremennikLighthouseDiary.AchievementDiaries").register(api);
   PluginManager.emitCustomEvent = dispatch;
 });
 

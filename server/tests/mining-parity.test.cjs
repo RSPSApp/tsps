@@ -56,6 +56,7 @@ function guildVisitor(x, y, current = 60, members = true) {
   player.getPacketSender = () => new Proxy({
     sendObjectRemoval: object => packets.push(["remove", object]),
     sendObject: object => packets.push(["restore", object]),
+    sendSound: (id, loops, delay) => packets.push(["sound", id, loops, delay]),
     sendTypedMessage: (type, text) => messages.push([type, text]),
   }, { get: (target, key) => target[key] ?? noop });
   function click(object, option) {
@@ -115,7 +116,22 @@ test("Mining Guild: outer and both members doors check entry, cross, and restore
     eligible.click(door, "Open");
     eligible.finish();
     assert.equal(eligible.player.getLocation().getY(), y);
-    assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore"]);
+    if (name === "mguild_door") {
+      const [hidden, wall, leaf, sound, removal, closed] = eligible.packets;
+      assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore", "restore", "sound", "remove", "restore"]);
+      assert.equal(hidden[1], door);
+      assert.equal(wall[1].getId(), core.CacheDefinitions.getLocId("inviswall"));
+      assert.equal(wall[1].getLocation().getY(), y);
+      assert.equal(wall[1].getFace(), 1);
+      assert.equal(leaf[1].getId(), core.CacheDefinitions.getLocId("inactivepoordoor"));
+      assert.equal(leaf[1].getLocation().getY(), y + 1);
+      assert.equal(leaf[1].getFace(), 2);
+      assert.deepEqual(sound, ["sound", 81, 1, 0]);
+      assert.equal(removal[1], leaf[1]);
+      assert.equal(closed[1], door);
+    } else {
+      assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore"]);
+    }
     assert.ok((MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).includes(door),
       "the shared wall stays closed so other players cannot bypass the guard");
     const exit = guildVisitor(x, y, 1);

@@ -143,6 +143,7 @@ export function loadTitleSprites(host: LoginRendererHost, cache: CacheSystem, fl
             const spriteIndex = cache.getIndex(IndexType.DAT2.sprites);
 
             host.logoSprite = loadSprite(spriteIndex, "logo");
+            host.hardcoreLogoSprite = loadSprite(spriteIndex, "logo_hcmain");
             host.titleboxSprite = loadSprite(spriteIndex, "titlebox");
             host.titlebuttonSprite = loadSprite(spriteIndex, "titlebutton");
             host.titlebuttonLargeSprite = loadSprite(spriteIndex, "titlebutton_large");

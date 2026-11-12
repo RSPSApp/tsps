@@ -1,6 +1,8 @@
 // A browser that cached a map square before a geometry change must not keep serving it. Format 6
 // builds loc id 0 (the Dwarf Cannon remains at the watchtower, square 40,53); format 5 squares
 // left it out, and their tile-loc metadata has no loc 0 whose varp could trigger a rebuild.
+// Format 7 builds rev 242 multilocs: format 6 squares stored while the browser failed to decode
+// them (stale ByteBuffer.js, #4007/#4135) left out Edgeville's poll booth and loot chest (#4240).
 import assert from "node:assert/strict";
 import { CACHE_FORMAT, cacheKey, cachePrefix, readSquare, writeSquare } from "../game/worker/MapSquareCache";
 
@@ -48,21 +50,23 @@ const db = {
 };
 
 async function main(): Promise<void> {
-    assert.ok(CACHE_FORMAT >= 6, "squares cached before loc 0 was built are a different format");
+    assert.ok(CACHE_FORMAT >= 7, "squares cached before rev 242 multilocs were built are a different format");
     const key = cacheKey(info, watchtower, "");
-    const staleKey = key.replace(`/v${CACHE_FORMAT}|`, "/v5|");
-    assert.notEqual(staleKey, key);
-    assert.notEqual(cachePrefix(staleKey), cachePrefix(key));
+    const staleKeys = [5, 6].map((format) => key.replace(`/v${CACHE_FORMAT}|`, `/v${format}|`));
+    for (const staleKey of staleKeys) {
+        assert.notEqual(staleKey, key);
+        assert.notEqual(cachePrefix(staleKey), cachePrefix(key));
+        stores.data.set(staleKey, { data: { missingLocs: true }, reads: [] });
+        stores.meta.set(staleKey, { lastUsed: 1 });
+    }
 
-    const stale = { data: { locsWithoutLocZero: true }, reads: [] };
-    stores.data.set(staleKey, stale);
-    stores.meta.set(staleKey, { lastUsed: 1 });
-
-    assert.equal(await readSquare(key), undefined, "the format 5 square is not served: the loader builds it again");
+    assert.equal(await readSquare(key), undefined, "format 5 and 6 squares are not served: the loader builds them again");
     const fresh = { data: { locZero: true }, reads: [[1, 0, 3]] };
     await writeSquare(key, fresh as any);
-    assert.equal(stores.data.has(staleKey), false, "storing the rebuilt square purges the old format");
-    assert.equal(stores.meta.has(staleKey), false);
+    for (const staleKey of staleKeys) {
+        assert.equal(stores.data.has(staleKey), false, "storing the rebuilt square purges the old formats");
+        assert.equal(stores.meta.has(staleKey), false);
+    }
     assert.deepEqual((await readSquare(key))?.data, fresh.data, "the rebuilt square is the one served");
     console.log("map-square-cache-format: ok");
 }

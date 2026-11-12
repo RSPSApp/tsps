@@ -215,6 +215,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const GOBLIN_PAGE = "Recipe for Disaster/Freeing the Goblin generals";
   const DWARF_PAGE = "Recipe for Disaster/Freeing the Mountain Dwarf";
   const MURPHY_IDS = new Set([NpcIdentifiers.MURPHY, NpcIdentifiers.MURPHY_2, NpcIdentifiers.MURPHY_3, NpcIdentifiers.MURPHY_4]);
+  /** The Murphy on the Port Khazard docks (5607); 5608-5610 are his trawler and wreck copies. */
+  const PORT_MURPHY_ID = NpcIdentifiers.MURPHY;
   const NUNG_IDS = new Set([NpcIdentifiers.NUNG]);
   const GOBLIN_COOK_IDS = new Set([NpcIdentifiers.GOBLIN_COOK, NpcIdentifiers.GOBLIN_COOK_2, NpcIdentifiers.GOBLIN_COOK_3]);
   const RANTZ_IDS = new Set([1470, NpcIdentifiers.RANTZ, NpcIdentifiers.RANTZ_2, NpcIdentifiers.RANTZ_3,
@@ -844,7 +846,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ? "talking-to-evil-dave-talking-to-evil-dave-again-after-getting-him-to-tell-you-what-he-ate"
         : "talking-to-evil-dave" };
     }
-    if (MURPHY_IDS.has(npcId) && pages.some((entry) => entry.page === PIRATE_PAGE)) {
+    if (npcId === PORT_MURPHY_ID && pages.some((entry) => entry.page === PIRATE_PAGE)) {
       const state = pirateState(player);
       const variant = state & 2 ? "asking-about-giant-crabs-talking-to-murphy-again-again"
         : state & 1 ? "asking-about-giant-crabs-talking-to-murphy-again"
@@ -1031,6 +1033,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleMurphy(event) {
     const { player, npcId } = event;
+    // Only the Port Khazard Murphy talks about the quest; the copies on the trawler at sea and in
+    // the wreck keep their own dialogue (the at-sea one is how the crew bails out).
+    if (npcId !== PORT_MURPHY_ID) return false;
     if (!MURPHY_IDS.has(npcId) || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 4)) return false;
     const option = event.definition?.getActions?.()?.[event.clickType - 1];
     if (option !== "Talk-to") return false;

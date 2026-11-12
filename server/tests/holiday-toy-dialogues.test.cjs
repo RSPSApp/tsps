@@ -112,6 +112,16 @@ test('each painted Archibald answers with the chathead of his own style', async 
     "Ok, I'll let you think about it for a bit longer."].includes(text(f)));
 });
 
+test('Morytania legs 2 or better stand in for the ghostspeak amulet with the Haunted wine bottle (Wiki: Ghostspeak amulet)', async t => {
+  const f = fixture(t);
+  const slot = give(f, 'hw21_haunted_bottle');
+  f.player.getEquipment().setItem(core.Equipment.LEG_SLOT, new core.Item(core.ItemIdentifiers.MORYTANIA_LEGS_2, 1));
+  await use(f, slot, 'Talk-to');
+  await next(f);
+  assert.notEqual(text(f), 'WoooOooOooOooooOOOoo.', 'the spirit is understood');
+  assert.equal(text(f), 'Yes, toytalkqa?');
+});
+
 test('the Haunted wine bottle wails without a ghostspeak amulet and counts conversations with one', async t => {
   const f = fixture(t), bottle = c.getObjId('hw21_haunted_bottle');
   const slot = give(f, 'hw21_haunted_bottle');

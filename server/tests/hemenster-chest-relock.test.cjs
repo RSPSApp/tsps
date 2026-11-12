@@ -37,7 +37,7 @@ function actor(t) {
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
   return { p, inv: p.getInventory(), messages };
 }
-const Kandarin = require("../plugins/achievements/diaries/KandarinDiaryFinish.plugin")._test;
+const Kandarin = require("../plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries")._test;
 
 function thief(t, username) {
   const f = actor(t);

@@ -75,13 +75,16 @@ function player() {
   subjects.add(subject);
   subject.setUsername("barrows-run");
   subject.setRegistered(true);
-  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null };
+  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null, camera: [] };
   subject.collected = [];
   const sender = new Proxy({}, {
     get: (target, key) => (key === "sendVarbit" ? (id, value) => (sent.varbits.set(id, value), sender)
       : key === "sendMessage" ? (text) => (sent.messages.push(text), sender)
       : key === "sendTypedMessage" ? (type, text) => (sent.spam.push(text), sender)
       : key === "sendInterfaceScript" ? (_id, _args, _a, _b, inventories) => (sent.rewards = inventories, sender)
+      : key === "sendCameraShake" ? (...shake) => (sent.camera.push(shake), sender)
+      : key === "sendCameraReset" ? () => (sent.camera.push("reset"), sender)
+      : key === "getVarbit" ? (id) => sent.varbits.get(id) ?? 0
       : () => sender),
   });
   subject.getPacketSender = () => sender;
@@ -116,6 +119,33 @@ test("Barrows: a looted run stays looted through a teleport out and back to the 
 });
 
 
+// rsprox_transcripts/237/04055.txt: the looting tick sends cam_shake slot 0, random 5 with the reward
+// interface; the teleport out resets the camera. 227/01885.txt tick 10592: a looted run's chest room,
+// teleported back into, shakes again on arrival.
+test("Barrows: the looted tunnels shake until left, again on each return, and not with the row off", () => {
+  const subject = player();
+  arrive(subject, CHEST_ROOM);
+  Object.assign(subject.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
+  Barrows._test.searchChest(subject, 1);
+  assert.deepEqual(subject.sent.camera, [[0, 5, 0, 0]]);
+  arrive(subject, SURFACE);
+  assert.deepEqual(subject.sent.camera, [[0, 5, 0, 0], "reset"]);
+  arrive(subject, CHEST_ROOM);
+  assert.deepEqual(subject.sent.camera, [[0, 5, 0, 0], "reset", [0, 5, 0, 0]]);
+
+  const unlooted = player();
+  arrive(unlooted, CHEST_ROOM);
+  arrive(unlooted, SURFACE);
+  assert.deepEqual(unlooted.sent.camera, [], "an unlooted run never shakes");
+
+  const off = player();
+  off.sent.varbits.set(14198, 1); // option_camera_effect_barrows_disabled
+  arrive(off, CHEST_ROOM);
+  Object.assign(off.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
+  Barrows._test.searchChest(off, 1);
+  assert.deepEqual(off.sent.camera, []);
+});
+
 // rsprox_transcripts/226/01694.txt (a normal world): "You've broken into a crypt!" (spam, :165471); a brother-raising
 // search "You don't find anything." (spam, :165522); at the chest the diary's rune line (spam) and then
 // "Your Barrows chest count is: <col=ff0000>N</col>." (:170767-170768).
@@ -144,6 +174,77 @@ test("Barrows: the chest's diary rune line (spam), then 'Your Barrows chest coun
   Barrows._test.searchChest(looter, 1);
   assert.ok(looter.sent.spam.includes("You receive more runes for completing the hard tier of the Morytania achievement diary."), looter.sent.spam.join(" | "));
   assert.ok(looter.sent.messages.some((m) => /^Your Barrows chest count is: <col=ff0000>\d+<\/col>\.$/.test(m)), looter.sent.messages.join(" | "));
+});
+
+// rsprox_transcripts/226/01694.txt: into crypts at ticks 8801, 8868, 8916, 8966 and 9046, drained at 8831, 8898, 8946,
+// 8996 and 9076: 30 ticks after each entry, however long the last crypt's countdown had run. Since the 24 September
+// 2025 update each drain tick also sends "<col=ff3045>Your prayers have been drained!</col>"
+// (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512, 94565 and 98836); 226/01694.txt predates it.
+test("Barrows: the Prayer drain lands 30 ticks after each entry into a crypt, with its chat line on that tick only", () => {
+  const DRAINED = "<col=ff3045>Your prayers have been drained!</col>";
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  const prayer = () => skills.getCurrentLevel(core.Skill.PRAYER);
+  const drainLines = () => subject.sent.messages.filter((m) => m === DRAINED).length;
+  const ticksToDrain = () => {
+    const from = prayer();
+    for (let n = 1; n <= 40; n++) {
+      const lines = drainLines();
+      Barrows._test.processPlayer({ player: subject });
+      // The line is sent on the drain's tick and on no other.
+      assert.equal(drainLines() - lines, prayer() < from ? 1 : 0, `tick ${n}`);
+      if (prayer() < from) return n;
+    }
+    return -1;
+  };
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  const crypt = subject.getLocation().clone();
+  assert.equal(crypt.getZ(), 3);
+  assert.equal(ticksToDrain(), 30, "the first crypt");
+  assert.equal(prayer(), 99 - 8, "8 with no brother killed");
+  for (let i = 0; i < 12; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(drainLines(), 1, "no line on the ticks between drains");
+  arrive(subject, SURFACE);
+  for (let i = 0; i < 5; i++) Barrows._test.processPlayer({ player: subject });
+  arrive(subject, crypt);
+  assert.equal(ticksToDrain(), 30, "back in: a fresh 30 ticks, not the 18 that were left");
+  assert.equal(drainLines(), 2, "one line per drain");
+  assert.ok(!subject.sent.messages.some((m) => /drains your Prayer/.test(m)), "the old text is gone");
+});
+
+// rsprox_transcripts/227/00086.txt:233214-233215 (546 times over the recordings): the tunnel's brother rising at the
+// chest says "You dare steal from us!"; a brother woken in his crypt, "You dare disturb my rest!" (226/01694:165530).
+test("Barrows: the brother at the chest says 'You dare steal from us!', one in his crypt 'You dare disturb my rest!'", () => {
+  const shoutOf = (queued) => {
+    const npc = queued.at(-1);
+    const said = [];
+    npc.forceChat = (text) => { said.push(text); return npc; };
+    try { npc.onAdd(); } catch { /* the fixture world has no combat target wiring; the shout comes first */ }
+    return said;
+  };
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    const subject = player();
+    arrive(subject, CHEST_ROOM);
+    Object.assign(subject.getAttribute("barrows"), { killed: [], kills: 0, chestOpen: false });
+    Barrows._test.searchChest(subject, 1);
+    assert.equal(queue.length, before + 1, "the tunnel's brother rises");
+    assert.deepEqual(shoutOf(queue), ["You dare steal from us!"]);
+
+    const digger = player();
+    arrive(digger, AHRIM_MOUND);
+    Barrows._test.dig({ player: digger });
+    for (let i = 0; i < 5 && digger.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: digger });
+    const run = digger.getAttribute("barrows");
+    Barrows._test.searchCrypt(digger, [0, 1, 2, 3, 4, 5].find((i) => i !== run.tunnel));
+    assert.deepEqual(shoutOf(queue), ["You dare disturb my rest!"]);
+  } finally {
+    queue.length = before;
+  }
 });
 
 function rewardDraw() {
@@ -254,4 +355,25 @@ test("Barrows: equipment, clue, coins, keys and racks keep their amounts in mixe
   for (const [id, amount] of expected) assert.equal(subject.getInventory().getAmount(id), amount);
   assert.deepEqual(Object.values(subject.sent.rewards)[0].slots,
     expected.map(([itemId, quantity], slot) => ({ slot, itemId, quantity })));
+});
+
+// Issue #4343: a tunnel door is crossed by walking through the doorway, as live (236/03929.txt
+// ~11290-11420: walk/run steps across barrows_door_o_l at 3562,9678, no exact move), not a slide.
+test("Barrows: an open tunnel door is walked through, not slid across", () => {
+  const subject = player();
+  const { useDoor, doorSides, getTunnelMap, getRun, processPlayer, IGNORE_CLIPPING_FLAG } = Barrows._test;
+  arrive(subject, CHEST_ROOM);
+  const run = getRun(subject);
+  const door = getTunnelMap().doors.find((entry) => run.openDoors.includes(entry.varbit) && entry.varbit !== run.puzzleDoor);
+  assert.ok(door, "an open door this run");
+  const [from, to] = doorSides(door);
+  subject.setLocation(from.clone());
+  processPlayer({ player: subject });
+  useDoor(subject, door);
+  assert.ok(!subject.getForceMovement(), "no exact move");
+  assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), true, "the doorway's clipping is ignored for the step");
+  subject.getMovementQueue().process();
+  assert.ok(subject.getLocation().equals(to), `walked to the far side (${subject.getLocation()})`);
+  for (let i = 0; i < 3; i++) processPlayer({ player: subject });
+  assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), false, "clipping back once across");
 });

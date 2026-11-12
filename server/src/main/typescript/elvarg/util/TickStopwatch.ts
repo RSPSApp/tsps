@@ -1,9 +1,11 @@
 import { GameConstants } from "../game/GameConstants";
+import { lazyRequire } from "./LazyRequire";
 
 /** Read lazily: World imports Player, which owns the stopwatches, so a top-level import would cycle. */
+const getWorld = lazyRequire(() => (require("../game/World") as typeof import("../game/World")).World);
+
 function currentCycle(): number {
-    const { World } = require("../game/World") as typeof import("../game/World");
-    return World.getProcessCycle();
+    return getWorld().getProcessCycle();
 }
 
 /**

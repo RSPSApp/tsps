@@ -48,6 +48,11 @@ function areaClass() {
       return false;
     }
 
+    /** No follower comes in either (Wiki: Nex): a following pet waits outside. */
+    barsFollowers() {
+      return true;
+    }
+
     canAttack(attacker, target) {
       return require("./Chamber.Nex").canAttackIn(attacker, target);
     }

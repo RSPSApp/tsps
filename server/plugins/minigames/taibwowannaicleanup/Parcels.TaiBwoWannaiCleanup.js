@@ -13,6 +13,7 @@
  * Send-parcel op does what the conversation does.
  */
 const Common = require("./Common.TaiBwoWannaiCleanup");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const parcels = () => Common.data.parcels;
 const cache = () => Common.core.CacheDefinitions;
@@ -95,7 +96,7 @@ function onItemClick(event) {
   if (amount !== undefined) send(player, event.slot, itemId, amount);
   else if (event.action === ops.x) promptAmount(player, event.slot, itemId);
   else if (event.action === ops.value) player.sendMessage(Common.message("parcelValue", { item: item.getDefinition().getName() }));
-  else if (event.action === ops.examine) player.sendMessage(item.getDefinition().getExamine() || item.getDefinition().getName());
+  else if (event.action === ops.examine) examineItem(player, itemId, item.getAmount());
 }
 
 /** "If the player does not have at least 10 trading sticks in their inventory:" */

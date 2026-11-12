@@ -61,6 +61,16 @@ and the uncharged ids of all three shields (a full Dragonfire shield showed stab
 Wiki has +70 at 50 charges), so a charged shield gave no defence for its charges. The bonus now
 comes from a bonus provider: item data plus the saved charges.
 
+## Buff bar cooldown
+
+The buff bar shows each shield's special cooldown (All Settings 132), from the cache's buff structs.
+The Dragonfire shield's (struct 3082) reads varbit 6539 and the ward's (839) varbit 6540, both in steps
+of 8 ticks, so a blast sends the varbit of the shield that fired. The wyvern shield's (840) has no
+varbit: the bar counts it against `map_clock` from the tick it ends on, which only `buff_bar_start`
+(script 5931) sets. A wyvern blast sends that with the end tick, and 0 when the recharge ends. A
+recharge running at logout comes back on the same shield's cooldown at login. Not recorded: no
+capture has a ward or wyvern shield blast.
+
 ## Not covered (no source)
 
 - The ward's and the wyvern shield's blast graphics are unrecorded. The ward reuses the Dragonfire

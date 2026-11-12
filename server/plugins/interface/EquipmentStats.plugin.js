@@ -1,6 +1,7 @@
 
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { EquipPacketListener } = require("../../src/main/typescript/elvarg/net/packet/impl/EquipPacketListener");
+const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const { WeaponProfiles } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponProfile");
 
 // OpenRune cache names: component.wornitems:equipment and interface.equipment.
@@ -184,8 +185,7 @@ function handleItemAction({ player, buttonId, action }) {
   if (action === 1) {
     EquipPacketListener.unequip(player, equipmentSlot);
   } else if (action === 10) {
-    const definition = item.getDefinition();
-    player.sendMessage(definition.getExamine() || definition.getName());
+    examineItem(player, item.getId(), item.getAmount());
   }
   return true;
 }

@@ -49,6 +49,7 @@ The client reads the log straight from its cache too. It used to override these 
 **Login** sends:
 - `collection_count` (2943) and its maximum (2944);
 - per tab, the count and maximum: bosses 4613/4614, raids 4615/4616, clues 4617/4618, minigames 4619/4620, other 4621/4622;
+  - These count **items, not slots**: an item listed by several categories counts once, and in the earliest tab that has it. The five tab maximums always add up to 2944 (captured: 1699 = 332 + 67 + 611 + 257 + 432), and a first Abyssal dagger (Abyssal Sire and Slayer) raised 4613 and 2943 by one and left 4621 alone;
 - `collection_count_highscores` (4612) and `collection_count_unsynced` (4848);
 - the 12 recent items at varps 4623, 4625 … 4645, each followed by its day number (days since 27 February 2002, UTC);
 - `option_collection_new_item` (varbit 11959) = the saved preference: 0 Off, 1 chat, 2 popup, 3 both (a new account starts at 3). All Settings rows 85 ("New addition notification") and 171 ("New addition popup") toggle its two bits (cache script 6716), and the client's whole varp 2856 transmission is kept so the bits survive relog without disturbing the other settings sharing that varp.

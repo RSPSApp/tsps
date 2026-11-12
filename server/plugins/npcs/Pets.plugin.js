@@ -24,6 +24,8 @@ const CatchUp = require("./pets/CatchUp.Pets");
 const Dialogue = require("./pets/Dialogue.Pets");
 const RiftGuardian = require("./pets/RiftGuardian.Pets");
 const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
+const Beaver = require("./pets/Beaver.Pets");
+const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -247,8 +249,10 @@ const PETS = [
     enumName: "BEAVER",
     petId: NpcIdentifiers.BEAVER_11,
     dialogueVariant: "standard-dialogue-normal-variant",
+    // Each recolour, the pheasant and the fox are their own item (pets/Beaver.Pets.js adds them).
     morphId: 0,
     itemId: 13322,
+    familyItemId: 13322,
     dialogue: -1,
     skill: Skill.WOODCUTTING,
     chance: 5000,
@@ -325,6 +329,8 @@ const PETS = [
   {
     enumName: "ROCKY",
     petId: 7336,
+    // Transcript:Rocky also has tanuki (Ziggy) and red panda (Red) sections; this follower is Rocky.
+    dialogueVariant: "standard-dialogue",
     morphId: 0,
     itemId: 20663,
     dialogue: -1,
@@ -795,6 +801,45 @@ function awardDroppedPets({ player, npc, npcId, drops, claim }) {
     if (!getPetForItemId(itemId)) continue;
     drops.splice(index, 1);
     awardPet(player, itemId);
+  }
+}
+
+/**
+ * "pets:extensions" { pets, services }: asked once as this plugin registers, before it hooks its
+ * pets' NPC ids, so another plugin can add pets of its own (Plugin Hub plugins load first, from
+ * plugins/imported/). A listener pushes rows like this table's onto `pets`:
+ *   { petId, itemId, enumName?, morphId?, dialogue?, reclaimable?, ... }
+ * petId is the follower's NPC id and itemId the item it is summoned from; any other fields stay
+ * on the row, for the adding plugin to read back (its "pets:interact" handler gets the row as
+ * `pet`). `services` lends the ownership helpers such a plugin needs: getOwnedPetItems(player),
+ * holdsPetItem(player, itemId), getPetForItemId(itemId) and getPetByNpcId(npcId). A second
+ * register (tests) replaces the previous extension pets.
+ */
+function addExtensionPets(api) {
+  for (let index = PETS.length - 1; index >= 0; index--) {
+    const pet = PETS[index];
+    if (!pet.extension) continue;
+    PETS.splice(index, 1);
+    PET_BY_ID.delete(pet.petId);
+    PET_BY_NAME.delete(pet.enumName);
+    if (PET_BY_ITEM_ID.get(pet.itemId) === pet) PET_BY_ITEM_ID.delete(pet.itemId);
+  }
+  const request = { pets: [], services: { getOwnedPetItems, holdsPetItem, getPetForItemId, getPetByNpcId } };
+  api.emitCustomEvent?.("pets:extensions", request);
+  for (const row of Array.isArray(request.pets) ? request.pets : []) {
+    if (!row || !Number.isInteger(row.petId) || !Number.isInteger(row.itemId)) {
+      console.error("[pets] an extension pet needs whole-number petId and itemId; skipped", row);
+      continue;
+    }
+    if (PET_BY_ID.has(row.petId) || PET_BY_ITEM_ID.has(row.itemId)) {
+      console.error(`[pets] extension pet NPC ${row.petId} or item ${row.itemId} is already a pet's; skipped`);
+      continue;
+    }
+    const pet = { morphId: 0, dialogue: -1, ...row, enumName: row.enumName ?? `EXTENSION_${row.petId}`, extension: true };
+    PETS.push(pet);
+    PET_BY_ID.set(pet.petId, pet);
+    PET_BY_NAME.set(pet.enumName, pet);
+    PET_BY_ITEM_ID.set(pet.itemId, pet);
   }
 }
 
@@ -2152,6 +2197,42 @@ function fillSkillPetVariants({ ItemIdentifiers, NpcIdentifiers: Npcs }) {
   SKILL_PET_VARIANTS.set(`npc:${Npcs.BLACK_CHINCHOMPA}`, PET_BY_NAME.get("BLACK_CHINCHOMPA"));
 }
 
+/** The beaver's other forms, each its own item and follower (pets/Beaver.Pets.js). */
+function addBeaverForms({ CacheDefinitions }) {
+  const base = PET_BY_NAME.get("BEAVER");
+  for (const pet of Beaver.rows(base, CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+  }
+}
+
+/** The giant squirrel's other forms, each its own item and follower (pets/GiantSquirrel.Pets.js). */
+function addGiantSquirrelForms({ CacheDefinitions }) {
+  const base = PET_BY_NAME.get("GIANT_SQUIRREL");
+  for (const pet of GiantSquirrel.rows(base, CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+    if (Number.isInteger(pet.houseNpcId)) PET_BY_HOUSE_ID.set(pet.houseNpcId, pet);
+  }
+}
+
+/** The player's own active follower, free to change form now. */
+function isOwnFollower(player, npc) {
+  return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
+    && npc.isRegistered?.() !== false && player.busy?.() !== true;
+}
+
+/** Changes the follower to another form of its pet, keeping the item and insurance records in step. */
+function transformFollower(player, npc, next) {
+  const pet = getPetByNpcId(npc.getId());
+  npc.setNpcTransformationId(next.petId);
+  if (pet) setStoredVariant(player, pet, next.petId);
+  player.setAttribute(ACTIVE_PET_ATTRIBUTE, next.itemId);
+  player.setAttribute(LAST_PET_ATTRIBUTE, next.itemId);
+  recordOwnership(player, next);
+  syncFollowerIndex(player, npc);
+}
+
 let World;
 let RegionManager;
 let ItemOnGroundManager;
@@ -2181,6 +2262,9 @@ module.exports = {
     NPCRespawnTaskRef = api.core?.NPCRespawnTask ?? null;
     ItemDefinitionClass = api.core?.ItemDefinition ?? null;
     fillSkillPetVariants(api.core);
+    addBeaverForms(api.core);
+    addGiantSquirrelForms(api.core);
+    addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
     api.persistAttribute(ACTIVE_PET_ATTRIBUTE, null);
@@ -2220,6 +2304,8 @@ module.exports = {
     api.onPlayerDeath(onCatOwnerDeath);
     RiftGuardian.attach(api, {pets: PETS, skill: Skill.RUNECRAFTING, world: World, currentAttribute: CURRENT_PET_ATTRIBUTE,
       activeAttribute: ACTIVE_PET_ATTRIBUTE, lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant, recordOwnership, syncFollowerIndex});
+    Beaver.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
+    GiantSquirrel.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 
@@ -2232,6 +2318,7 @@ module.exports = {
   // Exposed for tests/pets.test.cjs; nothing else reads them.
   __internals: {
     PETS,
+    addExtensionPets,
     onSkill,
     skillingPetMultiplier,
     PET_BY_ID,

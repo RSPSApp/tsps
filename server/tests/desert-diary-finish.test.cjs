@@ -13,7 +13,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Altars = require("../plugins/objects/Altars.plugin");
 const Camulet = require("../plugins/items/Camulet.plugin");
-const DesertFinish = require("../plugins/achievements/diaries/DesertFinish.AchievementDiaries.plugin");
+const DesertFinish = require("../plugins/achievements/diaries/DesertFinish.AchievementDiaries");
 
 let core = null;
 let api = null;
@@ -138,7 +138,9 @@ test("a Camulet rub teleports inside Enakhra's Temple, spends one shared charge 
   arrivals.length = 0;
   Camulet._test.onItemAction({ ...event, handled: false });
   assert.equal(arrivals.length, 0, "an empty Camulet cannot teleport");
-  assert.equal(player.messages.at(-1), "You rub the amulet...", "rsprox 3021, 3160, 3165: the rub message comes first");
+  assert.equal(player.messages.at(-2), "You rub the amulet...", "rsprox 3021, 3160, 3165: the rub message comes first");
+  assert.equal(player.messages.at(-1), "Your Camulet has run out of teleport charges. You can renew them by applying camel dung.",
+    "then the box's mesbox line (231/03021.txt:24821)");
   assert.equal(player.dialogues.at(-1).getDialogues?.()?.length ?? 1, 1, "the empty Camulet answers in a message box");
 
   player.setAttribute("quest.enakhras_lament.camulet-unlimited", 1);

@@ -14,7 +14,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Journal = require("../plugins/achievements/diaries/Journal.AchievementDiaries");
 const Rewards = require("../plugins/achievements/diaries/Rewards.AchievementDiaries");
 const Lamps = require("../plugins/achievements/diaries/Lamps.AchievementDiaries");
-const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.plugin");
+const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.AchievementDiaries");
 const CAPTURED = require("./fixtures/achievement-diary-journals.json").journals;
 
 const tasks = [];
@@ -606,8 +606,10 @@ test('diary tasks follow successful native gameplay actions', async t => {
     }
   });
 
-  await t.test('all three Draynor sewer Zombie spawns count through NPCDeathTask', () => {
-    for (const [id, x, y] of [[core.NpcIdentifiers.ZOMBIE_14, 3086, 9674], [core.NpcIdentifiers.ZOMBIE_31, 3088, 9672], [core.NpcIdentifiers.ZOMBIE_33, 3096, 9672]]) {
+  // Wiki (Draynor Sewers): "A total of seven zombies"; the east four are in map square [48,150].
+  await t.test('all seven Draynor sewer Zombie spawns count through NPCDeathTask', () => {
+    for (const [id, x, y] of [[core.NpcIdentifiers.ZOMBIE_14, 3086, 9674], [core.NpcIdentifiers.ZOMBIE_31, 3088, 9672], [core.NpcIdentifiers.ZOMBIE_33, 3096, 9672],
+      [core.NpcIdentifiers.ZOMBIE_13, 3119, 9647], [core.NpcIdentifiers.ZOMBIE_32, 3122, 9658], [core.NpcIdentifiers.ZOMBIE_15, 3124, 9651], [core.NpcIdentifiers.ZOMBIE_30, 3124, 9662]]) {
       assert.equal(CacheDefinitions.getNpc(id).name, 'Zombie');
       const player = actor(x - 1, y), npc = spawn(id, x, y);
       npc.__skipDefaultRespawn = true;
@@ -691,8 +693,9 @@ test('diary tasks follow successful native gameplay actions', async t => {
     }
   });
 
+  // (3122,9658) is the Draynor Sewers' south stretch to the jail entrance, so the Varrock case uses Varrock's sewers.
   await t.test('a Varrock sewer Zombie does not count as a Draynor sewer kill', () => {
-    const player = actor(3121, 9658), npc = spawn(core.NpcIdentifiers.ZOMBIE_32, 3122, 9658);
+    const player = actor(3239, 9866), npc = spawn(core.NpcIdentifiers.ZOMBIE_32, 3240, 9866);
     assert.equal(npc.getCurrentDefinition(player).getName(), 'Zombie');
     npc.__skipDefaultRespawn = true;
     npc.getCombat().addDamage(player, npc.getMaxHitpoints()); npc.setHitpoints(0);
@@ -740,5 +743,41 @@ test('diary tasks follow successful native gameplay actions', async t => {
       assert.equal(credits.some(event => event.player === player && event.diary === 'ardougne' && event.task === CROMPERTY), false);
       assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2682, 3326]);
     });
+  }
+});
+
+test("wilderness_diary_any_complete (4470) carries a bit per completed Wilderness tier, as live logins send it", () => {
+  const wilderness = Data.BY_KEY.get("wilderness");
+  const player = createPlayer();
+  Progress.restore({ player });
+  assert.ok(!player.log.some((line) => line.startsWith("varbit 4470=")), "nothing done: nothing sent");
+  const done = (tier) => wilderness.tiers[tier].tasks.map((task) => task.key);
+  player.setAttribute(Progress.TASKS_ATTRIBUTE, { wilderness: [...done("easy"), ...done("medium")] });
+  Progress.restore({ player });
+  assert.ok(player.log.includes("varbit 4470=3"), "easy and medium");
+  player.log.length = 0;
+  Progress.sendDiary(player, wilderness);
+  assert.ok(player.log.includes("varbit 4470=3"));
+});
+
+test("diary task modules share one plugin switch and keep their content dependencies", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const pluginDir = path.resolve(__dirname, "../plugins/achievements");
+  const diaryEntrypoints = PluginManager.discoverPluginFiles(pluginDir, 2)
+    .map((file) => path.relative(pluginDir, file))
+    .filter((file) => file === "AchievementDiaries.plugin.js" || file.startsWith(`diaries${path.sep}`));
+  assert.deepEqual(diaryEntrypoints, ["AchievementDiaries.plugin.js"]);
+
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  for (const thievingEnabled of [false, true]) {
+    const handlers = [];
+    Diaries.register(new Proxy({
+      core: PluginManager.getCoreApi(),
+      onCustomEvent: (name, handler) => handlers.push([name, handler]),
+    }, { get: (target, key) => target[key] ?? (() => {}) }));
+    const [, pluginsLoaded] = handlers.find(([name]) => name === "plugins:loaded");
+    pluginsLoaded({ names: new Set(thievingEnabled ? ["AchievementDiaries", "Thieving"] : ["AchievementDiaries"]) });
+    assert.equal(handlers.filter(([name, handler]) => name === "thieving:done" && handler.name === "pickpocketed").length, thievingEnabled ? 2 : 0);
   }
 });

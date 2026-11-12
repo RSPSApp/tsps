@@ -25,6 +25,7 @@ before(async () => {
     core,
     onObjectInteraction: (name, actions) => Object.entries(actions).forEach(([option, handler]) => (hooks[`${plugin}:${name}:${option}`] = handler)),
     onCustomEvent: (name, handler) => (hooks[`${plugin}:${name}`] = handler),
+    onNpcDialogueCondition() {}, onItemOnNpc() {}, persistAttribute() {},
     emitCustomEvent: (name, payload) => events.push([name, payload]),
   });
   Karamja.register(api("Karamja"));

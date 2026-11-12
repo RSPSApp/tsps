@@ -48,6 +48,7 @@ function makePlayer() {
   let prayer = 50;
   let location = new core.Location(3442, 3340, 0);
   let wearingGhostspeak = true;
+  const started = [];
 
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
@@ -87,7 +88,7 @@ function makePlayer() {
   };
 
   const player = {
-    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [], animations, graphics, sounds,
+    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [], animations, graphics, sounds, started,
     localNpcs: [],
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
@@ -116,7 +117,7 @@ function makePlayer() {
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
     sendMessage: (message) => messages.push(message),
-    getDialogueManager: () => ({ isActive: () => false }),
+    getDialogueManager: () => ({ isActive: () => false, startDialogues(builder) { started.push(builder); } }),
     getArea: () => null,
     getIndex: () => 1,
     isPlayer: () => true,
@@ -156,6 +157,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const clock = { tick: 0 };
   const diaries = new Set();
   let area = null;
+  const areas = [];
 
   class FakeGameObject {
     constructor(id, location, type, face, privateArea) {
@@ -174,7 +176,8 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
 
   const fakeCore = {
     ...core,
-    TaskManager: { submit: noop, cancelTasks: noop },
+    // Native actors run the real ticks (the grotto exit waits one).
+    TaskManager: nativeActors ? core.TaskManager : { submit: noop, cancelTasks: noop },
     World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
@@ -222,7 +225,8 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
       if (key === 'diary:is-complete') event.complete = diaries.has(`${event.diary}:${event.tier}`);
       for (const handler of custom.get(key) ?? []) handler(event);
     },
-    registerArea(next) { area = next; },
+    // The swamp is the first Area the quest registers; the rest (the gate approach strip) are kept in order.
+    registerArea(next) { areas.push(next); area ??= next; },
     spawnNpc(definition) {
       const { id, x, y, z } = definition;
       if (nativeActors) {
@@ -261,7 +265,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const h = {
     player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
     diaries, itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
-    deregistered, worldObjects, quest, clock, get area() { return area; },
+    deregistered, worldObjects, quest, clock, get area() { return area; }, areas,
   };
   if (!firstHarness) firstHarness = h;
   return h;
@@ -370,13 +374,18 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(h.quest.getStage(p), 5);
   assert.equal(variant(h, N.DREZEL), 'starting-off-talking-to-drezel-again');
 
+  p.setLocation(new core.Location(3444, 3459, 0)); // opening from the north side enters the swamp
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
   assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.spawned.length, 0, 'entering the swamp does not summon Filliman');
+  // Wiki Transcript:Nature Spirit, "If the player attempts to enter the Grotto": the line, the
+  // apparition box, then Filliman's dialogue; without the amulet that is the failed talk (15).
+  p.setWearingGhostspeak(false);
   objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK));
+  assert.equal(p.started.length, 1, 'the apparition and Filliman play on the entrance');
+  assert.equal(h.quest.getStage(p), 15);
 
-  p.setWearingGhostspeak(false);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
   assert.equal(h.quest.getStage(p), 15);
   p.setWearingGhostspeak(true);
@@ -1029,7 +1038,10 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   await click(O.GROTTO, 3440, 3337);
   assert.ok(player.getLocation().y < 4000, 'before the swamp gate, Enter does not move underground');
   assert.deepEqual(publish(), [], 'no Filliman is granted before the required gate progression');
+  const beforeGate = player.getLocation();
+  player.setLocation(new core.Location(3444, 3459, 0)); // opening from the north side enters the swamp
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
+  player.setLocation(beforeGate);
   assert.equal(h.quest.getStage(player), 10);
   assert.deepEqual(publish(), [], 'passing the swamp gate alone does not summon the ghost');
   for (const handler of h.logins) handler({ player });
@@ -1042,13 +1054,14 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
     [3440, 3336, 0], 'Filliman stands between the three ritual stones');
   await click(O.GROTTO, 3440, 3337);
   assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 1, 'repeat Enter does not duplicate Filliman');
-  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
-  assert.equal(h.quest.getStage(player), 20, 'the still-reachable ghost advances the existing dialogue');
+  // With the amulet, the entrance's own Filliman conversation (Wiki transcript) is speaking to him.
+  assert.equal(h.quest.getStage(player), 20, 'the entrance conversation advances like Talk-to');
+  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman');
 
   // Players saved underground by the old handler can leave and resume at the entrance.
   player.moveTo(new core.Location(3441, 9736, 0)); player.needsPlacement = false;
   await click(O.GROTTO_3, 3442, 9733);
-  assert.deepEqual(position(), [3443, 3338, 0]);
+  assert.deepEqual(position(), [3440, 3337, 0], 'rsprox 227/01846.txt tick 4478 landing');
   await click(O.GROTTO, 3440, 3337);
   assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK]);
   for (const handler of h.logouts) handler({ player });
@@ -1068,11 +1081,16 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   assert.deepEqual(position(), [3441, 9736, 1]);
   assert.equal(h.quest.getStage(player), 110, 'post-quest entry cannot lower progress');
   player.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
+  const said = [], sendMessage = player.sendMessage.bind(player);
+  player.sendMessage = (message) => { said.push(message); return sendMessage(message); };
   await click(O.ALTAR_OF_NATURE, 3441, 9740);
+  assert.deepEqual(said, ['You recharge your prayer points at the altar of nature.'], 'rsprox 227/01846.txt tick 4473');
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER),
     player.getSkillManager().getMaxLevel(core.Skill.PRAYER) + 2, 'the actual plane-1 altar restores and boosts Prayer');
   await click(O.GROTTO_4, 3442, 9733);
   assert.equal(player.getLocation().z, 0, 'the finished grotto has a working native exit');
+  assert.deepEqual(position(), [3440, 3337, 0]);
+  assert.deepEqual(said.slice(1), ["You prepare to exit the Druid's grotto.", 'You crawl back out of the grotto.'], 'rsprox 227/01846.txt ticks 4477-4478');
 });
 
 
@@ -1102,15 +1120,30 @@ test('walking through an already-open swamp gate records entry without crediting
   for (const entry of cases) {
     const h = harness(), p = h.player;
     h.quest.setStage(p, 5);
+    // As AreaManager does: only the Area the player stands in is processed.
+    const step = () => h.areas.find(area => area.getBoundaries().some(b => b.inside(p.getLocation())))?.process(p);
     p.setLocation(new core.Location(...entry.from, 0));
-    h.area.process(p);
+    step();
     p.setLocation(new core.Location(...entry.to, 0));
     p.needsPlacement = Boolean(entry.teleport);
-    h.area.process(p);
+    step();
     assert.equal(h.quest.getStage(p), entry.expected, entry.name);
     assert.equal(h.spawned.length, 0, 'crossing never auto-summons the ghost');
     objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
     assert.equal(h.spawned.some(npc => npc.getId() === N.FILLIMAN_TARLOCK),
       entry.expected === 10, entry.name + ': only legitimate entry unlocks the existing summon');
   }
+});
+
+test('every Mort Myre gate crossing has its line, after the quest too (rsprox 226/01638.txt:21691, :21802)', () => {
+  const h = harness();
+  const p = h.player;
+  h.quest.setStage(p, 110);
+  p.setLocation(new core.Location(3443, 3458, 0));
+  emit(h, 'door:toggle', { objectId: O.GATE_73 });
+  assert.deepEqual(p.messages, ['You walk into the gloomy atmosphere of Mort Myre.']);
+  p.setLocation(new core.Location(3443, 3457, 0));
+  emit(h, 'door:toggle', { objectId: O.GATE_73 });
+  assert.deepEqual(p.messages, ['You walk into the gloomy atmosphere of Mort Myre.', 'You skip gladly out of murky Mort Myre.']);
+  assert.equal(h.quest.getStage(p), 110);
 });

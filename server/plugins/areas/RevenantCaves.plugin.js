@@ -241,11 +241,18 @@ function readScroll(player, slot, destination) {
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  const inventory = player.getInventory();
-  if (inventory.getItems()[slot]?.getId?.() !== SCROLL) return;
-  inventory.deleteAtSlot(slot, 1);
-  sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
-  core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
+  core.TeleportHandler.confirm(player, to, () => {
+    const inventory = player.getInventory();
+    // The clicked slot, else wherever the scroll is now (moved while a warning asked).
+    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+    if (at < 0) {
+      sender.sendVarbit(BUSY_VARBIT, 0);
+      return;
+    }
+    inventory.deleteAtSlot(at, 1);
+    sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
+    core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
+  }, SCROLL_LEVEL_LIMIT, { item: SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** "Teleport": a sub-option picks the entrance; a left-click uses the configured one. */

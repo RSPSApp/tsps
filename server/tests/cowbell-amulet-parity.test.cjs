@@ -29,7 +29,7 @@ function scene() {
     sendMessage: text => messages.push(text),
   };
   const api = {
-    core: { ...core, TeleportHandler: { checkReqs: () => canTeleport, teleport: (...args) => teleports.push(args) }, World: { getNpcsNear: () => [] } },
+    core: { ...core, TeleportHandler: { checkReqs: () => canTeleport, confirm: (player, destination, go, level, { item } = {}) => go(item), teleport: (...args) => teleports.push(args) }, World: { getNpcsNear: () => [] } },
     onItemAction: (_name, handlers) => { actions = handlers; }, onItemOnItem: handler => { useItem = handler; },
     onCustomEvent: noop, onPlayerLogin: noop,
     emitCustomEvent: (name, request) => events.push([name, request]),

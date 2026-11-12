@@ -40,10 +40,10 @@ before(() => {
     onObjectInteraction: (handler) => { if (typeof handler === "function") objectHandlers.push(handler); },
     onBeforeObjectInteraction: (handler) => beforeObjectHandlers.push(handler),
   };
-  require("../plugins/skills/sailing/Sailing.plugin").register(real);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Panel.Sailing").register(real);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
   require("../plugins/interface/Notifications.plugin").register(real);
-  require("../plugins/skills/sailing/Charting.plugin").register(api);
+  require("../plugins/skills/sailing/Charting.Sailing").register(api);
 });
 
 let nextIndex = 900;
@@ -798,5 +798,38 @@ test("a full inventory leaves the crab statue uncharted until its fragment fits 
     assert.equal(player.getInventory().getAmount(32395), 1, "the fragment, once there's room");
   } finally {
     leave(player);
+  }
+});
+
+test("All Settings' Charting popups off (settings_sailing_charting_popup): the charting is told in chat only", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("settings_sailing_charting_popup"), off);
+      chart(player, "generic_rock_bay_of_sarim");
+      tick();
+      assert.ok(player.messages().includes(`Charting complete: ${blue("Find a treacherous rock formation near Draynor Village.")}`));
+      const popup = player.sent.some(([key, script]) => key === "sendInterfaceScript" && script === 3343);
+      assert.equal(popup, off === 0, off ? "no popup" : "the popup, as by default");
+    } finally {
+      leave(player);
+    }
+  }
+});
+
+test("All Settings' Current duck hint arrow off: the released duck gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = duckCaptain();
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_current_duck_hintarrow_disabled"), off);
+      currentDuck.trackCurrent({ player });
+      tick(2);
+      assert.ok(currentDuck.ducks.get(player), "the duck is out either way");
+      assert.equal(player.sent.some(([key]) => key === "sendEntityHint"), off === 0);
+      assert.equal(player.varbits.get(14192), off ? undefined : 5, "current_hint_arrow");
+    } finally {
+      leave(player);
+    }
   }
 });

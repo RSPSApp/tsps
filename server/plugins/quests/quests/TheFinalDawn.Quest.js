@@ -68,6 +68,8 @@
  * Source: OSRS Wiki "The Final Dawn", its quick guide, transcript and journal;
  * every id via scripts/lookup-gameval.ts and the cache definitions.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTheFinalDawnQuest(api) {
   const {
     ActionDialogue,
@@ -637,6 +639,18 @@ module.exports = function registerTheFinalDawnQuest(api) {
     return player.getInventory().getAmount(itemId) > 0;
   }
 
+  /**
+   * The safehouse sack in any fill: farming's Fill, Remove-one and use-potato change Potatoes(3) to another count,
+   * and that sack must still stop the ground one respawning.
+   */
+  function heldPotatoSack(player) {
+    for (let count = 1; count <= 10; count++) {
+      const id = api.core.CacheDefinitions.getObjId(`sack_potato_${count}`);
+      if (id != null && id >= 0 && held(player, id)) return true;
+    }
+    return false;
+  }
+
   function freeSlots(player) {
     return player.getInventory().getFreeSlots();
   }
@@ -808,7 +822,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     for (const entry of loot) {
       if (entry.itemId === KNIFE_ITEM && held(player, KNIFE_ITEM)) continue;
       if (entry.itemId === POTATO_SACK_ITEM &&
-        (held(player, POTATO_SACK_ITEM) || held(player, EMPTY_SACK_ITEM))) continue;
+        (heldPotatoSack(player) || held(player, EMPTY_SACK_ITEM))) continue;
       if (entry.itemId === COIN_PURSE_ITEM &&
         (held(player, COIN_PURSE_ITEM) || held(player, EMPTY_COIN_PURSE_ITEM) || held(player, SANDY_COIN_PURSE_ITEM))) continue;
       const tile = new Location(entry.x, entry.y, entry.z);
@@ -1707,8 +1721,10 @@ module.exports = function registerTheFinalDawnQuest(api) {
 
   function emptyPotatoSack(event) {
     const { player, itemId, option } = event;
-    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return;
-    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return;
+    // Outside the quest the sack is a plain Potatoes(3): return false so farming's Empty answers it (a name-based
+    // action that returns anything else counts as handled).
+    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return false;
+    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return false;
     event.handled = true;
     // The empty sack takes the sack's slot; the three potatoes need three more, or they were lost.
     if (player.getInventory().getFreeSlots() < POTATOES_PER_SACK) {
@@ -2034,8 +2050,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
       setBit(player, BIT_TABLET_ONE);
       setBit(player, BIT_TABLET_TWO);
       syncQuestVarbits(player);
-      for (const axis of [0, 1]) player.getPacketSender().sendCameraShake(axis, 4);
-      player.getPacketSender().sendCameraShake(2, 2);
+      for (const axis of [0, 1]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 4);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 2, 2);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       checkRuinsExplored(player);
       return;
@@ -2327,7 +2343,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     }
     if (checkpoint === 2 && locateTileMatches(player, 1373, 9539)) {
       player.sendMessage("The fragment crumbles in your hand and the dust blows towards a nearby wall, causing a symbol to appear.");
-      for (const axis of [0, 1, 2]) player.getPacketSender().sendCameraShake(axis, 5);
+      for (const axis of [0, 1, 2]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 5);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       player.getInventory().deleteNumber(KEYSTONE_FRAGMENT_ITEM, 1);
       setStage(player, STAGE_SYMBOL);

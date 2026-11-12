@@ -78,6 +78,13 @@ test("the captured success and burn lines", () => {
   assert.equal(line(ItemIds.RAW_TUNA), "You manage to cook a tuna.");
   assert.equal(line(ItemIds.RAW_RABBIT), "You cook the rabbit.");
   assert.equal(line(ItemIds.BREAD_DOUGH), "You successfully bake some bread.");
+  // rsprox 227/01858.txt:370990 (stick; the shaft is assumed the same), and the Wiki's "stop burning
+  // entirely at Cooking level 48" on both pages.
+  for (const name of ["spider on stick", "spider on shaft"]) {
+    const spider = [...Cooking.COOKABLE_BY_RAW.values()].find((cookable) => cookable.name === name);
+    assert.equal(Cooking._test.successMessage(spider), "You cook a spider.", name);
+    assert.equal(spider.stopBurn, 48, name);
+  }
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_HERRING)), "You accidentally burn the herring.");
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_KARAMBWAN)), "You accidentally burn the karambwan.");
 });
@@ -113,6 +120,20 @@ test("one raw food opens the how-many menu on the raw item; several open the wha
   assert.equal(many.sent.menu.getTitle(), "What would you like to cook?");
   assert.deepEqual(many.sent.menu.getItems(), [ItemIds.SHRIMPS, ItemIds.TROUT]);
   assert.equal(many.sent.menu.getOptions().maxAmount, 5);
+});
+
+test("Cook on the Rogues' Den fire offers food that can cook on a fire", () => {
+  const id = core.ObjectIdentifiers.FIRE_44;
+  const definition = core.CacheDefinitions.getObject(id);
+  assert.equal(definition.actions[0], "Cook");
+  const fire = { ...cooker(definition.name), getId: () => id };
+
+  const p = player(50, [[ItemIds.BREAD_DOUGH, 2], [ItemIds.RAW_TROUT, 3]]);
+  assert.equal(typeof hooks.object.Fire?.Cook, "function");
+  hooks.object.Fire.Cook({ player: p, object: fire });
+  assert.equal(p.sent.menu.getTitle(), "How many would you like to cook?");
+  assert.deepEqual(p.sent.menu.getItems(), [ItemIds.RAW_TROUT]);
+  assert.equal(p.sent.menu.getOptions().maxAmount, 3);
 });
 
 test("the what menu shows the karambwan the player will get: poison until Tinsay's training", () => {

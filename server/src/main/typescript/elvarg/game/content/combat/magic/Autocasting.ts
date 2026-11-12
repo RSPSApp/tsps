@@ -103,6 +103,8 @@ export class Autocasting {
         [12902, ItemIdentifiers.STAFF_OF_THE_DEAD], [ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_THE_DEAD],
         [ItemIdentifiers.STAFF_OF_LIGHT, ItemIdentifiers.STAFF_OF_LIGHT],
         [ItemIdentifiers.STAFF_OF_BALANCE, ItemIdentifiers.STAFF_OF_BALANCE],
+        // Cache autocast_spellpos (pest_void_knight_mace): Crumble Undead, Claws of Guthix, the waves and surges.
+        [ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.VOID_KNIGHT_MACE],
         [ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF],
     ]);
 
@@ -141,7 +143,8 @@ export class Autocasting {
 
     private static openSelector(player: Player, defensive: boolean): boolean {
         if (player.getSpellbook() === MagicSpellbook.LUNAR) {
-            player.sendMessage("You can't autocast lunar spells.");
+            // rsprox_transcripts/234/03297.txt tick 212.
+            player.sendMessage("You cannot autocast Lunar Magicks.");
             return true;
         }
         if (!player.getEquipment().hasStaffEquipped()) {
@@ -162,8 +165,8 @@ export class Autocasting {
             .sendConfig(fightType.getParentId(), fightType.getChildId())
             .sendConfig(664, this.selectorList(player.getSpellbook(), weaponId))
             .sendSubInterface((161 << 16) | 76, this.AUTOCAST_INTERFACE)
-            .sendInterfaceFlagsRange((this.AUTOCAST_INTERFACE << 16) | this.AUTOCAST_CONTAINER, 0, 64, 1 << 1)
-            .sendMessage("You can set a default autocast spell any time from the magic tab.");
+            // No line: none of the 53 recordings that open the selector sends one (e.g. 236/03914.txt).
+            .sendInterfaceFlagsRange((this.AUTOCAST_INTERFACE << 16) | this.AUTOCAST_CONTAINER, 0, 64, 1 << 1);
         return true;
     }
 
@@ -179,7 +182,8 @@ export class Autocasting {
             !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(weaponId) &&
             !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(ItemAliases.baseOf(weaponId) ?? -1) &&
             !Barrows.hasDamnedSet(player, "ahrims")) {
-            return "You can only autocast regular offensive spells with this staff.";
+            // rsprox_transcripts/234/00843.txt tick 465 (a bladed staff), 237/01107.txt tick 5739.
+            return "You cannot autocast Ancient Magicks with that.";
         }
         if (spellbook === MagicSpellbook.NORMAL && weaponId === ItemIdentifiers.ANCIENT_STAFF) {
             return "You can only autocast ancient magicks with that.";
@@ -265,7 +269,8 @@ export class Autocasting {
 
     private static godSpell(weaponId: number): CombatSpell | null {
         if (weaponId === ItemIdentifiers.SARADOMIN_STAFF || weaponId === ItemIdentifiers.STAFF_OF_LIGHT) return CombatSpells.SARADOMIN_STRIKE;
-        if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE) return CombatSpells.CLAWS_OF_GUTHIX;
+        if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE
+            || weaponId === ItemIdentifiers.VOID_KNIGHT_MACE) return CombatSpells.CLAWS_OF_GUTHIX;
         if (weaponId === ItemIdentifiers.ZAMORAK_STAFF || weaponId === ItemIdentifiers.STAFF_OF_THE_DEAD
             || weaponId === 12902 || weaponId === ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD) return CombatSpells.FLAMES_OF_ZAMORAK;
         return null;

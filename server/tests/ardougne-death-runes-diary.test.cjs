@@ -31,7 +31,7 @@ before(async () => {
   quest = QuestRuntime.getRegisteredQuests().find(entry => entry.key === 'mournings_end_part_ii');
   require('../plugins/achievements/AchievementDiaries.plugin').register(api);
   require('../plugins/skills/Runecrafting.plugin').register(api);
-  require('../plugins/achievements/diaries/ArdougneDeathRunesDiary.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneDeathRunesDiary.AchievementDiaries').register(api);
   Data = require('../plugins/achievements/diaries/Data.AchievementDiaries');
   Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
   diary = Data.BY_KEY.get('ardougne');

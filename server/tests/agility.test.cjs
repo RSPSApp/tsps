@@ -15,7 +15,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.plugin");
+const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.AchievementDiaries");
 
 /** Runs submitted tasks on demand instead of on the game loop. */
 const tasks = [];
@@ -28,7 +28,11 @@ const taskManager = {
   },
 };
 
+/** Ticks played so far, for timing checks. */
+let ticksPlayed = 0;
+
 function tick() {
+  ticksPlayed++;
   for (const task of tasks.splice(0)) {
     if (task.tick()) tasks.push(task);
   }
@@ -92,7 +96,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation() {},
+    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -550,18 +554,41 @@ test("cache-rotated Kandarin stiles route to the near side and cross their long 
   }
 });
 
+test("Piscatoris falconry stile (19222) crosses its 1x2 footprint both ways at level 1", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const at = [2371, 3620, 0], ends = [[2371, 3619, 0], [2371, 3622, 0]];
+  RegionManager.loadMapFiles(at[0], at[1]);
+  const object = MapObjects.get(19222, new Location(...at), null);
+  assert.ok(object, "cache stile at the falconry fence");
+  for (const side of [0, 1]) {
+    const from = ends[side], to = ends[1 - side];
+    const player = createPlayer(...from, 1);
+    const route = { player, object, objectId: 19222, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] }, `approach stays on side ${side}`);
+    player.setLocation(new Location(...from));
+    assert.notEqual(operate(player, 19222, at, object.getFace()), false);
+    assert.deepEqual(tileOf(player), to, `crossing from side ${side}`);
+    assert.equal(player.state.xp, 0);
+  }
+});
+
 test("native Lizardman Canyon handholds enter and leave both crossings at level 1", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
   RegionManager.init();
   RegionManager.loadMapFiles(1470, 3687);
-  for (const [upperLoc, lowerLoc, upper, lower] of [
-    [[1474, 3687, 0], [1471, 3687, 0], [1475, 3687, 0], [1470, 3687, 0]],
-    [[1459, 3690, 0], [1457, 3690, 0], [1460, 3690, 0], [1456, 3690, 0]],
+  // The east pair as recorded (rsprox 231/00725 ticks 238 and 743-747): east to west walks a tile a tick with
+  // the climbing render; west to east is one 4-tick move with sequence 1148. The west pair has no recording.
+  for (const [upperLoc, lowerLoc, upper, lower, recorded] of [
+    [[1474, 3687, 0], [1471, 3687, 0], [1475, 3687, 0], [1470, 3687, 0], true],
+    [[1459, 3690, 0], [1457, 3690, 0], [1460, 3690, 0], [1456, 3690, 0], false],
   ]) {
     for (const [id, at, from, to, animation] of [
-      [27362, upperLoc, upper, lower, "human_climbing_down"],
-      [42009, lowerLoc, lower, upper, "human_climbing"],
+      [27362, upperLoc, upper, lower, recorded ? null : "human_climbing_down"],
+      [42009, lowerLoc, lower, upper, recorded ? "death_human_climbing_down" : "human_climbing"],
     ]) {
       const object = MapObjects.get(id, new Location(...at), null);
       assert.ok(object, `the active map places handholds ${id} at ${at}`);
@@ -570,13 +597,25 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
       assert.equal(RegionManager.blocked(new Location(...from), null), false, "approach is walkable");
       assert.equal(RegionManager.blocked(new Location(...to), null), false, "landing is walkable");
       const player = createPlayer(...from, 1);
+      const moves = [];
+      const setForceMovement = player.setForceMovement;
+      player.setForceMovement = (value) => { if (value) moves.push(value.getDirection()); return setForceMovement(value); };
       const route = { player, object, objectId: id, clickType: 1, destination: null };
       hooks.route.forEach(handler => handler(route));
       assert.deepEqual([route.destination.x, route.destination.y, route.destination.z], from,
         "routing stays on this side of the clipped cliff");
+      const startTick = ticksPlayed;
       assert.notEqual(operate(player, id, at), false);
+      const ticks = ticksPlayed - startTick;
       assert.deepEqual(tileOf(player), to);
-      assert.ok(player.state.animations.includes(CacheDefinitions.getSeqId(animation)));
+      if (recorded && id === 42009) {
+        // rsprox 231/00725 ticks 237-238: facing west (512) a tick, then the 4-tick move east, still facing west
+        // (exactmove angle 512, ForceMovement direction 3).
+        assert.deepEqual(moves, [3], "one exact move, facing west");
+        assert.equal(ticks, 5, "the 1-tick facing lead-in, then the 4-tick move");
+      }
+      if (animation) assert.ok(player.state.animations.includes(CacheDefinitions.getSeqId(animation)), animation);
+      else assert.equal(player.state.renders?.[0], CacheDefinitions.getSeqId("human_climbing"), "the climbing walk render");
       assert.equal(player.state.xp, 0, "a canyon entrance does not award Agility XP");
       assert.equal(player.state.blocked, false, "finishing the climb releases movement");
     }
@@ -614,7 +653,8 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
   const DRAYNOR_STONE = 16533;
   const stoneTile = [3151, 3363, 0];
-  const west = [3149, 3363, 0], east = [3154, 3363, 0];
+  // rsprox 237/04001.txt:45675: the east crossing starts from 3155.
+  const west = [3149, 3363, 0], east = [3155, 3363, 0];
   RegionManager.init();
   RegionManager.loadMapFiles(...stoneTile);
   const object = MapObjects.get(DRAYNOR_STONE, new Location(...stoneTile), null);
@@ -638,6 +678,8 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
     assert.deepEqual(landings, [stoneTile, to], "the crossing uses the actual stone before reaching shore");
     assert.deepEqual(tileOf(player), to, "one click completes the crossing");
     assert.equal(player.state.xp, 3);
+    // rsprox 237/04001.txt:45813 (the newest crossing).
+    assert.equal(player.state.messages.at(-1), "You manage to make it to the other side of the river.");
     assert.equal(player.state.blocked, false);
     assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
   }
@@ -1664,6 +1706,21 @@ function timeline(player, objectId, objectTile) {
   }
   return ticks;
 }
+
+test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {
+  for (const [objectId, start, object, finish, steps] of [
+    [56991, [1453, 3336, 0], [1453, 3335, 0], [1453, 3329], 7],
+    [56990, [1401, 3291, 0], [1401, 3290, 0], [1401, 3283], 8],
+    [56990, [1401, 3283, 0], [1401, 3284, 0], [1401, 3291], 8],
+  ]) {
+    const player = createPlayer(...start, 45);
+    const ticks = timeline(player, objectId, object);
+    assert.deepEqual(tileOf(player).slice(0, 2), finish);
+    assert.equal(ticks.flatMap((entry) => entry.sounds).filter((sound) => (sound.id ?? sound) === 2470).length, steps, `${objectId}: a sound per tile`);
+    assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 19.5);
+    assert.equal(player.state.blocked, false);
+  }
+});
 
 const course = (key) => COURSES.find((entry) => entry.key === key);
 const HIGHLIGHT_VARBIT = 13140;

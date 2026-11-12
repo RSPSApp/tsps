@@ -389,6 +389,24 @@ void (async () => {
     console.log("touch controls plugin test passed");
 })();
 
+// On a short landscape screen the stick can cover the All Settings categories.
+void (async () => {
+    const { client } = makeClient();
+    const plugin = new TouchControlsPlugin(client);
+    await plugin.start();
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().visible, true);
+
+    const parents = client.widgetManager!.interfaceParents;
+    parents.set((601 << 16) | 27, { type: 0 });
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().visible, false, "a modal frees its touch targets in landscape");
+
+    parents.clear();
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().visible, true, "movement returns when the modal closes");
+})();
+
 // Portrait Mode layout: the stick comes back smaller and above the minimap (hudInset is the
 // distance from the bottom to the minimap's top), and steps aside while a bank or shop is open.
 void (async () => {

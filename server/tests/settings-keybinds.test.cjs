@@ -134,7 +134,7 @@ test('XP Drops Tracker and Goal start/end options prompt, store, and restore the
   assert.equal(player.getAttribute('settings:xpdrops-setup')['1229'], 0);
 
   assert.equal(select(1), true, 'the second picker row selects Strength by cache enum 681');
-  assert.equal(player.getPacketSender().getVarbit(4703), 3);
+  assert.equal(player.getPacketSender().getVarbit(4703), 2);
   assert.equal(click(38, 7), true, 'Goal start now targets Strength');
   player.enteredAmountAction.execute(33333);
   assert.equal(player.getPacketSender().getVarp(1230), 33333);
@@ -145,7 +145,7 @@ test('XP Drops Tracker and Goal start/end options prompt, store, and restore the
   assert.equal(player.getPacketSender().getVarp(1230), 1002);
 
   assert.equal(select(24), true, 'the final picker row selects Total XP');
-  assert.equal(player.getPacketSender().getVarbit(4703), 0);
+  assert.equal(player.getPacketSender().getVarbit(4703), 25);
   assert.equal(select(0), true, 'select Attack again for the persisted setup');
 
   const transmit = events.get('player:varp-transmit');

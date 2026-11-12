@@ -1086,13 +1086,9 @@ function chooseXpDropsSetupSkill(event) {
   const { player, slot } = event;
   if (event.buttonId !== XPDROPS_SKILL_PICKER_BUTTON || event.action !== XPDROPS_SKILL_PICKER_ACTION) return false;
   if (!Number.isInteger(slot) || slot < 0 || slot > XPDROPS_SKILL_PICKER_TOTAL_SLOT) return false;
-  const clientSkillId = slot === XPDROPS_SKILL_PICKER_TOTAL_SLOT
-    ? -1
-    : CacheDefinitions.getEnumValues(XPDROPS_SKILL_ENUM).get(slot + 1);
-  if (!Number.isInteger(clientSkillId)) return false;
 
   const sender = player.getPacketSender();
-  sender.sendVarbit(XPDROPS_SETUP_SKILL_VARBIT, clientSkillId + 1);
+  sender.sendVarbit(XPDROPS_SETUP_SKILL_VARBIT, slot + 1);
   saveXpDropsSetup(player, XPDROPS_SETUP_STATE_VARP, sender.getVarp(XPDROPS_SETUP_STATE_VARP));
   return true;
 }
@@ -1103,7 +1099,10 @@ function xpDropsTrackerFieldClick(event) {
   if (!field || (event.action !== XPDROPS_SET_XP_ACTION && event.action !== XPDROPS_SET_CURRENT_XP_ACTION)) return false;
   if (event.action === XPDROPS_SET_CURRENT_XP_ACTION && (field !== "start" || event.childId === 42)) return false;
 
-  const selectedSkill = event.player.getPacketSender().getVarbit(XPDROPS_SETUP_SKILL_VARBIT) - 1;
+  const selectedRow = event.player.getPacketSender().getVarbit(XPDROPS_SETUP_SKILL_VARBIT);
+  const selectedSkill = selectedRow === XPDROPS_SKILL_PICKER_TOTAL_SLOT + 1
+    ? -1
+    : CacheDefinitions.getEnumValues(XPDROPS_SKILL_ENUM).get(selectedRow);
   const varps = xpDropsTrackerVarps(selectedSkill);
   if (!varps) return false;
   const targetVarp = field === "start" ? varps[0] : varps[1];

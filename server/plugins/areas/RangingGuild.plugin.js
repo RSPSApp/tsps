@@ -98,7 +98,8 @@ function actionFromClick(event) {
   const label = String(event.option ?? "").trim().toLowerCase();
   if (ITEM_OPTIONS.has(label)) return ITEM_OPTIONS.get(label);
   const mode = event.player.getPacketSender().getVarbit(TICKET_EXCHANGE_QUANTITY_VARBIT);
-  return OPTIONS_BY_QUANTITY[mode]?.[event.action] ?? null;
+  // Script 3640 uses its default options for modes from other shops, including Buy 50.
+  return (OPTIONS_BY_QUANTITY[mode] ?? OPTIONS_BY_QUANTITY[0])[event.action] ?? null;
 }
 
 function maximumSets(player, row) {

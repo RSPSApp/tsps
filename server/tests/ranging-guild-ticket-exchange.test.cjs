@@ -102,6 +102,15 @@ test("the cache quantity-mode varbit maps reordered options to the right actions
   assert.equal(f.items.get(1464), 300);
 });
 
+test("the generic shop's Buy 50 setting uses the exchange's default options", () => {
+  const f = fixture({ tickets: 3000, mode: 4 });
+  assert.equal(click(f, { slot: 2, itemId: 892, option: "", action: 1 }).handled, true);
+  assert.match(f.messages[0], /2,000 Archery tickets/);
+  assert.equal(click(f, { slot: 2, itemId: 892, option: "", action: 3 }).handled, true);
+  assert.equal(f.items.get(892), 50);
+  assert.equal(f.items.get(1464), 1000);
+});
+
 test("quantity selector op 1 syncs cache children 6-9 to server varbit 6348", () => {
   const f = fixture();
   for (let mode = 0; mode < 4; mode++) {

@@ -1,6 +1,6 @@
 // The boat selection interface (934): choosing which of your boats to board at a gangplank or
 // to recover at a shipwright. Packets follow live captures (docs/sailing-osrs-reference.md):
-// the mode varbit, the current dock's db row, the cargo holds, script 2524, the modal, init
+// the mode varbit, the current dock's db row, the cargo holds, busy (Summon and Teleport to Boat), script 2524, the modal, init
 // script 8621 and 934:5's events; a choice resumes 934:5 with the boat's slot (from 1).
 const { content, setVarbit } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
@@ -48,7 +48,7 @@ function openBoatSelection(player, mode, dock, onChoose, onBoardFriend) {
   if (mode === MODE.SUMMON) sender.sendConfig(VARP_TELEPORT_DOCK, dock.selectionDbrow ?? -1);
   setVarbit(player, VARBIT_MODE, mode);
   sender.sendConfig(VARP_CURRENT_DOCK, dock.selectionDbrow ?? -1);
-  if (mode === MODE.SUMMON) sender.sendVarbit(VARBIT_BUSY, 1);
+  if (busyWhileOpen(mode)) sender.sendVarbit(VARBIT_BUSY, 1);
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -3]);
   player.setInterfaceId(SELECTION);
   sender.sendSubInterface(MAIN_MODAL, SELECTION, 0);
@@ -56,6 +56,11 @@ function openBoatSelection(player, mode, dock, onChoose, onBoardFriend) {
   sender.sendInterfaceFlagsRange((SELECTION << 16) | BOATS, 1, MAX_BOATS, IF_EVENT_PAUSEBUTTON_OP1);
   if (onBoardFriend) sender.sendInterfaceFlagsRange((SELECTION << 16) | BOARD_FRIEND, -1, -1, IF_EVENT_OP1);
   pending.set(player, { onChoose, onBoardFriend, mode });
+}
+
+/** Summon and Teleport to Boat set busy while open; the summon's cast or the teleport's landing clears it. */
+function busyWhileOpen(mode) {
+  return mode === MODE.SUMMON || mode === MODE.TELEPORT_TO_BOAT;
 }
 
 /** Clears what opening set; the interface itself is closed by the caller (or already was). */
@@ -67,18 +72,18 @@ function resetSelection(player, mode) {
   player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_CHAT_INPUT);
 }
 
-/** A choice made: busy stays on for a summon, whose cast clears it. */
+/** A choice made: busy stays on for a summon or a teleport, whose cast or landing clears it. */
 function closeSelection(player, mode) {
   resetSelection(player, mode);
   player.getPacketSender().sendInterfaceRemoval();
 }
 
-/** Closed without a choice (rsprox: a summon's close clears busy as well). */
+/** Closed without a choice (rsprox: a summon's close clears busy as well; ours: a teleport's too). */
 function selectionClosed({ player, interfaceId }) {
   const open = pending.get(player);
   if (!open || interfaceId !== SELECTION) return;
   resetSelection(player, open.mode);
-  if (open.mode === MODE.SUMMON) player.getPacketSender().sendVarbit(VARBIT_BUSY, 0);
+  if (busyWhileOpen(open.mode)) player.getPacketSender().sendVarbit(VARBIT_BUSY, 0);
 }
 
 /** A choice arrives as a pause-button resume (action = slot) or an op 1 click (slot). */

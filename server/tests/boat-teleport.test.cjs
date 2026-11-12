@@ -9,26 +9,44 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Location } = require("../dist/game/model/Location");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { Item } = require("../dist/game/model/Item");
+const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
+
 const teleports = [];
 let allowTeleport = true;
+let confirmAnswer = true;
 let breakTablet;
+let castSpell;
 let plugin;
+
+class FakeSpell {
+  canCast(player, del) {
+    player.casts.push(del);
+    return player.castable !== false;
+  }
+}
 
 before(async () => {
   await CachePipeline.initialize();
   plugin = require("../plugins/skills/sailing/BoatTeleport.Sailing");
   plugin.register({
     core: {
-      Location,
+      Location, CacheDefinitions, Item, MagicSpellbook,
+      Spell: FakeSpell,
+      Skill: { MAGIC: "MAGIC" },
       TeleportHandler: {
         checkReqs: () => allowTeleport,
+        confirm: (player, destination, go, level, { refused } = {}) => (confirmAnswer ? go() : refused?.()),
         teleport: (player, destination, type, warning, onArrival, onMiddle) =>
           teleports.push({ destination, type, onArrival, onMiddle }),
       },
       TeleportType: { TELE_TAB: "TELE_TAB" },
     },
     onItemAction: (name, actions) => { breakTablet = actions.Break; },
+    onSpellCast: (handler) => { castSpell = handler; },
     onCustomEvent() {},
+    persistAttribute() {},
   });
 });
 
@@ -52,10 +70,18 @@ function createPlayer(boats) {
       return sender;
     },
   });
+  const attributes = new Map([["quest.pandemonium.stage", 50]]);
+  const xp = [];
   return {
     items,
     messages,
     sent,
+    xp,
+    casts: [],
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
+    getSpellbook: () => ({ getTeleportType: () => "NORMAL" }),
     getSailing: () => ({ boats, activeBoatSlot: null, lastDock: null }),
     getLocation: () => new Location(3222, 3218, 0), // Lumbridge, near no dock
     getArea: () => null,
@@ -99,7 +125,9 @@ test("the tablet opens the boat selection's Teleport to Boat mode; the choice te
   assert.equal(teleports.length, 1);
   assert.equal(teleports[0].type, "TELE_TAB");
   assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3050, 3193], "Port Sarim's landing");
-  assert.equal(teleports[0].onArrival, undefined, "the player isn't put aboard");
+  player.sent.length = 0;
+  teleports[0].onArrival();
+  assert.deepEqual(player.sent, ["sendVarbit 12393=0"], "the landing only clears busy: the player isn't put aboard");
   assert.equal(player.items.length, 1, "the tablet goes as it is absorbed");
   teleports[0].onMiddle();
   assert.equal(player.items.length, 0);
@@ -118,4 +146,71 @@ test("no moored boat with a greater focus, or a refused teleport, keeps the tabl
   plugin._test.teleportToBoat(blocked, ItemIdentifiers.TELEPORT_TO_BOAT, 0);
   assert.equal(blocked.items.length, 1);
   assert.equal(teleports.length, 0);
+});
+
+function cast(player, opId = 1) {
+  castSpell({ player, spellName: "Teleport to Boat", opId, handled: false });
+}
+
+test("the Teleport to Boat spell is refused before The Pandemonium, or with no moored boat with a greater focus (rsprox)", () => {
+  const early = createPlayer([boat(0, "port_sarim")]);
+  early.setAttribute("quest.pandemonium.stage", 0);
+  cast(early);
+  assert.deepEqual(early.messages, ["You must have completed Pandemonium to use this spell."]);
+
+  const none = createPlayer([boat(0, "port_sarim", { focus: "Teleport focus" })]);
+  cast(none);
+  assert.deepEqual(none.messages, ["Your boat needs to have a greater teleport focus on it for you to do that."]);
+  assert.ok(!none.sent.includes("open 934"));
+});
+
+test("the spell opens the Teleport to Boat selection with busy; the choice uses its runes, gives 77 xp and casts the standard teleport (rsprox)", () => {
+  teleports.length = 0;
+  allowTeleport = true;
+  confirmAnswer = true;
+  const player = createPlayer([boat(0, "port_sarim")]);
+  cast(player);
+  const opened = player.sent.filter((line) => /18553|5005|12393|open/.test(line));
+  assert.deepEqual(opened, ["sendVarbit 18553=8", "sendConfig 5005=8587", "sendVarbit 12393=1", "open 934"]);
+  plugin._test.teleportBySpell(player, 0);
+  assert.deepEqual(player.casts, [false, true], "checked, then used up after any warning");
+  assert.deepEqual(player.xp, [["MAGIC", 77]]);
+  assert.equal(teleports.length, 1);
+  assert.equal(teleports[0].type, "NORMAL");
+  assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3050, 3193], "Port Sarim's landing");
+  assert.equal(player.items.length, 1, "no tablet used");
+  assert.equal(player.getAttribute(plugin._test.LAST_TELEPORTED_ATTRIBUTE), 0);
+  player.sent.length = 0;
+  teleports[0].onArrival();
+  assert.deepEqual(player.sent, ["sendVarbit 12393=0"]);
+});
+
+test("a spell teleport that can't go ahead (runes, teleport rules, a No to a warning) uses nothing and clears busy", () => {
+  teleports.length = 0;
+  const poor = createPlayer([boat(0, "port_sarim")]);
+  poor.castable = false;
+  plugin._test.teleportBySpell(poor, 0);
+  assert.deepEqual(poor.sent, ["sendVarbit 12393=0"]);
+
+  confirmAnswer = false;
+  const declined = createPlayer([boat(0, "port_sarim")]);
+  plugin._test.teleportBySpell(declined, 0);
+  assert.deepEqual(declined.casts, [false]);
+  assert.deepEqual(declined.sent, ["sendVarbit 12393=0"]);
+  assert.deepEqual(declined.xp, []);
+  assert.equal(teleports.length, 0);
+  confirmAnswer = true;
+});
+
+test("the spell's Last Boat goes to the boat last teleported to, else the one at the last dock", () => {
+  teleports.length = 0;
+  allowTeleport = true;
+  const player = createPlayer([boat(0, "port_sarim"), boat(1, "the_pandemonium")]);
+  cast(player, 2);
+  assert.ok(!player.sent.includes("open 934"), "without the selection");
+  assert.equal(teleports.length, 1);
+  assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3050, 3193], "the first boat with none yet");
+  player.setAttribute(plugin._test.LAST_TELEPORTED_ATTRIBUTE, 1);
+  cast(player, 2);
+  assert.notDeepEqual([teleports[1].destination.getX(), teleports[1].destination.getY()], [3050, 3193], "the Pandemonium's");
 });

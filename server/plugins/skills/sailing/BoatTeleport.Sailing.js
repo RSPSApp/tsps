@@ -7,15 +7,31 @@
 // The interface needs a current dock (varp 5005) or every boat is "Boat Unavailable" (cache script
 // 8997); which one live sends here isn't captured: the dock the player is near, else their last
 // dock, else the first boat's.
+//
+// The standard spellbook's Teleport to Boat (https://oldschool.runescape.wiki/w/Teleport_to_Boat):
+// level 67, two law, two earth and two water runes, 77 Magic xp, after The Pandemonium. The cast
+// opens the selection in the same mode with busy set; choosing a boat uses the runes and casts the
+// standard teleport to its dock, and the landing clears busy. Its right-click "Last Boat" goes to
+// the boat last teleported to. Ours: "Last Boat" before any teleport picks the boat at the
+// player's last dock, as the Sailing cape's does.
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { content, dockNear, dockById, boatName } = require("./SailingContent.Sailing");
 const { teleportFocusOf } = require("./BoatFacilities.Sailing");
 const { openBoatSelection, MODE } = require("./BoatSelection.Sailing");
 const { dropLostOnRecovery } = require("./Cargo.Sailing");
+const { spellFor, pandemoniumDone, isSpell } = require("./SummonBoat.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
 const NEAR_DOCK_RANGE = 16;
 const PANDEMONIUM_DOCK = "the_pandemonium";
+const VARBIT_BUSY = 12393;
+const LAST_TELEPORTED_ATTRIBUTE = "sailing:last-teleported-boat";
+const SPELL_NAME = "Teleport to Boat";
+const SPELL_EXPERIENCE = 77;
+/** Op 1 casts; op 2 is the spell's right-click "Last Boat". */
+const SPELL_OP_LAST_BOAT = 2;
+const NO_GREATER_FOCUS = "Your boat needs to have a greater teleport focus on it for you to do that.";
+const NO_PANDEMONIUM = "You must have completed Pandemonium to use this spell.";
 
 let core;
 let api;
@@ -29,19 +45,86 @@ function reachableBoats(player) {
   return player.getSailing().boats.filter((boat) => boat.location.kind === "docked" && hasGreaterFocus(boat));
 }
 
+/** The selection's busy, cleared when a teleport lands or doesn't happen. */
+function clearBusy(player) {
+  player.getPacketSender().sendVarbit(VARBIT_BUSY, 0);
+}
+
+/** The landing of the dock where the boat in `slot` is moored, or null (with busy cleared) when it can't be chosen. */
+function landingOf(player, slot) {
+  const boat = reachableBoats(player).find((candidate) => candidate.slot === slot);
+  const dock = boat && Sailing.getDock(boat.location.dock);
+  if (!dock) {
+    if (!boat) player.sendMessage("You can't choose that boat at the moment.");
+    clearBusy(player);
+    return null;
+  }
+  return new core.Location(dock.landing.x, dock.landing.y, dock.landing.z);
+}
+
 /** Teleports to the dock where the boat in `slot` is moored, using up one tablet. */
 function teleportToBoat(player, itemId, slot) {
-  const boat = reachableBoats(player).find((candidate) => candidate.slot === slot);
-  if (!boat) {
-    player.sendMessage("You can't choose that boat at the moment.");
+  const landing = landingOf(player, slot);
+  if (!landing) return;
+  if (!player.getInventory().contains(itemId) || !core.TeleportHandler.checkReqs(player, landing)) {
+    clearBusy(player);
     return;
   }
-  const dock = Sailing.getDock(boat.location.dock);
-  if (!dock) return;
-  const landing = new core.Location(dock.landing.x, dock.landing.y, dock.landing.z);
-  if (!player.getInventory().contains(itemId) || !core.TeleportHandler.checkReqs(player, landing)) return;
   const useTablet = () => player.getInventory().deleteNumber(itemId, 1);
-  core.TeleportHandler.teleport(player, landing, core.TeleportType.TELE_TAB, false, undefined, useTablet);
+  core.TeleportHandler.teleport(player, landing, core.TeleportType.TELE_TAB, false, () => clearBusy(player), useTablet);
+}
+
+/** The spell's teleport to the boat in `slot`: runes and xp as it casts, after any teleport warning. */
+function teleportBySpell(player, slot) {
+  const landing = landingOf(player, slot);
+  if (!landing) return;
+  const spell = spellFor(core, SPELL_NAME, SPELL_EXPERIENCE);
+  if (!spell.canCast(player, false) || !core.TeleportHandler.checkReqs(player, landing)) {
+    clearBusy(player);
+    return;
+  }
+  core.TeleportHandler.confirm(player, landing, () => {
+    if (!spell.canCast(player, true)) {
+      clearBusy(player);
+      return;
+    }
+    player.getSkillManager().addExperiences(core.Skill.MAGIC, SPELL_EXPERIENCE);
+    player.setAttribute(LAST_TELEPORTED_ATTRIBUTE, slot);
+    core.TeleportHandler.teleport(player, landing, player.getSpellbook().getTeleportType(), false, () => clearBusy(player));
+  }, 20, { refused: () => clearBusy(player) });
+}
+
+/** The boat "Last Boat" goes to: the one last teleported to, else the one at the player's last dock, else the first. */
+function lastBoatOf(player, boats) {
+  const slot = player.getAttribute(LAST_TELEPORTED_ATTRIBUTE);
+  return boats.find((boat) => boat.slot === slot)
+    ?? boats.find((boat) => boat.location.dock === player.getSailing().lastDock)
+    ?? boats[0];
+}
+
+function castSpell(event) {
+  if (!isSpell(event, SPELL_NAME)) return;
+  event.handled = true;
+  const { player } = event;
+  if (!pandemoniumDone(player)) {
+    player.sendMessage(NO_PANDEMONIUM);
+    return;
+  }
+  const boats = reachableBoats(player);
+  if (boats.length === 0) {
+    player.sendMessage(NO_GREATER_FOCUS);
+    return;
+  }
+  if (event.opId === SPELL_OP_LAST_BOAT) {
+    teleportBySpell(player, lastBoatOf(player, boats).slot);
+    return;
+  }
+  openBoatSelection(player, MODE.TELEPORT_TO_BOAT, currentDock(player, boats), (slot) => teleportBySpell(player, slot));
+}
+
+/** The selection's current dock (varp 5005): the dock the player is near, else their last dock, else the first boat's. */
+function currentDock(player, boats) {
+  return dockNear(player, NEAR_DOCK_RANGE) ?? dockById(player.getSailing().lastDock) ?? dockById(boats[0].location.dock);
 }
 
 /**
@@ -78,19 +161,23 @@ function capeTeleport(request) {
     teleportTo(player, Sailing.getDock(last.location.dock)?.landing);
     return;
   }
-  const current = dockNear(player, NEAR_DOCK_RANGE) ?? dockById(player.getSailing().lastDock) ?? dockById(boats[0].location.dock);
-  openBoatSelection(player, MODE.TELEPORT_TO_BOAT, current, (slot) => {
-    const boat = reachableBoats(player).find((candidate) => candidate.slot === slot);
-    if (boat) teleportTo(player, Sailing.getDock(boat.location.dock)?.landing);
+  openBoatSelection(player, MODE.TELEPORT_TO_BOAT, currentDock(player, boats), (slot) => {
+    const landing = landingOf(player, slot);
+    if (landing) teleportTo(player, { x: landing.getX(), y: landing.getY(), z: landing.getZ() });
   });
 }
 
+/** A cape teleport; busy (set by the selection) clears when it lands or doesn't happen. */
 function teleportTo(player, landing) {
   if (!landing) return;
   const destination = new core.Location(landing.x, landing.y, landing.z);
-  if (core.TeleportHandler.checkReqs(player, destination)) {
-    core.TeleportHandler.confirm(player, destination, () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false));
+  if (!core.TeleportHandler.checkReqs(player, destination)) {
+    clearBusy(player);
+    return;
   }
+  core.TeleportHandler.confirm(player, destination,
+    () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false, () => clearBusy(player)),
+    20, { refused: () => clearBusy(player) });
 }
 
 function breakTablet({ player, itemId }) {
@@ -102,9 +189,7 @@ function breakTablet({ player, itemId }) {
     player.sendMessage("You need a moored boat with a greater teleport focus to use this tablet.");
     return true;
   }
-  const boats = reachableBoats(player);
-  const current = dockNear(player, NEAR_DOCK_RANGE) ?? dockById(player.getSailing().lastDock) ?? dockById(boats[0].location.dock);
-  openBoatSelection(player, MODE.TELEPORT_TO_BOAT, current, (slot) => teleportToBoat(player, itemId, slot));
+  openBoatSelection(player, MODE.TELEPORT_TO_BOAT, currentDock(player, reachableBoats(player)), (slot) => teleportToBoat(player, itemId, slot));
   return true;
 }
 
@@ -198,12 +283,14 @@ module.exports = {
     api = pluginApi;
     core = pluginApi.core;
     content();
+    api.persistAttribute(LAST_TELEPORTED_ATTRIBUTE);
     api.onItemAction("Teleport to boat", { Break: breakTablet });
+    api.onSpellCast(castSpell);
     api.onCustomEvent("sailing:cape-teleport", capeTeleport);
     api.onCustomEvent("sailing:cape-rename-boat", capeRenameBoat);
   },
   _test: {
-    reachableBoats, hasGreaterFocus, teleportToBoat, capeTeleport,
+    reachableBoats, hasGreaterFocus, teleportToBoat, teleportBySpell, castSpell, lastBoatOf, capeTeleport, LAST_TELEPORTED_ATTRIBUTE,
     teleportBoatToPandemonium, moveBoatToPandemonium, chooseBoat, parseBoatName, renameBoat,
   },
 };

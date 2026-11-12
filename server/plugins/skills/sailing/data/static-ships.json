@@ -335,9 +335,18 @@
         "helm": true
       },
       {
-        "id": 59553,
+        "id": 29505,
         "x": 4,
         "y": 4,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0,
+        "opFlags": 2
+      },
+      {
+        "id": 59553,
+        "x": 4,
+        "y": 5,
         "level": 1,
         "shape": 10,
         "rotation": 0,
@@ -348,7 +357,7 @@
       {
         "id": 60480,
         "x": 3,
-        "y": 4,
+        "y": 2,
         "level": 1,
         "shape": 10,
         "rotation": 1,

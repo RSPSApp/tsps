@@ -121,6 +121,7 @@ function startGust(player, boat, wind) {
   animateSails(player, boat, sailState(boat), sailState(boat));
   if (trim) windOnSails(player, boat, trim.gust);
   playSound(player, SOUND_GUST);
+  PluginManager.emitCustomEvent("sailing:gust", { player, boat });
 }
 
 /** The wind dies down: after an untrimmed gust, or at the end of a trim's boost. */
@@ -132,6 +133,7 @@ function lull({ player, actor }, boat, wind) {
   boat.boostSpeed = undefined;
   if (!trimmed) wind.nextGust = wind.clock + GUST_DELAY_AFTER_LULL;
   player.sendMessage(LULL_MESSAGE);
+  PluginManager.emitCustomEvent("sailing:lull", { player, boat, trimmed });
   if (trimmed && trim && !wind.released) {
     actor.performAnimation(new Animation(trim.player.end));
     animateDeckLocs(player, boat, isHelm, trim.helm.end);
@@ -166,6 +168,7 @@ function trimSails(player, boat, { actor = player, crew = false } = {}) {
   boat.boostSpeed = BURST_STEP;
   // rsprox: a spam line in every recording (1,112 times, e.g. 229/00672.txt:17779).
   if (!crew) spam(player, TRIM_MESSAGE);
+  PluginManager.emitCustomEvent("sailing:trimmed", { player, boat, crew });
   if (trim) {
     actor.performAnimation(new Animation(trim.player.trim));
     animateDeckLocs(player, boat, isHelm, trim.helm.trim);

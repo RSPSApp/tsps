@@ -8,47 +8,43 @@
  * prose-condition answers, the cached boat scene and shipyard interactions, the
  * ledger hand-ins, the journal and the rewards.
  *
- * Stages (varbit 18314 "sailing_intro", varp 4959 bits 0-5), exactly as live sends them
- * (rsprox 381 rev 231 and PandemoniumDiscord rev 242) and as Quest Helper's loadSteps keys
- * on them:
+ * Stages (varbit 18314 "sailing_intro", varp 4959 bits 0-5), exactly as live sends them and as
+ * Quest Helper's loadSteps keys on them; each comes with the line in docs/quests/pandemonium
+ * (rsprox 242 20261104T121356-9573646, a full run; rsprox 231/235 agree on the values):
  *   2 accepted the interview, 4 interview finished, 6 boarded Will and Anne's ship,
- *   8 at the boat / before sailing, 10 took the helm, 12 reached the wreck,
- *  14 salvaging explained, 16 salvaged the cup and washed ashore at the Pandemonium,
- *  18 asked Steve (points to Ribs), 20 heard Ribs's tale, 22 Steve points to Junior Jim,
- *  24 cup offered to Jim, 26 cup handed over and the raft granted, 28 cargo hold built,
- *  30 captain's log received, 32 Jim's cargo request logged, 34 ready to board the raft,
- *  36 boarded the raft, 38 docked and disembarked at Port Sarim,
- *  40 boarded again with the crate, 42 docked at the Pandemonium,
- *  44 crate delivered, 46 told Jim, 48 Old Grog departs, 50 complete.
+ *   8 briefed, 10 took the helm, 12 stopped at the wreck, 14 salvaging explained,
+ *  16 washed ashore at the Pandemonium (Steve greets the player), 18 mid-welcome, 20 sent to Ribs,
+ *  22 Ribs's tale done, 24 sent to Junior Jim, 26 cup offered, 28 cup given and the raft granted,
+ *  30 cargo hold built (Jim provides its materials), 32 log given, 34 Jim's cargo request logged,
+ *  36 boarded the raft, 38 docked at Port Sarim, 40 boarded again with the crate,
+ *  42 docked at the Pandemonium, 44 crate delivered, 46 told Jim, 48 Old Grog departs, 50 complete.
  * Sibling bits of the same varp, re-sent on login: 18315 reached-wreck,
- * 18316 received-repair-kits.
+ * 18316 received-repair-kits (Jim stows them in the raft's hold at 44).
  *
- * Rewards (OSRS Wiki): 1 Quest point, 300 Sailing XP (plus 100 on delivering the
- * cargo), access to Sailing and The Pandemonium, a raft, 25 sawmill coupon (wood
- * plank), 2 repair kits and a spyglass. XP and the items are granted in onReward.
+ * Rewards (OSRS Wiki): 1 Quest point, 300 Sailing XP (plus 100 on delivering the cargo), access to
+ * Sailing and The Pandemonium, a raft, 25 sawmill coupon (wood plank), 2 repair kits and a
+ * spyglass (in the raft's cargo hold).
+ *
+ * The intro HUD (345) with its step text (clientscript 627), the hint arrows, the crew's overhead
+ * lines on the voyage and the quest's item boxes follow the rev 242 capture.
  *
  * Gaps/approximations:
  * - Will and Anne's tutorial ship is the shared `pandemonium_tutorial_ship` static ship
- *   (owner-only), with its captured 2x5 deck, helm, sails and hook. Taking the helm
- *   uses the canonical controls and raising the sails starts a real BoatManager voyage.
- *   The player steers to the wreck; arrival observes its real position. Optional sail-trim
- *   boosts and exact journey timing are not reproduced. The ship is disposed when the
- *   player is pushed overboard or leaves.
- * - The raft and cargo route use the real Sailing system: Junior Jim grants a raft in
- *   the player's boat slot, the shipyard visit shows it and the cargo hold is built on
- *   its hotspot, and the crate is port task 599 (crate 32807) collected and delivered
- *   through the real ledger tables and Sailing's board/dock/leave events. Task 599 is
- *   rewardful in the capture (reward bag and 100 XP); task 600 is the noReward one.
+ *   (owner-only), with its rev 242 deck (helm, mast, sails, hook). Taking the helm uses the
+ *   canonical controls and raising the sails starts a real BoatManager voyage; the player steers
+ *   and stops at the wreck. Exact journey timing is not reproduced. Ours: Anne repeats "We need to
+ *   be going south." every 35 ticks only while the boat is north of y 3140.
+ * - The raft and cargo route use the real Sailing system: Junior Jim grants a raft in the player's
+ *   boat slot, the shipyard visit shows it and the cargo hold is built on its hotspot, and the crate
+ *   is port task 599 (crate 32807) collected and delivered through the real ledger tables and
+ *   Sailing's board/dock/leave events. Its delivery is only the quest's box and 100 XP.
  * - Deploy uses the captured private ship/shore maps, actors, cameras and human sequences;
- *   native Continue drives its canonical text. The ambient "sailing-the-boat-*" lines,
- *   optional voyage boosts and exact frame parity are not reproduced.
- * - Old Grog has no transcript page in npc-dialogues.json, so his lines in the
- *   finale borrow the talking NPC's (Steve's) chathead; he is owner-spawned for the
- *   scene and removed on "Old Grog departs.".
- * - Will and Anne have no post-quest variant in the dump, so a completed player
- *   falls through to their standard page. Their short "after starting the quest"
- *   variants lost their jump targets (and the offer variant its boarding action), so
- *   the full interview is replayed while the quest is at stage 2 or 4.
+ *   native Continue drives its canonical text.
+ * - Old Grog has no transcript page of his own: his Talk-to and Steve's both play the finale
+ *   variant on Steve's page; he is owner-spawned from the delivery and removed on "Old Grog departs.".
+ * - Will and Anne have no post-quest variant in the dump, so a completed player falls through to
+ *   their standard page. Their short "after starting the quest" variants lost their jump targets
+ *   (and the offer variant its boarding action), so the full interview is replayed at stage 2 or 4.
  */
 module.exports = function registerPandemoniumQuest(api) {
   const {
@@ -71,6 +67,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const sailingContent = require("../../skills/sailing/SailingContent.Sailing");
   const Shipyard = require("../../skills/sailing/Shipyard.Sailing.js");
   const BoatFacilities = require("../../skills/sailing/BoatFacilities.Sailing");
+  const Cargo = require("../../skills/sailing/Cargo.Sailing");
   const PortTasks = require("../../skills/sailing/porttasks/Common.PortTasks");
 
   // NPCs (cache ids; NpcIdentifiers comments).
@@ -89,6 +86,8 @@ module.exports = function registerPandemoniumQuest(api) {
   const ANNE_DOCK_HEAD_ID = ANNE_DOCK_RAW_NPC_ID;
   const ANNE_BOAT_HEAD_ID = ANNE_BOAT_RAW_NPC_ID;
   const OLD_GROG_HEAD_ID = 14976;
+  const OLD_GROG_RAW_NPC_ID = 14976; // sailing_intro_grog -> 14977
+  const JIM_SHIPYARD_RAW_NPC_ID = 14973; // junior_jim_shipyard -> 14974
   const STEVE_NPC_ID = NpcIdentifiers.SQUAWKING_STEVE_BEANIE; // 14968
   const STEVE_NPC_ID_2 = NpcIdentifiers.SQUAWKING_STEVE_BEANIE_2; // 14969
   const RIBS_NPC_ID = NpcIdentifiers.RIBS; // 14971
@@ -107,11 +106,16 @@ module.exports = function registerPandemoniumQuest(api) {
   const OLD_CUP_ITEM_ID = ItemIdentifiers.OLD_CUP; // 31338
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
   const SAW_ITEM_ID = ItemIdentifiers.SAW; // 8794
-  const CAPTAINS_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG; // 31985
+  const CAPTAINS_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG; // 31985, sailing_log_initial
+  const SAILING_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG_2; // 31986, sailing_log: swapped in at stage 46
   const CRATE_OF_SHIP_PARTS_ITEM_ID = ItemIdentifiers.CRATE_OF_SHIP_PARTS_7; // 32807, quest crate
   const SAWMILL_COUPON_ITEM_ID = ItemIdentifiers.SAWMILL_COUPON_WOOD_PLANK_; // 32083
   const REPAIR_KIT_ITEM_ID = ItemIdentifiers.REPAIR_KIT; // 31964
   const SPYGLASS_ITEM_ID = ItemIdentifiers.SPYGLASS; // 31803
+  // Tutorial-box icons (rsprox 242: objectbox models).
+  const SHIPWRIGHT_ICON_ITEM_ID = 32916; // shipwright_icon_dummy
+  const PORT_TASK_ICON_ITEM_ID = 32913; // port_task_board_icon_dummy
+  const DOCK_ICON_ITEM_ID = 32914;
 
   const SALVAGING_HOOK_BASE_OBJECT_ID = api.core.CacheDefinitions.getLocId("sailing_intro_salvaging_hook");
   // The native client sends the placed parent; a visible-child click resolves to the same hook.
@@ -133,12 +137,12 @@ module.exports = function registerPandemoniumQuest(api) {
   const STAGE_ARRIVED = 12;
   const STAGE_SALVAGE_READY = 14;
   const STAGE_SALVAGED = 16;
-  const STAGE_STEVE_ASKED = 18;
-  const STAGE_RIBS_DONE = 20;
-  const STAGE_JIM_TOLD = 22;
-  const STAGE_CUP_OFFERED = 24;
-  const STAGE_CUP_GIVEN = 26;
-  const STAGE_BOAT_GRANTED = 28;
+  const STAGE_WELCOMED = 18;
+  const STAGE_SENT_TO_RIBS = 20;
+  const STAGE_RIBS_DONE = 22;
+  const STAGE_SENT_TO_JIM = 24;
+  const STAGE_CUP_OFFERED = 26;
+  const STAGE_CUP_GIVEN = 28;
   const STAGE_HOLD_BUILT = 30;
   const STAGE_LOG_GIVEN = 32;
   const STAGE_JOB_ACCEPTED = 34;
@@ -158,13 +162,30 @@ module.exports = function registerPandemoniumQuest(api) {
   const REPAIR_KITS = 2;
 
   const STAGE_VERSION_ATTRIBUTE = "pandemonium:stage-version";
-  const STAGE_VERSION = 2;
+  const STAGE_VERSION = 3;
   const PAGE = "Pandemonium";
-  const TUTORIAL_ATTRIBUTE = "pandemonium:tutorials";
+  const CARGO_GIFTS_ATTRIBUTE = "pandemonium:cargo-hold-gifts";
   const TUTORIAL_HELM_ATTRIBUTE = "pandemonium:tutorial-helm";
   const TUTORIAL_SAILS_ATTRIBUTE = "pandemonium:tutorial-sails";
   const HINT_ARROW_VARBIT = 14192;
-  const OBJECTBOX = 193;
+  // The intro HUD and its step text (overlay_hud, interface 345 sailing_intro_hud; clientscript 627
+  // sailing_intro_hint picks the text, 0 or less hides it). Steps as rsprox 242 sends them.
+  const OVERLAY_HUD_UID = (161 << 16) | 8;
+  const SAILING_INTRO_HUD = 345;
+  const SCRIPT_INTRO_HINT = 627;
+  const HINT = Object.freeze({
+    HIDDEN: 0, HELM: 1, HEADING: 2, STOP: 3, RESTART: 4, TRIM: 5, BOOST: 6, HOOK: 7,
+    SAW: 8, HAMMER: 9, GANGPLANK: 10, HOTSPOT: 11, STOP_HERE: 12, DONE: -1,
+  });
+  // Deck-local hint arrows on the 2x5 tutorial ship and on the raft (rsprox 242).
+  const ARROW_HELM = { x: 4, y: 5, height: 70, position: 3 };
+  const ARROW_SAILS = { x: 4, y: 3, height: 250, position: 5 };
+  const ARROW_HOOK = { x: 3, y: 2, height: 90, position: 3 };
+  const ARROW_RAFT_HOTSPOT = { x: 3, y: 2, height: 30, position: 2 };
+  // Shipyard arrows, world tiles.
+  const ARROW_SAWS = { x: 2082, y: 2720, height: 60, position: 2 };
+  const ARROW_HAMMERS = { x: 2082, y: 2721, height: 60, position: 2 };
+  const ARROW_GANGPLANK = { x: 2087, y: 2724, height: 30, position: 5 };
   const START_HOOK = "quest:pandemonium:start";
 
   // Variant names (npc-dialogues.json, "Pandemonium" page).
@@ -190,6 +211,8 @@ module.exports = function registerPandemoniumQuest(api) {
   const JIM_NO_CUP_VARIANT =
     "talking-to-junior-jim-talking-to-junior-jim-again-before-showing-him-the-cup-or-using-the-cup-on-him";
   const JIM_SHIPYARD_RETURN_VARIANT = "the-shipyard-talking-to-junior-jim-again-2";
+  const JIM_SHIPYARD_AGAIN_VARIANT = "the-shipyard-talking-to-junior-jim-again";
+  const JIM_AFTER_CUP_VARIANT = "talking-to-junior-jim-talking-to-junior-jim-after-giving-him-the-cup";
   const JIM_AFTER_LOG_VARIANT = "the-shipyard-talking-to-junior-jim-after-he-gives-you-the-captain-s-log";
   const JIM_CARGO_PROGRESS_VARIANT = "at-the-pandemonium-talking-to-junior-jim-after-he-asks-for-the-cargo";
   const JIM_DELIVERED_VARIANT = "at-the-pandemonium-talking-to-junior-jim-after-depositing-the-cargo";
@@ -253,10 +276,15 @@ module.exports = function registerPandemoniumQuest(api) {
   // Option and line texts the stage changes key on.
   const BOARDING_DONE_LINE = "Take the helm when ready.";
   const INTERVIEW_DONE_LINE = "Just let us know when you're ready, and we'll hop aboard!";
+  // Live's stage lines (rsprox 242 20261104T121356, matching Quest Helper's 16..28 steps).
+  const STEVE_WELCOME_LINE = "Aye! To be sure! This here is the finest establishment";
   const STEVE_RIBS_LINE = "speak to Ribs";
-  const STEVE_JIM_LINE = "speak with Junior Jim";
+  const RIBS_END_LINE = "You should talk to Steve. He already put out a bounty";
+  const STEVE_BOUNTY_END_LINE = "Jolly Roger!";
+  const JIM_CUP_LINE = "Er... I do have this cup I found.";
+  const SIGH_LINE = "*sigh*";
+  const JIM_CARGO_HOLD_GIFTS_LINE = "I've also chucked some useful bits and bobs in your cargo hold.";
   const JIM_FAREWELL_LINE = "Don't mention it, mate.";
-  const CHEEKY_DIP_LINE = "cheeky dip";
 
   // Quest-only scenery and teleport tiles (quest-helper/cache positions; the ledgers and
   // gangplank are absent from this world's maps, the boat deck is the cache's own scene).
@@ -271,7 +299,8 @@ module.exports = function registerPandemoniumQuest(api) {
   const SHIPYARD_TILE = { x: 2084, y: 2730, z: 0 };
   const STEVE_SPAWN_TILE = { x: 3050, y: 2966, z: 0 };
   const RIBS_SPAWN_TILE = { x: 3051, y: 2974, z: 0 };
-  const OLD_GROG_SPAWN_TILE = { x: 3049, y: 2966, z: 0 };
+  const OLD_GROG_SPAWN_TILE = { x: 3049, y: 2968, z: 0 }; // rsprox 242, from the cargo delivery
+  const JIM_SHIPYARD_TILE = { x: 2083, y: 2724, z: 0 }; // rsprox 242, the quest's shipyard visit
   const PORT_SARIM_LEDGER_TILE = { x: 3028, y: 3194 };
   const PANDEMONIUM_LEDGER_TILE = { x: 3061, y: 2985 };
   const PORT_SARIM_LEDGER_BASE = api.core.CacheDefinitions.getLocId("dock_loading_bay_ledger_table_port_sarim");
@@ -318,8 +347,18 @@ module.exports = function registerPandemoniumQuest(api) {
     return player.getSailing?.()?.boats.find((boat) => boat.type === "raft");
   }
 
+  /** Live words the warning for Jim's crate itself, with two answers (rsprox 242, tick 3941). */
+  function questCargoWarning(prompt) {
+    const raft = questRaft(prompt.player);
+    if (quest.isComplete(prompt.player) || !raft || prompt.boat?.slot !== raft.slot
+      || Cargo.countIn(raft, CRATE_OF_SHIP_PARTS_ITEM_ID) < 1) return;
+    prompt.title = "Jim's cargo is still in the cargo hold.";
+    prompt.options = [prompt.options[0], prompt.options[prompt.options.length - 1]];
+  }
+
   /** Sailing's own board/leave events carry the quest's boat legs. */
   function handleBoarded({ player }) {
+    handleShipyardBoarded({ player });
     const stage = quest.getStage(player);
     if (stage === STAGE_JOB_ACCEPTED) {
       quest.setStage(player, STAGE_RAFT_BOARDED);
@@ -330,6 +369,7 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function handleLeft({ player, reason }) {
     if (reason !== "disembark") return;
+    shipyardHint(player);
     const stage = quest.getStage(player);
     if (stage === STAGE_RAFT_BOARDED) quest.setStage(player, STAGE_PORT_SARIM);
     else if (stage === STAGE_CARGO_BOARDED) quest.setStage(player, STAGE_PANDEMONIUM);
@@ -571,12 +611,37 @@ module.exports = function registerPandemoniumQuest(api) {
     Scenes.fade(scene.player, true);
     salvageLater(scene, 6, () => {
       scene.finished = true;
+      const player = scene.player;
       // Commit with the normal-world landing; a saved16 can never refer to this temporary map.
-      quest.setStage(scene.player, STAGE_SALVAGED);
-      endSalvageScene(scene.player, false, false, false);
-      scene.player.moveTo(new Location(SHORE_EXIT.x, SHORE_EXIT.y, SHORE_EXIT.z));
-      ensureSteve(scene.player);
+      quest.setStage(player, STAGE_SALVAGED);
+      endSalvageScene(player, false, false, false);
+      player.moveTo(new Location(SHORE_EXIT.x, SHORE_EXIT.y, SHORE_EXIT.z));
+      ensureSteve(player);
+      // rsprox 242: the screen fades back in and Steve greets the player unprompted, 4 ticks on.
+      Scenes.fade(player, true);
+      Scenes.later(player, 2, () => Scenes.fade(player, false));
+      Scenes.later(player, 4, () => greetWashedUpPlayer(player));
     });
+  }
+
+  function greetWashedUpPlayer(player) {
+    if (!player.isRegistered() || quest.getStage(player) !== STAGE_SALVAGED
+      || player.getDialogueManager().isActive()) return;
+    const steve = steveNear(player);
+    if (steve) steve.setPositionToFace?.(player.getLocation());
+    startTranscript(api, player, STEVE_NPC_ID, PAGE, STEVE_FIRST_VARIANT, undefined, steve);
+  }
+
+  /** The Steve this player sees in the pub: ours, or Prying Times' owner spawn. */
+  function steveNear(player) {
+    const own = steveByPlayer.get(player);
+    if (own?.isRegistered?.()) return own;
+    for (const npc of api.getWorld().getNpcs()) {
+      if (npc?.getId?.() !== STEVE_RAW_NPC_ID || (npc.isOwnerOnly?.() && npc.getOwner?.() !== player)) continue;
+      const at = npc.getLocation();
+      if (Math.abs(at.getX() - STEVE_SPAWN_TILE.x) <= 10 && Math.abs(at.getY() - STEVE_SPAWN_TILE.y) <= 10) return npc;
+    }
+    return null;
   }
 
   function endSalvageScene(player, logout = false, restore = true, relocate = true) {
@@ -639,7 +704,6 @@ module.exports = function registerPandemoniumQuest(api) {
   // Owned tutorial entity16 in rsprox381: the 2x5 ship's observed start and stopped wreck root.
   const TUTORIAL_START_FINE = { fineX: 3056 * 128 + 64, fineY: 3190 * 128 + 64 };
   const WORLD_WRECK_FINE = { fineX: 3035 * 128 + 32, fineY: 3048 * 128 + 96 };
-  const WORLD_WRECK_TILE = { x: 3035, y: 3048 };
   const WORLD_WRECK_ZONE = { minX: 3018, maxX: 3040, minY: 3030, maxY: 3050 };
   // Capture381's headings at367/393/399/429 are client inputs, not an automatic course.
 
@@ -652,42 +716,39 @@ module.exports = function registerPandemoniumQuest(api) {
     return new Set((spec?.locs ?? []).filter((loc) => loc.part === part).map((loc) => loc.id));
   }
 
-  function showTutorialBoxes(player, boxes) {
-    const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
-    const chain = new DialogueChainBuilder();
-    boxes.forEach((box, index) => {
-      chain.add(new ItemStatementDialogue(index, box.item, box.text));
-      chain.add(new ActionDialogue(index + 1, { execute: () => {
-        if (box.hint) {
-          player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, 1);
-          player.getPacketSender().sendPositionalHint(new Location(box.hint.x, box.hint.y, box.hint.z ?? 0), box.hint.position, box.hint.height);
-        } else {
-          player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, 0).clearHintArrow();
-        }
-      } }));
-    });
-    player.getDialogueManager().startDialogues(chain);
+  // ==========================================================================
+  // Intro HUD, step text and hint arrows (rsprox 242)
+  // ==========================================================================
+
+  function openIntroHud(player) {
+    player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, SAILING_INTRO_HUD, 1);
   }
 
-  function showDockingTutorial(player) {
-    const tutorials = Number(player.getAttribute(TUTORIAL_ATTRIBUTE)) || 0;
-    if (tutorials & 1) return;
-    player.setAttribute(TUTORIAL_ATTRIBUTE, tutorials | 1);
-    showTutorialBoxes(player, [{
-      item: 32914,
-      text: "You can embark or disembark from your boat via docking points found around the world. To find a docking point, just look for the relevant icon on your map.",
-      hint: { x: 3070, y: 2987, height: 30, position: 3 },
-    }]);
+  function closeIntroHud(player) {
+    player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
   }
 
-  function showTaskLogTutorials(player) {
-    const tutorials = Number(player.getAttribute(TUTORIAL_ATTRIBUTE)) || 0;
-    if ((tutorials & 6) === 6) return;
-    player.setAttribute(TUTORIAL_ATTRIBUTE, tutorials | 6);
-    showTutorialBoxes(player, [
-      { item: 32913, text: "Port tasks can be accepted from notice boards found at various ports around the world. To find a notice board, just look for the relevant icon on your map.", hint: { x: 3058, y: 2986, height: 140, position: 2 } },
-      { item: 31986, text: "Your captain's log contains details on how to chart the sea. You can consult the log at any time for hints on what to chart. Charles in the cave on the Pandemonium can also help you out with sea charting.", hint: { x: 3046, y: 2997, height: 110, position: 6 } },
-    ]);
+  /** Live resets the arrow and its varbit before each new one. */
+  function pointAt(player, { x, y, z = 0, height, position }) {
+    player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, 0).clearHintArrow()
+      .sendVarbit(HINT_ARROW_VARBIT, 1)
+      .sendPositionalHint(new Location(x, y, z), position, height, z);
+  }
+
+  function clearArrow(player) {
+    player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, 0).clearHintArrow();
+  }
+
+  /** A deck-local arrow on a boat, in the deck's own tiles. */
+  function deckArrow(boat, arrow) {
+    return boat ? { ...arrow, x: boat.deckBaseX + arrow.x, y: boat.deckBaseY + arrow.y } : null;
+  }
+
+  /** The HUD's step text, and the arrow live shows with it (none clears it). */
+  function introHint(player, step, arrow = null) {
+    player.getPacketSender().sendClientScript(SCRIPT_INTRO_HINT, step);
+    if (arrow) pointAt(player, arrow);
+    else clearArrow(player);
   }
 
   function startTutorialShip(player, { atWreck = false } = {}) {
@@ -705,7 +766,8 @@ module.exports = function registerPandemoniumQuest(api) {
     StaticShips.board(player, ship);
     const helmTaken = atWreck || (stage >= STAGE_SAIL_ACCEPTED && player.getAttribute(TUTORIAL_HELM_ATTRIBUTE) === true);
     const sailsRaised = atWreck || (stage >= STAGE_SAIL_ACCEPTED && player.getAttribute(TUTORIAL_SAILS_ATTRIBUTE) === true);
-    const scene = { boat: ship.boat, deck, will, anne, staticShip: ship, helmTaken, sailsRaised, voyageStarted: false, arrived: atWreck };
+    const scene = { boat: ship.boat, deck, will, anne, staticShip: ship, helmTaken, sailsRaised, voyageStarted: false,
+      arrived: atWreck, ticks: 0, southSaidAt: undefined, toldToStop: false };
     tutorialScenes.set(player, scene);
     api.emitCustomEvent("sailing:board-supplied-panel", { player, boat: scene.boat, stopped: atWreck, accepted: false });
     if (helmTaken && !atWreck) {
@@ -718,7 +780,57 @@ module.exports = function registerPandemoniumQuest(api) {
       player, boat: scene.boat, mode: "full", accepted: false,
     });
     if (!atWreck) tutorialFadeIn(player, scene);
+    openIntroHud(player);
+    if (stage === STAGE_SAILING) introHint(player, HINT.HELM, deckArrow(scene.boat, ARROW_HELM));
+    else if (stage === STAGE_SAIL_ACCEPTED) introHint(player, scene.helmTaken && sailsRaised ? HINT.STOP : HINT.HEADING);
+    else if (stage === STAGE_SALVAGE_READY) introHint(player, HINT.HOOK, deckArrow(scene.boat, ARROW_HOOK));
     return true;
+  }
+
+  /** A crewmate's overhead line, also in the chatbox as theirs (rsprox 242: npc_say). */
+  function crewSays(player, npc, name, text) {
+    if (!npc?.isRegistered?.()) return;
+    const line = text.replace("[player name]", player.getUsername());
+    npc.forceChat?.(line);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.NPC_SAY, line, name);
+  }
+
+  // The crew's lines on the voyage (rsprox 242 20261104T121356, ticks 3195-3293).
+  const SOUTH_LINE = "We need to be going south.";
+  const TRIM_LINE = "[player name]! The sails need trimming! Don't miss out on that wind!";
+  const TRIMMED_LINE = "Very good!";
+  const STOP_HERE_LINE = "Stop here, [player name]! This is where we want to be!";
+  /** Anne repeats the heading 35 ticks after taking the helm (3195, 3230). */
+  const SOUTH_REPEAT_TICKS = 35;
+  /** Ours: she stops once the boat is well clear of Port Sarim (live never repeated it south of here). */
+  const SOUTH_REMINDER_MAX_Y = 3140;
+
+  function voyageScene(player, boat) {
+    const scene = tutorialScene(player);
+    return scene && scene.boat === boat && !scene.arrived && quest.getStage(player) === STAGE_SAIL_ACCEPTED ? scene : null;
+  }
+
+  function handleTutorialGust({ player, boat }) {
+    const scene = voyageScene(player, boat);
+    if (!scene) return;
+    crewSays(player, scene.will, "Will", TRIM_LINE);
+    introHint(player, HINT.TRIM, deckArrow(scene.boat, ARROW_SAILS));
+  }
+
+  function handleTrimmed({ player, boat }) {
+    const scene = voyageScene(player, boat);
+    if (!scene) return;
+    crewSays(player, scene.anne, "Anne", TRIMMED_LINE);
+    introHint(player, HINT.BOOST);
+  }
+
+  function handleTutorialLull({ player, boat }) {
+    if (voyageScene(player, boat) && boat.moveMode !== sailingContent.MOVE_MODE.STOPPED) introHint(player, HINT.STOP);
+  }
+
+  function inWreckZone(boat) {
+    return boat.tileX >= WORLD_WRECK_ZONE.minX && boat.tileX <= WORLD_WRECK_ZONE.maxX
+      && boat.tileY >= WORLD_WRECK_ZONE.minY && boat.tileY <= WORLD_WRECK_ZONE.maxY;
   }
 
   function tutorialFadeIn(player, scene) {
@@ -768,6 +880,8 @@ module.exports = function registerPandemoniumQuest(api) {
     const scene = tutorialScenes.get(player);
     if (!scene) return;
     tutorialScenes.delete(player);
+    closeIntroHud(player);
+    clearArrow(player);
     api.emitCustomEvent("sailing:leave-helm", { player, boat: scene.boat });
     api.emitCustomEvent("sailing:leave-supplied-panel", { player, boat: scene.boat, reason });
     Scenes.cancel(player);
@@ -780,10 +894,18 @@ module.exports = function registerPandemoniumQuest(api) {
     player.getPacketSender().sendCameraReset();
   }
 
+  /** Old Grog drinks in the pub from the cargo delivery until he departs (rsprox 242). */
   function ensureOldGrog(player) {
     if (oldGrogByPlayer.get(player)?.isRegistered?.()) return;
-    const npc = spawnOwnerNpc(OLD_GROG_NPC_ID, OLD_GROG_SPAWN_TILE, player);
+    const npc = spawnOwnerNpc(OLD_GROG_RAW_NPC_ID, OLD_GROG_SPAWN_TILE, player);
     if (npc) oldGrogByPlayer.set(player, npc);
+  }
+
+  /** Talking to Old Grog himself starts the finale, as live's run did (opnpc1 sailing_intro_grog). */
+  function grogTalkTo({ player, npc }) {
+    if (quest.isComplete(player) || quest.getStage(player) < STAGE_JIM_DONE || quest.getStage(player) >= STAGE_GROG_DONE) return false;
+    startTranscript(api, player, OLD_GROG_NPC_ID, PAGE, STEVE_FINALE_VARIANT, undefined, npc);
+    return true;
   }
 
   function removeOldGrog(player) {
@@ -825,20 +947,16 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function jimVariant(player, stage) {
     if (quest.isComplete(player)) return null; // his standard page takes over
+    const atShipyard = Shipyard.visitedBoat(player) !== undefined;
     switch (stage) {
-      case STAGE_JIM_TOLD:
-        if (held(player, OLD_CUP_ITEM_ID)) {
-          quest.setStage(player, STAGE_CUP_OFFERED);
-          return JIM_TRADE_VARIANT;
-        }
-        return JIM_NO_CUP_VARIANT;
-      case STAGE_CUP_OFFERED:
-        return held(player, OLD_CUP_ITEM_ID) ? JIM_TRADE_VARIANT : JIM_NO_CUP_VARIANT;
-      case STAGE_CUP_GIVEN:
-      case STAGE_BOAT_GRANTED:
-        // Only "talking-to-junior-jim" carries the TIfJ86 shipyard action; replaying it
-        // after an interrupted hand-in is what keeps the route recoverable.
+      case STAGE_SENT_TO_JIM:
         return JIM_TRADE_VARIANT;
+      case STAGE_CUP_OFFERED:
+        return JIM_NO_CUP_VARIANT;
+      case STAGE_CUP_GIVEN:
+        // At the shipyard: "What should I do now?". On the docks the cup's already his, and his
+        // after-the-cup variant jumps to the TIfJ86 shipyard action.
+        return atShipyard ? JIM_SHIPYARD_AGAIN_VARIANT : JIM_AFTER_CUP_VARIANT;
       case STAGE_HOLD_BUILT:
         return JIM_SHIPYARD_RETURN_VARIANT;
       case STAGE_LOG_GIVEN:
@@ -857,21 +975,27 @@ module.exports = function registerPandemoniumQuest(api) {
     const complete = quest.isComplete(player);
     const stage = quest.getStage(player);
     if (isSteve(npcId)) {
-      if (complete) return STEVE_POST_QUEST_VARIANT;
+      // 48: Grog's gone and only the rewards are left; the "again" variant jumps to them.
+      if (complete || stage >= STAGE_GROG_DONE) return STEVE_POST_QUEST_VARIANT;
       if (stage >= STAGE_JIM_DONE) {
         ensureOldGrog(player);
         return STEVE_FINALE_VARIANT;
       }
-      removeOldGrog(player);
-      if (stage >= STAGE_JIM_TOLD) return STEVE_SUBSEQUENT_VARIANT;
+      if (stage < STAGE_CARGO_DELIVERED) removeOldGrog(player);
+      // Live: 16 welcome, 18 mid-welcome, 20 sent to Ribs, 22 back from Ribs, 24 sent to Jim.
+      if (stage >= STAGE_SENT_TO_JIM) return STEVE_SUBSEQUENT_VARIANT;
       if (stage >= STAGE_RIBS_DONE) return STEVE_AFTER_RIBS_VARIANT;
-      if (stage >= STAGE_STEVE_ASKED) return STEVE_ASKED_AGAIN_VARIANT;
+      if (stage >= STAGE_WELCOMED) return STEVE_ASKED_AGAIN_VARIANT;
       if (stage >= STAGE_SALVAGED) return STEVE_FIRST_VARIANT;
       return null;
     }
     if (npcId === RIBS_NPC_ID) {
       if (complete || stage >= STAGE_RIBS_DONE) return RIBS_AGAIN_VARIANT;
-      if (stage >= STAGE_STEVE_ASKED) return RIBS_FIRST_VARIANT;
+      if (stage >= STAGE_SENT_TO_RIBS) return RIBS_FIRST_VARIANT;
+      return null;
+    }
+    if (npcId === OLD_GROG_NPC_ID) {
+      if (!complete && stage >= STAGE_JIM_DONE && stage < STAGE_GROG_DONE) return STEVE_FINALE_VARIANT;
       return null;
     }
     if (isJim(npcId)) return jimVariant(player, stage);
@@ -900,7 +1024,8 @@ module.exports = function registerPandemoniumQuest(api) {
       case DEPLOY_NO_SPACE_CONDITION_ID:
         return !held(player, OLD_CUP_ITEM_ID) && freeSlots(player) < 1;
       case STEVE_NOT_ASKED_CONDITION_ID:
-        return quest.getStage(player) < STAGE_STEVE_ASKED;
+        // The question comes after the welcome's 18 line; 20 is set once it's answered.
+        return quest.getStage(player) < STAGE_SENT_TO_RIBS;
       case LOST_OLD_CUP_CONDITION_ID:
       case LOST_CUP_CONDITION_ID:
         return !held(player, OLD_CUP_ITEM_ID);
@@ -963,8 +1088,8 @@ module.exports = function registerPandemoniumQuest(api) {
       return true;
     }
     if (stage === STAGE_ARRIVED) {
-      startTranscript(api, player, npcId, PAGE, WILL_ARRIVAL_AGAIN_VARIANT);
-      quest.setStage(player, STAGE_SALVAGE_READY);
+      // Live replays the explanation; its "*sigh*" sets 14 (rsprox 242, ticks 3306-3316).
+      startTranscript(api, player, npcId, PAGE, WILL_ARRIVAL_VARIANT);
       return true;
     }
     if (stage === STAGE_SALVAGE_READY) {
@@ -984,13 +1109,6 @@ module.exports = function registerPandemoniumQuest(api) {
     if (quest.getStage(player) === 0) quest.setStage(player, STAGE_STARTED);
   }
 
-  function handleChoice(event) {
-    const { player, npcId, option } = event;
-    if (typeof option !== "string") return;
-    if (npcId === RIBS_NPC_ID && quest.getStage(player) === STAGE_STEVE_ASKED) {
-      quest.setStage(player, STAGE_RIBS_DONE);
-    }
-  }
 
   /** The transcript has no end-of-branch action for these; their lines carry the stage. */
   function handleDialogueLine(event) {
@@ -1003,28 +1121,75 @@ module.exports = function registerPandemoniumQuest(api) {
     if (speaker === "Will") event.speakerId = stage >= STAGE_BOARDED && stage <= STAGE_SALVAGED ? WILL_BOAT_HEAD_ID : WILL_DOCK_HEAD_ID;
     if (speaker === "Anne") event.speakerId = stage >= STAGE_BOARDED && stage <= STAGE_SALVAGED ? ANNE_BOAT_HEAD_ID : ANNE_DOCK_HEAD_ID;
     if (speaker === "Old Grog") event.speakerId = OLD_GROG_HEAD_ID;
+    // A line's event comes when its chain is built, ahead of the line; live changes the stage as the
+    // line shows, so each change runs from `before` and checks the stage then.
+    const variants = event.pages?.flatMap(({ page, variants: names }) => page === PAGE ? names ?? [] : []) ?? [];
+    const advance = (from, to, also) => onShow(event, () => {
+      if (!from.includes(quest.getStage(player))) return;
+      quest.setStage(player, to);
+      also?.();
+    });
     if ((npcId === WILL_NPC_ID || npcId === ANNE_NPC_ID) && text.includes(INTERVIEW_DONE_LINE)) {
-      if (stage >= STAGE_STARTED && stage < STAGE_INTERVIEW_DONE) {
-        quest.setStage(player, STAGE_INTERVIEW_DONE);
-      }
-      return;
+      advance([STAGE_STARTED], STAGE_INTERVIEW_DONE);
+    } else if (speaker === "Anne" && text.endsWith(BOARDING_DONE_LINE) && variants.includes(WILL_ABOARD_VARIANT)) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        const scene = tutorialScene(player);
+        if (scene && quest.getStage(player) === STAGE_SAILING && !scene.helmTaken) {
+          introHint(player, HINT.HELM, deckArrow(scene.boat, ARROW_HELM));
+        }
+      };
+    } else if (text === SIGH_LINE && stage === STAGE_ARRIVED) {
+      advance([STAGE_ARRIVED], STAGE_SALVAGE_READY, () => {
+        const scene = tutorialScene(player);
+        if (scene) introHint(player, HINT.HOOK, deckArrow(scene.boat, ARROW_HOOK));
+      });
+    } else if (isSteve(npcId) && text.startsWith(STEVE_WELCOME_LINE)) {
+      advance([STAGE_SALVAGED], STAGE_WELCOMED);
+    } else if (isSteve(npcId) && text.includes(STEVE_RIBS_LINE)) {
+      advance([STAGE_SALVAGED, STAGE_WELCOMED], STAGE_SENT_TO_RIBS);
+    } else if (npcId === RIBS_NPC_ID && text.startsWith(RIBS_END_LINE)) {
+      advance([STAGE_SENT_TO_RIBS], STAGE_RIBS_DONE);
+    } else if (isSteve(npcId) && text === STEVE_BOUNTY_END_LINE && variants.includes(STEVE_AFTER_RIBS_VARIANT)) {
+      advance([STAGE_RIBS_DONE], STAGE_SENT_TO_JIM);
+    } else if (isJim(npcId) && text.startsWith(JIM_CUP_LINE)) {
+      advance([STAGE_SENT_TO_JIM], STAGE_CUP_OFFERED);
+    } else if (isJim(npcId) && text.includes(JIM_CARGO_HOLD_GIFTS_LINE)) {
+      onShow(event, () => { if (quest.getStage(player) === STAGE_CARGO_DELIVERED) stowCargoHoldGifts(player); });
+    } else if (isJim(npcId) && text === JIM_FAREWELL_LINE) {
+      advance([STAGE_CARGO_DELIVERED], STAGE_JIM_DONE, () => upgradeCaptainsLog(player));
     }
-    if (isSteve(npcId) && text.includes(STEVE_RIBS_LINE)) {
-      if (stage === STAGE_SALVAGED) quest.setStage(player, STAGE_STEVE_ASKED);
-      return;
+  }
+
+  /** Runs `fn` as the line shows, after any earlier `before` on it. */
+  function onShow(event, fn) {
+    const previous = event.before;
+    event.before = () => { previous?.(); fn(); };
+  }
+
+  /**
+   * Jim's repair kits and spyglass go in the raft's cargo hold, with varbit 18316, when he says so
+   * (rsprox 242: the two kits are in hold 963 later). What the hold can't take goes to the player.
+   */
+  function stowCargoHoldGifts(player) {
+    if (player.getAttribute(CARGO_GIFTS_ATTRIBUTE) === true) return;
+    player.setAttribute(CARGO_GIFTS_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
+    const raft = questRaft(player);
+    const Item = api.core.Item;
+    for (const [itemId, amount] of [[REPAIR_KIT_ITEM_ID, REPAIR_KITS], [SPYGLASS_ITEM_ID, 1]]) {
+      const stored = raft ? Cargo.store(raft, itemId, amount) : 0;
+      for (let i = stored; i < amount; i++) player.getInventory().forceAdd(player, new Item(itemId, 1));
     }
-    if (isSteve(npcId) && text.includes(STEVE_JIM_LINE)) {
-      if (stage < STAGE_JIM_TOLD && stage >= STAGE_RIBS_DONE) {
-        quest.setStage(player, STAGE_JIM_TOLD);
-      }
-      return;
-    }
-    if (isJim(npcId) && text === JIM_FAREWELL_LINE && stage === STAGE_CARGO_DELIVERED) {
-      quest.setStage(player, STAGE_JIM_DONE);
-      event.after = () => showTaskLogTutorials(player);
-      return;
-    }
-    if (isJim(npcId) && text.includes(CHEEKY_DIP_LINE)) event.after = () => showDockingTutorial(player);
+  }
+
+  /** Stage 46 replaces the starter log (31985) with the full captain's log (31986) in its slot. */
+  function upgradeCaptainsLog(player) {
+    const inventory = player.getInventory();
+    const slot = inventory.getSlotForItemId(CAPTAINS_LOG_ITEM_ID);
+    if (slot < 0) return;
+    inventory.setItem(slot, new api.core.Item(SAILING_LOG_ITEM_ID, 1)).refreshItems();
   }
 
   function boardShip(player) {
@@ -1060,8 +1225,59 @@ module.exports = function registerPandemoniumQuest(api) {
     removeOldGrog(player);
   }
 
+  /**
+   * The quest's hand-outs and tutorials are item boxes on live (rsprox 242 objectbox models), some
+   * with a camera and a hint arrow on what they describe; the rest play as chat messages.
+   */
+  const MESSAGE_BOXES = {
+    "LXQu-W": { item: OLD_CUP_ITEM_ID },
+    [GIVE_CUP_MESSAGE_ID]: { item: OLD_CUP_ITEM_ID },
+    [CUP_RECOVERY_MESSAGE_ID]: { item: OLD_CUP_ITEM_ID },
+    [TAKE_SAW_MESSAGE_ID]: { item: SAW_ITEM_ID },
+    OgmTuK: { item: SAW_ITEM_ID },
+    [TAKE_HAMMER_MESSAGE_ID]: { item: HAMMER_ITEM_ID },
+    aWG1rA: { item: HAMMER_ITEM_ID },
+    [LOG_GIVEN_MESSAGE_ID]: { item: CAPTAINS_LOG_ITEM_ID },
+    [LOG_AGAIN_GIVEN_MESSAGE_ID]: { item: CAPTAINS_LOG_ITEM_ID },
+    [CARGO_REQUEST_MESSAGE_ID]: { item: CAPTAINS_LOG_ITEM_ID },
+    [TAKE_CARGO_MESSAGE_ID]: { item: CRATE_OF_SHIP_PARTS_ITEM_ID },
+    [DELIVER_CARGO_MESSAGE_ID]: { item: CRATE_OF_SHIP_PARTS_ITEM_ID },
+    // Docking points; ours: the arrow, from the earlier tutorial chain (not in this capture).
+    LhIFh_: { item: DOCK_ICON_ITEM_ID, arrow: { x: 3070, y: 2987, height: 30, position: 3 } },
+    _mDPVw: { item: DOCK_ICON_ITEM_ID, arrow: { x: 3070, y: 2987, height: 30, position: 3 } },
+    teg4gz: { item: DOCK_ICON_ITEM_ID, arrow: { x: 3070, y: 2987, height: 30, position: 3 } },
+    EIOEfn: { item: SHIPWRIGHT_ICON_ITEM_ID },
+    VOIS_P: { item: PORT_TASK_ICON_ITEM_ID, arrow: { x: 3058, y: 2986, height: 140, position: 2 },
+      camera: [[3063, 2985, 640], [3058, 2986, 280]] },
+    mBygf3: { item: SAILING_LOG_ITEM_ID, arrow: { x: 3046, y: 2997, height: 110, position: 6 },
+      camera: [[3042, 2991, 720], [3046, 2998, 120]] },
+  };
+
+  function showMessageBox(event) {
+    const box = event.kind === "message" ? MESSAGE_BOXES[event.stepId] : undefined;
+    if (!box) return;
+    const { player } = event;
+    const sender = player.getPacketSender();
+    event.box = { items: [box.item] };
+    if (box.camera) {
+      const [[mx, my, mh], [lx, ly, lh]] = box.camera;
+      sender.sendCameraMoveTo(mx, my, mh, { rate: 232, rate2: 100, heightRelative: false })
+        .sendCameraLookAt(lx, ly, lh, { rate: 232, rate2: 100, heightRelative: false });
+    }
+    if (box.arrow) pointAt(player, { ...box.arrow, z: 0 });
+    if (box.arrow || box.camera) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        if (box.arrow) clearArrow(player);
+        if (box.camera) sender.sendCameraReset();
+      };
+    }
+  }
+
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    showMessageBox(event);
     switch (stepId) {
       case BOARD_SHIP_ACTION_ID:
         event.handled = true;
@@ -1096,13 +1312,19 @@ module.exports = function registerPandemoniumQuest(api) {
         event.handled = true;
         const raft = questRaft(player);
         const dock = sailingContent.content().docks.find((entry) => entry.id === PANDEMONIUM_DOCK_ID);
-        if (raft && dock) Shipyard.beginVisit(player, dock, raft.slot);
-        else teleportAfterDialogue(player, SHIPYARD_TILE);
+        if (raft && dock) {
+          Shipyard.beginVisit(player, dock, raft.slot, undefined, { questVisit: true });
+          // Live fades through the move (rsprox 242, ticks 3544-3546).
+          Scenes.fade(player, false);
+          beginShipyardTutorial(player);
+        } else teleportAfterDialogue(player, SHIPYARD_TILE);
         return;
       }
       case BACK_TO_PANDEMONIUM_ACTION_ID:
         event.handled = true;
-        teleportAfterDialogue(player, PANDEMONIUM_LANDING_TILE);
+        // Already on the docks (back through the portal), Jim just carries on.
+        if (Shipyard.visitedBoat(player) === undefined) return;
+        teleportAfterDialogue(player, PANDEMONIUM_LANDING_TILE, () => endShipyardTutorial(player));
         return;
       case OPEN_SHOP_ACTION_ID:
         if (!isSteve(npcId)) return;
@@ -1133,18 +1355,17 @@ module.exports = function registerPandemoniumQuest(api) {
         return;
       case GIVE_CUP_MESSAGE_ID:
         if (held(player, OLD_CUP_ITEM_ID)) player.getInventory().deleteNumber(OLD_CUP_ITEM_ID, 1);
-        if (quest.getStage(player) < STAGE_CUP_GIVEN) quest.setStage(player, STAGE_CUP_GIVEN);
+        if (quest.getStage(player) < STAGE_CUP_OFFERED) quest.setStage(player, STAGE_CUP_OFFERED);
         grantRaft(player);
-        if (quest.getStage(player) < STAGE_BOAT_GRANTED) quest.setStage(player, STAGE_BOAT_GRANTED);
+        if (quest.getStage(player) < STAGE_CUP_GIVEN) quest.setStage(player, STAGE_CUP_GIVEN);
         return;
       case TAKE_HAMMER_MESSAGE_ID:
         if (!held(player, HAMMER_ITEM_ID)) player.getInventory().adds(HAMMER_ITEM_ID, 1);
+        shipyardHint(player);
         return;
       case TAKE_SAW_MESSAGE_ID:
         if (!held(player, SAW_ITEM_ID)) player.getInventory().adds(SAW_ITEM_ID, 1);
-        return;
-      case BUILD_HOLD_MESSAGE_ID:
-        if (quest.getStage(player) < STAGE_HOLD_BUILT) quest.setStage(player, STAGE_HOLD_BUILT);
+        shipyardHint(player);
         return;
       case LOG_GIVEN_MESSAGE_ID:
         if (!held(player, CAPTAINS_LOG_ITEM_ID)) player.getInventory().adds(CAPTAINS_LOG_ITEM_ID, 1);
@@ -1171,8 +1392,11 @@ module.exports = function registerPandemoniumQuest(api) {
           player.getInventory().deleteNumber(CRATE_OF_SHIP_PARTS_ITEM_ID, 1);
         }
         if (quest.getStage(player) < STAGE_CARGO_DELIVERED) quest.setStage(player, STAGE_CARGO_DELIVERED);
+        ensureOldGrog(player);
         return;
       case OLD_GROG_DEPARTS_MESSAGE_ID:
+        // rsprox 242: a blank-continue message box for four ticks, then its continue.
+        event.box = { statement: true, holdTicks: 4 };
         removeOldGrog(player);
         if (quest.getStage(player) < STAGE_GROG_DONE) quest.setStage(player, STAGE_GROG_DONE);
         return;
@@ -1202,7 +1426,7 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function takeFromCrate(event, variant) {
     const stage = quest.getStage(event.player);
-    if (stage < STAGE_CUP_GIVEN || stage >= STAGE_HOLD_BUILT) return;
+    if (stage < STAGE_CUP_OFFERED || stage >= STAGE_HOLD_BUILT) return;
     event.handled = true;
     startTranscript(api, event.player, JIM_NPC_ID, PAGE, variant);
   }
@@ -1210,7 +1434,7 @@ module.exports = function registerPandemoniumQuest(api) {
   function modifySchematics(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_CUP_GIVEN && stage < STAGE_HOLD_BUILT) {
+    if (stage >= STAGE_CUP_OFFERED && stage < STAGE_HOLD_BUILT) {
       event.handled = true;
       startTranscript(api, player, JIM_NPC_ID, PAGE, JIM_SCHEMATICS_BEFORE_VARIANT);
       return;
@@ -1221,14 +1445,81 @@ module.exports = function registerPandemoniumQuest(api) {
     }
   }
 
+  // ==========================================================================
+  // The quest's shipyard visit (rsprox 242, ticks 3544-3594)
+  // ==========================================================================
+
+  /** The raft's cargo hold (facility row 8462): the one the client lets stage 28 build free. */
+  const RAFT_CARGO_HOLD_FACILITY = 8462;
+  const shipyardJimByPlayer = new WeakMap();
+
+  function isQuestRaftHold(player, boat, hotspot, facility) {
+    const raft = questRaft(player);
+    return quest.getStage(player) === STAGE_CUP_GIVEN && hotspot === 0 && facility === RAFT_CARGO_HOLD_FACILITY
+      && !!raft && raft.slot === boat?.slot;
+  }
+
+  function beginShipyardTutorial(player) {
+    ensureShipyardJim(player);
+    openIntroHud(player);
+    shipyardHint(player);
+  }
+
+  function ensureShipyardJim(player) {
+    if (shipyardJimByPlayer.get(player)?.isRegistered?.()) return;
+    const npc = spawnOwnerNpc(JIM_SHIPYARD_RAW_NPC_ID, JIM_SHIPYARD_TILE, player);
+    if (npc) shipyardJimByPlayer.set(player, npc);
+  }
+
+  /** Tools first (the saws, then the hammers), then the gangplank, then the raft's hotspot. */
+  function shipyardHint(player) {
+    if (quest.getStage(player) !== STAGE_CUP_GIVEN || Shipyard.visitedBoat(player) === undefined) return;
+    if (!held(player, SAW_ITEM_ID)) return introHint(player, HINT.SAW, ARROW_SAWS);
+    if (!held(player, HAMMER_ITEM_ID)) return introHint(player, HINT.HAMMER, ARROW_HAMMERS);
+    const visit = Shipyard.aboardVisit(player);
+    if (!visit) return introHint(player, HINT.GANGPLANK, ARROW_GANGPLANK);
+    introHint(player, HINT.HOTSPOT, deckArrow(visit.shown, ARROW_RAFT_HOTSPOT));
+  }
+
+  /** Jim covers the raft cargo hold's materials at stage 28 (client scripts 8828/8839, rsprox 242). */
+  function handleFacilityCost(event) {
+    if (isQuestRaftHold(event.player, event.boat, event.hotspot, event.facility)) event.provided = true;
+  }
+
   /** The shipped shipyard UI's completed facility build advances the quest exactly once. */
   function handleFacilityBuilt({ player, boat, hotspot, facility }) {
-    if (quest.getStage(player) !== STAGE_BOAT_GRANTED || hotspot !== 0) return;
-    const raft = questRaft(player);
-    if (!raft || raft.slot !== boat?.slot) return;
-    if (facility !== BoatFacilities.facilityNamed("Cargo hold")) return;
+    if (!isQuestRaftHold(player, boat, hotspot, facility)) return;
     quest.setStage(player, STAGE_HOLD_BUILT);
-    startTranscript(api, player, JIM_NPC_ID, PAGE, JIM_BUILD_VARIANT);
+    introHint(player, HINT.DONE);
+    // Its message ("Junior Jim helpfully provides ...") is a chat message on live, then his line.
+    startTranscript(api, player, JIM_NPC_ID, PAGE, JIM_BUILD_VARIANT, undefined, shipyardJimByPlayer.get(player) ?? null);
+  }
+
+  /** The portal at stage 30: back on the docks, Jim carries on from his shipyard return line. */
+  function endShipyardTutorial(player) {
+    if (!shipyardJimByPlayer.has(player)) return;
+    closeIntroHud(player);
+    clearArrow(player);
+    removeTracked(player, shipyardJimByPlayer);
+  }
+
+  function handleShipyardExited({ player }) {
+    endShipyardTutorial(player);
+    if (quest.getStage(player) !== STAGE_HOLD_BUILT) return;
+    Scenes.later(player, 1, () => {
+      if (!player.isRegistered() || quest.getStage(player) !== STAGE_HOLD_BUILT || player.getDialogueManager().isActive()) return;
+      startTranscript(api, player, JIM_NPC_ID, PAGE, JIM_SHIPYARD_RETURN_VARIANT, afterShipyardReturn);
+    });
+  }
+
+  /** The return variant from after its teleport (HrNl3J): "Okay, looks like that's you all sorted". */
+  function afterShipyardReturn(steps) {
+    const at = steps.findIndex((step) => step.id === BACK_TO_PANDEMONIUM_ACTION_ID);
+    return at < 0 ? steps : steps.slice(at + 1);
+  }
+
+  function handleShipyardBoarded({ player }) {
+    shipyardHint(player);
   }
 
   /** Native clicks keep the physical multiloc base separate from its resolved ledger action. */
@@ -1249,6 +1540,7 @@ module.exports = function registerPandemoniumQuest(api) {
         if (quest.getStage(player) !== STAGE_PANDEMONIUM) return;
         if (PortTasks.slots(player).some((slot) => slot?.id === QUEST_PORT_TASK_ID)) return;
         quest.setStage(player, STAGE_CARGO_DELIVERED);
+        ensureOldGrog(player);
       })
     );
   }
@@ -1275,6 +1567,9 @@ module.exports = function registerPandemoniumQuest(api) {
     if (stage === STAGE_SAILING) quest.setStage(player, STAGE_SAIL_ACCEPTED);
     Scenes.cancel(player);
     Scenes.closeFade(player);
+    crewSays(player, scene.anne, "Anne", SOUTH_LINE);
+    scene.southSaidAt = scene.ticks;
+    introHint(player, HINT.HEADING);
     return true;
   }
 
@@ -1300,6 +1595,16 @@ module.exports = function registerPandemoniumQuest(api) {
   /** Observe an accepted canonical mode change; repeated inputs never restart a voyage. */
   function handleTutorialSailModeChanged({ player, boat, mode }) {
     const scene = tutorialScene(player);
+    if (scene && scene.boat === boat && !scene.arrived && scene.helmTaken
+      && quest.getStage(player) === STAGE_SAIL_ACCEPTED) {
+      // Live arrives when the player stops the boat at the wreck (rsprox 242, tick 3300).
+      if (mode === "stop") {
+        if (scene.voyageStarted && inWreckZone(boat)) arriveAtWreck(player, scene);
+        else introHint(player, HINT.RESTART);
+        return;
+      }
+      if (mode === "full" || mode === "half") introHint(player, scene.toldToStop ? HINT.STOP_HERE : HINT.STOP);
+    }
     const moveMode = mode === "full" ? sailingContent.MOVE_MODE.FULL
       : mode === "half" ? sailingContent.MOVE_MODE.HALF
       : mode === "reverse" ? sailingContent.MOVE_MODE.REVERSE : undefined;
@@ -1336,14 +1641,23 @@ module.exports = function registerPandemoniumQuest(api) {
         endTutorialShip(player);
         continue;
       }
-      if (!scene.voyageStarted || scene.arrived) continue;
+      scene.ticks++;
+      if (!scene.helmTaken || scene.arrived) continue;
       if (player.isRegistered?.() === false) continue;
       const boat = scene.boat;
-      if (boat.tileX >= WORLD_WRECK_ZONE.minX && boat.tileX <= WORLD_WRECK_ZONE.maxX
-        && boat.tileY >= WORLD_WRECK_ZONE.minY && boat.tileY <= WORLD_WRECK_ZONE.maxY
-        && Math.abs(boat.tileX - WORLD_WRECK_TILE.x) <= 2
-        && Math.abs(boat.tileY - WORLD_WRECK_TILE.y) <= 2) {
-        arriveAtWreck(player, scene);
+      if (scene.southSaidAt !== undefined && scene.ticks - scene.southSaidAt >= SOUTH_REPEAT_TICKS) {
+        scene.southSaidAt = boat.tileY > SOUTH_REMINDER_MAX_Y ? scene.ticks : undefined;
+        if (scene.southSaidAt !== undefined) crewSays(player, scene.anne, "Anne", SOUTH_LINE);
+      }
+      if (!scene.voyageStarted) continue;
+      const inZone = inWreckZone(boat);
+      if (inZone && !scene.toldToStop && boat.moveMode !== sailingContent.MOVE_MODE.STOPPED) {
+        scene.toldToStop = true;
+        crewSays(player, scene.anne, "Anne", STOP_HERE_LINE);
+        introHint(player, HINT.STOP_HERE);
+      } else if (!inZone && scene.toldToStop) {
+        // Ours: sailing back out lets her call it again when the boat returns.
+        scene.toldToStop = false;
       }
     }
   }
@@ -1354,10 +1668,9 @@ module.exports = function registerPandemoniumQuest(api) {
     api.emitCustomEvent("sailing:leave-helm", { player, boat: scene.boat });
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     scene.boat.velocity = 0;
-    Scenes.fade(player, true);
-    Scenes.later(player, 2, () => Scenes.fade(player, false));
     quest.setStage(player, STAGE_ARRIVED);
     player.getPacketSender().sendVarbit(VARBIT_REACHED_WRECK, 1);
+    introHint(player, HINT.HIDDEN);
     startTranscript(api, player, WILL_NPC_ID, PAGE, WILL_ARRIVAL_VARIANT);
   }
 
@@ -1407,7 +1720,9 @@ module.exports = function registerPandemoniumQuest(api) {
   function sendIntroVarbits(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_ARRIVED) player.getPacketSender().sendVarbit(VARBIT_REACHED_WRECK, 1);
-    if (stage >= STAGE_COMPLETE) player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
+    if (player.getAttribute(CARGO_GIFTS_ATTRIBUTE) === true || stage >= STAGE_COMPLETE) {
+      player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
+    }
   }
 
   /** The login bootstrap's all-spells-unlocked send clobbers shared varps; re-send ours. */
@@ -1420,11 +1735,22 @@ module.exports = function registerPandemoniumQuest(api) {
   // ==========================================================================
 
   /** Maps saves written by the old invented 1..16 ladder onto the live stage values once. */
+  /** Saves from the invented 1..16 ladder (version 0/1) onto version 2's values. */
+  const LEGACY_STAGES = { 1: 2, 2: 6, 3: 8, 4: 8, 5: 10, 6: 12, 7: 16, 8: 18, 9: 20, 10: 22, 11: 26, 12: 30, 13: 32, 14: 38, 15: 44, 16: 46 };
+  /**
+   * Version 2 set 18 on Steve's Ribs line, 20 on Ribs's choice and 22 on Steve's Jim line; live
+   * (and Quest Helper) set them one line earlier each: 18 mid-welcome, 20 Ribs line, 22 Ribs's last
+   * line, 24 Steve's "Jolly Roger!". A version 2 save at 18/20/22 is at live's 20/22/24.
+   */
+  const V2_STAGES = { 18: 20, 20: 22, 22: 24 };
+
   function migrateStage({ player }) {
-    if (player.getAttribute(STAGE_VERSION_ATTRIBUTE) === STAGE_VERSION) return;
-    const old = quest.getStage(player);
-    const migrated = { 1: 2, 2: 6, 3: 8, 4: 8, 5: 10, 6: 12, 7: 16, 8: 18, 9: 20, 10: 22, 11: 26, 12: 30, 13: 32, 14: 38, 15: 44, 16: 46 }[old];
-    if (migrated !== undefined) quest.setStage(player, migrated);
+    const version = Number(player.getAttribute(STAGE_VERSION_ATTRIBUTE)) || 0;
+    if (version === STAGE_VERSION) return;
+    let stage = quest.getStage(player);
+    if (version < 2) stage = LEGACY_STAGES[stage] ?? stage;
+    if (version < 3) stage = V2_STAGES[stage] ?? stage;
+    if (stage !== quest.getStage(player)) quest.setStage(player, stage);
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
   }
 
@@ -1440,7 +1766,7 @@ module.exports = function registerPandemoniumQuest(api) {
         Scenes.later(player, 2, () => startBoardingDialogue(player, scene));
       }
     }
-    if (stage === STAGE_JIM_DONE) ensureOldGrog(player);
+    if (stage >= STAGE_CARGO_DELIVERED && stage < STAGE_GROG_DONE) ensureOldGrog(player);
     sendIntroVarbits(player);
   }
 
@@ -1448,6 +1774,7 @@ module.exports = function registerPandemoniumQuest(api) {
     if (!player) return;
     endSalvageScene(player, true, false);
     endTutorialShip(player, "logout");
+    removeTracked(player, shipyardJimByPlayer);
     removeOldGrog(player);
     removeTracked(player, steveByPlayer);
     removeTracked(player, ribsByPlayer);
@@ -1518,7 +1845,7 @@ module.exports = function registerPandemoniumQuest(api) {
         "board my Raft and build a <col=800000>Cargo Hold</col>.",
       ];
     }
-    if (stage >= STAGE_JIM_TOLD) {
+    if (stage >= STAGE_SENT_TO_JIM) {
       return [
         "<str>Steve told me I'd need a Boat of my own and directed me to</str>",
         "<str>Junior Jim on the docks of The Pandemonium.</str>",
@@ -1535,7 +1862,7 @@ module.exports = function registerPandemoniumQuest(api) {
         "I should discuss this with <col=800000>Steve</col>.",
       ];
     }
-    if (stage >= STAGE_STEVE_ASKED) {
+    if (stage >= STAGE_SENT_TO_RIBS) {
       return [
         "<str>I spoke to Steve Beanie, who told me Will and Anne stole a</str>",
         "<str>Map from The Pandemonium and it led them to the Medallion.</str>",
@@ -1590,10 +1917,9 @@ module.exports = function registerPandemoniumQuest(api) {
     // registerQuest adds the first coupon; top the stack up to 25. forceAdd merges the
     // stackable coupons and drops overflow instead of silently losing the quest rewards.
     inventory.forceAdd(player, new Item(SAWMILL_COUPON_ITEM_ID, SAWMILL_COUPONS - 1));
-    for (let i = 0; i < REPAIR_KITS; i++) {
-      inventory.forceAdd(player, new Item(REPAIR_KIT_ITEM_ID, 1));
-    }
-    inventory.forceAdd(player, new Item(SPYGLASS_ITEM_ID, 1));
+    // Jim stows the kits and the spyglass in the raft's hold first (stage 44's dialogue); a
+    // completion that never went through it still gets them.
+    stowCargoHoldGifts(player);
     player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
   }
 
@@ -1615,27 +1941,30 @@ module.exports = function registerPandemoniumQuest(api) {
 
   StaticShips.attach(api);
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
-  api.persistAttribute(TUTORIAL_ATTRIBUTE, 0);
+  api.persistAttribute(CARGO_GIFTS_ATTRIBUTE, false);
   api.persistAttribute(TUTORIAL_HELM_ATTRIBUTE, false);
   api.persistAttribute(TUTORIAL_SAILS_ATTRIBUTE, false);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Will", { "Talk-to": willAnneTalkTo });
   api.onNpcInteraction("Anne", { "Talk-to": willAnneTalkTo });
+  api.onNpcInteraction("Old Grog", { "Talk-to": grogTalkTo });
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
-  api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onObjectInteraction(handleObjectInteraction);
   BoatManager.onAfterTick(watchTutorialVoyages);
   api.onObjectRoute(routeTutorialHook);
+  api.onCustomEvent("sailing:facility-cost", handleFacilityCost);
   api.onCustomEvent("sailing:facility-built", handleFacilityBuilt);
+  api.onCustomEvent("sailing:shipyard-exited", handleShipyardExited);
+  api.onCustomEvent("port-tasks:hold-warning", questCargoWarning);
+  api.onCustomEvent("sailing:gust", handleTutorialGust);
+  api.onCustomEvent("sailing:trimmed", handleTrimmed);
+  api.onCustomEvent("sailing:lull", handleTutorialLull);
   api.onCustomEvent("sailing:sail-mode-changed", handleTutorialSailModeChanged);
   api.onCustomEvent("sailing:boarded", handleBoarded);
   api.onCustomEvent("sailing:left", handleLeft);
-  api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
-    if (interfaceId === OBJECTBOX) player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, 0).clearHintArrow();
-  });
   api.onPlayerLogin(migrateStage);
   api.onServerStartup(installQuestObjects);
   api.onPlayerLogin(handleLogin);

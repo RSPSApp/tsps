@@ -90,6 +90,15 @@ function persist(player) {
   sender.sendVarbit(SERVANT_LAST_TASK_VARBIT, TASK_TYPES[save.servant?.lastTask?.kind] ?? 0);
 }
 
+// Every chathead the lines use, checked against the cache when the plugin loads.
+const FACES = new Map();
+(function faces(value) {
+  if (Array.isArray(value) && value.length === 2 && typeof value[0] === "string" && typeof value[1] === "string" && /^chat/.test(value[1])) {
+    FACES.set(value[1], Ids.seq(value[1]));
+  } else if (value && typeof value === "object") Object.values(value).forEach(faces);
+})(LINES);
+FACES.set("chatneu1", Ids.seq("chatneu1"));
+function face(name) { return FACES.get(name) ?? Ids.seq(name); }
 function coins(amount) { return amount.toLocaleString("en-US"); }
 function fill(player, text, vars = {}) {
   const male = player.getAppearance?.()?.isMale?.() !== false;
@@ -114,8 +123,8 @@ function converse(player, steps, onEnd = null, vars = {}) {
   const entries = [];
   for (const step of steps) {
     if (step.mesbox) entries.push((index) => new StatementDialogue(index, step.mesbox));
-    else if (step.player) entries.push((index) => new PlayerDialogue(index, fill(player, step.player[0], vars), Ids.seq(step.player[1])));
-    else for (const [text, face] of step.lines) entries.push((index) => new NpcDialogue(index, step.npc, fill(player, text, vars), undefined, Ids.seq(face)));
+    else if (step.player) entries.push((index) => new PlayerDialogue(index, fill(player, step.player[0], vars), face(step.player[1])));
+    else for (const [text, head] of step.lines) entries.push((index) => new NpcDialogue(index, step.npc, fill(player, text, vars), undefined, face(head)));
   }
   if (!entries.length) { onEnd?.(); return; }
   const builder = new DialogueChainBuilder();
@@ -718,13 +727,13 @@ function returnCargo(player) {
   persist(player);
 }
 function guestMenu(guest, runtime) {
-  if (runtime.due !== undefined || payLeft(runtime.house.save.servant) === 0) { guest.sendMessage("The servant is busy."); return; }
+  if (runtime.due !== undefined || (payLeft(runtime.house.save.servant) === 0 && !payFromMoneyBag(runtime.house.owner))) { guest.sendMessage("The servant is busy."); return; }
   api.sendMultiChatboxPrompt(guest, "How may I help you?", "Take me to the owner", () => guide(guest, runtime, false),
     "Show me the way out", () => guide(guest, runtime, true), "Nothing, thanks", () => {});
 }
 function guide(guest, runtime, outside) {
   if (guest.getPrivateArea() !== runtime.house || runtime.due !== undefined || runtime.guide || !runtime.npc || !runtime.house.owner
-    || payLeft(runtime.house.save.servant) === 0 || runtime.house.save.servant?.cargo) return;
+    || (payLeft(runtime.house.save.servant) === 0 && !payFromMoneyBag(runtime.house.owner)) || runtime.house.save.servant?.cargo) return;
   runtime.guide = { guest, outside };
   guest.setFollowing(runtime.npc);
   guest.sendMessage("Follow me, please.");
@@ -734,6 +743,7 @@ function returnFromErrand(player, runtime) {
   runtime.due = undefined;
   spawn(player, runtime);
   const servant = runtime.house.save.servant;
+  // Ours: the bag also pays on the return from a bank errand (live shows it on a fetch).
   const paid = payFromMoneyBag(player);
   if (!servant?.cargo || servant.cargo.bank) { if (servant?.cargo) bankCargo(player); return; }
   if (!runtime.npc) return;
@@ -757,13 +767,17 @@ function processServant(player) {
   if (runtime.due !== undefined) return;
   if (runtime.meal && cycle >= runtime.meal.ready && runtime.npc) {
     const meal = runtime.meal;
-    runtime.meal = undefined;
     if (meal.kind === "dinner") {
-      for (const guest of runtime.house.getPlayers().filter(p => {
+      // Dinner waits on the table until someone seated there has room for it.
+      const diners = runtime.house.getPlayers().filter(p => {
         const pos = runtime.house.getRoomPositionAt(p.getLocation());
-        return pos && runtime.house.getRoom(pos)?.roomKey === "DINING_ROOM" && House.isSeatedForDinner(p);
-      })) give(guest, meal.itemId);
+        return pos && runtime.house.getRoom(pos)?.roomKey === "DINING_ROOM" && House.isSeatedForDinner(p)
+          && p.getInventory().getFreeSlots() > 0;
+      });
+      for (const diner of diners) diner.getInventory().adds(meal.itemId, 1);
+      if (diners.length) runtime.meal = undefined;
     } else {
+      runtime.meal = undefined;
       runtime.npc.getMovementQueue().reset();
       runtime.npc.moveTo(player.getLocation().clone());
       offerMeal(player, runtime, meal);

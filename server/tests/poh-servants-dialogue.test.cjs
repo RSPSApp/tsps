@@ -276,3 +276,23 @@ test("a save from before the counter: 3 uses of 8 leaves 10 points of work", (t)
   assert.equal(f.save.servant.pay, 10);
   assert.equal(f.save.servant.uses, undefined);
 });
+
+test("dinner waits on the table until a seated diner has room for it", (t) => {
+  const dining = { roomKey: "DINING_ROOM", furniture: { t: "WOOD_DINING_TABLE" } };
+  const kitchen = { roomKey: "KITCHEN", furniture: { a: "WOODEN_LARDER", b: "WOODEN_SHELVES_1", c: "FIREPIT_WITH_HOOK", d: "PUMP_AND_DRAIN" } };
+  const f = inHouse(t, { id: N.RICK, pay: 16 }, [dining, kitchen]);
+  const House = require("../plugins/skills/construction/House.Construction");
+  t.mock.method(House, "isSeatedForDinner", () => true);
+  f.house.getRoomPositionAt = () => ({});
+  f.house.getRoom = () => dining;
+  for (let slot = 0; slot < 28; slot++) f.p.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
+  talkTo(f.p, f.npc, N.RICK); f.next(); f.choose(1); f.choose(2);
+  assert.deepEqual(lines(f).at(-1), "I'll rustle up something tasty.");
+  f.next();
+  assert.equal(f.varbits.get(PAY), 14, "dinner costs 2");
+  returnNow(t, f);
+  assert.equal(f.p.getInventory().getAmount(I.SHRIMPS), 0);
+  f.p.getInventory().delete(I.BRONZE_SHORTSWORD, 1);
+  Servants.processServant(f.p);
+  assert.equal(f.p.getInventory().getAmount(I.SHRIMPS), 1, "served once there is room");
+});

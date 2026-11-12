@@ -30,6 +30,8 @@ const CLOSE_TICKS = 5;
 let core = null;
 let api = null;
 let docks = [];
+/** Players mid-trip: Board is ignored until the trip closes (Ours: live never recorded a click mid-trip). */
+const travelling = new WeakSet();
 
 function loadDocks() {
   return JSON.parse(fs.readFileSync(path.join(__dirname, "data", "lake-molch-boaty.json"), "utf8")).docks;
@@ -53,6 +55,7 @@ function travel(player, dock) {
   fade(player, true);
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();
+  travelling.add(player);
   let tick = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player, false); }
@@ -74,6 +77,7 @@ function travel(player, dock) {
       }
     }
     stop() {
+      travelling.delete(player);
       movement.setBlockMovement(false);
       super.stop();
     }
@@ -83,6 +87,7 @@ function travel(player, dock) {
 function board(event) {
   const { player, objectId } = event;
   if (objectId !== BOATY) return false;
+  if (travelling.has(player)) return true;
   const here = dockOf(event.location);
   if (here < 0) return false;
   const choices = docks.flatMap((dock, index) => (index === here ? [] : [dock.name, () => travel(player, dock)]));

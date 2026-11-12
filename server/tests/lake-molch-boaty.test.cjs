@@ -146,3 +146,18 @@ test("logging out mid-trip ends it without moving", () => {
   assert.equal(player.getLocation().getX(), 1408);
   assert.ok(player.log.includes("unlock"));
 });
+
+test("Board mid-trip is ignored until the trip closes", () => {
+  const player = createPlayer([1408, 3612, 0]);
+  boardAt("Shayzien", player);
+  choose(player, "Molch Island");
+  const queued = tasks.length;
+  runTicks(1);
+  player.prompt = undefined;
+  assert.equal(boardAt("Shayzien", player), true);
+  assert.equal(player.prompt, undefined);
+  assert.equal(tasks.length, queued);
+  runTicks(4);
+  assert.equal(boardAt("Molch Island", player), true);
+  assert.deepEqual(options(player), ["Molch", "Battlefront", "Shayzien", "Cancel"]);
+});

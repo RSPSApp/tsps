@@ -18,7 +18,7 @@ test("unsupported modes, arenas and combat restrictions cannot be accepted as th
   const changes = {
     wincondition: 15, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 3,
     food: 2, drinks: 2, specialattacks: 1, stragglers: 1, freezing: 1,
-    pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 1, rejoiningdelay: 1, vls: 1,
+    pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
   for (const [key, value] of Object.entries(changes)) {
     const rules = { ...Rules.create(), [key]: value };
@@ -112,7 +112,26 @@ test("revision 242 restriction enums compose with each supported battle family w
       assert.match(text,/Safe deaths: you keep your items/);
       if (prayer===1) assert.match(text,/overhead icons are disabled; other prayers are allowed/);
       else assert.match(text,prayer===2?/Prayers are disabled/:/All prayers are allowed/);
+      const supplyText = food && drinks ? 'Food and drinks are disabled.' : food
+        ? 'Allowed drinks are consumed normally.' : drinks ? 'Allowed food is consumed normally.'
+          : 'Food and drinks are consumed normally.';
+      assert.ok(text.includes(supplyText), 'confirmation describes only permitted supplies');
     }
+});
+
+test("membership terms preserve each battle family and reject unsupported departure or delay values", () => {
+  for (const mode of [0,1,8,16,20]) for (const leavingcc of [0,1]) for (const rejoiningdelay of [0,1]) {
+    const rules={...Rules.create(2,mode),leavingcc,rejoiningdelay};
+    assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);
+    assert.match(text,leavingcc?/Leaving the chat-channel incurs no death penalty/:/Leaving the chat-channel counts as a death/);
+    assert.match(text,rejoiningdelay?/60-second wait/:/no additional rejoining delay/);
+    if (rejoiningdelay) assert.doesNotMatch(text,/rejoining is unrestricted/);
+    if (!mode) assert.match(text,/No joining or rejoining after/);
+  }
+  for (const key of ['leavingcc','rejoiningdelay']) for (const value of [-1,2,0.5,'1',null,NaN,Infinity]) {
+    assert.equal(Rules.validate({...Rules.create(),[key]:value}),false);
+  }
 });
 
 test("unsupported or malformed restriction choices cannot enter an otherwise valid negotiated offer", () => {

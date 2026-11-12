@@ -18,7 +18,7 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "arena_container", "stragglers_container", "other_container",
-  "melee", "ranged", "magic", "leavingcc", "rejoiningdelay",
+  "melee", "ranged", "magic",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }

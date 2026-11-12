@@ -151,7 +151,9 @@ function character(name, profile, picks = {}, leagueType = 4) {
   player.interfaces = [];
   const sender = new Proxy({}, { get: (_, key) => (key === "sendInterface" ? (id) => { player.interfaces.push(id); return sender; }
     // A typed line (the farming spam) joins the game messages in the order it was sent.
-    : key === "sendTypedMessage" ? (_type, text) => { player.messages.push(text); return sender; } : () => sender) });
+    : key === "sendTypedMessage" ? (_type, text) => { player.messages.push(text); return sender; }
+    // No interface or prompt is open unless a test opens one.
+      : key === "hasInterruptibleInterface" || key === "hasInputPrompt" ? () => false : () => sender) });
   player.getPacketSender = () => sender;
   player.getSession = () => ({ sendClientPacket: () => true });
   player.messages = [];
@@ -325,6 +327,23 @@ test("Golden God: High Alchemy with no runes or level, 15% more coins, a 65% cha
     assert.equal(amount(player, I.RUNE_PLATEBODY), 0, `${player.getUsername()} alchs it as usual`);
     assert.equal(amount(player, I.COINS), value);
   }
+});
+
+test("Golden God: an automatic recast carries on under a dialogue opened while it waited (Wiki: Golden God)", (t) => {
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  const player = character("autorecastdialogue", "league", GOLDEN_GOD, 5);
+  const value = Math.floor(core.ItemDefinition.forId(I.RUNE_PLATEBODY).getHighAlchValue() * 115 / 100);
+  player.getInventory().add(new Item(I.RUNE_PLATEBODY, 1), false);
+  Math.random = () => 0.5;
+  alch(player, I.RUNE_PLATEBODY);
+  assert.equal(amount(player, I.COINS), value);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Craft a scarab emblem?")));
+  assert.equal(player.getDialogueManager().isActive(), true, "a dialogue is open");
+  cycle += 5;
+  tasks.at(-1).execute();
+  assert.equal(amount(player, I.COINS), value * 2, "the automatic cast still runs");
+  player.getDialogueManager().reset();
 });
 
 test("Golden God: automatic recasts execute with the original item and reject a replaced copy", (t) => {

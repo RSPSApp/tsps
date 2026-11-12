@@ -63,6 +63,7 @@ function aboard(t, p, hold) {
   t.mock.method(Sailing, 'instanceAboard', () => ({}));
   t.mock.method(Sailing, 'activeBoat', () => boat);
   t.mock.method(Sailing, 'lastPortOf', () => 'musa_point');
+  t.mock.method(Sailing, 'boatNearDock', () => true);
   t.mock.method(Sailing, 'disembark', (_p, dock) => { left.push(dock); return null; });
   const submitted = [];
   t.mock.method(TaskManager, 'submit', (task) => submitted.push(task));

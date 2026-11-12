@@ -21,6 +21,8 @@ export interface SailingDock {
     moorings?: Record<string, BoatPlacement>;
     /** Where a player steps ashore when disembarking here. */
     landing: { x: number; y: number; z: number };
+    /** The port's name as a sentence uses it ("the Pandemonium", "Catherby"). */
+    theName?: string;
 }
 
 /** Why a player left their boat, sent with the `sailing:left` event. */
@@ -218,27 +220,49 @@ export class Sailing {
     }
 
     /**
+     * Why the player can't board their boat at `dockId` (the boat in `slot`, or with none given
+     * the one moored here), or null. Live's message boxes: a boat docked at another port names
+     * that port, a sunk one is lost at sea.
+     */
+    public static boardRefusal(player: Player, dockId: string, slot?: number): string | null {
+        if (BoatManager.getBoatAboard(player)) return "You're already on a boat.";
+        if (!Sailing.docks.has(dockId)) return "You can't board a boat here.";
+        if (slot !== undefined) {
+            const chosen = player.getSailing().boats.find((boat) => boat.slot === slot);
+            return chosen && Sailing.dockedHere(chosen, dockId) ? null : "You can't choose that boat at the moment.";
+        }
+        if (Sailing.boatToBoard(player, dockId)) return null;
+        const boat = Sailing.activeBoat(player) ?? player.getSailing().boats[0];
+        if (boat?.location.kind === "sunk") {
+            return "You cannot board your boat as it is lost at sea. You'll need to speak to a shipwright to recover it."
+                + " To find a shipwright, just look for the relevant icon on your map.";
+        }
+        const elsewhere = boat?.location.kind === "docked" ? Sailing.docks.get(boat.location.dock) : undefined;
+        if (elsewhere) return `You cannot board your boat as it is currently docked at ${elsewhere.theName ?? elsewhere.id}.`;
+        return "There isn't a boat here for you to board.";
+    }
+
+    private static dockedHere(boat: OwnedBoat, dockId: string): boolean {
+        return boat.location.kind === "docked" && boat.location.dock === dockId;
+    }
+
+    /** The player's boat moored at `dockId`, their active one first. */
+    private static boatToBoard(player: Player, dockId: string): OwnedBoat | undefined {
+        return [Sailing.activeBoat(player), ...player.getSailing().boats]
+            .find((candidate) => candidate && Sailing.dockedHere(candidate, dockId));
+    }
+
+    /**
      * Boards the player's boat moored at `dockId`. Returns a message to show when they can't
-     * (no boat here, or it has sunk), otherwise null.
+     * (boardRefusal), otherwise null.
      */
     public static board(player: Player, dockId: string, slot?: number): string | null {
-        if (BoatManager.getBoatAboard(player)) return "You're already on a boat.";
-        const dock = Sailing.docks.get(dockId);
-        if (!dock) return "You can't board a boat here.";
-        const state = player.getSailing();
-        const here = (boat: OwnedBoat) => boat.location.kind === "docked" && boat.location.dock === dockId;
-        if (slot !== undefined) {
-            const chosen = state.boats.find((boat) => boat.slot === slot);
-            if (!chosen || !here(chosen)) return "You can't choose that boat at the moment.";
-        }
+        const refusal = Sailing.boardRefusal(player, dockId, slot);
+        if (refusal) return refusal;
+        const dock = Sailing.docks.get(dockId)!;
         const boat = slot !== undefined
-            ? state.boats.find((candidate) => candidate.slot === slot)
-            : [Sailing.activeBoat(player), ...state.boats].find((candidate) => candidate && here(candidate));
-        if (!boat) {
-            return state.boats.some((candidate) => candidate.location.kind === "sunk")
-                ? "Your boat has sunk. A shipwright can recover it for you."
-                : "You don't have a boat moored here.";
-        }
+            ? player.getSailing().boats.find((candidate) => candidate.slot === slot)!
+            : Sailing.boatToBoard(player, dockId)!;
         const at = boat.location.kind === "docked" ? boat.location.at : undefined;
         if (!Sailing.embark(player, boat, at ?? dock.moorings?.[boat.type] ?? dock.mooring, dockId)) {
             return "There's no room at sea right now.";
@@ -278,6 +302,13 @@ export class Sailing {
         Sailing.leave(player, instance, "disembark");
         Sailing.moveExpected(player, new Location(dock.landing.x, dock.landing.y, dock.landing.z));
         return null;
+    }
+
+    /** Whether the boat the player is aboard is close enough to `dockId` to step ashore there. */
+    public static boatNearDock(player: Player, dockId: string): boolean {
+        const dock = Sailing.docks.get(dockId);
+        const instance = Sailing.instanceAboard(player);
+        return !!dock && !!instance && Sailing.mooredAt(instance, dock);
     }
 
     /** The helm's Escape: the boat sinks and the player returns to their last dock or buoy. */

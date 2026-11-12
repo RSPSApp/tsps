@@ -5,6 +5,10 @@
 //
 // Board-friend (and the boat list's "Board friend's boat") puts a player on somebody else's boat
 // as a guest: "Enter name:", then aboard, or one of the captured refusals (rsprox 697 and 698).
+//
+// Every refusal is a message box on the click's tick, before any fade: no boat here, the boat
+// docked at another port or lost at sea, the boat too far from the dock to disembark, or the
+// port's Sailing level. A gangplank answers a click from the deck however far off the boat is.
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
@@ -13,6 +17,7 @@ const { World } = require("../../../src/main/typescript/elvarg/game/World");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
+const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { content, boatType, dockAtGangplank, dockAtBuoy, fade, playSound, spam } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
@@ -23,6 +28,9 @@ const SOUND_DOCK = 1794;
 /** The chatbox's name prompt; the client answers with `resume_p_namedialog` (rsprox 697). */
 const SCRIPT_NAME_INPUT = 109;
 const BOAT_TABLE = 166;
+/** Ours: a gangplank is used from a deck anywhere in view, so a boat too far off hears why. */
+const GANGPLANK_DECK_REACH = 64;
+const TOO_FAR = "The boat isn't close enough for you to be able to disembark here.";
 
 /** Boarding somebody else's boat, as captured (rsprox 697). The first is a plain game message, the rest message boxes. */
 const FRIEND_PROMPT = "Enter name:";
@@ -68,16 +76,21 @@ function boardBoat({ player, location }) {
 
 /** Boards the boat in `slot`, or with none given the one moored here. */
 function boardSlot(api, player, dock, slot) {
+  const refusal = Sailing.boardRefusal(player, dock.id, slot);
+  if (refusal) {
+    messageBox(player, refusal);
+    return;
+  }
   fade(player, true);
   later(player, 1, () => {
     if (!boardingAllowed(api, player, dock)) {
       fade(player, false);
       return;
     }
-    const refusal = Sailing.board(player, dock.id, slot);
-    if (refusal) {
+    const refused = Sailing.board(player, dock.id, slot);
+    if (refused) {
       fade(player, false);
-      player.sendMessage(refusal);
+      messageBox(player, refused);
       return;
     }
     playSound(player, SOUND_BOARD_BOAT);
@@ -93,8 +106,9 @@ function playerCapacity(owned) {
   return (column === null ? undefined : row?.int(column, 0)) || 1;
 }
 
+/** A message box, with its line in the chat as live sends it (a mesbox message). */
 function messageBox(player, text) {
-  player.sendMessage(text);
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
 
@@ -176,11 +190,11 @@ function disembarkAsGuest(player, dock) {
   });
 }
 
-/** Why the player can't dock at a port: its Sailing level (table 194), or null. Guessed text. */
-function levelRefusal(player, dock) {
+/** Why the player can't dock or disembark (`verb`) at a port: its Sailing level (table 194), or null. */
+function levelRefusal(player, dock, verb) {
   const level = dock.level ?? 1;
   return player.getSkillManager().getCurrentLevel(Skill.SAILING) < level
-    ? `You need a Sailing level of at least ${level} to dock at ${dock.theName}.`
+    ? `You need a Sailing level of ${level} to ${verb} here.`
     : null;
 }
 
@@ -188,7 +202,12 @@ function levelRefusal(player, dock) {
 function dockAtBuoyOp({ player, location }) {
   const dock = dockAtBuoy(location);
   if (!dock || !Sailing.instanceAboard(player)) return false;
-  const refusal = levelRefusal(player, dock) ?? Sailing.dock(player, dock.id);
+  const tooLow = levelRefusal(player, dock, "dock");
+  if (tooLow) {
+    messageBox(player, tooLow);
+    return;
+  }
+  const refusal = Sailing.dock(player, dock.id);
   if (refusal) {
     player.sendMessage(refusal);
     return;
@@ -207,10 +226,14 @@ function disembarkBoat({ player, location }) {
   const dock = dockAtGangplank(location);
   if (dock && Sailing.guestBoat(player)) return disembarkAsGuest(player, dock);
   if (!dock || !Sailing.instanceAboard(player)) return false;
+  if (!Sailing.boatNearDock(player, dock.id)) {
+    messageBox(player, TOO_FAR);
+    return;
+  }
   const docked = Sailing.lastPortOf(Sailing.activeBoat(player)) === dock.id;
-  const refusal = docked ? null : levelRefusal(player, dock);
+  const refusal = docked ? null : levelRefusal(player, dock, "disembark");
   if (refusal) {
-    player.sendMessage(refusal);
+    messageBox(player, refusal);
     return;
   }
   const leave = () => {
@@ -241,5 +264,6 @@ module.exports = {
     api.onObjectInteraction("Mooring point", { Board: boardBoat.bind(api), "Board-friend": boardFriendsBoat.bind(api), Disembark: disembarkBoat });
     api.onObjectInteraction("Buoy", { Dock: dockAtBuoyOp });
     api.setUsableFromDeck?.(["Gangplank", "Mooring point", "Buoy"]);
+    api.setDeckReach?.(["Gangplank", "Mooring point"], GANGPLANK_DECK_REACH);
   },
 };

@@ -629,6 +629,9 @@ function sailor(sailing = emptySailingState()) {
     setMobileInteraction() {},
     getSailing: () => sailing,
     setSailing: (next) => { sailing = next; },
+    // Message boxes (dialogue chains) land in `boxes`.
+    boxes: [],
+    getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
     // Spam lines (sendTypedMessage) land in `messages` too, after `spam: `.
     getPacketSender: () => new Proxy({}, {
       get: (_t, key, proxy) => key === "sendTypedMessage" ? (_type, text) => { messages.push(`spam: ${text}`); return proxy; } : () => proxy,
@@ -880,7 +883,15 @@ test("boarding at the dock puts the player on the deck of their boat, at sea", (
 });
 
 test("boarding is refused with no boat here", () => {
-  assert.equal(Sailing.board(sailor(), DOCK.id), "You don't have a boat moored here.");
+  assert.equal(Sailing.board(sailor(), DOCK.id), "There isn't a boat here for you to board.");
+});
+
+test("boarding a boat docked at another port names that port (rsprox 910, 4251)", () => {
+  Sailing.registerDock({ ...DOCK, id: "test_catherby", theName: "Catherby" });
+  const player = sailor();
+  Sailing.giveBoat(player, "raft", "test_catherby");
+  assert.equal(Sailing.board(player, DOCK.id), "You cannot board your boat as it is currently docked at Catherby.");
+  assert.equal(BoatManager.getBoatAboard(player), undefined);
 });
 
 test("disembarking moors the boat at the dock and removes it from the sea", () => {
@@ -910,7 +921,7 @@ test("teleporting off the boat sinks it; a shipwright recovers it for 250 coins"
   assert.deepEqual(Sailing.activeBoat(player).location, { kind: "sunk" });
   assert.equal(BoatManager.getBoat(boat.entityIndex), undefined);
   assert.deepEqual(tileOf(player), [3222, 3218, 0], "the teleport itself still happens");
-  assert.equal(Sailing.board(player, DOCK.id), "Your boat has sunk. A shipwright can recover it for you.");
+  assert.equal(Sailing.board(player, DOCK.id), "You cannot board your boat as it is lost at sea. You'll need to speak to a shipwright to recover it. To find a shipwright, just look for the relevant icon on your map.");
 
   assert.equal(Sailing.recover(player, 0, DOCK.id), null);
   assert.deepEqual(Sailing.activeBoat(player).location, { kind: "docked", dock: DOCK.id });
@@ -1152,20 +1163,97 @@ test("Navigate walks the player onto the helm's tile first", () => {
   }
 });
 
-test("the helm's Escape asks first and only sinks the boat on yes", () => {
+test("the helm's Escape warns with live's message box, then asks, and only sinks the boat on yes (rsprox 3461)", () => {
   const helm = registerPlugin("Helm.Sailing");
   const player = sailor();
   Sailing.giveBoat(player, "raft", DOCK.id);
   Sailing.board(player, DOCK.id);
 
   helm.objects.Helm.Escape({ player });
+  assert.equal(player.messages.at(-1), "spam: Escaping your boat while out at sea will result in it being lost. "
+    + "If this happens, retrieving it will incur a gold fee and any cargo on board will be lost.");
+  assert.equal(helm.prompt, undefined, "no question before the box is continued");
+  const [box, next] = [...player.boxes[0].getDialogues().values()];
+  assert.equal(box.getText(), "Escaping your boat while out at sea will result in it being lost. If this<br>"
+    + "happens, retrieving it will incur a gold fee and any cargo on board<br>will be lost.");
+  next.send(player);
   const [yes, onYes, no, onNo] = helm.prompt.pairs;
-  assert.deepEqual([yes, no], ["Yes, abandon ship.", "No."]);
+  assert.deepEqual([helm.prompt.title, yes, no],
+    ["Accept that your boat will be lost at sea?", "Yes, escape from it.", "No, stay on the boat."]);
   onNo();
   assert.ok(Sailing.instanceAboard(player));
   onYes();
   assert.equal(Sailing.instanceAboard(player), undefined);
   assert.equal(Sailing.activeBoat(player).location.kind, "sunk");
+  assert.equal(player.messages.at(-1), "You abandon your boat, resulting in it becoming lost at sea.");
+});
+
+test("Escape with salvage in the hold says the cargo is lost with the boat", () => {
+  const helm = registerPlugin("Helm.Sailing");
+  const player = sailor();
+  const boat = Sailing.giveBoat(player, "raft", DOCK.id);
+  const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+  const forId = ItemDefinition.forId;
+  ItemDefinition.forId = (id) => id === 32847 ? { getName: () => "Small salvage", isNoted: () => false } : forId.call(ItemDefinition, id);
+  boat.cargo.push({ id: 32847, amount: 1 }); // Small salvage
+  Sailing.board(player, DOCK.id);
+  helm.objects.Helm.Escape({ player });
+  [...player.boxes[0].getDialogues().values()][1].send(player);
+  helm.prompt.pairs[1]();
+  ItemDefinition.forId = forId;
+  assert.equal(player.messages.at(-1),
+    "You abandon your boat, resulting in it becoming lost at sea. The contents of your cargo hold are lost with it.");
+});
+
+test("Board refuses on the click with a message box, before any fade", () => {
+  clearTasks();
+  const plugin = registerPlugin("Gangplank.Sailing");
+  const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
+  const player = sailor();
+  Sailing.giveBoat(player, "raft", "catherby");
+  plugin.objects.Gangplank.Board({ player, location: pandemonium.gangplank });
+  const text = "You cannot board your boat as it is currently docked at Catherby.";
+  assert.equal(player.messages.at(-1), `spam: ${text}`, "its chat line (a mesbox message)");
+  assert.equal(player.boxes.length, 1);
+  assert.equal(player.boxes[0].getDialogues().get(0).getText(), text);
+  assert.equal(TaskManager.pendingTasks.shift() ?? null, null, "no fade queued");
+  assert.equal(BoatManager.getBoatAboard(player), undefined);
+  clearTasks();
+});
+
+test("Disembark with the boat too far from the dock is refused with live's message box (rsprox 901)", () => {
+  clearTasks();
+  const hooks = {};
+  const plugin = registerPlugin("Gangplank.Sailing");
+  require("../plugins/skills/sailing/Gangplank.Sailing").register({
+    onObjectInteraction() {}, setUsableFromDeck() {}, setDeckReach: (locs, tiles) => { hooks.reach = [locs, tiles]; },
+  });
+  assert.deepEqual(hooks.reach, [["Gangplank", "Mooring point"], 64], "used from a deck however far off the boat is");
+  const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
+  const player = sailor();
+  Sailing.giveBoat(player, "raft", "the_pandemonium");
+  Sailing.board(player, "the_pandemonium");
+  const boat = BoatManager.getBoatAboard(player);
+  try {
+    // 16 tiles east of the landing: live refuses there, and accepts a tile closer.
+    boat.fineX = (pandemonium.landing.x + 16) * 128 + 64;
+    plugin.objects.Gangplank.Disembark({ player, location: pandemonium.gangplank });
+    const text = "The boat isn't close enough for you to be able to disembark here.";
+    assert.equal(player.messages.at(-1), `spam: ${text}`);
+    assert.equal(player.boxes.at(-1).getDialogues().get(0).getText(), text);
+    assert.equal(TaskManager.pendingTasks.shift() ?? null, null, "no fade queued");
+    assert.ok(Sailing.instanceAboard(player), "still aboard");
+
+    boat.fineX = (pandemonium.landing.x + 15) * 128 + 64;
+    plugin.objects.Gangplank.Disembark({ player, location: pandemonium.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(player.messages.at(-1), "spam: You disembark at the Pandemonium.");
+    assert.equal(Sailing.instanceAboard(player), undefined);
+  } finally {
+    if (Sailing.instanceAboard(player)) Sailing.disembark(player, "the_pandemonium");
+    clearTasks();
+  }
 });
 
 /** A player at Junior Jim with a bank, choosing through the boat selection interface. */
@@ -2610,7 +2698,8 @@ test("Dock on a port's buoy docks the boat there; Disembark at any port docks it
 
     // Catherby needs Sailing 20.
     plugin.objects.Buoy.Dock({ player, location: catherby.buoy });
-    assert.equal(player.messages.at(-1), "You need a Sailing level of at least 20 to dock at Catherby.");
+    assert.equal(player.messages.at(-1), "spam: You need a Sailing level of 20 to dock here.", "a message box (rsprox 3837)");
+    assert.equal(player.boxes.at(-1).getDialogues().get(0).getText(), "You need a Sailing level of 20 to dock here.");
 
     plugin.objects.Buoy.Dock({ player, location: musa.buoy });
     assert.equal(player.messages.at(-1),
@@ -2694,7 +2783,7 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
     owner.visible = true;
 
     ask(guest, "Condor");
-    assert.equal(guest.messages.at(-1), "The player is not on their own boat, so you cannot join them.");
+    assert.equal(guest.messages.at(-1), "spam: The player is not on their own boat, so you cannot join them.");
     assert.equal(guest.boxes.length, 1, "shown as a message box too");
 
     Sailing.board(owner, "the_pandemonium");
@@ -2702,7 +2791,7 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
     const { fineX } = instance;
     instance.fineX += 40 * 128;
     ask(guest, "condor");
-    assert.equal(guest.messages.at(-1), "That player does not have a boat for you to board right now.");
+    assert.equal(guest.messages.at(-1), "spam: That player does not have a boat for you to board right now.");
     instance.fineX = fineX;
 
     const before = guest.messages.length;
@@ -2711,7 +2800,7 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
     assert.equal(guest.messages.length, before, "boarding somebody else's boat says nothing");
 
     ask(third, "condor");
-    assert.equal(third.messages.at(-1), "There's no space for you on that boat.", "a raft holds two players");
+    assert.equal(third.messages.at(-1), "spam: There's no space for you on that boat.", "a raft holds two players");
     assert.equal(BoatManager.getBoatAboard(third), undefined);
 
     // The guest's gangplank reads Disembark, and puts them on this port's landing.
@@ -2779,13 +2868,15 @@ test("Last Light docks at Sailing 52 and disembarks on its captured landing", ()
   Sailing.board(player, "the_pandemonium");
   try {
     plugin.objects.Buoy.Dock({ player, location: lastLight.buoy });
-    assert.equal(player.messages.at(-1), "You need a Sailing level of at least 52 to dock at Last Light.");
+    assert.equal(player.messages.at(-1), "spam: You need a Sailing level of 52 to dock here.");
     levels.set(Skill.SAILING, 52);
     plugin.objects.Buoy.Dock({ player, location: lastLight.buoy });
     assert.equal(player.messages.at(-1),
       "You dock the boat at Last Light. You will return here if you have to abandon your boat for any reason.");
     assert.equal(player.getSailing().lastDock, "last_light");
     assert.deepEqual(player.getSailing().returnPoint, lastLight.landing);
+    const sailed = BoatManager.getBoatAboard(player);
+    Object.assign(sailed, { fineX: lastLight.mooring.fineX, fineY: lastLight.mooring.fineY }); // sailed there
     plugin.objects.Gangplank.Disembark({ player, location: lastLight.gangplank });
     TaskManager.process();
     TaskManager.process();

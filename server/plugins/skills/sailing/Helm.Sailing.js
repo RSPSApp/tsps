@@ -34,6 +34,11 @@ const {
   TileInteractionMode,
   EntityInteractionMode,
 } = require("../../../src/main/typescript/elvarg/net/protocol/InteractionMode");
+const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
+const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
+const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
+const { ActionDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ActionDialogue");
+const { holdsLostOnRecovery } = require("./Cargo.Sailing");
 
 const HELM_LOCKED_IN = 3;
 /** sailing_sidepanel_helm_status while a crewmate holds the helm (rsprox). */
@@ -447,21 +452,38 @@ function walkAfterLeaving({ player, boat, reason, atHelm }) {
   if (atHelm && reason !== "logout") walkByClicks(player, boat);
 }
 
-/** Escape sinks the boat, so it asks first; the choice is checked again in case they left. */
+/** Escape's warning, as live: a mesbox chat line and the message box, broken where live breaks it. */
+const ESCAPE_WARNING = "Escaping your boat while out at sea will result in it being lost. If this happens, "
+  + "retrieving it will incur a gold fee and any cargo on board will be lost.";
+const ESCAPE_WARNING_BOX = "Escaping your boat while out at sea will result in it being lost. If this<br>"
+  + "happens, retrieving it will incur a gold fee and any cargo on board<br>will be lost.";
+/** Ours: the question after the warning, worded as the teleport warning's. */
+const ESCAPE_QUESTION = "Accept that your boat will be lost at sea?";
+const ESCAPE_YES = "Yes, escape from it.";
+const ESCAPE_NO = "No, stay on the boat.";
+/** Live's line for leaving a boat at sea (a teleport); Escape leaves it the same way. */
+const ABANDONED = "You abandon your boat, resulting in it becoming lost at sea.";
+const ABANDONED_CARGO = " The contents of your cargo hold are lost with it.";
+
+/**
+ * Escape sinks the boat, so it warns first (live's message box), then asks; the answer is
+ * checked again in case they left meanwhile.
+ */
 function escapeBoat(api, { player }) {
   if (!Sailing.instanceAboard(player)) return;
-  api.sendMultiChatboxPrompt(
-    player,
-    "Escape? Your boat will sink until a shipwright recovers it.",
-    "Yes, abandon ship.",
-    () => {
-      if (!Sailing.instanceAboard(player)) return;
-      Sailing.escape(player);
-      player.sendMessage("Your boat sinks, and you make it back to shore.");
-    },
-    "No.",
-    () => {},
-  );
+  const escape = () => {
+    const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
+    if (!owned) return;
+    const cargoLost = holdsLostOnRecovery(owned);
+    Sailing.escape(player);
+    player.sendMessage(cargoLost ? ABANDONED + ABANDONED_CARGO : ABANDONED);
+  };
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, ESCAPE_WARNING);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new StatementDialogue(0, ESCAPE_WARNING_BOX))
+    .add(new ActionDialogue(1, {
+      execute: () => api.sendMultiChatboxPrompt(player, ESCAPE_QUESTION, ESCAPE_YES, escape, ESCAPE_NO, () => {}),
+    })));
 }
 
 /** The sail row's three buttons (937:25 slots 0-2), for whoever steers: the helmsman, or the captain while a crewmate holds the helm. */

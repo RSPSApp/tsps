@@ -8,9 +8,9 @@
  * With 500 or more charges, run-energy drain is 85% of normal (a stamina effect wins
  * and the two do not stack).
  * A doubled effect "is immediately halved if the ring is unequipped" (Wiki): what is left of it
- * halves when the ring leaves the ring slot, by any route (`equipment:changed`). Ours, as the
- * Wiki doesn't say: putting it back on doesn't double it again, and an effect the ring didn't
- * double is left alone.
+ * halves when the ring that doubled it leaves the ring slot, by any route (`equipment:changed`),
+ * a second ring of endurance put on over it included. Ours, as the Wiki doesn't say: putting it
+ * back on doesn't double it again, and an effect the ring didn't double is left alone.
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
@@ -21,8 +21,13 @@ const PASSIVE_DRAIN_MULTIPLIER = 0.85;
 const CHARGES_META_KEY = "ring-of-endurance";
 /** Potions plugin: when the stamina effect ends (it already cuts the drain to 30%). */
 const STAMINA_END_ATTRIBUTE = "potions:stamina:end";
-/** Set while the stamina effect running now is one the worn ring doubled (saved). */
+/**
+ * While the stamina effect running now is one a worn ring doubled: a token, also kept on that
+ * ring (its meta), so a different ring of endurance in the slot doesn't count as it (both saved).
+ */
 const DOUBLED_ATTRIBUTE = "ring-of-endurance:doubled";
+const DOUBLED_META_KEY = "ring-of-endurance:doubled";
+let doublings = 0;
 
 /** Charges a potion adds to the ring: one per stamina dose, two per extended stamina dose. */
 const CHARGES_BY_ITEM = new Map([
@@ -57,6 +62,20 @@ function wornRing(player) {
 function wearingAnyRing(player) {
   const id = Number(player?.getEquipment?.()?.get?.(Equipment.RING_SLOT)?.getId?.() ?? -1);
   return chargedIds.has(id) || chargedByUncharged.has(id);
+}
+
+/** The ring that doubled the running effect is still in the ring slot. */
+function wearingDoublingRing(player, token) {
+  return wearingAnyRing(player) && player.getEquipment().get(Equipment.RING_SLOT).getMetaValue?.(DOUBLED_META_KEY) === token;
+}
+
+/** Takes the token off a carried or worn ring that has it, so it holds no stale meta. */
+function clearToken(player, token) {
+  for (const container of [player.getInventory?.(), player.getEquipment?.()]) {
+    for (const item of container?.getItems?.() ?? []) {
+      if (item?.getMetaValue?.(DOUBLED_META_KEY) === token) item.setMetaValue(DOUBLED_META_KEY, undefined);
+    }
+  }
 }
 
 function passiveApplies(player) {
@@ -104,10 +123,16 @@ function doubleStamina(request) {
   // Wiki (Ring of endurance): the Agility cape's Stamina Boost "is not doubled and uses no charges".
   if (!ring || request.ringDoubles === false) {
     // This dose replaces the running effect, so a later unequip has nothing doubled to halve.
+    const previous = request.player?.getAttribute?.(DOUBLED_ATTRIBUTE);
+    if (typeof previous === "string") clearToken(request.player, previous);
     request.player?.setAttribute?.(DOUBLED_ATTRIBUTE, null);
     return;
   }
-  request.player.setAttribute(DOUBLED_ATTRIBUTE, true);
+  const token = `${Date.now()}:${++doublings}`;
+  const previous = request.player.getAttribute?.(DOUBLED_ATTRIBUTE);
+  if (typeof previous === "string") clearToken(request.player, previous);
+  request.player.setAttribute(DOUBLED_ATTRIBUTE, token);
+  ring.setMetaValue(DOUBLED_META_KEY, token);
   request.energy *= 2;
   request.durationMs *= 2;
   request.player.sendMessage("Your Ring of endurance doubles the duration of your stamina potion's effect.");
@@ -116,10 +141,12 @@ function doubleStamina(request) {
 
 /** `equipment:changed`: the ring came off while the effect it doubled runs, so what's left halves (Wiki). */
 function halveOnUnequip({ player }) {
-  if (player?.getAttribute?.(DOUBLED_ATTRIBUTE) !== true || wearingAnyRing(player)) {
+  const token = player?.getAttribute?.(DOUBLED_ATTRIBUTE);
+  if (typeof token !== "string" || wearingDoublingRing(player, token)) {
     return;
   }
   player.setAttribute(DOUBLED_ATTRIBUTE, null);
+  clearToken(player, token);
   const endsAt = Number(player.getAttribute(STAMINA_END_ATTRIBUTE));
   const now = Date.now();
   if (!Number.isFinite(endsAt) || endsAt <= now) {
@@ -172,7 +199,7 @@ module.exports = {
   name: "RingOfEndurance",
   description: "Charges the ring of endurance with stamina potions, doubles a worn ring's stamina doses and cuts run-energy drain at 500 or more charges.",
   members: true,
-  _test: { charges, wornRing, useCharge, doubleStamina, chargeRing, uncharge, passiveApplies, drainModifier, halveOnUnequip, MAX_CHARGES, DOUBLED_ATTRIBUTE },
+  _test: { charges, wornRing, useCharge, doubleStamina, chargeRing, uncharge, passiveApplies, drainModifier, halveOnUnequip, MAX_CHARGES, DOUBLED_ATTRIBUTE, DOUBLED_META_KEY },
   register(api) {
     core = api.core;
     const I = core.ItemIdentifiers;

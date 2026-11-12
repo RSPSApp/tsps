@@ -46,6 +46,8 @@ function actor(t, { ring = true } = {}) {
   p.setRegistered(true);
   p.setLocation(new core.Location(HOME[0], HOME[1], 0));
   p.needsPlacement = false;
+  // The ring is worn from 70 Agility (its equip requirement).
+  p.getSkillManager().setMaxLevels(core.Skill.AGILITY, 99, false).setCurrentLevels(core.Skill.AGILITY, 99, false);
   const c = new ClientConnection(channel);
   c.player = p;
   const worn = new core.Item(I.RING_OF_ENDURANCE, 1);
@@ -68,7 +70,12 @@ async function send(f, packet) {
 
 const drink = (f) => send(f, { type: "inventory_action", slot: f.p.getInventory().getSlotForItemId(I.STAMINA_POTION_4_), itemId: I.STAMINA_POTION_4_, widgetId: 3214, option: "Drink" });
 const remove = (f) => send(f, { type: "widget_action", widgetId: (WORN_RING.groupId << 16) | WORN_RING.childId, ...WORN_RING, slot: -1, buttonNum: 1 });
-const wear = (f, id) => send(f, { type: "inventory_action", slot: f.p.getInventory().getSlotForItemId(id), itemId: id, widgetId: 3214, option: "Wear" });
+async function wear(f, id) {
+  const slot = f.p.getInventory().getSlotForItemId(id);
+  const ring = f.p.getInventory().getItems()[slot];
+  await send(f, { type: "inventory_action", slot, itemId: id, widgetId: 3214, option: "Wear" });
+  assert.equal(f.p.getEquipment().get(core.Equipment.RING_SLOT).getMetaValue(CHARGES), ring.getMetaValue(CHARGES), "the ring is worn");
+}
 const left = (f) => Number(f.p.getAttribute("potions:stamina:end")) - Date.now();
 const near = (actual, expected, what) => assert.ok(Math.abs(actual - expected) < 5_000, `${what}: about ${expected} ms, got ${actual}`);
 
@@ -106,4 +113,18 @@ test("a ring that runs out on the dose stays worn and keeps the doubled effect",
   near(left(f), 4 * MINUTE, "still doubled");
   await remove(f);
   near(left(f), 2 * MINUTE, "halved once it comes off");
+});
+
+test("putting a second ring of endurance on over it halves the effect too", async (t) => {
+  const f = actor(t);
+  await drink(f);
+  near(left(f), 4 * MINUTE, "doubled");
+  const second = new core.Item(I.RING_OF_ENDURANCE, 1);
+  second.setMetaValue(CHARGES, 50);
+  f.p.getInventory().setItem(5, second);
+  await wear(f, I.RING_OF_ENDURANCE);
+  near(left(f), 2 * MINUTE, "halved: the ring that doubled it came off");
+  const first = f.p.getInventory().getItems().find((item) => item?.getId?.() === I.RING_OF_ENDURANCE);
+  assert.equal(first.getMetaValue(CHARGES), 99, "the first ring went back to the inventory");
+  assert.equal(first.getMetaValue("ring-of-endurance:doubled"), undefined, "and keeps no stale mark");
 });

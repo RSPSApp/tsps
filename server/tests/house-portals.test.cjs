@@ -92,7 +92,45 @@ function withRefusals(run) {
   return refusals;
 }
 
-test("Home shows the loading screen, loads the house two ticks later and closes the screen the tick after", () => {
+/** The route event a portal click raises first, from where the player stood when clicking. */
+function routeFrom(player, objectId, from) {
+  const object = new GameObject(objectId, new core.Location(...PORTAL_TILE), 10, 2, null);
+  PluginManager.emitObjectRoute({ player, object, objectId, clickType: 2, sourceLocation: { x: from[0], y: from[1], z: from[2] }, destination: null });
+}
+
+test("Home after walking to the portal: screen and jingle at once, the house a tick later, closed the tick after", () => {
+  const player = playerFixture("walker");
+  routeFrom(player, portalId, [2542, 3090, 0]);
+  player.sent = [];
+  click(player, portalId, 2);
+  const click0 = player.sent;
+  assert.ok(has(click0, "sendSound", 984));
+  assert.ok(has(click0, "sendSubInterface", ids.overlay, ids.loading, 1));
+  assert.ok(has(click0, "sendJingle", 20), "Basic wood's loading jingle");
+  assert.ok(has(click0, "sendVarbit", ids.busy, 1));
+  assert.equal(House.houseFor(player), null);
+  tick(player);
+  assert.equal(House.houseFor(player)?.owner, player, "inside a tick after the screen");
+  const closing = tick(player);
+  assert.ok(has(closing, "closeSubInterface", ids.overlay));
+  assert.ok(has(closing, "sendVarbit", ids.busy, 0));
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  House.releaseHouse(player, true);
+});
+
+test("each house style plays its own loading jingle", () => {
+  const expected = { 0: 20, 1: 21, 2: 18, 3: 19, 4: 16, 5: 22, 6: 112, 7: 20, 9: 286, 10: 308, 11: 307, 12: 112 };
+  for (const [style, jingle] of Object.entries(expected)) {
+    const player = playerFixture("styled" + style);
+    player.getAttribute("construction:house").style = Number(style);
+    click(player, portalId, 2);
+    assert.ok(has(tick(player), "sendJingle", jingle), `style ${style}`);
+    tick(player); tick(player);
+    House.releaseHouse(player, true);
+  }
+});
+
+test("Home while standing at the portal shows the loading screen, loads the house two ticks later and closes the screen the tick after", () => {
   const player = playerFixture();
   player.sent = [];
   assert.equal(click(player, portalId, 2), true);
@@ -101,11 +139,12 @@ test("Home shows the loading screen, loads the house two ticks later and closes 
   assert.ok(has(click0, "sendVarbit", ids.minimap, 2));
   assert.ok(has(click0, "sendCameraReset"));
   assert.ok(has(click0, "sendSubInterface", ids.overlay, ids.loading, 1));
+  assert.equal(has(click0, "sendJingle"), false);
   assert.equal(House.houseFor(player), null, "not inside on the click tick");
   assert.equal(player.getMovementQueue().isMovementBlocked(), true, "held still while loading");
 
   const tick1 = tick(player);
-  assert.ok(has(tick1, "sendJingle", 112));
+  assert.ok(has(tick1, "sendJingle", 20));
   assert.ok(has(tick1, "sendVarbit", ids.busy, 1));
   assert.equal(House.houseFor(player), null);
 
@@ -206,14 +245,16 @@ test("each failed visit gets its own line: offline or private, building mode, lo
   House.releaseHouse(host, true);
 });
 
-test("a visit plays the loading screen with its jingle, arrives a tick later and sends no welcome line", () => {
+test("a visit plays the loading screen with the host house's jingle, arrives a tick later and sends no welcome line", () => {
   const host = hostWithHouse("hostv");
+  House.houseFor(host).save.style = 10; // Civitas
   const guest = playerFixture("guestv");
   click(guest, portalId, 4);
   guest.sent = [];
   withPlayerByName(() => host, () => guest.enteredSyntaxAction.execute("hostv"));
   assert.ok(has(guest.sent, "sendSound", 984));
-  assert.ok(has(guest.sent, "sendJingle", 112));
+  assert.ok(has(guest.sent, "sendJingle", 308), "the host's style, not the guest's");
+  assert.ok(has(guest.sent, "sendVarbit", ids.busy, 1));
   assert.ok(has(guest.sent, "sendSubInterface", ids.overlay, ids.loading, 1));
   assert.equal(House.houseFor(guest), null);
   tick(guest);
@@ -230,7 +271,7 @@ test("a house teleport lands inside at once behind the loading screen, closed tw
   player.sent = [];
   api.emitCustomEvent("spell:teleport-arrival", { player, name: "teleport to house" });
   assert.equal(House.houseFor(player)?.owner, player);
-  assert.ok(has(player.sent, "sendJingle", 112));
+  assert.ok(has(player.sent, "sendJingle", 20));
   assert.ok(has(player.sent, "sendSubInterface", ids.overlay, ids.loading, 1));
   assert.equal(has(player.sent, "sendSound", 984), false);
   assert.deepEqual(player.messages, []);

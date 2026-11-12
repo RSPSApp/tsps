@@ -114,11 +114,14 @@ const houseOptionsOpen = new WeakSet();
 const LOADING_INTERFACE = Ids.iface("poh_loading");
 const OVERLAY_ATMOSPHERE_UID = Ids.component("toplevel_osrs_stretch:overlay_atmosphere");
 const PORTAL_SOUND = 984;
-const LOADING_JINGLE = 112;
+// Ours: the loading jingle for a style none of the recorded houses had.
+const DEFAULT_LOADING_JINGLE = 112;
 const MINIMAP_STATE_VARBIT = Ids.varbit("minimap_state");
 const BUSY_VARBIT = Ids.varbit("busy");
 const MINIMAP_OFF = 2;
 const loadingHouses = new WeakSet();
+// Where each player stood when they last clicked a house portal, to tell whether they walked to it.
+const portalClickTiles = new WeakMap();
 const NAME_INPUT_SCRIPT = 109; // meslayer_mode8, answered by resume_p_namedialog
 const VISIT_PROMPT = "Enter name:";
 const VISIT_OFFLINE = "That player is offline, or has privacy mode enabled.";
@@ -276,17 +279,28 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
   return true;
 }
 
+/** Each house style has its own loading jingle (house-styles.json `loadingJingle`). */
+function loadingJingle(save) {
+  return Estate.HOUSE_STYLES[Estate.houseStyleIndex(save)]?.loadingJingle ?? DEFAULT_LOADING_JINGLE;
+}
+
 /**
  * The loading screen: the minimap goes off, the camera resets and poh_loading covers the game.
- * Portals and visits play the portal's sound with it; `jingle` adds the loading jingle.
+ * Portals and visits play the portal's sound with it; `jingle` (a house save) adds that house's
+ * loading jingle and sets `busy`.
  */
-function showHouseLoading(player, { sound = true, jingle = false } = {}) {
+function showHouseLoading(player, { sound = true, jingle = null } = {}) {
   const sender = player.getPacketSender();
   if (sound) sender.sendSound(PORTAL_SOUND, 1, 0);
   sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF);
   sender.sendCameraReset();
   sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, LOADING_INTERFACE, 1);
-  if (jingle) sender.sendJingle(LOADING_JINGLE);
+  if (jingle) playLoadingJingle(player, jingle);
+}
+
+function playLoadingJingle(player, save) {
+  player.getPacketSender().sendJingle(loadingJingle(save));
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
 }
 
 function hideHouseLoading(player) {
@@ -342,8 +356,7 @@ function loadHouse(player, steps) {
 /** A house teleport lands inside at once; the loading screen and jingle cover the next two ticks. */
 function teleportIntoHouse(player, buildingMode) {
   if (!enterHouse(player, buildingMode) || !houseFor(player) || loadingHouses.has(player)) return;
-  showHouseLoading(player, { sound: false, jingle: true });
-  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  showHouseLoading(player, { sound: false, jingle: houseFor(player).save });
   loadHouse(player, { 2: () => hideHouseLoading(player) });
 }
 
@@ -395,14 +408,13 @@ function visitHouse(player, name, location = nearbyHouseLocation(player), diaryE
   if (houseFor(player) === house) return;
   if (!loading) { arriveAsGuest(player, owner, house); return; }
   if (loadingHouses.has(player)) return;
-  showHouseLoading(player, { jingle: true });
+  showHouseLoading(player, { jingle: house.save });
   loadHouse(player, {
     1: () => {
       // The owner may have left, locked up or gone into building mode since.
       const current = activeHouses.get(owner);
       const late = visitRefusal(player, owner, current, location);
       if (late) { hideHouseLoading(player); Menu.refuse(player, late); return; }
-      player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
       arriveAsGuest(player, owner, current);
     },
     2: () => hideHouseLoading(player),
@@ -420,6 +432,7 @@ function arriveAsGuest(player, owner, house) {
 
 /** Friend's house: Ironmen are refused at once; anyone else names the host. */
 function promptVisit({ player, objectId, location: portalLocation, sourceLocation, object }) {
+  portalClickTiles.delete(player);
   if (isIronman(player)) {
     Menu.refuse(player, Menu.messageBox(IRONMAN_VISIT));
     return true;
@@ -1526,53 +1539,71 @@ function isCurrentYanilleHouseEntry(player, context) {
     && isHousePortalReachable(original, context.portalLocation, context.width, context.length);
 }
 
-function enterAtPortal(player, buildingMode, location, diaryEntryContext) {
+function enterAtPortal(player, buildingMode, location, diaryEntryContext, walked = false) {
   if (Estate.houseLocation(houseStateFor(player)).id !== location) {
     player.sendMessage("Your house is not located here.");
     return true;
   }
-  return loadOwnHouse(player, buildingMode, location, diaryEntryContext);
+  return loadOwnHouse(player, buildingMode, location, diaryEntryContext, walked);
 }
 
 /**
- * Home and Build mode: the refusals come at the click, then the loading screen; the house loads
- * two ticks later and the screen closes the tick after.
+ * Home and Build mode: the refusals come at the click, then the loading screen with the house's
+ * jingle; the house loads a tick later and the screen closes the tick after. A player already
+ * standing at the portal gets the screen on the click and the jingle a tick later, and the rest
+ * follows a tick later too.
  */
-function loadOwnHouse(player, buildingMode, location, diaryEntryContext) {
+function loadOwnHouse(player, buildingMode, location, diaryEntryContext, walked = false) {
   if (loadingHouses.has(player) || !ownsAHouse(player)) return true;
   if (entryRefused(player, buildingMode, "portal", () => loadOwnHouse(player, buildingMode, location, diaryEntryContext))) return true;
   player.getPacketSender().sendInterfaceRemoval();
-  showHouseLoading(player);
-  loadHouse(player, {
-    1: () => {
-      player.getPacketSender().sendJingle(LOADING_JINGLE);
-      player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
-    },
-    2: () => {
-      enterHouse(player, buildingMode, diaryEntryContext, "portal");
-      if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
-    },
-    3: () => hideHouseLoading(player),
-  });
+  const save = houseStateFor(player);
+  const enter = () => {
+    enterHouse(player, buildingMode, diaryEntryContext, "portal");
+    if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
+  };
+  if (walked) {
+    showHouseLoading(player, { jingle: save });
+    loadHouse(player, { 1: enter, 2: () => hideHouseLoading(player) });
+  } else {
+    showHouseLoading(player);
+    loadHouse(player, { 1: () => playLoadingJingle(player, save), 2: enter, 3: () => hideHouseLoading(player) });
+  }
   return true;
+}
+
+/** Notes where the player clicked a house portal from (the object route event). */
+function notePortalClick({ player, objectId, sourceLocation }) {
+  if (!HOUSE_PORTAL_IDS.includes(objectId) || !sourceLocation) return;
+  portalClickTiles.set(player, `${sourceLocation.x},${sourceLocation.y},${sourceLocation.z}`);
+}
+
+/** Whether the player walked to the portal they're now using; forgets the click. */
+function walkedToPortal({ player, sourceLocation }) {
+  const clicked = portalClickTiles.get(player);
+  portalClickTiles.delete(player);
+  return clicked != null && !!sourceLocation && clicked !== `${sourceLocation.x},${sourceLocation.y},${sourceLocation.z}`;
 }
 
 /** Enter: "Select an option" over the portal's three destinations. */
 function openPortalMenu(event) {
+  portalClickTiles.delete(event.player);
   api.sendMultiChatboxPrompt(event.player, "Select an option",
-    "Go to your house", () => enterNormalHouse(event),
-    "Go to your house (building mode)", () => enterBuildingHouse(event),
+    "Go to your house", () => enterNormalHouse(event, false),
+    "Go to your house (building mode)", () => enterBuildingHouse(event, false),
     "Go to a friend's house", () => promptVisit(event),
     "Cancel", () => {});
   return true;
 }
-function enterNormalHouse({ player, objectId, location, sourceLocation, object }) {
+function enterNormalHouse(event, walked = walkedToPortal(event)) {
+  const { player, objectId, location, sourceLocation, object } = event;
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
-  return enterAtPortal(player, false, nearbyHouseLocation(player, objectId), diaryEntryContext);
+  return enterAtPortal(player, false, nearbyHouseLocation(player, objectId), diaryEntryContext, walked);
 }
-function enterBuildingHouse({ player, objectId, location, sourceLocation, object }) {
+function enterBuildingHouse(event, walked = walkedToPortal(event)) {
+  const { player, objectId, location, sourceLocation, object } = event;
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
-  return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext);
+  return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext, walked);
 }
 /**
  * Wiki, Player-owned house: deaths anywhere in an active house keep items,
@@ -1720,6 +1751,7 @@ function attach(api) {
   api.onObjectFifthClick(hotspotIds, onObject);
   api.onObjectInteraction(handleFurnitureAction);
   api.onObjectRoute(routeHouseChair);
+  api.onObjectRoute(notePortalClick);
   api.onItemOnObject(handleHouseItem, { noted: false });
   api.onInterfaceActionClick(handleHouseInterface);
   api.onCustomEvent("player:option-route", kickGuest);

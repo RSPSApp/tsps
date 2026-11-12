@@ -16,6 +16,7 @@
 // minecarts and many more share it): the last test mounts another interface there right after the scene's fade in.
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const fs = require("node:fs");
 const { before, after, test } = require("node:test");
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
@@ -38,12 +39,20 @@ const SCENES = {
   goblin: { start: [2957, 3512, 0], key: "goblin_diplomacy", stage: 1, npc: "GENERAL_BENTNOZE", item: "ORANGE_GOBLIN_MAIL", at: [2958, 3512, 0] },
 };
 
+const noticeboardSave = path.resolve(__dirname, "../data/saves/shooting-stars.json");
+const noticeboardBytes = () => fs.existsSync(noticeboardSave) ? fs.readFileSync(noticeboardSave) : null;
+let noticeboardBefore;
 let core;
 let I;
 let next = 1700; // the player list gives each test player its index; this only seeds the name
 
 before(async () => {
+  noticeboardBefore = noticeboardBytes();
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  // This suite advances global tasks far enough for the star scheduler to land.
+  // Reuse the noticeboard's existing in-memory test lifecycle before scheduling;
+  // fixture ticks must not create a world save inside the sealed source tree.
+  require("../plugins/skills/shootingstars/Noticeboard.ShootingStars").resetForTests();
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
   assert.equal(core.WorldDefinition.isMembersWorld(), true, "native Watchtower fixture uses an actual members world");
@@ -58,7 +67,10 @@ before(async () => {
   }
   PM.emitServerStartup({});
 });
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  PM.emitServerShutdown({});
+  assert.deepEqual(noticeboardBytes(), noticeboardBefore, "native scene ticks never create or change the world noticeboard save");
+});
 
 function actor(t, scene) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -98,6 +110,9 @@ function tick(f) {
   AreaManager.process(f.player);
   core.TaskManager.processWalkTo(f.player.getIndex());
   f.player.getMovementQueue().process();
+  // World updates visibility after tasks/movement and before the session flush.
+  // Explicit quest overhead actors use this real list, not mere registration.
+  core.World.updateLocalNpcs(f.player, [...core.World.getNpcs()]);
   f.player.getSession().flushClient(core.World.processCycle);
   f.player.resetUpdating();
 }
@@ -512,7 +527,7 @@ async function useDoor(f, door) {
 }
 
 // ---- the undo ledger -------------------------------------------------------------------------------------------------
-const LEDGER_METHODS = /^(sendVarbit|sendConfig|sendVarp|sendVarc|sendClientScript|sendInterfaceScript|sendSubInterface|mountSubInterface|closeSubInterface|closeInterface|closeCurrentChatbox|sendInterfaceRemoval|sendInterface|sendChatboxInterface|sendInterfaceDisplayState|sendInterfaceHidden|sendCamera\w*|sendPlayerOption|sendInteractionMode|sendResetInteractionMode|sendMinimap\w*|sendTab\w*|sendWalkable\w*|sendFlashingTab|sendWidgetHidden|\w*Hidden|\w*Lock\w*|\w*Mode\w*)$/;
+const LEDGER_METHODS = /^(sendVarbit|sendConfig|sendVarp|sendVarc|sendClientScript|sendInterfaceScript|sendSubInterface|mountSubInterface|closeSubInterface|closeInterface|closeCurrentChatbox|sendInterfaceRemoval|sendInterface|sendChatboxInterface|sendInterfaceDisplayState|sendInterfaceHidden|sendInterfacePosition|sendInterfaceAnimation|sendCamera\w*|sendPlayerOption|sendInteractionMode|sendResetInteractionMode|sendMinimap\w*|sendTab\w*|sendWalkable\w*|sendFlashingTab|sendWidgetHidden|\w*Hidden|\w*Lock\w*|\w*Mode\w*)$/;
 
 /** Wraps the packet sender so every outer call of a state-changing method is written down with its arguments. */
 function recordSender(f) {
@@ -925,3 +940,561 @@ test("Yarlo: a forced death uses the real grave exit and cannot leave lecture ta
   ticks(f, 160);
   assert.ok(f.player.getLocation().equals(returned), "cancelled lecture cannot teleport the player later");
 });
+
+
+// #4403: real NPC inputs for the free repeat service; checkpoint fixtures, not quest traversal.
+const GIANT_DWARF_DOCKS = {
+  mines: { root: 2432, transformed: 7726, npc: [2842, 10129, 0], start: [2841, 10129, 0], arrival: [2888, 10226, 0], greeting: "Want to go back to Keldagrim?" },
+  city: { root: 2433, transformed: 2433, npc: [2888, 10227, 0], start: [2888, 10226, 0], arrival: [2841, 10129, 0], greeting: "Want me to take you back to the mines?" },
+};
+const giantDwarfPosition = f => {
+  const at = f.player.getLocation();
+  return [at.getX(), at.getY(), at.getZ()];
+};
+function giantDwarfState(f) {
+  return {
+    stage: quest("giant_dwarf").getStage(f.player),
+    packedProgress: f.player.getPacketSender().getVarp(482),
+    questPoints: f.player.getPacketSender().getVarp(QuestRuntime.QUEST_POINTS_VARP),
+    savedQuestPoints: f.player.getAttribute("quest.points"),
+    inventory: f.player.getInventory().getItems().map(item => [item.getId(), item.getAmount()]),
+  };
+}
+function giantDwarfBoatman(t, dock, stage) {
+  for (const at of [dock.npc, dock.start, dock.arrival]) core.RegionManager.loadMapFiles(at[0], at[1]);
+  const f = actor(t, { start: dock.start });
+  const q = quest("giant_dwarf");
+  assert.ok(q, "The Giant Dwarf is registered before testing a journey");
+  q.setStage(f.player, stage);
+  f.player.getInventory().add(new core.Item(I.COINS, 123), false);
+  const npc = core.NPC.create(dock.root, new core.Location(...dock.npc));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  t.after(() => core.World.getNpcs().remove(npc));
+  ticks(f, 3);
+  assert.equal(core.RegionManager.blocked(new core.Location(...dock.start), null), false, "departure is legal active-cache land");
+  assert.equal(core.RegionManager.blocked(new core.Location(...dock.arrival), null), false, "arrival is legal active-cache land");
+  assert.equal(npc.getContentId(f.player), stage === 0 && dock.root === 2432 ? 7725 : dock.transformed, "actual root transforms for the checkpoint");
+  const actions = npc.getCurrentDefinition(f.player).getActions();
+  assert.equal(actions[0], "Talk-to");
+  if (stage >= 5) assert.equal(actions[2], "Travel", "native option three really is Travel");
+  recordSender(f);
+  return { f, npc };
+}
+async function giantDwarfRepeatChoice(f, npc, choice) {
+  const dock = GIANT_DWARF_DOCKS[npc.getId() === 2433 ? "city" : "mines"];
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+  for (let i = 0; i < 12 && !f.player.getDialogueManager().isActive(); i++) tick(f);
+  const greeting = f.player.getDialogueManager().getCurrent();
+  assert.ok(greeting?.getText?.().includes(dock.greeting), "actual outgoing greeting selects this dock's branch");
+  await clickThrough(f, () => !!MultiChatboxPrompt.getPending(f.player), 40);
+  const pending = MultiChatboxPrompt.getPending(f.player);
+  assert.ok(pending, "ordinary Talk-to reaches the return menu");
+  assert.equal(pending.options[0], "Yes, please take me.");
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: choice }]);
+  tick(f);
+}
+for (const [name, dock] of Object.entries(GIANT_DWARF_DOCKS)) {
+  for (const stage of [5, 50]) {
+    for (const route of ["Talk-to Yes", "Travel"]) {
+      test(`Giant Dwarf: ${name} ${route} at stage ${stage} makes a free repeat journey without replay`, async t => {
+        const { f, npc } = giantDwarfBoatman(t, dock, stage);
+        const before = giantDwarfState(f);
+        if (route === "Travel") {
+          await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 3 }]);
+        } else {
+          await giantDwarfRepeatChoice(f, npc, 1);
+          assert.deepEqual(giantDwarfPosition(f), dock.start, "choosing Yes shows the player reply before departure");
+          await clickThrough(f, () => giantDwarfPosition(f).join() === dock.arrival.join(), 30);
+        }
+        ticks(f, 8);
+        assert.deepEqual(giantDwarfPosition(f), dock.arrival, "ordinary input reaches the opposite dock");
+        assert.deepEqual(giantDwarfState(f), before, "free travel preserves stage, all packed quest flags and inventory");
+        assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+        assert.equal(f.player.isUntargetable(), false);
+        assert.ok(!f.ledger.calls.some(call => /^sendCamera/.test(call.name)), "repeat service never replays opening camera");
+        const presentationGroups = new Set([151, 152, 172, 174]);
+        const presentationOpens = f.ledger.calls.filter(call => {
+          // recordSender records the outer call, so sendSubInterface hides its nested mount.
+          if (["sendSubInterface", "mountSubInterface"].includes(call.name)) return presentationGroups.has(call.args[1]);
+          if (call.name === "sendInterface") return presentationGroups.has(call.args[0]);
+          return false;
+        });
+        assert.deepEqual(presentationOpens, [], "repeat service opens none of the story/title/crash/fade presentation groups");
+      });
+    }
+  }
+  test(`Giant Dwarf: ${name} declined return stays at its dock`, async t => {
+    const { f, npc } = giantDwarfBoatman(t, dock, 5);
+    const before = giantDwarfState(f);
+    await giantDwarfRepeatChoice(f, npc, 2);
+    await clickThrough(f, () => !f.player.getDialogueManager().isActive(), 40);
+    ticks(f, 4);
+    assert.deepEqual(giantDwarfPosition(f), dock.start);
+    assert.deepEqual(giantDwarfState(f), before);
+  });
+  test(`Giant Dwarf: ${name} movement refusal cannot trigger native Travel`, async t => {
+    const { f, npc } = giantDwarfBoatman(t, dock, 5);
+    const before = giantDwarfState(f);
+    f.player.getMovementQueue().setBlockMovement(true);
+    t.after(() => f.player.getMovementQueue().setBlockMovement(false));
+    await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 3 }]);
+    ticks(f, 8);
+    assert.deepEqual(giantDwarfPosition(f), dock.start);
+    assert.deepEqual(giantDwarfState(f), before);
+  });
+}
+
+for (const [name, dock] of Object.entries(GIANT_DWARF_DOCKS)) {
+  test(`Giant Dwarf: ${name} modal refusal preserves the return service state`, async t => {
+    const { f, npc } = giantDwarfBoatman(t, dock, 5);
+    const before = giantDwarfState(f);
+    // A world click closes pre-existing interruptible modals before NPC dispatch.
+    // Open a real modal at the route event instead, after that close and before
+    // the journey callback. This tests the service's own late busy-state refusal.
+    let armed = true, modalOpened = false;
+    PM.createApi(`GiantDwarfLateModal-${name}`).onNpcRoute(event => {
+      if (!armed || event.player !== f.player || event.npc !== npc) return;
+      armed = false;
+      f.player.getPacketSender().sendInterface(OTHER_GROUP);
+      modalOpened = true;
+      assert.equal(f.player.busy(), true, "real late modal is a positive refusal precondition");
+    });
+    t.after(() => { armed = false; f.player.getPacketSender().sendInterfaceRemoval(); });
+    await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 3 }]);
+    ticks(f, 8);
+    assert.equal(modalOpened, true, "ordinary NPC input reaches the real route event");
+    assert.deepEqual(giantDwarfPosition(f), dock.start);
+    assert.deepEqual(giantDwarfState(f), before);
+    assert.equal(f.player.getInterfaceId(), OTHER_GROUP, "rejected Travel cannot remove the modal");
+  });
+}
+test("Giant Dwarf: prequest mine transform has no native repeat Travel service", async t => {
+  const dock = GIANT_DWARF_DOCKS.mines;
+  const { f, npc } = giantDwarfBoatman(t, dock, 0);
+  const before = giantDwarfState(f);
+  assert.notEqual(npc.getCurrentDefinition(f.player).getActions()[2], "Travel");
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 3 }]);
+  ticks(f, 8);
+  assert.deepEqual(giantDwarfPosition(f), dock.start);
+  assert.deepEqual(giantDwarfState(f), before, "invalid prequest native option cannot start or award the quest");
+});
+
+
+async function giantDwarfChoose(f, label) {
+  await clickThrough(f, () => !!MultiChatboxPrompt.getPending(f.player), 80);
+  const prompt = MultiChatboxPrompt.getPending(f.player);
+  assert.ok(prompt, `ordinary dialogue reaches ${label}`);
+  const index = prompt.options.indexOf(label);
+  assert.ok(index >= 0, `actual current menu offers ${label}: ${prompt.options.join(" / ")}`);
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 }]);
+  tick(f);
+}
+async function giantDwarfInitial(t, valid = true, accept = "Yes.") {
+  const { f, npc } = giantDwarfBoatman(t, GIANT_DWARF_DOCKS.mines, 0);
+  if (valid) {
+    for (const [skill, level] of [[core.Skill.CRAFTING, 12], [core.Skill.FIREMAKING, 16], [core.Skill.MAGIC, 33], [core.Skill.THIEVING, 14]]) {
+      f.player.getSkillManager().setMaxLevels(skill, level, false);
+      f.player.getSkillManager().setCurrentLevels(skill, level, false);
+    }
+  }
+  f.player.setSpellbook(core.MagicSpellbook.NORMAL);
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+  await giantDwarfChoose(f, "That's a deal!");
+  await giantDwarfChoose(f, accept);
+  return { f, npc };
+}
+test("Giant Dwarf: refused initial requirements never offer Skip or Play", async t => {
+  const { f } = await giantDwarfInitial(t, false);
+  ticks(f, 8);
+  assert.equal(quest("giant_dwarf").getStage(f.player), 0);
+  assert.ok(!MultiChatboxPrompt.getPending(f.player));
+  assert.deepEqual(giantDwarfPosition(f), GIANT_DWARF_DOCKS.mines.start);
+  assert.equal(f.player.getPrivateArea(), null, "refusal/decline cannot enter a private cutscene");
+});
+test("Giant Dwarf: optional Skip preserves initial acceptance and reaches Veldaban without the played map", async t => {
+  const { f, npc } = await giantDwarfInitial(t);
+  assert.equal(quest("giant_dwarf").getStage(f.player), 5, "ordinary Yes accepts before the Skip/Play choice");
+  assert.equal(npc.getId(), 2432);
+  assert.equal(npc.getContentId(f.player), 7726, "physical root now transforms while initial conversation retains its child context");
+  await giantDwarfChoose(f, "Skip Cutscene");
+  ticks(f, 4);
+  assert.deepEqual(giantDwarfPosition(f), [2827, 10214, 0]);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), "Identify yourself, human!");
+  assert.equal(quest("giant_dwarf").getStage(f.player), 5);
+  assert.ok(!f.ledger.calls.some(call => ["sendSubInterface", "mountSubInterface"].includes(call.name) && call.args[1] === 172));
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test("Giant Dwarf: declining the initial departure leaves quest and dock unchanged", async t => {
+  const { f } = await giantDwarfInitial(t, true, "No.");
+  await clickThrough(f, () => !f.player.getDialogueManager().isActive(), 30);
+  ticks(f, 4);
+  assert.equal(quest("giant_dwarf").getStage(f.player), 0);
+  assert.deepEqual(giantDwarfPosition(f), GIANT_DWARF_DOCKS.mines.start);
+  assert.equal(f.player.getPrivateArea(), null, "refusal/decline cannot enter a private cutscene");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  const presentationGroups = new Set([151, 152, 172, 174]);
+  assert.ok(!f.ledger.calls.some(call => (["sendSubInterface", "mountSubInterface"].includes(call.name) && presentationGroups.has(call.args[1]))
+    || (call.name === "sendInterface" && presentationGroups.has(call.args[0]))));
+});
+
+// Opening contract: cache/native producer ordering and ordinary inputs, not a rendered movie.
+test("Giant Dwarf: Play stages the opening and arrest in a private map, then restores the HQ offer", async t => {
+  const { f } = await giantDwarfInitial(t);
+  const q = quest("giant_dwarf");
+  assert.equal(q.getStage(f.player), 5, "valid ordinary start acceptance precedes Play");
+  const before = giantDwarfState(f);
+  core.RegionManager.loadMapFiles(2878, 10177);
+  const originalStatue = () => [0, 1, 2].map(plane => (core.MapObjects.getObjectsAt(new core.Location(2878, 10177, plane), null) ?? [])
+    .map(object => [object.getId(), object.getType(), object.getFace()]));
+  const realStatueBefore = originalStatue();
+  assert.deepEqual(realStatueBefore.map(parts => parts.find(part => [7031, 7040, 7042].includes(part[0]))),
+    [[7042, 10, 0], [7040, 10, 0], [7031, 10, 0]], "actual cache statue roots/effective planes precede the causal Play target");
+  const bystander = actor(t, { start: GIANT_DWARF_DOCKS.city.start });
+  ticks(bystander, 3);
+  const bystanderPosition = giantDwarfPosition(bystander);
+  const bystanderPacketStart = bystander.packets.length;
+  t.after(() => {
+    const area = f.player.getPrivateArea();
+    if (area instanceof core.TemplatedInstanceArea && !area.isDestroyed()) area.leave(f.player, true);
+  });
+  await giantDwarfChoose(f, "Play Cutscene");
+  const area = f.player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea, "GIANT_DWARF4403_TARGET_STAGED_OPENING: accepted Play must allocate its private map");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(f.player.isUntargetable(), true);
+  assert.ok(f.player.getLocation().getX() >= 8192, "owner occupies the allocated copy");
+  const rebuild = f.packets.find(packet => packet.op === OP.REBUILD_REGION)?.frame;
+  assert.ok(rebuild, "real session sends an encoded template rebuild");
+  const templateChunks = decodeTemplateChunks(rebuild);
+  assert.ok(templateChunks.length > 0, "template rebuild has actual source chunks");
+  assert.ok(templateChunks.some(packed => ((packed >>> 14) & 1023) === (2878 >> 3)
+    && ((packed >>> 3) & 2047) === (10177 >> 3)), "actual rebuild includes the bound statue source chunk");
+  const intact = area.getObjects().filter(object => [7032, 7041, 7043].includes(object.getId()));
+  assert.deepEqual(intact.map(object => [object.getId(), object.getLocation().getX() - area.getBaseX(),
+    object.getLocation().getY() - area.getBaseY(), object.getLocation().getZ(), object.getType(), object.getFace()]).sort((a, b) => a[3] - b[3]),
+    [[7043, 78, 49, 0, 10, 0], [7041, 78, 49, 1, 10, 0], [7032, 78, 49, 2, 10, 0]], "only private concrete parts use the actual root placements");
+  const mapLines = new Set(), dockLines = new Set(), guards = new Set();
+  let dockHeldBeforeSpeech = false;
+  await clickThrough(f, () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    const text = current?.getText?.();
+    if (typeof text === "string" && f.player.getPacketSender().isSubInterfaceOpen(172)) mapLines.add(text);
+    const currentGuards = area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER);
+    for (const guard of currentGuards) guards.add(guard);
+    if (currentGuards.length === 2 && !dockHeldBeforeSpeech) {
+      assert.ok(current instanceof core.ActionDialogue && current.isSelfAdvancing(), "new guards wait under the scene's held chain before the next-tick transcript");
+      assert.ok(currentGuards.every(guard => f.player.getLocalNpcs().includes(guard)), "spawn cycle publishes both guards before overhead begins");
+      dockHeldBeforeSpeech = true;
+    }
+    if (typeof text === "string" && currentGuards.length === 2) {
+      dockLines.add(text);
+      assert.ok(currentGuards.every(guard => f.player.getLocalNpcs().includes(guard)), "dock speakers entered the real local NPC view before dialogue");
+      assert.ok(!area.getObjects().some(object => [7032, 7041, 7043].includes(object.getId())), "dock phase no longer owns intact statue presentation");
+    }
+    // Both players share this world cycle; do not process global tasks a second time.
+    bystander.tick++;
+    AreaManager.process(bystander.player);
+    bystander.player.getMovementQueue().process();
+    core.World.updateLocalNpcs(bystander.player, [...core.World.getNpcs()]);
+    bystander.player.getSession().flushClient(core.World.processCycle);
+    bystander.player.resetUpdating();
+    return giantDwarfPosition(f).join() === "2827,10214,0" && text === "Identify yourself, human!";
+  }, 500);
+  assert.deepEqual(giantDwarfPosition(f), [2827, 10214, 0], "normal end arrives at the real HQ");
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), "Identify yourself, human!", "existing Veldaban offer resumes after teardown");
+  assert.deepEqual(giantDwarfState(f), before, "presentation preserves accepted stage5, packed progress, inventory and QP");
+  assert.ok(mapLines.has("Look, there's the statue of King Alvis, guarding the entrance to Keldagrim!"));
+  assert.ok(mapLines.has("Amazing! And we're going to go straight past it?"));
+  assert.ok(mapLines.has("Er, hold on! There's something wrong!"));
+  assert.ok(mapLines.has("Aaargh!"), "ordinary map dialogue reaches the collision warning");
+  assert.equal(dockHeldBeforeSpeech, true, "normal Play crossed the guarded actor visibility boundary");
+  assert.equal(guards.size, 2, "dock arrest uses two distinct private concrete guards");
+  assert.ok([...guards].every(guard => guard.getOwner() === f.player && guard.isOwnerOnly()), "arrest actors belong only to the scene owner");
+  assert.ok(dockLines.has("Halt! By order of the Black Guard, you are under arrest!"));
+  assert.ok(dockLines.has("Come with us, human! Commander Veldaban wants a word with you!"));
+
+  // WIDGET_OPEN_SUB is variable-short: opcode/length precede targetUID/group/type.
+  const sceneOpens = f.packets.filter(packet => packet.op === 103 && packet.frame.readInt32BE(3) === ((161 << 16) | 16));
+  const groups = sceneOpens.map(packet => packet.frame.readUInt16BE(7));
+  const transitions = groups.filter((group, index) => index === 0 || groups[index - 1] !== group);
+  assert.deepEqual(transitions, [152, 151, 152, 172], "native title, story, city/statue title and map producers occur in order");
+  const visibleParents = f.ledger.calls.filter(call => call.name === "sendInterfaceDisplayState" && call.args[1] === false).map(call => call.args[0]);
+  assert.deepEqual(visibleParents.filter(uid => uid >>> 16 === 151).map(uid => uid & 0xffff), [0, 1, 2, 3, 4, 5, 6, 7, 8], "all native story parent layers become visible in order");
+  assert.deepEqual(visibleParents.filter(uid => uid >>> 16 === 152).map(uid => uid & 0xffff), [0, 3, 6], "only opening title parent layers are revealed");
+  // WIDGET_SET_ANIMATION is fixed: opcode, UID, signed animation ID.
+  const animationPackets = f.packets.filter(packet => packet.op === 114 && packet.frame.readInt32BE(1) === ((172 << 16) | 4));
+  assert.deepEqual(animationPackets.map(packet => packet.frame.readInt16BE(5)), [-1, 2138], "fresh model is paused, then its native sequence released in canonical order");
+  assert.ok(f.ledger.calls.filter(call => call.name === "sendCameraMoveTo").length >= 3, "palace/city/statue views are actual camera producers");
+  assert.equal(f.ledger.calls.filter(call => /^sendCamera/.test(call.name)).at(-1)?.name, "sendCameraReset");
+  assert.equal(area.isDestroyed(), true);
+  assert.ok([...guards].every(guard => !guard.isRegistered()), "normal end removes the private arrest actors");
+  assert.equal(f.player.getPrivateArea(), null);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+  for (const group of [151, 152, 172]) assert.equal(f.player.getPacketSender().isSubInterfaceOpen(group), false);
+  assert.deepEqual(giantDwarfPosition(bystander), bystanderPosition);
+  assert.deepEqual(originalStatue(), realStatueBefore, "private presentation never changes the real city's statue roots");
+  assert.equal(bystander.player.getPrivateArea(), null);
+  assert.ok(!bystander.packets.slice(bystanderPacketStart).some(packet => packet.op === OP.REBUILD_REGION), "bystander receives no private map rebuild");
+  await giantDwarfChoose(f, "Yes, I will do this.");
+  ticks(f, 4);
+  const accepted = giantDwarfState(f);
+  assert.equal(accepted.stage, 10, "ordinary Veldaban task acceptance still advances the existing stage");
+  assert.deepEqual(accepted.inventory, before.inventory);
+  assert.equal(accepted.questPoints, before.questPoints);
+  assert.equal(accepted.savedQuestPoints, before.savedQuestPoints, "accepting the task does not award completion rewards");
+});
+
+for (const phase of ["held", "resumed"]) {
+  test(`Giant Dwarf: foreign visible chatbox preserves its owner when the ${phase} scene chain is still current`, async t => {
+    const { f } = await giantDwarfInitial(t);
+    const before = giantDwarfState(f);
+    t.after(() => {
+      const area = f.player.getPrivateArea();
+      if (area instanceof core.TemplatedInstanceArea && !area.isDestroyed()) area.leave(f.player, true);
+    });
+    await giantDwarfChoose(f, "Play Cutscene");
+    const area = f.player.getPrivateArea();
+    assert.ok(area instanceof core.TemplatedInstanceArea, "ordinary Play reaches a real held scene");
+    const sender = f.player.getPacketSender(), manager = f.player.getDialogueManager();
+    if (phase === "resumed") {
+      await clickThrough(f, () => sender.isSubInterfaceOpen(172)
+        && typeof manager.getCurrent()?.getText?.() === "string", 160);
+      assert.equal(sender.isSubInterfaceOpen(172), true);
+      assert.equal(typeof manager.getCurrent()?.getText?.(), "string", "canonical warning transcript has resumed");
+    }
+    const oldChainOwner = manager.getOwner(), oldEntry = manager.getCurrent();
+    assert.ok(oldChainOwner, "held and resumed chains have an actual opaque owner");
+    assert.equal(sender.getChatboxOwner(), oldChainOwner, "visible presentation initially belongs to the scene chain");
+    const foreignOwner = Object.freeze({});
+    const foreignGroup = sender.getChatboxGroupId() === 218 ? 231 : 218; // Both are native cache chatbox groups.
+    sender.withChatboxOwner(foreignOwner, () => sender.sendChatboxInterface(foreignGroup));
+    assert.equal(manager.getCurrent(), oldEntry, "actual sender replacement deliberately leaves the old manager entry intact");
+    assert.equal(manager.getOwner(), oldChainOwner);
+    assert.equal(sender.getChatboxOwner(), foreignOwner);
+    ticks(f, 2); // Actual area process must detect loss of the visible presentation, not just chain identity.
+    assert.equal(area.isDestroyed(), true);
+    assert.equal(f.player.getPrivateArea(), null);
+    assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+    assert.equal(f.player.isUntargetable(), false);
+    assert.equal(manager.isActive(), false, "retained scene chain is reset without closing foreign UI");
+    assert.equal(sender.getChatboxGroupId(), foreignGroup);
+    assert.equal(sender.getChatboxOwner(), foreignOwner);
+    const afterCancel = f.packets.length;
+    ticks(f, 200);
+    assert.equal(sender.getChatboxGroupId(), foreignGroup, "delayed scene tasks cannot close the foreign presentation");
+    assert.equal(sender.getChatboxOwner(), foreignOwner);
+    assert.equal(manager.isActive(), false, "interruption never resumes the task offer");
+    assert.deepEqual(giantDwarfState(f), before);
+    assert.ok(!f.packets.slice(afterCancel).some(packet => packet.op === 103
+      && packet.frame.readInt32BE(3) === ((161 << 16) | 16)
+      && [151, 152, 172].includes(packet.frame.readUInt16BE(7))), "no delayed phase reopens the scene");
+  });
+}
+
+async function giantDwarfOpenPhase(t, phase) {
+  const { f } = await giantDwarfInitial(t);
+  await giantDwarfChoose(f, "Play Cutscene");
+  const area = f.player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea, "ordinary Play establishes the private scene before interruption");
+  t.after(() => { if (!area.isDestroyed()) area.leave(f.player, true); });
+  if (phase === "map") {
+    await clickThrough(f, () => f.player.getPacketSender().isSubInterfaceOpen(172)
+      && typeof f.player.getDialogueManager().getCurrent()?.getText?.() === "string", 160);
+    assert.equal(f.player.getPacketSender().isSubInterfaceOpen(172), true);
+  } else if (phase === "dock") {
+    await clickThrough(f, () => area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER).length === 2
+      && typeof f.player.getDialogueManager().getCurrent()?.getText?.() === "string", 220);
+    const guards = area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER);
+    assert.equal(guards.length, 2);
+    assert.ok(guards.every(guard => f.player.getLocalNpcs().includes(guard)), "dock interruption follows actual actor visibility");
+  }
+  assert.deepEqual(f.player.getAttribute("giant-dwarf:boat-scene-exit"), [2827, 10214, 0]);
+  return { f, area };
+}
+for (const phase of ["intro", "map", "dock"]) {
+  for (const how of ["logout", "forced-exit", "Escape"]) {
+    test(`Giant Dwarf: ${phase} ${how} restores controls and cancels the opening without a task offer`, async t => {
+      const { f, area } = await giantDwarfOpenPhase(t, phase);
+      const before = giantDwarfState(f);
+      const actors = area.entities.filter(npc => npc.isNpc?.());
+      if (how === "logout") f.player.onLogout();
+      else if (how === "forced-exit") f.player.moveTo(area.tile(104, 98, 0)); // Outside the allocation as well as scene bounds.
+      else await f.connection.dispatch([{ type: "interface_close" }]);
+      ticks(f, 3);
+      assert.equal(area.isDestroyed(), true);
+      assert.deepEqual(giantDwarfPosition(f), [2827, 10214, 0], "safe real exit, including a forced step beyond the destroyed copy");
+      assert.equal(f.player.getPrivateArea(), null);
+      assert.equal(f.player.getAttribute("giant-dwarf:boat-scene-exit"), null);
+      assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+      assert.equal(f.player.isUntargetable(), false);
+      assert.equal(f.player.getPacketSender().getVarbit(542), 0);
+      assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+      assert.ok(actors.every(npc => !npc.isRegistered()));
+      const afterExit = f.ledger.calls.length;
+      ticks(f, 200);
+      assert.deepEqual(giantDwarfPosition(f), [2827, 10214, 0]);
+      assert.deepEqual(giantDwarfState(f), before);
+      assert.equal(f.player.getDialogueManager().isActive(), false, "abnormal teardown never resumes Veldaban's task offer");
+      assert.ok(!f.ledger.calls.slice(afterExit).some(call => ["sendSubInterface", "mountSubInterface"].includes(call.name)
+        && [151, 152, 172].includes(call.args[1])), "cancelled phase tasks never reopen their presentation");
+    });
+  }
+}
+test("Giant Dwarf: a forced engine death recovers the grave and cannot resume the opening later", async t => {
+  const { f, area } = await giantDwarfOpenPhase(t, "map");
+  const request = { player: f.player, tile: { x: f.player.getLocation().getX(), y: f.player.getLocation().getY(), z: 0 } };
+  PM.emitCustomEvent("gravestones:grave-location", request);
+  assert.deepEqual(request.tile, { x: 2827, y: 10214, z: 0 });
+  const errors = [];
+  t.mock.method(console, "error", (...args) => errors.push(args.map(String).join(" ")));
+  // Cinematic owners are untargetable; force the real engine death task, not an invented combat route.
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  core.TaskManager.submit(new PlayerDeathTask(f.player));
+  ticks(f, 12);
+  assert.deepEqual(errors, [], "forced death does not fall through exception recovery");
+  assert.equal(area.isDestroyed(), true);
+  assert.ok(f.player.getLocation().getX() < 8192);
+  assert.equal(f.player.getAttribute("giant-dwarf:boat-scene-exit"), null);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(quest("giant_dwarf").getStage(f.player), 5);
+  const returned = giantDwarfPosition(f);
+  ticks(f, 200);
+  assert.deepEqual(giantDwarfPosition(f), returned, "cancelled scene never teleports a respawned player");
+});
+test("Giant Dwarf: saved in-copy recovery uses the persisted real HQ exit", async t => {
+  const { f, area } = await giantDwarfOpenPhase(t, "intro");
+  const savedPosition = f.player.getLocation().clone(), savedExit = [...f.player.getAttribute("giant-dwarf:boat-scene-exit")];
+  f.player.onLogout();
+  assert.equal(area.isDestroyed(), true);
+  const restored = actor(t, { start: [savedPosition.getX(), savedPosition.getY(), savedPosition.getZ()] });
+  quest("giant_dwarf").setStage(restored.player, 5);
+  restored.player.setAttribute("giant-dwarf:boat-scene-exit", savedExit);
+  PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
+  ticks(restored, 4);
+  assert.deepEqual(giantDwarfPosition(restored), [2827, 10214, 0]);
+  assert.equal(restored.player.getAttribute("giant-dwarf:boat-scene-exit"), null);
+  assert.equal(restored.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(quest("giant_dwarf").getStage(restored.player), 5);
+});
+
+test("Giant Dwarf: a replacement overlay lifetime survives scene cancellation", async t => {
+  const { f, area } = await giantDwarfOpenPhase(t, "intro");
+  const sender = f.player.getPacketSender(), target = (161 << 16) | 16;
+  const replacement = sender.mountSubInterface(target, OTHER_GROUP, 1);
+  ticks(f, 3);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(sender.getSubInterfaceAt(target), replacement, "old scene receipt cannot close the new overlay lifetime");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getDialogueManager().isActive(), false);
+  ticks(f, 200);
+  assert.equal(sender.getSubInterfaceAt(target), replacement);
+  assert.equal(quest("giant_dwarf").getStage(f.player), 5);
+});
+
+async function giantDwarfBeforeHandoff(t, handoff) {
+  const { f, area } = await giantDwarfOpenPhase(t, handoff === "dock" ? "map" : "intro");
+  const marker = handoff === "dock"
+    ? call => call.name === "sendInterfaceAnimation" && call.args[0] === ((172 << 16) | 4) && call.args[1] === 2138
+    : call => call.name === "sendInterfaceDisplayState" && call.args[0] === ((152 << 16) | 6) && call.args[1] === false;
+  await clickThrough(f, () => f.ledger.calls.some(marker), 180);
+  const at = f.ledger.calls.find(marker);
+  assert.ok(at, "real phase producer establishes the deferred handoff boundary");
+  assert.equal(f.tick, at.tick, "stop on the observed producer's own world cycle");
+  ticks(f, handoff === "dock" ? 26 : 5);
+  return { f, area };
+}
+for (const handoff of ["map", "dock"]) {
+  test(`Giant Dwarf: foreign chatbox immediately before due ${handoff} callback prevents all handoff writes`, async t => {
+    const { f, area } = await giantDwarfBeforeHandoff(t, handoff);
+    const sender = f.player.getPacketSender(), manager = f.player.getDialogueManager();
+    const previous = manager.getCurrent(), previousOwner = manager.getOwner(), foreignOwner = Object.freeze({});
+    const foreignGroup = sender.getChatboxGroupId() === 218 ? 231 : 218;
+    sender.withChatboxOwner(foreignOwner, () => sender.sendChatboxInterface(foreignGroup));
+    assert.equal(manager.getCurrent(), previous); assert.equal(manager.getOwner(), previousOwner);
+    let guardAdds = 0;
+    const registry = core.World.getNpcs(), add = registry.add.bind(registry);
+    t.mock.method(registry, "add", npc => {
+      if (npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER && npc.getOwner() === f.player) guardAdds++;
+      return add(npc); // Observe the actual producer; never substitute a registry outcome.
+    });
+    const beforeDue = f.ledger.calls.length;
+    tick(f); // Tasks run before area process: this is precisely the due callback, not an early cancellation.
+    assert.equal(area.isDestroyed(), true);
+    assert.equal(guardAdds, 0, "no transient guard spawn before area cancellation");
+    const dueCalls = f.ledger.calls.slice(beforeDue);
+    assert.ok(!dueCalls.some(call => call.name === "sendCameraMoveTo" || call.name === "sendInterfaceAnimation"
+      || ["mountSubInterface", "sendSubInterface"].includes(call.name) && [151, 152, 172].includes(call.args[1])), "lost presentation blocks phase writes before global-task execution");
+    assert.equal(sender.getChatboxOwner(), foreignOwner); assert.equal(sender.getChatboxGroupId(), foreignGroup);
+    assert.equal(manager.isActive(), false);
+    assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+    ticks(f, 200);
+    assert.equal(sender.getChatboxOwner(), foreignOwner); assert.equal(sender.getChatboxGroupId(), foreignGroup);
+    assert.equal(manager.isActive(), false); assert.equal(quest("giant_dwarf").getStage(f.player), 5);
+  });
+}
+test("Giant Dwarf: a new same-group story receipt immediately before reveal receives no old parent writes", async t => {
+  const { f, area } = await giantDwarfOpenPhase(t, "intro");
+  const sender = f.player.getPacketSender(), target = (161 << 16) | 16;
+  await clickThrough(f, () => sender.isSubInterfaceOpen(151), 40);
+  const mount = f.ledger.calls.find(call => call.name === "mountSubInterface" && call.args[1] === 151);
+  assert.ok(mount); assert.equal(f.tick, mount.tick, "first reveal is due on the next native task cycle");
+  const replacement = sender.mountSubInterface(target, 151, 1), beforeDue = f.ledger.calls.length;
+  tick(f);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(sender.getSubInterfaceAt(target), replacement);
+  assert.ok(!f.ledger.calls.slice(beforeDue).some(call => call.name === "sendInterfaceDisplayState" && call.args[0] >>> 16 === 151), "old queued reveal cannot mutate the replacement group's parent state");
+  ticks(f, 200);
+  assert.equal(sender.getSubInterfaceAt(target), replacement);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.getDialogueManager().isActive(), false);
+});
+test("Giant Dwarf: lost manager ownership at a due map handoff preserves the foreign chain", async t => {
+  const { f, area } = await giantDwarfBeforeHandoff(t, "map");
+  const sender = f.player.getPacketSender(), manager = f.player.getDialogueManager();
+  const visibleOwner = sender.getChatboxOwner(), foreignOwner = Object.freeze({});
+  const foreignEntry = new core.ActionDialogue(0, { execute() {} }, true);
+  manager.startDialogues(new core.DialogueChainBuilder().add(foreignEntry), foreignOwner);
+  assert.equal(sender.getChatboxOwner(), visibleOwner, "actual foreign action changes manager ownership without presenting another chatbox");
+  const beforeDue = f.ledger.calls.length;
+  tick(f);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(manager.getCurrent(), foreignEntry); assert.equal(manager.getOwner(), foreignOwner);
+  assert.ok(!f.ledger.calls.slice(beforeDue).some(call => ["mountSubInterface", "sendSubInterface"].includes(call.name) && call.args[1] === 172));
+  ticks(f, 200);
+  assert.equal(manager.getCurrent(), foreignEntry); assert.equal(manager.getOwner(), foreignOwner);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+});
+
+for (const replacement of ["same-group", "end-scene"]) {
+  test(`Giant Dwarf: synchronous story interface-open ${replacement} stops the original caller's writes`, async t => {
+    const { f, area } = await giantDwarfOpenPhase(t, "intro");
+    const sender = f.player.getPacketSender(), target = (161 << 16) | 16;
+    let armed = true, fired = 0, foreignReceipt, beforeWrites;
+    t.after(() => { armed = false; });
+    PM.createApi(`GiantDwarfOpenedBoundary-${replacement}`).onCustomEvent("interface:opened", event => {
+      if (!armed || event.player !== f.player || event.targetUid !== target || event.groupId !== 151) return;
+      armed = false; fired++;
+      if (replacement === "same-group") foreignReceipt = sender.mountSubInterface(target, 151, 1);
+      else area.leave(f.player, false);
+      beforeWrites = f.ledger.calls.length;
+    });
+    await clickThrough(f, () => fired > 0, 40);
+    assert.equal(fired, 1, "actual one-shot interface:opened producer ran without recursive replacement");
+    assert.equal(area.isDestroyed(), true);
+    assert.ok(!f.ledger.calls.slice(beforeWrites).some(call => call.name === "sendInterfaceDisplayState" && call.args[0] >>> 16 === 151), "post-mount check precedes every original parent write");
+    if (replacement === "same-group") assert.equal(sender.getSubInterfaceAt(target), foreignReceipt);
+    else assert.equal(sender.getSubInterfaceAt(target), undefined, "a receipt returned after its scene ended is closed only if still current");
+    assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+    assert.equal(f.player.getDialogueManager().isActive(), false);
+    ticks(f, 200);
+    if (replacement === "same-group") assert.equal(sender.getSubInterfaceAt(target), foreignReceipt);
+    else assert.equal(sender.getSubInterfaceAt(target), undefined);
+    assert.equal(quest("giant_dwarf").getStage(f.player), 5);
+  });
+}

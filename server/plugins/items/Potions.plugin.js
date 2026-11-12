@@ -185,12 +185,12 @@ function applyPrayerRestore(player, isSuperRestore) {
   restorePrayer(player, isSuperRestore ? 8 : 7, hasPrayerRestoreBonus(player) ? 0.27 : 0.25);
 }
 
+/** Drinking plays only the drink sound: prayer-restoring potions add no prayer recharge sound. */
 function restorePrayer(player, flat, percent) {
   const max = getMaxLevel(player, Skill.PRAYER);
   const restored = Math.floor(flat + max * percent);
   const cap = Math.max(max, getCurrentLevel(player, Skill.PRAYER));
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 
 /** Sanfew serum (Wiki): 4 + 30% to every stat, prayer 4 + 30% (32% with the bonus). */
@@ -294,7 +294,6 @@ function restorePrayerOverheal(player, flat, percent, overPercent = 0.05) {
   const cap = max + Math.floor(max * overPercent);
   const restored = Math.floor(flat + max * percent);
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 
 /** Ancient brew / forgotten brew (Wiki): Magic boost, prayer restore and an Attack/Strength/Defence drain. */

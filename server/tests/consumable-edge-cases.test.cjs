@@ -203,6 +203,25 @@ test("prayer potions restore 7 + 25%, or 27% with a holy wrench or worn prayer c
   assert.equal(cape.levels.get(Skill.PRAYER), 1 + 8 + 26);
 });
 
+test("prayer-restoring potions play no prayer recharge sound (only the drink sound)", () => {
+  const PRAYER_RECHARGE = 2674;
+  for (const [name, apply] of [
+    ["prayer potion", (player) => applyPrayerRestore(player, false)],
+    ["super restore", (player) => applyPrayerRestore(player, true)],
+    ["sanfew serum", applySanfewRestore],
+    ["ancient brew", (player) => applyAncientBrew(player, 2, 0.05)],
+  ]) {
+    const player = createPlayer();
+    const sounds = [];
+    const sender = player.getPacketSender();
+    sender.sendSoundEffect = (id) => { sounds.push(id); return sender; };
+    player.getPacketSender = () => sender;
+    player.getUsername = () => "drinker";
+    apply(player);
+    assert.ok(!sounds.includes(PRAYER_RECHARGE), `${name} sent ${sounds}`);
+  }
+});
+
 test("a Sanfew dose restores 4 + 30% (prayer 32% with the bonus)", () => {
   const player = createPlayer({ equipment: [ItemIdentifiers.RING_OF_THE_GODS_I_] });
   applySanfewRestore(player);

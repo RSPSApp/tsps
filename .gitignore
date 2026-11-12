@@ -29,6 +29,8 @@ yarn-debug.log*
 yarn-error.log*
 
 caches/
+# Past leagues' cache groups from OpenRS2 (scripts/league-era-cache.ts)
+server/era-caches/
 toolkit/node_modules
 toolkit/dist
 mcp/data

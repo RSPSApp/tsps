@@ -171,9 +171,14 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     }
     for (const task of tasks) {
       assert.ok(([1, 2, 3, 4, 5, 6].includes(task.category) || (league.fromCache && task.category === -1)) && Object.values(catalog.areas).includes(task.area), task.id);
-      const cached = cacheRows.get(task.name.toLowerCase());
-      assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
-      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
+      if (league.eraCache) {
+        // The league's own cache (league-tasks-era-cache.test.cjs pins what it corrected).
+        assert.equal(task.categorySource, "era", task.id);
+      } else {
+        const cached = cacheRows.get(task.name.toLowerCase());
+        assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
+        if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
+      }
       if (task.trigger) {
         assert.ok(kinds.has(task.trigger.kind), `${task.id}: ${task.trigger.kind}`);
         for (const course of task.trigger.courses ?? []) assert.ok(courseKeys.has(course), `${task.id}: course ${course}`);

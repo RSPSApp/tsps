@@ -1412,7 +1412,14 @@ test("every course's loot tracker source is the cache's entry for it (enum 4976)
 
 test("a lap goes in the loot tracker after the helper's lap end, with the mark it spawned (rsprox 20261109T090342: 7197, then 7198)", () => {
   hooks.events.length = 0;
-  lapWithMarkRolls("seers", createPlayer(2729, 3489, 0, 60), [0]);
+  // Where the scripts stood when the entry was asked for, to compare with the helper's lap end (5174).
+  let scriptsBefore = null;
+  hooks.answers["loot-tracker:add"] = ({ player }) => { scriptsBefore = player.state.scripts.length; };
+  try {
+    lapWithMarkRolls("seers", createPlayer(2729, 3489, 0, 60), [0]);
+  } finally {
+    delete hooks.answers["loot-tracker:add"];
+  }
   const entries = hooks.events.filter((event) => event.name === "loot-tracker:add").map((event) => event.payload);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].source, 27);
@@ -1420,7 +1427,7 @@ test("a lap goes in the loot tracker after the helper's lap end, with the mark i
   assert.deepEqual(entries[0].items, [[MARK_OF_GRACE, 1]]);
   const [{ player }] = entries;
   const endLap = player.state.scripts.findIndex(([id]) => id === 5174);
-  assert.ok(endLap >= 0, "the helper's lap end was sent first");
+  assert.ok(endLap >= 0 && endLap < scriptsBefore, "the helper's lap end was sent before the entry");
 
   hooks.events.length = 0;
   lapWithMarkRolls("seers", createPlayer(2729, 3489, 0, 60), [0.99, 0.99]);

@@ -578,6 +578,14 @@ for (const attacker of ["creature", "ship"]) {
   });
 }
 
+/** Applies a repair kit from the player's inventory, as the inventory's Apply. */
+function applyKit(player, itemId) {
+  const event = { player, itemId, clickType: 1, handled: false };
+  assert.equal(Repairs.apply(event), true);
+  assert.equal(event.handled, true);
+  return event;
+}
+
 test("a repair kit's Apply repairs the boat as captured; its hitpoints by tier", () => {
   const player = captain();
   const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
@@ -585,17 +593,106 @@ test("a repair kit's Apply repairs the boat as captured; its hitpoints by tier",
   try {
     owned.damage = 30;
     player.inventory.add(new Item(31967, 1));
-    const event = { player, itemId: 31967, clickType: 1, handled: false };
-    assert.equal(Repairs.apply(event), true);
+    applyKit(player, 31967);
     assert.equal(owned.damage, 20, "an oak kit repairs 10");
     assert.equal(player.inventory.getAmount(31967), 0);
     assert.equal(player.anims.at(-1), 13252, "human_repairkit");
     assert.equal(player.messages().at(-1), "You use the repair kit to fix up the boat.");
     assert.equal(player.varbits.get(19181), BoatHp.hitpointsOf(owned));
+    assert.deepEqual(Object.values(cargo.REPAIR_KITS), [5, 10, 20, 30, 40, 45, 50], "wooden to rosewood");
     assert.equal(cargo.repairKitUses({ ...owned, cargo: [{ id: 31964, amount: 2 }, { id: 31982, amount: 1 }] }), 60,
       "the side panel counts the hold's kits by what they repair (5 per repair kit, rsprox)");
   } finally {
     leave(player);
+  }
+});
+
+test("a repair kit used ashore is refused with live's line and kept", () => {
+  const player = captain();
+  const { Item } = require("../dist/game/model/Item");
+  player.inventory.add(new Item(31976, 1));
+  applyKit(player, 31976);
+  assert.equal(player.messages().at(-1), "You need to be on a boat to use a repair kit.");
+  assert.equal(player.inventory.getAmount(31976), 1);
+  assert.deepEqual(player.anims, []);
+});
+
+test("a repair kit on a boat at full health is still used up", () => {
+  const player = captain();
+  const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
+  const { Item } = require("../dist/game/model/Item");
+  try {
+    owned.damage = 0;
+    player.inventory.add(new Item(31970, 1));
+    applyKit(player, 31970);
+    assert.equal(player.inventory.getAmount(31970), 0);
+    assert.equal(owned.damage, 0);
+    assert.equal(player.messages().at(-1), "You use the repair kit to fix up the boat.");
+  } finally {
+    leave(player);
+  }
+});
+
+test("repair kits go on at most one every 3 ticks; clicks in between do nothing", () => {
+  const player = captain();
+  const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
+  const { Item } = require("../dist/game/model/Item");
+  try {
+    owned.damage = 100;
+    player.inventory.add(new Item(31964, 5));
+    const repaired = [];
+    for (let i = 0; i < 7; i++) {
+      const before = owned.damage;
+      applyKit(player, 31964);
+      if (owned.damage < before) repaired.push(i);
+      tick();
+    }
+    assert.deepEqual(repaired, [0, 3, 6]);
+    assert.equal(player.inventory.getAmount(31964), 2, "an ignored click keeps the kit");
+    assert.equal(player.messages().filter((text) => text === "You use the repair kit to fix up the boat.").length, 3);
+  } finally {
+    leave(player);
+  }
+});
+
+test("at the helm a repair kit plays no repair animation", () => {
+  const player = captain();
+  const { boat, owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
+  const { Item } = require("../dist/game/model/Item");
+  const helm = boat.helmPlayerId;
+  try {
+    owned.damage = 30;
+    boat.helmPlayerId = player.getIndex();
+    player.inventory.add(new Item(31976, 1));
+    const anims = player.anims.length;
+    applyKit(player, 31976);
+    assert.equal(owned.damage, 0, "a camphor kit repairs 40, up to full");
+    assert.equal(player.anims.length, anims, "the helmsman's pose stays");
+    assert.ok(player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 2101), "the repair sound still plays");
+  } finally {
+    boat.helmPlayerId = helm;
+    leave(player);
+  }
+});
+
+test("a guest aboard someone else's boat repairs it", () => {
+  const owner = captain();
+  const guest = captain();
+  const { owned } = aboardWithCannon(owner, { type: "sloop" });
+  const { Item } = require("../dist/game/model/Item");
+  try {
+    assert.equal(Sailing.boardAsGuest(guest, owner, "the_pandemonium", 8), null);
+    owned.damage = 50;
+    guest.inventory.add(new Item(31973, 1));
+    applyKit(guest, 31973);
+    assert.equal(owned.damage, 20, "a mahogany kit repairs 30");
+    assert.equal(guest.inventory.getAmount(31973), 0);
+    assert.equal(guest.messages().at(-1), "You use the repair kit to fix up the boat.");
+    assert.equal(guest.anims.at(-1), 13252);
+    assert.equal(owner.varbits.get(19181), BoatHp.hitpointsOf(owned), "the owner's side panel");
+    assert.equal(guest.varbits.get(19181), BoatHp.hitpointsOf(owned), "the guest's side panel");
+  } finally {
+    leave(owner);
   }
 });
 

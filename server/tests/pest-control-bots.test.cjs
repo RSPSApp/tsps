@@ -38,6 +38,9 @@ const npcHandlers = {};
 const buttonHandlers = new Map();
 const emitted = [];
 const deathHooks = {};
+const startupHooks = [];
+// Kept, so the lander tests can reach each boat's waiting area and its queue.
+const areaManager = { areas: [] };
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
@@ -45,10 +48,11 @@ const api = {
   emitCustomEvent() {},
   registerDefinitionSource() {},
   registerNpcCombatMethodProvider() {},
-  getAreaManager: () => ({ areas: [] }),
+  getAreaManager: () => areaManager,
   getObjectManager: () => ObjectManager,
   getRegionManager: () => RegionManager,
   getWorld: () => World,
+  onServerStartup(handler) { startupHooks.push(handler); },
   onPlayerLogin() {},
   onObjectInteraction(handler) { objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },
@@ -597,6 +601,132 @@ test("a game that ends during a death keeps that player's items, and they stay a
   const later = { player: human, shouldDrop: null };
   deathHooks.drop(later);
   assert.equal(later.shouldDrop, null, "a later death elsewhere is the world's own");
+});
+
+// --- Lander boarding and groups ------------------------------------------------------------
+
+const { boardingParty } = plugin._test;
+const { MIN_PLAYERS, MAX_PLAYERS } = plugin._test.constants;
+
+/** Players on a lander, in boarding order; boardingParty only needs who they are. */
+function waiting(prefix, count) {
+  return Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}` }));
+}
+
+function names(players) {
+  return players.map((player) => player.name);
+}
+
+/** Answers "grouping:members" as the Grouping plugin does, from player -> { id, fits }. */
+function mockGrouping(t, groups) {
+  const asked = [];
+  const original = api.emitCustomEvent;
+  api.emitCustomEvent = (name, request) => {
+    if (name !== "grouping:members") return;
+    asked.push(request);
+    const group = groups.get(request.player);
+    Object.assign(request, { groupId: group?.id ?? 0, fits: group?.fits ?? true });
+  };
+  t.after(() => { api.emitCustomEvent = original; });
+  return asked;
+}
+
+function group(id, members, fits = true) {
+  return members.map((player) => [player, { id, fits }]);
+}
+
+test("at startup Pest Control tells the Grouping plugin a lander takes 25 players", (t) => {
+  const announced = [];
+  const original = api.emitCustomEvent;
+  api.emitCustomEvent = (name, payload) => announced.push([name, payload]);
+  t.after(() => { api.emitCustomEvent = original; });
+  assert.equal(startupHooks.length, 1);
+  startupHooks[0]({ timestamp: Date.now() });
+  assert.deepEqual(announced, [["grouping:activity", { name: "Pest Control", maxSize: 25 }]]);
+});
+
+test("a lander with room for everyone takes everyone in waiting order, groups or not", (t) => {
+  const queue = waiting("p", MAX_PLAYERS);
+  const asked = mockGrouping(t, new Map(group(1, [queue[0], queue[24]])));
+  assert.deepEqual(names(boardingParty(queue)), names(queue));
+  assert.equal(asked.length, 0, "nobody's group is looked up");
+});
+
+test("an over-full lander takes players without groups in waiting order, the first 25", (t) => {
+  const queue = waiting("p", MAX_PLAYERS + 3);
+  const asked = mockGrouping(t, new Map());
+  assert.deepEqual(names(boardingParty(queue)), names(queue.slice(0, MAX_PLAYERS)));
+  assert.deepEqual(asked[0], { player: queue[0], activity: "Pest Control", maxSize: 25, groupId: 0, fits: true });
+});
+
+test("an over-full lander keeps a group together, at the place of the first of them to board", (t) => {
+  const [a1, a2] = waiting("a", 2);
+  const lone = waiting("p", 24);
+  mockGrouping(t, new Map(group(4, [a1, a2])));
+  const party = boardingParty([a1, ...lone, a2]);
+  assert.deepEqual(names(party), names([a1, ...lone.slice(0, 23), a2]), "a2 boards with a1; the last lone player waits");
+});
+
+test("a group that doesn't fit the seats left waits whole, and later players who fit go instead", (t) => {
+  const lone = waiting("p", 23);
+  const big = waiting("b", 4);
+  const pair = waiting("c", 2);
+  const last = waiting("q", 1);
+  mockGrouping(t, new Map([...group(7, big), ...group(8, pair)]));
+  const queue = [...lone.slice(0, 22), ...big, pair[0], lone[22], pair[1], ...last];
+  const party = boardingParty(queue);
+  assert.deepEqual(names(party), names([...lone.slice(0, 22), pair[0], lone[22], pair[1]]));
+  assert.equal(party.length, MAX_PLAYERS);
+  assert.ok(big.every((player) => !party.includes(player)), "none of the four boards");
+  assert.ok(!party.includes(last[0]), "the lander filled before the last lone player");
+});
+
+test("a group too big for a lander boards as single players, as it would without groups", (t) => {
+  const lone = waiting("p", 22);
+  const huge = waiting("h", 4);
+  mockGrouping(t, new Map(group(9, huge, false)));
+  const queue = [...lone, ...huge];
+  assert.deepEqual(names(boardingParty(queue)), names(queue.slice(0, MAX_PLAYERS)));
+});
+
+test("a group never keeps a lander from leaving: too few left to play takes the first 25", (t) => {
+  const [first] = waiting("p", 1);
+  const crowd = waiting("g", MAX_PLAYERS);
+  mockGrouping(t, new Map(group(3, crowd)));
+  const queue = [first, ...crowd];
+  const party = boardingParty(queue);
+  assert.ok(party.length >= MIN_PLAYERS);
+  assert.deepEqual(names(party), names(queue.slice(0, MAX_PLAYERS)));
+});
+
+test("a departing lander starts the game with whole groups and keeps a group that didn't fit waiting", (t) => {
+  const boat = plugin._test.BOATS[0];
+  const state = areaManager.areas.find((waitingArea) => waitingArea.state?.boat === boat).state;
+  const human = () => realPlayer(boat.waitingLocation, { bot: false });
+  const lone = Array.from({ length: MAX_PLAYERS - 2 }, human);
+  const trio = [human(), human(), human()];
+  const late = human();
+  mockGrouping(t, new Map(group(5, trio)));
+  state.queue = [...lone, ...trio, late];
+  state.countdown = 1;
+  state.launch();
+  const match = lone[0].getAttribute("pest-control:match");
+  try {
+    assert.ok(match instanceof plugin._test.PestControlMatch, "the game starts");
+    const aboard = [...match.players.keys()];
+    assert.equal(aboard.length, MAX_PLAYERS - 1);
+    assert.ok([...lone, late].every((player, index) => aboard[index] === player), "the lone players, in waiting order");
+    assert.ok(trio.every((player) => !player.getAttribute("pest-control:match")), "the group stays off this game");
+    assert.ok(state.queue.length === 3 && trio.every((player, index) => state.queue[index] === player), "and waits together");
+    assert.ok(state.countdown > 1, "for a fresh countdown");
+  } finally {
+    state.queue = [];
+    for (const player of [...match.players.keys()]) {
+      player.getForcedLogoutTimer = () => ({ start() {} });
+      player.requestLogout = () => {};
+    }
+    match.finish(false, "test over");
+  }
 });
 
 // --- Void Knights' Reward Options ---------------------------------------------------------

@@ -18,7 +18,7 @@ const { DisplayNames } = require("../dist/game/entity/impl/player/DisplayNames")
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const Grouping = require("../plugins/interface/Grouping.plugin");
 
-const { Actions, Layout, Lifecycle, Members, Panel, Rows, Store } = Grouping._test;
+const { Actions, Activities, Layout, Lifecycle, Members, Panel, Rows, Store } = Grouping._test;
 const { MESSAGE } = Actions;
 const GROUP = Actions.GROUP_ATTRIBUTE;
 const ROLE = Actions.ROLE_ATTRIBUTE;
@@ -131,6 +131,7 @@ beforeEach(() => {
   process.env[DisplayNames.FILE_ENV] = path.join(dir, "display-names.json");
   DisplayNames.reset();
   Store.reset();
+  Activities.reset();
   online = [];
   clock = 1_000_000;
   performance.now = () => clock;
@@ -140,6 +141,7 @@ beforeEach(() => {
     persistAttribute: (key, value) => hooks.persisted.set(key, value),
     registerCustomInterface: (definition) => hooks.interfaces.push(definition),
     registerCommand: (name, handler) => hooks.commands.set(name, handler),
+    onServerStartup: (handler) => (hooks.startup = handler),
     onPlayerLogin: (handler) => (hooks.login = handler),
     onPlayerLogout: (handler) => (hooks.logout = handler),
     onObjectInteraction: (name, actions) => hooks.objects.set(name, actions),
@@ -479,6 +481,36 @@ test("a login reads the store, not the save: removed while away means out", () =
   login(back);
   assert.deepEqual([back.attributes.get(GROUP), back.attributes.get(ROLE)], [0, ""]);
   assert.equal(said(back), Lifecycle.NO_LONGER_IN_GROUP);
+});
+
+// --- Activities ---------------------------------------------------------------------------------
+
+test("minigames say how many they take; a minigame gets the group's members online and whether it fits", () => {
+  const [alice, bob, cara, dan] = ["Alice", "Bob", "Cara", "Dan"].map((name) => login(player(name)));
+  formed(alice, bob, cara);
+  emit("grouping:activity", { name: "Royal Titans", maxSize: 2 });
+  emit("grouping:activity", { name: "Tombs of Amascut", maxSize: 8 });
+  emit("grouping:activity", { name: "Nothing", maxSize: 0 });
+  assert.deepEqual([...Activities.activities], [["Royal Titans", 2], ["Tombs of Amascut", 8]]);
+
+  const toa = emit("grouping:members", { player: bob, activity: "Tombs of Amascut" });
+  assert.deepEqual(toa.members.map((member) => member.name), ["Alice", "Bob", "Cara"]);
+  assert.deepEqual([toa.leader, toa.isLeader, toa.size, toa.max, toa.fits, toa.message], [alice, false, 3, 8, true, undefined]);
+  const titans = emit("grouping:members", { player: alice, activity: "Royal Titans" });
+  assert.deepEqual([titans.isLeader, titans.fits, titans.message], [true, false, "Your group has 3 players; Royal Titans takes at most 2."]);
+  assert.equal(emit("grouping:members", { player: alice, activity: "Unlisted", maxSize: 3 }).fits, true, "a size given in the request counts");
+
+  logout(cara);
+  const away = emit("grouping:members", { player: alice, activity: "Tombs of Amascut" });
+  assert.deepEqual([away.members.map((member) => member.name), away.size], [["Alice", "Bob"], 3], "only members online, but every member counts");
+  const alone = emit("grouping:members", { player: dan, activity: "Royal Titans" });
+  assert.deepEqual([alone.groupId, alone.members, alone.fits, alone.leader], [0, [dan], true, null]);
+
+  assert.equal(emit("grouping:same-group", { player: alice, other: bob }).same, true);
+  assert.equal(emit("grouping:same-group", { player: alice, other: dan }).same, false);
+  assert.equal(emit("grouping:same-group", { player: dan, other: dan }).same, false, "no group is no shared group");
+  group(alice, "info");
+  assert.equal(said(alice), "Too many players for: Royal Titans (2).");
 });
 
 // --- Logouts and the cap -----------------------------------------------------------------------

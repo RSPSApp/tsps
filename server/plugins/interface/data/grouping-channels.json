@@ -1,0 +1,32 @@
+{
+  "_source": "OSRS Wiki, Grouping (revision of 5 October 2026), the activity table's Chat channel column: the channels that exist, by the owner name the tab's Join sends (enum 849), and the name each shows. Shooting Stars' shown name is from a live capture (rev 242). Bounty Hunter, Mastering Mixology and Sorceress's Garden have no channel on the Wiki, though enum 849 names one.",
+  "channels": {
+    "osrs ba": "Osrs Ba",
+    "osrs bf": "Osrs Bf",
+    "osrs bgr": "Osrs Bgr",
+    "osrs castle": "Osrs Castle",
+    "osrs clw": "Osrs Clw",
+    "osrs dkings": "Osrs Dkings",
+    "osrs ft": "Osrs Ft",
+    "osrs gf cc": "Osrs Gf Cc",
+    "osrs gwd": "Osrs Gwd",
+    "osrs gotr cc": "Osrs Gotr Cc",
+    "osrs lms cc": "Osrs Lms Cc",
+    "osrs mtacc": "Osrs Mtacc",
+    "osrs nmz": "Osrs Nmz",
+    "osrs pc": "Osrs Pc",
+    "osrs poh": "Osrs Poh",
+    "osrs ratpits": "Osrs Ratpits",
+    "osrs rt": "Osrs Rt",
+    "osrs shades": "Osrs Shades",
+    "osrs soa": "Osrs Soa",
+    "osrs star cc": "Stars",
+    "osrs sw cc": "Osrs Sw Cc",
+    "osrs tob cc": "Osrs Tob Cc",
+    "osrs tithe": "Osrs Tithe",
+    "osrs toa cc": "Osrs Toa Cc",
+    "osrs tb": "Osrs Tb",
+    "osrs tfp": "Osrs Tfp",
+    "os volcmine": "Os Volcmine"
+  }
+}

@@ -110,7 +110,7 @@ function rankLabel(rank) {
 class FriendsChatManager {
     static getOwnedChannel(player) {
         const owner = accountName(player.getUsername());
-        return owner ? this.channels.get(owner.key) : undefined;
+        return owner && !this.systemProfiles.has(owner.key) ? this.channels.get(owner.key) : undefined;
     }
     static recruitBot(owner, bot) {
         if (!bot.isPlayerBot() || owner.isPlayerBot())
@@ -137,6 +137,55 @@ class FriendsChatManager {
     static pendingJoins = new Map();
     /** Owner key -> the setup the channel takes when its delay ends. */
     static pendingSetups = new Map();
+    /**
+     * Channels a plugin runs that no player owns (Grouping's activity and group channels), by key.
+     * Their key wins over an account of the same name, nobody holds the Owner rank in them, a
+     * profile's `admits(player)` decides who may enter, and a login rejoins them by key. Keys are
+     * compared as names are (DisplayNames.key): the cache writes "osrs ba" with a no-break space,
+     * and a typed name has an ordinary one.
+     */
+    static systemProfiles = new Map();
+    /**
+     * Registers or updates a system channel: { ownerName, channelName, entryRank, talkRank, kickRank,
+     * admits(player), rankOf(player) }. rankOf, when given, is each member's rank (else Unranked).
+     */
+    static registerSystemChannel(rawKey, fields) {
+        const key = DisplayNames.key(rawKey);
+        const profile = {
+            system: true,
+            ownerKey: key,
+            ownerName: fields.ownerName,
+            channelName: fields.channelName,
+            entryRank: fields.entryRank ?? FriendsChatRank.Unranked,
+            talkRank: fields.talkRank ?? FriendsChatRank.Unranked,
+            kickRank: fields.kickRank ?? FriendsChatRank.Owner,
+            friends: new Set(),
+            ignores: new Set(),
+            friendRanks: new Map(),
+            admits: fields.admits,
+            rankOf: fields.rankOf,
+        };
+        this.systemProfiles.set(key, profile);
+        const channel = this.channels.get(key);
+        if (channel) {
+            channel.profile = profile;
+            this.broadcastChannel(key);
+        }
+    }
+    /** Ends a system channel: its members are removed, as from a disabled channel. */
+    static removeSystemChannel(rawKey) {
+        const key = DisplayNames.key(rawKey);
+        this.systemProfiles.delete(key);
+        const channel = this.channels.get(key);
+        if (channel)
+            this.closeChannel({ key }, channel);
+    }
+    /** The system channel a typed or stored name means, if any. */
+    static systemOwner(raw) {
+        const key = DisplayNames.key(String(raw ?? ""));
+        const profile = this.systemProfiles.get(key);
+        return profile ? { key, display: profile.ownerName, system: true } : undefined;
+    }
     static onLogin(player) {
         // encodeGameframeBootstrap mounts Friends429 on every login.
         player.getPacketSender().sendVarbit(FRIENDS_PANEL_VARBIT, 0);
@@ -388,7 +437,7 @@ class FriendsChatManager {
         this.sendSnapshot(player);
         this.refreshFriendWatchers(player.getLongUsername(), player);
         const ownerKey = accountName(player.getUsername())?.key;
-        if (ownerKey) {
+        if (ownerKey && !this.systemProfiles.has(ownerKey)) {
             this.refreshOwnedChannel(player);
             if (action.action === "add_ignore" && !wasIgnored && relations.hasIgnore(target.encoded)) {
                 const channel = this.channels.get(ownerKey);
@@ -416,11 +465,13 @@ class FriendsChatManager {
             if (this.pendingJoins.get(index) !== player)
                 return;
             this.pendingJoins.delete(index);
-            this.join(player, DisplayNames.resolve(String(rawOwnerName ?? "")) ?? "", true);
+            // A system channel's name is never someone's display name.
+            const system = this.systemOwner(rawOwnerName);
+            this.join(player, system ? system.key : DisplayNames.resolve(String(rawOwnerName ?? "")) ?? "", true);
         });
     }
     static join(player, rawOwnerName, notify) {
-        const ownerName = accountName(rawOwnerName);
+        const ownerName = this.systemOwner(rawOwnerName) ?? accountName(rawOwnerName);
         if (!ownerName) {
             if (notify)
                 this.notification(player, "The channel you tried to join does not exist.");
@@ -436,7 +487,7 @@ class FriendsChatManager {
         const memberName = accountName(player.getUsername());
         const rank = this.memberRank(profile, player);
         const privileged = rank === FriendsChatRank.JagexModerator;
-        if (!privileged && profile.ignores.has(memberName.encoded)) {
+        if (!privileged && (profile.ignores.has(memberName.encoded) || (profile.admits && !profile.admits(player)))) {
             if (notify)
                 this.notification(player, "You are not allowed to join this user's chat-channel.");
             return false;
@@ -480,13 +531,15 @@ class FriendsChatManager {
         channel.members.set(player.getIndex(), player);
         player.setAttribute(CLAN_CHAT_ATTRIBUTE, channel);
         this.membershipByPlayer.set(player.getIndex(), ownerName.key);
-        player.getRelations().setFriendsChatLastOwner(profile.ownerName);
+        // A system channel is found again by its key, which may be no one's name.
+        player.getRelations().setFriendsChatLastOwner(profile.system ? ownerName.key : profile.ownerName);
         this.persist(player);
         if (notify) {
             this.notification(player, `Now talking in chat-channel ${profile.channelName}`);
             this.notification(player, "To talk, start each line of chat with the / symbol.");
         }
         this.broadcastChannel(ownerName.key);
+        this.memberAdded?.(player, ownerName.key);
         return true;
     }
     static leave(player, notify) {
@@ -679,7 +732,7 @@ class FriendsChatManager {
     static refreshOwnedChannel(player) {
         const owner = accountName(player.getUsername());
         const channel = owner ? this.channels.get(owner.key) : undefined;
-        if (!owner || !channel)
+        if (!owner || !channel || this.systemProfiles.has(owner.key))
             return;
         const { channelName: name, entryRank, talkRank, kickRank } = channel.profile;
         channel.profile = this.profileFromPlayer(player, owner);
@@ -689,6 +742,9 @@ class FriendsChatManager {
         this.broadcastChannel(owner.key);
     }
     static loadOwnerProfile(owner) {
+        const system = this.systemProfiles.get(owner.key);
+        if (system)
+            return system;
         const online = this.onlinePlayer(owner);
         if (online)
             return this.profileFromPlayer(online, owner);
@@ -753,6 +809,8 @@ class FriendsChatManager {
     static memberRank(profile, player) {
         if ((player.getRights()?.getId?.() ?? 0) > 0)
             return FriendsChatRank.JagexModerator;
+        if (profile.system)
+            return profile.rankOf?.(player) ?? FriendsChatRank.Unranked;
         if (player.getLongUsername() === accountName(profile.ownerName)?.encoded)
             return FriendsChatRank.Owner;
         if (!profile.friends.has(player.getLongUsername()))

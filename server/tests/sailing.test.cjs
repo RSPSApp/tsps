@@ -3181,7 +3181,7 @@ test("Last Light docks at Sailing 52 and disembarks on its captured landing", ()
   const lastLight = content().docks.find((dock) => dock.id === "last_light");
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 51]]);
-  player.getSkillManager = () => ({ getCurrentLevel: (skill) => levels.get(skill) ?? 1 });
+  player.getSkillManager = () => ({ getCurrentLevel: (skill) => levels.get(skill) ?? 1, getMaxLevel: (skill) => levels.get(skill) ?? 1 });
   Sailing.giveBoat(player, "raft", "the_pandemonium");
   Sailing.board(player, "the_pandemonium");
   try {
@@ -3202,6 +3202,122 @@ test("Last Light docks at Sailing 52 and disembarks on its captured landing", ()
     assert.deepEqual(tileOf(player), [2851, 2326, 0]);
   } finally {
     if (Sailing.instanceAboard(player)) Sailing.disembark(player, "last_light");
+    clearTasks();
+  }
+});
+
+test("mooring points land on their captured tiles and set the last-mooring varbit", () => {
+  const byId = (id) => content().docks.find((dock) => dock.id === id);
+  // Where live puts the player on disembarking (rsprox, rev 235-238).
+  assert.deepEqual(byId("tear_of_the_soul").landing, { x: 2321, y: 2774, z: 0 });
+  assert.deepEqual(byId("anglers_retreat").landing, { x: 2469, y: 2719, z: 0 });
+  assert.deepEqual(byId("brittle_isle").landing, { x: 1955, y: 4058, z: 0 });
+  assert.deepEqual(byId("laguna_aurorae").landing, { x: 1201, y: 2733, z: 0 });
+  assert.deepEqual(byId("minotaurs_rest").landing, { x: 1960, y: 3114, z: 0 });
+  assert.deepEqual(byId("isle_of_souls").landing, { x: 2282, y: 2822, z: 0 }, "an uncaptured mooring keeps its tile");
+
+  clearTasks();
+  const { sendBoatVarbits } = require("../plugins/skills/sailing/BoatVarbits.Sailing");
+  const plugin = registerPlugin("Gangplank.Sailing");
+  const tear = byId("tear_of_the_soul");
+  const player = sailor();
+  const varbits = new Map();
+  const sender = new Proxy({}, {
+    get: (_t, key) => (...args) => {
+      if (key === "sendVarbit") varbits.set(args[0], args[1]);
+      if (key === "sendTypedMessage") player.messages.push(`spam: ${args[1]}`);
+      return sender;
+    },
+  });
+  player.getPacketSender = () => sender;
+  player.getSkillManager = () => ({ getCurrentLevel: () => 61, getMaxLevel: () => 61 });
+  Sailing.giveBoat(player, "raft", "the_pandemonium");
+  Sailing.board(player, "the_pandemonium");
+  try {
+    Object.assign(BoatManager.getBoatAboard(player), { fineX: tear.mooring.fineX, fineY: tear.mooring.fineY });
+    plugin.objects["Mooring point"].Disembark({ player, location: tear.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(player.messages.at(-1), "spam: You dock the boat at the Tear of the Soul and disembark.");
+    assert.deepEqual(tileOf(player), [2321, 2774, 0]);
+    sendBoatVarbits(player);
+    assert.deepEqual([19145, 19146, 19147].map((id) => varbits.get(id)), [45, 1, 45],
+      "last dock and last mooring point are the Tear's; the last port stays the Pandemonium");
+    const saved = normalizeSailingState(JSON.parse(JSON.stringify(player.getSailing())));
+    assert.equal(saved.lastMooringPoint, "tear_of_the_soul", "kept across logins");
+    assert.equal(normalizeSailingState({}).lastMooringPoint, undefined);
+
+    // How far off a boat may be is still counted from the mooring point, not the inland landing.
+    Sailing.board(player, "tear_of_the_soul");
+    const boat = BoatManager.getBoatAboard(player);
+    Object.assign(boat, { fineX: (tear.gangplank.x - 15) * 128 + 64, fineY: tear.gangplank.y * 128 + 64 });
+    assert.equal(Sailing.boatNearDock(player, "tear_of_the_soul"), true, "15 tiles out from the mooring point");
+    boat.fineX -= 128;
+    assert.equal(Sailing.boatNearDock(player, "tear_of_the_soul"), false);
+  } finally {
+    if (Sailing.instanceAboard(player)) Sailing.disembark(player, "tear_of_the_soul");
+    clearTasks();
+  }
+});
+
+test("a mooring point's Sailing level can't be boosted, and a guest needs it too", () => {
+  clearTasks();
+  const plugin = registerPlugin("Gangplank.Sailing");
+  const tear = content().docks.find((dock) => dock.id === "tear_of_the_soul");
+  const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
+  const skills = (current, max) => () => ({ getCurrentLevel: () => current, getMaxLevel: () => max });
+  const refusal = "You need a Sailing level of 61 to disembark here.";
+  const owner = sailor();
+  const guest = sailor();
+  owner.getSkillManager = skills(63, 59); // boosted from 59
+  guest.getSkillManager = skills(61, 60);
+  Sailing.giveBoat(owner, "raft", "the_pandemonium");
+  Sailing.board(owner, "the_pandemonium");
+  try {
+    const boat = BoatManager.getBoatAboard(owner);
+    Object.assign(boat, { fineX: tear.mooring.fineX, fineY: tear.mooring.fineY });
+    plugin.objects["Mooring point"].Disembark({ player: owner, location: tear.gangplank });
+    assert.equal(owner.messages.at(-1), `spam: ${refusal}`, "a boosted level doesn't count");
+    assert.equal(owner.boxes.at(-1).getDialogues().get(0).getText(), refusal);
+    assert.ok(Sailing.instanceAboard(owner), "still aboard");
+
+    // A port's level still counts a boost (live's rule isn't known to differ there).
+    owner.getSkillManager = skills(20, 1);
+    plugin.objects.Buoy.Dock({ player: owner, location: content().docks.find((dock) => dock.id === "catherby").buoy });
+    assert.notEqual(owner.messages.at(-1), "spam: You need a Sailing level of 20 to dock here.");
+
+    // Docked at the Tear by its owner, the guest with 60 Sailing can't step off there.
+    owner.getSkillManager = skills(61, 61);
+    Object.assign(boat, { fineX: tear.mooring.fineX, fineY: tear.mooring.fineY });
+    plugin.objects.Buoy.Dock({ player: owner, location: tear.buoy });
+    assert.equal(Sailing.lastPortOf(Sailing.activeBoat(owner)), "tear_of_the_soul");
+    assert.equal(Sailing.boardAsGuest(guest, owner, "tear_of_the_soul", 2), null);
+    plugin.objects["Mooring point"].Disembark({ player: guest, location: tear.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(guest.messages.at(-1), `spam: ${refusal}`);
+    assert.equal(Sailing.guestBoat(guest), Sailing.instanceAboard(owner), "the guest stays aboard");
+
+    guest.getSkillManager = skills(61, 61);
+    plugin.objects["Mooring point"].Disembark({ player: guest, location: tear.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(guest.messages.at(-1), "spam: You disembark at the Tear of the Soul.");
+    assert.deepEqual(tileOf(guest), [2321, 2774, 0]);
+
+    // A port's gangplank asks a guest for no level.
+    guest.getSkillManager = skills(1, 1);
+    Sailing.disembark(owner, "tear_of_the_soul");
+    Sailing.board(owner, "tear_of_the_soul");
+    Object.assign(BoatManager.getBoatAboard(owner), { fineX: pandemonium.mooring.fineX, fineY: pandemonium.mooring.fineY });
+    plugin.objects.Buoy.Dock({ player: owner, location: pandemonium.buoy });
+    assert.equal(Sailing.boardAsGuest(guest, owner, "the_pandemonium", 2), null);
+    plugin.objects.Gangplank.Disembark({ player: guest, location: pandemonium.gangplank });
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(guest.messages.at(-1), "spam: You disembark at the Pandemonium.");
+  } finally {
+    Sailing.onLogout(owner);
     clearTasks();
   }
 });

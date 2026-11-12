@@ -201,8 +201,16 @@ function nearDock(player, dock) {
   return distance(dock.gangplank) <= 2 || distance(dock.landing) <= 2;
 }
 
-/** A guest steps off somebody else's boat at the port it's moored at. The line isn't captured. */
+/**
+ * A guest steps off somebody else's boat at the port it's moored at. The line isn't captured. A
+ * mooring point still needs the guest's own Sailing level.
+ */
 function disembarkAsGuest(player, dock) {
+  const tooLow = dock.mooringPoint ? levelRefusal(player, dock, "disembark") : null;
+  if (tooLow) {
+    messageBox(player, tooLow);
+    return;
+  }
   fade(player, true);
   later(player, 1, () => {
     if (Sailing.guestBoat(player)) {
@@ -218,10 +226,15 @@ function disembarkAsGuest(player, dock) {
   });
 }
 
-/** Why the player can't dock or disembark (`verb`) at a port: its Sailing level (table 194), or null. */
+/**
+ * Why the player can't dock or disembark (`verb`) at a port: its Sailing level (table 194), or
+ * null. A mooring point's level can't be boosted.
+ */
 function levelRefusal(player, dock, verb) {
   const level = dock.level ?? 1;
-  return player.getSkillManager().getCurrentLevel(Skill.SAILING) < level
+  const skills = player.getSkillManager();
+  const sailing = dock.mooringPoint ? skills.getMaxLevel(Skill.SAILING) : skills.getCurrentLevel(Skill.SAILING);
+  return sailing < level
     ? `You need a Sailing level of ${level} to ${verb} here.`
     : null;
 }

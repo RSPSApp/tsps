@@ -1190,9 +1190,17 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (objectId === GROTTO_ID && option.includes("enter")) {
       event.handled = true;
       // Before the ritual, trying the entrance summons Filliman outside instead.
-      if (quest.getStage(player) < STAGE_PERFORMED_RITUAL) {
-        player.sendMessage("You prepare to enter the Druid's grotto.");
+      const stage = quest.getStage(player);
+      if (stage < STAGE_PERFORMED_RITUAL) {
         ensureQuestNpcs(player, true);
+        // Wiki Transcript:Nature Spirit, "If the player attempts to enter the Grotto" (finding Filliman):
+        // the line, "A shifting apparition appears in front of you.", then Filliman, by the amulet.
+        if (stage >= STAGE_ENTERED_SWAMP && stage < STAGE_SPOKEN_FILLIMAN) {
+          // As Talk-to: the conversation records the attempt (15) or, with the amulet, speaking (20).
+          startTranscript(api, player, FILLIMAN_NPC_ID, "Nature Spirit", fillimanVariant(stage, player));
+          return;
+        }
+        player.sendMessage("You prepare to enter the Druid's grotto.");
         return;
       }
       player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, quest.isComplete(player) ? 1 : GROTTO_INTERIOR.z));

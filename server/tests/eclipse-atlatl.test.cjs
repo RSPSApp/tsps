@@ -145,7 +145,8 @@ test("normal and LMS atlatls use only their darts; arrows and an empty slot are 
 test("normal shots use the cache atlatl animation/projectile, consume darts, and never consume the weapon", t => {
   const p = player(), target = npc();
   t.mock.method(Math, "random", () => 0); // A broken dart cannot be recovered.
-  normalMethod(p).start(p, target);
+  const method = normalMethod(p);
+  method.start(p, target); method.finished(p, target); // paid once the swing is rolled
   assert.deepEqual(p.animations, [11057]);
   assert.equal(shots[0][2], 2795);
   assert.equal(sounds[0], core.Sound.THROW_DART);
@@ -153,7 +154,8 @@ test("normal shots use the cache atlatl animation/projectile, consume darts, and
   assert.equal(p.items[E.AMMUNITION_SLOT].getAmount(), 9);
   assert.equal(p.items[E.WEAPON_SLOT].getId(), I.ECLIPSE_ATLATL);
   const lastDart = player({ amount: 1 });
-  normalMethod(lastDart).start(lastDart, target); ticks(5);
+  const lastMethod = normalMethod(lastDart);
+  lastMethod.start(lastDart, target); lastMethod.finished(lastDart, target); ticks(5);
   assert.equal(lastDart.items[E.AMMUNITION_SLOT].getId(), -1);
   assert.equal(normalMethod(lastDart).canAttack(lastDart, target), false);
 });

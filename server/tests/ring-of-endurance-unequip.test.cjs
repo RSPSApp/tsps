@@ -105,6 +105,21 @@ test("an effect drunk without the ring isn't touched when a ring comes off", asy
   near(left(f), 2 * MINUTE, "unchanged");
 });
 
+// #4865 review: the Egniol potion's stamina effect replaces the doubled one, so taking the ring off leaves it alone.
+test("an Egniol potion drunk over the doubled effect isn't halved when the ring comes off", async (t) => {
+  const f = actor(t);
+  await drink(f);
+  near(left(f), 4 * MINUTE, "doubled to four minutes");
+  f.p.getInventory().setItem(6, new core.Item(I.EGNIOL_POTION_4_, 1));
+  f.p.getTimers().cancel(require("../dist/util/timers/TimerKey").TimerKey.POTION); // the 3-tick delay between drinks
+  await send(f, { type: "inventory_action", slot: 6, itemId: I.EGNIOL_POTION_4_, widgetId: 3214, option: "Drink" });
+  near(left(f), 2 * MINUTE, "the Egniol potion's own, undoubled effect");
+  assert.equal(f.p.getAttribute("ring-of-endurance:doubled"), null, "the ring forgets the effect it doubled");
+  await remove(f);
+  assert.equal(f.p.getEquipment().get(core.Equipment.RING_SLOT).getId(), -1, "the ring came off");
+  near(left(f), 2 * MINUTE, "not halved");
+});
+
 test("a ring that runs out on the dose stays worn and keeps the doubled effect", async (t) => {
   const f = actor(t);
   f.p.getEquipment().get(core.Equipment.RING_SLOT).setMetaValue(CHARGES, 1);

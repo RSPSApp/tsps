@@ -131,11 +131,14 @@ function teleport(player, ring, index) {
   const { Location, TeleportHandler, TeleportType } = core;
   const target = new Location(...destination.tile);
   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
-  // Equipping during the animation clones the item, so pay before it can move.
-  const left = charges(ring) - 1;
-  setCharges(player, ring, left);
-  if (left === 0) player.sendMessage("Your ring of shadows has run out of charges.");
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, target, (carried) => {
+    if (charges(carried) <= 0) return;
+    // Equipping during the animation clones the item, so pay before it can move.
+    const left = charges(carried) - 1;
+    setCharges(player, carried, left);
+    if (left === 0) player.sendMessage("Your ring of shadows has run out of charges.");
+    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  }, WILDERNESS_LEVEL, { item: ring });
 }
 
 /** The inventory's Teleport: a destination from its submenu, or the chat menu when none was picked. */

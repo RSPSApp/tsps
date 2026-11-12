@@ -65,11 +65,24 @@ function saved(player, cause) {
   Common.api().emitCustomEvent("escape-crystal:escaped", { player, cause });
 }
 
-/** To the player's respawn point, as a death would put them, then the crystal's gone. */
+/**
+ * To the player's respawn point, as a death would put them, then the crystal's gone; whether it
+ * saved them now. The Teleport option asks first where content does (the boat-at-sea warning):
+ * false while it waits for the answer, the save then coming on a yes. Auto-afk and the ring of
+ * life don't wait.
+ */
 function toRespawnPoint(player, cause) {
   const { TeleportHandler, GameConstants } = Common.core();
   const destination = GameConstants.DEFAULT_LOCATION.clone();
   if (!TeleportHandler.checkReqs(player, destination, Common.WILDERNESS_LIMIT)) return false;
+  if (cause !== "teleport") return escapeTo(player, destination, cause);
+  let escaped = false;
+  TeleportHandler.confirm(player, destination, () => { escaped = escapeTo(player, destination, cause); },
+    Common.WILDERNESS_LIMIT, { item: Common.crystalId() });
+  return escaped;
+}
+
+function escapeTo(player, destination, cause) {
   if (!Common.useUp(player)) return false;
   player.getMovementQueue().reset();
   const respawn = { player, killer: null, escape: true, handled: false };

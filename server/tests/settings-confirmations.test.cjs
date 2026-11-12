@@ -284,7 +284,7 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
   const f = actor(t);
   let aboard = {};
   t.mock.method(core.Sailing, "instanceAboard", () => aboard);
-  f.varbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row ticked (varbit 0, the default).
   const ask = () => {
     const request = teleportRequest(f);
     PM.emitCustomEvent("spell:teleport-confirm", request);
@@ -293,10 +293,13 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
   };
   let request = ask();
   assert.equal(request.cast, 0);
-  assert.deepEqual(MultiChatboxPrompt.getPending(f.p), { title: TeleportWarning.QUESTION, options: [TeleportWarning.YES, TeleportWarning.NO] });
-  choose(f.p, 2);
+  f.p.getDialogueManager().advance(); // the message box first, as live
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p),
+    { title: TeleportWarning.QUESTION, options: [TeleportWarning.YES, TeleportWarning.YES_DONT_ASK, TeleportWarning.NO] });
+  choose(f.p, 3);
   assert.equal(request.cast, 0, "no: stays aboard");
   request = ask();
+  f.p.getDialogueManager().advance();
   choose(f.p, 1);
   assert.equal(request.cast, 1, "yes: the teleport goes ahead");
 
@@ -308,6 +311,7 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
 test("with the boat teleport warning off, a teleport spell aboard casts at once", (t) => {
   const f = actor(t);
   t.mock.method(core.Sailing, "instanceAboard", () => ({}));
+  f.varbit(TeleportWarning.WARNING_VARBIT, 1); // the row unticked
   const request = teleportRequest(f);
   PM.emitCustomEvent("spell:teleport-confirm", request);
   if (!request.handled) request.proceed();
@@ -317,7 +321,7 @@ test("with the boat teleport warning off, a teleport spell aboard casts at once"
 test("the boat warning follows a Wilderness warning the spell also has", (t) => {
   const f = actor(t);
   t.mock.method(core.Sailing, "instanceAboard", () => ({}));
-  f.varbit(TeleportWarning.WARNING_VARBIT, 1);
+  // The row ticked (varbit 0, the default).
   const request = teleportRequest(f);
   request.name = "ghorrock teleport";
   f.varbit(core.CacheDefinitions.getVarbitId("ghorrock_teleport_warning"), 1);
@@ -325,6 +329,7 @@ test("the boat warning follows a Wilderness warning the spell also has", (t) => 
   assert.equal(request.handled, true, "the Wilderness warning asks");
   assert.notEqual(MultiChatboxPrompt.getPending(f.p)?.title, TeleportWarning.QUESTION);
   choose(f.p, 1);
+  f.p.getDialogueManager().advance(); // the boat warning's message box
   assert.equal(MultiChatboxPrompt.getPending(f.p)?.title, TeleportWarning.QUESTION, "then the boat warning");
   choose(f.p, 1);
   assert.equal(request.cast, 1);

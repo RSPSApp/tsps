@@ -30,7 +30,14 @@ function cast(player, type, area) {
   const target = destination(area);
   player.getPacketSender().sendInterfaceRemoval();
   if (!TeleportHandler.checkReqs(player, target)) return false;
-  startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+  TeleportHandler.confirm(player, target, () => {
+    // Combat refuses it again on a yes the boat-at-sea warning waited for.
+    if (CombatFactory.inCombat(player)) {
+      player.sendMessage(Common.message("inCombat"));
+      return;
+    }
+    startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+  });
   return true;
 }
 

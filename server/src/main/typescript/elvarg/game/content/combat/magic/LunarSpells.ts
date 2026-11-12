@@ -150,13 +150,17 @@ class LunarSpell extends Spell {
     equipmentRequired(): Item[] { return []; }
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return MagicSpellbook.LUNAR; }
-    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
-    pay(player: Player): boolean {
+    /** Whether the player could cast it now (Defence, level, runes), without paying; the reason sent when not. */
+    castable(player: Player): boolean {
         if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 40) {
             player.sendMessage("You need at least level 40 Defence to cast Lunar spells.");
             return false;
         }
-        if (!this.canCast(player, false) || !this.canCast(player, true)) return false;
+        return this.canCast(player, false);
+    }
+    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
+    pay(player: Player): boolean {
+        if (!this.castable(player) || !this.canCast(player, true)) return false;
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
@@ -181,9 +185,12 @@ class LunarSpell extends Spell {
 class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
-        if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
-            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
+        // The cast's own checks come before anything asks (the boat-at-sea warning), so it never asks for a cast that
+        // can't happen; paying checks them again.
+        if (!TeleportHandler.checkReqs(player, this.teleport.destination) || !this.castable(player)) return true;
+        TeleportHandler.confirm(player, this.teleport.destination, () => this.cast(player, () => TeleportHandler.teleport(player,
+            this.teleport.destination, TeleportType.LUNAR, false, () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name }))));
+        return true;
     }
 }
 
@@ -289,16 +296,19 @@ export class LunarSpells {
     }
 
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
-        if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
-        return spell.cast(player, () => {
+        if (!TeleportHandler.checkReqs(player, spell.teleport.destination) || !spell.castable(player)) return true;
+        TeleportHandler.confirm(player, spell.teleport.destination, () => spell.cast(player, () => {
             TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
                 () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
+                // A passenger is asked too (the boat-at-sea warning) before they go.
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
-                    TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
+                    TeleportHandler.confirm(target, spell.teleport.destination,
+                        () => TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false));
                 }
             });
-        });
+        }));
+        return true;
     }
 
     /**

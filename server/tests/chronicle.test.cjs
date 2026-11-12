@@ -26,6 +26,7 @@ Chronicle.register({
     TeleportType: { NORMAL: "normal" },
     TeleportHandler: {
       checkReqs: () => reqsPass,
+      confirm: (player, destination, go, level, { item } = {}) => go(item),
       teleport: (player, destination, type, _force, onArrive) => teleports.push({ destination, type, onArrive }),
     },
   },

@@ -116,11 +116,11 @@ class ArceuusTeleportSpell extends Spell {
         if (!TeleportHandler.checkReqs(player, this.data.destination) || !this.canCast(player, false)) {
             return true;
         }
-        if (!this.canCast(player, true)) {
-            return true;
-        }
-        player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
-        TeleportHandler.teleport(player, this.data.destination, TeleportType.ARCEUUS, false);
+        TeleportHandler.confirm(player, this.data.destination, () => {
+            if (!this.canCast(player, true)) return;
+            player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
+            TeleportHandler.teleport(player, this.data.destination, TeleportType.ARCEUUS, false);
+        });
         return true;
     }
 }

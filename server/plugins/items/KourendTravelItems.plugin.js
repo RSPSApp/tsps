@@ -142,10 +142,13 @@ function teleport(player, item, page) {
   if (!memoirPageUnlocked(player, page)) return false;
   const target = new core.Location(...page.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
-  setMemoirCharges(player, item, charges - 1);
-  core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
-    api.emitCustomEvent("kharedst:teleported", { player, city: page.key });
-  });
+  core.TeleportHandler.confirm(player, target, (carried) => {
+    if (memoirCharges(player, carried) <= 0) return;
+    setMemoirCharges(player, carried, memoirCharges(player, carried) - 1);
+    core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
+      api.emitCustomEvent("kharedst:teleported", { player, city: page.key });
+    });
+  }, WILDERNESS_LEVEL, { item });
   return true;
 }
 
@@ -336,11 +339,14 @@ function teleportWithTalisman(player, item, destination) {
   }
   const target = new core.Location(...destination.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
-  // Spend before starting: Uncharge or equipping during the animation can move/change the item.
-  setXericCharges(player, item, charges - 1);
-  core.TeleportHandler.teleport(player, target, xericTeleportType(), false, () => {
-    api.emitCustomEvent("xerics-talisman:teleported", { player, destination: destination.key });
-  });
+  core.TeleportHandler.confirm(player, target, (carried) => {
+    if (xericCharges(carried) <= 0) return;
+    // Spend before starting: Uncharge or equipping during the animation can move/change the item.
+    setXericCharges(player, carried, xericCharges(carried) - 1);
+    core.TeleportHandler.teleport(player, target, xericTeleportType(), false, () => {
+      api.emitCustomEvent("xerics-talisman:teleported", { player, destination: destination.key });
+    });
+  }, WILDERNESS_LEVEL, { item });
   return true;
 }
 

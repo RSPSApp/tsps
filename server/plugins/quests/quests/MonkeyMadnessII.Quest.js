@@ -1646,8 +1646,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       event.handled = true;
       // Wiki (Royal seed pod): it "can teleport up to level 30 wilderness"; the usual teleport rules apply otherwise.
       if (!TeleportHandler.checkReqs(player, GRAND_TREE_KING, SEED_POD_WILDERNESS_LIMIT)) return;
-      TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
-        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree."));
+      TeleportHandler.confirm(player, GRAND_TREE_KING, () => TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
+        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree.")), SEED_POD_WILDERNESS_LIMIT);
       return;
     }
     if (option !== "read") return;

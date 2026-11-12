@@ -155,7 +155,7 @@ function invoke(event) {
   if (!TeleportHandler.checkReqs(player, destination)) return;
   const from = source(event);
   const imbued = event.itemId === ids.imbued;
-  TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => arrive(player, from, imbued));
+  TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => arrive(player, from, imbued)));
 }
 
 function divine({ player }) {

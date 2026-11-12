@@ -137,7 +137,8 @@ function teleport(player, destination) {
     return false;
   }
   // The charge goes on arrival, like the other teleport jewellery (Jewellery.plugin.js).
-  core.TeleportHandler.teleport(player, destination.destination, destination.type, false, () => arrive(player, destination));
+  core.TeleportHandler.confirm(player, destination.destination,
+    () => core.TeleportHandler.teleport(player, destination.destination, destination.type, false, () => arrive(player, destination)));
   return true;
 }
 

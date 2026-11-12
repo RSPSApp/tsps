@@ -1368,7 +1368,12 @@ module.exports = function registerGiantDwarfQuest(api) {
       BoatScenes.camera(player, ...BOAT_DOCK_VIEW);
       scene.guards = BOAT_GUARD_TILES.map(at => BoatScenes.actor(scene, BOAT_GUARD_ID, at, BOAT_CITY_DOCK));
       if (scene.guards.some(npc => !npc)) { cancelBoatScene(player); return; }
-      resumeBoatTranscript(scene, "2B7gDn", BOAT_GUARD_ID);
+      // World builds the owner's local NPC view after tasks and before flushing.
+      // Explicit overhead actors must already be in that view: speaking in this
+      // spawn callback would reject the guards and cancel an otherwise valid scene.
+      // Keep the held owner until the next tick; the guarded callback also refuses
+      // Escape, logout or a foreign presentation during this visibility boundary.
+      boatSceneLater(scene, 1, () => resumeBoatTranscript(scene, "2B7gDn", BOAT_GUARD_ID));
     });
     return true;
   }

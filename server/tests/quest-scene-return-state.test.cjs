@@ -16,6 +16,7 @@
 // minecarts and many more share it): the last test mounts another interface there right after the scene's fade in.
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const fs = require("node:fs");
 const { before, after, test } = require("node:test");
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
@@ -38,12 +39,20 @@ const SCENES = {
   goblin: { start: [2957, 3512, 0], key: "goblin_diplomacy", stage: 1, npc: "GENERAL_BENTNOZE", item: "ORANGE_GOBLIN_MAIL", at: [2958, 3512, 0] },
 };
 
+const noticeboardSave = path.resolve(__dirname, "../data/saves/shooting-stars.json");
+const noticeboardBytes = () => fs.existsSync(noticeboardSave) ? fs.readFileSync(noticeboardSave) : null;
+let noticeboardBefore;
 let core;
 let I;
 let next = 1700; // the player list gives each test player its index; this only seeds the name
 
 before(async () => {
+  noticeboardBefore = noticeboardBytes();
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  // This suite advances global tasks far enough for the star scheduler to land.
+  // Reuse the noticeboard's existing in-memory test lifecycle before scheduling;
+  // fixture ticks must not create a world save inside the sealed source tree.
+  require("../plugins/skills/shootingstars/Noticeboard.ShootingStars").resetForTests();
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
   I = core.ItemIdentifiers;
@@ -54,7 +63,10 @@ before(async () => {
   core.RegionManager.loadMapFiles(...VARROCK_SQUARE);
   PM.emitServerStartup({});
 });
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  PM.emitServerShutdown({});
+  assert.deepEqual(noticeboardBytes(), noticeboardBefore, "native scene ticks never create or change the world noticeboard save");
+});
 
 function actor(t, scene) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -94,6 +106,9 @@ function tick(f) {
   AreaManager.process(f.player);
   core.TaskManager.processWalkTo(f.player.getIndex());
   f.player.getMovementQueue().process();
+  // World updates visibility after tasks/movement and before the session flush.
+  // Explicit quest overhead actors use this real list, not mere registration.
+  core.World.updateLocalNpcs(f.player, [...core.World.getNpcs()]);
   f.player.getSession().flushClient(core.World.processCycle);
   f.player.resetUpdating();
 }
@@ -676,11 +691,21 @@ for (const [name, dock] of Object.entries(GIANT_DWARF_DOCKS)) {
   test(`Giant Dwarf: ${name} modal refusal preserves the return service state`, async t => {
     const { f, npc } = giantDwarfBoatman(t, dock, 5);
     const before = giantDwarfState(f);
-    f.player.getPacketSender().sendInterface(OTHER_GROUP);
-    assert.equal(f.player.busy(), true, "real modal is a positive refusal precondition");
-    t.after(() => f.player.getPacketSender().sendInterfaceRemoval());
+    // A world click closes pre-existing interruptible modals before NPC dispatch.
+    // Open a real modal at the route event instead, after that close and before
+    // the journey callback. This tests the service's own late busy-state refusal.
+    let armed = true, modalOpened = false;
+    PM.createApi(`GiantDwarfLateModal-${name}`).onNpcRoute(event => {
+      if (!armed || event.player !== f.player || event.npc !== npc) return;
+      armed = false;
+      f.player.getPacketSender().sendInterface(OTHER_GROUP);
+      modalOpened = true;
+      assert.equal(f.player.busy(), true, "real late modal is a positive refusal precondition");
+    });
+    t.after(() => { armed = false; f.player.getPacketSender().sendInterfaceRemoval(); });
     await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 3 }]);
     ticks(f, 8);
+    assert.equal(modalOpened, true, "ordinary NPC input reaches the real route event");
     assert.deepEqual(giantDwarfPosition(f), dock.start);
     assert.deepEqual(giantDwarfState(f), before);
     assert.equal(f.player.getInterfaceId(), OTHER_GROUP, "rejected Travel cannot remove the modal");
@@ -793,20 +818,28 @@ test("Giant Dwarf: Play stages the opening and arrest in a private map, then res
     object.getLocation().getY() - area.getBaseY(), object.getLocation().getZ(), object.getType(), object.getFace()]).sort((a, b) => a[3] - b[3]),
     [[7043, 78, 49, 0, 10, 0], [7041, 78, 49, 1, 10, 0], [7032, 78, 49, 2, 10, 0]], "only private concrete parts use the actual root placements");
   const mapLines = new Set(), dockLines = new Set(), guards = new Set();
+  let dockHeldBeforeSpeech = false;
   await clickThrough(f, () => {
     const current = f.player.getDialogueManager().getCurrent();
     const text = current?.getText?.();
     if (typeof text === "string" && f.player.getPacketSender().isSubInterfaceOpen(172)) mapLines.add(text);
     const currentGuards = area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER);
     for (const guard of currentGuards) guards.add(guard);
+    if (currentGuards.length === 2 && !dockHeldBeforeSpeech) {
+      assert.ok(current instanceof core.ActionDialogue && current.isSelfAdvancing(), "new guards wait under the scene's held chain before the next-tick transcript");
+      assert.ok(currentGuards.every(guard => f.player.getLocalNpcs().includes(guard)), "spawn cycle publishes both guards before overhead begins");
+      dockHeldBeforeSpeech = true;
+    }
     if (typeof text === "string" && currentGuards.length === 2) {
       dockLines.add(text);
+      assert.ok(currentGuards.every(guard => f.player.getLocalNpcs().includes(guard)), "dock speakers entered the real local NPC view before dialogue");
       assert.ok(!area.getObjects().some(object => [7032, 7041, 7043].includes(object.getId())), "dock phase no longer owns intact statue presentation");
     }
     // Both players share this world cycle; do not process global tasks a second time.
     bystander.tick++;
     AreaManager.process(bystander.player);
     bystander.player.getMovementQueue().process();
+    core.World.updateLocalNpcs(bystander.player, [...core.World.getNpcs()]);
     bystander.player.getSession().flushClient(core.World.processCycle);
     bystander.player.resetUpdating();
     return giantDwarfPosition(f).join() === "2827,10214,0" && text === "Identify yourself, human!";
@@ -818,6 +851,7 @@ test("Giant Dwarf: Play stages the opening and arrest in a private map, then res
   assert.ok(mapLines.has("Amazing! And we're going to go straight past it?"));
   assert.ok(mapLines.has("Er, hold on! There's something wrong!"));
   assert.ok(mapLines.has("Aaargh!"), "ordinary map dialogue reaches the collision warning");
+  assert.equal(dockHeldBeforeSpeech, true, "normal Play crossed the guarded actor visibility boundary");
   assert.equal(guards.size, 2, "dock arrest uses two distinct private concrete guards");
   assert.ok([...guards].every(guard => guard.getOwner() === f.player && guard.isOwnerOnly()), "arrest actors belong only to the scene owner");
   assert.ok(dockLines.has("Halt! By order of the Black Guard, you are under arrest!"));
@@ -917,7 +951,9 @@ async function giantDwarfOpenPhase(t, phase) {
   } else if (phase === "dock") {
     await clickThrough(f, () => area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER).length === 2
       && typeof f.player.getDialogueManager().getCurrent()?.getText?.() === "string", 220);
-    assert.equal(area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER).length, 2);
+    const guards = area.entities.filter(npc => npc.isNpc?.() && npc.getId() === core.NpcIdentifiers.BLACK_GUARD_BERSERKER);
+    assert.equal(guards.length, 2);
+    assert.ok(guards.every(guard => f.player.getLocalNpcs().includes(guard)), "dock interruption follows actual actor visibility");
   }
   assert.deepEqual(f.player.getAttribute("giant-dwarf:boat-scene-exit"), [2827, 10214, 0]);
   return { f, area };

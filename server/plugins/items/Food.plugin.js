@@ -16,6 +16,7 @@ const {
   lowerSkillByMax,
   restoreSkillToBaseWithFormula,
 } = require("./ConsumableEffects");
+const { allowsBlightedItems, isBlightedItem } = require("./BlightedItems");
 
 const EAT_OPTION = "Eat";
 const EAT_ANIMATION = 829; // human_eat
@@ -282,12 +283,9 @@ function mayEat(player, itemId, food) {
     return false;
   }
   if (timers.has(food.combo ? core.TimerKey.KARAMBWAN : core.TimerKey.FOOD)) return false;
-  if (food.wildernessOnly) {
-    const location = player.getLocation();
-    if (core.Wilderness.levelAt(location.getX(), location.getY()) <= 0) {
-      player.sendMessage(`The ${itemName(itemId).toLowerCase()} can be eaten only in the Wilderness.`);
-      return false;
-    }
+  if (isBlightedItem(core, itemId) && !allowsBlightedItems(core, player)) {
+    player.sendMessage(`The ${itemName(itemId).toLowerCase()} can be eaten only in the Wilderness.`);
+    return false;
   }
   return true;
 }

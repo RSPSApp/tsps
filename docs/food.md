@@ -34,8 +34,10 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
   some health." when it healed (not at full Hitpoints). Multi-bite foods have a line per bite
   ("You eat part of the cake.", "You eat half the Wild pie.").
 - **Refusals:** "You cannot eat here." where a plugin bars food (`onCanEat`), "You're currently
-  stunned!", the blighted foods outside the Wilderness ("The blighted manta ray can be eaten only
-  in the Wilderness."), and a whole pineapple ("You can't eat it whole; maybe you should cut it
+  stunned!", the blighted foods (any item the cache names "Blighted ...") where blighted items are not
+  allowed ("The blighted manta ray can be eaten only in the Wilderness."; the rule is
+  `plugins/items/BlightedItems.js`: the Wilderness, Ferox Enclave, the Mage Arena bank, PvP worlds,
+  Castle Wars, Clan Wars and Soul Wars), and a whole pineapple ("You can't eat it whole; maybe you should cut it
   up.").
 - **Events:** `food:eaten` (`{ player, itemId, heal }`) after every bite.
 
@@ -95,7 +97,6 @@ separate audits; this correction does not establish complete food/potion parity.
 | `outcomes` | A table of results by `weight`, each with its heal, boosts, drains, `drainRandom` (a random skill but Hitpoints) and messages (kebabs). |
 | `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
-| `wildernessOnly` | Can only be eaten in the Wilderness (blighted food). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
 | `say` | A line the player says overhead as they eat it. With it, the eat line is sent as a spam message (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |

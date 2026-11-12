@@ -54,6 +54,7 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
   const BUCKET_OF_WATER = Items.BUCKET_OF_WATER; // 1929
   const NETTLE_TEA = Items.NETTLE_TEA; // 4239
   const HANGOVER_CURE = Items.HANGOVER_CURE; // 1504
+  const BOTTOMLESS_MILK_BUCKET = Items.BOTTOMLESS_MILK_BUCKET; // 33089
 
   const PAGE = "Skippy";
   const VARIANT_BEFORE = "before-skippy-and-the-mogres";
@@ -81,6 +82,13 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
 
   const inventory = (player) => player.getInventory();
   const has = (player, itemId) => inventory(player).getAmount(itemId) > 0;
+
+  /** Wiki (Bottomless milk bucket): one filled with hangover cure gives Skippy a single use. */
+  function bottomlessCure(player) {
+    const request = { player, type: HANGOVER_CURE, holds: false };
+    api.emitCustomEvent?.("bottomless-milk:holds", request);
+    return request.holds;
+  }
 
   /** Plays raw transcript-format steps through the shared NPC dialogue runtime. */
   function play(player, steps, npc = null) {
@@ -368,7 +376,7 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
       play(player, [...TEA_TALK, ...teaRecipeSteps(player)], target);
       return;
     }
-    if (itemId === HANGOVER_CURE && stage === STAGE_HANGOVER) {
+    if ((itemId === HANGOVER_CURE || (itemId === BOTTOMLESS_MILK_BUCKET && bottomlessCure(player))) && stage === STAGE_HANGOVER) {
       event.handled = true;
       play(player, CURE_TALK, target);
     }
@@ -408,12 +416,13 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
       return;
     }
     if (stepId === MESSAGE_CURE_DRUNK) {
-      if (quest.getStage(player) !== STAGE_HANGOVER || !has(player, HANGOVER_CURE)) {
+      if (quest.getStage(player) !== STAGE_HANGOVER || (!has(player, HANGOVER_CURE) && !bottomlessCure(player))) {
         event.handled = true;
         event.end = true;
         return;
       }
-      inventory(player).deleteNumber(HANGOVER_CURE, 1);
+      if (has(player, HANGOVER_CURE)) inventory(player).deleteNumber(HANGOVER_CURE, 1);
+      else api.emitCustomEvent?.("bottomless-milk:spend", { player, type: HANGOVER_CURE, spent: false });
       quest.complete(player);
     }
   }

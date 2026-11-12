@@ -219,6 +219,13 @@ module.exports = function registerPlagueCityQuest(api) {
   const digging = new WeakSet();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  /** Wiki (Bottomless milk bucket): one filled with hangover cure serves Bravek for a single use, as for Skippy. */
+  function bottomlessCure(player) {
+    const request = { player, type: HANGOVER_CURE_ITEM_ID, holds: false };
+    api.emitCustomEvent("bottomless-milk:holds", request);
+    return request.holds === true;
+  }
+  const hasCure = (player) => held(player, HANGOVER_CURE_ITEM_ID) || bottomlessCure(player);
   const wearingGasMask = (player) =>
     player.getEquipment().get(Equipment.HEAD_SLOT)?.getId?.() === GAS_MASK_ITEM_ID;
   const at = (location, x, y, z = 0) =>
@@ -387,7 +394,7 @@ module.exports = function registerPlagueCityQuest(api) {
       return "finding-elena-talking-to-bravek-before-getting-the-warrant";
     }
     if (stage === STAGE_NEED_HANGOVER_CURE) {
-      if (held(player, HANGOVER_CURE_ITEM_ID)) return "finding-elena-talking-to-bravek-after-getting-the-hangover-cure";
+      if (hasCure(player)) return "finding-elena-talking-to-bravek-after-getting-the-hangover-cure";
       return "finding-elena-talking-to-bravek-talking-to-bravek-again-before-getting-the-hangover-cure";
     }
     if (stage === STAGE_CLERK_PERMISSION) return "finding-elena-talking-to-bravek";
@@ -526,8 +533,10 @@ module.exports = function registerPlagueCityQuest(api) {
       inventory.adds(SCRUFFY_NOTE_ITEM_ID, 1);
       if (stage === STAGE_CLERK_PERMISSION) quest.setStage(player, STAGE_NEED_HANGOVER_CURE);
     }
-    if (BRAVEK_NPC_IDS.has(npcId) && stepId === "Z2OftI" && stage === STAGE_NEED_HANGOVER_CURE && held(player, HANGOVER_CURE_ITEM_ID)) {
-      inventory.deleteNumber(HANGOVER_CURE_ITEM_ID, 1);
+    if (BRAVEK_NPC_IDS.has(npcId) && stepId === "Z2OftI" && stage === STAGE_NEED_HANGOVER_CURE && hasCure(player)) {
+      // A loose cure first; otherwise one use of a bottomless milk bucket holding hangover cure.
+      if (held(player, HANGOVER_CURE_ITEM_ID)) inventory.deleteNumber(HANGOVER_CURE_ITEM_ID, 1);
+      else api.emitCustomEvent("bottomless-milk:spend", { player, type: HANGOVER_CURE_ITEM_ID, spent: false });
       quest.setStage(player, STAGE_HAVE_WARRANT);
       transform(event.npc, BRAVEK_DRINKING_NPC_ID, 3);
     }
@@ -735,7 +744,10 @@ module.exports = function registerPlagueCityQuest(api) {
   }
 
   function useCure(event) {
-    if (!BRAVEK_NPC_IDS.has(event.npcId) || event.itemId !== HANGOVER_CURE_ITEM_ID || quest.getStage(event.player) !== STAGE_NEED_HANGOVER_CURE || !held(event.player, HANGOVER_CURE_ITEM_ID)) return;
+    if (!BRAVEK_NPC_IDS.has(event.npcId) || quest.getStage(event.player) !== STAGE_NEED_HANGOVER_CURE) return;
+    const cure = event.itemId === HANGOVER_CURE_ITEM_ID && held(event.player, HANGOVER_CURE_ITEM_ID);
+    const bucket = event.itemId === ItemIdentifiers.BOTTOMLESS_MILK_BUCKET && bottomlessCure(event.player);
+    if (!cure && !bucket) return;
     event.handled = true;
     startTranscript(api, event.player, event.npcId, PAGE, "finding-elena-talking-to-bravek-after-getting-the-hangover-cure", undefined, event.npc ?? null);
   }

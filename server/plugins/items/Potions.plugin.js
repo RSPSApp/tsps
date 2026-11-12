@@ -20,6 +20,7 @@ const { HitMask } = require("../../src/main/typescript/elvarg/game/content/comba
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers: Items } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const CameraShake = require("../interface/CameraShake.plugin");
+const { allowsBlightedItems, isBlightedItem } = require("./BlightedItems");
 /** Each potion's recorded drink line, by its cache name without the dose (data/potion-drink-lines.json). */
 const DRINK_LINES = require("./data/potion-drink-lines.json").lines;
 const {
@@ -682,6 +683,10 @@ function canEat(player, itemId) {
 function drinkPermissionRefusal(player, entry) {
   const itemId = entry.itemId;
   if (!canDrink(player, itemId)) return "You cannot use potions here.";
+  // Wiki (Blighted super restore): blighted potions are refused wherever blighted items are not allowed.
+  if (isBlightedItem(pluginApi.core, itemId) && !allowsBlightedItems(pluginApi.core, player)) {
+    return "The blighted potion can be used only in the Wilderness.";
+  }
   if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
   if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) return "You cannot eat here.";
   const permission = { player, itemId, allowed: true, message: null };

@@ -107,6 +107,16 @@ function milkIntoBottomless(player) {
   })());
 }
 
+/**
+ * An inventory item action clears the player's interaction (Player.clearPendingAction), which
+ * ends a milking under way, as it ends a chop or a mining action (Woodcutting, Mining).
+ */
+function stopMilking({ player }) {
+  if (!milking.has(player)) return;
+  milking.delete(player);
+  player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+}
+
 /** Using the bottomless bucket itself on the cow fills it even with an empty bucket carried. */
 function bottomlessOnCow(event) {
   milkIntoBottomless(event.player);
@@ -180,5 +190,6 @@ module.exports = {
     api.onItemOnObject("Bottomless milk bucket", "Dairy Cow", bottomlessOnCow);
     api.onItemOnObject("Bottomless milk bucket (empty)", "Dairy cow", bottomlessOnCow);
     api.onItemOnObject("Bottomless milk bucket (empty)", "Dairy Cow", bottomlessOnCow);
+    api.onCustomEvent("player:interaction-cleared", stopMilking);
   },
 };

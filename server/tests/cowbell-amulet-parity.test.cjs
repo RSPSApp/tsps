@@ -98,7 +98,7 @@ test('Steal-cowbell is refused before Cold War starts, then keeps its success an
   let started = false;
   try {
     const tasks = [], handlers = {};
-    require('../plugins/objects/DairyCow.plugin').register({ core, getTaskManager: () => ({ submit: task => tasks.push(task) }),
+    require('../plugins/objects/DairyCow.plugin').register({ core, onCustomEvent: noop, getTaskManager: () => ({ submit: task => tasks.push(task) }),
       onObjectInteraction: (name, actions) => { handlers[name] = actions; }, onItemOnObject: noop,
       emitCustomEvent: (name, request) => {
         assert.equal(name, 'quest:is-started');
@@ -160,7 +160,7 @@ test('Steal-cowbell is refused before Cold War starts, then keeps its success an
 
 test('milking takes seven ticks, six with either worn cowbell, and never consumes a cancelled bucket', () => {
   const tasks = [], handlers = {};
-  require('../plugins/objects/DairyCow.plugin').register({ core, getTaskManager: () => ({ submit: task => tasks.push(task) }),
+  require('../plugins/objects/DairyCow.plugin').register({ core, onCustomEvent: noop, getTaskManager: () => ({ submit: task => tasks.push(task) }),
     onObjectInteraction: (name, actions) => { handlers[name] = actions; }, onItemOnObject: noop, emitCustomEvent: noop,
   });
   for (const [amuletId, delay] of [[0, 7], [I.COWBELL_AMULET, 6], [I.COWBELL_AMULET_2, 6]]) {

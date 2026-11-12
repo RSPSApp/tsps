@@ -39,8 +39,10 @@ Tests: `tests/crystal-armour.test.cjs`, `tests/crystal-recolour.test.cjs`, `test
 
 ## Not covered
 
-- Recolouring an inactive piece, a piece already in that colour or a Deadman piece: no capture or Wiki
-  text; allowed, as for an active piece in the inventory.
+- Recolouring an inactive piece or a Deadman piece: no capture or Wiki text; allowed, as for an active piece in
+  the inventory.
+- A crystal of the item's current colour (Iorwerth on an Iorwerth helm, Meilyr on a base piece): no capture or Wiki
+  text; ours leaves the use unhandled, so nothing happens and the crystal is kept.
 - `Your crystal armour has run out of charges.`, `Your crystal armour cannot hold any more charges.` and the Revert
   messages are ours; no capture or Wiki text. Whether Revert asks first is unknown.
 - Whether the shard prompt's maximum drops to the shards held when fewer: no capture; ours keeps the room and takes

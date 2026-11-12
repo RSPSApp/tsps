@@ -10,6 +10,7 @@
  * animation 'human_xbow_enchant_arrowtip', graphic 'xbows_enchanting_tips_spot', sound 144 and an item
  * box of the new item and the crystal.
  * Armour's own colour is Meilyr's and the weapons' Hefin's, so those crystals turn any colour back.
+ * A crystal of the item's current colour does nothing (ours: no capture of it).
  */
 const CLANS = ["ithell", "iorwerth", "trahaearn", "cadarn", "crwys", "meilyr", "hefin", "amlodd"];
 const ARMOUR = ["crystal_helmet", "crystal_chestplate", "crystal_platelegs"];
@@ -62,14 +63,14 @@ function nameOf(id) {
   return core.ItemDefinition.forId(id).getName();
 }
 
-/** The clan crystal and the item it is used on, either way round, or null. */
+/** The clan crystal and the item it is used on, either way round, or null (also for the item's own colour). */
 function pairOf(event) {
   const { usedItem, usedWithItem } = event;
   const [crystal, target] = clanByCrystal.has(usedItem?.getId?.()) ? [usedItem, usedWithItem] : [usedWithItem, usedItem];
   const clan = clanByCrystal.get(crystal?.getId?.());
   const family = familyById.get(target?.getId?.());
   const nextId = family?.get(clan);
-  if (!clan || nextId == null) return null;
+  if (!clan || nextId == null || nextId === target.getId()) return null;
   return { crystal, target, clan };
 }
 

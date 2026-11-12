@@ -151,3 +151,19 @@ test("a piece revived by shards while the question is open takes the active colo
   prompts[0].options[1]();
   assert.equal(helm.getId(), obj("crystal_helmet_iorwerth"));
 });
+
+test("a crystal of the item's own colour is left unhandled and keeps the crystal", () => {
+  for (const [crystalName, targetName] of [
+    ["prif_clan_crystal_iorwerth", "crystal_helmet_iorwerth"],
+    ["prif_clan_crystal_meilyr", "crystal_chestplate"],
+    ["prif_clan_crystal_hefin", "bow_of_faerdhinen_infinite"],
+  ]) {
+    const crystal = new Item(obj(crystalName), 1);
+    const target = new Item(obj(targetName), 1);
+    const player = createPlayer([target, crystal]);
+    assert.equal(use(player, crystal, target).handled, false, targetName);
+    assert.equal(prompts.length, 0);
+    assert.equal(player.items[1], crystal);
+    assert.equal(target.getId(), obj(targetName));
+  }
+});

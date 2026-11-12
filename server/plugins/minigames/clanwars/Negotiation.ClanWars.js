@@ -168,7 +168,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade or Forsaken Quarry. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry or Soggy Swamp. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership

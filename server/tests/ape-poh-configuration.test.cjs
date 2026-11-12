@@ -451,7 +451,12 @@ test('nexus: Remove warns, then discards the paid destinations', async t => {
 test('nexus: removing its room discards the paid destinations', async t => {
   const f = actor(t, 'nexus', { rescued: true }); seedExisting(f, 'nexus');
   f.house.buildingMode = true;
+  const warnings = [], send = core.StatementDialogue.send;
+  t.mock.method(core.StatementDialogue, 'send', (player, text, ...rest) => { warnings.push(text); return send(player, text, ...rest); });
   House.removeRoomPrompt(f.p, f.house, { plane: 1, x: 4, y: 6 });
+  assert.deepEqual(warnings, [Nexus.ROOM_REMOVAL_WARNING], 'removing the room warns first');
+  await f.conn.dispatch([{ type: 'dialogue_continue', widgetId: (229 << 16) | 4, childIndex: -1 }]);
+  f.conn.processTurnPackets();
   await prompt(f, /remove the/i, /^yes$/i);
   assert.equal(f.house.getRoom({ plane: 1, x: 4, y: 6 }), null);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), { slots: [], left: 0 });

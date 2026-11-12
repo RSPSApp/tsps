@@ -22,6 +22,9 @@ const OFFSET = {
   steering: 11,
   /** `sailing_boat_N_teleport_focus`: which boats Summon and Teleport to Boat can choose. */
   teleportFocus: 12,
+  /** `sailing_boat_N_flag` and `_brazier`, as captured. */
+  flag: 13,
+  brazier: 14,
   hotspot: 15, // hotspot n: +15 + n
   trim: 26,
   hotspotData: 27, // hotspot n's extra data: +27 + n
@@ -85,7 +88,7 @@ function slotVarbits(slot, boat) {
   set(OFFSET.facilitiesUnaltered, boat && facilitiesUnaltered(boat) ? 1 : 0);
   for (let word = 0; word < 3; word++) set(OFFSET.name + word, boat?.name?.[word] ?? 0);
   const tiers = boat ? partTiers(boat) : {};
-  for (const part of ["keel", "hull", "sail", "steering", "trim"]) set(OFFSET[part], tiers[part] ?? 0);
+  for (const part of ["keel", "hull", "sail", "steering", "trim", "flag", "brazier"]) set(OFFSET[part], tiers[part] ?? 0);
   set(OFFSET.teleportFocus, boat && type ? teleportFocusOf(boat) : 0);
   const facilities = boat && type ? facilitiesOf(boat) : [];
   for (let hotspot = 0; hotspot < MAX_HOTSPOTS; hotspot++) values.set(hotspotVarbit(slot, hotspot), facilities[hotspot] ?? 0);

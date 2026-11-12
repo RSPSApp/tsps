@@ -2299,7 +2299,7 @@ test("a boat's parts rebuild the captured upgraded boats from the cache", () => 
   assert.deepEqual(locIds(skiffSpec), { helm: 59579, sails: 59539, sailCloth: 29517, keel: 59518, trim: 59628 });
   assert.deepEqual(parts.boatStats(skiff), {
     hitpoints: 180, armour: 300, baseSpeed: 320, speedCap: 384, acceleration: 64,
-    speedBoostDuration: 24, stormResistance: 1, rapidResistance: 1, crystalFleckedResistance: 0,
+    speedBoostDuration: 24, stormResistance: 1, rapidResistance: 1, crystalFleckedResistance: 0, icySeasResistance: 0,
   });
   // The captured sloop: camphor hull, adamant keel, camphor sails, mahogany helm.
   const sloop = { type: "sloop", parts: { hull: 4, keel: 4, sails: 4, helm: 3 } };
@@ -2339,9 +2339,13 @@ function shipyardHarness() {
   const chatboxes = [];
   const flags = [];
   const scripts = [];
+  const sounds = [];
+  const strings = [];
   const sender = new Proxy({}, {
     get: (_t, key) => (...args) => {
       if (key === "getVarbit") return varbits.get(args[0]) ?? 0;
+      if (key === "sendSoundEffect") sounds.push(args[2] ? [args[0], args[2]] : args[0]);
+      if (key === "sendString") strings.push(args[0]);
       if (key === "sendVarbit") varbits.set(args[0], args[1]);
       if (key === "sendConfig") varps.set(args[0], args[1]);
       if (key === "sendChatboxInterface") chatboxes.push(args[0]);
@@ -2372,7 +2376,7 @@ function shipyardHarness() {
     return event.handled;
   };
   const openSchematics = () => shipyard.objects["Boat schematics"].Modify({ player });
-  return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, scripts, buildRow, openSchematics, boat: () => player.getSailing().boats[0] };
+  return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, scripts, sounds, strings, buildRow, openSchematics, boat: () => player.getSailing().boats[0] };
 }
 
 test("a shipyard visit shows the boat's stats tab (rsprox)", () => {
@@ -2437,11 +2441,15 @@ test("building at the schematics swaps a part for the cache's materials and give
   h.buildRow(OAK_HULL);
   assert.equal(h.boat().parts.hull, 1, "the hull is now oak");
   assert.deepEqual([32044, 4820, 1939].map((item) => h.player.getInventory().getAmount(item)), [0, 0, 0]);
-  assert.deepEqual(h.xp, [["Construction", 238]]);
   assert.deepEqual(h.chatboxes, [229], "the workers' message box, shown through the fade");
+  assert.ok(h.strings.includes("With the help of some workers, you swap out the hull of your boat."));
   assert.equal(h.statements.length, 0, "not continuable until the fade in");
-  for (let tick = 0; tick < 4; tick++) TaskManager.process();
+  assert.deepEqual(h.xp, [], "the XP comes with the fade in");
+  TaskManager.process();
+  assert.deepEqual(h.sounds, [2104, [2103, 15]], "the swap's sounds, with the rebuild");
+  for (let tick = 1; tick < 4; tick++) TaskManager.process();
   assert.equal(h.statements.length, 1, "continuable once faded back in");
+  assert.deepEqual(h.xp, [["Construction", 238]]);
   // Back to wooden: a downgrade costs its own materials and the oak hull isn't refunded.
   h.openSchematics();
   h.buildRow(8271);
@@ -2520,6 +2528,205 @@ test("logging out in the shipyard saves the player at the dock the visit started
   const saved = h.player.getLocation();
   assert.deepEqual([saved.getX(), saved.getY(), saved.getZ()], [2805, 3429, 0]);
 });
+
+/** Gives the levels and the cache's materials for an option row, then builds it and plays the fade out. */
+function buildWithMaterials(h, part, row, sailing, construction) {
+  const parts = require("../plugins/skills/sailing/BoatParts.Sailing");
+  h.levels.set(h.Skill.SAILING, sailing);
+  h.levels.set(h.Skill.CONSTRUCTION, construction);
+  const { materials } = parts.requirementsOf(part, row);
+  for (const [item, count] of materials) h.player.getInventory().add(new Item(item, count), false);
+  h.openSchematics();
+  h.xp.length = 0;
+  h.sounds.length = 0;
+  assert.equal(h.buildRow(row), true);
+  for (let tick = 0; tick < 4; tick++) TaskManager.process();
+  return materials;
+}
+
+function shownShipyardBoat(h) {
+  return [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((boat) => boat?.ownerPlayerId === h.player.getIndex());
+}
+
+test("a part swap names each part as live does: 'of' the hull, keel and trim, 'on' the rest", () => {
+  const h = shipyardHarness();
+  // Skiff rows from the cache: iron helm, oak mast and linen sails, iron keel.
+  for (const [part, row, sailing, construction, text] of [
+    ["helm", 8328, 99, 99, "helm on your boat."],
+    ["sails", 8307, 99, 99, "mast and sails on your boat."],
+    ["keel", 8286, 99, 99, "keel of your boat."],
+  ]) {
+    buildWithMaterials(h, part, row, sailing, construction);
+    assert.ok(h.strings.includes(`With the help of some workers, you swap out the ${text}`), text);
+    assert.deepEqual(h.sounds, [2104, [2103, 15]]);
+  }
+});
+
+test("a trim is painted with the cache's paint, and No trim takes it off again", () => {
+  const h = shipyardHarness();
+  const SKIFF_SHARK_TRIM = 8360; // 8th on the skiff's trim list: 1 shark paint, Sailing 25, Construction 20
+  h.openSchematics();
+  h.buildRow(SKIFF_SHARK_TRIM);
+  assert.match(h.player.messages.at(-1), /Sailing level of 25 and a Construction level of 20/);
+  const materials = buildWithMaterials(h, "trim", SKIFF_SHARK_TRIM, 25, 20);
+  assert.deepEqual(materials, [[32090, 1]]);
+  assert.equal(h.player.getInventory().getAmount(32090), 0, "the paint is used up");
+  assert.equal(h.boat().parts.trim, 7);
+  assert.ok(h.strings.includes("With the help of some workers, you swap out the trim of your boat."));
+  assert.deepEqual(h.xp, [["Construction", 10]], "painting a skiff (Wiki: Trims)");
+  assert.equal(h.varbits.get(19258 + 26), 7, "sailing_boat_1_trim: shark, as captured on painting");
+  assert.equal(h.varbits.get(19172), 7, "the sidepanel's trim");
+  assert.ok(BoatManager.getSpec(shownShipyardBoat(h)).locs.some((loc) => loc.part === "trim" && loc.id === 59632), "the shark trim's loc");
+
+  // The paint stays through a hull swap; "No trim" puts back the hull's own trim.
+  h.openSchematics();
+  h.buildRow(SKIFF_SHARK_TRIM);
+  assert.equal(h.player.messages.at(-1), "Your boat already has that.");
+  buildWithMaterials(h, "hull", 8272, 99, 99);
+  assert.equal(h.varbits.get(19258 + 26), 7);
+  buildWithMaterials(h, "trim", 8352, 1, 1);
+  assert.equal(h.boat().parts.trim, undefined);
+  assert.equal(h.varbits.get(19258 + 26), 1, "the oak hull's own trim");
+  assert.deepEqual(h.xp, [], "taking the paint off gives no XP");
+});
+
+test("a flag is flown for its logs and rope, keeping the fabric roll", () => {
+  const h = shipyardHarness();
+  const SKIFF_SWAMP_CRUISERS_FLAG = 8350;
+  buildWithMaterials(h, "flag", SKIFF_SWAMP_CRUISERS_FLAG, 25, 20);
+  assert.equal(h.boat().parts.flag, 2);
+  assert.deepEqual([1521, 954, 31746].map((item) => h.player.getInventory().getAmount(item)), [0, 0, 1], "oak logs and rope used, the fabric roll kept (Wiki)");
+  assert.ok(h.strings.includes("With the help of some workers, you swap out the flag on your boat."));
+  assert.deepEqual(h.xp, [["Construction", 34]]);
+  assert.equal(h.varbits.get(19258 + 13), 2, "sailing_boat_1_flag");
+  assert.equal(h.varbits.get(19169), 2, "the sidepanel's flag");
+  const flag = BoatManager.getSpec(shownShipyardBoat(h)).locs.find((loc) => loc.part === "flag");
+  assert.deepEqual([flag.id, flag.x, flag.y, flag.level], [59489, 3, 6, 1], "the flag's loc, where the cache puts it");
+});
+
+test("the eternal brazier is built from the cache's materials and makes the boat icy-seas resistant", () => {
+  const h = shipyardHarness();
+  const SKIFF_BRAZIER = 8524; // Sailing 78, Construction 72
+  // Its rune nails and salts stack in game; this harness has no item definitions, so count them.
+  const held = new Map();
+  h.player.getInventory = () => ({
+    add: (item) => held.set(item.getId(), (held.get(item.getId()) ?? 0) + item.getAmount()),
+    getAmount: (id) => held.get(id) ?? 0,
+    delete: (id, count) => held.set(id, (held.get(id) ?? 0) - count),
+  });
+  const materials = buildWithMaterials(h, "brazier", SKIFF_BRAZIER, 78, 72);
+  assert.equal(materials.length, 7, "ironwood planks, rune nails, runite and cupronickel bars, three salts");
+  assert.equal(h.boat().parts.brazier, 1);
+  assert.ok(materials.every(([item]) => held.get(item) === 0), "all used up");
+  assert.ok(h.strings.includes("With the help of some workers, you swap out the brazier on your boat."));
+  assert.deepEqual(h.xp, [["Construction", 1373]]);
+  assert.equal(h.varbits.get(19258 + 14), 1, "sailing_boat_1_brazier");
+  assert.equal(h.varbits.get(19170), 1, "the sidepanel's brazier");
+  assert.equal(h.varbits.get(19255), 1, "sailing_sidepanel_boat_icyseas_resistant");
+  assert.ok(BoatManager.getSpec(shownShipyardBoat(h)).locs.some((loc) => loc.part === "brazier" && loc.id === 59708));
+});
+
+test("a part swap's XP still comes if the player logs out before the fade in", () => {
+  const h = shipyardHarness();
+  h.levels.set(h.Skill.SAILING, 20);
+  h.levels.set(h.Skill.CONSTRUCTION, 8);
+  for (const [item, count] of [[32044, 10], [4820, 300], [1939, 20]]) h.player.getInventory().add(new Item(item, count), false);
+  h.openSchematics();
+  h.buildRow(8272);
+  h.shipyard.logout({ player: h.player });
+  assert.deepEqual(h.xp, [["Construction", 238]]);
+  clearTasks();
+});
+
+test("every facility in the cache has its Construction XP", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const xp = require("../plugins/skills/sailing/data/sailing-parts.json").facility_construction_xp;
+  const names = new Set(CacheDefinitions.getDbTableRows(176).map((row) => (typeof row === "number" ? CacheDefinitions.getDbRow(row) : row).string(0)));
+  // "Recoloured sails" has no Wiki facility row.
+  const missing = [...names].filter((name) => name !== "Recoloured sails" && !(name in xp));
+  assert.deepEqual(missing, []);
+});
+
+test("the cosmetic parts are saved with the boat", () => {
+  const state = normalizeSailingState({ boats: [{ slot: 0, type: "sloop", parts: { hull: 3, trim: 10, flag: 2, brazier: 1 } },
+    { slot: 1, type: "skiff", parts: { hull: 1, trim: 3, flag: "x", brazier: 2 } }] });
+  assert.deepEqual(state.boats[0].parts, { hull: 3, keel: 0, sails: 0, helm: 0, trim: 10, flag: 2, brazier: 1 });
+  assert.deepEqual(state.boats[1].parts, { hull: 1, keel: 0, sails: 0, helm: 0 });
+});
+
+test("the yard's crates hand out a saw and a hammer", () => {
+  const h = shipyardHarness();
+  const crate = (name) => h.shipyard.objects[name]["Take-from"]({ player: h.player, location: { x: 2082, y: 2721, z: 0 }, definition: { getName: () => name } });
+  crate("Crate of saws");
+  assert.equal(h.player.getInventory().getAmount(8794), 0, "a tick after reaching it");
+  TaskManager.process();
+  assert.equal(h.player.getInventory().getAmount(8794), 1);
+  assert.deepEqual(h.sounds, [2582]);
+  crate("Crate of hammers");
+  TaskManager.process();
+  assert.equal(h.player.getInventory().getAmount(2347), 1);
+  assert.equal(h.statements.length, 2, "an item box each time");
+  clearTasks();
+});
+
+test("a facility can't be built without a saw and a hammer: the customisation closes on an item box", () => {
+  const h = shipyardHarness();
+  const built = registerPlugin("ShipyardFacilities.Sailing");
+  const facilities = require("../plugins/skills/sailing/BoatFacilities.Sailing");
+  h.player.performAnimation = () => {};
+  h.player.getEquipment = () => ({ get: () => undefined });
+  // A dialogue manager that knows which entry is showing, as the real one does.
+  let current;
+  h.player.getDialogueManager = () => ({
+    startDialogues: (chain) => { h.statements.push(chain); current = chain.getDialogues().get(0); },
+    getCurrent: () => current,
+    reset: () => { current = undefined; },
+  });
+  const continueBox = () => { current = h.statements.at(-1).getDialogues().get(1); current.send(h.player); };
+  const shown = shownShipyardBoat(h);
+  h.shipyard.objects.Gangplank.Board({ player: h.player, location: { x: 2087, y: 2723, z: 0 } });
+  const hotspot = facilities.hotspotsOf("skiff")[2];
+  const tile = { x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 };
+  built.objects["Facility hotspot"].Build({ player: h.player, location: tile });
+  h.levels.set(h.Skill.SAILING, 16);
+  h.levels.set(h.Skill.CONSTRUCTION, 6);
+  for (const [item, count] of [[2353, 4], [973, 2], [590, 1], [8794, 1]]) h.player.getInventory().add(new Item(item, count), false);
+  const row = 8512;
+  const zigzag = (row << 1) ^ (row >> 31);
+  const bytes = [];
+  let v = zigzag >>> 0;
+  while (v > 0x7f) { bytes.push((v & 0x7f) | 0x80); v >>>= 7; }
+  bytes.push(v, 0);
+  const sent = h.scripts.length;
+  const event = { player: h.player, groupId: 939, childId: 17, scriptTrigger: true, argsData: Buffer.from(bytes), handled: false };
+  for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
+  assert.equal(event.handled, true);
+  assert.equal(facilities.facilityAt(h.boat(), 2), undefined, "nothing built");
+  assert.equal(h.player.getInventory().getAmount(2353), 4, "nothing used up");
+  assert.equal(h.player.getInterfaceId(), -1, "939 closed");
+  assert.equal(h.varbits.get(19524), 0);
+  const box = h.statements.at(-1).getDialogues().get(0);
+  assert.deepEqual(box.getItemIds(), [8794, 2347], "objectbox_double: the saw and the hammer");
+  assert.equal(box.getText(), "You need a saw and a hammer in order to build a<br>facility.");
+  assert.deepEqual(h.scripts.slice(sent), [], "no redraw: 939 is gone");
+
+  // Continuing the box reopens the hotspot's customisation the tick after, as captured.
+  continueBox();
+  assert.equal(h.player.getInterfaceId(), -1, "not on the continue's own tick");
+  TaskManager.process();
+  assert.equal(h.player.getInterfaceId(), 939);
+  assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524), h.varbits.get(19525)], [1, 2, 1], "facility mode, the same hotspot");
+  assert.equal(current, undefined, "the box's chain has ended");
+
+  // Off the deck by then, it stays shut.
+  h.player.getPacketSender().sendInterfaceRemoval();
+  h.shipyard.objects.Gangplank.Disembark({ player: h.player, location: { x: 2087, y: 2723, z: 1 } });
+  continueBox();
+  TaskManager.process();
+  assert.equal(h.player.getInterfaceId(), -1);
+  clearTasks();
+});
+
 
 test("::boatmats spawns a part's materials from the cache, for the named or current boat", () => {
   const commands = {};
@@ -2640,6 +2847,7 @@ test("aboard in the shipyard, a hotspot's Build builds a facility and Modify rem
     for (const handler of [...h.shipyard.interfaceClicks, ...built.interfaceClicks]) handler(event);
     return event.handled;
   };
+  for (const tool of [8794, 2347]) h.player.getInventory().add(new Item(tool, 1), false);
   const sent = h.scripts.length;
   assert.equal(trigger(8512), true);
   assert.match(h.player.messages.at(-1), /Sailing level of 16 and a Construction level of 6/);
@@ -2650,7 +2858,7 @@ test("aboard in the shipyard, a hotspot's Build builds a facility and Modify rem
   trigger(8512);
   assert.equal(facilities.facilityAt(boat, 2), 8512);
   assert.deepEqual([2353, 973, 590].map((item) => h.player.getInventory().getAmount(item)), [0, 0, 0]);
-  assert.deepEqual(h.xp, [], "building a facility gives no XP");
+  assert.deepEqual(h.xp, [["Construction", 90]], "a range's Construction XP (Wiki)");
   assert.equal(h.player.animation, 3676);
   assert.equal(h.varbits.get(19524), 0, "the customisation closed");
   assert.equal(h.varbits.get(19158), 4, "the sidepanel's hotspot 2");
@@ -3780,6 +3988,19 @@ test("::maxboat presets fill every hotspot with a facility it allows, the best p
   assert.equal(count("Dragon salvaging hook"), 2, "both hook spots");
   assert.equal(count("Greater teleport focus"), 1, "capped at one");
   assert.equal(count("Rosewood cargo hold"), 1);
+});
+
+test("::maxboat keeps a boat's painted trim, flag and brazier", () => {
+  const commands = {};
+  require("../plugins/skills/sailing/Commands.Sailing").register({
+    registerCommand: (name, handler) => { commands[name] = handler; },
+    persistAttribute: () => {},
+  });
+  const player = sailor();
+  const boat = Sailing.giveBoat(player, "sloop", "the_pandemonium");
+  boat.parts = { ...boat.parts, trim: 10, flag: 2, brazier: 1 };
+  commands.maxboat({ player, parts: ["maxboat"] });
+  assert.deepEqual(boat.parts, { hull: 6, keel: 6, sails: 6, helm: 6, trim: 10, flag: 2, brazier: 1 }, player.messages.at(-1));
 });
 
 test("Navigate walks to each boat type's helm stand tile (rsprox: south of the skiff's wheel, south-east of the sloop's)", () => {

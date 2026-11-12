@@ -134,6 +134,7 @@ function setup() {
       getMaxLevel: (skill) => levels.get(skill) ?? 99,
       getCurrentLevel: (skill) => levels.get(skill) ?? 99,
       addExperiences(skill, amount) { xp.push({ skill, amount }); },
+      addExperience(skill, amount) { xp.push({ skill, amount }); },
     }),
     getLocation: () => location,
     moveTo(value) { location = value; },
@@ -784,6 +785,9 @@ test('stage 28 shipyard UI build consumes materials and advances once through th
     /cargo hold$/i.test(BoatFacilities.facilityRequirements(row).name));
   const materials = BoatFacilities.facilityRequirements(hold).materials;
   for (const [item, count] of materials) h.inventory.set(item, count + 3);
+  // The saw and hammer from the shipyard's crates.
+  h.inventory.set(8794, 1);
+  h.inventory.set(2347, 1);
   const quest = load(h, 'Pandemonium.Quest.js');
   h.attrs.set('quest.pandemonium.stage-version', 2);
   quest.setStage(h.player, 28);

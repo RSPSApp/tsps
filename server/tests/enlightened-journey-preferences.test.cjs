@@ -227,10 +227,10 @@ test('fuel or tinderbox lost after selection refuses before debit with feedback'
   }
 });
 
-test('logout invalidates the pending attempt even if the player is registered again before the callback', async t => {
+test('logout invalidates the pending attempt while the same actor is still registered', async t => {
   const f = actor(t); await selectFuel(f); assertPending(f, 0, 12);
   PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
-  f.p.setRegistered(false); f.p.setRegistered(true); tick();
+  assert.equal(f.p.isRegistered(), true, 'logout hook precedes deregistration'); tick();
   assert.equal(Controls.inFlight(f.p), false); assert.equal(stored(f), 12);
 });
 

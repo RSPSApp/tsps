@@ -177,7 +177,7 @@ async function clickObject(f, row, option, place = true) {
 test('forge Fuel/Check/Empty conserves carried and saved balance', async t => {
   const f = actor(t), id = obj('camdozaal_barronite_shard');
   f.player.getInventory().adds(id, 600);
-  const row = locate(/bim_ruins_wallkit_sacred_forge_op/);
+  const row = locate(/^bim_ruins_wallkit_sacred_forge_multi$/);
   await clickObject(f, row, 'Fuel');
   assert.equal(f.player.getInventory().getAmount(id), 0);
   assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 600);
@@ -338,15 +338,42 @@ test('successful vault exit converts only this run and restores run energy', asy
 async function exchange(f, t) {
   const id = core.CacheDefinitions.getNpcId('camdozaal_ramarno_multi');
   assert.ok(Number.isInteger(id), 'current cache Ramarno gameval');
-  const npc = PM.spawnNpc({ id, x: 2954, y: 5815, z: 0, wanderRadius: 0 });
+  const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id);
+  assert.ok(spawn, 'actual generated Ramarno world placement');
+  const npc = PM.spawnNpc({ id, x: spawn.x, y: spawn.y, z: spawn.level ?? 0, wanderRadius: 0 });
   assert.ok(npc);
   t.after(() => { if (npc.isRegistered()) core.World.getRemoveNPCQueue().push(npc); ticks(1); });
-  f.player.moveTo(new core.Location(2954, 5814, 0)); ticks(3);
+  ticks(1);
+  assert.equal(npc.isRegistered(), true);
+  const at = npc.getLocation();
+  let reached = false;
+  for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const tile = new core.Location(at.getX()+dx, at.getY()+dy, at.getZ());
+    if (core.RegionManager.blocked(tile, null)) continue;
+    f.player.moveTo(tile);
+    if (core.PathFinder.reachedEntity(f.player, npc)) { reached = true; break; }
+  }
+  assert.equal(reached, true, 'engine-qualified reachable perimeter at actual world placement');
+  ticks(3);
+  assert.equal(f.player.isNeedsPlacement(), false);
   const op = npc.getCurrentDefinition(f.player).getActions().indexOf('Exchange') + 1;
   assert.ok(op > 0, 'real Ramarno Exchange option');
-  await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]);
-  for (let i = 0; i < 20 && f.player.getInterfaceId() !== 685; i++) ticks(1);
-  assert.equal(f.player.getInterfaceId(), 685, 'ordinary NPC option opens real exchange');
+  let consumerEntries = 0;
+  const emit = PM.emitNpcInteraction;
+  PM.emitNpcInteraction = function(event) {
+    if (event.player === f.player && event.npc === npc) {
+      consumerEntries++;
+      assert.equal(event.npcId, npc.getContentId(f.player));
+      assert.equal(event.clickType, op);
+    }
+    return emit.call(this, event);
+  };
+  try {
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]);
+    for (let i = 0; i < 20 && !consumerEntries; i++) ticks(1);
+    assert.equal(consumerEntries, 1, 'decoded Exchange reaches exactly one real NPC consumer');
+    assert.equal(f.player.getInterfaceId(), 685, 'ordinary NPC option opens real exchange');
+  } finally { PM.emitNpcInteraction = emit; }
   return npc;
 }
 async function buy(f, component) {
@@ -576,7 +603,7 @@ test('each selected blue barrier crosses its actual cache footprint while yellow
     assert.ok(f.player.getLocation().equals(sides[0]), 'ordinary reverse Enter crosses back through the same footprint');
     const yellow = locate(new RegExp(`^camdozaal_vault_barrier_${groups[i][(selected + 1) % groups[i].length]}$`));
     const closed = ObjectDefinition.forPlayer(yellow.id, f.player);
-    assert.equal(closed.getInteractions().includes('Enter'), false, 'yellow cannot offer crossing');
+    assert.equal(closed.getInteractions()?.includes('Enter') ?? false, false, 'yellow cannot offer crossing');
   }
 });
 

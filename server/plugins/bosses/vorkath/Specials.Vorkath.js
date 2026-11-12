@@ -26,6 +26,16 @@ const RAPID_IMPACT_GFX = 131;
 const RAPID_IMPACT_HEIGHT = 30;
 const FREEZE_GFX = 369;
 const SPAWN_EXPLOSION_GFX = 1460;
+/**
+ * The explosion as recorded (rsprox.net recs 127/129/543 rev 227, 3280 rev 234, every explosion alike): on the
+ * tick the spawn reaches the player it plays ds2_spawn_attack, map_anim watersurge_impact (1460) at its tile with
+ * delay 22 and height 30, synth sounds 232 and 208 (delay 22), and this message; the hit and its removal follow
+ * a tick later.
+ */
+const SPAWN_ATTACK_ANIMATION = 7890;
+const SPAWN_EXPLOSION_GRAPHIC = Object.freeze({ delay: 22, height: 30 });
+const SPAWN_EXPLOSION_SOUNDS = Object.freeze([[232, 0], [208, 22]]);
+const SPAWN_EXPLODED_MESSAGE = "<col=ff3045>The spawn violently explodes, unfreezing you as it does so.</col>";
 
 const SPAWN_KILLED_MESSAGE = "<col=229628>You become unfrozen as you kill the spawn.</col>";
 const FROZEN_MESSAGE = "<col=ff3045>You have been frozen!</col>";
@@ -95,8 +105,8 @@ const ACID_LOB_FLIGHT = { delay: 32, duration: 90, angle: 46, startHeight: 85, e
 const RAPID_FLIGHT = { delay: 0, duration: 30, angle: 22, startHeight: 35, endHeight: 8 };
 const SPAWN_FLIGHT = { delay: 32, duration: 120, angle: 46, startHeight: 85, endHeight: 0 };
 
-function globalGraphic(npc, gfxId, height, tile) {
-  return Shared.tileGraphic(core, npc, gfxId, height, tile);
+function globalGraphic(npc, gfxId, height, tile, delay = 0) {
+  return Shared.tileGraphic(core, npc, gfxId, height, tile, delay);
 }
 
 function damagePlayer(player, amount) {
@@ -334,8 +344,12 @@ function finishExplosion(npc, fight, spawn, target) {
   if (fight.exploding) return;
   fight.exploding = true;
   const location = spawn.getLocation();
-  globalGraphic(npc, SPAWN_EXPLOSION_GFX, core.GraphicHeight.HIGH, { x: location.getX(), y: location.getY() });
+  spawn.performAnimation(new core.Animation(SPAWN_ATTACK_ANIMATION));
+  globalGraphic(npc, SPAWN_EXPLOSION_GFX, SPAWN_EXPLOSION_GRAPHIC.height, { x: location.getX(), y: location.getY() },
+    SPAWN_EXPLOSION_GRAPHIC.delay);
+  for (const [id, delay] of SPAWN_EXPLOSION_SOUNDS) Shared.playSound(target, id, delay);
   unfreeze(target);
+  target.sendMessage(SPAWN_EXPLODED_MESSAGE);
   const hp = spawn.getHitpoints?.() ?? 0;
   later(1, target, () => {
     if (fight.spawn !== spawn || (npc.getAttribute?.(Shared.ATTR_PHASE) ?? null) !== Shared.PHASE_SPAWN) return;
@@ -429,4 +443,5 @@ module.exports = {
   spawnDied,
   tick,
   fights,
+  _test: { finishExplosion, SPAWN_EXPLODED_MESSAGE },
 };

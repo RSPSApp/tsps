@@ -1107,6 +1107,12 @@ class TreeRespawnTask extends Task {
   }
 
   execute() {
+    // A private template may have ended while this tree was depleted. Its delayed
+    // respawn must not put an object back into the world after area destruction.
+    if (this.originalTreeObject.getPrivateArea()?.isDestroyed()) {
+      this.stop();
+      return;
+    }
     const existingStump = MapObjects.get(
       this.stumpObject.getId(),
       this.stumpObject.getLocation(),
@@ -1190,6 +1196,28 @@ function choppingAxeEligible(axe) {
   return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(axe.id)?.isMembers !== true;
 }
 
+/** The current tree, including an unchanged loc lazily copied into a template scene. */
+function treeAt(id, location, privateArea, type, face) {
+  if (privateArea?.isDestroyed()) return null;
+  const matches = (object) => object && object.getId() === id
+    && object.getPrivateArea() === privateArea && object.getLocation().equals(location)
+    && object.getType() === type && object.getFace() === face;
+  const current = MapObjects.get(id, location, privateArea)
+    ?? ObjectManager.objectsAt(location).find(matches);
+  if (current) return matches(current) ? current : null;
+  if (!privateArea?.usesTemplateMap()) return null;
+  const tree = privateArea.resolveObject(id, location);
+  if (!matches(tree)) return null;
+  // The template index still describes the original map after depletion. A stump,
+  // replacement, or remembered removal in that shape slot hides the lazy original.
+  const sameSlot = (object) => object.getPrivateArea() === privateArea
+    && object.getType() === tree.getType() && object.getLocation().equals(location);
+  if (privateArea.getObjects().some(sameSlot)
+    || ObjectManager.objectsAt(location).some(sameSlot)
+    || pluginApi.core.World.getRemovedObjects().some(sameSlot)) return null;
+  return tree;
+}
+
 function startWoodcutting(player, treeObject, tree, activeSessions) {
   const request = { player, object: treeObject, allow: true };
   pluginApi.emitCustomEvent("woodcutting:validate-tree", request);
@@ -1212,10 +1240,12 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
   }
 
   const location = treeObject.getLocation().clone();
-  const existingTree = MapObjects.get(
+  const existingTree = treeAt(
     treeObject.getId(),
     location,
-    treeObject.getPrivateArea()
+    treeObject.getPrivateArea(),
+    treeObject.getType(),
+    treeObject.getFace()
   );
   if (!existingTree) {
     player.sendMessage("You can't reach that tree right now.");
@@ -1239,6 +1269,8 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
     objectId: treeObject.getId(),
     location,
     privateArea: treeObject.getPrivateArea(),
+    objectType: treeObject.getType(),
+    objectFace: treeObject.getFace(),
     nextActionTick: woodcuttingTick + FIRST_ROLL_DELAY_TICKS,
     nextAnimationTick: woodcuttingTick + FIRST_ROLL_DELAY_TICKS,
   });
@@ -1267,10 +1299,12 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     }
     if (state.levelUpPaused) continue;
 
-    const activeTree = MapObjects.get(
+    const activeTree = treeAt(
       state.objectId,
       state.location,
-      state.privateArea
+      state.privateArea,
+      state.objectType,
+      state.objectFace
     );
     if (!activeTree) {
       stopWoodcutting(activeSessions, player);

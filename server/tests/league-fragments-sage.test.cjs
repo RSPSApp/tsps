@@ -175,6 +175,12 @@ test("each set's item from the cache: the grimoire, the crystal and the waystone
   delete custom["gravestones:state"];
   assert.equal(graved.getInventory().getAmount(GRIMOIRE), 0, "one waiting in the grave counts");
 
+  const retrieved = shattered("sageretrieval");
+  custom["item-retrieval:items"] = [(request) => { if (request.player === retrieved) request.items.push({ itemId: CRYSTAL, amount: 1 }); }];
+  equip(retrieved, ...LAST_RECALL);
+  delete custom["item-retrieval:items"];
+  assert.equal(retrieved.getInventory().getAmount(CRYSTAL), 0, "one kept by an item-retrieval NPC counts");
+
   const loggedIn = shattered("sagelogin");
   equip(loggedIn, ...TRAILBLAZER);
   loggedIn.getInventory().delete(WAYSTONE, 1);

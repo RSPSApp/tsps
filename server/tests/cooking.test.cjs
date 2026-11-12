@@ -59,6 +59,8 @@ function player(cooking, carried) {
 function cooker(name) {
   return {
     getId: () => 1,
+    getType: () => 10,
+    getFace: () => 0,
     getDefinition: () => ({ getName: () => name, getInteractions: () => name === "Fire" ? [] : ["Cook"] }),
     getLocation: () => new core.Location(3222, 3218, 0),
     getPrivateArea: () => null,

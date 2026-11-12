@@ -108,7 +108,11 @@ const MAX_STACK = 2147483647;
 /** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
-/** A stored stack keeps no meta, so a preset (or meta-untradeable, unbankable) stack would come back plain. */
+/**
+ * A preset (or meta-untradeable, unbankable) item is never stored: a stored stack keeps no meta, so it would come back
+ * plain, and a single item keeping its meta would reach the bank from the mountain's unit or another raider through
+ * the shared storage.
+ */
 function restricted(item) {
   return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
 }
@@ -165,6 +169,12 @@ function privateItems(player) {
     player.setAttribute(ATTR_PRIVATE, items);
   }
   return items;
+}
+
+/** Whether the private storage holds an item, without creating an empty store for a player who has none. */
+function privatelyHeld(player, id) {
+  const items = player.getAttribute?.(ATTR_PRIVATE);
+  return Array.isArray(items) && items.some((entry) => entry?.id === id && entry.amount > 0);
 }
 
 /** Raid-only items can't leave the raid: they are gone from the private storage once outside. */
@@ -298,7 +308,7 @@ function deposit(player, slot, amount) {
     return;
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
-  if (stacks(id) && restricted(item)) {
+  if (restricted(item)) {
     player.sendMessage(PRESET_TEXT);
     return;
   }
@@ -319,11 +329,11 @@ function depositStack(inventory, store, size, slot, amount) {
   return stored;
 }
 
-/** Item by item, the clicked one first, so each keeps its own meta. */
+/** Item by item, the clicked one first, so each keeps its own meta; preset copies of the id stay in the inventory. */
 function depositEach(inventory, store, size, slot, amount) {
   const items = inventory.getItems();
   const id = items[slot].getId();
-  const slots = [slot, ...items.flatMap((item, index) => (item?.getId() === id && index !== slot ? [index] : []))];
+  const slots = [slot, ...items.flatMap((item, index) => (item?.getId() === id && index !== slot && !restricted(item) ? [index] : []))];
   let stored = 0;
   for (const from of slots) {
     if (stored >= amount || addTo(store, size, id, 1, items[from].getMeta()) === 0) break;
@@ -393,7 +403,14 @@ function clickInventoryItem(event) {
   return true;
 }
 
+/** The private storage's own buttons (271:9, 271:10) act only while it is the storage open. */
+function privateView(player) {
+  const view = viewOf(player);
+  return view?.kind === "private" ? view : null;
+}
+
 function withdrawAll({ player }) {
+  if (!privateView(player)) return true;
   const items = privateItems(player);
   if (items.length === 0) {
     player.sendMessage("There's nothing to withdraw.");
@@ -406,7 +423,7 @@ function withdrawAll({ player }) {
 
 /** Inside: everything in the inventory into the private storage. On the mountain: all to the bank. */
 function depositOrBankAll({ player }) {
-  const view = viewOf(player);
+  const view = privateView(player);
   if (!view) return true;
   if (!view.mount) {
     player.getInventory().getItems().forEach((item, slot) => {
@@ -644,5 +661,7 @@ module.exports = function registerCoxStorage(api) {
 
 Object.assign(module.exports, {
   TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
-  dragPrivate, isUltimateIronman, depositOrBankAll,
+  dragPrivate, isUltimateIronman, depositOrBankAll, withdrawAll,
 });
+
+module.exports.privatelyHeld = privatelyHeld;

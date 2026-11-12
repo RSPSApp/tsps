@@ -262,6 +262,8 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     cookable, selected,
     animation: cookAnimationFor(object.getDefinition().getName()),
     objectId: object.getId(),
+    objectType: object.getType(),
+    objectFace: object.getFace(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
     // Repeated clicks must not shorten the initial captured first-food delay.
@@ -332,11 +334,31 @@ function openCookMenu(player, title, items, most, choose) {
     { mode: COOK_MENU_MODE, maxAmount: most, lastAmount: most }));
 }
 
+/** The active cooker can be unchanged scenery lazily copied into a template. */
+function currentCooker(session) {
+  const { MapObjects, ObjectManager, World } = Common.core;
+  const { objectId, location, privateArea } = session;
+  if (privateArea?.isDestroyed()) return null;
+  const matches = (object) => object && object.getId() === objectId
+    && object.getPrivateArea() === privateArea && object.getLocation().equals(location)
+    && object.getType() === session.objectType && object.getFace() === session.objectFace;
+  const current = MapObjects.get(objectId, location, privateArea)
+    ?? ObjectManager.objectsAt(location).find(matches);
+  if (current) return matches(current) ? current : null;
+  if (!privateArea?.usesTemplateMap()) return null;
+  const cooker = privateArea.resolveObject(objectId, location);
+  if (!matches(cooker)) return null;
+  const sameSlot = (object) => object.getPrivateArea() === privateArea
+    && object.getType() === session.objectType && object.getLocation().equals(location);
+  if (privateArea.getObjects().some(sameSlot)
+    || ObjectManager.objectsAt(location).some(sameSlot)
+    || World.getRemovedObjects().some(sameSlot)) return null;
+  return cooker;
+}
+
 /** One step of the cook loop for every cooking player, once a tick. */
 function cookTick(task) {
   task.cycle++;
-  const { MapObjects } = Common.core;
-
   for (const [player, session] of activeSessions) {
     if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
       activeSessions.delete(player);
@@ -356,7 +378,7 @@ function cookTick(task) {
       continue;
     }
 
-    const object = MapObjects.get(session.objectId, session.location, session.privateArea);
+    const object = currentCooker(session);
     if (!object || !object.isWithinInteractionDistance(player.getLocation())) {
       stopCooking(player);
       continue;

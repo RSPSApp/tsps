@@ -99,6 +99,7 @@ function playerAt(x, y, z = 0, { coins = 0, items = {}, area = null } = {}) {
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new core.Location(x, y, z),
     getPrivateArea: () => area,
+    getArea: () => null, // no area rules here (TeleportHandler.destinationAllowed reads it before a voyage)
     isPlayer: () => true,
     isRegistered: () => true,
     sendMessage: (message) => messages.push(message),

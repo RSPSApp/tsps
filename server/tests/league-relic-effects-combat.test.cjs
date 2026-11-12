@@ -14,6 +14,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const { GameConstants } = require("../dist/game/GameConstants");
 const { Skill } = require("../dist/game/model/Skill");
 const { Location } = require("../dist/game/model/Location");
@@ -49,7 +50,7 @@ before(async () => {
   const modifier = (name) => (fn) => ((modifiers[name] ??= []).push(fn));
   const api = new Proxy({
     core,
-    persistAttribute() {},
+    persistAttribute: (key, fallback) => PlayerSave.persistAttribute(key, fallback),
     getPluginConfig: (key, fallback) => (key === "league:type" ? 4 : fallback),
     setWorldProfile: (profile) => GameConstants.setWorldProfile(profile),
     getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
@@ -513,6 +514,59 @@ test("Last Stand: logging out mid-stand settles the boosts at base + 15 before t
     assert.equal(skills.getCurrentLevel(Skill.ATTACK), 255);
     hooks.onPlayerLogout({ player: who.relic });
     assert.equal(skills.getCurrentLevel(Skill.ATTACK), 85, "base 70 + 15, as the drain would leave it");
+  } finally {
+    core.TaskManager.submit = submit;
+  }
+});
+
+test("Last Stand: a save mid-stand that no logout settled (shutdown, tick error) comes back at base + 15", () => {
+  const who = cases(LAST_STAND, 5);
+  const tasks = [];
+  const submit = core.TaskManager.submit;
+  core.TaskManager.submit = (task) => tasks.push(task);
+  try {
+    const skills = who.relic.getSkillManager();
+    skills.setMaxLevels(Skill.HITPOINTS, 99, false);
+    skills.setMaxLevels(Skill.ATTACK, 70, false);
+    skills.setCurrentLevels(Skill.ATTACK, 70, false);
+    cycle = 400;
+    who.relic.setAttribute("league:last-stand-ready-at", 0);
+    skills.setCurrentLevel(Skill.HITPOINTS, 0, false);
+    hooks.onPlayerBeforeDeath({ player: who.relic, preventDeath: false });
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 255);
+    const saved = PlayerSave.fromPlayer(who.relic); // World.savePlayers("shutdown"): no logout hook
+    const back = new Player(null);
+    back.setUsername("relic");
+    back.setProfile("league");
+    back.setLocation(new Location(3200, 3200, 0));
+    back.setRegistered(true);
+    const sender = new Proxy({}, { get: () => () => sender });
+    back.getPacketSender = () => sender;
+    back.sendMessage = () => {};
+    saved.applyToPlayer(back);
+    assert.equal(back.getSkillManager().getCurrentLevel(Skill.ATTACK), 255, "the save holds the boost");
+    hooks.onPlayerLogin({ player: back, username: "relic", isNewAccount: false, profile: "league" });
+    assert.equal(back.getSkillManager().getCurrentLevel(Skill.ATTACK), 85, "base 70 + 15, as the drain would leave it");
+    assert.equal(back.getAttribute("league:last-stand-draining"), false);
+
+    // A stand that drained out on its own leaves nothing to settle: a later boost is kept.
+    assert.equal(who.relic.getAttribute("league:last-stand-draining"), true, "set while the boosts drain");
+    for (let i = 0; i < 40; i++) {
+      cycle++;
+      tasks[0].execute();
+    }
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 85);
+    assert.equal(who.relic.getAttribute("league:last-stand-draining"), false, "cleared when the drain ends");
+    skills.setCurrentLevel(Skill.ATTACK, 99, false); // a super potion afterwards
+    const later = PlayerSave.fromPlayer(who.relic);
+    const relog = new Player(null);
+    relog.setUsername("relic");
+    relog.setProfile("league");
+    relog.getPacketSender = () => sender;
+    relog.sendMessage = () => {};
+    later.applyToPlayer(relog);
+    hooks.onPlayerLogin({ player: relog, username: "relic", isNewAccount: false, profile: "league" });
+    assert.equal(relog.getSkillManager().getCurrentLevel(Skill.ATTACK), 99, "a later boost is kept");
   } finally {
     core.TaskManager.submit = submit;
   }

@@ -418,6 +418,49 @@ test('a restart mid-dream: logging in still marked as dreaming wakes the player 
   assert.equal(outside.location, start, 'a player not dreaming stays put');
 });
 
+/** The same save loaded into a new player after a restart: no logout ran, and this server has no dream for it. */
+function restarted(p) {
+  const back = fakePlayer({ quests: [...p.quests] });
+  back.getAttribute = p.getAttribute;
+  back.setAttribute = p.setAttribute;
+  back.location = p.location;
+  return back;
+}
+
+test("a restart mid-dream pays the dream's points at the next login, once", () => {
+  const p = dreamer();
+  ticks(Common.data.arena.firstSpawnTicks);
+  // A boss with several forms pays only for its last one: kill until the counter shows points.
+  for (let i = 0; i < 10 && !(varbit(p, 'nzone_currentpoints') > 0); i++) Dream.bossDied({ npc: [...Dream.dreams.get(p).npcs][0] });
+  const earned = varbit(p, 'nzone_currentpoints');
+  assert.ok(earned > 0);
+  const before = Common.points(p);
+  const back = restarted(p); // a new player object: this server has no dream for it
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'the points gathered before the restart');
+  const [x, y] = Common.data.lobby.afterDream;
+  assert.deepEqual([back.location.getX(), back.location.getY()], [x, y], 'by Dominic');
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'a second login pays nothing more');
+});
+
+test('a restart during the entry fade gives the fee back and keeps the dream prepared', () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setCoffer(p, 5000);
+  Common.setPreparedDream(p, { mode: 'endurance', difficulty: 'normal' });
+  Dream.start(p);
+  ticks(1);
+  assert.equal(Common.coffer(p), 4000);
+  assert.equal(Common.preparedDream(p), null, 'the vial is emptied a tick into the fade');
+  const back = restarted(p);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'the fee is back');
+  assert.deepEqual(Common.preparedDream(back), { mode: 'endurance', difficulty: 'normal' });
+  assert.equal(Common.points(back), 0);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'refunded once');
+});
+
 test('real executeHit protects before absorption spends points', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

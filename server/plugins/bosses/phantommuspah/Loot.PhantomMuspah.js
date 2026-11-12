@@ -60,9 +60,11 @@ function lootOnCentre(event) {
   event.location = npc.getLocation().clone().add(centre, centre);
 }
 
+/** In the inventory or a bank tab; the search tab only holds copies of what the tabs hold. */
 function owns(player, itemId) {
   if (player.getInventory().getAmount(itemId) > 0) return true;
-  return (player.getBanks?.() ?? []).some((bank) => bank?.getAmount?.(itemId) > 0);
+  const searchTab = Common.core.Bank.BANK_SEARCH_TAB_INDEX;
+  return (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.getAmount?.(itemId) > 0);
 }
 
 let mainTableIds = null;

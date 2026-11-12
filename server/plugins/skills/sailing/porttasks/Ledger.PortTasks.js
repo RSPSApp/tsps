@@ -199,8 +199,13 @@ function complete(player, index, task, random = Math.random) {
   }
   countCompletion(player);
   replaceOnBoard(player, task);
-  player.sendMessage(`You have finished the ${common.blue(task.name)} port task.`);
   player.getPacketSender().sendSoundEffect(SOUND_COMPLETE, 1, 0);
+  // A quest's own delivery (Pandemonium's crate) is just its box: no task message, rsprox 235/242.
+  if (task.questDelivery === true) {
+    itemBox(player, task.crate, `You deliver the ${common.crateName(task.crate)}.`);
+    return;
+  }
+  player.sendMessage(`You have finished the ${common.blue(task.name)} port task.`);
   itemBox(player, task.crate, `You deliver the ${common.crateName(task.crate)} and complete your courier task!`);
 }
 

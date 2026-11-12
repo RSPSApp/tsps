@@ -179,6 +179,8 @@ function mix(request) {
   const unfinished = /\(unf\)$/i.test(name(request.productId));
   if (!unfinished) {
     request.consume.forEach((item, index) => {
+      // Already kept by another listener (Prescription goggles): no second roll, and no second vial back.
+      if (item.count <= 0) return;
       const secondary = index > 0 && (alsoSaved.has(item.id) || !Common.isPotion(item.id));
       if (!secondary || neverSaved.has(item.id) || Math.random() >= effect.secondarySaveChance) return;
       item.count = 0;

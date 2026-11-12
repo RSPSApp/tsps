@@ -108,13 +108,18 @@ function sail({ player, definition, kind, text }) {
     player.sendMessage("You need a ship ticket to sail.");
     return;
   }
+  // The port must be a place the passenger may go before the ticket is taken: a league area still locked refuses here
+  // ("You haven't unlocked that area yet.") instead of taking it and sending them back on landing, as the charter ships
+  // do. Only the destination is asked (TeleportHandler.destinationAllowed): a voyage is no teleport.
+  const to = new core.Location(...destination.to);
+  if (!core.TeleportHandler.destinationAllowed(player, to)) return;
   inventory.deleteNumber(SHIP_TICKET, 1);
   if (inventory.getAmount(core.ItemIdentifiers.KARAMJAN_RUM) > 0) {
     inventory.deleteNumber(core.ItemIdentifiers.KARAMJAN_RUM, 1);
     player.sendMessage("During the trip you lose your rum to a sailor in a game of dice. Better luck next time!");
   }
   inventory.refreshItems?.();
-  player.moveTo(new core.Location(...destination.to));
+  player.moveTo(to);
   api.emitCustomEvent("lady-of-the-waves:sailed", { player, destination: destination.key });
 }
 

@@ -154,24 +154,30 @@ function buildOnHotspot(player, visit, facility) {
     return false;
   }
   const requirements = facilities.facilityRequirements(facility);
-  const refused = refusal(player, requirements);
+  // Another plugin may cover the materials (Pandemonium's Junior Jim does for the raft's cargo
+  // hold); the levels still apply.
+  const cost = { player, boat, hotspot, facility, provided: false };
+  pluginApi.emitCustomEvent("sailing:facility-cost", cost);
+  const needs = cost.provided ? { ...requirements, materials: [] } : requirements;
+  const refused = refusal(player, needs);
   if (refused) {
     player.sendMessage(refused);
     return false;
   }
   if (!cargoFitsAfter(player, boat, hotspot, facility)) return false;
   // A catcher's captured wind mote is needed, not used up (Wiki).
-  for (const [item, count] of requirements.materials) {
+  for (const [item, count] of needs.materials) {
     if (item !== CAPTURED_WIND_MOTE) player.getInventory().delete(item, count);
   }
   facilities.setFacility(boat, hotspot, facility);
   closeCustomisation(player);
-  const xp = facilityXp(requirements.name);
+  // A build someone else provides gives no XP (Pandemonium's hold: no stat update, rsprox 242 tick 3581).
+  const xp = cost.provided ? 0 : facilityXp(requirements.name);
   if (xp > 0) player.getSkillManager().addExperience(Skill.CONSTRUCTION, xp, true);
   player.performAnimation(new Animation(SEQ_BUILD));
   playSound(player, SOUND_BUILD);
   showHotspot(player, visit, boat, hotspot);
-  pluginApi.emitCustomEvent("sailing:facility-built", { player, boat, hotspot, facility });
+  pluginApi.emitCustomEvent("sailing:facility-built", { player, boat, hotspot, facility, provided: cost.provided });
   return true;
 }
 

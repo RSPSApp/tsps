@@ -75,6 +75,8 @@ const NO_CANNON_NPCS = [
   "Sand crab", "Ammonite crab", "Demonic gorilla", "Kurask", "Battle mage", "Kolodion",
   // Wiki (Turoth): "the dwarf multicannon is ineffective"; (Vyrewatch Sentinel): Cannons "Immune".
   "Turoth", "Vyrewatch Sentinel",
+  // Their superiors share the "leafy" attribute (Wiki infoboxes), so only leaf-bladed weapons, broad ammo and Magic Dart hurt them.
+  "Spiked Turoth", "King kurask",
 ];
 
 /** Is (dx, dy) from the centre inside the polygon (even-odd rule on tile centres)? */

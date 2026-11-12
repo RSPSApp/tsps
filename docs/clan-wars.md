@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena or Soggy Swamp**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic or Lumbridge Castle**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -577,3 +577,104 @@ pinned Wiki/cache references above. Exact placement, team assignment and wall
 axis/face are TSPS choices, not recorded retail spawns or timing. Native tests
 retain disclosed combat/Forfeit checkpoints, pre-rolled damage and inert
 transport; no rendered-client/full-session/natural-RNG equivalence is claimed.
+
+## Classic
+
+Classic (11, native arena slot 33) uses the existing melee modes, restrictions,
+Ignore 5, safe-death and viewing routes alongside the five delivered layouts.
+The pinned Clan Wars Wiki lists Classic in the free-to-play section. Objective
+modes, other arenas, modern clans and ranged/ammunition parity remain outside
+this implementation.
+
+The selected copy is rectangular: source 3392..3455 / 4672..4799, regions 13641
+and 13642, eight by sixteen chunks. Source planes 0/1 map to matching instance
+planes; 2/3 remain unmapped. A separate read-only inspection returned all 1,683
+raw locs (866 and 817 respectively), all on raw plane 0, with full settings/clips
+and actual owned interactive copies. Its 141 checks were 140 retained controls
+plus one source inspection, not Classic gameplay proof. This bounded footprint
+is a TSPS choice qualified against source geometry, not a retail arena extent.
+
+The TSPS south/north battle landings are (3423,4690,0) / (3423,4787,0), and jail
+landings are (3448,4727,0) / (3448,4744,0). Source graphs identify a 5,766-tile
+battle component and two separate 100-tile jails. A darkrock preparation line
+at y=4735, x=3393..3445 skips two terrain-blocked cells and registers 51 native
+1x1, type-10, face-0 walls. The directional/projectile edge at (3445,4735) keeps
+its 0x140a mask; removal must restore all 8,192 plane-0 masks exactly. Ordinary
+processed movement is separate from the source graph. The shared Match copy
+uses selected width/height with each old dimension falling back to size; all
+five old literal configurations, square defaults and Clan Cup axis/face remain
+unchanged, as do native registration, removal and preparation lifetime.
+
+Actual active darkrock orbs are (3450,4720), face 0, and (3450,4751), face 2,
+using model 9752. Jail Exit portals are (3450,4734) / (3450,4737). All are raw
+plane 0 with settings [0,0] and owned effective plane 0. The existing policy
+requires a jailed member and the exact owned template object. Same IDs in other
+matches and unregistered lookalikes do not establish ownership. Both Forfeit
+copies use the same darkrock-south gameval, at (3421,4681), face 0, and
+(3423,4789), face 2. Both are 4x2: ordinary approach uses the actual footprint
+perimeter, not anchor-only adjacency. Suitable source approaches include
+(3423,4683) and (3423,4788); the two open tiles immediately west of the south
+portal are isolated and are not used as ordinary approach evidence.
+
+Selected Tree 14693 at (3410,4686), face 3, has a 2x2 footprint that blocks
+walking and projectiles. Selected Stone Pile 14731 at (3425,4730), face 2, is
+1x1 and blocks walking while allowing a ray. Adjacent open endpoints and an
+independent open control support bounded native movement/ray checks; names
+alone do not establish arena-wide line of sight. Placement, jail assignment,
+barrier and copied dimensions remain TSPS choices. Validation retains supplied
+combat/Forfeit checkpoints, pre-rolled melee damage and inert transport; no
+rendered-client, full-login, natural-RNG or retail spawn/timing claim is made.
+
+
+## Lumbridge Castle
+
+The native arena row 12 (slot 36) selects Lumbridge Castle alongside the previous
+six layouts. This bounded template copies region 13643, source 3392..3455 /
+4800..4863, planes 0 and 1; planes 2/3 remain unmapped. Returned plane-1 settings
+have no bridge bits. Staircase copies are on effective plane 1, with no ground-floor
+Climb action. Ground-floor gameplay and sealed main/rear entrances follow the
+existing source clipping, not a new permission to use upper floors.
+
+The following are explicit TSPS placements qualified against the source, not retail
+spawns or extent claims: south/north landings (3417,4810,0)/(3417,4843,0), jails
+(3436,4822,0)/(3436,4831,0). Greyrock preparation barriers use type 10, face 0,
+y=4826, x=3407..3437, skipping two already-solid tiles. The remaining 29 native
+barriers separate the starts; removing them must preserve the complete original
+4096-tile collision grid. Existing dimensions, preparation lifetime, native object
+registration/removal and the other six configurations are unchanged.
+
+Each gatehouse jail contains an owned greyrock viewing orb (26743, model 9755)
+and swamp Exit portal (26740). Actual south/north orbs are at (3436,4823) /
+(3436,4830), Exit portals at (3437,4820) / (3437,4833). Smallwood Forfeit portals
+7819/7820 at (3417,4809)/(3417,4844) have 2x1 footprints. Their native owned
+identity and footprint approaches matter; matching an ID elsewhere grants no action.
+
+The [pinned Wiki description](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+allows ground-floor water sources, cooking and regular trees; the Oak remains
+behind invisible barriers. Actual interior source copies include Sink 14868,
+Range 26181, Fountains 879 and two reachable regular Trees 1278. These use the
+canonical WaterSources, Cooking and Woodcutting plugins, including actionless
+water item-use, real supplies and normal NoFood/NoDrinks consumption restrictions.
+The Oak's 3x3 footprint has directional clipping on every cardinal approach;
+walkable corner tiles do not establish native object reach. Other copied scenery
+is not assumed usable merely from its name.
+
+Canonical Woodcutting and Cooking resolve untouched lazy template trees/ranges
+as well as spawned and world objects, while honoring an area's removed or
+replaced shape slots. This
+keeps a depleted original unavailable until its actual respawn rather than reading
+it straight back from the immutable template index.
+
+Canonical tree depletion keeps private-area identity on its stump and respawn.
+The delayed Woodcutting respawn task now stops before object lookup or mutation
+when the original private area is destroyed. World and living-private-area respawns
+retain their existing path. This prevents a stale tree from being registered after
+a match ends, without disabling ordinary chopping or changing global object tasks.
+
+Existing fixtures cover ordinary arena offers, full mask restoration, actual object
+and movement routes, internal doors versus actionless seals, ground-floor refusal,
+canonical resource outputs/cancellation/respawn and private teardown, safe-death
+metadata, viewing, delayed return, both Forfeit footprints and prior-layout controls.
+Coverage descriptions are source intent; observed outcomes and failure history belong
+to the PR evidence. Supplied setup, controlled RNG, native listener versus decoded
+packet boundaries, inert transport and unrendered client/session limits remain explicit.

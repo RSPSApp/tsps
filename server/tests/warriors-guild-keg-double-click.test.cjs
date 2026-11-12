@@ -35,3 +35,48 @@ test("clicking the same keg twice before it is picked up counts it once", (t) =>
   for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.equal(Kegs.balancing.get(p)?.kegs, 1, "one keg on the head");
 });
+
+const HELMET = 1155; // bronze full helm
+
+function kegPlayer(t, index) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(index); p.setUsername("kegs" + index); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  p.setLocation(new core.Location(2870, 3540, 1)); // the keg room
+  t.after(() => { Kegs.balancing.delete(p); core.TaskManager.cancelTasks(p); p.setRegistered(false); });
+  return p;
+}
+
+/** The real equip path (EquipPacketListener), as an inventory Wear click. */
+function equipHelmet(p) {
+  const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+  const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+  p.getInventory().setItem(0, new core.Item(HELMET, 1));
+  EquipPacketListener.equip(p, HELMET, 0, Inventory.INTERFACE_ID);
+}
+
+test("a helmet put on in the two-tick pick-up keeps its head slot: no keg replaces it", (t) => {
+  const p = kegPlayer(t, 9031);
+  Kegs.pickUpKeg({ player: p, objectId: 15669 });
+  core.TaskManager.process();
+  equipHelmet(p); // worn in the window
+  assert.equal(p.getEquipment().getItems()[core.Equipment.HEAD_SLOT].getId(), HELMET, "the helmet went on");
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(p.getEquipment().getItems()[core.Equipment.HEAD_SLOT].getId(), HELMET, "the helmet is still worn");
+  assert.equal(Kegs.balancing.has(p), false, "no kegs balanced");
+});
+
+test("a helmet worn after the stack falls, while the next keg is coming, keeps its head slot", (t) => {
+  const p = kegPlayer(t, 9032);
+  Kegs.pickUpKeg({ player: p, objectId: 15669 });
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.equal(Kegs.balancing.get(p)?.kegs, 1);
+  Kegs.pickUpKeg({ player: p, objectId: 15670 });
+  core.TaskManager.process();
+  equipHelmet(p); // drops the stack (the equip hook), then the helmet goes on
+  assert.equal(Kegs.balancing.has(p), false, "the stack fell");
+  assert.equal(p.getEquipment().getItems()[core.Equipment.HEAD_SLOT].getId(), HELMET, "the helmet went on");
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(p.getEquipment().getItems()[core.Equipment.HEAD_SLOT].getId(), HELMET);
+  assert.equal(Kegs.balancing.has(p), false);
+});

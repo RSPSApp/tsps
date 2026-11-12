@@ -14,6 +14,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+const Session = require('../plugins/minigames/archerycompetition/Session.ArcheryCompetition');
 
 const JUDGE = 6070;
 const AT = [2669, 3418, 0];
@@ -92,4 +93,29 @@ test('"What are the rules?" and "No thanks." answer as chosen', async (t) => {
   await f.choose('No thanks.');
   assert.equal(f.text(), 'No thanks.');
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 1000, 'nothing paid');
+});
+
+test('a full pack whose only bronze arrows are a preset stack is refused before the fee', async (t) => {
+  const f = harness(t);
+  const inventory = f.player.getInventory();
+  const preset = new core.Item(core.ItemIdentifiers.BRONZE_ARROW, 50);
+  preset.setMetaValue(core.Item.PRESET_META, true);
+  inventory.add(preset, false);
+  while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(core.ItemIdentifiers.LOGS, 1), false);
+  await talk(f);
+  await f.choose("Sure, I'll give it a go.");
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.COINS), 1000, 'no fee taken');
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.BRONZE_ARROW), 50, 'only the preset stack');
+  assert.equal(Session.sessionOf(f.player), null, 'no round started');
+});
+
+test('a full pack with a plain bronze arrow stack still starts a round', async (t) => {
+  const f = harness(t);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(core.ItemIdentifiers.BRONZE_ARROW, 5), false);
+  while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(core.ItemIdentifiers.LOGS, 1), false);
+  await talk(f);
+  await f.choose("Sure, I'll give it a go.");
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.COINS), 800);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.BRONZE_ARROW), 15);
 });

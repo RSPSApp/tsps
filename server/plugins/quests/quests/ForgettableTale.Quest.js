@@ -382,7 +382,7 @@ module.exports = function registerForgettableTaleQuest(api) {
   function addSeed(player, bit) {
     if (hasSeed(player, bit)) return false;
     player.setAttribute(SEEDS_ATTRIBUTE, seeds(player) | bit);
-    player.getInventory().adds(KELDA_SEED, 1);
+    giveReward(player, KELDA_SEED, 1);
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_SEED2_GIVEN, hasSeed(player, SEED_ROWDY) ? 1 : 0);
     sender.sendVarbit(VARBIT_SEED3_GIVEN, hasSeed(player, SEED_GAUSS) ? 1 : 0);
@@ -857,7 +857,7 @@ module.exports = function registerForgettableTaleQuest(api) {
 
     if (npcId === RIND && raw.startsWith("That's a little clumsy")) {
       if (!held(player, LETTER) && letterState(player) === LETTER_OFFERED) {
-        player.getInventory().adds(LETTER, 1);
+        giveReward(player, LETTER, 1);
       }
       return;
     }
@@ -962,7 +962,7 @@ module.exports = function registerForgettableTaleQuest(api) {
         return;
       case "5-Cvcz":
         event.handled = true;
-        player.getInventory().adds(KELDA_SEED, 1);
+        giveReward(player, KELDA_SEED, 1);
         return;
       case "CNN_hK": {
         event.handled = true;
@@ -989,7 +989,7 @@ module.exports = function registerForgettableTaleQuest(api) {
         return;
       case "Xk9onS":
         event.handled = true;
-        if (!held(player, LETTER)) player.getInventory().adds(LETTER, 1);
+        if (!held(player, LETTER)) giveReward(player, LETTER, 1);
         setLetterState(player, LETTER_OFFERED);
         return;
       case "9EYwOK":
@@ -1004,17 +1004,17 @@ module.exports = function registerForgettableTaleQuest(api) {
         return;
       case "QDUHsY":
         event.handled = true;
-        player.getInventory().adds(MARRENTILL_SEED, 2);
+        giveReward(player, MARRENTILL_SEED, 2);
         setLetterState(player, LETTER_REWARDED);
         return;
       case "oKT26B":
         event.handled = true;
-        player.getInventory().adds(KELDA_HOPS, 1);
+        giveReward(player, KELDA_HOPS, 1);
         if (stageOf(player) < STAGE_HOPS_HARVESTED) quest.setStage(player, STAGE_HOPS_HARVESTED);
         return;
       case "Z9bb9f":
         event.handled = true;
-        player.getInventory().adds(KELDA_STOUT, 1);
+        giveReward(player, KELDA_STOUT, 1);
         player.setAttribute(STOUT_ATTRIBUTE, true);
         if (stageOf(player) < STAGE_STOUT_COLLECTED) quest.setStage(player, STAGE_STOUT_COLLECTED);
         return;
@@ -1308,6 +1308,7 @@ module.exports = function registerForgettableTaleQuest(api) {
     }
     if (option === "Harvest") {
       if (value === 8) {
+        if (!roomFor(player, [[KELDA_HOPS, 1]])) return;
         setFarming(player, 3);
         player.getInventory().adds(KELDA_HOPS, 1);
         refreshPatch(player);

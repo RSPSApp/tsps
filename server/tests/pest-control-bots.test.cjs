@@ -603,6 +603,23 @@ test("a game that ends during a death keeps that player's items, and they stay a
   assert.equal(later.shouldDrop, null, "a later death elsewhere is the world's own");
 });
 
+test("a mark left by a death that never reached Pest Control's death hook does not make a later death outside safe", () => {
+  const boat = plugin._test.BOATS[0];
+  const human = realPlayer(boat.waitingLocation, { bot: false });
+  const match = new plugin._test.PestControlMatch(boat, [human], () => {});
+  deathHooks.before({ player: human }); // a death in the game that another hook handled first, so no death hook here
+  human.getForcedLogoutTimer = () => ({ start() {} });
+  human.requestLogout = () => {};
+  match.finish(false, "The Void Knight was killed, another of our Order has fallen and that Island is lost.");
+  deathHooks.before({ player: human }); // a later death at the outpost
+  const drop = { player: human, shouldDrop: null };
+  deathHooks.drop(drop);
+  assert.equal(drop.shouldDrop, null, "the world's own rules, not Pest Control's");
+  const death = { player: human, handled: false };
+  deathHooks.death(death);
+  assert.equal(death.handled, false, "and the world's own respawn");
+});
+
 // --- Lander boarding and groups ------------------------------------------------------------
 
 const { boardingParty } = plugin._test;

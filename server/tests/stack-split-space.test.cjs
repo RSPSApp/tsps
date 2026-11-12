@@ -49,6 +49,32 @@ test("grinding one nihil shard of a stack needs room for the dust", (t) => {
   assert.equal(last.p.getInventory().getAmount(DUST), 1, "the last shard's slot holds the dust");
 });
 
+test("a preset nihil shard is never ground into plain dust; a plain one next to it is", (t) => {
+  const { grindShard } = require("../plugins/bosses/nex/Items.Nex");
+  const SHARD = core.ItemIdentifiers.NIHIL_SHARD, DUST = core.ItemIdentifiers.NIHIL_DUST;
+  const preset = (amount) => {
+    const item = new core.Item(SHARD, amount);
+    for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) item.setMetaValue(meta, true);
+    return item;
+  };
+  for (const amount of [5, 1]) {
+    const only = holder(t, SHARD, 1, 5);
+    only.p.getInventory().setItem(0, preset(amount));
+    grindShard({ player: only.p });
+    assert.equal(only.p.getInventory().getAmount(SHARD), amount, `${amount}: the preset shards are kept`);
+    assert.equal(only.p.getInventory().getAmount(DUST), 0, `${amount}: no dust`);
+    assert.ok(only.messages.includes("Preset items cannot be used for this."), only.messages.join(" | "));
+  }
+  const both = holder(t, SHARD, 1, 5);
+  both.p.getInventory().setItem(0, preset(5));
+  both.p.getInventory().setItem(1, new core.Item(SHARD, 3));
+  grindShard({ player: both.p });
+  const items = both.p.getInventory().getItems();
+  assert.equal(items[0].getAmount(), 5, "the preset stack stays put");
+  assert.equal(items[1].getAmount(), 2, "the plain stack pays");
+  assert.equal(both.p.getInventory().getAmount(DUST), 1);
+});
+
 test("reverting one redirected house tablet of a stack needs room for the house tablet", (t) => {
   const RIMMINGTON = core.ItemIdentifiers.RIMMINGTON_TELEPORT, HOUSE = core.ItemIdentifiers.TELEPORT_TO_HOUSE;
   const revert = (f) => {

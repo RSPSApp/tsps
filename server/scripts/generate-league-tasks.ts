@@ -28,9 +28,9 @@
 // name. Every Wiki row needs its era task and every era task its row; the tiers must agree, and the
 // era's tier points (enum 2671 then) must be the league's. The Wiki still gives everything else: the
 // tier, requirements, the trigger (derived from the Wiki's name and description, which keep details
-// the in-game text drops; the in-game text's trigger replaces it where it only adds a restriction, see
-// `stricterTrigger`) and the string id (the Wiki name's slug, which saves hold, so a task the cache
-// spells differently keeps its id). Categories are recorded as `categorySource: "era"`.
+// the in-game text drops; a rule only the in-game text words is not enforced, as the live league did
+// not) and the string id (the Wiki name's slug, which saves hold, so a task the cache spells
+// differently keeps its id). Categories are recorded as `categorySource: "era"`.
 //
 // What the Wiki gives: name, description, requirements, tier, region and the Wiki's own task id. What
 // the cache (rev 241) gives: the tasks its own list shows (enum 5950's rows of DB table 118
@@ -1280,15 +1280,10 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
     }
   }
-  // A deed its plugin emits an event of its own for ("Worship the Ectofuntus", "Fill a Large Pouch"),
-  // in the league area a trailing "in the Fremennik Province" names (Raging Echoes' in-game "Use the
-  // special attack of a Dragon Axe in the Fremennik Province").
-  const deedArea = leagueAreaOf(description.replace(/\.$/, ""));
+  // A deed its plugin emits an event of its own for ("Worship the Ectofuntus", "Fill a Large Pouch").
   for (const deed of DEEDS) {
     const named = deed.name.exec(name);
-    if (!named) continue;
-    const inArea = !deed.description.test(description) && deedArea.area !== null;
-    if (!(match = deed.description.exec(inArea ? deedArea.text : description))) continue;
+    if (!named || !(match = deed.description.exec(description))) continue;
     const trigger: Trigger = { kind: "deed", event: deed.event, count: 1 };
     if (deed.items) {
       const listed = deed.items(match).map((each) => itemNamed(each, items));
@@ -1296,7 +1291,6 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       trigger.items = listed;
     }
     if (deed.where) trigger.where = deed.where;
-    if (inArea) trigger.area = deedArea.area!;
     return { trigger };
   }
   // "Help the Spirit Anglers defeat Tempoross": Tempoross subdued (the minigame's tempoross:subdued;
@@ -1990,16 +1984,11 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
   if (/^Burn Some Food$/i.test(name)) return { trigger: { kind: "burn-food", count: 1 } };
   if ((match = /^Burn (.+)$/i.exec(name))) {
     const named = countAndSubject(match[1]);
-    // A trailing league area is where they burn (Raging Echoes' in-game "Burn 200 Redwood Logs in Kourend").
-    const { area, text: unplaced } = leagueAreaOf(clean(description));
-    const said = countAndSubject(unplaced.replace(/^Burn /i, ""));
+    const said = countAndSubject(clean(description).replace(/^Burn /i, ""));
     // Pyre logs go on a funeral pyre (the Shades of Mort'ton minigame), not a plain fire.
     if (CONDITION.test(clean(description)) || PLACE.test(said.subject) || /coloured|firelighter|pyre/i.test(description)) return {};
     const logs = [said.subject, named.subject].map((subject) => itemNamed(subject, items)).find((item) => item && /logs$/i.test(item));
-    if (!logs) return {};
-    const trigger: Trigger = { kind: "burn", items: [logs], count: named.count };
-    if (area !== null) trigger.area = area;
-    return { trigger };
+    return logs ? { trigger: { kind: "burn", items: [logs], count: named.count } } : {};
   }
   // "Bury 6 bones" ("Bury 6 Remains of any kind"): any bones; "Bury Some Wyvern or Dragon Bones"
   // ("either some wyvern bones or some dragon bones"): any of those; a place is no plain count.
@@ -2393,42 +2382,6 @@ function eraIds(league: League, era: EraLeague, areas: Record<string, number>) {
 }
 
 const sameName = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-/**
- * The trigger derived from the in-game text when it is the Wiki's with a restriction added, else
- * undefined. The in-game text is Jagex's own statement of the task, so where it says more than the
- * Wiki's ("Reach level 10 in any skill (not including Agility and Hitpoints)", "... in the Fremennik
- * Province") the task asks for that. Only the restrictions a trigger keeps count: more skills
- * `excluding`, or an `area` / `place` the Wiki's trigger has none of; every other field must be the
- * same, so a looser or different reading of the in-game text never replaces the Wiki's.
- */
-/**
- * In-game text the live league did not follow, by league type and Wiki id: the Wiki's trigger stays.
- * Raging Echoes' "Achieve Your First Level 5" and "... 10" still say "(not including Agility, ...)",
- * the text their task structs (2648, 2649) have carried since the Trailblazer cache (2020), but a
- * Leagues V character's first level 10 was Agility 10 and completed the task (rsprox.net capture
- * 20241209T063558, 9 Dec 2024: Thieving 5, Woodcutting 3, Firemaking 3, then Agility 2 to 10 and the
- * task in the same tick). Raging Echoes started no one at Agility 10; the Wiki leaves Agility out of
- * both exclusions. No capture shows a first level 5 in Agility; level 5 follows level 10's evidence.
- */
-const STALE_IN_GAME_TEXT: Record<number, number[]> = { 5: [192, 193] };
-
-function stricterTrigger(wiki: Trigger | undefined, shown: Trigger | undefined): Trigger | undefined {
-  if (!wiki || !shown || wiki.kind !== shown.kind) return undefined;
-  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  let stricter = false;
-  for (const key of new Set([...Object.keys(wiki), ...Object.keys(shown)])) {
-    if (same(wiki[key], shown[key])) continue;
-    if (key === "excluding" && Array.isArray(shown[key])) {
-      const wikiList = (wiki[key] ?? []) as unknown[];
-      if (!wikiList.every((each) => (shown[key] as unknown[]).includes(each))) return undefined;
-      stricter = true;
-    } else if ((key === "area" || key === "place") && wiki.area === undefined && wiki.place === undefined && shown[key] !== undefined) {
-      stricter = true;
-    } else return undefined;
-  }
-  return stricter ? shown : undefined;
-}
 
 /**
  * Each Wiki row's era task, in the rows' order: by the Wiki's id, the task struct's id (param 873),
@@ -2871,8 +2824,6 @@ async function main() {
     const eraTasks = era ? eraTasksOf(league, era, wikiRows) : [];
     const eraId = era ? eraIds(league, era, areas) : undefined;
     const fromEra = { name: 0, description: 0, area: 0, category: 0 };
-    const restricted: string[] = [];
-    const staleKept: string[] = [];
     for (const [index, row] of wikiRows.entries()) {
       const tier = TIERS[row.tier];
       if (!tier) throw new Error(`${league.key}: unknown tier "${row.tier}" on ${row.name}`);
@@ -2891,28 +2842,23 @@ async function main() {
         requirements, skills: skillsOf(row.s),
       };
       const shown = eraTasks[index];
-      let trigger = derived.trigger;
       if (shown && eraId) {
-        // The client shows the era's text, category and area; the id stays the Wiki name's slug.
+        // The client shows the era's text, category and area; the id stays the Wiki name's slug. The
+        // trigger stays the Wiki's even where the in-game text words a rule of its own: where a live
+        // capture tests one, the league did not enforce it. Raging Echoes' "Use the special attack of
+        // a Dragon Axe in the Fremennik Province" completed in Varrock (capture 227/00086, 29 Nov 2024),
+        // and "Reach level 10 in any skill (not including Agility and Hitpoints)" on Agility 10
+        // (rsprox.net capture 20241209T063558, 9 Dec 2024).
         const eraTask = { name: shown.name, description: shown.description, area: eraId.area(shown.area), category: eraId.category(shown.category) };
         for (const field of ["name", "description", "area", "category"] as const) if (eraTask[field] !== task[field]) fromEra[field]++;
         Object.assign(task, eraTask);
         task.categorySource = "era";
-        // The trigger is the Wiki's, unless the in-game text adds a restriction to it.
-        const stricter = stricterTrigger(trigger, deriveTrigger(shown.name, shown.description.replace(/\u00a0/g, " "), names).trigger);
-        if (stricter && STALE_IN_GAME_TEXT[league.type]?.includes(row.id)) staleKept.push(task.id);
-        else if (stricter) {
-          restricted.push(`${task.id} ${JSON.stringify(trigger)} -> ${JSON.stringify(stricter)}`);
-          trigger = stricter;
-        }
       }
-      if (trigger) task.trigger = trigger;
+      if (derived.trigger) task.trigger = derived.trigger;
       tasks.push(task);
     }
     if (era) {
       report.push(`${league.key}: era cache OpenRS2 ${league.era!.openrs2} (${league.era!.date}), ${era.tasks.length} tasks; its text differs from the Wiki's in ${fromEra.name} names and ${fromEra.description} descriptions, its area from the Wiki region's in ${fromEra.area}, its category from the rev 241 list's or the rule's in ${fromEra.category}`);
-      if (restricted.length) report.push(`  triggers the in-game text restricts (${restricted.length}): ${restricted.join("; ")}`);
-      if (staleKept.length) report.push(`  in-game restrictions the live league did not follow, Wiki trigger kept: ${staleKept.join(", ")}`);
     }
     // Ids are unique within a league: a repeated name takes its area, then its Wiki id.
     const regionOf = new Map(tasks.map((task, index) => [task, wikiRows[index].region]));

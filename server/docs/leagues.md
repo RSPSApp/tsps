@@ -1644,15 +1644,13 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   description, category and area from it (`categorySource: "era"`): the text and filters the
   client showed. The Wiki keeps the tier (which must agree), requirements and the id, so a task the
   game spells differently ("Pickpocket a HAM Member", the Wiki's "H.A.M.") keeps its saved id. The
-  trigger is derived from the Wiki's text, which keeps details the in-game text drops, and is
-  derived again from the in-game text: where that one is the Wiki's with a restriction added (more
-  skills excluded, or a league area or place the Wiki's has none of) the task asks for it, since the
-  in-game text is Jagex's own statement of the task ("Use the special attack of a Dragon Axe in the
-  Fremennik Province", "Burn 200 Redwood Logs in Kourend", "Fletch a Redwood Shield in Kourend",
-  Raging Echoes; the report lists them). Text the live league did not follow is listed in the
-  generator (`STALE_IN_GAME_TEXT`) and keeps the Wiki's trigger: Raging Echoes' first level 5 and 10
-  still say "(not including Agility, ...)" from the Trailblazer cache, but a Leagues V capture
-  (rsprox.net 20241209T063558) completed the first level 10 on Agility 10. Two Wiki remarks the
+  trigger is derived from the Wiki's text only, which keeps details the in-game text drops. A rule
+  only the in-game text words is shown but not enforced, because where a live capture tests one the
+  league did not enforce it either: Raging Echoes' "Use the special attack of a Dragon Axe in the
+  Fremennik Province" completed in Varrock (capture 227/00086), and "Reach level 10 in any skill (not
+  including Agility and Hitpoints)", Trailblazer's text, on Agility 10 (rsprox.net capture
+  20241209T063558). "Burn 200 Redwood Logs in Kourend" and "Fletch a Redwood Shield in Kourend" follow
+  the same reading; no capture shows them either way. Two Wiki remarks the
   captures bear out shape the trigger too: "(does not require a kiteshield / Crozier)" leaves that
   piece out of a god set (a Leagues V capture completed the rune set without a shield), and
   "(actually on Waterbirth Island)" is the place ("Pick up Snapegrass from Lunar Isle" completed at

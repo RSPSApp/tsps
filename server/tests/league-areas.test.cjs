@@ -244,7 +244,7 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
   assert.equal(areaAt(1200, 3350), KOUREND, "the Stranglewood counts as Kourend in Trailblazer Reloaded");
   assert.equal(areaAt(1200, 3350, { league: 5 }), VARLAMORE, "and as Varlamore in Raging Echoes");
   // The Dagannoth Kings' lair is on no surface square: open by default, Fremennik in Raging Echoes,
-  // where a live capture completes "...a Dragon Axe in the Fremennik Province" on this tile.
+  // whose Fremennik Province (Wiki) lists Waterbirth Island Dungeon and has the Kings as its echo boss.
   assert.equal(areaAt(2926, 4375), null, "the Kings' lair is open in Trailblazer Reloaded");
   assert.equal(areaAt(2926, 4375, { league: 5 }), FREMENNIK, "and Fremennik in Raging Echoes");
   assert.equal(areaAt(3000, 3000, { league: 99 }), null, "no league, no areas");

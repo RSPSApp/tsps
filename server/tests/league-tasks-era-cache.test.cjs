@@ -46,20 +46,17 @@ test("a task struct without an area reads the param's default, Global", () => {
   assert.equal(byWikiId(4, 1022).area, 0);
 });
 
-// League area ids (league-areas.json): 8 the Fremennik Province, 20 Kourend & Kebos.
-test("a restriction only the in-game text states is in the trigger", () => {
+test("a rule only the in-game text words is shown but not enforced: the trigger stays the Wiki's", () => {
+  // The live league did not enforce these where a capture tests them: the Dragon Axe special
+  // completed in Varrock (227/00086), the first level 10 on Agility 10.
   const axe = byWikiId(5, 612);
   assert.match(axe.description, /in the Fremennik Province$/);
-  assert.deepEqual(axe.trigger, { kind: "deed", event: "combat-special:performed", count: 1, items: ["Dragon axe"], area: 8 });
+  assert.deepEqual(axe.trigger, { kind: "deed", event: "combat-special:performed", count: 1, items: ["Dragon axe"] });
   assert.match(byWikiId(5, 1356).description, /in Kourend$/);
-  assert.deepEqual(byWikiId(5, 1356).trigger, { kind: "burn", items: ["Redwood logs"], count: 200, area: 20 });
+  assert.deepEqual(byWikiId(5, 1356).trigger, { kind: "burn", items: ["Redwood logs"], count: 200 });
   assert.match(byWikiId(5, 1362).description, /in Kourend$/);
-  assert.deepEqual(byWikiId(5, 1362).trigger, { kind: "produce", items: ["Redwood shield"], count: 1, area: 20 });
-});
-
-test("in-game text the live league did not follow leaves the Wiki's trigger", () => {
-  // "(not including Agility and Hitpoints)" is Trailblazer's text; a Leagues V capture completed the
-  // first level 10 on Agility 10, as the Wiki's "(not including Hitpoints)" says.
+  assert.deepEqual(byWikiId(5, 1362).trigger, { kind: "produce", items: ["Redwood shield"], count: 1 });
+  assert.match(byWikiId(5, 193).description, /not including Agility and Hitpoints/);
   assert.deepEqual(byWikiId(5, 193).trigger, { kind: "any-level", level: 10, excluding: ["HITPOINTS"] });
   assert.deepEqual(byWikiId(5, 192).trigger, { kind: "any-level", level: 5, excluding: ["HITPOINTS", "RUNECRAFTING"] });
 });

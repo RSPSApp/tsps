@@ -417,6 +417,10 @@ async function lethalMelee(killer, victim, game) {
   tick();
 }
 async function jailExit(player, game) {
+  // The death task moves after this fixture's player updates; complete that
+  // ordinary placement update before sending the next object's input.
+  tick();
+  assert.equal(player.isNeedsPlacement(), false, 'death placement completed before the jail portal click');
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
   const side = game.members.get(player);

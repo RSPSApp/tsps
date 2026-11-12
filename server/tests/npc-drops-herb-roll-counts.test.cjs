@@ -72,11 +72,12 @@ test("the deviant spectre's herb access gives at least two herbs when it hits (a
   assert.ok(counts.includes(2) && counts.includes(3));
 });
 
-test("rows with an unresolved roll count and no weights (hydra) still roll the herb table once", (t) => {
-  const row = herbRow("hydra");
+test("a row with an unresolved roll count and no weights (eagle ray) still rolls the herb table once", (t) => {
+  // Not the hydras: they also carry separate flat Grimy avantoe and ranarr rows, so a kill can legitimately give two herbs.
+  const row = herbRow("eagle_ray");
   assert.equal(row.unresolved_roll_count, true);
   assert.equal(row.roll_count_weights, undefined);
-  const counts = herbsPerKill(t, "hydra", 5000);
-  assert.ok(Math.max(...counts) <= 1);
+  const counts = herbsPerKill(t, "eagle_ray", 5000);
+  assert.ok(Math.max(...counts) <= 1, "never more than one herb");
   assert.ok(counts.includes(1));
 });

@@ -106,6 +106,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   /** Drezel's post-quest "receive" step that hands back a lost Wolfbane. */
   const WOLFBANE_RETURN_ACTION_ID = "cb-Z4u";
   const WOLFBANE_ITEM_IDS = [ItemIdentifiers.WOLFBANE, ItemIdentifiers.WOLFBANE_2];
+  const POST_QUEST_DREZEL_VARIANT = "standard-dialogue-after-priest-in-peril";
   /** Set at "Quest complete!" and cleared by Drezel's blessing: varp 302 shows 60 until then. */
   const AWAITING_BLESSING_ATTRIBUTE = "priest-in-peril:awaiting-blessing";
   const ESSENCE_REMAINING_BLANK = "[1-50]";
@@ -407,7 +408,7 @@ module.exports = function registerPriestInPerilQuest(api) {
 
   /** The Drezel in the mausoleum takes the essence once the vampyre is sealed. */
   function mausoleumDrezelVariant(stage, player) {
-    if (stage >= STAGE_COMPLETE) return { page: DREZEL_PAGE, variant: "standard-dialogue-after-priest-in-peril" };
+    if (stage >= STAGE_COMPLETE) return { page: DREZEL_PAGE, variant: POST_QUEST_DREZEL_VARIANT };
     if (stage >= STAGE_REPAIRING_BARRIER) {
       // Paid in full: talkToPaidMausoleumDrezel resumes after the hand-in.
       if (essenceAllHandedIn(player)) return FINAL_ESSENCE_VARIANT;
@@ -503,6 +504,20 @@ module.exports = function registerPriestInPerilQuest(api) {
       (steps) => steps.slice(steps.findIndex((step) => step?.id === COMPLETE_ACTION_ID) + 1), npc);
   }
 
+  /**
+   * Drezel's post-quest page (Transcript:Drezel) opens with "If the player has lost their
+   * wolfbane dagger:", but once the quest is done Nature Spirit's variants answer his Talk-to.
+   * Ours (entry point): with the dagger lost, the Talk-to plays his page, whose lost-dagger
+   * branch comes first, so it can be had back before, during and after Nature Spirit.
+   */
+  function talkToDrezelLostWolfbane(event) {
+    const { player, npc, npcId, clickType } = event;
+    if (event.handled || npcId !== DREZEL_NPC_ID || clickType !== 1) return;
+    if (!quest.isComplete(player) || awaitingBlessing(player) || ownsWolfbane(player)) return;
+    event.handled = startTranscript(api, player, DREZEL_NPC_ID, DREZEL_PAGE, POST_QUEST_DREZEL_VARIANT,
+      undefined, npc);
+  }
+
   /** Which transcript variant the speaker plays. */
   function selectVariant({ npcId, npc, player }) {
     const stage = quest.getStage(player);
@@ -522,7 +537,7 @@ module.exports = function registerPriestInPerilQuest(api) {
     // Asked right after the blessing message, so the blessing just given counts.
     if (value.includes("first time blessing water")) return blessings(player) <= 1;
     if (npcId !== DREZEL_NPC_ID || !quest.isComplete(player)) return null;
-    // Drezel's post-quest page opens with these; unanswered, the first ("lost Wolfbane") won.
+    // Drezel's post-quest page opens with these (see talkToDrezelLostWolfbane).
     if (value.includes("has lost their wolfbane dagger")) return !ownsWolfbane(player);
     if (value.includes("inventory isn't full")) return !player.getInventory().isFull();
     if (value.includes("inventory is full")) return player.getInventory().isFull();
@@ -1159,6 +1174,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.onNpcInteraction(talkToUnlockedDrezel);
   api.onNpcInteraction(talkToPaidMausoleumDrezel);
   api.onNpcInteraction(talkToUnblessedDrezel);
+  api.onNpcInteraction(talkToDrezelLostWolfbane);
   api.onObjectRoute(handleTrapdoorRoute);
   api.onObjectInteraction("Holy barrier", { "Pass-through": handleHolyBarrier });
   api.onObjectInteraction("Cell gate", { Open: openCellGate });

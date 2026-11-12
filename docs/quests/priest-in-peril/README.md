@@ -44,11 +44,21 @@ Newest first.
     **Ours:** someone who walks off in that gap gets the final conversation back from the step
     after "Quest complete!" when they next talk to the mausoleum Drezel. The Holy barrier still
     opens on completion. Neither case is captured.
-  - Drezel's post-quest page starts with "If the player has lost their wolfbane dagger:".
-    Nothing answered it, so the runtime took that first branch for everyone. It is now
-    answered from the inventory, equipment and banks (both Wolfbane ids), along with its
-    inventory-full pair, and its "receive" step gives one dagger back.
-  Covered by `tests/priest-in-peril.test.cjs`.
+  - A lost Wolfbane could not be had back. Drezel's post-quest page (Transcript:Drezel) starts
+    with "If the player has lost their wolfbane dagger:", but once the quest is done Nature
+    Spirit's variants answer his Talk-to, so that page never played. **Ours (entry point):**
+    with the dagger lost, the Talk-to now plays his page. Its lost-dagger branch is answered
+    from the inventory, equipment and banks (both Wolfbane ids), along with its inventory-full
+    pair, and its "receive" step gives one dagger back.
+  - Still not matching live: "Drezel inspects the water..." and "Drezel blesses you..." show
+    as chat messages, where live shows them in a messagebox. That is how the dialogue runtime
+    plays every message step without a box. On a fresh account, the Prayer level-up box at
+    "Quest complete!" ends the conversation before the blessing, so the resume above is what
+    reaches varp 61 there.
+  Covered by `tests/priest-in-peril.test.cjs`; checked in game on a headless account, worktree
+  slot 40. That covered the well, the unlock (key gone, varp 6), the water blessing, the coffin
+  (both 272 graphics, varp 7), the hand-in (60, then 61 after talking again), a relog at 61,
+  and getting a dropped Wolfbane back.
 
 - **fixed (live capture, issue 4130)** The temple's large doors and Drezel's cell gate teleported
   the player across. Live opens them like doors (rev 241 recording 2026-11-02 ticks 10840-10847 in

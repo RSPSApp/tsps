@@ -768,6 +768,7 @@ test('walking off before the blessing keeps varp 60 and resumes after "Quest com
   assert.ok(!steps.some((step) => step.id === '5wj46V'), 'the completion is not replayed');
   assert.equal(steps[0].player, 'So can I pass through that barrier now?');
   assert.ok(steps.some((step) => step.id === 'R9VGgf'), 'the blessing is still ahead');
+  assert.equal(player.inventory.getAmount(I.WOLFBANE), 1, 'the reward was paid');
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'R9VGgf', kind: 'message' });
   assert.equal(h.wire(), 61);
   assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { page: 'Drezel', variant: 'standard-dialogue-after-priest-in-peril' });
@@ -778,6 +779,7 @@ test('walking off before the blessing keeps varp 60 and resumes after "Quest com
 test('a save completed before the blessing step existed sends 61', () => {
   const h = harness();
   h.player.setAttribute(STAGE, 60);
+  h.player.inventory.adds(I.WOLFBANE);
   assert.equal(h.quest.varpValue(60, h.player), 61);
   assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { page: 'Drezel', variant: 'standard-dialogue-after-priest-in-peril' });
 });
@@ -807,9 +809,20 @@ test('post-quest Drezel returns a lost Wolfbane, and only a lost one', () => {
   assert.equal(h.condition("If the player's inventory is full:", N.DREZEL), false);
   assert.equal(h.condition("If the player's inventory isn't full:", N.DREZEL), true);
 
+  // Nature Spirit answers his Talk-to once the quest is done; a lost dagger claims it first.
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true });
+  assert.equal(lastPlayed().page, 'Drezel');
+  assert.equal(lastPlayed().variant, 'standard-dialogue-after-priest-in-peril');
+  assert.equal(lastPlayed().steps[0].text, lost);
+  h.player.setAttribute('priest-in-peril:awaiting-blessing', true);
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true });
+  assert.equal(lastPlayed().variant, 'giving-drezel-the-last-of-the-essence', 'the blessing comes first');
+  h.player.setAttribute('priest-in-peril:awaiting-blessing', false);
+
   const receive = h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'cb-Z4u', action: 'receive' });
   assert.ok(receive.handled);
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'cb-Z4u', action: 'receive' });
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1, 'one dagger at a time');
+  assert.notDeepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true }, 'with the dagger back Drezel is left to the variants');
 });

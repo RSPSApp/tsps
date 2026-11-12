@@ -28,6 +28,10 @@ const DWARF_ANIMATION = 105;
 const DWARF_HIC_SOUND = 2297;
 const GENIE_ARRIVAL_SOUND = 2301;
 const MAYBE_LATER = "Maybe later.";
+// Dismissing an event makes its owner play one of these at random, with a short delay: No, Wave,
+// Yawn, Angry and Ya boo sucks. The same for every event NPC with a Dismiss option.
+const DISMISS_EMOTES = [856, 863, 2111, 859, 2110];
+const DISMISS_EMOTE_DELAY = 10;
 const CHECK_INTERVAL_MS = 5 * 60_000;
 const MAX_INTERVAL_MS = 120 * 60_000;
 const NEXT_EVENT_ATTRIBUTE = "random-events:next-at";
@@ -495,9 +499,15 @@ function chooseSandwich(event) {
   if (serve(active, [id])) rewardDialogue(active);
 }
 
+function dismissEmote(player) {
+  const id = DISMISS_EMOTES[Math.floor(Math.random() * DISMISS_EMOTES.length)];
+  player.performAnimation(new api.core.Animation(id, DISMISS_EMOTE_DELAY));
+}
+
 function dismiss({ player, npc }) {
   const active = eventsByNpc.get(npc);
   if (!active) return false;
+  if (player === active.player) dismissEmote(player);
   if (active.leaving) {
     // Told to go while waiting for his beat. A wilting plant is already going at its own pace.
     if (player === active.player && active.definition.witherTicks == null) finish(active);

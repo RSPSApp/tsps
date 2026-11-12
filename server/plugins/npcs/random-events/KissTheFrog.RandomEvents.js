@@ -285,6 +285,12 @@ module.exports = function attach(api, Events) {
 
   api.onNpcInteraction("Frog", {
     "Talk-to": event => talkToOthersFrog(event) || talkToFrog(event),
+    // The crier and the other frogs around the crowned one carry the Dismiss option: it sends the
+    // whole event away, as Dismiss on any other event NPC does.
+    Dismiss: event => {
+      const frog = chorusFrogs.get(event.npc);
+      return frog ? Events.dismiss({ player: event.player, npc: frog.active.npc }) : false;
+    },
   });
 
   api.onNpcInteraction("Thessalia", { "Talk-to": thessalia });

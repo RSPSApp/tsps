@@ -405,3 +405,13 @@ Known differences from live, needing engine work:
 Checked on a live server through the agent MCP: all 24 events spawn and talk, every teleporting
 event reaches its captured arrival tile, relogging returns the player, Freaky Forester start to
 finish, decline and dismiss. Not checked in a real client: rendering of any interface.
+
+### Dismiss
+
+RSProx Dismiss clicks on 21 event NPC families (revisions 223-237: the Genie, Sandwich lady,
+Drunken Dwarf, certers, Count Check, Mysterious Old Man, Evil Bob, the Frog crier, Strange plant
+and every invitation NPC) all make the owner play one of No (856), Wave (863), Yawn (2111),
+Angry (859) or Ya boo sucks (2110), with delay 10, on the click tick; each emote is about as
+common as the others. The Wiki pages don't mention the emote. In Kiss the Frog the crier (5429)
+and the other frogs (5430) carry Dismiss and the crowned frog (5431) does not; live's Dismiss
+on the crier ends the whole event. Dismiss on 5430 has no capture and is ours by the same rule.

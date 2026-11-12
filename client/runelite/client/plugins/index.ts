@@ -57,6 +57,7 @@ import { PuzzleSolverPlugin } from "../../../game/plugins/puzzlesolver/PuzzleSol
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
 import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
+import { StatusInfoPlugin } from "../../../game/plugins/statusinfo/StatusInfoPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
 import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin";
@@ -118,6 +119,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     OsrsTranslatePlugin,
     AnimationSmoothingPlugin,
     TimersPlugin,
+    StatusInfoPlugin,
     StatusBarsPlugin,
     BoostsPlugin,
     RegenMeterPlugin,

@@ -9,7 +9,8 @@
  * - Search: picking_low_shorter a tick after the click, then a reward every 3 ticks (the animation
  *   again), "You found some loot: 125 x Chaos rune" (spam) and sound 2581, until the searches run
  *   out: mesbox "There doesn't seem to be anything else in the rift for you."
- * - Big-search: the animation, and three ticks later up to five rewards at once.
+ * - Big-search: the animation, and three ticks later up to five rewards at once. Like Search it
+ *   goes on, five more every 3 ticks, until the searches or the inventory space run out.
  * - With nothing to search: mesbox "There doesn't seem to be anything in the rift for you."
  * Wiki: a search costs an elemental and a catalytic point, and 25 abyssal pearls used on the
  * Rewards Guardian buy one more roll (Search and Big-search spend only points); the tables are in
@@ -227,14 +228,21 @@ function bigSearch({ player, objectId }) {
     Shared.statement(player, "There doesn't seem to be anything in the rift for you.");
     return true;
   }
+  let next = 1;
   Shared.startAction(player, "big-search", (ticks) => {
     if (ticks === 1) Shared.animate(player, "picking_low_shorter");
-    if (ticks < 1 + SEARCH_TICKS) return true;
+    if (ticks < next + SEARCH_TICKS) return true;
+    next = ticks;
+    Shared.animate(player, "picking_low_shorter");
     let searched = 0;
     while (searched < BIG_SEARCH && searchOnce(player)) searched++;
     if (searched > 0) Shared.sound(player, LOOT_SOUND);
-    if (!canSearch(player)) emptied(player);
-    return false;
+    if (!canSearch(player)) {
+      emptied(player);
+      return false;
+    }
+    // A short batch with searches left means the inventory filled up (it said so).
+    return searched === BIG_SEARCH;
   });
   return true;
 }

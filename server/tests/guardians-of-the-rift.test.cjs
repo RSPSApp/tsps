@@ -1564,12 +1564,30 @@ test('Check counts the points and searches; Search takes one reward every 3 tick
   assert.match(statementText(player), /There doesn't seem to be anything in the rift for you\./);
 });
 
-test('Big-search takes up to five at once', () => {
+test('Big-search takes up to five at once, every 3 ticks until they run out', t => {
+  t.mock.method(Math, 'random', () => 0.5);
   const player = fakePlayer();
-  Records.setPoints(player, 7, 7);
+  for (let i = 0; i < 28; i++) player.inventory.slots[i] = null;
+  Records.setPoints(player, 12, 12);
   rift(player, 'Big-search');
   ticks(4);
-  assert.deepEqual(Records.points(player), { elemental: 2, catalytic: 2 });
+  assert.deepEqual(Records.points(player), { elemental: 7, catalytic: 7 });
+  ticks(3);
+  assert.deepEqual(Records.points(player), { elemental: 2, catalytic: 2 }, 'five more three ticks later');
+  ticks(3);
+  assert.deepEqual(Records.points(player), { elemental: 0, catalytic: 0 }, 'the last two');
+  assert.match(statementText(player), /There doesn't seem to be anything else in the rift for you\./);
+});
+
+test('Big-search stops when the inventory fills up', t => {
+  t.mock.method(Math, 'random', () => 0.5);
+  const player = fakePlayer();
+  for (let i = 0; i < 28; i++) player.inventory.slots[i] = { id: 1, amount: 1 };
+  Records.setPoints(player, 20, 20);
+  rift(player, 'Big-search');
+  ticks(20);
+  assert.deepEqual(Records.points(player), { elemental: 20, catalytic: 20 }, 'nothing taken, and it does not keep trying');
+  assert.ok(!/anything else in the rift/.test(statementText(player) ?? ''), 'not the out-of-searches box');
 });
 
 test('the reward tables: a missing pouch first, the weights add up, once-only items stay once', () => {

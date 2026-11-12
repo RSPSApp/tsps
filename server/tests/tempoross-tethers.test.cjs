@@ -44,22 +44,25 @@ function fixture() {
   player.moveTo = (location) => player.setLocation(location);
   const messages = [];
   player.sendMessage = (message) => messages.push(message);
+  // The area's base maps template tiles one to one, so siteAt finds the mast at its own tile.
+  const base = { x: Shared.DATA.cove.sourceChunkX * Shared.CHUNK, y: Shared.DATA.cove.sourceChunkY * Shared.CHUNK };
   const cove = Object.assign(Object.create(Cove.prototype), {
-    players: new Set(), crew: 0, area: { enter() {} },
+    players: new Set(), crew: 0, area: { enter() {}, getBaseX: () => base.x, getBaseY: () => base.y },
     tile: () => new Location(3200, 3200, 0),
   });
   const tethers = new Tethers({ cove });
   cove.fight = { tethers };
   cove.arrive(player, 0);
-  const site = { data: { kind: "mast", varbit: 2 }, loc: { getLocation: () => new Location(3200, 3199, 0) } };
+  const site = { data: { kind: "mast", varbit: 2, tile: [3200, 3199] }, loc: { getLocation: () => new Location(3200, 3199, 0) } };
+  tethers.sites.push(site);
   player.getMovementQueue().requestWalk(new Location(3205, 3200, 0));
   assert.ok(player.getMovementQueue().size() > 0);
   tethers.tether(player, site);
   return { player, tethers, site, messages, queue: player.getMovementQueue() };
 }
 
-function worldInput(player, type) {
-  const event = { player, packet: { type }, handled: false };
+function worldInput(player, type, fields = {}) {
+  const event = { player, packet: { type, ...fields }, handled: false };
   hooks.get("player:world-input")(event);
   return event;
 }
@@ -91,6 +94,34 @@ test("a click in the same tick as a refused walk keeps the tether and can't reac
   core.World.processCycle++;
   assert.equal(worldInput(player, "npc_option").handled, false, "a later click untethers (227/00552.txt tick 16915)");
   assert.equal(tethers.siteOf(player), null);
+});
+
+test("after a refused walk only an NPC or a non-mast object is refused; the mast's own ops and the inventory still let go", () => {
+  // Refused in the same tick (227/01858.txt tick 4744 an NPC; 00552 tick 16618 an object).
+  for (const [type, fields] of [["npc_option", { index: 1 }], ["object_option", { id: 1, x: 3210, y: 3210 }]]) {
+    const { player, tethers, site, messages } = fixture();
+    worldInput(player, "move");
+    assert.equal(worldInput(player, type, fields).handled, true, type);
+    assert.equal(tethers.siteOf(player), site, `${type}: still tethered`);
+    assert.equal(messages.at(-1), "I can't reach that!");
+  }
+  // Move, then the mast's own Untether in the same tick: it lets go.
+  {
+    const { player, tethers, messages } = fixture();
+    worldInput(player, "move");
+    assert.equal(worldInput(player, "object_option", { id: 1, x: 3200, y: 3199 }).handled, false, "the mast's op is not refused");
+    assert.equal(objects.get("Mast").Untether({ player }), true);
+    assert.equal(tethers.siteOf(player), null);
+    assert.equal(messages.includes("I can't reach that!"), false);
+  }
+  // Move, then an inventory action (eat, drop) in the same tick: it is not swallowed.
+  for (const type of ["inventory_action", "inventory_use_on", "item_on_npc", "spell_on_npc", "ground_item_action", "player_option", "teleport"]) {
+    const { player, tethers, messages } = fixture();
+    worldInput(player, "move");
+    assert.equal(worldInput(player, type).handled, false, `${type} is not swallowed`);
+    assert.equal(tethers.siteOf(player), null, `${type} lets go`);
+    assert.equal(messages.includes("I can't reach that!"), false, type);
+  }
 });
 
 test("manual untether and other action routing release the lock first", () => {

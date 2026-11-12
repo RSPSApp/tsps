@@ -11,6 +11,11 @@ const Common = require("./Common.LeagueRelics");
 
 /** When the relic may fire again (ms since the epoch); 0 when it may. */
 const READY_AT_ATTRIBUTE = "league:last-stand-ready-at";
+/**
+ * Saved true while a stand's boosts are above where its drain ends: a save that no logout settles (a shutdown or
+ * tick-error save, a crash after an autosave) is settled at the next login instead.
+ */
+const DRAINING_ATTRIBUTE = "league:last-stand-draining";
 
 let api;
 let core;
@@ -52,8 +57,23 @@ function tick(player) {
   if (core.World.getProcessCycle() < stand.until) return true;
   if (stand.dealt > 0 && player.getHitpoints() > 0) player.heal(Math.min(stand.dealt, manager.getMaxLevel(core.Skill.HITPOINTS)));
   stand.dealt = 0;
-  if (!draining) stands.delete(player);
+  if (!draining) end(player);
   return draining;
+}
+
+function end(player) {
+  stands.delete(player);
+  if (player.getAttribute?.(DRAINING_ATTRIBUTE) === true) player.setAttribute(DRAINING_ATTRIBUTE, false);
+}
+
+/** The boosts settled to where the drain ends (base + 15). */
+function settle(player) {
+  const manager = player.getSkillManager();
+  for (const skill of boostedSkills()) {
+    const floor = manager.getMaxLevel(skill) + effect.drainFloorAboveBase;
+    if (manager.getCurrentLevel(skill) > floor) manager.setCurrentLevel(skill, floor, true);
+  }
+  end(player);
 }
 
 function watch(player) {
@@ -74,6 +94,7 @@ function begin(player, now) {
   const boosted = boostedSkills();
   for (const skill of boosted) manager.setCurrentLevel(skill, effect.boostedLevel, true);
   stands.set(player, { until: core.World.getProcessCycle() + effect.windowTicks, dealt: 0, boosted });
+  player.setAttribute(DRAINING_ATTRIBUTE, true);
   player.setAttribute(READY_AT_ATTRIBUTE, now + effect.cooldownMs);
   watch(player);
   api.emitCustomEvent("league:relic-triggered", { player, relic: effect.key });
@@ -127,20 +148,18 @@ function necklaceEligible(event) {
  * drain ends (base + 15) first, so nobody logs back in at 255.
  */
 function settleOnLogout({ player }) {
-  const stand = stands.get(player);
-  if (!stand) return;
-  const manager = player.getSkillManager();
-  for (const skill of stand.boosted) {
-    const floor = manager.getMaxLevel(skill) + effect.drainFloorAboveBase;
-    if (manager.getCurrentLevel(skill) > floor) manager.setCurrentLevel(skill, floor, true);
-  }
-  stands.delete(player);
+  if (stands.has(player)) settle(player);
+}
+
+/** A save written mid-stand without a logout (shutdown, tick error) still holds the boosts: settled on entering. */
+function settleOnLogin({ player }) {
+  if (player?.getAttribute?.(DRAINING_ATTRIBUTE) === true && !stands.has(player)) settle(player);
 }
 
 /** A real death ends the cooldown (Wiki). */
 function death({ player }) {
   if (Number(player?.getAttribute?.(READY_AT_ATTRIBUTE)) > 0) player.setAttribute(READY_AT_ATTRIBUTE, 0);
-  stands.delete(player);
+  if (player) end(player);
 }
 
 module.exports = function attach(pluginApi) {
@@ -148,10 +167,12 @@ module.exports = function attach(pluginApi) {
   core = api.core;
   effect = Common.data.effects.lastStand;
   api.persistAttribute(READY_AT_ATTRIBUTE, 0);
+  api.persistAttribute(DRAINING_ATTRIBUTE, false);
   api.onPlayerBeforeDeath(beforeDeath);
   api.onPlayerDealtDamage(dealtDamage);
   api.onCanEat(refuseFood);
   api.onCustomEvent("phoenix-necklace:eligible", necklaceEligible);
   api.onPlayerDeath(death);
   api.onPlayerLogout(settleOnLogout);
+  api.onPlayerLogin(settleOnLogin);
 };

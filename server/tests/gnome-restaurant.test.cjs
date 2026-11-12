@@ -790,10 +790,17 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   assert.equal(dragonInventory.getAmount(cream), 0);
   assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 30);
   dragonOther.getInventory().add(new core.Item(9576, 1), false);
-  const heat = async (p) => {
-    await clients.get(p).dispatch([{ type: "item_on_object", widgetId: core.Inventory.INTERFACE_ID,
-      objectId: rangeId, itemId: 9576, slot: slot(p, 9576), x: rangeLocation.getX(), y: rangeLocation.getY() }]);
-    for (let tick = 0; tick < 12; tick++) { clients.get(p).processTurnPackets(); World.process(); }
+  // The heat can fail below 38 Cooking (Wiki: Drunk dragon); `roll` pins the success roll.
+  const heat = async (p, roll = 0.999) => {
+    const random = Math.random;
+    Math.random = () => roll;
+    try {
+      await clients.get(p).dispatch([{ type: "item_on_object", widgetId: core.Inventory.INTERFACE_ID,
+        objectId: rangeId, itemId: 9576, slot: slot(p, 9576), x: rangeLocation.getX(), y: rangeLocation.getY() }]);
+      for (let tick = 0; tick < 12; tick++) { clients.get(p).processTurnPackets(); World.process(); }
+    } finally {
+      Math.random = random;
+    }
   };
   await heat(dragonOther);
   assert.equal(dragonOther.getInventory().getAmount(9576), 1, "level 31 cannot heat it");
@@ -811,9 +818,11 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   await widget(dragon, cuisineCreate, 9, undefined);
   await sendAction(dragon, 9574, "Pour");
   await sendAction(dragon, 9575, "Add-ingreds");
-  await heat(dragon);
-  assert.equal(dragonInventory.getAmount(obj("drunk_dragon")), 2, "the retained shaker supports a second complete drink");
-  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 320);
+  const xpBefore = dragonSkill.getExperience(Skill.COOKING);
+  await heat(dragon, 0);
+  assert.equal(dragonInventory.getAmount(obj("drunk_dragon")), 2, "a failed heat still gives a finished drunk dragon (Wiki)");
+  assert.equal(dragonSkill.getExperience(Skill.COOKING), xpBefore, "but no experience");
+  assert.equal(dragonSkill.getExperience(Skill.COOKING) - dragonXp, 190, "the second drink's mixing counts, its failed heat's 130 does not");
 
   // Observe the real decoded object route; the replacement adapter models a
   // queued input disappearing after admission and before the cooking task runs.

@@ -13,9 +13,12 @@
  *   totem."; the third sets the durability.
  * - Decorate: human_pickuptable_walkmerge with sound 2739 (delay 20), the item goes a tick later
  *   with "You decorate the totem." and the next starts the tick after, until the fourth: "You add
- *   the final decoration to the totem.". A fifth: "You have already added as many decorations as
- *   possible to the totem." (mesbox). "You don't have any logs to build a totem with." and "You
- *   don't have anything to decorate the totem with." when there's nothing to use.
+ *   the final decoration to the totem." (a game message; a mesbox only during the miniquest). A
+ *   fifth: "You have already added as many decorations as possible to the totem." (mesbox).
+ * - Messages: the carve and decorate lines are filterable (spam); "You erect ..." and "You finish
+ *   carving the totem." are game messages. The refusals are mesboxes: "You don't have any logs to
+ *   build a totem with.", "You need a Fletching level of 50 to build a maple totem." and "You don't
+ *   have anything to decorate the totem with.".
  * Wiki: the Fletching level per wood (boostable), 15% run energy per totem built, Construction
  * xp of one per level when building with a house, and 25% less decoration xp per wrong animal.
  */
@@ -169,7 +172,7 @@ function build(event) {
   }
   const choice = chooseLog(player);
   if (choice.error) {
-    player.sendMessage(choice.error);
+    Shared.statement(player, choice.error);
     return true;
   }
   Shared.face(player, State.tileOf(site));
@@ -245,14 +248,14 @@ function carveAnimal(player, site, animal) {
     // was carved, and the finish mesbox follows a tick later (ticks 620-621); after it, the
     // third carving's only message is "You finish carving the totem." (ticks 1103, 1317).
     if (quest) {
-      player.sendMessage(carved);
+      Shared.spam(player, carved);
       Shared.later(1, () => Shared.statement(player, "You finish carving the totem, but it still seems to be missing something. Ranulph and Isadora might know what to do next."));
     } else {
       player.sendMessage("You finish carving the totem.");
     }
     return;
   }
-  player.sendMessage(carved);
+  Shared.spam(player, carved);
   // The quest's warning dialogue takes the chatbox instead of the menu.
   if (quest && !State.animals(player, site).includes(animal)) {
     Shared.api().emitCustomEvent("vale-totems:wrong-carve", { player, site, animal });
@@ -318,7 +321,7 @@ function decorate(event) {
     if (hasOtherWoodDecoration(player, wood)) {
       Shared.statement(player, "You may only add decorations which match the wood used to build the totem.");
     } else {
-      player.sendMessage("You don't have anything to decorate the totem with.");
+      Shared.statement(player, "You don't have anything to decorate the totem with.");
     }
     return true;
   }
@@ -348,11 +351,11 @@ function addDecoration(player, site, wood) {
     if (questActive(player) && site === QUEST_SITE) {
       Shared.statementThenPlayer(player, "You add the final decoration to the totem.", "There we go! I's say that's the totem finished!");
     } else {
-      Shared.statement(player, "You add the final decoration to the totem.");
+      player.sendMessage("You add the final decoration to the totem.");
     }
     return false;
   }
-  player.sendMessage("You decorate the totem.");
+  Shared.spam(player, "You decorate the totem.");
   return true;
 }
 

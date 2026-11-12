@@ -249,15 +249,25 @@ test("the treasure chest's tier button: a menu of the tiers it holds, or a tier 
   assert.equal(f.player.getInterfaceId(), Storage.MAIN);
 });
 
-test("a mahogany chest's six tiers page in the tier menu", (t) => {
+test("a mahogany chest asks for its six tiers in the list menu", (t) => {
   const f = fixture(t, "costier6", "TREASURE_CHEST", "MAHOGANY_TREASURE_CHEST");
+  const hard = [...core.CacheDefinitions.getEnumValues(3296).values()].map(Number)[0];
+  f.furniture.storage = { [hard]: 1 };
+  const scripts = [];
+  const sender = f.player.getPacketSender(), send = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push([id, ...args]); return send(id, ...args); };
   open(f);
   button(f, "poh_costumes:tier");
-  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Beginner", "Easy", "Medium", "Hard", "More..."]);
-  core.MultiChatboxPrompt.handleInterfaceActionClick({ player: f.player, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 5, action: 5 });
-  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Elite", "Master"]);
-  core.MultiChatboxPrompt.handleInterfaceActionClick({ player: f.player, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 2, action: 2 });
+  const menu = core.CacheDefinitions.getInterfaceId("menu");
+  assert.equal(f.player.getInterfaceId(), menu);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+  assert.deepEqual(scripts.find(([id]) => id === 217), [217, "Select a tier", "Beginner|Easy|Medium|Hard|Elite|Master", 1]);
+  PluginManager.emitInterfaceActionClick({ player: f.player, buttonId: core.CacheDefinitions.getComponentId("menu:lj_layer1"),
+    groupId: menu, childId: 3, action: 3, slot: 3, handled: false });
   assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  // On the hard tier, row 0 is the hard enum's first entry.
+  button(f, "poh_costumes:items", 1, rowSlot(0));
+  assert.equal(f.inventory.getAmount(hard), 1);
 });
 
 test("Deposit mode flips and keeps poh_costumes_mode", (t) => {

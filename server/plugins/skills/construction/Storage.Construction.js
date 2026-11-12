@@ -49,6 +49,14 @@ const ROWS_PER_TICK = 4, REOPEN_TICKS = 3, NOTHING_TICKS = 2;
 const openFor = new WeakMap();
 /** player -> their deposit-all in progress */
 const depositing = new WeakMap();
+// A chest with more tiers than this asks in the list menu ("menu", script 217) rather than a chat menu.
+const LIST_MENU_AFTER = 3;
+const LIST_MENU = Ids.iface("menu");
+const LIST_MENU_OPTIONS = Ids.component("menu:lj_layer1");
+const LIST_MENU_SCRIPT = 217, MAIN_MODAL_OPEN_SCRIPT = 2524, RESTORE_INPUT_SCRIPT = 2158;
+const PAUSE_BUTTON = 1;
+/** player -> the tier list they have open: { state, count } */
+const tierMenus = new WeakMap();
 
 function storageItems(furniture) {
   const result = new Map();
@@ -493,8 +501,8 @@ function clickDepositAll(event) {
 }
 
 /**
- * The treasure chest's tier: op1 asks which tier in a chat menu, the tier's own option shows it
- * at once.
+ * The treasure chest's tier: op1 asks which tier (a chat menu for an oak chest's two, the list
+ * menu for a mahogany chest's six), the tier's own option shows it at once.
  */
 function clickTier(event) {
   const { player } = event;
@@ -507,19 +515,38 @@ function clickTier(event) {
     return true;
   }
   openFor.delete(player);
+  if (tiers.length > LIST_MENU_AFTER) return listTierMenu(player, state, tiers), true;
   player.getPacketSender().sendInterfaceRemoval();
-  tierMenu(player, state, tiers, 0);
+  api.sendMultiChatboxPrompt(player, "Select an option", ...tiers.flatMap((name, tier) => [name, () => showTier(player, state, tier)]));
   return true;
 }
 
-/** Ours: a chat menu shows five options at most, so six tiers page after the fourth. */
-function tierMenu(player, state, tiers, first) {
-  const page = tiers.length - first > 5 ? tiers.slice(first, first + 4) : tiers.slice(first);
-  const options = page.flatMap((name, index) => [name, () => {
-    if (state.owner ? inHouse(player, state.house, state.furniture) : player.getPrivateArea() === state.house) openInterface(player, { ...state, tier: first + index }, true);
-  }]);
-  if (first + page.length < tiers.length) options.push("More...", () => tierMenu(player, state, tiers, first + page.length));
-  api.sendMultiChatboxPrompt(player, "Select an option", ...options);
+function showTier(player, state, tier) {
+  if (state.owner ? inHouse(player, state.house, state.furniture) : player.getPrivateArea() === state.house) openInterface(player, { ...state, tier }, true);
+}
+
+/** The list menu in place of the storage: the side panel closes, the menu takes the main modal. */
+function listTierMenu(player, state, tiers) {
+  const sender = player.getPacketSender();
+  sender.sendInterfaceScript(MAIN_MODAL_OPEN_SCRIPT, [-1, -1]);
+  sender.closeSubInterface(SIDE_MODAL);
+  sender.sendInterface(LIST_MENU);
+  sender.sendClientScript(LIST_MENU_SCRIPT, "Select a tier", tiers.join("|"), 1);
+  sender.sendInterfaceFlagsRange(LIST_MENU_OPTIONS, 0, 127, PAUSE_BUTTON);
+  tierMenus.set(player, { state, count: tiers.length });
+}
+
+/** A pick in the tier list (its sub is the tier): the storage again, on that tier. */
+function pickTier(event) {
+  if (event.groupId !== LIST_MENU || event.childId !== (LIST_MENU_OPTIONS & 0xffff)) return;
+  const pending = tierMenus.get(event.player);
+  if (!pending) return;
+  event.handled = true;
+  tierMenus.delete(event.player);
+  const tier = event.slot ?? event.action;
+  if (event.player.getInterfaceId?.() !== LIST_MENU || !Number.isInteger(tier) || tier < 0 || tier >= pending.count) return;
+  event.player.getPacketSender().sendInterfaceScript(RESTORE_INPUT_SCRIPT, []);
+  showTier(event.player, pending.state, tier);
 }
 
 /** Deposit mode: the client flips the varbit; the server keeps it. */
@@ -567,7 +594,8 @@ function attachStorage(pluginApi) {
   pluginApi.onInterfaceActionButton(DEPOSIT_ALL, clickDepositAll);
   pluginApi.onInterfaceActionButton(TIER, clickTier);
   pluginApi.onInterfaceActionButton(MODE, clickMode);
-  pluginApi.onCustomEvent("interface:close", ({ player }) => openFor.delete(player));
+  pluginApi.onInterfaceActionClick(pickTier);
+  pluginApi.onCustomEvent("interface:close", ({ player }) => { openFor.delete(player); tierMenus.delete(player); });
 }
 
 Object.assign(module.exports, { storageItems, depositHouseItem, withdrawHouseItem, withdrawRow, openHouseStorage, storeItemOnFurniture, attachStorage, MAIN, ROW_COMPONENTS });

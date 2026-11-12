@@ -3,10 +3,9 @@
 const S = require("./Shared.Camdozaal");
 const RELICS = [1, 2, 3, 4, 5].map(index => `camdozaal_relic_${index}`);
 
-/** Wiki rates are approximate and do not form a complete normalized table.
- * Anchor the head/relic marginals to those estimates and preserve Ash's conditional
- * 1/15 member hammer roll. This implies a lower hammer marginal than "about 1/300";
- * no undocumented extra nonshard items are invented to fill that difference.
+/** Roll the Wiki's published overall rare marginals directly. Its quoted conditional
+ * 1/15 member hammer wording does not normalize with those approximate marginals;
+ * use the published 1/300 overall hammer rate rather than deriving a rarer rate.
  */
 function rareMultiplier(player) {
   return 1 / (1 - (S.purchased(player, 4) ? 0.05 : 0) - (S.boostTicks(player) > 0 ? 0.05 : 0));
@@ -15,24 +14,28 @@ function depositReward(request) {
   const { player } = request;
   if (request.reward || !S.inRuins(player)) return;
   const multiplier = rareMultiplier(player);
-  const headWeight = 1 / 200;
-  const relicWeight = 1 / 350;
-  const knownRareMass = (headWeight + RELICS.length * relicWeight) * multiplier;
-  const hammerChance = S.core().WorldDefinition.isMembersWorld() ? 1 / 15 : 0;
-  const nonShardMass = knownRareMass / (1 - hammerChance);
-  if (Math.random() < nonShardMass) {
-    if (hammerChance > 0 && Math.random() < hammerChance) {
+  const roll = Math.random();
+  let boundary = multiplier / 200;
+  if (roll < boundary) {
+    request.reward = { itemId: S.obj("barronite_mace_1"), amount: 1 };
+    return;
+  }
+  for (const name of RELICS) {
+    boundary += multiplier / 350;
+    if (roll < boundary) {
+      request.reward = { itemId: S.obj(name), amount: 1 };
+      return;
+    }
+  }
+  if (S.core().WorldDefinition.isMembersWorld()) {
+    boundary += multiplier / 300;
+    if (roll < boundary) {
       request.reward = { itemId: S.obj("imcando_hammer_broken"), amount: 1 };
       return;
     }
-    const roll = Math.random() * (headWeight + RELICS.length * relicWeight);
-    const name = roll < headWeight ? "barronite_mace_1"
-      : RELICS[Math.min(RELICS.length - 1, Math.floor((roll - headWeight) / relicWeight))];
-    request.reward = { itemId: S.obj(name), amount: 1 };
-    return;
   }
-  // Keep the published large-shard marginal near 1/20. Small shards take the remainder.
-  const large = Math.random() < (1 / 20) / (1 - nonShardMass);
+  // Large shards retain their published 1/20 marginal; small shards take the remainder.
+  const large = roll < boundary + 1 / 20;
   request.reward = { itemId: S.obj("camdozaal_barronite_shard"),
     amount: large ? 15 + Math.floor(Math.random() * 21) : 6 + Math.floor(Math.random() * 3) };
 }

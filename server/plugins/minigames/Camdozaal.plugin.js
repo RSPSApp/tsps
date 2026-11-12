@@ -3,6 +3,7 @@
 /** Camdozaal's shard economy and the activities powered by the Sacred Forge. */
 module.exports = {
   name: "Camdozaal",
+  description: "Adds Camdozaal fishing, barronite crushing, shard storage and Exchange charms, and the timed vault.",
   register(api) {
     require("./camdozaal/Shared.Camdozaal").bind(api);
     require("./camdozaal/Exchange.Camdozaal")(api);

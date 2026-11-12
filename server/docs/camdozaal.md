@@ -70,17 +70,18 @@ Below each published no-ruin level, preparation retains at least a 1/256 ruin
 chance, so the estimated additive curve cannot guarantee guppies at level 34/35
 when the permanent buff's published boundary is 36.
 
-Deposit rates are incomplete approximate observations, not an exhaustive normalized
-table. Let `K = 1/200 + 5/350`. The implementation anchors the head and each relic's
-marginal to those published estimates, scales them for Luck, and sets the member
-nonshard pool to `K / (1 - 1/15)` before the conditional hammer roll. This preserves
-that quoted conditional rule and avoids inflating head/relic rates by normalizing
-an arbitrary five-percent pool. The resulting unbuffed member hammer marginal is
-**27/19600, about 1/726**, materially below the separate quoted **about 1/300**.
-That disagreement remains disclosed; no unlisted nonshard rewards are invented to
-fill the missing mass. Large shards retain approximately 1/20 overall probability;
-small shards take the remainder. Boundary tests verify this declared model, not
-exact retail probabilities.
+Deposit rolls use the Wiki's published overall marginals directly: head 1/200,
+each of five relics 1/350, and members-only broken Imcando hammer 1/300, scaled
+by the declared Luck/Boost rare multiplier. Large shards retain a 1/20 marginal;
+small shards take the remainder. One cumulative roll selects the outcome before
+any shard quantity roll. The quoted conditional **1/15 when not receiving shards**
+does not normalize with these approximate overall marginals and is retained as a
+source note, not the implemented selection rule. The earlier implementation
+prioritized that conditional wording and yielded 27/19600 (about 1/726) for the
+hammer; maintainer review requested the published overall 1/300 anchor instead.
+Boundary tests check the declared cumulative intervals and F2P exclusion, not
+measured retail distributions. Prior completed runs exercised the earlier model;
+the changed reward model requires its own reviewed runtime evidence.
 
 ## Conservation and lifecycle
 

@@ -662,7 +662,7 @@ test('native accuracy producer applies golem Defence bonus without changing actu
   } finally { PM.emitCustomEvent = emit; }
 });
 
-test('declared deposit approximation keeps rare boundaries, conditional hammer and Luck scaling explicit', t => {
+test('deposit rolls published overall rare marginals with member hammer and Luck scaling', t => {
   const { player } = actor(t);
   player.moveTo(new core.Location(2955, 5800, 0)); ticks(3);
   const K = 1 / 200 + 5 / 350, oldRandom = Math.random, oldMembers = core.WorldDefinition.isMembersWorld;
@@ -674,19 +674,31 @@ test('declared deposit approximation keeps rare boundaries, conditional hammer a
     Math.random = () => { assert.ok(index < values.length, 'bounded declared reward draws'); return values[index++]; };
     const event = { player, reward: null };
     PM.emitCustomEvent('camdozaal:deposit-reward', event);
+    assert.equal(index, values.length, 'one outcome draw plus quantity only for shards');
     assert.ok(event.reward);
     return event.reward;
   };
   try {
-    assert.deepEqual(reward(false, [0, 0]), { itemId: obj('barronite_mace_1'), amount: 1 });
-    assert.deepEqual(reward(false, [K - 1e-8, 0.999]), { itemId: obj('camdozaal_relic_5'), amount: 1 });
-    assert.deepEqual(reward(false, [K, 0, 0]), { itemId: obj('camdozaal_barronite_shard'), amount: 15 });
-    assert.deepEqual(reward(false, [K + 0.001, 0.99, 0]), { itemId: obj('camdozaal_barronite_shard'), amount: 6 });
-    assert.deepEqual(reward(true, [0, 1 / 15 - 1e-8]), { itemId: obj('imcando_hammer_broken'), amount: 1 });
-    assert.deepEqual(reward(true, [0, 1 / 15, 0]), { itemId: obj('barronite_mace_1'), amount: 1 });
-    assert.deepEqual(reward(false, [K + 0.0001, 0], 1 << 4), { itemId: obj('barronite_mace_1'), amount: 1 });
-    assert.ok(Math.abs(K / (1 - 1 / 15) / 15 - 27 / 19600) < 1e-12,
-      'declared member hammer marginal is about1/726, not a claimed1/300 match');
+    const head = obj('barronite_mace_1'), hammer = obj('imcando_hammer_broken');
+    const shards = obj('camdozaal_barronite_shard');
+    assert.deepEqual(reward(false, [0]), { itemId: head, amount: 1 });
+    assert.deepEqual(reward(false, [1 / 200 - 1e-10]), { itemId: head, amount: 1 });
+    for (let index = 0; index < 5; index++) {
+      const start = 1 / 200 + index / 350, end = 1 / 200 + (index + 1) / 350;
+      assert.deepEqual(reward(false, [start + 1e-10]), { itemId: obj(`camdozaal_relic_${index + 1}`), amount: 1 });
+      assert.deepEqual(reward(false, [end - 1e-10]), { itemId: obj(`camdozaal_relic_${index + 1}`), amount: 1 });
+    }
+    assert.deepEqual(reward(true, [K + 1e-10]), { itemId: hammer, amount: 1 });
+    assert.deepEqual(reward(true, [K + 1 / 300 - 1e-10]), { itemId: hammer, amount: 1 });
+    assert.deepEqual(reward(true, [K + 1 / 300 + 1e-10, 0]), { itemId: shards, amount: 15 });
+    assert.deepEqual(reward(true, [K + 1 / 300 + 1 / 20 - 1e-10, 0.999]), { itemId: shards, amount: 35 });
+    assert.deepEqual(reward(true, [K + 1 / 300 + 1 / 20 + 1e-10, 0]), { itemId: shards, amount: 6 });
+    assert.deepEqual(reward(false, [K + 1e-10, 0]), { itemId: shards, amount: 15 });
+    assert.deepEqual(reward(false, [K + 1 / 20 + 1e-10, 0.999]), { itemId: shards, amount: 8 });
+    const luck = 1 / 0.95;
+    assert.deepEqual(reward(false, [1 / 200 * luck - 1e-10], 1 << 4), { itemId: head, amount: 1 });
+    assert.deepEqual(reward(true, [(K + 1 / 300) * luck - 1e-10], 1 << 4), { itemId: hammer, amount: 1 });
+    assert.deepEqual(reward(true, [(K + 1 / 300) * luck + 1e-10, 0], 1 << 4), { itemId: shards, amount: 15 });
   } finally { Math.random = oldRandom; core.WorldDefinition.isMembersWorld = oldMembers; }
 });
 

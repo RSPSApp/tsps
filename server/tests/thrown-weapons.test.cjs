@@ -420,9 +420,8 @@ test("each throw uses one chinchompa for good, and the last one empties the hand
   t.mock.method(TaskManager, "submit", (task) => submitted.push(task));
   const flying = thrower(ItemIdentifiers.RED_CHINCHOMPA_2, 5);
   ammo.decrementAmmo(flying, null, 1, 2);
-  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 5, "counted when the throw lands");
-  submitted[0].execute();
-  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 4);
+  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 4, "paid as it leaves the hand");
+  assert.deepEqual(submitted, [], "nothing waits for the landing");
 });
 
 test("a chinchompa has no special bar and the medium fuse has no accuracy boost", () => {

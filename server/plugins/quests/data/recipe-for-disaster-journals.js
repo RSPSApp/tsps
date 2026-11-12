@@ -2,6 +2,15 @@
 // OSRS Wiki Transcript:Recipe for Disaster/Freeing ... pages and the existing quest
 // milestone handlers. Thresholds describe what the player has already learned/done.
 // Cache display-name suffixes identify the native child rows without hard-coded ids.
+// Revision-qualified dialogue sources (not journal transcripts):
+// Mountain Dwarf: https://oldschool.runescape.wiki/w/Special:PermanentLink/15315379
+// Goblin generals: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263689
+// Pirate Pete: https://oldschool.runescape.wiki/w/Special:PermanentLink/15342716
+// Lumbridge Guide: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263696
+// Evil Dave: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263695
+// Skrach Uglogwee: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263699
+// Sir Amik Varze: https://oldschool.runescape.wiki/w/Special:PermanentLink/15320992
+// King Awowogei: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263700
 module.exports = {
   "Mountain Dwarf": [
     [0, "I need to inspect the Mountain Dwarf in the Lumbridge Castle dining room."],

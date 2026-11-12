@@ -3573,6 +3573,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     ["Sir Amik Varze", amikQuestStage], ["King Awowogei", awowogeiQuestStage],
   ]);
 
+  // Authored summary: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263687
   function openingJournal(player) {
     if (stage(player) >= STAGE_OPENING_COMPLETE) {
       return ["<str>I helped the Cook prepare the banquet for the Lumbridge council.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
@@ -3592,6 +3593,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return lines;
   }
 
+  // Aris's portal direction: https://oldschool.runescape.wiki/w/Special:PermanentLink/15354817
   function finaleJournal(player) {
     if (quest.isComplete(player)) return ["<str>I freed the Lumbridge council and defeated the Culinaromancer.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
     if (stage(player) < STAGE_OPENING_COMPLETE) return ["I must help the Cook prepare the banquet before I can face the Culinaromancer."];

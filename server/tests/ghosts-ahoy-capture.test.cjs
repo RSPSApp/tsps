@@ -428,7 +428,7 @@ test('villagers: a ghost asked once has had its say, the bribe is the 1-3 it nam
     talk(p, fresh);
     const before = p.getInventory().getAmount(I().ECTO_TOKEN);
     shown = play(p, ['Okay, if you insist.']);
-    const asked = lines.get(p).find((line) => /cost you/.test(line));
+    const asked = lines.get(p).find((line) => line.startsWith("Oh, it'll cost you"));
     if (asked) {
       const named = Number(/cost you ([1-3]) ecto-tokens\.$/.exec(asked)?.[1]);
       assert.ok(named >= 1 && named <= 3, asked);

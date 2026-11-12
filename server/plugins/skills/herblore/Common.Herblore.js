@@ -98,10 +98,10 @@ function repeatMessage(firstId, secondId) {
   return null;
 }
 
-/** "herblore:clean" `{ grimyId, clean, level }`: clean herb and its required Herblore level. */
+/** "herblore:clean" `{ grimyId, clean, level, xp }`: clean herb, its required Herblore level and cleaning XP. */
 function answerClean(request) {
   const herb = herbFor(request?.grimyId);
-  if (herb) { request.clean = herb.cleanId; request.level = herb.level; }
+  if (herb) { request.clean = herb.cleanId; request.level = herb.level; request.xp = herb.xp; }
 }
 
 /**

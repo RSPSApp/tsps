@@ -1012,6 +1012,8 @@ registerPotion({
   chains: [doseChain("RANK_FROTHY_POTION_4_", "RANK_FROTHY_POTION_3_", "RANK_FROTHY_POTION_2_", "RANK_FROTHY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rank frothy potion. You feel oddly powerful."] },
   effect: applyRankFrothyPotion,
 });
 registerPotion({
@@ -1019,6 +1021,8 @@ registerPotion({
   chains: [doseChain("FOUL_CHUNKY_POTION_4_", "FOUL_CHUNKY_POTION_3_", "FOUL_CHUNKY_POTION_2_", "FOUL_CHUNKY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the foul chunky potion. You feel oddly reinvigorated."] },
   effect: applyFoulChunkyPotion,
 });
 registerPotion({
@@ -1026,6 +1030,8 @@ registerPotion({
   chains: [doseChain("RANCID_SLIMY_POTION_4_", "RANCID_SLIMY_POTION_3_", "RANCID_SLIMY_POTION_2_", "RANCID_SLIMY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rancid slimy potion. You feel oddly robust."] },
   effect: applyRancidSlimyPotion,
 });
 registerPotion({
@@ -1033,6 +1039,8 @@ registerPotion({
   chains: [[Items.JAR_OF_CONGEALED_BLOOD]],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You eat the congealed blood. It tastes better than expected and leaves you feeling fully refreshed."] },
   effect: applyJarOfCongealedBlood,
 });
 registerPotion({
@@ -1795,6 +1803,8 @@ function handlePotionDrink(player, itemId, slot) {
       else spam(String(message?.text ?? message));
     }
   } else if (smashVial) {
+    // The finished line, then the smash (rsprox 236/03932.txt:72353-72354, 237/01104.txt:464410; 62 recorded).
+    spam("You have finished your potion.");
     spam("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     // The gourd line is not captured; it stays a game message.

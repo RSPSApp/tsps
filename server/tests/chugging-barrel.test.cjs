@@ -733,3 +733,14 @@ test("legacy name-key insertion order survives canonical numeric keys and later 
   itemAction(f, BARREL_NAME, "Drink", 27);
   assert.deepEqual(effects, ["energy", "prayer"]);
 });
+
+// rsprox 234/00799.txt:54610, drinking from the inventory: the drink line, then the effect's own line. The barrel
+// keeps that order for each stored potion.
+test("a stored anti-venom's drink line comes before its immunity line", (t) => {
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  seed(f.player, { "Anti-venom": { itemId: I.ANTI_VENOM_4_, name: "anti-venom", doses: 4, slot: 0 } });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.deepEqual(f.messages, ["spam: You drink some of your antivenom potion.", "spam: It grants you immunity from poison."]);
+});

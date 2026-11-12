@@ -291,6 +291,15 @@ export class ClickRegistry {
         return best;
     }
 
+    /** Every visible target under the point, in registration order. */
+    targetsAt(x: number, y: number): ClickTarget[] {
+        return this.targets.filter(
+            (t) =>
+                this.targetContains(t, x, y) &&
+                !(t.widgetUid !== undefined && this.widgetHiddenChecker?.(t.widgetUid)),
+        );
+    }
+
     private targetContains(target: ClickTarget, x: number, y: number): boolean {
         if (!inRect({ x, y }, target.rect)) return false;
         return target.contains ? target.contains(x, y) : true;

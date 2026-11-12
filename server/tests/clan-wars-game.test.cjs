@@ -1604,11 +1604,11 @@ async function batchJoin(players,game) {
   }
   assert.equal(game.phase,'staging'); assert.ok(C.now()<game.starts,'all entries completed within unchanged preparation');
 }
-async function stragglerGame(perSide,stragglers,cap=3,terms={}) {
+async function stragglerGame(perSide,stragglers,cap=3,terms={},arena=1) {
   const teams=[Array.from({length:perSide},()=>actor(true)),Array.from({length:perSide},()=>actor(true))];
   for (const p of teams.flat()) ruleStats(p);
   const a=teams[0][0],b=teams[1][0];channel(a,teams[0].slice(1));channel(b,teams[1].slice(1));
-  const game=await negotiate(a,b,cap,0,{...terms,stragglers});
+  const game=await negotiate(a,b,cap,0,{...terms,stragglers},arena);
   await batchJoin(teams.flat(),game);
   for (let side=0;side<2;side++) {
     assert.equal([...game.members.values()].filter(value=>value===side).length,perSide);
@@ -1774,7 +1774,7 @@ test('Ignore 5 threshold finish restores an actual jailed viewing owner and rele
 // G: setup through ordinary packets; coordinates below are explicit TSPS choices.
 const SYLVAN_LANDINGS = [[3424,5000,0],[3424,5048,0]];
 const SYLVAN_JAILS = [[3423,5020,0],[3424,5027,0]];
-function sylvanObjects(game, gameval) {
+function mappedLayoutObjects(game, gameval) {
   const id = core.CacheDefinitions.getLocId(gameval), objects = [];
   assert.ok(Number.isInteger(id), `active cache defines ${gameval}`);
   for (let x=0;x<8;x++) for (let y=0;y<8;y++) {
@@ -1782,22 +1782,22 @@ function sylvanObjects(game, gameval) {
   }
   return objects;
 }
-function sylvanReachable(game, from, to) {
+function layoutReachable(game, from, to, origin = [3392,4992]) {
   const queue=[from.slice(0,2)], seen=new Set([from.slice(0,2).join(',')]);
   for(let i=0;i<queue.length;i++) {
     const [x,y]=queue[i]; if(x===to[0] && y===to[1]) return true;
     for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) {
       if(!dx&&!dy) continue;
       const nx=x+dx,ny=y+dy,key=`${nx},${ny}`;
-      if(nx<3392||nx>3455||ny<4992||ny>5055||seen.has(key)) continue;
+      if(nx<origin[0]||nx>=origin[0]+64||ny<origin[1]||ny>=origin[1]+64||seen.has(key)) continue;
       if(core.RegionManager.canMovestart(game.area.at([x,y,0]),game.area.at([nx,ny,0]),1,1,game.area)) {
         seen.add(key);queue.push([nx,ny]);
       }
     }
   } return false;
 }
-async function sylvanObjectInput(player, game, gameval, sourceXY, action) {
-  const object=sylvanObjects(game,gameval).find(o => {
+async function layoutObjectInput(player, game, gameval, sourceXY, action) {
+  const object=mappedLayoutObjects(game,gameval).find(o => {
     const at=o.getLocation();
     return at.getX()===game.area.at([sourceXY[0],sourceXY[1],0]).getX()
       && at.getY()===game.area.at([sourceXY[0],sourceXY[1],0]).getY();
@@ -1825,7 +1825,7 @@ test('native Sylvan selection and Plateau reselection reset agreement and refuse
   assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Sylvan Glade/);
   tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
   await click(b,'clanwars_setup:arena',3);assert.equal(s.rules.arena,1);assert.equal(s.accepted.size,0);
-  for(const slot of [0,1,2,9,39,65535]) {
+  for(const slot of [0,1,2,12,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,1);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);
   }
@@ -1851,15 +1851,15 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
       assert.equal(MapObjects.getPrivateArea(a,wall.getId(),wall.getLocation()),wall,'native resolver sees the exact registered barrier');
       assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wall.getId()).length,1,'one runtime registration per barrier');
     }
-    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
-    for(const side of [0,1]) assert.equal(sylvanReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
+    assert.equal(layoutReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
+    for(const side of [0,1]) assert.equal(layoutReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
     for(const x of [3444,3445,3446,3450,3451]) assert.equal(game.walls.some(o=>o.getLocation().getX()===game.area.at([x,5023,0]).getX()),false,'mapped solid trees receive no overlay barrier');
     assert.equal(core.RegionManager.canMovestart(game.area.at([3392,5000,0]),game.area.at([3391,5000,0]),1,1,game.area),false,'unmapped footprint refuses exit');
     const walker=[a,b].find(p=>game.members.get(p)===0);
     const open=game.area.at([3425,5000,0]), across=game.area.at(SYLVAN_LANDINGS[1]);
-    await wire(walker,sylvanWalkFrame(open));
+    await wire(walker,walkClickFrame(open));
     assert.deepEqual(position(walker),[open.getX(),open.getY(),0],'ordinary decoded walk queues and reaches open tile');
-    await wire(walker,sylvanWalkFrame(across));tick(60);
+    await wire(walker,walkClickFrame(across));tick(60);
     assert.equal(game.phase,'staging','walk checks fit within unchanged preparation');
     assert.ok(walker.getLocation().getY()<game.area.at([3424,5023,0]).getY(),'ordinary queued movement cannot cross staging wall');
     const before={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
@@ -1872,8 +1872,8 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
     const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
     assert.deepEqual(after,baseline,'all4096 masks including directional/projectile/tree bits restored exactly');
     assert.equal(after[(5023-4992)*64+3414-3392],0x4020,'known directional/projectile fence bits survive');
-    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),true);
-    await wire(walker,sylvanWalkFrame(across));tick(80);
+    assert.equal(layoutReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(across));tick(80);
     assert.deepEqual(position(walker),[across.getX(),across.getY(),0],'same native crossing reaches destination after barriers disappear');
     console.log('SYLVAN_MOVEMENT_QUALIFICATION '+JSON.stringify({staging:before,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
     const tree=game.area.at([3408,5020,0]);assert.equal(game.area.getClip(tree)&0x20100,0x20100,'mapped tree keeps walking and projectile obstruction');
@@ -1882,7 +1882,7 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
     assert.equal(core.RegionManager.canProjectileAttackReturn(game.area.at([3424,5000,0]),game.area.at([3425,5000,0]),1,game.area),true,'open ray control remains visible');
   } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
 });
-function sylvanWalkFrame(at) {
+function walkClickFrame(at) {
   // Existing click-teleport fixture's literal MOVE_GAMECLICK encoding, plain click.
   const add=value=>[(value>>8)&255,((value&255)+128)&255];
   return Buffer.from([16,...add(at.getY()),0,...add(at.getX()),128,0]);
@@ -1915,7 +1915,7 @@ for(const victimIndex of [0,1]) test(`native Sylvan side ${victimIndex} safe def
   const scripts=scriptCalls(victim);
   const orbXY=side===0?[3423,5022]:[3424,5025];
   // Start at the actual completed death jail landing; native object routing owns approach.
-  await sylvanObjectInput(victim,game,'clanwars_viewing_start_elfwood',orbXY,'Use');
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_elfwood',orbXY,'Use');
   assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));
   assert.equal(viewingUnit().active.has(victim),true);
   const approached=viewingUnit().active.get(victim).location, orbAt=game.area.at([...orbXY,0]);
@@ -1924,7 +1924,7 @@ for(const victimIndex of [0,1]) test(`native Sylvan side ${victimIndex} safe def
   await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
   const portalXY=side===0?[3424,5017]:[3423,5029];
   // Continue from restored orb approach position; no adjacency seed hides portal routing.
-  await sylvanObjectInput(victim,game,'clanwars_prisonportal_elfwood',portalXY,'Exit');
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_elfwood',portalXY,'Exit');
   assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);
   assert.deepEqual(position(victim),positionAt(game,SYLVAN_LANDINGS[side]));
 });
@@ -1934,15 +1934,15 @@ test('native Sylvan and Plateau coexist and refuse foreign exit or viewing objec
   const glade=await negotiate(a,b,null,1,null,2);await join(a);await join(b);
   const plateau=await negotiate(c,d);await join(c);await join(d);
   assert.notEqual(glade.area,plateau.area);assert.equal(plateau.walls.length,52,'Plateau keeps original registrations');
-  const foreign=sylvanObjects(plateau,'clanwars_exitportal_darkrock_s')[0];assert.ok(foreign);
+  const foreign=mappedLayoutObjects(plateau,'clanwars_exitportal_darkrock_s')[0];assert.ok(foreign);
   assert.equal(Match.forfeit({player:a,object:foreign}),false);assert.equal(C.matches.get(a),glade);
-  const wrong=sylvanObjects(glade,'clanwars_viewing_elfwood')[0];assert.ok(wrong);
+  const wrong=mappedLayoutObjects(glade,'clanwars_viewing_elfwood')[0];assert.ok(wrong);
   assert.equal(viewingUnit().use({player:a,object:wrong}),false);
   assert.equal(Match.exit({player:a,object:wrong}),false);assert.equal(C.matches.get(a),glade);
   for(const p of [a,b]) {
     const side=glade.members.get(p),xy=side===0?[3422,4996]:[3421,5051];
     p.moveTo(glade.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
-    await sylvanObjectInput(p,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
+    await layoutObjectInput(p,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
     assert.equal(C.matches.has(p),false);lobby(p);
   }
   assert.equal(glade.members.size,0);assert.equal(glade.phase,'staging','empty staging retains its existing preparation lifetime');
@@ -1961,4 +1961,152 @@ test('native Sylvan Ignore5 preserves six-fighter starts and real five-fighter d
   await lethalMelee(b,allies[0],game,true,[[3400,5020,0],[3401,5020,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of [a,...allies,b,...enemies]) lobby(p);
   assert.equal(game.area.isDestroyed(),true);
+});
+
+// H: observed cache geometry; exact player placements/barrier row are TSPS choices.
+const QUARRY_ORIGIN=[3392,5056];
+const QUARRY_LANDINGS=[[3424,5066,0],[3424,5109,0]];
+const QUARRY_JAILS=[[3428,5085,0],[3419,5090,0]];
+const quarryReachable=(game,from,to)=>layoutReachable(game,from,to,QUARRY_ORIGIN);
+
+test('native Quarry selection, delivered arena reselection and unsupported rows retain agreement guards',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');const s=C.negotiations.get(a);assert.equal(s.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',9);assert.equal(s.rules.arena,3,'native Quarry option reaches authoritative offer');
+  assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Forsaken Quarry/);
+  for(const [slot,arena] of [[6,2],[3,1],[9,3]]) {
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
+    await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
+  }
+  for(const slot of [0,1,2,12,39,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,3);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),3);
+  }
+});
+
+test('native Quarry queued movement, full clip restoration and rock walk-versus-LOS',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,3);
+  await join(a);await join(b);for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,QUARRY_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let plane=0;plane<2;plane++) for(let x=0;x<8;x++) for(let y=0;y<8;y++) {
+      reference.setChunk(plane,x,y,{sourceChunkX:424+x,sourceChunkY:632+y,sourcePlane:plane,rotation:0});
+      assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const wallId=core.CacheDefinitions.getLocId('clanwars_barrier_greyrock'),def=core.CacheDefinitions.getObject(wallId);
+    assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.equal(game.walls.length,24);
+    const walls=game.walls.slice(),{MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of walls) {
+      assert.equal(wall.getId(),wallId);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);
+      assert.notEqual(game.area.getClip(wall.getLocation())&0x100,0);
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),wall);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wallId).length,1);
+    }
+    for(const [lo,hi] of [[3396,3415],[3432,3451]]) for(let x=lo;x<=hi;x++) {
+      const old=reference.getClip(reference.tile(x-3392,5087-5056,0));
+      const count=walls.filter(o=>o.getLocation().equals(game.area.at([x,5087,0]))).length;
+      assert.equal(count,old&core.RegionManager.BLOCKED_MASK?0:1,'solid mapped rocks need no overlay');
+    }
+    assert.equal(quarryReachable(game,QUARRY_LANDINGS[0],QUARRY_LANDINGS[1]),false,'cardinal+diagonal routes including corrected prison edges stay separated');
+    for(const side of [0,1]) assert.equal(quarryReachable(game,QUARRY_JAILS[side],QUARRY_LANDINGS[side]),false);
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3392,5066,0]),game.area.at([3391,5066,0]),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3425,5066,0]),across=game.area.at(QUARRY_LANDINGS[1]);
+    await wire(walker,walkClickFrame(open));assert.deepEqual(position(walker),[open.getX(),open.getY(),0]);
+    await wire(walker,walkClickFrame(across));tick(60);assert.equal(game.phase,'staging');
+    assert.ok(walker.getLocation().getY()<game.area.at([3424,5087,0]).getY(),'ordinary movement cannot reach north during preparation');
+    const staging={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of walls) {
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),null);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);
+    }
+    const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'all4096 masks preserve static rocks and prison directional/projectile edges');
+    assert.equal(after[(5087-5056)*64+3415-3392],0x1008);assert.equal(after[(5087-5056)*64+3432-3392],0x10080);
+    assert.equal(quarryReachable(game,QUARRY_LANDINGS[0],QUARRY_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(across));tick(80);assert.deepEqual(position(walker),[across.getX(),across.getY(),0]);
+    console.log('QUARRY_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    const rock=game.area.at([3402,5073,0]),left=game.area.at([3401,5073,0]),right=game.area.at([3404,5073,0]);
+    const rockObject=mappedLayoutObjects(game,'rockslide_grey2').find(o=>o.getLocation().equals(rock));assert.ok(rockObject);
+    const rockDef=core.CacheDefinitions.getObject(rockObject.getId());assert.deepEqual([rockDef.sizeX,rockDef.sizeY,rockDef.blocksProjectile],[2,2,false]);
+    assert.equal(game.area.getClip(rock)&0x20100,0x100);assert.equal(core.RegionManager.canMovestart(left,rock,1,1,game.area),false);
+    assert.equal(quarryReachable(game,QUARRY_LANDINGS[1],[3401,5073,0]),true,'open rock approach is in the battle component');
+    await wire(walker,walkClickFrame(left));tick(140);assert.deepEqual(position(walker),[left.getX(),left.getY(),0],'ordinary walk reaches open rock approach');
+    await wire(walker,walkClickFrame(rock));tick(10);assert.notDeepEqual(position(walker),[rock.getX(),rock.getY(),0],'ordinary click cannot enter the blocked rock tile');
+    assert.equal(core.RegionManager.blocked(walker.getLocation(),game.area),false);
+    assert.ok(Math.max(Math.abs(walker.getLocation().getX()-rock.getX()),Math.abs(walker.getLocation().getY()-rock.getY()))<=2,'blocked click stays at a legal near endpoint');
+    console.log('QUARRY_ROCK_MOVEMENT_QUALIFICATION '+JSON.stringify({requested:[rock.getX(),rock.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}));
+    assert.equal(core.RegionManager.canProjectileAttackReturn(left,right,1,game.area),true,'actual ray crosses walk-blocking small rock');
+    const o1=game.area.at([3424,5066,0]),o2=game.area.at([3425,5066,0]);
+    assert.equal(core.RegionManager.canMovestart(o1,o2,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(o1,o2,1,game.area),true);
+  } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
+});
+
+for(const mode of [0,1,16]) test(`native Quarry mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},3);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3424,5066,0]));b.moveTo(game.area.at([3425,5066,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,QUARRY_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Quarry side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},3);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'quarry'}));
+  await lethalMelee(killer,victim,game,true,[[3424,5066,0],[3425,5066,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,QUARRY_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'quarry'});
+  const scripts=scriptCalls(victim),orbXY=side===0?[3429,5086]:[3418,5089];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_greyrock',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9755));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3424,5087]:[3423,5088],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3424,5087]:[3423,5088],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,QUARRY_LANDINGS[side]));
+});
+
+test('native three-layout coexistence, shared-ID foreign portal and unregistered lookalike refusals',async()=>{
+  const a=actor(),b=actor(),c=actor(),d=actor(),e=actor(),f=actor();for(const p of [a,b,c,d,e,f]) channel(p);
+  const plateau=await negotiate(a,b,null,1);await join(a);await join(b);assert.equal(plateau.walls.length,52);
+  const sylvan=await negotiate(c,d,null,1,null,2);await join(c);await join(d);
+  const quarry=await negotiate(e,f,null,1,null,3);await join(e);await join(f);
+  assert.equal(new Set([plateau.area,sylvan.area,quarry.area]).size,3);
+  const foreign=mappedLayoutObjects(plateau,'clanwars_prisonportal_darkrock')[0],owned=mappedLayoutObjects(quarry,'clanwars_prisonportal_darkrock')[0];
+  assert.ok(foreign&&owned);assert.equal(foreign.getId(),owned.getId(),'sameID cannot substitute instance ownership');
+  assert.equal(Match.exit({player:e,object:foreign}),false);assert.equal(C.matches.get(e),quarry);
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');assert.equal(MapObjects.getPrivateArea(e,foreign.getId(),foreign.getLocation()),null);
+  const fake=new core.GameObject(owned.getId(),owned.getLocation().clone(),owned.getType(),owned.getFace(),quarry.area);
+  try {assert.equal(Match.exit({player:e,object:fake}),false);assert.equal(C.matches.get(e),quarry);} finally {quarry.area.detach(fake);}
+  const wrong=mappedLayoutObjects(quarry,'clanwars_viewing_greyrock')[0];assert.ok(wrong);assert.equal(viewingUnit().use({player:e,object:wrong}),false);
+  const foreignExit=mappedLayoutObjects(sylvan,'clanwars_exitportal_elfwood_s')[0];assert.ok(foreignExit);assert.equal(Match.forfeit({player:e,object:foreignExit}),false);
+  for(const p of [e,f]) {
+    const side=quarry.members.get(p),xy=side===0?[3422,5062]:[3422,5112];p.moveTo(quarry.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
+    await layoutObjectInput(p,quarry,side===0?'clanwars_exitportal_greyrock_s':'clanwars_exitportal_greyrock_n',xy,'Forfeit');assert.equal(C.matches.has(p),false);lobby(p);
+  }
+  assert.equal(quarry.members.size,0);assert.equal(quarry.phase,'staging');const remaining=quarry.starts-C.now();assert.ok(remaining>0);tick(remaining);
+  assert.equal(quarry.area.isDestroyed(),true);
+  for(const [game,players] of [[plateau,[a,b]],[sylvan,[c,d]]]) {assert.notEqual(game.phase,'over');assert.equal(game.area.isDestroyed(),false);for(const p of players) assert.equal(C.matches.get(p),game);}
+});
+
+test('native Quarry Ignore5 uses concurrent six-fighter starts and actual defeat threshold',async()=>{
+  const {a,b,teams,players,game}=await stragglerGame(6,1,3,{},3);completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.fighters.size,12);
+  await lethalMelee(b,teams[0][1],game,true,[[3424,5066,0],[3425,5066,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
 });

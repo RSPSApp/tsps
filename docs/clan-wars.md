@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau or Sylvan Glade**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade or Forsaken Quarry**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -457,3 +457,41 @@ Sources: [Wiki Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/C
 and [cache-242 definitions and interfaces](https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339).
 Raw cache loc planes and bridge-aware template settings were inspected separately;
 source inspection does not establish rendered-client behavior or retail spawn/timing equivalence.
+
+
+## Forsaken Quarry
+
+The same native arena scrollbox also offers Forsaken Quarry (3). The immutable
+layout table selects its map, landings, jails, barriers, viewing model and owned
+exit identities; existing melee modes, restrictions, safe-death metadata and
+membership rules remain the same. Other arenas are refused and resynchronized.
+
+The bounded template is region 13647, source 3392..3455 / 5056..5119, with planes
+0 and 1 copied to corresponding instance planes. Four active orb/jail-portal
+objects have terrain settings [4,1], no bridge bit, and owned effective-plane-0
+copies. Source planes 2/3 are not mapped; this footprint is not a retail extent claim.
+
+These are explicit TSPS placement choices qualified against the active map:
+south/north landings (3424,5066,0) / (3424,5109,0), south/north jails
+(3428,5085,0) / (3419,5090,0), and type-10 face-0 preparation barriers at y=5087,
+x=3396..3415 and 3432..3451. The jail-border columns are included to close a
+source-geometry bypass. Sixteen already-solid rock tiles receive no temporary
+overlay; the remaining 24 barriers use native spawn registration, as the clip grid
+has already been materialized by solid-tile checks. The normal 200-tick preparation
+and empty-staging lifetime are unchanged.
+
+South/north jail orbs are (3429,5086) / (3418,5089), using model 9755; jail exits
+are (3424,5087) / (3423,5088). Quarry's jail portals share the Plateau gameval, so
+a correct ID alone is insufficient: the actual object must belong to the selected
+match's private template. Forfeit portals are (3422,5062) / (3422,5112).
+
+The Wiki and revision-242 enum930 describe small rocks that do not block line of
+sight. Returned active-cache Rockslide definitions 11426/11427/11428 are 2x2 and
+block walking while allowing projectiles. In particular the rock at (3402,5073)
+occupies walk-blocked tiles with no projectile-tile bit, between open left/right
+tiles. Native verification must distinguish walking obstruction from the ray
+across it; this map property does not enable ranged combat.
+
+Sources and limits are the pinned Wiki/cache references above. Native tests use
+ordinary decoded movement/object input and existing actor/death-task fixtures;
+exact spawn/barrier coordinates are our choices, not recorded retail positions.

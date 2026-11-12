@@ -19,6 +19,14 @@ const layouts = Object.freeze({
     orb: "clanwars_viewing_start_elfwood", orbModel: 9754,
     jailPortal: "clanwars_prisonportal_elfwood",
     exits: Object.freeze(["clanwars_exitportal_elfwood_s", "clanwars_exitportal_elfwood_n"]) }),
+  3: Object.freeze({ name: "Forsaken Quarry", origin: Object.freeze([3392, 5056]), size: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3424, 5066), tile(3424, 5109)]),
+    jails: Object.freeze([tile(3428, 5085), tile(3419, 5090)]),
+    barrier: "clanwars_barrier_greyrock", barrierY: 5087, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3396, 3415]), Object.freeze([3432, 3451])]),
+    orb: "clanwars_viewing_start_greyrock", orbModel: 9755,
+    jailPortal: "clanwars_prisonportal_darkrock",
+    exits: Object.freeze(["clanwars_exitportal_greyrock_s", "clanwars_exitportal_greyrock_n"]) }),
 });
 function get(id) { return Object.prototype.hasOwnProperty.call(layouts, id) ? layouts[id] : null; }
 function owns(game, object, gamevals) {

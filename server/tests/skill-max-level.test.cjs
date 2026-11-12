@@ -358,7 +358,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     // click's tick with live messages, sound 2623 and the caught animation; Puro-Puro spawns return in 7/50.
     const N=core.NpcIdentifiers,said=[],sounds=[],grabs=[];
     const iq=player(),packets=iq.getPacketSender();
-    iq.sendMessage=m=>said.push(m);iq.getPacketSender=()=>({...packets,sendSound:id=>sounds.push(id)});
+    iq.sendMessage=m=>said.push(m);iq.getPacketSender=()=>({...packets,sendSound:id=>sounds.push(id),sendTypedMessage:(type,m)=>said.push(type===core.ChatType.SPAM?`spam:${m}`:m)});
     iq.performAnimation=a=>grabs.push(a.getId());
     const puroTile=new core.Location(2567,4320,0),outsideTile=new core.Location(3000,3000,0);
     iq.moveTo(puroTile);iq.equipment.set(core.Equipment.WEAPON_SLOT,I.BUTTERFLY_NET);iq.counts.set(I.IMPLING_JAR,2);
@@ -367,7 +367,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Catching.catchNpc({player:iq,npc:baby,npcId:baby.getId()});
     assert.equal(iq.counts.get(I.BABY_IMPLING_JAR),1,"the jar is filled on the click's tick, not two ticks later");
     assert.equal(iq.counts.get(I.IMPLING_JAR),1);
-    assert.deepEqual(said,["You manage to catch the impling and squeeze it into a jar."]);
+    assert.deepEqual(said,["spam:You manage to catch the impling and squeeze it into a jar."]);
     assert.deepEqual(sounds,[2623]);assert.deepEqual(grabs,[6606]);
     assert.equal(iq.experience.get(Skill.HUNTER),18,"Puro-Puro XP");
     assert.deepEqual(baby.animations.map(a=>a.getId()),[6615]);
@@ -397,7 +397,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.deepEqual(said,["You'll need to clear some space in your pack to catch this impling without a jar."]);
     iq.setSize(28);said.length=0;grabs.length=0;iq.experience.clear();
     Catching.catchNpc({player:iq,npc:wild,npcId:wild.getId()});
-    assert.deepEqual(said,["You manage to catch the impling and acquire some loot."]);
+    assert.deepEqual(said,["spam:You manage to catch the impling and acquire some loot."]);
     assert.deepEqual(grabs,[7171],"barehanded catches play hunting_impling_catch");
     assert.ok(iq.counts.size>0,"barehanded loot arrives on the same tick");
     assert.equal(iq.experience.get(Skill.HUNTER),27,"Gielinor XP");

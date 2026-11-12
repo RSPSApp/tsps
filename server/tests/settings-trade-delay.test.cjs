@@ -38,11 +38,13 @@ function createPlayer(name, index, delay, bot = false) {
     get: (_target, key) => {
       if (key === "getVarbit") return (id) => varbits.get(id) ?? 0;
       if (key === "sendInterfaceRemoval") return () => { status = PlayerStatus.NONE; interfaceId = -1; return sender; };
+      if (key === "sendTypedMessage") return (type, text) => { player.typed.push([type, text]); return sender; };
       return () => sender;
     },
   });
   const player = {
     messages: [],
+    typed: [],
     getUsername: () => name, getDisplayName: () => name, getIndex: () => index,
     getSession: () => ({ sendClientPacket: () => true }),
     getPacketSender: () => sender,
@@ -151,4 +153,23 @@ test("an AI bot never waits, so its offer-then-accept in one tick still counts",
   alice.getTrading().getButtonDelay().stop();
   alice.getTrading().acceptTrade();
   assert.equal(state(alice), TradeState.TRADE_SCREEN, "the player still waits out the delay");
+});
+
+test("the request and the finished trade send live's trade-type lines (rsprox 227/00548.txt:3891, :4488)", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const alice = createPlayer("alice", 1, 0);
+  const bob = createPlayer("bob", 2, 0);
+  alice.getInventory().adds(LOBSTER, 1);
+  alice.getTrading().requestTrade(bob);
+  assert.deepEqual(alice.typed, [[102, "Sending trade offer..."]]);
+  assert.deepEqual(alice.messages, [], "no game message for the request");
+  bob.getTrading().requestTrade(alice);
+  offer(alice, LOBSTER, 1);
+  bothAccept(alice, bob);
+  assert.equal(state(alice), TradeState.CONFIRM_SCREEN);
+  bothAccept(alice, bob);
+  for (const player of [alice, bob]) {
+    assert.deepEqual(player.typed.at(-1), [102, "Accepted trade."], player.getUsername());
+    assert.ok(!player.messages.includes("Trade accepted!"), player.getUsername());
+  }
 });

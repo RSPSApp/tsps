@@ -10,7 +10,7 @@ import { StackType } from "../model/container/StackType";
 import { Inventory } from "../model/container/impl/Inventory";
 import { Misc } from "../../util/Misc";
 import { PluginManager } from "../../plugins/PluginManager";
-import { encodeChatMessage, encodeTradeClose, encodeTradeOpen, encodeTradeRequest, encodeTradeUpdate, TradePartyView } from "../../net/protocol/ClientProtocol";
+import { ChatType, encodeChatMessage, encodeTradeClose, encodeTradeOpen, encodeTradeRequest, encodeTradeUpdate, TradePartyView } from "../../net/protocol/ClientProtocol";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 
@@ -44,6 +44,8 @@ export class Trading {
     private static readonly CONFIRM_INTERFACE = 334;
     private static readonly INVENTORY_INTERFACE = 336;
     private static readonly TRADE_REQUEST_CHAT_TYPE = 101;
+    /** The completed trade's line (rsprox: "Accepted trade.", type=trade). */
+    public static readonly ACCEPTED_MESSAGE = "Accepted trade.";
     /** All Settings "Accept trade delay" (205): while 1, Accept waits 3 seconds after any change to the offers. */
     private static readonly ACCEPT_DELAY_VARBIT = 13130;
     public static readonly ACCEPT_DELAY_MS = 3000;
@@ -172,7 +174,8 @@ export class Trading {
                 this.player.getTrading().initiateTrade();
                 t_.getTrading().initiateTrade();
             } else {
-                this.player.sendMessage("You've sent a trade request to " + t_.getDisplayName() + ".");
+                // rsprox 227/00548.txt:3891 (38 recordings): a trade-type line, no name.
+                this.player.getPacketSender().sendTypedMessage(ChatType.TRADE, "Sending trade offer...");
                 // The client shows "<name> wishes to trade with you." and makes it clickable.
                 t_.getSession().sendClientPacket(encodeChatMessage(
                     "trade", "wishes to trade with you.", this.player.getDisplayName(), "",
@@ -343,14 +346,14 @@ export class Trading {
                 interact_.getTrading().resetAttributes();
                 Trading.save(this.player);
                 Trading.save(interact_);
-                this.player.getSession().sendClientPacket(encodeTradeClose("Trade accepted!"));
-                interact_.getSession().sendClientPacket(encodeTradeClose("Trade accepted!"));
+                this.player.getSession().sendClientPacket(encodeTradeClose(Trading.ACCEPTED_MESSAGE));
+                interact_.getSession().sendClientPacket(encodeTradeClose(Trading.ACCEPTED_MESSAGE));
                 // Send interface removal for both players...
                 this.player.getPacketSender().sendInterfaceRemoval();
                 interact_.getPacketSender().sendInterfaceRemoval();
-                // Send successful trade message!
-                this.player.sendMessage("Trade accepted!");
-                interact_.sendMessage("Trade accepted!");
+                // rsprox 227/00548.txt:4488, 227/01734.txt:8213 (26 recordings): a trade-type line.
+                this.player.getPacketSender().sendTypedMessage(ChatType.TRADE, Trading.ACCEPTED_MESSAGE);
+                interact_.getPacketSender().sendTypedMessage(ChatType.TRADE, Trading.ACCEPTED_MESSAGE);
             }
         } else {
             if (interact_.isPlayerBot && interact_.isPlayerBot()) {

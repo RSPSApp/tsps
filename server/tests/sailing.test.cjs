@@ -2688,8 +2688,9 @@ test("a facility can't be built without a saw and a hammer: the customisation cl
   assert.equal(h.player.getInventory().getAmount(2353), 4, "nothing used up");
   assert.equal(h.player.getInterfaceId(), -1, "939 closed");
   assert.equal(h.varbits.get(19524), 0);
-  assert.equal(h.chatboxes.at(-1), 11, "objectbox_double: the saw and the hammer");
-  assert.ok(h.strings.includes("You need a saw and a hammer in order to build a<br>facility."));
+  const box = h.statements.at(-1).getDialogues().get(0);
+  assert.deepEqual(box.getItemIds(), [8794, 2347], "objectbox_double: the saw and the hammer");
+  assert.equal(box.getText(), "You need a saw and a hammer in order to build a<br>facility.");
   assert.deepEqual(h.scripts.slice(sent), [], "no redraw: 939 is gone");
 });
 

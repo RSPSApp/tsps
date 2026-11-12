@@ -11,6 +11,7 @@ const { Animation } = require("../../../src/main/typescript/elvarg/game/model/An
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { DoubleItemStatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/DoubleItemStatementDialogue");
 const { setVarbit, playSound, content } = require("./SailingContent.Sailing");
 const { HOTSPOT_VARBITS } = require("./Sidepanel.Sailing");
@@ -108,7 +109,8 @@ function buildFacility(event) {
 function checkTools(player) {
   if (hasTool(player, SAWS) && hasTool(player, HAMMERS)) return true;
   closeCustomisation(player);
-  DoubleItemStatementDialogue.send(player, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new DoubleItemStatementDialogue(0, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS)));
   return false;
 }
 

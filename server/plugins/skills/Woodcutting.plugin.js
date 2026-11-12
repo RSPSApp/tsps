@@ -1107,6 +1107,12 @@ class TreeRespawnTask extends Task {
   }
 
   execute() {
+    // A private template may have ended while this tree was depleted. Its delayed
+    // respawn must not put an object back into the world after area destruction.
+    if (this.originalTreeObject.getPrivateArea()?.isDestroyed()) {
+      this.stop();
+      return;
+    }
     const existingStump = MapObjects.get(
       this.stumpObject.getId(),
       this.stumpObject.getLocation(),

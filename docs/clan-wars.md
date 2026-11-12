@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp or Classic**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic or Lumbridge Castle**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -624,3 +624,51 @@ alone do not establish arena-wide line of sight. Placement, jail assignment,
 barrier and copied dimensions remain TSPS choices. Validation retains supplied
 combat/Forfeit checkpoints, pre-rolled melee damage and inert transport; no
 rendered-client, full-login, natural-RNG or retail spawn/timing claim is made.
+
+
+## Lumbridge Castle
+
+The native arena row 12 (slot 36) selects Lumbridge Castle alongside the previous
+six layouts. This bounded template copies region 13643, source 3392..3455 /
+4800..4863, planes 0 and 1; planes 2/3 remain unmapped. Returned plane-1 settings
+have no bridge bits. Staircase copies are on effective plane 1, with no ground-floor
+Climb action. Ground-floor gameplay and sealed main/rear entrances follow the
+existing source clipping, not a new permission to use upper floors.
+
+The following are explicit TSPS placements qualified against the source, not retail
+spawns or extent claims: south/north landings (3417,4810,0)/(3417,4843,0), jails
+(3436,4822,0)/(3436,4831,0). Greyrock preparation barriers use type 10, face 0,
+y=4826, x=3407..3437, skipping two already-solid tiles. The remaining 29 native
+barriers separate the starts; removing them must preserve the complete original
+4096-tile collision grid. Existing dimensions, preparation lifetime, native object
+registration/removal and the other six configurations are unchanged.
+
+Each gatehouse jail contains an owned greyrock viewing orb (26743, model 9755)
+and swamp Exit portal (26740). Actual south/north orbs are at (3436,4823) /
+(3436,4830), Exit portals at (3437,4820) / (3437,4833). Smallwood Forfeit portals
+7819/7820 at (3417,4809)/(3417,4844) have 2x1 footprints. Their native owned
+identity and footprint approaches matter; matching an ID elsewhere grants no action.
+
+The [pinned Wiki description](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+allows ground-floor water sources, cooking and regular trees; the Oak remains
+behind invisible barriers. Actual interior source copies include Sink 14868,
+Range 26181, Fountains 879 and two reachable regular Trees 1278. These use the
+canonical WaterSources, Cooking and Woodcutting plugins, including actionless
+water item-use, real supplies and normal NoFood/NoDrinks consumption restrictions.
+The Oak's 3x3 footprint has directional clipping on every cardinal approach;
+walkable corner tiles do not establish native object reach. Other copied scenery
+is not assumed usable merely from its name.
+
+Canonical tree depletion keeps private-area identity on its stump and respawn.
+The delayed Woodcutting respawn task now stops before object lookup or mutation
+when the original private area is destroyed. World and living-private-area respawns
+retain their existing path. This prevents a stale tree from being registered after
+a match ends, without disabling ordinary chopping or changing global object tasks.
+
+Existing fixtures cover ordinary arena offers, full mask restoration, actual object
+and movement routes, internal doors versus actionless seals, ground-floor refusal,
+canonical resource outputs/cancellation/respawn and private teardown, safe-death
+metadata, viewing, delayed return, both Forfeit footprints and prior-layout controls.
+Coverage descriptions are source intent; observed outcomes and failure history belong
+to the PR evidence. Supplied setup, controlled RNG, native listener versus decoded
+packet boundaries, inert transport and unrendered client/session limits remain explicit.

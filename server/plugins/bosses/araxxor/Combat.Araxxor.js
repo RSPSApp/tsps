@@ -121,6 +121,8 @@ function araneaNegates(target, attribute, cooldownTicks, damage) {
   return true;
 }
 
+const ENRAGE_RAISES = [["DEFENCE", 35], ["MAGIC", 28], ["RANGED", 31]];
+
 /** Hits that would take Araxxor past the threshold flip her into the enrage. */
 function checkEnrage(npc, incomingDamage = 0) {
   if (!alive(npc) || npc.getAttribute?.(Shared.ATTR_DYING) === true) return;
@@ -132,6 +134,11 @@ function checkEnrage(npc, incomingDamage = 0) {
   if (projected <= 0) return;
   if (projected > Math.floor(Shared.MAX_HITPOINTS * Shared.ENRAGE_THRESHOLD)) return;
   npc.setAttribute(Shared.ATTR_ENRAGED, true);
+  // Wiki (Araxxor/Strategies): the enrage "will additionally increase his Defence level by 35, Magic by 28 and Ranged
+  // by 31" (infobox: 135 -> 170, 190 -> 218, 210 -> 241).
+  for (const [skill, raise] of ENRAGE_RAISES) {
+    if (npc.setCurrentLevels && npc.getCurrentLevel) npc.setCurrentLevels(core.Skill[skill], npc.getCurrentLevel(core.Skill[skill]) + raise);
+  }
   // Captured: 11488, then 11489 two ticks later with the body change (the two front legs
   // coat in venom). The screech is in the animations themselves: no sound packet goes out.
   npc.performAnimation(new core.Animation(BOSS_ANIMATIONS.enrage));

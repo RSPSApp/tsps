@@ -532,3 +532,29 @@ test("the collection log gets what the corpse hands over: the harvest's loot, an
   }
   assert.deepEqual(logged(), [Shared.ELITE_CLUE_ITEM_ID], "destroyed: only the clue it keeps");
 });
+
+// Wiki (Araxxor/Strategies): the enrage "will additionally increase his Defence level by 35, Magic by 28 and Ranged by 31".
+test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const levels = new Map([[core.Skill.DEFENCE, 135], [core.Skill.MAGIC, 190], [core.Skill.RANGED, 210]]);
+  const attributes = new Map();
+  const npc = {
+    isRegistered: () => true,
+    getHitpoints: () => Math.floor(Shared.MAX_HITPOINTS * Shared.ENRAGE_THRESHOLD),
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    performAnimation() {},
+    getMovementQueue: () => ({ setBlockMovement() {} }),
+    getCurrentLevel: (skill) => levels.get(skill),
+    setCurrentLevels: (skill, level) => levels.set(skill, level),
+  };
+  Combat.checkEnrage(npc, 1);
+  assert.equal(attributes.get(Shared.ATTR_ENRAGED), true);
+  assert.deepEqual([levels.get(core.Skill.DEFENCE), levels.get(core.Skill.MAGIC), levels.get(core.Skill.RANGED)], [170, 218, 241]);
+  Combat.checkEnrage(npc, 1);
+  assert.equal(levels.get(core.Skill.DEFENCE), 170, "only once");
+  core.TaskManager.cancelTasks(npc);
+});

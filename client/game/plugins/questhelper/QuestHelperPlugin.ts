@@ -429,7 +429,7 @@ export class QuestHelperPlugin extends Plugin {
             // after tick), so what it held is gone: a fresh session, whose first evaluation is sent in full.
             this.faulted = false;
             this.events.clear();
-            this.session.restart("Quest Helper fell behind. Resynchronizing…");
+            this.session.restart("Quest Helper fell behind. Resynchronizing...");
         }
         const now = Date.now();
         if (this.session.hasPendingEvaluation()) {

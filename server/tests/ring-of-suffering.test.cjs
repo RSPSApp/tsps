@@ -129,7 +129,9 @@ test("recoil immunity prevents suffering damage without spending its last charge
 // Exercise real name/noted hook filtering and real inventory deletion, in both orders.
 function chargingFixture(ringId, recoilNoted, remaining = 0) {
   const player = new Player(null);
-  const sender = new Proxy({}, { get: () => () => sender });
+  const prompts = [];
+  const sender = new Proxy({}, { get: (_, name) => name === "sendEnterAmountPrompt" ? (title) => { prompts.push(title); return sender; } : () => sender });
+  player.prompts = prompts;
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   const ring = new core.Item(ringId);
@@ -143,14 +145,18 @@ function chargingFixture(ringId, recoilNoted, remaining = 0) {
   return { player, ring, recoilId };
 }
 
-function useRecoil(fixture, reverse = false) {
+/** Uses a recoil ring on the suffering ring; with several held, answers the count prompt with `answer`. */
+function useRecoil(fixture, reverse = false, answer = 1) {
   const { player } = fixture;
   const usedItemSlot = reverse ? 0 : 1, usedWithItemSlot = reverse ? 1 : 0;
   const usedItem = player.getInventory().get(usedItemSlot);
   const usedWithItem = player.getInventory().get(usedWithItemSlot);
-  return PluginManager.emitItemOnItem({ player, usedItem, usedWithItem,
+  const prompted = player.prompts.length;
+  const handled = PluginManager.emitItemOnItem({ player, usedItem, usedWithItem,
     usedItemId: usedItem.getId(), usedWithItemId: usedWithItem.getId(),
     usedItemSlot, usedWithItemSlot, handled: false });
+  if (player.prompts.length > prompted) player.getEnteredAmountAction().execute(answer);
+  return handled;
 }
 
 for (const noted of [false, true]) {
@@ -181,6 +187,24 @@ for (const [base, charged] of [
     assert.equal(f.player.getInventory().getAmount(f.recoilId), 1);
   });
 }
+
+// rsprox 237/01150.txt:596557-596596: "How many rings do you wish to use?", then "You load your ring with 106 rings of
+// recoil. It now has 4,240 recoil charges." (40 each).
+test("several recoil rings ask how many, and load that many at 40 charges each", () => {
+  const f = chargingFixture(ItemIds.RING_OF_SUFFERING, true);
+  const messages = [];
+  f.player.sendMessage = message => messages.push(message);
+  assert.equal(useRecoil(f, false, 2), true);
+  assert.deepEqual(f.player.prompts, ["How many rings do you wish to use?"]);
+  assert.equal(RingOfSuffering._test.charges(f.ring), 80);
+  assert.equal(f.player.getInventory().getAmount(f.recoilId), 1);
+  assert.deepEqual(messages, ["You load your ring with 2 rings of recoil. It now has 80 recoil charges."]);
+  assert.equal(useRecoil(f, false, 5), true, "the last ring loads without a prompt");
+  assert.equal(f.player.prompts.length, 1);
+  assert.equal(RingOfSuffering._test.charges(f.ring), 120);
+  assert.equal(f.player.getInventory().getAmount(f.recoilId), 0);
+  assert.equal(messages.at(-1), "You load your ring with 1 ring of recoil. It now has 120 recoil charges.");
+});
 
 test("a full ring consumes nothing and does not reset ordinary recoil damage", () => {
   const f = chargingFixture(ItemIds.RING_OF_SUFFERING_R_, true, 100000);
@@ -240,11 +264,13 @@ test("named inventory and worn hooks retain Check and recoil toggles", () => {
     assert.equal(event.handled, true);
   }
   click(3214, 4, "check");
-  assert.match(messages.pop(), /80 charges left/);
+  // rsprox: "Your ring currently has N recoil charges remaining. The recoil effect is currently enabled."
+  assert.equal(messages.pop(), "Your ring currently has 80 recoil charges remaining. The recoil effect is currently enabled.");
   click(3214, 5, "recoil settings");
+  assert.equal(messages.pop(), "You disable the recoil effect of your ring.");
   assert.equal(f.player.getAttribute("ring-of-suffering:recoil-disabled"), true);
   click(core.Equipment.INVENTORY_INTERFACE_ID, 2, "Check");
-  assert.match(messages.pop(), /80 charges left/);
+  assert.equal(messages.pop(), "Your ring currently has 80 recoil charges remaining. The recoil effect is currently disabled.");
   click(core.Equipment.INVENTORY_INTERFACE_ID, 3, "Recoil Settings");
   assert.equal(f.player.getAttribute("ring-of-suffering:recoil-disabled"), false);
   assert.equal(RingOfSuffering._test.charges(f.ring), 80);

@@ -37,7 +37,9 @@ class LoginBroker(
     private val busy = ThreadLocal.withInitial { false }
     /**
      * Requests the workers cannot take run here and are answered "busy" at once, so a burst beyond
-     * 36 logins gets a reply instead of a connection the HTTP server drops unanswered.
+     * 36 logins gets a reply instead of a connection the HTTP server drops unanswered. Past its
+     * queue too, AbortPolicy throws back to the HTTP server, which closes the connection at once
+     * (a discarded task would leave it open, unanswered, until maxReqTime).
      */
     private val overflow =
         ThreadPoolExecutor(
@@ -51,7 +53,7 @@ class LoginBroker(
                     isDaemon = true
                 }
             },
-            ThreadPoolExecutor.DiscardPolicy(),
+            ThreadPoolExecutor.AbortPolicy(),
         )
     private val timer =
         Executors.newSingleThreadScheduledExecutor {

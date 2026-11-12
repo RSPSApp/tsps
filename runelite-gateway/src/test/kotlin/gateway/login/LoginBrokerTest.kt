@@ -222,6 +222,49 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `requests beyond the overflow queue are closed at once, not held open`() {
+        Backend(hold = true).use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(37)
+                val stalled = ArrayList<java.net.Socket>()
+                try {
+                    // 4 running and 32 queued logins fill the workers.
+                    val held =
+                        (0 until 36).map { i ->
+                            pool.submit<Result<List<String>>> {
+                                runCatching { request(port, ip = "192.0.2.${i + 1}") }
+                            }
+                        }
+                    repeat(4) { assertNotNull(backend.flags.poll(5, TimeUnit.SECONDS)) }
+                    Thread.sleep(300)
+                    // Unfinished headers keep the overflow thread reading, then fill its 64 slots.
+                    repeat(65) {
+                        stalled +=
+                            java.net.Socket("127.0.0.1", port).apply {
+                                getOutputStream().write("POST /login-utilities/v1/session HTTP/1.1\r\n".toByteArray())
+                                getOutputStream().flush()
+                            }
+                        if (it == 0) Thread.sleep(200)
+                    }
+                    Thread.sleep(300)
+                    val started = System.nanoTime()
+                    val extra = pool.submit<Result<List<String>>> { runCatching { request(port, ip = "198.51.100.9") } }
+                    val result = extra.get(30, TimeUnit.SECONDS)
+                    val waited = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+                    assertTrue(result.isFailure, "Nothing can answer it: $result")
+                    assertTrue(waited < 3_000, "Held open $waited ms instead of closed at once")
+                    backend.release()
+                    held.forEach { it.get(30, TimeUnit.SECONDS) }
+                } finally {
+                    stalled.forEach { runCatching { it.close() } }
+                    pool.shutdownNow()
+                }
+            }
+        }
+    }
+
+    @Test
     fun `an unredeemed native ticket expires and releases the pending login`() {
         Backend().use { backend ->
             val port = freePort()

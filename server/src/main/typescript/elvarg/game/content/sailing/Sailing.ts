@@ -411,7 +411,8 @@ export class Sailing {
         const state = player.getSailing();
         state.returnPoint = { ...dock.landing };
         state.lastDock = dock.id;
-        if (!dock.mooringPoint) state.lastStandardDock = dock.id;
+        if (dock.mooringPoint) state.lastMooringPoint = dock.id;
+        else state.lastStandardDock = dock.id;
         if (moored) {
             const history = state.mooredDocks ??= [];
             if (!history.includes(dock.id)) history.push(dock.id);

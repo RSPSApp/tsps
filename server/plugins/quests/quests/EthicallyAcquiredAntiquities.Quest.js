@@ -529,6 +529,11 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
     const stage = quest.getStage(player);
     // Hand in the Sand's Betty: stages 18-23; once Haig has been visited (24+), her "after visiting" page.
     if (stage < STAGE_BETTY || quest.isComplete(player)) return null;
+    // Plugins load alphabetically, so this selector runs before Hand in the Sand's: leave Betty to it while one of its
+    // pages applies (the vial, the lens, the serum), or a player doing both quests could never finish that one.
+    const handInTheSand = { player, variant: null };
+    api.emitCustomEvent("hand-in-the-sand:betty-page", handInTheSand);
+    if (handInTheSand.variant) return null;
     if (stage >= STAGE_STOREROOM) return V_BETTY_AFTER_HAIG;
     return stage >= STAGE_READ_NOTES ? V_BETTY_AGAIN : V_BETTY_FIRST;
   }

@@ -46,7 +46,7 @@ runtime.startTranscript = (api, player, npcId, page, variant, select) => {
   return true;
 };
 
-function setup({ boneVoyage = false } = {}) {
+function setup({ boneVoyage = false, handInTheSand = false } = {}) {
   const realCore = PluginManager.getCoreApi();
   const hooks = {
     variants: [], conditions: [], custom: new Map(), login: [], logout: [],
@@ -107,6 +107,8 @@ function setup({ boneVoyage = false } = {}) {
 
   require('../plugins/quests/quests/EthicallyAcquiredAntiquities.Quest')(api);
   if (boneVoyage) require('../plugins/quests/quests/BoneVoyage.Quest')(api);
+  // Plugins load in localeCompare order, so Hand in the Sand registers after EAA, as here.
+  if (handInTheSand) require('../plugins/quests/quests/HandInTheSand.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'ethically_acquired_antiquities');
 
   const attrs = new Map(), inventory = new Map();
@@ -701,4 +703,26 @@ test('registered order releases Haig to the real Bone Voyage hook once EAA is co
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return');
   h.quest.setStage(p, STAGE.complete);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'starting-out-talking-to-curator-haig-halen');
+});
+
+test("EAA's Betty pages leave Betty to Hand in the Sand while one of its pages applies", () => {
+  const h = withPrerequisites(setup({ handInTheSand: true }));
+  const npcs = N();
+  const p = h.player;
+  const hits = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'hand_in_the_sand');
+  assert.ok(hits, 'real Hand in the Sand plugin registered after EAA');
+  // EAA at the storeroom (24) with Hand in the Sand at its make-serum stage (70): Hand in the Sand's first Betty page.
+  h.quest.setStage(p, STAGE.storeroom);
+  hits.setStage(p, 70);
+  assert.equal(h.variant(npcs.BETTY), 'talking-to-betty');
+  // Its later pages too (the bottled water given, no lens yet), and its returning page after the orb.
+  p.setAttribute('quest.hand_in_the_sand.serum', 2);
+  assert.equal(h.variant(npcs.BETTY), 'talking-to-betty-talking-to-betty-without-the-rose-tinted-lens');
+  hits.setStage(p, 100);
+  assert.equal(h.variant(npcs.BETTY), 'the-truth-serum-returning-to-betty');
+  // Without a Hand in the Sand page (not started, or done), EAA's own Betty page applies again.
+  hits.setStage(p, 0);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
+  hits.setStage(p, 160);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
 });

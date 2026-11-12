@@ -49,6 +49,7 @@ before(async () => {
   core.ObjectDefinition.init();
   core.RegionManager.init();
   for (const scene of Object.values(SCENES)) core.RegionManager.loadMapFiles(scene.start[0], scene.start[1]);
+  core.RegionManager.loadMapFiles(3240, 3395);
   core.RegionManager.loadMapFiles(...VARROCK_SQUARE);
   PM.emitServerStartup({});
 });
@@ -354,4 +355,69 @@ test("shared quest fade-in closes only its own mount after the animation", (t) =
   sender.sendSubInterface(OVERLAY_UID, OTHER_GROUP, 1);
   ticks(f, 3);
   assert.equal(mounted()?.groupId, OTHER_GROUP, "an explicit close makes the delayed token stale");
+});
+
+
+// #4491: checkpoint seed is after removal; Talk-to and Listen are real packets, with real tasks/map/session.
+const YARLO_SCENE = { start: [3240, 3395, 0] };
+async function listenToYarlo(f) {
+  const q = quest("daddys_home");
+  assert.ok(q, "Daddy's Home is registered");
+  q.setStage(f.player, 3);
+  f.player.setAttribute("daddys-home:furniture", Array(7).fill(2));
+  const npc = core.NPC.create(core.NpcIdentifiers.OLD_MAN_YARLO, new core.Location(3240, 3395, 0));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  f.t.after(() => core.World.getNpcs().remove(npc));
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+  ticks(f, 4);
+  await clickThrough(f, () => f.player.getDialogueManager().getCurrent() instanceof core.OptionDialogue, 40);
+  const menu = f.player.getDialogueManager().getCurrent();
+  assert.ok(menu instanceof core.OptionDialogue, "ordinary Yarlo dialogue reaches the choice");
+  assert.equal(menu.getOptions()[0], "Listen to Yarlo.");
+  assert.equal(q.getStage(f.player), 3, "choice alone cannot advance the quest");
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+  ticks(f, 4);
+  return f.player.getArea();
+}
+
+test("Yarlo: current-cache parlour geometry is available for an isolated demonstration", () => {
+  const { getTemplateRegion, templateChunkKey } = require("../dist/game/collision/TemplateRegionData");
+  const room = require("../plugins/skills/construction/data/rooms.json").find(room => room.key === "PARLOUR");
+  const region = getTemplateRegion(((room.sourceChunkX >> 3) << 8) | (room.sourceChunkY >> 3));
+  assert.ok(region, "current cache contains the construction template region");
+  const locs = region.chunks[templateChunkKey(0, room.sourceChunkX, room.sourceChunkY)];
+  assert.ok(locs.length > 0, "candidate chunk contains real cache locs");
+  console.log("YARLO_PARLOUR_GEOMETRY " + JSON.stringify(locs.map(loc => ({...loc,
+    x: room.sourceChunkX * 8 + (loc.localX & 7), y: room.sourceChunkY * 8 + (loc.localY & 7),
+    name: core.ObjectDefinition.forId(loc.id)?.getName()}))));
+});
+
+test("Yarlo: Listen replaces the Varrock house map with an isolated room and returns safely", async (t) => {
+  const f = actor(t, YARLO_SCENE);
+  ticks(f, 3);
+  t.after(() => { const area = f.player.getArea(); if (area) area.leave(f.player, true); });
+  const area = await listenToYarlo(f);
+  assert.ok(area, "Listen starts the lecture's private scene");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "cinematic blocks movement");
+  assert.equal(f.player.isUntargetable(), true, "cinematic protects its owner");
+  assert.ok(area instanceof core.TemplatedInstanceArea,
+    "Listen must rebuild a template map instead of drawing demonstration furniture over Yarlo's real Varrock house");
+  assert.ok(f.player.getLocation().getX() >= 8192, "owner is moved to the allocated copy");
+  const palette = area.buildScenePalette(f.player.getLocation().getX() >> 3, f.player.getLocation().getY() >> 3).palette.flat(2).filter(n => n !== -1);
+  assert.ok(palette.length > 0, "client receives actual map chunks");
+  for (const packed of palette) {
+    const x = (packed >>> 14) & 1023, y = (packed >>> 3) & 2047;
+    assert.ok(!(x >= 398 && x <= 410 && y >= 418 && y <= 430), "palette excludes the Varrock house and surrounding chunks");
+  }
+  ticks(f, 160);
+  await clickThrough(f, () => !f.player.getDialogueManager().isActive(), 80);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3240, 3395, 0]);
+  assert.equal(f.player.getArea(), null);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(quest("daddys_home").getStage(f.player), 5);
+  assert.deepEqual(f.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
+  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+  assert.ok(f.packets.some(p => p.op === OP.REBUILD_NORMAL), "normal map is rebuilt on return");
 });

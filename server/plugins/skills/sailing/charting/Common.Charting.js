@@ -44,6 +44,8 @@ const SOUND_CHARTED = 11166;
 const NOTIFICATION_TITLE = "Charting Complete!";
 /** settings_sailing_charting_popup: All Settings "Charting popups" off. */
 const POPUP_DISABLED_VARBIT = 18142;
+/** A sea, group, ocean or the entire sea fully charted: its popup's jingle (length in ms). */
+const FULLY_CHARTED_JINGLE = Object.freeze({ id: 830, length: 3994 });
 
 let core;
 let pluginApi;
@@ -299,10 +301,14 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
     sender.sendVarbit(VARBIT.FULL_COMPLETION_EVER, 1);
     completed.push("Entire sea");
   }
-  // The spot's popup, then one per sea, group or ocean it completed, queued one after another.
+  // The spot's popup, then in the same banner, 13 ticks apart, one per sea, group or ocean it
+  // completed, each with its jingle.
   if (sender.getVarbit(POPUP_DISABLED_VARBIT) !== 1) {
-    for (const text of [spot.hint, ...completed.map((name) => `${name} fully charted!`)]) {
-      pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text });
+    pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text: spot.hint });
+    for (const name of completed) {
+      pluginApi.emitCustomEvent("notification:show", {
+        player, title: NOTIFICATION_TITLE, text: `${name} fully charted!`, follow: true, jingle: FULLY_CHARTED_JINGLE,
+      });
     }
   }
   sender.sendSoundEffect(SOUND_CHARTED, 1, 0);
@@ -320,6 +326,12 @@ function mark(player, spot) {
   updateProgress(player, (saved) => { saved.charted = [...saved.charted, spot.uid].sort((a, b) => a - b); });
   setSpotBit(player, spot);
   player.getPacketSender().sendConfig(VARP_TOTAL_ENTRIES, chartedSet(player).size);
+}
+
+/** A charting tool's Inspect: its object box. */
+function inspect(player, itemId, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
 }
 
 /**
@@ -361,6 +373,7 @@ module.exports = {
   seaBonusXp,
   xpFor,
   addXp,
+  inspect,
   leaveHelm,
   afterHelm,
   DATA,

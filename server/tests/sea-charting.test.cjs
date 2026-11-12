@@ -601,6 +601,125 @@ test("every current's route runs from its release to its end a tile at a time", 
   }
 });
 
+/** Where a duck sets off on each leg after its first: the tile before each leg's first step. */
+function legCorners(key) {
+  const spot = common.spotByKey(key);
+  const steps = currentDuck.routeSteps(spot.route);
+  return [...currentDuck.legStarts(spot.route, steps)].sort((a, b) => a - b).map((i) => steps[i - 1]);
+}
+
+test("a duck quacks again where each leg of its current starts (rsprox 948)", () => {
+  // Every "Quack!" the swimming duck gave in the captures, after the one on release.
+  assert.deepEqual(legCorners("current_duck_crystal_sea"),
+    [[1936, 3295], [1958, 3302], [1971, 3298], [1989, 3304], [2003, 3299], [2020, 3307], [2041, 3304]]);
+  assert.deepEqual(legCorners("current_duck_gulf_of_kourend"), [[1809, 3656], [1814, 3645], [1816, 3632],
+    [1820, 3619], [1822, 3609], [1823, 3595], [1821, 3609], [1825, 3622], [1824, 3637], [1828, 3648], [1834, 3653],
+    [1838, 3664], [1846, 3669], [1856, 3680], [1853, 3694], [1850, 3706], [1839, 3702]]);
+});
+
+/** The quacks' area sounds since `from`: [x, y, delay]. */
+function quacks(player, from = 0) {
+  return player.sent.slice(from).filter(([key, id]) => key === "sendAreaSound" && id === 413).map(([, , x, y, , , delay]) => [x, y, delay]);
+}
+
+test("the swimming duck quacks on each leg; stopped, it quacks twice every 10 ticks (rsprox 940, 948)", () => {
+  const player = duckCaptain();
+  try {
+    const duck = releaseAndFollow(player);
+    const corners = [...duck.legs].sort((a, b) => a - b).map((i) => duck.steps[i - 1]);
+    const from = player.sent.length;
+    for (let i = 0; i < duck.steps.length + 3 && !duck.stopped; i++) tick();
+    assert.equal(duck.stopped, true);
+    const [endX, endY] = duck.steps.at(-1);
+    const swimming = quacks(player, from);
+    // The release's quack, then one per leg.
+    const [startX, startY] = duck.spot.route[0];
+    assert.deepEqual(swimming.slice(0, corners.length + 1), [[startX, startY, 0], ...corners.map(([x, y]) => [x, y, 0])]);
+    // The stop: two quacks, the second 12 client cycles later.
+    assert.deepEqual(swimming.slice(corners.length + 1), [[endX, endY, 0], [endX, endY, 12]]);
+    const stopped = player.sent.length;
+    tick(9);
+    assert.deepEqual(quacks(player, stopped), []);
+    tick(1);
+    assert.deepEqual(quacks(player, stopped), [[endX, endY, 0], [endX, endY, 12]]);
+    tick(10);
+    assert.equal(quacks(player, stopped).length, 4);
+  } finally {
+    currentDuck.ducks.delete(player);
+    leave(player);
+  }
+});
+
+/** An inventory click on a tool, as the item action listener hands it to the plugins. */
+function itemOption(player, itemId, option, clickType) {
+  const slot = player.getInventory().getSlotForItemId(itemId);
+  const event = { player, interfaceId: 149, item: player.getInventory().get(slot), itemId, slot, clickType, option, handled: false };
+  PluginManager.emitItemAction(event);
+  return event;
+}
+
+test("Inspect on the duck and the spyglass opens the tool's object box (rsprox 948, 3455)", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const spyglass = require("../plugins/skills/sailing/charting/Spyglass.Charting");
+  for (const [itemId, text] of [[ITEM_DUCK, currentDuck.INSPECT], [31803, spyglass.INSPECT]]) {
+    const player = captain();
+    player.getInventory().add(new Item(itemId, 1), true);
+    const event = itemOption(player, itemId, "Inspect", 2);
+    assert.equal(event.handled, true, String(itemId));
+    const [box] = dialogueTexts(player);
+    assert.ok(box?.includes(text), box);
+    assert.ok(box?.includes(String(itemId)), box);
+    assert.equal(player.getInventory().getAmount(itemId), 1);
+  }
+});
+
+test("Dismiss sends the duck back to the tools compartment (Wiki: Transcript:Current duck)", () => {
+  const player = duckCaptain();
+  try {
+    const event = itemOption(player, ITEM_DUCK, "Dismiss", 5);
+    assert.equal(event.handled, true);
+    assert.equal(player.getInventory().getAmount(ITEM_DUCK), 0);
+    assert.ok(player.getSailing().tools.includes(2));
+    assert.equal(player.messages().at(-1), "You dismiss the duck and he flies away.");
+  } finally {
+    leave(player);
+  }
+});
+
+test("a completed sea's popup takes over the task's banner 13 ticks later, with jingle 830 (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Ardent Ocean");
+    const list = common.oceanSpots(ocean);
+    // The earlier tasks with the popups off (All Settings), so none is still queued.
+    player.getPacketSender().sendVarbit(18142, 1);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    player.getPacketSender().sendVarbit(18142, 0);
+    const last = list.at(-1);
+    const from = player.sent.length;
+    common.complete(player, last);
+    const banner = [];
+    for (let t = 0; t <= 45; t++) {
+      for (const entry of player.sent.splice(from)) {
+        const [key, a, b] = entry;
+        if (key === "sendInterfaceScript" && a === 3343) banner.push([t, b[1]]);
+        if (key === "sendJingle") banner.push([t, "jingle", a]);
+        if (key === "sendSubInterface" && b === 660) banner.push([t, "open"]);
+        if (key === "closeSubInterface" && a === ((161 << 16) | 13)) banner.push([t, "close"]);
+      }
+      tick();
+    }
+    assert.deepEqual(banner, [
+      [0, "open"], [0, last.hint],
+      [13, `${last.sea.name} fully charted!`], [13, "jingle", 830],
+      [26, "Ardent Ocean fully charted!"], [26, "jingle", 830],
+      [39, "close"],
+    ]);
+  } finally {
+    leave(player);
+  }
+});
+
 const weather = require("../plugins/skills/sailing/charting/Weather.Charting");
 const ITEM_STATION = 31809;
 const ITEM_STATION_FULL = 31810;

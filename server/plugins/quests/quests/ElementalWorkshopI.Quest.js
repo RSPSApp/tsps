@@ -1,3 +1,4 @@
+const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
 /**
  * Elemental Workshop I (members).
  *
@@ -182,8 +183,8 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     player.getSkillManager().addExperiences(Skill.SMITHING, 5000);
   }
 
-  function crossOddWall(player, hasKey) {
-    if (!hasKey && !has(player, ItemIdentifiers.BATTERED_KEY)) {
+  function crossOddWall(player, keySupplied) {
+    if (!keySupplied && !hasKey(api, player, ItemIdentifiers.BATTERED_KEY)) {
       player.sendMessage("You see a keyhole, but have no key that fits.");
       return;
     }
@@ -222,7 +223,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
         player.getInventory().adds(book, 1);
         if (has(player, book)) player.sendMessage("You find a book titled 'The Elemental Shield'.");
       }
-      if (hasBit(player, BIT.slashedBook) && !has(player, ItemIdentifiers.BATTERED_KEY)) {
+      if (hasBit(player, BIT.slashedBook) && !has(player, ItemIdentifiers.BATTERED_KEY) && !ownsStoredKey(api, player, ItemIdentifiers.BATTERED_KEY)) {
         player.getInventory().adds(ItemIdentifiers.BATTERED_KEY, 1);
         if (has(player, ItemIdentifiers.BATTERED_KEY)) player.sendMessage("You recover the hidden key.");
       }

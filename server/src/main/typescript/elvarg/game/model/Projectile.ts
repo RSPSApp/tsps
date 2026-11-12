@@ -133,7 +133,7 @@ export class Projectile {
             startHeight,
             endHeight,
             across ? null : source.getPrivateArea()
-        ).withSource(source.isPlayer?.() ? null : source);
+        ).withSource(source);
     }
 
     /** `centreOf`, from the main-world tile under a mobile aboard a boat. */
@@ -151,7 +151,9 @@ export class Projectile {
     public withSource(source: Mobile | null): Projectile {
         // rsprox: a player's projectile never names its caster (0 of ~450,000 map_projanim
         // sources); live starts it from the caster's tile. NPCs keep theirs (some are recorded so).
-        this.sourceIndex = source ? Projectile.resolveLockonTargetIndex(source) : 0;
+        // Checked here, so plugins that build their own projectile from a player (the bone staff,
+        // Nex's Soul Split) send none either.
+        this.sourceIndex = source && !source.isPlayer?.() ? Projectile.resolveLockonTargetIndex(source) : 0;
         return this;
     }
 

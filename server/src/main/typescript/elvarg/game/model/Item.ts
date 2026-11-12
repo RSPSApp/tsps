@@ -49,23 +49,32 @@ export class Item {
         return Item.cloneMetaValue(meta) as Record<string, unknown>;
     }
 
-    private static readonly CAMEL_CASE_META_KEY = /([a-z0-9])([A-Z])/g;
+    /**
+     * The item meta keys #226 renamed from camelCase to kebab-case. Only these are migrated: other
+     * camelCase keys are still live (the looting bag keeps its contents under "lootingBag").
+     */
+    private static readonly RENAMED_META_KEYS: ReadonlyMap<string, string> = new Map([
+        ["toxicBlowpipe", "toxic-blowpipe"],
+        ["tridentCharges", "trident-charges"],
+        ["bloodFury", "blood-fury"],
+        ["tumekensShadowCharges", "tumekens-shadow-charges"],
+        ["barrows:lockpickCharges", "barrows:lockpick-charges"],
+        ["farming:saplingAt", "farming:sapling-at"],
+    ]);
 
     /**
-     * Save migration, as PlayerSave's for attributes: item meta keys were renamed from camelCase
-     * to kebab-case (#226: toxicBlowpipe, tridentCharges, bloodFury, tumekensShadowCharges,
-     * barrows:lockpickCharges, farming:saplingAt), so a saved camelCase key loads under its
-     * kebab-case name. A kebab-case key already present wins. Meta keys are never camelCase now.
+     * Save migration, as PlayerSave's for attributes: a top-level meta key #226 renamed loads
+     * under its new name; the new key wins if both are saved. Meta nested in other meta or in
+     * player attributes is not migrated.
      */
     public static migrateSavedMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
         if (!meta) return meta;
         let migrated: Record<string, unknown> | null = null;
-        for (const key of Object.keys(meta)) {
-            const kebab = key.replace(Item.CAMEL_CASE_META_KEY, "$1-$2").toLowerCase();
-            if (kebab === key || /[A-Z]/.test(kebab)) continue;
+        for (const [old, renamed] of Item.RENAMED_META_KEYS) {
+            if (!(old in meta)) continue;
             migrated ??= { ...meta };
-            if (!(kebab in migrated)) migrated[kebab] = migrated[key];
-            delete migrated[key];
+            if (!(renamed in migrated)) migrated[renamed] = migrated[old];
+            delete migrated[old];
         }
         return migrated ?? meta;
     }

@@ -142,6 +142,7 @@ module.exports = {
     require("./combatachievements/tasks/Vorkath.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Sarachnis.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Scorpia.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/KingBlackDragon.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:has-task", onHasTask);

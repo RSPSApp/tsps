@@ -152,7 +152,8 @@ class Fight {
     this.roar();
     this.nextEnrageDebris = this.tick + 8;
     this.nextAttack = this.tick + 5;
-    this.player.sendMessage("The Leviathan focuses on you. Stay within the abyssal pathfinder's aura!");
+    // rsprox 227/00100.txt:77699 (and 227/00555, 00550, 01750): the enrage's game message.
+    this.player.sendMessage("<col=ff289d>The Leviathan focuses on you intensely...</col>");
   }
   afterDamage(taken, rear) {
     if (!this.alive() || !taken || !this.stunnedUntil) return;

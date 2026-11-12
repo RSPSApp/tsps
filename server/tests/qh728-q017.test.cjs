@@ -458,6 +458,48 @@ test('Harold wagers use native NPC, amount, Roll and Continue dispatch', async (
   });
 });
 
+// Transcript:Death_Plateau: before Eohric, the player's "I'd better not go into someone's bedroom without a reason!";
+// after, "You knock on the door." and "Harold: Come in!", then the door opens (233/03247.txt:4659-4744).
+test("Harold's door: the player's refusal line before Eohric, the knock and Harold's reply after", () => {
+  const { quest } = registered;
+  const opened = [];
+  const listener = (event) => opened.push(event);
+  (PluginManager.customEventHooks.get('door:open') ?? PluginManager.customEventHooks.set('door:open', []).get('door:open'))
+    .push({ pluginName: 'DeathPlateauDoorTest', handler: listener });
+  try {
+    const player = playerFixture();
+    const said = [];
+    player.getDialogueManager = () => ({ startDialogues(chain) {
+      for (const entry of [...chain.getDialogues().values()].sort((a, b) => a.getIndex() - b.getIndex())) {
+        said.push(entry.constructor.name + ':' + JSON.stringify(entry));
+        if (entry.constructor.name === 'ActionDialogue') entry.send(player);
+      }
+    } });
+    player.getLocation = () => new core.Location(2907, 3543, 1);
+    const object = { getId: () => core.ObjectIdentifiers.DOOR_115, getLocation: () => new core.Location(2906, 3543, 1) };
+    const click = () => {
+      const request = { player, object, objectId: core.ObjectIdentifiers.DOOR_115, location: { x: 2906, y: 3543, z: 1 }, handled: false };
+      PluginManager.emitCustomEvent('door:toggle', request);
+      return request;
+    };
+    quest.setStage(player, 10);
+    assert.equal(click().handled, true);
+    assert.ok(said.some((line) => line.startsWith('PlayerDialogue') && line.includes("bedroom without a reason")), said.join(' | '));
+    assert.equal(opened.length, 0);
+    said.length = 0;
+    quest.setStage(player, 20);
+    assert.equal(click().handled, true);
+    assert.ok(said.some((line) => line.startsWith('StatementDialogue') && line.includes('You knock on the door.')), said.join(' | '));
+    assert.ok(said.some((line) => line.startsWith('NpcDialogue') && line.includes('Come in!')));
+    assert.equal(opened.length, 1, 'then the door opens');
+    player.getLocation = () => new core.Location(2906, 3542, 1);
+    assert.equal(click().handled, false, 'leaving needs no knock');
+  } finally {
+    const hooks = PluginManager.customEventHooks.get('door:open') ?? [];
+    PluginManager.customEventHooks.set('door:open', hooks.filter((hook) => hook.pluginName !== 'DeathPlateauDoorTest'));
+  }
+});
+
 test('fresh login sends stage 0 and the start hook advances to the canonical 10 wire value', () => {
   const { quest } = registered;
   const player = playerFixture();

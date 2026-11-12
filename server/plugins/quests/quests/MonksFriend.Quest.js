@@ -51,9 +51,10 @@ module.exports = function registerMonksFriendQuest(api) {
 
   // The stone circle the wiki marks with {{Map|2561,3221|r=4|mtype=square}}.
   const STONE_CIRCLE_BOUNDS = new Boundary(2557, 2565, 3217, 3225, 0);
-  const HIDDEN_LADDER_LOCATION = new Location(2561, 3221, 0);
+  // rsprox 226/01694.txt:118600: ladder_outside_to_underground (16680) added at (2561, 3222, 0), shape 10, rotation 1.
+  const HIDDEN_LADDER_LOCATION = new Location(2561, 3222, 0);
   const HIDDEN_LADDER_TYPE = 10;
-  const HIDDEN_LADDER_FACE = 0;
+  const HIDDEN_LADDER_FACE = 1;
   const LADDER_APPEARS_MESSAGE = "A ladder mysteriously appears.";
   const CAVE_LADDER_DESTINATION = new Location(2561, 9621, 0);
   const CAVE_LADDER_RETURN = new Location(2561, 3221, 0);

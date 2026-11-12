@@ -12,7 +12,8 @@
  *
  * Gates (an entry's `requires`, decided in plugins/world/data/loc-teleport-sync.json) are checked in
  * order first: a total level, worn items (any one set), an item used on the loc once before (a
- * rope tied to the Elid crevice), or a completed quest (`quest`: the Prifddinas gates, Dorgesh-Kaan's doors). The first one the player lacks plays its captured refusal: a
+ * rope tied to the Elid crevice), a completed quest (`quest`: the Prifddinas gates, Dorgesh-Kaan's doors),
+ * a skill level or a Slayer task (`skill`, `slayerTask`: Araxxor's lair). The first one the player lacks plays its refusal: a
  * game message, a message box, or an NPC's line.
  *
  * A loc whose option asks first (`ask`: "Climb out of the window?") shows the game's question and
@@ -121,8 +122,10 @@ function runSteps(player, steps, holdUntil) {
     constructor() { super(1, player, false); }
     execute() {
       tick++;
-      const moved = tick <= holdUntil && !player.getLocation().equals(start);
-      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getPrivateArea() !== privateArea || moved) {
+      // Until the move: the player walked off, or something else moved them into or out of an instance.
+      // After it, leaving an instance (Araxxor's lair) is the move itself, and the fade back in still plays.
+      const moved = tick <= holdUntil && (!player.getLocation().equals(start) || player.getPrivateArea() !== privateArea);
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || moved) {
         this.stop();
         return;
       }
@@ -220,7 +223,17 @@ function meets(player, entry, requirement) {
   if (requirement.tied !== undefined) return tied(player).includes(entry.name);
   if (requirement.varbit !== undefined) return player.getPacketSender().getVarbit(requirement.varbit) >= (requirement.atLeast ?? 1);
   if (requirement.quest !== undefined) return questComplete(player, requirement.quest);
+  if (requirement.skill !== undefined) return player.getSkillManager().getCurrentLevel(core.Skill[requirement.skill.toUpperCase()]) >= requirement.atLeast;
+  if (requirement.slayerTask !== undefined) return onSlayerTask(player, requirement.slayerTask);
   return true;
+}
+
+/** Whether the player's Slayer task is one of `names` (araxyte or spider), as the Slayer plugin answers. */
+function onSlayerTask(player, names) {
+  const query = { player, task: null };
+  pluginApi.emitCustomEvent("slayer:current-task", query);
+  const task = String(query.task?.name ?? "").toLowerCase();
+  return names.some((name) => task.includes(name));
 }
 
 /** A quest the loc needs done (`{ quest: key }`), answered by the quest system. */

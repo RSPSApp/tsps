@@ -4,6 +4,8 @@ let api;
 let CRAWLING, AIRBORNE, KQ_IDS, KQ_WORKER;
 let KqWorker, WorkerDespawnTask, KalphiteQueenCombat, TransformTask, RevertTask;
 const rangedPrayerDrains = new WeakSet();
+/** Queens between the first form's death and the airborne form taking over (TRANSFORMATION_TICKS). */
+const molting = new WeakSet();
 
 const KQ_HITPOINTS = 255;
 const KQ_AGGRESSION = { aggressive: true, aggressiveTolerance: false, combatFollowDistance: 9, huntRange: 9 };
@@ -175,6 +177,7 @@ function defineTypes() {
   class TransformTask extends core.Task {
     constructor(npc) { super(TRANSFORMATION_TICKS, npc); this.npc = npc; }
     execute() {
+      molting.delete(this.npc);
       if (this.npc.isRegistered?.() && this.npc.getHitpoints?.() > 0) {
         this.npc.setNpcTransformationId(AIRBORNE);
         this.npc.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
@@ -205,6 +208,7 @@ function transformFirstForm(event) {
     return;
   }
   event.preventDeath = true;
+  molting.add(npc);
   npc.setUntargetable(true);
   npc.setHitpoints(1);
   npc.getCombat().reset();
@@ -213,6 +217,19 @@ function transformFirstForm(event) {
   npc.performAnimation(new core.Animation(MOLT_ANIMATION));
   npc.performGraphic(new core.Graphic(MOLT_GRAPHIC));
   core.TaskManager.submit(new TransformTask(npc));
+}
+
+/**
+ * Nothing hurts the Queen while she molts. Untargetable stops attacks and clearing the hit queue
+ * drops those in flight, but direct damage (a burn's tick, poison, venom) is queued straight
+ * onto her and used to take her last hitpoint, killing the airborne form before it took over
+ * (#4548). In the rsprox captures no hitsplat lands on her in the 12 ticks after any of 154
+ * molts (recordings 95, 96, 545, 1757, 1864, 3276); none of them has status damage on her.
+ * Ours: damage that still arrives is zeroed, so it shows as a 0 splat, and burn stacks keep
+ * running down meanwhile, the rest carrying over to the airborne form.
+ */
+function holdMoltDamage({ target, hit }) {
+  if (molting.has(target) && hit.getDamage() > 0) hit.setDamage(0);
 }
 
 function forceKqAccuracy(event) {
@@ -335,6 +352,7 @@ function attach(pluginApi) {
   api.onCustomEvent("combat-achievements:kill-count", combatAchievementsKillCount);
   api.persistAttribute(KILL_COUNT_ATTRIBUTE, 0);
   api.onNpcBeforeDeath(transformFirstForm);
+  api.onCustomEvent("combat:damage-apply", holdMoltDamage);
   api.onNpcDeath(awardConditionalDrops);
   api.onCombatHitRoll(forceKqAccuracy);
   api.onCombatHitRoll(hatchWorker);

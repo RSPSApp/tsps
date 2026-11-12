@@ -27,7 +27,7 @@ Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), a
 - **Tree Gnome Village's tree:** `bolren_got_orbs` (varbit 598) at 2. Tree Gnome Village now sends it: 1 once the first orb is back, 2 once complete, on login and whenever its stage changes (QuestRuntime's `quest:stage-changed`).
 - **The Grand Exchange, Battlefield, Feldip Hills, Prifddinas and Laguna Aurorae trees:** Tree Gnome Village's varp (111) at 9.
 - **The Gnome Stronghold's tree:** The Grand Tree's varp (150) at 160.
-- **The Poison Waste tree:** The Path of Glouphrie's varbit (15288), which this server doesn't have, so it shows Talk-to only. Talk-to still opens the menu. It's named "Spirit Tree", like the farming patches, and is taken only at its own tile.
+- **The Poison Waste tree:** The Path of Glouphrie's varbit (15288), which its quest plugin sends. Talk-to also opens the menu. It's named "Spirit Tree", like the farming patches, and is taken only at its own tile.
 
 **Last-destination** goes straight to the last tree travelled to. The first time, the tree says "This once, you will have to tell me where you wish to go, for I do not yet know where to take you back." and the menu opens.
 
@@ -39,7 +39,7 @@ Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), a
 - **The network:** Tree Gnome Village.
 - **Leaving the Gnome Stronghold's tree:** The Grand Tree.
 - **Prifddinas:** Song of the Elves.
-- **Poison Waste:** The Path of Glouphrie.
+- **Poison Waste:** The Path of Glouphrie, from the crystal chime healing Incomitatus (stage 38; Wiki: Spirit Tree (Incomitatus)) rather than its completion.
 - **Laguna Aurorae:** Pandemonium, 58 Sailing and having moored there at least once.
 - **The Farming Guild:** 85 Farming.
 

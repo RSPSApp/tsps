@@ -1,0 +1,43 @@
+/** Cache242 templates. Landing/jail tiles and preparation rows are TSPS choices,
+ * not recorded retail spawns. Sylvan copies both raw planes for bridge placement. */
+const C = require("./Common.ClanWars");
+const tile = (x, y) => Object.freeze([x, y, 0]);
+const layouts = Object.freeze({
+  1: Object.freeze({ name: "Plateau", origin: Object.freeze([3264, 4928]), size: 8,
+    planes: Object.freeze([0]), landings: Object.freeze([tile(3293, 4933), tile(3293, 4986)]),
+    jails: Object.freeze([tile(3323, 4943), tile(3323, 4976)]),
+    barrier: "clanwars_barrier_darkrock", barrierY: 4959, barrierSkipBlocked: false,
+    barrierRanges: Object.freeze([Object.freeze([3268, 3319])]),
+    orb: "clanwars_viewing_start_darkrock", orbModel: 9752,
+    jailPortal: "clanwars_prisonportal_darkrock",
+    exits: Object.freeze(["clanwars_exitportal_darkrock_s", "clanwars_exitportal_darkrock_n"]) }),
+  2: Object.freeze({ name: "Sylvan Glade", origin: Object.freeze([3392, 4992]), size: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3424, 5000), tile(3424, 5048)]),
+    jails: Object.freeze([tile(3423, 5020), tile(3424, 5027)]),
+    barrier: "clanwars_barrier_elfwood", barrierY: 5023, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3396, 3419]), Object.freeze([3428, 3451])]),
+    orb: "clanwars_viewing_start_elfwood", orbModel: 9754,
+    jailPortal: "clanwars_prisonportal_elfwood",
+    exits: Object.freeze(["clanwars_exitportal_elfwood_s", "clanwars_exitportal_elfwood_n"]) }),
+  3: Object.freeze({ name: "Forsaken Quarry", origin: Object.freeze([3392, 5056]), size: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3424, 5066), tile(3424, 5109)]),
+    jails: Object.freeze([tile(3428, 5085), tile(3419, 5090)]),
+    barrier: "clanwars_barrier_greyrock", barrierY: 5087, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3396, 3415]), Object.freeze([3432, 3451])]),
+    orb: "clanwars_viewing_start_greyrock", orbModel: 9755,
+    jailPortal: "clanwars_prisonportal_darkrock",
+    exits: Object.freeze(["clanwars_exitportal_greyrock_s", "clanwars_exitportal_greyrock_n"]) }),
+});
+function get(id) { return Object.prototype.hasOwnProperty.call(layouts, id) ? layouts[id] : null; }
+function owns(game, object, gamevals) {
+  if (!object || object.getPrivateArea() !== game.area
+    || !gamevals.some(name => C.core.CacheDefinitions.getLocId(name) === object.getId())) return false;
+  // Cache copies, including bridge-lowered objects, are the native resolver's objects.
+  for (const plane of game.layout.planes) {
+    for (let x = 0; x < game.area.widthChunks; x++) for (let y = 0; y < game.area.heightChunks; y++) {
+      if (game.area.getChunkObjects(plane, x, y).includes(object)) return true;
+    }
+  }
+  return false;
+}
+module.exports = { get, owns };

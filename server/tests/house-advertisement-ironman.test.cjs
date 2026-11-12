@@ -71,6 +71,7 @@ async function select(who, name) {
   assert.ok(who.player.getEnteredSyntaxAction());
   await who.connection.dispatch([{ type: 'dialogue_input', value: name }]);
   who.connection.processTurnPackets();
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process(); // the visit loads behind the loading screen
 }
 
 for (const mode of ['ironman', 'ultimate', 'hardcore']) {

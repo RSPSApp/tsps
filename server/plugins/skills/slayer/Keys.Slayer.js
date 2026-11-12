@@ -64,7 +64,9 @@ function inSlayerCave(location) {
 
 /** The chance (0-1) that this kill drops the key. */
 function chance(key, npc) {
-  if (Superiors.isSuperior(npc)) return 1;
+  // Wiki (Superior slayer monster): a guaranteed brimstone key on a Konar task, but a guaranteed Larran's key only
+  // "on-task in the Wilderness Slayer Cave"; elsewhere a Krystilia superior rolls like any other kill.
+  if (Superiors.isSuperior(npc) && (!key.caveBoost || inSlayerCave(npc.getLocation()))) return 1;
   const type = definition(npc);
   const level = Math.max(1, type?.getCombatLevel?.() ?? 1);
   let result = 1 / key.denominator(level);

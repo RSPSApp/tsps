@@ -164,3 +164,73 @@ test("a hunter reminds a player with an unfinished rumour with the captured word
   Rumours.assign(p, 0, NPC.GILMAN);
   assert.equal(said(), "You're hunting for me at the moment. This rumour was about a embertailed jerboa. You'll need to bring back its tail.");
 });
+
+// A catch of the rumour's creature: the red chinchompa from Aco, caught in a box trap.
+function catchPart(p, { count = 0, random = 0 } = {}) {
+  const state = Rumours.state(p);
+  state.assignments[3] = { task: Rumours.tasks.findIndex((t) => t.npc === "CARNIVOROUS_CHINCHOMPA"), count, found: false };
+  state.active = 3;
+  const realRandom = Math.random;
+  Math.random = () => random;
+  try { Rumours.success({ player: p, npcId: C.H.core.NpcIdentifiers.CARNIVOROUS_CHINCHOMPA, method: "box" }); }
+  finally { Math.random = realRandom; }
+  return state.assignments[3];
+}
+function huntingPlayer(options = {}, fill = 0) {
+  const p = player(options);
+  for (let i = 0; i < fill; i++) p.items.set(20000 + i, 1);
+  p.sounds = []; p.ground = [];
+  p.getPacketSender = () => ({ sendInterfaceRemoval: () => {}, sendSound: (id, loops, delay) => p.sounds.push([id, loops, delay]) });
+  p.getEquipment = () => ({ getItems: () => [] });
+  p.getLocation = () => ({ clone: () => "under the player" });
+  p.getPrivateArea = () => null;
+  C.H.core.Item = class { constructor(id, amount) { this.id = id; this.amount = amount; } };
+  C.H.core.ItemOnGroundManager = { registerLocation: (owner, item, at, area, options) => p.ground.push({ owner, item, at, area, options }) };
+  return p;
+}
+
+test("a found part is announced in green with its jingle and goes to the inventory", () => {
+  const p = huntingPlayer();
+  const assignment = catchPart(p);
+  assert.equal(sent.messages.at(-1), "<col=229628>You find a rare piece of the creature! You should take it back to the Hunter Guild.");
+  assert.deepEqual(p.sounds, [[2655, 1, 0]]);
+  assert.equal(p.items.get(ITEM.PART), 1);
+  assert.equal(assignment.found, true);
+  assert.deepEqual(p.ground, []);
+});
+
+test("with a full inventory the part drops under the player, for them only, with live's line", () => {
+  const p = huntingPlayer({}, 28);
+  const assignment = catchPart(p);
+  assert.equal(sent.messages.at(-1), "<col=229628>You find a rare piece of the creature! Though without space in your inventory, it drops to the ground.");
+  assert.deepEqual(p.sounds, [[2655, 1, 0]]);
+  assert.equal(p.items.get(ITEM.PART), undefined);
+  assert.equal(p.ground.length, 1);
+  assert.equal(p.ground[0].owner, p);
+  assert.deepEqual([p.ground[0].item.id, p.ground[0].item.amount, p.ground[0].at], [ITEM.PART, 1, "under the player"]);
+  assert.deepEqual(p.ground[0].options, { goesGlobal: false, despawnDelay: 200 });
+  assert.equal(assignment.found, true);
+});
+
+test("a pity part with a full inventory is not given and waits for the next catch", () => {
+  const p = huntingPlayer({}, 28);
+  const assignment = catchPart(p, { count: 99, random: 0.999 });
+  assert.deepEqual(p.ground, []);
+  assert.deepEqual(p.sounds, []);
+  assert.equal(assignment.found, false);
+  assert.equal(sent.messages.at(-1), "Free an inventory slot to receive the rare creature part on your next catch.");
+});
+
+test("a pity part with room is announced like any other", () => {
+  const p = huntingPlayer();
+  const assignment = catchPart(p, { count: 99, random: 0.999 });
+  assert.equal(sent.messages.at(-1), "<col=229628>You find a rare piece of the creature! You should take it back to the Hunter Guild.");
+  assert.deepEqual(p.sounds, [[2655, 1, 0]]);
+  assert.equal(assignment.found, true);
+});
+
+test("a catch that misses the roll sends nothing", () => {
+  const p = huntingPlayer();
+  const assignment = catchPart(p, { random: 0.999 });
+  assert.deepEqual([sent.messages, p.sounds, assignment.found], [[], [], false]);
+});

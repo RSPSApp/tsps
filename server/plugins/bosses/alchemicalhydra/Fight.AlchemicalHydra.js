@@ -118,14 +118,29 @@ class Fight {
     }
   }
 
+  /** This phase's row of the Wiki infobox's max hits (none once enraged). */
+  phaseHits() {
+    if (this.enraged) return null;
+    return Common.data.combat.phaseHits?.[PHASES()[this.phase]?.name] ?? null;
+  }
+
   /**
-   * The most a hit can take off the player: 35, 52 while an incorrect vent empowers it (up
-   * to 50% more, the Wiki's infobox's 35 -> 52), 55 once enraged.
+   * The most a hit can take off the player, by the Wiki's infobox: serpentine 17 (26 empowered),
+   * electric 35 (26 empowered), flame 35 (52 empowered), 55 once enraged.
    */
   maxHit() {
     const { combat } = Common.data;
     if (this.enraged) return combat.enragedMaxHit;
-    return this.empowered ? combat.empoweredMaxHit : combat.maxHit;
+    const row = this.phaseHits();
+    if (!row) return this.empowered ? combat.empoweredMaxHit : combat.maxHit;
+    return this.empowered ? row.empoweredMax : row.max;
+  }
+
+  /** Hits an auto-attack deals: the infobox's "x2" is two (serpentine, and electric empowered). */
+  hitCount() {
+    const row = this.phaseHits();
+    if (!row) return 1;
+    return this.empowered ? row.empoweredHits : row.hits;
   }
 
   /** onNpcHitModify: 75% less damage while shielded (the enraged form keeps no shield). */

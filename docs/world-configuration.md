@@ -404,7 +404,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ResourceArea` | ResourceArea | areas | yes | Wilderness Resource Area gate: Mandrith's 6,000 coin entry fee, the gate swinging open and free exit from inside. (members only) |
 | `RevenantCaves` | RevenantCaves | areas | yes | Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside. (members only) |
 | `ShantayPass` | ShantayPass | areas | yes | Shantay Pass: the gate into the desert, Shantay and his pass, and his jail. |
-| `SlayerTower` | SlayerTower | areas | yes | Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay. (members only) |
+| `SlayerTower` | SlayerTower | areas | yes | Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay (lifted by a light source). (members only) |
 | `StrongholdOfSecurity` | StrongholdOfSecurity | areas | yes | Stronghold of Security: its doors and security questions, ladders, portals, reward rooms and the skull sceptre. |
 | `SulphurMine` | SulphurMine | areas | yes | Lovakengj sulphur mine's poison gas clouds, which hurt nearby players, less so with a breathing filter. (members only) |
 | `TaverleyDungeon` | TaverleyDungeon | areas | yes | Taverley Dungeon's key doors, Velrak's dusty key and the suits of armour that come alive at the Cauldron of Thunder prison door. (members only) |
@@ -577,6 +577,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BoltPouch` | BoltPouch | items | yes | Adds the bolt pouch: four slots of up to 10,000 bolts, stored with Use, the Open interface's Remove and Unwield, and Hirko's sale. (members only) |
 | `Bonds` | Bonds | items | yes | Old school bonds: tradeable and untradeable forms, bond pouch interface, redeeming for membership days, converting and gifting bonds. |
 | `Bonecrusher` | Bonecrusher | items | yes | Bonecrusher: while charged and active in the inventory, crushes the bones a kill drops for Prayer XP, in full with the elite Morytania diary. (members only) |
+| `BottomlessMilkBucket` | BottomlessMilkBucket | items | yes | Bottomless milk bucket: holds up to 10,000 uses of one kind of milk, with Check, Fill and Empty; quests and dairy cows use it a use at a time. (members only) |
 | `BountyHunterWeapons` | BountyHunterWeapons | items | yes | Restricts imbued Bounty Hunter weapons, like the dark bow (BH) and abyssal daggers (BH), to permitted PvP minigames and combat rings. (members only) |
 | `BowOfFaerdhinen` | BowOfFaerdhinen | items | yes | Bow of Faerdhinen: uses one charge per shot, hit or miss, and has its inactive form, built on the shared crystal-weapon charge code. (members only) |
 | `BraceletOfClay` | BraceletOfClay | items | yes | Bracelet of clay: softens mined clay and gives two soft clay per success at the soft clay rocks, crumbling after 28 uses. (members only) |
@@ -588,9 +589,10 @@ This table lists bundled plugins that have a description. The world config page 
 | `Chronicle` | Chronicle | items | yes | Chronicle: teleports to the Champions' Guild for one charge, charged with teleport cards up to 1,000, with Check charges. |
 | `ChuggingBarrel` | ChuggingBarrel | items | yes | Chugging barrel: assemble and dismantle it, store five potions at 100 doses each, and drink one dose of every potion in one click. (members only) |
 | `CircletOfWater` | CircletOfWater | items | yes | Circlet of water: charged with water runes up to 500,000 charges, uncharge, and stands in for drinks against desert heat. (members only) |
-| `CrystalArmour` | CrystalArmour | items | yes | Crystal armour: sung from seeds at a singing bowl, boosts crystal bow and Faerdhinen accuracy and damage, loses charges when hit, and takes shards. (members only) |
+| `CrystalArmour` | CrystalArmour | items | yes | Crystal armour in every colour: boosts crystal bow and Faerdhinen accuracy and damage, loses charges when hit, takes shards and reverts to seeds. (members only) |
 | `CrystalHalberd` | CrystalHalberd | items | yes | Crystal halberd: starts with 2,500 charges, loses one per hit, takes crystal shards up to 20,000 and goes inactive at zero. (members only) |
-| `CrystalSinging` | CrystalSinging | items | yes | Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal tools, weapons and teleport crystals for Smithing and Crafting XP. (members only) |
+| `CrystalRecolour` | CrystalRecolour | items | yes | Crystal equipment recolours: the Elven Clan crystals recolour crystal armour and the corrupted blade of Saeldor and bow of Faerdhinen, keeping their charges. (members only) |
+| `CrystalSinging` | CrystalSinging | items | yes | Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal armour, tools, weapons and teleport crystals for Smithing and Crafting XP. (members only) |
 | `DiaryRewards` | DiaryRewards | items | yes | Achievement diary reward items: their daily teleports, Falador shield prayer restore, Explorer's ring energy and the other diary rewards. (members only) |
 | `DizanasQuiver` | DizanasQuiver | items | yes | Dizana's quiver: an extra ammunition slot with Fill, charges, Open, Empty and Uncharge, plus its death rules and the Shrine of Ralos blessing. (members only) |
 | `DragonboneNecklace` | DragonboneNecklace | items | yes | Dragonbone necklace: while worn, burying or crushing bones restores Prayer points. (members only) |
@@ -685,6 +687,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BlastFurnace` | BlastFurnace | minigames | yes | Adds the Blast Furnace: smelting ore on the conveyor and collecting bars from the dispenser. (members only) |
 | `BountyHunter` | BountyHunter | minigames | yes | Adds Bounty Hunter in Daimon's Crater, with the shared crater state split into units for each part of the minigame. (members only) |
 | `BrimhavenAgilityArena` | BrimhavenAgilityArena | minigames | yes | Adds the Brimhaven Agility Arena: pay Cap'n Izzy, cross the obstacles and tag the marked pillar for arena tickets and vouchers. (members only) |
+| `Camdozaal` | Camdozaal | minigames | yes | Adds Camdozaal fishing, barronite crushing, shard storage and Exchange charms, and the timed vault. |
 | `CastleWars` | CastleWars | minigames | yes | Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game. |
 | `ChambersOfXeric` | ChambersOfXeric | minigames | yes | Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms. (members only) |
 | `ChampionsChallenge` | ChampionsChallenge | minigames | yes | Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions. (members only) |

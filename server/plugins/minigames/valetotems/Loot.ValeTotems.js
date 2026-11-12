@@ -3,7 +3,7 @@
 /**
  * One roll of the Vale offerings loot table (Wiki "Vale offerings"): a 1/100 pre-roll for a
  * unique, then resources, roots, nests or seeds out of 399, the seeds by Fletching level tier.
- * Captured loot lines: "You find some loot: 26 x Dirty arrowtips", "You find some loot: Bird nest".
+ * Loot lines are filterable (spam): "You find some loot: 26 x Dirty arrowtips", "You find some loot: Bird nest".
  */
 const Shared = require("./Shared.ValeTotems");
 
@@ -53,12 +53,12 @@ function lootLine(id, count) {
 function give(player, reward) {
   const { Item, ItemOnGroundManager } = Shared.core();
   player.getInventory().adds(reward.id, reward.amount);
-  player.sendMessage(lootLine(reward.id, reward.amount));
+  Shared.spam(player, lootLine(reward.id, reward.amount));
   for (let nest = 1; nest < (reward.nests ?? 1); nest++) {
     const id = Shared.obj(pick(LOOT.nests).item);
     if (Shared.hasRoomFor(player, id)) player.getInventory().adds(id, 1);
     else ItemOnGroundManager.registers(player, new Item(id, 1));
-    player.sendMessage(lootLine(id, 1));
+    Shared.spam(player, lootLine(id, 1));
   }
   const name = LOOT.collectionLog.find((item) => Shared.obj(item) === reward.id);
   if (name) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: reward.id, amount: reward.amount });

@@ -71,7 +71,8 @@ function grapple(event) {
   ObstacleRunner.run(event, [
     { walk: [start.slice(0, 2)] },
     { faceDir: southward ? "south" : "north" },
-    { msg: "You fire your grapple at the pillar..." },
+    // rsprox: both grapple lines are spam (230/02960.txt:16501, 16703; 227/01862.txt:573992).
+    { msg: { spam: "You fire your grapple at the pillar..." } },
     { wait: 1 },
     { anim: pillar.anim, delay: 6 },
     { gfx: pillar.gfx, delay: 6, height: pillar.gfxHeight },
@@ -81,7 +82,7 @@ function grapple(event) {
     { move: pillar.middle, speed: [15, 29], ticks: 1 },
     { move: end, speed: [0, 21], ticks: 1 },
     { sound: pillar.landSound },
-    { msg: "...and swing safely to the other side." },
+    { msg: { spam: "...and swing safely to the other side." } },
   ]);
   return true;
 }

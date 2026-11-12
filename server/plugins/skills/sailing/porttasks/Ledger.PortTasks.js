@@ -2,12 +2,16 @@
 // in the player's hands (both hands must be free); Deposit-cargo, while carrying one, delivers it
 // at its destination, and the task's last crate completes it: Sailing XP, a port coin bag (4 in
 // 5) or the destination's reward bag sized by the task's base XP, rarely shark paint (Wiki).
-// The table shows Take-cargo or Deposit-cargo by sailing_carrying_cargo.
+// The table shows Take-cargo or Deposit-cargo by sailing_carrying_cargo. Every box it opens is
+// also written to the chatbox.
 const common = require("./Common.PortTasks");
 const { replaceOnBoard } = require("./Board.PortTasks");
+const { dockById } = require("../SailingContent.Sailing");
 
+/** Taking a crate and setting one down both play these. */
 const SEQ_PICKUP = 832; // human_pickuptable
 const SOUND_PICKUP = 2739;
+const SOUND_COMPLETE = 10791;
 /** Bag sizes by a task's base XP: tiny below 400, small 1,000, medium 2,500, large 6,000 (Wiki). */
 const BAG_XP = [400, 1000, 2500, 6000];
 const REWARD_BAG_CHANCE = 1 / 5;
@@ -20,6 +24,7 @@ const CREW_DROP_OFF = "Your crew drop off the cargo that needed to be delivered 
 /** Crate counts in the boxes, spelt out (rsprox: "There are two more crates of this type to collect"). */
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const NO_CARGO = "There is no cargo available for you to collect here.";
+const WHICH_CARGO = "Which cargo would you like to take?";
 const LAST_SLOT_ATTRIBUTE = "port-tasks:last-slot";
 const DEPOSIT_WARNING_SETTING = 463;
 /** port_task_loading_bay_warning_dismissed: 1 after "don't ask again" (the row's tick clears it). */
@@ -27,13 +32,25 @@ const DEPOSIT_WARNING_VARBIT = 18137;
 const DEPOSIT_TITLE = "Deposit the cargo?";
 const DEPOSIT_OPTIONS = ["Yes.", "Yes, and don't ask again.", "No."];
 
+/** The box's text in the chatbox too. */
+function echo(player, text) {
+  player.getPacketSender().sendTypedMessage(common.core().ChatType.MESBOX, text);
+}
+
 function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue } = common.core();
+  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
 }
 
 function statement(player, text) {
+  echo(player, text);
   common.core().StatementDialogue.send(player, text);
+}
+
+function pickupFeedback(player) {
+  player.performAnimation(new (common.core().Animation)(SEQ_PICKUP));
+  player.getPacketSender().sendSoundEffect(SOUND_PICKUP, 1, 15);
 }
 
 /** "There is one more crate of this type to collect." for the crates still to go. */
@@ -55,25 +72,72 @@ function collectable(player, dockId) {
       && slot.taken + common.crewAmount(player, i) < task.amount);
 }
 
-function takeCargo(player, location, preferLast) {
+/** The crates the player can take here, or null after the box saying why not. */
+function takeable(player, location) {
   if (common.heldCrate(player) !== undefined || !common.handsFree(player)) {
     statement(player, HANDS_FULL);
-    return;
+    return null;
   }
   const dock = common.dockAt(location.x, location.y);
   const options = dock ? collectable(player, dock.id) : [];
   if (options.length === 0) {
     statement(player, NO_CARGO);
+    return null;
+  }
+  return { dock, options };
+}
+
+/** "Crate of bananas (The Pandemonium).": a crate and where it goes. */
+function cargoOption(task) {
+  const name = common.crateName(task.crate);
+  const destination = dockById(task.destination)?.name ?? task.destination;
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} (${destination}).`;
+}
+
+/**
+ * Take-cargo asks "Which cargo would you like to take?" when crates of more than one held task are
+ * here, listing them in slot order; Take-any-cargo takes one of them at random without asking.
+ * Take-last-cargo takes the last-taken task's crate (Ours: otherwise it acts as Take-cargo).
+ */
+function takeCargo(player, location, mode) {
+  const found = takeable(player, location);
+  if (!found) return;
+  const { dock, options } = found;
+  const last = player.getAttribute(LAST_SLOT_ATTRIBUTE);
+  const chosen = mode === "last" ? options.find(([i]) => i === last)
+    : mode === "any" ? options[Math.floor(Math.random() * options.length)]
+      : undefined;
+  if (chosen || options.length === 1) {
+    take(player, dock, chosen ?? options[0]);
     return;
   }
-  const last = player.getAttribute(LAST_SLOT_ATTRIBUTE);
-  const [index, , task] = (preferLast && options.find(([i]) => i === last)) || options[0];
+  chooseCargo(player, location, options);
+}
+
+function chooseCargo(player, location, options) {
+  const { DialogueChainBuilder, OptionDialogue } = common.core();
+  const owner = {};
+  const picks = options.map(([index, , task]) => [index, task.id]);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new OptionDialogue(0, {
+      executeOption: (option) => {
+        player.getPacketSender().closeChatboxFor(owner);
+        const [index, taskId] = picks[Number(option) - 1] ?? [];
+        if (index === undefined) return;
+        // Hands, slots and crew may have changed while the menu was open.
+        const found = takeable(player, location);
+        const pick = found?.options.find(([i, , task]) => i === index && task.id === taskId);
+        if (pick) take(player, found.dock, pick);
+      },
+    }, ...options.map(([, , task]) => cargoOption(task))).setTitle(WHICH_CARGO)), owner);
+}
+
+function take(player, dock, [index, , task]) {
   const held = common.slots(player);
   held[index] = { ...held[index], taken: held[index].taken + 1 };
   common.setSlots(player, held);
   player.setAttribute(LAST_SLOT_ATTRIBUTE, index);
-  player.performAnimation(new (common.core().Animation)(SEQ_PICKUP));
-  player.getPacketSender().sendSoundEffect(SOUND_PICKUP, 1, 15);
+  pickupFeedback(player);
   common.carry(player, task.crate, index);
   // Crewmates with the boat docked here carry what's left (crew/Courier.Crew.js sets `helped`).
   const left = task.amount - held[index].taken - common.crewAmount(player, index);
@@ -85,11 +149,15 @@ function takeCargo(player, location, preferLast) {
 }
 
 function takeCargoOp({ player, location }) {
-  takeCargo(player, location, false);
+  takeCargo(player, location, "choose");
 }
 
 function takeLastCargo({ player, location }) {
-  takeCargo(player, location, true);
+  takeCargo(player, location, "last");
+}
+
+function takeAnyCargo({ player, location }) {
+  takeCargo(player, location, "any");
 }
 
 /** The bag a finished task gives: a coin bag, or 1 in 5 the destination's reward bag. */
@@ -132,6 +200,7 @@ function complete(player, index, task, random = Math.random) {
   countCompletion(player);
   replaceOnBoard(player, task);
   player.sendMessage(`You have finished the ${common.blue(task.name)} port task.`);
+  player.getPacketSender().sendSoundEffect(SOUND_COMPLETE, 1, 0);
   itemBox(player, task.crate, `You deliver the ${common.crateName(task.crate)} and complete your courier task!`);
 }
 
@@ -156,8 +225,7 @@ function returnToSource(player, crate, dock) {
   held[index] = { ...held[index], taken: held[index].taken - 1 };
   common.setSlots(player, held);
   common.putDown(player);
-  player.performAnimation(new (common.core().Animation)(SEQ_PICKUP));
-  player.getPacketSender().sendSoundEffect(SOUND_PICKUP, 1, 15);
+  pickupFeedback(player);
   itemBox(player, crate, `You deposit the ${common.crateName(crate)}.`);
 }
 
@@ -167,11 +235,11 @@ function returnToSource(player, crate, dock) {
  * "Yes, and don't ask again." sets 18137.
  */
 function depositWarning(player, crate, dock) {
-  const { DialogueChainBuilder, StatementDialogue, OptionDialogue, ChatType, PluginManager } = common.core();
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue, PluginManager } = common.core();
   const text = depositWarningText(crate);
   const sender = player.getPacketSender();
   const owner = {};
-  sender.sendTypedMessage(ChatType.MESBOX, text);
+  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, text))
     .add(new OptionDialogue(1, {
@@ -222,6 +290,7 @@ function depositCargo({ player, location }) {
     if (taken > 0) player.sendMessage(CREW_DROP_OFF);
   }
   held[index] = { ...held[index], delivered: held[index].delivered + 1 };
+  pickupFeedback(player);
   common.putDown(player);
   if (held[index].delivered < task.amount) {
     common.setSlots(player, held);
@@ -238,7 +307,7 @@ function attach(api) {
   api.onObjectInteraction("Ledger table", {
     "Take-cargo": takeCargoOp,
     "Take-last-cargo": takeLastCargo,
-    "Take-any-cargo": takeCargoOp,
+    "Take-any-cargo": takeAnyCargo,
     "Deposit-cargo": depositCargo,
   });
 }
@@ -248,6 +317,8 @@ module.exports.rewardBag = rewardBag;
 module.exports.complete = complete;
 module.exports.collectable = collectable;
 module.exports.moreToGo = moreToGo;
+module.exports.cargoOption = cargoOption;
+module.exports.WHICH_CARGO = WHICH_CARGO;
 module.exports.give = give;
 module.exports.countCompletion = countCompletion;
 module.exports.depositWarningText = depositWarningText;

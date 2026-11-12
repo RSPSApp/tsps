@@ -6,6 +6,13 @@
  * which also credits the Lumbridge diary). Everything else a tinderbox lights is here. The bug lantern is
  * lit the same way (Firemaking 33) though the Wiki notes it is not a light source for darkness.
  *
+ * An empty candle lantern also accepts a white or black candle, in either use direction (Wiki:
+ * Candle lantern, revision 15184430). Unlit candles make the matching unlit lantern at Firemaking 1;
+ * lit candles make the lit lantern at 4. Only the selected candle is consumed, and the selected
+ * lantern changes in place to retain its metadata. Refusing restricted candles is a TSPS safeguard
+ * against losing preset, untradeable or unbankable marks; the assembly refusal messages are our
+ * wording, not Wiki text or recorded dialogue.
+ *
  * Captured (rsprox 70 tick 1626, 75 tick 11666): lighting a torch says "You light your torch." and plays
  * no sequence and no sound. Nothing else was captured, so no other item gets a message or an animation, and
  * the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
@@ -41,6 +48,45 @@ function build(I) {
     [I.UNLIT_BUG_LANTERN, { lit: I.LIT_BUG_LANTERN, level: 33 }],
     [I.EMERALD_LANTERN, { lit: I.EMERALD_LANTERN_2, level: 49 }],
   ]);
+}
+
+function candleRecipe(I, id) {
+  if (id === I.CANDLE) return { result: I.CANDLE_LANTERN, level: 1 };
+  if (id === I.BLACK_CANDLE) return { result: I.CANDLE_LANTERN_4, level: 1 };
+  if (id === I.LIT_CANDLE) return { result: I.CANDLE_LANTERN_3, level: 4 };
+  if (id === I.LIT_BLACK_CANDLE) return { result: I.CANDLE_LANTERN_6, level: 4 };
+}
+
+/** A candle can be placed in an empty lantern; lit candles need 4 Firemaking. */
+function assembleCandleLantern(event) {
+  const I = core.ItemIdentifiers;
+  const lanternFirst = event.usedItemId === I.EMPTY_CANDLE_LANTERN;
+  if (!lanternFirst && event.usedWithItemId !== I.EMPTY_CANDLE_LANTERN) return;
+  const candleId = lanternFirst ? event.usedWithItemId : event.usedItemId;
+  const recipe = candleRecipe(I, candleId);
+  if (!recipe) return;
+  event.handled = true;
+  const { player } = event;
+  const inventory = player.getInventory();
+  const lantern = lanternFirst ? event.usedItem : event.usedWithItem;
+  const candle = lanternFirst ? event.usedWithItem : event.usedItem;
+  const lanternSlot = lanternFirst ? event.usedItemSlot : event.usedWithItemSlot;
+  const candleSlot = lanternFirst ? event.usedWithItemSlot : event.usedItemSlot;
+  if (lanternSlot === candleSlot || inventory.getItems()[lanternSlot] !== lantern ||
+      inventory.getItems()[candleSlot] !== candle || lantern?.getId() !== I.EMPTY_CANDLE_LANTERN ||
+      candle?.getId() !== candleId || lantern.getAmount() !== 1 || candle.getAmount() !== 1) return;
+  // The lantern retains its own metadata; refusing restricted candles prevents their marks being lost.
+  if (candle.isPresetItem() || candle.isUntradeable() || candle.isUnbankable()) {
+    player.sendMessage("You cannot use that candle to make a lantern.");
+    return;
+  }
+  if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < recipe.level) {
+    player.sendMessage(`You need ${recipe.level} Firemaking to do this.`);
+    return;
+  }
+  inventory.deleteAtSlot(candleSlot, 1, false);
+  lantern.setId(recipe.result);
+  inventory.refreshItems();
 }
 
 /** Lights `item` from `source`, or refuses on the level. Shared by both ways of lighting. */
@@ -145,6 +191,7 @@ module.exports = {
     core = api.core;
     lights = build(core.ItemIdentifiers);
     api.onItemOnItem(light, { noted: false });
+    api.onItemOnItem(assembleCandleLantern, { noted: false });
     api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });

@@ -96,7 +96,7 @@
     "80": {"task": "Cave Horrors", "any": ["cabin_fever"]},
     "81": {"task": "Jungle Horrors", "any": ["cabin_fever"]},
     "83": {"task": "Suqahs", "any": ["lunar_diplomacy"], "started": true},
-    "84": {"task": "Brine Rats", "any": ["olafs_quest"], "started": true},
+    "84": {"task": "Brine Rats", "any": ["olafs_quest"]},
     "85": {"task": "Scabarites", "any": ["contact"], "started": true},
     "86": {"task": "Terror Dogs", "any": ["haunted_mine"]},
     "87": {"task": "Molanisks", "any": ["death_to_the_dorgeshuun"]},

@@ -199,12 +199,18 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     assert.equal(player.configs.get(0), 1, 'stage 1 is mirrored to canonical varp 0');
 
     const railingIds = [15590, 15591, 15592, 15593, 15594, 15595];
-    // fixing-the-railings-trying-to-fix-a-railing: a failed attempt keeps the railing.
+    // fixing-the-railings-trying-to-fix-a-railing: "This railing is broken..." is a message box ({{tbox}}); its Continue
+    // makes the attempt. A failed attempt keeps the railing.
+    const inspect = (objectId) => {
+      const handled = object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 });
+      if (player.getDialogueManager().isActive()) player.getDialogueManager().advance();
+      return handled;
+    };
     assert.equal(object(player, railingIds[0], 'Inspect', { x: 0, y: 0, z: 0 }), true);
-    assert.deepEqual(player.messages.slice(-2), [
-      'This railing is broken and needs to be replaced.',
-      'You attempt to repalce the broken railing...',
-    ]);
+    assert.ok(player.dialogueText.includes('This railing is broken and needs to be replaced.'), 'the box');
+    assert.ok(!player.messages.includes('This railing is broken and needs to be replaced.'), 'not a chat line');
+    player.getDialogueManager().advance();
+    assert.equal(player.messages.at(-1), 'You attempt to repalce the broken railing...');
     assert.equal(player.animations.at(-1), 4190, 'mcannon_hammer_anim plays');
     assert.equal(player.configs.get(2240), undefined, 'nothing is fixed before the animation ends');
     withRandom(0.99, runQueuedTasks);
@@ -214,12 +220,17 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     assert.equal(inventory.getAmount(I.RAILING), 6, 'a failure keeps the railing');
     assert.equal(player.configs.get(2240), undefined);
     for (const objectId of railingIds) {
-      assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
+      assert.equal(inspect(objectId), true);
       withRandom(0, runQueuedTasks);
       assert.equal(player.messages.at(-1), 'This railing is now fixed.');
       if (objectId === railingIds[0]) {
         assert.equal(player.configs.get(2240), 1, 'the cache-backed fixed railing varbit changes');
+        const shown = player.dialogueText.length;
         assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
+        // "Inspecting a fixed railing": the player's "I've fixed all these railings now."
+        assert.ok(player.dialogueText.slice(shown).some((text) => String(text).includes("I've fixed all these railings now.")));
+        assert.ok(!player.messages.includes('This railing is already fixed.'));
+        while (player.getDialogueManager().isActive()) player.getDialogueManager().advance();
         assert.equal(inventory.getAmount(I.RAILING), 5, 're-inspecting one fixed railing does not consume a second spare');
         assert.equal(player.getAttribute('dwarf-cannon:rails-fixed'), 1, 're-inspecting does not increment the fixed count');
       }

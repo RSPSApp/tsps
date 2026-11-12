@@ -11,8 +11,12 @@
  * Every recipe's materials, shards, levels and XP are the rsprox captures' or the Wiki's
  * (Crystal_Singing_Recipes, the product pages); `source` on each row says which.
  *
- * Crystal armour keeps its own menu (CrystalArmour.plugin.js) and the celestial signet its own
- * (CelestialRing.ShootingStars.js); the enhanced crystal key joins this menu from KeyChests' data.
+ * Crystal armour is sung here too: choosing a piece first shows its warning beside an armour seed and
+ * asks "Are you sure you wish to proceed?" (Yes. / Yes, and don't ask again. / No.); the second
+ * answer skips both from then on. The song message is an item box of the product.
+ *
+ * The celestial signet keeps its own menu (CelestialRing.ShootingStars.js); the enhanced crystal key
+ * joins this menu from KeyChests' data.
  */
 const SONG_OF_THE_ELVES = "song_of_the_elves";
 const SINGING_SEQUENCE = "prif_crystal_singing";
@@ -21,7 +25,10 @@ const SONG_DELAY_TICKS = 5;
 const SING_ATTRIBUTE = "crystal-singing:singing";
 const NO_MATERIALS = "You do not have all of the required materials and requirements to make anything.";
 const LEVEL_TOO_LOW = "You need to be at least level {level} Crafting and Smithing to create anything through crystal singing.";
-const SONG = "With the help of the crystal bowl, you sing a beautiful song and shape the crystals.";
+const SONG = "With the help of the crystal bowl, you sing a beautiful<br>song and shape the crystals.";
+const PROCEED = "Are you sure you wish to proceed?";
+/** Saved: the player chose "Yes, and don't ask again." at a crystal armour warning. */
+const SKIP_WARNING_ATTRIBUTE = "crystal-singing:skip-armour-warning";
 const SHARD_NAME = "CRYSTAL_SHARD";
 
 /** The Prifddinas bowls (capture 819; both are this loc). The Gauntlet's has its own, the others have no capture of their menu. */
@@ -38,6 +45,12 @@ const RECIPES_LOC = 37344;
  * equipment pages), `diary` ones the Hard Western Provinces Diary. `source`: capture ids where one shows the whole song, else the Wiki page.
  */
 const RECIPES = [
+  { product: "CRYSTAL_HELM", needs: [["CRYSTAL_ARMOUR_SEED", 1]], shards: 50, level: 70, xp: 2500, quest: true, source: "capture 1159; Wiki Crystal_helm",
+    warning: "This will consume your armour seed as well as your<br>crystal shards. Reverting the helmet will not give you<br>any crystal shards back." },
+  { product: "CRYSTAL_BODY", needs: [["CRYSTAL_ARMOUR_SEED", 3]], shards: 150, level: 74, xp: 7500, quest: true, source: "capture 1159; Wiki Crystal_body",
+    warning: "This will consume three of your armour seeds as well<br>as your crystal shards. Reverting the chestplate will not<br>give you any crystal shards back." },
+  { product: "CRYSTAL_LEGS", needs: [["CRYSTAL_ARMOUR_SEED", 2]], shards: 100, level: 72, xp: 5000, quest: true, source: "capture 1159; Wiki Crystal_legs",
+    warning: "This will consume two of your armour seeds as well as<br>your crystal shards. Reverting the platelegs will not give<br>you any crystal shards back." },
   { product: "ETERNAL_TELEPORT_CRYSTAL", needs: [["ENHANCED_CRYSTAL_TELEPORT_SEED", 1]], shards: 100, level: 80, xp: 5000, source: "capture 312; Wiki Eternal_teleport_crystal" },
   { product: "BLADE_OF_SAELDOR", needs: [["ENHANCED_CRYSTAL_WEAPON_SEED", 1]], shards: 100, level: 82, xp: 5000, quest: true, source: "capture 1159; Wiki Blade_of_Saeldor" },
   { product: "BOW_OF_FAERDHINEN", needs: [["ENHANCED_CRYSTAL_WEAPON_SEED", 1]], shards: 100, level: 82, xp: 5000, quest: true, source: "capture 1159; Wiki Bow_of_Faerdhinen" },
@@ -110,9 +123,36 @@ function open(player, only) {
   if (ready.length === 0) {
     return statement(player, LEVEL_TOO_LOW.replace("{level}", Math.min(...makeable.map((recipe) => recipe.level))));
   }
-  player.getPacketSender().sendCreationMenu(new core.CreationMenu("How many would you like to make?", ready.map((recipe) => recipe.productId), {
-    execute: (itemId, amount) => sing(player, itemId, amount),
+  const title = ready.length === 1 ? "How many would you like to make?" : "What would you like to make?";
+  player.getPacketSender().sendCreationMenu(new core.CreationMenu(title, ready.map((recipe) => recipe.productId), {
+    execute: (itemId, amount) => choose(player, itemId, amount),
   }, { maxAmount: Math.max(...ready.map((recipe) => maxMade(player, recipe))) }));
+}
+
+/** A recipe with a warning shows it and asks to proceed first, unless the player said not to ask again. */
+function choose(player, productId, amount) {
+  const recipe = resolve().find((candidate) => candidate.productId === productId);
+  if (!recipe?.warning || player.getAttribute(SKIP_WARNING_ATTRIBUTE) === true) return sing(player, productId, amount);
+  const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = core;
+  const seed = recipe.needs[0].itemId;
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, recipe.warning.replace(/<br>/g, " "));
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, seed, recipe.warning),
+    new ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, PROCEED,
+      "Yes.", () => sing(player, productId, amount),
+      "Yes, and don't ask again.", () => {
+        player.setAttribute(SKIP_WARNING_ATTRIBUTE, true);
+        sing(player, productId, amount);
+      },
+      "No.", () => {}) }),
+  ));
+  return true;
+}
+
+function songBox(player, productId) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, SONG.replace(/<br>/g, " "));
+  const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, productId, SONG)));
 }
 
 /** Takes the materials and gives the products at once, then the song message after SONG_DELAY_TICKS. */
@@ -137,8 +177,7 @@ function sing(player, productId, amount) {
     execute() {
       this.stop();
       player.setAttribute(SING_ATTRIBUTE, false);
-      player.sendMessage(SONG);
-      statement(player, SONG);
+      songBox(player, productId);
     }
   })());
   return true;
@@ -175,11 +214,12 @@ function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   recipes = null;
+  api.persistAttribute?.(SKIP_WARNING_ATTRIBUTE, false);
 }
 
 module.exports = {
   name: "CrystalSinging",
-  description: "Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal tools, weapons and teleport crystals for Smithing and Crafting XP.",
+  description: "Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal armour, tools, weapons and teleport crystals for Smithing and Crafting XP.",
   members: true,
   register(pluginApi) {
     attach(pluginApi);
@@ -187,5 +227,5 @@ module.exports = {
     api.onObjectInteraction(RECIPES_BOOK, { Read: readRecipes });
     for (const name of inputNames()) api.onItemOnObject(name, "Singing bowl", useOnBowl, { noted: false });
   },
-  _test: { RECIPES, resolve, open, sing, singCrystal, useOnBowl, readRecipes, maxMade, meetsLevel, inputNames, attach, NO_MATERIALS, SONG },
+  _test: { RECIPES, resolve, open, sing, choose, SKIP_WARNING_ATTRIBUTE, singCrystal, useOnBowl, readRecipes, maxMade, meetsLevel, inputNames, attach, NO_MATERIALS, SONG },
 };

@@ -316,13 +316,13 @@ export class PlayerSession {
 
   /**
    * Logs out as an accepted logout button does: the client is told, then the socket closes.
-   * Live first sets clicks back to walking, as the client keeps interaction modes (rsprox).
+   * Live first sets clicks back to walking, as the client keeps interaction modes (rsprox). It
+   * sends no hidenpcops/hideobjops reset: none of the 3,157 recorded logouts has one, 47 of them
+   * with NPC ops hidden; the client clears both itself on logout (OsrsClient).
    */
   public logout(): void {
     this.npcSpecificEffects.clear();
     this.sendClientPacket(encodeWalkInteractionMode());
-    this.sendClientPacket(encodeHideNpcOps(false));
-    this.sendClientPacket(encodeHideObjOps(false));
     this.sendClientPacket(encodeLogoutResponse());
     this.flushPackets();
     this.channel.close?.(1000, "logout");
@@ -700,6 +700,7 @@ export class PlayerSession {
       payload = encodePlayerAppearance(
         {
           gender: look[Appearance.GENDER] ?? 0,
+          hidden: player.isAppearanceHidden(),
           pronouns: player.getAppearance().getPronouns(),
           colors: [
             look[Appearance.HAIR_COLOUR],

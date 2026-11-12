@@ -3563,13 +3563,148 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
 
-  function buildJournal(player) {
-    if (quest.isComplete(player)) return ["I freed the Lumbridge council and defeated the Culinaromancer.", "", "<col=ff0000>QUEST COMPLETE!</col>"];
+  // Native child display names are supplied by the shared journal runtime. The
+  // existing stage readers also recover legacy saves and completed rescue flags.
+  const rescueJournals = require("../data/recipe-for-disaster-journals");
+  const journalStages = new Map([
+    ["Mountain Dwarf", dwarfQuestStage], ["Wartface & Bentnoze", goblinQuestStage],
+    ["Pirate Pete", pirateQuestStage], ["Lumbridge Guide", guideQuestStage],
+    ["Evil Dave", player => Math.max(daveQuestStage(player), (Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) & 2) ? 3 : 0)], ["Skrach Uglogwee", skrachQuestStage],
+    ["Sir Amik Varze", amikQuestStage], ["King Awowogei", awowogeiQuestStage],
+  ]);
+
+  // Authored summary: https://oldschool.runescape.wiki/w/Special:PermanentLink/15263687
+  function openingJournal(player) {
     if (stage(player) >= STAGE_OPENING_COMPLETE) {
-      return ["I started the Recipe for Disaster banquet and freed the council members.", "", "The council still need to be freed, and the Culinaromancer defeated."];
+      return ["<str>I helped the Cook prepare the banquet for the Lumbridge council.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
     }
-    if (stage(player) >= STAGE_STARTED) return ["The Cook is preparing a banquet for the Lumbridge council.", "", "I need to help him gather the ingredients."];
-    return ["I can start this quest by talking to the <col=800000>Cook</col> in the kitchen of <col=800000>Lumbridge Castle</col>."];
+    if (stage(player) < STAGE_STARTED) {
+      return ["I can start this quest by talking to the Cook in the kitchen of Lumbridge Castle."];
+    }
+    const ingredients = [
+      [ItemIdentifiers.EYE_OF_NEWT, "an eye of newt"],
+      [ItemIdentifiers.GREENMANS_ALE, "a glass of greenman's ale"],
+      [ItemIdentifiers.ROTTEN_TOMATO, "a rotten tomato"],
+      [ItemIdentifiers.DIRTY_BLAST, "a Dirty Blast, made from a freshly mixed fruit blast and ashes"],
+    ];
+    const lines = ["The Cook is preparing a banquet for the Lumbridge council.", "I need to bring him:"];
+    for (const [id, name] of ingredients) lines.push(has(player, id) ? `<str>${name}</str>` : `<col=800000>${name}</col>`);
+    if (ingredients.every(([id]) => has(player, id))) lines.push("", "I have all the ingredients. I should return to the Cook.");
+    return lines;
+  }
+
+  // Aris's portal direction: https://oldschool.runescape.wiki/w/Special:PermanentLink/15354817
+  function finaleJournal(player) {
+    if (quest.isComplete(player)) return ["<str>I freed the Lumbridge council and defeated the Culinaromancer.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
+    if (stage(player) < STAGE_OPENING_COMPLETE) return ["I must help the Cook prepare the banquet before I can face the Culinaromancer."];
+    if (player.getAttribute(FEAST_PENDING_ATTRIBUTE)) return ["I should enter the dining room in Lumbridge Castle to attend the banquet."];
+    if (flags(player) !== ALL_RESCUES) {
+      const remaining = [...journalStages].filter(([name, read]) => {
+        const steps = rescueJournals[name];
+        return read(player) < steps[steps.length - 1][0];
+      }).length;
+      if (remaining === 0) {
+        // Old saves can have completed numeric child stages without rescue flags.
+        // Report those journals honestly without opening a mechanically gated portal.
+        return ["All eight council members' rescue journals are complete.", "", "I still need to finish the council's rescue at the banquet before I can follow the Culinaromancer through the portal."];
+      }
+      return ["Aris has protected the council from the Culinaromancer by freezing time.", "", `I still need to free ${remaining} council member${remaining === 1 ? "" : "s"}. I should inspect the guests in the dining room to learn how to help them.`];
+    }
+    const lines = ["<str>I freed all eight members of the Lumbridge council.</str>", ""];
+    if (!canBeginFinale(player)) {
+      lines.push("Before I can follow the Culinaromancer through the portal, I need:");
+      if ((Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0) < 175) lines.push("<col=800000>175 quest points</col>");
+      if (!completedQuest(player, "desert_treasure_i")) lines.push("<col=800000>Desert Treasure I completed</col>");
+      if (!completedQuest(player, "horror_from_the_deep")) lines.push("<col=800000>Horror from the Deep completed</col>");
+      return lines;
+    }
+    if (player.getAttribute(FINAL_BOSS_DEFEATED_ATTRIBUTE)) {
+      lines.push("I defeated the Culinaromancer. I should speak to Aris to finish the quest.");
+    } else {
+      if (!player.getAttribute(FINAL_FIGHT_ATTRIBUTE)) lines.push("I should speak to Aris in the dining room about the Culinaromancer.");
+      lines.push("I must follow the Culinaromancer through the portal and defeat him once and for all.");
+    }
+    return lines;
+  }
+
+  function councilJournal(player) {
+    const guidance = finaleJournal(player);
+    if (player.getAttribute(FEAST_PENDING_ATTRIBUTE) && !quest.isComplete(player)) return guidance;
+    // Informational progress, not the retail interactive member selector (CS2
+    // recipe_for_disaster_subquests). Use the same completion as each child and
+    // the remaining count; zero alone does not tell us whether a guest was inspected.
+    const members = [...journalStages].map(([name, read]) => {
+      const steps = rescueJournals[name];
+      const complete = read(player) >= steps[steps.length - 1][0];
+      const label = name === "Wartface & Bentnoze" ? "Goblin generals (Wartface & Bentnoze)" : name;
+      const line = `${label}: ${complete ? "rescue complete" : "still needs rescuing"}.`;
+      return complete ? `<str>${line}</str>` : line;
+    });
+    return ["Council members:", ...members, "", ...guidance];
+  }
+
+  // Like Vampyre Slayer's journal, prose is split across the native fixed-height
+  // line widgets. Whole-line colour/strike tags are repeated on continuation lines.
+  function wrapJournalLine(text) {
+    const match = /^(<(?:str|col=[^>]+)>)(.*)(<\/(?:str|col)>)$/.exec(text);
+    const plain = match ? match[2] : text;
+    const lines = [];
+    let line = "";
+    for (const word of plain.split(" ")) {
+      if (line && line.length + 1 + word.length > 58) { lines.push(line); line = word; }
+      else line = line ? `${line} ${word}` : word;
+    }
+    lines.push(line);
+    return match ? lines.map(value => `${match[1]}${value}${match[3]}`) : lines;
+  }
+
+  function amikJournalDetails(player) {
+    if (has(player, ItemIdentifiers.BRULEE_SUPREME)) return ["I need to use the creme brulee supreme on Sir Amik Varze in the dining room."];
+    if (has(player, ItemIdentifiers.BRULEE_3)) return ["My brulee is ready to flambe. I need to rub a dragon token and ask the dragon to help."];
+    const lines = [];
+    if (!player.getAttribute(AMIK_WOM_BRIEFED_ATTRIBUTE)) lines.push("I should ask the Wise Old Man about the Evil Chicken.");
+    else if (!player.getAttribute(AMIK_CHICKEN_DEAD_ATTRIBUTE)) lines.push("I should offer raw chicken at the chicken shrine in Zanaris and defeat the Evil Chicken for its egg.");
+    else lines.push("<str>I defeated the Evil Chicken.</str>");
+    if (player.getAttribute(AMIK_DRAGON_DROP_ATTRIBUTE)) lines.push("I obtained a dragon token. I can use it to summon a dragon to flambe the prepared brulee.");
+    else lines.push("I need to kill a black dragon in the Evil Chicken's Lair to obtain a dragon token.");
+    return lines;
+  }
+
+  function journalProgress(player, context) {
+    const name = context?.row?.displayname?.[0];
+    const child = name?.startsWith("Recipe for Disaster - ") ? name.slice("Recipe for Disaster - ".length) : null;
+    if (stage(player) === 0 && child && journalStages.has(child)) {
+      return [`I can start this quest by inspecting ${child === "Wartface & Bentnoze" ? "the goblin generals" : child} in the Lumbridge Castle dining room after helping the Cook prepare the banquet.`];
+    }
+    if (stage(player) === 0 && child === "Culinaromancer") {
+      return ["I can start this quest by helping the Cook in Lumbridge Castle, then freeing all eight council members before facing the Culinaromancer."];
+    }
+    if (child === "Another Cook's Quest") return openingJournal(player);
+    const readStage = journalStages.get(child);
+    if (readStage) {
+      if (stage(player) < STAGE_OPENING_COMPLETE) return ["I must help the Cook prepare the banquet before I can rescue the council members."];
+      if (player.getAttribute(FEAST_PENDING_ATTRIBUTE)) return ["I should enter the dining room in Lumbridge Castle to attend the banquet."];
+      const progress = readStage(player);
+      const steps = rescueJournals[child];
+      const current = steps.filter(([value]) => value <= progress).pop() ?? steps[0];
+      const complete = progress >= steps[steps.length - 1][0];
+      // Supply-gathering stages can advance independently: lower numbers do not
+      // prove that every earlier objective was completed.
+      const lines = [complete ? `<str>${current[1]}</str>` : current[1]];
+      if (!complete && child === "Skrach Uglogwee" && progress === 150 && has(player, ItemIdentifiers.RAW_JUBBLY)) {
+        lines[0] = "I need to cook the raw jubbly on Rantz's spit roast.";
+      }
+      if (!complete && child === "Sir Amik Varze" && progress >= 10) lines.push("", ...amikJournalDetails(player));
+      if (complete) lines.push("", "<col=ff0000>QUEST COMPLETE!</col>");
+      return lines;
+    }
+    if (child === "Culinaromancer") return finaleJournal(player);
+    if (stage(player) >= STAGE_OPENING_COMPLETE) return councilJournal(player);
+    return openingJournal(player);
+  }
+
+  function buildJournal(player, _quest, context) {
+    return journalProgress(player, context).flatMap(wrapJournalLine);
   }
 
   function syncQuestState({ player }) {

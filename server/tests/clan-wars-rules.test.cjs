@@ -16,9 +16,9 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 16, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 2,
-    food: 1, drinks: 1, specialattacks: 2, stragglers: 1, freezing: 1,
-    pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 1, rejoiningdelay: 1, vls: 1,
+    wincondition: 15, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 3,
+    food: 2, drinks: 2, specialattacks: 1, stragglers: 2, freezing: 1,
+    pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
   for (const [key, value] of Object.entries(changes)) {
     const rules = { ...Rules.create(), [key]: value };
@@ -54,4 +54,131 @@ test("confirmation describes safe last-standing entry cutoff and supplies withou
   assert.match(summary, /Melee combat only/);
   assert.match(summary, /Powered staves and Vesta's blighted longsword are not enabled/);
   assert.match(Rules.summary(Rules.create()), /maximum 100 fighters per team/);
+});
+
+
+test("revision 242 kill targets preserve fixed melee terms and reject deferred native modes", () => {
+  const targets = [25,50,100,200,500,1000,5000,10000];
+  for (let mode=1; mode<=8; mode++) {
+    const rules=Rules.create(3,mode);
+    assert.equal(Rules.validate(rules),true);
+    assert.equal(Rules.killTarget(rules),targets[mode-1]);
+    assert.equal(Rules.teamCap(rules),10);
+    assert.equal(rules.ranged,1); assert.equal(rules.magic,4);
+    assert.match(Rules.summary(rules),/First to .* kills on Plateau/);
+    assert.match(Rules.summary(rules),/Joining and rejoining remain open/);
+    assert.match(Rules.summary(rules),/Food and drinks are consumed normally/);
+  }
+  for (const mode of [-1,9,15,21,23,24,1.5,"1",null,NaN]) assert.equal(Rules.create(0,mode),null);
+});
+
+
+test("revision 242 timed modes use sourced durations with fixed melee and respawning terms", () => {
+  const minutes = [5, 10, 20, 60, 120];
+  const ticks = [500, 1000, 2000, 6000, 12000];
+  for (let i = 0; i < minutes.length; i++) {
+    const rules = Rules.create(2, 16 + i);
+    assert.equal(Rules.validate(rules), true);
+    assert.equal(Rules.timeLimitTicks(rules), ticks[i]);
+    assert.equal(Rules.killTarget(rules), 0);
+    assert.equal(Rules.respawns(rules), true);
+    assert.equal(Rules.teamCap(rules), 5);
+    assert.equal(rules.ranged, 1); assert.equal(rules.magic, 4);
+    assert.match(Rules.summary(rules), new RegExp(`Most kills in ${minutes[i]} minutes on Plateau`));
+    assert.match(Rules.summary(rules), /Equal scores end without a winner/);
+    assert.match(Rules.summary(rules), /Joining and rejoining remain open/);
+  }
+  assert.equal(Rules.timeLimitTicks(Rules.create()), 0);
+  assert.equal(Rules.respawns(Rules.create()), false);
+  assert.equal(Rules.timeLimitTicks(Rules.create(0, 1)), 0);
+  assert.equal(Rules.respawns(Rules.create(0, 1)), true);
+  assert.equal(Rules.timeLimitTicks(null), null);
+});
+
+
+test("revision 242 restriction enums compose with each supported battle family without changing melee terms", () => {
+  for (const mode of [0,1,16,20]) for (const food of [0,1]) for (const drinks of [0,1])
+    for (const prayer of [0,1,2]) for (const specialattacks of [0,2]) {
+      const base=Rules.create(2,mode), rules={...base,food,drinks,prayer,specialattacks};
+      assert.equal(Rules.validate(rules),true);
+      assert.equal(Rules.teamCap(rules),Rules.teamCap(base));
+      assert.equal(Rules.killTarget(rules),Rules.killTarget(base));
+      assert.equal(Rules.timeLimitTicks(rules),Rules.timeLimitTicks(base));
+      assert.equal(rules.ranged,1); assert.equal(rules.magic,4); assert.equal(rules.melee,0);
+      const text=Rules.summary(rules);
+      assert.match(text,new RegExp(`Food: ${food?'disabled':'allowed'}`));
+      assert.match(text,new RegExp(`Drinks: ${drinks?'disabled':'allowed'}`));
+      assert.match(text,new RegExp(`Melee special attacks: ${specialattacks===2?'disabled':'allowed'}`));
+      assert.match(text,/Safe deaths: you keep your items/);
+      if (prayer===1) assert.match(text,/overhead icons are disabled; other prayers are allowed/);
+      else assert.match(text,prayer===2?/Prayers are disabled/:/All prayers are allowed/);
+      const supplyText = food && drinks ? 'Food and drinks are disabled.' : food
+        ? 'Allowed drinks are consumed normally.' : drinks ? 'Allowed food is consumed normally.'
+          : 'Food and drinks are consumed normally.';
+      assert.ok(text.includes(supplyText), 'confirmation describes only permitted supplies');
+    }
+});
+
+test("membership terms preserve each battle family and reject unsupported departure or delay values", () => {
+  for (const mode of [0,1,8,16,20]) for (const leavingcc of [0,1]) for (const rejoiningdelay of [0,1]) {
+    const rules={...Rules.create(2,mode),leavingcc,rejoiningdelay};
+    assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);
+    assert.match(text,leavingcc?/Leaving the chat-channel incurs no death penalty/:/Leaving the chat-channel counts as a death/);
+    assert.match(text,rejoiningdelay ? mode ? /60-second wait/ : /60-second rejoining delay cannot reopen entry/
+      : /no additional rejoining delay/);
+    if (!mode && rejoiningdelay) assert.doesNotMatch(text,/returning to this battle requires a 60-second wait/);
+    if (rejoiningdelay) assert.doesNotMatch(text,/rejoining is unrestricted/);
+    if (!mode) assert.match(text,/No joining or rejoining after/);
+  }
+  for (const key of ['leavingcc','rejoiningdelay']) for (const value of [-1,2,0.5,'1',null,NaN,Infinity]) {
+    assert.equal(Rules.validate({...Rules.create(),[key]:value}),false);
+  }
+});
+
+test("revision 242 stragglers thresholds are supported only for Last Team Standing", () => {
+  assert.deepEqual(Rules.STRAGGLER_LIMITS,[0,5]);
+  for (const playercap of [0,1,2,3,7]) for (const stragglers of [0,1]) {
+    const rules={...Rules.create(playercap,0),stragglers};
+    assert.equal(Rules.validate(rules),true,'the variant invents no minimum team cap');
+    const text=Rules.summary(rules);
+    assert.match(text,stragglers?/Ignore 5.*five or fewer fighters remaining loses/:/Kill 'em all.*no fighters remaining loses/);
+    if (stragglers) assert.match(text,/both teams have five or fewer fighters.*without a winner/);
+  }
+  for (const mode of [1,8,16,20]) {
+    assert.equal(Rules.validate({...Rules.create(3,mode),stragglers:0}),true);
+    assert.equal(Rules.validate({...Rules.create(3,mode),stragglers:1}),false);
+  }
+  for (const stragglers of [-1,2,0.5,'1',null,NaN,Infinity]) {
+    assert.equal(Rules.validate({...Rules.create(),stragglers}),false);
+  }
+});
+
+test("unsupported or malformed restriction choices cannot enter an otherwise valid negotiated offer", () => {
+  for (const key of ['food','drinks','prayer','specialattacks']) {
+    const values=key==='prayer'?[-1,3,4]:key==='specialattacks'?[-1,1,3]:[-1,2,3];
+    for (const value of [...values,0.5,'1',null,NaN,Infinity]) {
+      assert.equal(Rules.validate({...Rules.create(2,16),[key]:value}),false,`${key}:${String(value)}`);
+    }
+  }
+});
+
+test('Sylvan and Plateau arena rules retain supported modes and reject other layouts', () => {
+  for (const arena of [1, 2]) for (const mode of [0, 1, 8, 16, 20]) {
+    const rules = { ...Rules.create(2, mode), arena };
+    assert.equal(Rules.validate(rules), true);
+    assert.match(Rules.summary(rules), new RegExp(arena === 1 ? 'Plateau' : 'Sylvan Glade'));
+  }
+  for (const arena of [-1, 0, 4, 13, 14, 1.5, '2']) {
+    assert.equal(Rules.validate({ ...Rules.create(), arena }), false);
+  }
+});
+
+
+test('Quarry is a bounded third arena for existing modes while other arenas stay refused', () => {
+  for (const mode of [0,1,8,16,20]) {
+    const rules={...Rules.create(3,mode),arena:3};
+    assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Forsaken Quarry/);
+  }
+  assert.equal(Rules.validate({...Rules.create(),arena:4}),false);
 });

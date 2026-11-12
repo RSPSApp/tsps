@@ -20,6 +20,9 @@ const { HitMask } = require("../../src/main/typescript/elvarg/game/content/comba
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers: Items } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const CameraShake = require("../interface/CameraShake.plugin");
+const { allowsBlightedItems, isBlightedItem } = require("./BlightedItems");
+/** Each potion's recorded drink line, by its cache name without the dose (data/potion-drink-lines.json). */
+const DRINK_LINES = require("./data/potion-drink-lines.json").lines;
 const {
   DragonfireProtectionTier,
   processDragonfireProtection,
@@ -62,6 +65,8 @@ const ATTR_BOOST_CYCLE = "potions:boost-cycle";
 const ATTR_BOOST_CYCLE_PRESERVED = "potions:boost-cycle-preserved";
 /** When Preserve was last switched on. */
 const ATTR_PRESERVE_SINCE = "potions:preserve-since";
+/** The last time Preserve was on and past its 15-second warm-up: it still counts for 13 seconds after that. */
+const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
 const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
@@ -70,6 +75,9 @@ const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
 const PRESERVE_EXTENSION_MS = 30 * 1000;
 const PRESERVE_WARMUP_MS = 15 * 1000;
+// Wiki (Preserve): "Players can turn off Preserve when there are less than 13 seconds left until the next buff
+// drain, and still keep the full effect."
+const PRESERVE_TURN_OFF_GRACE_MS = 13 * 1000;
 const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
 const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
@@ -136,8 +144,9 @@ const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
 function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null) {
   const wasVenomed = player.isVenomed();
   if (wasVenomed && !fullVenomCure) {
+    // No line of its own: venomed antipoison drinks send only the drink line (rsprox 234/03280.txt:69820,
+    // 223/00014.txt:133172, 227/00572.txt:565041, 234/00787.txt:52834: venom to poison, then that line).
     curePoison(player);
-    if (message) player.sendMessage("The potion weakens the venom to poison.");
     return;
   }
   curePoisonAndVenom(player);
@@ -177,12 +186,12 @@ function applyPrayerRestore(player, isSuperRestore) {
   restorePrayer(player, isSuperRestore ? 8 : 7, hasPrayerRestoreBonus(player) ? 0.27 : 0.25);
 }
 
+/** Drinking plays only the drink sound: prayer-restoring potions add no prayer recharge sound. */
 function restorePrayer(player, flat, percent) {
   const max = getMaxLevel(player, Skill.PRAYER);
   const restored = Math.floor(flat + max * percent);
   const cap = Math.max(max, getCurrentLevel(player, Skill.PRAYER));
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 
 /** Sanfew serum (Wiki): 4 + 30% to every stat, prayer 4 + 30% (32% with the bonus). */
@@ -286,7 +295,6 @@ function restorePrayerOverheal(player, flat, percent, overPercent = 0.05) {
   const cap = max + Math.floor(max * overPercent);
   const restored = Math.floor(flat + max * percent);
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 
 /** Ancient brew / forgotten brew (Wiki): Magic boost, prayer restore and an Attack/Strength/Defence drain. */
@@ -448,6 +456,7 @@ function timedEffectSkillIndexes(player) {
  * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
+  notePreserveWarm(player, Date.now());
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
@@ -500,9 +509,12 @@ function sendBoostDrainTimer({ player }) {
   const { PrayerHandler } = pluginApi.core;
   const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
   const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
-  const period = preserve || stretched ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   const now = Date.now();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
+  // Preserve, turned off under 13 seconds before this cycle ends, still stretches it.
+  const graceStretch = !preserve && !stretched && warmAt > 0 && nextDecayAt > now && nextDecayAt - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  const period = preserve || stretched || graceStretch ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
@@ -521,7 +533,7 @@ function sendBoostDrainTimer({ player }) {
       }
     }
     // A cycle Preserve is going to stretch ends 30 seconds later.
-    if (!cycleStretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
+    if (!cycleStretched && (graceStretch || preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS)) {
       decayAt += PRESERVE_EXTENSION_MS;
     }
     remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);
@@ -540,12 +552,26 @@ function hasDecayingBoost(player) {
   return false;
 }
 
-/** Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends. */
-function preserveStretchesCycle(player, now) {
-  if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
+/** Whether Preserve is on and has been for 15 seconds. */
+function preserveWarm(player, now) {
   const { PrayerHandler } = pluginApi.core;
   if (!PrayerHandler.isActivated(player, PrayerHandler.PRESERVE)) return false;
   return now - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS;
+}
+
+function notePreserveWarm(player, now) {
+  if (preserveWarm(player, now)) player.setAttribute(ATTR_PRESERVE_WARM_AT, now);
+}
+
+/**
+ * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
+ * turned off (after its warm-up) under 13 seconds before.
+ */
+function preserveStretchesCycle(player, now) {
+  if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
+  if (preserveWarm(player, now)) return true;
+  const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
+  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {
@@ -657,6 +683,10 @@ function canEat(player, itemId) {
 function drinkPermissionRefusal(player, entry) {
   const itemId = entry.itemId;
   if (!canDrink(player, itemId)) return "You cannot use potions here.";
+  // Wiki (Blighted super restore): blighted potions are refused wherever blighted items are not allowed.
+  if (isBlightedItem(pluginApi.core, itemId) && !allowsBlightedItems(pluginApi.core, player)) {
+    return "The blighted potion can be used only in the Wilderness.";
+  }
   if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
   if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) return "You cannot eat here.";
   const permission = { player, itemId, allowed: true, message: null };
@@ -1010,6 +1040,8 @@ registerPotion({
   chains: [doseChain("RANK_FROTHY_POTION_4_", "RANK_FROTHY_POTION_3_", "RANK_FROTHY_POTION_2_", "RANK_FROTHY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rank frothy potion. You feel oddly powerful."] },
   effect: applyRankFrothyPotion,
 });
 registerPotion({
@@ -1017,6 +1049,8 @@ registerPotion({
   chains: [doseChain("FOUL_CHUNKY_POTION_4_", "FOUL_CHUNKY_POTION_3_", "FOUL_CHUNKY_POTION_2_", "FOUL_CHUNKY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the foul chunky potion. You feel oddly reinvigorated."] },
   effect: applyFoulChunkyPotion,
 });
 registerPotion({
@@ -1024,6 +1058,8 @@ registerPotion({
   chains: [doseChain("RANCID_SLIMY_POTION_4_", "RANCID_SLIMY_POTION_3_", "RANCID_SLIMY_POTION_2_", "RANCID_SLIMY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rancid slimy potion. You feel oddly robust."] },
   effect: applyRancidSlimyPotion,
 });
 registerPotion({
@@ -1031,6 +1067,8 @@ registerPotion({
   chains: [[Items.JAR_OF_CONGEALED_BLOOD]],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You eat the congealed blood. It tastes better than expected and leaves you feeling fully refreshed."] },
   effect: applyJarOfCongealedBlood,
 });
 registerPotion({
@@ -1776,24 +1814,34 @@ function handlePotionDrink(player, itemId, slot) {
     && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
   const replacement = smashVial ? NO_EMPTY_ITEM : entry.replacementId;
   inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
-  entry.potion.effect(player);
-
   // Live sends the drink lines as spam (filterable): rsprox has "You drink some of your goading
   // potion." and its doses-left lines, the beer and cider lines, "You have finished your potion."
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
+  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
+  if (line) spam(line);
+  entry.potion.effect(player);
+
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) {
       if (message?.game === true) player.sendMessage(message.text);
       else spam(String(message?.text ?? message));
     }
   } else if (smashVial) {
+    // The finished line, then the smash (rsprox 236/03932.txt:72353-72354, 237/01104.txt:464410; 62 recorded).
+    spam("You have finished your potion.");
     spam("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     // The gourd line is not captured; it stays a game message.
     if (entry.potion.area === "chambers-of-xeric") player.sendMessage("You have finished your potion. The gourd vial disintegrates.");
     else spam("You have finished your potion.");
+  } else {
+    // rsprox: "You have 3 doses of potion left." / "You have 1 dose of potion left." (5,000+ recorded, spam).
+    const left = dosesOf(entry.replacementId);
+    if (left > 0) spam(`You have ${left} ${left === 1 ? "dose" : "doses"} of potion left.`);
   }
   pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
@@ -2083,8 +2131,22 @@ function answerDoseFamily(request) {
   request.family = { byDose: [...family.byDose], doses: family.doses, max: family.max };
 }
 
+/** The recorded "You drink some of ..." line for a potion item, or null where none is recorded. */
+function drinkLine(itemId) {
+  const name = pluginApi?.core?.CacheDefinitions?.getItem?.(itemId)?.name;
+  return name ? DRINK_LINES[name.replace(/\(\d+\)$/, "")] ?? null : null;
+}
+
+/** The doses a potion item holds, from its name's "(N)"; 0 when it has none. */
+function dosesOf(itemId) {
+  const name = pluginApi?.core?.CacheDefinitions?.getItem?.(itemId)?.name ?? "";
+  const match = /\((\d+)\)$/.exec(name);
+  return match ? Number(match[1]) : 0;
+}
+
 module.exports = {
   name: "Potions",
+  drinkLine,
   description: "Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers.",
   isPotionItem(itemId) {
     return POTION_BY_ITEM_ID.has(itemId);

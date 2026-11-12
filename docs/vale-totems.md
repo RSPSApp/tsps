@@ -20,8 +20,7 @@ Status:
   - `::entvisit` for testing.
 - **Not done:**
   - the ents walking their route, ent trails (double offerings and +15% xp for four actions, `ent_totems_trail_*`), and admiring beautiful scenery for run energy;
-  - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests;
-  - filterable ("spam") chat messages, which the server doesn't support yet.
+  - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests.
 
 ## Layout
 
@@ -107,14 +106,15 @@ Not captured: the wrong-animal warning, the "still working on it" reminders and 
 
 ## Captured behaviour
 
-- **Build:** a tick after arriving, the log is used, with `human_pickupfloor` and sound 1739 and the message "You erect an oak totem.". The carve menu opens on the same tick. "You don't have any logs to build a totem with." when there are none.
+- **Message types:** rsprox captures 237/1098, 237/1100 (Leagues VI) and 234/3276 (Grid Master) agree on every line's channel. Filterable (spam): "You carve a buffalo into the totem.", "You decorate the totem.", "You find some loot: ..." and "You clean a batch of arrowtips.". Game messages: "You erect an oak totem.", "You finish carving the totem.", "You collect 40 offerings." and, outside the miniquest, "You add the final decoration to the totem.". Mesboxes: the no-logs, Fletching level and nothing-to-decorate refusals below, and the miniquest's own lines. No regular-world recording in the index covers these lines.
+- **Build:** a tick after arriving, the log is used, with `human_pickupfloor` and sound 1739 and the message "You erect an oak totem.". The carve menu opens on the same tick. With no logs, the mesbox "You don't have any logs to build a totem with." (237/1098 tick 22674); below the wood's level, the mesbox "You need a Fletching level of 50 to build a maple totem." (237/1098 tick 22724).
 - **Carve:** skillmulti mode 34, one at a time: "What animal would you like to carve?" with Buffalo, Jaguar, Eagle, Snake and Scorpion and their `ent_totems_animal_icon_X` items. Carved ones show the `_disabled` icon. The menu comes back by itself two ticks after each carving that leaves the totem unfinished (20261109T224258-5ab63b4 ticks 613-619, 1094-1101); walking off stops it. The third carving's only message is "You finish carving the totem." (ticks 1103, 1317); during the miniquest it names the animal and the finish mesbox follows a tick later.
   - Choosing one plays `human_pickuptable_walkmerge` with sound 10384 (delay 15) and says "You carve a buffalo into the totem.".
   - The third carving sets `base_carved`, the carved `base_multiloc` and the durability.
 - **Decorate:** `human_pickuptable_walkmerge` with sound 2739 (delay 20). A tick later the item goes and "You decorate the totem." shows. The next decoration starts the tick after that.
-  - The fourth is a mesbox, "You add the final decoration to the totem."; during the quest it is followed by the player line "There we go! I's say that's the totem finished!".
+  - The fourth is a game message, "You add the final decoration to the totem." (237/1098, 237/1100, 234/3276). During the miniquest it is a mesbox instead, followed by the player line "There we go! I's say that's the totem finished!".
   - A fifth gets the mesbox "You have already added as many decorations as possible to the totem.".
-  - With nothing to use: "You don't have anything to decorate the totem with.".
+  - With nothing to use, the mesbox "You don't have anything to decorate the totem with." (237/1098 tick 23138).
 - **Ent visits:** every 80 ticks every site is visited at once.
   - A fully carved totem gets its offerings and loses a point of durability. At 0 it collapses, with every site varbit back to 0, on the same visit.
   - A site with no totem gets three new spirits. A built totem, carved or not, keeps its spirits.
@@ -139,7 +139,7 @@ Not captured: the wrong-animal warning, the "still working on it" reminders and 
 These are not in the captures or the Wiki:
 
 - **Wrong animals:** one maple totem with one wrong animal got 6 offerings instead of 10, the only sample. Each wrong animal takes 40% off here. The Wiki only says "significantly fewer".
-- **Messages:** "You need a Fletching level of 50 to build a maple totem.", "You need a knife to carve the totem.", "Hasty-rummage twice/three times/five times", and the pile's Inspect above twenty, which shows digits.
+- **Messages:** "You need a knife to carve the totem.", "Hasty-rummage twice/three times/five times", and the pile's Inspect above twenty, which shows digits.
 - **Book plurals:** the notes' "Vale Totems", "N times" and "Research Points" are the Wiki transcript's, in the captured line breaks.
 - **Exchange for ironmen:** the `ent_totems_shop_ironman` row for every ironman mode.
 - **Log choice:** with several logs, the best one the player has the level for is used.

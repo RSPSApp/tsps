@@ -41,6 +41,23 @@ says (see Evidence).
 - **Shops without the figures** (the legacy core shops, most pubs) sell at value and pay 85%.
 - Content still has the last word through `shop:buy-price` and `shop:sell-price`.
 
+## Explicit Wiki prices
+
+The osrsreboxed producer preserves raw `StoreLine.sell` text from the committed Wiki
+pages through both parsing and export. The importer uses positive safe integer values
+(including grouped values such as `26,000`) for fixed reward currencies. Coins, tokkul,
+trading sticks and blood money retain their existing value-based pricing. A row declaring
+a different currency cannot be priced in the shop's currency and keeps its previous fallback.
+Missing values, expressions, zero and malformed numbers also keep the fallback; the runtime
+does not support a zero-price stock override. Conflicting duplicate item prices stop the import.
+Explicit TSPS item and shop price overrides retain precedence.
+
+Regenerate from the producer's committed Wiki cache and import its output; do not patch
+`shops.json`. For a generated-file merge conflict, `--existing <clean-shops.json>` lets the
+importer preserve IDs from the chosen clean base while regenerating the whole output.
+The existing `shops-data.test.cjs` covers the currency policy, invalid values, duplicate
+refusal, override preservation and deterministic import.
+
 ## Karamja gloves
 
 Thirteen Karamja shops have a second version, "(Karamja gloves)", with better rates for players

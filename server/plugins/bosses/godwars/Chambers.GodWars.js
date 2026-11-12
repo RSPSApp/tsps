@@ -181,7 +181,8 @@ function payEntry(player, faction) {
   }
   if (result.consumesKey) {
     player.getInventory().delete(Common.core.ItemIdentifiers.ECUMENICAL_KEY, 1);
-    player.sendMessage("Your ecumenical key melts into the door.");
+    // rsprox: spam (224/01461.txt:3604).
+    player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, "Your ecumenical key melts into the door.");
   } else {
     Common.setEssence(player, faction, Common.getEssence(player, faction) - result.spendsEssence);
     player.sendMessage(`The door devours the life-force of ${result.spendsEssence} followers of ${faction.name} that you have slain.`);

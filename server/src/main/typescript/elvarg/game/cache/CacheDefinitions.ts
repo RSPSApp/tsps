@@ -440,18 +440,22 @@ export class CacheDefinitions {
     static getStructParams(id: number): ReadonlyMap<number, number | string> {
         const cached = this.structParams.get(id);
         if (cached) return cached;
-        const params = new Map<number, number | string>();
         this.structArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
             .getArchive(ConfigType.OSRS.struct);
         const file = this.structArchive.getFile(id);
-        if (file) {
-            const buffer = new ByteBuffer(new Int8Array(file.data));
-            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
-                if (opcode !== STRUCT_PARAMS_OPCODE) break; // the only struct opcode
-                Type.readParamsMap(buffer, params);
-            }
-        }
+        const params = file ? this.decodeStructParams(new Int8Array(file.data)) : new Map<number, number | string>();
         this.structParams.set(id, params);
+        return params;
+    }
+
+    /** A struct file's params; also read from an older cache by scripts/league-era-cache.ts. */
+    static decodeStructParams(data: Int8Array): Map<number, number | string> {
+        const params = new Map<number, number | string>();
+        const buffer = new ByteBuffer(data);
+        for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+            if (opcode !== STRUCT_PARAMS_OPCODE) break; // the only struct opcode
+            Type.readParamsMap(buffer, params);
+        }
         return params;
     }
 
@@ -472,34 +476,38 @@ export class CacheDefinitions {
     static getEnumValues(id: number): ReadonlyMap<number, number | string> {
         const cached = this.enumValues.get(id);
         if (cached) return cached;
-        const values = new Map<number, number | string>();
         // The enums archive is decoded once; decompressing it for each new enum caused a hitch.
         this.enumArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
             .getArchive(ConfigType.DAT2.enums);
         const file = this.enumArchive.getFile(id);
-        if (file) {
-            const buffer = new ByteBuffer(new Int8Array(file.data));
-            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
-                if (opcode === 1 || opcode === 2) buffer.readUnsignedByte(); // key / value type
-                else if (opcode === 3) buffer.readString(); // default string
-                else if (opcode === 4) buffer.readInt(); // default int
-                else if (opcode === 5 || opcode === 6) {
-                    const size = buffer.readUnsignedShort();
-                    for (let i = 0; i < size; i++) {
-                        const key = buffer.readInt();
-                        values.set(key, opcode === 5 ? buffer.readString() : buffer.readInt());
-                    }
-                } else if (opcode === 7 || opcode === 8) {
-                    buffer.readUnsignedShort(); // the dense table's size
-                    const size = buffer.readUnsignedShort();
-                    for (let i = 0; i < size; i++) {
-                        const key = buffer.readUnsignedShort();
-                        values.set(key, opcode === 7 ? buffer.readString() : buffer.readInt());
-                    }
-                } else break;
-            }
-        }
+        const values = file ? this.decodeEnumValues(new Int8Array(file.data)) : new Map<number, number | string>();
         this.enumValues.set(id, values);
+        return values;
+    }
+
+    /** An enum file's key -> value entries; also read from an older cache by scripts/league-era-cache.ts. */
+    static decodeEnumValues(data: Int8Array): Map<number, number | string> {
+        const values = new Map<number, number | string>();
+        const buffer = new ByteBuffer(data);
+        for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+            if (opcode === 1 || opcode === 2) buffer.readUnsignedByte(); // key / value type
+            else if (opcode === 3) buffer.readString(); // default string
+            else if (opcode === 4) buffer.readInt(); // default int
+            else if (opcode === 5 || opcode === 6) {
+                const size = buffer.readUnsignedShort();
+                for (let i = 0; i < size; i++) {
+                    const key = buffer.readInt();
+                    values.set(key, opcode === 5 ? buffer.readString() : buffer.readInt());
+                }
+            } else if (opcode === 7 || opcode === 8) {
+                buffer.readUnsignedShort(); // the dense table's size
+                const size = buffer.readUnsignedShort();
+                for (let i = 0; i < size; i++) {
+                    const key = buffer.readUnsignedShort();
+                    values.set(key, opcode === 7 ? buffer.readString() : buffer.readInt());
+                }
+            } else break;
+        }
         return values;
     }
 

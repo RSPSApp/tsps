@@ -796,3 +796,14 @@ test("WORLD_ADMIN_BIND beyond loopback needs a WORLD_ADMIN_TOKEN of 24+ token ch
   assert.match(text, /WORLD_ADMIN_BIND ignored/);
   assert.match(text, /listening on 127\.0\.0\.1:/);
 });
+
+test("every pluginPanel method page.html calls is one the bundle's createPluginPanel returns", () => {
+  const dir = path.join(__dirname, "../plugins/tools/worldadmin/panel");
+  const page = fs.readFileSync(path.join(dir, "page.html"), "utf8");
+  const bundle = fs.readFileSync(path.join(dir, "panel.js"), "utf8");
+  const called = [...new Set([...page.matchAll(/pluginPanel\.([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]))];
+  assert.ok(called.length > 0, "page.html drives the plugin panel");
+  // A minified method is `name(){` or `name:` in the returned object.
+  const missing = called.filter((name) => !new RegExp("[,{]" + name + "(\\(|:)").test(bundle));
+  assert.deepEqual(missing, [], "a missing method throws in enterReconnect before the reconnect overlay starts (#4501)");
+});

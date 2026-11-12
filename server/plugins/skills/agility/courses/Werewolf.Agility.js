@@ -153,6 +153,7 @@ module.exports = {
   key: "werewolf",
   name: "Werewolf Agility",
   helper: 14, // the Agility helper's course (enum 3507: "Werewolf Agility Course")
+  lootSource: 21, // the loot tracker's source (enum 4976)
   lapXp: 730,
   petBase: 32597, // Giant squirrel base chance (Wiki)
   // Marks since 8 May 2024 (Wiki), on the one tile between the stepping stones and the hurdles

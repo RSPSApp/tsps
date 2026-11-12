@@ -279,6 +279,33 @@ test("breath messages name the protection and the breath, as captured", () => {
   ]);
 });
 
+test("the protection lines go to the spam channel; only \"horribly burnt\" is a game message (rsprox)", () => {
+  require("../dist/Server").Server.installProductionPathResolver();
+  const core = require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+  const Vorkath = require("../plugins/bosses/vorkath/Combat.Vorkath");
+  Vorkath.attach({
+    core, getPrayerHandler: () => ({}), getCombatFactory: () => ({}),
+    onNpcHitModify() {}, registerNpcCombatMethodProvider() {},
+  });
+  const { breathMessages, sendBreathLine } = Vorkath._test;
+  const sent = [];
+  const player = {
+    sendMessage: (text) => sent.push(["game", text]),
+    getPacketSender: () => ({ sendTypedMessage: (type, text) => sent.push([type === core.ChatType.SPAM ? "spam" : type, text]) }),
+  };
+  for (const line of [
+    ...breathMessages({ prayer: true, shield: true, potion: "super" }, "dragonfire"),
+    ...breathMessages({ prayer: false, shield: false, potion: "antifire" }, "venom"),
+  ]) sendBreathLine(player, line);
+  assert.deepEqual(sent, [
+    ["spam", "Your prayers resist some of the dragon's fiery breath!"],
+    ["spam", "Your shield absorbs most of the dragon's fiery breath!"],
+    ["spam", "Your super antifire potion helps to protect you from the dragon's fiery breath!"],
+    ["game", "You're horribly burnt by the dragon's venomous breath!"],
+    ["spam", "Your antifire potion helps to protect you from the dragon's breath!"],
+  ]);
+});
+
 test("each shot plays its launch sounds and an impact sound timed to its landing (captured)", () => {
   const played = [];
   const player = { getPacketSender: () => ({ sendSoundEffect: (id, loops, delay) => played.push([id, delay]) }) };

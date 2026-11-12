@@ -118,6 +118,8 @@ function login({ player, league }) {
 module.exports = function attach(api) {
   const { group, openButton, rows, close: closeChild } = Common.data.interface;
   api.persistAttribute(Common.FILTERS_ATTRIBUTE, {});
+  // A locked player (mid-teleport, on an obstacle) is told to finish first, and nothing opens.
+  api.refuseWhileBusy(uid(openButton[0], openButton[1]));
   api.onInterfaceActionButton(uid(openButton[0], openButton[1]), open);
   for (const [key, filter] of Object.entries(Common.data.filters)) api.onInterfaceActionButton(uid(group, filter.component), filterClick(key));
   api.onInterfaceActionButton(uid(group, rows), rowClick);

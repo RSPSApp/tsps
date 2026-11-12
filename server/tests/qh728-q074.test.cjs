@@ -629,7 +629,9 @@ test('the stone circle spawns the canonical ladder and scopes both ladder clicks
   assert.equal(h.registered.length, 1, 'entering the circle spawns its ladder');
   const ladder = h.registered[0];
   assert.equal(ladder.getId(), O.LADDER_192, 'the helper/cache ladder id 16680, not the KBD ladder');
-  assert.deepEqual([ladder.getLocation().getX(), ladder.getLocation().getY(), ladder.getLocation().getZ()], [2561, 3221, 0]);
+  // rsprox 226/01694.txt:118600: (2561, 3222, 0), rotation 1.
+  assert.deepEqual([ladder.getLocation().getX(), ladder.getLocation().getY(), ladder.getLocation().getZ()], [2561, 3222, 0]);
+  assert.equal(ladder.getFace(), 1);
   assert.ok(p.messages.includes('A ladder mysteriously appears.'));
 
   const click = (objectId, x, y) => {
@@ -645,7 +647,7 @@ test('the stone circle spawns the canonical ladder and scopes both ladder clicks
     return event;
   };
 
-  assert.equal(click(O.LADDER_192, 2561, 3221).handled, true, 'the spawned circle ladder is handled');
+  assert.equal(click(O.LADDER_192, 2561, 3222).handled, true, 'the spawned circle ladder is handled');
   assert.deepEqual(p.moves.at(-1), [2561, 9621, 0], 'it enters the thieves cave');
   assert.equal(click(O.LADDER_192, 2884, 3397).handled, false, 'other ladders with the same id are untouched');
   assert.deepEqual(p.moves.at(-1), [2561, 9621, 0], 'an unrelated 16680 click does not move the player');

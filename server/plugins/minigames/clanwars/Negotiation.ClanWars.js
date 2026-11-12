@@ -1,11 +1,12 @@
 /**
- * Native legacy chat-channel challenges for the bounded Plateau/melee-only LTS slice.
+ * Native legacy chat-channel challenges for bounded Plateau, Sylvan and Quarry/melee-only team battles.
  * Messages are implementation wording; there is no team-match recording to quote.
- * Pinned rev241: setup accept31, cap dropdown43 children1..8, confirm button7;
+ * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
  */
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Layout = require("./Layout.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -17,8 +18,8 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "wincondition_container", "arena_container", "stragglers_container", "other_container",
-  "melee", "ranged", "magic", "food", "drinks", "prayer", "specialattacks", "leavingcc", "rejoiningdelay",
+  "other_container",
+  "melee", "ranged", "magic",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -60,11 +61,35 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee last team standing - Plateau", Common.uid("clanwars_setup:title"));
-      // Hidden controls cannot optimistically change local rule varbits. The next screen
-      // explicitly lists the fixed terms; this screen negotiates the cap only.
+      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      // The cache creates mode rows at index * 3 (script 576). Every actual row
+      // must transmit even when its mode is unsupported: script579
+      // optimistically changes the client varbit even on unsupported selections.
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
+      }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:arena_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:arena"), 0, 41, 0);
+      for (let arena = 0; arena < 14; arena++) {
+        sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:arena"), arena * 3, arena * 3, OP1);
+      }
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), 0, 71, 0);
+      for (let mode = 0; mode < 24; mode++) {
+        sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), mode * 3, mode * 3, OP1);
+      }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:stragglers_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:stragglers"), 0, 5, 0);
+      // This is script576's scrollbox, with option rectangles at value * 3.
+      // Both rows transmit so unsupported combinations can reset optimistic bits.
+      for (let value = 0; value < Rules.STRAGGLER_LIMITS.length; value++) {
+        sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:stragglers"), value * 3, value * 3, OP1);
+      }
+      for (const name of Object.keys(Rules.RESTRICTIONS)) {
+        sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
+        // Script2877 creates highlight child0, then option children index+1.
+        // The deferred special row also transmits, so its optimistic bit is reset.
+        const count = name === "prayer" || name === "specialattacks" ? 3 : 2;
+        sender.sendInterfaceFlagsRange(Common.uid(`clanwars_setup:dropdown_${name}`), 1, count, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:dropdown_playercap"), 1, Rules.TEAM_CAPS.length, OP1);
@@ -143,7 +168,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing on Plateau. Choose a team cap, then check all fixed terms on the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade or Forsaken Quarry. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -173,10 +198,15 @@ function route(event) {
   });
 }
 
-function changeCap(session, player, index) {
-  const next = Rules.create(index);
-  if (!next) return;
-  if (session.rules.playercap === index) {
+function changeRules(session, player, key, index) {
+  const next = { ...session.rules, [key]: index };
+  if (!Rules.validate(next)) {
+    player.sendMessage("Ignore 5 is only supported in Last Team Standing battles.");
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
+  if (session.rules[key] === index) {
     sendRules(player, session.rules);
     return;
   }
@@ -238,9 +268,35 @@ function click(event) {
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
+    if (clicked("clanwars_setup:arena")) {
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
+        && Layout.get(slot / 3)) return changeRules(session, player, "arena", slot / 3);
+      player.sendMessage("Only Plateau, Sylvan Glade and Forsaken Quarry are supported.");
+    }
+    if (clicked("clanwars_setup:stragglers")) {
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
+        && slot / 3 < Rules.STRAGGLER_LIMITS.length) return changeRules(session, player, "stragglers", slot / 3);
+      player.sendMessage("That Clan Wars stragglers option is not supported.");
+    }
     if (clicked("clanwars_setup:dropdown_playercap")) {
       const slot = event.slot ?? event.action;
-      if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeCap(session, player, slot - 1);
+      if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeRules(session, player, "playercap", slot - 1);
+    }
+    for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
+      if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
+      player.sendMessage("That Clan Wars rule option is not supported.");
+      sendRules(player, session.rules);
+      return;
+    }
+    if (clicked("clanwars_setup:wincondition")) {
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
+        && Rules.create(session.rules.playercap, slot / 3)) return changeRules(session, player, "wincondition", slot / 3);
+      player.sendMessage("Only Last Team Standing, First to X kills and Most kills are supported.");
     }
     // A forged unsupported selection cannot alter the server's offer, nor leave a
     // client-only optimistic selection behind for the confirmation screen.

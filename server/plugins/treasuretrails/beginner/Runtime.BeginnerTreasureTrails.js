@@ -83,7 +83,8 @@ function read(event) {
 function checkSteps(event) {
   const item = clicked(event, data().scroll);
   if (!item) return false;
-  event.player.sendMessage(`You have completed ${stateOf(item, event.player).completed} steps on this beginner Treasure Trail.`);
+  // rsprox: "You have completed N steps on this beginner clue scroll."
+  event.player.sendMessage(`You have completed ${stateOf(item, event.player).completed} steps on this beginner clue scroll.`);
   return true;
 }
 
@@ -91,6 +92,11 @@ function dismissUri(player) {
   const active = uris.get(player);
   if (active) api.removeNpc(active.npc);
   uris.delete(player);
+}
+
+function itemBox(player, itemId, text) {
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.ItemStatementDialogue(0, itemId, text)).add(new core.EndDialogue(1)));
 }
 
 function advance(player, snapshot) {
@@ -102,11 +108,12 @@ function advance(player, snapshot) {
     // Exact-slot deletion matters when several generic scrolls are carried.
     player.getInventory().deleteAtSlot(trail.slot, 1);
     player.getInventory().adds(data().casket, 1);
-    player.sendMessage("You've found a reward casket!");
+    // rsprox (e.g. 227/00091.txt:346163, 346841): in a message box with the item, not chat.
+    itemBox(player, data().casket, "You've obtained a casket!");
   } else {
     trail.item.setMetaValue(TRAIL_META, newStep({ ...trail.state, completed }));
     player.getInventory().refreshItems();
-    player.sendMessage("You've found another clue!");
+    itemBox(player, trail.item.getId(), "You've found a new clue!");
   }
   return true;
 }

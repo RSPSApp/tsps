@@ -164,6 +164,11 @@ function check({player}) {
   else player.sendMessage("You have no active Hunter rumour.");
   return true;
 }
+// The rare part line, in the game's green, with its jingle.
+const PART_FOUND = "<col=229628>You find a rare piece of the creature! You should take it back to the Hunter Guild.";
+const PART_DROPPED = "<col=229628>You find a rare piece of the creature! Though without space in your inventory, it drops to the ground.";
+const PITY_FULL = "Free an inventory slot to receive the rare creature part on your next catch.";
+const PART_SOUND = 2655, PART_DESPAWN_TICKS = 200;
 function success({player,npcId,method,creature}) {
   if(method === "herbiboar-tracking")return;
   const s=state(player),a=s.assignments[s.active];if(!a)return;
@@ -176,12 +181,15 @@ function success({player,npcId,method,creature}) {
   const rate=rates[category];if(!rate)return;
   const outfit=C.outfit(player),pity=a.count>=rate[outfit?2:1];
   if(!pity&&Math.random()>=(outfit?1.05:1)/rate[0])return;
-  if(!C.exchange(player,[],[[part,1]])) {
-    if(pity){player.sendMessage("Free an inventory slot to receive the rare creature part on your next catch.");return;}
-    C.drop(player,[[part,1]],player.getLocation());
-  }
+  const room=C.exchange(player,[],[[part,1]]);
+  // A pity part needs a free slot: with a full inventory it is lost and comes again on the next catch.
+  // Ours: the line that says so (live's wording is unknown).
+  if(!room&&pity){player.sendMessage(PITY_FULL);return;}
+  // Without room the part lands under the player, theirs alone, for 200 ticks.
+  if(!room)H.core.ItemOnGroundManager.registerLocation(player,new H.core.Item(part,1),player.getLocation().clone(),player.getPrivateArea(),{goesGlobal:false,despawnDelay:PART_DESPAWN_TICKS});
   a.found=true;
-  player.sendMessage("You find a rare piece of the creature! Take it back to the Hunter Guild.");
+  player.sendMessage(room?PART_FOUND:PART_DROPPED);
+  player.getPacketSender().sendSound(PART_SOUND,1,0);
 }
 function owns(player,id) {return player.getInventory().contains(id)||C.hasTool(player,id)||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>player.getBank(tab)).some(bank=>bank?.contains(id));}
 function cascade(player, skill, rows) {

@@ -99,7 +99,7 @@
   "gasHoleDamage": [3, 6],
 
   "_water": "36 throws a vessel; the crust stages last 74, 65 and 10 ticks, then lava again (recorded).",
-  "water": { "throws": 36, "stages": [74, 65, 10] },
+  "water": { "throws": 36, "upgradedThrows": 72, "stages": [74, 65, 10] },
 
   "stairs": {
     "3802,10159,3": [3803, 10158, 1], "3813,10159,3": [3813, 10158, 1],

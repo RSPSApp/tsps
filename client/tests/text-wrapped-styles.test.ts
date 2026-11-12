@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { BitmapFont } from "../rs/font/BitmapFont";
-import { drawWrappedTextGL, parseWrappedOsrsMarkup, type TextSegment } from "../widgets/components/TextRenderer";
+import { drawWrappedTextGL, parseWrappedOsrsMarkup, wrapTextToWidth, type TextSegment } from "../widgets/components/TextRenderer";
 import type { GLRenderer } from "../widgets/gl/renderer";
 
 // The OSRS client sets a font's colour and styles once (AbstractFont.reset) and then draws every
@@ -88,5 +88,12 @@ assert.deepEqual(
     { x: 448, y: 483, width: 3, height: 1 },
 );
 assert.equal(drawWrappedTextGL(glr, () => font, "", 10, 20, 880, 927, 0, DEFAULT), undefined);
+
+// A non-breaking space keeps its two words on one line (cache text such as the league tasks'
+// "level 10"), and it stays a non-breaking space in the wrapped line.
+assert.deepEqual(
+    wrapTextToWidth("Reach level 10 now", 11, (s) => s.length),
+    ["Reach", "level 10", "now"],
+);
 
 console.log("text-wrapped-styles: ok");

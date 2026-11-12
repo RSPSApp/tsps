@@ -4,6 +4,11 @@ const Model = require('./Model.DukeSucellus');
 const Records = require('./Records.DukeSucellus');
 const Hazards = require('./Hazards.DukeSucellus');
 const Preparation = require('./Preparation.DukeSucellus');
+
+/** A spam line (filterable), as these are in the recordings. */
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, text);
+}
 const { sendBossKillCount } = require('../../interface/BossKillCount.plugin');
 class Fight {
   constructor(session, boss) {
@@ -153,10 +158,11 @@ class Fight {
     this.at(Common.data.timing.gazeWarning, () => {
       this.hideGaze();
       if (Model.hidden(Common.source(this.session, this.player.getLocation()))) {
-        this.player.sendMessage("<col=06600c>You manage to avoid Duke Sucellus' gaze.");
+        // Spam, as recorded (226/01703.txt:232438; the failure in red, 227/00555.txt:361498).
+        spam(this.player, "<col=06600c>You manage to avoid Duke Sucellus' gaze.");
       }
       else {
-        this.player.sendMessage("You failed to avoid Duke Sucellus' gaze.");
+        spam(this.player, "<col=ff3045>You failed to avoid Duke Sucellus' gaze.");
         this.at(1, () => Common.hurt(this, Common.data.normal.gaze));
       }
     });

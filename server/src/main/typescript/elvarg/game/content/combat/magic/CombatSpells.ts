@@ -1592,7 +1592,8 @@ export class CombatSpells {
         spellEffect: (_cast, target) => {
             if (!target.isNpc()) return;
             target.getMovementQueue().reset();
-            target.setAttribute("arceuus:dark-lure-until", World.getProcessCycle() + 34);
+            // Wiki (Dark Lure): it "remains active on monsters for 61.2 seconds", 102 ticks.
+            target.setAttribute("arceuus:dark-lure-until", World.getProcessCycle() + 102);
             target.getCombat().attack(_cast);
         },
     });

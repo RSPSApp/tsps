@@ -256,3 +256,57 @@ test('unrelated utility spells retain their fallback effect and inaccurate casts
   attacker.setAttribute('standard-curses-test:veto',true);
   spell.finishCast(attacker,value,true,0);assert.equal(calls,1);
 });
+
+// rsprox_transcripts/227/00095.txt:81131 and 227/02174.txt:5460: Enfeeble on an immune NPC is refused on the click's
+// tick with this line: no animation, runes or XP.
+test('every curse on a stat-drain-immune NPC says the target is immune, before rune payment', t => {
+  for (const [name] of cases) {
+    const { value: target } = npc(t);
+    target.setStatDrainImmune(true);
+    const f = paidCast(t, name, target);
+    const inventory = JSON.stringify(f.p.getInventory().getItems()), xp = f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()];
+    assert.equal(f.method.canAttack(f.p, target), false, name + ': the cast is refused');
+    assert.deepEqual(f.p.messages, ['Your target is currently immune to that spell.'], name);
+    assert.equal(JSON.stringify(f.p.getInventory().getItems()), inventory, name + ' keeps its runes');
+    assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()], xp, name + ' gives no XP');
+  }
+  // A player target is never immune this way, and an ordinary NPC still takes the curse.
+  const { value: normal } = npc(t);
+  const ok = paidCast(t, 'ENFEEBLE', normal);
+  assert.equal(ok.method.canAttack(ok.p, normal), true);
+  assert.deepEqual(ok.p.messages, []);
+});
+
+test('native spell-on-NPC Enfeeble on a real cached NPC made immune is refused with the recorded line', t => {
+  new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
+  const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
+  const target = new NPC(core.NpcIdentifiers.LESSER_DEMON, new core.Location(3201, 3200));
+  target.setStatDrainImmune(true);
+  const f = paidCast(t, 'ENFEEBLE', target); f.p.setRegistered(true); f.p.setLocation(new core.Location(3200, 3200));
+  core.World.getNpcs().add(target); t.after(() => core.World.getNpcs().remove(target));
+  const inventory = JSON.stringify(f.p.getInventory().getItems()), xp = f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()];
+  assert.equal(NPCOptionPacketListener.castSpell(f.p, target.getIndex(), f.spell.spellId()), true, 'the native click selects the target');
+  assert.equal(f.method.canAttack(f.p, target), false, 'the cast gate refuses before payment');
+  assert.deepEqual(f.p.messages, ['Your target is currently immune to that spell.']);
+  assert.equal(JSON.stringify(f.p.getInventory().getItems()), inventory);
+  assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()], xp);
+  assert.equal(target.getCurrentLevel(core.Skill.STRENGTH), target.getMaxLevel(core.Skill.STRENGTH));
+});
+
+// Wiki (Dark Lure): "Dark Lure remains active on monsters for 61.2 seconds" (102 ticks).
+test('Dark Lure keeps a monster from retreating for 102 ticks', () => {
+  const attributes = new Map();
+  const attacked = [];
+  const target = {
+    isNpc: () => true, isPlayer: () => false,
+    getMovementQueue: () => ({ reset() {} }),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getAttribute: key => attributes.get(key),
+    getCombat: () => ({ attack: who => attacked.push(who) }),
+  };
+  const caster = { isNpc: () => false, isPlayer: () => true };
+  const now = core.World.getProcessCycle();
+  core.CombatSpells.DARK_LURE.spellEffect(caster, target);
+  assert.equal(attributes.get('arceuus:dark-lure-until'), now + 102);
+  assert.deepEqual(attacked, [caster]);
+});

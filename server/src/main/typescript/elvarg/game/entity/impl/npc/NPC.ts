@@ -137,6 +137,7 @@ export class NPC extends Mobile {
     private defenceBonusOverrides: Array<number | null> | null = null;
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
+    private telejumped = false;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
     private headbars: NpcHeadbar[] = [];
     /** This tick's fade, sent with the NPC's update and cleared after it. */
@@ -179,6 +180,8 @@ export class NPC extends Mobile {
     private statDrainImmune = false;
     /** Optional encounter-owned minimum combat levels; the default remains zero. */
     private statMinimumLevels = new Map<Skill, number>();
+    /** Encounter-owned raises to this NPC's base combat levels (a boss's enrage); the definition is untouched. */
+    private maxLevelBoosts: Map<Skill, number> | null = null;
     private static readonly STAT_RESTORE_TICKS = 100;
     /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
     private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
@@ -561,7 +564,21 @@ export class NPC extends Mobile {
     public getMaxLevel(skill: Skill): number {
         const slot = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC].indexOf(skill);
         if (slot < 0) throw new RangeError("Unsupported NPC combat skill");
-        return this.getCurrentDefinition().getStats()[slot];
+        return this.getCurrentDefinition().getStats()[slot] + (this.maxLevelBoosts?.get(skill) ?? 0);
+    }
+
+    /**
+     * Raise this NPC's base level for `skill` by `amount` (drains then clamp to, and restore up to, the raised
+     * level), or clear it with null. Only this NPC changes; its shared definition and other NPCs do not.
+     */
+    public setMaxLevelBoost(skill: Skill, amount: number | null): void {
+        this.getMaxLevel(skill); // validate the skill
+        if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+            throw new RangeError("Invalid NPC max level boost");
+        }
+        this.maxLevelBoosts ??= new Map<Skill, number>();
+        if (amount === null || Math.floor(amount) === 0) this.maxLevelBoosts.delete(skill);
+        else this.maxLevelBoosts.set(skill, Math.floor(amount));
     }
 
     public getCurrentLevel(skill: Skill): number {
@@ -886,6 +903,22 @@ export class NPC extends Mobile {
         return this.exactMoveState;
     }
 
+    /**
+     * Moves the NPC to `destination` at once, staying in view, as OSRS's NPC telejump does: clients
+     * see it snap there in place, its animation carrying on, rather than vanish for a tick and
+     * come back (a plain moveTo) or glide (exactMove).
+     */
+    public telejump(destination: Location): NPC {
+        this.moveTo(destination);
+        this.telejumped = true;
+        return this;
+    }
+
+    /** Whether the NPC telejumped this tick (cleared with the tick's update). */
+    public isTelejumping(): boolean {
+        return this.telejumped;
+    }
+
     /** The orientation facing along (dx, dy): 0 south, 512 west, 1024 north, 1536 east. */
     public static travelAngle(dx: number, dy: number): number {
         if (dx === 0 && dy === 0) return 0;
@@ -973,6 +1006,7 @@ export class NPC extends Mobile {
     public resetUpdating() {
         super.resetUpdating();
         this.exactMoveState = null;
+        this.telejumped = false;
         this.headbars = [];
         this.faceTileState = null;
         this.transparencyState = null;

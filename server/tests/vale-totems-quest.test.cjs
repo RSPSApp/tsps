@@ -94,6 +94,7 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
   const stacks = (id) => PluginManager.getCoreApi().ItemDefinition.forId(id)?.isStackable?.() === true;
   const said = [];
   const messages = [];
+  const spam = [];
   const attributes = new Map();
   const dialogues = [];
   let creationMenu = null;
@@ -115,6 +116,11 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
       return sender;
     },
     sendCreationMenu: (menu) => { creationMenu = menu; return sender; },
+    sendTypedMessage: (type, text) => {
+      if (type === PluginManager.getCoreApi().ChatType.SPAM) spam.push(text);
+      else messages.push(text);
+      return sender;
+    },
   }, { get: (target, key) => key in target ? target[key] : () => sender });
 
   const inventoryApi = {
@@ -145,7 +151,7 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
   };
 
   const player = {
-    inventory, messages, attributes, dialogues, isPlayerBot: () => false,
+    inventory, messages, spam, attributes, dialogues, isPlayerBot: () => false,
     getDisplayName: () => "Tester", getUsername: () => "tester",
     get creationMenu() { return creationMenu; },
     getLocation: () => location,
@@ -351,6 +357,8 @@ test("the minigame withholds carving and decorating until each lesson, then adva
     creation.execute(obj(`ent_totems_animal_icon_${animal}`));
   }
   assert.equal(State.totem(player, SITE).carved, true);
+  // During the miniquest all three carvings name the animal, as spam.
+  assert.deepEqual(player.spam, ["You carve a buffalo into the totem.", "You carve a jaguar into the totem.", "You carve an eagle into the totem."]);
   tick();
   assert.equal(player.dialogues.at(-1)[0].getText(), "You finish carving the totem, but it still seems to be missing something. Ranulph and Isadora might know what to do next.");
 

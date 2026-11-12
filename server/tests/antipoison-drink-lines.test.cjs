@@ -38,6 +38,12 @@ test('antipoisons send no line of their own', t => {
   }
 });
 
+test('an antipoison weakens venom to poison with no line of its own (rsprox 234/03280.txt:69820)', t => {
+  const f = drinker(t, { venom: true, poison: 8 }); f.drink(I.ANTIPOISON_4_);
+  assert.equal(f.p.isVenomed(), false, 'the venom is now poison');
+  assert.deepEqual(f.lines, []);
+});
+
 test('anti-venom: "It cures your venom." when venomed, else immunity from poison', t => {
   const venomed = drinker(t, { venom: true, poison: 8 }); venomed.drink(I.ANTI_VENOM_4_);
   assert.equal(venomed.p.isVenomed(), false);
@@ -51,4 +57,65 @@ test('anti-venom+ and extended anti-venom+: immunity from venom', t => {
     const f = drinker(t); f.drink(id);
     assert.deepEqual(f.lines, [[ChatType.SPAM, 'It grants you immunity from venom.']], String(id));
   }
+});
+
+// rsprox: each potion's own drink line first, then its effect's lines, then the doses left
+// ("You have 3 doses of potion left.", "You have 1 dose of potion left.") or "You have finished your potion."
+test('a drink sends its recorded line, the effect, then the doses left', t => {
+  const { Item } = require('../dist/game/model/Item');
+  const drinkFrom = (id) => {
+    const f = drinker(t);
+    t.mock.method(f.p, 'performAnimation', () => {});
+    f.p.getInventory().setItem(0, new Item(id, 1));
+    const item = f.p.getInventory().getItems()[0];
+    assert.equal(PluginManager.emitItemAction({ player: f.p, item, itemId: id, slot: 0, clickType: 1, handled: false }), true);
+    return f.lines;
+  };
+  assert.deepEqual(drinkFrom(I.PRAYER_POTION_4_), [
+    [ChatType.SPAM, 'You drink some of your restore prayer potion.'], [ChatType.SPAM, 'You have 3 doses of potion left.']]);
+  assert.deepEqual(drinkFrom(I.ANTI_VENOM_2_), [
+    [ChatType.SPAM, 'You drink some of your antivenom potion.'], [ChatType.SPAM, 'It grants you immunity from poison.'],
+    [ChatType.SPAM, 'You have 1 dose of potion left.']]);
+  assert.deepEqual(drinkFrom(I.SUPER_ATTACK_1_), [
+    [ChatType.SPAM, 'You drink some of your attack potion.'], [ChatType.SPAM, 'You have finished your potion.']]);
+});
+
+function drinkItem(t, id, { inside = null, smash = false } = {}) {
+  const { Item } = require('../dist/game/model/Item');
+  const f = drinker(t);
+  t.mock.method(f.p, 'performAnimation', () => {});
+  if (smash) t.mock.method(f.p.getPacketSender(), 'getVarbit', (varbit) => (varbit === 5668 ? 1 : 0));
+  if (inside) {
+    const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+    t.mock.method(PluginManager, 'emitCustomEvent', (name, event, ...rest) => {
+      const result = emit(name, event, ...rest);
+      if (name === 'potions:area' && event?.area === inside) event.inside = true;
+      return result;
+    });
+  }
+  f.p.getInventory().setItem(0, new Item(id, 1));
+  const item = f.p.getInventory().getItems()[0];
+  assert.equal(PluginManager.emitItemAction({ player: f.p, item, itemId: id, slot: 0, clickType: 1, handled: false }), true);
+  t.mock.restoreAll();
+  return f.lines;
+}
+
+// rsprox 239/04272.txt:6910 and the 619 recorded Vampyrium supply drinks: their own spam line, and nothing after it.
+test('Vampyrium supplies send only their own recorded line, at every dose', t => {
+  const cases = [
+    [[I.RANCID_SLIMY_POTION_4_, I.RANCID_SLIMY_POTION_1_], 'You drink the rancid slimy potion. You feel oddly robust.'],
+    [[I.FOUL_CHUNKY_POTION_4_, I.FOUL_CHUNKY_POTION_1_], 'You drink the foul chunky potion. You feel oddly reinvigorated.'],
+    [[I.RANK_FROTHY_POTION_4_, I.RANK_FROTHY_POTION_1_], 'You drink the rank frothy potion. You feel oddly powerful.'],
+    [[I.JAR_OF_CONGEALED_BLOOD], 'You eat the congealed blood. It tastes better than expected and leaves you feeling fully refreshed.'],
+  ];
+  for (const [ids, line] of cases) {
+    for (const id of ids) assert.deepEqual(drinkItem(t, id, { inside: 'vampyrium' }), [[ChatType.SPAM, line]], String(id));
+  }
+});
+
+// rsprox 236/03932.txt:72353-72354 and 237/01104.txt:464410 (62 recorded): the drink line, the finished line, then the smash.
+test('with vial smashing on, the last dose says it is finished before the smash', t => {
+  assert.deepEqual(drinkItem(t, I.SUPER_ATTACK_1_, { smash: true }), [
+    [ChatType.SPAM, 'You drink some of your attack potion.'], [ChatType.SPAM, 'You have finished your potion.'],
+    [ChatType.SPAM, 'You quickly smash the empty vial using the trick a Barbarian taught you.']]);
 });

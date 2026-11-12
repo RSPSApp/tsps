@@ -49,8 +49,12 @@
       "item": 4241, "itemName": "Nettles",
       "message": "You pick the nettles.",
       "deplete": 0,
-      "needsGloves": true,
-      "source": "wiki: Nettles, gloves are needed (not Beekeeper's); without them no nettles and up to 2 damage; depletion not documented"
+      "needsGloves": {
+        "names": ["glove", "gauntlet", "vambrace", "vambs", "bracers"],
+        "also": ["Bunny paws", "Crab claw", "Crabclaw hook", "Holy wraps", "Pirate's hook", "Regen bracelet"],
+        "not": ["Beekeeper's gloves"]
+      },
+      "source": "wiki: Nettles, gloves are needed (not Beekeeper's); without them no nettles and up to 2 damage, a green hitsplat but no poison; depletion not documented. needsGloves: hands items named as gloves, gauntlets, vambraces or bracers, plus the Wiki's ==Gloves== list's other items (its only bracelet is the Regen bracelet), so bracelets, cuffs and armbands don't count"
     }
   ]
 }

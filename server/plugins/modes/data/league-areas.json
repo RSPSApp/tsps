@@ -76,7 +76,10 @@
       "thresholds": [90, 200, 400],
       "areas": [1, 2, 3, 4, 5, 6, 7, 8, 11, 20, 21],
       "spotanimPrefix": "league_5_area_unlock_emote_spotanim_",
-      "overrides": [{ "rect": [17, 53, 19, 53], "area": 21 }],
+      "overrides": [
+        { "rect": [17, 53, 19, 53], "area": 21 },
+        { "_comment": "The Dagannoth Kings' lair below Waterbirth Island, on no surface square and so open to everyone otherwise. The Wiki's Raging Echoes Fremennik Province lists Waterbirth Island Dungeon and has the Dagannoth Kings as its echo boss.", "rect": [45, 68, 45, 69], "area": 8 }
+      ],
       "teleportCast": {
         "steps": [
           { "tick": 1, "animation": 11875, "graphic": 3180 },

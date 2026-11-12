@@ -18,7 +18,7 @@ const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
 
 let Barrier, core;
 const hooks = { objects: {}, custom: {}, variant: null, condition: null };
-const state = { complete: false, dialogues: [] };
+const state = { complete: false, stage: 0, dialogues: [] };
 
 before(() => {
   CachePipeline.initialize();
@@ -33,6 +33,7 @@ before(() => {
     onCustomEvent: (name, handler) => { (hooks.custom[name] ??= []).push(handler); },
     emitCustomEvent: (name, payload) => {
       if (name === 'quest:is-complete' && payload.name === 'Ghosts Ahoy') payload.complete = state.complete;
+      if (name === 'quest:get-stage' && payload.name === 'Ghosts Ahoy') payload.stage = state.stage;
       if (name === 'npc-dialogue:start') { state.dialogues.push([payload.npcId, payload.variant]); payload.handled = true; }
     },
   };
@@ -42,6 +43,7 @@ before(() => {
 
 beforeEach(() => {
   state.complete = false;
+  state.stage = 0;
   state.dialogues.length = 0;
 });
 
@@ -54,6 +56,8 @@ function realPlayer(t, x, y) {
   p.messages = [];
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   t.mock.method(p, 'sendMessage', (text) => { p.messages.push(text); });
+  const sender = p.getPacketSender();
+  t.mock.method(sender, 'sendTypedMessage', (type, text) => { p.messages.push(text); return sender; });
   t.mock.method(p, 'isRegistered', () => true);
   t.mock.method(p.getInventory(), 'refreshItems', () => p.getInventory());
   t.mock.method(p.getEquipment(), 'refreshItems', () => p.getEquipment());
@@ -110,7 +114,7 @@ test('a double click pays once: the second waits for the first walk', (t) => {
   assert.equal(p.getLocation().getY(), 3507);
 });
 
-test('one ecto-token: nothing taken, nobody moves', (t) => {
+test('one ecto-token: nothing taken, nobody moves, and the guard asks for his toll (Ghosts Ahoy capture ticks 105-106)', (t) => {
   const p = realPlayer(t, 3660, 3509);
   wear(p, I().MORYTANIA_LEGS_2, core.Equipment.LEG_SLOT);
   p.getInventory().add(new core.Item(I().ECTO_TOKEN, 1));
@@ -118,7 +122,50 @@ test('one ecto-token: nothing taken, nobody moves', (t) => {
   ticks(3);
   assert.equal(tokens(p), 1);
   assert.equal(p.getLocation().getY(), 3509);
-  assert.deepEqual(p.messages, [Barrier.TOO_FEW_TOKENS]);
+  assert.deepEqual(p.messages, ["You don't have enough tokens to pay the toll."]);
+  assert.deepEqual(state.dialogues, [[core.NpcIdentifiers.GHOST_GUARD, 'standard-dialogue-before-or-during-ghosts-ahoy']]);
+  // His menu then offers only the captured two (ticks 108, 119): the toll options are for 2 tokens.
+  assert.equal(hooks.condition({ player: p, npcId: core.NpcIdentifiers.GHOST_GUARD, text: 'If the player has at least 2 Ectotokens:' }), false);
+  assert.equal(hooks.condition({ player: p, npcId: core.NpcIdentifiers.GHOST_GUARD, text: 'If the player has fewer than 2 Ectotokens:' }), true);
+});
+
+test('paying in says so; walking out of the town is free (capture ticks 141, 215, 1628)', (t) => {
+  const p = realPlayer(t, 3659, 3509);
+  wear(p, I().GHOSTSPEAK_AMULET, core.Equipment.AMULET_SLOT);
+  p.getInventory().add(new core.Item(I().ECTO_TOKEN, 45));
+  click(p, 'Pay-toll(2-Ecto)');
+  assert.equal(tokens(p), 43);
+  assert.deepEqual(p.messages, [Barrier.PAID_TOLL]);
+  ticks(4);
+  assert.equal(p.getLocation().getY(), 3507);
+  click(p, 'Pay-toll(2-Ecto)');
+  ticks(4);
+  assert.equal(p.getLocation().getY(), 3509, 'out of the town');
+  assert.equal(tokens(p), 43, 'for nothing');
+});
+
+test('the bedsheet stops the crossing with its message box (capture tick 1621)', (t) => {
+  const p = realPlayer(t, 3660, 3507);
+  wear(p, I().GHOSTSPEAK_AMULET, core.Equipment.AMULET_SLOT);
+  wear(p, I().BEDSHEET_2, core.Equipment.HEAD_SLOT);
+  p.getInventory().add(new core.Item(I().ECTO_TOKEN, 2));
+  const started = [];
+  t.mock.method(p.getDialogueManager(), 'startDialogues', (builder) => { started.push([...builder.getDialogues().values()]); });
+  click(p, 'Pay-toll(2-Ecto)');
+  ticks(4);
+  assert.equal(p.getLocation().getY(), 3507);
+  assert.equal(tokens(p), 2);
+  assert.equal(started[0][0].getText(), Barrier.BEDSHEET_REFUSAL);
+});
+
+test('from Necrovarus commanded (questvar 7) the toll is gone (capture tick 1952)', (t) => {
+  state.stage = 7;
+  const p = realPlayer(t, 3660, 3509);
+  wear(p, I().GHOSTSPEAK_AMULET, core.Equipment.AMULET_SLOT);
+  click(p, 'Pay-toll(2-Ecto)');
+  ticks(4);
+  assert.equal(p.getLocation().getY(), 3507);
+  assert.deepEqual(p.messages, []);
 });
 
 test('without a ghostspeak amulet the guards wail and nothing is taken (Transcript:Ghost guard)', (t) => {

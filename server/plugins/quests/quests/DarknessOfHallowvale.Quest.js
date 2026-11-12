@@ -622,7 +622,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const REQUIRED_SKILLS = [
     { skill: Skill.CONSTRUCTION, level: 5, label: "Construction", boostable: true },
     { skill: Skill.MINING, level: 20, label: "Mining" },
-    { skill: Skill.THIEVING, level: 22, label: "Thieving" },
+    // Wiki (Darkness of Hallowvale): "The level 22 Thieving requirement to begin the quest is boostable"; the latch
+    // in Meiyerditch keeps an unboostable 22 (the base-level check below).
+    { skill: Skill.THIEVING, level: 22, label: "Thieving", boostable: true },
     { skill: Skill.AGILITY, level: 26, label: "Agility", boostable: true },
     { skill: Skill.CRAFTING, level: 32, label: "Crafting" },
     { skill: Skill.MAGIC, level: 33, label: "Magic", boostable: true },

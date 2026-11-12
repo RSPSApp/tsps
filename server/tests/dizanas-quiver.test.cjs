@@ -68,6 +68,7 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
         sendString: (text, uid) => { sentStrings.push([uid, text]); return sender; },
         sendItemOnInterfaces: (uid, itemId, amount) => { sentItems.push([uid, itemId, amount]); return sender; },
         sendItemOnInterface: (uid, itemId, slot, amount) => { sentItems.push([uid, itemId, amount]); return sender; },
+        sendTypedMessage: (type, message) => { messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : message); return sender; },
       };
       return sender;
     },
@@ -130,7 +131,7 @@ test('Fill moves the worn arrows into the quiver; with none worn, the Wiki messa
 
   const empty = fakePlayer();
   click(empty, 2);
-  assert.equal(empty.messages.at(-1), 'You have nothing in your worn quiver to fill your Dizana\'s Quiver with.');
+  assert.equal(empty.messages.at(-1), '<col=ff3045>You have nothing in your worn quiver to fill your Dizana\'s Quiver with.', 'in red (rsprox 238/04144.txt:23998)');
 });
 
 test('Swap wears the stored ammo only at its Ranged level: no dragon arrows at 50 Ranged', () => {
@@ -168,6 +169,7 @@ test('Quiver-Remove puts the ammo in the inventory', () => {
   assert.equal(player.carried.get(I.DRAGON_ARROW), 40);
   assert.equal(Quiver.stored(player), null);
   assert.equal(player.varps.get(Quiver.VARP.ITEM), -1);
+  assert.equal(player.messages.at(-1), "spam: You remove the ammo from Dizana's Quiver.", 'rsprox 238/04144.txt:23330');
 });
 
 test('the bow fires the quiver when the ammo slot holds something it can\'t fire', () => {

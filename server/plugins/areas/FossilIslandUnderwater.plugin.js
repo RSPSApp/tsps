@@ -11,14 +11,17 @@
  * 3732,10281 on plane 1 with fossil_underwater_oxygen at 1000 and the fossil_underwater overlay
  * (underwater_shallow in its water_overlay), the "Dive without diving gear?" warning after the
  * player's line, the rope's bubbles and 3769,3898. The barge routes are left out: the barge isn't
- * in this map (see BoneVoyage.Quest.js). Not done yet: air bubbles and pufferfish refilling
- * oxygen, and the "Your hands are full." swim prompt.
+ * in this map (see BoneVoyage.Quest.js). Underwater Agility and Thieving's chests, clams and
+ * pufferfish are fossilislandunderwater/Tears, Mairin's Training fossilislandunderwater/Training.
+ * Not done yet: air bubbles refilling oxygen, and the "Your hands are full." swim prompt.
  *
  * The drift-net area is a private instance, so the sea floor can't be an Area that players stay
  * in: underwater players are followed per map square, and one task visits only them.
  */
 const DATA = require("./data/fossil-island-underwater.json");
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
+const Tears = require("./fossilislandunderwater/Tears.FossilIslandUnderwater");
+const Training = require("./fossilislandunderwater/Training.FossilIslandUnderwater");
 
 const OXYGEN_VARBIT = 5811; // fossil_underwater_oxygen
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
@@ -168,6 +171,16 @@ function sendOxygen(player) {
   player.getPacketSender().sendVarbit(OXYGEN_VARBIT, oxygen.get(player));
 }
 
+/** Oxygen gained or lost (a pufferfish's 15%, a nibble's 2%), kept between 0 and the full bar. */
+function changeOxygen(player, change) {
+  if (!oxygen.has(player)) return;
+  oxygen.set(player, Math.max(0, Math.min(DATA.oxygen.max, oxygen.get(player) + change)));
+  sendOxygen(player);
+}
+
+/** What the sea floor's units (Tears, Training) use. */
+const shared = { isDiving: (player) => oxygen.has(player), changeOxygen, later };
+
 function swim(player, swimming) {
   player.setRenderAnimations(swimming ? SWIM_ANIMATIONS : null);
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
@@ -181,11 +194,13 @@ function enterWater(player) {
   sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, UNDERWATER_OVERLAY, 1);
   sender.sendSubInterface(WATER_OVERLAY_UID, SHALLOW_WATER, 1);
   sendOxygen(player);
+  Tears.enter(player);
 }
 
 function leaveWater(player) {
   if (!oxygen.delete(player)) return;
   drainTicks.delete(player);
+  Tears.leave(player);
   if (!player.isRegistered()) return;
   swim(player, false);
   player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
@@ -224,8 +239,9 @@ function breathe(player) {
 
 function underwaterTick() {
   for (const player of [...oxygen.keys()]) {
-    if (!player.isRegistered()) { oxygen.delete(player); drainTicks.delete(player); continue; }
+    if (!player.isRegistered()) { oxygen.delete(player); drainTicks.delete(player); Tears.leave(player); continue; }
     if (player.getHitpoints() > 0) breathe(player);
+    if (oxygen.has(player)) Tears.tick(player);
   }
 }
 
@@ -253,13 +269,14 @@ function login({ player }) {
 function logout({ player }) {
   oxygen.delete(player);
   drainTicks.delete(player);
+  Tears.leave(player);
 }
 
 module.exports = {
   name: "FossilIslandUnderwater",
   description: "Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus.",
   members: true,
-  _test: { oxygen, underwaterTick, followWater, breathingGear, boatMenu, dive, climbRope },
+  _test: { oxygen, underwaterTick, followWater, breathingGear, boatMenu, dive, climbRope, changeOxygen, Tears, Training },
   register(api) {
     core = api.core;
     pluginApi = api;
@@ -272,5 +289,7 @@ module.exports = {
     api.onPlayerLogin(login);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
+    Tears.attach(api, shared, DATA.tears);
+    Training.attach(api, DATA.training);
   },
 };

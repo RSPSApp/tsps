@@ -6,12 +6,15 @@
 //   want you getting swept away!" and "You need a Sailing level of 38 to dive here.". Otherwise
 //   "I want something in return if you're going to dive with me...", her riddle, and the item
 //   search: "Submit your answer to the mermaid's puzzle:" (or "your first answer", "second" ...
-//   for each of several answers).
+//   for each of several answers). An answer may be any of a few items ("Tarromin or grimy
+//   tarromin"). Where her riddle asks for quantities, each item is followed by "<Item>: How many
+//   should there be?".
 //   Right: the box "The mermaid, satisfied with your answer, escorts you to the bottom of the
-//   sea...", her dive animation and sounds 10797/10798, the screen fading out; 8 ticks later it
-//   fades back in, 2 later the charting, and her "There you go. Hope the dive got you everything
-//   you needed!". Wrong (the Wiki): "I don't think that's right... You should try again." and the
-//   riddle again.
+//   sea...", with no continue, her dive animation and sounds 10797/10798, the screen fading out
+//   and the minimap off a tick later; 8 ticks later it fades back in, 2 later the fade closes, the
+//   charting, and the same box again, now to continue; after it her "There you go. Hope the dive
+//   got you everything you needed!". Wrong: "I don't think that's right... You should try again."
+//   and the riddle again, once every answer is in.
 const common = require("./Common.Charting");
 
 const NPC_FIRST = 15155; // sailing_charting_mermaid_guide_1 (Victoria) .. _5 (Christina)
@@ -21,8 +24,10 @@ const LEVEL = 38;
 const SEQ_DIVE = 13191; // mermaid_dive
 const SOUNDS = Object.freeze([10797, 10798]);
 const SCRIPT_ITEM_SEARCH = 750; // meslayer_mode14
+const MINIMAP_OFF_TICKS = 1;
 const FADE_IN_TICKS = 8;
 const CHART_TICKS = 10;
+const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 /** From the deck to a mermaid in the water: the deck's usual reach (ours). */
 const DECK_REACH = 12;
 const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
@@ -79,44 +84,81 @@ function dive(event) {
   return true;
 }
 
-/** The item search, once per answer; all of them right (in any order) and she dives. */
+/** An answer's accepted items: one id, or a list of alternatives. */
+function accepted(answer) {
+  return Array.isArray(answer) ? answer : [answer];
+}
+
+/**
+ * Every answer given once, in any order: `given` is `{ id, count }` per submission, and `counts`
+ * (where the riddle asks for quantities) the amount each answer needs.
+ */
+function isRight({ answers, counts }, given) {
+  const left = [...given];
+  return answers.every((answer, i) => {
+    const at = left.findIndex(({ id, count }) => accepted(answer).includes(id) && (!counts || count === counts[i]));
+    if (at < 0) return false;
+    left.splice(at, 1);
+    return true;
+  });
+}
+
+/** The item search, once per answer (with its quantity where she asks); all of them right and she dives. */
 function ask(player, npc, spot, given) {
-  const answers = spot.mermaid.answers;
+  const { answers, counts } = spot.mermaid;
   const prompt = answers.length === 1
     ? "Submit your answer to the mermaid's puzzle:"
     : `Submit your ${ORDINALS[given.length] ?? "next"} answer to the mermaid's puzzle:`;
-  player.setEnteredSyntaxAction({ execute: (input) => {
-    const id = Number(input);
-    if (!Number.isInteger(id)) return;
-    const next = [...given, id];
+  const submit = (answer) => {
+    const next = [...given, answer];
     if (next.length < answers.length) {
       ask(player, npc, spot, next);
       return;
     }
-    const right = answers.every((answer) => next.includes(answer));
-    if (!right) {
+    if (!isRight(spot.mermaid, next)) {
       say(player, npc.getId(), [WRONG, ...spot.mermaid.riddle], () => ask(player, npc, spot, []));
       return;
     }
     escort(player, npc, spot);
+  };
+  player.setEnteredSyntaxAction({ execute: (input) => {
+    const id = Number(input);
+    if (!Number.isInteger(id)) return;
+    if (!counts) {
+      submit({ id });
+      return;
+    }
+    const name = common.core().ItemDefinition.forId(id)?.getName?.();
+    if (!name) return;
+    player.setEnteredAmountAction({ acceptsZero: true, execute: (count) => submit({ id, count: Math.floor(Number(count) || 0) }) });
+    player.getPacketSender().sendEnterAmountPrompt(`${name}: How many should there be?`);
   } });
   player.getPacketSender().sendInterfaceScript(SCRIPT_ITEM_SEARCH, [prompt, 1, -1, 0]);
 }
 
+/** The dive: the box stays without a continue until she has brought the diver back up. */
 function escort(player, npc, spot) {
-  const { Animation, CountdownTask, TaskManager } = common.core();
+  const { Animation, CountdownTask, TaskManager, StatementDialogue } = common.core();
   const content = require("../SailingContent.Sailing");
+  const sender = player.getPacketSender();
+  const online = () => player.isRegistered?.() !== false;
   common.leaveHelm(player);
   npc.performAnimation(new Animation(SEQ_DIVE));
-  for (const sound of SOUNDS) player.getPacketSender().sendSoundEffect(sound, 1, 0);
-  content.fade(player, true);
-  say(player, npc.getId(), [{ box: DIVED }]);
-  // Not keyed to the player: a click mustn't cut the dive short.
-  TaskManager.submit(new CountdownTask(null, FADE_IN_TICKS, () => content.fade(player, false)));
+  for (const sound of SOUNDS) sender.sendSoundEffect(sound, 1, 0);
+  content.fade(player, true, undefined, { minimap: false });
+  StatementDialogue.send(player, DIVED, false);
+  // Not keyed to the player: nothing they do cuts the dive short.
+  TaskManager.submit(new CountdownTask(null, MINIMAP_OFF_TICKS, () => {
+    if (online()) content.setVarbit(player, content.VARBIT.MINIMAP_STATE, 2);
+  }));
+  TaskManager.submit(new CountdownTask(null, FADE_IN_TICKS, () => {
+    if (online()) content.fade(player, false);
+  }));
   TaskManager.submit(new CountdownTask(null, CHART_TICKS, () => {
-    if (player.isRegistered?.() === false) return;
+    if (!online()) return;
+    sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
     common.complete(player, spot, { lines: [] });
-    say(player, npc.getId(), [THERE_YOU_GO]);
+    say(player, npc.getId(), [{ box: DIVED }, THERE_YOU_GO]);
   }));
 }
 

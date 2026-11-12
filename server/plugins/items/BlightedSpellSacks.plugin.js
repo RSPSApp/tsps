@@ -1,7 +1,6 @@
 // https://oldschool.runescape.wiki/w/Blighted: one sack replaces the entire
 // rune cost; the spell still checks its book, levels, target and cooldown before payment.
-const MAGE_ARENA_BANK_REGION = 10057; // The cave reached by magearena_lever_to_cellar (2539, 4712).
-const BLIGHTED_MINIGAMES = new Set(["Castle Wars", "Clan Wars", "Soul Wars", "BountyHunterLobby", "BountyHunterArena"]);
+const { allowsBlightedItems } = require("./BlightedItems");
 const BOUNTY_HUNTER_AREAS = new Set(["BountyHunterLobby", "BountyHunterArena"]);
 const BLIGHTED_ITEMS_ALLOWED_VARBIT = 11028; // blighted_items_allowed, read by the spellbook.
 const SPELL_SACKS = [
@@ -12,14 +11,6 @@ const SPELL_SACKS = [
   ["LUNAR", "BLIGHTED_VENGEANCE_SACK", ["VENGEANCE", "VENGEANCE_OTHER"]],
 ];
 
-function allowsBlightedItems(core, player) {
-  const location = player.getLocation();
-  return core.WorldDefinition.hasGlobalWorldTag("pvp") ||
-    core.Wilderness.levelAt(location.getX(), location.getY()) > 0 ||
-    (((location.getX() >> 6) << 8) | (location.getY() >> 6)) === MAGE_ARENA_BANK_REGION ||
-    BLIGHTED_MINIGAMES.has(player.getArea()?.getName());
-}
-
 /**
  * Wiki (Blighted teleport spell sack): it "can only be used inside the Wilderness", unlike the other
  * sacks' shared areas. The Bounty Hunter lobby and arena stay: the Wiki's Bounty Hunter changelog
@@ -28,7 +19,7 @@ function allowsBlightedItems(core, player) {
 function allowsTeleportSack(core, player) {
   const location = player.getLocation();
   return core.Wilderness.levelAt(location.getX(), location.getY()) > 0 ||
-    BOUNTY_HUNTER_AREAS.has(player.getArea()?.getName());
+    BOUNTY_HUNTER_AREAS.has(player.getArea?.()?.getName());
 }
 
 function syncAvailability(core, { player }, force = false) {

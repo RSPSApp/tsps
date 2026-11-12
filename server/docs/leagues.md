@@ -307,6 +307,27 @@ data `panels`):
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
 
+**Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
+(656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: a teleport's cast, before
+the move, or an agility obstacle) with the game message "Please finish what you are doing first." and
+open nothing, through the plugin API's `refuseWhileBusy`, which the interface-click packet checks before
+any handler. As captured: View Tasks two ticks into a standard teleport cast, the tick before the move
+(227/00075), and View Tasks during the Varrock Rooftop wall swing (227/01723).
+
+Not modelled (those clicks still open here):
+- The Royal seed pod's arrival: live refused View Demonic Pacts one and four ticks after the move,
+  during the arrival animation, and opened it the tick after the pod's message (237/01149). Here a
+  teleport releases the player on the tick they move.
+- Live also refused during a stall theft (237/01148) and on the tick a box trap check finished
+  (237/01108). Neither locks the player here.
+- A few refusals came in states the captures don't make clear: after dialogues, banking or inventory
+  clicks (227/00552, 01710, 01757, 01768).
+- Other holds (a spell freeze, a boss's stun or knockback, a cutscene, a ride, a loc's climb, the
+  Leagues home teleport's cast) don't count.
+- Summary, Info and Rank have no captured refusal and aren't gated.
+- The same line answers other interfaces (the account tab's bond and inbox buttons, settings buttons),
+  which this doesn't cover yet.
+
 ### Ranks
 
 `league/Rank.LeagueMode.js`, data `league-ranks.json`: seven ranks a league (Bronze to Dragon) at
@@ -1094,8 +1115,8 @@ Animal Wrangler's Hunter and cooking ones) do not.
   helmet's check offers a new task from the last master or a cancel at the usual price
   (`slayer:remote-task`; not Mortimer's tasks, a choice with modifiers made in person: ours); the bracelet of slaughter works 35% of the time and uses no charge;
   superiors come 1 time in 25; each gives Slayer points (ours: 5 plus a fifth of its Slayer
-  requirement, the Wiki says only "based on" it) and six more rolls on its normal monster's table;
-  a quarter spawn bloodthirsty (a message of ours says so): nine rolls, a clue scroll for sure when
+  requirement, the Wiki says only "based on" it) and six rolls in all on its normal monster's table (the Wiki's "six rolls", a kill total: what the superior's own table already rolls counts, three for a superior whose page says rolls=3, so the relic adds 3 there and 5 elsewhere);
+  a quarter spawn bloodthirsty (a message of ours says so): nine rolls in all, a clue scroll for sure when
   its table has one (the rarest the player can take now, by its chance), three times the unique chance and a roll on the bloodthirsty
   table (Wiki, Bloodthirsty Nechryarch). Not here: the expeditious bracelet (not in this server);
   the variants' stronger stats, names and icon (no NPCs of their own in this cache).
@@ -1602,19 +1623,47 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   (`yarn generate:league-tasks [--from <dir>] [--save <dir>] [--check]`) from the Wiki's
   Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks
   pages (one `{{TRLTaskRow}}` / `{{RELTaskRow}}` / `{{DPLTaskRow}}` template per task in the raw wikitext: name, description, requirements, tier,
-  region, the Wiki's id) and the rev 241 cache; never edit it by hand, change the generator and
-  re-run it (same inputs, identical file; `--check` fails when the committed file is stale). A
-  task has a stable string id (its name's slug; saves hold ids, so the list order is free to
-  change), `wikiId`, tier 1-5, points (Easy 10, Medium 40 Trailblazer Reloaded / 30 Raging
-  Echoes, Hard 80, Elite 200, Master 400: the Wiki rows show the first two, the pages' per-area
-  totals reproduce the rest, and Raging Echoes' match cache enum 2671), the client's area id
-  (enum 3412: Global 0, Misthalin 1 ... Kourend 10, Wilderness 11, Varlamore 21), a category (enum
-  3411: 1 Skill, 2 Combat, 3 Quest, 4 Achievement, 5 Minigame, 6 Other) and, where derivable, a
-  `trigger`. The Wiki has no category: a task the cache's own list has by name (enum 5950's rows
-  of DB table 118 `action`, column 35: most of Raging Echoes and the Trailblazer Reloaded tasks
-  that share a name) takes the cache's, the rest a rule in the generator (`categorySource:
-  "rule"`, ours). The Wiki's Trailblazer Reloaded id 1522 is on two tasks (The Frozen Door,
-  Defeat Vardorvis); kept as the Wiki has it.
+  region, the Wiki's id), the rev 241 cache and each past league's era cache (below); never edit
+  it by hand, change the generator and re-run it (same inputs, identical file; `--check` fails
+  when the committed file is stale). A task has a stable string id (the Wiki name's slug; saves
+  hold ids, so the list order is free to change), `wikiId`, tier 1-5, points (Easy 10, Medium 40
+  Trailblazer Reloaded / 30 Raging Echoes, Hard 80, Elite 200, Master 400: the Wiki rows show the
+  first two, the pages' per-area totals reproduce the rest, and each era cache's enum 2671 agrees),
+  the client's area id (enum 3412: Global 0, Misthalin 1 ... Kourend 10, Wilderness 11, Varlamore
+  21), a category (enum 3411: 1 Skill, 2 Combat, 3 Quest, 4 Achievement, 5 Minigame, 6 Other) and,
+  where derivable, a `trigger`.
+- **Era caches** (`eraCache` on a league; `scripts/league-era-cache.ts`). A past league's task list
+  is in the caches Jagex served during it, not in ours: enum 2670 gives the league's struct, its
+  param 868 the list enum (position -> task struct), and a task struct its id (873, the Wiki's id),
+  name (874), description (875), category (1016, enum 3411) and area (1017, enum 3412); the tier is
+  param 1852 for Trailblazer Reloaded, 2044 for Raging Echoes, and a missing param reads its default
+  (Trailblazer Reloaded's "Equip a Full Angler's Outfit" has no area: Global). The generator fetches
+  only the config reference table and the enum, param and struct groups of a cache pinned by its
+  OpenRS2 id (`/caches/runescape/<id>/archives/<archive>/groups/<group>.dat`, CRC-checked against
+  the reference table) into `server/era-caches/` (gitignored), and takes each task's name,
+  description, category and area from it (`categorySource: "era"`): the text and filters the
+  client showed. The Wiki keeps the tier (which must agree), requirements and the id, so a task the
+  game spells differently ("Pickpocket a HAM Member", the Wiki's "H.A.M.") keeps its saved id. The
+  trigger is derived from the Wiki's text only, which keeps details the in-game text drops. A rule
+  only the in-game text words is shown but not enforced, because where a live capture tests one the
+  league did not enforce it either: Raging Echoes' "Use the special attack of a Dragon Axe in the
+  Fremennik Province" completed in Varrock (capture 227/00086), and "Reach level 10 in any skill (not
+  including Agility and Hitpoints)", Trailblazer's text, on Agility 10 (rsprox.net capture
+  20241209T063558). "Burn 200 Redwood Logs in Kourend" and "Fletch a Redwood Shield in Kourend" follow
+  the same reading; no capture shows them either way. Two Wiki remarks the
+  captures bear out shape the trigger too: "(does not require a kiteshield / Crozier)" leaves that
+  piece out of a god set (a Leagues V capture completed the rune set without a shield), and
+  "(actually on Waterbirth Island)" is the place ("Pick up Snapegrass from Lunar Isle" completed at
+  2553,3754). Category ids are
+  the same since Trailblazer; an era area id keeps its number where today's enum 3412 names it the
+  same (all of these do; Kourend & Kebos is 10). The pinned cache is the league's last whose list
+  is final: Trailblazer Reloaded 1642 (12 Dec 2023; its list last changed by 6 Dec, and 1677 on the
+  last day is the same), Raging Echoes 2023 (15 Jan 2025; three descriptions changed by 10 Dec, and
+  2028 on the last day is the same). Twisted and Trailblazer can plug in the same way (their tier is
+  param 876; Twisted's task structs have no category or area, so it needs its own). The Demonic Pacts task of the same name, or
+  a rule, would give 241 Trailblazer Reloaded and 119 Raging Echoes tasks another category (the
+  generator reports the counts). The Trailblazer Reloaded id 1522 is on two tasks (The Frozen Door,
+  Defeat Vardorvis) on the Wiki and in the cache alike, told apart by name.
 - **Demonic Pacts' catalog is the cache's own list** (`fromCache: true`): this cache (rev 241) is
   the Demonic Pacts cache, so its task enum 5950 and table 118 rows are that league's. The
   generator reads them in position order: name, description, tier, area and category as the client
@@ -2055,3 +2104,19 @@ the loc exists.
 The cache's "League Skill Cape Shop" (652) is not a shop: its only script (3201) creates 22 tiny
 cape items and prints "Loading: <cape>" for each, a model preloader. Nothing sells through it, and
 the Wiki names no such shop.
+
+When Tutorial Island is enabled on the same world, league character profiles use the league's
+onboarding only. The profile is selected before login hooks run; Tutorial Island neither starts
+nor resumes on that profile, including old saves with island progress. Main characters still
+use Tutorial Island normally. This keeps the quest journal mounted for the league tutorial's
+Open the Leagues Menu step, including after the welcome screen rebuilds the gameframe.
+
+The separate Leagues VI Yama's Lair plays **Sign Here** (Wiki
+[Yama's Lair](https://oldschool.runescape.wiki/w/Yama%27s_Lair), cache song 280).
+`YamaLair.LeagueAreaUnlocks.js` supplies the existing area's music policy for plane 0 of cache
+map square 5975, including the recorded start (1503, 5602) and League Home Teleport landing
+(1502, 5592). The whole map square is used as the isolated lair's boundary; the Wiki names the
+music but does not draw a music polygon for this copy. The session owns unlocking and playback,
+so relog/return work and manual music modes remain respected. The generated Modern and Classic
+Wiki music maps are unchanged. The regression records server music output and unlock bits;
+it does not establish client audio rendering or a natural end-to-end World login playthrough.

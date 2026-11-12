@@ -75,17 +75,21 @@ function player() {
   subjects.add(subject);
   subject.setUsername("barrows-run");
   subject.setRegistered(true);
-  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null, camera: [] };
+  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null, camera: [], scripts: [], mounts: [], calls: [] };
   subject.collected = [];
+  const handlers = {
+    sendVarbit: (id, value) => sent.varbits.set(id, value),
+    sendMessage: (text) => sent.messages.push(text),
+    sendTypedMessage: (type, text) => sent.spam.push(text),
+    sendInterfaceScript: (id, args, _a, _b, inventories) => (sent.scripts.push([id, args]), sent.rewards = inventories ?? sent.rewards),
+    sendSubInterface: (...args) => sent.mounts.push(args),
+    sendCameraShake: (...shake) => sent.camera.push(shake),
+    sendCameraReset: () => sent.camera.push("reset"),
+  };
+  // Every call is also logged in order (sent.calls), the getVarbit read aside.
   const sender = new Proxy({}, {
-    get: (target, key) => (key === "sendVarbit" ? (id, value) => (sent.varbits.set(id, value), sender)
-      : key === "sendMessage" ? (text) => (sent.messages.push(text), sender)
-      : key === "sendTypedMessage" ? (type, text) => (sent.spam.push(text), sender)
-      : key === "sendInterfaceScript" ? (_id, _args, _a, _b, inventories) => (sent.rewards = inventories, sender)
-      : key === "sendCameraShake" ? (...shake) => (sent.camera.push(shake), sender)
-      : key === "sendCameraReset" ? () => (sent.camera.push("reset"), sender)
-      : key === "getVarbit" ? (id) => sent.varbits.get(id) ?? 0
-      : () => sender),
+    get: (target, key) => (key === "getVarbit" ? (id) => sent.varbits.get(id) ?? 0
+      : (...args) => (sent.calls.push([key, ...args]), handlers[key]?.(...args), sender)),
   });
   subject.getPacketSender = () => sender;
   subject.sendMessage = (text) => sent.messages.push(text);
@@ -109,7 +113,7 @@ test("Barrows: a looted run stays looted through a teleport out and back to the 
   arrive(subject, CHEST_ROOM);
   subject.sent.messages.length = 0;
   Barrows._test.searchChest(subject, 1);
-  assert.deepEqual(subject.sent.messages, ["The chest is empty. Leave the tunnels to begin another run."]);
+  assert.deepEqual(subject.sent.messages, ["The chest is empty."]);
   arrive(subject, AHRIM_MOUND);
   Barrows._test.dig({ player: subject });
   const fresh = subject.getAttribute("barrows");
@@ -118,6 +122,44 @@ test("Barrows: a looted run stays looted through a teleport out and back to the 
   assert.equal(subject.sent.varbits.get(1394), 0, "the chest shut");
 });
 
+
+// rsprox_transcripts/226/01694.txt and 234/03276.txt: opening the lid plays sound 54 with barrows_chest_open
+// 0->1, closing it sound 53 with 1->0. 237/04057.txt tick 9526: the loot tick sends the messages, then the
+// area's track (147) and jingle 77, toplevel_mainmodal_open, barrows_reward in the main modal with its items
+// Examine-able, the shake, and barrows_overlay closes; it stays shut until the next crypt is dug into.
+test("Barrows: the chest's lid sounds, and the loot's jingle, main-modal reward window and closed overlay", () => {
+  const subject = player();
+  arrive(subject, CHEST_ROOM);
+  Object.assign(subject.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600 });
+  const sounds = () => subject.sent.calls.filter(([key]) => key === "sendSoundEffect").map(([, id]) => id);
+  Barrows._test.searchChest(subject, 1);
+  assert.deepEqual([sounds(), subject.sent.varbits.get(1394)], [[54], 1], "opened");
+  Barrows._test.searchChest(subject, 2);
+  assert.deepEqual([sounds(), subject.sent.varbits.get(1394)], [[54, 53], 0], "closed");
+  Barrows._test.searchChest(subject, 1);
+  subject.sent.calls.length = 0;
+  Barrows._test.searchChest(subject, 1);
+  assert.deepEqual(sounds(), [], "no lid sound on the loot itself");
+  const keys = subject.sent.calls.map(([key]) => key);
+  const at = (key) => keys.indexOf(key);
+  assert.deepEqual(subject.sent.calls.find(([key]) => key === "sendJingle"), ["sendJingle", 77]);
+  assert.deepEqual(subject.sent.mounts.filter(([, id]) => id === 155), [[(161 << 16) | 16, 155, 0]], "barrows_reward in the main modal");
+  assert.deepEqual(subject.sent.scripts[0], [2524, [-1, -1]], "toplevel_mainmodal_open first");
+  assert.deepEqual(subject.sent.calls.find(([key]) => key === "sendInterfaceFlagsRange"), ["sendInterfaceFlagsRange", (155 << 16) | 3, 0, 11, 1 << 10]);
+  assert.deepEqual(subject.sent.calls.find(([key]) => key === "closeInterface"), ["closeInterface", 24], "barrows_overlay closes");
+  assert.ok(at("sendMessage") < at("sendJingle") && at("sendJingle") < at("sendSubInterface") &&
+    at("sendSubInterface") < at("closeInterface"), keys.join(" "));
+
+  // Out to the surface and back into the tunnels: the overlay stays shut while the run is looted.
+  subject.sent.mounts.length = 0;
+  arrive(subject, SURFACE);
+  arrive(subject, CHEST_ROOM);
+  assert.deepEqual(subject.sent.mounts.filter(([, id]) => id === 24), [], "no overlay while looted");
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  assert.deepEqual(subject.sent.mounts.filter(([, id]) => id === 24), [[(161 << 16) | 1, 24, 1]], "the next crypt reopens it");
+});
 
 // rsprox_transcripts/237/04055.txt: the looting tick sends cam_shake slot 0, random 5 with the reward
 // interface; the teleport out resets the camera. 227/01885.txt tick 10592: a looted run's chest room,
@@ -213,6 +255,80 @@ test("Barrows: the Prayer drain lands 30 ticks after each entry into a crypt, wi
   assert.equal(ticksToDrain(), 30, "back in: a fresh 30 ticks, not the 18 that were left");
   assert.equal(drainLines(), 2, "one line per drain");
   assert.ok(!subject.sent.messages.some((m) => /drains your Prayer/.test(m)), "the old text is gone");
+});
+
+test("Barrows: defeated brothers appear on the drain tick, on the atmosphere overlay; looting and leaving stop the faces", () => {
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, new Location(3557, 9703, 3));
+  assert.ok(subject.sent.mounts.some(([uid, group]) => uid === ((161 << 16) | 1) && group === 24));
+  const run = subject.getAttribute("barrows");
+  const faceScripts = () => subject.sent.scripts.filter(([id]) => id === 894);
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 91);
+  assert.equal(faceScripts().length, 0, "there is no face before a brother is defeated");
+  run.killed = [1];
+  for (let i = 0; i < 29; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 0);
+  Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 82);
+  assert.equal(faceScripts().length, 1);
+  assert.equal(faceScripts()[0][1][0], (24 << 16) | 7);
+  assert.ok([6738, 29225].includes(faceScripts()[0][1][1]));
+  run.looted = true;
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 1, "looted runs do not show a brother");
+  arrive(subject, SURFACE);
+  for (let i = 0; i < 40; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 1);
+});
+
+test("Barrows: tunnel entry starts a fresh countdown and protected hilts suppress drain and faces", () => {
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, CHEST_ROOM);
+  const run = subject.getAttribute("barrows");
+  run.killed = [2, 3, 4];
+  for (let i = 0; i < 29; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 99);
+  Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 88);
+  for (const id of [core.ItemIdentifiers.GHOMMALS_HILT_2, core.ItemIdentifiers.GHOMMALS_HILT_6,
+    core.ItemIdentifiers.GHOMMALS_AVERNIC_DEFENDER_5, core.ItemIdentifiers.GHOMMALS_AVERNIC_DEFENDER_6_L_]) {
+    subject.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(id));
+    const scripts = subject.sent.scripts.length;
+    const messages = subject.sent.messages.length;
+    for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 88, `protected by ${id}`);
+    assert.equal(subject.sent.scripts.length, scripts);
+    assert.equal(subject.sent.messages.length, messages);
+  }
+  subject.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.GHOMMALS_HILT_1));
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 77, "hilt 1 does not protect");
+});
+
+test("Barrows: each slain brother selects his own captured face models", () => {
+  const models = [[6737, 29228], [6738, 29225], [6739, 29224], [6740, 29226], [6741, 29227], [6742, 29223]];
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, CHEST_ROOM);
+  const run = subject.getAttribute("barrows");
+  const random = Math.random;
+  try {
+    for (let brother = 0; brother < models.length; brother++) {
+      run.killed = [brother];
+      for (const [rng, expected] of [[0.5, models[brother][0]], [0, models[brother][1]]]) {
+        skills.setCurrentLevel(core.Skill.PRAYER, 99);
+        Math.random = () => rng;
+        for (let tick = 0; tick < 30; tick++) Barrows._test.processPlayer({ player: subject });
+        assert.deepEqual(subject.sent.scripts.filter(([id]) => id === 894).at(-1), [894, [(24 << 16) | (6 + brother), expected]]);
+      }
+    }
+  } finally { Math.random = random; }
 });
 
 // rsprox_transcripts/227/00086.txt:233214-233215 (546 times over the recordings): the tunnel's brother rising at the

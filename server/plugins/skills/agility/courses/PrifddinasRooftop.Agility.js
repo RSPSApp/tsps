@@ -105,6 +105,7 @@ module.exports = {
   // As the lap count line names it: "Your Prifddinas Agility Course lap count is: ..." (rsprox 1149).
   name: "Prifddinas Agility Course",
   helper: 18, // the Agility helper's course (enum 3507: "Prifddinas Agility Course")
+  lootSource: 18, // the loot tracker's source (enum 4976)
   // The Wiki's obstacles add up to the lap: the last dark hole's 1037.1 is the lap's bonus, and
   // nothing more is paid with the lap count (rsprox 1149, both laps).
   lapXp: 1285.2,

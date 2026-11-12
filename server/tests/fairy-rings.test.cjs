@@ -468,6 +468,77 @@ test("travel log right-click ops: op2 adds or removes a favourite without moving
   assert.equal(T.codeFromDials(p), "AIQ");
 });
 
+test("Add Favourite: the spaced-code line, the slot's varbits, the log again with both interfaces reopened", () => {
+  const rec = player();
+  const akr = T.rings().get("AKR");
+  rec.p.setAttribute(T.USED_CODES_ATTRIBUTE, "AKR,AIQ");
+  T.openDial({ player: rec.p, location: RING });
+  rec.nextTick();
+  click(rec.p, 381, akr.starComponent, undefined, 1);
+  const sent = rec.ticks[1];
+  assert.equal(sent[0], "Added A K R to your favourites.");
+  assert.deepEqual(sent.slice(1, 3), [`varbit ${T.FAVOURITE_VARBITS[0]}=${64 + akr.index}`, `varbit ${T.FAVOURITE_VARBITS[1]}=0`]);
+  assert.ok(sent.includes(`varbit ${T.FAVOURITE_OPVIS_VARBIT}=1`), "slot 1's bit");
+  assert.ok(sent.includes("text 141=<br>Great Kourend: Hosidius Vinery") && sent.includes("text 151=A K R"), sent.join(" | "));
+  assert.ok(sent.includes(`text ${akr.logComponent}=`), "a favourite leaves the list of used codes");
+  assert.ok(sent.includes("text 14=<br>Asgarnia: Mudskipper Point "), "other used codes stay");
+  assert.deepEqual(sent.slice(-4), ["script 917 [4212288,50]", "open 398", "open side 381", "script 101 [28]"]);
+  assert.equal(rec.p.getInterfaceId(), 398, "the dials stay open");
+});
+
+test("favourite slots: a removed one stays empty and the next added fills it; no line on removal", () => {
+  const rec = player();
+  const rings = T.rings();
+  for (const code of ["AIQ", "AJR", "AKR"]) click(rec.p, 381, rings.get(code).starComponent, undefined, 1);
+  assert.equal(rec.p.getAttribute(T.FAVOURITES_ATTRIBUTE), "AIQ,AJR,AKR");
+  rec.nextTick();
+  click(rec.p, 381, 162, undefined, 1); // slot 2's remove star
+  assert.equal(rec.p.getAttribute(T.FAVOURITES_ATTRIBUTE), "AIQ,,AKR");
+  const removed = rec.ticks[rec.ticks.length - 1];
+  assert.ok(!removed.some((line) => /favourites\./.test(line)), removed.join(" | "));
+  assert.equal(rec.varbits.get(T.FAVOURITE_VARBITS[1]), 0);
+  assert.equal(rec.varbits.get(T.FAVOURITE_OPVIS_VARBIT), 0b101);
+  assert.ok(removed.includes("text 142=") && removed.includes("text 152=") && removed.includes("text 153=A K R"));
+  click(rec.p, 381, rings.get("DKR").starComponent, undefined, 1);
+  assert.equal(rec.p.getAttribute(T.FAVOURITES_ATTRIBUTE), "AIQ,DKR,AKR");
+  assert.equal(rec.varbits.get(T.FAVOURITE_VARBITS[1]), 64 + rings.get("DKR").index);
+  assert.equal(rec.varbits.get(T.FAVOURITE_OPVIS_VARBIT), 0b111);
+  click(rec.p, 381, 142, undefined, 1);
+  assert.equal(T.codeFromDials(rec.p), "DKR", "slot 2's Use code");
+});
+
+test("Use code turns the dials with sound 2871: a used code, a favourite and the hideout", () => {
+  const rec = player();
+  const rings = T.rings();
+  click(rec.p, 381, rings.get("DKR").logComponent, undefined, 1);
+  assert.deepEqual(rec.ticks.flat().slice(0, 1), [`sound ${T.USE_CODE_SOUND}`]);
+  assert.equal(T.codeFromDials(rec.p), "DKR");
+  rec.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "AIQ");
+  rec.nextTick();
+  click(rec.p, 381, 141, undefined, 1);
+  assert.equal(rec.ticks[1][0], `sound ${T.USE_CODE_SOUND}`);
+  assert.equal(T.codeFromDials(rec.p), "AIQ");
+  rec.nextTick();
+  click(rec.p, 381, 140, undefined, 1);
+  assert.equal(rec.ticks[2][0], `sound ${T.USE_CODE_SOUND}`);
+  assert.equal(T.codeFromDials(rec.p), "AIR");
+  rec.nextTick();
+  click(rec.p, 381, 143, undefined, 1);
+  assert.deepEqual(rec.ticks[3], [], "an empty slot does nothing");
+});
+
+test("the ring's Favourites option without a sub-menu choice, and the favourite slots at login", () => {
+  const rec = player();
+  assert.equal(CacheDefinitions.getObject(29495).actions[3], "Favourites");
+  T.ringOptions().Favourites({ player: rec.p, location: RING });
+  assert.deepEqual(rec.ticks.flat(), ["You will need to select a favourite from the sub-menu."]);
+  rec.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "BJS,,AJR");
+  T.sendLastOnLogin({ player: rec.p });
+  assert.equal(rec.varbits.get(T.FAVOURITE_VARBITS[0]), 64 + 61, "BJS is index 61");
+  assert.equal(rec.varbits.get(T.FAVOURITE_VARBITS[2]), 64 + 14);
+  assert.equal(rec.varbits.get(T.FAVOURITE_OPVIS_VARBIT), 0b101);
+});
+
 test('database table indexing skips mixed tuple values without changing decoded rows', () => {
   const { DbRowType } = require('../dist/game/cache/codec/rs/config/dbrow/DbRowType');
   // Column 0: (string type 36, int, string type 42), two tuples, then table 300.

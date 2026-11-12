@@ -59,6 +59,8 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
   const said = [];
   const dialogueChains = [];
   const messages = [];
+  // Filterable (spam) lines, kept apart from game messages.
+  const spam = [];
   const animations = [];
   const attributes = new Map();
   let menu = null;
@@ -86,9 +88,13 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
     sendCreationMenu: (value) => { menu = value; return sender; },
     sendSound: () => sender,
     sendRunEnergy: () => sender,
+    sendTypedMessage: (type, text) => {
+      (type === PluginManager.getCoreApi().ChatType.SPAM ? spam : messages).push(text);
+      return sender;
+    },
   };
   const player = {
-    inventory, xp, said, dialogueChains, messages, animations, attributes,
+    inventory, xp, said, dialogueChains, messages, spam, animations, attributes,
     menu: () => menu,
     clearMenu: () => { menu = null; },
     // As MovementQueue: `isMoving` is a field, `isMovings()` the query.
@@ -182,11 +188,13 @@ test("the data: every gameval it names exists in the cache, and each site's locs
 test("as captured: Build - nothing to build with, too low a level, then the best log a tick later and the carve menu", () => {
   const empty = createPlayer();
   click(empty, "Totem site", "Build");
-  assert.deepEqual(empty.messages, ["You don't have any logs to build a totem with."]);
+  assert.deepEqual(empty.said, ["You don't have any logs to build a totem with."], "a mesbox");
+  assert.deepEqual(empty.messages, []);
 
   const low = createPlayer({ fletching: 40, items: [item("maple_logs")] });
   click(low, "Totem site", "Build");
-  assert.deepEqual(low.messages, ["You need a Fletching level of 50 to build a maple totem."]);
+  assert.deepEqual(low.said, ["You need a Fletching level of 50 to build a maple totem."], "a mesbox");
+  assert.deepEqual(low.messages, []);
 
   const player = createPlayer({ fletching: 55, items: [item("oak_logs"), item("maple_logs"), item("yew_logs"), item("knife")] });
   click(player, "Totem site", "Build");
@@ -209,7 +217,8 @@ test("as captured: three carvings - each sets its piece to 9 + the animal; the l
   click(player, "Oak totem", "Carve");
   player.menu().execute(obj("ent_totems_animal_icon_a"));
   assert.equal(site(player, "low"), 10);
-  assert.deepEqual(player.messages, ["You carve a buffalo into the totem."]);
+  assert.deepEqual(player.spam, ["You carve a buffalo into the totem."], "spam");
+  assert.deepEqual(player.messages, []);
   // RSProx 20261109T224258-5ab63b4: the menu comes back by itself two ticks after a carving.
   player.clearMenu();
   ticks(1);
@@ -226,7 +235,8 @@ test("as captured: three carvings - each sets its piece to 9 + the animal; the l
   assert.deepEqual([site(player, "base_carved"), site(player, "base_multiloc"), site(player, "decay")], [1, 9, 2]);
   assert.equal(player.xp.fletching, 12.5 * 3);
   // The finished totem says so instead of naming the third animal (ticks 1103, 1317).
-  assert.deepEqual(player.messages, ["You carve a buffalo into the totem.", "You carve a snake into the totem.", "You finish carving the totem."]);
+  assert.deepEqual(player.spam, ["You carve a buffalo into the totem.", "You carve a snake into the totem."]);
+  assert.deepEqual(player.messages, ["You finish carving the totem."], "a game message");
   player.clearMenu();
   ticks(3);
   assert.equal(player.menu(), null, "nothing left to carve");
@@ -253,10 +263,10 @@ test("as captured: decorating - an item every two ticks, the fourth is the final
   assert.equal(site(player, "decorations"), 1);
   ticks(6);
   assert.equal(site(player, "decorations"), 4);
-  assert.deepEqual(player.messages, ["You decorate the totem.", "You decorate the totem.", "You decorate the totem."]);
-  const final = player.dialogueChains.at(-1);
-  assert.equal(final[0].getText(), "You add the final decoration to the totem.");
-  assert.equal(final.length, 1, "the player line is quest-only");
+  assert.deepEqual(player.spam, ["You decorate the totem.", "You decorate the totem.", "You decorate the totem."]);
+  // Outside the miniquest the fourth is a game message, with no mesbox or player line.
+  assert.deepEqual(player.messages, ["You add the final decoration to the totem."]);
+  assert.deepEqual(player.dialogueChains, []);
   assert.equal(player.getInventory().contains(obj("unstrung_willow_shortbow")), true, "only the totem's own wood");
   assert.equal(Math.round(player.xp.fletching * 10), 2048);
   player.said.length = 0;
@@ -274,7 +284,8 @@ test("Wiki: each wrong animal takes 25% off the decoration xp; nothing to decora
   const none = createPlayer();
   carvedTotem(none, 1, [1, 4, 3]);
   click(none, "Oak totem", "Decorate");
-  assert.deepEqual(none.messages, ["You don't have anything to decorate the totem with."]);
+  assert.deepEqual(none.said, ["You don't have anything to decorate the totem with."], "a mesbox");
+  assert.deepEqual(none.messages, []);
 });
 
 test("captured visits: the Wiki's offerings per wood, a point of durability each, the collapse on the last", () => {
@@ -354,7 +365,8 @@ test("as captured: rummaging - 100 at a time every two ticks, a research point e
   assert.equal(player.messages.filter((text) => text === "You rummage through the offerings...").length, 2);
   assert.ok(player.messages.includes("<col=229628>You now have 1 Vale Research Point!</col>"));
   assert.ok(player.messages.includes("Ranulph offers rewards to those who help with his research."));
-  assert.ok(player.messages.some((text) => text.startsWith("You find some loot: ")));
+  assert.ok(player.spam.some((text) => text.startsWith("You find some loot: ")), "loot lines are spam");
+  assert.equal(player.messages.some((text) => text.startsWith("You find some loot: ")), false);
   hooks.items["Vale offerings"].Rummage({ player });
   assert.deepEqual(player.said, ["You don't have enough offerings to rummage through.<br>You need at least 100."]);
 });
@@ -468,7 +480,7 @@ test("as captured (cleaning-arrowtips): Clean turns dirty arrowtips into arrowhe
     hooks.items["Dirty arrowtips"].Clean({ player, itemId: dirty });
     assert.equal(player.getInventory().getAmount(dirty), 0);
     assert.equal(player.getInventory().getAmount(obj("steel_arrowheads")), 25);
-    assert.equal(player.messages.at(-1), "You clean a batch of arrowtips.");
+    assert.deepEqual(player.spam, ["You clean a batch of arrowtips."], "spam");
   } finally {
     Math.random = random;
   }

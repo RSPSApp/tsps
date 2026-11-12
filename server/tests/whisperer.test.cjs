@@ -1588,7 +1588,7 @@ test('Ketla replacement uses her generated conversation and grants the plain fra
 test('capture messages accompany special activation, depletion and bind impact', t => {
     const f=fixture(), messages=[],sounds=[],graphics=[];
     f.player.sendMessage=text=>messages.push(text);
-    const sender=new Proxy({}, {get:(_,name)=>(...args)=>{if(name==='sendSoundEffect')sounds.push(args[0]);return sender;}});
+    const sender=new Proxy({}, {get:(_,name)=>(...args)=>{if(name==='sendSoundEffect')sounds.push(args[0]);if(name==='sendTypedMessage')messages.push(args[0]===core.ChatType.SPAM?`spam:${args[1]}`:args[1]);return sender;}});
     f.player.getPacketSender=()=>sender;
     f.player.performGraphic=graphic=>graphics.push(graphic.getId());
     startSpecial(f.fight,'seeds');
@@ -1596,7 +1596,8 @@ test('capture messages accompany special activation, depletion and bind impact',
     assert.deepEqual(sounds,[1664]);
     f.fight.special.left=1;
     Specials.process(f.fight);
-    assert.ok(messages.includes(Common.data.messages.deplete));
+    // Recorded: the depletion is spam (58); the failed-seeds line is a game message.
+    assert.ok(messages.includes(`spam:${Common.data.messages.deplete}`));
     assert.ok(messages.includes(Common.data.messages.seedsFailed));
     for(let tick=0;tick<7;tick++)f.fight.process();
     assert.ok(messages.includes(Common.data.messages.bind));

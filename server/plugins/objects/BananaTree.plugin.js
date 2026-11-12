@@ -79,15 +79,16 @@ function pickBanana(api, event) {
 
   api.core.Sounds.sendSound(player, api.core.Sound.PICK);
   player.getInventory().adds(ItemIdentifiers.BANANA, 1);
-  player.sendMessage("You pick a banana.");
+  // Spam in every recording: "You pick a banana." (57, e.g. 239/04287.txt:13598) and the empty-tree line (239/04287.txt:13958).
+  player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You pick a banana.");
   api.emitCustomEvent("banana-tree:picked", { player, object });
   return true;
 }
 
-function searchEmptyTree(event) {
+function searchEmptyTree(api, event) {
   if (event.object?.getId?.() !== EMPTY_TREE_ID) return false;
   event.handled = true;
-  event.player.sendMessage("There are no bananas left on the tree.");
+  event.player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "There are no bananas left on the tree.");
   return true;
 }
 
@@ -97,6 +98,6 @@ module.exports = {
   register(api) {
     ObjectManager = api.getObjectManager();
     TaskManager = api.getTaskManager();
-    api.onObjectInteraction("Banana tree", { Pick: pickBanana.bind(null, api), Search: searchEmptyTree });
+    api.onObjectInteraction("Banana tree", { Pick: pickBanana.bind(null, api), Search: searchEmptyTree.bind(null, api) });
   },
 };

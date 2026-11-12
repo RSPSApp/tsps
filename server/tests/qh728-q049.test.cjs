@@ -178,7 +178,7 @@ function harness(extraPlugins = []) {
 
 function player() {
   const attrs = new Map(), items = new Map(), configs = new Map(), varbits = new Map();
-  const xp = [], messages = [], animations = [], dialogueTexts = [];
+  const xp = [], messages = [], animations = [], dialogueTexts = [], spam = [];
   let location = new core.Location(1248, 3686, 0), area = null, text = '', prompt = null, full = false, offline = false;
   let manager;
   const inventory = {
@@ -219,9 +219,10 @@ function player() {
     getVarp: id => configs.get(id) ?? 0,
     sendString(value) { text = value; dialogueTexts.push(value); return packet; },
     sendInterfaceRemoval() { manager.reset(); prompt = null; return packet; },
+    sendTypedMessage(type, value) { spam.push([type, value]); return packet; },
   }, { get: (target, key) => target[key] ?? ((...args) => packet) });
   const p = {
-    attrs, items, configs, varbits, xp, messages, animations, dialogueTexts, inventory, equipment,
+    attrs, items, configs, varbits, xp, messages, spam, animations, dialogueTexts, inventory, equipment,
     getAttribute: key => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -617,7 +618,8 @@ test('WaterSources fills an empty bucket at the Getting Ahead farmhouse sink', (
   assert.equal(p.inventory.getAmount(I.BUCKET), 0);
   assert.equal(p.inventory.getAmount(I.BUCKET_OF_WATER), 1);
   assert.ok(p.animations.includes(832), 'human_pickuptable fill animation');
-  assert.ok(p.messages.some(message => /You fill the bucket from the sink\./.test(message)));
+  // Spam, as in every recorded fill line.
+  assert.deepEqual(p.spam, [[105, 'You fill the bucket from the sink.']]);
   h.tick(2);
   assert.equal(p.inventory.getAmount(I.BUCKET_OF_WATER), 1, 'the repeat task stops with no empty bucket left');
 });

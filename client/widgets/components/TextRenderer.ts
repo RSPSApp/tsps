@@ -641,7 +641,9 @@ export function wrapTextToWidth(
     const out: string[] = [];
     for (const para of paragraphs) {
         const p = para;
-        const words = p.split(/\s+/);
+        // A non-breaking space (160) is drawn as a space but never breaks a line, as in AbstractFont;
+        // JavaScript's \s would match it, so it is left out of the break characters.
+        const words = p.split(/[^\S ]+/);
         // whitespace-only paragraphs (e.g. from "Public<br> ")
         // must still produce a line so the line count is preserved for centering.
         if (!p.trim()) {

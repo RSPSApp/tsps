@@ -81,6 +81,8 @@ function defineArena() {
       player.setAttribute(IN_FFA_ATTRIBUTE, false);
       showOverlays(player, false);
       Ferox.restore(player, { prayersOff: false });
+      // "free-for-all-portal:used" { player }: through the free-for-all (white) portal (the imbued heart's reset).
+      Ferox.api?.emitCustomEvent?.("free-for-all-portal:used", { player });
     }
 
     /** Any two players past the line, at any level; no other rules apply here. */
@@ -108,6 +110,7 @@ function firstPlayerInside() {
 function enter({ player }) {
   Ferox.later(player, 1, () => {
     Ferox.restore(player, { prayersOff: false });
+    Ferox.api?.emitCustomEvent?.("free-for-all-portal:used", { player });
     player.moveTo(LANDING.clone());
   });
 }

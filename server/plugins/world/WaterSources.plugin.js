@@ -80,7 +80,10 @@ function fillFromWaterSource(event) {
   const sound = name === "well" ? WELL_FILL_SOUND : FILL_SOUND;
   if (!fillOne(player, itemId, container, sound)) return;
   const from = WATER_SOURCES.get(name);
-  player.sendMessage(from ? `You fill the ${container.noun} ${from}.` : `You fill the ${container.noun}.`);
+  // Spam in every recording: "You fill the bucket from the sink." (12), "...the kettle from the sink." (12),
+  // "...the vial from the fountain." (3), "You fill the bucket." (3, 227/01849.txt:14671).
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM,
+    from ? `You fill the ${container.noun} ${from}.` : `You fill the ${container.noun}.`);
   api.emitCustomEvent("water-source:filled", { player, objectId, name, itemId, filledId: container.filled, location });
 
   // Keyed to the player's index, so walking or another click cancels the rest (walkToReset).

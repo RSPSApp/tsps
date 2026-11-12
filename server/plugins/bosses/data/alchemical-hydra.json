@@ -84,6 +84,12 @@
     "enragedMaxHit": 55,
     "empoweredMaxHit": 52,
     "_empoweredMaxHit": "the Wiki's infobox: max hit 35 default, 52 empowered (an incorrect vent raises its damage by up to 50%)",
+    "phaseHits": {
+      "serpentine": { "max": 17, "hits": 2, "empoweredMax": 26, "empoweredHits": 2 },
+      "electric": { "max": 35, "hits": 1, "empoweredMax": 26, "empoweredHits": 2 },
+      "flame": { "max": 35, "hits": 1, "empoweredMax": 52, "empoweredHits": 1 }
+    },
+    "_phaseHits": "the Wiki's infobox, per version: serpentine 17x2 (26x2 empowered), electric 35 (26x2 empowered), flame 35 (52 empowered), extinguished 55; 'x2' is two hits an attack. Only the infobox gives the x2; no recording of the fight.",
     "attackSpeed": 6,
     "enragedAttackSpeed": 4,
     "attackDistance": 10,

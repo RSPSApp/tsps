@@ -22,12 +22,16 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
     return spent.get(player) ?? unleashDrain(player);
   }
 
+  // Wiki (Dragon hasta): Unleash "ignores the 40% damage reduction from Protect from Melee", a player's prayer.
+  // An NPC's protection prayer still blocks it (Wiki, Demonic gorilla: its prayers "cannot be bypassed with
+  // special attacks"); only the ancient mace and dragon sword pierce those.
   function traitsFor(player) {
     const energy = spentEnergy(player);
+    const target = player.getCombat?.()?.getTarget?.();
     return {
       hitCount: 1,
       meleeAttackBonusIndex: 0,
-      ignoreProtectionPrayer: true,
+      ignoreProtectionPrayer: target?.isPlayer?.() === true,
       accuracyMultiplier: 1 + energy * ACCURACY_PER_PERCENT,
       damageMultiplier: 1 + energy * DAMAGE_PER_PERCENT,
     };

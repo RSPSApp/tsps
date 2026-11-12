@@ -18,12 +18,12 @@ const SLAYER_RINGS = [
   "Slayer ring (5)", "Slayer ring (6)", "Slayer ring (7)", "Slayer ring (8)", "Slayer ring (eternal)",
 ];
 
-/** The task line: "You're assigned to kill bloodveld; only 44 more to go." */
+/** The task line, red but for the task and the count: "You're assigned to kill bloodveld; only 44 more to go." */
 function taskLine(player) {
   const task = Tasks.current(player);
   if (!task) return NO_TASK;
   const where = task.area ? ` ${task.area.text}` : "";
-  return `You're assigned to kill ${Tasks.taskName(task.task)}${where}; only ${task.count} more to go.`;
+  return `<col=ef1020>You're assigned to kill </col>${Tasks.taskName(task.task)}${where}<col=ef1020>; only </col>${task.count}<col=ef1020> more to go.`;
 }
 
 function check(player) {

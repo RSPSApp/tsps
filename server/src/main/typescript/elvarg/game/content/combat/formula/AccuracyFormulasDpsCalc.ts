@@ -289,6 +289,11 @@ export class AccuracyFormulasDpsCalc {
             defRoll = AccuracyFormulasDpsCalc.magicDefenceRollEvent(entity, enemy, defRoll);
         }
 
+        const defenceRequest = { attacker: entity, target: enemy, combatType: defenceStyle, defenceRoll: defRoll };
+        PluginManager.emitCustomEvent("combat:defence-roll", defenceRequest);
+        if (Number.isFinite(defenceRequest.defenceRoll) && defenceRequest.defenceRoll >= 0) {
+            defRoll = Math.floor(defenceRequest.defenceRoll);
+        }
         attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);
 
         return { attack: attRoll, defence: defRoll };

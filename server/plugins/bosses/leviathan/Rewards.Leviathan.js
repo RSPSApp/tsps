@@ -4,6 +4,14 @@ const Records = require('./Records.Leviathan');
 const { sendBossKillCount } = require('../../interface/BossKillCount.plugin');
 const MONSTER = Common.MONSTER;
 const BOSS_NAME = 'Leviathan';
+/** m:ss.cc, as the boss lines show a fight's time (0:34.20). */
+function formatTicks(ticks) {
+  const centis = Math.round(ticks * 60);
+  const minutes = Math.floor(centis / 6000);
+  const seconds = Math.floor((centis % 6000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+}
+
 function current(npc, player = null) {
   const f = own(npc);
   return f && f.boss === npc && f.over && !f.stopped && !f.session.ended && f.session.fight === f &&
@@ -34,7 +42,11 @@ function died({ npc, killer }) {
   if (!previous || ticks < previous) player.setAttribute(bestKey, ticks);
   if (!previous || ticks < previous) Common.api.emitCustomEvent('boss:personal-best', { player, boss: `${awakened ? 'Awakened ' : ''}${BOSS_NAME}`, ticks });
   Records.won(fight);
-  player.sendMessage(`Fight duration: ${(ticks * 0.6).toFixed(1)} seconds${!previous || ticks < previous ? ' (new personal best)' : ''}.`);
+  // rsprox 227/00100.txt:78155 "Fight duration: <col=ff0000>0:34.20</col> (new personal best)", and :80961
+  // "Fight duration: <col=ff0000>0:35.40</col>. Personal best: 0:34.20".
+  player.sendMessage(!previous || ticks < previous
+    ? `Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`
+    : `Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(previous)}`);
   const complete = task => Common.api.emitCustomEvent('combat-achievements:complete', { player, task });
   if (awakened) complete('Leviathan Sleeper');
   else {

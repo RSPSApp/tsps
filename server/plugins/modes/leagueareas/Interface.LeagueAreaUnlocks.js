@@ -100,6 +100,8 @@ function confirmClicked({ player }) {
 
 module.exports = function attach(api) {
   const { group, openButton, nameHeader, teleportButton, confirm } = ui();
+  // A locked player (mid-teleport, on an obstacle) is told to finish first, and nothing opens.
+  api.refuseWhileBusy(Common.uid(openButton[0], openButton[1]));
   api.onInterfaceActionButton(Common.uid(openButton[0], openButton[1]), open);
   api.onInterfaceActionButton(areaButtons(), shieldClicked);
   api.onInterfaceActionButton(Common.uid(group, nameHeader), headerClicked);

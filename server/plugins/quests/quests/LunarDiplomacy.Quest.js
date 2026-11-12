@@ -106,7 +106,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   const LUNAR_SPELLS_DEACTIVATED = "Lunar spells deactivated!";
   // npc-drops.json gates A special tiara on this Wiki quest condition. The row is
   // only eligible after Meteora has explained her headgear.
-  const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacyafteraskingmeteoraaboutherheadgear";
+  const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacy";
 
   // ==========================================================================
   // Stages and varbits

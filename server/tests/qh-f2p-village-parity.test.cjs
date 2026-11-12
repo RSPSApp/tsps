@@ -167,6 +167,8 @@ function realPlayer() {
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)),
     isFull: () => p.full === true,
     getFreeSlots: () => p.full ? ((items.get(core.ItemIdentifiers.COINS) ?? 0) > 0 ? 0 : 1) : 28,
+    // An unstackable item fits only in a free slot.
+    getAddableAmount: (item) => inventory.getFreeSlots() > 0 ? item.getAmount() : 0,
   };
   let packet;
   packet = new Proxy({
@@ -686,21 +688,28 @@ test("Yanille's real Greenman's Ale dialogue charges ten coins and supplies one 
   }
 });
 
-test('Baraek sells fur for 20 coins or the 18-coin fallback, with safe inventory and coin checks', () => {
+// rsprox 226/01663.txt:8340: "Baraek sells you a fur." gives fur (948), the bear fur. Wiki (Transcript:Baraek):
+// with a full inventory the fur "Drops to the ground".
+test('Baraek sells bear fur for 20 coins or the 18-coin fallback, dropping it with a full inventory', () => {
   const { cleanup } = registerBaraekDispatch();
   const cleanupDialogues = registerRealDialoguesScoped();
+  const dropped = [];
+  const register = core.ItemOnGroundManager.registerLocation;
+  core.ItemOnGroundManager.registerLocation = (player, item, at) => { dropped.push([item.getId(), item.getAmount(), at.getX(), at.getY()]); };
   try {
     const I = core.ItemIdentifiers;
+    assert.equal(I.BEAR_FUR, 948);
     const standard = realPlayer();
     standard.items.set(I.COINS, 20);
     buyFurAtBaraek(standard);
-    assert.equal(standard.items.get(I.FUR), 1);
+    assert.equal(standard.items.get(I.BEAR_FUR), 1);
+    assert.equal(standard.items.get(I.FUR) ?? 0, 0, 'not the other fur item');
     assert.equal(standard.items.get(I.COINS), 0);
 
     const fallback = realPlayer();
     fallback.items.set(I.COINS, 18);
     buyFurAtBaraek(fallback);
-    assert.equal(fallback.items.get(I.FUR), 1);
+    assert.equal(fallback.items.get(I.BEAR_FUR), 1);
     assert.equal(fallback.items.get(I.COINS), 0);
 
     for (const amount of [18, 20]) {
@@ -708,31 +717,27 @@ test('Baraek sells fur for 20 coins or the 18-coin fallback, with safe inventory
       full.full = true;
       full.items.set(I.COINS, amount);
       buyFurAtBaraek(full);
-      assert.equal(full.items.get(I.FUR), 1, `${amount}-coin stack should free its slot for the fur`);
+      assert.equal(full.items.get(I.BEAR_FUR), 1, `${amount}-coin stack should free its slot for the fur`);
       assert.equal(full.items.get(I.COINS), 0);
     }
+    assert.deepEqual(dropped, []);
 
     const tooPoor = realPlayer();
     tooPoor.items.set(I.COINS, 17);
     buyFurAtBaraek(tooPoor);
-    assert.equal(tooPoor.items.get(I.FUR) ?? 0, 0);
+    assert.equal(tooPoor.items.get(I.BEAR_FUR) ?? 0, 0);
     assert.equal(tooPoor.items.get(I.COINS), 17);
-
-    const failedDelivery = realPlayer();
-    failedDelivery.items.set(I.COINS, 20);
-    failedDelivery.failAddId = I.FUR;
-    buyFurAtBaraek(failedDelivery);
-    assert.equal(failedDelivery.items.get(I.FUR) ?? 0, 0);
-    assert.equal(failedDelivery.items.get(I.COINS), 20, 'failed delivery restores the full price');
 
     const fullWithRemainder = realPlayer();
     fullWithRemainder.full = true;
     fullWithRemainder.items.set(I.COINS, 21);
-    const refusal = buyFurAtBaraek(fullWithRemainder);
-    assert.equal(fullWithRemainder.items.get(I.FUR) ?? 0, 0);
-    assert.equal(fullWithRemainder.items.get(I.COINS), 21);
-    assert.ok(refusal.some((text) => /free inventory slot/.test(text)), 'full inventory refusal is shown');
+    const texts = buyFurAtBaraek(fullWithRemainder);
+    assert.equal(fullWithRemainder.items.get(I.BEAR_FUR) ?? 0, 0);
+    assert.equal(fullWithRemainder.items.get(I.COINS), 1, 'the sale goes ahead');
+    assert.deepEqual(dropped, [[I.BEAR_FUR, 1, 3222, 3397]], 'the fur drops under the player');
+    assert.ok(!texts.some((text) => /free inventory slot/.test(text)), 'no invented refusal');
   } finally {
+    core.ItemOnGroundManager.registerLocation = register;
     cleanupDialogues();
     cleanup();
   }

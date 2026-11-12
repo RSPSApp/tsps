@@ -81,6 +81,8 @@ function setup({ barcrawl = true } = {}) {
     setAttribute(key, value) { attrs.set(key, value); },
     getPacketSender: () => sender,
     sendMessage(message) { messages.push(message); },
+    dialogues: [],
+    getDialogueManager() { return { startDialogues: (chain) => player.dialogues.push(chain), isActive: () => false }; },
     getInventory: () => inventoryApi,
     getEquipment: () => ({ getItems: () => [] }),
     getSkillManager: () => ({
@@ -135,6 +137,7 @@ function setup({ barcrawl = true } = {}) {
         getOwner: () => def.owner,
         getLocation: () => new core.Location(def.x, def.y, def.z),
         setNpcTransformationId(id) { this.transformationId = id; },
+        forceChat(text) { (this.overheads ??= []).push(text); },
         isRegistered: () => true,
       };
       spawned.push(npc);
@@ -323,6 +326,10 @@ test('q059 mandatory handler route: start gate, bridge, key, door, light, wall, 
   assert.equal(h.quest.getStage(h.player), 5, 'an untracked base-ID mother cannot complete the quest');
   h.death(988);
   assert.equal(h.quest.getStage(h.player), 10);
+  // Transcript: "(The player is teleported to outside the strange wall.)", then the player's and Jossik's lines.
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2514, 3627]);
+  const said = JSON.stringify([...(h.player.dialogues.at(-1)?.getDialogues?.().values() ?? [])]);
+  assert.ok(said.includes("Okay, it's dead! Let's get out of here!"), 'the post-kill transcript plays: ' + said.slice(0, 200));
   for (const id of [35,36,37,38,40,41,42,43,44,45,46,47,48]) assert.equal(h.varbits.get(id), 1, `earned helper flag ${id}`);
   assert.ok(h.varbits.get(34) >= 10);
 });
@@ -407,6 +414,8 @@ test('q059 mother cycles canonical weaknesses and blocks damage from the wrong s
     assert.ok(h.messages.includes(`The Dagannoth changes to ${phases[index + 1].name}...`));
     assert.equal(mother.transformationId, phases[index + 1].id, `${phases[index + 1].name} transition changes cache form`);
   }
+  // Transcript:Horror_from_the_Deep: each change has its overhead (blue "Krrrrrrk" ... green "Krkrkrkrkrkrkrkr").
+  assert.deepEqual(mother.overheads, ['Krrrrrrk', 'Chkhkhkhkhk', 'Krrrrrrssssssss', 'Sssssrrrkkkkk', 'Krkrkrkrkrkrkrkr']);
 
   assert.equal(CombatSpells.WIND_BOLT.spellId(), 1160, 'air bolt is the canonical spell ID, not Curse 1161');
 

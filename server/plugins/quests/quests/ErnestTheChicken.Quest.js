@@ -11,7 +11,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
     NpcIdentifiers,
     ObjectIdentifiers,
     RegionManager,
-    Animation, Graphic, PrivateArea, Boundary, CountdownTask, TaskManager,
+    Animation, Graphic, GraphicHeight, PrivateArea, Boundary, CountdownTask, TaskManager,
     DialogueChainBuilder, PlayerDialogue, ActionDialogue,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -154,7 +154,8 @@ module.exports = function registerErnestTheChickenQuest(api) {
       const at = new Location(3111, 3366, 2);
       player.getPacketSender().sendGraphic(new Graphic(173), at);
       if (chicken) {
-        chicken.performGraphic(new Graphic(80, 45));
+        // stunned (80): height 124 with no delay in 148 of 164 recordings; this scene itself is not recorded.
+        chicken.performGraphic(new Graphic(80, GraphicHeight.SURGE_IMPACT));
         player.getPacketSender().sendProjectile(at, chicken.getLocation(), 0, 45, 174, 12, 0, chicken, 15, 0);
       }
       player.getPacketSender().sendSoundEffect(187, 2, 0);

@@ -454,3 +454,96 @@ test('the existing lit oil lamp Extinguish action is unchanged', async t => {
   assert.equal(idAt(f, 0), I.OIL_LAMP);
   assert.equal(f.inv.getItems()[0], selected);
 });
+
+// Wiki Candle lantern, revision 15184430: unlit white/black candles make the
+// matching unlit lantern; lit candles make the lit variant at Firemaking 4.
+for (const [label, candle, result, level] of [
+  ['white', I.CANDLE, I.CANDLE_LANTERN, 1],
+  ['black', I.BLACK_CANDLE, I.CANDLE_LANTERN_4, 1],
+  ['lit white', I.LIT_CANDLE, I.CANDLE_LANTERN_3, 4],
+  ['lit black', I.LIT_BLACK_CANDLE, I.CANDLE_LANTERN_6, 4],
+]) {
+  test(`assemble ${label} candle lantern in either direction`, async t => {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t, level);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, item(candle)); f.inv.setItem(2, item(candle));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [result, candle]);
+      assert.equal(f.inv.getItems()[0], lantern);
+    }
+  });
+  if (level === 4) test(`${label} candle requires current Firemaking 4`, async t => {
+    const f = actor(t, 3);
+    f.inv.setItem(0, item(I.EMPTY_CANDLE_LANTERN)); f.inv.setItem(1, item(candle));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [I.EMPTY_CANDLE_LANTERN, candle]);
+    assert.deepEqual(f.messages, ["You need 4 Firemaking to do this."]);
+  });
+}
+
+test('active cache identifies the ordinary candles and lantern variants', () => {
+  for (const [id, name, lit] of [
+    [I.CANDLE, 'Candle', false], [I.BLACK_CANDLE, 'Black candle', false],
+    [I.LIT_CANDLE, 'Lit candle', true], [I.LIT_BLACK_CANDLE, 'Lit black candle', true],
+    [I.CANDLE_LANTERN, 'Candle lantern', false], [I.CANDLE_LANTERN_4, 'Candle lantern', false],
+    [I.CANDLE_LANTERN_3, 'Candle lantern', true], [I.CANDLE_LANTERN_6, 'Candle lantern', true],
+  ]) {
+    const def = core.CacheDefinitions.getItem(id);
+    assert.equal(def.name, name);
+    assert.equal(def.inventoryActions.includes('Extinguish'), lit, `${id} lit state`);
+  }
+  assert.equal(core.CacheDefinitions.getItem(I.EMPTY_CANDLE_LANTERN).name, 'Empty candle lantern');
+});
+
+test('restricted selected candles cannot become unrestricted lanterns in either direction', async t => {
+  for (const mark of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN);
+      const candle = item(I.CANDLE).setMetaValue(mark, true);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, candle); f.inv.setItem(2, item(I.CANDLE));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [I.EMPTY_CANDLE_LANTERN, I.CANDLE, I.CANDLE]);
+      assert.equal(f.inv.getItems()[0], lantern);
+      assert.equal(f.inv.getItems()[1], candle);
+      assert.equal(candle.getMetaValue(mark), true);
+      assert.deepEqual(f.messages, ["You cannot use that candle to make a lantern."]);
+    }
+  }
+});
+
+test('assembly preserves restrictions on the selected lantern', async t => {
+  for (const mark of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+    for (const candleFirst of [true, false]) {
+      const f = actor(t);
+      const lantern = item(I.EMPTY_CANDLE_LANTERN).setMetaValue(mark, true);
+      f.inv.setItem(0, lantern); f.inv.setItem(1, item(I.CANDLE));
+      await useOn(f, candleFirst ? 1 : 0, candleFirst ? 0 : 1);
+      assert.deepEqual(carried(f), [I.CANDLE_LANTERN]);
+      assert.equal(f.inv.getItems()[0], lantern);
+      assert.equal(lantern.getMetaValue(mark), true);
+    }
+  }
+});
+
+
+test('assembly uses the selected later lantern and candle in a full inventory', async t => {
+  for (const candleFirst of [true, false]) {
+    const f = actor(t);
+    for (let slot = 0; slot < 28; slot++) f.inv.setItem(slot, item(I.CANDLE));
+    const spareLantern = item(I.EMPTY_CANDLE_LANTERN);
+    const selected = item(I.EMPTY_CANDLE_LANTERN).setMetaValue(core.Item.PRESET_META, true);
+    f.inv.setItem(0, spareLantern); f.inv.setItem(26, selected);
+    const spareCandle = f.inv.getItems()[1];
+    await useOn(f, candleFirst ? 27 : 26, candleFirst ? 26 : 27);
+    assert.equal(f.inv.getItems()[0], spareLantern);
+    assert.equal(spareLantern.getId(), I.EMPTY_CANDLE_LANTERN);
+    assert.equal(f.inv.getItems()[26], selected);
+    assert.equal(selected.getId(), I.CANDLE_LANTERN);
+    assert.equal(selected.isPresetItem(), true);
+    assert.equal(f.inv.getItems()[1], spareCandle);
+    assert.equal(idAt(f, 27), -1);
+    assert.equal(carried(f).length, 27);
+  }
+});

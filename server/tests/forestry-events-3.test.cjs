@@ -361,9 +361,13 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
   assert.ok(p.messages.includes(done));
   assert.deepEqual(p.sounds.slice(-1), [7531]);
   assert.ok(!p.messages.includes("You've been awarded <col=3366ff>50 Anima-infused bark</col>."));
-  ticks(1);
+  // Wiki (Friendly Ent): a random tier of the six (recorded: an oak's entlings gave maple leaves, 227/01723.txt:124792).
+  const real = Math.random;
+  Math.random = () => 0.999; // the last tier, magic leaves, at this willow
+  try { ticks(1); } finally { Math.random = real; }
   assert.ok(p.messages.includes("You've been awarded <col=3366ff>50 Anima-infused bark</col>."));
-  assert.equal(p.inventory.getAmount(6024), 8, '4 willow leaves an entling');
+  assert.equal(p.inventory.getAmount(6030), 8, '4 magic leaves an entling');
+  assert.equal(p.inventory.getAmount(6024), 0, "not the tree's willow leaves");
 });
 
 // ------------------------------------------------------------------ beehive
@@ -444,6 +448,19 @@ test('Build adds only as many logs as chosen', () => {
   ticks(8);
   assert.equal(event.box.logs, 2);
   assert.equal(p.anims.length, 2, 'the choice and the first log');
+});
+
+// Wiki (Beehive (Forestry event)): willow, maple, teak, mahogany and jatoba are the 4-5 bark tier, achey the 2-3 one.
+test('beehive logs pay their Wiki tier: willow 4-5 bark, achey 2-3', () => {
+  for (const [logId, low, high] of [[1519, 4, 5], [1517, 4, 5], [2862, 2, 3]]) {
+    const p = fakePlayer({ level: 70 });
+    p.inventory.add(new core.Item(logId, 1));
+    const event = startEvent('beehive', [p]);
+    addLogs(p, event, 1);
+    ticks(1);
+    assert.ok(bark(p) >= low && bark(p) <= high, `log ${logId}: ${bark(p)} bark`);
+    ticks(260);
+  }
 });
 
 test('no logs: the item box; the keeper leaves at 249, the rest at 250', () => {

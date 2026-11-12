@@ -60,6 +60,8 @@ function playerFixture() {
   player.varbits = varbits;
   player.getSession = () => ({ sendClientPacket: () => true });
   player.setEnteredSyntaxAction = (action) => { player.enteredSyntaxAction = action; };
+  player.messages = [];
+  player.sendMessage = (message) => { player.messages.push(message); };
   return player;
 }
 
@@ -83,6 +85,17 @@ function click(player, objectId, clickType, coordinates, source = [coordinates[0
   });
 }
 
+/** Portal entries and visits load behind the loading screen: the house is up three ticks later. */
+function ticks(count = 3) {
+  for (let tick = 0; tick < count; tick++) core.TaskManager.process();
+}
+
+function enter(player, objectId, clickType, coordinates, source) {
+  const handled = click(player, objectId, clickType, coordinates, source);
+  ticks();
+  return handled;
+}
+
 function assertUncredited(player) {
   assert.equal(Progress.tierCount(player, diary, "hard"), 0);
   assert.equal(player.varbits.get(diary.tiers.hard.countVarbit) ?? 0, 0);
@@ -96,7 +109,7 @@ test("entering the owned house through Yanille's portal credits Ardougne Hard #1
   assert.equal(portalDefinition.sizeX, 5);
   assert.equal(portalDefinition.sizeY, 2);
 
-  click(player, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  enter(player, yanillePortalId, 2, YANILLE_PORTAL_TILE);
 
   const task = "enter-your-poh-from-yanille";
   assert.equal(House.houseFor(player)?.owner, player);
@@ -106,7 +119,7 @@ test("entering the owned house through Yanille's portal credits Ardougne Hard #1
 
   for (const source of [[2544, 3096, 0], [2541, 3097, 0], [2547, 3098, 0], [2544, 3099, 0]]) {
     const sidePlayer = playerFixture();
-    click(sidePlayer, yanillePortalId, 1, YANILLE_PORTAL_TILE, source);
+    enter(sidePlayer, yanillePortalId, 2, YANILLE_PORTAL_TILE, source);
     assert.equal(House.houseFor(sidePlayer)?.owner, sidePlayer, `entry from ${source.join(",")}`);
     assert.equal(Progress.tierCount(sidePlayer, diary, "hard"), 1, `credit from ${source.join(",")}`);
   }
@@ -117,35 +130,35 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   const player = playerFixture();
   const rimmingtonId = require("../plugins/skills/construction/Estate.Construction").HOUSE_LOCATIONS[0].portal;
 
-  click(player, rimmingtonId, 1, [2954, 3224, 0]);
+  enter(player, rimmingtonId, 2, [2954, 3224, 0]);
   assertUncredited(player);
 
   const elsewhere = playerFixture();
   elsewhere.getAttribute("construction:house").location = 1;
-  click(elsewhere, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  enter(elsewhere, yanillePortalId, 2, YANILLE_PORTAL_TILE);
   assertUncredited(elsewhere);
 
   const wrongYanilleTile = playerFixture();
-  click(wrongYanilleTile, yanillePortalId, 1, [2543, 3097, 0]);
+  enter(wrongYanilleTile, yanillePortalId, 2, [2543, 3097, 0]);
   assertUncredited(wrongYanilleTile);
 
   const farSide = playerFixture();
-  click(farSide, yanillePortalId, 1, YANILLE_PORTAL_TILE, [2540, 3098, 0]);
+  enter(farSide, yanillePortalId, 2, YANILLE_PORTAL_TILE, [2540, 3098, 0]);
   assertUncredited(farSide);
 
   const transformedPortal = playerFixture();
   const transformedId = core.CacheDefinitions.getLocId("poh_portal_op");
-  click(transformedPortal, transformedId, 1, YANILLE_PORTAL_TILE);
+  enter(transformedPortal, transformedId, 2, YANILLE_PORTAL_TILE);
   assertUncredited(transformedPortal);
 
   player.setArea(null);
-  click(player, yanillePortalId, 2, YANILLE_PORTAL_TILE);
+  enter(player, yanillePortalId, 2, YANILLE_PORTAL_TILE);
   assert.ok(Progress.doneTasks(player, diary).has(task));
   assert.equal(Progress.tierCount(player, diary, "hard"), 1);
   assert.equal(player.varbits.get(diary.tiers.hard.countVarbit), 1);
 
   const buildingModeEntry = playerFixture();
-  click(buildingModeEntry, yanillePortalId, 3, YANILLE_PORTAL_TILE);
+  enter(buildingModeEntry, yanillePortalId, 3, YANILLE_PORTAL_TILE);
   assert.equal(Progress.tierCount(buildingModeEntry, diary, "hard"), 1);
   assert.equal(buildingModeEntry.varbits.get(diary.tiers.hard.countVarbit), 1);
 
@@ -153,7 +166,7 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   const original = Instance.PlayerHouseInstance.prototype.enterHouse;
   Instance.PlayerHouseInstance.prototype.enterHouse = () => false;
   try {
-    click(blocked, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+    enter(blocked, yanillePortalId, 2, YANILLE_PORTAL_TILE);
   } finally {
     Instance.PlayerHouseInstance.prototype.enterHouse = original;
   }
@@ -174,6 +187,7 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   assertUncredited(pinBlocked);
   assert.equal(typeof pinResume, "function");
   pinResume();
+  ticks();
   assert.ok(Progress.doneTasks(pinBlocked, diary).has(task));
   assert.equal(pinBlocked.varbits.get(diary.tiers.hard.countVarbit), 1);
 
@@ -189,6 +203,7 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   assertUncredited(stalePin);
   stalePin.getAttribute("construction:house").location = 1;
   staleResume();
+  ticks();
   assert.equal(House.houseFor(stalePin)?.owner, stalePin);
   assertUncredited(stalePin);
 
@@ -202,6 +217,7 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   const movedResume = pinResume;
   movedPin.moveTo(new core.Location(2954, 3224, 0));
   movedResume();
+  ticks();
   assert.equal(House.houseFor(movedPin)?.owner, movedPin);
   assertUncredited(movedPin);
 
@@ -213,6 +229,7 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
     click(menuOnly, yanillePortalId, 4, YANILLE_PORTAL_TILE);
     assertUncredited(menuOnly);
     menuOnly.enteredSyntaxAction.execute("HouseOwner");
+    ticks();
   } finally {
     core.World.getPlayerByName = getPlayerByName;
   }
@@ -223,12 +240,13 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   owner.getUsername = () => "HouseOwner";
   owner.getDisplayName = () => "HouseOwner";
   owner.getRelations = () => ({ canReceivePrivateMessageFrom: () => true });
-  click(owner, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  enter(owner, yanillePortalId, 2, YANILLE_PORTAL_TILE);
   const visitor = playerFixture();
   core.World.getPlayerByName = () => owner;
   try {
     click(visitor, yanillePortalId, 4, YANILLE_PORTAL_TILE);
     visitor.enteredSyntaxAction.execute("HouseOwner");
+    ticks();
   } finally {
     core.World.getPlayerByName = getPlayerByName;
   }
@@ -259,22 +277,27 @@ function registeredHousePlayer(t, name, mode = "none") {
 }
 
 function visitByPortal(player, name) {
+  player.enteredSyntaxAction = null;
   click(player, yanillePortalId, 4, YANILLE_PORTAL_TILE);
   assert.ok(player.enteredSyntaxAction);
   player.enteredSyntaxAction.execute(name);
+  ticks();
 }
 
 for (const mode of ["ironman", "ultimate", "hardcore"]) {
-  test(`${mode} may enter their own house but not another player's house`, (t) => {
+  test(`${mode} may enter their own house but is refused Friend's house at the click`, (t) => {
     const host = registeredHousePlayer(t, "host" + mode);
     const guest = registeredHousePlayer(t, "gst" + mode, mode);
-    click(host, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+    enter(host, yanillePortalId, 2, YANILLE_PORTAL_TILE);
     assert.equal(House.houseFor(host)?.owner, host);
-    visitByPortal(guest, guest.getUsername());
-    assert.equal(House.houseFor(guest)?.owner, guest, "self name enters own house");
+    enter(guest, yanillePortalId, 2, YANILLE_PORTAL_TILE);
+    assert.equal(House.houseFor(guest)?.owner, guest, "Home enters own house");
     House.releaseHouse(guest, true);
     assert.equal(House.houseFor(guest), null);
-    visitByPortal(guest, host.getUsername());
+    guest.enteredSyntaxAction = null;
+    click(guest, yanillePortalId, 4, YANILLE_PORTAL_TILE);
+    assert.equal(guest.enteredSyntaxAction, null, "no name prompt for an Ironman");
+    ticks();
     assert.equal(House.houseFor(guest) === null, true, "another player's house is unavailable");
     assert.equal(House.houseFor(host)?.owner, host);
   });
@@ -283,7 +306,7 @@ for (const mode of ["ironman", "ultimate", "hardcore"]) {
 test("ordinary guest can visit an Ironman host, subject to host settings and presence", (t) => {
   const host = registeredHousePlayer(t, "ironhost", "ironman");
   const guest = registeredHousePlayer(t, "normalguest");
-  click(host, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  enter(host, yanillePortalId, 2, YANILLE_PORTAL_TILE);
   const house = House.houseFor(host);
   assert.equal(house?.owner, host);
   visitByPortal(guest, host.getUsername());

@@ -230,7 +230,8 @@ function catchImpling(player, npc, npcId, def) {
   }
   if (!exchange(player, inputs, outputs)) return;
   player.getPacketSender().sendSound(IMPLING_CATCH_SOUND, 1, 0);
-  player.sendMessage(jarred ? JAR_MESSAGE : LOOT_MESSAGE);
+  // Spam in every recording: the jar line 395 times, the loot line 7.
+  player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, jarred ? JAR_MESSAGE : LOOT_MESSAGE);
   xp(player, puro ? def.puroXp : def.xp, "impling", npcId);
   npc.performAnimation(new H.core.Animation(ANIM.IMPLING_CAUGHT));
   // Roaming spawns (Puro-Puro's and the overworld's) manage their own removal and respawn.

@@ -15,6 +15,14 @@
  *
  * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
  * in the Slayer Rewards interface). Reinforced goggles are not required.
+ *
+ * Recolours: using a recolour's head on a plain or imbued helmet asks "Combine the <head> with
+ * your helm?" and, on Yes, makes that colour of the same helmet. Each needs its Slayer reward
+ * unlock; without it the player is told to learn it from a Slayer master. A recoloured helmet
+ * takes no second head. Disassemble gives back the mask, the components and the head. The
+ * Soul Wars and Emir's Arena imbued helmets keep their own copy of each colour and of the
+ * imbued black mask. The Tztok, Vampyric and Tzkal colours come from Ghommal and Laidee
+ * Gnonock and give back no head; the Radiant colour is made from the Oathplate one.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -33,6 +41,90 @@ let PARTS = [];
 let IMBUE_SCROLLS = new Set();
 /** Black mask / Slayer helmet id -> its imbued id, filled at register. */
 let IMBUED_ITEMS = new Map();
+
+const COMBINE_SOUND = 2241;
+const LEARN_FIRST = "You must first learn how to do this from a Slayer Master.";
+const HELM_LOCKED = "You have not unlocked the ability to combine these items.";
+
+/** Each form's helmet and black mask gamevals: plain, then the NMZ, Soul Wars and Emir's Arena imbued copies. */
+const FORMS = [
+  { helm: "slayer_helm", mask: null },
+  { helm: "slayer_helm_i", mask: "nzone_black_mask" },
+  { helm: "sw_slayer_helm_i", mask: "sw_black_mask" },
+  { helm: "pvpa_slayer_helm_i", mask: "pvpa_black_mask" },
+];
+
+const suffixed = (colour) => (helm) => `${helm}_${colour}`;
+const league6 = (n) => (helm) => helm.replace("slayer_helm", `league_6_slayer_helm${n}`);
+
+/**
+ * Every recolour: its item name prefix, its helmet gameval per form, and the head and unlock
+ * that make it (none for the colours an NPC gives, or Radiant, which is made from Oathplate).
+ */
+const RECOLOURS = [
+  { name: "Black", item: suffixed("black"), head: "poh_trophydrop_kbd", unlock: "slayer_unlock_helm_black" },
+  { name: "Green", item: suffixed("green"), head: "poh_trophydrop_kalphitequeen", unlock: "slayer_unlock_helm_green" },
+  { name: "Red", item: suffixed("red"), head: "poh_trophydrop_abyssaldemon", unlock: "slayer_unlock_helm_red" },
+  { name: "Purple", item: suffixed("purple"), head: "cata_boss_claw", unlock: "slayer_unlock_helm_purple" },
+  { name: "Turquoise", item: suffixed("turquoise"), head: "vorkath_head", unlock: "slayer_unlock_helm_turquoise" },
+  { name: "Hydra", item: suffixed("hydra"), head: "poh_alchemical_hydra_head", unlock: "slayer_unlock_helm_hydra" },
+  { name: "Twisted", item: suffixed("twisted"), head: "twisted_horns", unlock: "slayer_unlock_helm_twisted" },
+  { name: "Araxyte", item: suffixed("araxyte"), head: "poh_araxyte_head", unlock: "slayer_unlock_helm_araxyte" },
+  { name: "Hooded", item: suffixed("hooded"), head: "skillcape_slayer_hood", unlock: "slayer_unlock_helm_hooded" },
+  { name: "Oathplate", item: league6(1), head: "league_6_demonic_quill", unlock: "slayer_unlock_helm_league_6" },
+  { name: "Tztok", item: suffixed("jad") },
+  { name: "Vampyric", item: suffixed("verzik") },
+  { name: "Tzkal", item: suffixed("zuk") },
+  // Ours: what taking a Radiant helmet apart gives back isn't known, so it has no Disassemble.
+  { name: "Radiant", item: league6(2), disassemble: false },
+];
+
+/** Every helmet's item name, for its options. */
+const HELMET_NAMES = [
+  "Slayer helmet",
+  "Slayer helmet (i)",
+  ...RECOLOURS.flatMap(({ name }) => [`${name} slayer helmet`, `${name} slayer helmet (i)`]),
+];
+
+/** Helmet id -> { form, recolour (null for the plain colour), mask, base }, and head id -> recolour; built on first use. */
+let helmets = null;
+
+function objId(name) {
+  return pluginApi.core.CacheDefinitions.getObjId?.(name) ?? null;
+}
+
+function helmetTable() {
+  if (helmets?.api === pluginApi) return helmets;
+  const byId = new Map();
+  const heads = new Map();
+  const recolours = RECOLOURS.map((recolour) => ({ ...recolour, headId: recolour.head ? objId(recolour.head) : null }));
+  for (const form of FORMS) {
+    const base = objId(form.helm);
+    const mask = form.mask ? objId(form.mask) : ItemIdentifiers.BLACK_MASK;
+    if (base == null || mask == null) continue;
+    byId.set(base, { form, recolour: null, mask, base });
+    for (const recolour of recolours) {
+      const id = objId(recolour.item(form.helm));
+      if (id != null) byId.set(id, { form, recolour, mask, base });
+    }
+  }
+  for (const recolour of recolours) if (recolour.headId != null) heads.set(recolour.headId, recolour);
+  helmets = { api: pluginApi, byId, heads };
+  return helmets;
+}
+
+function sendSpam(player, text) {
+  player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
+}
+
+function combineSound(player) {
+  player.getPacketSender().sendSoundEffect(COMBINE_SOUND, 1, 0, 255);
+}
+
+function varbitSet(player, name) {
+  const id = pluginApi.core.CacheDefinitions.getVarbitId(name);
+  return id != null && player.getPacketSender().getVarbit(id) === 1;
+}
 
 function headName(player) {
   const head = player.getEquipment?.()?.getItems?.()?.[pluginApi.core.Equipment.HEAD_SLOT];
@@ -143,7 +235,9 @@ function imbue(event) {
   const scrollOnWith = isImbueScroll(usedWithItemId);
   if (scrollOnUsed === scrollOnWith) return;
   const targetId = Number(scrollOnUsed ? usedWithItemId : usedItemId);
-  const result = IMBUED_ITEMS.get(targetId);
+  const helm = helmetTable().byId.get(targetId);
+  const recoloured = helm?.recolour && helm.form.helm === "slayer_helm" ? objId(helm.recolour.item("slayer_helm_i")) : null;
+  const result = IMBUED_ITEMS.get(targetId) ?? recoloured;
   if (result == null) return;
   event.handled = true;
   const targetItem = scrollOnUsed ? usedWithItem : usedItem;
@@ -152,18 +246,21 @@ function imbue(event) {
   player.getInventory().refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
   player.sendMessage(
-    targetId === ItemIdentifiers.SLAYER_HELMET
+    helm
       ? "You imbue the Slayer helmet with the scroll."
       : "You imbue the black mask with the scroll."
   );
 }
 
-/** Ours: the Wiki gives no message for assembling without the unlock. */
-const HELM_LOCKED = "You need to unlock the Malevolent masquerade from a Slayer master to make a Slayer helmet.";
-
 function helmUnlocked(player) {
-  const id = pluginApi.core.CacheDefinitions.getVarbitId("slayer_helm_unlocked");
-  return id != null && player.getPacketSender().getVarbit(id) === 1;
+  return varbitSet(player, "slayer_helm_unlocked");
+}
+
+/** The imbued helmet an imbued mask makes: the Soul Wars and Emir's Arena masks make their own copy. */
+function imbuedHelmFor(maskItemId) {
+  const name = pluginApi.core.CacheDefinitions.getObjNames?.()?.get(Number(maskItemId));
+  const form = FORMS.find((entry) => entry.mask && entry.mask !== "nzone_black_mask" && entry.mask === name);
+  return (form && objId(form.helm)) ?? ItemIdentifiers.SLAYER_HELMET_I_;
 }
 
 function assemble(event) {
@@ -195,15 +292,63 @@ function assemble(event) {
     return;
   }
   const imbued = usingScroll || maskId(mask.getId()) === "imbued";
+  const result = !imbued ? ItemIdentifiers.SLAYER_HELMET
+    : usingScroll ? ItemIdentifiers.SLAYER_HELMET_I_ : imbuedHelmFor(mask.getId());
   if (selectedMask) inventory.deleteAtSlot(selectedSlot, 1);
   else inventory.deleteNumber(mask.getId(), 1);
   for (const part of PARTS) inventory.deleteNumber(part, 1);
   if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
-  inventory.adds(imbued ? ItemIdentifiers.SLAYER_HELMET_I_ : ItemIdentifiers.SLAYER_HELMET, 1);
+  inventory.adds(result, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
   pluginApi.emitCustomEvent("league:complete-task", { player, id: "assemble-a-slayer-helm" });
-  player.sendMessage("You combine the items into a Slayer helmet.");
+  sendSpam(player, "You combine the items into a Slayer helm.");
+  combineSound(player);
+}
+
+/** A recolour's head on a helmet of the plain colour, either way round. */
+function recolour(event) {
+  if (event.handled) return;
+  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
+  const { byId, heads } = helmetTable();
+  const headOnUsed = heads.has(Number(usedItemId));
+  const colour = heads.get(Number(headOnUsed ? usedItemId : usedWithItemId));
+  const helm = byId.get(Number(headOnUsed ? usedWithItemId : usedItemId));
+  // A recoloured helmet takes no second head: "Nothing interesting happens."
+  if (!colour || !helm || helm.recolour) return;
+  const result = objId(colour.item(helm.form.helm));
+  if (result == null) return;
+  event.handled = true;
+  if (!varbitSet(player, colour.unlock)) {
+    learnFirst(player);
+    return;
+  }
+  const helmItem = headOnUsed ? usedWithItem : usedItem;
+  const helmSlot = headOnUsed ? usedWithItemSlot : usedItemSlot;
+  const headName = pluginApi.core.ItemDefinition.forId(colour.headId)?.getName?.() ?? "head";
+  pluginApi.sendMultiChatboxPrompt(player, `Combine the ${headName} with your helm?`,
+    "Yes", () => combineRecolour(player, helmItem, helmSlot, helm.base, colour, result),
+    "No", () => {});
+}
+
+function learnFirst(player) {
+  const { ChatType, DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, LEARN_FIRST);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LEARN_FIRST)));
+}
+
+/** Yes: the head goes into the helmet, if both are still there and the helmet is still the same uncoloured one. */
+function combineRecolour(player, helmItem, helmSlot, base, colour, result) {
+  const inventory = player.getInventory();
+  const helm = helmetTable().byId.get(Number(helmItem.getId()));
+  if (inventory.getItems()[helmSlot] !== helmItem || helm?.base !== base || helm.recolour ||
+    !inventory.contains(colour.headId)) return;
+  inventory.deleteNumber(colour.headId, 1);
+  helmItem.setId(result);
+  inventory.refreshItems();
+  pluginApi.emitCustomEvent("equipment:changed", { player });
+  sendSpam(player, `You combine the items into a ${pluginApi.core.ItemDefinition.forId(result)?.getName?.()}.`);
+  combineSound(player);
 }
 
 /** Check (inventory or worn): the task, as the enchanted gem inside it shows (Slayer.plugin.js). */
@@ -216,20 +361,26 @@ function notBuilt() {
   return true;
 }
 
+/** Disassemble: the helmet's own black mask, the components and any recolour's head. */
 function disassemble(event) {
   const { player, item } = event;
+  const entry = helmetTable().byId.get(Number(item.getId()));
+  if (!entry || entry.recolour?.disassemble === false) return true;
+  const head = entry.recolour?.headId ?? null;
   const inventory = player.getInventory();
-  if (inventory.getFreeSlots() < PARTS.length) {
+  // Ours: no message is recorded for a full inventory.
+  if (inventory.getFreeSlots() < PARTS.length + (head != null ? 1 : 0)) {
     player.sendMessage("You don't have enough inventory space to disassemble the helmet.");
     return true;
   }
-  const imbued = itemName(item.getId()).includes("(i)");
   inventory.deleteNumber(item.getId(), 1);
-  inventory.adds(imbued ? ItemIdentifiers.BLACK_MASK_I_ : ItemIdentifiers.BLACK_MASK, 1);
+  inventory.adds(entry.mask, 1);
   for (const part of PARTS) inventory.adds(part, 1);
+  if (head != null) inventory.adds(head, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
-  player.sendMessage("You disassemble the Slayer helmet.");
+  sendSpam(player, "You disassemble your Slayer helm.");
+  combineSound(player);
   return true;
 }
 
@@ -271,11 +422,10 @@ module.exports = {
     api.onCustomEvent("slayer:imbued-active", imbuedActive);
     api.onItemOnItem(imbue, { noted: false });
     api.onItemOnItem(assemble, { noted: false });
-    // Worn Partner and Log aren't built; handling them keeps an unhandled worn click from
-    // taking the helmet off.
+    api.onItemOnItem(recolour, { noted: false });
+    // Partner and Log aren't built; handling them keeps the worn click from taking the helmet off.
     const actions = { Disassemble: disassemble, Check: check, Partner: notBuilt, Log: notBuilt };
-    api.onItemAction("Slayer helmet", actions);
-    api.onItemAction("Slayer helmet (i)", actions);
+    for (const name of HELMET_NAMES) api.onItemAction(name, actions);
   },
-  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble },
+  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
 };

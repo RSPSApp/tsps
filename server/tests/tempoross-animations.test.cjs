@@ -128,11 +128,9 @@ function fireAttacksAt(tiles) {
   return { attacks, players };
 }
 
-// Issue #2730: a fire stopped after two spreads because the child inherited the parent's
-// incremented depth counter, so a chain was only three fires deep. The Wiki has fires spreading
-// until they are doused or a wave puts them out, and the maintainers ruled the Wiki wins over the
-// capture that saw two. Each fire now spreads on its own 40-tick timer with no depth cap.
-test("a fire keeps spreading on its timer instead of stopping after two", () => {
+// Wiki (Fire (Tempoross Cove)): "Each fire can spread twice before stabilising". Issue #2730's bug
+// was a child inheriting its parent's count; here each fire counts its own two.
+test("each fire spreads twice on its timer, then stabilises; a new fire has its own two", () => {
   const fight = { ticks: 0, stopped: false, players: new Set(), forEachPlayer() {} };
   const attacks = new Attacks(fight);
   attacks.cove = { tile: () => ({}), projectile() {}, areaSound() {} };
@@ -141,15 +139,21 @@ test("a fire keeps spreading on its timer instead of stopping after two", () => 
   const lit = [];
   attacks.ignite = (tile) => lit.push(tile);
   attacks.burnable = () => true;
-  // `spreads` is what the old code capped on; it is carried here so this test fails against it.
   attacks.fires.set("10,10", { npc: {}, loc: {}, x: 10, y: 10, spreads: 0, spreadAt: 0 });
 
   for (let tick = 0; tick <= DATA.fight.fireSpreadTicks * 5; tick++) {
     fight.ticks = tick;
     attacks.tickFires();
   }
+  assert.equal(lit.length, 2, "two spreads, then it stabilises");
 
-  assert.ok(lit.length > 2, `spread ${lit.length} times; the old cap stopped it at two`);
+  // A fire lit by a spread starts its own count.
+  attacks.fires.set("20,20", { npc: {}, loc: {}, x: 20, y: 20, spreads: 0, spreadAt: fight.ticks + 1 });
+  for (let tick = fight.ticks + 1; tick <= DATA.fight.fireSpreadTicks * 10; tick++) {
+    fight.ticks = tick;
+    attacks.tickFires();
+  }
+  assert.equal(lit.length, 4, "the new fire spreads twice of its own");
 });
 
 // Issue #2455: damage was tied to the fight's tick parity, so a fire lit on an odd tick

@@ -12,6 +12,7 @@ module.exports = {
   key: "wyrm-advanced",
   name: "Colossal Wyrm Agility Course (Advanced)",
   helper: 22, // the Agility helper's course (enum 3507: "Colossal Wyrm Agility Course")
+  lootSource: 124, // the loot tracker's source (enum 4976)
   lapXp: 1053.6,
   // The shared ladder and tightrope set both courses' progress varbits (`progress`, rsprox 1106).
   sharesWith: { course: "wyrm-basic", through: 2, progress: true },

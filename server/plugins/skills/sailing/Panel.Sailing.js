@@ -25,7 +25,8 @@ const { repairKitUses } = require("./Cargo.Sailing");
 const { specFor, boatStatsForRow } = require("./BoatParts.Sailing");
 const { hotspotLocs } = require("./BoatFacilities.Sailing");
 const { describeBoat, boatVarps, describeSuppliedBoat, suppliedBoatVarps,
-  openSidepanel, clearBoatVarps, DESCRIPTION_VARBITS } = require("./Sidepanel.Sailing");
+  openSidepanel, clearBoatVarps, clickTab, DESCRIPTION_VARBITS, VARBIT_SIDEPANEL_TABS,
+  SIDEPANEL_TAB } = require("./Sidepanel.Sailing");
 const StaticShips = require("./StaticShips.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
@@ -168,6 +169,7 @@ function onGuestBoarded({ player, boat, owned }) {
     execute() {
       this.stop();
       if (Sailing.guestBoat(player) !== boat) return;
+      setVarbit(player, VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB.FACILITIES);
       applyBoarded(player, owned, playersAboard(boat));
       updateHeadCount(boat);
     }
@@ -187,6 +189,8 @@ function onBoarded({ player, boat, owned }) {
     constructor() { super(1, player); }
     execute() {
       if (player.getArea()?.boat !== boat) return this.stop();
+      // Boarding shows the facilities tab.
+      setVarbit(player, VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB.FACILITIES);
       applyBoarded(player, owned);
       // Boarding shows the sails at rest, on the mast and the sail cloth (rsprox).
       animateSails(player, boat, "down", "down", { settle: false });
@@ -304,6 +308,21 @@ function openOffBoatSidepanel(player) {
   openSidepanel(player, null, { [VARBIT.SIDEPANEL_VISIBLE]: 1 }, {});
 }
 
+/** Mounts the sailing sidepanel on the combat tab: the boat aboard, a visited one, or none. */
+function showSidepanel(player) {
+  const supplied = suppliedPanels.get(player);
+  if (supplied && currentSuppliedPanel(player, supplied)) {
+    setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 1);
+    if (applySuppliedPanel(player, supplied)) return;
+  }
+  const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
+  if (owned) return applyBoarded(player, owned);
+  const visited = Sailing.guestBoat(player);
+  const visitedOwned = visited && Sailing.ownedOf(visited);
+  if (visitedOwned) return applyBoarded(player, visitedOwned, playersAboard(visited));
+  openOffBoatSidepanel(player);
+}
+
 /**
  * The combat tab's "View" button (593:48) and the sidepanel's "Combat Options" (937:1) swap
  * the combat tab between the combat options and the sailing sidepanel, aboard or (with the
@@ -314,17 +333,7 @@ function switchCombatTab(event) {
   const { player } = event;
   if (event.groupId === COMBAT_OPTIONS_GROUP && event.childId === VIEW_SAILING_OPTIONS_CHILD) {
     event.handled = true;
-    const supplied = suppliedPanels.get(player);
-    if (supplied && currentSuppliedPanel(player, supplied)) {
-      setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 1);
-      if (applySuppliedPanel(player, supplied)) return;
-    }
-    const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
-    if (owned) return applyBoarded(player, owned);
-    const visited = Sailing.guestBoat(player);
-    const visitedOwned = visited && Sailing.ownedOf(visited);
-    if (visitedOwned) return applyBoarded(player, visitedOwned, playersAboard(visited));
-    openOffBoatSidepanel(player);
+    showSidepanel(player);
   } else if (event.groupId === SIDEPANEL_GROUP && event.childId === VIEW_COMBAT_OPTIONS_CHILD) {
     event.handled = true;
     setVarbit(player, VARBIT.SIDEPANEL_VISIBLE, 0);
@@ -346,6 +355,7 @@ function describeBoatsOnLogin({ player }) {
 }
 
 module.exports = {
+  showSidepanel,
   register(api) {
     attachCore(api);
     content();
@@ -360,5 +370,6 @@ module.exports = {
     api.onCustomEvent("quest:stage-changed", pandemoniumStageChanged);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
+    api.onInterfaceActionClick(clickTab);
   },
 };

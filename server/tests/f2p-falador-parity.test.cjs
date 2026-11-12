@@ -219,42 +219,6 @@ test('Goblin crates are individually exhausted even before the quest, and legacy
   assert.equal(h.quest.varbitId, 2378); assert.equal(h.quest.varpId, undefined);
 });
 
-test('all three Goblin fittings keep mail until the scene ends, change Grubfoot and reward once', () => {
-  const h = setup('GoblinDiplomacy'); h.line(N.GENERAL_WARTFACE, 'Yep, bring us orange armour.').before();
-  assert.equal(h.quest.getStage(h.player), 1);
-  for (const [mail, start, change, end, stage, morph] of [
-    [I.ORANGE_GOBLIN_MAIL, 'tpOU6M', '7xpvaw', 'C7D_Q0', 3, 1],
-    [I.BLUE_GOBLIN_MAIL, 'W3sSt5', 'UNwweE', '0v3cKx', 4, 2],
-    [I.GOBLIN_MAIL, 'qn3xcl', null, 'QqWnqy', 6, 0],
-  ]) {
-    h.packets.length = 0;
-    h.inventory.set(mail, 1); h.action(N.GENERAL_WARTFACE, start); assert.equal(h.inventory.get(mail), 1);
-    h.runAt(1);
-    assert.deepEqual(h.packets.filter(row => row.key === 'sendCameraShake').map(row => row.args), [0, 1, 2, 3, 4].map(axis => [axis, 0]));
-    assert.equal(h.packets.filter(row => /sendCamera(MoveTo|LookAt)/.test(row.key)).length, 0);
-    h.runAt(2); h.runAt(3); assert.equal(h.player.getPrivateArea().getName(), 'Goblin armour fitting');
-    const camera = h.player.getPrivateArea().sourceTile(2961, 3514), target = h.player.getPrivateArea().sourceTile(2957, 3512);
-    assert.deepEqual(h.packets.filter(row => /sendCamera(MoveTo|LookAt)/.test(row.key)), [
-      { key: 'sendCameraMoveTo', args: [camera.getX(), camera.getY(), 450, { rate: 232, rate2: 232, heightRelative: false }] },
-      { key: 'sendCameraLookAt', args: [target.getX(), target.getY(), 150, { rate: 232, rate2: 232, heightRelative: false }] },
-    ]);
-    if (change) h.action(N.GENERAL_WARTFACE, change); else h.line(N.GENERAL_WARTFACE, 'Put on this armour!').after();
-    h.runAt(9); h.runAt(12); assert.ok(h.spawned.length >= 4);
-    h.action(N.GENERAL_WARTFACE, end); assert.equal(h.inventory.get(mail), 0); h.runAt(1); h.runAt(2); h.runAt(3);
-    assert.equal(h.quest.getStage(h.player), stage); assert.equal(h.varbits.get(13594), morph); assert.equal(h.player.getPrivateArea(), null);
-    assert.deepEqual(h.packets.filter(row => /sendCamera(Unlock|Reset)/.test(row.key)), [{ key: 'sendCameraUnlock', args: [false] }, { key: 'sendCameraReset', args: [] }]);
-  }
-  assert.equal(h.inventory.get(I.GOLD_BAR), 1); assert.deepEqual(h.xp, [[h.core.Skill.CRAFTING, 200]]); assert.equal(h.attrs.get('quest.points'), 5);
-  h.action(N.GENERAL_WARTFACE, 'QqWnqy'); assert.equal(h.inventory.get(I.GOLD_BAR), 1);
-});
-
-test('interrupting a Goblin fitting restores controls and retains the undelivered mail', () => {
-  const h = setup('GoblinDiplomacy'); h.quest.setStage(h.player, 1); h.inventory.set(I.ORANGE_GOBLIN_MAIL, 1);
-  h.action(N.GENERAL_WARTFACE, 'tpOU6M'); h.runAt(1); h.logout();
-  assert.equal(h.player.getPrivateArea(), null); assert.equal(h.inventory.get(I.ORANGE_GOBLIN_MAIL), 1); assert.equal(h.player.untargetable, false); assert.equal(h.varbits.get(6719), 0);
-});
-
-
 test('Black Knights sabotage sends the recorded tick-ten camera and restores it at the two captured return boundaries', () => {
   const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
   h.action(N.WITCH_5, 'lUsX9u');

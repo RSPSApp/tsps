@@ -41,6 +41,16 @@ function voyageFor(player) {
   return voyage && voyage.crew.has(player) ? voyage : null;
 }
 
+/**
+ * Wiki (Fishing Trawler, contribution table): filling a leak and fixing a rail each give 5 Construction XP, only to a
+ * player who owns a house (Construction answers "construction:owns-house").
+ */
+function constructionXp(player, amount) {
+  const request = { player, owns: true };
+  Shared.api()?.emitCustomEvent?.("construction:owns-house", request);
+  if (request.owns !== false) Shared.addXp(player, "CONSTRUCTION", amount);
+}
+
 function fillLeak({ player, objectId }) {
   const index = hullSpots.get(objectId);
   if (index === undefined) return false;
@@ -58,6 +68,7 @@ function fillLeak({ player, objectId }) {
   Shared.later(Shared.DATA.timing.fillDelay, () => {
     if (Sea.sea.voyage !== voyage || !Shared.carries(player, paste) || !voyage.patch(player, index)) return;
     player.getInventory().deleteNumber(paste, 1);
+    constructionXp(player, Shared.DATA.xp.patchConstruction);
     player.sendMessage(Shared.message("filled"));
     voyage.sync(player);
   });
@@ -175,6 +186,7 @@ function fixRail({ player, objectId }) {
     return true;
   }
   if (!voyage.fixRail(player, side)) return true;
+  constructionXp(player, Shared.DATA.xp.railConstruction);
   Shared.animate(player, Shared.ids().seqs.hammer);
   player.sendMessage(Shared.message("railFixed"));
   voyage.sync(player);

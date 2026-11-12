@@ -453,6 +453,19 @@ test('the jungle-grass trapdoor cancellation stays on the surface and does not s
   assert.equal(harness.spawned.some(npc => npc.id === N.KRUK_3), false);
 });
 
+// Wiki (Monkey Madness II): entering Kruk's Dungeon the greegree will "wrench itself from your hands".
+test('entering the jungle-grass trapdoor to find Kruk wrenches the greegree off', () => {
+  const harness = register();
+  const p = makePlayer();
+  const wrenched = [];
+  harness.api.onCustomEvent('greegree:wrench-off', event => wrenched.push(event.player));
+  harness.quest.setStage(p, 65);
+  object(harness, p, O.JUNGLE_GRASS_4, 'Investigate');
+  choose(p, 'Yes.');
+  assert.equal(p.moves.length, 1);
+  assert.deepEqual(wrenched, [p]);
+});
+
 test('only the canonical end-of-dungeon Cavern entrance starts the Kruk fight', () => {
   const harness = register();
   const p = makePlayer();

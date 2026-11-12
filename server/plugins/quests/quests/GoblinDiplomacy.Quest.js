@@ -76,6 +76,9 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
    */
   const MENU_QUESTIONS = ["Why are you arguing about the colour of your armour?", "Wouldn't you prefer peace?", "I'll leave you to it."];
 
+  /** "Shows the previous options": from the mid-quest menu, back to it. */
+  const BACK_TO_MENU = { type: "jump", reference: "previous" };
+
   const CONDITION_NON_ORANGE = "non-orange";
   const CONDITION_NON_BLUE = "non-blue";
   const CONDITION_ORANGE_PAINTED = "orange-painted";
@@ -132,6 +135,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   /** The cutscene's own client state, set with cutscene_status and cleared with it (ticks 189 / 216). */
   const SCENE_VARBITS = [["fov_clamp", 3], ["draw_distance_max_override", 1]];
   const SCENE_VARPS = [["option_areasounds_override", 30], ["areasounds_override", 1]];
+  const SETTINGS_SET_DRAW_DISTANCE_SCRIPT = 6021;
 
   const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
   const fittings = new WeakMap();
@@ -336,7 +340,11 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     return true;
   }
 
-  /** The menu after the opening. Ours: without the armour it is the same menu less the hand-in (no capture shows it). */
+  /**
+   * The menu after the opening. Ours (no capture picks a question under way): without the armour it is the same menu less
+   * the hand-in, and an answer comes back to this menu, not to the transcript's pre-quest menus that offer to start the
+   * quest again.
+   */
   function midQuestMenu(player, variant) {
     const start = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].variants[VARIANT_START_GENERALS][0].options;
     const firstMenu = start.flatMap(option => option.steps).find(step => step.type === "choice" && step.options.some(o => o.text === MENU_QUESTIONS[0]));
@@ -345,8 +353,19 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       const handIn = handInSteps(variant);
       options.push({ text: handIn[0].player, steps: handIn });
     }
-    for (const text of MENU_QUESTIONS) options.push({ text, steps: firstMenu.options.find(option => option.text === text).steps });
+    const branches = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].branches;
+    for (const text of MENU_QUESTIONS) {
+      const steps = firstMenu.options.find(option => option.text === text).steps;
+      options.push({ text, steps: text === MENU_QUESTIONS.at(-1) ? steps : [...answerOf(steps, branches), BACK_TO_MENU] });
+    }
     return { type: "choice", options };
+  }
+
+  /** A question's answer: its lines, up to the menu the transcript follows them with. */
+  function answerOf(steps, branches) {
+    const body = steps.length === 1 && steps[0].type === "call" ? branches[steps[0].branch] : steps;
+    const end = body.findIndex(step => step.type === "choice" || step.type === "jump" || step.type === "call");
+    return end < 0 ? body : body.slice(0, end);
   }
 
   // ---- the fitting -------------------------------------------------------------------------------------------------------
@@ -381,6 +400,8 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     const sender = player.getPacketSender();
     for (const [name, value] of SCENE_VARBITS) sender.sendVarbit(CacheDefinitions.getVarbitId(name), on ? value : 0);
     for (const [name, value] of SCENE_VARPS) sender.sendConfig(CacheDefinitions.getVarpId(name), on ? value : 0);
+    // Live runs settings_set_draw_distance as the override goes on and off (ticks 189, 216), so it applies.
+    sender.sendInterfaceScript(SETTINGS_SET_DRAW_DISTANCE_SCRIPT);
   }
 
   /**
@@ -496,13 +517,16 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       player.moveTo(new Location(...fitting.exit));
     });
     // The scene's own tasks went with it; what is left of the way out is keyed on the player.
+    const online = () => player.isRegistered?.() !== false;
     Scenes.later(player, 2, () => {
+      if (!online()) return;
       Scenes.fade(player, false, FADE_CYCLES);
       player.getDialogueManager().reset();
       player.getPacketSender().sendInterfaceRemoval();
     });
     Scenes.later(player, 3, () => {
-      if (fitting.stage === STAGE_BLUE_REJECTED && quest.getStage(player) === STAGE_BROWN_ACCEPTED) quest.complete(player);
+      // A logout before this completes it at the next login.
+      if (online() && fitting.stage === STAGE_BLUE_REJECTED && quest.getStage(player) === STAGE_BROWN_ACCEPTED) quest.complete(player);
     });
   }
 

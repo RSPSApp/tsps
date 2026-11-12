@@ -56,10 +56,8 @@ function actor(t, { stage, items = [] }) {
   connection.player = player;
   const bentnoze = core.NPC.create(core.NpcIdentifiers.GENERAL_BENTNOZE, new core.Location(...BENTNOZE_TILE));
   core.World.getNpcs().add(bentnoze);
-  // The side tabs a logged-in player has up (the login bootstrap mounts them).
-  const sender = player.getPacketSender();
-  sender.sendTabInterface(0, 593).sendTabInterface(6, player.getSpellbook().getInterfaceId());
-  for (const [slot, group] of [[77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [87, 116], [88, 216]]) sender.sendTabInterface(slot, group);
+  // The real login gameframe: its tab mounts are raw packets the sender does not track.
+  connection.sendPlayerBootstrap();
   const f = { t, player, connection, bentnoze, tick: 0, calls: [], said: [] };
   record(f);
   t.after(() => {
@@ -171,6 +169,11 @@ test("under way, a talk opens with a start opening and then live's menu, the han
   const menu = await untilMenu(carried);
   assert.deepEqual(menu, ["I have some blue armour here.", "Why are you arguing about the colour of your armour?",
     "Wouldn't you prefer peace?", "I'll leave you to it."], JSON.stringify(carried.said));
+  // Ours: an answer comes back to this menu; the pre-quest menus would offer to start the quest again.
+  for (const question of ["Why are you arguing about the colour of your armour?", "Wouldn't you prefer peace?"]) {
+    await choose(carried, question);
+    assert.deepEqual(await untilMenu(carried), menu, question);
+  }
 
   const without = actor(t, { stage: STAGE.blueRejected });
   ticks(without, 2);

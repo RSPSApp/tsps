@@ -51,8 +51,6 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   } = api.core;
   const scenes = new Map();
   const playerKeys = new WeakMap();
-  /** The tab slots hideTabs found mounted, per player. */
-  const hiddenTabs = new WeakMap();
 
   /** A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi, allowSummonPet, barsFollowers }) answer for its area. */
   function sceneRules(Base) {
@@ -206,28 +204,20 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   /** The side tabs a captured cutscene closes as it starts: combat, stats, journal, inventory, worn, prayer, magic, settings, emotes. */
   function hideTabs(player) {
     const sender = player.getPacketSender();
-    const mounted = new Set();
-    for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) {
-      const uid = (TOPLEVEL << 16) | slot;
-      if (sender.getSubInterfaceAt?.(uid)) mounted.add(slot);
-      sender.closeSubInterface(uid);
-    }
-    hiddenTabs.set(player, mounted);
+    for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) sender.closeSubInterface((TOPLEVEL << 16) | slot);
   }
 
   /**
-   * The tabs hideTabs closed go back, each with its login setup: the client drops a closed tab's op events, so without it
-   * the inventory's item options did nothing until a relog (see Scenes.ValeTotems). A tab that was not up stays down.
+   * Every side tab goes back, as live reopens them all (Goblin Diplomacy capture ticks 216, 288), each with its login
+   * setup: the client drops a closed tab's op events, so without it the inventory's item options did nothing until a relog
+   * (see Scenes.ValeTotems). The login gameframe mounts them as raw packets, so the sender cannot say which were up.
    */
   function restoreTabs(player) {
-    const mounted = hiddenTabs.get(player);
-    hiddenTabs.delete(player);
-    if (!mounted?.size) return;
     const sender = player.getPacketSender();
     const spellbook = player.getSpellbook().getInterfaceId();
-    if (mounted.has(COMBAT_TAB[0])) sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
-    if (mounted.has(MAGIC_TAB)) sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
-    for (const [slot, group] of TABS) if (mounted.has(slot)) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
+    sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
+    sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
+    for (const [slot, group] of TABS) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
     player.getInventory().refreshItems();
     player.getEquipment().refreshItems();
   }

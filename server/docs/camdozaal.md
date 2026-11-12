@@ -102,7 +102,10 @@ external destination survives AreaManager departure. The existing death-bones ev
 removes temporary loot before the native kept/dropped-item snapshot, and the died
 event clears run state without changing death/drop/respawn authority. A persisted
 return marker recovers interrupted saves on login. Boost deadlines are persisted
-without extending them on login.
+without extending them on login. The pre-existing members golem Area owns the
+public ruins first; it publishes enter/process/leave events to the Boost module.
+The standalone activity Area keeps the same direct processing as a free-to-play
+fallback, preserving the golem Area's original departure restoration.
 
 ## Verification scope
 

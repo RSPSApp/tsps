@@ -35,7 +35,15 @@ function createArea() {
   }
   return new Camdozaal([new Boundary(2897, 3047, 5757, 5869, 0)]);
 }
+// The pre-existing members golem Area owns this same public rectangle first.
+// It publishes its lifecycle; the standalone Area above remains the F2P fallback.
+function processExistingArea({ player }) { processBoost(player); }
+function enterExistingArea({ player }) { previousBoost.set(player, S.boostTicks(player)); S.sync(player); }
+function leaveExistingArea({ player }) { previousBoost.delete(player); }
 function startup() { S.pluginApi().registerArea(createArea()); }
 module.exports = function attach(api) {
+  api.onCustomEvent("camdozaal:area-process", processExistingArea);
+  api.onCustomEvent("camdozaal:area-enter", enterExistingArea);
+  api.onCustomEvent("camdozaal:area-leave", leaveExistingArea);
   api.onServerStartup(startup);
 };

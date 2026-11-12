@@ -839,3 +839,65 @@ test('ordinary big net catch reaches clue-bottle rolls and the Luck consumer', a
     assert.ok(outsideRolls.every(event => event.multiplier === 1), 'Camdozaal Luck does not affect outside catches');
   } finally { PM.emitCustomEvent = emit; Math.random = random; }
 });
+
+test('actual members Area owner processes Boost countdown and every published warning', async t => {
+  const f = actor(t), shards = obj('camdozaal_barronite_shard');
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, 'fixture is the real members plugin profile');
+  f.player.getInventory().adds(shards, 1000);
+  await exchange(f, t);
+  assert.equal(f.player.getArea().getName(), 'CamdozaalGolemArea', 'existing members Area is the actual first owner');
+  await buy(f, 12);
+  assert.ok(f.player.getAttribute('camdozaal:boost-expires-at') > Date.now());
+  const messages = [], send = f.player.sendMessage;
+  f.player.sendMessage = function(text) { messages.push(text); return send.call(this, text); };
+  try {
+    // Seed expiry deadlines, not elapsed wall-clock minutes. All processing goes
+    // through actual World/AreaManager ownership, never a direct Boost callback.
+    f.player.setAttribute('camdozaal:boost-expires-at', Date.now() + 501 * 600); ticks(1);
+    assert.deepEqual(messages, [], 'no early five-minute warning');
+    const expected = [];
+    for (const [remaining, minutes, text] of [
+      [499, 5, 'You have less than 5 mins of Boosted buff left in Camdozaal.'],
+      [199, 2, 'You have less than 2 mins of Boosted buff left in Camdozaal.'],
+      [99, 1, 'You have less than 1 min of Boosted buff left in Camdozaal.'],
+      [-1, 0, 'Your Camdozaal Boosted buff has run out.'],
+    ]) {
+      f.player.setAttribute('camdozaal:boost-expires-at', Date.now() + remaining * 600); ticks(1);
+      expected.push(text);
+      assert.deepEqual(messages, expected, 'actual owning Area emits the next warning exactly once');
+      assert.equal(f.player.getPacketSender().getVarbit(12106), minutes, 'actual owner updates cached Boost countdown');
+    }
+    ticks(3);
+    assert.deepEqual(messages, expected, 'expiry is not repeated every tick');
+  } finally { f.player.sendMessage = send; }
+});
+
+test('shared public Area lifecycle preserves ordinary golem awakening and departure restoration', async t => {
+  const f = actor(t), id = core.CacheDefinitions.getNpcId('camdozaal_golem_chaos_rock');
+  const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id);
+  assert.ok(spawn);
+  const npc = PM.spawnNpc({ id, x: spawn.x, y: spawn.y, z: spawn.level ?? 0, wanderRadius: 0 });
+  assert.ok(npc);
+  t.after(() => { if (npc.isRegistered()) core.World.getRemoveNPCQueue().push(npc); ticks(1); });
+  ticks(1);
+  const index = npc.getIndex(), originalHp = npc.getHitpoints();
+  let reached = false;
+  for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const tile = new core.Location(spawn.x + dx, spawn.y + dy, spawn.level ?? 0);
+    if (core.RegionManager.blocked(tile, null)) continue;
+    f.player.moveTo(tile);
+    if (core.PathFinder.reachedEntity(f.player, npc)) { reached = true; break; }
+  }
+  assert.equal(reached, true); ticks(3);
+  assert.equal(f.player.getArea().getName(), 'CamdozaalGolemArea');
+  const op = npc.getCurrentDefinition(f.player).getActions().indexOf('Awaken') + 1;
+  assert.ok(op > 0);
+  await f.connection.dispatch([{ type: 'npc_option', index, clickType: op }]); ticks(1);
+  assert.equal(npc.getId(), core.CacheDefinitions.getNpcId('camdozaal_golem_chaos'));
+  assert.equal(npc.getOwner(), f.player);
+  f.player.moveTo(new core.Location(3222, 3218, 0)); ticks(3);
+  assert.equal(npc.getId(), id, 'existing golem postLeave restores rubble');
+  assert.equal(npc.getIndex(), index, 'same registered world slot retained');
+  assert.equal(npc.getOwner(), null);
+  assert.equal(npc.getHitpoints(), originalHp);
+});

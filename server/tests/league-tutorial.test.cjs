@@ -588,8 +588,9 @@ test("Tutorial Island leaves new and returning Leagues VI characters' journal us
     click(league, uid(161, 61));
     await settle();
     assertPage(league, 4);
-    league.getPacketSender().sendSubInterface(uid(629, 43), 656, 1);
+    assert.equal(click(league, uid(629, 34)), true, "the registered Leagues journal tab handles the click");
     await settle();
+    assert.equal(league.open.get(656), uid(629, 43), "the journal handler mounted the league menu");
     assertPage(league, 5);
     assert.equal(points(league), 10, "ordinary menu opening still completes the task");
     click(league, uid(378, 72));

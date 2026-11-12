@@ -1670,12 +1670,6 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
   try {
     const arrival = new Location(1503, 5602, 0);
     const area = AreaManager.get(arrival);
-    assert.equal(area?.getMusicTrack({ getLocation: () => arrival }), 280, 'the registered lair must supply Sign Here');
-    for (const tile of [new Location(1471, 5602, 0), new Location(1536, 5602, 0),
-      new Location(1503, 5567, 0), new Location(1503, 5632, 0), new Location(1503, 5602, 1)]) {
-      assert.notEqual(AreaManager.get(tile), area, 'adjacent squares and other planes are outside the lair');
-      assert.equal(area.getMusicTrack({ getLocation: () => tile }), null, 'stale membership cannot override another tile');
-    }
     for (const classic of [false, true]) {
       const player = makePlayer();
       let location = arrival;
@@ -1730,6 +1724,12 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
         flushMusic(4);
         assert.deepEqual(songs, [], 'Single mode does not force area playback');
       } finally { eventMock.mock.restore(); transport.mock.restore(); }
+    }
+    assert.equal(area?.getMusicTrack({ getLocation: () => arrival }), 280, 'the registered lair must supply Sign Here');
+    for (const tile of [new Location(1471, 5602, 0), new Location(1536, 5602, 0),
+      new Location(1503, 5567, 0), new Location(1503, 5632, 0), new Location(1503, 5602, 1)]) {
+      assert.notEqual(AreaManager.get(tile), area, 'adjacent squares and other planes are outside the lair');
+      assert.equal(area.getMusicTrack({ getLocation: () => tile }), null, 'stale membership cannot override another tile');
     }
   } finally { AreaManager.areas = previous; }
 });

@@ -44,12 +44,17 @@ function wielder(weaponId, meta) {
     if (meta !== undefined) weapon.setMetaValue(meta.key, meta.value);
     const equipment = new Array(14).fill(null);
     equipment[Equipment.WEAPON_SLOT] = weapon;
-    const inventory = { shards: 0 };
+    const inventory = { shards: 0, items: [weapon] };
     const messages = [];
+    const prompts = [];
     const player = {
         weapon,
         messages,
         inventory,
+        prompts,
+        amountAction: null,
+        setEnteredAmountAction(action) { player.amountAction = action; },
+        getPacketSender: () => ({ sendEnterAmountPrompt: (text) => prompts.push(text) }),
         sendMessage: (m) => messages.push(m),
         isPlayer: () => true,
         getAsPlayer() { return this; },
@@ -58,6 +63,7 @@ function wielder(weaponId, meta) {
             refreshItems() {},
             getAmount: () => inventory.shards,
             deleteNumber: (_id, n) => { inventory.shards -= n; },
+            getItems: () => inventory.items,
         }),
         getUpdateFlag: () => ({ flag() {} }),
         getCombat: () => ({ getRangedWeapon: () => core.RangedWeapon.BOW_OF_FAERDHINEN[0] }),
@@ -90,15 +96,70 @@ test('Check gives the captured message with corruption progress (2,000 charges u
     assert.deepEqual(player.messages, ['Your bow of Faerdhinen has 8,000 charges remaining, and 2% progress towards corruption.']);
 });
 
-test('shards add 100 charges each up to 20,000 and revive an inactive bow', () => {
+function useShards(player, inactive = false) {
+    const name = inactive ? 'Bow of Faerdhinen (inactive)' : 'Bow of Faerdhinen';
+    const event = { player, usedItem: new Item(I.CRYSTAL_SHARD, 1), usedItemId: I.CRYSTAL_SHARD, usedWithItem: player.weapon, usedWithItemId: player.weapon.getId(), handled: false };
+    itemOnItem.find((entry) => entry.b === name).handler(event);
+    return event;
+}
+
+test('shards ask how many to add, the most being those that reach 20,000 rounded up', () => {
+    const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 3689, used: 0 } });
+    player.inventory.shards = 350;
+    const event = useShards(player);
+    assert.equal(event.handled, true);
+    assert.deepEqual(player.prompts, ['How many shards do you wish to add? (0 - 164)']);
+    assert.equal(player.inventory.shards, 350, 'nothing is taken before the answer');
+    player.amountAction.execute(164);
+    assert.equal(player.inventory.shards, 186);
+    assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 20000, 'the overshoot is lost');
+    assert.deepEqual(player.messages, [], 'no chat line');
+});
+
+test('a smaller count adds that many; more than held or allowed is cut down; 0 adds nothing', () => {
+    const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 10000, used: 0 } });
+    player.inventory.shards = 30;
+    useShards(player);
+    player.amountAction.execute(0);
+    assert.equal(player.inventory.shards, 30);
+    useShards(player);
+    player.amountAction.execute(10);
+    assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 11000);
+    useShards(player);
+    player.amountAction.execute(500);
+    assert.equal(player.inventory.shards, 0);
+    assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 13000);
+});
+
+test('shards revive an inactive bow', () => {
     const player = wielder(I.BOW_OF_FAERDHINEN_INACTIVE_, { key: BOW_KEY, value: { charges: 0, used: 10000 } });
     player.inventory.shards = 500;
-    const event = { player, usedItem: player.weapon, usedItemId: player.weapon.getId(), usedWithItem: new Item(I.CRYSTAL_SHARD, 500), usedWithItemId: I.CRYSTAL_SHARD, handled: false };
-    itemOnItem.find((entry) => entry.b === 'Bow of Faerdhinen (inactive)').handler(event);
+    useShards(player, true);
+    assert.deepEqual(player.prompts, ['How many shards do you wish to add? (0 - 200)']);
+    player.amountAction.execute(200);
     assert.equal(player.weapon.getId(), I.BOW_OF_FAERDHINEN);
     assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 20000);
     assert.equal(player.inventory.shards, 300);
-    assert.equal(event.handled, true);
+});
+
+test('a bow moved out of the inventory before the answer takes no shards', () => {
+    const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 100, used: 0 } });
+    player.inventory.shards = 10;
+    useShards(player);
+    player.inventory.items = [];
+    player.amountAction.execute(10);
+    assert.equal(player.inventory.shards, 10);
+    assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 100);
+});
+
+test('a shot that leaves a multiple of 500 charges sends the red reminder, without a separator', () => {
+    const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 4002, used: 0 } });
+    ammoHandlers[0].decrementAmmo(player, null, 1);
+    assert.deepEqual(player.messages, []);
+    ammoHandlers[0].decrementAmmo(player, null, 1);
+    assert.deepEqual(player.messages, ['<col=ff0000>Your bow of Faerdhinen has 4000 charges remaining.</col>']);
+    ammoHandlers[0].decrementAmmo(player, null, 1);
+    assert.equal(player.messages.length, 1);
 });
 
 test('a blade of Saeldor spends a charge on every melee swing and not on other attacks', () => {

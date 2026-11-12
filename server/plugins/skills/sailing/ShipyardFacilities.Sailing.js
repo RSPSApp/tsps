@@ -12,6 +12,9 @@ const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill"
 const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
+const { ActionDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ActionDialogue");
+const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
+const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { DoubleItemStatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/DoubleItemStatementDialogue");
 const { setVarbit, playSound, content } = require("./SailingContent.Sailing");
 const { HOTSPOT_VARBITS } = require("./Sidepanel.Sailing");
@@ -102,15 +105,31 @@ function buildFacility(event) {
   if (!buildOnHotspot(event.player, visit, readOptionRow(event.argsData))) refreshCustomisation(event.player);
 }
 
+/** Runs `action` once, `ticks` from now, while the player is online. */
+function later(player, ticks, action) {
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(ticks, player); }
+    execute() {
+      action();
+      this.stop();
+    }
+  })());
+}
+
 /**
  * Without a saw and a hammer the customisation closes and an item box shows both, as captured.
- * True when the build may go on.
+ * Continuing it reopens the hotspot's customisation the tick after, if the player is still
+ * aboard. True when the build may go on.
  */
-function checkTools(player) {
+function checkTools(player, clicked) {
   if (hasTool(player, SAWS) && hasTool(player, HAMMERS)) return true;
   closeCustomisation(player);
+  const reopen = () => later(player, 1, () => {
+    if (aboardVisit(player) === clicked.visit) openHotspotOptions(player, clicked);
+  });
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new DoubleItemStatementDialogue(0, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS)));
+    new DoubleItemStatementDialogue(0, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS),
+    new ActionDialogue(1, { execute: reopen })));
   return false;
 }
 
@@ -122,7 +141,7 @@ function buildOnHotspot(player, visit, facility) {
   const boat = ownedBoat(player, visit.slot);
   const hotspot = visit.hotspot;
   if (!boat || facility === undefined || !facilities.allows(boat, hotspot, facility)) return false;
-  if (!checkTools(player)) return true;
+  if (!checkTools(player, { visit, boat, hotspot })) return true;
   const schematic = { player, row: facility, allow: null };
   pluginApi.emitCustomEvent("sailing:schematic-can-build", schematic);
   if (schematic.allow === false) return false;

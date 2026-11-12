@@ -2701,6 +2701,21 @@ test("a facility can't be built without a saw and a hammer: the customisation cl
   assert.deepEqual(box.getItemIds(), [8794, 2347], "objectbox_double: the saw and the hammer");
   assert.equal(box.getText(), "You need a saw and a hammer in order to build a<br>facility.");
   assert.deepEqual(h.scripts.slice(sent), [], "no redraw: 939 is gone");
+
+  // Continuing the box reopens the hotspot's customisation the tick after, as captured.
+  h.statements.at(-1).getDialogues().get(1).send(h.player);
+  assert.equal(h.player.getInterfaceId(), -1, "not on the continue's own tick");
+  TaskManager.process();
+  assert.equal(h.player.getInterfaceId(), 939);
+  assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524), h.varbits.get(19525)], [1, 2, 1], "facility mode, the same hotspot");
+
+  // Off the deck by then, it stays shut.
+  h.player.getPacketSender().sendInterfaceRemoval();
+  h.shipyard.objects.Gangplank.Disembark({ player: h.player, location: { x: 2087, y: 2723, z: 1 } });
+  h.statements.at(-1).getDialogues().get(1).send(h.player);
+  TaskManager.process();
+  assert.equal(h.player.getInterfaceId(), -1);
+  clearTasks();
 });
 
 
@@ -3964,6 +3979,19 @@ test("::maxboat presets fill every hotspot with a facility it allows, the best p
   assert.equal(count("Dragon salvaging hook"), 2, "both hook spots");
   assert.equal(count("Greater teleport focus"), 1, "capped at one");
   assert.equal(count("Rosewood cargo hold"), 1);
+});
+
+test("::maxboat keeps a boat's painted trim, flag and brazier", () => {
+  const commands = {};
+  require("../plugins/skills/sailing/Commands.Sailing").register({
+    registerCommand: (name, handler) => { commands[name] = handler; },
+    persistAttribute: () => {},
+  });
+  const player = sailor();
+  const boat = Sailing.giveBoat(player, "sloop", "the_pandemonium");
+  boat.parts = { ...boat.parts, trim: 10, flag: 2, brazier: 1 };
+  commands.maxboat({ player, parts: ["maxboat"] });
+  assert.deepEqual(boat.parts, { hull: 6, keel: 6, sails: 6, helm: 6, trim: 10, flag: 2, brazier: 1 }, player.messages.at(-1));
 });
 
 test("Navigate walks to each boat type's helm stand tile (rsprox: south of the skiff's wheel, south-east of the sloop's)", () => {

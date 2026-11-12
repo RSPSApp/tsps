@@ -12,6 +12,10 @@ function fixture(t) {
   // Player/HitQueue, NPC lethal-damage path and canonical loot consumer are real.
   h.api.getItemOnGroundManager = () => ({});
   Drops.register(h.api);
+  // The imported table carries the ordered Forgotten Four chain; its state provider is the saved-state plugin's
+  // contract (here: no saved state, no kill count, commit accepted).
+  h.api.onCustomEvent('npc-drops:reward-state', event => { if (event.domain === 'forgotten_four') { event.state = {}; event.killCount = 0; event.handled = true; } });
+  h.api.onCustomEvent('npc-drops:reward-state-commit', event => { event.committed = true; });
   const s = h.enter();
   s.fight.wake();
   s.fight.nextAttack = Infinity;
@@ -31,7 +35,9 @@ function fixture(t) {
   const loot = (player = h.p, npc = s.boss) => {
     // Slot zero selects the first canonical main-table row. Keep every other
     // entry/tertiary intact: there is no synthetic quantity or supplied context.
-    random.mock.mockImplementation(() => .005);
+    // Every ordered-chain stage must miss (one draw each) so the roll reaches the flat main table.
+    let draws = 0;
+    random.mock.mockImplementation(() => (draws++ < table.reward_chain.stages.length ? .99 : .005));
     const drops = Drops.__internals.rollTable(table, player, npc);
     const bronze = drops.find(drop => drop.itemId === 1103);
     assert.ok(bronze, 'full canonical Duke table rolled Bronze chainbody');

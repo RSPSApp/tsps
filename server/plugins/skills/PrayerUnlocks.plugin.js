@@ -9,6 +9,10 @@
  *  - Rigour: read a dexterous prayer scroll (21034), 74 Prayer and 70 Defence.
  *  - Augury: read an arcane prayer scroll (21079), 77 Prayer and 70 Defence.
  *  - Preserve: read a torn prayer scroll (21047), 55 Prayer.
+ *  - Deadeye / Mystic Vigour: read a Deadeye (30626) / Mystic vigour (30627) prayer scroll, 62 /
+ *    63 Prayer. They don't add a prayer: they replace Eagle Eye / Mystic Might in the book, so the
+ *    slot's own prayer stays usable and PrayerHandler applies the upgrade (Wiki: Deadeye, Mystic
+ *    Vigour).
  *
  * The Knight Waves activity is not implemented, so completing King's Ransom stands in for
  * it; when the activity exists this should read its completion instead.
@@ -30,6 +34,8 @@ const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const PRESERVE_UNLOCKED_VARBIT = 5453;
 const RIGOUR_UNLOCKED_VARBIT = 5451;
 const AUGURY_UNLOCKED_VARBIT = 5452;
+const DEADEYE_UNLOCKED_VARBIT = 16097; // prayer_deadeye_unlocked
+const MYSTIC_VIGOUR_UNLOCKED_VARBIT = 16098; // prayer_mystic_vigour_unlocked
 // The client reveals Chivalry and Piety when KR_KNIGHTWAVES_STATE reaches 8.
 const KNIGHT_WAVES_STATE_VARBIT = 3909;
 const KNIGHT_WAVES_COMPLETE = 8;
@@ -61,7 +67,25 @@ function scrolls() {
       attribute: RIGOUR_UNLOCKED_ATTRIBUTE, varbit: RIGOUR_UNLOCKED_VARBIT },
     { itemId: ItemIdentifiers.ARCANE_PRAYER_SCROLL, prayer: PrayerData.AUGURY, name: "Augury",
       attribute: AUGURY_UNLOCKED_ATTRIBUTE, varbit: AUGURY_UNLOCKED_VARBIT },
+    ...upgradeScrolls(),
   ];
+}
+
+/** Scrolls that upgrade a book slot's prayer rather than unlock one (`upgrades` is the slot's prayer id). */
+function upgradeScrolls() {
+  const { ItemIdentifiers, PrayerData, PrayerHandler } = core;
+  return [
+    { itemId: ItemIdentifiers.DEADEYE_PRAYER_SCROLL, prayer: PrayerData.EAGLE_EYE, name: "Deadeye",
+      attribute: PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, varbit: DEADEYE_UNLOCKED_VARBIT, upgrades: PrayerHandler.EAGLE_EYE },
+    { itemId: ItemIdentifiers.MYSTIC_VIGOUR_PRAYER_SCROLL, prayer: PrayerData.MYSTIC_MIGHT, name: "Mystic Vigour",
+      attribute: PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, varbit: MYSTIC_VIGOUR_UNLOCKED_VARBIT,
+      upgrades: PrayerHandler.MYSTIC_MIGHT },
+  ];
+}
+
+/** A scroll that locks its prayer until read (not an upgrade: Eagle Eye works without Deadeye). */
+function lockingScroll(prayer) {
+  return scrolls().find((candidate) => candidate.prayer === prayer && candidate.upgrades === undefined) ?? null;
 }
 
 function scrollFor(itemId) {
@@ -87,7 +111,10 @@ function unlocksBypassed(player, prayer) {
 
 /** What the server lets the player use: earned scroll or quest progress, or a live bypass. */
 function scrollUnlocked(player, scroll) {
-  return player.getAttribute(scroll.attribute) === true || unlocksBypassed(player, scroll.prayer);
+  if (player.getAttribute(scroll.attribute) === true) return true;
+  // A bypass hands out locked prayers; an upgrade is only ever the scroll read (PrayerHandler
+  // reads that attribute alone), so the book never shows a Deadeye the server doesn't apply.
+  return scroll.upgrades === undefined && unlocksBypassed(player, scroll.prayer);
 }
 
 /** The varbit is shared by Chivalry and Piety, so a bypass on either reveals both. */
@@ -134,7 +161,7 @@ function kingsRansomStageChanged({ player, key }) {
 function prayerRequirements(event) {
   const { prayer, player } = event;
   const knightPrayer = prayer === core.PrayerData.CHIVALRY || prayer === core.PrayerData.PIETY;
-  const scroll = knightPrayer ? null : scrolls().find((candidate) => candidate.prayer === prayer);
+  const scroll = knightPrayer ? null : lockingScroll(prayer);
   if (!knightPrayer && !scroll) return;
   // Bots have no quest or scroll progression; their loadouts already assume the unlocks.
   if (player.isPlayerBot?.() === true) return;
@@ -154,7 +181,7 @@ function prayerRequirements(event) {
 
 /** Admin command: grant a scroll prayer without going through the scroll. */
 function unlockPrayer({ player, prayer }) {
-  const scroll = scrolls().find((candidate) => candidate.prayer === prayer);
+  const scroll = lockingScroll(prayer);
   if (!scroll) return;
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
@@ -166,6 +193,7 @@ function learnScroll(player, scroll) {
   player.getInventory().deleteNumber(scroll.itemId, 1);
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
+  if (scroll.upgrades !== undefined) core.PrayerHandler.syncUpgrade(player, scroll.upgrades);
   player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
   // "prayer:scroll-read" { player, itemId }: a prayer scroll read, its prayer learnt.
   api.emitCustomEvent("prayer:scroll-read", { player, itemId: scroll.itemId });
@@ -193,11 +221,14 @@ function readScroll(event) {
   return true;
 }
 
-const SCROLL_ITEM_NAMES = ["Dexterous prayer scroll", "Arcane prayer scroll", "Torn prayer scroll"];
+const SCROLL_ITEM_NAMES = [
+  "Dexterous prayer scroll", "Arcane prayer scroll", "Torn prayer scroll",
+  "Deadeye prayer scroll", "Mystic vigour prayer scroll",
+];
 
 module.exports = {
   name: "PrayerUnlocks",
-  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls.",
+  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -205,6 +236,8 @@ module.exports = {
     pluginApi.persistAttribute(PRESERVE_UNLOCKED_ATTRIBUTE, false);
     pluginApi.persistAttribute(RIGOUR_UNLOCKED_ATTRIBUTE, false);
     pluginApi.persistAttribute(AUGURY_UNLOCKED_ATTRIBUTE, false);
+    pluginApi.persistAttribute(pluginApi.core.PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, false);
+    pluginApi.persistAttribute(pluginApi.core.PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, false);
     pluginApi.onPlayerLogin(syncUnlocks);
     pluginApi.onPrayerDisabled(prayerRequirements);
     pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);

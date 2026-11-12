@@ -9,7 +9,7 @@ Two travel networks where an interface picks the destination, played as live OSR
 **Travel** on a spirit tree opens the menu interface (187) in the main modal:
 - **The packets:** `toplevel_mainmodal_open`, then the menu script (217) with "Spirit Tree Locations" and the trees joined by `|`, ending with Cancel, then pause-button events on 187:3, slots 0–127.
 - **Order:** the trees come in the game's order: Tree Gnome Village, Gnome Stronghold, Battlefield of Khazard, Grand Exchange, Feldip Hills, Prifddinas, Port Sarim, Etceteria, Brimhaven, Hosidius, Farming Guild, Your house, Poison Waste, Laguna Aurorae.
-- **Greyed** (`<col=5f5f5f>`): trees the player can't travel to now. That's a farming patch without a grown, checked spirit tree; a missing requirement; and the house, which has no spirit tree on this server.
+- **Greyed** (`<col=5f5f5f>`): trees the player can't travel to now. That's a farming patch without a grown, checked spirit tree; a missing requirement; and a house with no spirit tree built (or no house).
 
 Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), as the game does; without it the chatbox can't be typed in afterwards. The Magic Mushtrees' interface does the same.
 
@@ -51,10 +51,14 @@ Quests this server doesn't have don't block, as elsewhere. Quest varps are sent 
 - **Travel on a grown tree:** Farming opens the same menu (`spirit-trees:open`).
 - **Which trees are grown:** SpiritTrees asks Farming (`spirit-trees:grown`) for the spirit tree patches the player has grown and checked.
 
-Before this, the plugin listened for "Spirit Tree", the farming patch's name. The permanent trees are named "Spirit tree", so their Travel did nothing, and the network was a chatbox list.
+**Your house** (captured, rev 224–237):
+- **The label** names where the house stands: "Your house (Yanille)". It's offered once a Spirit tree or Spiritual fairy tree is built in the house, and greyed otherwise ("<col=5f5f5f>Your house (Rellekka)</col>"). A player with no house sees a greyed "Your house". SpiritTrees asks Construction for all of this (`construction:spirit-tree`: `owns`, `location`, `built`).
+- **Choosing it:** the same bark message and reach. Two ticks later the box closes and Construction takes over (`construction:spirit-tree-travel`): the house loads as a house teleport does, with its loading screen and jingle and the house's default building mode. The player stands on the tile east of the tree's footprint, and the loading screen lifts two ticks after that. The trip is reported as a `teleport:landed`, as the other trees' trips are.
+- **Last-destination** takes them back to the house after a trip there.
+- **The Fairy's Flight relic's** spirit tree list still leaves the house out (it lists fixed tiles only).
+- **Not captured:** choosing it while already inside the house (it reloads the house beside the tree), and the landing in a rotated superior garden (always east of the tree).
 
-**Not done:**
-- the house's tree.
+Before this, the plugin listened for "Spirit Tree", the farming patch's name. The permanent trees are named "Spirit tree", so their Travel did nothing, and the network was a chatbox list.
 
 ## Magic Mushtrees
 

@@ -68,8 +68,7 @@ for levels, XP, sizes, what each holds and the fur pouches, which weren't captur
   `human_leather_crafting` at once, then 2 ticks later "You make a small meat pouch." (spam), the XP and
   the pouch, with the reel counted as the other needle crafts ("You use up one of your reels of
   thread." on the fifth). 4 fox fur make a small meat pouch (35 Crafting, 30 XP), 4 larupia fur a small
-  fur pouch (35, 20 XP). Upgrades use 3 fur and the **closed** pouch below, whose slot the new one
-  takes: sunlight antelope fur for a large meat pouch (65, 60 XP), graahk fur for a medium fur pouch
+  fur pouch (35, 20 XP). Upgrades use 3 fur and the **closed** pouch below; the pouch takes the first free slot: sunlight antelope fur for a large meat pouch (65, 60 XP), graahk fur for a medium fur pouch
   (50, 40 XP), kyatt fur for a large fur pouch (65, 60 XP).
   - Without thread: messagebox "You'll need a needle and some thread to craft a small meat pouch."
   - Without the closed pouch below (an open one doesn't count): objectbox with that pouch, "You need a
@@ -87,7 +86,8 @@ for levels, XP, sizes, what each holds and the fur pouches, which weren't captur
 - **Catches** (trap collection, falconry and noose-wand tracking, through `catchExchange` in
   `Context.Hunter.js`): the catch needs inventory room for all of its loot, meat and fur included,
   even with an open pouch that has room (captured: "You don't have enough inventory space. You need 3
-  more free slots." on a deadfall, the singular ours). Once it fits, an open pouch takes the meat or fur
+  more free slots." on a deadfall; rsprox.net rev 237 recordings 01102, 01108 and 01115 show it on
+  bird snares and net traps, "1 more free slot." for one). Once it fits, an open pouch takes the meat or fur
   (`storage:gather`, skill Hunter), silently, also when that fills it.
 - **Empty:** an empty pouch says "Your meat pouch is empty." anywhere. Away from a bank, "You can't
   empty your meat pouch here."; next to one with the bank closed (`league:near-bank`, as the chugging

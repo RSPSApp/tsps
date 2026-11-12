@@ -268,3 +268,22 @@ test("Empty with no inventory room moves nothing and says the inventory is full"
   assert.equal(Storage.total(player, meat()), 2);
   assert.equal(messages.at(-1), "Not enough space in your inventory.");
 });
+
+test("a sewn pouch takes the first free slot, not the fur's (captured)", (t) => {
+  const { TaskManager } = require("../dist/game/task/TaskManager");
+  if (!globalThis.__craftingRegistered) {
+    require("../plugins/skills/Crafting.plugin").register(PluginManager.createApi("HunterPouchesCrafting"));
+    globalThis.__craftingRegistered = true;
+  }
+  const { player, messages } = actor(t, [[I.COINS, 1], [I.NEEDLE, 1], [I.THREAD, 1], [I.LOGS, 1]]);
+  player.getSkillManager().setCurrentLevels(core.Skill.CRAFTING, 99).setMaxLevel(core.Skill.CRAFTING, 99);
+  player.getInventory().adds(I.FOX_FUR, 4);
+  player.getInventory().deleteNumber(I.COINS, 1); // slot 0 free, the fur in slots 3-6
+  const fur = player.getInventory().getItems().find((item) => item?.getId() === I.FOX_FUR);
+  const needle = player.getInventory().getItems().find((item) => item?.getId() === I.NEEDLE);
+  PluginManager.emitItemOnItem({ player, usedItem: needle, usedWithItem: fur, usedItemId: I.NEEDLE, usedWithItemId: I.FOX_FUR, handled: false });
+  for (let i = 0; i < 4; i++) TaskManager.process();
+  assert.ok(messages.length === 0 || !messages.includes("Nothing interesting happens."));
+  assert.equal(player.getInventory().getItems()[0]?.getId(), I.SMALL_MEAT_POUCH);
+  assert.equal(player.getInventory().getAmount(I.FOX_FUR), 0);
+});

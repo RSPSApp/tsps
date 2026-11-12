@@ -98,7 +98,9 @@ function exchange(player, remove, add, commit = true) {
 /**
  * rsprox captures (pyre-fur-and-smallpouch-3/-4, rev 242): a deadfall catch on a full inventory says
  * "You don't have enough inventory space. You need 3 more free slots." for its bones, fur and meat,
- * also with an open meat pouch that had room. The singular for one slot is ours.
+ * also with an open meat pouch that had room. The rsprox.net archive has it on bird snares and net
+ * traps too, singular for one ("You need 1 more free slot.", rev 237 recordings 01102, 01108, 01115),
+ * N being what the inventory is short of.
  */
 function catchRefusal(player, remove, add) {
   const short = (slotsAfter(player, remove, add) ?? 0) - player.getInventory().capacity();

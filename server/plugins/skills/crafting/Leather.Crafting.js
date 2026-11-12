@@ -171,23 +171,15 @@ function hasPouchParts(player, recipe, needleId) {
 }
 
 /**
- * The pouch takes the closed pouch's slot on an upgrade (captured), so its contents, kept on the
- * player by StorageItems, stay with it; a new pouch takes the fur's.
+ * The inputs go, then the pouch takes the first free slot (captured: a new pouch went to slot 0, freed
+ * earlier, not to the fur's). Its contents, kept on the player by StorageItems, stay on an upgrade.
  */
 function sewPouch(player, recipe, needleId) {
   if (!hasPouchParts(player, recipe, needleId)) return false;
-  const { Item } = Shared.getCore();
   const inventory = player.getInventory();
-  const items = inventory.getItems();
-  const slot = items.findIndex((item) => item?.getId?.() === (recipe.fromId ?? recipe.furId));
   inventory.deleteNumber(recipe.furId, recipe.amount);
   if (recipe.fromId !== null) inventory.deleteNumber(recipe.fromId, 1);
-  if (slot >= 0 && typeof inventory.setItem === "function" && (inventory.getItems()[slot]?.getId?.() ?? -1) < 0) {
-    inventory.setItem(slot, new Item(recipe.itemId, 1));
-    inventory.refreshItems?.();
-  } else {
-    inventory.addItem(new Item(recipe.itemId, 1));
-  }
+  inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.spam(player, `You make ${Shared.withArticle(pouchName(recipe.itemId))}.`);
   useThread(player, needleId);

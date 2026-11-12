@@ -339,6 +339,24 @@ test("carried and banked coins pay together, the carried ones first", () => {
   assert.equal(player.getAttribute("bank-space:blocks"), 3);
 });
 
+test("banked coins pay past a coins placeholder and from every tab they are split across", () => {
+  const p = plugin();
+  const player = createPlayer();
+  player.setAttribute("bank-space:blocks", 2);
+  player.getBank(0).add(new Item(COINS, 0), false);
+  player.getBank(1).add(new Item(COINS, 3_000_000), false);
+  player.getBank(2).add(new Item(COINS, 3_000_000), false);
+  openPurchase(p, player);
+  pick(p, player, 0);
+  next(player);
+  player.dialogues.advance();
+  assert.ok(player.dialogues.getCurrent() instanceof OptionDialogue, "the Yes/No is offered, not the refusal");
+  player.dialogues.handleOption(1);
+  assert.equal(next(player), "Your additional bank slots have been added.");
+  assert.equal(player.getBank(1).getAmount(COINS) + player.getBank(2).getAmount(COINS), 1_000_000);
+  assert.equal(player.getAttribute("bank-space:blocks"), 3);
+});
+
 test("with too few coins between the inventory and the bank the player backs out", () => {
   const p = plugin();
   const player = createPlayer();

@@ -1082,19 +1082,8 @@ export class Bank extends ItemContainer {
                             if (empty) {
                                 return true;
                             }
-                            let items: Item[] = player.getBank(bankId).getValidItems();
-                            if (player.getBank(0).getFreeSlots() < items.length) {
-                                player.sendMessage("You don't have enough free slots in your Main tab to do that.");
-                                return true;
-                            }
-                            let noteWithdrawal: boolean = player.withdrawAsNote();
-                            player.setNoteWithdrawal(false);
-                            for (let item of items) {
-                                player.getBank(bankId).switchsItem(player.getInventory(), item.clone(), player.getBank(bankId).getSlotForItemId(item.getId()), false, false);
-                            }
-                            player.setNoteWithdrawal(noteWithdrawal);
-                            this.reconfigureTabs(player);
-                            player.getBank(player.getCurrentBankTab()).refreshItems();
+                            // The same collapse as the tab menu: each stack moves to the main tab as it is.
+                            Bank.collapseTab(player, bankId);
                         } else {
                             if (!empty || bankId === 0) {
                                 player.setCurrentBankTab(bankId);
@@ -1285,9 +1274,16 @@ export class Bank extends ItemContainer {
         return 0;
     }
 
+    /** Whether the bank holds at least `item`'s amount of its id (a note's item), in every tab together. */
     public static contains(player: Player, item: Item): boolean {
-        let tab = this.getTabForItem(player, item.getId());
-        return player.getBank(tab).getAmount(item.getId()) >= item.getAmount();
+        const definition = ItemDefinition.forId(item.getId());
+        const id = definition.isNoted() ? definition.unNote() : item.getId();
+        let amount = 0;
+        for (let tab = 0; tab < this.TOTAL_BANK_TABS; tab++) {
+            // The search tab only shows copies of the other tabs' items; placeholders add 0.
+            if (tab !== this.BANK_SEARCH_TAB_INDEX) amount += player.getBank(tab).getAmount(id);
+        }
+        return amount >= item.getAmount();
     }
 
     /** This tab's slots so far (it grows); the player's space is getCapacity. */

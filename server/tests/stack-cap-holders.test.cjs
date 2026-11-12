@@ -2,8 +2,8 @@
 //
 // A stack can't grow past its cap, and add() drops what doesn't fit, so a holder must keep the rest and
 // a reward must not take tokens for what won't arrive. Native fixture: real plugins and items. NPCs are
-// registered and reached by npc_option through ClientConnection.dispatch. Short of dispatch: Zulrah's collect and Soul Wars' reward buttons through
-// their exports. Held items are set on their saved attributes rather than by dying.
+// registered and reached by npc_option through ClientConnection.dispatch. Zulrah's retrieval button is sent as a widget_action. Short of dispatch: Soul Wars' reward
+// buttons through their exports. Held items are set on their saved attributes rather than by dying.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -15,7 +15,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
 
-const Shrine = require("../plugins/bosses/zulrah/Shrine.Zulrah");
+const ZulrahShared = require("../plugins/bosses/zulrah/Shared.Zulrah");
 const YamaCommon = require("../plugins/bosses/yama/Common.Yama");
 const SoulWarsCommon = require("../plugins/minigames/soulwars/Common.SoulWars");
 const Rewards = require("../plugins/minigames/soulwars/Rewards.SoulWars");
@@ -114,9 +114,41 @@ function holderCases(name, attribute, collect, extra = {}) {
   });
 }
 
-holderCases("Zulrah's priestess", ZULRAH_HELD, (_t, f) => Shrine.collect({ player: f.p }));
+/** Collect from the priestess, then her retrieval interface's button, as the client sends both. */
+async function zulrahCollect(t, f) {
+  await npcOption(t, f, ZulrahShared.NPC.PRIESTESS, "Collect");
+  const button = core.CacheDefinitions.getComponentId("gravestone_retrieval:button");
+  assert.ok(f.p.getPacketSender().isSubInterfaceOpen(button >>> 16), "the retrieval interface opens");
+  await send(f, { type: "widget_action", widgetId: button, groupId: button >>> 16, childId: button & 0xffff, slot: -1, buttonNum: 1 });
+}
+
+holderCases("Zulrah's priestess", ZULRAH_HELD, zulrahCollect);
 holderCases("Nightmare's Shura", NIGHTMARE_HELD, (t, f) => npcOption(t, f, SHURA, "Collect"), { holder: "shura" });
 holderCases("the Voice of Yama", YAMA_HELD, (t, f) => npcOption(t, f, YamaCommon.data.npcs.voiceVariants[0], "Talk-to"));
+
+/** The same with a held stack that carries meta (charges), going onto a stack with the same meta. */
+function metaCases(name, attribute, collect, extra = {}) {
+  test(`${name}: a held stack with meta keeps what its stack can't hold`, async (t) => {
+    const META = { charges: 7 };
+    const f = actor(t);
+    f.inv.setItem(0, new core.Item(I.DEATH_RUNE, NEAR_CAP, { ...META }));
+    f.p.setAttribute(attribute, { ...extra, items: [[I.DEATH_RUNE, STORED, { ...META }]], paid: true });
+    await collect(t, f);
+    assert.equal(f.inv.getAmount(I.DEATH_RUNE), MAX_STACK_AMOUNT, "the stack fills");
+    assert.equal(heldRunes(f, attribute), STORED - 5, "the holder keeps the rest");
+    assert.deepEqual(f.p.getAttribute(attribute).items[0][2], META, "with its meta");
+
+    const full = actor(t);
+    for (let slot = 0; slot < 28; slot++) full.inv.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+    full.p.setAttribute(attribute, { ...extra, items: [[I.DEATH_RUNE, STORED, { ...META }]], paid: true });
+    await collect(t, full);
+    assert.equal(full.inv.getAmount(I.DEATH_RUNE), 0, "a full inventory takes nothing");
+    assert.equal(heldRunes(full, attribute), STORED, "and the holder keeps it all");
+  });
+}
+
+metaCases("Nightmare's Shura", NIGHTMARE_HELD, (t, f) => npcOption(t, f, SHURA, "Collect"), { holder: "shura" });
+metaCases("the Voice of Yama", YAMA_HELD, (t, f) => npcOption(t, f, YamaCommon.data.npcs.voiceVariants[0], "Talk-to"));
 
 test("Soul Wars rewards: a stack that can't take the batch costs no tokens", (t) => {
   const start = (held) => {

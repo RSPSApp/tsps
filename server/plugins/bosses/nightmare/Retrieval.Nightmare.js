@@ -77,15 +77,14 @@ function collect(player, holder) {
     inventory.delete(COINS, retrieval.fee);
     held.paid = true;
   }
-  const { Item, ItemDefinition } = Common.core;
+  const { Item } = Common.core;
   const left = [];
   for (const [id, amount, meta = null] of held.items) {
-    // An item with meta (charges, degradation) goes back as itself, into a slot of its own.
-    const stackable = meta == null && ItemDefinition.forId(id)?.isStackable?.();
-    const fits = stackable ? inventory.contains(id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() > 0;
-    // A stack can't grow past its cap: what it can't hold stays here.
-    const moved = !fits ? 0 : stackable && inventory.contains(id) ? inventory.getAddableAmount(new Item(id, amount)) : amount;
-    if (moved > 0) inventory.add(meta == null ? new Item(id, moved) : new Item(id, moved, JSON.parse(JSON.stringify(meta))), false);
+    // An item with meta (charges, degradation) goes back as itself, stacking only onto the same meta.
+    const copy = (n) => (meta == null ? new Item(id, n) : new Item(id, n, JSON.parse(JSON.stringify(meta))));
+    // Only what fits moves (free slots, or a stack's cap): the rest stays here.
+    const moved = inventory.getAddableAmount(copy(amount));
+    if (moved > 0) inventory.add(copy(moved), false);
     if (moved < amount) left.push([id, amount - moved, meta]);
   }
   inventory.refreshItems?.();

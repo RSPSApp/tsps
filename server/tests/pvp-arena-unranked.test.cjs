@@ -19,6 +19,9 @@ const UnrankedDuel = require('../plugins/minigames/duelarena/UnrankedDuel.DuelAr
 const Battle = require('../plugins/minigames/duelarena/Battle.DuelArena');
 const Loadouts = require('../plugins/minigames/duelarena/Loadouts.DuelArena');
 const Stash = require('../plugins/minigames/duelarena/Stash.DuelArena');
+// The mid-fight save tests go through PlayerSave.fromPlayer's real "persistence:snapshot" emit: this file's api stub
+// keeps custom events to itself, so Stash's handler is also attached to the real PluginManager.
+Stash.attachStash(PluginManager.createApi('PvpArenaSnapshotFixture'));
 const ToxicStaff = require('../plugins/items/ToxicStaffOfTheDead.plugin');
 
 const config = { pvpArenaWorld: true };
@@ -347,7 +350,6 @@ test('a save taken mid-fight writes their own character in the Emir\'s Arena, ne
   click(b, 'pvp_arena_unrankedduel:opponent_confirm');
   assert.ok(Battle.fightFor(a));
   const save = PlayerSave.fromPlayer(a);
-  Stash.snapshot({ player: a, save });
   const saved = save.getInventory().filter((item) => item.getId() > 0).map((item) => [item.getId(), item.getAmount()]);
   assert.deepEqual(saved, [[995, 777]], 'only their own items');
   assert.equal(save.getEquipment().some((item) => item.getId() > 0), false);
@@ -372,7 +374,6 @@ test("the arena's antifire and anti-venom never leave it, even through a mid-fig
   combat.getTeleblockTimer().start(300);
   combat.getPoisonClock().protectBriefly(300);
   const save = PlayerSave.fromPlayer(a);
-  Stash.snapshot({ player: a, save });
   assert.equal(save.teleblockTimer, 0, 'no arena Tele Block in the save');
   assert.ok(save.fireImmunityTimer > 290 && save.fireImmunityTimer <= 300, `their own antifire timer (${save.fireImmunityTimer})`);
   assert.equal(save.poisonClock, undefined, 'no poison clock of their own');
@@ -401,7 +402,6 @@ for (const [own, arena] of [['SUPER_ANTIFIRE', 'ANTIFIRE'], ['ANTIFIRE', 'SUPER_
     assert.ok(Battle.fightFor(a));
     Dragonfire.setDragonfireProtection(a, { tier: Tier[arena], seconds: 360, label: "the arena's" });
     const save = PlayerSave.fromPlayer(a);
-    Stash.snapshot({ player: a, save });
     assert.deepEqual(save.attributes[Dragonfire.ATTR_DRAGONFIRE_TIER], { tier: Tier[own], label: 'their own' }, 'their own tier saved');
     const relogged = new Player(null);
     relogged.getSession = () => ({ sendClientPacket: () => true, write: () => true });

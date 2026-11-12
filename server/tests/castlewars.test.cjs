@@ -262,6 +262,52 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
   assert.equal(p.getRunEnergy(), 100, 'run energy restored');
 });
 
+test("leaving the game restores stats as the waiting room does, up to a skill's resting level (Wiki)", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const registered = [];
+  const island = {
+    data, BOT_KEY: {}, TRANSITION_KEY: {},
+    getTeamData: (team) => data.TEAM_DATA[team], getTeamId: () => TEAM.SARADOMIN, setTeamId: () => {},
+    closeOverlay: () => {}, clearBraceletEffect: () => {}, equipTeamColours: () => {}, dropCarriedFlag: () => {},
+    clearCastleWarsItems: () => {}, returnToLobby: () => {}, releaseSeededBots: () => false, checkTeamsRemain: () => {},
+    beginStartCountdown: () => {}, startSecondsLeft: () => 0, checkStartCountdown: () => {},
+  };
+  Areas({
+    core,
+    registerArea: (area) => registered.push(area),
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
+  }, island);
+  const gameArea = registered.find((area) => area.getName() === 'Castle Wars');
+  const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
+  const boosted = new WeakSet();
+  // A permanent resting boost (as League Pacts give Defence): +10 for the marked players only.
+  SkillManager.registerRestingLevelModifier((player, skill, level) => (boosted.has(player) && skill === core.Skill.DEFENCE ? level + 10 : level));
+  for (const [name, area] of [['game', gameArea], ['waiting room', waitingRoom]]) {
+    for (const logout of [false, true]) {
+      const p = new Player(null);
+      p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+      boosted.add(p);
+      const skills = p.getSkillManager();
+      skills.setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 10, false);
+      skills.setMaxLevels(core.Skill.PRAYER, 70, false).setCurrentLevel(core.Skill.PRAYER, 5, false);
+      skills.setMaxLevels(core.Skill.DEFENCE, 99, false).setCurrentLevel(core.Skill.DEFENCE, 60, false);
+      skills.setMaxLevels(core.Skill.STRENGTH, 90, false).setCurrentLevel(core.Skill.STRENGTH, 109, false);
+      p.setPoisonDamage(6);
+      p.setRunEnergy(10);
+      area.postLeave(p, logout);
+      const where = `${name}, logout ${logout}`;
+      assert.equal(skills.getCurrentLevel(core.Skill.HITPOINTS), 99, `Hitpoints restored (${where})`);
+      assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 70, `Prayer restored (${where})`);
+      assert.equal(skills.getCurrentLevel(core.Skill.DEFENCE), 109, `drained Defence back to its resting level (${where})`);
+      assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 109, `a boost stays (${where})`);
+      assert.equal(p.getRunEnergy(), 100, `run energy restored (${where})`);
+      assert.equal(p.getPoisonDamage(), 6, `still poisoned (${where})`);
+    }
+  }
+});
+
 test('both waiting rooms release seeded bots on leave and honour the transition path', () => {
   const registered = [];
   const calls = { released: 0, coloured: 0, countdown: 0 };
@@ -294,7 +340,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
     const real = {
       getAsPlayer: () => real, getAttribute: () => false, isPlayerBot: () => false, isPlayer: () => true, isNpc: () => false,
       // Leaving restores stats (restoreStats): the skills, run energy and prayers it touches.
-      getSkillManager: () => ({ getCurrentLevel: () => 1, getMaxLevel: () => 1, setCurrentLevel() {} }),
+      getSkillManager: () => ({ getCurrentLevel: () => 1, getRestingLevel: () => 1, setCurrentLevel() {} }),
       setRunEnergy() {}, getPrayerActive: () => [],
       getQuickPrayers: () => ({ setEnabled() {} }), getPacketSender: () => ({ sendQuickPrayersState() {} }),
     };
@@ -418,6 +464,28 @@ test("a practice match's settings stay with it: the next public game has no team
   assert.ok(!third.messages?.includes?.('That Castle Wars team is full.'), 'no cap outside practice');
   assert.equal(game.getTeamId(third), TEAM.SARADOMIN);
   game.settings = { ...Settings._test.DEFAULTS };
+});
+
+test("an abandoned practice's bots still logging out don't count: the next human gets an empty lobby and a public match", () => {
+  game.settings = { teamSize: 1, opponent: 'none', barricades: 10, botTier: 'veteran' };
+  game.joinFromLobby(fakePlayer(), TEAM.SARADOMIN, null, TEAM.SARADOMIN, false, true);
+  assert.equal(game.practice, true);
+  // The practice player left; the released bots are queued for removal but still in the waiting rooms this tick.
+  const departing = [fakePlayer({ bot: true }), fakePlayer({ bot: true })];
+  game.waitingAreas[TEAM.SARADOMIN].players.push(departing[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(departing[1]);
+  World.getRemovePlayerQueue().push(...departing);
+  try {
+    assert.deepEqual(game.queueCounts(), { [TEAM.SARADOMIN]: 0, [TEAM.ZAMORAK]: 0 }, 'departing bots are not queued');
+    const next = fakePlayer();
+    enterPortal(next, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+    assert.ok(prompt, 'the empty-lobby prompt is shown');
+    prompt.options[3].pick();
+    assert.equal(game.practice, false, 'the abandoned practice flag does not stick');
+  } finally {
+    for (const bot of departing) World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(bot), 1);
+    game.settings = { ...Settings._test.DEFAULTS };
+  }
 });
 
 test('practice menus join from every portal through the real prompt dispatcher without losing settings or team choice', (t) => {
@@ -735,6 +803,28 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   const after = { player: ending, shouldDrop: null };
   deathPolicy(after);
   assert.equal(after.shouldDrop, null, 'a later lobby death follows the world rules');
+
+});
+
+test('a mark whose death never reached the death hook does not keep a later death outside Castle Wars safe', () => {
+  let deathPolicy;
+  let beforeDeath;
+  const deathApi = PluginManager.createApi('Castle Wars stale death mark');
+  const island = { ...game };
+  Areas({
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
+    onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
+    onPlayerDeath() {},
+  }, island);
+  let area = island.gameArea;
+  const player = { getArea: () => area };
+  beforeDeath({ player }); // a death in the game that another death hook handled first
+  area = island.lobbyArea;
+  beforeDeath({ player }); // a later death in the lobby
+  const later = { player, shouldDrop: null };
+  deathPolicy(later);
+  assert.equal(later.shouldDrop, null, 'the world rules, not an old mark');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {

@@ -52,6 +52,14 @@ const layouts = Object.freeze({
     orb: "clanwars_viewing_start_darkrock", orbModel: 9752,
     jailPortal: "clanwars_prisonportal_darkrock",
     exits: Object.freeze(["clanwars_exitportal_darkrock_s"]) }),
+  12: Object.freeze({ name: "Lumbridge Castle", origin: Object.freeze([3392, 4800]), size: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3417, 4810), tile(3417, 4843)]),
+    jails: Object.freeze([tile(3436, 4822), tile(3436, 4831)]),
+    barrier: "clanwars_barrier_greyrock", barrierY: 4826, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3407, 3437])]),
+    orb: "clanwars_viewing_start_greyrock", orbModel: 9755,
+    jailPortal: "clanwars_prisonportal_swamp",
+    exits: Object.freeze(["clanwars_exitportal_smallwood_s", "clanwars_exitportal_smallwood_n"]) }),
 });
 function get(id) { return Object.prototype.hasOwnProperty.call(layouts, id) ? layouts[id] : null; }
 function owns(game, object, gamevals) {

@@ -120,18 +120,26 @@ class LoginBroker(
                 )
                 require(exchange.requestHeaders.getFirst("Origin") == null)
                 val now = clock()
-                attempts.entries.removeIf { now - it.value.first > 60_000 }
-                require(attempts.size < 2048 || attempts.containsKey(ip))
+                // One step, so concurrent new addresses can't all evict the same entry and insert.
                 val rate =
-                    attempts.compute(ip) { _, old ->
-                        if (old == null || now - old.first > 60_000) now to 1
-                        else old.first to old.second + 1
-                    }!!
+                    synchronized(attempts) {
+                        attempts.entries.removeIf { now - it.value.first > 60_000 }
+                        // A full table forgets its oldest window instead of refusing every new
+                        // address: otherwise 2048 rotating addresses lock everyone else out.
+                        if (attempts.size >= 2048 && !attempts.containsKey(ip))
+                            attempts.entries
+                                .minByOrNull { it.value.first }
+                                ?.let { attempts.remove(it.key) }
+                        attempts.compute(ip) { _, old ->
+                            if (old == null || now - old.first > 60_000) now to 1
+                            else old.first to old.second + 1
+                        }!!
+                    }
                 require(rate.second <= 20 && tickets.size < 64)
                 val data = exchange.requestBody.readNBytes(4097)
                 require(data.size <= 4096)
                 val fields = String(data, Charsets.UTF_8).trimEnd('\n', '\r').split('\n')
-                require(fields.size == 3 && fields[0] in listOf("password", "token"))
+                require(fields.size == 3 && fields[0] in listOf("password", "token", "forget"))
                 val username = String(Base64.getDecoder().decode(fields[1]), Charsets.UTF_8)
                 val secret = String(Base64.getDecoder().decode(fields[2]), Charsets.UTF_8)
                 require(
@@ -139,6 +147,7 @@ class LoginBroker(
                         secret.length in 1..64 &&
                         '\u0000' !in secret
                 )
+                require(fields[0] != "forget" || secret.matches(Regex("[A-Za-z0-9_-]{43}")))
                 val bridge = Bridge()
                 val loginResult = bridge.resultFuture()
                 val connection = TspsSocket.connect(tspsUrl, ip, bridge)
@@ -149,6 +158,13 @@ class LoginBroker(
                         connection.whenComplete { late, _ -> late?.close() }
                         throw error
                     }
+                if (fields[0] == "forget") {
+                    // Forget account: tsps drops this token from the account's save. It replies
+                    // nothing, so OK only means the request reached tsps.
+                    socket.send(TspsClientPacket.loginForget(username, secret))
+                    reply(exchange, 200, "OK\n")
+                    return@createContext
+                }
                 socket.send(
                     TspsClientPacket.login(
                         username,
@@ -230,6 +246,9 @@ class LoginBroker(
             return null
         return tickets.remove(ticket)
     }
+
+    /** Addresses in the rate table (tests). */
+    internal fun rateTableSize(): Int = attempts.size
 
     override fun close() {
         server.stop(0)

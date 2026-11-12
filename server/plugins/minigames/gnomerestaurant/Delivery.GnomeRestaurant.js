@@ -61,7 +61,8 @@ function giveTip(player, session) {
   const inventory = player.getInventory();
   if (session.tier === "easy") {
     const coins = rollEasyTip();
-    inventory.adds(COINS_ID, coins);
+    // A coin stack near the cap keeps what fits; the rest lands under the player.
+    inventory.forceAdd(player, new core.Item(COINS_ID, coins));
     player.sendMessage(`You are given ${coins} coins as a tip.`);
     return;
   }

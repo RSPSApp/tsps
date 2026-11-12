@@ -103,6 +103,8 @@ export class RangedCombatMethod extends CombatMethod {
     }
 
     start(character: Mobile, target: Mobile) {
+        // An earlier shot whose swing never reached finished() (hits() returned none) is paid first.
+        RangedCombatMethod.payPendingShot(character);
         const ammo = character.getCombat().getAmmunition();
         const rangedWeapon = character.getCombat().getRangedWeapon();
         const animation = character.getAttackAnim(target);
@@ -155,10 +157,32 @@ export class RangedCombatMethod extends CombatMethod {
         Sounds.sendSound(character, this.fireSound(character) ?? profile?.fireSound ?? Sound.SHOOT_ARROW);
 
         if (character.isPlayer()) {
-            // The shot's ammo is consumed when its hit lands, like the hitsplat.
+            // Paid in finished(), on this tick but after hits(): the swing rolls with the ammo it fired (a last
+            // fire arrow, silver bolt or thrown weapon is still worn), then the slot drops (rsprox 227/00096).
             const flightTicks = Math.max(1, ...hitDelays);
-            CombatFactory.decrementAmmo(character.getAsPlayer(), target.getLocation(), profile?.ammoRequired ?? 1, flightTicks);
+            RangedCombatMethod.pendingShots.set(character, { pos: target.getLocation(), amount: profile?.ammoRequired ?? 1, flightTicks });
         }
+    }
+
+    /** The shot start() fired, paid once the swing's hits are rolled. */
+    private static readonly pendingShots = new WeakMap<Mobile, { pos: any; amount: number; flightTicks: number }>();
+
+    finished(character: Mobile, target: Mobile) {
+        super.finished(character, target);
+        RangedCombatMethod.payPendingShot(character);
+    }
+
+    onCombatEnded(character: Mobile, target: Mobile) {
+        // A swing stopped between start() and finished() (no hits) still fired its shot.
+        RangedCombatMethod.payPendingShot(character);
+        super.onCombatEnded(character, target);
+    }
+
+    private static payPendingShot(character: Mobile): void {
+        const shot = RangedCombatMethod.pendingShots.get(character);
+        if (!shot) return;
+        RangedCombatMethod.pendingShots.delete(character);
+        if (character.isPlayer()) CombatFactory.decrementAmmo(character.getAsPlayer(), shot.pos, shot.amount, shot.flightTicks);
     }
 
     /**

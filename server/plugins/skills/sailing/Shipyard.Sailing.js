@@ -153,10 +153,12 @@ function endVisit(player) {
   }
   // Back to what the tools unlock says; on a real save that may be Pandemonium
   // progress (varbit 18314 is that quest's stage), so restore what we saved.
-  setVarbit(player, VARBIT.SAILING_INTRO, visit.sailingIntro ?? 0);
+  if (!visit.questVisit) setVarbit(player, VARBIT.SAILING_INTRO, visit.sailingIntro ?? 0);
   sendToolUnlocks(player);
   clearBoatVarps(player);
   player.getPacketSender().sendTabInterface(0, 0);
+  // The portal and any teleport out end the visit here (a logout forgets it instead).
+  pluginApi.emitCustomEvent("sailing:shipyard-visit-ended", { player, questVisit: visit.questVisit === true });
 }
 
 /** A copy of the player's tile, kept while they move on. */
@@ -181,14 +183,16 @@ function enterShipyard(player, dock, slot) {
 }
 
 /** Puts the player in the shipyard with the boat in `slot` shown. */
-function beginVisit(player, dock, slot, from = standingAt(player)) {
+function beginVisit(player, dock, slot, from = standingAt(player), { questVisit = false } = {}) {
   player.moveTo(new Location(SHIPYARD.arrival.x, SHIPYARD.arrival.y, SHIPYARD.arrival.z));
   const visit = { slot, dock: dock.id, from, shown: undefined, aboard: false, hotspot: undefined,
-    sailingIntro: player.getPacketSender().getVarbit(VARBIT.SAILING_INTRO) };
+    sailingIntro: player.getPacketSender().getVarbit(VARBIT.SAILING_INTRO), questVisit };
   visits.set(player, visit);
   // Owning a boat means The Pandemonium is done; the customisation refuses every build without
-  // it (script 8807 via 9022). Only for the visit, so the tools stay behind ::sailingtools.
-  setVarbit(player, VARBIT.SAILING_INTRO, 50);
+  // it (script 8807 via 9022). Only for the visit, so the tools stay behind ::sailingtools. The
+  // quest's own visit keeps its stage: at 28 the client allows the raft's cargo hold (row 8462)
+  // and shows Jim providing its materials (scripts 8807, 8828, 8839).
+  if (!questVisit) setVarbit(player, VARBIT.SAILING_INTRO, 50);
   showBoat(player, visit);
 }
 
@@ -420,6 +424,7 @@ function exitShipyard({ player }) {
       : new Location(fallback.x, fallback.y, fallback.z);
     endVisit(player);
     player.moveTo(spot);
+    pluginApi.emitCustomEvent("sailing:shipyard-exited", { player });
     later(player, 1, () => fade(player, false));
   });
 }

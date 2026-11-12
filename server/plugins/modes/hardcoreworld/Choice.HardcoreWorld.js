@@ -27,7 +27,8 @@ const Common = require("./Common.HardcoreWorld");
 const OPEN_DELAY_TICKS = 1;
 const REOPEN_CHECK_TICKS = 2;
 const LOGOUT_WAIT_MS = 100;
-const LOGOUT_WAIT_TRIES = 100;
+/** A player hit in combat stays in the world until combat ends, so the logout can take a while. */
+const LOGOUT_WAIT_TRIES = 6000;
 
 /** Players with the screen up and a task keeping it there. */
 const watching = new WeakSet();
@@ -106,13 +107,23 @@ function persistence() {
   return Common.core().GameConstants.PLAYER_PERSISTENCE;
 }
 
-/** Waits for the account to be fully offline (its logout save queued and written), then runs `after`. */
-function whenOffline(name, after) {
+/**
+ * Waits for this player to have left the world (its logout save queued and written), then runs `after`. If they
+ * are still in it after the wait, or the account is online again (a relog), nothing is changed: the stored
+ * Hardcore save still has the choice pending, so the next login asks it again.
+ */
+function whenOffline(player, after) {
+  const name = player.getUsername();
   const { World } = Common.core();
   let tries = 0;
   const poll = async () => {
-    if (World.getPlayerByName(name) && ++tries < LOGOUT_WAIT_TRIES) {
+    const online = World.getPlayerByName(name);
+    if (online === player && ++tries < LOGOUT_WAIT_TRIES) {
       setTimeout(poll, LOGOUT_WAIT_MS);
+      return;
+    }
+    if (online) {
+      console.warn(`[hardcore-world] ${name} is still online; their choice is asked again at the next login`);
       return;
     }
     try {
@@ -138,14 +149,24 @@ function unmakeSave(name) {
 function chooseReset(player) {
   if (!pending(player)) return;
   const name = player.getUsername();
-  Common.recordReset(name);
   player.setAttribute(Common.LEAVING_ATTRIBUTE, "reset");
   forfeitGrave(player);
   // The life is over: nothing of it is written again, and its save keeps only the account.
   player.setAttribute(Common.SKIP_PERSISTENCE_ATTRIBUTE, true);
   player.getPacketSender().sendInterfaceRemoval();
   player.requestLogout();
-  whenOffline(name, () => unmakeSave(name));
+  // Counted once the save is unmade: a Reset that could not finish is chosen again at the next login.
+  whenOffline(player, async () => {
+    if (await unmakeSave(name)) Common.recordReset(name);
+  });
+}
+
+/** The transferred save is the main character's now: nothing of the Hardcore death is left to choose. */
+function clearChoice(save) {
+  const attributes = save.attributes ?? {};
+  for (const key of [Common.CHOICE_PENDING_ATTRIBUTE, Common.DEATH_OPTION_ATTRIBUTE, Common.DIED_DATE_ATTRIBUTE]) {
+    delete attributes[key];
+  }
 }
 
 function chooseTransfer(player) {
@@ -157,14 +178,15 @@ function chooseTransfer(player) {
   }
   player.setAttribute(Common.LEAVING_ATTRIBUTE, "transfer");
   forfeitGrave(player);
-  // The character goes on as it is: no longer Hardcore, nothing left to choose.
-  player.setAttribute(Common.CHOICE_PENDING_ATTRIBUTE, false);
-  player.setAttribute(Common.DEATH_OPTION_ATTRIBUTE, 0);
-  player.setAttribute(Common.DIED_DATE_ATTRIBUTE, 0);
+  // The character goes on as it is. Its Hardcore save keeps the choice pending until the copy is made, so a
+  // Transfer that could not finish (still online, a relog) is asked again rather than leave a Hardcore
+  // character that died with nothing to choose; the copy is cleared of it.
   player.getPacketSender().sendInterfaceRemoval();
   player.requestLogout();
-  whenOffline(name, async () => {
-    if (await persistence().copyProfile(name, Common.HARDCORE_PROFILE, Common.core().MAIN_PROFILE, "hardcore-transfer")) {
+  whenOffline(player, async () => {
+    const main = Common.core().MAIN_PROFILE;
+    if (await persistence().copyProfile(name, Common.HARDCORE_PROFILE, main, "hardcore-transfer")) {
+      await persistence().updateOffline(name, clearChoice, "hardcore-transfer", main);
       await unmakeSave(name);
     }
   });

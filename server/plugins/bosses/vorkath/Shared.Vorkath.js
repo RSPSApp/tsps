@@ -285,11 +285,12 @@ function areaSound(npc, id, tile, range) {
  * A graphic on a tile for each player at her fight (once each); returns those players. Its
  * fields are set directly: Graphic's overloads read a height of 30 or 38 as a delay.
  */
-function tileGraphic(core, npc, gfxId, height, tile) {
+function tileGraphic(core, npc, gfxId, height, tile, delay = 0) {
   const viewers = npc.getPlayersWithinDistance(25);
   const at = new core.Location(tile.x, tile.y, npc.getLocation().getZ());
   const gfx = new core.Graphic(gfxId);
   gfx.height = height;
+  gfx.delay = delay;
   for (const viewer of viewers) viewer.getPacketSender().sendGraphic(gfx, at);
   return viewers;
 }

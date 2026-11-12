@@ -1063,7 +1063,7 @@ test("the sail buttons follow their labels for each move mode", () => {
   assert.equal(sailButtonTransition(3, 0), undefined);
 });
 
-function registerPlugin(file) {
+function registerPlugin(file, api = {}) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
     core: {
@@ -1092,6 +1092,7 @@ function registerPlugin(file) {
     spawnNpc: (definition) => { hooks.spawned = definition; return null; },
     removeNpc: () => {},
     sendMultiChatboxPrompt: (_player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
+    ...api,
   });
   return hooks;
 }
@@ -2981,7 +2982,10 @@ function salvager(boat) {
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 15]]);
   const xp = [];
+  const locAnims = [];
+  const steps = { pending: 0 };
   let animation;
+  const sender = player.getPacketSender;
   Object.assign(player, {
     getSkillManager: () => ({
       getCurrentLevel: (skill) => levels.get(skill) ?? 1,
@@ -2989,7 +2993,11 @@ function salvager(boat) {
     }),
     performAnimation: (anim) => { animation = anim.getId(); },
     setPositionToFace() {},
-    getMovementQueue: () => ({ size: () => 0, reset() {}, handleRegionChange() {} }),
+    getMovementQueue: () => ({ size: () => steps.pending, reset() {}, handleRegionChange() {} }),
+    // Deck loc animations land in `locAnims`.
+    getPacketSender: () => new Proxy(sender(), {
+      get: (target, key) => key === "sendObjectAnimation" ? (_loc, anim) => { locAnims.push(anim.getId()); } : target[key],
+    }),
     isRegistered: () => true,
     getHitpoints: () => 10,
     getLocalPlayers: () => [],
@@ -2998,7 +3006,7 @@ function salvager(boat) {
     BoatManager.getDeck(boat).enter(player);
     player.setLocation(new Location(boat.deckBaseX + 3, boat.deckBaseY + 3, 0));
   }
-  return { player, levels, xp, animation: () => animation };
+  return { player, levels, xp, locAnims, steps, animation: () => animation };
 }
 
 const { Skill } = require("../dist/game/model/Skill");
@@ -3030,18 +3038,25 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
     assert.equal(h.player.messages.at(-1), "You cast out your salvaging hook towards the shipwreck...");
     assert.equal(h.animation(), 13576);
     assert.notEqual(wreck.sinksAt, undefined, "casting starts the wreck's despawn");
-    withRandom(0, () => { for (let tick = 0; tick < 5; tick++) TaskManager.process(); });
+    withRandom(0, () => { for (let tick = 0; tick < 2; tick++) TaskManager.process(); });
     assert.equal(h.player.getInventory().getAmount(32847), 0);
-    assert.equal(h.animation(), 13577, "the hook's idle");
+    assert.equal(h.animation(), 13576, "still casting");
     withRandom(0, () => TaskManager.process());
-    assert.equal(h.player.getInventory().getAmount(32847), 1, "the first salvage, 6 ticks after the cast");
+    assert.equal(h.animation(), 13577, "the hook's idle");
+    assert.equal(h.player.getInventory().getAmount(32847), 1, "the first salvage, 3 ticks after the cast");
     assert.equal(h.player.messages.at(-1), "spam: You reel in some salvage.");
     assert.deepEqual(h.xp, [["Sailing", 10]]);
+    withRandom(0, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
+    assert.equal(h.player.getInventory().getAmount(32847), 1);
+    withRandom(0, () => TaskManager.process());
+    assert.equal(h.player.getInventory().getAmount(32847), 2, "then every 4 ticks");
 
-    // The wreck sinking ends it.
+    // The wreck sinking ends it: the player and the hook reset at once.
     shipwrecks.sink(wreck);
     TaskManager.process();
     assert.equal(h.player.messages.at(-1), "You salvage all you can from the shipwreck before it is reclaimed by the sea.");
+    assert.equal(h.animation(), 13578, "the player's hook reset");
+    assert.equal(h.locAnims.at(-1), 13575, "the hook's reset");
 
     // Only sunken wrecks in range: the plundered message box.
     const hook = { x: boat.deckBaseX + 3, y: boat.deckBaseY + 4 };
@@ -3060,6 +3075,79 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
     boat.fineX += 60 * 128;
     deploy();
     assert.equal(h.player.messages.at(-1), "There are no shipwrecks within range of the salvaging hook.");
+  } finally {
+    BoatManager.dispose(boat);
+    clearTasks();
+  }
+});
+
+test("salvaging stops the tick after the inventory fills, and the hook winds in when salvaging stops", () => {
+  clearTasks();
+  withRandom(0, () => shipwrecks.start());
+  const wreck = shipwrecks.all().find((candidate) => candidate.type === "small" && candidate.raised);
+  const salvaging = registerPlugin("Salvaging.Sailing");
+  const hookLoc = { id: 60490, x: 3, y: 4, level: 1, shape: 10, rotation: 1 };
+  const boat = BoatManager.spawn(1, { ...RAFT, locs: [hookLoc] },
+    { fineX: wreck.x * 128 + 64, fineY: wreck.y * 128 + 64 - 3 * 128, level: 0, angle: NORTH });
+  try {
+    const h = salvager(boat);
+    h.levels.set(Skill.SAILING, 15);
+    const deploy = () => salvaging.objectHandlers.forEach((handler) => handler({ player: h.player, clickType: 1, handled: false,
+      location: { x: boat.deckBaseX + 3, y: boat.deckBaseY + 4, z: 0 },
+      definition: { getName: () => "Bronze salvaging hook", getInteractions: () => ["Deploy", null, null, null, "Modify"] } }));
+    const tick = (count = 1) => withRandom(0, () => { for (let n = 0; n < count; n++) TaskManager.process(); });
+
+    // One slot free: the first reel-in fills it, and the next tick ends the salvage.
+    h.player.getInventory().addItem(new Item(995, 1));
+    for (let slot = 1; slot < 27; slot++) h.player.getInventory().addItem(new Item(1351, 1));
+    deploy();
+    assert.equal(h.locAnims.at(-1), 13573, "the hook's cast");
+    tick(3);
+    assert.equal(h.player.getInventory().getAmount(32847), 1);
+    assert.equal(h.player.getInventory().getFreeSlots(), 0);
+    assert.deepEqual(h.player.boxes, []);
+    tick();
+    assert.deepEqual(h.player.boxes.map((chain) => chain.getDialogues().get(0).getText()),
+      ["Your inventory is too full to hold any more small salvage."]);
+    assert.equal(h.animation(), 65535, "the player stops");
+    assert.equal(h.locAnims.at(-1), 13574, "the hook still idles");
+    tick();
+    assert.equal(h.locAnims.at(-1), 13574);
+    tick();
+    assert.equal(h.locAnims.at(-1), 13575, "the hook winds in 2 ticks later");
+
+    // Walking away: the hook winds in 2 ticks later too.
+    h.player.getInventory().delete(32847, 1);
+    deploy();
+    tick(2);
+    h.steps.pending = 1;
+    tick();
+    assert.equal(h.animation(), 65535);
+    tick();
+    assert.equal(h.locAnims.at(-1), 13573, "not yet");
+    tick();
+    assert.equal(h.locAnims.at(-1), 13575);
+
+    // Casting the hook again before then keeps it out.
+    h.steps.pending = 0;
+    deploy();
+    tick(2);
+    h.steps.pending = 1;
+    tick();
+    h.steps.pending = 0;
+    h.player.getInventory().delete(1351, 1);
+    const recast = h.locAnims.length;
+    deploy();
+    tick(4);
+    assert.deepEqual(h.locAnims.slice(recast), [13573, 13574, 13574], "the cast, then the idle from the settle");
+    assert.equal(h.animation(), 13577);
+
+    // A salvage the player leaves for another action winds the hook in too, and the new
+    // action keeps its own animation.
+    salvaging.objects["Salvaging station"]["Sort-salvage"]({ player: h.player });
+    assert.equal(h.animation(), 13599, "sorting");
+    tick(2);
+    assert.equal(h.locAnims.at(-1), 13575);
   } finally {
     BoatManager.dispose(boat);
     clearTasks();
@@ -4409,6 +4497,94 @@ test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (r
     assert.equal(h.player.messages.at(-1), "The crystal extractor is now disabled.");
     assert.equal(h.locAt().id, 59703);
     assert.equal(h.owned.crystalExtractorOn, false);
+  } finally {
+    h.done();
+  }
+});
+
+/** An NPC as a plugin's spawnNpc makes it, recording the headbars shown over it. */
+function deckNpc(definition) {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const npc = NPC.create(definition.id, new Location(definition.x, definition.y, definition.z));
+  Object.assign(npc, { definition, bars: [] });
+  npc.showHeadbar = (id, options) => { npc.bars.push([id, options.fill]); return npc; };
+  return npc;
+}
+
+test("the crystal extractor's progress bar: an NPC on it with headbar 82 filling every 5 ticks, gone with the mote (rsprox)", () => {
+  const spawned = [];
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: (definition) => {
+      const npc = deckNpc(definition);
+      spawned.push(npc);
+      return npc;
+    },
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const { MOTE_TICKS } = require("../plugins/skills/sailing/CrystalExtractor.Sailing");
+  const h = facilityAtSea("sloop", "Crystal extractor");
+  try {
+    const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
+    h.click(extractor);
+    h.tick(2);
+    assert.equal(spawned.length, 0, "no bar before it's enabled");
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "The crystal extractor is now enabled.");
+    assert.equal(spawned.length, 1, "the bar comes with the enable line");
+    const [bar] = spawned;
+    assert.equal(bar.definition.id, 15111, "crystal_extractor_headbar");
+    assert.deepEqual([bar.definition.x, bar.definition.y, bar.definition.z], [...tile, 0], "on the extractor, on the deck's level");
+    assert.deepEqual(bar.bars, [[82, 0]]);
+    assert.ok(BoatManager.getDeck(h.boat).getNpcs().includes(bar), "on the boat's deck");
+    h.tick(4);
+    assert.equal(bar.bars.length, 1);
+    h.tick();
+    assert.equal(bar.bars.length, 2, "sent again 5 ticks in");
+    h.tick(MOTE_TICKS - 6);
+    // As live: 0 at the start and 5 ticks in, then 2 more every 5 ticks, 38 five ticks before the mote.
+    const fills = bar.bars.map(([, fill]) => fill);
+    assert.deepEqual(fills, [0, 0, ...Array.from({ length: 19 }, (_, i) => 2 * (i + 1))]);
+    assert.deepEqual(removed, [], "still charging");
+    h.tick();
+    assert.equal(h.owned.crystalMote, true);
+    assert.deepEqual(removed, [bar], "gone with the mote");
+    assert.equal(BoatManager.getDeck(h.boat).getNpcs().includes(bar), false, "and off the deck");
+    h.tick(20);
+    assert.equal(spawned.length, 1, "no bar while it holds a mote");
+
+    // Harvested: a new bar with the next charge.
+    h.click(extractor);
+    h.tick(4);
+    assert.equal(h.owned.crystalMote, false);
+    assert.equal(spawned.length, 2);
+    assert.deepEqual(spawned[1].bars, [[82, 0]]);
+
+    // Ours: switched off, the bar goes with the charge.
+    h.click(extractor, 2);
+    h.tick();
+    assert.equal(h.owned.crystalExtractorOn, false);
+    assert.deepEqual(removed, [bar, spawned[1]]);
+    h.tick(MOTE_TICKS);
+    assert.equal(spawned[1].bars.length, 1, "no more fills once it's off");
+    assert.equal(spawned.length, 2);
+  } finally {
+    h.done();
+  }
+});
+
+test("the crystal extractor's bar goes when its owner leaves the boat", () => {
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: deckNpc,
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const h = facilityAtSea("sloop", "Crystal extractor", (owned) => { owned.crystalExtractorOn = true; });
+  try {
+    extractor.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+    assert.equal(removed.length, 0);
+    extractor.events["sailing:left"]({ player: h.player, boat: h.boat, reason: "disembark" });
+    assert.equal(removed.length, 1);
   } finally {
     h.done();
   }

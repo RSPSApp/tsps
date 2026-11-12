@@ -289,6 +289,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function has(player, itemId, amount = 1) {
     return player.getInventory().getAmount(itemId) >= amount;
   }
+  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
+  function owns(player, itemId) {
+    return has(player, itemId) || (player.getBanks?.() ?? []).some((bank, tab) =>
+      tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount?.(itemId) ?? 0) > 0);
+  }
   function hasSpace(player, count = 1) {
     return player.getInventory().getFreeSlots() >= count;
   }
@@ -2768,7 +2773,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ItemOnGroundManager.registerLocation(player, new Item(ItemIdentifiers.EVIL_CHICKENS_EGG, 1), player.getLocation());
       }
     } else if (BLACK_DRAGON_IDS.has(event.npcId) && Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) === 1
-      && inZone(player, EVIL_CHICKEN_LAIR_ZONE) && !has(player, ItemIdentifiers.DRAGON_TOKEN)) {
+      && inZone(player, EVIL_CHICKEN_LAIR_ZONE) && !owns(player, ItemIdentifiers.DRAGON_TOKEN)) {
       player.setAttribute(AMIK_DRAGON_DROP_ATTRIBUTE, true);
       syncAmikQuestVarbits(player);
       if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.DRAGON_TOKEN, 1);

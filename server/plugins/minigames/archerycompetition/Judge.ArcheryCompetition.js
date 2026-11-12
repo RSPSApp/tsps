@@ -119,8 +119,7 @@ function scoreCheck(player) {
 /** Accepting an offer, first time or replay: pay only when the round can actually start. */
 function accept(player) {
   if (!Session.canStart(player)) {
-    const inventory = player.getInventory();
-    if (inventory.getFreeSlots() === 0 && !inventory.contains(core.ItemIdentifiers.BRONZE_ARROW)) {
+    if (!Session.hasArrowRoom(player)) {
       player.sendMessage("You don't have enough inventory space.");
       return;
     }

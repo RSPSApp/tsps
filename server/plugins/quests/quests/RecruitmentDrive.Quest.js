@@ -17,7 +17,8 @@
  *
  * Source: OSRS Wiki "Recruitment Drive" and "Transcript:Recruitment Drive".
  * Rewards per the Wiki: 1 Quest point, 1,000.5 Prayer/Herblore/Agility XP,
- * 3,000 coins and a free initiate sallet (initiate armour shop stock is a gap).
+ * 3,000 coins and a free initiate sallet. Sir Tiffy's common post-quest dialogue
+ * opens the existing initiate armour shop.
  *
  * Gaps / approximations:
  *   - Requirements are the wiki page's: Black Knights' Fortress + Druidic Ritual

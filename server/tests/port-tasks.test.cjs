@@ -196,6 +196,27 @@ test("the ledger table: a crate in both hands at the cargo port, then delivered 
     "its entry on the board is drawn again");
 });
 
+test("Pandemonium's crate is only its box: 100 XP, no bag and no task message (rsprox 235/242)", () => {
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: 599, taken: 1, delivered: 0 }]);
+  common.carry(player, common.taskById(599).crate, 0);
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    hooks.objects["Ledger table"]["Deposit-cargo"]({ player, location: PANDEMONIUM_LEDGER });
+  } finally {
+    Math.random = random;
+  }
+  assert.ok(player.log.includes("xp 100"));
+  assert.deepEqual(player.inventory.map((item) => item.getId()), [], "no coin bag or shark paint");
+  assert.equal(player.log.some((line) => line.includes("port task.")), false, "no task message");
+  assert.equal(player.dialogues.length, 1, "the item box");
+  const box = player.dialogues[0].getDialogues().get(0);
+  assert.equal(box.text, "You deliver the crate of ship parts.", "the box's own words");
+  assert.equal(box.itemId, 32807);
+  assert.equal(common.slots(player)[0], null);
+});
+
 test("the Prying Times delivery pays only Sailing XP, with no reward bag or shark paint", () => {
   const player = createPlayer();
   player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: 600, taken: 1, delivered: 0 }]);

@@ -233,9 +233,9 @@ test("two divine potions keep their own five minutes: the second doesn't drop th
   const player = createPlayer({ current: 99 });
   let now = 1_000_000;
   t.mock.method(Date, "now", () => now);
-  applyDivine(player, (p) => p.levels.set(Skill.ATTACK, 118), [Skill.ATTACK], { damage: 0 });
+  applyDivine(player, (p) => p.levels.set(Skill.ATTACK, 118), [Skill.ATTACK]);
   now += 60_000;
-  applyDivine(player, (p) => p.levels.set(Skill.RANGED, 112), [Skill.RANGED], { damage: 0 });
+  applyDivine(player, (p) => p.levels.set(Skill.RANGED, 112), [Skill.RANGED]);
   const skills = () => (player.getAttribute("potions:divine:state")?.targets ?? []).map((entry) => entry.skillIndex).sort();
   assert.deepEqual(skills(), [Skill.ATTACK.getIndex(), Skill.RANGED.getIndex()].sort(), "both stay pinned");
   now += 4 * 60_000 + 1; // the first potion's five minutes are over, the second has a minute left
@@ -263,7 +263,7 @@ test("divine potions: the warning at 30 ticks left, the worn-off line at the end
     const player = createPlayer({ current: 99 });
     const lines = [];
     player.sendMessage = (text) => lines.push(text);
-    applyDivine(player, (p) => { for (const skill of skills) p.levels.set(skill, 112); }, skills, { damage: 0 });
+    applyDivine(player, (p) => { for (const skill of skills) p.levels.set(skill, 112); }, skills);
     return { player, lines };
   };
   const bastion = drink([Skill.RANGED, Skill.DEFENCE]);

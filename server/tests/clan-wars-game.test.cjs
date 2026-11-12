@@ -595,9 +595,9 @@ for (const mode of [0, 1]) {
       const before = inventory();
       assert.equal(before.length, 6, 'more than three protected items expose unsafe death drops');
       extra.getCombat().addDamage(b, 10);
+      assert.equal(extra.getCombat().getKiller(false), b, 'real damage owner supplies the queued task killer');
       extra.setHitpoints(0);
       assert.equal(extra.isDyingReturn(), true, 'production death task is queued');
-      assert.equal(extra.getCombat().getKiller(false), b, 'real damage owner supplies the queued task killer');
       assert.equal(Match.dying.has(extra), false, 'first dying callback has not run');
       if (departure === 'channel leave') FC.leave(extra, false);
       else if (departure === 'disconnect hook') PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });

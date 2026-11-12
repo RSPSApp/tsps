@@ -107,6 +107,9 @@ module.exports = function registerDigSiteQuest(api) {
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
+  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
+  const owned = (player, itemId) => held(player, itemId) || player.getBanks().some((bank, tab) =>
+    tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(itemId) ?? 0) > 0);
   const delivered = (player) => player.getAttribute(DELIVERED_ATTRIBUTE) === true;
   const stamped = (player) => player.getAttribute(STAMPED_ATTRIBUTE) === true;
   const canPan = (player) => player.getAttribute(PANNING_PERMISSION) === true;
@@ -147,7 +150,7 @@ module.exports = function registerDigSiteQuest(api) {
     if (objectId !== ObjectIdentifiers.BUSH_10) return false;
     player.performAnimation(new Animation(SEARCH_ANIMATION));
     player.sendMessage("You search the bush...");
-    if (quest.getStage(player) >= STAGE_EXAMS_DONE || held(player, ItemIdentifiers.TEDDY)) {
+    if (quest.getStage(player) >= STAGE_EXAMS_DONE || owned(player, ItemIdentifiers.TEDDY)) {
       player.sendMessage("You find nothing of interest.");
     } else if (player.getInventory().getFreeSlots() === 0) {
       player.getInventory().full();
@@ -231,13 +234,20 @@ module.exports = function registerDigSiteQuest(api) {
       return true;
     }
     const roll = Math.floor(Math.random() * 40);
-    const reward = PAN_REWARDS.find(([end]) => roll < end);
+    const found = PAN_REWARDS.find(([end]) => roll < end);
+    const reward = found && (found[1] !== ItemIdentifiers.SPECIAL_CUP ||
+        (!quest.isComplete(player) && !held(player, ItemIdentifiers.SPECIAL_CUP))) ? found : null;
+    const amount = reward?.[1] === ItemIdentifiers.COINS ? 1 + Math.floor(Math.random() * 10) : 1;
+    // A coin stack at the cap takes no more; keep the mud rather than empty it for nothing.
+    if (reward && inventory.getAddableAmount(new Item(reward[1], amount)) < amount) {
+      inventory.full();
+      return true;
+    }
     player.sendMessage("You search the contents of the tray...");
     inventory.setItem(slot, new Item(EMPTY_TRAY, 1));
-    if (reward && (reward[1] !== ItemIdentifiers.SPECIAL_CUP ||
-        (!quest.isComplete(player) && !held(player, ItemIdentifiers.SPECIAL_CUP)))) {
+    if (reward) {
       const [, id, text, boxId = id] = reward;
-      inventory.adds(id, id === ItemIdentifiers.COINS ? 1 + Math.floor(Math.random() * 10) : 1);
+      inventory.adds(id, amount);
       showItem(player, boxId, text);
     } else {
       inventory.refreshItems();

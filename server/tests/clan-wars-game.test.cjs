@@ -43,6 +43,10 @@ before(async () => {
   for (const name of ['DragonDagger','DragonBattleaxe']) {
     require(`../plugins/combat/specials/${name}.SpecialAttack`)(PM.createApi('ClanWarsSpecialTest'));
   }
+  for (const [file,name] of [['objects/Doors.plugin','Doors'],['world/WaterSources.plugin','Water'],
+    ['skills/Cooking.plugin','Cooking'],['skills/Woodcutting.plugin','Woodcutting']]) {
+    require(`../plugins/${file}`).register(PM.createApi(`ClanWars${name}Test`));
+  }
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
 });
 afterEach(() => {
@@ -2493,7 +2497,7 @@ test('native Classic selection resets agreement across all six arenas and reject
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,36,39,65535]) {
+  for(const slot of [0,1,2,12,21,30,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,11);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),11);
   }
@@ -2679,4 +2683,378 @@ test('native Classic Ignore5 uses concurrent six-fighter starts and actual defea
   const {a,b,teams,players,game}=await stragglerGame(6,1,3,{},11);completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.fighters.size,12);
   await lethalMelee(b,teams[0][1],game,true,[[3423,4690,0],[3424,4690,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+
+// L: source-qualified Lumbridge choices; canonical producers, actual native listener routes.
+const LUMBRIDGE_ORIGIN=[3392,4800];
+const LUMBRIDGE_LANDINGS=[[3417,4810,0],[3417,4843,0]];
+const LUMBRIDGE_JAILS=[[3436,4822,0],[3436,4831,0]];
+const lumbridgeReachable=(game,from,to)=>layoutReachable(game,from,to,LUMBRIDGE_ORIGIN);
+function lumbridgeObject(game,gameval,xy,plane=0) {
+  const id=core.CacheDefinitions.getLocId(gameval),at=game.area.at([...xy,plane]);
+  const found=[];
+  for(let x=0;x<game.area.widthChunks;x++)for(let y=0;y<game.area.heightChunks;y++)
+    found.push(...game.area.getChunkObjects(plane,x,y).filter(o=>o.getId()===id&&o.getLocation().equals(at)));
+  assert.equal(found.length,1,'actual uniquely owned observed template loc');assert.equal(found[0].getPrivateArea(),game.area);return found[0];
+}
+async function lumbridgeWalk(p,game,xy) {
+  const at=game.area.at([...xy,0]);assert.ok(Math.abs(p.getLocation().getX()-at.getX())<64&&Math.abs(p.getLocation().getY()-at.getY())<64,'ordinary click in RSMOD search window');
+  await wire(p,walkClickFrame(at));tick(80);assert.deepEqual(position(p),[at.getX(),at.getY(),0],'processed ordinary walk reaches exact endpoint');
+}
+function lumbridgeObjectClick(p,o,action) {
+  const actions=o.getDefinition().getInteractions(),op=actions.findIndex(a=>a?.toLowerCase()===action.toLowerCase())+1;assert.ok(op>0);
+  const {ObjectActionPacketListener}=require('../dist/net/packet/impl/ObjectActionPacketListener');
+  new ObjectActionPacketListener().executeAction(p,o.getId(),o.getLocation().getX(),o.getLocation().getY(),op);
+}
+function treeTask(tree) {return [...core.TaskManager.pendingTasks.toArray(),...core.TaskManager.activeTasks].find(t=>t.originalTreeObject===tree&&t.isRunning());}
+function resourceRandom(t) {t.mock.method(Math,'random',()=>new Error().stack.includes('rollLog')?0.001:0.99);}
+async function chopTree(p,tree) {
+  const I=core.ItemIdentifiers;const skills=p.getSkillManager();skills.setCurrentLevel(core.Skill.WOODCUTTING,99);skills.setMaxLevel(core.Skill.WOODCUTTING,99);
+  if(!p.getInventory().contains(I.BRONZE_AXE))p.getInventory().add(new core.Item(I.BRONZE_AXE));
+  const before=p.getInventory().getAmount(I.LOGS);lumbridgeObjectClick(p,tree,'Chop down');
+  for(let i=0;i<40&&!treeTask(tree);i++)tick();
+  const task=treeTask(tree);assert.ok(task,'ordinary chop actually depleted and scheduled canonical respawn');
+  assert.equal(p.getInventory().getAmount(I.LOGS),before+1,'ordinary chopping awards actual log');
+  assert.equal(task.stumpObject.getPrivateArea(),tree.getPrivateArea());
+  assert.equal(core.MapObjects.get(task.stumpObject.getId(),task.stumpObject.getLocation(),tree.getPrivateArea()),task.stumpObject);
+  return task;
+}
+
+// Independent canonical guard regression: does not require missing Layout12 admission.
+test('native canonical tree respawn respects destroyed private area while live private and world respawn',async t=>{
+  resourceRandom(t);
+  const make=()=>{const area=new core.TemplatedInstanceArea(8,8);for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<8;y++)area.setChunk(z,x,y,{sourceChunkX:424+x,sourceChunkY:600+y,sourcePlane:z,rotation:0});area.at=tile=>area.tile(tile[0]-3392,tile[1]-4800,tile[2]);return {area,layout:{origin:LUMBRIDGE_ORIGIN}};};
+  const dead=make(),live=make(),replacement=[];const players=[actor(true),actor(true),actor(true)];const trees=[];const tasks=[];
+  try {
+    for(const [index,game]of [[0,dead],[1,live]]){const p=players[index];p.moveTo(game.area.at([3419,4840,0]));game.area.add(p);tick();const tree=lumbridgeObject(game,'tree2',[3420,4840]);trees.push(tree);}
+    const world=players[2];world.moveTo(new core.Location(3222,3218,0));core.RegionManager.loadMapFiles(3222,3218);
+    const tree=new core.GameObject(trees[0].getId(),new core.Location(3223,3218,0),10,2,null);core.ObjectManager.register(tree,true);trees.push(tree);tick();
+    // Independent ordinary native starts, simultaneous pending delays, no timer rewinds.
+    for(let i=0;i<3;i++)tasks.push(await chopTree(players[i],trees[i]));
+    assert.ok(tasks.every(task=>task.isRunning()&&task.getRemainingTicks()>0),'all three real delayed respawns pending');
+    const deadBase=[dead.area.getBaseX(),dead.area.getBaseY()];players[0].moveTo(new core.Location(3128,3627,0));dead.area.detach(players[0]);players[0].setArea(null);dead.area.destroy();assert.equal(dead.area.isDestroyed(),true);
+    const reused=make();replacement.push(reused);assert.deepEqual([reused.area.getBaseX(),reused.area.getBaseY()],deadBase,'actual template slot is reused');
+    const replacementTree=lumbridgeObject(reused,'tree2',[3420,4840]);const oldClip=reused.area.getClip(replacementTree.getLocation());
+    const remaining=Math.max(...tasks.map(task=>task.getRemainingTicks()));tick(remaining+2);
+    assert.equal(tasks.every(task=>task.isStopped()),true);
+    for(const object of [trees[0],tasks[0].stumpObject]){
+      assert.equal(core.World.getObjects().includes(object),false,'no delayed old-area tree/stump world resurrection');
+      assert.equal(core.World.getRemovedObjects().includes(object),false);
+      assert.equal(core.ObjectManager.objectsAt(object.getLocation()).includes(object),false);
+      assert.equal(dead.area.getObjects().includes(object),false);
+    }
+    assert.equal(core.MapObjects.get(trees[0].getId(),trees[0].getLocation(),dead.area),null,'destroyed resolver remains empty');
+    assert.equal(reused.area.resolveObject(replacementTree.getId(),replacementTree.getLocation()),replacementTree);
+    assert.equal(reused.area.getClip(replacementTree.getLocation()),oldClip,'reused live slot preserves its own native masks');
+    for(let i=1;i<3;i++){
+      assert.equal(core.World.getObjects().includes(trees[i]),true,'canonical live/world respawn really registered original');
+      assert.equal(i===1?live.area.resolveObject(trees[i].getId(),trees[i].getLocation()):core.MapObjects.get(trees[i].getId(),trees[i].getLocation(),null),trees[i]);
+    }
+  } finally {
+    for(const task of tasks){task.stop();if(core.World.getObjects().includes(task.stumpObject))core.ObjectManager.deregister(task.stumpObject,true);}
+    for(const tree of trees)if(core.World.getObjects().includes(tree))core.ObjectManager.deregister(tree,true);
+    for(const p of players){p.getPrivateArea()?.detach(p);p.setArea(null);p.moveTo(new core.Location(3128,3627,0));}
+    for(const g of [dead,live,...replacement])g.area.destroy();
+    const owned=new Set([dead.area,live.area,...replacement.map(g=>g.area)]);const removed=core.World.getRemovedObjects();
+    for(let i=removed.length-1;i>=0;i--)if(owned.has(removed[i].getPrivateArea()))removed.splice(i,1);
+  }
+});
+test('native Lumbridge Castle selection resets agreement across all seven arenas and rejects unsupported rows',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');const session=C.negotiations.get(a);assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',36);assert.equal(session.rules.arena,12,'native Lumbridge Castle option reaches authoritative offer');
+  assert.equal(session.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Lumbridge Castle/);
+  for(const [slot,arena] of [[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12]]) {
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+    await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
+  }
+  for(const slot of [0,1,2,12,21,30,39,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,12);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),12);
+  }
+});
+
+
+for(const mode of [0,1,16]) test(`native Lumbridge Castle mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},12);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3417,4810,0]));b.moveTo(game.area.at([3418,4810,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,LUMBRIDGE_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Lumbridge Castle side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const outsiders=[actor(),actor()];for(const p of outsiders) channel(p);
+  const foreignGame=await negotiate(outsiders[0],outsiders[1],null,1,null,6);for(const p of outsiders) await join(p);
+  const orbOutsiders=[actor(),actor()];for(const p of orbOutsiders)channel(p);const orbForeign=await negotiate(orbOutsiders[0],orbOutsiders[1],null,1,null,3);
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},12);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'lumbridge'}));
+  await lethalMelee(killer,victim,game,true,[[3417,4810,0],[3418,4810,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,LUMBRIDGE_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'lumbridge'});
+  const foreignPortal=mappedLayoutObjects(foreignGame,'clanwars_prisonportal_swamp')[0],foreignOrb=mappedLayoutObjects(orbForeign,'clanwars_viewing_start_greyrock')[0];assert.ok(foreignPortal&&foreignOrb);
+  assert.equal(Match.exit({player:victim,object:foreignPortal}),false,'valid jailed member cannot use the real same-ID portal of another match');
+  assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false,'valid jailed member cannot use a real same-ID foreign orb');
+  assert.equal(C.matches.get(victim),game);assert.equal(game.jailed.has(victim),true);
+  const inactive=mappedLayoutObjects(game,'clanwars_viewing_greyrock')[0];assert.ok(inactive);
+  assert.equal(viewingUnit().use({player:victim,object:inactive}),false,'actual owned inactive orb is not an active Use target');
+  const scripts=scriptCalls(victim),orbXY=side===0?[3436,4823]:[3436,4830];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_greyrock',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9755));
+  console.log('LUMBRIDGE_ORB_APPROACH_QUALIFICATION '+JSON.stringify({side,source:orbXY,approach:[state.location.getX(),state.location.getY(),state.location.getZ()]}));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.deepEqual(position(victim),[state.location.getX(),state.location.getY(),state.location.getZ()]);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const ownedPortal=mappedLayoutObjects(game,'clanwars_prisonportal_swamp').find(o=>o.getLocation().equals(game.area.at([...(side===0?[3437,4820]:[3437,4833]),0])));assert.ok(ownedPortal);
+  const fake=new core.GameObject(ownedPortal.getId(),ownedPortal.getLocation().clone(),ownedPortal.getType(),ownedPortal.getFace(),game.area);
+  try {assert.equal(Match.exit({player:victim,object:fake}),false);assert.equal(game.jailed.has(victim),true);} finally {game.area.detach(fake);}
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',side===0?[3437,4820]:[3437,4833],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',side===0?[3437,4820]:[3437,4833],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,LUMBRIDGE_LANDINGS[side]));
+});
+
+test('native seven-layout coexistence preserves old square and rectangular layouts and isolates footprint-aware owned Forfeit cleanup',async()=>{
+  const players=Array.from({length:14},()=>actor());for(const p of players) channel(p);
+  const old=[];
+  for(const [offset,arena,axis,coordinate,face,count] of [[0,1,'y',4959,0,52],[2,2,'y',5023,0,null],[4,3,'y',5087,0,24],[6,6,'y',4959,0,57],[8,5,'x',3167,1,43],[10,11,'y',4735,0,51]]) {
+    const team=players.slice(offset,offset+2),game=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team) await join(p);
+    assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[8,arena===11?16:8]);assert.equal(game.phase,'staging');assert.ok(game.walls.length>0);if(count!==null) assert.equal(game.walls.length,count);
+    for(const wall of game.walls) {
+      assert.equal(wall.getFace(),face);
+      const actual=axis==='x'?wall.getLocation().getX()-game.area.getBaseX()+game.layout.origin[0]:wall.getLocation().getY()-game.area.getBaseY()+game.layout.origin[1];
+      assert.equal(actual,coordinate,'old layout native placement and selected axis/face remain exact');
+    }
+    old.push({game,team});
+  }
+  const [a,b]=players.slice(12),game=await negotiate(a,b,null,1,null,12);await join(a);await join(b);
+  assert.equal(new Set([...old.map(x=>x.game.area),game.area]).size,7);
+  const foreign=mappedLayoutObjects(old[0].game,'clanwars_exitportal_darkrock_s')[0];assert.ok(foreign);assert.equal(Match.forfeit({player:a,object:foreign}),false);
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+  for(const player of [a,b]) {
+    const side=game.members.get(player),xy=side===0?[3417,4809]:[3417,4844],approach=side===0?[3417,4810,0]:[3417,4843,0];
+    const object=mappedLayoutObjects(game,side===0?'clanwars_exitportal_smallwood_s':'clanwars_exitportal_smallwood_n').find(o=>o.getLocation().equals(game.area.at([...xy,0])));assert.ok(object);
+    assert.deepEqual([object.getDefinition().sizeX,object.getDefinition().sizeY],[2,1]);assert.equal(object.getFace(),side===0?0:2);
+    const fake=new core.GameObject(object.getId(),object.getLocation().clone(),object.getType(),object.getFace(),game.area);
+    try {assert.equal(Match.forfeit({player,object:fake}),false);} finally {game.area.detach(fake);}
+    // Supplied footprint-perimeter checkpoint. It is not a natural traversal claim.
+    player.moveTo(game.area.at(approach));tick(2);assert.equal(game.area.getClip(player.getLocation()),0);
+    assert.equal(MapObjects.getPrivateArea(player,object.getId(),object.getLocation()),object);
+    await layoutObjectInput(player,game,side===0?'clanwars_exitportal_smallwood_s':'clanwars_exitportal_smallwood_n',xy,'Forfeit');assert.equal(C.matches.has(player),false);lobby(player);
+  }
+  assert.equal(game.members.size,0);assert.equal(game.phase,'staging');const remaining=game.starts-C.now();assert.ok(remaining>0);tick(remaining);
+  assert.equal(game.area.isDestroyed(),true);
+  for(const {game:other,team} of old) {
+    assert.notEqual(other.phase,'over');assert.equal(other.area.isDestroyed(),false);for(const p of team) assert.equal(C.matches.get(p),other);
+  }
+});
+
+test('native Lumbridge Castle Ignore5 uses concurrent six-fighter starts and actual defeat threshold',async()=>{
+  const {a,b,teams,players,game}=await stragglerGame(6,1,3,{},12);completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.fighters.size,12);
+  await lethalMelee(b,teams[0][1],game,true,[[3417,4810,0],[3418,4810,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+test('native Lumbridge full masks and owned walls preserve source geometry with ordinary causal crossing',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,12);await join(a);await join(b);
+  assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[8,8]);
+  for(const p of [a,b])assert.deepEqual(position(p),positionAt(game,LUMBRIDGE_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<8;y++){
+      reference.setChunk(z,x,y,{sourceChunkX:424+x,sourceChunkY:600+y,sourcePlane:z,rotation:0});assert.deepEqual(game.area.getChunk(z,x,y),reference.getChunk(z,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const id=core.CacheDefinitions.getLocId('clanwars_barrier_greyrock'),definition=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
+    assert.deepEqual([definition.sizeX,definition.sizeY,definition.clipType,definition.blocksProjectile],[1,1,1,true]);assert.equal(walls.length,29);
+    for(const wall of walls){
+      assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);
+      assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getPrivateArea()===game.area).length,1);
+    }
+    for(let x=3407;x<=3437;x++){
+      const old=baseline[(4826-4800)*64+x-3392],at=game.area.at([x,4826,0]);const found=walls.filter(w=>w.getLocation().equals(at));
+      assert.equal(found.length,old&core.RegionManager.BLOCKED_MASK?0:1);if(found.length)assert.equal(old&0x20100,0);
+    }
+    for(const xy of [...LUMBRIDGE_LANDINGS,...LUMBRIDGE_JAILS])assert.equal(game.area.getClip(game.area.at(xy)),0);
+    assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],LUMBRIDGE_LANDINGS[1]),false);
+    for(const j of LUMBRIDGE_JAILS)for(const landing of LUMBRIDGE_LANDINGS)assert.equal(lumbridgeReachable(game,j,landing),false);
+    assert.equal(lumbridgeReachable(game,LUMBRIDGE_JAILS[0],LUMBRIDGE_JAILS[1]),false);
+    for(const outside of [[3405,4826,0],[3439,4826,0],[3417,4807,0],[3417,4848,0]])assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],outside),false,'source seals separate interior from exterior');
+    for(const z of [2,3]){assert.equal(game.area.getChunk(z,0,0),null);assert.notEqual(game.area.getClip(game.area.at([3417,4810,z]))&0x200100,0);}
+    for(const [inside,outside]of [[[3392,4826,0],[3391,4826,0]],[[3455,4826,0],[3456,4826,0]],[[3417,4800,0],[3417,4799,0]],[[3417,4863,0],[3417,4864,0]]])assert.equal(core.RegionManager.canMovestart(game.area.at(inside),game.area.at(outside),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0);await lumbridgeWalk(walker,game,[3422,4824]);const target=game.area.at([3422,4828,0]);
+    await wire(walker,walkClickFrame(target));tick(30);assert.equal(game.phase,'staging');assert.ok(walker.getLocation().getY()<game.area.at([3422,4826,0]).getY());
+    const state=()=>({position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()});const staging=state();
+    completePreparation(game);assert.equal(game.walls.length,0);
+    for(const wall of walls){assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),null);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);}
+    const after=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'full4096native masks before intentional door/resource mutations');
+    for(const [x,mask]of [[3407,0x82c1],[3412,0x1008],[3414,0x4020],[3421,0x10080],[3437,0x8],[3413,0x3c1e0],[3420,0x355aa]])assert.equal(after[26*64+x-3392],mask);
+    assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],LUMBRIDGE_LANDINGS[1]),true);
+    await lumbridgeWalk(walker,game,[3422,4828]);console.log('LUMBRIDGE_MOVEMENT_QUALIFICATION '+JSON.stringify({requested:[target.getX(),target.getY(),0],staging,combat:state()}));
+    await lumbridgeWalk(walker,game,LUMBRIDGE_LANDINGS[1].slice(0,2));
+  } finally {reference.destroy();}
+});
+
+test('native Lumbridge canonical internal doors preserve preparation, seals, jails and ground-floor access',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,12);await join(a);await join(b);
+  const p=[a,b].find(p=>game.members.get(p)===0),wallIds=game.walls.slice();
+  const door=lumbridgeObject(game,'elfdoor',[3415,4825]);
+  // Supplied ground checkpoint selects the actual reachable door side; native route opens it.
+  p.moveTo(game.area.at([3415,4824,0]));tick();lumbridgeObjectClick(p,door,'Open');tick(12);
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(door)),'native ordinary Open records the actual owned internal door removal');
+  const openDoor=game.area.getObjects().find(o=>o.getId()!==door.getId()&&o.getDefinition()?.getName()==='Door'&&o.getDefinition().getInteractions()?.includes('Close'));assert.ok(openDoor,'canonical owned open leaf exists');
+  lumbridgeObjectClick(p,openDoor,'Close');tick(12);
+  const restored=game.area.getObjects().find(o=>o.getId()===door.getId()&&o.getLocation().equals(door.getLocation()));assert.ok(restored);assert.equal(restored.getFace(),door.getFace());
+  assert.equal(core.World.getRemovedObjects().some(object=>object.equals(door)),false,'canonical close clears original removal marker');
+  const north=[a,b].find(actor=>game.members.get(actor)===1);north.moveTo(game.area.at([3422,4829,0]));tick();
+  const double=lumbridgeObject(game,'castledoubledoorl',[3421,4829]);lumbridgeObjectClick(north,double,'Open');tick(12);
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(double)));
+  assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],LUMBRIDGE_LANDINGS[1]),false,'canonical double-door opening during preparation cannot bypass wall');
+  const opened=game.area.getObjects().find(o=>o.getDefinition()?.getName()==='Large door'&&o.getDefinition().getInteractions()?.includes('Close'));assert.ok(opened);
+  lumbridgeObjectClick(north,opened,'Close');tick(12);
+  assert.ok(game.area.getObjects().some(o=>o.getId()===double.getId()&&o.getLocation().equals(double.getLocation())),'double door closes to its original location');
+  assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],LUMBRIDGE_LANDINGS[1]),false,'opened internal door cannot bypass native staging walls');
+  for(const wall of wallIds)assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);
+  completePreparation(game);await lumbridgeWalk(p,game,[3422,4829]);
+  const large=lumbridgeObject(game,'castledoubledoorl',[3421,4829]);lumbridgeObjectClick(p,large,'Open');tick(12);
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(large)),'canonical double door records its actual private closed-leaf removal');
+  assert.ok(game.area.getObjects().some(o=>o.getPrivateArea()===game.area&&o.getDefinition()?.getName()==='Large door'&&o.getDefinition().getInteractions()?.includes('Close')),'actual owned double-door opened leaf');
+  await lumbridgeWalk(p,game,[3419,4829]);
+  // Room access is an ordinary door route, not a seeded membership or clipping override.
+  for(const xy of [[3405,4826],[3439,4826]]){
+    const beforeZ=p.getLocation().getZ();await wire(p,walkClickFrame(game.area.at([...xy,0])));tick(30);
+    const sourceX=p.getLocation().getX()-game.area.getBaseX()+3392;assert.ok(sourceX>=3407&&sourceX<=3437);assert.equal(p.getLocation().getZ(),beforeZ);
+  }
+  for(const xy of [[3406,4826],[3409,4826],[3438,4826],[3438,4827]]){
+    const candidates=game.area.getTemplateObjects(game.area.at([...xy,0]));const boundary=candidates.find(o=>[1548,1554,1555].includes(o.getId()));assert.ok(boundary);
+    assert.equal((boundary.getDefinition().getInteractions()??[]).some(a=>a?.toLowerCase()==='open'),false);
+  }
+  for(const xy of [[3412,4815],[3412,4837]]){
+    const stair=lumbridgeObject(game,'spiralstairs',xy,1);assert.equal(stair.getLocation().getZ(),1);
+    const before=position(p);lumbridgeObjectClick(p,stair,'Climb-up');tick(20);
+    assert.equal(p.getLocation().getZ(),0,'ground actor cannot resolve upper-floor staircase as a ground loc');assert.deepEqual(position(p),before);
+  }
+  for(const jail of LUMBRIDGE_JAILS)assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],jail),false,'internal door changes leave both gatehouse jails isolated');
+  for(const xy of [[3436,4822],[3436,4831]]){await wire(p,walkClickFrame(game.area.at([...xy,0])));tick(30);assert.notDeepEqual(position(p),positionAt(game,[...xy,0]));assert.equal(p.getLocation().getZ(),0);}
+});
+
+function lumbridgeItemOnObject(p,object,itemId) {
+  const slot=p.getInventory().getSlotForItemId(itemId);assert.ok(slot>=0);
+  assert.equal(core.MapObjects.getPrivateArea(p,object.getId(),object.getLocation()),object);
+  const {UseItemPacketListener}=require('../dist/net/packet/impl/UseItemPacketListener');
+  UseItemPacketListener.itemOnObject(p,C.uid('inventory:items'),object.getId(),itemId,slot,object.getLocation().getX(),object.getLocation().getY());
+}
+
+test('native Lumbridge actionless sink and both fountains fill real metadata containers and cancel on ordinary movement',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,12);await join(a);await join(b);completePreparation(game);
+  const p=a,I=core.ItemIdentifiers;
+  for(const [gameval,xy,approach]of [['qip_cook_sink',[3413,4823],[3413,4822]],['fountain',[3429,4818],[3428,4818]],['fountain',[3429,4834],[3428,4834]]]){
+    await lumbridgeWalk(p,game,approach);const object=lumbridgeObject(game,gameval,xy);
+    assert.equal((object.getDefinition().getInteractions()??[]).some(Boolean),false,'water item-use remains available without a direct option');
+    const before=p.getInventory().getAmount(I.VIAL_OF_WATER);give(p,I.VIAL,`lumbridge-water-${xy}`);
+    lumbridgeItemOnObject(p,object,I.VIAL);for(let i=0;i<40&&p.getInventory().getAmount(I.VIAL)>0;i++)tick();
+    assert.equal(p.getInventory().getAmount(I.VIAL),0);assert.equal(p.getInventory().getAmount(I.VIAL_OF_WATER),before+1);
+    assert.ok(p.getInventory().getValidItems().some(i=>i.getId()===I.VIAL_OF_WATER&&i.getMeta()?.qa===`lumbridge-water-${xy}`));
+    console.log('LUMBRIDGE_WATER_QUALIFICATION '+JSON.stringify({source:xy,id:object.getId(),owned:object.getPrivateArea()===game.area,position:position(p)}));
+  }
+  const sink=lumbridgeObject(game,'qip_cook_sink',[3413,4823]);await lumbridgeWalk(p,game,[3413,4822]);
+  for(let i=0;i<8;i++)give(p,I.VIAL,'water-cancel');
+  const before=p.getInventory().getAmount(I.VIAL_OF_WATER);lumbridgeItemOnObject(p,sink,I.VIAL);
+  for(let i=0;i<20&&p.getInventory().getAmount(I.VIAL_OF_WATER)===before;i++)tick();
+  assert.ok(p.getInventory().getAmount(I.VIAL_OF_WATER)>before);assert.ok(p.getInventory().getAmount(I.VIAL)>0);
+  await wire(p,walkClickFrame(game.area.at([3415,4822,0])));tick(3);const remaining=p.getInventory().getAmount(I.VIAL);assert.ok(remaining>0,'ordinary movement interrupted a genuinely active water batch');
+  tick(8);assert.equal(p.getInventory().getAmount(I.VIAL),remaining);assert.equal(C.matches.get(p),game);assert.equal(C.matches.get(b),game);
+});
+
+test('native Lumbridge canonical range cooks through item-use and Cook choice while supply rules survive death',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,{food:1,drinks:1},12);await join(a);await join(b);completePreparation(game);
+  const p=a,I=core.ItemIdentifiers;ruleStats(p);p.getSkillManager().setMaxLevel(core.Skill.COOKING,99);p.getSkillManager().setCurrentLevel(core.Skill.COOKING,99);
+  const range=lumbridgeObject(game,'range',[3420,4823]);await lumbridgeWalk(p,game,[3419,4823]);
+  const cooked=p.getInventory().getAmount(I.SHRIMPS),xp=p.getSkillManager().getExperience(core.Skill.COOKING);
+  give(p,I.RAW_SHRIMPS,'lumbridge-cook');lumbridgeItemOnObject(p,range,I.RAW_SHRIMPS);tick(12);
+  assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),0);assert.equal(p.getInventory().getAmount(I.SHRIMPS),cooked+1);assert.ok(p.getSkillManager().getExperience(core.Skill.COOKING)>xp);
+  give(p,I.RAW_SHRIMPS,'lumbridge-menu-1');give(p,I.RAW_SHRIMPS,'lumbridge-menu-2');lumbridgeObjectClick(p,range,'Cook');tick(8);
+  const menu=p.getCreationMenu();assert.ok(menu,'actual owned Range Cook produces canonical quantity menu');
+  // Existing skill menu callback; native Range listener and processed approach above, no decoded quantity-packet claim.
+  menu.execute(I.RAW_SHRIMPS,1);tick(12);assert.equal(p.getInventory().getAmount(I.SHRIMPS),cooked+2);assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),1,'selecting one from the actual two-item menu leaves one raw supply');
+  const food=p.getInventory().getAmount(I.SHRIMPS);await nativeItem(p,I.SHRIMPS,'Eat');assert.equal(p.getInventory().getAmount(I.SHRIMPS),food,'cooked supplies do not bypass NoFood');
+  give(p,I.ATTACK_POTION_4_,'lumbridge-no-drink');await nativeItem(p,I.ATTACK_POTION_4_,'Drink');assert.equal(p.getInventory().getAmount(I.ATTACK_POTION_4_),1,'ordinary Drink preserves disabled dose');
+  const supplied=contents(p.getInventory());await lethalMelee(b,p,game,true,[[3417,4810,0],[3418,4810,0]]);tick(6);
+  assert.equal(game.jailed.has(p),true);assert.deepEqual(contents(p.getInventory()),supplied,'actual cooking/remaining supplies and metadata survive real safe death');
+});
+
+test('native Lumbridge exact Oak rectangle denial has ordinary Tree positive controls and match teardown respawn isolation',async t=>{
+  resourceRandom(t);
+  const a=actor(true),b=actor(true),c=actor(true),d=actor(true);channel(a);channel(b);channel(c);channel(d);
+  const game=await negotiate(a,b,null,1,null,12);await join(a);await join(b);completePreparation(game);
+  const other=await negotiate(c,d,null,1,null,12);await join(c);await join(d);completePreparation(other);
+  const p=a,I=core.ItemIdentifiers;ruleStats(p);p.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING,99);p.getSkillManager().setCurrentLevel(core.Skill.WOODCUTTING,99);give(p,I.BRONZE_AXE,'lumbridge-axe');
+  const oak=lumbridgeObject(game,'oaktree',[3426,4813]);assert.deepEqual([oak.getDefinition().sizeX,oak.getDefinition().sizeY],[3,3]);
+  await lumbridgeWalk(p,game,[3429,4816]);const logs=p.getInventory().getAmount(I.OAK_LOGS),xp=p.getSkillManager().getExperience(core.Skill.WOODCUTTING);
+  const {PathFinder}=require('../dist/game/model/movement/path/PathFinder');
+  for(const [x,y,flag]of [[3425,4813,0x8],[3425,4814,0x8],[3425,4815,0x8],[3429,4813,0x80],[3429,4814,0x80],[3429,4815,0x80],[3426,4812,0x2],[3427,4812,0x2],[3428,4812,0x2],[3426,4816,0x20],[3427,4816,0x20],[3428,4816,0x20]])assert.notEqual(game.area.getClip(game.area.at([x,y,0]))&flag,0);
+  lumbridgeObjectClick(p,oak,'Chop down');for(let i=0;i<40;i++){tick();assert.equal(core.RegionManager.blocked(p.getLocation(),game.area),false);}
+  assert.equal(p.getInventory().getAmount(I.OAK_LOGS),logs);assert.equal(p.getSkillManager().getExperience(core.Skill.WOODCUTTING),xp);assert.equal(treeTask(oak),undefined);
+  assert.equal(PathFinder.reachedObject(p,oak.getLocation().getX(),oak.getLocation().getY(),3,3,0,10,oak.getDefinition().getBlockingMask()),false,'actual ordinary endpoint fails exact native object reach');
+  const first=lumbridgeObject(game,'tree2',[3420,4840]);await lumbridgeWalk(p,game,[3419,4840]);const firstTask=await chopTree(p,first);
+  const stoppedLogs=p.getInventory().getAmount(I.LOGS);lumbridgeObjectClick(p,first,'Chop down');tick(8);
+  assert.equal(p.getInventory().getAmount(I.LOGS),stoppedLogs,'clicking lazy original behind actual stump cannot restart depleted tree');assert.equal(treeTask(first),firstTask);
+  assert.equal(core.MapObjects.get(firstTask.stumpObject.getId(),firstTask.stumpObject.getLocation(),game.area),firstTask.stumpObject);
+  tick(firstTask.getRemainingTicks()+2);
+  assert.equal(core.World.getObjects().includes(first),true,'live match tree actually registered on respawn');assert.equal(game.area.resolveObject(first.getId(),first.getLocation()),first);
+  const second=lumbridgeObject(game,'tree2',[3425,4839]);await lumbridgeWalk(p,game,[3424,4839]);const pending=await chopTree(p,second);
+  const otherTree=lumbridgeObject(other,'tree2',[3420,4840]);await lumbridgeWalk(c,other,[3419,4840]);const otherTask=await chopTree(c,otherTree);assert.ok(pending.getRemainingTicks()>0);
+  const base=[game.area.getBaseX(),game.area.getBaseY()];game.finish(null);assert.equal(game.area.isDestroyed(),true);lobby(a);lobby(b);
+  const replacement=new core.TemplatedInstanceArea(8,8);
+  try {
+    assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],base,'actual ended match slot reused before pending task fires');
+    for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<8;y++)replacement.setChunk(z,x,y,{sourceChunkX:424+x,sourceChunkY:600+y,sourcePlane:z,rotation:0});
+    const masks=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)masks.push(replacement.getClip(replacement.tile(x,y,0)));
+    tick(Math.max(pending.getRemainingTicks(),otherTask.getRemainingTicks())+2);
+    for(const object of [second,pending.stumpObject]){assert.equal(core.World.getObjects().includes(object),false);assert.equal(core.World.getRemovedObjects().includes(object),false);assert.equal(core.ObjectManager.objectsAt(object.getLocation()).includes(object),false);assert.equal(game.area.getObjects().includes(object),false);}
+    const after=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)after.push(replacement.getClip(replacement.tile(x,y,0)));assert.deepEqual(after,masks,'full reused template mask isolation');
+    assert.equal(core.World.getObjects().includes(otherTree),true,'concurrent other match ordinary respawn registered original');assert.equal(other.area.resolveObject(otherTree.getId(),otherTree.getLocation()),otherTree);assert.equal(C.matches.get(c),other);assert.equal(C.matches.get(d),other);
+  } finally {replacement.destroy();}
+});
+
+test('native canonical lazy-template range cooks and removal cancels while world range remains usable',async()=>{
+  const area=new core.TemplatedInstanceArea(8,8);for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<8;y++)area.setChunk(z,x,y,{sourceChunkX:424+x,sourceChunkY:600+y,sourcePlane:z,rotation:0});
+  const game={area,layout:{origin:LUMBRIDGE_ORIGIN}};area.at=tile=>area.tile(tile[0]-3392,tile[1]-4800,tile[2]);
+  const p=actor(true),world=actor(true),I=core.ItemIdentifiers;let worldRange;
+  try {
+    p.moveTo(area.at([3419,4823,0]));area.add(p);tick();const range=lumbridgeObject(game,'range',[3420,4823]);assert.equal(area.getObjects().includes(range),false,'untouched template cooker is lazily owned, never manually registered');
+    for(const player of [p,world]){player.getSkillManager().setMaxLevel(core.Skill.COOKING,99);player.getSkillManager().setCurrentLevel(core.Skill.COOKING,99);}
+    give(p,I.RAW_SHRIMPS,'independent-lazy-range');lumbridgeItemOnObject(p,range,I.RAW_SHRIMPS);tick(12);
+    assert.equal(p.getInventory().getAmount(I.SHRIMPS),1,'independent ordinary template range reaches first actual cooked output');
+    assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),0);
+    // A disclosed runtime world cooker control uses the same actual cache definition.
+    world.moveTo(new core.Location(3222,3218,0));worldRange=new core.GameObject(range.getId(),new core.Location(3223,3218,0),range.getType(),range.getFace(),null);core.ObjectManager.register(worldRange,true);tick();
+    give(world,I.RAW_SHRIMPS,'world-range-control');lumbridgeItemOnObject(world,worldRange,I.RAW_SHRIMPS);tick(12);
+    assert.equal(world.getInventory().getAmount(I.SHRIMPS),1,'ordinary world cooker existing path remains usable');
+    give(p,I.RAW_SHRIMPS,'range-remove');give(p,I.RAW_SHRIMPS,'range-remove');lumbridgeItemOnObject(p,range,I.RAW_SHRIMPS);
+    for(let i=0;i<10&&!p.getCreationMenu();i++)tick();const menu=p.getCreationMenu();assert.ok(menu);menu.execute(I.RAW_SHRIMPS,2);
+    assert.equal(require('../plugins/skills/Cooking.plugin').isCookingActive(p),true);core.ObjectManager.deregister(range,true);assert.ok(core.World.getRemovedObjects().includes(range));
+    tick(12);assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),2);assert.equal(p.getInventory().getAmount(I.SHRIMPS),1,'removed lazy original cannot continue via raw template fallback');
+    assert.equal(require('../plugins/skills/Cooking.plugin').isCookingActive(p),false);
+  } finally {
+    p.getPrivateArea()?.detach(p);p.setArea(null);p.moveTo(new core.Location(3128,3627,0));area.destroy();
+    if(worldRange)core.ObjectManager.deregister(worldRange,true);
+  }
 });

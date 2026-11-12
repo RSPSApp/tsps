@@ -31,6 +31,17 @@ const OVERLAY_HUD_UID = (161 << 16) | 1;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
 const REWARDS_ID = 155;
 const REWARDS_INVENTORY = 141;
+/** The reward window is a main modal: toplevel_mainmodal_open, then barrows_reward in mainmodal, items Examine-able. */
+const MAIN_MODAL_UID = (161 << 16) | 16;
+const SCRIPT_MAINMODAL_OPEN = 2524;
+const REWARDS_ITEMS_UID = (REWARDS_ID << 16) | 3;
+const REWARDS_ITEM_SLOTS = 11;
+const OP10 = 1 << 10;
+/** Opening the chest's lid, and closing it. */
+const CHEST_OPEN_SOUND = 54;
+const CHEST_CLOSE_SOUND = 53;
+/** Looting plays this jingle over the area's track. */
+const LOOT_JINGLE = 77;
 const PUZZLE_ID = 25;
 const PUZZLE_BUTTONS = [12, 14, 16];
 const PUZZLE_SEQUENCE_MODELS = [3, 5, 7];
@@ -261,7 +272,9 @@ function updateOverlay(player, run) {
   sender.sendVarbit(KILL_COUNT_VARBIT, run.kills);
 }
 
+/** The brothers overlay closes as the chest is looted and stays shut until the next run starts. */
 function showOverlay(player) {
+  if (player.getAttribute(ATTRIBUTE)?.looted) return;
   player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, OVERLAY_ID, 1);
   updateOverlay(player, getRun(player));
 }
@@ -557,8 +570,10 @@ function rollRewards(run, runeBonus) {
 function showRewards(player, rewards) {
   player.setAttribute(CLOSE_INTERFACE_ATTRIBUTE, REWARDS_ID);
   const sender = player.getPacketSender();
-  sender.sendSubInterface(GAMEFRAME_OVERLAY_UID, REWARDS_ID, 0);
-  sender.sendInterfaceScript(1065, [(REWARDS_ID << 16) | 3], undefined, undefined, {
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  sender.sendSubInterface(MAIN_MODAL_UID, REWARDS_ID, 0);
+  sender.sendInterfaceFlagsRange(REWARDS_ITEMS_UID, 0, REWARDS_ITEM_SLOTS, OP10);
+  sender.sendInterfaceScript(1065, [REWARDS_ITEMS_UID], undefined, undefined, {
     [REWARDS_INVENTORY]: { capacity: 8, slots: rewards.map((item, slot) => ({ slot, itemId: item.getId(), quantity: item.getAmount() })) },
   });
 }
@@ -603,16 +618,18 @@ function searchChest(player, clickType) {
   const state = session(player);
   const sender = player.getPacketSender();
   if (run.looted) {
-    sender.sendMessage("The chest is empty. Leave the tunnels to begin another run.");
+    sender.sendMessage("The chest is empty.");
     return;
   }
   if (clickType === 2) {
+    if (run.chestOpen) sender.sendSoundEffect(CHEST_CLOSE_SOUND, 1, 0);
     run.chestOpen = false;
     sender.sendVarbit(CHEST_OPEN_VARBIT, 0);
     return;
   }
   if (!run.chestOpen) {
     run.chestOpen = true;
+    sender.sendSoundEffect(CHEST_OPEN_SOUND, 1, 0);
     sender.sendVarbit(CHEST_OPEN_VARBIT, 1);
     if (!run.killed.includes(run.tunnel) && !state.brother) {
       spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true).__barrowsChest = true;
@@ -631,12 +648,15 @@ function searchChest(player, clickType) {
   randomiseLayout(run);
   syncTunnels(player, run);
   pluginApi.emitCustomEvent("barrows:chest-looted", { player });
-  showRewards(player, rewards);
-  CameraShake.send(sender, "barrows", ...LOOTED_SHAKE);
   // rsprox_transcripts/226/01694.txt:170767-170768: the diary's rune line (spam), then the count.
   if (diary.complete === true) spam(player, "You receive more runes for completing the hard tier of the Morytania achievement diary.");
   sender.sendMessage(`Your Barrows chest count is: <col=ff0000>${run.chests}</col>.`);
   combatAchievementsAtChest(player, run);
+  // Then the jingle (after the area's track), the reward window, the shaking, and the overlay closes.
+  sender.sendJingle(LOOT_JINGLE);
+  showRewards(player, rewards);
+  CameraShake.send(sender, "barrows", ...LOOTED_SHAKE);
+  sender.closeInterface(OVERLAY_ID);
 }
 
 /** A looted run's tunnels shake again on each arrival in them; leaving them stills the camera. */

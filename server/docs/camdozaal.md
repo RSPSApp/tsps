@@ -113,8 +113,48 @@ Its source/dist/cache seals were unchanged. This is meaningful feature absence,
 not a green suite. Seeded completed quest/materials and reachable perimeter placement
 are explicit; it does not prove natural quest traversal, raw socket input or rendering.
 
-The extended existing `tests/camdozaal-native.test.cjs` is being prepared for the
-supported AFTER run. Checkpoint placement at vault pedestals tests ordinary Take,
-timing, conservation and recovery; it does not prove natural maze traversal.
-No final activity runtime, rendered-client or publication claim follows from source
-inspection or syntax checks. Update this section only from retained actual results.
+At tested revision `fb3a5e24d9f64fa4b7ea86d365e0a8c633a3c329`, the final
+supported Linux run completed with separate clean processes:
+
+| File | Passed / total | Exit |
+| --- | --- | --- |
+| `camdozaal-native.test.cjs` | 25 / 25 | 0 |
+| `fishing.test.cjs` | 16 / 16 | 0 |
+| `cooking.test.cjs` | 53 / 53 | 0 |
+
+Actual build/test commands, run from `server` after dependency/cache setup:
+
+```sh
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/camdozaal-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/fishing.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/cooking.test.cjs
+```
+
+The Camdozaal suite includes decoded ordinary item/object/NPC/widget inputs,
+carried/stored conservation, prices/repeat refusal, actual delayed activities,
+all seven selected barrier groups in both directions, process99/process100
+vault deadline, failure/success loot custody, actual death and external relocation,
+native save/restore, real accuracy-formula and clue-bottle producers, inventory/floor
+overflow, and the three existing quest authorities. Probability seams and reward
+selection controls test the declared model, not retail distribution measurements.
+The generic fishing/cooking suites contain both doubles and native portions;
+their 69 cases are not all additional end-to-end native cases.
+
+Two earlier AFTER attempts remain failed evidence. The first was 21/25: named-forge
+target setup failed, two cases failed through the same unobserved Exchange helper,
+and a null closed-barrier option list raised a fixture error. The second was 24/25:
+forge operations, purchases and seven barrier groups passed, while a Talk-to page
+assertion failed without identifying its loop branch in raw output. Subsequent
+source qualification corrected an inconsistent workshop/introduction checkpoint;
+it does not retroactively identify that failed branch. Both attempts stopped before
+the generic suites. Their failures are retained rather than merged into the final
+run's 94 passing results.
+
+Final source/compiled/cache seals remained unchanged (8,447 original source files,
+28 cache files), no stage timed out, and no child process group remained. The
+provider reported terminal completion. This is process-group plus platform-terminal
+closure, not an independent census of escaped/setsid descendants or Windows proof.
+Checkpoint placement at vault pedestals/barriers tests ordinary interactions and
+one sampled legal layout, not natural maze traversal or every layout combination.
+No rendered-client, audio, raw-socket or complete quest-traversal proof is claimed.

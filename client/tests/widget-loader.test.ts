@@ -4,7 +4,7 @@ import path from "node:path";
 import { CacheSystem } from "../rs/cache/CacheSystem";
 import { WidgetLoader } from "../widgets/WidgetLoader";
 import { WidgetManager } from "../widgets/WidgetManager";
-import { deriveMenuEntriesForWidget } from "../widgets/menu/utils";
+import { deriveMenuEntriesForWidget, withStackedIf1ButtonEntries } from "../widgets/menu/utils";
 import { shouldTransmitAction } from "../widgets/WidgetFlags";
 import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
 
@@ -53,6 +53,22 @@ for (const child of [1, 2, 3, 7, 8, 9]) {
     const toggle = cannon.widgets.get((409 << 16) | child)!;
     assert.equal(toggle.buttonType, 4, `409:${child} is a toggle`);
     assert.ok(deriveMenuEntriesForWidget(toggle).some(entry => entry.option === toggle.buttonText), `409:${child} keeps its ${toggle.buttonText} entry`);
+}
+
+// The tanner's interface stacks four IF1 buttons over each hide (Tan All, X, 5 and 1, the last on
+// top). Right-clicking a hide offers all four, topmost first.
+const tanner = new WidgetLoader(cache).loadWidgetGroup(324)!;
+for (let hide = 0; hide < 8; hide++) {
+    const stack = [124, 132, 140, 148].map(child => tanner.widgets.get((324 << 16) | (child + hide))!);
+    for (const button of stack) {
+        assert.equal(button.isIf3, false);
+        assert.equal(button.buttonType, 1, `324:${button.fileId} is an IF1 button`);
+        assert.deepEqual([button.parentUid, button.x, button.y, button.width, button.height],
+            [stack[0].parentUid, stack[0].x, stack[0].y, stack[0].width, stack[0].height], `324:${button.fileId} covers its hide`);
+    }
+    const derive = (w: any) => deriveMenuEntriesForWidget(w);
+    const menu = withStackedIf1ButtonEntries(stack[3], derive(stack[3]), stack, derive);
+    assert.deepEqual(menu.map(entry => entry.option.replace(/<[^>]*>/g, "")), ["Tan 1", "Tan 5", "Tan X", "Tan All", "Cancel"]);
 }
 
 // Exercise the plugin's actual flag packets against the current cache decoder:

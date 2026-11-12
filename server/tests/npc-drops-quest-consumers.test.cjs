@@ -21,11 +21,9 @@ test('the Suqah tiara rows carry the Lunar Diplomacy key the quest plugin answer
     assert.match(plugin, /const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacy";/);
 });
 
-test('the Dragon token row has no typed requirement, and NpcDrops gates it by item id', () => {
+test('the Dragon token row has no typed requirement (NpcDrops gates it by item id; see npc-drops-dragon-token-gate)', () => {
     const DRAGON_TOKEN = 7478;
     const tokens = rows(DRAGON_TOKEN);
     assert.ok(tokens.some(([id, entry]) => id === 'black_dragon' && entry.always), 'still a guaranteed black dragon row');
     for (const [, entry] of tokens) assert.equal(typed(entry).length, 0);
-    assert.match(read('../plugins/npcs/NpcDrops.plugin.js'), /QUEST_REQUIREMENT_BY_ITEM = new Map\(\[\s*\[7478,/);
-    assert.match(read('../plugins/quests/quests/RecipeForDisaster.Quest.js'), /event\?\.itemId !== ItemIdentifiers\.DRAGON_TOKEN\) return;\s*event\.allowed = false;/);
 });

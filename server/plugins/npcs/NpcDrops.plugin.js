@@ -937,7 +937,7 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
  */
 /** The killed NPC's combat level, which picks the general seed table's subtable; null when unknown. */
 function npcCombatLevel(npc) {
-  const level = Number(npc?.getDefinition?.()?.getCombatLevel?.());
+  const level = Number((npc?.getCurrentDefinition?.() ?? npc?.getDefinition?.())?.getCombatLevel?.());
   return Number.isSafeInteger(level) && level > 0 ? level : null;
 }
 
@@ -1276,5 +1276,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

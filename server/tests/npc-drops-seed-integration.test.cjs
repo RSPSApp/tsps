@@ -29,7 +29,7 @@ const rolled = (level, count) => {
 test("the seed shared table is registered from its categories and still drops seeds", () => {
   assert.equal(Drops._test.sharedCategories.get("seed").categories.length, 6);
   assert.equal(Drops._test.sharedTables.get("seed").length, 44);
-  assert.ok(rolled(60, 500).size > 0, "a black knight (combat 33) style kill gets seeds");
+  assert.ok(rolled(60, 500).size > 0, "a combat level 60 kill still gets seeds");
 });
 
 test("a low combat level only reaches the allotment seeds; a high one reaches the others", () => {

@@ -133,6 +133,15 @@ recording shows every quantity/Banknotes path: their op order follows the cache;
 Banknotes uses the selected quantity, and X remembers a positive amount for the
 open session. The amount prompt wording is ours. Produce noting is unchanged.
 
+Produce noting follows rsprox captures (user recordings, revision 241: potatoes and
+weeds at Catherby, potatoes at Ardougne and Falador, grimy guam and tomatoes at
+Hosidius, strawberries at the Varlamore leprechaun). On the tick the notes replace
+the produce, live sends `The leprechaun exchanges your items for banknotes.` as a
+mesbox chat line and opens `objectbox` (193) with the unnoted item at zoom 400 and
+the same text. Exchanging a single item reads `The leprechaun exchanges your item for a
+banknote.` instead (rsprox.net recording 1851, rev 227, tick 17662: one coconut). The
+refusal lines are not in these recordings.
+
 ### Other Farming verification
 
 Geomancy refuses casting while attacking or being attacked, before rune

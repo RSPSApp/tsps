@@ -16,6 +16,8 @@ const AUTO_SMASH_POTS_LOCKED = "You must complete the Farming portion of Barbari
 /** All Settings > Warnings: "Farming protection payment confirmation" (on: pay without asking). */
 const PROTECTION_SETTING = 295;
 const PROTECTION_NO_ASK_VARBIT = 98; // settings_warning_confirmation_farming_protection
+const NOTED_TEXT = "The leprechaun exchanges your items for banknotes.";
+const NOTED_ONE_TEXT = "The leprechaun exchanges your item for a banknote.";
 const COMPOST_NAMES = ["", "Compost", "Supercompost", "Ultracompost", "Rotten tomato"];
 const ROTTEN_TOMATO_TIER = 4;
 // Rev 241 gamevals human_push and human_pickuptable, with the sounds captured on the bin (recording 1858).
@@ -451,6 +453,19 @@ function farmingItemOnNpc(event) {
     if (planned.getAddableAmount(noted) < amount) { inventory.full(); return; }
     inventory.deleteNumber(id, amount);
     inventory.addItem(noted);
+    notedBox(player, id, amount);
+}
+/**
+ * rsprox captures (rev 241: potatoes, weeds, tomatoes, grimy guam and strawberries at the
+ * Catherby, Ardougne, Falador, Hosidius and Varlamore leprechauns): on the tick the notes
+ * appear live sends this line as a mesbox chat line and opens the objectbox with the unnoted
+ * item at zoom 400. A single item reads "your item for a banknote" (rsprox.net recording 1851,
+ * rev 227: one coconut).
+ */
+function notedBox(player, itemId, amount) {
+    const text = amount === 1 ? NOTED_ONE_TEXT : NOTED_TEXT;
+    player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.ItemStatementDialogue(0, itemId, text)));
 }
 function isGardenerPayment(action) {
     return /^pay(?:$| \()/i.test(action ?? "");

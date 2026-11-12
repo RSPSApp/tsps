@@ -635,9 +635,12 @@ test('LOTG machine only runs at stage 50 and completes once through the box', ()
   h.action(p, N.ZANIK_7, 'Eh5lL0');
   assert.equal(h.quest.getStage(p), 54);
   assert.ok(p.log.some((row) => row[0] === 'sendCameraMoveTo' && row[1] === 3546 && row[2] === 4389 && row[3] === 580), 'strange-box camera track');
+  const formEnded = [];
+  (h.events['goblin-form:ended'] ??= []).push((event) => formEnded.push(event.player));
   h.action(p, N.OLDAK, 'dfkFWY');
   assert.equal(h.quest.getStage(p), 56);
   assert.equal(h.quest.isComplete(p), true);
+  assert.ok(formEnded.includes(p), 'completion ends the goblin form, so goblin mail comes off (GoblinMail)');
   assert.equal(h.quest.complete(p), false);
   assert.deepEqual(p.xp.map((entry) => entry[1]), [8000, 8000, 8000, 8000]);
 });

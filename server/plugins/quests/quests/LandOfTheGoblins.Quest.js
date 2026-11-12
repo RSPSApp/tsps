@@ -1077,6 +1077,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       player.setNpcTransformationId(-1);
       player.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
       player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, 0).sendVarbit(VARBIT_GOBLIN_TYPE, 0);
+      // "goblin-form:ended" { player }: the goblin form is gone, so goblin mail (GoblinMail.plugin) no longer fits.
+      api.emitCustomEvent("goblin-form:ended", { player });
     }
   }
 

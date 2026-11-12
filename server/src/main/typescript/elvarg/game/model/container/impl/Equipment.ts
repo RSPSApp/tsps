@@ -1,9 +1,10 @@
+import { lazyRequire } from "../../../../util/LazyRequire";
 import { ItemContainer } from "../ItemContainer";
 import { Item } from "../../Item";
 import { Player } from "../../../entity/impl/player/Player";
 import { StackType } from "../StackType";
-const getWeaponInterfaces = () => require("../../../content/combat/WeaponInterfaces").WeaponInterfaces as typeof import("../../../content/combat/WeaponInterfaces").WeaponInterfaces;
-const getItemDefinition = () => require("../../../definition/ItemDefinition").ItemDefinition as typeof import("../../../definition/ItemDefinition").ItemDefinition;
+const getWeaponInterfaces = lazyRequire(() => require("../../../content/combat/WeaponInterfaces").WeaponInterfaces as typeof import("../../../content/combat/WeaponInterfaces").WeaponInterfaces);
+const getItemDefinition = lazyRequire(() => require("../../../definition/ItemDefinition").ItemDefinition as typeof import("../../../definition/ItemDefinition").ItemDefinition);
 
 export class Equipment extends ItemContainer {
 

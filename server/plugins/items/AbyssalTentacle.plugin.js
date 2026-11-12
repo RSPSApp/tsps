@@ -15,6 +15,10 @@ const POISON_SEVERITY = 20;
 const POISON_ORB_TYPE = 1;
 const CHARGES_META_KEY = "abyssal-tentacle";
 const MAX_CHARGES = 10000;
+const COMBINE_WARNING = "<col=7f0000>Warning!</col><br>The tentacle will gradually consume your whip and destroy it. You<br>"
+  + "won't be able to get the whip out again.<br>The combined item is not tradeable.";
+const COMBINE_SEQUENCE = 713; // human_casthighlvlalchemy
+const COMBINE_SOUND = 2320;
 
 let core = null;
 let api = null;
@@ -34,18 +38,31 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
   // The cache also names quest and placeholder variants "Abyssal whip".
   if (whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE) return false;
 
-  api.sendMultiChatboxPrompt(player, "This is irreversible and makes the whip untradeable. Combine?",
-    "Yes, create an abyssal tentacle.", () => {
-      const inventory = player.getInventory();
-      if (inventory.getItems()[whipSlot] !== whip || inventory.getItems()[tentacleSlot] !== tentacle ||
-        whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE ||
-        whip.getAmount() !== 1 || tentacle.getAmount() !== 1) return;
-      inventory.deleteAtSlot(tentacleSlot, 1, false);
-      whip.setId(I.ABYSSAL_TENTACLE);
-      inventory.refreshItems();
-      player.sendMessage("You attach the kraken tentacle to your abyssal whip.");
-    },
-    "No, keep them separate.", () => {});
+  // rsprox 237/01151.txt ticks 9416-9420: the warning's mesbox chat line (its <br> a space), the warning
+  // message box, then this menu; Yes plays human_casthighlvlalchemy (713) and synth 2320, with no further
+  // chat line. Live also holds busy (12393) while the menu is up; it is left out because the menu has no
+  // close hook to clear it on a walk-away, teleport or logout.
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue, Animation } = core;
+  const sender = player.getPacketSender();
+  sender.sendTypedMessage(core.ChatType.MESBOX, COMBINE_WARNING.replace(/<br>/g, " "));
+  const chain = new DialogueChainBuilder();
+  chain.add(new StatementDialogue(0, COMBINE_WARNING));
+  chain.add(new ActionDialogue(1, {
+    execute: () => api.sendMultiChatboxPrompt(player, "Are you sure you wish to do this?",
+      "Yes, let the tentacle consume the whip.", () => {
+        const inventory = player.getInventory();
+        if (inventory.getItems()[whipSlot] !== whip || inventory.getItems()[tentacleSlot] !== tentacle ||
+          whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE ||
+          whip.getAmount() !== 1 || tentacle.getAmount() !== 1) return;
+        inventory.deleteAtSlot(tentacleSlot, 1, false);
+        whip.setId(I.ABYSSAL_TENTACLE);
+        inventory.refreshItems();
+        player.performAnimation(new Animation(COMBINE_SEQUENCE));
+        player.getPacketSender().sendSoundEffect(COMBINE_SOUND, 1, 0, 255);
+      },
+      "No, I'll keep my whip.", () => {}),
+  }));
+  player.getDialogueManager().startDialogues(chain);
 }
 
 function dissolve({ player, item, itemId, slot, interfaceId }) {

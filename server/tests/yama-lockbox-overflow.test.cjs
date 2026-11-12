@@ -61,5 +61,7 @@ test("a capped coin stack keeps the lockbox's whole reward", (t) => {
   assert.equal(drops[0].owner, p);
   assert.equal(drops[0].item.getId(), I.COINS);
   assert.equal(drops[0].item.getAmount(), 233_332);
-  assert.equal(messages.at(-1), Common.data.lockbox.entries.find((entry) => entry.itemId === I.COINS).message);
+  assert.equal(p.getDialogueManager().getCurrent()?.getText?.(), Common.data.lockbox.entries.find((entry) => entry.itemId === I.COINS).message,
+    "the reward is an item box (Wiki Transcript:Forgotten lockbox)");
+  assert.deepEqual(messages, []);
 });

@@ -28,6 +28,7 @@ const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").s
   .map(([retired, successor]) => [successor.id, Number(retired)]));
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
@@ -454,6 +455,23 @@ function combatLevelCondition(player, text) {
   return match ? player.getSkillManager().getCombatLevel() < Number(match[1]) : null;
 }
 
+/**
+ * The transcripts' bare skill-level wording, "If the player has at least 46 Hunter:" and its
+ * siblings "under 46 Hunter" / "less than 60 Smithing", answered from the player's base level in
+ * that skill: the Wiki marks these not boostable (Hunter Guild, Blast Furnace), as Rumours.Hunter.js
+ * and AtFirstLight.Quest.js read them. A plugin answers a boostable one first (Adventurer Ada's Sailing).
+ * Unanswered, a sibling run took its first branch whatever the level, so
+ * Pellem and Imia refused every player (issue #4434). Plugins answer their own conditions first.
+ */
+function skillLevelCondition(player, text) {
+  const match = /^If the player has (at least|under|less than) (\d+) ([A-Z][a-z]+):$/.exec(String(text ?? ""));
+  if (!match) return null;
+  const skill = Skill.values().find((entry) => entry.getName().toLowerCase() === match[3].toLowerCase());
+  if (!skill) return null;
+  const level = player.getSkillManager().getMaxLevel(skill);
+  return match[1] === "at least" ? level >= Number(match[2]) : level < Number(match[2]);
+}
+
 /** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
 function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
@@ -614,7 +632,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     PluginManager.emitNpcDialogueCondition({
       player, npc: event.npc, npcId, definition, pages: context.pages,
       text: step.text, stepId: step.id,
-    }) ?? combatLevelCondition(player, step.text);
+    }) ?? combatLevelCondition(player, step.text) ?? skillLevelCondition(player, step.text);
 
   // "shows other/previous/initial options" ({{tact|other}} etc.) replays a menu
   // that has already been shown. "previous2/3" walk further back, "initial" is
@@ -1178,6 +1196,7 @@ module.exports = {
   aliasKeys,
   flatten,
   combatLevelCondition,
+  skillLevelCondition,
   formatPlayerText,
   startDialogue,
   collectPageLines,

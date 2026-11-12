@@ -17,6 +17,7 @@ const URI_STANDARD = "standard-dialogue";
 const URI_REFUSAL = "speaking-with-another-player-s-uri-or-with-incorrect-attire";
 let api;
 let core;
+const URI_TRANSFORM_HARD_CLUES = 300;
 let catalogues = new Map();
 const uris = new WeakMap();
 // A trail's live fight (Wiki "Saradomin wizard", "Double agent"): player -> { npc, token }, and back.
@@ -678,6 +679,11 @@ function restore({ player }) {
     const varbit = core.CacheDefinitions.getVarbitId(`collection_clues_${tier.name}_completed`);
     if (varbit != null) player.getPacketSender().sendVarbit(varbit, Number(player.getAttribute(completedAttribute(tier))) || 0);
   }
+  // The Uri transform emote (emotes tab slot 45) unlocks at 300 hard clues: the cache's lock text
+  // and the Wiki's Uri transform page. The emotes plugin leaves count-based unlocks to their owner.
+  const uri = core.CacheDefinitions.getVarbitId("emote_uri_transform");
+  const hard = Number(player.getAttribute(completedAttribute({ name: "hard" }))) || 0;
+  if (uri != null && hard >= URI_TRANSFORM_HARD_CLUES) player.getPacketSender().sendVarbit(uri, 1);
 }
 
 function categoryCount(request) {

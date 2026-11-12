@@ -308,6 +308,9 @@ test("the rubble lands nine ticks after the stomp, on the players still on its t
   assert.equal(hits.get(players[0]).length, 1);
   assert.ok(hits.get(players[0])[0] >= 15 && hits.get(players[0])[0] <= 22);
   assert.equal(hits.get(players[1]).length, 0);
+  // Combat Achievements hear of it (Perfect Scurrius: no damage from Falling Bricks).
+  const fell = events.filter((event) => event.name === "scurrius:rockfall-hit").map((event) => event.payload.player);
+  assert.deepEqual(fell, [players[0]]);
 });
 
 test("the rubble covers twelve floor tiles, one under each player", () => {

@@ -1412,7 +1412,9 @@ module.exports = function registerRedReefQuest(api) {
     ],
     rewardItemId: BOSUNS_WORKBENCH_SCHEMATIC_ITEM_ID,
     rewardItemLabel: "Bosun's Workbench Schematic",
-    otherRewards: ["Great Conch Sacred Grove Access"],
+    // rsprox 238/04152.txt:62418-62423: the access on two lines, then the schematic, then XP.
+    otherRewards: ["Great Conch Sacred Grove", "Access"],
+    rewardOrder: ["other", "item", "xp"],
     buildJournal,
     onReward: grantReward,
   });

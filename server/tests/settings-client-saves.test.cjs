@@ -255,3 +255,56 @@ test('a transmit that changes none of the rows does not swallow the next row cli
   assert.equal(click(p, 115), true);
   assert.equal(p.getPacketSender().getVarbit(ANTI_DRAG), 1, 'the click still toggles it');
 });
+
+test('the Emotes and Account keybind rows (21, 26) save their keys for the next login', () => {
+  const p = login();
+  for (const [settingId, varbit, key] of [[21, 4687, 7], [26, 6517, 11]]) {
+    click(p, settingId);
+    assert.equal(handlers.clickDropdownOption({ player: p, slot: key * 3 }), true, `row ${settingId} takes F${key}`);
+    assert.equal(p.getPacketSender().getVarbit(varbit), key);
+  }
+  const next = login(p.attributes);
+  assert.equal(next.getPacketSender().getVarbit(4687), 7, 'Emotes key restored at login');
+  assert.equal(next.getPacketSender().getVarbit(6517), 11, 'Account key restored at login');
+  assert.equal(next.getPacketSender().getVarbit(4683), 0, 'Clan chat gave up F7');
+});
+
+test('Restore default keybinds (row 58) resets every key and saves it, as the panel button does', () => {
+  const restored = (via) => {
+    const p = login();
+    click(p, 21);
+    handlers.clickDropdownOption({ player: p, slot: 1 * 3 });
+    click(p, 57);
+    assert.equal(p.getPacketSender().getVarbit(4675), 0, 'Combat gave up F1');
+    const messages = [];
+    p.getPacketSender().sendMessage = (text) => { messages.push(text); return p.getPacketSender(); };
+    assert.equal(via(p), true);
+    assert.deepEqual(messages, ['Keybindings restored to default.']);
+    return login(p.attributes);
+  };
+  const fromRow = restored((p) => click(p, 58));
+  const fromPanel = restored((p) => buttons.get((121 << 16) | 104)[0]({ player: p }));
+  const fresh = login();
+  for (const varbit of [4675, 4676, 4677, 4678, 4679, 4680, 4682, 4683, 4684, 4686, 4687, 4688, 4689, 6517, ESC_CLOSES]) {
+    const expected = fresh.getPacketSender().getVarbit(varbit);
+    assert.equal(fromRow.getPacketSender().getVarbit(varbit), expected, `varbit ${varbit} after the row`);
+    assert.equal(fromPanel.getPacketSender().getVarbit(varbit), expected, `varbit ${varbit} after the panel button`);
+  }
+  assert.equal(fresh.getPacketSender().getVarbit(4675), 1, 'Combat is F1 by default');
+});
+
+test('a new account starts with the keys live gives one', () => {
+  const sender = login().getPacketSender();
+  const keys = { 4675: 1, 4676: 2, 4677: 3, 4678: 13, 4679: 4, 4680: 5, 4682: 6, 4683: 7, 4684: 8, 6517: 9, 4689: 0, 4686: 10, 4687: 11, 4688: 12 };
+  for (const [varbit, key] of Object.entries(keys)) assert.equal(sender.getVarbit(Number(varbit)), key, `varbit ${varbit}`);
+  assert.equal(sender.getVarbit(ESC_CLOSES), 1, 'Esc closes the current interface is on');
+});
+
+test('a key saved before it became another tab default stays with the tab the player gave it', () => {
+  const attributes = new Map([['keybind_4678', 5]]); // Inventory on F5, from an older save
+  const sender = login(attributes).getPacketSender();
+  assert.equal(sender.getVarbit(4678), 5, 'Inventory keeps F5');
+  assert.equal(sender.getVarbit(4680), 0, 'Prayer, whose default is F5, is left unbound');
+  assert.equal(sender.getVarbit(4679), 4, 'other defaults are untouched');
+  assert.equal(attributes.get('keybind_4680'), 0, 'and saved that way');
+});

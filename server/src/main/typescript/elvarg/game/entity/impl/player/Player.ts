@@ -415,6 +415,10 @@ export class Player extends Mobile {
         return true;
     }
 
+    public isNpc(): boolean {
+        return false;
+    }
+
     public equals(o: Object): boolean {
         if (!(o instanceof Player)) {
             return false;

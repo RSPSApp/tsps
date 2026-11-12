@@ -32,6 +32,7 @@ function player(items = []) {
     sendInterfaceScript() { return packet; }, sendItemOnInterfaces() { return packet; }, sendChatboxInterface() { return packet; },
     sendClientScript() { return packet; }, closeSubInterface() { return packet; }, sendInterfaceRemoval() { return packet; },
   };
+  const dialogueManager = { reset() {}, startDialogues(builder) { this.builder = builder; }, isActive: () => false };
   let p;
   p = {
     attributes, inventoryItems, bank, messages, varps, varbits,
@@ -39,7 +40,8 @@ function player(items = []) {
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
     getPacketSender: () => packet, sendMessage: (message) => messages.push(message),
     getLocation: () => new core.Location(2544, 3570, 0),
-    getDialogueManager: () => ({ reset() {}, startDialogues() {}, isActive: () => false }),
+    dialogueManager,
+    getDialogueManager: () => dialogueManager,
     getSkillManager: () => ({ getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
     isRegistered: () => true, getUsername: () => 'BarcrawlTester', getDisplayName: () => 'BarcrawlTester',
   };
@@ -47,10 +49,11 @@ function player(items = []) {
 }
 
 function setup() {
-  const custom = new Map(), hooks = new Map();
+  const custom = new Map(), hooks = new Map(), itemActions = new Map();
   const api = new Proxy({
     core,
     persistAttribute() {},
+    onItemAction: (name, actions) => itemActions.set(name, actions),
     onCustomEvent: (event, fn) => { if (!custom.has(event)) custom.set(event, []); custom.get(event).push(fn); },
     emitCustomEvent: (event, payload) => { for (const fn of custom.get(event) || []) fn(payload); },
     onNpcInteraction: (name, actions) => { if (typeof name === 'function') hooks.set('*', name); else for (const [action, fn] of Object.entries(actions)) hooks.set(`${name}:${action}`, fn); },
@@ -67,8 +70,22 @@ function setup() {
   const internals = register(api);
   const quest = getRegisteredQuests().findLast((entry) => entry.key === 'alfred-grimhands-barcrawl');
   const emit = (event, payload) => { for (const fn of custom.get(event) || []) fn(payload); };
-  return { api, quest, internals, hooks, emit };
+  return { api, quest, internals, hooks, itemActions, emit };
 }
+
+test('reading the card pages all ten bars within the five-line statement box', () => {
+  const { itemActions, internals } = setup();
+  const p = player([[core.ItemIdentifiers.BARCRAWL_CARD, 1]]);
+  itemActions.get('Barcrawl card').Read({ player: p });
+
+  const dialogues = [...p.dialogueManager.builder.getDialogues().values()];
+  const pages = dialogues.filter((dialogue) => dialogue instanceof core.StatementDialogue);
+  assert.equal(pages.length, 3);
+  assert.ok(pages.every((page) => page.getText().split('<br>').length <= 5));
+  const text = pages.map((page) => page.getText()).join(' ');
+  for (const bar of internals.BARS) assert.ok(text.includes(bar.name), bar.name);
+  assert.ok(dialogues.at(-1) instanceof core.EndDialogue);
+});
 
 test('guard start needs a free slot and grants the card with native progress vars', () => {
   const { quest, internals } = setup();

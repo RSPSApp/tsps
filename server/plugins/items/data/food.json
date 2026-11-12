@@ -20,6 +20,7 @@
     {"name": "Blueberry muffin", "heal": 4},
     {"name": "Bluefin", "heal": 22, "restore": {"prayer": 5}},
     {"name": "Botanical pie", "bites": ["Botanical pie", "Half a botanical pie"], "heal": 7, "eatDelay": [1, 1], "leaves": "Pie dish", "messages": ["You eat half the botanical pie.", "You eat the remaining botanical pie."], "boost": {"herblore": 4}},
+    {"name": "Bottle of wine", "option": "Drink", "heal": 14, "drain": {"attack": 3}, "leaves": "Empty wine bottle", "message": "You drink the wine.", "afterMessage": "It makes you feel a bit dizzy.", "healMessage": null},
     {"name": "Brawk fish (3)", "heal": 14},
     {"name": "Bread", "heal": 5},
     {"name": "Cabbage", "heal": 1, "message": "You eat the cabbage. Yuck!"},

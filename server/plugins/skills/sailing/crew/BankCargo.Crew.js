@@ -176,14 +176,26 @@ function confirm(player, npcId, crew, boat) {
  * Banking from the dock: the boat docked here (or the one chosen when there are several), then
  * the confirmation. `checked`: the transcript has already answered whether the hold is empty.
  */
+/**
+ * Wiki (Crew Management): a crewmate with Deckhandiness 2 is needed, and a keg of whirlpool surprise
+ * "can be used to boost any level 1 Deckhandiness crewmates to level 2", so a boat's keg counts.
+ */
+function hasDeckhand(player, boats) {
+  const level = (member, owned) => owned
+    ? common.statOf(owned, member, common.STAT.DECKHANDINESS)
+    : member.stats[common.STAT.DECKHANDINESS];
+  return common.all().some((member) => common.isRecruited(player, member.id)
+    && (boats.length ? boats.some((owned) => level(member, owned) >= 2) : level(member, null) >= 2));
+}
+
 function startBanking(player, npc, crew, { checked = false } = {}) {
   const npcId = headOf(npc, crew);
-  if (!common.all().some((member) => common.isRecruited(player, member.id) && member.stats[common.STAT.DECKHANDINESS] >= 2)) {
+  const dock = dockNear(player, DOCK_RANGE);
+  const boats = dock ? boatsAt(player, dock) : [];
+  if (!hasDeckhand(player, boats)) {
     player.sendMessage(NO_DECKHAND);
     return undefined;
   }
-  const dock = dockNear(player, DOCK_RANGE);
-  const boats = dock ? boatsAt(player, dock) : [];
   if (!boats.length) return noBoat(player, npcId, crew);
   const loaded = boats.filter((boat) => !holdEmpty(boat));
   if (!loaded.length) {
@@ -245,3 +257,4 @@ module.exports = attach;
 module.exports.moveToBank = moveToBank;
 module.exports.answerCondition = answerCondition;
 module.exports.startBanking = startBanking;
+module.exports.hasDeckhand = hasDeckhand;

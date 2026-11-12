@@ -90,3 +90,10 @@ A standard spellbook teleport lands on a random tile of the 5x5 square around it
 | Yanille | 2 | 2583-2585 | 3097-3099 | 2584, 3098 |
 
 The Varrock tablet's Grand Exchange option lands in the same square. Watchtower and Ape Atoll keep their tiles: their captures are too few to place a centre. The Ancient spellbook's teleports land spread out too (Paddewwa 3097-3098, 9881-9884; Kharyrll 3492-3494, 3471-3474), but on too few landings to place their squares; they stay on one tile.
+
+## The house tablet's Group option
+
+Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house). This server has no Ironman groups, so every
+player gets live's refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`,
+sends the game message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet
+is kept (`plugins/combat/SpellTeleports.plugin.js`).

@@ -16,12 +16,13 @@ const Spade = require('../plugins/items/Spade.plugin');
 
 const SPADE = 952;
 const actions = new Map();
+const fallbacks = new Map();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Spade.register({
     core: PluginManager.getCoreApi(),
-    onItemAction: (name, named) => actions.set(name, named),
+    onItemAction: (name, named, options) => (options?.fallback ? fallbacks : actions).set(name, named),
   });
 });
 
@@ -42,8 +43,9 @@ function digPlayer() {
   return { player, movement, animations, sounds };
 }
 
-test('every spade registers the shared Dig handler', () => {
+test('every spade registers the shared Dig handler and its nothing-found fallback', () => {
   assert.deepEqual([...actions.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
+  assert.deepEqual([...fallbacks.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
 });
 
 test('a Dig plays human_dig and its synth without clearing the walk', () => {

@@ -250,7 +250,8 @@ test("fill enforces the 100-dose cap and five potion types", (t) => {
   fill(full, 0, 1);
   assert.equal(full.inventory.getItems()[0].getId(), I.MAGIC_POTION_4_);
   assert.equal(Object.keys(full.player.getAttribute(ATTRIBUTE)).length, 5);
-  assert.ok(full.messages.includes("You can't store that in the chugging barrel."));
+  // A sixth kind gets the full line with the potion's own name (rsprox 238/04236.txt:44376-44391).
+  assert.ok(full.messages.includes("Your chugging barrel doesn't have space to store any more Magic potion(4)."), full.messages.join(" | "));
 });
 
 test("Drink applies one dose per stored type, emits potion events and starts shared timers", (t) => {

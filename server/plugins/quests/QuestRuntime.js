@@ -391,13 +391,19 @@ function openJournal(player, quest) {
   packet.sendInterfaceScript(SCRIPT_QJ_SCROLL, [0, lines.length]);
 }
 
+/** The scroll's reward groups after the quest points, in live's usual order unless a quest sets its own. */
+const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
+
 function rewardLines(quest) {
   const lines = ["You are awarded:"];
   const points = quest.questPoints || 0;
   lines.push(`${points} Quest Point${points === 1 ? "" : "s"}`);
-  for (const reward of quest.xpRewards ?? []) lines.push(`${reward.amount.toLocaleString("en-US")} ${reward.label} XP`);
-  if (quest.rewardItemLabel) lines.push(quest.rewardItemLabel);
-  lines.push(...(quest.otherRewards ?? []));
+  const groups = {
+    xp: (quest.xpRewards ?? []).map((reward) => `${reward.amount.toLocaleString("en-US")} ${reward.label} XP`),
+    item: quest.rewardItemLabel ? [quest.rewardItemLabel] : [],
+    other: quest.otherRewards ?? [],
+  };
+  for (const group of quest.rewardOrder ?? DEFAULT_REWARD_ORDER) lines.push(...(groups[group] ?? []));
   return lines.slice(0, COMPLETED_LINE_COUNT);
 }
 
@@ -722,6 +728,7 @@ function sendQuestVarps({ player }) {
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest), onReward?(player, quest),
  *               varpValue?(stage, player) }
@@ -937,6 +944,7 @@ function giveReward(player, itemId, amount = 1) {
 }
 
 module.exports = {
+  rewardLines,
   openBook,
   openIndexedBook,
   journalWidgets,

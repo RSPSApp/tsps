@@ -256,8 +256,8 @@ test('native Yarlo partial-removal dialogue groups the remaining furniture with 
   const expected = [
     "Ah, young man, how's the redecoration coming on?",
     "I've been removing the old furniture.",
-    'You still need to remove: - A broken stool in the kitchen - A broken stool in the bedroom - A broken chair in the bedroom',
-    '- A broken table in the kitchen - A broken table in the bedroom - The rotten carpet',
+    'You still need to remove:<br>- A broken stool in the kitchen<br>- A broken stool in the bedroom<br>- A broken chair in the bedroom',
+    '- A broken table in the kitchen<br>- A broken table in the bedroom<br>- The rotten carpet',
   ];
   for (let visit = 0; visit < 2; visit++) {
     fixture.talk();
@@ -280,7 +280,8 @@ test('native Yarlo lists just the final furniture and cancellation cannot advanc
   assert.deepEqual(await fixture.read(), [
     "Ah, young man, how's the redecoration coming on?",
     "I've been removing the old furniture.",
-    'You still need to remove: - The old campbed - The rotten carpet',
+    // rsprox 226/01702.txt:27405 sets the box text with <br> between the rows.
+    'You still need to remove:<br>- The old campbed<br>- The rotten carpet',
   ]);
 });
 

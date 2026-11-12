@@ -18,7 +18,18 @@
  *   teleport straight to that destination (talisman 726, 3942; Book of the Dead 363, 3150).
  * - City and destination tiles: RuneLite TeleportLocationData.
  * - Cache: item gamevals and the kourend_diary_* teleport varbits (7917-7921).
+ * - rsprox capture 363 (Book of the Dead): Check opens the objectbox with the book and its
+ *   "memories remain" line (ticks 37, 3595); Read plays human_readbook and opens book 392 with
+ *   every entry attached (ticks 494-507, also recordings 1441, 603, 3792).
+ * - User capture 20261111T231757-5ab63b4 (rev 242, Kharedst's memoirs, no page attached, no charge):
+ *   Read opens "Kharedst's Memoirs", where each missing entry is one page of its heading and red
+ *   "This entry seems to be missing." lines; Reminisce's entries open the messagebox
+ *   "Kharedst's Memoirs holds no charge.". The pages are in data/kharedsts-memoirs-pages.json.
+ * - Ours: the Book of the Dead's no-charge line names that book; it always reads in full, with Tread
+ *   Carefully, which the memoirs leave out (no capture reads fully attached memoirs).
  */
+const { openBook } = require("../quests/QuestRuntime");
+const BOOK = require("./data/kharedsts-memoirs-pages.json");
 const MEMOIRS_ID = 21760;
 const BOOK_OF_THE_DEAD_ID = 25818;
 const BOOK_OF_THE_DEAD_MAX_CHARGES = 250;
@@ -28,11 +39,19 @@ const MEMOIRS_CHARGES_ATTRIBUTE = "kharedst-memoirs:charges";
 const MEMOIRS_CHARGED_PAGES_ATTRIBUTE = "kharedst-memoirs:charged-pages";
 const XERIC_CHARGES_META = "xerics-talisman:charges";
 const MEMOIRS_PAGES_ATTRIBUTE = "kharedst-memoirs:added-pages";
-const MEMOIRS_MAX_CHARGES = 100;
+/** Wiki: 20 charges per attached page; live's Check with no page reads "0/0 memories remain.". */
+const MEMOIRS_CHARGES_PER_PAGE = 20;
 const XERIC_MAX_CHARGES = 1000;
 const WILDERNESS_LEVEL = 20;
 const PROMPT = "Where would you like to teleport to?";
 const WORN_OPTION_PARAM = 451;
+const READ_BOOK_SEQUENCE = "human_readbook";
+const BOOK_TITLES = new Map([[BOOK_OF_THE_DEAD_ID, "The Book of the Dead"], [MEMOIRS_ID, "Kharedst's Memoirs"]]);
+const BOOK_LINES = 15;
+const LEFT_TEXT = 44;
+const RIGHT_TEXT = 60;
+/** The memoirs' last entry, from A Kingdom Divided; only the Book of the Dead is captured with it. */
+const BOOK_OF_THE_DEAD_ONLY = new Set(["tread"]);
 const FIRST_WORN_OPTION_CLICK = 2;
 
 /**
@@ -90,22 +109,23 @@ function memoirsItem(event) {
   return event.usedItemId === MEMOIRS_ID ? event.usedItem : event.usedWithItem;
 }
 
-/** The book's capacity: 100 for the memoirs, 250 for the Book of the Dead (Wiki). */
-function maxCharges(item) {
-  return item?.getId?.() === BOOK_OF_THE_DEAD_ID ? BOOK_OF_THE_DEAD_MAX_CHARGES : MEMOIRS_MAX_CHARGES;
+/** The book's capacity: 20 per attached page for the memoirs (up to 100), 250 for the Book of the Dead (Wiki). */
+function maxCharges(item, player) {
+  if (item?.getId?.() === BOOK_OF_THE_DEAD_ID) return BOOK_OF_THE_DEAD_MAX_CHARGES;
+  return unlockedCities(player).length * MEMOIRS_CHARGES_PER_PAGE;
 }
 
 function memoirCharges(player, item) {
   const saved = Number(player.getAttribute(MEMOIRS_CHARGES_ATTRIBUTE));
   const pages = unlockedCities(player).length;
-  if (!Number.isFinite(saved) || saved < 0) return pages * 20;
+  if (!Number.isFinite(saved) || saved < 0) return pages * MEMOIRS_CHARGES_PER_PAGE;
   // Quest-owned page handlers only set their varbit; grant their new capacity once.
   const chargedPages = Number(player.getAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE) ?? pages);
-  return Math.min(maxCharges(item), saved + Math.max(0, pages - chargedPages) * 20);
+  return Math.min(maxCharges(item, player), saved + Math.max(0, pages - chargedPages) * MEMOIRS_CHARGES_PER_PAGE);
 }
 
 function setMemoirCharges(player, item, amount) {
-  const charges = Math.max(0, Math.min(maxCharges(item), amount));
+  const charges = Math.max(0, Math.min(maxCharges(item, player), amount));
   player.setAttribute(MEMOIRS_CHARGES_ATTRIBUTE, charges);
   player.setAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, unlockedCities(player).length);
   player.getInventory().refreshItems();
@@ -114,12 +134,12 @@ function setMemoirCharges(player, item, amount) {
 }
 
 function teleport(player, item, page) {
-  if (!memoirPageUnlocked(player, page)) return false;
   const charges = memoirCharges(player, item);
   if (charges <= 0) {
-    player.sendMessage("Your book has no charges.");
+    noCharge(player, item);
     return false;
   }
+  if (!memoirPageUnlocked(player, page)) return false;
   const target = new core.Location(...page.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
   core.TeleportHandler.confirm(player, target, (carried) => {
@@ -132,7 +152,25 @@ function teleport(player, item, page) {
   return true;
 }
 
+/** Live sends each box's text as a mesbox chat line first, line breaks as spaces (rsprox 363 tick 37). */
+function mesbox(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
+}
+
+/** Live's messagebox when the book is empty (user capture 20261111T231757-5ab63b4). */
+function noCharge(player, item) {
+  const text = `${BOOK_TITLES.get(item?.getId?.()) ?? BOOK_TITLES.get(MEMOIRS_ID)} holds no charge.`;
+  mesbox(player, text);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.StatementDialogue(0, text),
+  ));
+}
+
 function chooseCity(player, item) {
+  if (memoirCharges(player, item) <= 0) {
+    noCharge(player, item);
+    return;
+  }
   const cities = unlockedCities(player);
   if (!cities.length) return;
   api.sendMultiChatboxPrompt(player, PROMPT,
@@ -162,7 +200,63 @@ function memoirsAction(event) {
   if (option === "reminisce") {
     event.handled = true;
     chooseCity(player, item);
+    return;
   }
+  if (option === "check") {
+    event.handled = true;
+    checkMemoirs(player, item);
+    return;
+  }
+  if (option === "read") {
+    event.handled = true;
+    readMemoirs(player, item);
+  }
+}
+
+/** Live's objectbox line, the count in purple (rsprox 363: "33/250 memories remain."). */
+function checkMemoirs(player, item) {
+  const text = "On the inside of the cover a message is displayed in<br>dark ink. It reads: "
+    + `<col=800080>${memoirCharges(player, item)}/${maxCharges(item, player)} memories remain.<col=800080>`;
+  mesbox(player, text);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.ItemStatementDialogue(0, item.getId(), text),
+  ));
+}
+
+function readMemoirs(player, item) {
+  const sequence = core.CacheDefinitions.getSeqId(READ_BOOK_SEQUENCE);
+  if (sequence != null) player.performAnimation(new core.Animation(sequence));
+  openBook(player, BOOK_TITLES.get(item.getId()), bookSpreads(player, item));
+}
+
+/** The book's pages run on: the dedication, then each entry in full when attached or as its one missing page. */
+function bookPages(player, item) {
+  const full = item.getId() === BOOK_OF_THE_DEAD_ID;
+  const attached = new Set(unlockedCities(player).map((page) => page.key));
+  const pages = [BOOK.dedication];
+  for (const entry of BOOK.entries) {
+    if (BOOK_OF_THE_DEAD_ONLY.has(entry.key)) {
+      if (full) pages.push(...entry.pages);
+    } else {
+      pages.push(...(full || attached.has(entry.key) ? entry.pages : [entry.missing]));
+    }
+  }
+  return pages;
+}
+
+/** Pairs the pages into book 392 spreads, keyed by text component. */
+function bookSpreads(player, item) {
+  const pages = bookPages(player, item);
+  const spreads = [];
+  for (let index = 0; index < pages.length; index += 2) {
+    const spread = {};
+    for (let line = 0; line < BOOK_LINES; line++) {
+      spread[LEFT_TEXT + line] = pages[index][line] ?? "";
+      spread[RIGHT_TEXT + line] = pages[index + 1]?.[line] ?? "";
+    }
+    spreads.push(spread);
+  }
+  return spreads;
 }
 
 /** These pages are rewarded by their quests but have no quest-owned attachment handler. */
@@ -368,7 +462,7 @@ module.exports = {
   _test: {
     MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,
     memoirCharges, setMemoirCharges, memoirPageUnlocked, unlockedCities, teleport, chooseCity,
-    memoirsAction, addPage, xericCharges, setXericCharges, teleportWithTalisman, talismanAction,
+    memoirsAction, checkMemoirs, readMemoirs, bookSpreads, addPage, xericCharges, setXericCharges, teleportWithTalisman, talismanAction,
     chooseTalismanDestination, chargeTalisman, checkTalisman, unchargeTalisman, talismanDestination,
   },
 };

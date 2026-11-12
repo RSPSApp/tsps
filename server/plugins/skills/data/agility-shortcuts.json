@@ -226,10 +226,11 @@
       "object": 16533,
       "level": 31,
       "xp": 3,
+      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, ending with the other-side line.",
       "start": "You attempt to balance on the stepping stone.",
-      "end": "You manage to make the jump.",
+      "end": "You manage to make it to the other side of the river.",
       "between": {
-        "ends": [[3149,3363,0],[3154,3363,0]],
+        "ends": [[3149,3363,0],[3155,3363,0]],
         "via": [[3151,3363]],
         "cross": [{"use":"hops","args":["...via","to"]}]
       }

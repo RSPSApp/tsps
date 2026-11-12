@@ -43,6 +43,16 @@ The stats' second option is "View <skill> guide" (cache script 393 sets it; the 
 
 The captures agree: Attack 1, Strength 2, Thieving 10, Farming 21, Sailing 24.
 
+## Old-style guide (All Settings row 360)
+
+All Settings' "Enable new-style skill guide interface" (row 360, varbit 15321 `option_skill_guide`) is on by default: live sends it as 1 at login. With it off, "View <skill> guide" opens the old guide instead (rsprox 236/3947, ticks 414-634; 230/339 on rev 230), all on the same tick:
+
+1. `if_opensub`: `skill_guide` (214) as an overlay in the floater.
+2. `script skill_guide_content_init` (9340) with the same `[skill, 0, 0, 0]` as the new guide.
+3. `if_setevents`: the icons (214:32) with no events.
+
+Its scripts draw it; close (214:30) closes it. The row is an ordinary `settings.json` toggle, saved and restored at login.
+
 ## Inside the guide
 
 - **Tabs** (860:7): no server response in any capture. The guide's scripts switch them.
@@ -56,5 +66,6 @@ Before opening, the click is offered to other plugins as `skills:stat-clicked` (
 
 ## Not done yet
 
+- **The old guide's icons** (214:32): live sets `IF_SCRIPT_TRIGGER` on them for Construction and answers a click with the materials as game messages; tsps sends no events there and answers nothing.
 - **Clicking a list entry**: in the captures only Sailing entries answer, with a game message listing that entry's materials (for example "Adamant keel (skiff): # x Adamant keel parts, # x Lead bar").
 - **The `IF_SCRIPT_TRIGGER` event** that live OSRS sets on the two link components is not sent: the tsps client doesn't check it before sending a script trigger.

@@ -46,6 +46,7 @@ import {
   PluginItemOnGroundItemEvent,
   PluginItemOnItemEvent,
   PluginItemUseFilter,
+  PluginItemActionOptions,
   PluginItemOnNpcEvent,
   PluginItemOnPlayerEvent,
   PluginItemOnObjectEvent,
@@ -386,6 +387,8 @@ export class PluginManager {
     [];
   private static groundItemPickupHooks: PluginHook<PluginGroundItemInteractionEvent>[] = [];
   private static itemActionHooks: PluginHook<PluginItemActionEvent>[] = [];
+  /** Named item actions registered with `fallback`: run when no other handler took the click. */
+  private static itemActionFallbackHooks: PluginHook<PluginItemActionEvent>[] = [];
   private static itemDropHooks: PluginHook<PluginItemDropEvent>[] = [];
   private static buttonClickHooks: PluginHook<PluginButtonClickEvent>[] = [];
   private static interfaceActionClickHooks: PluginHook<PluginInterfaceActionClickEvent>[] =
@@ -2017,6 +2020,9 @@ export class PluginManager {
       if (subOption !== null) event.subOption = subOption;
     }
     for (const hook of PluginManager.itemActionHooks) {
+      PluginManager.executeHook(hook, event, "item_action", "item_action");
+    }
+    for (const hook of PluginManager.itemActionFallbackHooks) {
       PluginManager.executeHook(hook, event, "item_action", "item_action");
     }
     // An inventory action something answered (not a click nothing took): `item:operated`
@@ -4236,13 +4242,17 @@ export class PluginManager {
       },
       onItemAction: (
         handler: string | ((event: PluginItemActionEvent) => void),
-        actions?: Record<string, (event: PluginItemActionEvent) => void | boolean>
+        actions?: Record<string, (event: PluginItemActionEvent) => void | boolean>,
+        options?: PluginItemActionOptions
       ) => {
         if (typeof handler !== "function" && (typeof handler !== "string" || !actions)) {
           return;
         }
         const namedActions = new Map(Object.entries(actions ?? {}).filter(([, action]) => typeof action === "function"));
-        PluginManager.itemActionHooks.push({
+        const hooks = typeof handler === "string" && options?.fallback
+          ? PluginManager.itemActionFallbackHooks
+          : PluginManager.itemActionHooks;
+        hooks.push({
           pluginName,
           profileName,
           handlerName: typeof handler === "function" ? handler.name || "anonymous" : (event) => {

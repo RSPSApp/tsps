@@ -491,14 +491,15 @@ test("quest plugins hand crossings over with ferries:travel", () => {
 });
 
 test("Barnaby's three destinations fade, sail and arrive without casting a teleport or charging twice", () => {
-  const destinations = [[2680, 3274, 0], [2768, 3227, 0], [2916, 3225, 0]];
+  // rsprox 224/01440.txt ticks 15777-15780: Brimhaven lands on the ship's deck.
+  const destinations = [[2680, 3274, 0], [2775, 3233, 1], [2916, 3225, 0]];
   for (const [index, port] of BarnabyFerry._test.PORTS.entries()) {
     const player = createPlayer({ coins: 100 });
     const sail = () => BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
     sail();
     sail();
     assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 70, "only the accepted voyage charges");
-    assert.deepEqual(player.sent.messages, ["You pay 30 coins and board the ship."]);
+    assert.deepEqual(player.sent.messages, ["You pay Captain Barnaby 30 coins."]);
     assert.equal(player.blocked, true);
     assert.equal(player.sent.subs.length, 1);
     assert.equal(player.sent.subs[0].id, 174, "fade overlay, not a spellbook animation");
@@ -507,6 +508,7 @@ test("Barnaby's three destinations fade, sail and arrive without casting a telep
     assert.deepEqual(at(player), [3046, 3236, 0], "the crossing takes time");
     tick(1);
     assert.deepEqual(at(player), destinations[index]);
+    assert.equal(player.sent.messages.at(-1), `You board the ship and sail to ${port.name}.`, "the boarding line comes with the move");
     assert.equal(player.blocked, true, "arrival remains held until fade-in");
     tick(1);
     assert.deepEqual(player.sent.subs[1].options.postScripts, [{ scriptId: 948, args: [0, 0, 0, 255, 50] }]);
@@ -525,7 +527,7 @@ test("logging out on Barnaby's discounted crossing lands the player and releases
   tick(1);
   for (const handler of hooks.logout) handler({ player });
   player.setRegistered(false);
-  assert.deepEqual(at(player), [2768, 3227, 0]);
+  assert.deepEqual(at(player), [2775, 3233, 1]);
   assert.equal(player.blocked, false);
   assert.equal(Common.travelling(player), false);
   tick(10);

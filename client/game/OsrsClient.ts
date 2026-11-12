@@ -398,32 +398,13 @@ import { WorldMapController, type WorldMapRenderedIcon } from "./worldMap/WorldM
 import type { PluginWorldMapPointEntry, RenderedWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 import type { WorldMapViewport } from "./worldMap/WorldMapTypes";
 import { WorldViewManager } from "./worldview/WorldViewManager";
+import { keybindingTabFor } from "./keybindingTabs";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
 
 // Escape selects the inventory side panel separately; it is not exposed as a
 // configurable keybinding, so it stays hardcoded.
 const ESCAPE_TAB_SHORTCUT = 3;
-
-// All Settings keybindings map a varbit to the side-panel tab it opens. Values
-// are OSRS key codes: 0 = unbound, 1 = F1 ... 12 = F12. Names/tabs verified
-// against RuneLite VarbitID (STONE_*_KEY) and interface-layouts.json tabIds.
-// The server (Settings.plugin.js) owns the current values and defaults.
-const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
-    { varbit: 4675, tab: 0 }, // Combat
-    { varbit: 4676, tab: 1 }, // Stats
-    { varbit: 4677, tab: 2 }, // Journal/Quests
-    { varbit: 4678, tab: 3 }, // Inventory
-    { varbit: 4679, tab: 4 }, // Worn equipment
-    { varbit: 4680, tab: 5 }, // Prayer
-    { varbit: 4682, tab: 6 }, // Magic
-    { varbit: 4683, tab: 7 }, // Clan chat
-    { varbit: 4684, tab: 8 }, // Friends
-    { varbit: 4686, tab: 11 }, // Options (settings)
-    { varbit: 4687, tab: 10 }, // Options (secondary)
-    { varbit: 4688, tab: 13 }, // Music
-    { varbit: 4689, tab: 10 }, // Logout
-];
 
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
@@ -4483,10 +4464,7 @@ export class OsrsClient {
 
         const varManager = this.varManager;
         if (!varManager) return undefined;
-        for (const binding of KEYBINDING_TABS) {
-            if (varManager.getVarbit(binding.varbit) === pressed) return binding.tab;
-        }
-        return undefined;
+        return keybindingTabFor(pressed, (varbit) => varManager.getVarbit(varbit));
     }
 
     /** Switch the stock side panel through its cache script so all tab widgets update together. */

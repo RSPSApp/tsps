@@ -166,6 +166,15 @@ test('Revert turns a redirected tablet back into a Teleport to house tablet', ()
     assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
 });
 
+test('the house tablet Group option refuses as live does, and keeps the tablet (rsprox 2919 tick 2179)', () => {
+    const { event, player, teleport } = use('teleport to house', 'group');
+    assert.equal(event.handled, true);
+    assert.equal(teleport, undefined);
+    assert.deepEqual(player.messages, ['You are not in an Ironman Group.']);
+    assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
+    assert.deepEqual(CacheDefinitions.getItem(Items.TELEPORT_TO_HOUSE).inventoryActions.slice(0, 4), ['Break', 'Inside', 'Outside', 'Group']);
+});
+
 /** Clicks an option on a spell, as NetworkBuilder emits it; unhandled means the usual cast. */
 function cast(spell, opId, player) {
     player ??= playerWith(-1);

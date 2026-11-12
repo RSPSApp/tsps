@@ -77,7 +77,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({
     core: { WorldDefinition: { getWorldDefinition: () => ({ name: worldName }) }, MOBILE_CLIENT_ATTRIBUTE, XPDROPS_ENABLED_ATTRIBUTE, encodeGameframeBootstrap,
-      ChatType: { WELCOME: 108 }, GameConstants: { WORLD_TYPE: { label: 'REGULAR' } },
+      ChatType: { WELCOME: 108 }, GameConstants: { WORLD_TYPE: { label: 'REGULAR' } }, World: { getProcessCycle: () => 4321 },
       resolveGameframeRoot, dataOrbsHidden, Wilderness: { isInLocation: location => location.wilderness } },
     onPlayerLogin: fn => { hooks.login = fn; },
     onCustomEvent: (name, fn) => { hooks[name] = fn; },
@@ -97,7 +97,7 @@ test('welcome screen Play leaves the orbs closed while Show data orbs is off', a
   await Promise.resolve();
   h.hooks.play({ player: h.player });
   const sent = h.packets.slice(3).map(row => row[1]);
-  assert.deepEqual(sent, encodeGameframeBootstrap('WelcomeTester', 161, false, 'REGULAR', false));
+  assert.deepEqual(sent, encodeGameframeBootstrap('WelcomeTester', 161, false, 'REGULAR', false, 4321));
   assert.equal(sent.length, encodeGameframeBootstrap('WelcomeTester', 161).length - 1, 'one mount fewer: the orbs');
 });
 
@@ -114,7 +114,7 @@ test('welcome screen waits for synchronous login initialization and restores the
     assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown']);
     h.hooks.play({ player: h.player });
     h.hooks.play({ player: h.player });
-    assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
+    assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root, false, 'REGULAR', true, 4321));
     assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown', 'gameframe:ready']);
     assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'Play does not send it again');
   }

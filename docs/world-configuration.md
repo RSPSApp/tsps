@@ -18,7 +18,8 @@ enabled state. The `enabled` field, when present, must be a boolean.
     "BountyHunter": { "levelDifference": 10 },
     "Characters": { "maxPerAccount": 6 },
     "Prayer": { "enabled": true, "sequentialBurying": true },
-    "PlayerBots": { "ai": { "enabled": false } }
+    "PlayerBots": { "ai": { "enabled": false } },
+    "Wilderness": { "pvpWorldLevelDifference": 10 }
   }
 }
 ```
@@ -29,6 +30,9 @@ the equivalent `pluginConfig` keys. Then the local file overrides the shipped fi
 individual switches and settings, with nested values replaced in full. For example, a local
 `"Prayer": false` disables the plugin and keeps its shipped settings. Plugins can read
 their options by short name, such as `api.getPluginConfig("sequentialBurying", false)`.
+
+On PvP worlds, `plugins.Wilderness.pvpWorldLevelDifference` sets the server's attack limit
+on unlevelled ground. The client overlay still displays the standard 15-level range there.
 
 The existing `pluginConfig` form still works. The Characters, LeagueMode, Quests and
 RandomEvents entries map to the existing `characters`, `league`, `quests` and `random-events`
@@ -271,6 +275,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `TutorialIsland:allowSkip` | boolean | `true` | **Allow skipping Tutorial Island.** The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it. |
+| `Wilderness:pvpWorldLevelDifference` | number (integer, >= 0) | `15` | **Unlevelled PvP combat level difference.** Maximum combat level difference on unlevelled PvP ground on PvP worlds. Levelled Wilderness tiles keep their usual range. |
 
 #### Plugin area `bosses` (`pluginConfig`)
 
@@ -505,6 +510,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BankSpace` | BankSpace | interface | yes | Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins. |
 | `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks. |
 | `BossKillCount` | BossKillCount | interface | yes | Sends boss kill-count lines as filterable spam when the player's All Settings row asks for it. |
+| `BuffBarStart` | Buff Bar Start | interface | yes | Starts the buff bar's freeze, Staff of the dead, poison and Abyssal Sire stun timers. |
 | `BuffTimers` | Buff Timers | interface | yes | Sends the effect countdowns the buff bar reads (potions, spells, ammo, group woodcutting) and the client's antifire, Tele Block and stamina infobox timers. |
 | `CameraShake` | CameraShake | interface | yes | Camera shake effects, sent only when the player's combat and atmospheric camera shake settings allow them. |
 | `Clans` | Clans | interface | yes | Clans: the Clan Hub, the player's own clan, // clan chat and the Your Clan tab. |
@@ -536,7 +542,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Settings` | Settings | interface | yes | All Settings browser, keybindings panel and game client layout dropdown, saving the chosen settings and XP drop options per player. |
 | `SideChannels` | SideChannels | interface | yes | Tab bar of the social tab, switching between chat channel, Your Clan and grouping, and remembering the chosen tab between logins. |
 | `SideJournalDefaults` | SideJournalDefaults | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
-| `SkillGuide` | SkillGuide | interface | yes | Opens the skill guide when you pick View guide on a Skills tab stat, and opens a quest's journal from the Quest XP tab. |
+| `SkillGuide` | SkillGuide | interface | yes | Opens the skill guide (new or old style, as All Settings chooses) when you pick View guide on a Skills tab stat, and opens a quest's journal from the Quest XP tab. |
 | `SkillLevelUp` | SkillLevelUp | interface | yes | Level-up feedback: chat message, unlock messages, graphic, sound and the level-up pop-up, which pauses skilling until you press Continue. |
 | `StaffCrowns` | StaffCrowns | interface | yes | Shows the right chat icon before a player's name: a moderator or admin crown from their rights, else the Ironman icon. |
 | `TabFilters` | TabFilters | interface | yes | Prayer and spellbook filter menus that hide prayers or spells, saved per player, with unusable spells hidden for new accounts. |
@@ -546,6 +552,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ValueWarnings` | ValueWarnings | interface | yes | All Settings value warnings (drop, Alchemy) and loot drop notifications, and their thresholds. |
 | `VengeanceTimer` | Vengeance Timer | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
 | `VoiceChat` | VoiceChat | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
+| `WasdCamera` | WasdCamera | interface | yes | Lets web client players turn on WASD camera in All Settings > Controls: W, A, S and D turn the camera like the arrow keys, and Enter opens chat. Off for each player until they turn it on; turn the plugin off to remove the option. |
 | `WelcomeScreen` | WelcomeScreen | interface | yes | Welcome screen at login with the message of the week and a Play button, with the text set by the world's plugin config. |
 | `WorldMapPlayers` | World Map Players | interface | yes | Gives admins a live dot on the world map for every online player, with bots marked differently, refreshed every few ticks. |
 | `WorldMapPosition` | WorldMapPosition | interface | yes | Keeps the world map's player marker up to date while the map is open, on land or aboard a boat. |
@@ -593,7 +600,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ElementalTomes` | Elemental Tomes | items | yes | Tomes of fire and water: charged with burnt or soaked pages, boosting spell damage and saving runes, with page-storing and bank options. (members only) |
 | `ElementalStaves` | ElementalStaves | items | yes | Elemental staves, battlestaves, the Kodai wand, the twinflame staff and the Shadowflame quadrant supply their element's runes to spells automatically. |
 | `Emblems` | Emblems | items | yes | Mysterious emblems: they downgrade a tier when you die to a player and are dropped on the ground instead of kept. |
-| `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets of water, sand and compost: leaves an empty bucket and sends the captured message and sound. |
+| `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets, pots, jugs, bowls and plant cure: leaves the empty container and sends the captured message and sound. |
 | `EyeOfAyak` | EyeOfAyak | items | yes | Eye of Ayak: powered staff charged with demon tears or runes, with Check, Uncharge and Dismantle, casting every 3 ticks. (members only) |
 | `Food` | Food | items | yes | Eating: heals, boosts, drains and cures from data/food.json, with eat delays, multi-bite foods, combo foods and the food-eaten counter. |
 | `GiantsoulAmulet` | GiantsoulAmulet | items | yes | Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each. (members only) |

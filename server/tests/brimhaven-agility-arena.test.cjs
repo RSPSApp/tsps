@@ -41,7 +41,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
   if (coins > 0) inventory.set(COINS, coins);
   const attributes = new Map();
   const p = {
-    messages: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
+    messages: [], typed: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
     varbits: new Map(), dialogues: [], animations: [],
     x, y, z,
     getLocation: () => new Location(p.x, p.y, p.z),
@@ -73,7 +73,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     getPacketSender: () => ({
       sendGlobalGraphic() {},
       sendSoundEffect() {},
-      sendTypedMessage: (_type, message) => p.messages.push(message),
+      sendTypedMessage: (type, message) => { p.typed.push([type, message]); return p.messages.push(message); },
       sendPositionalHint: (loc) => p.hints.push(loc),
       clearHintArrow: () => { p.hintCleared = true; },
       sendVarbit: (id, value) => p.varbits.set(id, value),
@@ -117,6 +117,24 @@ test("the hut ladder needs the fee; unpaid, the Parrot speaks first", () => {
   payIzzy({ player: paid });
   climbDown(paid);
   assert.deepEqual(paid.animations, [827]);
+});
+
+test("within a minute of leaving, paying works and the ladder refuses in a message box (227/01738.txt)", () => {
+  const back = player({ coins: 500, x: 2808, y: 3193, z: 0 });
+  back.setAttribute("brimhaven-agility-arena:reenter-after", Date.now() + 30_000);
+  climbDown(back);
+  assert.equal(back.dialogues.length, 1, "unpaid: the Parrot, as at 227/01738.txt:2448-2454");
+  payIzzy({ player: back });
+  assert.equal(hasPaid(back), true, "Izzy takes the fee (227/01738.txt:2509-2514)");
+  assert.equal(back.inventory.get(COINS), 300);
+  const before = back.dialogues.length;
+  back.typed.length = 0;
+  climbDown(back);
+  assert.equal(back.animations.length, 0, "the ladder refuses");
+  assert.equal(back.dialogues.length, before + 1, "in a message box");
+  // 227/01738.txt:3031-3046: the box's mesbox chat line in the same tick, its <br> a space.
+  assert.deepEqual(back.typed, [[PluginManager.getCoreApi().ChatType.MESBOX,
+    "You've only just left the arena. You need a wait at least a minute after leaving before re-entering."]]);
 });
 
 test("Izzy's transcript takes the fee on its hand-over line", () => {
@@ -475,4 +493,29 @@ test("one click crosses a whole obstacle and pays its XP once, as every capture 
     assert.deepEqual(route.path[route.path.length - 1], landing, `${kind} landing (${source})`);
     assert.ok(crossingSteps(line, route).length > 0);
   }
+});
+
+test("at 99 a broken plank takes one tick more than the smooth one; below 99 it falls (Wiki: Plank (Brimhaven Agility Arena))", () => {
+  const { useObstacle } = require("../plugins/minigames/brimhavenagilityarena/Obstacles.BrimhavenAgilityArena");
+  /** Clicks the lane's east plank from its approach tile, then counts ticks until XP lands or the plank breaks. */
+  const cross = (agility, lane) => {
+    const p = player({ agility, x: 2803, y: lane });
+    const object = { getLocation: () => new Location(2802, lane, 3), getFace: () => 0, getType: () => 22 };
+    assert.equal(useObstacle({ player: p, object, objectId: 3570 }), true);
+    for (let ticks = 1; ticks <= 20; ticks++) {
+      TaskManager.process();
+      if (p.xp > 0) return { ticks, fell: false, xp: p.xp, at: [p.x, p.y] };
+      if (p.messages.includes("You stepped on a broken piece of plank!")) return { ticks, fell: true, xp: p.xp, at: [p.x, p.y] };
+    }
+    assert.fail(`lane ${lane} at ${agility} never finished`);
+  };
+  // The cache's smooth lane is the middle one (9590); 9589 and 9591 each have a broken plank.
+  assert.deepEqual(cross(99, 9590), { ticks: 8, fell: false, xp: 6, at: [2796, 9590] }, "the smooth plank at 99");
+  assert.deepEqual(cross(99, 9589), { ticks: 9, fell: false, xp: 6, at: [2796, 9589] }, "a broken lane at 99: one tick more");
+  assert.deepEqual(cross(99, 9591), { ticks: 9, fell: false, xp: 6, at: [2796, 9591] }, "the other broken lane at 99");
+  const fall = cross(50, 9589);
+  assert.equal(fall.fell, true, "below 99 a broken lane breaks");
+  assert.equal(fall.ticks, 5, "its fall sequence is unchanged: the message on tick 5, no extra wait");
+  assert.equal(fall.xp, 0);
+  assert.deepEqual(cross(50, 9590), { ticks: 8, fell: false, xp: 6, at: [2796, 9590] }, "the smooth plank below 99 is unchanged");
 });

@@ -7,6 +7,9 @@ import { sendChat } from "../../../network/serverConnection/outgoing/inventoryCh
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 
+/** chatbox:0, whose key listener (script 73) types into the chat line and sends it. */
+const CHATBOX_TYPING_UID = (162 << 16) | 0;
+
 /** The construction build menu (458) is open: it owns every key. */
 function isConstructionOpen(widgetManager: WidgetManager): boolean {
     return widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
@@ -182,6 +185,8 @@ export function processWidgetKeyboardInput(
         // A key listener alone must not force a full repaint (held camera keys repeat).
         for (const keyEvent of input.keyEvents) {
             for (const w of keyWidgetsByUid.values()) {
+                // WASD camera mode: dialogues and other listeners still get the key.
+                if (keyEvent.chatBlocked && ((w.uid ?? 0) | 0) === CHATBOX_TYPING_UID) continue;
                 const keyCtx: Partial<ScriptEvent> = {
                     mouseX: mx - (w._absX ?? w.x ?? 0),
                     mouseY: my - (w._absY ?? w.y ?? 0),

@@ -518,8 +518,14 @@ test("a talisman or the tiara used on its altar binds the tiara (Wiki: Tiara; rs
   assert.deepEqual(player.xp, [52.5], "the Wiki's 52.5 XP");
   assert.deepEqual(player.log, ["spam You bind the power of the talisman into your Tiara."]);
 
-  const air = crafter(1, [[ItemIdentifiers.TIARA, 1], [ItemIdentifiers.AIR_TALISMAN, 1]]);
-  assert.equal(use(air, ObjectIdentifiers.ALTAR_35, ItemIdentifiers.AIR_TALISMAN), false, "another altar's talisman");
+  const air = crafter(1, [[ItemIdentifiers.TIARA, 1], [ItemIdentifiers.AIR_TALISMAN, 1], [ItemIdentifiers.MIND_TALISMAN, 1]]);
+  // The water altar (35): a mind talisman makes no combination there, so nothing handles it.
+  assert.equal(use(air, ObjectIdentifiers.ALTAR_35, ItemIdentifiers.MIND_TALISMAN), false, "another altar's talisman");
+  // An air talisman there is a mist-rune recipe now, so it is handled; but it still doesn't bind the tiara.
+  use(air, ObjectIdentifiers.ALTAR_35, ItemIdentifiers.AIR_TALISMAN);
+  assert.equal(amount(air, ItemIdentifiers.TIARA), 1, "no tiara bound at another altar");
+  assert.equal(amount(air, ItemIdentifiers.AIR_TALISMAN), 1);
+  assert.deepEqual(air.xp, []);
   assert.equal(use(air, ObjectIdentifiers.ALTAR_33, ItemIdentifiers.AIR_TALISMAN), true);
   assert.equal(amount(air, ItemIdentifiers.AIR_TIARA), 1);
   assert.deepEqual(air.xp, [25]);

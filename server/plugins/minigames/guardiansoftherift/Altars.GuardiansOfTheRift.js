@@ -124,9 +124,7 @@ function overlay(player, altar, on) {
   const sender = player.getPacketSender();
   if (on) {
     Game.closeHud(player);
-    sender.sendSubInterface(Shared.OVERLAY_ATMOSPHERE_UID, Shared.iface(Shared.INTERFACE.OVERLAY), 1, {
-      postScripts: [{ scriptId: Shared.SCRIPT.OVERLAY_PORTAL, args: altar.overlay }],
-    });
+    Shared.openPortalEffect(player, altar.overlay);
   } else {
     sender.closeSubInterface(Shared.OVERLAY_ATMOSPHERE_UID);
     if (Game.isPlaying(player)) Game.openHud(player);
@@ -155,7 +153,7 @@ function travel(player, altar, going, message, whileActive = false) {
     const [x, y] = going ? altar.arrival : [RETURN_TILE.x, RETURN_TILE.y];
     player.moveTo(Shared.location({ x, y }));
     if (Records.setting(player, "gotr_colourful_fade_disabled") !== 1) {
-      player.getPacketSender().sendClientScript(Shared.SCRIPT.REMOVE_PORTAL);
+      Shared.clearPortalEffect(player);
     }
     Shared.later(1, () => {
       if (!player.isRegistered()) return;

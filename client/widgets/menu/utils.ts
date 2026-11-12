@@ -488,6 +488,44 @@ export function hasContextMenuOption(
     });
 }
 
+/** An IF1 button whose buttonText is its menu option (Ok, Select and the like). */
+export function isIf1MenuButton(w: any): boolean {
+    const buttonType = (w?.buttonType ?? 0) | 0;
+    return w?.isIf3 === false && (buttonType === 1 || buttonType === 4 || buttonType === 5);
+}
+
+/**
+ * IF1 interfaces stack buttons on one spot to offer several options: each hide on the tanner's
+ * interface has Tan 1, Tan 5, Tan X and Tan All buttons over it. Every IF1 button under the mouse
+ * adds its own option, the topmost first, so when the menu's widget is such a button the other
+ * buttons of its interface at that point (`hits`, back to front) join its menu above Cancel.
+ * Each added entry carries its own `widget`, so choosing it clicks that button.
+ */
+export function withStackedIf1ButtonEntries<T extends { option?: unknown }>(
+    chosen: any,
+    entries: T[],
+    hits: readonly any[],
+    deriveEntries: (w: any) => T[],
+): Array<T & { widget?: any }> {
+    if (!isIf1MenuButton(chosen)) return entries;
+    const group = (chosen.uid ?? 0) >>> 16;
+    const stacked: Array<T & { widget: any }> = [];
+    const seen = new Set<number>([chosen.uid]);
+    for (let i = hits.length - 1; i >= 0; i--) {
+        const hit = hits[i];
+        if (!hit || seen.has(hit.uid) || (hit.uid ?? 0) >>> 16 !== group || !isIf1MenuButton(hit)) continue;
+        seen.add(hit.uid);
+        for (const entry of deriveEntries(hit) || []) {
+            const option = String(entry?.option ?? "").trim().toLowerCase();
+            if (option && option !== "cancel" && option !== "examine") stacked.push({ ...entry, widget: hit });
+        }
+    }
+    if (!stacked.length) return entries;
+    const cancelAt = entries.findIndex((entry) => String(entry?.option ?? "").trim().toLowerCase() === "cancel");
+    const at = cancelAt < 0 ? entries.length : cancelAt;
+    return [...entries.slice(0, at), ...stacked, ...entries.slice(at)];
+}
+
 // Clip bounds for hit testing - matches rendering scissor logic
 interface HitClip {
     x0: number;

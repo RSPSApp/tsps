@@ -28,6 +28,7 @@ const DS2 = "dragon_slayer_ii";
 const NAVY = "<col=000080>";
 const BLACK = "<col=000000>";
 const TELEPORTS_TITLE = "Select a destination";
+const NOT_MAXED_TEXT = "You need to have level 99 in all of the skills to use this.";
 const TELEPORT_CHOICES = [
   "Warrior's Guild", "Fishing Guild", "Crafting Guild", "Farming Guild", "Otto's Grotto",
   "Carnivorous chinchompas (Feldip Hills)", "Black Chinchompas (Wilderness)", "Hunter Guild", "The Pandemonium",
@@ -282,7 +283,9 @@ function maxCapeOption(event) {
   const player = event.player;
   switch (option) {
     case "Teleports":
-      if (sub) Teleports.goTo(player, sub);
+      // The teleports need every skill at 99, as wearing the cape does.
+      if (!Capes.maxed(player)) Capes.messageBox(player, NOT_MAXED_TEXT);
+      else if (sub) Teleports.goTo(player, sub);
       else Teleports.openMenu(player, TELEPORTS_TITLE, TELEPORT_CHOICES);
       break;
     case "Spellbook":

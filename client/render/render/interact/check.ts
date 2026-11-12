@@ -1394,14 +1394,19 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             shouldLeftClickOpenMenu(simpleEntries, !!host.osrsClient.settings?.leftClickOpensMenu)
         );
         if (leftClickMenuToggle) {
+            const leftClickX = inputManager.leftClickX;
+            const leftClickY = inputManager.leftClickY;
+            // The press that opens the menu is spent, as a right click's is. Left in place, the
+            // Choose Option overlay reads it this same frame as a click at the menu's corner
+            // (its header) and closes the menu again.
+            inputManager.clickMode3 = ClickMode.NONE;
+            inputManager.saveClickX = -1;
+            inputManager.saveClickY = -1;
             host.osrsClient.menuOpen = true;
             host.osrsClient.menuOpenedFrame = frameCount;
-            host.osrsClient.menuX = inputManager.leftClickX;
-            host.osrsClient.menuY = inputManager.leftClickY;
-            const clickedFromLeft = host.computeTileAt(
-                inputManager.leftClickX,
-                inputManager.leftClickY,
-            );
+            host.osrsClient.menuX = leftClickX;
+            host.osrsClient.menuY = leftClickY;
+            const clickedFromLeft = host.computeTileAt(leftClickX, leftClickY);
             if (clickedFromLeft) {
                 host.osrsClient.menuTile = clickedFromLeft;
                 host.hoverTileX = clickedFromLeft.tileX;

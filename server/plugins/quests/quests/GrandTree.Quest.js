@@ -128,8 +128,13 @@ module.exports = function registerGrandTreeQuest(api) {
   ]);
   const GLOUGHS_CHEST_ID = ObjectIdentifiers.CLOSED_CHEST_9;
   const WATCHTOWER_TREE_ID = ObjectIdentifiers.TREE_13;
-  /** Unnamed multi-loc: Open (2446) below stage 130, Climb-down (26243) at 130+. */
-  const GLOUGHS_TRAPDOOR_ID = 2444;
+  /**
+   * The trapdoor's map object (2444) and the loc its varp-150 transform resolves to at stage 130
+   * (26243, Climb-down). A click can name either one; both must start the same handler.
+   */
+  const GLOUGHS_TRAPDOOR_IDS = new Set([2444, ObjectIdentifiers.TRAPDOOR_90]);
+  /** The same multi-loc is reused elsewhere; only Glough's tower trapdoor owns this handler. */
+  const GLOUGHS_TRAPDOOR_TILE = { x: 2487, y: 3464, z: 2 };
   const ROOT_IDS = new Set([ObjectIdentifiers.ROOT, ObjectIdentifiers.ROOT_2]);
   /** West-to-east the pillars spell T-U-Z-O. */
   const PILLAR_TWIGS = new Map([
@@ -902,8 +907,12 @@ module.exports = function registerGrandTreeQuest(api) {
   }
 
   function climbDownTrapdoor(event) {
-    if (event.objectId !== GLOUGHS_TRAPDOOR_ID) return false;
+    if (!GLOUGHS_TRAPDOOR_IDS.has(event.objectId)) return false;
+    const at = event.object?.getLocation?.();
+    if (at && (at.getX() !== GLOUGHS_TRAPDOOR_TILE.x || at.getY() !== GLOUGHS_TRAPDOOR_TILE.y
+      || at.getZ() !== GLOUGHS_TRAPDOOR_TILE.z)) return false;
     if (quest.getStage(event.player) < STAGE_TRAPDOOR) return false;
+    event.handled = true;
     if (quest.getStage(event.player) === STAGE_TRAPDOOR) demonEncounter.start(event.player);
     else teleport(event.player, CAVE_DESTINATION);
     return true;
@@ -1009,6 +1018,9 @@ module.exports = function registerGrandTreeQuest(api) {
   api.onItemOnObject(useKeyOnChest);
   api.onItemOnObject(placeTwig);
   api.onObjectInteraction("Tree", { "Climb-up": climbWatchtower });
+  // Before the generic Ladders handler: a client may name the transformed 26243 loc, which
+  // Ladders would otherwise climb into the cave without Glough's scene.
+  api.onBeforeObjectInteraction(climbDownTrapdoor);
   api.onObjectInteraction("Trapdoor", { "Climb-down": climbDownTrapdoor });
   api.onBeforeObjectInteraction(blockBrokenCaveLadder);
   api.onBeforeObjectInteraction(askShipyardPassword);

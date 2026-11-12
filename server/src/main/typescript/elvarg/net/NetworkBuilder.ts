@@ -1875,6 +1875,7 @@ export class ClientConnection {
     const displayEquipment = player.getEquipment().getItems();
     return {
       gender: look[Appearance.GENDER] ?? 0,
+      hidden: player.isAppearanceHidden(),
       pronouns: player.getAppearance().getPronouns(),
       colors: [
         look[Appearance.HAIR_COLOUR],

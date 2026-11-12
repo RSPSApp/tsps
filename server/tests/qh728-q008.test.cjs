@@ -65,6 +65,7 @@ function setup({ complete = ['the_dig_site'], started = [] } = {}) {
         def, __area: null, getId: () => def.id, getOwner: () => def.owner,
         getLocation: () => new core.Location(def.x, def.y, def.z), isRegistered: () => true,
         isNpc: () => true, isPlayer: () => false, getIndex: () => spawned.length + 100,
+        getAsNpc: () => npc,
         setArea: (area) => { npc.__area = area; }, getArea: () => npc.__area,
         setPositionToFace() {}, forceChat() {},
         getMovementQueue: () => ({ setBlockMovement() {}, reset() {} }),
@@ -571,6 +572,30 @@ test('durable stages map to the Quest Helper wire stages on setStage and login',
   }
 });
 
+// Transcript:Bone_Voyage "If the player fails the voyage", then the navigators' "after failing a voyage" pages.
+test('a voyage that runs out of time fails back to the canal with the after-failing pages', () => {
+  const h = setup();
+  try {
+    const p = player();
+    p.setAttribute('quest.bone_voyage.potion', 2);
+    p.setAttribute('quest.bone_voyage.charm', 2);
+    h.quest.setStage(p, 10);
+    p.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 0, heading: 0, throttle: 1, ticks: 9, wind: 0 });
+    runtime.sendQuestVarps({ player: p });
+    for (const login of h.logins) login({ player: p });
+    h.operate(p);
+    const area = p.getPrivateArea();
+    area.state.ticks = 100000;
+    area.process(p);
+    assert.equal(h.quest.getStage(p), 9, 'back to the canal');
+    const variant = (npcId) => h.variants.map((fn) => fn({ player: p, npcId })).find(Boolean) ?? null;
+    assert.equal(variant(N.LEAD_NAVIGATOR), 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again');
+    assert.equal(variant(N.JUNIOR_NAVIGATOR), 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage');
+  } finally {
+    h.restore();
+  }
+});
+
 test('abort closes the controls, returns to the canal and allows a retry', () => {
   const h = setup();
   try {
@@ -584,6 +609,11 @@ test('abort closes the controls, returns to the canal and allows a retry', () =>
     const area = p.getPrivateArea();
     assert.ok(area);
     h.press(p, (604 << 16) | 2);
+    // Transcript:Bone_Voyage "Aborting the voyage": "Abort the voyage?" Yes./Cancel., then the message on Yes.
+    assert.deepEqual(MultiChatboxPrompt.getPending(p), { title: 'Abort the voyage?', options: ['Yes.', 'Cancel.'] });
+    assert.equal(h.quest.getStage(p), 10, 'nothing happens until Yes');
+    assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    assert.ok(p.messages.includes('With the aid of the junior navigator, you sail back to the digsite.'));
     assert.equal(h.quest.getStage(p), 9);
     assert.equal(p.varbits.get(5795), 25);
     assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3364, 3446, 0]);
@@ -593,6 +623,8 @@ test('abort closes the controls, returns to the canal and allows a retry', () =>
     assert.equal(h.spawned.filter((npc) => npc.def.id === N.JUNIOR_NAVIGATOR).length >= 1, true, 'retry junior is available');
 
     h.npcAction(p, N.BARGE_GUARD_3, 3364, 3446, 0, 'Embark');
+    // "Talking to the Lead Navigator to try again" after the aborted voyage, whose "I'm ready, let's go." sets off.
+    assert.equal(h.variants.map((fn) => fn({ player: p, npcId: N.LEAD_NAVIGATOR })).find(Boolean) ?? null, 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again');
     h.talk(p, N.LEAD_NAVIGATOR, 3363, 3453, ["I'm ready, let's go."], 1);
     assert.equal(h.quest.getStage(p), 10);
     assert.equal(p.varbits.get(5795), 30);

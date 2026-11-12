@@ -16,7 +16,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 16, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 2,
+    wincondition: 15, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 2,
     food: 1, drinks: 1, specialattacks: 2, stragglers: 1, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 1, rejoiningdelay: 1, vls: 1,
   };
@@ -54,4 +54,43 @@ test("confirmation describes safe last-standing entry cutoff and supplies withou
   assert.match(summary, /Melee combat only/);
   assert.match(summary, /Powered staves and Vesta's blighted longsword are not enabled/);
   assert.match(Rules.summary(Rules.create()), /maximum 100 fighters per team/);
+});
+
+
+test("revision 242 kill targets preserve fixed melee terms and reject deferred native modes", () => {
+  const targets = [25,50,100,200,500,1000,5000,10000];
+  for (let mode=1; mode<=8; mode++) {
+    const rules=Rules.create(3,mode);
+    assert.equal(Rules.validate(rules),true);
+    assert.equal(Rules.killTarget(rules),targets[mode-1]);
+    assert.equal(Rules.teamCap(rules),10);
+    assert.equal(rules.ranged,1); assert.equal(rules.magic,4);
+    assert.match(Rules.summary(rules),/First to .* kills on Plateau/);
+    assert.match(Rules.summary(rules),/Joining and rejoining remain open/);
+    assert.match(Rules.summary(rules),/Food and drinks are consumed normally/);
+  }
+  for (const mode of [-1,9,15,21,23,24,1.5,"1",null,NaN]) assert.equal(Rules.create(0,mode),null);
+});
+
+
+test("revision 242 timed modes use sourced durations with fixed melee and respawning terms", () => {
+  const minutes = [5, 10, 20, 60, 120];
+  const ticks = [500, 1000, 2000, 6000, 12000];
+  for (let i = 0; i < minutes.length; i++) {
+    const rules = Rules.create(2, 16 + i);
+    assert.equal(Rules.validate(rules), true);
+    assert.equal(Rules.timeLimitTicks(rules), ticks[i]);
+    assert.equal(Rules.killTarget(rules), 0);
+    assert.equal(Rules.respawns(rules), true);
+    assert.equal(Rules.teamCap(rules), 5);
+    assert.equal(rules.ranged, 1); assert.equal(rules.magic, 4);
+    assert.match(Rules.summary(rules), new RegExp(`Most kills in ${minutes[i]} minutes on Plateau`));
+    assert.match(Rules.summary(rules), /Equal scores end without a winner/);
+    assert.match(Rules.summary(rules), /Joining and rejoining remain open/);
+  }
+  assert.equal(Rules.timeLimitTicks(Rules.create()), 0);
+  assert.equal(Rules.respawns(Rules.create()), false);
+  assert.equal(Rules.timeLimitTicks(Rules.create(0, 1)), 0);
+  assert.equal(Rules.respawns(Rules.create(0, 1)), true);
+  assert.equal(Rules.timeLimitTicks(null), null);
 });

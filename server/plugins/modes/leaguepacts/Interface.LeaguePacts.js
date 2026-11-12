@@ -223,6 +223,8 @@ function logout({ player }) {
 
 module.exports = function attach(api) {
   const { group, openButton, frame, dataLayer, panel } = ui();
+  // A locked player (mid-teleport, on an obstacle) is told to finish first, and nothing opens.
+  api.refuseWhileBusy(Common.uid(openButton[0], openButton[1]));
   api.onInterfaceActionButton(Common.uid(openButton[0], openButton[1]), openTree);
   api.onInterfaceActionButton(Common.uid(group, frame), frameClicked);
   api.onInterfaceActionButton(Common.uid(group, dataLayer), dataLayerTriggered);

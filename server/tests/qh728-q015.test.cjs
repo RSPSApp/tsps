@@ -819,6 +819,16 @@ test('start skill gates use the cache DB thresholds at Veliaf and the start hook
   assert.equal(h.stage(), 10);
 });
 
+// Wiki (Darkness of Hallowvale): "The level 22 Thieving requirement to begin the quest is boostable".
+test('a boosted Thieving 22 starts the quest', () => {
+  const h = setup();
+  const START_HOOK = 'quest:darkness-of-hallowvale:start';
+  h.setSkill(h.core.Skill.THIEVING, 21); // base 21; this fixture's current levels are all 99 (boosted)
+  h.emit('npc-dialogue:hook', { npcId: VELIAF_ID, hook: START_HOOK });
+  assert.equal(h.stage(), 10);
+  assert.ok(!h.messages.some((message) => /22 Thieving/.test(message)));
+});
+
 test('stage-0 Veliaf transcript selects only the canonical In Aid continuation', () => {
   const h = setup();
   assert.equal(h.answerCondition('5iTY3c'), true, 'the In Aid prerequisite selects the continuation branch');

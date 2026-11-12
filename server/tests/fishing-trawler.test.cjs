@@ -513,3 +513,35 @@ test("Murphy at sea answers with his take-me-back talk, and its wreck action sin
     Sea.sea.voyage = null;
   }
 });
+
+// Wiki (Fishing Trawler, contribution table): a fixed rail gives 5 Construction XP, only with a player-owned house.
+test('fixing a rail gives 5 Construction XP to a house owner, and none without a house', () => {
+  const Actions = require('../plugins/minigames/fishingtrawler/Actions.FishingTrawler');
+  Actions.resolveSpots();
+  const railId = core.CacheDefinitions.getLocId('shiprail_port');
+  for (const owns of [true, false]) {
+    Shared.bind({ core, emitCustomEvent: (name, request) => { if (name === 'construction:owns-house') request.owns = owns; } });
+    const player = fakePlayer();
+    const xp = [];
+    player.getInventory = () => ({ contains: () => true, getAmount: () => 1 });
+    player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: (skill, amount) => xp.push([skill, amount]) });
+    player.performAnimation = () => {};
+    player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+    const voyage = new Voyage([player], () => 0.99);
+    voyage.sync = () => {};
+    voyage.rails.port = 2;
+    Sea.sea.voyage = voyage;
+    try {
+      assert.equal(Actions.fixRail({ player, objectId: railId }), true);
+      assert.deepEqual(xp.filter(([skill]) => skill === core.Skill.CONSTRUCTION).map(([, amount]) => amount), owns ? [5] : [], `owns a house: ${owns}`);
+    } finally {
+      Sea.sea.voyage = null;
+    }
+  }
+  Shared.bind({ core, emitCustomEvent: () => {} });
+});
+
+test("the angler piece uses the Wiki's line", () => {
+  // Wiki (Fishing Trawler, trivia).
+  assert.equal(Shared.message('angler'), 'The luck of the sea is in today. You spot a piece of fishing gear caught up in the netting!');
+});

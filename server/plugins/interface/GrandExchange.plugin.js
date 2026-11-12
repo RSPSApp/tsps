@@ -1090,7 +1090,8 @@ function handleInventoryItem(event) {
   const item = event.player.getInventory().getItems()[event.slot];
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
     if (!exchangeable(event.itemId)) {
-      event.player.sendMessage("That item can't be traded on the Grand Exchange.");
+      // rsprox 226/01671.txt:24807, 232/03215.txt:42779.
+      event.player.sendMessage("You can't trade that item on the Grand Exchange.");
       return true;
     }
     if (restricted(item)) {

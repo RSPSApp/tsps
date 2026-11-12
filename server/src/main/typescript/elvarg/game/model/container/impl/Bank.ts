@@ -20,6 +20,7 @@ const getPluginManager = () =>
     require("../../../../plugins/PluginManager").PluginManager as typeof import("../../../../plugins/PluginManager").PluginManager;
 
 /** Live OSRS's wording (rsprox recordings 454, 3066, 4151, 3467, 1059). */
+// Both are spam on bank clicks in every recording (e.g. 224/01463.txt:7863, 231/03063.txt:9533); shops send the first as a game message.
 const INVENTORY_FULL_MESSAGE = "You don't have enough inventory space.";
 const WITHDRAW_PARTIAL_MESSAGE = "You don't have enough inventory space to withdraw that many.";
 const NEW_TAB_MESSAGE = "To create a new tab, drag items from your bank onto this tab.";
@@ -1400,7 +1401,7 @@ export class Bank extends ItemContainer {
         // Make sure we have enough space in the other container
         if (to.getFreeSlots() <= 0 && (!(to.contains(item.getId()) && item.getDefinition().isStackable()))
                 && !(this.getPlayer().withdrawAsNote() && canWithdrawAsNote && to.contains(noteId))) {
-            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            if (to instanceof Inventory) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, INVENTORY_FULL_MESSAGE);
             else to.full();
             return this;
         }
@@ -1421,7 +1422,7 @@ export class Bank extends ItemContainer {
                 }
             }
         }
-        if (shortened) this.getPlayer().sendMessage(WITHDRAW_PARTIAL_MESSAGE);
+        if (shortened) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, WITHDRAW_PARTIAL_MESSAGE);
 
         // Make sure we aren't taking more than we have.
         if (item.getAmount() > this.getAmount(item.getId())) {
@@ -1452,7 +1453,7 @@ export class Bank extends ItemContainer {
         if (this.getPlayer().withdrawAsNote() && canWithdrawAsNote) arriving.setId(noteId);
         const room = to.getAddableAmount(arriving);
         if (room <= 0) {
-            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            if (to instanceof Inventory) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, INVENTORY_FULL_MESSAGE);
             else to.full();
             return this;
         }

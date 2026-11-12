@@ -1,7 +1,7 @@
 /**
- * Native legacy chat-channel challenges for the bounded Plateau/melee-only LTS slice.
+ * Native legacy chat-channel challenges for bounded Plateau/melee-only team battles.
  * Messages are implementation wording; there is no team-match recording to quote.
- * Pinned rev241: setup accept31, cap dropdown43 children1..8, confirm button7;
+ * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
  */
 const Common = require("./Common.ClanWars");
@@ -17,7 +17,7 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "wincondition_container", "arena_container", "stragglers_container", "other_container",
+  "arena_container", "stragglers_container", "other_container",
   "melee", "ranged", "magic", "food", "drinks", "prayer", "specialattacks", "leavingcc", "rejoiningdelay",
 ];
 
@@ -60,11 +60,16 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee last team standing - Plateau", Common.uid("clanwars_setup:title"));
-      // Hidden controls cannot optimistically change local rule varbits. The next screen
-      // explicitly lists the fixed terms; this screen negotiates the cap only.
+      sender.sendString("Melee team battles - Plateau", Common.uid("clanwars_setup:title"));
+      // The cache creates mode rows at index * 3 (script 576). Every actual row
+      // must transmit even when its mode is unsupported: script579
+      // optimistically changes the client varbit even on unsupported selections.
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
+      }
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), 0, 71, 0);
+      for (let mode = 0; mode < 24; mode++) {
+        sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), mode * 3, mode * 3, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:dropdown_playercap"), 1, Rules.TEAM_CAPS.length, OP1);
@@ -143,7 +148,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing on Plateau. Choose a team cap, then check all fixed terms on the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau. Objective modes are unavailable. Choose a mode and team cap, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -173,10 +178,11 @@ function route(event) {
   });
 }
 
-function changeCap(session, player, index) {
-  const next = Rules.create(index);
+function changeRules(session, player, key, index) {
+  const next = Rules.create(key === "playercap" ? index : session.rules.playercap,
+    key === "wincondition" ? index : session.rules.wincondition);
   if (!next) return;
-  if (session.rules.playercap === index) {
+  if (session.rules[key] === index) {
     sendRules(player, session.rules);
     return;
   }
@@ -240,7 +246,13 @@ function click(event) {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
     if (clicked("clanwars_setup:dropdown_playercap")) {
       const slot = event.slot ?? event.action;
-      if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeCap(session, player, slot - 1);
+      if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeRules(session, player, "playercap", slot - 1);
+    }
+    if (clicked("clanwars_setup:wincondition")) {
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
+        && Rules.create(session.rules.playercap, slot / 3)) return changeRules(session, player, "wincondition", slot / 3);
+      player.sendMessage("Only Last Team Standing, First to X kills and Most kills are supported.");
     }
     // A forged unsupported selection cannot alter the server's offer, nor leave a
     // client-only optimistic selection behind for the confirmation screen.

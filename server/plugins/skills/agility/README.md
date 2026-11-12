@@ -20,6 +20,7 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `at` | Optional: the loc's tile, or a list of tiles, when one id is several shortcuts |
 | `level`, `xp` | Agility level and experience (Wiki) |
 | `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }` |
+| `keepAnimation` | Optional `true`: the last animation plays out after a successful crossing instead of being reset on landing |
 | `start`, `end` | Optional messages at the start and on success |
 | `render` | Optional walk animation for the whole crossing (`"BALANCE_WALK"`) |
 | `route` | Optional tile the player walks to before starting |
@@ -66,7 +67,7 @@ and an obstacle's `start` and `end`, is a game message, or `{ "spam": text }` or
 - **Animations by name**, from `Constants.Agility.js` (`Anim`) and `shortcuts/Builders.Agility.js` (`ShortcutAnim`):
   `{ "anim": "CLIMB_ROCKS" }`; `-1` resets.
 - **Builders as macros**: `{ "use": "hops", "args": ["object", "to"] }`. `climbOver`, `jump`,
-  `hops`, `pipe`, `tunnel`, `crevice`, `crawlDown`, `crawlUp`, `ropeSwing`, `hurdle`, `climb`.
+  `hops`, `pipe`, `tunnel`, `underwall`, `hole`, `crevice`, `crawlDown`, `crawlUp`, `ropeSwing`, `hurdle`, `climb`.
 - **Tokens**: `"object"` (the clicked loc's tile), `"to"` and `"from"` (a crossing's ends),
   `"via0"`, `"via1"` ... and `"...via"` (its `via` tiles in travel order), single coordinates
   (`"pos.x"`, `"object.y"`).

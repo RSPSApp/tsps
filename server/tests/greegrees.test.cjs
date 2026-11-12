@@ -140,6 +140,14 @@ test("a greegree can't be wielded off the island or in combat (rsprox 3342)", ()
   assert.deepEqual(fighting.state.messages, ["You cannot use this whilst in combat."]);
 });
 
+test("'greegree:wrench-off' is the shared wrench-off (Kruk's Dungeon, Monkey Madness II)", () => {
+  assert.equal(typeof hooks.events["greegree:wrench-off"], "function");
+  const player = createPlayer(MARIM);
+  login(player);
+  hooks.events["greegree:wrench-off"]({ player }); // no greegree wielded: nothing to take off
+  assert.equal(player.getNpcTransformationId(), -1);
+});
+
 test("logging in on the island wearing one is a monkey again, without the effects", () => {
   const player = createPlayer(MARIM, { weapon: SMALL_NINJA });
   hooks.events["equipment:changed"]({ player });

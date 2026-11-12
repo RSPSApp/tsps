@@ -102,6 +102,16 @@ module.exports = function registerWitchsHouseQuest(api) {
   /** The drawers at 2901,3471 shut themselves 100 ticks after opening (ticks 271 -> 371). */
   const SHUT_BY_ITSELF_TICKS = 100;
   const FULL_INVENTORY_MESSAGE = "You couldn't hold all those items.";
+  const BOXES_NOTHING = "You search the boxes but find nothing.";
+  /** Wiki (Boxes (witch's house)), estimated from 750 searches: nothing 1/2, cabbage 1/6.67, needle 1/7, thread 1/12, boots 1/10, gloves 1/26. */
+  const BOXES_TABLE = [
+    { itemId: null, weight: 1 / 2 },
+    { itemId: ItemIdentifiers.CABBAGE, name: "an old cabbage", weight: 1 / 6.67 },
+    { itemId: ItemIdentifiers.NEEDLE, name: "a sewing needle", weight: 1 / 7 },
+    { itemId: ItemIdentifiers.THREAD, name: "some sewing thread", weight: 1 / 12 },
+    { itemId: ItemIdentifiers.LEATHER_BOOTS, name: "a pair of leather boots", weight: 1 / 10 },
+    { itemId: GLOVES_ITEM_ID, name: "a pair of leather gloves", weight: 1 / 26 },
+  ];
   /** Cache Boxes (24692) placements in the witch's house basement. */
   const BASEMENT_BOXES = [
     { x: 2899, y: 9871 }, // west room, behind the electric gate
@@ -344,20 +354,31 @@ module.exports = function registerWitchsHouseQuest(api) {
     const at = player.getLocation();
     if (at.getZ() !== 0 || at.getX() < 2897 || at.getX() > 2909 || at.getY() < 9870 || at.getY() > 9878) return;
     if (basementRoom(at.getX()) !== basementRoom(location.x)) return;
-    const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return;
-
     event.handled = true;
-    if (held(player, GLOVES_ITEM_ID) || wearingGloves(player)) {
-      player.sendMessage("You search the boxes but find nothing.");
-      return;
-    }
+    // Wiki (Boxes (witch's house)): not a quest-only search; "Searching the boxes with a full inventory will always
+    // yield nothing." The rest is its table, with the recorded lines (233/03246.txt:15693-18881).
     if (player.getInventory().getFreeSlots() <= 0) {
-      player.sendMessage(FULL_INVENTORY_MESSAGE);
+      player.sendMessage(BOXES_NOTHING);
       return;
     }
-    player.getInventory().adds(GLOVES_ITEM_ID, 1);
-    player.sendMessage("You find a pair of leather gloves in the boxes.");
+    const found = rollBoxes(Math.random());
+    if (!found) {
+      player.sendMessage(BOXES_NOTHING);
+      return;
+    }
+    player.getInventory().adds(found.itemId, 1);
+    player.sendMessage(`You find ${found.name} in the bottom of one of the boxes!`);
+  }
+
+  /** One roll on the boxes' table: null for nothing. */
+  function rollBoxes(roll) {
+    const total = BOXES_TABLE.reduce((sum, row) => sum + row.weight, 0);
+    let at = roll * total;
+    for (const row of BOXES_TABLE) {
+      if (at < row.weight) return row.itemId === null ? null : row;
+      at -= row.weight;
+    }
+    return null;
   }
 
   /** The clicked menu option, lower-case (the object-click packet sends it so). */

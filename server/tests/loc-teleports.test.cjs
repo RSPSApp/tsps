@@ -799,6 +799,86 @@ test("the Tlati dragon nest cave plays as captured: crawl, sound and fade, then 
   ]);
 });
 
+test("Araxxor's lair web tunnel out crawls, fades and teleports out of the instance, then fades back in", () => {
+  // Captured: crawl (844), sound 2454 and the fade out a tick after arriving, the minimap off a tick
+  // later, the teleport to (3658, 9815) on tick 3, the fade back in a tick after it.
+  const object = locAt(54274, 3648, 9814, 0);
+  const visit = explorer([3649, 9815, 0]);
+  // The lair is the player's own instance, which the move takes them out of.
+  let area = {};
+  visit.player.getPrivateArea = () => area;
+  const moveTo = visit.player.moveTo;
+  visit.player.moveTo = (location) => { area = null; return moveTo(location); };
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 6);
+  assert.deepEqual(visit.ticks, [
+    ["anim 844", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 3658,9815,0"],
+    ["varbit 6719=0", "open 174"],
+    [],
+    ["close overlay"],
+    [],
+  ]);
+  assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test("Araxxor's lair web tunnel in needs 92 Slayer, Priest in Peril and a spider task, then crawls in with its box", (t) => {
+  const object = locAt(54161, 3655, 9814, 0);
+  const entry = data.locs.find((loc) => loc.id === 54161);
+  const visit = explorer([3658, 9814, 0]);
+  const messages = [];
+  const boxes = [];
+  visit.player.sendMessage = (message) => messages.push(message);
+  visit.player.getDialogueManager().startDialogues = (chain) => boxes.push([...chain.getDialogues().values()].map((line) => line.text).join(" / "));
+  let task = null;
+  let answering = true;
+  const slayer = PluginManager.createApi("AraxxorTunnelSlayer");
+  slayer.onCustomEvent("slayer:current-task", (query) => { if (answering) query.task = task; });
+  t.after(() => { questsDone.delete("priest_in_peril"); answering = false; });
+  const click = () => {
+    const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+  };
+  visit.player.getSkillManager().setCurrentLevel(core.Skill.SLAYER, 91, false);
+  click();
+  visit.player.getSkillManager().setCurrentLevel(core.Skill.SLAYER, 92, false);
+  click();
+  questsDone.add("priest_in_peril");
+  task = { name: "Kalphite" };
+  click();
+  assert.deepEqual(messages, entry.requires.map((gate) => gate.refuse.message));
+  assert.deepEqual(visit.ticks.flat(), [], "a refusal plays nothing");
+  task = { name: "Spiders" };
+  click();
+  runTicks(visit, 6);
+  assert.deepEqual(boxes, ["You crawl through the webbed tunnel."]);
+  assert.deepEqual(visit.ticks, [
+    ["anim 844", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 3647,9815,0"],
+    ["varbit 6719=0", "open 174"],
+    [],
+    ["close overlay"],
+    [],
+  ]);
+});
+
+test("Araxxor's outer web tunnels crawl with sound 2454 both ways; only 54271 long-crawls", () => {
+  const tunnels = data.locs.filter((loc) => loc.name.startsWith("araxxor_cave_outer_tunnel_multi") && loc.id !== 54274);
+  assert.equal(tunnels.length, 6);
+  for (const tunnel of tunnels) {
+    assert.equal(tunnel.sound, 2454, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
+    assert.equal(tunnel.anim, tunnel.id === 54271 ? 2796 : 844, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
+  }
+  // The east link's reverse: crawl and sound two ticks after arriving, the move a tick later.
+  const eastBack = tunnels.find((tunnel) => tunnel.id === 54272 && tunnel.x === 3693);
+  assert.deepEqual([eastBack.animTick, eastBack.tick, eastBack.recordings], [2, 3, 1]);
+});
+
 test("a Climb that Ladders would ask about goes the captured way: the Arceuus library stairs go up", () => {
   const object = locAt(27851, 1612, 3818, 1);
   const visit = explorer([1615, 3819, 1]);
@@ -1065,8 +1145,9 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
     emitCustomEvent: (name, payload) => (listeners.get(name) ?? []).forEach((handler) => handler(payload)),
     onPlayerLogin: (handler) => logins.push(handler),
     getTaskManager: () => core.TaskManager,
-    sendMultiChatboxPrompt: () => true,
+    sendMultiChatboxPrompt: (player, title, ...pairs) => { ropePrompts.push({ title, pairs }); return true; },
   };
+  const ropePrompts = [];
   require("../plugins/objects/Ladders.plugin").register(api);
   const Misthalin = require("../plugins/areas/Misthalin.plugin");
   Misthalin.register(api);
@@ -1095,6 +1176,19 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
   const rope = { player: visit.player, object, objectId: 5947, itemId: 954, location: { x: 3169, y: 3172, z: 0 }, handled: false };
   assert.equal(itemOnObject.get("Rope:Dark hole")(rope), true);
   assert.equal(rope.handled, true);
+  // rsprox 227/00075.txt:174556: the game asks first; No leaves the rope.
+  const [asked] = ropePrompts.splice(0);
+  assert.deepEqual([asked.title, asked.pairs[0], asked.pairs[2]], ["Attach a rope to the top of the hole?", "Yes.", "No."]);
+  asked.pairs[3]();
+  assert.ok(visit.player.getAttribute(Misthalin._test.SWAMP_CAVE_ROPED_ATTRIBUTE) !== true, "No: not tied");
+  assert.equal(visit.player.getInventory().getAmount(954), 1);
+  itemOnObject.get("Rope:Dark hole")(rope);
+  let box = null;
+  visit.player.getDialogueManager().startDialogues = (chain) => { box = [...chain.getDialogues().values()][0]; };
+  ropePrompts.splice(0)[0].pairs[1]();
+  assert.ok(box instanceof core.ItemStatementDialogue, "Yes: the line in an item box");
+  assert.ok(JSON.stringify(box).includes("You tie the rope to the top of the hole and throw it down."));
+  assert.ok(visit.ticks.flat().includes("anim 827") && visit.ticks.flat().includes("sound 1774"), JSON.stringify(visit.ticks.flat()));
   assert.equal(visit.player.getAttribute(Misthalin._test.SWAMP_CAVE_ROPED_ATTRIBUTE), true, "the rope stays tied");
   assert.equal(visit.player.getInventory().getAmount(954), 0, "the rope is used up");
   assert.ok(visit.ticks.flat().includes(`varbit ${Misthalin._test.SWAMP_CAVE_ROPED_VARBIT}=1`));

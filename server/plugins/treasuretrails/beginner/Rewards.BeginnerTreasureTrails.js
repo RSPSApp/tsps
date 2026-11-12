@@ -40,6 +40,11 @@ function onEntrana(player) {
 }
 
 /** Resolve every credited definition before consumption, including milestone rewards. */
+/** The rewards' Grand Exchange worth, as the casket's last message gives it. */
+function worth(drops) {
+  return drops.reduce((sum, drop) => sum + drop.amount * (core.ItemDefinition.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
+}
+
 function prepareDrops(drops) {
   if (!Array.isArray(drops) || !drops.length) throw new Error("Missing beginner rewards");
   return drops.map(drop => {
@@ -107,6 +112,9 @@ function open(event) {
     if (inventory.getItems()[slot] !== item || item.getId() !== Runtime.data().casket || item.getAmount() < 1) return true;
     inventory.deleteAtSlot(slot, 1);
     player.setAttribute(Runtime.COMPLETED_ATTRIBUTE, count);
+    // rsprox 227/00091.txt:346300-346305: the trail is complete, the count, then the treasure's worth, the last two in red.
+    player.sendMessage("Well done, you've completed the Treasure Trail!");
+    player.sendMessage(`<col=ef1020>You have completed ${count} beginner Treasure Trail${count === 1 ? "" : "s"}.</col>`);
     const slots = give(player, drops, true);
     Runtime.restore({ player });
     const sender = player.getPacketSender();
@@ -115,7 +123,7 @@ function open(event) {
     sender.sendInterfaceScript(1065, [(group << 16) | 3], undefined, undefined, {
       [Runtime.data().rewardInventory]: { capacity: Math.max(3, slots.length), slots },
     });
-    player.sendMessage(`You have completed ${count} beginner Treasure Trail${count === 1 ? "" : "s"}.`);
+    player.sendMessage(`<col=ef1020>Your treasure is worth around ${worth(drops).toLocaleString("en-US")} coins!</col>`);
     api?.emitCustomEvent?.("treasure-trails:casket-opened", { player, tier: "beginner" });
   } finally {
     player.setAttribute(OPENING_ATTRIBUTE, false);

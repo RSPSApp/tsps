@@ -853,6 +853,7 @@ test('area music follows actual same-region movement, dynamic selection and manu
     player.setArea(null);
     const index = AreaManager.areas.indexOf(area);
     if (index >= 0) AreaManager.areas.splice(index, 1);
+    AreaManager.get(player.getLocation()); // Refresh the index after removing this temporary area.
     core.World.getPlayers().remove(player);
   });
   let tick = 0;
@@ -1650,4 +1651,92 @@ test('Shuffle and Skip play only from the playlist in use', async t => {
   assert.equal(pick(alKharid.track.id).track, adventure.track.id, 'never the one that ended');
   player.setAudioSetting(19, 1 | (2 << 14));
   assert.equal(pick(alKharid.track.id).silent, true, 'an empty playlist plays nothing, not even the last track');
+});
+
+test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registered area', async t => {
+  await setup();
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const areas = [];
+  const areaApi = new Proxy(api, { get: (target, key) => key === 'registerArea'
+    ? (area) => areas.push(area) : target[key] });
+  // Use the ordinary deferred LeagueMode registration, rather than constructing the new area directly.
+  require('../plugins/modes/AreaUnlocks.LeagueMode').register(areaApi);
+  const { Music, CacheMaps, CacheDefinitions } = api.core;
+  assert.equal(trackNames[280], 'Sign Here', 'the cache song ID, not the Wiki display number');
+  assert.ok(CacheMaps.getArchiveIds(5975), 'the separate lair map square is present');
+  assert.notEqual(CacheDefinitions.getLocId('league_6_yama_exit'), null, 'the league exit exists in this cache');
+  assert.deepEqual(Music.tracksAt(1503, 5602, 0), [], 'Wiki polygons do not cover the league map');
+  const previous = AreaManager.areas;
+  const arrival = new Location(1503, 5602, 0);
+  // Earlier cases remove temporary areas. Resolve that restored registry before adding a new
+  // one with the same area/boundary counts, which otherwise reuses the earlier search index.
+  assert.equal(AreaManager.get(arrival), null, 'no existing area supplies the lair policy before registration');
+  AreaManager.areas = [...areas, ...previous];
+  try {
+    const area = AreaManager.get(arrival);
+    for (const classic of [false, true]) {
+      const player = makePlayer();
+      let location = arrival;
+      let currentArea = area;
+      const audio = { 18: 0, 19: classic ? 1 << 10 : 0 };
+      const songs = [];
+      Object.assign(player, {
+        getLocation: () => location,
+        getArea: () => currentArea,
+        getAudioSettings: () => audio,
+      });
+      const session = new PlayerSession({ isOpen: true });
+      session.setPlayer(player);
+      player.getSession = () => session;
+      const packets = [];
+      const transport = t.mock.method(session, 'sendClientPacket', (packet) => (packets.push(packet), true));
+      const nativeSender = new PacketSender(player);
+      player.getPacketSender().sendSong = (id, fades) => {
+        songs.push(id);
+        return nativeSender.sendSong(id, fades);
+      };
+      // Keep this test at the real music-flush boundary, before unrelated scene synchronization.
+      const flushMusic = (tick) => {
+        let checks = 0;
+        const open = t.mock.method(session, 'isBinaryChannelOpen', () => checks++ === 0);
+        session.lastGroundItemRegion = ((location.getX() >> 6) << 8) | (location.getY() >> 6);
+        session.lastGroundItemLevel = location.getZ();
+        try { session.flush(tick); } finally { open.mock.restore(); }
+      };
+      const eventMock = t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => api.emitCustomEvent(name, payload));
+      try {
+        flushMusic(0);
+        assert.deepEqual(songs, [280], 'Area mode plays Sign Here on first entry');
+        const { encodePlaySong } = require('../dist/net/protocol/ClientProtocol');
+        assert.deepEqual(packets[0], encodePlaySong(280), 'the actual native song packet was accepted by the recording transport');
+        assert.ok(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE).includes(280), 'entry stored the unlock attribute');
+        const slot = catalog.slotByTrackId[280];
+        assert.ok(player.configs.some(([varp, value]) => varp === slot.varp && (value & (1 << slot.bit)) !== 0), 'native unlock bit was sent');
+        assert.equal(session.getCurrentMusicTrack(), 280);
+        flushMusic(1);
+        assert.deepEqual(songs, [280], 'standing in the lair does not restart the song each tick');
+        location = new Location(1666, 3136, 0);
+        currentArea = null;
+        flushMusic(2);
+        assert.ok(Music.tracksAt(1666, 3136, 0, classic).includes(songs.at(-1)), 'exit resumes destination music');
+        location = new Location(1502, 5592, 0); // League Home Teleport's recorded return tile.
+        currentArea = AreaManager.get(location);
+        flushMusic(3);
+        assert.equal(songs.at(-1), 280, 'returning to the lair plays Sign Here again');
+        audio[18] = 2;
+        songs.length = 0;
+        flushMusic(4);
+        assert.deepEqual(songs, [], 'Single mode does not force area playback');
+      } finally { eventMock.mock.restore(); transport.mock.restore(); }
+    }
+    assert.equal(area?.getMusicTrack({ getLocation: () => arrival }), 280, 'the registered lair must supply Sign Here');
+    for (const tile of [new Location(1471, 5602, 0), new Location(1536, 5602, 0),
+      new Location(1503, 5567, 0), new Location(1503, 5632, 0), new Location(1503, 5602, 1)]) {
+      assert.notEqual(AreaManager.get(tile), area, 'adjacent squares and other planes are outside the lair');
+      assert.equal(area.getMusicTrack({ getLocation: () => tile }), null, 'stale membership cannot override another tile');
+    }
+  } finally {
+    AreaManager.areas = previous;
+    AreaManager.get(arrival); // Leave the search index in sync with the restored registry too.
+  }
 });

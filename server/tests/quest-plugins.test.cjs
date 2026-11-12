@@ -916,15 +916,17 @@ test('While Guthix Sleeps only tracks a shirt through the player’s own broav',
   const player = { getLocation: () => new api.core.Location(2519,3249,0),
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key,value),
     getInventory: () => ({ deleteNumber() {} }),
-    sendMessage() {}, getPacketSender: () => ({ sendVarbit() {} }) };
+    sendMessage() {}, performAnimation() {}, getPacketSender: () => ({ sendVarbit() {} }) };
   const npc = { getId: () => 13518, getOwner: () => player,
     getMovementQueue: () => ({ addSteps: location => moves.push(location) }) };
   const event = { player, itemId:29521, target:npc };
   assert.equal(handlers.at(-1)({...event,target:{...npc,getOwner:()=>({})}}),false);
   assert.equal(handlers.at(-1)(event),true);
   assert.equal(event.handled,true);
+  // The find comes 7 ticks after the sniff (rsprox 226/01698.txt:32945-33145).
+  for (let i = 0; i < 7; i++) api.core.TaskManager.process();
   assert.equal(attributes.get('while-guthix-sleeps:broav-trail'),1);
-  assert.equal(moves.length,1);
+  assert.equal(moves.length,0,'the broav stays put (rsprox 226/01698.txt)');
 });
 
 test("While Guthix Sleeps counts Thaerisk's actual assassin kill without a player death event", () => {
@@ -18319,22 +18321,33 @@ test("Death Plateau walks the castle and inn stairs without climbing", (t) => {
 });
 
 test("Death Plateau doors require Eohric's hint and the solved puzzle", () => {
-  const { api, handlers, quest, player, messages } = questScene('DeathPlateau');
+  const { api, handlers, quest, player } = questScene('DeathPlateau');
   const door = api.core.ObjectIdentifiers.DOOR_115;
+  const started = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => started.push(chain) });
   const toggle = objectId => {
     const event = { player, objectId, handled: false };
     handlers.custom.get('door:toggle').forEach(handler => handler(event));
     return event.handled;
   };
+  // Transcript:Death_Plateau: the refusal is the player's chathead line; after Eohric, a knock from the corridor, and
+  // leaving the room is the door's own pass-through.
+  player.moveTo(new api.core.Location(2906, 3542, 1));
   for (const stage of [0, 10]) {
     quest.setStage(player, stage);
+    started.length = 0;
     assert.equal(toggle(door), true);
-    assert.match(messages.at(-1), /without a reason/);
+    assert.ok(JSON.stringify([...started[0].getDialogues().values()]).includes('without a reason'));
   }
   for (const stage of [20, 30, 40, 60, 80]) {
     quest.setStage(player, stage);
-    assert.equal(toggle(door), false, 'the shared door handler opens it');
+    assert.equal(toggle(door), false, 'leaving: the shared door handler opens it');
   }
+  player.moveTo(new api.core.Location(2906, 3543, 1));
+  quest.setStage(player, 20);
+  started.length = 0;
+  assert.equal(toggle(door), true, 'entering: the knock first');
+  assert.ok(JSON.stringify([...started[0].getDialogues().values()]).includes('You knock on the door.'));
   for (const stage of [0, 55, 60, 65, 70, 80]) {
     quest.setStage(player, stage);
     assert.equal(toggle(api.core.ObjectIdentifiers.LARGE_DOOR_23), stage < 65);

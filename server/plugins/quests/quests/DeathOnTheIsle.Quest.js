@@ -1315,7 +1315,8 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     const boxes = {
       '0NeKgL': [UNIFORM_TOP, UNIFORM_BOTTOM],
       '5z2Lhi': [WINE_LABELS], SsD2Fw: [THREATENING_NOTE], Adb65_: [DRINKING_FLASK], XXxTM6: [SHIPPING_CONTRACT],
-      JwtSTS: [WINE_LABELS, DRINKING_FLASK], FTSXlx: [CHEST_KEY], '1XIQ80': [ICON],
+      // rsprox 226/01695.txt:124649-124651: the hand-over's objectbox_double shows doti_flask (29925) and doti_letter (29926).
+      JwtSTS: [DRINKING_FLASK, THREATENING_NOTE], FTSXlx: [CHEST_KEY], '1XIQ80': [ICON],
     };
     if (boxes[stepId]) { event.handled = true; event.box = { items: boxes[stepId] }; }
     if (boxes[stepId]?.some(id => EVIDENCE_ITEMS.includes(id)) && stepId !== 'JwtSTS' && player.getInventory().getFreeSlots() < 1) {

@@ -149,8 +149,8 @@ function bankStorageOp(event) {
     event.handled = true;
     const stored = container.getMetaValue("farming:stored") ?? {}, seeds = containerKind(container) === "seed";
     const initial = Object.keys(stored).length;
-    if (seeds && !initial) player.sendMessage("Your seed box is already empty.");
-    for (const [key, count] of Object.entries(stored)) {
+    if (!initial) player.sendMessage(seeds ? "Your seed box is already empty." : herbSackEmpty(container));
+    for (const [key, count] of seeds ? SeedBox.entriesOf(container) : Object.entries(stored)) {
         const id = Number(key);
         if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
         const bank = player.getBank(core.Bank.getTabForItem(player, id));
@@ -161,6 +161,7 @@ function bankStorageOp(event) {
         if (!stored[key]) delete stored[key];
     }
     container.setMetaValue("farming:stored", stored);
+    if (seeds) SeedBox.arrange(container);
     if (seeds && Object.keys(stored).length === 0 && initial) Patches.spam(player, "Your seed box is now empty."); // spam, as recorded
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
@@ -178,6 +179,7 @@ function emptyStored(player, container) {
         contents.push({ id, amount: count });
     }
     if (Object.keys(stored).length) container.setMetaValue("farming:stored", {});
+    if (containerKind(container) === "seed") SeedBox.arrange(container);
     return contents;
 }
 const DEATH_CONTAINERS = [
@@ -187,14 +189,17 @@ const DEATH_CONTAINERS = [
 function deathContainers(query) {
     query.containers.push(...DEATH_CONTAINERS);
 }
+/** An unnoted grimy normal herb: the only items a herb sack takes. */
+const isSackHerb = id => [...Data.CROPS.values()].some(c => c.type === "HERB" && c.produce === id)
+    && !!core.CacheDefinitions.getItem(id).name?.startsWith("Grimy ");
 /** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 function storeRoom(player, container, id) {
     const kind = containerKind(container);
     if (!kind) return 0;
     if (kind === "herb" && player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) < 58) return 0;
-    const crop = [...Data.CROPS.values()].find(c => kind === "seed" ? c.seed === id : c.type === "HERB" && c.produce === id);
-    if (!crop || (kind === "seed" && !core.CacheDefinitions.getItem(id).stackability)) return 0;
-    if (kind === "herb" && !core.CacheDefinitions.getItem(id).name?.startsWith("Grimy ")) return 0;
+    if (kind === "herb" && !isSackHerb(id)) return 0;
+    const crop = kind === "seed" && [...Data.CROPS.values()].find(c => c.seed === id);
+    if (kind === "seed" && (!crop || !core.CacheDefinitions.getItem(id).stackability)) return 0;
     const stored = (container.getMetaValue("farming:stored") ?? {});
     if (kind === "seed" && !stored[id] && Object.keys(stored).length >= 6) return 0;
     return Math.max(0, (kind === "herb" ? (isSilklined(container) ? SILKLINED_CAPACITY : HERB_SACK_CAPACITY) : 2147483647) - (stored[id] ?? 0));
@@ -205,6 +210,7 @@ function storeCrop(player, container, id, maximum) {
     const stored = container.getMetaValue("farming:stored") ?? {};
     stored[id] = (stored[id] ?? 0) + amount;
     container.setMetaValue("farming:stored", stored);
+    if (containerKind(container) === "seed") SeedBox.arrange(container);
     return amount;
 }
 /** The first open herb sack the player carries, plain or silklined. */
@@ -292,18 +298,57 @@ function storagePair(event) {
     const container = containerKind(a) ? a : containerKind(b) ? b : undefined;
     if (!container) return;
     event.handled = true;
-    const id = (container === a ? b : a).getId();
+    const id = (container === a ? b : a).getId(), herbs = containerKind(container) === "herb";
+    if (herbs && !isSackHerb(id)) {
+        event.player.sendMessage(SPOILS_SACK);
+        return;
+    }
     const stored = storeCrop(event.player, container, id, inventory.getAmount(id));
     if (stored) inventory.deleteNumber(id, stored);
-    if (stored && containerKind(container) === "seed") Patches.spam(event.player, storedLine(id, stored));
-    else if (!stored) event.player.sendMessage(containerKind(container) === "seed" && isSeed(id) ? NO_SEED_ROOM : "There is no room for that in this container.");
+    if (stored && !herbs) Patches.spam(event.player, storedLine(id, stored));
+    // Ours: a herb used on a sack with no room for it answers as Fill does.
+    else if (!stored) event.player.sendMessage(herbs ? NO_HERB_ROOM : isSeed(id) ? NO_SEED_ROOM : "There is no room for that in this container.");
 }
 // Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines. The
 // Stored, Emptied and "now empty" lines are spam (every recorded one); the refusals are game messages.
 const NO_SEED_ROOM = "You don't have space in your seed box for that.";
 const NO_SEEDS = "You have no seeds that will fit in the seed box.";
+const NO_SEED_INVENTORY_ROOM = "You don't have space in your inventory for that.";
 const displayName = id => core.CacheDefinitions.getItem(id).name;
 const storedLine = (id, amount) => `Stored ${amount} x ${displayName(id)} in your seed box.`;
+/**
+ * The herb sack's lines. Fill searches (spam), then adds (spam) or finds no room (game message);
+ * with no grimy herb carried it only refuses. Check and the refusals are game messages, Empty's
+ * rummage line is spam. The silklined sack names itself in Check and the empty line (Wiki); ours:
+ * in the rummage line too.
+ */
+const sackName = sack => (isSilklined(sack) ? "silklined herb sack" : "herb sack");
+const SEARCH_HERBS = "You search your inventory for herbs appropriate to put in the sack...";
+const HERBS_ADDED = "You add the herbs to your sack.";
+const NO_GRIMY_HERBS = "You have no grimy herbs in your inventory that can be stored in the sack.";
+const NO_HERB_ROOM = "You don't have enough space for the herbs.";
+const NO_HERB_INVENTORY_ROOM = "You have no space to put any herbs!";
+const SPOILS_SACK = "You can't possibly put that in there, it would spoil your sack.";
+const herbSackEmpty = sack => `The ${sackName(sack)} is empty.`;
+function fillHerbSack(player, sack) {
+    const inventory = player.getInventory(), herbs = inventory.getValidItems().filter(item => isSackHerb(item.getId()));
+    if (!herbs.length) return player.sendMessage(NO_GRIMY_HERBS);
+    Patches.spam(player, SEARCH_HERBS);
+    let any = false;
+    for (const item of herbs) {
+        const id = item.getId(), amount = storeCrop(player, sack, id, inventory.getAmount(id));
+        if (amount) inventory.deleteNumber(id, amount);
+        any ||= amount > 0;
+    }
+    if (any) Patches.spam(player, HERBS_ADDED);
+    else player.sendMessage(NO_HERB_ROOM);
+}
+function checkHerbSack(player, sack) {
+    const entries = withdrawalEntries(sack.getMetaValue("farming:stored") ?? {}, "herb").filter(([, n]) => n > 0);
+    player.sendMessage(`You look in your ${sackName(sack)} and see:`);
+    if (!entries.length) player.sendMessage(herbSackEmpty(sack));
+    for (const [id, amount] of entries) player.sendMessage(`${amount} x ${displayName(+id)}`);
+}
 function storageAction(event) {
     const inventory = event.player.getInventory(), container = inventory.forSlot(event.slot);
     if (!container || container.getId() !== event.itemId || !containerKind(container)) return;
@@ -313,6 +358,10 @@ function storageAction(event) {
     const kind = containerKind(container);
     if (action === "open" || action === "close") {
         container.setId(Data.itemId((action === "open" ? "Open " : "") + (kind === "seed" ? "seed box" : isSilklined(container) ? "silklined herb sack" : "herb sack")));
+    } else if (kind === "herb" && action === "fill") {
+        fillHerbSack(event.player, container);
+    } else if (kind === "herb" && action === "check") {
+        checkHerbSack(event.player, container);
     } else if (action === "fill") {
         let refused = false, any = false;
         for (const item of [...inventory.getValidItems()]) {
@@ -328,15 +377,24 @@ function storageAction(event) {
         SeedBox.open(event.player, container);
     } else {
         const stored = (container.getMetaValue("farming:stored") ?? {});
-        if (action === "check") event.player.sendMessage(Object.entries(stored).map(([id, amount]) => `${amount} ${core.CacheDefinitions.getItem(+id).name}`).join(", ") || "The container is empty.");
-        else for (const [id, count] of withdrawalEntries(stored, kind)) {
-            const amount = Math.min(count, kind === "seed" ? inventory.contains(+id) || !inventory.isFull() ? count : 0 : inventory.getFreeSlots());
-            if (amount && Patches.give(event.player, +id, amount)) {
-                stored[id] -= amount;
-                if (!stored[id]) delete stored[id];
-                if (kind === "seed") Patches.spam(event.player, `Emptied ${amount} x ${displayName(+id)} to your inventory.`);
+        const entries = kind === "seed" ? SeedBox.entriesOf(container) : withdrawalEntries(stored, kind);
+        let left = false;
+        if (kind === "herb" && !entries.length) event.player.sendMessage(herbSackEmpty(container));
+        else if (kind === "herb" && inventory.getFreeSlots() === 0) event.player.sendMessage(NO_HERB_INVENTORY_ROOM);
+        else {
+            if (kind === "herb") Patches.spam(event.player, `You rummage around to see if you can extract any herbs from your ${sackName(container)}.`);
+            for (const [id, count] of entries) {
+                const amount = Math.min(count, kind === "seed" ? inventory.contains(+id) || !inventory.isFull() ? count : 0 : inventory.getFreeSlots());
+                if (amount && Patches.give(event.player, +id, amount)) {
+                    stored[id] -= amount;
+                    if (!stored[id]) delete stored[id];
+                    if (kind === "seed") Patches.spam(event.player, `Emptied ${amount} x ${displayName(+id)} to your inventory.`);
+                }
+                left ||= stored[id] > 0;
             }
         }
+        if (kind === "seed") SeedBox.arrange(container);
+        if (kind === "seed" && left) event.player.sendMessage(NO_SEED_INVENTORY_ROOM);
     }
     inventory.refreshItems();
 }
@@ -353,6 +411,14 @@ function openSeedBox(player) {
 function seedBoxGather(event) {
     const box = openSeedBox(event.player), left = event.amount - event.stored;
     if (box && left > 0) event.stored += storeCrop(event.player, box, event.itemId, left);
+}
+/**
+ * "herb-sack:gather" { player, itemId, amount, stored }: Sailing creature loot goes into an open herb sack that has room
+ * (Wiki: Herb sack, 6 May 2026). Silent, as for the seed box: ours.
+ */
+function herbSackGather(event) {
+    const sack = openHerbSack(event.player), left = event.amount - event.stored;
+    if (sack && left > 0) event.stored += storeCrop(event.player, sack, event.itemId, left);
 }
 const seedPickupItems = new WeakSet();
 const seedPickupPlayers = new WeakSet();
@@ -443,4 +509,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { deathContainers, seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

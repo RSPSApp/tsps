@@ -307,6 +307,27 @@ data `panels`):
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
 
+**Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
+(656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: a teleport's cast, before
+the move, or an agility obstacle) with the game message "Please finish what you are doing first." and
+open nothing, through the plugin API's `refuseWhileBusy`, which the interface-click packet checks before
+any handler. As captured: View Tasks two ticks into a standard teleport cast, the tick before the move
+(227/00075), and View Tasks during the Varrock Rooftop wall swing (227/01723).
+
+Not modelled (those clicks still open here):
+- The Royal seed pod's arrival: live refused View Demonic Pacts one and four ticks after the move,
+  during the arrival animation, and opened it the tick after the pod's message (237/01149). Here a
+  teleport releases the player on the tick they move.
+- Live also refused during a stall theft (237/01148) and on the tick a box trap check finished
+  (237/01108). Neither locks the player here.
+- A few refusals came in states the captures don't make clear: after dialogues, banking or inventory
+  clicks (227/00552, 01710, 01757, 01768).
+- Other holds (a spell freeze, a boss's stun or knockback, a cutscene, a ride, a loc's climb, the
+  Leagues home teleport's cast) don't count.
+- Summary, Info and Rank have no captured refusal and aren't gated.
+- The same line answers other interfaces (the account tab's bond and inbox buttons, settings buttons),
+  which this doesn't cover yet.
+
 ### Ranks
 
 `league/Rank.LeagueMode.js`, data `league-ranks.json`: seven ranks a league (Bronze to Dragon) at
@@ -2055,3 +2076,19 @@ the loc exists.
 The cache's "League Skill Cape Shop" (652) is not a shop: its only script (3201) creates 22 tiny
 cape items and prints "Loading: <cape>" for each, a model preloader. Nothing sells through it, and
 the Wiki names no such shop.
+
+When Tutorial Island is enabled on the same world, league character profiles use the league's
+onboarding only. The profile is selected before login hooks run; Tutorial Island neither starts
+nor resumes on that profile, including old saves with island progress. Main characters still
+use Tutorial Island normally. This keeps the quest journal mounted for the league tutorial's
+Open the Leagues Menu step, including after the welcome screen rebuilds the gameframe.
+
+The separate Leagues VI Yama's Lair plays **Sign Here** (Wiki
+[Yama's Lair](https://oldschool.runescape.wiki/w/Yama%27s_Lair), cache song 280).
+`YamaLair.LeagueAreaUnlocks.js` supplies the existing area's music policy for plane 0 of cache
+map square 5975, including the recorded start (1503, 5602) and League Home Teleport landing
+(1502, 5592). The whole map square is used as the isolated lair's boundary; the Wiki names the
+music but does not draw a music polygon for this copy. The session owns unlocking and playback,
+so relog/return work and manual music modes remain respected. The generated Modern and Classic
+Wiki music maps are unchanged. The regression records server music output and unlock bits;
+it does not establish client audio rendering or a natural end-to-end World login playthrough.

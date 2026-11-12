@@ -26,10 +26,22 @@ const REGION_ID = 14231;
 const ATTRIBUTE = "barrows";
 const DIG_ANIMATION = new Animation(830);
 const OVERLAY_ID = 24;
-const OVERLAY_HUD_UID = (161 << 16) | 8;
+// The face needs the full-screen atmosphere slot, not the smaller HUD slot (226/01694).
+const OVERLAY_HUD_UID = (161 << 16) | 1;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
 const REWARDS_ID = 155;
 const REWARDS_INVENTORY = 141;
+/** The reward window is a main modal: toplevel_mainmodal_open, then barrows_reward in mainmodal, items Examine-able. */
+const MAIN_MODAL_UID = (161 << 16) | 16;
+const SCRIPT_MAINMODAL_OPEN = 2524;
+const REWARDS_ITEMS_UID = (REWARDS_ID << 16) | 3;
+const REWARDS_ITEM_SLOTS = 11;
+const OP10 = 1 << 10;
+/** Opening the chest's lid, and closing it. */
+const CHEST_OPEN_SOUND = 54;
+const CHEST_CLOSE_SOUND = 53;
+/** Looting plays this jingle over the area's track. */
+const LOOT_JINGLE = 77;
 const PUZZLE_ID = 25;
 const PUZZLE_BUTTONS = [12, 14, 16];
 const PUZZLE_SEQUENCE_MODELS = [3, 5, 7];
@@ -55,7 +67,13 @@ const DOOR_LINKS = [
   [477, 3, 4], [478, 4, 5], [479, 3, 6], [480, 4, 7],
   [481, 5, 8], [482, 6, 7], [483, 7, 8], [484, 6, 8],
 ];
-const HILTS = new Set([Items.GHOMMALS_HILT_2, Items.GHOMMALS_HILT_3, Items.GHOMMALS_HILT_4, Items.GHOMMALS_HILT_5, Items.GHOMMALS_HILT_6]);
+const HILTS = new Set([Items.GHOMMALS_HILT_2, Items.GHOMMALS_HILT_3, Items.GHOMMALS_HILT_4, Items.GHOMMALS_HILT_5, Items.GHOMMALS_HILT_6,
+  Items.GHOMMALS_AVERNIC_DEFENDER_5, Items.GHOMMALS_AVERNIC_DEFENDER_5_L_, Items.GHOMMALS_AVERNIC_DEFENDER_6, Items.GHOMMALS_AVERNIC_DEFENDER_6_L_]);
+// The pairs are the ordinary and alternate face models seen in rsprox captures 1694 and 4057.
+// Ours: the 1/4 alternate probability approximates the observed frequency; the exact odds are unknown.
+const PRAYER_FACES = [[6737, 29228], [6738, 29225], [6739, 29224], [6740, 29226], [6741, 29227], [6742, 29223]];
+const PRAYER_FACE_SCRIPT = 894; // barrows_nodnod: component, model
+const PRAYER_FACE_FIRST_COMPONENT = 6;
 // These model sequences and options are present in the current cache's model archive.
 const PUZZLES = [
   { sequence: [6716, 6717, 6718], options: [6713, 6714, 6715] },
@@ -254,7 +272,9 @@ function updateOverlay(player, run) {
   sender.sendVarbit(KILL_COUNT_VARBIT, run.kills);
 }
 
+/** The brothers overlay closes as the chest is looted and stays shut until the next run starts. */
 function showOverlay(player) {
+  if (player.getAttribute(ATTRIBUTE)?.looted) return;
   player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, OVERLAY_ID, 1);
   updateOverlay(player, getRun(player));
 }
@@ -550,8 +570,10 @@ function rollRewards(run, runeBonus) {
 function showRewards(player, rewards) {
   player.setAttribute(CLOSE_INTERFACE_ATTRIBUTE, REWARDS_ID);
   const sender = player.getPacketSender();
-  sender.sendSubInterface(GAMEFRAME_OVERLAY_UID, REWARDS_ID, 0);
-  sender.sendInterfaceScript(1065, [(REWARDS_ID << 16) | 3], undefined, undefined, {
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  sender.sendSubInterface(MAIN_MODAL_UID, REWARDS_ID, 0);
+  sender.sendInterfaceFlagsRange(REWARDS_ITEMS_UID, 0, REWARDS_ITEM_SLOTS, OP10);
+  sender.sendInterfaceScript(1065, [REWARDS_ITEMS_UID], undefined, undefined, {
     [REWARDS_INVENTORY]: { capacity: 8, slots: rewards.map((item, slot) => ({ slot, itemId: item.getId(), quantity: item.getAmount() })) },
   });
 }
@@ -596,16 +618,18 @@ function searchChest(player, clickType) {
   const state = session(player);
   const sender = player.getPacketSender();
   if (run.looted) {
-    sender.sendMessage("The chest is empty. Leave the tunnels to begin another run.");
+    sender.sendMessage("The chest is empty.");
     return;
   }
   if (clickType === 2) {
+    if (run.chestOpen) sender.sendSoundEffect(CHEST_CLOSE_SOUND, 1, 0);
     run.chestOpen = false;
     sender.sendVarbit(CHEST_OPEN_VARBIT, 0);
     return;
   }
   if (!run.chestOpen) {
     run.chestOpen = true;
+    sender.sendSoundEffect(CHEST_OPEN_SOUND, 1, 0);
     sender.sendVarbit(CHEST_OPEN_VARBIT, 1);
     if (!run.killed.includes(run.tunnel) && !state.brother) {
       spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true).__barrowsChest = true;
@@ -624,12 +648,15 @@ function searchChest(player, clickType) {
   randomiseLayout(run);
   syncTunnels(player, run);
   pluginApi.emitCustomEvent("barrows:chest-looted", { player });
-  showRewards(player, rewards);
-  CameraShake.send(sender, "barrows", ...LOOTED_SHAKE);
   // rsprox_transcripts/226/01694.txt:170767-170768: the diary's rune line (spam), then the count.
   if (diary.complete === true) spam(player, "You receive more runes for completing the hard tier of the Morytania achievement diary.");
   sender.sendMessage(`Your Barrows chest count is: <col=ff0000>${run.chests}</col>.`);
   combatAchievementsAtChest(player, run);
+  // Then the jingle (after the area's track), the reward window, the shaking, and the overlay closes.
+  sender.sendJingle(LOOT_JINGLE);
+  showRewards(player, rewards);
+  CameraShake.send(sender, "barrows", ...LOOTED_SHAKE);
+  sender.closeInterface(OVERLAY_ID);
 }
 
 /** A looted run's tunnels shake again on each arrival in them; leaving them stills the camera. */
@@ -746,6 +773,14 @@ function drainPrayer(player, run) {
   // before the Prayer drop (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512). Older recordings
   // (226/01694.txt) have no line.
   player.sendMessage(PRAYER_DRAINED);
+  // A defeated brother's face accompanies the drain; none after looting (normal-world 1694,
+  // plus repeated observations in Leagues recording 4057).
+  if (!run.looted && run.killed.length) {
+    const brother = run.killed[randomInt(0, run.killed.length - 1)];
+    const models = PRAYER_FACES[brother];
+    if (models) player.getPacketSender().sendInterfaceScript(PRAYER_FACE_SCRIPT,
+      [(OVERLAY_ID << 16) | (PRAYER_FACE_FIRST_COMPONENT + brother), models[randomInt(0, 3) === 0 ? 1 : 0]]);
+  }
   skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
   skills.updateSkill(Skill.PRAYER);
 }
@@ -779,7 +814,9 @@ function processPlayer({ player }) {
     // Each entry into a crypt restarts the drain's 30 ticks (rsprox_transcripts/226/01694.txt: in at ticks 8801, 8868,
     // 8916, 8966 and 9046, drained at 8831, 8898, 8946, 8996 and 9076).
     // One more than the interval: this same tick's drainPrayer call below counts the first one down.
-    if (phase === "crypt" && run) run.prayerTicks = PRAYER_DRAIN_TICKS + 1;
+    if (run && (phase === "crypt" || (phase === "tunnels" && state.phase !== "crypt" && state.phase !== "tunnels"))) {
+      run.prayerTicks = PRAYER_DRAIN_TICKS + 1;
+    }
     if (run?.looted) syncLootedShake(player, state.phase, phase);
     state.phase = phase;
     syncMinimap(player, phase);

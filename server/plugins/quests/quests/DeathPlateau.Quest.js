@@ -715,15 +715,35 @@ module.exports = function registerDeathPlateauQuest(api) {
     return true;
   }
 
+  const HAROLD_DOOR_TILE = { x: 2906, y: 3543, z: 1 };
+  const HAROLD_KNOCK_SOUND = 1735;
+
   function guardQuestDoors(request) {
     if (request.objectId === EQUIPMENT_DOOR_ID && quest.getStage(request.player) < STAGE_ROOM) {
       request.player.sendMessage("The equipment room door is locked. I should read the combination and arrange the stone balls.");
       request.handled = true;
       return;
     }
-    if (request.objectId !== HAROLD_DOOR_ID || quest.getStage(request.player) >= STAGE_EOHRIC) return;
-    request.player.sendMessage("I'd better not go into someone's bedroom without a reason!");
+    if (request.objectId !== HAROLD_DOOR_ID) return;
+    const { player } = request;
+    const { DialogueChainBuilder, StatementDialogue, NpcDialogue, PlayerDialogue, ActionDialogue, EndDialogue } = api.core;
+    if (quest.getStage(player) < STAGE_EOHRIC) {
+      // Transcript:Death_Plateau "Trying to enter Harold's room before talking to Eohric": the player's line.
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+        .add(new PlayerDialogue(0, "I'd better not go into someone's bedroom without a reason!")).add(new EndDialogue(1)));
+      request.handled = true;
+      return;
+    }
+    // Leaving the room (233/03247.txt:5755) is no knock: the door's pass-through opens it.
+    if (player.getLocation().getY() < HAROLD_DOOR_TILE.y) return;
+    // "Entering Harold's room": the knock box (with synth 1735), "Harold: Come in!", then in (233/03247.txt:4659-4744).
     request.handled = true;
+    const { object } = request;
+    player.getPacketSender().sendSound(HAROLD_KNOCK_SOUND, 1, 0);
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new StatementDialogue(0, "You knock on the door."))
+      .add(new NpcDialogue(1, HAROLD_NPC_ID, "Come in!"))
+      .add(new ActionDialogue(2, { execute: () => api.emitCustomEvent("door:open", { player, object, handled: false }) })));
   }
 
   function walkQuestStairs(request) {

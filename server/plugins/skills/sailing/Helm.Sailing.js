@@ -34,14 +34,30 @@ const {
   TileInteractionMode,
   EntityInteractionMode,
 } = require("../../../src/main/typescript/elvarg/net/protocol/InteractionMode");
+const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
+const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
+const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
+const { ActionDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ActionDialogue");
+const { holdsLostOnRecovery } = require("./Cargo.Sailing");
 
 const HELM_LOCKED_IN = 3;
 /** sailing_sidepanel_helm_status while a crewmate holds the helm (rsprox). */
 const HELM_STATUS_CREW = 3;
 /** While navigating, the helm and the helmsman replay their loop every 10 ticks (rsprox). */
 const HELM_LOOP_TICKS = 10;
-const SOUND_SAIL_RAISE = 10831;
-const SOUND_SAIL_LOWER = 10833;
+/**
+ * Each sail step has its own sound: from rest, setting the sails (half) and raising them straight
+ * to full; raising and lowering the speed; un-setting them from half and from full. Reversing,
+ * and stopping a reversing boat, are silent. Ours: button 0's Set sails, straight to full from
+ * rest, takes the raise-to-full sound of the sail cloth's Set and of a heading's first full sail;
+ * the cloth's Un-set and button 0 from half sail take the panel's un-set-from-half sound.
+ */
+const SOUND_SAILS_SET = 10832;
+const SOUND_SAILS_SET_FULL = 11089;
+const SOUND_SPEED_RAISE = 10836;
+const SOUND_SPEED_LOWER = 10834;
+const SOUND_SAILS_UNSET_HALF = 10835;
+const SOUND_SAILS_UNSET_FULL = 10833;
 /** All Settings 461 "Stop the boat when leaving the helm": ticked while 0. */
 const VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED = 18135;
 /** All Settings 462 `sailing_start_boat_when_setting_heading`: First time only, Always, Never. */
@@ -103,8 +119,18 @@ function sailState(moveMode) {
   return "down";
 }
 
-/** Sets the sails for whoever steers; `raiseSound` replaces the raise sound (a crewmate's, rsprox 11089). */
-function setSailMode(player, boat, mode, { raiseSound = SOUND_SAIL_RAISE } = {}) {
+/** The sound of a sail step from one move mode to another, or undefined for a silent one. */
+function sailSound(from, to) {
+  if (from === to) return undefined;
+  if (to === MOVE_MODE.FULL) return from === MOVE_MODE.HALF ? SOUND_SPEED_RAISE : SOUND_SAILS_SET_FULL;
+  if (to === MOVE_MODE.HALF) return from === MOVE_MODE.FULL ? SOUND_SPEED_LOWER : SOUND_SAILS_SET;
+  if (to === MOVE_MODE.STOPPED && from === MOVE_MODE.FULL) return SOUND_SAILS_UNSET_FULL;
+  if (to === MOVE_MODE.STOPPED && from === MOVE_MODE.HALF) return SOUND_SAILS_UNSET_HALF;
+  return undefined;
+}
+
+/** Sets the sails for whoever steers (the helmsman, or the captain while a crewmate holds the helm). */
+function setSailMode(player, boat, mode) {
   const previous = getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE);
   boat.moveMode = SAIL_MODES[mode].boat;
   setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, SAIL_MODES[mode].varbit);
@@ -112,11 +138,8 @@ function setSailMode(player, boat, mode, { raiseSound = SOUND_SAIL_RAISE } = {})
   if (mode === "full" || mode === "half") windFor(boat);
   setSailClothOps(player, boat, mode !== "stop", canTrim(boat));
   animateSails(player, boat, sailState(previous), sailState(SAIL_MODES[mode].varbit));
-  if (mode === "full" || mode === "half") {
-    playSound(player, raiseSound);
-  } else if (mode === "stop") {
-    playSound(player, SOUND_SAIL_LOWER);
-  }
+  const sound = sailSound(previous, SAIL_MODES[mode].varbit);
+  if (sound !== undefined) playSound(player, sound);
   pluginApi?.emitCustomEvent("sailing:sail-mode-changed", { player, boat, mode });
 }
 
@@ -447,21 +470,41 @@ function walkAfterLeaving({ player, boat, reason, atHelm }) {
   if (atHelm && reason !== "logout") walkByClicks(player, boat);
 }
 
-/** Escape sinks the boat, so it asks first; the choice is checked again in case they left. */
+/** Escape's warning, as live: a mesbox chat line and the message box, broken where live breaks it. */
+const ESCAPE_WARNING = "Escaping your boat while out at sea will result in it being lost. If this happens, "
+  + "retrieving it will incur a gold fee and any cargo on board will be lost.";
+const ESCAPE_WARNING_BOX = "Escaping your boat while out at sea will result in it being lost. If this<br>"
+  + "happens, retrieving it will incur a gold fee and any cargo on board<br>will be lost.";
+/** Ours: the question after the warning, worded as the teleport warning's. */
+const ESCAPE_QUESTION = "Accept that your boat will be lost at sea?";
+const ESCAPE_YES = "Yes, escape from it.";
+const ESCAPE_NO = "No, stay on the boat.";
+/**
+ * Live's line for leaving a boat at sea (a teleport); Escape leaves it the same way. Ours: the
+ * cargo half is added when the hold has anything a recovery loses.
+ */
+const ABANDONED = "You abandon your boat, resulting in it becoming lost at sea.";
+const ABANDONED_CARGO = " The contents of your cargo hold are lost with it.";
+
+/**
+ * Escape sinks the boat, so it warns first (live's message box), then asks; the answer is
+ * checked again in case they left meanwhile.
+ */
 function escapeBoat(api, { player }) {
   if (!Sailing.instanceAboard(player)) return;
-  api.sendMultiChatboxPrompt(
-    player,
-    "Escape? Your boat will sink until a shipwright recovers it.",
-    "Yes, abandon ship.",
-    () => {
-      if (!Sailing.instanceAboard(player)) return;
-      Sailing.escape(player);
-      player.sendMessage("Your boat sinks, and you make it back to shore.");
-    },
-    "No.",
-    () => {},
-  );
+  const escape = () => {
+    const owned = Sailing.instanceAboard(player) && Sailing.activeBoat(player);
+    if (!owned) return;
+    const cargoLost = holdsLostOnRecovery(owned);
+    Sailing.escape(player);
+    player.sendMessage(cargoLost ? ABANDONED + ABANDONED_CARGO : ABANDONED);
+  };
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, ESCAPE_WARNING);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new StatementDialogue(0, ESCAPE_WARNING_BOX))
+    .add(new ActionDialogue(1, {
+      execute: () => api.sendMultiChatboxPrompt(player, ESCAPE_QUESTION, ESCAPE_YES, escape, ESCAPE_NO, () => {}),
+    })));
 }
 
 /** The sail row's three buttons (937:25 slots 0-2), for whoever steers: the helmsman, or the captain while a crewmate holds the helm. */
@@ -478,6 +521,8 @@ function clickSailButton(event) {
     setSailMode(player, boat, mode);
   } else if (event.slot === 2 && moveMode === MOVE_MODE.FULL) {
     player.sendMessage("The boat is already going as fast as it can.");
+  } else if (event.slot === 1 && moveMode === MOVE_MODE.REVERSE) {
+    player.sendMessage("The boat is already reversing.");
   }
 }
 
@@ -550,6 +595,7 @@ function raiseSailForHeading(player, boat) {
 
 module.exports = {
   sailButtonTransition,
+  sailSound,
   sailState,
   setSailMode,
   playHelm,

@@ -176,10 +176,11 @@ function hideTabs(player) {
   }
 }
 
-function restoreTabs(player) {
+/** `pluginApi` lets another feature put the same tabs back without this module's own setup. */
+function restoreTabs(player, pluginApi = api) {
   const sender = player.getPacketSender();
   // The combat tab with its weapon's styles and flags.
-  api.core.WeaponInterfaceManager.assign(player);
+  pluginApi.core.WeaponInterfaceManager.assign(player);
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
   // Tab 5 re-mounts prayer with its click flags; a plain mount on its slot would drop them.
   sender.sendTabInterface(5, PRAYER_GROUP);
@@ -188,7 +189,7 @@ function restoreTabs(player) {
   for (const [slot, group] of HIDDEN_TABS) {
     if (group === PRAYER_GROUP) continue;
     sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
-    api.emitCustomEvent("gameframe:tab-mounted", { player, group });
+    pluginApi.emitCustomEvent("gameframe:tab-mounted", { player, group });
   }
   player.getInventory().refreshItems?.();
   player.getEquipment().refreshItems?.();

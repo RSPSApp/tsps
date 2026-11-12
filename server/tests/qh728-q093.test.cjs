@@ -258,7 +258,8 @@ test('stage 0 to completion dispatches the registered QH legs and sends varbit 1
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], [2848, 5108, 0]);
 
   // Mansion rats on both floors count, then Jimmy sends the player to Jack.
-  for (const [id, flag] of [[6224, 1424], [6226, 1425], [6225, 1426]]) {
+  // Cache: 6225 vc_partyrat_multi2 is hidden by vc_raton_off2 (1425), 6226 vc_partyrat_multi3 by vc_raton_off3 (1426).
+  for (const [id, flag] of [[6224, 1424], [6225, 1425], [6226, 1426]]) {
     h.killRat(2850, 5090, 1, id);
     assert.equal(h.auxVarbit(flag), 1, `the matching upstairs party rat sets QH bit ${flag}`);
   }

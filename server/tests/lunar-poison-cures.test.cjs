@@ -57,6 +57,7 @@ test('native Cure Me clears poison, consumes the Wiki runes and grants no protec
   await cast(t, f, 'Cure Me');
   assert.equal(f.player.getAnimation().getId(), core.CacheDefinitions.getSeqId('quest_lunar_pushing_magic_animation'));
   assert.equal(f.player.getGraphic().getId(), core.CacheDefinitions.getSpotanimId('quest_lunar_cure_me_spot'));
+  assert.equal(f.player.getGraphic().getHeight(), 92, 'rsprox: quest_lunar_cure_me_spot at height 92');
   assert.equal(f.player.getPoisonDamage(), 0);
   assert.equal(f.player.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
   assert.deepEqual(f.xp, [69]);

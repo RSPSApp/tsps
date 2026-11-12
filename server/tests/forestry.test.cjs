@@ -207,7 +207,7 @@ test('a falling tree brings an event at once; then the buffer holds the next one
   assert.equal(falling.handled, event.kind === 'sapling', "a sapling takes the stump's place");
   Math.random = () => 0.999;
   if (event.kind === 'sapling') Sapling.finish(event, false);
-  else ticks(200);
+  else for (let i = 0; i < 400 && Spawns.active.size; i++) ticks(1); // until the event ends (its own length)
   assert.equal(Spawns.active.size, 0);
   chop(p, tree(), 190);
   Math.random = random;
@@ -323,6 +323,18 @@ test('feeding: the lines, the hint, the bark the next tick and the XP; a perfect
   assert.equal(p.boxes.length, 1, 'no second box');
 });
 
+test("a saved sapling's leaves are a random tier, not the tree's (a willow giving magic leaves)", () => {
+  const p = fakePlayer({ level: 80 });
+  const event = startEvent('sapling', [p]);
+  event.recipe = [1, 2, 3];
+  for (let i = 0; i < 15; i++) feedWith(p, event, [1, 2, 3]);
+  const real = Math.random;
+  Math.random = () => 0.999; // the last of the six tiers, Magic leaves, and the most leaves
+  try { ticks(1); } finally { Math.random = real; }
+  assert.equal(p.inventory.getAmount(6030), 20, 'magic leaves from a willow sapling');
+  assert.equal(p.inventory.getAmount(6024), 0, "not the tree's willow leaves");
+});
+
 test('saved: the thriving sapling, then bark, leaves and bonus XP; the tree back 14 ticks on', () => {
   const p = fakePlayer({ level: 80 });
   const event = startEvent('sapling', [p]);
@@ -334,8 +346,12 @@ test('saved: the thriving sapling, then bark, leaves and bonus XP; the tree back
   assert.equal(Spawns.active.has(event), false);
   ticks(1);
   assert.ok(p.messages.some((m) => /^You've been awarded <col=3366ff>(1[89]\d|200) Anima-infused bark<\/col>\.$/.test(m)), 'the lump for 100%');
-  assert.ok(p.messages.includes(`You've been awarded <col=3366ff>${p.inventory.getAmount(6024)}</col> piles of <col=3366ff>Willow leaves</col>.`));
-  assert.ok(p.inventory.getAmount(6024) >= 15 && p.inventory.getAmount(6024) <= 20);
+  // Wiki: "20 leaves of a random tier" (recorded: a willow sapling gave yew leaves, 227/00083.txt:365537).
+  const LEAF_IDS = { 'Leaves': 6020, 'Oak leaves': 6022, 'Willow leaves': 6024, 'Maple leaves': 6028, 'Yew leaves': 6026, 'Magic leaves': 6030 };
+  const awarded = p.messages.map((m) => m.match(/^You've been awarded <col=3366ff>(\d+)<\/col> piles of <col=3366ff>([A-Za-z ]+)<\/col>\.$/)).find(Boolean);
+  assert.ok(awarded && LEAF_IDS[awarded[2]], 'leaves of one of the six tiers');
+  assert.equal(p.inventory.getAmount(LEAF_IDS[awarded[2]]), Number(awarded[1]));
+  assert.ok(Number(awarded[1]) >= 15 && Number(awarded[1]) <= 20);
   const at = (id) => core.ObjectManager.objectsAt(new Location(WILLOW.x, WILLOW.y, 0)).some((o) => o.getId() === id);
   ticks(12);
   assert.equal(at(47489), true, 'still thriving 13 ticks on');
@@ -426,16 +442,17 @@ test('rising roots (rsprox 227/01850): six with their rise sounds; 2-4 sink 7 ti
   }
 });
 
-test('rising roots end: every root sinks at 199 and goes 7 ticks later', () => {
+// Wiki (Rising roots): "one minute and 33 seconds" (155 ticks); recorded 199 on a Leagues world.
+test('rising roots end: every root sinks at 155 and goes 7 ticks later', () => {
   const p = fakePlayer();
   const seen = watchRoots();
   try {
     const event = startEvent('roots', [p]);
-    ticks(198);
+    ticks(154);
     assert.equal(Roots.events.has(event), true);
     seen.anims.length = 0;
     ticks(1);
-    assert.equal(Spawns.active.has(event), false, 'over at 199');
+    assert.equal(Spawns.active.has(event), false, 'over at 155');
     assert.equal(event.roots.size, 6, 'still standing while they sink');
     assert.deepEqual(seen.anims.map((a) => a.at).sort(), [...event.roots].map(tileOf).sort());
     ticks(6);

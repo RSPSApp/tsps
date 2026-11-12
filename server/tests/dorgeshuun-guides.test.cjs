@@ -67,6 +67,7 @@ test("Mistag's Follow and Cellar lead to Kazgar (3235, 9610); after Death to the
     const p = player();
     handlers.Mistag[option]({ player: p });
     assert.deepEqual(p.messages, ['Mistag shows you the way through the tunnels.']);
+    assert.deepEqual(p.types, [PluginManager.getCoreApi().ChatType.SPAM]);
     ticks(6, p, []);
     assert.deepEqual([p.location.getX(), p.location.getY()], [3235, 9610], option);
   }

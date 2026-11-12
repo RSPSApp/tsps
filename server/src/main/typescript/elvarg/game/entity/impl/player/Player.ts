@@ -815,6 +815,14 @@ export class Player extends Mobile {
         }
     }
 
+    /**
+     * Held by a teleport (its cast, until the move) or an agility obstacle (the agility runner's "agility.obstacle"
+     * attribute). Other holds (a spell freeze, a boss's stun or knockback, a cutscene, a ride) are not counted.
+     */
+    isLocked(): boolean {
+        return this.isTeleportingReturn() || this.getAttribute("agility.obstacle") != null;
+    }
+
     busy(): boolean {
         if (this.interfaceId > 0) {
             return true;
@@ -1034,6 +1042,17 @@ export class Player extends Mobile {
 
     public getViewDistance(): number {
         return this.fixedViewDistance ?? this.viewDistance;
+    }
+
+    public getFixedViewDistance(): number | null { return this.fixedViewDistance; }
+
+    /** Ephemeral appearance visibility; never changes participation or combat policy. */
+    private appearanceHidden = false;
+    public isAppearanceHidden(): boolean { return this.appearanceHidden; }
+    public setAppearanceHidden(hidden: boolean): void {
+        if (this.appearanceHidden === hidden) return;
+        this.appearanceHidden = hidden;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
     }
 
     /** A view distance kept regardless of the crowd (a spectator watching a room), or null. */

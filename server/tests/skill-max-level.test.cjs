@@ -358,7 +358,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     // click's tick with live messages, sound 2623 and the caught animation; Puro-Puro spawns return in 7/50.
     const N=core.NpcIdentifiers,said=[],sounds=[],grabs=[];
     const iq=player(),packets=iq.getPacketSender();
-    iq.sendMessage=m=>said.push(m);iq.getPacketSender=()=>({...packets,sendSound:id=>sounds.push(id)});
+    iq.sendMessage=m=>said.push(m);iq.getPacketSender=()=>({...packets,sendSound:id=>sounds.push(id),sendTypedMessage:(type,m)=>said.push(type===core.ChatType.SPAM?`spam:${m}`:m)});
     iq.performAnimation=a=>grabs.push(a.getId());
     const puroTile=new core.Location(2567,4320,0),outsideTile=new core.Location(3000,3000,0);
     iq.moveTo(puroTile);iq.equipment.set(core.Equipment.WEAPON_SLOT,I.BUTTERFLY_NET);iq.counts.set(I.IMPLING_JAR,2);
@@ -367,7 +367,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     Catching.catchNpc({player:iq,npc:baby,npcId:baby.getId()});
     assert.equal(iq.counts.get(I.BABY_IMPLING_JAR),1,"the jar is filled on the click's tick, not two ticks later");
     assert.equal(iq.counts.get(I.IMPLING_JAR),1);
-    assert.deepEqual(said,["You manage to catch the impling and squeeze it into a jar."]);
+    assert.deepEqual(said,["spam:You manage to catch the impling and squeeze it into a jar."]);
     assert.deepEqual(sounds,[2623]);assert.deepEqual(grabs,[6606]);
     assert.equal(iq.experience.get(Skill.HUNTER),18,"Puro-Puro XP");
     assert.deepEqual(baby.animations.map(a=>a.getId()),[6615]);
@@ -397,7 +397,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.deepEqual(said,["You'll need to clear some space in your pack to catch this impling without a jar."]);
     iq.setSize(28);said.length=0;grabs.length=0;iq.experience.clear();
     Catching.catchNpc({player:iq,npc:wild,npcId:wild.getId()});
-    assert.deepEqual(said,["You manage to catch the impling and acquire some loot."]);
+    assert.deepEqual(said,["spam:You manage to catch the impling and acquire some loot."]);
     assert.deepEqual(grabs,[7171],"barehanded catches play hunting_impling_catch");
     assert.ok(iq.counts.size>0,"barehanded loot arrives on the same tick");
     assert.equal(iq.experience.get(Skill.HUNTER),27,"Gielinor XP");
@@ -802,6 +802,33 @@ function registerFeedbackPlugin(name, core, extra = {}) {
   return hooks;
 }
 
+// Recorded pop-up text (rsprox): "Congratulations, you just advanced an Agility level." (10),
+// "...an Attack level." (3), and "Your Hitpoints are now N." (18).
+test("the level-up pop-up says 'an' before a vowel and 'Your Hitpoints are now'", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+  const emit = PluginManager.emitPlayerLevelUp;
+  PluginManager.emitPlayerLevelUp = event => hooks.onPlayerLevelUp(event);
+  try {
+    for (const [skill, first, second] of [
+      [Skill.AGILITY, "Congratulations, you just advanced an Agility level.", "Your Agility level is now 2."],
+      [Skill.ATTACK, "Congratulations, you just advanced an Attack level.", "Your Attack level is now 2."],
+      [Skill.HITPOINTS, "Congratulations, you just advanced a Hitpoints level.", "Your Hitpoints are now 2."],
+    ]) {
+      const p = feedbackPlayer(core);
+      p.skills.setCurrentLevels(skill, 1, false).setMaxLevel(skill, 1, false).setExperience(skill, 0);
+      p.sent.length = 0;
+      p.skills.addExperience(skill, SkillManager.getExperienceForLevel(2), false);
+      const strings = p.sent.filter(([type]) => type === "sendString").map(([, text]) => text);
+      assert.ok(strings.includes(`<col=000080>${first}`), strings.join(" | "));
+      assert.ok(strings.includes(second), strings.join(" | "));
+    }
+  } finally {
+    PluginManager.emitPlayerLevelUp = emit;
+  }
+});
+
 test("every skill gets native level-up text, its own model, stats before hooks, and a working Continue", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();
@@ -823,9 +850,10 @@ test("every skill gets native level-up text, its own model, stats before hooks, 
       assert.equal(p.messages[0], `Congratulations, you've just advanced your ${skill.getName()} level. You are now level 2.`);
       assert.deepEqual(p.graphics, [199]);
       assert.ok(p.sent.some(([type, text, id]) => type === "sendString" && id === ((233 << 16) | 1)
-        && text === `<col=000080>Congratulations, you just advanced a ${skill.getName()} level.`));
+        && text === `<col=000080>Congratulations, you just advanced ${/^[AEIOU]/.test(skill.getName()) ? "an" : "a"} ${skill.getName()} level.`));
+      // As recorded: "an Agility level", "an Attack level"; "Your Hitpoints are now N."
       assert.ok(p.sent.some(([type, text, id]) => type === "sendString" && id === ((233 << 16) | 2)
-        && text === `Your ${skill.getName()} level is now 2.`));
+        && text === (skill.getName() === "Hitpoints" ? "Your Hitpoints are now 2." : `Your ${skill.getName()} level is now 2.`)));
       assert.deepEqual(p.sent.filter(([type, , hidden]) => type === "sendInterfaceDisplayState" && !hidden),
         [["sendInterfaceDisplayState", (233 << 16) | layers[skill.getIndex()], false]]);
       assert.equal(p.sent.filter(([type]) => type === "sendSkill").length, 1, "one stats update for the resolving tick");

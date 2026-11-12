@@ -107,6 +107,19 @@ test("the handle table maps each maul onto the cache's ornate form", () => {
   assert.equal(loaded.forms.get(HANDLED), undefined, "a maul that already has one is not a base");
 });
 
+// Only the handle with a maul opens the warning; a maul used on anything else is left to other handlers.
+test("a maul used on another item is not handled and opens no warning", () => {
+  const { prompts, use } = registerPlugin();
+  const player = createPlayer([995, -1, PLAIN]);
+  for (const [from, to] of [[2, 0], [0, 2]]) {
+    const event = use(player, from, to);
+    assert.equal(event.handled, false);
+  }
+  assert.equal(prompts.length, 0);
+  assert.equal(player.idAt(2), PLAIN);
+
+});
+
 test("attaching warns, then consumes the handle and swaps the maul", () => {
   const { prompts, use, answer } = registerPlugin();
   const player = createPlayer([HANDLE, -1, PLAIN]);

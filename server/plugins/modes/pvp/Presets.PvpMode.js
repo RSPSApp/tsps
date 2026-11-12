@@ -54,6 +54,8 @@ let pluginApi = null;
  * (Last Man Standing, Castle Wars, raids, the Inferno and Fight Caves, the Gauntlet, Pest Control and the other
  * minigames that keep their own gear and refuse teleports, through their area or the plugins' teleport hooks, as
  * TeleportHandler asks): a preset there would re-gear them, bank the minigame's items and reset their stats.
+ * An area's optional canLoadPreset(player) policy is true/false/null: permit re-gearing despite that area's
+ * teleport restriction, refuse re-gearing, or keep the teleport fallback. Other guards still apply.
  */
 function presetBusyRefusal(player) {
   // Bots re-gear from presets wherever they fight, by design (as bankRefusal exempts them).
@@ -62,7 +64,10 @@ function presetBusyRefusal(player) {
   if (duel !== undefined && duel !== DuelState.NONE) return "You can't load a preset during a duel.";
   if (pluginApi?.core?.CombatFactory?.inCombat?.(player)) return "You can't load a preset during combat.";
   const area = player.getArea?.();
-  if (area && area.canTeleport?.(player, 20) === false) return "You can't load a preset here.";
+  const areaPermission = area?.canLoadPreset?.(player);
+  if (areaPermission === false || (areaPermission !== true && area?.canTeleport?.(player, 20) === false)) {
+    return "You can't load a preset here.";
+  }
   if (PluginManager.emitCanTeleport(player, 20) === false) return "You can't load a preset here.";
   return null;
 }

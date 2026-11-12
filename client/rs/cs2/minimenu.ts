@@ -1,5 +1,6 @@
 import { ClientState } from "../../game/ClientState";
 import { CANCEL_SELECTION_HANDLER } from "../../widgets/gl/widgetsGl/constants";
+import { isIf1MenuButton } from "../../widgets/menu/utils";
 import { MenuTargetType } from "../MenuEntry";
 
 /**
@@ -34,29 +35,33 @@ export const getInteractionCanvases = (osrsClient: any): any[] => {
 // ("Use Knife -> Goblin") behind an empty component hover.
 const isMenuHoverTarget = (t: any): boolean => t?.onClick !== CANCEL_SELECTION_HANDLER;
 
+const getCanvasClicks = (canvasAny: any): any =>
+    (canvasAny?.__input as any)?.getClicks?.() ||
+    (canvasAny?.__inputBridge as any)?.getClicks?.() ||
+    canvasAny?.__clicks;
+
+/** The live pointer in the canvas's click-registry pixels, when its UI tracks one. */
+const getCanvasPointer = (canvasAny: any): { px: number; py: number } | undefined => {
+    const ui = canvasAny?.__ui;
+    if (typeof ui?.mouseX !== "number" || typeof ui?.mouseY !== "number") return undefined;
+    const sxRaw = Number(canvasAny?.__uiInputScaleX ?? 1);
+    const syRaw = Number(canvasAny?.__uiInputScaleY ?? 1);
+    const sx = Number.isFinite(sxRaw) && sxRaw > 0 ? sxRaw : 1;
+    const sy = Number.isFinite(syRaw) && syRaw > 0 ? syRaw : 1;
+    return { px: Math.round(ui.mouseX * sx), py: Math.round(ui.mouseY * sy) };
+};
+
 export const getHoverTarget = (osrsClient: any): any => {
     for (const canvasAny of getInteractionCanvases(osrsClient)) {
-        const clicks =
-            (canvasAny?.__input as any)?.getClicks?.() ||
-            (canvasAny?.__inputBridge as any)?.getClicks?.() ||
-            canvasAny?.__clicks;
+        const clicks = getCanvasClicks(canvasAny);
         if (!clicks) continue;
         // Re-pick at the live pointer position instead of trusting the cached
         // hover id: CS2 timers rebuild widget rows (e.g., the side journal),
         // which unregisters the hovered target and nulls the hover id while the
         // pointer is stationary - making the mouseover text vanish mid-hover.
-        const ui = canvasAny?.__ui;
-        if (
-            typeof clicks.pick === "function" &&
-            typeof ui?.mouseX === "number" &&
-            typeof ui?.mouseY === "number"
-        ) {
-            const sxRaw = Number(canvasAny?.__uiInputScaleX ?? 1);
-            const syRaw = Number(canvasAny?.__uiInputScaleY ?? 1);
-            const sx = Number.isFinite(sxRaw) && sxRaw > 0 ? sxRaw : 1;
-            const sy = Number.isFinite(syRaw) && syRaw > 0 ? syRaw : 1;
-            const px = Math.round(ui.mouseX * sx);
-            const py = Math.round(ui.mouseY * sy);
+        const pointer = getCanvasPointer(canvasAny);
+        if (typeof clicks.pick === "function" && pointer) {
+            const { px, py } = pointer;
             // Prefer the topmost target with menu text: listener-only widgets
             // (e.g., the diary rows' hover-highlight rects) layer above the
             // op-bearing rows and would otherwise blank the minimenu.
@@ -69,6 +74,34 @@ export const getHoverTarget = (osrsClient: any): any => {
         if (hoverTarget && isMenuHoverTarget(hoverTarget)) return hoverTarget;
     }
     return undefined;
+};
+
+/**
+ * Options the other IF1 buttons stacked under the pointer add to the hovered one's menu (the
+ * tanner's Tan 5, Tan X and Tan All under Tan 1), as the right-click menu lists them.
+ */
+const stackedIf1OptionCount = (osrsClient: any, hoverTarget: any): number => {
+    const uid = hoverTarget?.widgetUid;
+    const getWidget = (widgetUid: number) => osrsClient?.widgetManager?.getWidgetByUid?.(widgetUid);
+    if (typeof uid !== "number" || !isIf1MenuButton(getWidget(uid))) return 0;
+    for (const canvasAny of getInteractionCanvases(osrsClient)) {
+        const clicks = getCanvasClicks(canvasAny);
+        const pointer = getCanvasPointer(canvasAny);
+        if (typeof clicks?.targetsAt !== "function" || !pointer) continue;
+        const under: any[] = clicks.targetsAt(pointer.px, pointer.py);
+        if (!under.includes(hoverTarget)) continue;
+        const seen = new Set<number>([uid]);
+        let extra = 0;
+        for (const target of under) {
+            const targetUid = target?.widgetUid;
+            if (typeof targetUid !== "number" || seen.has(targetUid) || targetUid >>> 16 !== uid >>> 16) continue;
+            if (!isIf1MenuButton(getWidget(targetUid))) continue;
+            seen.add(targetUid);
+            extra += Math.max(0, ((target.menuOptionsCount ?? 0) | 0) - 1);
+        }
+        return extra;
+    }
+    return 0;
 };
 
 export const minMenuSnapshot = (osrsClient: any): MinMenuSnapshot => {
@@ -92,9 +125,9 @@ export const minMenuSnapshot = (osrsClient: any): MinMenuSnapshot => {
     let componentTarget = typeof primaryOption?.target === "string" ? primaryOption.target : "";
     // CS2 mouseover scripts treat numops as actionable options (exclude Cancel).
     const componentNumOpsRaw =
-        typeof hoverTarget?.menuOptionsCount === "number"
+        (typeof hoverTarget?.menuOptionsCount === "number"
             ? Math.max(0, hoverTarget.menuOptionsCount | 0)
-            : 0;
+            : 0) + (hasComponentHover ? stackedIf1OptionCount(osrsClient, hoverTarget) : 0);
     const componentNumOps = Math.max(0, componentNumOpsRaw - 1);
     const componentHasText =
         componentOption.trim().length > 0 || componentTarget.trim().length > 0;

@@ -433,7 +433,8 @@ test("the gem's Check gives the task and the streak", () => {
   const player = createPlayer({ points: 20 });
   giveTask(player, 3, "Bloodveld", 44);
   Checks.check(player);
-  assert.equal(player.messages[0], "You're assigned to kill bloodveld; only 44 more to go.");
+  assert.equal(player.messages[0],
+    "<col=ef1020>You're assigned to kill </col>bloodveld<col=ef1020>; only </col>44<col=ef1020> more to go.");
   assert.match(player.messages[1], /currently have a total of <\/col>20 points/);
 });
 
@@ -787,6 +788,17 @@ test("superiors: Bigger and Badder spawns one 1 time in 200, worth ten times its
   const superior = npcNamed("Insatiable Bloodveld");
   Superiors.npcKilled({ killer: player, npc: superior });
   assert.equal(player.xp.at(-1)[1], superior.getDefinition().getHitpoints() * 10);
+});
+
+// Wiki (Superior slayer monster): a guaranteed Larran's key only "on-task in the Wilderness Slayer Cave".
+test("a Krystilia superior is a guaranteed Larran's key only in the Wilderness Slayer Cave", () => {
+  const larran = { denominator: Keys.larranDenominator, caveBoost: true };
+  const cave = { getX: () => 3400, getY: () => 10100, getZ: () => 0 };
+  const outside = { getX: () => 3100, getY: () => 3700, getZ: () => 0 };
+  assert.equal(Keys.chance(larran, npcNamed("Insatiable Bloodveld", cave)), 1, "in the cave");
+  assert.ok(Keys.chance(larran, npcNamed("Insatiable Bloodveld", outside)) < 1, "elsewhere it rolls");
+  assert.equal(Keys.chance({ denominator: Keys.brimstoneDenominator }, npcNamed("Insatiable Bloodveld", outside)), 1,
+    "a Konar superior's brimstone key stays guaranteed");
 });
 
 test("keys: brimstone on Konar's tasks, Larran's on Krystilia's, by combat level", () => {

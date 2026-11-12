@@ -935,3 +935,35 @@ test("crew following the captain take the captain's target when the captain atta
     leave(player);
   }
 });
+
+test("looted runes go to the rune pouch first, under the Rune-picking setting (Wiki: Rune pouch)", () => {
+  const player = captain();
+  const { boat, owned, loc, hotspot } = aboardWithCannon(player);
+  const osprey = seaNpc(OSPREY, outboard(boat, owned, hotspot.id, loc, 1));
+  const AIR_RUNE = 556;
+  const asked = [];
+  const previous = PluginManager.emitCustomEvent;
+  PluginManager.emitCustomEvent = (name, payload) => {
+    if (name === "npc-drops:add") payload.drops.push({ itemId: AIR_RUNE, amount: 30 });
+    if (name === "rune-pouch:gather") {
+      asked.push({ ...payload });
+      if (payload.itemId === AIR_RUNE) payload.stored = payload.amount;
+    }
+    return previous.call(PluginManager, name, payload);
+  };
+  try {
+    PluginManager.emitNpcDeath({ killer: player, npc: osprey, npcId: OSPREY, location: {}, remains: null });
+    Loot.harvest({ player, npc: osprey, clickType: 1, handled: false });
+    tick(2);
+    assert.equal(Loot.corpses.has(osprey), false, "harvested");
+    const air = asked.find((request) => request.itemId === AIR_RUNE);
+    assert.ok(air, "the pouch was asked for the runes");
+    assert.equal(air.amount, 30);
+    assert.equal(air.runePicking, true, "only while Rune-picking is on");
+    assert.equal(player.inventory.getAmount(AIR_RUNE), 0, "what the pouch took isn't added again");
+  } finally {
+    PluginManager.emitCustomEvent = previous;
+    World.getNpcs().remove(osprey);
+    leave(player);
+  }
+});

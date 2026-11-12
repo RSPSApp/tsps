@@ -16,6 +16,7 @@ const Singing = require("../plugins/items/CrystalSinging.plugin");
 
 const core = PluginManager.getCoreApi();
 const tasks = [];
+const prompts = [];
 const objects = new Map();
 const itemOnObject = [];
 let songComplete = true;
@@ -30,6 +31,7 @@ const api = {
   onObjectInteraction: (name, options) => objects.set(name, { ...objects.get(name), ...options }),
   onItemOnObject: (item, object, handler) => itemOnObject.push([item, object, handler]),
   onItemOnItem() {},
+  sendMultiChatboxPrompt: (player, title, ...options) => { prompts.push({ player, title, options }); return true; },
 };
 KeyChests.register(api);
 Singing.register(api);
@@ -40,13 +42,13 @@ function createPlayer({ smithing = 99, crafting = 99, items = [] } = {}) {
   const inventory = new Map(items);
   const attributes = new Map();
   const player = {
-    messages: [], xp: [], inventory, menu: null, statements: 0, sounds: [], animations: 0,
+    messages: [], boxes: [], dialogues: [], xp: [], inventory, menu: null, statements: 0, sounds: [], animations: 0,
     sendMessage(message) { player.messages.push(message); },
     performAnimation() { player.animations++; },
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendSound: (id) => player.sounds.push(id), sendInterface: (id) => { player.interfaceId = id; }, sendCreationMenu: (menu) => { player.menu = menu; } }),
-    getDialogueManager: () => ({ startDialogues: () => { player.statements++; } }),
+    getPacketSender: () => ({ sendTypedMessage: (_type, text) => player.boxes.push(text), sendSound: (id) => player.sounds.push(id), sendInterface: (id) => { player.interfaceId = id; }, sendCreationMenu: (menu) => { player.menu = menu; } }),
+    getDialogueManager: () => ({ startDialogues: (chain) => { player.statements++; player.dialogues.push(chain); } }),
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === Skill.SMITHING ? smithing : skill === Skill.CRAFTING ? crafting : 99),
       addExperiences: (skill, amount) => player.xp.push([skill, amount]),
@@ -64,6 +66,9 @@ function createPlayer({ smithing = 99, crafting = 99, items = [] } = {}) {
 const SHARD = I.CRYSTAL_SHARD;
 /** [recipe product, the materials the recipe needs besides shards, shards, level, xp] from the captures and the Wiki. */
 const EXPECTED = [
+  ["CRYSTAL_HELM", [[I.CRYSTAL_ARMOUR_SEED, 1]], 50, 70, 2500],
+  ["CRYSTAL_BODY", [[I.CRYSTAL_ARMOUR_SEED, 3]], 150, 74, 7500],
+  ["CRYSTAL_LEGS", [[I.CRYSTAL_ARMOUR_SEED, 2]], 100, 72, 5000],
   ["ETERNAL_TELEPORT_CRYSTAL", [[I.ENHANCED_CRYSTAL_TELEPORT_SEED, 1]], 100, 80, 5000],
   ["BLADE_OF_SAELDOR", [[I.ENHANCED_CRYSTAL_WEAPON_SEED, 1]], 100, 82, 5000],
   ["BOW_OF_FAERDHINEN", [[I.ENHANCED_CRYSTAL_WEAPON_SEED, 1]], 100, 82, 5000],
@@ -118,8 +123,12 @@ test("the song message comes five ticks after the song, and a second song waits 
   assert.equal(Singing._test.sing(player, I.CRYSTAL_BOW_3, 1), false);
   assert.deepEqual(player.messages, []);
   tasks[0].execute();
-  assert.deepEqual(player.messages, [Singing._test.SONG]);
+  assert.deepEqual(player.messages, []);
+  assert.deepEqual(player.boxes, ["With the help of the crystal bowl, you sing a beautiful song and shape the crystals."]);
   assert.equal(player.statements, 1);
+  const box = [...player.dialogues[0].getDialogues().values()][0];
+  assert.equal(box.getItemId(), I.CRYSTAL_BOW_3, "the song is an item box of the product");
+  assert.equal(box.getText(), "With the help of the crystal bowl, you sing a beautiful<br>song and shape the crystals.");
   assert.equal(Singing._test.sing(player, I.CRYSTAL_BOW_3, 1), true);
 });
 
@@ -166,10 +175,67 @@ test("without Song of the Elves the quest recipes are not offered", () => {
   }
 });
 
+test("the armour pieces are in the Sing-crystal menu, titled for several products", () => {
+  const player = createPlayer({ items: [[I.CRYSTAL_ARMOUR_SEED, 6], [SHARD, 300]] });
+  Singing._test.singCrystal({ player, objectId: BOWL });
+  assert.deepEqual(player.menu.getItems(), [I.CRYSTAL_HELM, I.CRYSTAL_BODY, I.CRYSTAL_LEGS]);
+  assert.equal(player.menu.getTitle?.() ?? player.menu.title, "What would you like to make?");
+  const one = createPlayer({ items: [[I.CRYSTAL_WEAPON_SEED, 1], [SHARD, 40]] });
+  diaryComplete = false;
+  Singing._test.singCrystal({ player: one, objectId: BOWL });
+  diaryComplete = true;
+  assert.equal(one.menu.getTitle?.() ?? one.menu.title, "What would you like to make?", "bow and shield");
+  const single = createPlayer({ items: [[I.ENHANCED_CRYSTAL_TELEPORT_SEED, 1], [SHARD, 100]] });
+  Singing._test.singCrystal({ player: single, objectId: BOWL });
+  assert.equal(single.menu.getTitle?.() ?? single.menu.title, "How many would you like to make?");
+});
+
+test("an armour piece shows its warning and asks to proceed before it is sung", () => {
+  const warnings = [
+    [I.CRYSTAL_HELM, "This will consume your armour seed as well as your<br>crystal shards. Reverting the helmet will not give you<br>any crystal shards back."],
+    [I.CRYSTAL_BODY, "This will consume three of your armour seeds as well<br>as your crystal shards. Reverting the chestplate will not<br>give you any crystal shards back."],
+    [I.CRYSTAL_LEGS, "This will consume two of your armour seeds as well as<br>your crystal shards. Reverting the platelegs will not give<br>you any crystal shards back."],
+  ];
+  for (const [product, text] of warnings) {
+    const player = createPlayer({ items: [[I.CRYSTAL_ARMOUR_SEED, 3], [SHARD, 150]] });
+    prompts.length = 0;
+    Singing._test.choose(player, product, 1);
+    assert.equal(player.inventory.get(product), undefined, "nothing is sung before the answer");
+    const [box, ask] = [...player.dialogues[0].getDialogues().values()];
+    assert.equal(box.getItemId(), I.CRYSTAL_ARMOUR_SEED);
+    assert.equal(box.getText(), text);
+    assert.equal(player.boxes[0], text.replace(/<br>/g, " "));
+    ask.send(player);
+    assert.equal(prompts[0].title, "Are you sure you wish to proceed?");
+    assert.deepEqual(prompts[0].options.filter((o) => typeof o === "string"), ["Yes.", "Yes, and don't ask again.", "No."]);
+    prompts[0].options[5]();
+    assert.equal(player.inventory.get(product), undefined, "No. sings nothing");
+    prompts[0].options[1]();
+    assert.equal(player.inventory.get(product), 1);
+    assert.deepEqual(player.sounds, [8]);
+  }
+});
+
+test("Yes, and don't ask again. skips the armour warning from then on", () => {
+  const player = createPlayer({ items: [[I.CRYSTAL_ARMOUR_SEED, 2], [SHARD, 100]] });
+  prompts.length = 0;
+  tasks.length = 0;
+  Singing._test.choose(player, I.CRYSTAL_HELM, 1);
+  [...player.dialogues[0].getDialogues().values()][1].send(player);
+  prompts[0].options[3]();
+  assert.equal(player.getAttribute(Singing._test.SKIP_WARNING_ATTRIBUTE), true);
+  assert.equal(player.inventory.get(I.CRYSTAL_HELM), 1);
+  tasks.forEach((task) => task.execute());
+  const before = player.dialogues.length;
+  Singing._test.choose(player, I.CRYSTAL_HELM, 1);
+  assert.equal(player.inventory.get(I.CRYSTAL_HELM), 2, "sung at once");
+  assert.equal(player.dialogues.length, before, "no warning box");
+});
+
 test("other bowls are left alone, and every input is hooked by item name", () => {
   assert.equal(Singing._test.singCrystal({ player: createPlayer(), objectId: CacheDefinitions.getLocId("gauntlet_singing_bowl") }), false);
   const names = itemOnObject.filter(([, object]) => object === "Singing bowl").map(([item]) => item);
-  for (const id of [I.CRYSTAL_WEAPON_SEED, I.CRYSTAL_TOOL_SEED, I.ENHANCED_CRYSTAL_WEAPON_SEED, I.ENHANCED_CRYSTAL_TELEPORT_SEED, I.DRAGON_AXE, CacheDefinitions.getObjId("crystal_key")]) {
+  for (const id of [I.CRYSTAL_ARMOUR_SEED, I.CRYSTAL_WEAPON_SEED, I.CRYSTAL_TOOL_SEED, I.ENHANCED_CRYSTAL_WEAPON_SEED, I.ENHANCED_CRYSTAL_TELEPORT_SEED, I.DRAGON_AXE, CacheDefinitions.getObjId("crystal_key")]) {
     assert.ok(names.includes(core.ItemDefinition.forId(id).getName()), String(id));
   }
   assert.ok(objects.get("Singing bowl")["Sing-crystal"], "Sing-crystal is hooked once, by CrystalSinging");

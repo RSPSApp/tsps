@@ -58,11 +58,14 @@ function grandLoot() {
 function give(player, drops) {
   const { CacheDefinitions, Item, ItemOnGroundManager } = Common.core;
   for (const [id, amount] of drops) {
-    const item = new Item(id, amount);
-    if (player.getInventory().getAddableAmount(item) < amount) {
-      ItemOnGroundManager.registers(player, item);
-    } else {
-      player.getInventory().adds(id, amount);
+    // Wiki (Rune pouch), 25 February 2026: coffin runes go into the pouch when it already holds them and has room.
+    const pouch = { player, itemId: id, amount, stored: 0 };
+    Common.api.emitCustomEvent("rune-pouch:gather", pouch);
+    const rest = amount - pouch.stored;
+    if (rest > 0) {
+      const item = new Item(id, rest);
+      if (player.getInventory().getAddableAmount(item) < rest) ItemOnGroundManager.registers(player, item);
+      else player.getInventory().adds(id, rest);
     }
     Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
     const name = CacheDefinitions.getItem(id)?.name ?? "item";
@@ -133,4 +136,4 @@ function attachCoffins(api) {
   api.onObjectClick([...Object.keys(Common.data.coffins).map(Number), Common.data.finalChest], 1, open);
 }
 
-module.exports = { attachCoffins, coffinLoot, grandLoot, successChance };
+module.exports = { attachCoffins, coffinLoot, grandLoot, successChance, give };

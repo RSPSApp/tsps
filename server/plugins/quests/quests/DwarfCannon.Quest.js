@@ -223,37 +223,55 @@ module.exports = function registerDwarfCannonQuest(api) {
   function repairRailing(event) {
     const { player, objectId } = event;
     const stage = quest.getStage(player);
+    // Transcript:Dwarf_Cannon "Inspecting a fixed railing": the player's "I've fixed all these railings now."
+    if (stage >= STAGE_CHECK_WATCHTOWER) {
+      sayFixedAll(player);
+      return true;
+    }
     if (stage !== STAGE_REPAIR_RAILINGS) {
-      player.sendMessage(
-        stage >= STAGE_CHECK_WATCHTOWER
-          ? "That's better, the goblins won't get past this piece of fencing now."
-          : "This railing is broken and needs to be replaced."
-      );
+      brokenRailingBox(player);
       return true;
     }
     const railingIndex = objectId - 15590;
     if (railingIndex < 0 || railingIndex >= RAILS_REQUIRED) return false;
     if ((railingMask(player) & (1 << railingIndex)) !== 0) {
-      player.sendMessage("This railing is already fixed.");
+      sayFixedAll(player);
       return true;
     }
-    player.sendMessage("This railing is broken and needs to be replaced.");
+    // "Trying to fix a railing": the line is a message box, then the attempt.
+    brokenRailingBox(player, () => attemptRailing(player, railingIndex));
+    return true;
+  }
+
+  function sayFixedAll(player) {
+    startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [{ player: ["I've fixed all these railings now."] }]);
+  }
+
+  function brokenRailingBox(player, then) {
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, EndDialogue } = api.core;
+    const chain = new DialogueChainBuilder().add(new StatementDialogue(0, "This railing is broken and needs to be replaced."));
+    // With a follow-up the chain ends on it (as item boxes elsewhere do), so a dialogue it starts is not closed.
+    chain.add(then ? new ActionDialogue(1, { execute: then }) : new EndDialogue(1));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
+  function attemptRailing(player, railingIndex) {
+    if (quest.getStage(player) !== STAGE_REPAIR_RAILINGS || (railingMask(player) & (1 << railingIndex)) !== 0) return;
     if (!has(player, ItemIdentifiers.RAILING)) {
       startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [
         { player: ["I'm not going to be able to fix this without a new railing. Lawgof should have some spare ones."] },
       ]);
-      return true;
+      return;
     }
     // The transcript's spelling.
     player.sendMessage("You attempt to repalce the broken railing...");
     if (!has(player, ItemIdentifiers.HAMMER)) {
       player.sendMessage("You will need a hammer to fix the railings.");
-      return true;
+      return;
     }
     player.performAnimation(new Animation(RAILING_REPAIR_ANIMATION));
     // Keyed to the player's index: walking away or fighting cancels the attempt.
     TaskManager.submit(new CountdownTask(player.getIndex(), RAILING_REPAIR_TICKS, () => finishRailingRepair(player, railingIndex)));
-    return true;
   }
 
   function railingMask(player) {

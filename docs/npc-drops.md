@@ -113,3 +113,17 @@ Pinned producer [b618aec953fb](https://github.com/RSPSApp/osrsreboxed-db/commit/
 Regenerated with `SOURCE_DATE_EPOCH=1793491200 python3 -m scripts.drops.update --out <output>` twice from unchanged pinned inputs. The unmodified pinned producer exactly reproduces the prior imported hashes; repaired outputs are byte-identical across runs. Imported `npc-drops.json` SHA-256: `8dc7ed00369a7afef0410a64d3fead9a0779d84e1ea2edab3ed19a9796fc48d8`. Subtables remain `a2a90b4467e86ad34afbe3788eda588ab1137a0f98d7a5a589cf0883b6684b12`. No generated output was edited manually.
 
 The shared-reference repair restores 214 note differences across 110 tables, including previously missing quest notes. NPC mappings, table IDs, rates, quantities, bonuses, roll counts and ordered-drop contracts are unchanged. These are source-attached notes recovered by the shared parser, rather than location-specific overrides.
+
+## Warriors' Guild Cyclops (#4402)
+
+The upstairs and basement Cyclops shared one `cyclops` table, so the Dragon defender's base row dropped upstairs too. The Wiki names the NPC variant "Warriors' Guild Rooftop" but its drops "Warriors' Guild Top Floor", and the dumper didn't match the two labels. [osrsreboxed-db#73](https://github.com/RSPSApp/osrsreboxed-db/pull/73) (`3266dfa45`, `_heading_matches_drop_version`) treats them as equivalent, so each room gets its own table.
+
+This import is the entire output of pinned producer [`d0bec67f5d422d41e5190210613b17202748c0d6`](https://github.com/RSPSApp/osrsreboxed-db/commit/d0bec67f5d422d41e5190210613b17202748c0d6): the same change backported onto `368fd8764`, whose unmodified generation reproduces the previous import byte for byte. It was generated twice with `SOURCE_DATE_EPOCH=1793491200 python3 -m scripts.drops.update --out <output>`, with identical output both times (#4530). Imported `npc-drops.json` SHA-256: `d408f558f2d5bb549c7211fa3a45df9569a3e31d86b075933ddbb155b8bd115f`. Subtables remain `a2a90b4467e86ad34afbe3788eda588ab1137a0f98d7a5a589cf0883b6684b12`. No generated output was edited manually.
+
+Only the Cyclops changed:
+- The shared `cyclops` table is replaced by `cyclops_drop_table_warriors_guild_basement` and `cyclops_drop_table_warriors_guild_top_floor`, so `meta.table_count` goes from 1,105 to 1,106.
+- The twelve Cyclops NPCs (2137-2142 and 2463-2468) now map to their room's table.
+
+Every variant keeps one guaranteed Big bones row. The Dragon defender base row is only on the basement table. The guild's own defender progression still decides which defender drops.
+
+A full re-import of osrsreboxed-db master was deliberately left out. nharrison93 reported that it changes 452 tables and fails 7 checks; those numbers haven't been re-run here.

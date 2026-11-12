@@ -137,6 +137,37 @@ The gangplank's Board (op 1) opens the boat selection interface when you own sev
 - script 8778 `["", 1, "", 1]` runs;
 - players on board 19235 goes to 0.
 
+## Side panel (interface 937)
+
+rsprox captures, revs 235-238 (tabs: recordings 908, 920, 934, 948, 1030, 3451, 3455, 3461; sail
+row: about 11,000 clicks in 280 recordings, e.g. 856, 857, 901, 938, 940; sail cloth: 856, 938,
+1037, 3499, 3837).
+
+- **Tabs.** Facilities 937:33, Stats 937:34 and Crew 937:35 set `sailing_sidepanel_tabs` 19152 to
+  0, 1 and 2 on the click tick; the client draws the rest. Boarding sets it back to 0 (with the
+  boarded varbits); a shipyard visit sets it to 1, with `sailing_sidepanel_shipyard_mode`.
+- **Sail row (937:25 slots 0-2).** Each step sets the move mode 19175 and the sail button 19174 on
+  the click tick, with one sound:
+
+  | Step | Button | Sound |
+  | --- | --- | --- |
+  | Rest (0 or 4) to half: Set sails | slot 2 | 10832 |
+  | Half to full: Raise speed | slot 2 | 10836 |
+  | Full to half: Lower speed | slot 1 | 10834 |
+  | Half to stopped: Un-set sails | slot 1 | 10835 |
+  | Full to stopped: Un-set sails | slot 0 | 10833 |
+  | Rest to reversing: Reverse | slot 1 | none |
+  | Reversing to stopped: Stop boat | slot 2 | none |
+  | Full, slot 2 again | | game message "The boat is already going as fast as it can." |
+  | Reversing, slot 1 again | | game message "The boat is already reversing." |
+
+- **Straight to full sail** from rest plays 11089: the sail cloth's Set (op 2), the first
+  heading after taking the helm, and a crewmate setting sail. The sail cloth's Un-set (op 5)
+  from full plays 10833. Without anyone navigating, the cloth answers "You or a crewmate must be
+  navigating at the helm to adjust the sails."
+- Every captured sail-row click was made at the helm; what live does for a click away from it
+  is not captured.
+
 ## Per-boat varbits
 
 The server describes every owned boat to the client at login (live login capture) and whenever one changes. Each boat slot has a block of varbits, 38 ids apart: slot 1 starts at 19258, slot 2 at 19296, up to slot 5 at 19410.
@@ -386,10 +417,15 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 **Wrecks** are loc pairs: an active form with "Inspect" (60464 small, 60466 fisherman's, 60468 barracuda, 60470 large, 60472 pirate, 60474 mercenary, 60476 Fremennik, 60478 merchant) and a sunken form with no ops (the next id).
 - The cache map places every wreck sunken: 16 small spots (two groups of 8), and the other types in groups of 6 (barracuda's 43 are strung out unevenly). The small group south-east of the Pandemonium is at about (3085-3132, 2928-2989).
 - The server raises some of each group, sinks a wreck when its time is up, and raises another of the group (Wiki: "When one shipwreck sinks, another in the area immediately rises").
+- Sinking and rising animate (rsprox captures 235/3792, small and barracuda): on the tick a wreck sinks it becomes the sunken loc and plays its type's `*_shipwreck_full_to_depleted`; the next tick another of the group becomes the active loc with `*_depleted_to_full`; two ticks after each transition the loc gets its idle (`*_depleted_idle`, `*_full_idle`). Each type's four sequences are consecutive in the cache (small 13600-13603, fisherman 13604, barracuda 13608, pirate 13612, mercenary 13616, merchant 13620, Fremennik 13624, large 13628: full idle, depleted idle, full to depleted, depleted to full). Ours: a group with no other sunken wreck raises the one that sank.
 - Salvaging starts a wreck's despawn timer: small 2:30, fisherman's, barracuda, large and pirate 3:00, mercenary 3:15, Fremennik 3:45, merchant 4:00. When it sinks: "You salvage all you can from the shipwreck before it is reclaimed by the sea."
+
+**Inspect** (op 1 on an active wreck), a message box (rsprox captures, rev 235: 3457, 3461, 3467, 936, 938, 948, 1007, 4290): "It's a Barracuda shipwreck. You might be able to salvage something from the wreckage using a salvaging hook." Below the wreck's level it adds " However, you'll first need a Sailing level of 35 to do so." The names as captured: small, fisherman's, Barracuda, large, pirate, merchant; mercenary and Fremennik have no capture (ours: "mercenary", "Fremennik"). One rev 235 capture (3414) shows "It might be possible to salvage something from the wreckage, but you're not really sure how to do so yet." for a player who can't salvage yet; what decides it isn't known, so the server doesn't send it.
 
 **Deploy** (op 1 on a salvaging hook):
 - No wreck in range: "There are no shipwrecks within range of the salvaging hook." Nothing else.
+- Only sunken wrecks in range: a message box, "This shipwreck has already been plundered. Perhaps there's another one nearby?" (rsprox captures 235/3792, 235/3834).
+- Below the wreck's level: "You need a Sailing level of at least N to salvage this shipwreck." Ours: no capture or Wiki text.
 - Otherwise: "You cast out your salvaging hook towards the shipwreck...", player animation 13576, and the hook loc plays 13573.
 - 3 ticks later varbit `sailing_sidepanel_player_at_facility_n` (19193 + hotspot; 19200 for hotspot 7) goes to 1, and from then on every tick the player replays 13577 and the hook 13574.
 - The first salvage came 10 ticks after the cast: "You reel in some salvage." (spam filter), the salvage in the inventory, and the wreck's XP (small 10).
@@ -401,6 +437,9 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 - The animation replays with each, with sound 10864 after the first and 10866 after the rest.
 - With none left: "You have no more salvage to sort."
 - Loot: each salvage's pre-rolls first (1 in n each), then its main table by weight.
+- The find line is spam, with the amount written with a thousands separator ("find: 3,504 x Coins."). A find from the salvage's own collection log section (every pre-roll, and Opulent salvage's table Dragon cannonball) is a game message instead: Dragon nails, Mouldy doll, Broken compass, Rusty coin, Smashed mirror, Boat bottle, Sailors' amulet and Dragon cannon barrel every time in rev 235 captures. Opulent salvage's Dragon cannonball is spam in the earliest captures and a game message in later ones, which fits the 10 December 2025 update that put it in the collection log.
+- Salvage above the player's level is left; sorting ends with "You do not have a high enough Sailing level to sort through any more salvage." (Wiki, Opulent salvage trivia; no capture). Ours: the same line refuses Sort-salvage when all of it is above the player's level.
+- Cannonball amounts follow the Wiki (2-5, 2-7 and so on): rev 235 captures give the amounts from before the 18 March 2026 update that raised them (1-3, 1-5, 1-2, and 1 for the pre-roll Dragon cannonball).
 
 ## Shipwrights' workbench
 
@@ -471,8 +510,8 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - **Refused:** "The cargo hold cannot store that item." (game message).
 - **Deposit buttons** (943:13 Cargo, 14 Salvage, 15 Inventory):
   - Deposit Inventory moves everything storable, with sound 10905.
-  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit.", with sound 2277.
-- **Item stacking:** the "Item stacking" toggle (varbit 19592) sends nothing to the server. It only changes how the client draws the hold.
+  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit." / "You have nothing suitable to deposit." (Inventory), with sound 2277.
+- **Item stacking:** the toggle (943:3, op 1) is a button: the server flips `cargo_hold_draw_stacked` (varbit 19592) a tick later. It only changes how the client draws the hold.
 - **Warning:** "Dismiss" (944:8) sets varbit 19123 and hides the warning on the side panel.
 
 **The tools compartment:** shared by all your boats, and taking no space. Taking a tool is op 1 on 943:18, with sound 2582.
@@ -481,11 +520,17 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 | --- | --- | --- | --- |
 | 0 | Captain's log | 31986 | You collect your captain's log from the tools compartment. |
 | 1 | Spyglass | 31803 | You collect a spyglass from the tools compartment. |
-| 2 | Current duck | 31805 | not captured |
-| 3 | Crowbar | 31807 | not captured |
+| 2 | Current duck | 31805 | You collect your current duck from the tools compartment. |
+| 3 | Crowbar | 31807 | You collect a crowbar from the tools compartment. |
 | 4 | Diving gear | 7534 + 7535 | You collect some diving gear from the tools compartment. |
 
-Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment.
+Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment, with no message or sound. Each part of diving gear is deposited on its own click (the other part stays in the pack).
+
+Refusals, each with sound 2277:
+- No room: "You need one free slot to take a spyglass from the tools compartment." (one recording).
+- The crowbar while carrying one: "You already have a crowbar in your inventory." (one recording).
+- A current duck still out at sea: "You have a current duck out at sea. Either find it or wait # seconds to collect another."
+
 
 **Tool unlocks:** script 9138 shows a tool only once its quest progress is reached. The captain's log always shows.
 
@@ -506,8 +551,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 | Recovery | dialogue (Junior Jim) | All done! The boat is now docked here at the Pandemonium. |
 | Hull upgrade | message box | With the help of some workers, you swap out the hull of your boat. |
 | Cargo hold | game | The cargo hold cannot store that item. |
-| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. |
-| Tools compartment | game | You collect your captain's log / a spyglass / some diving gear from the tools compartment. |
+| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. / You have nothing suitable to deposit. |
+| Tools compartment | game | You collect your captain's log / a spyglass / your current duck / a crowbar / some diving gear from the tools compartment. |
+| Tools compartment | game | You need one free slot to take a spyglass from the tools compartment. / You already have a crowbar in your inventory. |
 
 ## Where tsps differs
 

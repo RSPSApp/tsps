@@ -49,6 +49,7 @@ async function use(t, first, second) {
     core.TaskManager.cancelTasks(p.getIndex());
   });
   quest().setStage(p, STAGE_DART_TIP);
+  t.mock.method(Math, "random", () => 0); // the Fletching roll succeeds
   p.getSkillManager().setMaxLevels(core.Skill.FLETCHING, 99, false);
   p.getSkillManager().setCurrentLevels(core.Skill.FLETCHING, 99, false);
   p.getInventory().setItem(0, new core.Item(first[0], first[1]));

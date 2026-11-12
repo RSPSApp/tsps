@@ -483,6 +483,28 @@ test('early Twig/Berry kills and pickpockets do not leak cell keys', () => {
   assert.equal(p.items.get(I.CELL_KEY_1), 1);
 });
 
+// Wiki (Twig, Berry): the cell key comes from pickpocketing "Only during Troll Stronghold"; the note is on the Pickpocketing
+// rows only, and the kill drop is a plain 100% cell key. rsprox 233/00740.txt:14465-14472, after the quest: "You attempt to
+// pick the guard's pocket.", then human_pickpocket and "...but find nothing." a tick later.
+test('after the quest a pickpocket finds nothing, but a kill still drops the cell key', () => {
+  const h = harness();
+  const p = makePlayer();
+  const animations = [];
+  p.performAnimation = animation => animations.push(animation.getId());
+  h.quest.setStage(p, 50);
+  h.npcActions.get('Twig').Pickpocket({ player: p, npcId: K.TWIG_3, npc: { getId: () => K.TWIG_3, isRegistered: () => true } });
+  assert.deepEqual(p.messages, ["You attempt to pick the guard's pocket."]);
+  core.TaskManager.process();
+  assert.deepEqual(p.messages, ["You attempt to pick the guard's pocket.", "You pick the guard's pocket but find nothing."]);
+  assert.deepEqual(animations, [core.CacheDefinitions.getSeqId('human_pickpocket')]);
+  assert.equal(p.items.get(I.CELL_KEY_1) ?? 0, 0, 'no key from the pocket');
+  kill(h, p, K.TWIG_3);
+  kill(h, p, K.BERRY_2); // the quest's Berry ids are BERRY and BERRY_2; BERRY_3 is not one of them
+  assert.equal(p.items.get(I.CELL_KEY_1), 1, "Twig's kill drop");
+  assert.equal(p.items.get(I.CELL_KEY_2), 1, "Berry's kill drop");
+  assert.equal(h.quest.getStage(p), 50, 'the finished quest stays finished');
+});
+
 test('cell doors free each player\'s own prisoners and lock again', () => {
   const h = harness();
   const first = makePlayer();

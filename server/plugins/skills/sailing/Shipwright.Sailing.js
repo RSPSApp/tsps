@@ -12,7 +12,7 @@ const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/ga
 const { NpcDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
 const { PlayerDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/PlayerDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
-const { content, playSound } = require("./SailingContent.Sailing");
+const { content, playSound, tileBeside } = require("./SailingContent.Sailing");
 const { dropLostOnRecovery } = require("./Cargo.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { recoveryFee } = require("./BoatParts.Sailing");
@@ -67,16 +67,18 @@ function pay(player, fee) {
 }
 
 /**
- * A Port Wizard teleports in, recovers the boat and teleports out; the shipwright confirms.
- * `head` is the shipwright the player spoke to, so the line shows their face: Jim's multinpc
- * parent is nameless, so his chat head is the constant rather than his resolved form.
+ * A Port Wizard teleports in on a tile next to the player, facing them, recovers the boat and
+ * teleports out; the shipwright confirms. `head` is the shipwright the player spoke to, so the
+ * line shows their face: Jim's multinpc parent is nameless, so his chat head is the constant
+ * rather than his resolved form.
  */
 function castRecovery(player, dock, head = JUNIOR_JIM_HEAD) {
-  const spot = dock.portWizard ?? dock.landing;
+  const spot = tileBeside(pluginApi.getRegionManager?.(), player.getLocation(), player.getPrivateArea?.() ?? null, false);
   const wizard = pluginApi.spawnNpc({
     id: PORT_WIZARDS[Math.floor(Math.random() * PORT_WIZARDS.length)],
-    x: spot.x, y: spot.y, z: spot.z ?? 0,
+    x: spot.getX(), y: spot.getY(), z: spot.getZ(),
   });
+  wizard?.setPositionToFace?.(player.getLocation());
   wizard?.performAnimation(new Animation(SEQ_TELEPORT_IN));
   wizard?.performGraphic(new Graphic(SPOT_TELEPORT_IN));
   wizard?.forceChat("Another recovery? This won't take long...");

@@ -1285,9 +1285,16 @@ export class Bank extends ItemContainer {
         return 0;
     }
 
+    /** Whether the bank holds at least `item`'s amount of its id (a note's item), in every tab together. */
     public static contains(player: Player, item: Item): boolean {
-        let tab = this.getTabForItem(player, item.getId());
-        return player.getBank(tab).getAmount(item.getId()) >= item.getAmount();
+        const definition = ItemDefinition.forId(item.getId());
+        const id = definition.isNoted() ? definition.unNote() : item.getId();
+        let amount = 0;
+        for (let tab = 0; tab < this.TOTAL_BANK_TABS; tab++) {
+            // The search tab only shows copies of the other tabs' items; placeholders add 0.
+            if (tab !== this.BANK_SEARCH_TAB_INDEX) amount += player.getBank(tab).getAmount(id);
+        }
+        return amount >= item.getAmount();
     }
 
     /** This tab's slots so far (it grows); the player's space is getCapacity. */

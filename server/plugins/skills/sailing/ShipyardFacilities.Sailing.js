@@ -124,12 +124,16 @@ function later(player, ticks, action) {
 function checkTools(player, clicked) {
   if (hasTool(player, SAWS) && hasTool(player, HAMMERS)) return true;
   closeCustomisation(player);
-  const reopen = () => later(player, 1, () => {
+  const reopen = new ActionDialogue(1, { execute: () => later(player, 1, () => {
+    // The chain ends here, and the box goes as 939 comes back.
+    const dialogues = player.getDialogueManager();
+    if (dialogues.getCurrent() !== reopen) return;
+    dialogues.reset();
+    player.getPacketSender().sendInterfaceRemoval();
     if (aboardVisit(player) === clicked.visit) openHotspotOptions(player, clicked);
-  });
+  }) });
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new DoubleItemStatementDialogue(0, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS),
-    new ActionDialogue(1, { execute: reopen })));
+    new DoubleItemStatementDialogue(0, ItemIdentifiers.SAW, ItemIdentifiers.HAMMER, NEED_TOOLS), reopen));
   return false;
 }
 

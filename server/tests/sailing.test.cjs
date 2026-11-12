@@ -2675,6 +2675,14 @@ test("a facility can't be built without a saw and a hammer: the customisation cl
   const facilities = require("../plugins/skills/sailing/BoatFacilities.Sailing");
   h.player.performAnimation = () => {};
   h.player.getEquipment = () => ({ get: () => undefined });
+  // A dialogue manager that knows which entry is showing, as the real one does.
+  let current;
+  h.player.getDialogueManager = () => ({
+    startDialogues: (chain) => { h.statements.push(chain); current = chain.getDialogues().get(0); },
+    getCurrent: () => current,
+    reset: () => { current = undefined; },
+  });
+  const continueBox = () => { current = h.statements.at(-1).getDialogues().get(1); current.send(h.player); };
   const shown = shownShipyardBoat(h);
   h.shipyard.objects.Gangplank.Board({ player: h.player, location: { x: 2087, y: 2723, z: 0 } });
   const hotspot = facilities.hotspotsOf("skiff")[2];
@@ -2703,16 +2711,17 @@ test("a facility can't be built without a saw and a hammer: the customisation cl
   assert.deepEqual(h.scripts.slice(sent), [], "no redraw: 939 is gone");
 
   // Continuing the box reopens the hotspot's customisation the tick after, as captured.
-  h.statements.at(-1).getDialogues().get(1).send(h.player);
+  continueBox();
   assert.equal(h.player.getInterfaceId(), -1, "not on the continue's own tick");
   TaskManager.process();
   assert.equal(h.player.getInterfaceId(), 939);
   assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524), h.varbits.get(19525)], [1, 2, 1], "facility mode, the same hotspot");
+  assert.equal(current, undefined, "the box's chain has ended");
 
   // Off the deck by then, it stays shut.
   h.player.getPacketSender().sendInterfaceRemoval();
   h.shipyard.objects.Gangplank.Disembark({ player: h.player, location: { x: 2087, y: 2723, z: 1 } });
-  h.statements.at(-1).getDialogues().get(1).send(h.player);
+  continueBox();
   TaskManager.process();
   assert.equal(h.player.getInterfaceId(), -1);
   clearTasks();

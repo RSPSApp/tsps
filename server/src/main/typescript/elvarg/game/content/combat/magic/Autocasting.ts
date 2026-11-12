@@ -108,6 +108,27 @@ export class Autocasting {
         [ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF],
     ]);
 
+    /**
+     * The slots each varp 664 list places (cache script 243 autocast_spellpos, with 4512 the standard list and the
+     * ancient_ and arceuus_autocast_spellpos procs); the others are hidden.
+     */
+    private static readonly STANDARD_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 48, 49, 50, 51];
+    private static readonly WAVE_AND_SURGE_SLOTS = [13, 14, 15, 16, 48, 49, 50, 51];
+    private static readonly SELECTOR_SLOTS = new Map<number, Set<number>>([
+        [Autocasting.SELECTOR_STANDARD, new Set(Autocasting.STANDARD_SLOTS)],
+        [ItemIdentifiers.ANCIENT_STAFF, new Set([31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46])],
+        [Autocasting.SELECTOR_ARCEUUS, new Set([53, 54, 55, 56, 57, 58])],
+        [Autocasting.SELECTOR_SLAYERS_STAFF, new Set([17, 18, ...Autocasting.WAVE_AND_SURGE_SLOTS])],
+        [ItemIdentifiers.VOID_KNIGHT_MACE, new Set([17, 19, ...Autocasting.WAVE_AND_SURGE_SLOTS])],
+        [ItemIdentifiers.IBANS_STAFF, new Set([...Autocasting.STANDARD_SLOTS, 47])],
+        ...[ItemIdentifiers.STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_LIGHT, ItemIdentifiers.STAFF_OF_BALANCE]
+            .map((list): [number, Set<number>] => [list, new Set([...Autocasting.STANDARD_SLOTS, 17, 18, 19, 20, 52])]),
+    ]);
+
+    private static selectorSlots(list: number): Set<number> {
+        return this.SELECTOR_SLOTS.get(list) ?? this.SELECTOR_SLOTS.get(this.SELECTOR_STANDARD)!;
+    }
+
     /** The god-spell slots, which only the matching god's staff may choose. */
     private static readonly GOD_SLOTS = new Set([19, 20, 52]);
 
@@ -134,8 +155,9 @@ export class Autocasting {
         const weaponId = player.getEquipment().getWeapon().getId();
         if (spell && this.GOD_SLOTS.has(slot)
             && (!this.OWN_SELECTOR_LISTS.has(weaponId) || this.godSpell(weaponId) !== spell)) spell = null;
-        // Iban Blast is only in Iban's staff's list.
-        if (spell && slot === 47 && this.OWN_SELECTOR_LISTS.get(weaponId) !== ItemIdentifiers.IBANS_STAFF) spell = null;
+        // Only a slot the open list places, from the player's own book, can be chosen (a modified client can send any).
+        if (spell && (spell.getSpellbook() !== player.getSpellbook()
+            || !this.selectorSlots(this.selectorList(player.getSpellbook(), weaponId)).has(slot))) spell = null;
         if (spell) this.setAutocast(player, spell);
         this.openCombatInterface(player);
         return true;

@@ -50,7 +50,7 @@
  */
 module.exports = function registerRatcatchersQuest(api) {
   const { Equipment, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, giveReward } = require("../QuestRuntime");
 
   const PAGE = "Ratcatchers";
   const START_HOOK = "quest:ratcatchers:start";
@@ -303,6 +303,9 @@ module.exports = function registerRatcatchersQuest(api) {
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const heldAny = (player, itemIds) => [...itemIds].some((itemId) => held(player, itemId));
+  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
+  const owned = (player, itemId) => held(player, itemId) || player.getBanks().some((bank, tab) =>
+    tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(itemId) ?? 0) > 0);
 
   function ratcatchers(variant) {
     return { page: PAGE, variant };
@@ -632,7 +635,7 @@ module.exports = function registerRatcatchersQuest(api) {
         return ratcatchers("learning-to-charm-animals-using-a-coin-on-the-snake-charmer-s-money-pot");
       }
       if (stage === STAGE_HAS_CHARM) {
-        if (held(player, SNAKE_CHARM_ITEM_ID) && held(player, MUSIC_SCROLL_ITEM_ID)) {
+        if (owned(player, SNAKE_CHARM_ITEM_ID) && owned(player, MUSIC_SCROLL_ITEM_ID)) {
           return ratcatchers("learning-to-charm-animals-talking-to-the-snake-charmer-again");
         }
         return ratcatchers("learning-to-charm-animals-reclaiming-the-snake-charm-if-lost");
@@ -716,11 +719,11 @@ module.exports = function registerRatcatchersQuest(api) {
       case "hsahNP":
         return held(player, SNAKE_CHARM_ITEM_ID);
       case "SpbdeZ":
-        return !held(player, SNAKE_CHARM_ITEM_ID);
+        return !owned(player, SNAKE_CHARM_ITEM_ID);
       case "NqCxPD":
-        return !held(player, MUSIC_SCROLL_ITEM_ID);
+        return !owned(player, MUSIC_SCROLL_ITEM_ID);
       case "nqrJQU":
-        return !held(player, SNAKE_CHARM_ITEM_ID) && !held(player, MUSIC_SCROLL_ITEM_ID);
+        return !owned(player, SNAKE_CHARM_ITEM_ID) && !owned(player, MUSIC_SCROLL_ITEM_ID);
       case TRAIN_OVERGROWN_CONDITION_ID: {
         const cats = wilyCatStatus(player);
         return cats.overgrown && !cats.wily;
@@ -957,9 +960,9 @@ module.exports = function registerRatcatchersQuest(api) {
         return;
       }
       if (stage === STAGE_HAS_CHARM && text.includes("There you go. Now if you don't mind")) {
-        const inventory = player.getInventory();
-        if (!held(player, SNAKE_CHARM_ITEM_ID)) inventory.adds(SNAKE_CHARM_ITEM_ID, 1);
-        if (!held(player, MUSIC_SCROLL_ITEM_ID)) inventory.adds(MUSIC_SCROLL_ITEM_ID, 1);
+        // A banked charm or scroll is not handed out again; what he gives that does not fit goes to the floor.
+        if (!owned(player, SNAKE_CHARM_ITEM_ID)) giveReward(player, SNAKE_CHARM_ITEM_ID, 1);
+        if (!owned(player, MUSIC_SCROLL_ITEM_ID)) giveReward(player, MUSIC_SCROLL_ITEM_ID, 1);
       }
     }
   }

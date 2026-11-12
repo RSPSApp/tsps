@@ -355,7 +355,8 @@ function name(itemId) {
 function fill(player) {
   const worn = wornAmmo(player);
   if (!worn) {
-    player.sendMessage("You have nothing in your worn quiver to fill your Dizana's Quiver with.");
+    // rsprox 238/04144.txt:23998, :24037 (and the Wiki): in red.
+    player.sendMessage("<col=ff3045>You have nothing in your worn quiver to fill your Dizana's Quiver with.");
     return;
   }
   if (!isArrowOrBolt(worn.getId())) {
@@ -401,18 +402,28 @@ function canWear(player, ammo) {
   return PluginManager.emitCanEquip(player, core().Equipment.AMMUNITION_SLOT, item) !== false;
 }
 
+/** Moves the stored ammo to the inventory; true when any moved. */
 function remove(player) {
   const ammo = stored(player);
-  if (!ammo) return;
+  if (!ammo) return false;
   const inventory = player.getInventory();
   const moved = inventory.getAddableAmount(new (core().Item)(ammo.id, ammo.amount));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space to do that.");
-    return;
+    return false;
   }
   inventory.adds(ammo.id, moved);
   inventory.refreshItems();
   store(player, { id: ammo.id, amount: ammo.amount - moved }, true);
+  return true;
+}
+
+/**
+ * The worn slot's Remove: rsprox (238/04144.txt:23330, 237/01156.txt:880383, 234/03299.txt:388259)
+ * follows it with this spam line. The item's own Empty isn't recorded, so it stays silent.
+ */
+function removeWorn(player) {
+  if (remove(player)) player.getPacketSender().sendTypedMessage(core().ChatType.SPAM, "You remove the ammo from Dizana's Quiver.");
 }
 
 function examine(player) {
@@ -424,7 +435,7 @@ function slotClicked(event) {
   if (event.groupId !== SLOT_COMPONENT.group || event.childId !== SLOT_COMPONENT.child) return;
   const op = Number(event.opId ?? event.action);
   event.handled = true;
-  if (op === OP.REMOVE) remove(event.player);
+  if (op === OP.REMOVE) removeWorn(event.player);
   else if (op === OP.FILL_OR_SWAP) (stored(event.player) ? swap : fill)(event.player);
   else if (op === OP.EXAMINE) examine(event.player);
 }

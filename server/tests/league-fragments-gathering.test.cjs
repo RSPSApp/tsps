@@ -290,11 +290,13 @@ test("Personal Banker: half the resources at two pieces, all of them at three, t
   Math.random = () => 0.6;
   gather(player, "FISHING", I.RAW_LOBSTER, 90);
   assert.equal(player.getInventory().getAmount(I.RAW_LOBSTER), 1, "past the 50%");
-  assert.equal(emit("storage:room", { player, itemId: I.RAW_LOBSTER, room: false }).room, false, "not every resource is banked yet");
+  assert.equal(emit("storage:room", { player, itemId: I.RAW_LOBSTER, skill: core.Skill.FISHING, room: false }).room, false, "not every resource is banked yet");
   equip(player, F.deeperPockets);
   gather(player, "FISHING", I.RAW_LOBSTER, 90);
   assert.equal(banked(player, I.RAW_LOBSTER), 2);
-  assert.equal(emit("storage:room", { player, itemId: I.RAW_LOBSTER, room: false }).room, true);
+  assert.equal(emit("storage:room", { player, itemId: I.RAW_LOBSTER, skill: core.Skill.FISHING, room: false }).room, true);
+  // Hunter is no Personal Banker skill: a catch on a full inventory still needs room (Hunter's catchExchange).
+  assert.equal(emit("storage:room", { player, itemId: I.RAW_PYRE_FOX, skill: core.Skill.HUNTER, room: false }).room, false);
 });
 
 test("the effects compose: Chef's Catch cooks every piece Greedy Gatherer brings, and Personal Banker banks them", () => {

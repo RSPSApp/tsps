@@ -23,7 +23,7 @@ function build(core) {
       fail: loc("hunting_boxtrap_failed"), animation: 5208, ...BOX },
     magic: { level: 71, item: I.MAGIC_BOX, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
     deadfall: { level: 23, idle: loc("hunting_deadfall_trap"), fail: loc("hunting_deadfall_boulder"), setting: loc("hunting_deadfall_setting"),
-      failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1,
+      failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1, keepsAnimation: true,
       layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631 },
     pit: { level: 31, idle: O.SPIKED_PIT, fail: O.COLLAPSED_TRAP, animation: 5212, knife: true, logs: true, layTicks: 1, laySound: 2639,
       dismantle: 5212, dismantleTicks: 1, dismantleSound: 2649, caughtSuffix: "!", refusal: "You need some logs and a knife to set a pitfall trap." },

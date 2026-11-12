@@ -1,7 +1,7 @@
 "use strict";
 
 const C = require("./Context.Hunter");
-const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, xp, begin, hide, chance } = C;
+const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, catchExchange, xp, begin, hide, chance } = C;
 const tables = require("../data/impling-loot.json");
 const falcons = new Map();
 const caught = new Map();
@@ -97,7 +97,7 @@ function collect(player, npc, def) {
   const generated = { player, npc, npcId: def.npc, drops: prey(def), handled: false };
   H.api.emitCustomEvent("npc-drops:generated", generated);
   if (generated.handled) return;
-  for (const drop of generated.drops) exchange(player, [], [[drop.itemId, drop.amount]]);
+  for (const drop of generated.drops) catchExchange(player, [], [[drop.itemId, drop.amount]]);
 }
 
 function retrieve({ player, npc }) {

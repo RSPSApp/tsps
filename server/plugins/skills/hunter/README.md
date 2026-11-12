@@ -78,6 +78,11 @@ butterflies and moths 95, 1634, 3279, 4051; herbiboar 127, 552, 554, 1858; bird 
   spam. A box trap or snare goes on the floor until its loc replaces it (2 and 3 ticks); a tree or
   boulder shows its setting loc and the trap stands a tick later. Reset lays again three ticks
   after the dismantle.
+- Deadfalls leave their 5212 animation to play out (about 4 ticks) after setting up, baiting and
+  dismantling: live sends no reset (`keepsAnimation`; the user's rsprox recording
+  pyre-fur-and-smallpouch-1, rev 242, and 1105, 1108, 1757). Other traps still reset when the action
+  ends. Baiting one says `You lay the jerboa tail beneath the deadfall as bait.` (the same recording;
+  other deadfall baits take the same line).
 - Each trap state sends the cache's `add_overlaytimer_loc` timer: yellow while it waits, green on a
   catch, red when it failed.
 - A catch shows the creature's trapping loc (the cache's `_full_` loc renamed `_trapping_`, or

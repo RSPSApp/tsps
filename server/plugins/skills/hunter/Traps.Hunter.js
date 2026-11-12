@@ -2,7 +2,7 @@
 
 const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  exchange, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
+  exchange, catchExchange, catchRefusal, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
 
 // The trap timer the client draws over a laid trap (cache script add_overlaytimer_loc): coord, loc,
 // shape, timer id, ticks, colour, 1. Yellow while it waits, green on a catch, red when it failed
@@ -169,7 +169,7 @@ function lay(player, kind, location, base = null, ground = null) {
         if (queue.canWalk(dx, dy)) { queue.walkStep(dx, dy); break; }
       }
     }
-  }, restore)) return;
+  }, restore, { reset: !def.keepsAnimation })) return;
   if (!placed && def.item && exchange(player, [[def.item, 1]], [])) {
     placed = H.core.ItemOnGroundManager.registerLocation(player, new H.core.Item(def.item, 1), location.clone());
   }
@@ -230,10 +230,10 @@ function collect(event, reset = false, check = true) {
   if (check && trap.state !== "caught") return true;
   const rewards = trap.state === "caught" ? (trap.rewards ??= rewardsFor(player, trap)) : [];
   const items = returnedItems(trap).concat(rewards);
-  if (!exchange(player, [], items, false)) { player.getInventory().full(); return true; }
+  if (!catchExchange(player, [], items, false)) { catchRefusal(player, [], items); return true; }
   const def = H.data.traps[trap.kind];
   if (!begin(player, def.dismantleTicks ?? 2, def.dismantle ?? ANIM.TAKE, () => {
-    if (!H.traps.has(trap) || !owned(player, object) || !exchange(player, [], items)) return;
+    if (!H.traps.has(trap) || !owned(player, object) || !catchExchange(player, [], items)) return;
     if (trap.state === "caught") xp(player, trap.xp ?? trap.creature.xp, trap.kind, trap.creature.npc);
     const { kind, location, base } = trap;
     remove(trap);
@@ -242,7 +242,7 @@ function collect(event, reset = false, check = true) {
       player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
     }
     if (reset) begin(player, RESET_LAY_TICKS, null, () => lay(player, kind, location, base));
-  })) return true;
+  }, undefined, { reset: !def.keepsAnimation })) return true;
   if (def.dismantleSoundFirst) player.getPacketSender().sendSound(DISMANTLE_SOUND, 1, NET_DISMANTLE_SOUND_DELAY);
   if (def.dismantleTicks === 1) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, "You dismantle the trap.");
   return true;
@@ -329,7 +329,10 @@ function bait(event) {
   if (!exchange(player, [[itemId, amount]], [])) { player.sendMessage(`You need ${amount} of that bait.`); return; }
   trap.bait = { id: itemId, amount, baits };
   player.performAnimation(new H.core.Animation(ANIM.SMALL));
-  player.sendMessage("You bait the trap.");
+  // rsprox captures (pyre-fur-and-smallpouch-1, rev 242): "You lay the jerboa tail beneath the deadfall
+  // as bait."; the other deadfall baits take the same line. Other traps keep this server's wording.
+  if (trap.kind === "deadfall") player.sendMessage(`You lay the ${H.core.CacheDefinitions.getItem(itemId).name.toLowerCase()} beneath the deadfall as bait.`);
+  else player.sendMessage("You bait the trap.");
 }
 
 function eligible(trap, npc, creature) {

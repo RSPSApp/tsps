@@ -51,5 +51,16 @@
     "ramble_lumberjack_top", "ramble_lumberjack_legs", "ramble_lumberjack_hat", "ramble_lumberjack_boots",
     "forestry_lumberjack_top", "forestry_lumberjack_legs", "forestry_lumberjack_hat", "forestry_lumberjack_boots",
     "skillcape_woodcutting", "skillcape_woodcutting_trimmed"
+  ],
+  "_hunterMeat": "Hunter meats a meat pouch holds (Wiki: Hunter meat, Small meat pouch): not raw bird meat.",
+  "hunterMeat": [
+    "Raw wild kebbit", "Raw larupia", "Raw barb-tailed kebbit", "Raw graahk", "Raw kyatt", "Raw pyre fox",
+    "Raw sunlight antelope", "Raw dashing kebbit", "Raw moonlight antelope"
+  ],
+  "_hunterFur": "Furs a fur pouch holds (Wiki: Fur pouch): hunter creatures' furs, no tatty fur and none from combat.",
+  "hunterFur": [
+    "Larupia fur", "Graahk fur", "Kyatt fur", "Dark kebbit fur", "Polar kebbit fur", "Feldip weasel fur",
+    "Common kebbit fur", "Spotted kebbit fur", "Desert devil fur", "Dashing kebbit fur", "Fox fur",
+    "Moonlight antelope fur", "Sunlight antelope fur", "Wyrmscraig goat fur"
   ]
 }

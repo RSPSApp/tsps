@@ -277,6 +277,13 @@ for (const how of ["walkout", "logout"]) test(`Watchtower: interrupted relic ass
 test("Watchtower: nightshade entry plays private shaman/dragon actors without changing world actors or potion progress", async t => {
   const f = actor(t, WATCHTOWER_GUARD), bystander = actor(t, { start: [2582, 9437, 0] });
   ticks(f, 3); ticks(bystander, 3);
+  const casts = [], deaths = [];
+  const animate = core.NPC.prototype.performAnimation;
+  t.mock.method(core.NPC.prototype, "performAnimation", function (animation) {
+    if (this.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5) casts.push(animation.id);
+    if (this.getId() === core.NpcIdentifiers.BLUE_DRAGON_6) deaths.push(animation.id);
+    return animate.call(this, animation);
+  });
   const bits = 1 << 12;
   f.player.setAttribute("quest.watchtower.bits", bits);
   const worldDragon = watchtowerNpc(bystander, core.NpcIdentifiers.BLUE_DRAGON, [2592, 9431, 0]);
@@ -287,12 +294,6 @@ test("Watchtower: nightshade entry plays private shaman/dragon actors without ch
   const actors = area.entities.filter(n => n.isNpc?.());
   assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5));
   assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.BLUE_DRAGON_6));
-  const casts = [], deaths = [];
-  const shaman = actors.find(n => n.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5);
-  const dragon = actors.find(n => n.getId() === core.NpcIdentifiers.BLUE_DRAGON_6);
-  const cast = shaman.performAnimation.bind(shaman), death = dragon.performAnimation.bind(dragon);
-  t.mock.method(shaman, "performAnimation", anim => { casts.push(anim.id); return cast(anim); });
-  t.mock.method(dragon, "performAnimation", anim => { deaths.push(anim.id); return death(anim); });
   ticks(f, 12);
   assert.ok(casts.includes(5357), "shaman performs the dedicated spellcast");
   assert.ok(deaths.includes(92), "private dragon plays its death");
@@ -304,6 +305,39 @@ test("Watchtower: nightshade entry plays private shaman/dragon actors without ch
   assert.equal(bystander.player.getPrivateArea(), null);
   assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION));
   assert.equal(f.player.getAttribute("watchtower:enclave-scene-seen"), true);
+});
+
+test("Watchtower: full-inventory assembly resume keeps progress pending until the relic is delivered", async t => {
+  const f = actor(t, WATCHTOWER_WIZARD);
+  ticks(f, 3);
+  const { area, npc } = await beginRelicScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  area.leave(f.player, true);
+  f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
+  const inventory = f.player.getInventory();
+  while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE), false);
+  assert.equal(inventory.getFreeSlots(), 0, "resumption starts with an actually full bag");
+  const before = items(f.player);
+  const resume = async () => {
+    await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+    ticks(f, 2);
+    await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
+    assert.ok(f.player.getArea() instanceof core.TemplatedInstanceArea, "Talk-to resumes all retained parts");
+    ticks(f, 12);
+  };
+  await resume();
+  assert.equal(quest("watchtower").getStage(f.player), 2, "failed award cannot advance the quest");
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 0);
+  assert.deepEqual(items(f.player), before, "full-bag refusal preserves inventory");
+  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
+  inventory.deleteNumber(I.RAKE, 1);
+  assert.equal(inventory.getFreeSlots(), 1);
+  await resume();
+  assert.equal(quest("watchtower").getStage(f.player), 3);
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
+  assert.equal(inventory.getAmount(I.RAKE), 27);
+  ticks(f, 12);
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
 });
 
 test("Watchtower: early nightshade use is refused without consumption or a cinematic", async t => {

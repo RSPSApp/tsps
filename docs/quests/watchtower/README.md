@@ -30,7 +30,8 @@ No native playthrough recorded; natural completion pending.
   statue is awarded. Consumed parts remain represented by the saved hand-in
   bits; closing the dialogue or interrupting the scene permits another Talk-to
   without consuming replacement parts. A completed scene grants one statue and
-  stage 3. The first enclave entry through the nightshade dialogue shows a
+  stage 3 only after inventory delivery succeeds; a full bag leaves the saved
+  parts and stage 2 ready for another Talk-to. The first enclave entry through the nightshade dialogue shows a
   private shaman attacking a private dragon. It changes no world dragon,
   shaman-kill counter, potion or crystal progress.
 

@@ -1215,6 +1215,10 @@ module.exports = function registerWatchtowerQuest(api) {
     if (!scene.finished || logout || player.getHitpoints() <= 0) return;
     if (scene.name === "watchtower-relic" && quest.getStage(player) === STAGE_GIVEN_FINGERNAILS) {
       give(player, OGRE_RELIC);
+      if (!held(player, OGRE_RELIC)) {
+        player.sendMessage("The wizard keeps the relic until you have room to carry it.");
+        return;
+      }
       quest.setStage(player, STAGE_MADE_RELIC);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
         new ItemStatementDialogue(0, OGRE_RELIC, "The wizard gives you a complete statue.")

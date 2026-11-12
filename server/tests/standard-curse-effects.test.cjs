@@ -292,3 +292,21 @@ test('native spell-on-NPC Enfeeble on a real cached NPC made immune is refused w
   assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()], xp);
   assert.equal(target.getCurrentLevel(core.Skill.STRENGTH), target.getMaxLevel(core.Skill.STRENGTH));
 });
+
+// Wiki (Dark Lure): "Dark Lure remains active on monsters for 61.2 seconds" (102 ticks).
+test('Dark Lure keeps a monster from retreating for 102 ticks', () => {
+  const attributes = new Map();
+  const attacked = [];
+  const target = {
+    isNpc: () => true, isPlayer: () => false,
+    getMovementQueue: () => ({ reset() {} }),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getAttribute: key => attributes.get(key),
+    getCombat: () => ({ attack: who => attacked.push(who) }),
+  };
+  const caster = { isNpc: () => false, isPlayer: () => true };
+  const now = core.World.getProcessCycle();
+  core.CombatSpells.DARK_LURE.spellEffect(caster, target);
+  assert.equal(attributes.get('arceuus:dark-lure-until'), now + 102);
+  assert.deepEqual(attacked, [caster]);
+});

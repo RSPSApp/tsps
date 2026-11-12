@@ -26,8 +26,9 @@ const WIKI_CHART = {
     man: [180, 240], farmer: [150, 240], ham: [135, 239], warrior: [100, 240], rogue: [75, 240],
     master_farmer: [90, 240], guard: [50, 240], wealthy_citizen: [35, 200], desert_bandit: [50, 240],
     knight: [50, 240], menaphite_thug: [50, 160], watchman: [15, 160],
-    // Both cite Mod Ash: "LOW: 35 HIGH: 160" (Paladin) and "LOW: 33 HIGH: 140" (Gnome).
-    paladin: [35, 160], gnome: [33, 140], hero: [39, 160], vyre: [8, 128],
+    // The charts both pages render (Normal: low1/high1). Each page also keeps a commented-out
+    // chart citing Mod Ash ("LOW: 35 HIGH: 160", "LOW: 33 HIGH: 140"), which the Wiki doesn't show.
+    paladin: [40, 170], gnome: [43, 175], hero: [39, 160], vyre: [8, 128],
     elf_lletya: [6, 100], elf_prifddinas: [6, 100], tzhaar_hur: [-200, 200],
 };
 /** The Wiki has no chart for these: each uses the one its `estimatedFrom` names. */
@@ -274,12 +275,12 @@ test('the interpolation rounds as the Wiki module does, at a level where the sum
     // Flooring without the module's +0.5 would give 156/256 (61.0% instead of 61.3%).
     const warrior = DATA.targets.find((t) => t.key === 'warrior');
     assert.equal(successChance(player({ level: 40 }), warrior), 157 / 256);
-    // The two charts that had been transcribed stale (see WIKI_CHART above).
+    // Paladin and Gnome: the charts the Wiki pages render (see WIKI_CHART above).
     const at = (key, level) => successChance(player({ level }), DATA.targets.find((t) => t.key === key));
-    assert.equal(at('paladin', 70), 124 / 256, '48.4%, not the 51.9% of a 40/170 chart');
-    assert.equal(at('paladin', 99), 161 / 256);
-    assert.equal(at('gnome', 75), 115 / 256, '44.9%, not the 56.3% of a 43/175 chart');
-    assert.equal(at('gnome', 99), 141 / 256);
+    assert.equal(at('paladin', 70), 133 / 256, '51.9%, the rendered 40/170 chart');
+    assert.equal(at('paladin', 99), 171 / 256);
+    assert.equal(at('gnome', 75), 144 / 256, '56.3%, the rendered 43/175 chart');
+    assert.equal(at('gnome', 99), 176 / 256);
 });
 
 test('a success announces the pickpocket before adding loot so RuneLite can snapshot the old inventory', (t) => {

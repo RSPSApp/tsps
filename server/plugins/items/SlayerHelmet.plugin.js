@@ -97,20 +97,18 @@ function helmetTable() {
   if (helmets?.api === pluginApi) return helmets;
   const byId = new Map();
   const heads = new Map();
+  const recolours = RECOLOURS.map((recolour) => ({ ...recolour, headId: recolour.head ? objId(recolour.head) : null }));
   for (const form of FORMS) {
     const base = objId(form.helm);
     const mask = form.mask ? objId(form.mask) : ItemIdentifiers.BLACK_MASK;
     if (base == null || mask == null) continue;
     byId.set(base, { form, recolour: null, mask, base });
-    for (const recolour of RECOLOURS) {
+    for (const recolour of recolours) {
       const id = objId(recolour.item(form.helm));
       if (id != null) byId.set(id, { form, recolour, mask, base });
     }
   }
-  for (const recolour of RECOLOURS) {
-    const head = recolour.head ? objId(recolour.head) : null;
-    if (head != null) heads.set(head, { ...recolour, headId: head });
-  }
+  for (const recolour of recolours) if (recolour.headId != null) heads.set(recolour.headId, recolour);
   helmets = { api: pluginApi, byId, heads };
   return helmets;
 }
@@ -329,7 +327,7 @@ function recolour(event) {
   const helmSlot = headOnUsed ? usedWithItemSlot : usedItemSlot;
   const headName = pluginApi.core.ItemDefinition.forId(colour.headId)?.getName?.() ?? "head";
   pluginApi.sendMultiChatboxPrompt(player, `Combine the ${headName} with your helm?`,
-    "Yes", () => combineRecolour(player, helmItem, helmSlot, colour, result),
+    "Yes", () => combineRecolour(player, helmItem, helmSlot, helm.base, colour, result),
     "No", () => {});
 }
 
@@ -339,11 +337,12 @@ function learnFirst(player) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LEARN_FIRST)));
 }
 
-/** Yes: the head goes into the helmet, if both are still there and the helmet is still uncoloured. */
-function combineRecolour(player, helmItem, helmSlot, colour, result) {
+/** Yes: the head goes into the helmet, if both are still there and the helmet is still the same uncoloured one. */
+function combineRecolour(player, helmItem, helmSlot, base, colour, result) {
   const inventory = player.getInventory();
   const helm = helmetTable().byId.get(Number(helmItem.getId()));
-  if (inventory.getItems()[helmSlot] !== helmItem || !helm || helm.recolour || !inventory.contains(colour.headId)) return;
+  if (inventory.getItems()[helmSlot] !== helmItem || helm?.base !== base || helm.recolour ||
+    !inventory.contains(colour.headId)) return;
   inventory.deleteNumber(colour.headId, 1);
   helmItem.setId(result);
   inventory.refreshItems();
@@ -367,7 +366,7 @@ function disassemble(event) {
   const { player, item } = event;
   const entry = helmetTable().byId.get(Number(item.getId()));
   if (!entry || entry.recolour?.disassemble === false) return true;
-  const head = entry.recolour?.head ? objId(entry.recolour.head) : null;
+  const head = entry.recolour?.headId ?? null;
   const inventory = player.getInventory();
   // Ours: no message is recorded for a full inventory.
   if (inventory.getFreeSlots() < PARTS.length + (head != null ? 1 : 0)) {

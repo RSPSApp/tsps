@@ -361,6 +361,15 @@ test("No, or a head that's gone by Yes, leaves the helmet as it was", () => {
   assert.deepEqual(player.typed, []);
 });
 
+test("a helmet imbued while the question is up isn't turned into the plain colour", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS] });
+  headOn(player, 0, 1);
+  player.items[0].setId(ItemIdentifiers.SLAYER_HELMET_I_);
+  prompts[0].options[1]();
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_, ItemIdentifiers.KBD_HEADS]);
+});
+
 test("the Soul Wars imbued helmet turns into its own black copy", () => {
   prompts.length = 0;
   const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET_I__3, ItemIdentifiers.KBD_HEADS] });

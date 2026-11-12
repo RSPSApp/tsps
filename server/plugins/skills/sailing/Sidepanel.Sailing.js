@@ -10,6 +10,7 @@ const {
   COMBAT_TAB_UID,
   SCRIPT_SIDEPANEL_INIT,
   SCRIPT_SIDEBUTTON_SWITCH,
+  setVarbit,
 } = require("./SailingContent.Sailing");
 const { boatStats, partTiers } = require("./BoatParts.Sailing");
 const { facilitiesOf } = require("./BoatFacilities.Sailing");
@@ -58,6 +59,15 @@ const VIEW_COMBAT_OPTIONS_CHILD = 1;
 const VIEW_COMBAT_OPTIONS_MAX_SLOT = 12;
 const IF_EVENT_OP1 = 1 << 1;
 const IF_EVENT_OP1_TO_OP4 = IF_EVENT_OP1 | (1 << 2) | (1 << 3) | (1 << 4);
+const IF_EVENT_TGTNPC = 1 << 12;
+const IF_EVENT_TGTPLAYER = 1 << 14;
+/**
+ * Over the facility rows, a layer (937:26) that targets an NPC; over the crew list, one (937:10,
+ * slots 0-1) that targets a player. Live enables both with the panel.
+ */
+const FACILITIES_NPC_TARGET_CHILD = 26;
+const CREW_PLAYER_TARGET_CHILD = 10;
+const CREW_PLAYER_TARGET_MAX_SLOT = 1;
 /**
  * The crew picker (937:20, a slot per facility slot), its Back button (937:29, 0-11) and the crew
  * tab's radio buttons (937:38, 0-3), as live enables them with the panel (rsprox: every boarding).
@@ -67,6 +77,21 @@ const CREW_PICKER_BACK_CHILD = 29;
 const CREW_PICKER_BACK_MAX_SLOT = 11;
 const CREW_RADIO_BUTTONS_CHILD = 38;
 const CREW_RADIO_BUTTONS_MAX_SLOT = 3;
+
+/**
+ * The panel's three tabs (937:33-35) and sailing_sidepanel_tabs, the one shown. Boarding shows
+ * the facilities, a shipyard visit the stats.
+ */
+const VARBIT_SIDEPANEL_TABS = 19152;
+const SIDEPANEL_TAB = { FACILITIES: 0, STATS: 1, CREW: 2 };
+const TAB_CHILDREN = { 33: SIDEPANEL_TAB.FACILITIES, 34: SIDEPANEL_TAB.STATS, 35: SIDEPANEL_TAB.CREW };
+
+/** A tab button shows its tab, aboard, off a boat and in the shipyard alike. */
+function clickTab(event) {
+  if (event.groupId !== SIDEPANEL_GROUP || !Object.hasOwn(TAB_CHILDREN, event.childId)) return;
+  event.handled = true;
+  setVarbit(event.player, VARBIT_SIDEPANEL_TABS, TAB_CHILDREN[event.childId]);
+}
 
 /**
  * A boat's stats: from its parts in the cache, with any the cache doesn't hold (the captured
@@ -140,13 +165,20 @@ function openSidepanel(player, type, varbits, varps) {
   if (type) {
     sender.sendInterfaceFlagsRange(
       (SIDEPANEL_GROUP << 16) | SIDEPANEL_FACILITIES_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1_TO_OP4);
+    sender.sendInterfaceFlagsRange(
+      (SIDEPANEL_GROUP << 16) | FACILITIES_NPC_TARGET_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_TGTNPC);
     sender.sendInterfaceFlagsRange((SIDEPANEL_GROUP << 16) | CREW_PICKER_CHILD, 0, type.sidepanelFacilitySlots, IF_EVENT_OP1);
   }
   sender.sendInterfaceFlagsRange(
     (SIDEPANEL_GROUP << 16) | CREW_PICKER_BACK_CHILD, 0, CREW_PICKER_BACK_MAX_SLOT, IF_EVENT_OP1);
+  if (type) {
+    sender.sendInterfaceFlagsRange(
+      (SIDEPANEL_GROUP << 16) | CREW_PLAYER_TARGET_CHILD, 0, CREW_PLAYER_TARGET_MAX_SLOT, IF_EVENT_TGTPLAYER);
+  }
   sender.sendInterfaceFlagsRange(
     (SIDEPANEL_GROUP << 16) | CREW_RADIO_BUTTONS_CHILD, 0, CREW_RADIO_BUTTONS_MAX_SLOT, IF_EVENT_OP1);
 }
 
 module.exports = { describeBoat, boatVarps, describeSuppliedBoat, suppliedBoatVarps,
-  clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS, HOTSPOT_VARBITS };
+  clearBoatVarps, openSidepanel, clickTab, DESCRIPTION_VARBITS, HOTSPOT_VARBITS,
+  VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB };

@@ -15,7 +15,8 @@ const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/ga
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
 const { VARBIT, content, boatType, setVarbit, fade, tileBeside } = require("./SailingContent.Sailing");
-const { describeBoat, boatVarps, clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS } = require("./Sidepanel.Sailing");
+const { describeBoat, boatVarps, clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS,
+  VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB } = require("./Sidepanel.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { sendToolUnlocks } = require("./Cargo.Sailing");
 const parts = require("./BoatParts.Sailing");
@@ -111,6 +112,8 @@ function describeVisit(player, visit) {
     [VARBIT_SHIPYARD_BOAT_ANGLE]: SHIPYARD.boat.angle,
     [VARBIT_SHIPYARD_BOAT_OFFSET_FINEX]: 1,
     [VARBIT.SIDEPANEL_VISIBLE]: 1,
+    // The shipyard shows the boat's stats tab.
+    [VARBIT_SIDEPANEL_TABS]: SIDEPANEL_TAB.STATS,
   };
   const varps = boatVarps(type, boat);
   for (const [id, value] of Object.entries(varbits)) setVarbit(player, Number(id), value);

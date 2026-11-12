@@ -12,8 +12,6 @@ const { VARBIT, MOVE_MODE, getVarbit, animateSails } = require("../SailingConten
 
 /** Ticks from reaching the helm to setting sail (rsprox: arrived 188, full sail 191). */
 const SAIL_DELAY_TICKS = 3;
-/** A crewmate setting sail (rsprox), in place of the player's raise sound. */
-const SOUND_CREW_RAISE = 11089;
 /** Share of a trim's XP by Helmsmanship 1-4 (Wiki, Crewmates). */
 const TRIM_XP_SHARE = [0, 0.4, 0.5, 0.6, 0.7];
 const WATCHING = "You gain some experience by watching your crew work.";
@@ -50,7 +48,7 @@ function work(player, boat, member, { setSail = true } = {}) {
       ticks++;
       const moveMode = getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE);
       if (setSail && ticks === SAIL_DELAY_TICKS && (moveMode === MOVE_MODE.STOPPED || moveMode === MOVE_MODE.MOORED)) {
-        helm.setSailMode(player, boat, "full", { raiseSound: SOUND_CREW_RAISE });
+        helm.setSailMode(player, boat, "full");
       }
       if (ticks % helm.HELM_LOOP_TICKS === 0 && !isTrimmed(boat)) helm.playHelm(player, boat, "loop", npc);
       if (Math.random() < CHATTER_CHANCE) lines.say(npc, crew, "helm");

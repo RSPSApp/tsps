@@ -49,8 +49,8 @@ powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
 snapshot is reconstructed. Food, drink and weapon charges are consumed normally.
-A defeated fighter goes to the map's jail if the battle is still running. The team
-with no fighters loses. Result screens return remaining participants to the lobby.
+A defeated fighter goes to the map's jail if the battle is still running. In Last
+Team Standing, the team with no fighters loses. Result screens return remaining participants to the lobby.
 There are no stakes, prizes, blood-money rewards, Elo changes or ordinary PvP streak
 changes. The existing PvP statistics/reward query is vetoed throughout a match death,
 including when the battle finishes before the death callback completes.
@@ -91,7 +91,8 @@ or item-loss variant is imported from older RuneScape reference servers.
   combat policy, inventory/preset producers, death tasks and save codecs. Independent
   collision checks verify preparation separation, combat connectivity and jail isolation.
 - Regressions retain stale portal-confirmation ownership, the HUD's actual toplevel
-  mount and interrupted-save recovery. Native browser QA checks the visible negotiation,
+  mount and interrupted-save recovery. The original LTS delivery
+  used native browser QA for the visible negotiation,
   portal, countdown, combat and win/loss flow. Exact live OSRS timing/presentation parity
   is not claimed from these checks.
 

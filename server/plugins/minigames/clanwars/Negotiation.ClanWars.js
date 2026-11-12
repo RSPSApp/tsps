@@ -61,8 +61,8 @@ function renderSetup(session) {
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
       sender.sendString("Melee LTS or first-to-kills - Plateau", Common.uid("clanwars_setup:title"));
-      // The cache creates mode rows at index * 3 (script 576). Enable only
-      // LTS and kill targets are accepted. Every actual row must transmit: script579
+      // The cache creates mode rows at index * 3 (script 576). Only LTS and
+      // kill targets are accepted. Every actual row must transmit: script579
       // optimistically changes the client varbit even on unsupported selections.
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);

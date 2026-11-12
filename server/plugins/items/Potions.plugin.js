@@ -64,6 +64,8 @@ const ATTR_BOOST_CYCLE = "potions:boost-cycle";
 const ATTR_BOOST_CYCLE_PRESERVED = "potions:boost-cycle-preserved";
 /** When Preserve was last switched on. */
 const ATTR_PRESERVE_SINCE = "potions:preserve-since";
+/** The last time Preserve was on and past its 15-second warm-up: it still counts for 13 seconds after that. */
+const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
 const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
@@ -72,6 +74,9 @@ const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
 const PRESERVE_EXTENSION_MS = 30 * 1000;
 const PRESERVE_WARMUP_MS = 15 * 1000;
+// Wiki (Preserve): "Players can turn off Preserve when there are less than 13 seconds left until the next buff
+// drain, and still keep the full effect."
+const PRESERVE_TURN_OFF_GRACE_MS = 13 * 1000;
 const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
 const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
@@ -451,6 +456,7 @@ function timedEffectSkillIndexes(player) {
  * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
+  notePreserveWarm(player, Date.now());
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
@@ -503,9 +509,12 @@ function sendBoostDrainTimer({ player }) {
   const { PrayerHandler } = pluginApi.core;
   const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
   const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
-  const period = preserve || stretched ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   const now = Date.now();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
+  // Preserve, turned off under 13 seconds before this cycle ends, still stretches it.
+  const graceStretch = !preserve && !stretched && warmAt > 0 && nextDecayAt > now && nextDecayAt - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  const period = preserve || stretched || graceStretch ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
@@ -524,7 +533,7 @@ function sendBoostDrainTimer({ player }) {
       }
     }
     // A cycle Preserve is going to stretch ends 30 seconds later.
-    if (!cycleStretched && preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS) {
+    if (!cycleStretched && (graceStretch || preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS)) {
       decayAt += PRESERVE_EXTENSION_MS;
     }
     remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);
@@ -543,12 +552,26 @@ function hasDecayingBoost(player) {
   return false;
 }
 
-/** Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends. */
-function preserveStretchesCycle(player, now) {
-  if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
+/** Whether Preserve is on and has been for 15 seconds. */
+function preserveWarm(player, now) {
   const { PrayerHandler } = pluginApi.core;
   if (!PrayerHandler.isActivated(player, PrayerHandler.PRESERVE)) return false;
   return now - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS;
+}
+
+function notePreserveWarm(player, now) {
+  if (preserveWarm(player, now)) player.setAttribute(ATTR_PRESERVE_WARM_AT, now);
+}
+
+/**
+ * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
+ * turned off (after its warm-up) under 13 seconds before.
+ */
+function preserveStretchesCycle(player, now) {
+  if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
+  if (preserveWarm(player, now)) return true;
+  const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
+  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {

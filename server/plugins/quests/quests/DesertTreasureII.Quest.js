@@ -2991,10 +2991,10 @@ module.exports = function registerDesertTreasureII(api) {
     return npc;
   }
 
+  /** Banked in any tab (not the search tab, which repeats them; placeholders hold 0). */
   function hasBankedItem(player, itemId) {
-    const bank = player.getBank?.(0);
-    return (bank?.getAmount?.(itemId) ?? bank?.getItems?.().reduce((amount, item) =>
-      amount + (item?.getId?.() === itemId ? item.getAmount?.() ?? 0 : 0), 0) ?? 0) > 0;
+    return (player.getBanks?.() ?? []).some((bank, tab) =>
+      tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount?.(itemId) ?? 0) > 0);
   }
 
   function recoverLostSucellusKey(player) {
@@ -5169,6 +5169,9 @@ module.exports = function registerDesertTreasureII(api) {
   }
   const setStage = (p, v) => { if (stage(p) < v) quest.setStage(p, v); };
   const has = (p, id) => p.getInventory().getAmount(id) > 0;
+  const BLACKSTONE_FRAGMENTS = [I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3];
+  /** Ketla's fragment is replaced only when none is carried or banked. */
+  const ownsBlackstoneFragment = (p) => BLACKSTONE_FRAGMENTS.some((id) => has(p, id) || hasBankedItem(p, id));
   function talk(p, npcId, variant, next) {
     const select = variant === "the-desert-treasure-aftermath" ? (steps) => {
       const selected = steps.slice();
@@ -7830,7 +7833,7 @@ module.exports = function registerDesertTreasureII(api) {
         }
         if (state.escapedVision && state.perfectTorchSchematic)
           return talk(p, npcId, "the-whisperer-inspecting-the-totem-in-the-cistern-talking-to-ketla-again");
-        if (state.cameTo && (state.ringShown || state.blackstone) && ![I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3].some(id => has(p, id))) {
+        if (state.cameTo && (state.ringShown || state.blackstone) && !ownsBlackstoneFragment(p)) {
           return talk(p, npcId, "the-whisperer-talking-to-ketla-with-the-ring-of-visibility-reclaiming-the-blackstone-fragment");
         }
         if (state.cameTo && !state.blackstone && has(p, I.RING_OF_VISIBILITY)) {
@@ -8338,7 +8341,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (["5mQjA2", "FLyW0o", "WWa1TU"].includes(stepId) && inChapter(p, "whisperer")) {
       const current = p.getAttribute(LASSAR) ?? {};
       if (!current.cameTo || !current.ringShown && !current.blackstone) return;
-      if (!has(p, I.BLACKSTONE_FRAGMENT) && !has(p, I.BLACKSTONE_FRAGMENT_2) && !has(p, I.BLACKSTONE_FRAGMENT_3)) p.getInventory().adds(I.BLACKSTONE_FRAGMENT, 1);
+      if (!ownsBlackstoneFragment(p)) p.getInventory().adds(I.BLACKSTONE_FRAGMENT, 1);
       setLassar(p, { ...current, blackstone: true });
     }
     if (stepId === "tOep7b" && inChapter(p, "whisperer")) {

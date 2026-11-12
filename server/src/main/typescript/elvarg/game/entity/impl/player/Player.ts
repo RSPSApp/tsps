@@ -815,6 +815,14 @@ export class Player extends Mobile {
         }
     }
 
+    /**
+     * Held by a teleport (its cast, until the move) or an agility obstacle (the agility runner's "agility.obstacle"
+     * attribute). Other holds (a spell freeze, a boss's stun or knockback, a cutscene, a ride) are not counted.
+     */
+    isLocked(): boolean {
+        return this.isTeleportingReturn() || this.getAttribute("agility.obstacle") != null;
+    }
+
     busy(): boolean {
         if (this.interfaceId > 0) {
             return true;

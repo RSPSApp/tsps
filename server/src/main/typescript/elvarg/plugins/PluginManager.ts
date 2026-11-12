@@ -393,6 +393,8 @@ export class PluginManager {
   private static buttonClickHooks: PluginHook<PluginButtonClickEvent>[] = [];
   private static interfaceActionClickHooks: PluginHook<PluginInterfaceActionClickEvent>[] =
     [];
+  /** Buttons that answer "Please finish what you are doing first." while the player is locked (refuseWhileBusy). */
+  private static busyRefusalButtons = new Set<number>();
   private static commandHooks: PluginHook<PluginCommandEvent>[] = [];
   private static commandHandlersByBase = new Map<
     string,
@@ -2064,6 +2066,11 @@ export class PluginManager {
       PluginManager.executeHook(hook, event, "button_click", "button_click");
     }
     return event.handled === true;
+  }
+
+  /** Whether `buttonId` was registered with refuseWhileBusy. */
+  public static refusesWhileBusy(buttonId: number): boolean {
+    return PluginManager.busyRefusalButtons.has(buttonId);
   }
 
   public static emitInterfaceActionClick(
@@ -4392,6 +4399,11 @@ export class PluginManager {
           handler,
           "interface_action_button"
         );
+      },
+      refuseWhileBusy: (buttonIds) => {
+        for (const id of [].concat(buttonIds as any)) {
+          if (Number.isInteger(id) && id >= 0) PluginManager.busyRefusalButtons.add(id);
+        }
       },
       onCommand: (handler) => {
         if (typeof handler !== "function") {

@@ -307,6 +307,27 @@ data `panels`):
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
 
+**Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
+(656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: a teleport's cast, before
+the move, or an agility obstacle) with the game message "Please finish what you are doing first." and
+open nothing, through the plugin API's `refuseWhileBusy`, which the interface-click packet checks before
+any handler. As captured: View Tasks two ticks into a standard teleport cast, the tick before the move
+(227/00075), and View Tasks during the Varrock Rooftop wall swing (227/01723).
+
+Not modelled (those clicks still open here):
+- The Royal seed pod's arrival: live refused View Demonic Pacts one and four ticks after the move,
+  during the arrival animation, and opened it the tick after the pod's message (237/01149). Here a
+  teleport releases the player on the tick they move.
+- Live also refused during a stall theft (237/01148) and on the tick a box trap check finished
+  (237/01108). Neither locks the player here.
+- A few refusals came in states the captures don't make clear: after dialogues, banking or inventory
+  clicks (227/00552, 01710, 01757, 01768).
+- Other holds (a spell freeze, a boss's stun or knockback, a cutscene, a ride, a loc's climb, the
+  Leagues home teleport's cast) don't count.
+- Summary, Info and Rank have no captured refusal and aren't gated.
+- The same line answers other interfaces (the account tab's bond and inbox buttons, settings buttons),
+  which this doesn't cover yet.
+
 ### Ranks
 
 `league/Rank.LeagueMode.js`, data `league-ranks.json`: seven ranks a league (Bronze to Dragon) at

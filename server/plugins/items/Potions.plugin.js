@@ -14,6 +14,7 @@ const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
 const { Graphic } = require("../../src/main/typescript/elvarg/game/model/Graphic");
+const { World } = require("../../src/main/typescript/elvarg/game/World");
 const { EffectTimer } = require("../../src/main/typescript/elvarg/game/model/EffectTimer");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
@@ -1399,10 +1400,22 @@ registerPotion({
  */
 function divineShock(player) {
   player.performGraphic(new Graphic(DIVINE_SHOCK_GRAPHIC));
+  const cycle = World.getProcessCycle();
+  const pending = PENDING_SHOCKS.get(player);
+  PENDING_SHOCKS.set(player, { cycle, damage: (pending?.cycle === cycle ? pending.damage : 0) + DIVINE_DAMAGE });
   const hit = new HitDamage(DIVINE_DAMAGE, HitMask.RED).onApplied((taken) => {
+    PENDING_SHOCKS.delete(player);
     if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
   });
   player.getCombat().getHitQueue().addPendingDamage([hit]);
+}
+
+/** Divine shocks queued this tick and not landed yet: they land on the player's own hit phase. */
+const PENDING_SHOCKS = new WeakMap();
+
+function pendingShockDamage(player) {
+  const pending = PENDING_SHOCKS.get(player);
+  return pending?.cycle === World.getProcessCycle() ? pending.damage : 0;
 }
 
 function registerDivinePotion(definition) {
@@ -1412,8 +1425,9 @@ function registerDivinePotion(definition) {
       definition.effect(player);
       divineShock(player);
     },
-    // Damage already on its way counts: a chugging barrel's second divine dose can't take the last Hitpoints.
-    canUse: (player) => (player.getHitpointsAfterPendingDamage?.() ?? getCurrentLevel(player, Skill.HITPOINTS)) > DIVINE_DAMAGE,
+    // An earlier dose's shock that hasn't landed yet counts: a chugging barrel's second divine dose can't take
+    // the last Hitpoints. Other incoming hits don't.
+    canUse: (player) => getCurrentLevel(player, Skill.HITPOINTS) - pendingShockDamage(player) > DIVINE_DAMAGE,
     canUseMessage: "You need more than 10 hitpoints to survive the power of a divine potion.",
   });
 }

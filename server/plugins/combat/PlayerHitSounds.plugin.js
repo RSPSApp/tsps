@@ -66,7 +66,10 @@ function playHurtSoundForListeners(attacker, target, hurtIds) {
   }
 }
 
-/** Damage the player takes on itself (a divine potion's shock): only they hear it, in their own voice. */
+/**
+ * Damage the player takes on itself (a divine potion's shock): only they hear it, in their own voice.
+ * Ours: Type B's voices here follow combat's; only Type A's were recorded for it.
+ */
 function playOwnHurtSound(player) {
   if (!core || !player?.isRegistered?.() || player.isPlayerBot?.() || player.getNpcTransformationId() >= 0) return;
   playHurtSound(player, hitSoundsType(player) === TYPE_A ? HURT_IDS.body0 : HURT_IDS.body1);

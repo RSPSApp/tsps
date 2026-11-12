@@ -51,7 +51,7 @@ for (const [name, [itemId, locksAttack]] of Object.entries(DIVINES)) {
     t.mock.method(c.Misc, "getRandom", () => 2);
     const { p, frames } = drinker(t);
     Potions._test.findPotionEntry(itemId).potion.effect(p);
-    assert.equal(p.getGraphic()?.getId?.() ?? p.getGraphic()?.id, 560, "skeleton_killerwatt_electricshock");
+    assert.equal(p.getGraphic()?.getId(), 560, "skeleton_killerwatt_electricshock");
     assert.equal(p.getHitpoints(), 99, "the damage lands with the hit, not before");
     c.World.processCycle++;
     p.getCombat().getHitQueue().process(c.World.processCycle);
@@ -79,6 +79,12 @@ test("the potion still needs more than 10 Hitpoints", (t) => {
   assert.equal(potion.canUse(p), false);
   p.setHitpoints(11);
   assert.equal(potion.canUse(p), true);
+});
+
+test("an enemy hit already on its way doesn't stop the drink", (t) => {
+  const { p } = drinker(t, 40);
+  p.getCombat().getHitQueue().addPendingDamage([new c.HitDamage(35, c.HitMask.RED)]);
+  assert.equal(Potions._test.findPotionEntry(I.DIVINE_SUPER_COMBAT_POTION_4_).potion.canUse(p), true);
 });
 
 test("a second divine dose before the first one's hit lands counts that hit (chugging barrel)", (t) => {

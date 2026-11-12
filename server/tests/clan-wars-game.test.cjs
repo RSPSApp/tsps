@@ -2036,6 +2036,7 @@ test('native Quarry queued movement, full clip restoration and rock walk-versus-
     await wire(walker,walkClickFrame(rock));tick(10);assert.notDeepEqual(position(walker),[rock.getX(),rock.getY(),0],'ordinary click cannot enter the blocked rock tile');
     assert.equal(core.RegionManager.blocked(walker.getLocation(),game.area),false);
     assert.ok(Math.max(Math.abs(walker.getLocation().getX()-rock.getX()),Math.abs(walker.getLocation().getY()-rock.getY()))<=2,'blocked click stays at a legal near endpoint');
+    console.log('QUARRY_ROCK_MOVEMENT_QUALIFICATION '+JSON.stringify({requested:[rock.getX(),rock.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}));
     assert.equal(core.RegionManager.canProjectileAttackReturn(left,right,1,game.area),true,'actual ray crosses walk-blocking small rock');
     const o1=game.area.at([3424,5066,0]),o2=game.area.at([3425,5066,0]);
     assert.equal(core.RegionManager.canMovestart(o1,o2,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(o1,o2,1,game.area),true);

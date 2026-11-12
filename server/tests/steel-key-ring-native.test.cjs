@@ -118,15 +118,35 @@ test("rewarded ring Check-keys opens the native empty then nonempty count and re
 
 test("all thirteen supported keys add in both directions and native navigation/removal conserves every item", async t => {
   const f = actor(t); ring(f);
-  for (const [index, id] of KEY_IDS.entries()) { add(f, id); await store(f, id, index % 2 === 0); assert.equal(amount(f, id), 0); assert.equal(available(f, id), true); }
+  for (const [index, id] of KEY_IDS.entries()) { add(f, id); await store(f, id, index % 2 === 0); assert.equal(amount(f, id), 0); assert.equal(available(f, id), true);
+    assert.ok(f.messages.includes(`You add the ${core.CacheDefinitions.getItem(id).name.toLowerCase()} to your key ring.`)); }
   await check(f); assert.equal(setup(f)[3], 13);
+  const recorded = new Map([
+    [983, ["Brass key", "Allows access to Edgeville dungeon.", 5623]],
+    [1590, ["Dusty key", "Opens door in Taverley dungeon.", 5623]],
+    [2887, ["Battered key", "Elemental workshop key.", 5623]],
+    [1542, ["Maze key", "Allows access to Melzar's maze.", 5623]],
+    [4077, ["Crystal mine key", "Crystal mine key.", 5623]],
+    [6792, ["Key", "Key to the Spirits of the Elid cave.", 10216]],
+    [6754, ["Key", "Key to find hidden treasure!", 5623]],
+  ]);
   const visited = [];
-  for (let n = 0; n < 13; n++) { visited.push(setup(f)[0]); await button(f, 2); }
+  for (let n = 0; n < 13; n++) {
+    const id = setup(f)[0]; visited.push(id);
+    if (recorded.has(id)) {
+      const [name, description, highlight] = recorded.get(id);
+      assert.equal(f.strings.filter(([, uid]) => uid === (GROUP << 16 | 10)).at(-1)[0], name);
+      assert.equal(f.strings.filter(([, uid]) => uid === (GROUP << 16 | 11)).at(-1)[0], description);
+      assert.equal(f.models.filter(([uid]) => uid === core.CacheDefinitions.getComponentId("favour_keyring:main_highlight")).at(-1)[1], highlight);
+    }
+    await button(f, 2);
+  }
   assert.deepEqual(new Set(visited), new Set(KEY_IDS));
   await button(f, 1); assert.equal(setup(f)[0], KEY_IDS[11]);
   for (let n = 0; n < 13; n++) await button(f, 0);
   assert.equal(setup(f)[3], 0);
-  for (const id of KEY_IDS) { assert.equal(amount(f, id), 1); assert.equal(available(f, id), false); }
+  for (const id of KEY_IDS) { assert.equal(amount(f, id), 1); assert.equal(available(f, id), false);
+    assert.ok(f.messages.includes(`You remove the ${core.CacheDefinitions.getItem(id).name.toLowerCase()} from your key ring.`)); }
 });
 
 test("duplicates, unsupported keys, wrong bone key, preset and metadata items are retained", async t => {
@@ -175,18 +195,20 @@ test("ordinary Drop warns, cancellation preserves keys, final loss clears them a
 });
 
 test("a stored brass key unlocks the existing door without materializing or consuming it; no-key controls stay locked", async t => {
-  for (const mode of ["none", "empty", "stored", "banked", "physical"]) {
+  for (const mode of ["none", "empty", "stored", "banked", "physical", "both"]) {
     const f = actor(t);
     if (mode !== "none" && mode !== "physical") ring(f);
-    if (["stored", "banked", "physical"].includes(mode)) add(f, 983);
-    if (["stored", "banked"].includes(mode)) await store(f, 983);
+    if (["stored", "banked", "physical", "both"].includes(mode)) add(f, 983);
+    if (["stored", "banked", "both"].includes(mode)) await store(f, 983);
+    if (mode === "both") add(f, 983);
     if (mode === "banked") { f.p.getInventory().deleteNumber(RING, 1); f.p.getBank(0).adds(RING, 1); }
     f.p.closeInterruptibleInterfaces();
     await input(f, { type: "object_option", id: 1804, x: 3115, y: 3450, clickType: 1 }, 6);
-    if (["stored", "physical"].includes(mode)) {
+    if (["stored", "physical", "both"].includes(mode)) {
       assert.equal(f.p.getLocation().getY(), 3450, `${mode} existing door crosses`);
-      assert.equal(amount(f, 983), mode === "physical" ? 1 : 0);
+      assert.equal(amount(f, 983), ["physical", "both"].includes(mode) ? 1 : 0);
       if (mode === "stored") assert.equal(available(f, 983), true);
+      assert.ok(f.messages.includes(mode === "stored" ? "You use your keyring to unlock the door." : "You unlock the door."));
     } else { assert.equal(f.p.getLocation().getY(), 3449); assert.ok(f.messages.includes("The door is locked.")); }
   }
 });
@@ -223,7 +245,106 @@ test("physical weapon-store key-on-door remains connected; stored keys cannot be
   assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [cross.destination.x, cross.destination.y], "physical key-on-door crosses through its existing handler");
   assert.ok(f.messages.includes("You unlock the door using the key you're carrying."));
   ring(f); await store(f, KEY); assert.equal(amount(f, KEY), 0); assert.equal(available(f, KEY), true);
+  for (const both of [false, true]) {
+    if (both) add(f, KEY);
+    const beforeMessages = f.messages.length;
+    await input(f, { type: "object_option", id: door.getId(), x: at.getX(), y: at.getY(), clickType: 1 }, 4);
+    assert.ok(f.messages.slice(beforeMessages).includes(both
+      ? "You unlock the door using the key you're carrying." : "You use your keyring to unlock the door."));
+    assert.equal(amount(f, KEY), both ? 1 : 0);
+    assert.equal(available(f, KEY), true);
+    if (both) f.p.getInventory().deleteNumber(KEY, 1);
+  }
   await input(f, { type: "inventory_use_on", widgetId: 3214, itemId: KEY, slot: slot(f, RING),
     target: { kind: "player", id: other.p.getIndex() } }, 4);
   assert.equal(amount(other, KEY), 0); assert.equal(amount(f, KEY), 0); assert.equal(available(f, KEY), true);
+});
+
+// These regressions invoke the existing transcript query/action producers directly with supplied
+// quest state; they do not claim a complete merchant conversation or natural quest playthrough.
+function merchantCondition(f, stepId) {
+  return PM.emitNpcDialogueCondition({ player: f.p, npcId: core.NpcIdentifiers.SILVER_MERCHANT,
+    pages: [{ page: "Silver merchant" }], stepId, text: ({
+      q_Kz9y: "If the player no longer has an Enchanted key:",
+      "07rNIp": "If the player still has an Enchanted key on a steel key ring:",
+      APjFg8: "After completing The Enchanted Key miniquest and the Enchanted key dissolving:",
+    })[stepId] });
+}
+function purchase(f) {
+  const event = { player: f.p, npcId: core.NpcIdentifiers.SILVER_MERCHANT,
+    pages: [{ page: "Silver merchant" }], kind: "action", stepId: "uDpunX", handled: false };
+  PM.emitCustomEvent("npc-dialogue:action", event); assert.equal(event.handled, true);
+}
+function ownedStored(f, id) {
+  const request = { player: f.p, itemId: id, owned: false };
+  PM.emitCustomEvent("steel-key-ring:contains", request); return request.owned;
+}
+
+test("Making History replacement respects carried/banked stored ownership and rechecks paid commits", async t => {
+  const KEY = core.ItemIdentifiers.ENCHANTED_KEY, COINS = core.ItemIdentifiers.COINS;
+  const quest = Runtime.getRegisteredQuests().find(q => q.key === "making_history"); assert.ok(quest);
+  for (const mode of ["none", "carried", "banked-ring", "physical", "banked-key", "stale", "search-only", "placeholder-ring", "late-stored", "poor", "full", "incomplete"]) {
+    const f = actor(t); quest.setStage(f.p, mode === "incomplete" ? 1 : 2);
+    add(f, COINS, mode === "poor" ? 499 : 1000);
+    if (["carried", "banked-ring", "stale", "search-only", "placeholder-ring"].includes(mode)) {
+      ring(f); add(f, KEY); await store(f, KEY);
+      if (mode !== "carried") f.p.getInventory().deleteNumber(RING, 1);
+      if (["banked-ring", "placeholder-ring"].includes(mode)) f.p.getBank(0).adds(RING, 1);
+      if (mode === "placeholder-ring") f.p.getBank(0).getItems().find(item => item.getId() === RING).setAmount(0);
+      if (mode === "search-only") f.p.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).adds(RING, 1);
+    }
+    if (mode === "physical") add(f, KEY);
+    if (mode === "banked-key") f.p.getBank(0).adds(KEY, 1);
+    const storedOwned = ["carried", "banked-ring"].includes(mode);
+    const owns = storedOwned || ["physical", "banked-key"].includes(mode);
+    assert.equal(ownedStored(f, KEY), storedOwned, mode);
+    assert.equal(available(f, KEY), mode === "carried", "bank ownership never grants carried access");
+    assert.equal(merchantCondition(f, "q_Kz9y"), !owns, `${mode} purchase offer`);
+    assert.equal(merchantCondition(f, "07rNIp"), storedOwned, `${mode} canonical ring dialogue`);
+    assert.equal(merchantCondition(f, "APjFg8"), false, "no miniquest completion invented");
+    if (mode === "late-stored") { ring(f); add(f, KEY); await store(f, KEY); }
+    if (mode === "full") while (f.p.getInventory().getFreeSlots() > 0) add(f, 1511);
+    const beforeKey = amount(f, KEY), beforeCoins = amount(f, COINS);
+    purchase(f);
+    const sells = ["none", "stale", "search-only", "placeholder-ring"].includes(mode);
+    assert.equal(amount(f, KEY), beforeKey + (sells ? 1 : 0), `${mode} key conservation`);
+    assert.equal(amount(f, COINS), beforeCoins - (sells ? 500 : 0), `${mode} coin conservation`);
+    if (storedOwned || mode === "late-stored") assert.equal(ownedStored(f, KEY), true);
+    if (sells) { purchase(f); assert.equal(amount(f, KEY), beforeKey + 1); assert.equal(amount(f, COINS), beforeCoins - 500); }
+  }
+});
+
+test("free key recovery recognizes a carried or banked stored copy and still recovers a genuinely lost key", async t => {
+  for (const banked of [false, true]) {
+    const f = actor(t); ring(f);
+    for (const id of [1590, 2887, 6792]) { add(f, id); await store(f, id); }
+    if (banked) { f.p.getInventory().deleteNumber(RING, 1); f.p.getBank(0).adds(RING, 1); }
+    const velrak = { player: f.p, npcId: core.NpcIdentifiers.VELRAK_THE_EXPLORER,
+      pages: [{ page: "Velrak the explorer" }] };
+    assert.equal(PM.emitNpcDialogueCondition({ ...velrak, text: "Without having a dusty key in the inventory:" }), false);
+    assert.equal(PM.emitNpcDialogueCondition({ ...velrak, text: "With a dusty key in the inventory:" }), true);
+    const ew = Runtime.getRegisteredQuests().find(q => q.key === "elemental_workshop_i"); assert.ok(ew);
+    ew.setStage(f.p, 1 << 2); // supplied existing slashed-book bit, not quest progress proof
+    const spirits = Runtime.getRegisteredQuests().find(q => q.key === "spirits_of_the_elid"); assert.ok(spirits);
+    spirits.setStage(f.p, 20);
+    const recover = () => {
+      const dusty = { ...velrak, kind: "message", stepId: "sM-0Hv", handled: false };
+      PM.emitCustomEvent("npc-dialogue:action", dusty); assert.equal(dusty.handled, true);
+      const bookcase = new core.GameObject(core.ObjectIdentifiers.BOOKCASE_99, f.p.getLocation().clone(), 10, 0, null);
+      assert.equal(PM.emitObjectInteraction({ player: f.p, object: bookcase, objectId: bookcase.getId(),
+        location: bookcase.getLocation(), definition: { getName: () => "Bookcase", getInteractions: () => ["Search"] }, clickType: 1, handled: false }), true);
+      const ballad = { player: f.p, npcId: core.NpcIdentifiers.GHASLOR_THE_ELDER, stepId: "4JXIDh", handled: false };
+      PM.emitCustomEvent("npc-dialogue:action", ballad); assert.equal(ballad.handled, true);
+    };
+    const ground = () => core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), 6792, new core.Location(3432, 2928, 0), null);
+    recover();
+    for (const id of [1590, 2887, 6792]) { assert.equal(amount(f, id), 0); assert.equal(ownedStored(f, id), true); }
+    assert.equal(ground(), null, "stored ancestral copy does not respawn");
+    // Existing completed-loss producer clears contents after the final ring is actually removed.
+    if (banked) f.p.getBank(0).deleteNumber(RING, 1); else f.p.getInventory().deleteNumber(RING, 1);
+    PM.emitCustomEvent("item:discarded", { player: f.p, item: new core.Item(RING, 1) });
+    recover(); assert.equal(amount(f, 1590), 1); assert.equal(amount(f, 2887), 1);
+    assert.ok(ground(), "genuinely lost ancestral key retains its existing ground respawn");
+    recover(); assert.equal(amount(f, 1590), 1); assert.equal(amount(f, 2887), 1);
+  }
 });

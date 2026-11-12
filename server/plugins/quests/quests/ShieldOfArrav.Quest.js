@@ -1,4 +1,4 @@
-const { hasKey, storedKey } = require("../../items/KeyAvailability");
+const { hasKey } = require("../../items/KeyAvailability");
 /** Shield of Arrav. Capture evidence and remaining presentation gaps: docs/shield-of-arrav.md. */
 module.exports = function registerShieldOfArravQuest(api) {
   const { giveReward } = require("../QuestRuntime");
@@ -871,7 +871,7 @@ module.exports = function registerShieldOfArravQuest(api) {
         player.sendMessage("The door is securely locked.");
         return;
       }
-      player.sendMessage(storedKey(api, player, KEY_ID)
+      player.sendMessage(!player.getInventory().contains(KEY_ID)
         ? "You use your keyring to unlock the door." : "You unlock the door using the key you're carrying.");
     } else if (objectId === BLACKARM_DOOR_ID && (!isBlackArm(player) || quest.getStage(player) < STAGE_JOINED_GANG)) {
       player.sendMessage(isPhoenix(player) && joinedGang(player)

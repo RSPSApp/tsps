@@ -4,16 +4,17 @@ const Warning = require("../../interface/ValueWarning");
 const KEYS_ATTRIBUTE = "steel-key-ring:keys";
 const SETUP_SCRIPT = 861; // rev242 script861; keytotal and native remove/previous/next callbacks
 const HIGHLIGHT_MODEL = 5623; // favour_keyring's highlighted key
+// Recorded UI text: rsprox 1702 rev226.1, ticks1635–1650; optional fields override UI name and highlighted model only.
 // Wiki Steel key ring's explicit whitelist. Bone key is Shilo Village's 605, not Ghosts Ahoy's 4272.
 const KEYS = [
-  ["ANCESTRAL_KEY", "Allows access to the Spirits of the Elid cave."],
-  ["BATTERED_KEY", "Allows access to the Elemental Workshop."],
+  ["ANCESTRAL_KEY", "Key to the Spirits of the Elid cave.", "Key", 10216],
+  ["BATTERED_KEY", "Elemental workshop key."],
   ["BONE_KEY", "Allows access to Rashiliyia's tomb."],
   ["BRASS_KEY", "Allows access to Edgeville dungeon."],
-  ["CRYSTAL_MINE_KEY", "Allows access to the crystal mine."],
-  ["DUSTY_KEY", "Allows access to the depths of Taverley dungeon."],
-  ["ENCHANTED_KEY", "An enchanted key."],
-  ["MAZE_KEY", "Allows access to Melzar's Maze."],
+  ["CRYSTAL_MINE_KEY", "Crystal mine key.", "Crystal mine key"],
+  ["DUSTY_KEY", "Opens door in Taverley dungeon."],
+  ["ENCHANTED_KEY", "Key to find hidden treasure!", "Key"],
+  ["MAZE_KEY", "Allows access to Melzar's maze."],
   ["METAL_KEY", "Allows access to the Desert Mining Camp."],
   ["NEW_KEY", "Allows access to the Mourner Tunnels."],
   ["SHINY_KEY", "Allows access to the shed in McGrubor's Wood."],
@@ -25,9 +26,9 @@ let core;
 const selections = new WeakMap();
 
 function ringId() { return core.ItemIdentifiers.STEEL_KEY_RING; }
-function carried(player) { return player.getInventory().contains(ringId()); }
+function carried(player) { return player.getInventory().getAmount(ringId()) > 0; }
 function banked(player) {
-  return (player.getBanks() ?? []).some((bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX && bank?.contains(ringId()));
+  return (player.getBanks() ?? []).some((bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX && (bank?.getAmount(ringId()) ?? 0) > 0);
 }
 function keyData(id) { return KEYS.find(([name]) => core.ItemIdentifiers[name] === id); }
 function contents(player) {
@@ -36,7 +37,9 @@ function contents(player) {
 }
 function setContents(player, keys) { player.setAttribute(KEYS_ATTRIBUTE, keys); }
 function contains(request) {
-  if (keyData(request.itemId) && carried(request.player) && contents(request.player).includes(request.itemId)) request.available = true;
+  if (!keyData(request.itemId) || !contents(request.player).includes(request.itemId)) return;
+  if (carried(request.player)) { request.available = true; request.owned = true; }
+  else if (banked(request.player)) request.owned = true;
 }
 function component(name) { return core.CacheDefinitions.getComponentId(`favour_keyring:${name}`); }
 function group() { return component("buttons") >>> 16; }
@@ -53,13 +56,13 @@ function refresh(player) {
   selections.set(player, index);
   const id = keys[index] ?? -1;
   const sender = player.getPacketSender();
-  sender.sendString(id < 0 ? "Steel key ring" : nameOf(id), component("name"));
+  sender.sendString(id < 0 ? "Steel key ring" : (keyData(id)[2] ?? nameOf(id)), component("name"));
   sender.sendString(id < 0 ? "There are no keys on your key ring." : keyData(id)[1], component("desc"));
   sender.sendInterfaceDisplayState(component("main"), id < 0);
   sender.sendInterfaceDisplayState(component("main_highlight"), id < 0);
   if (id >= 0) {
     sender.sendInterfaceRawModel(component("main"), core.CacheDefinitions.getItem(id).model);
-    sender.sendInterfaceRawModel(component("main_highlight"), HIGHLIGHT_MODEL);
+    sender.sendInterfaceRawModel(component("main_highlight"), keyData(id)[3] ?? HIGHLIGHT_MODEL);
   }
   for (let offset = 1; offset <= 5; offset++) {
     const next = keys[index + offset - 1];

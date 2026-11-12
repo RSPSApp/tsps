@@ -5,8 +5,15 @@ function storedKey(api, player, itemId) {
   return request.available === true;
 }
 
+/** Ownership queries include a genuine banked ring; door access still requires a carried ring. */
+function ownsStoredKey(api, player, itemId) {
+  const request = { player, itemId, owned: false };
+  api.emitCustomEvent("steel-key-ring:contains", request);
+  return request.owned === true;
+}
+
 function hasKey(api, player, itemId) {
   return player.getInventory().contains(itemId) || storedKey(api, player, itemId);
 }
 
-module.exports = { hasKey, storedKey };
+module.exports = { hasKey, storedKey, ownsStoredKey };

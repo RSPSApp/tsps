@@ -20,27 +20,66 @@ and completed loss. No legacy item data or generated osrsreboxed output is chang
 
 ## Evidence and boundaries
 
-Historical RSProx recording **3792**, revision **235.1**, transcript SHA-256
-`5371f4a98594793c6916ad1fdc41fc4b9c9c44b3800eec3248d5a090e9cf3f57`,
-lines **370633–370659**, shows inventory op 2 on ring 4446 followed by interface 127,
-Brass key/name component 10, description 11, models, script 861 `[983,-1,1590,6]`,
-and pause-button events for component 1 children 0–2. This establishes a populated
-Check-keys interface with a count, not the complete storage/loss contract. Capture date
-and supplied decoder build are unknown; this historical interval is not current-revision proof.
+The frozen shared decoded export of historical RSProx recording **3792**, revision
+**235.1**, is **53,593,160 bytes / 381,359 LF-terminated physical lines**, SHA-256
+`5371f4a98594793c6916ad1fdc41fc4b9c9c44b3800eec3248d5a090e9cf3f57`.
+In that exact export, lines **370633–370659** show inventory op 2 on ring 4446 at
+**tick 14812**, then interface 127, Brass key/name component 10, description 11,
+models, script 861 `[983,-1,1590,6]` and component 1 children 0–2 at **tick 14813**;
+the interface closes at **tick 14816** (line 370681). These ticks and packet fields
+are the stable event locators. This establishes a populated Check-keys interface,
+not the complete storage/loss contract or current-revision proof.
+
+The maintainer reports another decoded export, `rsprox_transcripts/235/03792.txt`,
+with **467,320 lines**, SHA-256
+`4b5632309326de5d6f9f5d7c63af2bcdba495dcff3613ce69a9156bcbdc48627`,
+and the same events at **456816–456850**. That is an externally reported alternate
+export, not the bytes inspected here; the original line/hash pair must not be
+applied to it. Capture date and decoder build are unknown for these exports.
+
+The inspected shared export of recording **1702**, revision **226.1**, is
+**24,281,417 bytes / 179,520 LF-terminated physical lines**, SHA-256
+`523b81e49a7d8850977ce4a8245bad200d792e06ec3e812d12a92b99959f4caa`.
+At **ticks 1635–1650**, script 861 identifies the selected key while name/description
+updates record these pairs (physical lines are specific to this export):
+
+| Key ID | UI name | UI description | Lines |
+| --- | --- | --- | --- |
+| 983 | Brass key | Allows access to Edgeville dungeon. | 26956–26957 |
+| 1590 | Dusty key | Opens door in Taverley dungeon. | 27032–27033 |
+| 2887 | Battered key | Elemental workshop key. | 27062–27063 |
+| 1542 | Maze key | Allows access to Melzar's maze. | 27085–27086 |
+| 4077 | Crystal mine key | Crystal mine key. | 27107–27108 |
+| 6792 | Key | Key to the Spirits of the Elid cave. | 27135–27136 |
+| 6754 | Key | Key to find hidden treasure! | 27158–27159 |
+
+The ancestral key's highlighted model is **10216** (line 27134); the other six
+observed keys use **5623**. The interface uses those recorded overrides while
+add/remove chat keeps each cache item's name. This is decoded presentation evidence,
+not proof of rendering on the active client.
 
 The [pinned revision 242 interface](https://github.com/Joshua-F/osrs-dumps/blob/853150e3f75e1463391b470f98caf5d3bf796339/interface/favour_keyring.if3)
 and [script 861](https://github.com/Joshua-F/osrs-dumps/blob/853150e3f75e1463391b470f98caf5d3bf796339/script/%5Bclientscript%2Cscript861%5D.cs2)
 name the count component and implement native selection/removal. Scripts 862/864 send
 RESUME_PAUSEBUTTON on the hidden buttons; they do not send a direct Remove widget op.
-The implementation uses the cache's item models and named components. Key descriptions
-other than the observed brass line, insertion ordering, empty-state wording and refusal
-wording are TSPS presentation choices, not claimed verbatim retail observations.
+The implementation uses the cache's item models and named components. Descriptions for the six unobserved keys, insertion ordering, empty-state wording and
+refusal wording remain TSPS presentation choices, not claimed verbatim retail observations.
+The unobserved keys retain the existing highlight default; their retail highlights are unproved.
 
 Existing access owners are integrated narrowly: brass/dusty doors, Elemental Workshop's
 wall, Phoenix weapon store, Melzar's Maze, Haunted Mine, Spirits of the Elid, Tourist Trap's
 camp gate and Shilo's carved doors. Existing new/shiny/wrought-key content has no equivalent
 physical-key access predicate to replace; this change does not invent missing doors or the
 Enchanted Key miniquest. Each of these thirteen keys can still be stored and removed.
+Making History's existing silver-merchant replacement checks ownership of a stored key
+with a genuine carried or banked ring at both the dialogue offer and purchase commit;
+the canonical ring-specific conversation is enabled. Bank search results and stale
+contents without a ring are not ownership. Its existing Feel/Dig/chest operations
+still require the physical Enchanted key: remove it from the ring first. This does
+not implement the separate Enchanted Key miniquest. Velrak, the slashed-book recovery
+and ancestral ground respawn also recognize stored ownership; their existing rules
+for physical bank copies are unchanged. Brass and weapon-store door messages prefer
+a carried physical key when both forms are present.
 
 `node --test --test-concurrency=1 tests/steel-key-ring-native.test.cjs` (after the normal
 server build and cache preparation) exercises decoded inventory/use/pause-button inputs

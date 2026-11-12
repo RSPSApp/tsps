@@ -91,3 +91,16 @@ test('a refused overflow sends no exchange box', () => {
     f.noteProduce();
     assert.equal(boxes.length, 0);
 });
+test('a single item gets the captured singular line', () => {
+    const f = prepare('Coconut', { produce: 1, notes: 5 });
+    const typed = [], boxes = [];
+    const sender = new Proxy({}, { get: (_, key) => key === 'sendTypedMessage'
+        ? (type, text) => { typed.push(text); return sender; } : () => sender });
+    f.player.getPacketSender = () => sender;
+    f.player.getDialogueManager = () => ({ startDialogues: chain => boxes.push(chain) });
+    f.noteProduce();
+    assert.equal(f.inventory.getAmount(f.note), 6);
+    const text = 'The leprechaun exchanges your item for a banknote.';
+    assert.deepEqual(typed, [text]);
+    assert.equal(boxes[0].getDialogues().get(0).getText(), text);
+});

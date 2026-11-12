@@ -49,6 +49,27 @@ export class Item {
         return Item.cloneMetaValue(meta) as Record<string, unknown>;
     }
 
+    private static readonly CAMEL_CASE_META_KEY = /([a-z0-9])([A-Z])/g;
+
+    /**
+     * Save migration, as PlayerSave's for attributes: item meta keys were renamed from camelCase
+     * to kebab-case (#226: toxicBlowpipe, tridentCharges, bloodFury, tumekensShadowCharges,
+     * barrows:lockpickCharges, farming:saplingAt), so a saved camelCase key loads under its
+     * kebab-case name. A kebab-case key already present wins. Meta keys are never camelCase now.
+     */
+    public static migrateSavedMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
+        if (!meta) return meta;
+        let migrated: Record<string, unknown> | null = null;
+        for (const key of Object.keys(meta)) {
+            const kebab = key.replace(Item.CAMEL_CASE_META_KEY, "$1-$2").toLowerCase();
+            if (kebab === key || /[A-Z]/.test(kebab)) continue;
+            migrated ??= { ...meta };
+            if (!(kebab in migrated)) migrated[kebab] = migrated[key];
+            delete migrated[key];
+        }
+        return migrated ?? meta;
+    }
+
     /**
      * Gets the item's id.
      */

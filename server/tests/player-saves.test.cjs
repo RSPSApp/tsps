@@ -411,6 +411,15 @@ for (const [name, backend] of persistenceBackends) {
     }
   });
 
+  test(`${name}: item meta saved under the old camelCase keys loads under the kebab-case ones (#226)`, () => {
+    const item = backend.hydrateItem({ id: 12926, amount: 1, meta: { toxicBlowpipe: { scales: 100, darts: { id: 11230, amount: 50 } }, "barrows:lockpickCharges": 7 } });
+    assert.deepEqual(item.getMeta(), { "toxic-blowpipe": { scales: 100, darts: { id: 11230, amount: 50 } }, "barrows:lockpick-charges": 7 });
+    const both = backend.hydrateItem({ id: 11907, amount: 1, meta: { tridentCharges: 1, "trident-charges": 2500 } });
+    assert.deepEqual(both.getMeta(), { "trident-charges": 2500 }, "a kebab-case key already there wins");
+    const current = backend.hydrateItem({ id: 4241, amount: 1, meta: { "blood-fury": { charges: 9 } } });
+    assert.deepEqual(current.getMeta(), { "blood-fury": { charges: 9 } });
+  });
+
   test(`${name}: missing or invalid saved combat styles retain the safe default`, () => {
     for (const fightType of [undefined, null, {}, "UNARMED_BLOCK", { animation: -123456 }]) {
       const save = backend.hydratePlayerSave({ fightType });

@@ -53,8 +53,9 @@ test("sendProjectile names its source when given one", () => {
   assert.deepEqual(actorFields(sent[1]), [0, 0, 0, 0], "callers that pass no source are unchanged");
 });
 
-test("createProjectile fires from its caster, so the client follows the caster until launch", () => {
+test("createProjectile names an NPC caster, but never a player one (rsprox: live sends none)", () => {
   const caster = mobile(7, true);
+  const npcCaster = mobile(301, false, 3204);
   const victim = mobile(300, false, 3205);
   const calls = [];
   const recipient = {
@@ -67,10 +68,18 @@ test("createProjectile fires from its caster, so the client follows the caster u
   World.forEachNetworkPlayer = (visit) => visit(recipient);
   try {
     Projectile.createProjectile(caster, victim, 280, 51, 96, 43, 31).sendProjectile();
+    Projectile.createProjectile(npcCaster, victim, 280, 51, 96, 43, 31).sendProjectile();
     new Projectile(new Location(3200, 3200, 0), new Location(3205, 3200, 0), victim, 280, 51, 96, 43, 31, null).sendProjectile();
+    // Built directly with a player source, as the bone staff and Nex's Soul Split do (rsprox 227/02154.txt:4869-4870,
+    // 226/01694.txt:151187-151188: no source actor either); an NPC's direct source is kept.
+    new Projectile(new Location(3200, 3200, 0), new Location(3205, 3200, 0), victim, 2647, 51, 96, 43, 31, null).withSource(caster).sendProjectile();
+    new Projectile(new Location(3204, 3200, 0), new Location(3205, 3200, 0), caster, 2009, 51, 96, 43, 31, null).withSource(npcCaster).sendProjectile();
   } finally {
     World.forEachNetworkPlayer = original;
   }
-  assert.equal(calls[0][11], -(7 + 1), "the caster, as a player lock-on index");
-  assert.equal(calls[1][11], null, "a projectile from a tile has no source actor");
+  assert.equal(calls[0][11], null, "a player's shot starts from the caster's tile, as live (232/00424.txt:71776)");
+  assert.notEqual(calls[1][11], null, "an NPC's still names it");
+  assert.equal(calls[2][11], null, "a projectile from a tile has no source actor");
+  assert.equal(calls[3][11], null, "withSource(player) names no source actor");
+  assert.notEqual(calls[4][11], null, "withSource(npc) still does");
 });

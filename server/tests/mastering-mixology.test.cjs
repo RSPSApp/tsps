@@ -163,6 +163,21 @@ test('conveyor: an unordered hand-in plays only the deposit sound', t => {
   assert.ok(unordered.chat.some(([, text]) => /fail to fulfil an order/.test(text)));
 });
 
+test('every lab message box also writes its text to chat, line breaks as spaces', () => {
+  const { ChatType } = PluginManager.getCoreApi();
+  const chat = [];
+  const player = {
+    getPacketSender: () => ({ sendTypedMessage: (type, text) => chat.push([type, text]) }),
+    getDialogueManager: () => ({ startDialogues() {} }),
+  };
+  Shared.statement(player, "You don't currently have enough reagents to mix that potion. You<br>are missing the following:<br>30 Aga");
+  Shared.itemStatement(player, Shared.ITEM.LAB_NOTES, 'You take a set of lab notes from the bookshelf.');
+  assert.deepEqual(chat, [
+    [ChatType.MESBOX, "You don't currently have enough reagents to mix that potion. You are missing the following: 30 Aga"],
+    [ChatType.MESBOX, 'You take a set of lab notes from the bookshelf.'],
+  ]);
+});
+
 /** Exercise the shared reward shop with actual cache rows and a native inventory. */
 function omnishopHarness(shop = 'forestry_shop') {
   const core = PluginManager.getCoreApi();

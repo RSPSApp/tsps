@@ -324,6 +324,17 @@ function fade(player, out, cycles = FADE_CYCLES, { minimap = true } = {}) {
   if (minimap) setVarbit(player, VARBIT.MINIMAP_STATE, out ? 2 : 0);
 }
 
+/**
+ * Takes an NPC a plugin added to a boat's deck (`deck.enter`) off the deck, then out of the world.
+ * removeNpc leaves the NPC's area alone, so the deck would otherwise keep it among its NPCs.
+ */
+function removeDeckNpc(api, boat, npc) {
+  if (!npc) return;
+  const deck = BoatManager.getDeck(boat);
+  if (deck?.hasMember(npc)) deck.leave(npc, false);
+  api.removeNpc(npc);
+}
+
 module.exports = {
   dockNear,
   VARBIT,
@@ -358,6 +369,7 @@ module.exports = {
   fade,
   animateDeckLocs,
   animateDeckLoc,
+  removeDeckNpc,
   later,
   isHelm,
   isSail,

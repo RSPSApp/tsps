@@ -10,7 +10,7 @@
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
 const assign = require("./Assign.Crew");
-const { boatType } = require("../SailingContent.Sailing");
+const { boatType, removeDeckNpc } = require("../SailingContent.Sailing");
 
 const { POSITION, VARBIT } = common;
 /** An idle crewmate steps somewhere new about this often a tick (shortcut: live walks them a lot). */
@@ -31,7 +31,7 @@ const leaving = new Map();
 const wanderers = new Map();
 
 function removeLeaving(boat) {
-  for (const { npc } of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
+  for (const { npc } of leaving.get(boat) ?? []) removeDeckNpc(pluginApi, boat, npc);
   leaving.delete(boat);
 }
 
@@ -248,7 +248,7 @@ function onLeft({ player, boat, reason }) {
   boat.helmCrew = undefined;
   for (const member of members) {
     assign.stopJob(player, boat, member);
-    pluginApi.removeNpc(member.npc);
+    removeDeckNpc(pluginApi, boat, member.npc);
   }
   common.endTrip(boat);
   const state = common.state(player);

@@ -621,6 +621,29 @@ test("Gwenith Glide: the crystallised helm hurts its holder, up to 5, and takes 
 });
 
 
+test("Gwenith Glide: the crystallised helm's headbar NPC stands on the deck's level and leaves the deck with the crystals", () => {
+  const player = captain();
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, GWENITH().start);
+  try {
+    resonance.crystallise(player, boat);
+    const { npc } = resonance.helmOf(boat);
+    assert.ok(npc, "the headbar NPC");
+    const helm = BoatManager.getSpec(boat).locs.find((loc) => loc.id === 59597);
+    assert.equal(helm.level, 1, "the helm loc sits on the template's deck plane");
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()],
+      [boat.deckBaseX + helm.x, boat.deckBaseY + helm.y, 0], "on the helm, on the level the people aboard stand on");
+    const deck = BoatManager.getDeck(boat);
+    assert.ok(deck.getNpcs().includes(npc), "on the boat's deck");
+    for (let i = 0; i < 3; i++) resonance.strike(player, boat);
+    assert.equal(resonance.helmOf(boat), undefined, "the crystals off");
+    assert.equal(deck.getNpcs().includes(npc), false, "and the NPC off the deck");
+    assert.equal(npc.getArea() ?? null, null);
+  } finally {
+    leave(player);
+  }
+});
+
 const cutscene = require("../plugins/skills/sailing/barracudatrials/Cutscene.BarracudaTrials");
 
 /** A transcript line reaching the screen: its `before` runs, as NpcDialogues does. */

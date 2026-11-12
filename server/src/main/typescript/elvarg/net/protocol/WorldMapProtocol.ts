@@ -4,6 +4,8 @@ import { CachePipeline } from "../../game/cache/CachePipeline";
 export const WORLD_MAP_GROUP_ID = 595;
 export const WORLD_MAP_TARGET_UID = (161 << 16) | 18;
 export const WORLD_MAP_CLOSE_WIDGET_ID = (WORLD_MAP_GROUP_ID << 16) | 38;
+/** The cache binds Escape to this separate Close op (worldmap:4), not the frame X. */
+export const WORLD_MAP_KEYBOARD_CLOSE_WIDGET_ID = (WORLD_MAP_GROUP_ID << 16) | 4;
 /** The world map orb on each orbs interface: desktop, no-map and the mobile toplevel's. */
 const WORLD_MAP_ORB_COMPONENTS = ["orbs:worldmap", "orbs_nomap:worldmap", "orbs_osm:worldmap"];
 let worldMapOrbWidgetIds: number[] | undefined;

@@ -104,3 +104,36 @@ test('opening the map aboard marks the boat, not the deck tile', () => {
     aboard.delete(fakePlayer);
     assert.deepEqual([onBoat.getX(), onBoat.getY(), onBoat.getZ()], [48 * 64 + 3, 46 * 64 + 43, 0]);
 });
+
+test('world map closes from its Escape-bound control as well as the frame X', async (t) => {
+    const path = require('node:path');
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const { WORLD_MAP_GROUP_ID } = require('../dist/net/protocol/WorldMapProtocol');
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+
+    const p = new Player(null);
+    p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+    p.setUsername('mapclose');
+    p.setRegistered(true);
+    t.after(() => p.setRegistered(false));
+    const channel = { isOpen: () => true, send: () => true, onData() {}, onError() {}, onClose() {}, close() {} };
+    const connection = new ClientConnection(channel);
+    connection.player = p;
+
+    // Cache 242 worldmap:4 has a Close op bound to key 13 (Escape);
+    // worldmap:38 is the frame's mouse close button.
+    for (const childId of [4, 38]) {
+        p.setInterfaceId(12);
+        p.getPacketSender().toggleWorldMap();
+        assert.equal(p.getPacketSender().isWorldMapOpen(), true);
+        await connection.dispatch([{
+            type: 'widget_action', widgetId: (WORLD_MAP_GROUP_ID << 16) | childId,
+            groupId: WORLD_MAP_GROUP_ID, childId, buttonNum: 1, slot: -1, itemId: -1,
+        }]);
+        connection.processTurnPackets();
+        assert.equal(p.getPacketSender().isWorldMapOpen(), false, 'close control ' + childId);
+        assert.equal(p.getInterfaceId(), 12, 'closing the map leaves another interface alone');
+    }
+});

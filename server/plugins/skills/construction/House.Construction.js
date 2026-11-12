@@ -109,6 +109,21 @@ const HOUSE_KICK_OPTION = 7;
 // The click House Options' settings (teleport, default building mode, doors) play.
 const OPTION_SOUND = 2266;
 const houseOptionsOpen = new WeakSet();
+
+// The loading screen for entering a house.
+const LOADING_INTERFACE = Ids.iface("poh_loading");
+const OVERLAY_ATMOSPHERE_UID = Ids.component("toplevel_osrs_stretch:overlay_atmosphere");
+const PORTAL_SOUND = 984;
+const LOADING_JINGLE = 112;
+const MINIMAP_STATE_VARBIT = Ids.varbit("minimap_state");
+const BUSY_VARBIT = Ids.varbit("busy");
+const MINIMAP_OFF = 2;
+const loadingHouses = new WeakSet();
+const NAME_INPUT_SCRIPT = 109; // meslayer_mode8, answered by resume_p_namedialog
+const VISIT_PROMPT = "Enter name:";
+const VISIT_OFFLINE = "That player is offline, or has privacy mode enabled.";
+const IRONMAN_VISIT = "Ironmen do not visit their friends.<br>Ironmen stand alone.";
+const IRON_MODES = ["ironman", "ultimate", "hardcore"];
 const kickOptionVisible = new WeakSet();
 
 const activeHouses = new WeakMap();
@@ -197,16 +212,8 @@ function grantHouse(request) {
   request.granted = true;
 }
 
-/**
- * `via` is where the entry came from: "portal", "options" (House Options' building mode buttons,
- * which say "Building mode is now on/off." instead of the entry line) or "teleport".
- */
-function enterHouse(player, buildingMode, diaryEntryContext = null, via = "teleport") {
-  const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
-  if (houseStateFor(player).owned === false) {
-    player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
-    return false;
-  }
+/** Refusals before entering your own house: guests or a follower in the way, or a locked Bank PIN. */
+function entryRefused(player, buildingMode, via, resume) {
   let house = activeHouses.get(player);
   if (house?.isDestroyed()) house = undefined;
   if (buildingMode && house?.getPlayers().some(guest => guest !== player)) {
@@ -219,10 +226,29 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
   }
   if (buildingMode) {
     // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
-    const pin = { player, feature: "poh-building-mode", resume: () => enterHouse(player, true, diaryEntryContext, via) };
+    const pin = { player, feature: "poh-building-mode", resume };
     api.emitCustomEvent("bank-pin:guard", pin);
     if (pin.locked) return true;
   }
+  return false;
+}
+
+function ownsAHouse(player) {
+  if (houseStateFor(player).owned !== false) return true;
+  player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
+  return false;
+}
+
+/**
+ * `via` is where the entry came from: "portal", "options" (House Options' building mode buttons,
+ * which say "Building mode is now on/off.") or "teleport". Entering itself sends no chat line.
+ */
+function enterHouse(player, buildingMode, diaryEntryContext = null, via = "teleport") {
+  const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
+  if (!ownsAHouse(player)) return false;
+  if (entryRefused(player, buildingMode, via, () => enterHouse(player, true, diaryEntryContext, via))) return true;
+  let house = activeHouses.get(player);
+  if (house?.isDestroyed()) house = undefined;
   player.getPacketSender().sendInterfaceRemoval();
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
@@ -244,11 +270,71 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
   syncHouseOptions(player);
   syncKickOption(player);
   if (via === "options") player.sendMessage(buildingMode ? "Building mode is now on." : "Building mode is now off.");
-  else player.sendMessage(buildingMode ? "You enter your house in building mode." : "You enter your house.");
   if (canCreditDiaryTask && house.owner === player && houseFor(player) === house) {
     api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_POH_TASK });
   }
   return true;
+}
+
+/**
+ * The loading screen: the minimap goes off, the camera resets and poh_loading covers the game.
+ * Portals and visits play the portal's sound with it; `jingle` adds the loading jingle.
+ */
+function showHouseLoading(player, { sound = true, jingle = false } = {}) {
+  const sender = player.getPacketSender();
+  if (sound) sender.sendSound(PORTAL_SOUND, 1, 0);
+  sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF);
+  sender.sendCameraReset();
+  sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, LOADING_INTERFACE, 1);
+  if (jingle) sender.sendJingle(LOADING_JINGLE);
+}
+
+function hideHouseLoading(player) {
+  const sender = player.getPacketSender();
+  sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+  sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
+  sender.sendVarbit(BUSY_VARBIT, 0);
+}
+
+/**
+ * Runs `steps` ({ ticks from now: action }) behind the loading screen, holding the player still
+ * until the last one. A logout cancels it with the player's other tasks.
+ */
+function loadHouse(player, steps) {
+  loadingHouses.add(player);
+  const movement = player.getMovementQueue();
+  movement.setBlockMovement(true).reset();
+  const last = Math.max(...Object.keys(steps).map(Number));
+  let tick = 0;
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player, false); }
+
+    execute() {
+      tick++;
+      try {
+        steps[tick]?.();
+      } finally {
+        if (tick >= last) this.stop();
+      }
+    }
+
+    stop() {
+      if (loadingHouses.has(player)) {
+        loadingHouses.delete(player);
+        movement.setBlockMovement(false);
+        if (tick < last) hideHouseLoading(player);
+      }
+      super.stop();
+    }
+  })());
+}
+
+/** A house teleport lands inside at once; the loading screen and jingle cover the next two ticks. */
+function teleportIntoHouse(player, buildingMode) {
+  if (!enterHouse(player, buildingMode) || !houseFor(player) || loadingHouses.has(player)) return;
+  showHouseLoading(player, { sound: false, jingle: true });
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  loadHouse(player, { 2: () => hideHouseLoading(player) });
 }
 
 function hasFollower(player) {
@@ -257,37 +343,79 @@ function hasFollower(player) {
   return !!request.pet;
 }
 
-function canVisitHouse(player, house) {
-  const owner = house.owner;
+function isIronman(player) {
   const mode = { player, mode: "none" };
   api.emitCustomEvent("ironman:mode", mode);
-  return (owner === player || !["ironman", "ultimate", "hardcore"].includes(mode.mode))
-    && !!owner && !house.isDestroyed() && !house.buildingMode && !house.save.locked
-    && owner.getRelations().canReceivePrivateMessageFrom(player);
+  return IRON_MODES.includes(mode.mode);
 }
 
-function visitHouse(player, name, location = nearbyHouseLocation(player), diaryEntryContext = null) {
-  const owner = World.getPlayerByName(name.trim().replace(/_/g, " "));
-  const house = owner && activeHouses.get(owner);
-  if (owner === player) { enterAtPortal(player, false, location, diaryEntryContext); return; }
-  if (!house || Estate.houseLocation(house.save).id !== location || !canVisitHouse(player, house)) {
-    player.sendMessage("That house is unavailable or its owner is not accepting guests.");
-    return;
+/**
+ * Why `player` can't visit `owner`'s house (at portal `location`, when given), or null.
+ * Ours: the line for an owner who is online but not at home in that town.
+ */
+function visitRefusal(player, owner, house, location) {
+  if (!owner || !owner.getRelations().canReceivePrivateMessageFrom(player)) return VISIT_OFFLINE;
+  if (owner !== player && isIronman(player)) return Menu.messageBox(IRONMAN_VISIT);
+  if (!house || house.isDestroyed() || (location != null && Estate.houseLocation(house.save).id !== location)) {
+    return "That house is unavailable or its owner is not accepting guests.";
   }
+  if (owner === player) return null;
+  if (house.buildingMode) return `${owner.getDisplayName()} is in building mode at the moment.`;
+  // Ours: "her" for a female owner.
+  if (house.save.locked) return `${owner.getDisplayName()} has locked ${owner.getAppearance?.()?.isMale?.() === false ? "her" : "his"} house to visitors.`;
+  return null;
+}
+
+function canVisitHouse(player, house) {
+  return !!house.owner && !visitRefusal(player, house.owner, house, null);
+}
+
+/**
+ * Visits `name`'s house. With `loading` (the portal's name prompt, the advertisement board) the
+ * loading screen plays and the guest arrives a tick later; otherwise at once (Scrying's return).
+ */
+function visitHouse(player, name, location = nearbyHouseLocation(player), diaryEntryContext = null, { loading = false } = {}) {
+  const owner = World.getPlayerByName(String(name ?? "").trim().replace(/_/g, " "));
+  if (owner === player) { enterAtPortal(player, false, location, diaryEntryContext); return; }
+  const house = owner && activeHouses.get(owner);
+  const refusal = visitRefusal(player, owner, house, location);
+  if (refusal) { Menu.refuse(player, refusal); return; }
+  if (houseFor(player) === house) return;
+  if (!loading) { arriveAsGuest(player, owner, house); return; }
+  if (loadingHouses.has(player)) return;
+  showHouseLoading(player, { jingle: true });
+  loadHouse(player, {
+    1: () => {
+      // The owner may have left, locked up or gone into building mode since.
+      const current = activeHouses.get(owner);
+      const late = visitRefusal(player, owner, current, location);
+      if (late) { hideHouseLoading(player); Menu.refuse(player, late); return; }
+      player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+      arriveAsGuest(player, owner, current);
+    },
+    2: () => hideHouseLoading(player),
+  });
+}
+
+function arriveAsGuest(player, owner, house) {
   if (houseFor(player) === house) return;
   if (houseFor(player)) exitHouse(player);
   if (!house.enterHouse(player, false)) { exitHouse(player); return; }
   api.emitCustomEvent("combat:clear-burn", { target: player });
   lastVisited.set(player, owner.getUsername());
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
-  player.sendMessage("Welcome to " + owner.getDisplayName() + "'s house.");
 }
 
+/** Friend's house: Ironmen are refused at once; anyone else names the host. */
 function promptVisit({ player, objectId, location: portalLocation, sourceLocation, object }) {
+  if (isIronman(player)) {
+    Menu.refuse(player, Menu.messageBox(IRONMAN_VISIT));
+    return true;
+  }
   const location = nearbyHouseLocation(player, objectId);
   const diaryEntryContext = yanilleHouseEntryContext(objectId, portalLocation, sourceLocation, object);
-  player.setEnteredSyntaxAction({ execute: (name) => visitHouse(player, name, location, diaryEntryContext) });
-  player.getPacketSender().sendEnterInputPrompt("Whose house would you like to visit?");
+  player.setEnteredSyntaxAction({ execute: (name) => visitHouse(player, name, location, diaryEntryContext, { loading: true }) });
+  player.getPacketSender().sendClientScript(NAME_INPUT_SCRIPT, VISIT_PROMPT);
   return true;
 }
 
@@ -378,7 +506,7 @@ function viewAdvertisements(player, location = boardLocations.get(player) ?? nea
       player.sendMessage("That house is no longer advertised or is not accepting guests.");
       return;
     }
-    visitHouse(player, house.owner.getUsername(), location);
+    visitHouse(player, house.owner.getUsername(), location, null, { loading: true });
   } });
 }
 
@@ -733,7 +861,7 @@ function houseTeleportArrival({ player, name, option }) {
   if (name !== "teleport to house") return;
   const saved = houseStateFor(player);
   if (option === "outside" || saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
-  else enterHouse(player, saved.defaultBuildingMode);
+  else teleportIntoHouse(player, saved.defaultBuildingMode);
 }
 
 /**
@@ -750,7 +878,7 @@ function houseTablet(request) {
   }
   const outside = request.option === "outside" || (request.option === "break" && !!saved.teleportOutside);
   request.destination = Estate.houseExit(saved);
-  request.onArrival = outside ? null : () => { enterHouse(player, saved.defaultBuildingMode); };
+  request.onArrival = outside ? null : () => { teleportIntoHouse(player, saved.defaultBuildingMode); };
 }
 
 const HOUSE_VIEWER_INTERFACE = Ids.iface("poh_viewer");
@@ -1391,14 +1519,40 @@ function enterAtPortal(player, buildingMode, location, diaryEntryContext) {
     player.sendMessage("Your house is not located here.");
     return true;
   }
-  enterHouse(player, buildingMode, diaryEntryContext, "portal");
-  if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
+  return loadOwnHouse(player, buildingMode, location, diaryEntryContext);
+}
+
+/**
+ * Home and Build mode: the refusals come at the click, then the loading screen; the house loads
+ * two ticks later and the screen closes the tick after.
+ */
+function loadOwnHouse(player, buildingMode, location, diaryEntryContext) {
+  if (loadingHouses.has(player) || !ownsAHouse(player)) return true;
+  if (entryRefused(player, buildingMode, "portal", () => loadOwnHouse(player, buildingMode, location, diaryEntryContext))) return true;
+  player.getPacketSender().sendInterfaceRemoval();
+  showHouseLoading(player);
+  loadHouse(player, {
+    1: () => {
+      player.getPacketSender().sendJingle(LOADING_JINGLE);
+      player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+    },
+    2: () => {
+      enterHouse(player, buildingMode, diaryEntryContext, "portal");
+      if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
+    },
+    3: () => hideHouseLoading(player),
+  });
   return true;
 }
 
-function enterDefaultHouse({ player, objectId, location, sourceLocation, object }) {
-  const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
-  return enterAtPortal(player, houseStateFor(player).defaultBuildingMode, nearbyHouseLocation(player, objectId), diaryEntryContext);
+/** Enter: "Select an option" over the portal's three destinations. */
+function openPortalMenu(event) {
+  api.sendMultiChatboxPrompt(event.player, "Select an option",
+    "Go to your house", () => enterNormalHouse(event),
+    "Go to your house (building mode)", () => enterBuildingHouse(event),
+    "Go to a friend's house", () => promptVisit(event),
+    "Cancel", () => {});
+  return true;
 }
 function enterNormalHouse({ player, objectId, location, sourceLocation, object }) {
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
@@ -1430,11 +1584,15 @@ function safeHouseDeath(event) {
   exitHouse(player);
 }
 
-function leaveHouse({ player }) { return exitHouse(player); }
+function leaveHouse({ player }) {
+  if (!houseFor(player)) return false;
+  player.getPacketSender().sendSound(PORTAL_SOUND, 1, 0);
+  return exitHouse(player);
+}
 function showAdvertisements({ player, objectId }) { viewAdvertisements(player, nearbyHouseLocation(player, objectId)); return true; }
 function visitLastHouse({ player }) {
   const name = lastVisited.get(player);
-  if (name) visitHouse(player, name);
+  if (name) visitHouse(player, name, undefined, null, { loading: true });
   else player.sendMessage("You have not visited a house yet.");
   return true;
 }
@@ -1525,7 +1683,7 @@ function attach(api) {
   CarpenterOutfit.attachCarpenterOutfit(api);
   Nexus.attachNexus(api);
   api.persistAttribute(HOUSE_ATTRIBUTE, defaultHouse());
-  api.onObjectFirstClick(HOUSE_PORTAL_IDS, enterDefaultHouse);
+  api.onObjectFirstClick(HOUSE_PORTAL_IDS, openPortalMenu);
   api.onObjectSecondClick(HOUSE_PORTAL_IDS, enterNormalHouse);
   api.onObjectThirdClick(HOUSE_PORTAL_IDS, enterBuildingHouse);
   api.onObjectFourthClick(HOUSE_PORTAL_IDS, promptVisit);

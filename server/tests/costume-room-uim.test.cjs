@@ -105,7 +105,8 @@ function costumeFixture(t, name, mode) {
   save.rooms[1][4][6] = {
     roomKey: "COSTUME_ROOM", rotation: 0, furniture: { MAGIC_WARDROBE: "OAK_MAGIC_WARDROBE" },
   };
-  click(player, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  click(player, yanillePortalId, 2, YANILLE_PORTAL_TILE);
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process(); // Home loads two ticks later
   const house = House.houseFor(player);
   assert.equal(house?.owner === player, true);
   assert.equal(player.getPrivateArea() === house, true);
@@ -300,7 +301,8 @@ function promptFixture(t, name, mode = "ultimate", hotspotKey = "MAGIC_WARDROBE"
   const query = { player, mode: "none" };
   api.emitCustomEvent("ironman:mode", query);
   assert.equal(query.mode, mode);
-  click(player, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  click(player, yanillePortalId, 2, YANILLE_PORTAL_TILE);
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process(); // Home loads two ticks later
   const house = House.houseFor(player);
   assert.equal(house?.owner === player, true);
   assert.equal(player.getPrivateArea() === house, true);

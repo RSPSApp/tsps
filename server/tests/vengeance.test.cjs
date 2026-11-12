@@ -443,3 +443,23 @@ test("captured Vengeance casts emit one immediate radius10 area sound at their c
     assert.equal(sounds.length,2,"existing-effect/cooldown refusal adds nothing");
   });
 });
+
+test('the blighted teleport sack only pays in the Wilderness and Bounty Hunter (Wiki: "can only be used inside the Wilderness")', t => {
+  const core = PluginManager.getCoreApi(), spell = core.CombatSpells.TELEBLOCK;
+  const pays = (options, area) => {
+    const player = sackCaster({ item: 'BLIGHTED_TELEPORT_SPELL_SACK', book: spell.getSpellbook(), ...options });
+    if (area) player.getArea = () => ({ getName: () => area });
+    const paid = spell.canCast(player, true);
+    return paid && player.getInventory().getAmount(core.ItemIdentifiers.BLIGHTED_TELEPORT_SPELL_SACK) === 1;
+  };
+  assert.equal(pays({ x: 3100, y: 3600 }), true, 'the Wilderness');
+  assert.equal(pays({ x: 3200, y: 3200 }, 'BountyHunterArena'), true, 'Bounty Hunter');
+  assert.equal(pays({ x: 2539, y: 4712 }), false, 'not the Mage Arena bank');
+  for (const area of ['Castle Wars', 'Clan Wars', 'Soul Wars']) assert.equal(pays({ x: 3200, y: 3200 }, area), false, area);
+  t.mock.method(core.WorldDefinition, 'hasGlobalWorldTag', tag => tag === 'pvp');
+  assert.equal(pays({ x: 3200, y: 3200 }), false, 'not a PvP world outside the Wilderness');
+  // The other sacks keep their shared areas.
+  const ice = core.CombatSpells.ICE_BARRAGE;
+  const player = sackCaster({ x: 2539, y: 4712, item: 'BLIGHTED_ANCIENT_ICE_SACK', book: ice.getSpellbook() });
+  assert.equal(ice.canCast(player, true), true);
+});

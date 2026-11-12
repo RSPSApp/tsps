@@ -1,6 +1,7 @@
 // https://oldschool.runescape.wiki/w/Blighted: one sack replaces the entire
 // rune cost; the spell still checks its book, levels, target and cooldown before payment.
 const { allowsBlightedItems } = require("./BlightedItems");
+const BOUNTY_HUNTER_AREAS = new Set(["BountyHunterLobby", "BountyHunterArena"]);
 const BLIGHTED_ITEMS_ALLOWED_VARBIT = 11028; // blighted_items_allowed, read by the spellbook.
 const SPELL_SACKS = [
   ["ANCIENT", "BLIGHTED_ANCIENT_ICE_SACK", ["ICE_RUSH", "ICE_BURST", "ICE_BLITZ", "ICE_BARRAGE"]],
@@ -9,6 +10,17 @@ const SPELL_SACKS = [
   ["NORMAL", "BLIGHTED_SURGE_SACK", ["WIND_WAVE", "WATER_WAVE", "EARTH_WAVE", "FIRE_WAVE", "WIND_SURGE", "WATER_SURGE", "EARTH_SURGE", "FIRE_SURGE"]],
   ["LUNAR", "BLIGHTED_VENGEANCE_SACK", ["VENGEANCE", "VENGEANCE_OTHER"]],
 ];
+
+/**
+ * Wiki (Blighted teleport spell sack): it "can only be used inside the Wilderness", unlike the other
+ * sacks' shared areas. The Bounty Hunter lobby and arena stay: the Wiki's Bounty Hunter changelog
+ * made blighted supplies usable there, and Teleport to Target is cast there.
+ */
+function allowsTeleportSack(core, player) {
+  const location = player.getLocation();
+  return core.Wilderness.levelAt(location.getX(), location.getY()) > 0 ||
+    BOUNTY_HUNTER_AREAS.has(player.getArea?.()?.getName());
+}
 
 function syncAvailability(core, { player }, force = false) {
   const sender = player.getPacketSender();
@@ -31,6 +43,7 @@ function supplySack(core, event) {
   const sackId = match ? core.ItemIdentifiers[match[1]]
     : id === core.CacheDefinitions.getSpellByName("Teleport to Target")?.widgetId
       ? core.ItemIdentifiers.BLIGHTED_TELEPORT_SPELL_SACK : null;
+  if (sackId === core.ItemIdentifiers.BLIGHTED_TELEPORT_SPELL_SACK && !allowsTeleportSack(core, player)) return;
   if (sackId != null && player.getInventory().getAmount(sackId) > 0) event.items = [new core.Item(sackId, 1)];
 }
 

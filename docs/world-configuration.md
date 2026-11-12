@@ -485,6 +485,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MultiHitWeapons` | MultiHitWeapons | combat | yes | Twin-hit weapons such as sulphur blades, tecpatls and Torag's hammers: independent accuracy rolls and two hitsplats on the same tick. |
 | `PlayerHitSounds` | PlayerHitSounds | combat | yes | Plays the hurt sound to players struck in combat, in the voice their Hit sounds setting chooses. |
 | `PvpStatistics` | PvpStatistics | combat | yes | Tracks PvP kills, deaths, kill streaks and Elo rating, separating player and bot opponents. |
+| `PvpTutorial` | PvpTutorial | combat | yes | No PvP tutorial is active, so spells count the player's own runes in instances and on boats. |
 | `Retribution` | Retribution | combat | yes | The Retribution prayer: when its user dies, nearby enemies take damage up to a quarter of their Prayer level, with its graphic and sound. |
 | `SkullPrevention` | SkullPrevention | combat | yes | The PK Skull Prevention setting, which refuses attacks that would skull the player. |
 | `SpecialAttacks` | SpecialAttacks | combat | yes | Weapon special attacks, one handler per weapon from the dragon dagger to the Osmumten's fang, each with its own combat method and drain. |

@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "about": "Undead Druids (NPC 2145) attack with crush melee and magic. The OSRS Wiki says they are aggressive, max hit 11 melee/22 magic, and only use magic outside melee range. Use the server's standard magic attack distance of 10; RSProx 2966 confirms a cast at five tiles, not the maximum range."
+  },
+  "ids": [2145],
+  "melee": { "maxHit": 11 },
+  "magic": {
+    "maxHit": 22,
+    "animation": 5571,
+    "range": 10,
+    "projectile": 1679,
+    "launchGraphic": 1678,
+    "impactGraphic": 1681,
+    "impactSound": 135,
+    "startCycle": 61,
+    "startHeight": 37,
+    "endHeight": 30,
+    "angle": 10,
+    "progress": 96
+  }
+}

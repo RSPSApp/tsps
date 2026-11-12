@@ -89,6 +89,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     setLocation: (next) => { location = next.clone(); return player; },
     moveTo: (next) => { location = next.clone(); return player; },
     setWalkingDirection: () => { state.walked++; },
+    setRunningDirection: () => { state.ran = (state.ran ?? 0) + 1; },
     getMovementQueue: () => ({
       reset() {},
       setBlockMovement: (blocked) => { state.blocked = blocked; },
@@ -125,7 +126,10 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
       sendObjectAnimation() {},
     }),
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: () => { state.hits++; } }) }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => {
+      state.hits++;
+      (state.damage ??= []).push(...damage.map((hit) => hit.getDamage()));
+    } }) }),
     getInventory: () => ({
       isFull: () => false,
       addItem() {},
@@ -1145,6 +1149,128 @@ test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level"
   }
 });
 
+test("rooftop failures fitted to the main-game captures stop at the Wiki's no-fail levels: Seers' 79, Falador's hand holds 66", () => {
+  const obstacles = [
+    { key: "seers", index: 2, start: [2721, 3494, 3], tile: [2720, 3492, 3], never: 79, xp: 20 },
+    { key: "seers", index: 3, start: [2710, 3490, 2], tile: [2710, 3489, 2], never: 79, xp: 20 },
+    { key: "falador", index: 3, start: [3050, 3349, 3], tile: [3050, 3350, 3], never: 66, xp: 60.3 },
+  ];
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    for (const { key, index, start, tile, never, xp } of obstacles) {
+      const { object } = course(key).obstacles.find((entry) => entry.index === index);
+      const failing = createPlayer(...start, never - 1);
+      operate(failing, object, tile);
+      assert.equal(failing.state.xp, 0, `${key} ${index} still fails at ${never - 1}`);
+      assert.equal(failing.state.hits, 1, `${key} ${index}: one fall`);
+      const boundary = createPlayer(...start, never);
+      operate(boundary, object, tile);
+      assert.equal(boundary.state.xp, xp, `${key} ${index} never fails from ${never}`);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("rooftop falls land, hurt and end as captured; the damage follows current Hitpoints (rsprox 20261109T090342, 20261027T185126, 20261024T001512)", () => {
+  // At 99 Hitpoints: floor(HP x percent) + plus, the formulas the captured falls fit.
+  const falls = [
+    { key: "seers", index: 2, start: [2721, 3494, 3], tile: [2720, 3492, 3], landing: [2715, 3494, 0], tick: 5, damage: 9 },
+    { key: "seers", index: 3, start: [2710, 3490, 2], tile: [2710, 3489, 2], landing: [2710, 3484, 0], tick: 7, damage: 7 },
+    { key: "falador", index: 3, start: [3050, 3349, 3], tile: [3050, 3350, 3], landing: [3050, 3351, 0], tick: 2, damage: 8 },
+    { key: "varrock", index: 2, start: [3214, 3414, 3], tile: [3213, 3414, 3], landing: [3212, 3414, 0], tick: 3, damage: 9 },
+    { key: "varrock", index: 4, start: [3194, 3416, 1], tile: [3191, 3415, 1], landing: [3190, 3410, 0], tick: 10, damage: 7 },
+  ];
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    for (const { key, index, start, tile, landing, tick: at, damage } of falls) {
+      const { object, level } = course(key).obstacles.find((entry) => entry.index === index);
+      const player = createPlayer(...start, level);
+      const ticks = timeline(player, object, tile);
+      assert.deepEqual(tileOf(player), landing, `${key} ${index}: landing`);
+      assert.equal(ticks.length - 1, at, `${key} ${index}: on the ground and free ${at} ticks after the op`);
+      assert.ok(ticks[at].moved, `${key} ${index}: the fall is the last tick's`);
+      assert.deepEqual(player.state.damage, [damage], `${key} ${index}: damage`);
+      assert.ok(player.state.sounds.includes(2455), `${key} ${index}: the thud`);
+      assert.ok(player.state.sounds.some((sound) => sound >= 518 && sound <= 521), `${key} ${index}: a hurt sound`);
+      assert.equal(player.state.xp, 0);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Seers' Village Rooftop plays as captured, tick by tick from the op (rsprox 20261109T090342 and 15 others)", () => {
+  const seers = course("seers");
+  // [index, start, loc tile, the ticks after the op of: its first animation, the XP; its end tile]
+  const expected = [
+    [1, [2729, 3489, 0], [2729, 3489, 0], Anim.CLIMB_WALL, 1, 5, [2729, 3491, 3]],
+    [2, [2721, 3494, 3], [2720, 3492, 3], Anim.LEAP, 2, 6, [2713, 3494, 2]],
+    [3, [2710, 3490, 2], [2710, 3489, 2], null, null, 9, [2710, 3480, 2]],
+    [4, [2712, 3477, 2], [2710, 3476, 2], Anim.JUMP_SHORT, 1, 4, [2712, 3472, 3]],
+    [5, [2702, 3470, 3], [2700, 3469, 3], Anim.LEAP, 2, 4, [2702, 3465, 2]],
+    [6, [2702, 3464, 2], [2703, 3461, 2], Anim.LEAP, 2, 4, [2704, 3464, 0]],
+  ];
+  const player = createPlayer(2729, 3489, 0, 99);
+  for (const [index, start, tile, anim, animTick, xpTick, end] of expected) {
+    const obstacle = seers.obstacles.find((entry) => entry.index === index);
+    player.setLocation(new Location(...start));
+    const ticks = timeline(player, obstacle.object, tile);
+    if (anim != null) assert.equal(ticks.findIndex((entry) => entry.animations.includes(anim)), animTick, `obstacle ${index}: first animation`);
+    assert.equal(ticks.findIndex((entry) => entry.xp > 0), xpTick, `obstacle ${index}: XP tick`);
+    assert.equal(ticks.length - 1, xpTick, `obstacle ${index}: free with the XP`);
+    assert.deepEqual(tileOf(player), end, `obstacle ${index}: end tile`);
+  }
+  assert.equal(player.getAttribute("agility.laps")?.seers, 1);
+  assert.deepEqual(player.state.spam.slice(0, 2), ["You climb up the wall...", "...jump, and grab hold of the sign!"]);
+  assert.equal(player.state.ran, 1, "the tightrope's two-tile step is sent as a run step");
+});
+
+test("Seers' tightrope: a tile, two tiles the next tick, then a tile a tick, creaking on the second and sixth (rsprox 20261110T020354)", () => {
+  const rope = course("seers").obstacles.find((entry) => entry.index === 3);
+  const player = createPlayer(2710, 3490, 2);
+  const tiles = [];
+  const setLocation = player.setLocation;
+  player.setLocation = (location) => {
+    tiles.push([location.getX(), location.getY()]);
+    return setLocation(location);
+  };
+  const ticks = timeline(player, rope.object, [2710, 3489, 2]);
+  assert.deepEqual(tiles.map(([, y]) => y), [3490, 3489, 3488, 3487, 3486, 3485, 3484, 3483, 3482, 3481, 3480]);
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2495)), [2, 6]);
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.xp > 0), [9]);
+});
+
+test("the last obstacle of the Draynor, Varrock and Falador laps ends a tick after the lap, as captured; Seers' with it", () => {
+  const lastObstacles = [
+    ["draynor", 7, [3101, 3261, 3], [3102, 3261, 3], true],
+    ["varrock", 9, [3236, 3415, 3], [3236, 3416, 3], true],
+    ["falador", 13, [3024, 3334, 3], [3025, 3332, 3], true],
+    ["seers", 6, [2702, 3464, 2], [2703, 3461, 2], false],
+  ];
+  for (const [key, index, start, tile, extraTick] of lastObstacles) {
+    const obstacle = course(key).obstacles.find((entry) => entry.index === index);
+    const player = createPlayer(...start);
+    player.setAttribute("agility.progress", { course: key, index: index - 1 });
+    const ticks = timeline(player, obstacle.object, tile);
+    const lap = ticks.findIndex((entry) => entry.messages.some((message) => message.includes("lap count is")));
+    assert.ok(lap > 0, `${key}: the lap`);
+    assert.equal(ticks.length - 1, lap + (extraTick ? 1 : 0), `${key}: free ${extraTick ? "a tick after" : "with"} the lap`);
+  }
+});
+
+test("Seers' marks of grace spawn on the five captured tiles (91 marks, rsprox 20261109T090342 and 20261110T020354)", () => {
+  assert.deepEqual(course("seers").marks.tiles, [[2727, 3493, 3], [2706, 3493, 2], [2709, 3493, 2], [2712, 3481, 2], [2698, 3465, 2]]);
+});
+
+test("Falador's obstacles pay the captured helper_agility_add_xp amounts, adding up to the Wiki's 586", () => {
+  const xp = course("falador").obstacles.filter((entry) => entry.object !== ObjectIds.LEDGE_14).map((entry) => entry.xp);
+  assert.deepEqual(xp, [10.7, 22.7, 60.3, 26.8, 26.8, 60.3, 53.6, 30, 13.4, 13.4, 13.4, 13.4, 241.2]);
+  assert.equal(course("falador").lapBonus, 0);
+});
+
 test("Al Kharid's zip line cannot fail after the 2024 fail-point removal", () => {
   const zipline = COURSES.find((entry) => entry.key === "alkharid").obstacles.find((entry) => entry.index === 4);
   const random = Math.random;
@@ -1284,15 +1410,15 @@ test("Falador's rough wall is climbed facing it (north, across its edge)", () =>
   const falador = COURSES.find((course) => course.key === "falador");
   const first = falador.obstacles.find((obstacle) => obstacle.index === 1);
   const steps = first.steps({ player: null, obj: wall, pos: { x: 3036, y: 3341, z: 0 } });
-  assert.deepEqual(steps[0], { face: [3036, 3342] });
+  assert.deepEqual(steps.find((step) => step.face), { face: [3036, 3342] });
 });
 
-test("Falador's handhold corner starts outside the house, with the wall path, end and XP unchanged", () => {
+test("Falador's hand holds play as captured: the jump, the corner, three holds two ticks apart and the drop (rsprox 20261027T185126)", () => {
   const falador = COURSES.find((course) => course.key === "falador");
   const holds = falador.obstacles.find((obstacle) => obstacle.index === 3);
   assert.equal(holds.object, ObjectIds.HAND_HOLDS_4);
 
-  const player = createPlayer(3050, 3350, 3);
+  const player = createPlayer(3050, 3349, 3);
   const landings = [];
   const moveTo = player.moveTo;
   player.moveTo = (location) => {
@@ -1300,51 +1426,49 @@ test("Falador's handhold corner starts outside the house, with the wall path, en
     return moveTo(location);
   };
   hooks.events.length = 0;
-  assert.notEqual(operate(player, holds.object, [3050, 3350, 3]), false);
+  const random = Math.random;
+  Math.random = () => 0;
+  let ticks;
+  try {
+    ticks = timeline(player, holds.object, [3050, 3350, 3]);
+  } finally {
+    Math.random = random;
+  }
 
-  assert.deepEqual(landings[0], [3051, 3351, 2], "the initial corner lands outside the room");
-  assert.deepEqual(landings.slice(1, 5), [
-    [3051, 3352, 2],
-    [3051, 3353, 2],
-    [3051, 3354, 2],
-    [3051, 3355, 2],
-  ], "all four existing actor holds remain on the outside face");
-  assert.deepEqual(landings.at(-1), [3050, 3357, 3], "the final roof landing is unchanged");
+  assert.deepEqual(landings, [
+    [3050, 3351, 3], [3050, 3351, 2], [3051, 3352, 2], [3051, 3353, 2], [3051, 3354, 2], [3051, 3355, 2],
+    [3050, 3357, 2], [3050, 3357, 3],
+  ]);
+  // As captured, from the op: the jump (2583) a tick on, hanging (1118) a tick later, a hold at each
+  // of ticks 4, 6 and 8, the drop (1120) at 10 and the roof with the XP at 12.
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(Anim.JUMP_SHORT)), [1]);
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(Anim.HANG)), [2, 4, 6, 8]);
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(Anim.HANG_DROP)), [10]);
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.xp > 0), [12]);
+  assert.equal(player.state.xp, 60.3, "the captured 603 tenths");
   assert.deepEqual(tileOf(player), [3050, 3357, 3]);
-
-  assert.equal(player.state.xp, holds.xp, "one obstacle's XP, unchanged");
-  assert.equal(
-    hooks.events.filter((event) => event.name === "agility:obstacle" && event.payload.objectId === holds.object).length,
-    1,
-    "one completion"
-  );
+  assert.equal(hooks.events.filter((event) => event.name === "agility:obstacle" && event.payload.objectId === holds.object).length, 1);
   assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
 });
 
-test("Falador's diagonal tightrope follows the drawn span instead of the parallel click-anchor line", () => {
+test("Falador's diagonal tightrope walks the captured tiles, with the XP on the last (rsprox 20261027T185126)", () => {
   const falador = COURSES.find((course) => course.key === "falador");
   const rope = falador.obstacles.find((obstacle) => obstacle.index === 6);
-  const player = createPlayer(3035, 3362, 3);
+  const player = createPlayer(3035, 3361, 3);
   const tiles = [];
   const setLocation = player.setLocation;
   player.setLocation = (location) => {
     tiles.push([location.getX(), location.getY(), location.getZ()]);
     return setLocation(location);
   };
-  hooks.events.length = 0;
-  operate(player, rope.object, [3034, 3361, 3]);
-  assert.deepEqual(tiles.slice(0, 2), [[3035, 3362, 3], [3034, 3362, 3]],
-    "keep the roof approach, then step west onto the rope");
-  // Cache loc 11397's visible span runs (3034,3362) -> (3028,3356).
-  for (const [x, y, z] of tiles.slice(1)) {
-    assert.equal(y - x, 328, `(${x},${y}) stays on the drawn diagonal`);
-    assert.equal(z, 3);
-  }
-  assert.deepEqual(tileOf(player), [3027, 3355, 3]);
-  assert.equal(player.state.xp, 61, "one obstacle's unchanged XP");
-  assert.equal(hooks.events.filter((event) => event.name === "agility:obstacle"
-    && event.payload.objectId === rope.object).length, 1);
-  assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
+  const ticks = timeline(player, rope.object, [3034, 3361, 3]);
+  assert.deepEqual(tiles.slice(1), [
+    [3034, 3361, 3], [3033, 3361, 3], [3032, 3360, 3], [3031, 3359, 3], [3030, 3358, 3], [3029, 3357, 3],
+    [3028, 3356, 3], [3028, 3355, 3], [3028, 3354, 3],
+  ], "after the route to 3035,3361: one tile a tick");
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.moved).slice(0, 1), [1], "onto the rope a tick after the op");
+  assert.deepEqual(ticksWith(ticks, (entry) => entry.xp > 0), [9], "the XP with the last tile, 3028,3354");
+  assert.equal(player.state.xp, 60.3);
 });
 
 const MARK_OF_GRACE = 11849;
@@ -1777,6 +1901,11 @@ function timeline(player, objectId, objectTile) {
     ticks.push(since(from));
   }
   return ticks;
+}
+
+/** The ticks of a `timeline` whose entry passes `test`. */
+function ticksWith(ticks, test) {
+  return ticks.map((entry, index) => (test(entry) ? index : null)).filter((index) => index != null);
 }
 
 test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {

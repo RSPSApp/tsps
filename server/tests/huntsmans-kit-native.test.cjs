@@ -255,7 +255,7 @@ function forceKitRolls() {
   };
   return () => { C.roll = original; };
 }
-test("loot sacks suppress a second kit both initially and after an earlier full-inventory roll", async t => {
+test("loot sacks reject duplicate kits held physically, banked or awaiting reclamation", async t => {
   const sack = core.ItemIdentifiers.HUNTERS_LOOT_SACK_ADEPT_;
   const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
   for (const banked of [false,true]) {
@@ -263,13 +263,6 @@ test("loot sacks suppress a second kit both initially and after an earlier full-
     add(f,sack); Rumours.state(f.p).enhanced=true;
     const restore=forceKitRolls(); try { await action(f,"Open",sack); } finally { restore(); }
     assert.equal(amount(f,KIT)+(f.p.getBank(0).getAmount(KIT)),1); assert.equal(amount(f,sack),0);
-  }
-  for (const placeholder of [KIT, 29310]) {
-    const absent = actor(t); absent.p.getBank(0).setItem(0, new core.Item(placeholder, 0));
-    absent.p.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).setItem(0, new core.Item(KIT, 1));
-    add(absent, sack); Rumours.state(absent.p).enhanced = true;
-    const restore = forceKitRolls(); try { await action(absent, "Open", sack); } finally { restore(); }
-    assert.equal(amount(absent, KIT), 1, "zero placeholder and search mirror do not suppress legitimate kit reward");
   }
   for (const location of ["grave", "office", "retrieval"]) {
     const owned = actor(t);
@@ -295,6 +288,23 @@ test("loot sacks suppress a second kit both initially and after an earlier full-
     assert.equal(amount(owned, sack), 0, "ordinary sack opening reached delivery");
     assert.equal(amount(owned, KIT), 0, `${location} ownership suppresses duplicate kit award`);
   }
+});
+
+test("zero bank placeholders and search mirrors do not suppress replacement kit rolls", async t => {
+  const sack = core.ItemIdentifiers.HUNTERS_LOOT_SACK_ADEPT_;
+  const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
+  for (const placeholder of [KIT, 29310]) {
+    const absent = actor(t); absent.p.getBank(0).setItem(0, new core.Item(placeholder, 0));
+    absent.p.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).setItem(0, new core.Item(KIT, 1));
+    add(absent, sack); Rumours.state(absent.p).enhanced = true;
+    const restore = forceKitRolls(); try { await action(absent, "Open", sack); } finally { restore(); }
+    assert.equal(amount(absent, KIT), 1, "zero placeholder and search mirror do not suppress legitimate kit reward");
+  }
+});
+
+test("cached sack delivery rechecks kit ownership without rerolling other rewards", async t => {
+  const sack = core.ItemIdentifiers.HUNTERS_LOOT_SACK_ADEPT_;
+  const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
   const f=actor(t); add(f,sack); Rumours.state(f.p).enhanced=true;
   while(f.p.getInventory().getFreeSlots())add(f,1511);
   const restore=forceKitRolls(); try { await action(f,"Open",sack); } finally { restore(); }

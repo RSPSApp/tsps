@@ -1189,7 +1189,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
 
   function talkToAfflictedRazmire({ player }) {
     if (player.getAttribute(PERM_RAZMIRE_ATTRIBUTE)) return false;
-    player.sendMessage("This person doesn't make any sense at all.");
+    const { DialogueChainBuilder, NpcDialogue } = api.core;
+    const id = NpcIdentifiers.AFFLICTED_RAZMIRE_;
+    // Transcript:Afflicted supplies the words; RSProx 3088 captures both chatboxes and expression 571.
+    const words = ["ughugh", "knows'is", "nots", "pirsl", "wot's", "zurgle", "gurghl", "mee's", "seysyi", "sfriess", "says"];
+    const phrase = Array.from({ length: 1 + Math.floor(Math.random() * 6) },
+      () => words[Math.floor(Math.random() * words.length)]).join(" ");
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new NpcDialogue(0, id, phrase, "Afflicted(Razmire)", 571))
+      .add(new NpcDialogue(1, id, "<col=0000ff>~ This person doesn't make any sense at all. ~", "Afflicted(Razmire)", 571)));
     return true;
   }
 

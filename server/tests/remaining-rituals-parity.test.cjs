@@ -677,8 +677,17 @@ test("Shades of Mort'ton serums change the NPC for a while; Razmire's Trade opti
   assert.equal(razmire.form, -1, 'a 207 cure wears off');
   const afflictedTalk = h.hooks.namedNpcs.find(({ name }) => name === 'Afflicted(Razmire)').actions['Talk-to'];
   h.quest.setStage(h.player, 85);
+  let afflictedBoxes;
+  const dialogueManager = h.player.getDialogueManager();
+  h.player.getDialogueManager = () => ({
+    ...dialogueManager,
+    startDialogues(chain) { afflictedBoxes = [...chain.getDialogues().values()]; },
+  });
   assert.equal(afflictedTalk({ player: h.player }), true, 'afflicted talk stops before the shop dialogue');
-  assert.equal(h.messages.at(-1), "This person doesn't make any sense at all.");
+  assert.equal(afflictedBoxes.length, 2);
+  assert.ok(afflictedBoxes.every((box) => box.getNpcId() === N.AFFLICTED_RAZMIRE_));
+  assert.match(afflictedBoxes[0].getText(), /^[a-z']+( [a-z']+){0,5}$/);
+  assert.equal(afflictedBoxes[1].getText(), "<col=0000ff>~ This person doesn't make any sense at all. ~");
   h.give(I.SERUM_208_4_, 1);
   use(I.SERUM_208_4_, N.AFFLICTED_RAZMIRE_, razmire);
   h.runTasks();

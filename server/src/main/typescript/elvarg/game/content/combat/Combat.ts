@@ -405,8 +405,7 @@ export class Combat {
             return;
         }
 
-        // An overlapped NPC that can still reach its target (a large NPC fighting
-        // underfoot) attacks in place; one that cannot steps aside below.
+        // An NPC over its target can't reach it (CombatRange.canReach): it steps off below.
         if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)
             && !reachable) {
             this.processNpcUnderTarget(state);
@@ -869,8 +868,47 @@ export class Combat {
                 TaskManager.wasTaskActiveThisCycle(state.target.getIndex?.(), "MovementTask"));
         if (targetBusy) return;
 
-        const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
-        movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+        const size = Math.max(1, this.character.getSize() | 0);
+        if (size <= 1) {
+            const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
+            movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+            return;
+        }
+        // A large NPC can't clear its target in one step: it walks off the shortest way, a tile a
+        // tick, recomputed each tick, until the target stands beside it (rsprox: a gargoyle,
+        // 237/01143.txt:85622; a moss giant, 227/00569.txt:3987; the Kalphite Queen, 227/00095.txt).
+        // Its own footprint still covers the target mid-step, so the target alone doesn't block it.
+        // One that can't move (blocked, scripted, built into scenery) stays put and can't attack.
+        if (!movement.getMobility().canMove() || movement.isMovementBlocked()) return;
+        if (this.character.getAsNpc().isScriptedMovement() === true) return;
+        if (this.character.hasFlag?.(CombatRange.BUILT_INTO_SCENERY_FLAG)) return;
+        const step = this.stepOffTarget(state.target, size);
+        if (!step) return;
+        movement.ignoreOccupantThisCycle(state.target);
+        movement.setPursuitCheckpoint(step);
+    }
+
+    /**
+     * The first tile of the shortest cardinal way out from over `target`: each direction costs the
+     * tiles it takes to leave the target outside the footprint; directions the NPC can't step are
+     * dropped. Null when it's boxed in.
+     */
+    private stepOffTarget(target: Mobile, size: number): Location | null {
+        const at = this.character.getLocation();
+        const them = target.getLocation();
+        const movement = this.character.getMovementQueue();
+        const options: Array<[number, number, number]> = [
+            [-1, 0, at.getX() + size - them.getX()],
+            [1, 0, them.getX() - at.getX() + 1],
+            [0, -1, at.getY() + size - them.getY()],
+            [0, 1, them.getY() - at.getY() + 1],
+        ];
+        movement.ignoreOccupantThisCycle(target);
+        const open = options
+            .filter(([dx, dy]) => movement.canWalkTo(at.transform(dx, dy)))
+            .sort((a, b) => a[2] - b[2]);
+        movement.ignoreOccupantThisCycle(null);
+        return open.length ? at.transform(open[0][0], open[0][1]) : null;
     }
 
     /**

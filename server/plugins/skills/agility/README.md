@@ -66,7 +66,7 @@ and an obstacle's `start` and `end`, is a game message, or `{ "spam": text }` or
 - **Animations by name**, from `Constants.Agility.js` (`Anim`) and `shortcuts/Builders.Agility.js` (`ShortcutAnim`):
   `{ "anim": "CLIMB_ROCKS" }`; `-1` resets.
 - **Builders as macros**: `{ "use": "hops", "args": ["object", "to"] }`. `climbOver`, `jump`,
-  `hops`, `pipe`, `tunnel`, `crevice`, `crawlDown`, `crawlUp`, `ropeSwing`, `hurdle`, `climb`.
+  `hops`, `pipe`, `tunnel`, `underwall`, `hole`, `crevice`, `crawlDown`, `crawlUp`, `ropeSwing`, `hurdle`, `climb`.
 - **Tokens**: `"object"` (the clicked loc's tile), `"to"` and `"from"` (a crossing's ends),
   `"via0"`, `"via1"` ... and `"...via"` (its `via` tiles in travel order), single coordinates
   (`"pos.x"`, `"object.y"`).

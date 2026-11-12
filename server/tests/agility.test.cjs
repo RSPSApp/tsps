@@ -648,6 +648,77 @@ test("the native Draynor underwall tunnel crosses both ways in one click (rsprox
   }
 });
 
+/** Plays a crossing, logging each exact move (tick it started, its end tile, cycles, sounds sent by then). */
+function crossLogged(player, id, tile) {
+  const moves = [];
+  const startTick = ticksPlayed;
+  const setForceMovement = player.setForceMovement;
+  player.setForceMovement = (value) => {
+    if (value) {
+      const end = value.getEnd();
+      moves.push({
+        tick: ticksPlayed - startTick,
+        to: [player.getLocation().getX() + end.getX(), player.getLocation().getY() + end.getY()],
+        cycles: [value.getSpeed(), value.getReverseSpeed()],
+        sounds: player.state.sounds.slice(),
+      });
+    }
+    return setForceMovement(value);
+  };
+  operate(player, id, tile);
+  return { moves, ticks: ticksPlayed - startTick };
+}
+
+test("the underwall tunnels cross in three one-tick legs with the tunnel sound (rsprox 238/4169, 237/4001)", () => {
+  for (const [name, ids, level, path] of [
+    ["Grand Exchange", [16530, 16529], 21, [[3142, 3513], [3141, 3513], [3138, 3516], [3137, 3516]]],
+    ["Falador", [16528, 16527], 26, [[2948, 3313], [2948, 3312], [2948, 3310], [2948, 3309]]],
+    ["Yanille", [16520, 16519], 16, [[2575, 3112], [2575, 3111], [2575, 3108], [2575, 3107]]],
+  ]) {
+    for (const [id, route] of [[ids[0], path], [ids[1], path.slice().reverse()]]) {
+      const [from, ...legs] = route;
+      const player = createPlayer(...from, 0, level);
+      const { moves, ticks } = crossLogged(player, id, from.concat(0));
+      assert.deepEqual(moves.map((move) => move.to), legs, `${name}: in, through and out`);
+      assert.deepEqual(moves.map((move) => move.cycles), [[0, 30], [0, 30], [0, 30]]);
+      assert.deepEqual(tileOf(player), legs[2].concat(0));
+      assert.deepEqual(player.state.sounds, [2452]);
+      assert.deepEqual(moves[0].sounds, [2452], "the sound plays as the player enters");
+      assert.deepEqual(moves.map((move) => move.tick - moves[0].tick), [0, 1, 2], "one leg a tick");
+      assert.equal(ticks - moves[0].tick, 3, "free a tick after the last leg starts");
+      assert.deepEqual(player.state.animations.slice(-4), [2589, 2590, 2591, 65535], "enter, walk, exit, then reset");
+      assert.equal(player.state.xp, 0);
+    }
+  }
+});
+
+test("the Draynor underwall tunnel plays the tunnel sound with the crawl (rsprox 237/4001)", () => {
+  for (const [id, from, to] of [[19032, [3066, 3257, 0], [3070, 3257, 0]], [19036, [3070, 3257, 0], [3066, 3257, 0]]]) {
+    const player = createPlayer(...from, 42);
+    operate(player, id, [3067, 3257, 0]);
+    assert.deepEqual(tileOf(player), to);
+    assert.deepEqual(player.state.sounds, [2452]);
+    assert.deepEqual(player.state.animations.slice(-2), [844, 65535], "the crawl, then reset on landing");
+  }
+});
+
+test("the Piscatoris colony wall hole: a two-tick entry, three-tick crawl and exit, with its sounds (rsprox 224/1440)", () => {
+  for (const [from, legs] of [
+    [[2344, 3650], [[2344, 3651], [2344, 3654], [2344, 3655]]],
+    [[2344, 3655], [[2344, 3654], [2344, 3651], [2344, 3650]]],
+  ]) {
+    const player = createPlayer(...from, 0, 1);
+    const { moves, ticks } = crossLogged(player, 12656, [2344, from[1] === 3650 ? 3651 : 3654, 0]);
+    assert.deepEqual(moves.map((move) => move.to), legs);
+    assert.deepEqual(moves.map((move) => move.tick - moves[0].tick), [0, 2, 5]);
+    assert.deepEqual(moves.map((move) => move.cycles), [[0, 50], [0, 100], [15, 33]]);
+    assert.deepEqual(moves.map((move) => move.sounds), [[2489], [2489], [2489, 2490]]);
+    assert.equal(ticks - moves[0].tick, 6);
+    assert.deepEqual(tileOf(player), legs[2].concat(0));
+    assert.deepEqual(player.state.animations.slice(-4), [2589, 2590, 2591, 65535], "enter, walk, exit, then reset");
+  }
+});
+
 test("the native Draynor River Lum stone routes to this shore and finishes across the river", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

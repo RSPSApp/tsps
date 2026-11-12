@@ -33,6 +33,8 @@ const MACROS = {
   hops: builders.hops,
   pipe: builders.pipe,
   tunnel: builders.tunnel,
+  underwall: builders.underwall,
+  hole: builders.hole,
   crevice: builders.crevice,
   crawlDown: builders.crawlDown,
   crawlUp: builders.crawlUp,

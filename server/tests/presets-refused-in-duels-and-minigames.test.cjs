@@ -6,7 +6,7 @@
 // every plugin loaded with PvpMode, a real Player, Bank and Inventory, the real applyPreset.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, after, test } = require("node:test");
+const { before, after, test, mock } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
@@ -16,11 +16,14 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { Presetable } = require("../dist/game/content/presets/Presetable");
 const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 
 let core;
 let I;
 let Presets;
+const hookErrors = [];
 before(async () => {
+  mock.method(console, "error", (...args) => hookErrors.push(args.map(String).join(" ")));
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
@@ -28,7 +31,11 @@ before(async () => {
   Presets = require("../plugins/modes/pvp/Presets.PvpMode");
   PM.emitServerStartup({});
 });
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  PM.emitServerShutdown({});
+  mock.restoreAll();
+  assert.deepEqual(hookErrors, [], "plugin hooks, including cleanup, must not throw");
+});
 
 let next = 9090;
 function actor(t) {
@@ -38,7 +45,12 @@ function actor(t) {
   p.setLocation(new core.Location(3222, 3218, 0));
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
-  t.after(() => p.setRegistered(false));
+  t.after(() => {
+    const area = p.getArea();
+    if (area?.hasMember(p)) area.leave(p, true);
+    p.setArea(null);
+    p.setRegistered(false);
+  });
   return { p, messages };
 }
 const preset = () => new Presetable("qa", [new core.Item(I.SHARK, 5)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
@@ -94,4 +106,133 @@ test("elsewhere a preset still loads as before", (t) => {
   Presets.applyPreset(f.p, geared());
   assert.equal(f.p.getInventory().getAmount(I.SHARK), 5);
   assert.equal(f.p.getEquipment().getAmount(I.ABYSSAL_WHIP), 1);
+});
+
+// Seeded locations and an in-memory PlayerSession exercise the registered command and
+// widget handlers with production areas, inventory and banks; no client or World loop.
+function place(f, x, y, z = 0) {
+  f.p.setLocation(new core.Location(x, y, z));
+  AreaManager.process(f.p);
+}
+
+function openFromCommand(f) {
+  const { CommandPacketListener } = require("../dist/net/packet/impl/CommandPacketListener");
+  const { GROUP_ID } = require("../plugins/modes/pvp/PresetsWidget.PvpMode");
+  assert.equal(f.p.isPlayerBot(), false, "normal players must not take the bot bypass");
+  assert.equal(Presets.isEnabled(), true, "PvpMode is actually registered");
+  assert.ok(f.p.getHitpoints() > 0, "the ordinary command parser accepts a living player");
+  CommandPacketListener.execute(f.p, "::presets");
+  assert.equal(f.p.getInterfaceId(), GROUP_ID, f.messages.join(" | "));
+  const selected = f.p.getAttribute("pvp:current-preset");
+  assert.equal(selected, Presets.getGlobalPresetPool()[0], "the command selects the configured first loadout");
+  assert.ok(selected.getInventory().length > 0);
+  return selected;
+}
+
+function clickLoad(f) {
+  const { COMPONENT, uid } = require("../plugins/modes/pvp/PresetsWidget.PvpMode");
+  assert.equal(PM.emitInterfaceActionClick({ player: f.p, buttonId: uid(COMPONENT.LOAD_BUTTON),
+    action: 1, opId: 1, handled: false }), true, "registered Load widget consumes the click");
+}
+
+function carriedState(p) {
+  const items = (container) => container.getItems().map((item) => item
+    ? [item.getId(), item.getAmount(), item.getMeta()] : null);
+  return {
+    inventory: items(p.getInventory()), equipment: items(p.getEquipment()),
+    banks: Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => items(p.getBank(tab))),
+    skills: core.Skill.values().map((skill) => [p.getSkillManager().getCurrentLevel(skill), p.getSkillManager().getMaxLevel(skill)]),
+    hitpoints: p.getHitpoints(), spellbook: p.getSpellbook(),
+  };
+}
+
+function seedCarried(f) {
+  f.p.getInventory().setItem(0, new core.Item(I.LOBSTER, 2));
+  f.p.getBank(0).setItem(0, new core.Item(I.COINS, 123));
+}
+
+function expectLoad(f, selected, label) {
+  assert.deepEqual(f.p.getInventory().getValidItems().map((item) => [item.getId(), item.getAmount()]),
+    selected.getInventory().map((item) => [item.getId(), item.getAmount()]), label);
+  assert.ok(f.p.getInventory().getValidItems().every((item) => item.isPresetItem()), "spawned copies retain preset metadata");
+  const equipment = (items) => items.map((item) => [item.getId(), item.getAmount()]).sort((a, b) => a[0] - b[0]);
+  assert.deepEqual(equipment(f.p.getEquipment().getValidItems()), equipment(selected.getEquipment()), "configured equipment is worn");
+  assert.deepEqual([core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.HITPOINTS,
+    core.Skill.RANGED, core.Skill.PRAYER, core.Skill.MAGIC].map((skill) => f.p.getSkillManager().getMaxLevel(skill)),
+  selected.getStats(), "configured combat stats are applied");
+  assert.equal(f.p.getBank(0).getAmount(I.LOBSTER), 2, "real carried food is banked exactly once");
+  assert.equal(f.p.getBank(0).getAmount(I.COINS), 123, "existing bank stock is conserved");
+}
+
+function expectLoadRefused(f, pattern) {
+  const before = carriedState(f.p);
+  clickLoad(f);
+  assert.deepEqual(carriedState(f.p), before, "refusal preserves items, all bank tabs, stats, health and spellbook");
+  assert.ok(f.messages.some((message) => pattern.test(message)), f.messages.join(" | "));
+}
+
+test("ordinary ::presets and Load work outside and in the safe Bounty Hunter lobby", (t) => {
+  const outside = actor(t);
+  seedCarried(outside);
+  const selected = openFromCommand(outside);
+  clickLoad(outside);
+  expectLoad(outside, selected, "outside positive establishes a valid configured loadout");
+
+  const f = actor(t);
+  seedCarried(f);
+  const bh = require("../plugins/minigames/bountyhunter/State.BountyHunter");
+  place(f, bh.CRATER.lobbyArrival.x, bh.CRATER.lobbyArrival.y);
+  assert.equal(f.p.getArea().getName(), "BountyHunterLobby");
+  assert.equal(bh.inLobby(f.p), true, "production area entry owns the player");
+  assert.equal(f.p.getArea().canTeleport(f.p, 20), false, "lobby teleport refusal stays intact");
+  const lobbyPreset = openFromCommand(f);
+  clickLoad(f);
+  expectLoad(f, lobbyPreset, "safe BH lobby must load the configured preset through the ordinary widget");
+});
+
+test("Bounty Hunter arena still refuses the ordinary Load without changing possessions or stats", (t) => {
+  const f = actor(t);
+  seedCarried(f);
+  place(f, 3423, 4050);
+  assert.equal(f.p.getArea().getName(), "BountyHunterArena");
+  openFromCommand(f);
+  expectLoadRefused(f, /can't load a preset here/);
+  assert.equal(f.p.getArea().canTeleport(f.p, 20), false);
+});
+
+test("a lobby interface cannot load after moving into the arena, before or after area processing", (t) => {
+  const f = actor(t);
+  seedCarried(f);
+  place(f, 3423, 4061);
+  openFromCommand(f);
+  const lobby = f.p.getArea();
+  f.p.setLocation(new core.Location(3423, 4050, 0));
+  assert.equal(f.p.getArea(), lobby, "area membership deliberately lags the live tile");
+  expectLoadRefused(f, /can't load a preset here/);
+  AreaManager.process(f.p);
+  assert.equal(f.p.getArea().getName(), "BountyHunterArena");
+  openFromCommand(f);
+  expectLoadRefused(f, /can't load a preset here/);
+});
+
+test("lobby permission never bypasses a duel or combat begun after opening presets", (t) => {
+  const { DuelState } = require("../dist/game/content/Duelling");
+  for (const combat of [false, true]) {
+    const f = actor(t);
+    seedCarried(f);
+    place(f, 3423, 4061);
+    openFromCommand(f);
+    if (combat) f.p.getCombat().setTarget(actor(t).p);
+    else f.p.getDueling().setState(DuelState.REQUESTED_DUEL);
+    expectLoadRefused(f, combat ? /during combat/ : /during a duel/);
+  }
+});
+
+test("a global teleport veto still refuses a lobby load", (t) => {
+  const f = actor(t);
+  seedCarried(f);
+  place(f, 3423, 4061);
+  openFromCommand(f);
+  t.mock.method(PM, "emitCanTeleport", () => false);
+  expectLoadRefused(f, /can't load a preset here/);
 });

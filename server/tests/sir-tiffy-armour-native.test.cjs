@@ -18,6 +18,15 @@ const ARMOUR = [[5574, "Initiate sallet", "basic_tk_helm", 6000],
   [5576, "Initiate cuisse", "basic_tk_legs", 8000]];
 let core, tiffy, spawned = false, serial = 0, oldError, oldWarn, oldSubmit;
 const errors = [], tasks = new Set();
+const actors = new WeakMap();
+function observePurchase(event) {
+  const f = actors.get(event.player);
+  if (!f) return;
+  f.receipts.push({ shopId: event.shopId, itemId: event.itemId, amount: event.amount,
+    stock: core.ShopManager.shopsById.get(event.shopId).stock.get(event.itemId),
+    coins: event.player.getInventory().getAmount(995),
+    items: event.player.getInventory().getAmount(event.itemId) });
+}
 before(async () => {
   oldError = console.error;
   oldWarn = console.warn;
@@ -30,6 +39,7 @@ before(async () => {
   core.RegionManager.init(); core.RegionManager.loadMapFiles(2997, 3373);
   PM.emitServerStartup({});
   assert.equal(new ShopDefinitionLoader().load(), true); core.ShopManager.initialize();
+  PM.createApi("TiffyNativePurchaseObservation").onCustomEvent("shop:purchase", observePurchase);
   const row = require("../data/definitions/npc-spawns.json").find(r => r.id === 4687);
   assert.deepEqual([row.x, row.y, row.level], [2997, 3373, 0], "canonical seated Tiffy spawn");
   tiffy = [...core.World.getNpcs()].find(n => n.getId() === row.id && n.getLocation().getX() === row.x && n.getLocation().getY() === row.y);
@@ -77,7 +87,7 @@ function actor(t, rd = 4) {
   assert.equal(p.isRegistered(), true); assert.ok(p.getHitpoints() > 0); assert.equal(p.busy(), false);
   assert.equal(p.getPrivateArea(), null); assert.equal(core.WorldDefinition.isMembersWorld(), true);
   const messages = [], send = p.sendMessage.bind(p); p.sendMessage = text => { messages.push(text); return send(text); };
-  return { p, c, messages };
+  const f = { p, c, messages, receipts: [] }; actors.set(p, f); return f;
 }
 async function input(f, packet) { await f.c.dispatch([packet]); for (let i = 0; i < 4; i++) turn(); }
 function current(f) { return f.p.getDialogueManager().getCurrent(); }
@@ -128,8 +138,11 @@ async function buy(f, id, expected = INITIATE) {
   shop(f, expected);
   const s = core.ShopManager.shopsById.get(expected), slot = core.ShopManager.displayEntries(s, f.p).findIndex(row => row.itemId === id);
   assert.ok(slot >= 0, "actual visible stock contains requested item");
+  const before = f.receipts.length;
   await input(f, { type: "widget_action", widgetId: (core.ShopManager.MAIN_INTERFACE_ID << 16) | 16,
     groupId: core.ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 1, slot: slot + 1, itemId: id, option: "Buy 1" });
+  assert.ok(f.receipts.length <= before + 1, "one decoded buy cannot produce duplicate purchases");
+  return f.receipts.length > before ? f.receipts.at(-1) : undefined;
 }
 function wantedEligible(f) { seed(f.p, "the_lost_tribe"); seed(f.p, "priest_in_peril"); f.p.setAttribute("quest.points", 32); }
 function slugEligible(f) {
@@ -155,8 +168,10 @@ test("post-Recruitment Drive ordinary menu offers armour and sells all three pie
   await talk(f); assert.match(text(f), /Hello|Jolly good show|spiffing/i, "ordinary Tiffy dialogue is a working admission control");
   await armour(f);
   let coins = 50000;
-  for (const [id, , , price] of ARMOUR) { const stock = core.ShopManager.shopsById.get(INITIATE).stock.get(id); await buy(f, id); coins -= price;
-    assert.equal(amount(f, id), 1); assert.equal(amount(f, 995), coins); assert.equal(core.ShopManager.shopsById.get(INITIATE).stock.get(id), stock - 1); }
+  for (const [id, , , price] of ARMOUR) { const stock = core.ShopManager.shopsById.get(INITIATE).stock.get(id), receipt = await buy(f, id); coins -= price;
+    assert.deepEqual(receipt, { shopId: INITIATE, itemId: id, amount: 1, stock: stock - 1, coins, items: 1 }, "purchase producer records the actual stock/payment/delivery before restock");
+    assert.equal(amount(f, id), 1); assert.equal(amount(f, 995), coins);
+    assert.equal(core.ShopManager.shopsById.get(INITIATE).stock.get(id), 30, "ordinary later World ticks restock the item"); }
   await buy(f, 5574); assert.equal(amount(f, 5574), 2); assert.equal(amount(f, 995), coins - 6000, "repeat purchase is paid");
   assert.equal(quest("recruitment_drive").getStage(f.p), 4); assert.equal(quest("wanted").getStage(f.p), 0);
 });
@@ -178,6 +193,7 @@ for (const full of [false, true]) test(`purchase refusal conserves stock/items/c
   if (full) while (f.p.getInventory().getFreeSlots() > 0) add(f, 1511);
   await talk(f); await armour(f); const stock = core.ShopManager.shopsById.get(INITIATE).stock.get(5574), coins = amount(f, 995);
   await buy(f, 5574); assert.equal(amount(f, 5574), 0); assert.equal(amount(f, 995), coins); assert.equal(core.ShopManager.shopsById.get(INITIATE).stock.get(5574), stock);
+  assert.equal(f.receipts.length, 0, "refusal emits no successful purchase");
   assert.ok(f.messages.some(s => full ? /space|room/i.test(s) : /enough coins/i.test(s)), "meaningful refusal feedback");
 });
 test("before Recruitment Drive the ordinary greeting has no armour; existing shop gate refuses", async t => {

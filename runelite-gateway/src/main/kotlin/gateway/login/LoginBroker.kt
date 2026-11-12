@@ -120,13 +120,21 @@ class LoginBroker(
                 )
                 require(exchange.requestHeaders.getFirst("Origin") == null)
                 val now = clock()
-                attempts.entries.removeIf { now - it.value.first > 60_000 }
-                require(attempts.size < 2048 || attempts.containsKey(ip))
+                // One step, so concurrent new addresses can't all evict the same entry and insert.
                 val rate =
-                    attempts.compute(ip) { _, old ->
-                        if (old == null || now - old.first > 60_000) now to 1
-                        else old.first to old.second + 1
-                    }!!
+                    synchronized(attempts) {
+                        attempts.entries.removeIf { now - it.value.first > 60_000 }
+                        // A full table forgets its oldest window instead of refusing every new
+                        // address: otherwise 2048 rotating addresses lock everyone else out.
+                        if (attempts.size >= 2048 && !attempts.containsKey(ip))
+                            attempts.entries
+                                .minByOrNull { it.value.first }
+                                ?.let { attempts.remove(it.key) }
+                        attempts.compute(ip) { _, old ->
+                            if (old == null || now - old.first > 60_000) now to 1
+                            else old.first to old.second + 1
+                        }!!
+                    }
                 require(rate.second <= 20 && tickets.size < 64)
                 val data = exchange.requestBody.readNBytes(4097)
                 require(data.size <= 4096)
@@ -238,6 +246,9 @@ class LoginBroker(
             return null
         return tickets.remove(ticket)
     }
+
+    /** Addresses in the rate table (tests). */
+    internal fun rateTableSize(): Int = attempts.size
 
     override fun close() {
         server.stop(0)

@@ -8,7 +8,8 @@
 //
 // Every refusal is a message box on the click's tick, before any fade: no boat here, the boat
 // docked at another port or lost at sea, the boat too far from the dock to disembark, or the
-// port's Sailing level. A gangplank answers a click from the deck however far off the boat is.
+// port's Sailing level. A port's gangplank answers a
+// click from the deck however far off the boat is; other gangplanks (a ship's Cross) don't.
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
@@ -28,7 +29,7 @@ const SOUND_DOCK = 1794;
 /** The chatbox's name prompt; the client answers with `resume_p_namedialog` (rsprox 697). */
 const SCRIPT_NAME_INPUT = 109;
 const BOAT_TABLE = 166;
-/** Ours: a gangplank is used from a deck anywhere in view, so a boat too far off hears why. */
+/** Ours: a port's gangplank is used from a deck anywhere in view, so a boat too far off hears why. */
 const GANGPLANK_DECK_REACH = 64;
 const TOO_FAR = "The boat isn't close enough for you to be able to disembark here.";
 
@@ -110,6 +111,24 @@ function playerCapacity(owned) {
 function messageBox(player, text) {
   player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+}
+
+/**
+ * The ports' gangplanks and mooring points: the multilocs that turn into a Sailing gangplank with
+ * Board-friend (varbit 19104), not every loc that shares the name.
+ */
+function portGangplankIds() {
+  const total = CacheDefinitions.getCounts().objects;
+  const boardable = new Set();
+  for (let id = 0; id < total; id++) {
+    if (CacheDefinitions.getObject(id)?.actions?.includes("Board-friend")) boardable.add(id);
+  }
+  const ports = [];
+  for (let id = 0; id < total; id++) {
+    const transforms = CacheDefinitions.getObject(id)?.transforms;
+    if (Array.isArray(transforms) && transforms.some((variant) => boardable.has(variant))) ports.push(id);
+  }
+  return ports;
 }
 
 /** Board-friend: boards somebody else's boat, moored at this dock with them aboard. */
@@ -261,12 +280,13 @@ function leaveBoat(player, dock, docked) {
 }
 
 module.exports = {
+  portGangplankIds,
   register(api) {
     content();
     api.onObjectInteraction("Gangplank", { Board: boardBoat.bind(api), "Board-friend": boardFriendsBoat.bind(api), Disembark: disembarkBoat });
     api.onObjectInteraction("Mooring point", { Board: boardBoat.bind(api), "Board-friend": boardFriendsBoat.bind(api), Disembark: disembarkBoat });
     api.onObjectInteraction("Buoy", { Dock: dockAtBuoyOp });
     api.setUsableFromDeck?.(["Gangplank", "Mooring point", "Buoy"]);
-    api.setDeckReach?.(["Gangplank", "Mooring point"], GANGPLANK_DECK_REACH);
+    api.onServerStartup?.(() => api.setDeckReach?.(portGangplankIds(), GANGPLANK_DECK_REACH));
   },
 };

@@ -137,8 +137,7 @@ export class ObjectActionPacketListener {
     // gangplank) are used from the deck when close to the tile under the player.
     if (player.getPrivateArea()?.countsAsMainWorld() && object.getPrivateArea() == null) {
       const source = player.getLocation();
-      const reach = PluginManager.deckReach.get(object.getId())
-        ?? PluginManager.deckReach.get(definition.getName?.() ?? "");
+      const reach = PluginManager.deckReach.get(object.getId());
       // Live answers a land loc clicked from a boat (a tree, a sign) with this (rsprox 901, 347).
       if (reach === undefined && !PluginManager.usableFromDeck.has(definition.getName?.() ?? "")
         && !PluginManager.usableFromDeck.has(object.getId())) {

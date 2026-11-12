@@ -1226,9 +1226,16 @@ test("Disembark with the boat too far from the dock is refused with live's messa
   const hooks = {};
   const plugin = registerPlugin("Gangplank.Sailing");
   require("../plugins/skills/sailing/Gangplank.Sailing").register({
-    onObjectInteraction() {}, setUsableFromDeck() {}, setDeckReach: (locs, tiles) => { hooks.reach = [locs, tiles]; },
+    onObjectInteraction() {}, setUsableFromDeck() {},
+    onServerStartup: (handler) => { hooks.startup = handler; },
+    setDeckReach: (locs, tiles) => { hooks.reach = [locs, tiles]; },
   });
-  assert.deepEqual(hooks.reach, [["Gangplank", "Mooring point"], 64], "used from a deck however far off the boat is");
+  hooks.startup();
+  const [locs, tiles] = hooks.reach;
+  assert.equal(tiles, 64, "a port's gangplank is used from a deck however far off the boat is");
+  assert.equal(locs.length, content().docks.length, "one per port and mooring point");
+  assert.ok(locs.includes(59836), "the Pandemonium's gangplank");
+  for (const ship of [2083, 2412, 34671]) assert.ok(!locs.includes(ship), `a ship's gangplank (${ship}, Cross) keeps the usual reach`);
   const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
   const player = sailor();
   Sailing.giveBoat(player, "raft", "the_pandemonium");

@@ -1033,9 +1033,9 @@ export interface PluginApi {
   /**
    * How far from the player's boat (in tiles) these main-world locs can be used from its deck,
    * instead of the usual reach; clicks from further away get no answer (a Barracuda Trial's
-   * outcrops, thrown at from 18 tiles off). A name covers every loc of that name.
+   * outcrops, thrown at from 18 tiles off).
    */
-  setDeckReach(objectIds: Array<number | string>, tiles: number): void;
+  setDeckReach(objectIds: number[], tiles: number): void;
   /**
    * Main-world locs (by name, or by id) a player on a boat deck can use, within the deck's usual
    * reach (a dock's gangplank, a buoy, a charting spot). Any other land loc clicked from a deck:

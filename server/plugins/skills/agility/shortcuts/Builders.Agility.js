@@ -148,12 +148,14 @@ function stepTowards(from, to) {
 }
 
 /**
- * The underwall tunnels (Yanille, Grand Exchange, Falador): the tunnel sound, then three one-tick
- * legs - into the hole at `enter`, through the wall to `exit`, and out onto `to`. `enter` and `exit`
- * default to the tiles next to each end.
+ * The underwall tunnels (Yanille, Grand Exchange, Falador): the player faces the tunnel for a tick,
+ * then with the tunnel sound crosses in three one-tick legs - into the hole at `enter`, through the
+ * wall to `exit`, and out onto `to`. `enter` and `exit` default to the tiles next to each end.
  */
 function underwall(from, to, enter = stepTowards(from, to), exit = stepTowards(to, from)) {
   return [
+    { face: enter },
+    { wait: 1 },
     { sound: UNDERWALL_SOUND },
     { move: enter, anim: ShortcutAnim.DUCK, speed: [0, 30], ticks: 1 },
     { move: exit, anim: ShortcutAnim.INVISIBLE, speed: [0, 30], ticks: 1 },

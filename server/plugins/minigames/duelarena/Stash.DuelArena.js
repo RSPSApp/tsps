@@ -140,11 +140,15 @@ function restoreTimers(player, timers) {
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
-/** Whatever the fight left goes, and the player's own poison or venom comes back as it was. */
+/**
+ * Whatever the fight left goes, and the player's own poison or venom comes back as it was, ticking again: its task
+ * stopped once the fight start cleared it, and a new poisoning does not submit one while the player is poisoned.
+ */
 function restoreAffliction(player, affliction) {
   player.setPoisonDamage(affliction?.poison ?? 0);
   player.setVenomed(affliction?.venomed === true);
   if (affliction?.venomed) player.setLastVenomDamage(affliction.lastVenom);
+  Common.core.CombatPoisonEffect.resume(player);
 }
 
 function itemOf([id, amount, meta]) {

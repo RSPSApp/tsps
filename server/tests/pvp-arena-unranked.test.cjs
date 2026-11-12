@@ -571,4 +571,7 @@ test("the player's own poison or venom is put aside for the fight and comes back
   assert.equal(a.getLastVenomDamage(), 10);
   assert.equal(b.getPoisonDamage(), 4, "the arena's venom stays behind; their own poison comes back");
   assert.equal(b.isVenomed(), false);
+  tick(40);
+  assert.equal(a.getPoisonDamage(), 8, 'their venom ticks again: a hit of 6, then 8 next');
+  assert.equal(b.getPoisonDamage(), 3, 'their poison ticks again');
 });

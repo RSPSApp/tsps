@@ -1628,5 +1628,13 @@
       {"shell": "BLAMISH_OCHRE_SHELL_3", "item": "POINTED_OCHRE_SNELM"},
       {"shell": "BLAMISH_BLUE_SHELL_3", "item": "POINTED_BRUISE_BLUE_SNELM"}
     ]
+  },
+  "gemSickles": {
+    "$comment": "A gem on a silver sickle (b). XP: Wiki (Emerald/Ruby/Diamond sickle (b)). Prompt, message, the gem's cutting animation and sound: rsprox captures 102 and 1637 (ruby) and 4288 (diamond); the emerald follows them (no capture).",
+    "recipes": [
+      {"gemName": "Emerald", "name": "emerald", "article": "an", "product": "EMERALD_SICKLE_B_", "xp": 20, "seq": 889, "seqName": "human_emeraldcutting"},
+      {"gemName": "Ruby", "name": "ruby", "article": "a", "product": "RUBY_SICKLE_B_", "xp": 26, "seq": 887, "seqName": "human_rubycutting"},
+      {"gemName": "Diamond", "name": "diamond", "article": "a", "product": "DIAMOND_SICKLE_B_", "xp": 32, "seq": 886, "seqName": "human_diamondcutting"}
+    ]
   }
 }

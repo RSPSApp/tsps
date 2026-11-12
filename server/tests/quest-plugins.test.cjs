@@ -2686,8 +2686,13 @@ test('Blood Moon Hallowed preparations make the stew, upgraded flail and stakes 
   interact('Crate', 3177, 7843);
   interact('Crate', 3181, 7841);
   interact('Chest', 3181, 7835);
-  use(ids.SILVER_SICKLE_B_, ids.DIAMOND); choose(2); assert.equal(inventory.contains(ids.DIAMOND), true, 'No preserves crafting materials');
-  use(ids.SILVER_SICKLE_B_, ids.DIAMOND); choose(1);
+  // The diamond sickle is Crafting's (tests/gem-sickles-crafting.test.cjs); the quest says when it can be made.
+  assert.equal(use(ids.SILVER_SICKLE_B_, ids.DIAMOND).handled, false, 'the gem on the sickle is left to Crafting');
+  const sickleRequest = { player, product: ids.DIAMOND_SICKLE_B_, allowed: false };
+  handlers.custom.get('crafting:gem-sickle-allowed').forEach(handler => handler(sickleRequest));
+  assert.equal(sickleRequest.allowed, true, 'the preparations allow the diamond sickle');
+  inventory.deleteNumber(ids.SILVER_SICKLE_B_, 1); inventory.deleteNumber(ids.DIAMOND, 1); inventory.adds(ids.DIAMOND_SICKLE_B_, 1);
+  handlers.custom.get('skills:produced').forEach(handler => handler({ player, itemId: ids.DIAMOND_SICKLE_B_ }));
   interact('Chest', 3175, 7836);
   use(ids.DIAMOND_SICKLE_B_, ids.ENCHANT_DIAMOND);
   use(ids.ENCHANTED_DIAMOND_SICKLE_B_, ids.BLISTERWOOD_LOGS); choose(1);

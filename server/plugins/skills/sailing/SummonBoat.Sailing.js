@@ -59,7 +59,6 @@ const CARGO_WARNING = "It seems there's something in the cargo hold of that boat
 const CARGO_WARNING_BOX = "It seems there's something in the cargo hold of that boat. If you<br>summon the boat, the cargo will be lost.";
 const CARGO_YES = "Yes, summon it without cargo.";
 const CARGO_NO = "No, I'd like to keep my cargo.";
-const PANDEMONIUM_STAGE = 50;
 
 let core;
 let api;
@@ -91,12 +90,14 @@ function summonRefusal(player, boat, dock) {
 }
 
 /**
- * How a summon is paid for and shown, by a tablet or by the spell: `usable` before anything,
- * `pay` uses it up (false when it can't), `cast` plays at the move and `landed` with the message.
+ * How a summon is paid for and shown, by a tablet or by the spell: `usable` before anything (it
+ * sends its own refusal), `near` the line for a dock left behind, `pay` uses it up (false when it
+ * can't), `cast` plays at the move and `landed` with the message.
  */
 function tabletCast(itemId) {
   return {
     usable: (player) => player.getInventory().contains(itemId),
+    near: NOT_NEAR_DOCK,
     // The tablet goes with the boat's move, not with the cast two ticks later (when the captures show it leave the
     // pack): dropping or banking it in between summoned the boat for free and kept the tablet.
     pay: (player) => {
@@ -119,7 +120,8 @@ function tabletCast(itemId) {
 /** The spell: runes and xp at the move, with the cast's animation, graphic and sound. */
 function spellCast() {
   return {
-    usable: () => true,
+    usable: (player) => spellFor(core, SPELL_NAME, SPELL_EXPERIENCE).canCast(player, false),
+    near: SPELL_NOT_NEAR_DOCK,
     pay: (player) => {
       if (!spellFor(core, SPELL_NAME, SPELL_EXPERIENCE).canCast(player, true)) return false;
       player.getSkillManager().addExperiences(core.Skill.MAGIC, SPELL_EXPERIENCE);
@@ -171,6 +173,12 @@ function warnCargo(player, dock, proceed) {
 function summonNow(player, by, dock, slot) {
   const sender = player.getPacketSender();
   const boat = player.getSailing().boats.find((owned) => owned.slot === slot);
+  // Asked again after a cargo warning: the player may have walked away from the dock meanwhile.
+  if (nearbyDock(player)?.id !== dock.id || Sailing.instanceAboard(player)) {
+    player.sendMessage(by.near);
+    sender.sendVarbit(VARBIT_BUSY, 0);
+    return;
+  }
   if (refused(player, by, boat, dock)) return;
   if (!by.pay(player)) {
     sender.sendVarbit(VARBIT_BUSY, 0);
@@ -209,9 +217,17 @@ function spellFor(core, name, experience) {
   return spell;
 }
 
-/** Both boat spells need The Pandemonium done (Wiki; its stage 50). */
-function pandemoniumDone(player) {
-  return (Number(player.getAttribute("quest.pandemonium.stage")) || 0) >= PANDEMONIUM_STAGE;
+/**
+ * Both boat spells need The Pandemonium done (Wiki), unless content lifts the spell's lock
+ * ("magic:spell-unlocked", a league relic), as for the other quest-locked spells.
+ */
+function pandemoniumDone(pluginApi, player, spellName) {
+  const query = { player, key: "pandemonium", complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  if (query.complete === true) return true;
+  const unlock = { player, name: spellName.toLowerCase(), unlocked: false };
+  pluginApi.emitCustomEvent("magic:spell-unlocked", unlock);
+  return unlock.unlocked === true;
 }
 
 /** Whether a spell cast event is for the spell named `name`. */
@@ -223,7 +239,7 @@ function castSpell(event) {
   if (!isSpell(event, SPELL_NAME)) return;
   event.handled = true;
   const { player } = event;
-  if (!pandemoniumDone(player)) {
+  if (!pandemoniumDone(api, player, SPELL_NAME)) {
     player.sendMessage(NO_PANDEMONIUM);
     return;
   }

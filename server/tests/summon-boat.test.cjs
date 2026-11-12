@@ -53,6 +53,9 @@ before(async () => {
     },
     onItemAction: (name, handlers) => { if (name === "Summon boat") actions = handlers; },
     onSpellCast: (handler) => { castSpell = handler; },
+    emitCustomEvent: (name, query) => {
+      if (name === "quest:is-complete" && query.key === "pandemonium") query.complete = query.player.pandemonium !== false;
+    },
     sendMultiChatboxPrompt: (player, question, ...options) => prompts.push({ player, question, options }),
     persistAttribute() {},
   });
@@ -75,7 +78,7 @@ function boat(slot, dock, { focus = "Teleport focus" } = {}) {
 function createPlayer(x, y, boats) {
   const items = [ItemIdentifiers.SUMMON_BOAT];
   const log = [];
-  const attributes = new Map([["quest.pandemonium.stage", 50]]);
+  const attributes = new Map();
   const xp = [];
   const dialogues = [];
   const sender = new Proxy({}, {
@@ -183,7 +186,7 @@ function cast(player, opId = 1) {
 
 test("the Summon Boat spell is refused before The Pandemonium, away from a dock, or with no boat with a focus (rsprox)", () => {
   const early = createPlayer(3059, 2974, [boat(0, "port_sarim")]);
-  early.setAttribute("quest.pandemonium.stage", 10);
+  early.pandemonium = false;
   cast(early);
   assert.deepEqual(early.log, ["message You must have completed Pandemonium to use this spell."]);
 
@@ -206,7 +209,7 @@ test("the spell opens the Summon selection; the choice uses its runes, casts boa
   player.log.length = 0;
   plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 1);
   assert.deepEqual(summoned.location, { kind: "docked", dock: "the_pandemonium" });
-  assert.deepEqual(player.log.filter((line) => !line.startsWith("send")), ["canCast true", "seq 725", "spot 3546", "sound 10900"]);
+  assert.deepEqual(player.log.filter((line) => !line.startsWith("send")), ["canCast false", "canCast false", "canCast true", "seq 725", "spot 3546", "sound 10900"]);
   assert.deepEqual(player.xp, [["MAGIC", 66]]);
   assert.equal(player.items.length, 1, "no tablet used");
   player.log.length = 0;
@@ -282,4 +285,31 @@ test("the spell's Last Boat summons the boat last summoned", () => {
   assert.equal(last.location.dock, "the_pandemonium");
   assert.ok(!player.log.includes("open 934"), "without the selection");
   clearTasks();
+});
+
+test("a summon after the cargo warning needs the player still near that dock", () => {
+  clearTasks();
+  prompts.length = 0;
+  const loaded = boat(1, "port_sarim");
+  loaded.cargo = [{ id: SALVAGE, amount: 1 }];
+  let x = 3059;
+  const player = createPlayer(3059, 2974, [loaded]);
+  player.getLocation = () => new Location(x, 2974, 0);
+  plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 1);
+  player.dialogues[0].entries[1].action.execute();
+  x = 3222;
+  prompts[0].options[1]();
+  assert.equal(loaded.location.dock, "port_sarim");
+  assert.ok(player.log.includes("message You need to be near a dock or mooring point to use this spell."));
+  assert.deepEqual(player.xp, []);
+  clearTasks();
+});
+
+test("without the level or runes the spell refuses at the choice, before any cargo warning", () => {
+  const loaded = boat(1, "port_sarim");
+  loaded.cargo = [{ id: SALVAGE, amount: 1 }];
+  const player = createPlayer(3059, 2974, [loaded]);
+  player.castable = false;
+  plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 1);
+  assert.equal(player.dialogues.length, 0);
 });

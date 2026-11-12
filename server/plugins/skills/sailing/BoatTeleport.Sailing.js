@@ -84,7 +84,11 @@ function teleportBySpell(player, slot) {
     return;
   }
   core.TeleportHandler.confirm(player, landing, () => {
-    if (!spell.canCast(player, true)) {
+    // Asked again after any warning: the boat may have moved, or the player be unable to teleport, meanwhile.
+    const still = landingOf(player, slot);
+    if (!still) return;
+    if (still.getX() !== landing.getX() || still.getY() !== landing.getY() || !core.TeleportHandler.checkReqs(player, landing)
+      || !spell.canCast(player, true)) {
       clearBusy(player);
       return;
     }
@@ -106,7 +110,7 @@ function castSpell(event) {
   if (!isSpell(event, SPELL_NAME)) return;
   event.handled = true;
   const { player } = event;
-  if (!pandemoniumDone(player)) {
+  if (!pandemoniumDone(api, player, SPELL_NAME)) {
     player.sendMessage(NO_PANDEMONIUM);
     return;
   }

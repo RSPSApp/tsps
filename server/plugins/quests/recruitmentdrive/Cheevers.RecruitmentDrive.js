@@ -53,6 +53,8 @@ module.exports = function createCheeversRoom(api, course, ids) {
     SHELVES: [7333, 7334, 7335, 7336, 7337, 7338, 7339, 7340], BURNER: 7332, STONE_DOOR: 7342, KEY: 7346,
   };
   const CHEST_TILE = [2477, 4942];
+  const SPADE_TILE = [2473, 4941];
+  const SPADE_RESPAWN_TICKS = 7;
   const CHEST_FACE = 3;
   const CHEST_CLOSE_TICKS = 300;
   // What each searchable loc holds, by loc id (any of the room's same-id locs).
@@ -106,13 +108,35 @@ module.exports = function createCheeversRoom(api, course, ids) {
   }
 
   function enter(player) {
-    rooms.set(player, { found: new Set(), chest: null, talks: 0 });
+    const room = { found: new Set(), chest: null, talks: 0, spade: null };
+    rooms.set(player, room);
+    laySpade(player, room);
     course.say(player, course.lines(course.variant(V_ENTER)).map((line) => ({ npc: NPC, text: line.text })));
+  }
+
+  /**
+   * The metal spade on the table (2473,4941): there on every entry and back 7 ticks after it is
+   * picked up (ticks 1308-1315). Ours: one per player, as Sir Leye's weapons are.
+   */
+  function laySpade(player, room) {
+    const { Item, Location } = api.core;
+    room.spade = api.getItemOnGroundManager()?.registerLocation?.(player, new Item(ITEM.SPADE, 1),
+      new Location(SPADE_TILE[0], SPADE_TILE[1], 0), player.getPrivateArea(), { goesGlobal: false, despawnDelay: 6000 }) ?? null;
+  }
+
+  function retakeSpade(event) {
+    const room = rooms.get(event.player);
+    if (!room || !room.spade || event.groundItem !== room.spade) return;
+    room.spade = null;
+    course.later(event.player, SPADE_RESPAWN_TICKS, () => {
+      if (rooms.get(event.player) === room && !room.spade) laySpade(event.player, room);
+    });
   }
 
   function clear(player) {
     const room = rooms.get(player);
     rooms.delete(player);
+    if (room?.spade) api.getItemOnGroundManager()?.deregister?.(room.spade);
     if (room?.chest) closeChest(player, room);
     if (player.getInterfaceId?.() === 392) player.getPacketSender().sendInterfaceRemoval();
   }
@@ -442,6 +466,7 @@ module.exports = function createCheeversRoom(api, course, ids) {
       event.handled = pourInto(player, ITEM.TIN_ORE_POWDER, mould, mould === ITEM.MOULD_COPPER ? ITEM.MOULD_UNHEATED : ITEM.MOULD_TIN);
       return;
     }
+    // The capture prises it with the chisel (2251) and the knife (2708); the wire is the Wiki's.
     if ([ITEM.KNIFE, ITEM.CHISEL, ITEM.WIRE].some((tool) => pair(tool, ITEM.MOULD_COMPLETE))) {
       replace(player, slotOf(player, ITEM.MOULD_COMPLETE), ITEM.KEY);
       give(player, ITEM.KEY_MOULD);
@@ -532,6 +557,7 @@ module.exports = function createCheeversRoom(api, course, ids) {
   api.onItemOnItem(itemOnItem);
   api.onItemAction("Nitrous oxide", { Open: openVial });
   api.onItemAction("Alchemical notes", { Read: readNotes });
+  api.onGroundItemPickup(retakeSpade);
 
   return { ITEM, rooms };
 };

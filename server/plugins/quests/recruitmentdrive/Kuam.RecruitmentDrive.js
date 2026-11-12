@@ -132,7 +132,10 @@ module.exports = function createKuamRoom(api, course, ids) {
   }
 
   function playerDied({ player }) {
-    if (course.inRoom(player, ROOM)) course.abandon(player);
+    // Death hands back the kept items first (PlayerDeath); the room's weapons stay in the grounds.
+    if (!course.inRoom(player, ROOM)) return;
+    course.clearItems(player);
+    course.abandon(player);
   }
 
   course.defineRoom(ROOM, { enter, clear });

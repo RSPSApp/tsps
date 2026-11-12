@@ -201,9 +201,11 @@ module.exports = function registerRecruitmentDriveQuest(api) {
 
   function handleLogin({ player }) {
     if (quest.getStage(player) >= STAGE_TESTING) player.getPacketSender().sendVarbit(course.SPOKE_TO_TIFFY_VARBIT, 1);
-    // Ours: a run never outlives the session; a player who logs in on the grounds is put by Sir
-    // Tiffy, their room's items gone.
-    if (course.inGrounds(player.getLocation())) {
+    // Ours: a run never outlives the session; a recruit who logs in on the grounds is put by Sir
+    // Tiffy, their room's items gone. Only a recruit can be there with nothing but room items
+    // (the trip needs an empty inventory); anyone else is left as they are.
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_STARTED && stage < STAGE_COMPLETE && course.inGrounds(player.getLocation())) {
       course.clearItems(player);
       const tile = course.FALADOR_RETURN;
       player.moveTo(new Location(tile.x, tile.y, tile.z));

@@ -473,7 +473,17 @@ test("Miss Cheevers: the captured solve, spade to key, opens the exit door (tick
   await choose(f, "YES");
   assert.ok(has(f, I.CUPRIC_SULPHATE));
   assert.equal(varbit(f, 673), 1);
-  give(I.SPADE); give(I.WATER, 2); give(I.GYPSUM); give(I.TIN); give(I.COPPER_ORE_POWDER); give(I.TIN_ORE_POWDER);
+  give(I.WATER, 2); give(I.GYPSUM); give(I.TIN); give(I.COPPER_ORE_POWDER); give(I.TIN_ORE_POWDER);
+  // The spade on the table is the player's own, there on entry (review: the shared spawn never came back).
+  const spadeAt = new core.Location(2473, 4941, 0);
+  const own = () => core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), I.SPADE, spadeAt, f.player.getPrivateArea());
+  assert.ok(own(), "a spade for the player on the table");
+  await f.connection.dispatch([{ type: "ground_item_action", itemId: I.SPADE, x: 2473, y: 4941, option: "Take" }]);
+  ticks(f, 8);
+  assert.ok(has(f, I.SPADE), "picked up");
+  assert.equal(own(), null);
+  ticks(f, 7);
+  assert.ok(own(), "back 7 ticks after the pickup (ticks 1308-1315)");
   await useOnLoc(f, I.SPADE, 7332, 2472, 4940);
   assert.ok(has(f, I.SPADE_NO_HANDLE) && has(f, I.ASHES));
   await useOnLoc(f, I.SPADE_NO_HANDLE, 7342, 2477, 4940);
@@ -549,7 +559,7 @@ test("the entrance portal quits: YES moves the player by Sir Tiffy the tick afte
   assert.ok(f.tick - chose <= 7);
 });
 
-test("the fifth room's line closes into the finish: Falador 3 ticks later, Sir Tiffy's welcome and the quest 1 after (ticks 3586-3600)", async (t) => {
+test("the fifth room's line closes into the finish: Falador 3 ticks later, Sir Tiffy's welcome 4 after that (ticks 3586-3593)", async (t) => {
   const f = actor(t);
   intoGrounds(f, [ROOM.hynn, ROOM.kuam, ROOM.table, ROOM.ren, ROOM.tinley]);
   const { course } = drive();
@@ -565,10 +575,33 @@ test("the fifth room's line closes into the finish: Falador 3 ticks later, Sir T
   const closed = f.tick;
   ticks(f, 3);
   assert.deepEqual(at(f), FALADOR_RETURN.slice(0, 2));
+  ticks(f, 3);
+  assert.equal(shown(f), null, "nothing yet 6 ticks after the close");
   tick(f);
-  assert.equal(f.tick, closed + 4);
+  assert.equal(f.tick, closed + 7, "tick 3593: 4 ticks after the move (3589)");
   assert.equal(shown(f)?.text, "I believe I've managed to pass the tests!", JSON.stringify({ said: f.said.slice(-4), tick: f.tick, closed, run: !!drive().course.run(f.player) }));
   await finishChat(f);
   assert.equal(quest().getStage(f.player), 4, "complete");
   assert.ok(f.messages.some((m) => m.text === "Your respawn point has been left alone, but you can now speak to Sir Tiffy to change it to Falador."));
+});
+
+test("a login on the grounds moves a recruit out with the room's items, and leaves anyone else alone (review)", async (t) => {
+  const recruit = actor(t, { stage: 2, items: [5605], at: [2460, 4979, 0] });
+  PM.emitPlayerLogin({ player: recruit.player, username: recruit.player.getUsername(), isNewAccount: false });
+  assert.deepEqual(at(recruit), FALADOR_RETURN.slice(0, 2));
+  assert.equal(recruit.player.getInventory().getAmount(5605), 0);
+  const other = actor(t, { stage: 4, items: [core.ItemIdentifiers.COINS, 4151], at: [2460, 4979, 0] });
+  PM.emitPlayerLogin({ player: other.player, username: other.player.getUsername(), isNewAccount: false });
+  assert.deepEqual(at(other), [2460, 4979]);
+  assert.equal(other.player.getInventory().getAmount(4151), 1, "a finished player keeps their whip");
+});
+
+test("dying in Sir Leye's room ends the run and keeps the steel weapons in the grounds (review)", async (t) => {
+  const f = actor(t);
+  intoGrounds(f, [ROOM.kuam, ROOM.table, ROOM.ren, ROOM.hynn, ROOM.tinley]);
+  await finishChat(f);
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.STEEL_SHORTSWORD, 1), true);
+  PM.emitPlayerDeath({ player: f.player, killer: null, handled: false });
+  assert.equal(drive().course.run(f.player), null);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEEL_SHORTSWORD), 0);
 });

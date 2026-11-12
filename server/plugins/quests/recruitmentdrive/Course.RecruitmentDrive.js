@@ -21,7 +21,7 @@
 //     moves the player the tick after, without a fade, and Sir Tiffy's failure lines follow 5 ticks
 //     later (ticks 1776-1789, 2945-2954).
 //   - Passing the fifth room: its observer's "all five" line is closed, the screen fades out, 3
-//     ticks later the player is by Sir Tiffy and a tick after that the finishing conversation plays
+//     ticks later the player is by Sir Tiffy and 4 ticks after that the finishing conversation plays
 //     with the fade in (ticks 3584-3600).
 //   - Inside, minimap_state (6719) is 2; it goes back to 0 as the closing conversation by Sir Tiffy
 //     ends (ticks 339, 468, 3593).
@@ -426,7 +426,7 @@ module.exports = function createCourse(api, hooks) {
       clearItems(player);
       teleport(player, [FALADOR_RETURN.x, FALADOR_RETURN.y, FALADOR_RETURN.z]);
     });
-    later(player, 4, () => {
+    later(player, 7, () => {
       clearVarbits(player, SIDE_VARBITS.filter((id) => !PASSED_VARBITS.includes(id)));
       player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);
       fade(player, false);

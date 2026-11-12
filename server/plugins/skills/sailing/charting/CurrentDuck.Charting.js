@@ -4,12 +4,16 @@
 //   Release: +0 the helm let go of; +1 the placing animation; +2 "You release your current duck...",
 //   sailing_charting_current_duck_reset set, current_hint_arrow 5, the duck (15152) at the release
 //   spot with a hint arrow, the item gone; +3 "Quack!" with area sound 413. Then a tile a tick
-//   along the current's route (data/charting.json `route`, as captured).
+//   along the current's route (data/charting.json `route`, as captured). The route is a chain of legs,
+//   each diagonal steps then straight ones, and the duck quacks again ("Quack!", sound 413) as it
+//   sets off on each leg.
 //   Stop: the duck turns into its stopped form (15153), "Your current duck comes to a stop.",
-//   "Quack! Quack! Quack!" and area sound 413 twice.
+//   "Quack! Quack! Quack!" and area sound 413 twice, the second 12 client cycles later; the same
+//   every 10 ticks until it is collected.
 //   Collect: +1 the helm let go of and the pick-up animation; +2 the charting, the duck back in
 //   the inventory with its object box, the variables back to 0.
 // No duck marker within reach: "You don't spot any currents worth tracking."
+// Inspect: the duck's object box. Dismiss: the duck flies away, back to the boat's tools compartment.
 const common = require("./Common.Charting");
 
 const ITEM_DUCK = 31805;
@@ -33,6 +37,9 @@ const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 const QUEUED_STEPS = 8;
 const DUCK_TOOL_SLOT = 2;
 const STOPPED_LIFETIME_MS = 120000; // OSRS Wiki Current duck: two minutes after stopping.
+const STOPPED_QUACK_TICKS = 10;
+/** The stop's second quack sound, in client cycles. */
+const SECOND_QUACK_DELAY = 12;
 const RESET_ATTRIBUTE = "charting:duck-reset-at";
 
 const RELEASED = "<col=3366ff>You release your current duck and he begins tracking the currents...</col>";
@@ -40,6 +47,9 @@ const STOPPED = "<col=3366ff>Your current duck comes to a stop.</col>";
 const NOTHING = "You don't spot any currents worth tracking.";
 const COLLECTED = "The duck recognises your boat and climbs aboard. He shares the secrets of the currents he travelled on with you.";
 const NOT_ABOARD = "You need to be on your boat to release the duck.";
+const INSPECT = "This duck can be used to chart the currents of the sea. Place him in an area where you wish to chart currents, then collect the duck from wherever he ends up.";
+// OSRS Wiki Transcript:Current duck.
+const DISMISSED = "You dismiss the duck and he flies away.";
 
 /** Ducks out at sea: player -> { spot, npc, steps, stopped }. */
 const ducks = new Map();
@@ -86,12 +96,35 @@ function routeSteps(route) {
   return steps;
 }
 
-function quack(duck, text, times) {
-  duck.npc.forceChat(text);
-  const at = duck.npc.getLocation();
-  for (const player of [duck.player]) {
-    for (let i = 0; i < times; i++) player.getPacketSender().sendAreaSound(SOUND_QUACK, at.getX(), at.getY(), at.getZ(), 1, 0, SOUND_RANGE);
+/**
+ * The steps that start a new leg of the route (a leg is diagonal steps, then straight ones): a
+ * diagonal after a straight step, or a turn between two steps of the same kind. Index into `steps`.
+ */
+function legStarts(route, steps) {
+  const starts = new Set();
+  const direction = (i) => {
+    const [fromX, fromY] = i === 0 ? route[0] : steps[i - 1];
+    return [steps[i][0] - fromX, steps[i][1] - fromY];
+  };
+  for (let i = 1; i < steps.length; i++) {
+    const [ax, ay] = direction(i - 1);
+    const [bx, by] = direction(i);
+    if (ax === bx && ay === by) continue;
+    const diagonalBefore = ax !== 0 && ay !== 0;
+    const diagonal = bx !== 0 && by !== 0;
+    if (diagonal || !diagonalBefore) starts.add(i);
   }
+  return starts;
+}
+
+/** The duck's quack: its overhead text and the area sound, `times` over (each later one delayed). */
+function quack(duck, text, times, at = duck.npc.getLocation()) {
+  duck.npc.forceChat(text);
+  const x = at.getX?.() ?? at[0];
+  const y = at.getY?.() ?? at[1];
+  const z = at.getZ?.() ?? 0;
+  const sender = duck.player.getPacketSender();
+  for (let i = 0; i < times; i++) sender.sendAreaSound(SOUND_QUACK, x, y, z, 1, i * SECOND_QUACK_DELAY, SOUND_RANGE);
 }
 
 function later(ticks, action) {
@@ -141,7 +174,8 @@ function release(player, spot) {
     sender.sendVarbit(VARBIT_HINT_ARROW, HINT_ARROW_DUCK);
     sender.sendEntityHint(npc);
   }
-  const duck = { player, spot, npc, steps: routeSteps(spot.route), stopped: false };
+  const steps = routeSteps(spot.route);
+  const duck = { player, spot, npc, steps, legs: legStarts(spot.route, steps), stopped: false };
   // Remember the remaining journey as well as its stopped lifetime across a relog/restart.
   player.setAttribute(RESET_ATTRIBUTE, Date.now() + (duck.steps.length + 1) * 600 + STOPPED_LIFETIME_MS);
   if (!player.getSailing().tools.includes(DUCK_TOOL_SLOT)) player.getSailing().tools.push(DUCK_TOOL_SLOT);
@@ -168,12 +202,20 @@ function swim(duck) {
   };
   feed();
   const [endX, endY] = duck.steps.at(-1) ?? duck.spot.route[0];
+  let leg = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1); }
     execute() {
       if (ducks.get(duck.player) !== duck || duck.npc.isRegistered?.() === false) return this.stop();
       feed();
       const at = duck.npc.getLocation();
+      // On the tile a new leg sets off from: the quack as it moves on.
+      for (let i = leg; i < duck.steps.length; i++) {
+        if (duck.steps[i][0] !== at.getX() || duck.steps[i][1] !== at.getY()) continue;
+        leg = i + 1;
+        if (duck.legs.has(i + 1)) quack(duck, "Quack!", 1);
+        break;
+      }
       if (at.getX() !== endX || at.getY() !== endY) return;
       this.stop();
       stop(duck);
@@ -189,13 +231,17 @@ function stop(duck) {
   duck.player.setAttribute(RESET_ATTRIBUTE, Date.now() + STOPPED_LIFETIME_MS);
   sendReset(duck.player);
   const { Task, TaskManager } = common.core();
+  let ticks = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, duck, false); }
     execute() {
       if (ducks.get(duck.player) !== duck) return this.stop();
-      if (Date.now() < resetAt(duck.player)) return;
-      finish(duck.player, duck);
-      this.stop();
+      if (Date.now() >= resetAt(duck.player)) {
+        finish(duck.player, duck);
+        this.stop();
+        return;
+      }
+      if (++ticks % STOPPED_QUACK_TICKS === 0) quack(duck, "Quack! Quack! Quack!", 2);
     }
   })());
 }
@@ -251,6 +297,20 @@ function finish(player, duck) {
   sender.clearHintArrow();
 }
 
+function inspect({ player }) {
+  common.inspect(player, ITEM_DUCK, INSPECT);
+}
+
+/** The duck flies back to the boat: out of the inventory and into the tools compartment. */
+function dismiss({ player, slot }) {
+  const item = player.getInventory().getItems()[slot];
+  if (item?.getId() !== ITEM_DUCK) return;
+  player.getInventory().deleteAtSlot(slot, 1);
+  const tools = player.getSailing().tools;
+  if (!tools.includes(DUCK_TOOL_SLOT)) tools.push(DUCK_TOOL_SLOT);
+  player.sendMessage(DISMISSED);
+}
+
 function resetAt(player) {
   const value = player.getAttribute(RESET_ATTRIBUTE);
   return Number.isFinite(value) && value > 0 ? value : 0;
@@ -294,7 +354,7 @@ function onLogout({ player }) {
 function attach(api) {
   common.init(api);
   api.persistAttribute(RESET_ATTRIBUTE, 0);
-  api.onItemAction("Current duck", { "Track-current": trackCurrent });
+  api.onItemAction("Current duck", { "Track-current": trackCurrent, Inspect: inspect, Dismiss: dismiss });
   api.onNpcRoute(widenCollectRange);
   api.onNpcInteraction("Current duck", { Collect: collect });
   api.onPlayerLogout(onLogout);
@@ -307,5 +367,8 @@ module.exports.ducks = ducks;
 module.exports.trackCurrent = trackCurrent;
 module.exports.collect = collect;
 module.exports.routeSteps = routeSteps;
+module.exports.legStarts = legStarts;
+module.exports.INSPECT = INSPECT;
+module.exports.DISMISSED = DISMISSED;
 module.exports.NOTHING = NOTHING;
 module.exports.RESET_ATTRIBUTE = RESET_ATTRIBUTE;

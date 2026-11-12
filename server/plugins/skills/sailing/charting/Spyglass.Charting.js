@@ -7,8 +7,11 @@
 //   then the overlay fades out, three ticks later the camera and screen come back, and two ticks
 //   after that the view is charted.
 // Anywhere else: "There isn't anything nearby worth looking at." The shots are each view's own, as
-// captured (data/charting.json `view`).
+// captured (data/charting.json `view`). Inspect: the spyglass's object box.
 const common = require("./Common.Charting");
+
+const ITEM_SPYGLASS = 31803;
+const INSPECT = "This spyglass can be used to observe specific points of interest throughout the seas. These observations will then be added to your sea charts.";
 
 const SEQ_TELESCOPE = 13301; // human_sailing_charting_telescope01
 const NOTHING_NEARBY = "There isn't anything nearby worth looking at.";
@@ -142,7 +145,10 @@ function onLogout({ player }) {
 
 function attach(api) {
   common.init(api);
-  api.onItemAction("Spyglass", { "Look-through": lookThrough });
+  api.onItemAction("Spyglass", {
+    "Look-through": lookThrough,
+    Inspect: ({ player }) => common.inspect(player, ITEM_SPYGLASS, INSPECT),
+  });
   api.onPlayerLogout?.(onLogout);
 }
 
@@ -151,3 +157,4 @@ module.exports.viewNear = viewNear;
 module.exports.lookThrough = lookThrough;
 module.exports.viewing = viewing;
 module.exports.NOTHING_NEARBY = NOTHING_NEARBY;
+module.exports.INSPECT = INSPECT;

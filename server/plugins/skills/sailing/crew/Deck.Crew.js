@@ -4,7 +4,9 @@
 // show Command to the captain (sidepanel role 10). The sidepanel lists them; each goes back to
 // the job they had (Wiki: crew remember their jobs), and the idle ones wander the deck. Leaving
 // takes them off; disembarking at a dock leaves the first slot's crewmate waiting on the docks
-// (varbit 19503) while the player is ashore.
+// (varbit 19503) while the player is ashore. Crew management aboard changes the crew there too:
+// a crewmate cleared from the crew stops work and leaves the side panel at once, and leaves the
+// deck when the interface closes (rsprox, clearing the crew for a Barracuda Trial).
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
 const assign = require("./Assign.Crew");
@@ -21,6 +23,12 @@ const TOO_MANY = "One or more members of your crew cannot board this boat due to
 const SIDEPANEL_GROUP = 937;
 const CREW_RADIO_BUTTONS = 38;
 const VARBIT_CREW_PLAYER_VIEW = 19234;
+const CREW_MANAGEMENT = 938;
+
+/** Crewmates taken off a boat's crew while it sails, still on deck until crew management closes. */
+const leaving = new Map();
+/** Each boat's wandering task, so a crew that empties and refills runs one. */
+const wanderers = new Map();
 
 let pluginApi;
 
@@ -47,22 +55,9 @@ function bringAboard(player, boat, owned) {
     player.getPacketSender().sendTypedMessage(common.core().ChatType.SPAM, TOO_MANY);
   }
   const members = [];
-  for (let slot = 0; slot < common.MAX_SLOTS && members.length < capacity; slot++) {
-    const crew = common.byId(state.slots[slot]);
-    if (!crew || crew.shipNpc < 0) continue;
-    const npc = pluginApi.spawnNpc({
-      id: crew.shipNpc,
-      x: boat.deckBaseX + spec.boardingTile.x,
-      y: boat.deckBaseY + spec.boardingTile.y,
-      z: 0,
-      owner: player,
-    });
-    if (!npc) continue;
-    // Crew walk through the players and each other on a crowded deck, as followers do, or one
-    // standing in the way would hold them off their job until it moved.
-    npc.setFlag?.(common.core().NPC.WALK_THROUGH_ENTITIES_FLAG, true);
-    deck.enter(npc);
-    members.push({ slot, crew, npc, position: state.positions[slot] });
+  for (const slot of crewSlots(state, capacity)) {
+    const member = spawnMember(player, boat, spec, deck, state, slot);
+    if (member) members.push(member);
   }
   common.setCrewAboard(boat, members);
   for (const member of members) member.position = validPosition(owned, member);
@@ -73,6 +68,109 @@ function bringAboard(player, boat, owned) {
   sendSidepanel(player, members);
   for (const member of members) assign.startJob(player, boat, member, { resumed: true });
   if (members.length) wander(player, boat);
+}
+
+/** The slots whose crewmates sail: the first filled ones, as many as the boat holds (Wiki). */
+function crewSlots(state, capacity) {
+  const slots = [];
+  for (let slot = 0; slot < common.MAX_SLOTS && slots.length < capacity; slot++) {
+    const crew = common.byId(state.slots[slot]);
+    if (crew && crew.shipNpc >= 0) slots.push(slot);
+  }
+  return slots;
+}
+
+/** A crewmate's ship NPC on the boarding tile. */
+function spawnMember(player, boat, spec, deck, state, slot) {
+  const crew = common.byId(state.slots[slot]);
+  const npc = pluginApi.spawnNpc({
+    id: crew.shipNpc,
+    x: boat.deckBaseX + spec.boardingTile.x,
+    y: boat.deckBaseY + spec.boardingTile.y,
+    z: 0,
+    owner: player,
+  });
+  if (!npc) return undefined;
+  // Crew walk through the players and each other on a crowded deck, as followers do, or one
+  // standing in the way would hold them off their job until it moved.
+  npc.setFlag?.(common.core().NPC.WALK_THROUGH_ENTITIES_FLAG, true);
+  deck.enter(npc);
+  return { slot, crew, npc, position: state.positions[slot] };
+}
+
+/**
+ * The crew changed (crew management) while the player sails their boat. Crewmates no longer in
+ * the sailing slots stop work and leave the side panel at once; their NPCs leave the deck when
+ * the interface closes. One moved to another slot sails on from there, at that slot's job.
+ */
+function crewChanged({ player }) {
+  const { Sailing } = common.core();
+  const boat = Sailing.instanceAboard(player);
+  const owned = boat && Sailing.ownedOf(boat);
+  if (!owned) return;
+  const state = common.state(player);
+  const sailing = new Set(crewSlots(state, assign.crewCapacity(owned)).map((slot) => state.slots[slot]));
+  const staying = [];
+  for (const member of common.crewAboard(boat)) {
+    const slot = state.slots.indexOf(member.crew.id);
+    if (!sailing.has(member.crew.id)) {
+      assign.stopJob(player, boat, member);
+      leaving.set(boat, [...(leaving.get(boat) ?? []), member.npc]);
+      continue;
+    }
+    if (slot !== member.slot || state.positions[slot] !== member.position) {
+      assign.stopJob(player, boat, member);
+      member.slot = slot;
+      member.position = state.positions[slot];
+      assign.startJob(player, boat, member, { resumed: true });
+    }
+    staying.push(member);
+  }
+  staying.sort((a, b) => a.slot - b.slot);
+  common.setCrewAboard(boat, staying);
+  sendSidepanel(player, staying);
+  if (player.getInterfaceId?.() !== CREW_MANAGEMENT) settleCrew(player, boat);
+}
+
+/**
+ * The deck catches up with the crew: those taken off leave, and (ours) crewmates newly in the
+ * sailing slots come aboard on the boarding tile, as boarding brings them.
+ */
+function settleCrew(player, boat) {
+  for (const npc of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
+  leaving.delete(boat);
+  const { BoatManager, Sailing } = common.core();
+  const owned = Sailing.instanceAboard(player) === boat ? Sailing.ownedOf(boat) : undefined;
+  const spec = BoatManager.getSpec(boat);
+  const deck = BoatManager.getDeck(boat);
+  if (!owned || !spec || !deck) return;
+  const state = common.state(player);
+  const members = [...common.crewAboard(boat)];
+  const joined = [];
+  for (const slot of crewSlots(state, assign.crewCapacity(owned))) {
+    if (members.some((member) => member.slot === slot)) continue;
+    const member = spawnMember(player, boat, spec, deck, state, slot);
+    if (!member) continue;
+    member.position = validPosition(owned, member);
+    members.push(member);
+    joined.push(member);
+  }
+  if (!joined.length) return;
+  members.sort((a, b) => a.slot - b.slot);
+  common.setCrewAboard(boat, members);
+  common.update(player, (crew) => {
+    for (const member of joined) crew.positions[member.slot] = member.position;
+  });
+  sendSidepanel(player, members);
+  for (const member of joined) assign.startJob(player, boat, member, { resumed: true });
+  wander(player, boat);
+}
+
+/** Crew management closed: the deck catches up with what changed there. */
+function crewManagementClosed({ player, interfaceId }) {
+  if (interfaceId !== CREW_MANAGEMENT) return;
+  const boat = common.core().Sailing.instanceAboard(player);
+  if (boat) settleCrew(player, boat);
 }
 
 /** The sidepanel's crew list: who is aboard in each slot, and where they work. */
@@ -92,12 +190,16 @@ function walkableTiles(boat, owned) {
 /** Idle crewmates walk the deck and say something now and then, for as long as the boat sails. */
 function wander(player, boat) {
   const { BoatManager, Task, TaskManager } = common.core();
-  TaskManager.submit(new (class extends Task {
+  if (wanderers.has(boat)) return;
+  const task = new (class extends Task {
     constructor() { super(1, boat, false); }
     execute() {
       const members = common.crewAboard(boat);
       const owned = common.core().Sailing.instanceAboard(player) === boat ? common.core().Sailing.activeBoat(player) : undefined;
-      if (!BoatManager.getSpec(boat) || !members.length || !owned) return this.stop();
+      if (!BoatManager.getSpec(boat) || !members.length || !owned) {
+        if (wanderers.get(boat) === task) wanderers.delete(boat);
+        return this.stop();
+      }
       for (const member of members) {
         if (member.position !== POSITION.IDLE || member.walk) continue;
         if (Math.random() < CHATTER_CHANCE) lines.say(member.npc, member.crew, "idle");
@@ -110,7 +212,9 @@ function wander(player, boat) {
         if (target) common.walkTo(member.npc, target.x, target.y);
       }
     }
-  })());
+  })();
+  wanderers.set(boat, task);
+  TaskManager.submit(task);
 }
 
 /** A tick after boarding, once the deck is in place (as the sidepanel waits). */
@@ -126,6 +230,9 @@ function onBoarded({ player, boat, owned }) {
 
 /** The crew leave with the boat; disembarking at a dock leaves the first slot's crewmate there. */
 function onLeft({ player, boat, reason }) {
+  for (const npc of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
+  leaving.delete(boat);
+  wanderers.delete(boat);
   const members = common.crewAboard(boat);
   if (!members.length && reason !== "disembark") return;
   // The boat has gone: nothing is left to stop or lower.
@@ -163,6 +270,8 @@ function attach(api) {
   api.onCustomEvent("sailing:boarded", onBoarded);
   api.onCustomEvent("sailing:left", onLeft);
   api.onInterfaceActionClick(switchCrewView);
+  api.onCustomEvent("sailing:crew-changed", crewChanged);
+  api.onCustomEvent("interface:closed", crewManagementClosed);
 }
 
 module.exports = attach;

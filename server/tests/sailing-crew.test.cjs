@@ -865,3 +865,87 @@ test("logging out with crew carrying crates removes them (review)", () => {
   assert.equal(carriers(player).length, 0, "no carrier left behind");
   assert.equal(portTasks.crewAmount(player, 0), 0);
 });
+
+function closeCrewManagement(player) {
+  player.interfaceId = -1;
+  PluginManager.emitCustomEvent("interface:closed", { player, interfaceId: 938 });
+}
+
+test("clearing a slot aboard: off the side panel at once, off the deck when crew management closes (rsprox)", () => {
+  const player = captain({ level: 99 });
+  const boat = boardSkiff(player, [JENKINS, JIM]);
+  try {
+    const jim = common.crewAboard(boat).find((member) => member.crew.id === JIM);
+    registrar.openCrewManagement(player);
+    registrar.clear(player, 1);
+    assert.equal(player.varbits.get(VARBIT.SLOT0 + 1), 0);
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0 + 1), 0, "the side panel's slot clears the same tick");
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0), JENKINS, "the rest of the crew stays");
+    assert.deepEqual(common.crewAboard(boat).map((member) => member.crew.id), [JENKINS], "no longer crew: a trial master takes the boat");
+    assert.ok(jim.npc.isRegistered(), "still on deck while the interface is open");
+    assert.equal(player.varbits.get(VARBIT.VISIBLE_JIM), 2, "not back at the Pandemonium while the boat sails");
+    closeCrewManagement(player);
+    assert.ok(!jim.npc.isRegistered(), "gone from the deck as crew management closes");
+    assert.equal(common.crewAboard(boat).length, 1);
+  } finally {
+    Sailing.disembark(player, "the_pandemonium");
+  }
+});
+
+test("clearing the whole crew aboard leaves an empty deck, and a crewmate at the helm gives it up", () => {
+  const player = captain({ level: 99 });
+  const boat = boardSkiff(player, [JENKINS, JIM]);
+  try {
+    const owned = Sailing.activeBoat(player);
+    const [first] = common.crewAboard(boat);
+    assign.setPosition(player, boat, first, assign.helmJob(owned).position);
+    tick(10);
+    assert.equal(boat.helmCrew, first.npc, "at the helm");
+    const npcs = common.crewAboard(boat).map((member) => member.npc);
+    registrar.openCrewManagement(player);
+    registrar.clear(player, 0);
+    registrar.clear(player, 1);
+    assert.equal(boat.helmCrew, undefined, "the helm is free the moment they're cleared");
+    assert.equal(common.crewAboard(boat).length, 0);
+    closeCrewManagement(player);
+    assert.ok(npcs.every((npc) => !npc.isRegistered()));
+  } finally {
+    Sailing.disembark(player, "the_pandemonium");
+  }
+  assert.equal(player.varbits.get(VARBIT.ON_DOCK), 0, "nobody left to wait on the docks");
+});
+
+test("assigning aboard: a new crewmate joins the deck when crew management closes; moved ones keep sailing", () => {
+  const player = captain({ level: 99 });
+  const boat = boardSkiff(player, [JENKINS, JIM]);
+  try {
+    recruited(player, ADA);
+    const jim = common.crewAboard(boat).find((member) => member.crew.id === JIM);
+    registrar.openCrewManagement(player);
+    // Jim moves into Jenkins's slot: Jenkins is off the crew, Jim sails on from slot 1.
+    registrar.assign(player, 0, JIM);
+    assert.deepEqual(common.crewAboard(boat).map((member) => [member.crew.id, member.slot]), [[JIM, 0]]);
+    assert.equal(jim.npc.isRegistered(), true, "the same crewmate, not a new NPC");
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0), JIM);
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0 + 1), 0);
+    registrar.assign(player, 1, ADA);
+    assert.equal(common.crewAboard(boat).length, 1, "a new crewmate waits for the interface to close");
+    closeCrewManagement(player);
+    const aboard = common.crewAboard(boat);
+    assert.deepEqual(aboard.map((member) => [member.crew.id, member.slot]), [[JIM, 0], [ADA, 1]]);
+    assert.equal(BoatManager.getBoatAboard(aboard[1].npc), boat, "on the deck");
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0 + 1), ADA);
+    assert.equal(aboard.filter((member) => member.npc.getId() === 15343).length, 0, "Jenkins has left");
+  } finally {
+    Sailing.disembark(player, "the_pandemonium");
+  }
+});
+
+test("crew changes made ashore leave the boat's crew alone until boarding", () => {
+  const player = captain({ level: 99 });
+  recruited(player, JIM);
+  registrar.openCrewManagement(player);
+  registrar.assign(player, 0, JIM);
+  closeCrewManagement(player);
+  assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0) ?? 0, 0, "no side panel crew ashore");
+});

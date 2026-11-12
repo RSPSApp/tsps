@@ -30,7 +30,7 @@ Two captains or channel owners in the Clan Wars building right-click each other 
 choose Challenge. Reciprocal requests open the native setup interface. The offered
 configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau**;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap and supported mode are negotiable. Other combat and arena controls are hidden;
+The team cap, supported mode and the bounded restrictions described below are negotiable. Other combat and arena controls are hidden;
 objective mode selections are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -73,7 +73,7 @@ choices where no exact team recording was available. Both-empty ends without a w
 there is no guessed reward or penalty. Cache collision verifies separation and reachability,
 but does not establish official server placement or cleanup policy.
 
-Other arenas, adjustable combat restrictions, King-of-the-Hill/Oddskull
+Other arenas, the remaining combat restrictions, King-of-the-Hill/Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
 ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
 restriction avoids introducing an unverified ammunition-return implementation. No dangerous
@@ -236,3 +236,54 @@ Jail adjacency, lethal HP and an overlapping-coordinate visibility checkpoint ar
 supplied setup. The transport is inert and no rendered-client or natural walking,
 combat RNG, login or camera-angle parity claim follows from these checks. Actual
 runtime outcomes and independent acceptance belong to the PR evidence.
+
+
+## Negotiated melee restrictions
+
+Wiki Clan Wars revision 15379109 and the pinned revision-242 cache agree on food
+and drinks Allowed/Disabled, prayers All allowed/No overhead icons/Disabled, and
+special attacks Allowed/No Staff of the Dead/Disabled. This slice offers food and
+drinks values 0/1, prayer values 0/1/2, and special-attack values 0/2. The Staff-only
+value 1 remains deferred and is refused/reset to the server offer. Melee stays
+allowed, ranged stays disabled and magical combat stays disabled; no ammunition,
+charge or item restoration rule is added.
+
+The native setup uses interface 91's food/drinks/prayer/specialattacks containers
+23–26 and dropdowns 38–41. Their label/tooltips come from enum pairs 921/922,
+923/924, 919/920 and 925/926 respectively. Script 2877 creates a highlight child 0
+and one option child per value at index + 1. Script 2878 calls 573 to update the
+client's optimistic varbit; unsupported values therefore transmit too and are
+reset. Changing any agreed term preserves all other terms, clears both acceptances
+and applies the existing opponent-change delay. Both captain confirmation and
+member entry confirmation show the complete frozen offer.
+
+Restrictions apply from entry, including preparation and jail, until removal.
+This participant-wide boundary is an implementation policy where no relevant team
+recording supplies exact staging/jail exceptions. Food and potion producers keep
+ownership of effects, timers, dose/leftover items and metadata; a refusal occurs
+before those mutate. No Food follows the existing canonical Food and food-permission
+potion classification, including healing drinks that already request food permission.
+Food-owned Drink items are also covered by No Drinks. Thus No Food alone, No Drinks
+alone and both together refuse those Food-owned drinks; No Drinks alone permits
+ordinary Eat items. This is an explicit TSPS classification boundary, not a claim
+that every drink's retail classification has been recorded. Passive nonconsumables
+are not newly classified as food, so the existing phoenix-necklace behavior remains.
+
+Normal and quick-prayer activation use the existing prayer permission path.
+Overheads are identified by the prayer definition's head icon; No overheads keeps
+non-overhead boosts, while No Prayer refuses all activation. Forbidden prayers
+already active before entry are cleared, because the activation path returns early
+for an active prayer. Similarly, a pre-armed special is disarmed on entry/rejoin;
+normal and instant utility activations use the existing special permission hook,
+and the arena also refuses an armed special when specials are disabled. No points,
+special energy or consumed items are reconstructed on exit.
+
+The existing native fixture covers the four setup controls, no-op and stale input,
+all-term preservation, acceptance delays and both confirmations; native inventory
+Eat/Drink/Wield, normal and quick-prayer setup/toggle, queued-special activation and
+an instant utility special. It also checks pre-active entry, refusal resource and
+metadata preservation, both consumption backends, cleanup/outsider allowances and
+a real core nonlethal-damage callback for passive-item preservation. Supplied
+levels, placement and that damage are explicit setup; no full login, natural RNG,
+rendered client or exact retail classification/timing claim follows. Runtime
+outcomes and independent acceptance belong to the PR evidence.

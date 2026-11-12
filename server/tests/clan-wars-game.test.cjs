@@ -37,6 +37,12 @@ before(async () => {
   require('../plugins/combat/KillStreaks.plugin').register(PM.createApi('ClanWarsKillStreaksTest'));
   require('../plugins/minigames/ClanWars.plugin').register(PM.createApi('ClanWarsTest'));
   Presets.register(PM.createApi('ClanWarsPresetsTest'));
+  require('../plugins/items/Food.plugin').register(PM.createApi('ClanWarsFoodTest'));
+  require('../plugins/items/Potions.plugin').register(PM.createApi('ClanWarsPotionsTest'));
+  require('../plugins/items/PhoenixNecklace.plugin').register(PM.createApi('ClanWarsPhoenixTest'));
+  for (const name of ['DragonDagger','DragonBattleaxe']) {
+    require(`../plugins/combat/specials/${name}.SpecialAttack`)(PM.createApi('ClanWarsSpecialTest'));
+  }
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
 });
 afterEach(() => {
@@ -131,13 +137,18 @@ function channel(owner, members = []) {
   for (const member of members) assert.equal(FC.join(member, owner.getUsername(), false), true);
   assert.equal(C.captain(owner).rankOf(owner), 7);
 }
-async function negotiate(a, b, cap = null, mode = 0) {
+async function negotiate(a, b, cap = null, mode = 0, restrictions = null) {
   await challenge(a, b); await challenge(b, a);
   assert.equal(a.getInterfaceId(), C.group('clanwars_setup'));
   if (cap !== null) { await click(a, 'clanwars_setup:dropdown_playercap', cap + 1); tick(9); }
   if (mode) {
     await click(a, 'clanwars_setup:wincondition', mode * 3);
     assert.equal(C.negotiations.get(a).rules.wincondition, mode, 'native mode selection must reach the server offer');
+    tick(9);
+  }
+  for (const [key,value] of Object.entries(restrictions ?? {})) {
+    await click(a, `clanwars_setup:dropdown_${key}`, value + 1);
+    assert.equal(C.negotiations.get(a).rules[key],value,'native restriction selection must reach the server offer');
     tick(9);
   }
   await click(a, 'clanwars_setup:accept'); await click(b, 'clanwars_setup:accept');
@@ -1125,4 +1136,244 @@ test('additive shakes do not block viewing or erase an actual controlled camera 
   assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
   assert.equal(viewingUnit().active.has(viewer),false);
   assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'},'ending modifiers cannot relinquish a real scripted shot');
+});
+
+// Restriction cases use the real consumable, prayer/quick-prayer and special
+// producers. Scene placement, levels and a nonlethal passive-item hit are supplied.
+const NEGOTIATED_RULE_CHOICES = { food:[1], drinks:[1], prayer:[1,2], specialattacks:[2] };
+const STANDARD_PRAYER_ENUM = 4956; // Rev242 script7823, standard prayer book.
+const PRAYER_COMPONENT_PARAM = 1751; // Rev242 quickprayer_init reads the prayer's component.
+function ruleStats(player, hitpoints = 50) {
+  for (const name of ['ATTACK','STRENGTH','DEFENCE','RANGED','MAGIC','PRAYER','HITPOINTS']) {
+    player.getSkillManager().setMaxLevels(core.Skill[name],99,false);
+    player.getSkillManager().setCurrentLevel(core.Skill[name],99,false);
+  }
+  player.setHitpoints(hitpoints); player.setSpecialPercentage(100);
+}
+function contents(container) {
+  return container.getItems().map(item=>item ? {id:item.getId(),n:item.getAmount(),meta:structuredClone(item.getMeta())} : null);
+}
+function resources(player) {
+  const { TimerKey } = require('../dist/util/timers/TimerKey');
+  return { inventory:contents(player.getInventory()), equipment:contents(player.getEquipment()),
+    levels:['ATTACK','STRENGTH','DEFENCE','RANGED','MAGIC','PRAYER','HITPOINTS'].map(name=>player.getSkillManager().getCurrentLevel(core.Skill[name])),
+    special:player.getSpecialPercentage(),
+    timers:[TimerKey.FOOD,TimerKey.POTION,TimerKey.KARAMBWAN].map(key=>player.getTimers().getTicks(key)) };
+}
+function messagesOf(player) {
+  const lines=[],send=player.sendMessage;
+  player.sendMessage=function(message) { lines.push(message); return send.call(this,message); };
+  return lines;
+}
+async function nativeButton(player, component, op = 1, slot = 65535, itemId = 65535) {
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const uid=typeof component==='number' ? component : C.uid(component);
+  const frame=Buffer.alloc(9); frame[0]=ClientPacketId[`IF_BUTTON${op}`];
+  assert.ok(frame[0] > 0,'the native operation exists');
+  frame.writeInt32BE(uid,1); frame.writeUInt16BE(slot,5); frame.writeUInt16BE(itemId,7);
+  await wire(player,frame);
+}
+async function nativeItem(player, itemId, option) {
+  const { MAIN_INVENTORY_WIDGET_UID } = require('../dist/net/protocol/ClientProtocol');
+  const slot=player.getInventory().getItems().findIndex(item=>item?.getId()===itemId);
+  assert.ok(slot>=0,'the real carried item occupies its clicked slot');
+  const index=core.CacheDefinitions.getItem(itemId).inventoryActions.indexOf(option);
+  assert.ok(index>=0,`the active cache item offers ${option}`);
+  // Cache7779/enum4303: inventory actions1..5 transmit widgetops2,3,4,6,7.
+  await nativeButton(player,MAIN_INVENTORY_WIDGET_UID,[2,3,4,6,7][index],slot,itemId);
+}
+function give(player,itemId,tag) {
+  const before=player.getInventory().getAmount(itemId);
+  player.getInventory().add(new core.Item(itemId,1,{qa:tag}),false);
+  assert.equal(player.getInventory().getAmount(itemId),before+1,'supplied real inventory setup succeeded');
+}
+async function ruleGame(restrictions,beforeEntry=null) {
+  const a=actor(true),b=actor(true); ruleStats(a); ruleStats(b); channel(a); channel(b);
+  const game=await negotiate(a,b,2,1,restrictions);
+  if (beforeEntry) await beforeEntry(a,b,game);
+  await join(a); await join(b); core.World.processCycle=game.starts-1; tick();
+  assert.equal(game.phase,'combat');
+  return {a,b,game};
+}
+async function endRuleGame(game,a,b) {
+  game.finish(null); tick(2); lobby(a); lobby(b);
+  await wire(a,Buffer.from([VIEW_CLOSE_PACKET])); await wire(b,Buffer.from([VIEW_CLOSE_PACKET]));
+}
+function prayerWidget(prayerId) {
+  const found=[];
+  for (let index=1;index<=core.PrayerData.prayerData.size;index++) {
+    const uid=core.CacheDefinitions.getComponentId(`prayerbook:prayer${index}`);
+    if (uid!=null && core.PrayerHandler.prayerIdForChild(uid&65535)===prayerId) found.push(uid);
+  }
+  assert.equal(found.length,1,'one actual cache prayer widget maps to this production prayer');
+  return found[0];
+}
+async function selectQuick(player,prayerIds) {
+  await nativeButton(player,'orbs:prayerbutton',2);
+  for (const prayerId of prayerIds) {
+    const uid=prayerWidget(prayerId);
+    const entries=[...core.CacheDefinitions.getEnumValues(STANDARD_PRAYER_ENUM)]
+      .filter(([,obj])=>Number(core.CacheDefinitions.getItem(Number(obj)).params?.get(PRAYER_COMPONENT_PARAM))===uid);
+    assert.equal(entries.length,1,'active quick-prayer enum/obj param identifies the actual clickable slot');
+    await nativeButton(player,'quickprayer:buttons',1,Number(entries[0][0]));
+    assert.ok(player.getQuickPrayers().getPrayers()[prayerId],'real setup selected the intended prayer');
+  }
+  await nativeButton(player,'quickprayer:close');
+}
+async function wield(player,itemId,tag) {
+  give(player,itemId,tag); await nativeItem(player,itemId,'Wield');
+  assert.equal(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),itemId);
+  assert.ok(player.getCombatSpecial(),'ordinary equip bound the registered weapon special');
+}
+
+for (const [key,values] of Object.entries(NEGOTIATED_RULE_CHOICES)) {
+  test(`native ${key} negotiation preserves every other term and revalidates both confirmations`,async()=>{
+    const a=actor(true),b=actor(true); channel(a); channel(b); const calls=scriptCalls(a);
+    await challenge(a,b); await challenge(b,a);
+    await click(a,'clanwars_setup:wincondition',3); tick(9);
+    await click(a,'clanwars_setup:dropdown_playercap',3); tick(9);
+    const session=C.negotiations.get(a);
+    for (const value of [...values,0,values.at(-1)]) {
+      await click(b,'clanwars_setup:accept'); assert.equal(session.accepted.has(b),true);
+      await click(a,`clanwars_setup:dropdown_${key}`,value+1);
+      assert.equal(session.rules[key],value,'native selected restriction reaches the authoritative offer');
+      assert.equal(session.rules.playercap,2); assert.equal(session.rules.wincondition,1);
+      assert.equal(session.accepted.size,0,'changed restriction invalidates both prior acceptances');
+      await click(b,'clanwars_setup:accept'); assert.equal(session.accepted.has(b),false,'opponent change delay is enforced');
+      tick(9);
+    }
+    await click(a,'clanwars_setup:wincondition',16*3); tick(9);
+    await click(a,'clanwars_setup:dropdown_playercap',4); tick(9);
+    assert.equal(session.rules[key],values.at(-1),'mode/cap changes preserve negotiated restrictions');
+    const revision=session.revision;
+    await click(b,'clanwars_setup:accept'); await click(a,`clanwars_setup:dropdown_${key}`,values.at(-1)+1);
+    assert.equal(session.revision,revision); assert.equal(session.accepted.has(b),true,'same selection is a no-op');
+    await click(a,'clanwars_setup:dropdown_specialattacks',2);
+    assert.equal(session.rules.specialattacks,key==='specialattacks'?2:0,'deferred Staff-only choice cannot change terms');
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),session.rules.specialattacks);
+    await click(a,'clanwars_setup:accept'); assert.equal(session.stage,'confirm');
+    const agreed={...session.rules}; await click(a,`clanwars_setup:dropdown_${key}`,1);
+    assert.deepEqual(session.rules,agreed,'stale setup packets cannot mutate a confirmation');
+    tick(5); await click(a,'clanwars_confirm:button'); await click(b,'clanwars_confirm:button');
+    const game=C.channelGames.get(C.channel(a).key); assert.ok(game); assert.deepEqual(game.rules,agreed);
+    assert.equal(Object.isFrozen(game.rules),true);
+    await join(a); await join(b);
+    const summary=calls.filter(([id])=>id===554).at(-1)[2];
+    assert.match(summary,key==='prayer'? /Prayers .*disabled/ : key==='specialattacks'? /Melee special attacks: disabled/ : new RegExp(`${key==='food'?'Food':'Drinks'}: disabled`));
+    assert.match(summary,/Most kills in 5 minutes/); assert.match(summary,/10 v 10/);
+  });
+}
+
+test('native No Food refuses before inventory, healing and timers change and ends on departure',async()=>{
+  const {a,b,game}=await ruleGame({food:1}); const I=core.ItemIdentifiers,lines=messagesOf(a);
+  give(a,I.APPLE_PIE,'no-food-pie'); const before=resources(a);
+  await nativeItem(a,I.APPLE_PIE,'Eat'); assert.deepEqual(resources(a),before); assert.ok(lines.some(line=>line.includes('cannot eat')));
+  const outside=actor(true); ruleStats(outside); give(outside,I.APPLE_PIE,'outside-pie');
+  await nativeItem(outside,I.APPLE_PIE,'Eat'); assert.equal(outside.getInventory().contains(I.HALF_AN_APPLE_PIE),true,'unrelated player still eats normally');
+  await endRuleGame(game,a,b); await nativeItem(a,I.APPLE_PIE,'Eat');
+  assert.equal(a.getHitpoints(),57); const half=a.getInventory().getValidItems().find(item=>item.getId()===I.HALF_AN_APPLE_PIE);
+  assert.ok(half); assert.deepEqual(half.getMeta(),{qa:'no-food-pie'});
+});
+
+test('native No Drinks preserves dose metadata, stats and cooldown and ends on departure',async()=>{
+  const {a,b,game}=await ruleGame({drinks:1}); const I=core.ItemIdentifiers,lines=messagesOf(a);
+  a.getSkillManager().setCurrentLevel(core.Skill.ATTACK,30,false); give(a,I.ATTACK_POTION_4_,'no-drinks-dose');
+  const before=resources(a); await nativeItem(a,I.ATTACK_POTION_4_,'Drink');
+  assert.deepEqual(resources(a),before); assert.ok(lines.some(line=>line.includes('cannot use potions')));
+  await endRuleGame(game,a,b); await nativeItem(a,I.ATTACK_POTION_4_,'Drink');
+  const dose=a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_);
+  assert.ok(dose); assert.deepEqual(dose.getMeta(),{qa:'no-drinks-dose'});
+  assert.ok(a.getSkillManager().getCurrentLevel(core.Skill.ATTACK)>30);
+});
+
+for (const restrictions of [{food:1},{drinks:1},{food:1,drinks:1}]) {
+  test(`canonical Food-owned Drink honors ${JSON.stringify(restrictions)} without reclassifying its producer`,async()=>{
+    const {a,b,game}=await ruleGame(restrictions); const I=core.ItemIdentifiers;
+    give(a,I.CUP_OF_TEA,'food-owned-drink');
+    assert.equal(require('../plugins/items/Food.plugin').foodBite(I.CUP_OF_TEA).food.option,'Drink');
+    const before=resources(a); await nativeItem(a,I.CUP_OF_TEA,'Drink'); assert.deepEqual(resources(a),before);
+    if (!restrictions.food) {
+      give(b,I.APPLE_PIE,'food-allowed'); await nativeItem(b,I.APPLE_PIE,'Eat');
+      assert.equal(b.getInventory().contains(I.HALF_AN_APPLE_PIE),true,'No Drinks alone still permits ordinary food');
+    }
+    await endRuleGame(game,a,b); await nativeItem(a,I.CUP_OF_TEA,'Drink');
+    assert.equal(a.getInventory().contains(I.CUP_OF_TEA),false); assert.equal(a.getInventory().contains(I.EMPTY_CUP),true);
+    assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.EMPTY_CUP).getMeta(),{qa:'food-owned-drink'});
+  });
+}
+
+test('No Food retains existing healing-drink permission while ordinary potions remain allowed',async()=>{
+  const {a,b,game}=await ruleGame({food:1}); const I=core.ItemIdentifiers;
+  for (const p of [a,b]) give(p,I.SARADOMIN_BREW_4_,'healing-drink');
+  const before=resources(a); await nativeItem(a,I.SARADOMIN_BREW_4_,'Drink'); assert.deepEqual(resources(a),before);
+  give(a,I.ATTACK_POTION_4_,'ordinary-potion'); await nativeItem(a,I.ATTACK_POTION_4_,'Drink');
+  assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true,'Food permission is not a blanket potion veto');
+  await endRuleGame(game,a,b); const hp=b.getHitpoints(); await nativeItem(b,I.SARADOMIN_BREW_4_,'Drink');
+  assert.ok(b.getHitpoints()>hp,'same real healing drink is valid after activity cleanup');
+});
+
+test('negotiated consumption rules preserve the existing passive phoenix-necklace producer',async()=>{
+  const {a,game}=await ruleGame({food:1,drinks:1}); const I=core.ItemIdentifiers;
+  a.getEquipment().setItem(core.Equipment.AMULET_SLOT,new core.Item(I.PHOENIX_NECKLACE,1,{qa:'passive'}));
+  a.setHitpoints(20); assert.equal(a.getEquipment().get(core.Equipment.AMULET_SLOT).getDefinition().getName(),'Phoenix necklace');
+  // Supplied nonlethal damage through the actual core health/event producer, no synthetic event.
+  a.decrementHealth(new core.HitDamage(1,core.HitMask.RED));
+  assert.equal(a.getEquipment().contains(I.PHOENIX_NECKLACE),false,'the existing one-use passive effect still consumes its own item');
+  assert.equal(a.getHitpoints(),48); assert.equal(game.fighters.has(a),true); assert.deepEqual(game.kills,[0,0]);
+});
+
+test('No Overheads clears pre-active icons and refuses native normal and quick prayers while allowing boosts',async()=>{
+  const P=core.PrayerHandler;
+  const {a,b,game}=await ruleGame({prayer:1},async player=>{
+    await selectQuick(player,[P.THICK_SKIN,P.PROTECT_FROM_MELEE]);
+    await nativeButton(player,prayerWidget(P.THICK_SKIN)); await nativeButton(player,prayerWidget(P.PROTECT_FROM_MELEE));
+    assert.equal(player.getPrayerActive()[P.THICK_SKIN],true); assert.equal(player.getPrayerActive()[P.PROTECT_FROM_MELEE],true);
+  });
+  assert.equal(a.getPrayerActive()[P.THICK_SKIN],true,'allowed pre-active boost survives entry');
+  assert.equal(a.getPrayerActive()[P.PROTECT_FROM_MELEE],false,'forbidden pre-active overhead is cleared on real portal entry');
+  const lines=messagesOf(a); await nativeButton(a,prayerWidget(P.PROTECT_FROM_MELEE));
+  await nativeButton(a,'orbs:prayerbutton');
+  assert.equal(a.getPrayerActive()[P.PROTECT_FROM_MELEE],false); assert.equal(a.getPrayerActive()[P.THICK_SKIN],true);
+  assert.ok(lines.some(line=>line.includes('Overhead prayers are disabled')));
+  await nativeButton(a,prayerWidget(P.THICK_SKIN)); assert.equal(a.getPrayerActive()[P.THICK_SKIN],false);
+  await nativeButton(a,prayerWidget(P.THICK_SKIN)); assert.equal(a.getPrayerActive()[P.THICK_SKIN],true);
+  await endRuleGame(game,a,b); await nativeButton(a,prayerWidget(P.PROTECT_FROM_MELEE));
+  assert.equal(a.getPrayerActive()[P.PROTECT_FROM_MELEE],true,'prayer permission is released outside the activity');
+});
+
+test('No Prayer clears all pre-active prayers and refuses native activation and a saved quick preset',async()=>{
+  const P=core.PrayerHandler;
+  const {a}=await ruleGame({prayer:2},async player=>{
+    await selectQuick(player,[P.THICK_SKIN]);
+    await nativeButton(player,prayerWidget(P.THICK_SKIN)); await nativeButton(player,prayerWidget(P.PROTECT_FROM_MELEE));
+    assert.equal(player.getPrayerActive()[P.THICK_SKIN],true); assert.equal(player.getPrayerActive()[P.PROTECT_FROM_MELEE],true);
+  });
+  assert.equal(a.getPrayerActive().some(Boolean),false);
+  const before=resources(a),lines=messagesOf(a);
+  await nativeButton(a,prayerWidget(P.THICK_SKIN)); await nativeButton(a,prayerWidget(P.PROTECT_FROM_MELEE));
+  await nativeButton(a,'orbs:prayerbutton');
+  assert.equal(a.getPrayerActive().some(Boolean),false); assert.deepEqual(resources(a),before);
+  assert.ok(lines.some(line=>line.includes('Prayers are disabled')));
+});
+
+test('No Specials clears a pre-armed weapon and refuses native queued and utility specials without spending resources',async()=>{
+  const I=core.ItemIdentifiers;
+  const {a,b,game}=await ruleGame({specialattacks:2},async player=>{
+    await wield(player,I.DRAGON_DAGGER,'queued-special');
+    assert.equal(player.getCombatSpecial().getId(),'dragon_dagger');
+    await nativeButton(player,'orbs:specbutton'); assert.equal(player.isSpecialActivated(),true);
+  });
+  assert.equal(a.isSpecialActivated(),false,'portal entry disarms a pre-armed special');
+  let before=resources(a); const lines=messagesOf(a);
+  await nativeButton(a,'orbs:specbutton'); assert.equal(a.isSpecialActivated(),false); assert.deepEqual(resources(a),before);
+  a.setSpecialActivated(true);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),false,'production attack backstop refuses an injected armed special');
+  a.setSpecialActivated(false); assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true,'ordinary melee remains allowed');
+  await wield(a,I.DRAGON_BATTLEAXE,'utility-special'); assert.equal(a.getCombatSpecial().getId(),'dragon_battleaxe'); before=resources(a);
+  await nativeButton(a,'orbs:specbutton'); assert.deepEqual(resources(a),before,'instant utility special cannot drain or boost through the rule');
+  assert.ok(lines.some(line=>line.includes('Special attacks are disabled')));
+  await endRuleGame(game,a,b); await nativeButton(a,'orbs:specbutton');
+  assert.equal(a.getSpecialPercentage(),0); assert.ok(a.getSkillManager().getCurrentLevel(core.Skill.STRENGTH)>99);
+  assert.ok(a.getSkillManager().getCurrentLevel(core.Skill.ATTACK)<99);
+  assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'utility-special'});
 });

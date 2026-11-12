@@ -8,6 +8,7 @@
 const C = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
+const Restrictions = require("./Restrictions.ClanWars");
 const PREPARATION_TICKS = 200;
 // Rev242 varbits4290/4291 are 16 bits; HUD script595 renders this value as "Lots!".
 const MAX_HUD_KILLS = 65535;
@@ -39,6 +40,7 @@ function arenaClass() {
       if (!attacker.isPlayer() || !target.isPlayer()) return false;
       if (this.game.phase !== "combat" || this.game.expired()
         || attacker.getArea() !== this || target.getArea() !== this) return false;
+      if (this.game.rules.specialattacks === 2 && attacker.isSpecialActivated()) return false;
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
       // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
@@ -112,6 +114,7 @@ class Game {
     C.matches.set(player, this);
     player.setAttribute(C.IN_MATCH_ATTRIBUTE, true);
     player.getCombat().reset();
+    Restrictions.prepare(player, this.rules);
     this.area.enter(player);
     player.moveTo(this.area.at(LANDINGS[side]));
     player.getPacketSender().sendPlayerOption(1, "Attack", true);
@@ -155,6 +158,7 @@ class Game {
     this.jailed.delete(player);
     this.fighters.set(player, side);
     player.getCombat().reset();
+    Restrictions.prepare(player, this.rules);
     player.moveTo(this.area.at(LANDINGS[side]));
     hud(this, player);
     return true;

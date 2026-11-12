@@ -3,6 +3,7 @@ const C = require("./clanwars/Common.ClanWars");
 const Match = require("./clanwars/Match.ClanWars");
 const Negotiation = require("./clanwars/Negotiation.ClanWars");
 const Viewing = require("./clanwars/Viewing.ClanWars");
+const Restrictions = require("./clanwars/Restrictions.ClanWars");
 
 function entered({ player }) { if (C.inLobby(player)) player.getPacketSender().sendPlayerOption(4, "Challenge"); }
 function left({ player }) { Negotiation.cancelPlayer(player); player.getPacketSender().sendPlayerOption(4, ""); }
@@ -20,6 +21,7 @@ function attach(api) {
   Match.attach(api);
   Negotiation.attach(api);
   Viewing.attach(api);
+  Restrictions.attach(api);
   api.onZoneEnter({ ...C.LOBBY, levels: [0] }, entered);
   api.onZoneExit({ ...C.LOBBY, levels: [0] }, left);
   api.onServerShutdown(Negotiation.shutdown);

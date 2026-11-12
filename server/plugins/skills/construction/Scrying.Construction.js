@@ -74,10 +74,10 @@ function scry(event) {
     .filter(value => value.buildableKey.endsWith("_PORTAL_FRAME") && value.destinations?.[0]);
   const known = Portals.houseDestinations();
   const choices = portals.map(portal => known.find(data => data.name === portal.destinations[0]))
-    .filter(Boolean).slice(0, 4).map(data => [title(data.name), title(data.name), data.destination]);
+    .filter(Boolean).slice(0, 4).map(data => [title(data.name), viewName(title(data.name)), data.destination]);
   choices.push(["Entrance portal", entranceName(house), Estate.houseExit(house.save)]);
   api.sendMultiChatboxPrompt(player, "Observe which location?", ...choices.flatMap(([label, name, destination]) =>
-    [label, () => look(player, house, viewName(name), viewTile(viewName(name), destination))]));
+    [label, () => look(player, house, name, viewTile(name, destination))]));
   return true;
 }
 

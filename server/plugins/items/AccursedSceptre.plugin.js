@@ -24,10 +24,11 @@
  * revenant ether left powering your sceptre.". No capture shows its built-in spell; it uses the
  * powered staff cast (human_castwave_staff_walkmerge, 11430) and Thammaron's projectile
  * (spells_thammaron01_travel01, 2340), the sceptre it is made from. Dismantle (not captured)
- * splits an unactivated one back into Thammaron's sceptre and the Skull of Vet'ion.
+ * splits an unactivated one back into Thammaron's sceptre and the Skull of Vet'ion. Uncharge and
+ * Dismantle ask on the destroy prompt first; Thammaron's Dismantle shows its objectbox before that.
  */
 
-const { definePoweredStaff, restricted } = require("./PoweredStaff");
+const { definePoweredStaff, restricted, ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther } = require("./PoweredStaff");
 
 const CHARGES_KEY = "accursed-sceptre-charges";
 // Set only when addEther takes the activation ether: a sceptre from a spawn, load-out or older save has
@@ -244,15 +245,21 @@ function checkCharges({ player, item }) {
 
 /** Wiki: every ether comes back, the activation deposit included. */
 function uncharge({ player, item }) {
-  const staff = variantOf(item.getId());
   if (!isActivated(item)) return false;
+  askFirst(api, player, item, ETHER_PROMPT.UNCHARGE_QUESTION, ETHER_PROMPT.UNCHARGE_NOTE, unchargeNow);
+  return true;
+}
+
+function unchargeNow(player, item) {
+  const staff = variantOf(item.getId());
+  if (!isActivated(item)) return;
   const inventory = player.getInventory();
   const etherId = ids().REVENANT_ETHER;
   const returned = staff.chargesOf(item) + depositOf(item);
   const refund = new core.Item(etherId, returned);
   if (returned > 0 && inventory.getAddableAmount(refund) < returned) {
     player.sendMessage("You don't have enough inventory space to uncharge your sceptre.");
-    return true;
+    return;
   }
   if (returned > 0) inventory.addItem(refund);
   staff.setCharges(item, 0);
@@ -260,8 +267,7 @@ function uncharge({ player, item }) {
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   inventory.refreshItems();
-  player.sendMessage(returned > 0 ? `You uncharge your sceptre, regaining ${format(returned)} revenant ether.` : "You uncharge your sceptre.");
-  return true;
+  player.getPacketSender().sendSound(UNCHARGE_SOUND, 100, 0);
 }
 
 /** Swap: the sceptre and its (a) version, charges kept. */
@@ -291,30 +297,48 @@ function refresh(player) {
  * Wiki: the accursed sceptre is Thammaron's sceptre and the Skull of Vet'ion, "and this process is
  * reversible". Dismantle, on the unactivated sceptre, gives both back (the (au) one Thammaron's (au)).
  */
-function dismantle({ player, item }) {
+function thammaronsOf(item) {
   const I = ids();
-  const thammarons = new Map([[I.ACCURSED_SCEPTRE_U_, I.THAMMARONS_SCEPTRE_U_], [I.ACCURSED_SCEPTRE_AU_, I.THAMMARONS_SCEPTRE_AU_]]).get(item?.getId?.());
-  if (thammarons === undefined) return false;
+  return new Map([[I.ACCURSED_SCEPTRE_U_, I.THAMMARONS_SCEPTRE_U_], [I.ACCURSED_SCEPTRE_AU_, I.THAMMARONS_SCEPTRE_AU_]]).get(item?.getId?.());
+}
+
+function dismantle({ player, item }) {
+  if (thammaronsOf(item) === undefined) return false;
+  askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, splitNow);
+  return true;
+}
+
+function splitNow(player, item) {
+  const thammarons = thammaronsOf(item);
+  if (thammarons === undefined) return;
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < 1) {
     player.sendMessage("You don't have enough inventory space to do that.");
-    return true;
+    return;
   }
   item.setId(thammarons);
-  inventory.addItem(new core.Item(I.SKULL_OF_VETION, 1));
+  inventory.addItem(new core.Item(ids().SKULL_OF_VETION, 1));
   inventory.refreshItems();
-  player.sendMessage("You remove the Skull of Vet'ion from the sceptre.");
-  return true;
 }
 
 /** Wiki: dismantling an uncharged Thammaron's sceptre yields 7,500 revenant ether. */
 function dismantleThammarons({ player, item }) {
   const inventory = player.getInventory();
-  if (!isThammarons(item?.getId?.()) || !inventory.getItems().includes(item)) return false;
+  if (!isThammarons(item?.getId?.()) || isActivated(item) || !inventory.getItems().includes(item)) return false;
   if (item.getMetaValue(UNPAID_META) === true) {
     player.sendMessage("Your sceptre was never activated with ether, so it cannot be dismantled.");
     return true;
   }
+  // The objectbox's line, wrapped as live sends it (Ours: the (au) wraps as the (u) does).
+  const name = item.getId() === ids().THAMMARONS_SCEPTRE_AU_ ? "Thammaron's sceptre (au)" : "Thammaron's sceptre (u)";
+  const text = `${name} will be dismantled for <col=ef1020>7500<br><col=ef1020>Revenant ether</col>.`;
+  dismantleForEther(api, player, item, text, dismantleThammaronsNow);
+  return true;
+}
+
+function dismantleThammaronsNow(player, item) {
+  const inventory = player.getInventory();
+  if (!isThammarons(item.getId()) || isActivated(item) || item.getMetaValue(UNPAID_META) === true) return;
   const slot = inventory.getItems().indexOf(item);
   // A copy to put back: the delete empties the slot's own Item (id -1), so restoring `item` restored nothing.
   const kept = item.clone();
@@ -323,12 +347,10 @@ function dismantleThammarons({ player, item }) {
   if (inventory.getAddableAmount(ether) < DISMANTLE_ETHER) {
     inventory.setItem(slot, kept);
     player.sendMessage("You don't have enough inventory space to dismantle your sceptre.");
-    return true;
+    return;
   }
   inventory.addItem(ether);
   inventory.refreshItems();
-  player.sendMessage(`You dismantle your sceptre, gaining ${format(DISMANTLE_ETHER)} revenant ether.`);
-  return true;
 }
 
 /** Wiki: dying in the Wilderness drops all the ether, even when the sceptre is protected. */

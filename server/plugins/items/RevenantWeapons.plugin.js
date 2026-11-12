@@ -9,13 +9,14 @@
  * 16,000 more, one an attack. Charged in the Wilderness it adds 50% accuracy and damage against NPCs;
  * outside the Wilderness an attack still spends the ether. The chainmaces work uncharged without the
  * passive, Craw's bow needs ether to fire at all. Uncharge returns every ether, the activation ether
- * included; Dismantle gives 7,500 ether for an uncharged one. Dying in the Wilderness drops the
+ * included; Dismantle gives 7,500 ether for an uncharged one, and splits an uncharged Ursine chainmace
+ * back into Viggora's chainmace and the Claws of Callisto. Both ask on the destroy prompt first. Dying in the Wilderness drops the
  * ether even when the weapon is protected. The Webweaver bow, its sibling, is WebweaverBow.plugin.js
  * and the accursed sceptre is AccursedSceptre.plugin.js, both built from rsprox captures. No capture
  * shows these four weapons, so their messages follow those two (the bow's "Your bow has N charges left
  * powering it.") with the weapon's own word.
  */
-const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+const { restricted, plainAmount, takePlain, PRESET_TEXT, ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther } = require("./PoweredStaff");
 
 const CHARGES_META = "revenant-weapon:charges";
 // Set only when addEther takes the activation ether: a weapon from a shop, spawn or older save has no
@@ -49,9 +50,14 @@ const setCharges = (item, charges) => item.setMetaValue(CHARGES_META, charges > 
 function defineWeapons() {
   const I = core.ItemIdentifiers;
   const definitions = [
-    { name: "Viggora's chainmace", label: "chainmace", style: MELEE, charged: I.VIGGORAS_CHAINMACE, uncharged: I.VIGGORAS_CHAINMACE_U_ },
-    { name: "Ursine chainmace", label: "chainmace", style: MELEE, charged: I.URSINE_CHAINMACE, uncharged: I.URSINE_CHAINMACE_U_ },
-    { name: "Craw's bow", label: "bow", style: RANGED, charged: I.CRAWS_BOW, uncharged: I.CRAWS_BOW_U_ },
+    // dismantleText: the objectbox before an ether Dismantle, wrapped as live sends it (Ours: Viggora's wrap,
+    // as Thammaron's sceptre's). parts: what Dismantle splits the weapon into instead.
+    { name: "Viggora's chainmace", label: "chainmace", style: MELEE, charged: I.VIGGORAS_CHAINMACE, uncharged: I.VIGGORAS_CHAINMACE_U_,
+      dismantleText: "Viggora's chainmace (u) will be dismantled for <col=ef1020>7500<br><col=ef1020>Revenant ether</col>." },
+    { name: "Ursine chainmace", label: "chainmace", style: MELEE, charged: I.URSINE_CHAINMACE, uncharged: I.URSINE_CHAINMACE_U_,
+      parts: [I.VIGGORAS_CHAINMACE_U_, I.CLAWS_OF_CALLISTO] },
+    { name: "Craw's bow", label: "bow", style: RANGED, charged: I.CRAWS_BOW, uncharged: I.CRAWS_BOW_U_,
+      dismantleText: "Craw's bow (u) will be dismantled for <col=ef1020>7500 Revenant<br><col=ef1020>ether</col>." },
   ];
   for (const weapon of definitions) {
     weaponsById.set(weapon.charged, weapon);
@@ -129,30 +135,60 @@ function uncharge({ player, item }) {
     player.sendMessage(PRESET_TEXT);
     return true;
   }
+  askFirst(api, player, item, ETHER_PROMPT.UNCHARGE_QUESTION, ETHER_PROMPT.UNCHARGE_NOTE, unchargeNow);
+  return true;
+}
+
+function unchargeNow(player, item) {
+  if (!activated(item) || restricted(item)) return;
   const inventory = player.getInventory();
   const label = weaponFor(item).label;
   const returned = depositOf(item) + chargesOf(item);
   const refund = new core.Item(core.ItemIdentifiers.REVENANT_ETHER, returned);
   if (returned > 0 && inventory.getAddableAmount(refund) < returned) {
     player.sendMessage(`You don't have enough inventory space to uncharge your ${label}.`);
-    return true;
+    return;
   }
   if (returned > 0) inventory.addItem(refund);
   emptyWeapon(item);
   inventory.refreshItems();
-  player.sendMessage(returned > 0 ? `You uncharge your ${label}, regaining ${format(returned)} revenant ether.` : `You uncharge your ${label}.`);
-  return true;
+  player.getPacketSender().sendSound(UNCHARGE_SOUND, 100, 0);
 }
 
-/** Wiki: dismantling an uncharged weapon yields 7,500 revenant ether. */
+/** Wiki: dismantling an uncharged weapon yields 7,500 revenant ether; the Ursine chainmace gives its parts back. */
 function dismantle({ player, item }) {
   const inventory = player.getInventory();
   if (activated(item) || !weaponFor(item) || !inventory.getItems().includes(item)) return false;
-  const label = weaponFor(item).label;
-  if (item.getMetaValue(UNPAID_META) === true) {
-    player.sendMessage(`Your ${label} was never activated with ether, so it cannot be dismantled.`);
+  const weapon = weaponFor(item);
+  if (weapon.parts) {
+    askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, splitNow);
     return true;
   }
+  if (item.getMetaValue(UNPAID_META) === true) {
+    player.sendMessage(`Your ${weapon.label} was never activated with ether, so it cannot be dismantled.`);
+    return true;
+  }
+  dismantleForEther(api, player, item, weapon.dismantleText, dismantleNow);
+  return true;
+}
+
+function splitNow(player, item) {
+  const [base, part] = weaponFor(item)?.parts ?? [];
+  if (base === undefined || item.getId() !== weaponFor(item).uncharged) return;
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space to do that.");
+    return;
+  }
+  item.setId(base);
+  inventory.addItem(new core.Item(part, 1));
+  inventory.refreshItems();
+}
+
+function dismantleNow(player, item) {
+  const inventory = player.getInventory();
+  if (activated(item) || !weaponFor(item) || item.getMetaValue(UNPAID_META) === true) return;
+  const label = weaponFor(item).label;
   // The weapon's own slot is freed for the ether, so only a full stack of it can be refused.
   const slot = inventory.getItems().indexOf(item);
   // A copy to put back: the delete empties the slot's own Item (id -1), so restoring `item` restored nothing.
@@ -162,12 +198,10 @@ function dismantle({ player, item }) {
   if (inventory.getAddableAmount(ether) < DISMANTLE_ETHER) {
     inventory.setItem(slot, kept);
     player.sendMessage(`You don't have enough inventory space to dismantle your ${label}.`);
-    return true;
+    return;
   }
   inventory.addItem(ether);
   inventory.refreshItems();
-  player.sendMessage(`You dismantle your ${label}, gaining ${format(DISMANTLE_ETHER)} revenant ether.`);
-  return true;
 }
 
 // ------------------------------------------------------------------ combat

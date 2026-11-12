@@ -18,6 +18,13 @@ const actions = {};
 const events = {};
 const ground = [];
 let cycle = 100;
+// The destroy prompt's Uncharge/Dismantle requests; each is answered Yes unless `answer` is set false.
+const prompts = [];
+let answer = true;
+events["destroy-item:confirm"] = (request) => {
+  prompts.push(request);
+  if (answer) request.confirm(request.player, request.item);
+};
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -38,7 +45,7 @@ before(async () => {
 
 const WEAPONS = [
   { name: "Viggora's chainmace", label: "chainmace", charged: I.VIGGORAS_CHAINMACE, uncharged: I.VIGGORAS_CHAINMACE_U_, melee: true },
-  { name: "Ursine chainmace", label: "chainmace", charged: I.URSINE_CHAINMACE, uncharged: I.URSINE_CHAINMACE_U_, melee: true },
+  { name: "Ursine chainmace", label: "chainmace", charged: I.URSINE_CHAINMACE, uncharged: I.URSINE_CHAINMACE_U_, melee: true, parts: true },
   { name: "Craw's bow", label: "bow", charged: I.CRAWS_BOW, uncharged: I.CRAWS_BOW_U_, melee: false },
 ];
 const [VIGGORA, URSINE, CRAW] = WEAPONS;
@@ -47,10 +54,14 @@ function player() {
   const p = new Player(null);
   p.setUsername("revenant-weapon-test");
   const messages = [];
-  const sender = new Proxy({}, { get: (_, key) => key === "sendEnterAmountPrompt"
+  const sender = new Proxy({}, { get: (own, key) => own[key] ?? (key === "sendEnterAmountPrompt"
     ? (text) => { p.prompt = text; }
-    : () => sender });
+    : () => sender) });
   p.getPacketSender = () => sender;
+  p.sounds = [];
+  p.boxes = [];
+  sender.sendSound = (id) => { p.sounds.push(id); return sender; };
+  sender.sendTypedMessage = (type, text) => { p.boxes.push(text); return sender; };
   p.sendMessage = (message) => messages.push(message);
   p.setEnteredAmountAction = (action) => { p.amountAction = action; };
   p.messages = messages;
@@ -65,6 +76,13 @@ function weapon(p, kind, charges, worn = false) {
   if (worn) p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = item;
   else p.getInventory().addItem(item);
   return worn ? item : p.getInventory().getItems().find((held) => held.getId() === item.getId());
+}
+
+/** Dismantle, then Continue on the objectbox an ether dismantle shows first. */
+function dismantle(kind, p, item) {
+  const result = actions[`${kind.name} (u)`].Dismantle({ player: p, item });
+  if (p.getDialogueManager().isActive()) p.getDialogueManager().advance();
+  return result;
 }
 
 function charge(p, item) {
@@ -115,26 +133,40 @@ for (const kind of WEAPONS) {
     assert.equal(p.messages.at(-1), `Your ${kind.label} cannot hold any more ether.`);
   });
 
-  test(`${kind.name}: Dismantle on the uncharged one gives 7,500 ether; a charged one cannot be dismantled`, () => {
-    const p = player();
-    const item = weapon(p, kind, null);
-    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
-    assert.equal(p.getInventory().getAmount(kind.uncharged), 0);
-    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), W.DISMANTLE_ETHER);
-    const charged = weapon(p, kind, 5);
-    assert.equal(W.dismantle({ player: p, item: charged }), false);
-    assert.equal(p.getInventory().getAmount(kind.charged), 1);
-  });
+  if (kind.parts) {
+    test(`${kind.name}: Dismantle asks, then gives back Viggora's chainmace (u) and the Claws of Callisto`, () => {
+      const p = player();
+      const item = weapon(p, kind, null);
+      prompts.length = 0;
+      assert.equal(dismantle(kind, p, item), true);
+      assert.deepEqual([prompts[0].question, prompts[0].note], ["Are you sure you want to dismantle this weapon?", "You will receive its components back."]);
+      assert.equal(item.getId(), I.VIGGORAS_CHAINMACE_U_);
+      assert.equal(p.getInventory().getAmount(I.CLAWS_OF_CALLISTO), 1);
+      assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0);
+      assert.deepEqual(p.messages, [], "no chat message");
+    });
+  } else {
+    test(`${kind.name}: Dismantle on the uncharged one gives 7,500 ether; a charged one cannot be dismantled`, () => {
+      const p = player();
+      const item = weapon(p, kind, null);
+      assert.equal(dismantle(kind, p, item), true);
+      assert.equal(p.getInventory().getAmount(kind.uncharged), 0);
+      assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), W.DISMANTLE_ETHER);
+      const charged = weapon(p, kind, 5);
+      assert.equal(W.dismantle({ player: p, item: charged }), false);
+      assert.equal(p.getInventory().getAmount(kind.charged), 1);
+    });
 
-  test(`${kind.name}: a refused Dismantle keeps the weapon`, () => {
-    // The ether stack can't take 7,500 more: the weapon was deleted and the emptied slot "restored".
-    const p = player();
-    const item = weapon(p, kind, null);
-    p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 2147483647 - 1000));
-    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
-    assert.equal(p.messages.at(-1), `You don't have enough inventory space to dismantle your ${kind.label}.`);
-    assert.equal(p.getInventory().getAmount(kind.uncharged), 1, "the weapon is still there");
-  });
+    test(`${kind.name}: a refused Dismantle keeps the weapon`, () => {
+      // The ether stack can't take 7,500 more: the weapon was deleted and the emptied slot "restored".
+      const p = player();
+      const item = weapon(p, kind, null);
+      p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 2147483647 - 1000));
+      assert.equal(dismantle(kind, p, item), true);
+      assert.equal(p.messages.at(-1), `You don't have enough inventory space to dismantle your ${kind.label}.`);
+      assert.equal(p.getInventory().getAmount(kind.uncharged), 1, "the weapon is still there");
+    });
+  }
 
   test(`${kind.name}: Wilderness PvP death loses the activation ether and charges, protected or not`, () => {
     for (const kept of [true, false]) {
@@ -255,7 +287,7 @@ test("a weapon without a paid deposit refunds and drops only its charges", () =>
 });
 
 test("a weapon bought before the deposit rule cannot be Uncharged then Dismantled for ether", () => {
-  for (const kind of WEAPONS) {
+  for (const kind of WEAPONS.filter((weapon) => !weapon.parts)) {
     const p = player();
     const bought = new core.Item(kind.charged, 1);
     p.getInventory().addItem(bought);
@@ -263,7 +295,7 @@ test("a weapon bought before the deposit rule cannot be Uncharged then Dismantle
     actions[kind.name].Uncharge({ player: p, item });
     assert.equal(item.getId(), kind.uncharged);
     assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0);
-    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
+    assert.equal(dismantle(kind, p, item), true);
     assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0, `${kind.name}: no ether from dismantling`);
     assert.equal(p.getInventory().getAmount(kind.uncharged), 1, `${kind.name}: the weapon is kept`);
   }
@@ -279,7 +311,51 @@ test("activating an unpaid weapon again does not clear the mark, so Dismantle st
   W.addEther(p, item, 0);
   actions[CRAW.name].Uncharge({ player: p, item });
   assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1000);
-  actions[`${CRAW.name} (u)`].Dismantle({ player: p, item });
+  dismantle(CRAW, p, item);
   assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1000);
   assert.equal(p.getInventory().getAmount(CRAW.uncharged), 1);
+});
+
+test("Uncharge asks on the destroy prompt first; Yes returns the ether with the destroy sound and no message", () => {
+  for (const kind of WEAPONS) {
+    const p = player();
+    const item = weapon(p, kind, 40);
+    prompts.length = 0;
+    answer = false;
+    assert.equal(actions[kind.name].Uncharge({ player: p, item }), true);
+    answer = true;
+    assert.deepEqual([prompts[0].question, prompts[0].note, prompts[0].item, prompts[0].slot],
+      ["Are you sure you want to uncharge it?", "If you uncharge this weapon, all the revenant ether will be returned to your inventory.", item, 0]);
+    assert.equal(item.getId(), kind.charged, `${kind.name}: nothing changes before Yes`);
+    prompts[0].confirm(p, item);
+    assert.equal(item.getId(), kind.uncharged);
+    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1040);
+    assert.deepEqual(p.sounds, [2381]);
+    assert.deepEqual(p.messages, [], `${kind.name}: no chat message`);
+  }
+});
+
+test("an ether Dismantle shows the weapon's objectbox, then asks; only Yes breaks it down", () => {
+  for (const [kind, text] of [
+    [CRAW, "Craw's bow (u) will be dismantled for <col=ef1020>7500 Revenant<br><col=ef1020>ether</col>."],
+    [VIGGORA, "Viggora's chainmace (u) will be dismantled for <col=ef1020>7500<br><col=ef1020>Revenant ether</col>."],
+  ]) {
+    const p = player();
+    const item = weapon(p, kind, null);
+    prompts.length = 0;
+    answer = false;
+    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
+    assert.deepEqual(p.boxes, [text.replace(/<br>/g, " ")], "the box's line goes to the chat as a mesbox");
+    assert.equal(p.getDialogueManager().getCurrent().getText(), text);
+    assert.equal(prompts.length, 0, "the prompt waits for Continue");
+    p.getDialogueManager().advance();
+    answer = true;
+    assert.deepEqual([prompts[0].question, prompts[0].note],
+      ["Are you sure you want to dismantle this weapon?", "Your weapon will be broken down for <col=ef1020>7500 Revenant ether</col>."]);
+    assert.equal(p.getInventory().getAmount(kind.uncharged), 1, "No keeps the weapon");
+    prompts[0].confirm(p, item);
+    assert.equal(p.getInventory().getAmount(kind.uncharged), 0);
+    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 7500);
+    assert.deepEqual(p.messages, []);
+  }
 });

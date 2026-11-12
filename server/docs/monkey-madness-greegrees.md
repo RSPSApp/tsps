@@ -43,3 +43,16 @@ An initial AFTER at `f752e435d3bd9d2ab1f4e672e7786bcf7da04dd0` passed 37/38, the
 Source, compiled output and all 28 cache-file seals stayed unchanged, all reached child processes exited without timeout or remaining process groups, and the final platform completed. Closure is process-group plus platform-terminal evidence, not an escaped-descendant census. A separate reviewer inspected source, fixtures, inputs and actual raw results.
 
 Quest checkpoints, materials, canonical-spawn/perimeter placement and in-memory saved-login application are supplied. There is no claim of natural quest traversal, disk-backed authentication, socket stream, rendered client/audio, measured retail cadence or a complete repository suite. Conservation/refusal feedback and unfinished-offer recovery are explicit implementation choices where the primary sources do not specify exact repeat timing.
+
+## Maintainer regression correction
+
+Maintainer review of the first publication found that the existing `qh728-q075.test.cjs` source-contract route still used arena actor 1442 for tunnel handovers and expected Chapter 3 at `hOYpYN`. Its tunnel dialogue/material contexts now use content ID 7170; final-arena contexts retain 1442. The test asserts that the first hand-back consumes one pair and gives one greegree, `hOYpYN` leaves stage 7, and canonical `qNLIG9` advances to stage 8. Repeated hand-back/marker actions cannot grant or advance again. Production code and generated data are unchanged by this correction.
+
+A distinct run at `936b5b0d95c8b0d088b0bfa64bdaf052454dd7c4` passed the corrected 20-case source-contract file, then the expanded 52-case ordinary-input native file. The added native case delivers dentures, mould and gold to the real tunnel actor through the existing ClientConnection/World route, observes their canonical handovers and enchanted-bar/mould return, and verifies stage 7 with no greegree minted. All earlier 51 native cases also passed in that run.
+
+```sh
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q075.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/monkey-madness-greegrees-native.test.cjs
+```
+
+Both processes exited 0 with valid TAP and no timeout or remaining process groups; source, compiled output and cache seals stayed unchanged and the platform completed. These are 20 source-contract cases with stand-ins plus 52 ordinary-input native cases, not 72 full-native cases or natural full quest traversal. The diary/hangar files were not selected in this correction run; their eight passes above remain historical evidence from the earlier run. Earlier failures remain retained separately.

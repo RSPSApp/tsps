@@ -240,8 +240,8 @@ function addXp(player, xp) {
 /**
  * Charts a spot, as every kind of spot does on success (rsprox, e.g. 1009, 944): its variable, the
  * task, the sea's and ocean's counts, then a sea, group, ocean or the whole map completed with its
- * messages and the sea's bonus XP; the popups, the sound and the spot's XP. A spot already charted gives only
- * a current duck's repeat XP. `lines` are the spot's own messages, sent first.
+ * messages and the sea's bonus XP; the popups, the sound and the spot's XP. A spot already charted
+ * gives only a current duck's repeat XP. `lines` are the spot's own messages, sent first.
  */
 function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) } = {}) {
   const before = chartedSet(player);
@@ -277,8 +277,8 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
   }
   if (ocean && oceanComplete(charted, ocean)) {
     // The Miscellaneous groups' "ocean" is called a group in its lines.
-    const kind = ocean.type === SEA_TYPE.MISCELLANEOUS ? "group" : "ocean";
-    player.sendMessage(`You have completed charting ${kind === "group" ? "a group" : "an ocean"}: ${blue(ocean.name)}`);
+    const [kind, article] = ocean.type === SEA_TYPE.MISCELLANEOUS ? ["group", "a"] : ["ocean", "an"];
+    player.sendMessage(`You have completed charting ${article} ${kind}: ${blue(ocean.name)}`);
     setSeaBit(player, ocean, true);
     updateProgress(player, (saved) => {
       if (!saved.owed.includes(ocean.row) && !saved.paid.includes(ocean.row)) saved.owed = [...saved.owed, ocean.row];
@@ -288,7 +288,8 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
     setSeaBit(player, ocean, false);
     completed.push(ocean.name);
   }
-  if (charted.size >= allSpots().size) {
+  const every = allSpots();
+  if (countCharted(charted, [...every.values()]) === every.size) {
     updateProgress(player, (saved) => { saved.fullOwed = !saved.fullPaid; });
     sender.sendVarbit(VARBIT.FULL_COMPLETION, 1);
     // Live leaves this colour tag open.

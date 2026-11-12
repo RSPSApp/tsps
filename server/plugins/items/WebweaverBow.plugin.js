@@ -11,6 +11,9 @@ const CHARGES_META = "webweaver-bow:charges";
 // Set only when addEther takes the activation ether: a charged bow from a shop, spawn or
 // older save has no paid reserve to refund or drop.
 const DEPOSIT_META = "webweaver-bow:deposit";
+// RevenantWeapons' mark for a weapon emptied without a paid deposit: Craw's bow (u), dismantled out
+// of this bow, keeps it, so its Dismantle refuses ether that was never paid in. Never cleared.
+const UNPAID_META = "revenant-weapon:unpaid";
 const ACTIVATION_ETHER = 1000;
 const MAX_CHARGES = 16000;
 const BUSY_VARBIT = 12393; // cache gameval busy; the revenant-weapon amount prompt
@@ -30,6 +33,7 @@ function setCharges(item, charges) {
 }
 
 function emptyBow(item) {
+  if (depositOf(item) === 0) item.setMetaValue(UNPAID_META, true);
   setCharges(item, 0);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(core.ItemIdentifiers.WEBWEAVER_BOW_U_);

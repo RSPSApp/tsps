@@ -365,3 +365,31 @@ test("a preset Webweaver bow (u) is not dismantled into a plain Fangs of Venenat
   assert.equal(p.getInventory().getAmount(I.FANGS_OF_VENENATIS), 0);
   assert.equal(p.messages.at(-1), "Preset items cannot be used for this.");
 });
+
+test("a bow never paid for keeps that mark through Dismantle, so Craw's bow (u) gives no 7,500 ether", () => {
+  const Weapons = require("../plugins/items/RevenantWeapons.plugin");
+  const crawActions = {};
+  Weapons.register({
+    core,
+    onItemOnItem() {},
+    onItemAction: (name, options) => { crawActions[name] = options; },
+    onCustomEvent() {},
+    registerRangedAmmoHandler() {},
+    registerRangedCombatModifier() {},
+    registerMeleeHitModifier() {},
+    registerMeleeAttackAccuracyModifier() {},
+    onPlayerDeathItemDrop() {},
+    emitCustomEvent: (name, request) => events[name]?.(request),
+  });
+  const p = player();
+  const item = bow(p, 10, false, false);
+  B.uncharge({ player: p, item });
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 10);
+  B.dismantle({ player: p, item });
+  assert.equal(item.getId(), I.CRAWS_BOW_U_);
+  crawActions["Craw's bow (u)"].Dismantle({ player: p, item });
+  if (p.getDialogueManager().isActive()) p.getDialogueManager().advance();
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 10, "no ether from dismantling");
+  assert.equal(p.getInventory().getAmount(I.CRAWS_BOW_U_), 1, "the bow is kept");
+  assert.equal(p.messages.at(-1), "Your bow was never activated with ether, so it cannot be dismantled.");
+});

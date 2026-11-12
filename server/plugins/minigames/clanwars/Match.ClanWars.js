@@ -98,7 +98,9 @@ class Game {
       // clear shared loc bits when the temporary barrier is deregistered.
       if (this.layout.barrierSkipBlocked && C.core.RegionManager.blocked(at, this.area)) continue;
       const wall = new C.core.GameObject(wallId, at, 10, 0, this.area);
-      C.core.ObjectManager.register(wall, false);
+      // Sylvan's blocked check already built the lazy collision grid. Native
+      // registration must now add clipping; Plateau retains its original lazy route.
+      C.core.ObjectManager.register(wall, this.layout.barrierSkipBlocked);
       this.walls.push(wall);
     }
     this.task = new (class extends C.core.Task {

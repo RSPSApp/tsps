@@ -1842,11 +1842,12 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
       assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
     }
     const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
-    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
-    for(const side of [0,1]) assert.equal(sylvanReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
     const definition=core.CacheDefinitions.getObject(core.CacheDefinitions.getLocId('clanwars_barrier_elfwood'));
     assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);
     assert.ok(game.walls.length>0);assert.ok(game.walls.every(o=>o.getPrivateArea()===game.area&&o.getType()===10&&o.getFace()===0));
+    assert.ok(game.walls.every(o=>(game.area.getClip(o.getLocation())&0x100)!==0),'native registration adds solid barrier clipping after the lazy grid exists');
+    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
+    for(const side of [0,1]) assert.equal(sylvanReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
     for(const x of [3444,3445,3446,3450,3451]) assert.equal(game.walls.some(o=>o.getLocation().getX()===game.area.at([x,5023,0]).getX()),false,'mapped solid trees receive no overlay barrier');
     assert.equal(core.RegionManager.canMovestart(game.area.at([3392,5000,0]),game.area.at([3391,5000,0]),1,1,game.area),false,'unmapped footprint refuses exit');
     const walker=[a,b].find(p=>game.members.get(p)===0);
@@ -1934,6 +1935,8 @@ test('native Sylvan and Plateau coexist and refuse foreign exit or viewing objec
     await sylvanObjectInput(p,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
     assert.equal(C.matches.has(p),false);lobby(p);
   }
+  assert.equal(glade.members.size,0);assert.equal(glade.phase,'staging','empty staging retains its existing preparation lifetime');
+  const remaining=glade.starts-C.now();assert.ok(remaining>0);tick(remaining);
   assert.equal(glade.area.isDestroyed(),true);assert.equal(plateau.phase,'staging');assert.equal(C.matches.get(c),plateau);
 });
 

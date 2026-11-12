@@ -789,10 +789,14 @@ for (const steelHeadroom of [1, 20]) {
 
 // Wiki (Turoth): "the dwarf multicannon is ineffective"; (Vyrewatch Sentinel): Cannons "Immune". The cannon targeted
 // both, and on Turoth its cannonballs could even land with the owner's broad ammo worn.
-test("a Turoth and a Vyrewatch Sentinel are never targeted (Wiki)", () => {
+test("a Turoth, a Vyrewatch Sentinel and the leafy superiors are never targeted (Wiki)", () => {
   const p = gunner();
   built(p);
-  for (const [id, x, y] of [[core.NpcIdentifiers.TUROTH, 3260, 3262], [core.NpcIdentifiers.VYREWATCH_SENTINEL, 3261, 3262]]) {
+  for (const [id, x, y] of [
+    [core.NpcIdentifiers.TUROTH, 3260, 3262], [core.NpcIdentifiers.VYREWATCH_SENTINEL, 3261, 3262],
+    // The superiors are "leafy" like Turoth and Kurask (Wiki: Spiked Turoth, King kurask).
+    [core.NpcIdentifiers.SPIKED_TUROTH, 3258, 3262], [core.NpcIdentifiers.KING_KURASK, 3262, 3264],
+  ]) {
     const npc = spawnNpc(id, x, y);
     npc.getCombat().setUnderAttack(p);
     assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);

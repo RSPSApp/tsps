@@ -48,9 +48,9 @@ export class TeleportType {
     // human_teleport_other_impact (1816) with lunar_teleport_spotanim (747), the Arceuus one
     // arceuus_necromancy_anim (3865) with arceuus_teleport_spotanim (1296), and a lever is pulled
     // (2140) before the standard teleport's 714 and 111. None plays human_castteleport_reverse (715)
-    // on landing.
-    public static readonly LUNAR = new TeleportType(4, new Animation(1816, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(747, GraphicHeight.LOW, Priority.HIGH), null, null);
-    public static readonly ARCEUUS = new TeleportType(4, new Animation(3865, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(1296, GraphicHeight.HIGH, Priority.HIGH), null, null);
+    // on landing. Heights as captured: 747 at 92 (e.g. 227/00075.txt), 1296 at ground level.
+    public static readonly LUNAR = new TeleportType(4, new Animation(1816, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(747, 92 as GraphicHeight, Priority.HIGH), null, null);
+    public static readonly ARCEUUS = new TeleportType(4, new Animation(3865, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(1296, GraphicHeight.LOW, Priority.HIGH), null, null);
     // Ladders
     public static readonly LADDER_DOWN = new TeleportType(1, new Animation(827, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, null, null, null);
     public static readonly LADDER_UP = new TeleportType(1, new Animation(828, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, null, null, null);

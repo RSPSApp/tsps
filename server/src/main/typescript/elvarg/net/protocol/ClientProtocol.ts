@@ -370,6 +370,14 @@ function withCtrl<T extends ClientMessage>(message: T, modifierFlags: number): T
   return modifierFlags ? { ...message, modifierFlags } : message;
 }
 
+/**
+ * An item id the client writes as two unsigned bytes, with 65535 (its -1) for "no item": ids 32768-65534 are real
+ * items, so the field must not be read as signed.
+ */
+function unsignedItemId(raw: number): number {
+  return raw === 0xffff ? -1 : raw;
+}
+
 class Reader {
   private offset = 0;
 
@@ -523,7 +531,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
         type: "widget_target",
         targetWidgetId: reader.intIME(), targetSlot: reader.shortAddLE(),
         sourceWidgetId: reader.intLE(), sourceSlot: reader.shortLE(),
-        sourceItemId: reader.signedShort(), targetItemId: reader.shortAddLE(),
+        sourceItemId: unsignedItemId(reader.short()), targetItemId: reader.shortAddLE(),
       };
     case NativeClientPacket.IF_TRIGGEROPLOCAL: {
       const blockLength = reader.short();
@@ -537,7 +545,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       return {
         type: "local_trigger", opcodeParam,
         childIndex: childRaw > 0x7fff ? childRaw - 0x10000 : childRaw,
-        widgetId, itemId: itemRaw > 0x7fff ? itemRaw - 0x10000 : itemRaw,
+        widgetId, itemId: unsignedItemId(itemRaw),
         argsData: reader.bytes(blockLength - 12),
       };
     }
@@ -951,7 +959,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       reader.short();
       reader.short();
       reader.byte();
-      const slot = reader.signedShort(), itemId = reader.signedShort();
+      const slot = reader.signedShort(), itemId = unsignedItemId(reader.short());
       return { type: "widget_action", widgetId, groupId, childId, opId, buttonNum, option, target, slot: slot >= 0 ? slot : undefined, itemId: itemId >= 0 ? itemId : undefined };
     }
     case HighClientPacket.IF_BUTTOND:
@@ -965,7 +973,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     case HighClientPacket.TRADE_ACTION: {
       const action = (["offer", "remove", "accept", "decline", "confirm_accept", "confirm_decline"] as const)[reader.byte()];
       if (!action) return { type: "raw", opcode, payload: frame.subarray(frame.length) };
-      const slot = reader.short(), quantity = reader.int(), itemId = reader.signedShort();
+      const slot = reader.short(), quantity = reader.int(), itemId = unsignedItemId(reader.short());
       return { type: "trade_action", action, slot, quantity, itemId: itemId >= 0 ? itemId : undefined };
     }
     case HighClientPacket.ITEM_SPAWNER_SEARCH:

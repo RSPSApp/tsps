@@ -160,15 +160,15 @@ export class MagicCombatMethod extends CombatMethod {
                 continue;
             }
 
-            let it: IterableIterator<Mobile> = null;
-            if (character.isPlayer() && target.isPlayer()) {
-                it = (character as Player).getLocalPlayers().values();
-            } else if (character.isPlayer() && target.isNpc()) {
-                it = (character as Player).getLocalNpcs().values();
-            } else if (character.isNpc() && target.isNpc()) {
-                let npcs = Object.values(World.getNpcs());
-            } else if (character.isNpc() && target.isPlayer()) {
-                let npcsValues = Object.values(World.getNpcs());
+            // The splash picks victims of the primary target's kind; an NPC caster has no local lists,
+            // so it draws from the world (canAttackSecondaryTarget applies the radius and multi rules).
+            let it: Iterable<Mobile>;
+            if (character.isPlayer()) {
+                it = target.isPlayer() ? (character as Player).getLocalPlayers().values() : (character as Player).getLocalNpcs().values();
+            } else {
+                it = target.isPlayer()
+                    ? World.getPlayers()
+                    : World.getNpcsNear(target.getLocation(), spellRadius, target.getPrivateArea());
             }
 
             for (let next of it) {

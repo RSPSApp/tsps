@@ -26,7 +26,7 @@ before(async () => {
   PM.emitServerStartup({});
 });
 after(() => { try { PM.emitServerShutdown({}); } finally { console.error=originalError; assert.deepEqual(errors,[],'no caught startup, runtime or shutdown errors'); } });
-async function attempt(t, base, current, apron, inside=false) {
+async function attempt(t, base, current, apron, inside=false, cancelAfterOneTick=false) {
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p=new Player(new PlayerSession(channel)); const name=`guild${next++}`;
   t.after(() => { try { try { p.closeInterruptibleInterfaces(); } finally { core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); } } finally { try { if(p.isRegistered()) core.World.getPlayers().remove(p); } finally { assert.ok(!p.isRegistered()); assert.ok(p.getForceMovement()==null); assert.equal(core.TaskManager.hasActiveTask(p),false); assert.equal(core.TaskManager.hasActiveTask(p.getIndex()),false); assert.equal(MultiChatboxPrompt.getPending(p),null); assert.deepEqual(errors,[]); } } });
@@ -57,7 +57,7 @@ async function attempt(t, base, current, apron, inside=false) {
   t.mock.method(skills,'getCurrentLevel',(which)=>{ const value=originalGet(which); if(which===skill && new Error().stack.includes('openDoor')) observed.push(value); return value; });
   await c.dispatch([{type:'object_option',id:DOOR,x:X,y:Y,clickType:1}]);
   let forced=false;
-  for(let i=0;i<20;i++) { core.World.process(); forced ||= !!p.getForceMovement(); }
+  for(let i=0;i<20;i++) { core.World.process(); forced ||= !!p.getForceMovement(); if(cancelAfterOneTick&&i===0) core.TaskManager.cancelTasks(p); }
   assert.ok(p.getForceMovement()==null,'force movement is inactive');
   assert.equal(skills.getCurrentLevel(skill),current,'visible level preserved through route');
   return {p,forced,observed};
@@ -68,3 +68,12 @@ test('base and current 39 remain outside',async t=>{const f=await attempt(t,39,3
 test('qualifying player without apron remains outside',async t=>{const f=await attempt(t,40,40,false); assert.equal(f.forced,false); assert.ok(f.p.getLocation().getY()>=Y);});
 test('previously qualified drained level still enters',async t=>{const f=await attempt(t,40,39,true); assert.ok(f.forced); assert.equal(f.p.getLocation().getY(),Y-1);});
 test('exit remains available without qualification',async t=>{const f=await attempt(t,1,1,false,true); assert.ok(f.forced); assert.equal(f.p.getLocation().getY(),Y);});
+// #4647 review: the door swap is world state, so a player-wide task cancel (logging out, a quest) within its two ticks
+// must not leave the doorway blocked for everyone.
+test('a task cancel for the player mid-swap still puts the guild door back',async t=>{
+  const f=await attempt(t,40,40,true,false,true); assert.ok(f.forced);
+  const ids=(x,y)=>core.ObjectManager.objectsAt(new core.Location(x,y,0)).map(o=>o.getId());
+  assert.equal(ids(X,Y).includes(38848),false,'inviswall gone from the doorway');
+  assert.equal(ids(X,Y-1).includes(1539),false,'open door gone from inside');
+  assert.ok(core.World.findCacheObject(f.p,DOOR,new core.Location(X,Y,0)),'guild door back');
+});

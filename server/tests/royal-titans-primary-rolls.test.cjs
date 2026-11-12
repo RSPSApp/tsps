@@ -103,3 +103,36 @@ for (const [titan, id] of [["branda", () => Shared.BRANDA_ID], ["eldric", () => 
     assert.equal(request.rolls, 2);
   });
 }
+
+// A seeded, statistical check that the own roll really repeats the table: without it every assertion above would still
+// pass if rollTable ignored `rolls`. The claim's own roll is `npc-drops:roll-table` with this filter (ownRoll()).
+const seeded = (seed) => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+for (const [titan, id] of [["branda", () => Shared.BRANDA_ID], ["eldric", () => Shared.ELDRIC_ID]]) {
+  test(`${titan}: the own roll makes two main-table rolls (a common row's rate is twice its single-roll rate)`, (t) => {
+    const table = Drops.__internals.tablesByNpc.get(id())[0];
+    // The most common plain main row: not a pre-roll, an independent roll, a shared-table access or an empty slot.
+    const row = table.entries.filter((e) => Number.isInteger(e.item_id) && !e.always && !e.pre_roll && !e.separate_roll && !e.shared_table && !e.nothing)
+      .sort((a, b) => b.weight / b.out_of - a.weight / a.out_of)[0];
+    const trials = 40000;
+    const rate = (rolls) => {
+      const saved = table.rolls;
+      if (rolls === 1) delete table.rolls; else table.rolls = rolls;
+      t.mock.method(Math, "random", seeded(7 + rolls));
+      let hits = 0;
+      for (let i = 0; i < trials; i++) {
+        const request = { npcId: id(), drops: [], entryFilter: (entry) => entry.item_id !== 30622 };
+        PM.emitCustomEvent("npc-drops:roll-table", request);
+        hits += request.drops.filter((drop) => drop.itemId === row.item_id).length;
+      }
+      table.rolls = saved;
+      t.mock.reset();
+      return hits / trials;
+    };
+    const single = rate(1), double = rate(2);
+    const p = row.weight / table.main_max_roll;
+    assert.ok(Math.abs(single - p) < Math.max(0.01, p * 0.1), `single roll ${single} vs ${p}`);
+    assert.ok(Math.abs(double / single - 2) < 0.2, `two rolls ${double} vs one ${single}`);
+  });
+}
+

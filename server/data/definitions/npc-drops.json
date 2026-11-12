@@ -5,7 +5,7 @@
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
     "npc_count": 3086,
-    "table_count": 1105,
+    "table_count": 1106,
     "table_refs": 3106,
     "wiki_pages_scanned": 1627,
     "shared_tables": [
@@ -57034,721 +57034,6 @@
       ],
       "tertiary": []
     },
-    "cyclops": {
-      "table_id": "cyclops",
-      "label": "Drops",
-      "table_name": "Cyclops Drops",
-      "wiki_page": "Cyclops",
-      "main_max_roll": 202,
-      "entries": [
-        {
-          "item_id": 532,
-          "name": "Big bones",
-          "quantity": [
-            1,
-            1
-          ],
-          "always": true,
-          "rarity_raw": "Always",
-          "section": "100%"
-        },
-        {
-          "item_id": 532,
-          "name": "Big bones",
-          "quantity": [
-            1,
-            1
-          ],
-          "always": true,
-          "rarity_raw": "Always",
-          "section": "100%"
-        },
-        {
-          "item_id": 12954,
-          "name": "Dragon defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "pre_roll": true,
-          "weight": 1,
-          "out_of": 100,
-          "rarity": 0.01,
-          "section": "Pre-roll"
-        },
-        {
-          "item_id": 869,
-          "name": "Black knife",
-          "quantity": [
-            4,
-            13
-          ],
-          "weight": 16,
-          "out_of": 202,
-          "rarity": 0.0792079,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1105,
-          "name": "Steel chainbody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1309,
-          "name": "Iron 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1101,
-          "name": "Iron chainbody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1207,
-          "name": "Steel dagger",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1424,
-          "name": "Steel mace",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1281,
-          "name": "Steel sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1365,
-          "name": "Steel battleaxe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1311,
-          "name": "Steel 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1295,
-          "name": "Steel longsword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1141,
-          "name": "Steel med helm",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1313,
-          "name": "Black 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1209,
-          "name": "Mithril dagger",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1299,
-          "name": "Mithril longsword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1430,
-          "name": "Adamant mace",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1283,
-          "name": "Black sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1297,
-          "name": "Black longsword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1217,
-          "name": "Black dagger",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1317,
-          "name": "Adamant 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 8844,
-          "name": "Bronze defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8845,
-          "name": "Iron defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8846,
-          "name": "Steel defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8847,
-          "name": "Black defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8848,
-          "name": "Mithril defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8849,
-          "name": "Adamant defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 8850,
-          "name": "Rune defender",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 202,
-          "rarity": 0.009901,
-          "section": "Defenders"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            3,
-            102
-          ],
-          "weight": 31,
-          "out_of": 202,
-          "rarity": 0.1534653,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            5,
-            204
-          ],
-          "weight": 10,
-          "out_of": 202,
-          "rarity": 0.049505,
-          "section": "Coins"
-        },
-        {
-          "item_id": 1317,
-          "name": "Adamant 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 4,
-          "out_of": 202,
-          "rarity": 0.019802,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 809,
-          "name": "Mithril dart",
-          "quantity": [
-            12,
-            12
-          ],
-          "weight": 6,
-          "out_of": 202,
-          "rarity": 0.029703,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1211,
-          "name": "Adamant dagger",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1165,
-          "name": "Black full helm",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1426,
-          "name": "Black mace",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1329,
-          "name": "Mithril scimitar",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1197,
-          "name": "Mithril kiteshield",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1119,
-          "name": "Steel platebody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1105,
-          "name": "Steel chainbody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 7,
-          "out_of": 202,
-          "rarity": 0.0346535,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 869,
-          "name": "Black knife",
-          "quantity": [
-            22,
-            22
-          ],
-          "weight": 4,
-          "out_of": 202,
-          "rarity": 0.019802,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1071,
-          "name": "Mithril platelegs",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 4,
-          "out_of": 202,
-          "rarity": 0.019802,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1217,
-          "name": "Black dagger",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 5,
-          "out_of": 202,
-          "rarity": 0.0247525,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1147,
-          "name": "Rune med helm",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 3,
-          "out_of": 202,
-          "rarity": 0.0148515,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1183,
-          "name": "Adamant sq shield",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1163,
-          "name": "Rune full helm",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 202,
-          "rarity": 0.0049505,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            96,
-            96
-          ],
-          "weight": 11,
-          "out_of": 202,
-          "rarity": 0.0544554,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            350,
-            449
-          ],
-          "weight": 8,
-          "out_of": 202,
-          "rarity": 0.039604,
-          "section": "Coins"
-        },
-        {
-          "item_id": 379,
-          "name": "Lobster",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 7,
-          "out_of": 202,
-          "rarity": 0.0346535,
-          "section": "Other"
-        },
-        {
-          "shared_table": "herb",
-          "weight": 3,
-          "out_of": 100,
-          "rarity": 0.03,
-          "section": "Herbs"
-        },
-        {
-          "shared_table": "herb",
-          "weight": 4,
-          "out_of": 100,
-          "rarity": 0.04,
-          "section": "Herbs"
-        },
-        {
-          "shared_table": "rareDrop",
-          "weight": 2,
-          "out_of": 100,
-          "rarity": 0.02,
-          "section": "Rare drop table"
-        },
-        {
-          "shared_table": "gem",
-          "weight": 2,
-          "out_of": 100,
-          "rarity": 0.02,
-          "section": "Gem drop table"
-        },
-        {
-          "shared_table": "uncommonSeed",
-          "weight": 1,
-          "out_of": 100,
-          "rarity": 0.01,
-          "section": "Seeds"
-        }
-      ],
-      "tertiary": [
-        {
-          "item_id": 10976,
-          "name": "Long bone",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 400,
-          "rarity": 0.0025,
-          "section": "Tertiary"
-        },
-        {
-          "item_id": 10977,
-          "name": "Curved bone",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5013,
-          "rarity": 0.0001995,
-          "section": "Tertiary"
-        },
-        {
-          "item_id": 2722,
-          "name": "Clue scroll (hard)",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 512,
-          "rarity": 0.0019531,
-          "section": "Tertiary",
-          "clue_scroll_box": true,
-          "notes": [
-            "The hard clue scroll drop rate increases to 1/486 after unlocking the hard Combat Achievements rewards tier.",
-            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
-          ]
-        },
-        {
-          "item_id": 10976,
-          "name": "Long bone",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 400,
-          "rarity": 0.0025,
-          "section": "Tertiary"
-        },
-        {
-          "item_id": 10977,
-          "name": "Curved bone",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5013,
-          "rarity": 0.0001995,
-          "section": "Tertiary"
-        },
-        {
-          "item_id": 2722,
-          "name": "Clue scroll (hard)",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 256,
-          "rarity": 0.0039062,
-          "section": "Tertiary",
-          "clue_scroll_box": true,
-          "notes": [
-            "The hard clue scroll drop rate increases to 1/243 after unlocking the hard Combat Achievements rewards tier.",
-            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
-          ]
-        }
-      ]
-    },
     "cyclops_ardougne_zoo": {
       "table_id": "cyclops_ardougne_zoo",
       "label": "Drops",
@@ -58415,6 +57700,739 @@
           "weight": 10,
           "out_of": 100,
           "rarity": 0.1,
+          "section": "Coins"
+        },
+        {
+          "shared_table": "herb",
+          "weight": 3,
+          "out_of": 100,
+          "rarity": 0.03,
+          "section": "Herbs"
+        },
+        {
+          "shared_table": "gem",
+          "weight": 2,
+          "out_of": 100,
+          "rarity": 0.02,
+          "section": "Gem drop table"
+        },
+        {
+          "shared_table": "uncommonSeed",
+          "weight": 1,
+          "out_of": 100,
+          "rarity": 0.01,
+          "section": "Seeds"
+        }
+      ],
+      "tertiary": [
+        {
+          "item_id": 10976,
+          "name": "Long bone",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 400,
+          "rarity": 0.0025,
+          "section": "Tertiary"
+        },
+        {
+          "item_id": 10977,
+          "name": "Curved bone",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5013,
+          "rarity": 0.0001995,
+          "section": "Tertiary"
+        },
+        {
+          "item_id": 2722,
+          "name": "Clue scroll (hard)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 512,
+          "rarity": 0.0019531,
+          "section": "Tertiary",
+          "clue_scroll_box": true,
+          "notes": [
+            "The hard clue scroll drop rate increases to 1/486 after unlocking the hard Combat Achievements rewards tier.",
+            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
+          ]
+        }
+      ]
+    },
+    "cyclops_drop_table_warriors_guild_basement": {
+      "table_id": "cyclops_drop_table_warriors_guild_basement",
+      "label": "Warriors' Guild Basement",
+      "table_name": "Cyclops Warriors' Guild Basement",
+      "wiki_page": "Cyclops",
+      "main_max_roll": 100,
+      "entries": [
+        {
+          "item_id": 532,
+          "name": "Big bones",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always",
+          "section": "100%"
+        },
+        {
+          "item_id": 12954,
+          "name": "Dragon defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "pre_roll": true,
+          "weight": 1,
+          "out_of": 100,
+          "rarity": 0.01,
+          "section": "Pre-roll"
+        },
+        {
+          "item_id": 1317,
+          "name": "Adamant 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 809,
+          "name": "Mithril dart",
+          "quantity": [
+            12,
+            12
+          ],
+          "weight": 6,
+          "out_of": 100,
+          "rarity": 0.06,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1211,
+          "name": "Adamant dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1165,
+          "name": "Black full helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1426,
+          "name": "Black mace",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1329,
+          "name": "Mithril scimitar",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1197,
+          "name": "Mithril kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1119,
+          "name": "Steel platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1105,
+          "name": "Steel chainbody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 7,
+          "out_of": 100,
+          "rarity": 0.07,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 869,
+          "name": "Black knife",
+          "quantity": [
+            22,
+            22
+          ],
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1071,
+          "name": "Mithril platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1217,
+          "name": "Black dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1147,
+          "name": "Rune med helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 100,
+          "rarity": 0.03,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1183,
+          "name": "Adamant sq shield",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 100,
+          "rarity": 0.01,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1163,
+          "name": "Rune full helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 100,
+          "rarity": 0.01,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            96,
+            96
+          ],
+          "weight": 11,
+          "out_of": 100,
+          "rarity": 0.11,
+          "section": "Coins"
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            350,
+            449
+          ],
+          "weight": 8,
+          "out_of": 100,
+          "rarity": 0.08,
+          "section": "Coins"
+        },
+        {
+          "item_id": 379,
+          "name": "Lobster",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 7,
+          "out_of": 100,
+          "rarity": 0.07,
+          "section": "Other"
+        },
+        {
+          "shared_table": "herb",
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04,
+          "section": "Herbs"
+        },
+        {
+          "shared_table": "rareDrop",
+          "weight": 2,
+          "out_of": 100,
+          "rarity": 0.02,
+          "section": "Rare drop table"
+        },
+        {
+          "shared_table": "uncommonSeed",
+          "weight": 3,
+          "out_of": 100,
+          "rarity": 0.03,
+          "section": "Seeds"
+        }
+      ],
+      "tertiary": [
+        {
+          "item_id": 10976,
+          "name": "Long bone",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 400,
+          "rarity": 0.0025,
+          "section": "Tertiary"
+        },
+        {
+          "item_id": 10977,
+          "name": "Curved bone",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5013,
+          "rarity": 0.0001995,
+          "section": "Tertiary"
+        },
+        {
+          "item_id": 2722,
+          "name": "Clue scroll (hard)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 256,
+          "rarity": 0.0039062,
+          "section": "Tertiary",
+          "clue_scroll_box": true,
+          "notes": [
+            "The hard clue scroll drop rate increases to 1/243 after unlocking the hard Combat Achievements rewards tier.",
+            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
+          ]
+        }
+      ]
+    },
+    "cyclops_drop_table_warriors_guild_top_floor": {
+      "table_id": "cyclops_drop_table_warriors_guild_top_floor",
+      "label": "Warriors' Guild Top Floor",
+      "table_name": "Cyclops Warriors' Guild Top Floor",
+      "wiki_page": "Cyclops",
+      "main_max_roll": 105,
+      "entries": [
+        {
+          "item_id": 532,
+          "name": "Big bones",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always",
+          "section": "100%"
+        },
+        {
+          "item_id": 869,
+          "name": "Black knife",
+          "quantity": [
+            4,
+            13
+          ],
+          "weight": 16,
+          "out_of": 105,
+          "rarity": 0.152381,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1105,
+          "name": "Steel chainbody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1309,
+          "name": "Iron 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1101,
+          "name": "Iron chainbody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1207,
+          "name": "Steel dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1424,
+          "name": "Steel mace",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1281,
+          "name": "Steel sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1365,
+          "name": "Steel battleaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1311,
+          "name": "Steel 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1295,
+          "name": "Steel longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1141,
+          "name": "Steel med helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1313,
+          "name": "Black 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1209,
+          "name": "Mithril dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1299,
+          "name": "Mithril longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1430,
+          "name": "Adamant mace",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1283,
+          "name": "Black sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1297,
+          "name": "Black longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1217,
+          "name": "Black dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1317,
+          "name": "Adamant 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 105,
+          "rarity": 0.0095238,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 8844,
+          "name": "Bronze defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8845,
+          "name": "Iron defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8846,
+          "name": "Steel defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8847,
+          "name": "Black defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8848,
+          "name": "Mithril defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8849,
+          "name": "Adamant defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 8850,
+          "name": "Rune defender",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 105,
+          "rarity": 0.0190476,
+          "section": "Defenders"
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            3,
+            102
+          ],
+          "weight": 31,
+          "out_of": 105,
+          "rarity": 0.2952381,
+          "section": "Coins"
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            5,
+            204
+          ],
+          "weight": 10,
+          "out_of": 105,
+          "rarity": 0.0952381,
           "section": "Coins"
         },
         {
@@ -218593,7 +218611,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2138": {
@@ -218602,7 +218620,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2139": {
@@ -218611,7 +218629,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2140": {
@@ -218620,7 +218638,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2141": {
@@ -218629,7 +218647,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2142": {
@@ -218638,7 +218656,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_basement"
       ]
     },
     "2145": {
@@ -219328,7 +219346,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2464": {
@@ -219337,7 +219355,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2465": {
@@ -219346,7 +219364,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2466": {
@@ -219355,7 +219373,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2467": {
@@ -219364,7 +219382,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2468": {
@@ -219373,7 +219391,7 @@
       "cache_name": "Cyclops",
       "wiki_page": "Cyclops",
       "tables": [
-        "cyclops"
+        "cyclops_drop_table_warriors_guild_top_floor"
       ]
     },
     "2474": {

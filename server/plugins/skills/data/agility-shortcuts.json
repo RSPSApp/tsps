@@ -1455,10 +1455,11 @@
     },
     {
       "name": "Ivy (Slayer Tower, up)",
-      "note": "Captured: no XP, though the Wiki lists 3",
+      "note": "Captured; 3 XP (Wiki, and rsprox 237/04000.txt:8985)",
       "object": 57677,
       "at": [3418,3533,0],
       "level": 81,
+      "xp": 3,
       "route": [3418,3533,0],
       "steps": [
         {"faceDir":"north"},
@@ -1479,10 +1480,11 @@
     },
     {
       "name": "Ivy (Slayer Tower, back down from the window)",
-      "note": "Captured",
+      "note": "Captured; 3 XP (rsprox 237/04000.txt:14145)",
       "object": 57678,
       "at": [3419,3533,2],
       "level": 81,
+      "xp": 3,
       "route": [3420,3534,2],
       "steps": [
         {"sound":2461},

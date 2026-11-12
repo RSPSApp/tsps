@@ -404,7 +404,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ResourceArea` | ResourceArea | areas | yes | Wilderness Resource Area gate: Mandrith's 6,000 coin entry fee, the gate swinging open and free exit from inside. (members only) |
 | `RevenantCaves` | RevenantCaves | areas | yes | Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside. (members only) |
 | `ShantayPass` | ShantayPass | areas | yes | Shantay Pass: the gate into the desert, Shantay and his pass, and his jail. |
-| `SlayerTower` | SlayerTower | areas | yes | Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay. (members only) |
+| `SlayerTower` | SlayerTower | areas | yes | Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay (lifted by a light source). (members only) |
 | `StrongholdOfSecurity` | StrongholdOfSecurity | areas | yes | Stronghold of Security: its doors and security questions, ladders, portals, reward rooms and the skull sceptre. |
 | `SulphurMine` | SulphurMine | areas | yes | Lovakengj sulphur mine's poison gas clouds, which hurt nearby players, less so with a breathing filter. (members only) |
 | `TaverleyDungeon` | TaverleyDungeon | areas | yes | Taverley Dungeon's key doors, Velrak's dusty key and the suits of armour that come alive at the Cauldron of Thunder prison door. (members only) |

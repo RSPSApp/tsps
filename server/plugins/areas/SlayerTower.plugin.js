@@ -5,11 +5,14 @@
  * - The entrance is one double door: opening either leaf swings both, and the gargoyle statues
  *   either side turn to their "open" pose; closing either puts all four back.
  * - The basement ladder goes between the ground floor and the dark basement, whose darkness
- *   overlay shows while you're down there (no light source needed).
+ *   overlay shows while you're down there without a light source (Wiki: "Bringing a light
+ *   source to the basement will remove the dim lighting effect.").
  *
  * The ivy, windows and spikey chains are agility shortcuts (skills/agility/shortcuts/Morytania).
  * This is under areas/ so its door and ladder handlers run before objects/Doors and Ladders.
  */
+const Darkness = require("../world/Darkness.plugin");
+
 let core = null;
 let api = null;
 let entranceOpen = false;
@@ -91,7 +94,17 @@ function showDarkness(player, dark) {
   else sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
 }
 
-/** The basement, dark while you're in it. */
+/** Whether each player in the basement is being shown the dark, so it's sent only on a change. */
+const shownDark = new WeakMap();
+
+function updateDarkness(player) {
+  const dark = !Darkness.hasLightSource(player);
+  if (shownDark.get(player) === dark) return;
+  shownDark.set(player, dark);
+  showDarkness(player, dark);
+}
+
+/** The basement, dim while you're in it without a light source. */
 function basementArea() {
   class SlayerTowerBasement extends core.Area {
     getName() {
@@ -99,11 +112,18 @@ function basementArea() {
     }
 
     postEnter(mobile) {
-      if (mobile.isPlayer()) showDarkness(mobile.getAsPlayer(), true);
+      if (mobile.isPlayer()) updateDarkness(mobile.getAsPlayer());
+    }
+
+    /** Lighting or putting out a source down here lifts or brings back the dim. */
+    process(mobile) {
+      if (mobile.isPlayer()) updateDarkness(mobile.getAsPlayer());
     }
 
     postLeave(mobile, logout) {
-      if (mobile.isPlayer() && !logout) showDarkness(mobile.getAsPlayer(), false);
+      if (!mobile.isPlayer()) return;
+      shownDark.delete(mobile.getAsPlayer());
+      if (!logout) showDarkness(mobile.getAsPlayer(), false);
     }
   }
   const [minX, maxX, minY, maxY, z] = BASEMENT.bounds;
@@ -117,10 +137,10 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "SlayerTower",
-  description: "Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay.",
+  description: "Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay (lifted by a light source).",
   members: true,
   BASEMENT,
-  _test: { attach, swing, openEntrance, closeEntrance, claimBasementLadder, showDarkness, basementArea, leaves, isOpen: () => entranceOpen, BASEMENT },
+  _test: { attach, swing, openEntrance, closeEntrance, claimBasementLadder, showDarkness, updateDarkness, basementArea, leaves, isOpen: () => entranceOpen, BASEMENT },
   register(pluginApi) {
     attach(pluginApi);
     pluginApi.onObjectInteraction("Door", { Open: openEntrance, Close: closeEntrance });

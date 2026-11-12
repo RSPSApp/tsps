@@ -1,5 +1,5 @@
 /**
- * Native legacy chat-channel challenges for bounded Plateau and Sylvan/melee-only team battles.
+ * Native legacy chat-channel challenges for bounded Plateau, Sylvan and Quarry/melee-only team battles.
  * Messages are implementation wording; there is no team-match recording to quote.
  * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
@@ -61,7 +61,7 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - Plateau / Sylvan Glade", Common.uid("clanwars_setup:title"));
+      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
@@ -168,7 +168,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau or Sylvan Glade. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade or Forsaken Quarry. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -272,7 +272,7 @@ function click(event) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
         && Layout.get(slot / 3)) return changeRules(session, player, "arena", slot / 3);
-      player.sendMessage("Only Plateau and Sylvan Glade are supported.");
+      player.sendMessage("Only Plateau, Sylvan Glade and Forsaken Quarry are supported.");
     }
     if (clicked("clanwars_setup:stragglers")) {
       const slot = event.slot ?? event.action;

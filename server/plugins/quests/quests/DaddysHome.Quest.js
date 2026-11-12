@@ -27,9 +27,10 @@
  * Varrock sawmill operator). The generic Old Man Yarlo/Marlo pages remain the fallback outside
  * the quest's stage windows.
  *
- * Yarlo's Construction demonstration uses an isolated current-cache parlour. RSProx 3218
- * (rev 232) establishes an instanced lecture, but its decoded BuildArea does not expose the
- * exact template. This room mapping is not a claim of historical template or timing equality.
+ * Yarlo's Construction demonstration uses an isolated current-cache parlour approximation.
+ * RSProx 3218 (rev 232) instead shows a different village-style room, which is not reproduced
+ * here. The parlour furniture, builder/camera tiles and timing are not retail-room parity;
+ * this change fixes the real Varrock house overlay. See docs/quests/daddys-home/README.md.
  * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
 module.exports = function registerDaddysHomeQuest(api) {
@@ -95,7 +96,7 @@ module.exports = function registerDaddysHomeQuest(api) {
   const BUILD_SOUND = 938;
   const REMOVE_SOUNDS = [2097, 2098];
 
-  // RSProx 3218 (rev 232): the cutscene's builder variants and the POH demo room.
+  // Builder variants: RSProx 3218 (rev 232). The parlour below approximates a different recorded room.
   const CUTSCENE_BUILDER_PLAIN = NpcIdentifiers.OLD_MAN_YARLO_2; // 10426
   const CUTSCENE_BUILDER_HAMMER = NpcIdentifiers.OLD_MAN_YARLO_3; // 10427
   // The same canonical room template Construction uses; current-cache loc geometry is checked

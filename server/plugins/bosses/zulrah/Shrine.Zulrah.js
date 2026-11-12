@@ -23,6 +23,8 @@ const Access = require("./Access.Zulrah");
 const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
 const BOSS_NAME = "Zulrah";
@@ -179,7 +181,7 @@ function onZulrahDeath({ npc }) {
   const ticks = fight.duration();
   CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
-  player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR.BEST_TIME, ticks);
     Shared.api().emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
@@ -265,9 +267,22 @@ function holdForPriestess(event) {
   event.handled = true;
 }
 
+/** Whether what she holds came from the death being handled now (its items were taken this cycle). */
+function heldFromThisDeath(player) {
+  return heldItems(player) != null && heldDeathCycle.get(player) === Shared.core().World.getProcessCycle();
+}
+
+/**
+ * Any unsafe death that gave her nothing new loses what she held: one with nothing to drop never reaches
+ * holdForPriestess, which only sees items. "player:died" reaches every observer, after the drops.
+ */
+function loseUnclaimed({ player, itemsLost }) {
+  if (itemsLost && heldItems(player) && !heldFromThisDeath(player)) player.setAttribute(Shared.ATTR.RETRIEVAL, null);
+}
+
 function announceHeld({ player }) {
   if (!Shared.inShrine(player.getLocation()) && !Fight.fightOf(player)) return;
-  if (heldItems(player)) player.sendMessage("Priestess Zul-Gwenwynig has retrieved some of your items. You can collect them from her at the pier in Zul-Andra.");
+  if (heldFromThisDeath(player)) player.sendMessage("Priestess Zul-Gwenwynig has retrieved some of your items. You can collect them from her at the pier in Zul-Andra.");
 }
 
 /** The fee: free for the first 50 kills, then 100,000 coins once per death (Wiki). */
@@ -395,7 +410,7 @@ function retrievalItemAction(event) {
   if (!entry) return false;
   const op = event.opId ?? event.action;
   if (op === RETRIEVAL_EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry[0]).getExamine());
+    examineItem(player, entry[0], entry[1]);
     return true;
   }
   if (op !== RETRIEVAL_TAKE_OP) return false;
@@ -467,6 +482,7 @@ module.exports = function registerZulrahShrine(api) {
   api.onCanAttack(onlyWhenSurfaced);
   api.onPlayerDeathItemDrop(holdForPriestess);
   api.onPlayerDeath(announceHeld);
+  api.onCustomEvent("player:died", loseUnclaimed);
 };
 
 module.exports.board = board;
@@ -476,6 +492,7 @@ module.exports.talkTo = talkTo;
 module.exports.returnFromShrine = returnFromShrine;
 module.exports.capDamage = capDamage;
 module.exports.holdForPriestess = holdForPriestess;
+module.exports.loseUnclaimed = loseUnclaimed;
 module.exports.onZulrahDeath = onZulrahDeath;
 module.exports.lootUnderPlayer = lootUnderPlayer;
 module.exports.onlyWhenSurfaced = onlyWhenSurfaced;

@@ -14,7 +14,8 @@
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
- * that box. "npc-dialogue:start" plays a named variant on demand
+ * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
+ * plays, then continue normally or, with `box.advance`, move on by itself. "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -27,6 +28,7 @@ const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").s
   .map(([retired, successor]) => [successor.id, Number(retired)]));
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
@@ -453,6 +455,23 @@ function combatLevelCondition(player, text) {
   return match ? player.getSkillManager().getCombatLevel() < Number(match[1]) : null;
 }
 
+/**
+ * The transcripts' bare skill-level wording, "If the player has at least 46 Hunter:" and its
+ * siblings "under 46 Hunter" / "less than 60 Smithing", answered from the player's base level in
+ * that skill: the Wiki marks these not boostable (Hunter Guild, Blast Furnace), as Rumours.Hunter.js
+ * and AtFirstLight.Quest.js read them. A plugin answers a boostable one first (Adventurer Ada's Sailing).
+ * Unanswered, a sibling run took its first branch whatever the level, so
+ * Pellem and Imia refused every player (issue #4434). Plugins answer their own conditions first.
+ */
+function skillLevelCondition(player, text) {
+  const match = /^If the player has (at least|under|less than) (\d+) ([A-Z][a-z]+):$/.exec(String(text ?? ""));
+  if (!match) return null;
+  const skill = Skill.values().find((entry) => entry.getName().toLowerCase() === match[3].toLowerCase());
+  if (!skill) return null;
+  const level = player.getSkillManager().getMaxLevel(skill);
+  return match[1] === "at least" ? level >= Number(match[2]) : level < Number(match[2]);
+}
+
 /** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
 function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
@@ -539,6 +558,14 @@ function flatten(steps, opts = {}) {
  * `step.shops` ("Ned's Handmade Rope (100% Wool) (Default)", "... (Fremennik Isles)");
  * "npc-dialogue:shop" lets a plugin pick one by game state, else the Default version opens.
  */
+/** Four 53-character lines a page: the layout before ChatTextLayout, for a core without it. */
+function characterPages(text) {
+  const lines = Misc.wrapText(text, 53);
+  const pages = [];
+  for (let start = 0; start < lines.length; start += 4) pages.push(lines.slice(start, start + 4).join(" "));
+  return pages;
+}
+
 function shopName(api, player, npcId, step) {
   if (!Array.isArray(step.shops)) return step.target;
   const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
@@ -605,7 +632,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     PluginManager.emitNpcDialogueCondition({
       player, npc: event.npc, npcId, definition, pages: context.pages,
       text: step.text, stepId: step.id,
-    }) ?? combatLevelCondition(player, step.text);
+    }) ?? combatLevelCondition(player, step.text) ?? skillLevelCondition(player, step.text);
 
   // "shows other/previous/initial options" ({{tact|other}} etc.) replays a menu
   // that has already been shown. "previous2/3" walk further back, "initial" is
@@ -969,7 +996,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return;
         }
         playedAny = true;
-        const lines = Misc.wrapText(formatted, 53);
+        // Pages as the chatbox holds them: four lines of font 497 in 380 pixels (ChatTextLayout).
+        const pages = api.core?.ChatTextLayout?.pages(formatted) ?? characterPages(formatted);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
@@ -999,8 +1027,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           : undefined;
         if (hold) chain.add(hold);
         let held;
-        for (let start = 0; start < lines.length; start += 4) {
-          const text = lines.slice(start, start + 4).join(" ");
+        for (const text of pages) {
           const dialogue = isPlayer
             ? new PlayerDialogue(index++, text, expression)
             : new NpcDialogue(index++, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
@@ -1053,12 +1080,29 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           if (first !== undefined || message.box?.statement === true) {
             const text = formatPlayerText(String(message.text ?? ""), player);
             const box = new DialogueChainBuilder();
-            box.add(message.box?.statement === true
-              ? new api.core.StatementDialogue(0, text)
-              : second === undefined
-                ? new ItemStatementDialogue(0, first, text)
-                : new DoubleItemStatementDialogue(0, first, second, text));
-            box.add(new ActionDialogue(1, { execute: () => {
+            // `box.holdTicks` (statement boxes): the box first shows that many ticks without
+            // "Click here to continue" while a scene plays out, as live sends it; then it gains
+            // its continue, or with `box.advance` the conversation moves on by itself.
+            const holdTicks = message.box?.statement === true && Number.isInteger(message.box.holdTicks)
+              && message.box.holdTicks > 0 ? message.box.holdTicks : 0;
+            let boxIndex = 0;
+            if (holdTicks) {
+              const held = new ActionDialogue(boxIndex++, { execute: () => {
+                presentOwned(() => api.core.StatementDialogue.send(player, text, false));
+                api.core.TaskManager.submit(new api.core.CountdownTask(player, holdTicks, () => {
+                  if (manager.getCurrent?.() === held) manager.advance();
+                }));
+              } }, true);
+              box.add(held);
+            }
+            if (!holdTicks || message.box.advance !== true) {
+              box.add(message.box?.statement === true
+                ? new api.core.StatementDialogue(boxIndex++, text)
+                : second === undefined
+                  ? new ItemStatementDialogue(boxIndex++, first, text)
+                  : new DoubleItemStatementDialogue(boxIndex++, first, second, text));
+            }
+            box.add(new ActionDialogue(boxIndex, { execute: () => {
               message.after?.();
               run(rest, currentRecord);
             } }));
@@ -1152,6 +1196,7 @@ module.exports = {
   aliasKeys,
   flatten,
   combatLevelCondition,
+  skillLevelCondition,
   formatPlayerText,
   startDialogue,
   collectPageLines,

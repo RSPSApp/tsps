@@ -18,7 +18,7 @@ const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFo
 const { MagicCombatMethod } = require("../dist/game/content/combat/method/impl/MagicCombatMethod");
 const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const IceBarrageDiary = require("../plugins/achievements/diaries/ArdougneIceBarrageDiary.plugin");
+const IceBarrageDiary = require("../plugins/achievements/diaries/ArdougneIceBarrageDiary.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 
 let core;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { FriendSnapshot } from "../common/social/FriendsChat";
-import { FriendLoginUpdates } from "../game/chat/FriendLoginUpdates";
+import { FriendLoginUpdates, friendLoginNoticesShown } from "../game/chat/FriendLoginUpdates";
 
 const friend = (name: string, world: number, previousName = ""): FriendSnapshot =>
     ({ name, world, previousName, rank: 0, isOnline: world > 0 });
@@ -35,3 +35,9 @@ queue.clear();
 queue.update([friend("Bob", 1)], 111_000);
 assert.deepEqual(queue.drain(130_000), [], "a fresh session suppresses its initial bulk list");
 console.log("Friend login updates tests passed");
+
+// Row 44: Off hides the notices; Timeout and On show them.
+const vars = (values: Record<number, number>) => (id: number) => values[id] ?? 0;
+assert.equal(friendLoginNoticesShown(vars({})), true, "Timeout shows notices");
+assert.equal(friendLoginNoticesShown(vars({ 12274: 1, 1627: 1 })), true, "On shows notices");
+assert.equal(friendLoginNoticesShown(vars({ 12274: 2, 1627: 0 })), false, "Off hides notices");

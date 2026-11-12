@@ -47,6 +47,8 @@
  *   owner-only for quest players because ground-items.json predates Sailing; the
  *   exact OSRS spawn network is not reproduced.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTroubledTortugansQuest(api) {
   const {
     Animation,
@@ -1202,7 +1204,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
     const sender = player.getPacketSender();
     camera(player, [3336, 2207, 1024], [3336, 2192, 1023], Scenes.CAMERA_RATES);
     // Discord capture: five zeroed cam_shake packets open the scene.
-    for (let axis = 0; axis < 5; axis++) sender.sendCameraShake(axis, 0, 0, 0);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(sender, "atmospheric", axis, 0, 0, 0);
     later(key, 6, () => {
       if (pearlCameraKeys.get(player) !== key) return;
       camera(player, [3366, 2232, 1024], [3336, 2197, 1023], Scenes.CAMERA_RATES);
@@ -1620,6 +1622,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
       { skillId: Skill.SLAYER.getIndex(), amount: SLAYER_REWARD_XP, label: "Slayer" },
     ],
     otherRewards: ["Great Conch Access"],
+    rewardOrder: ["other", "xp"], // rsprox 235/03456.txt (the completion scroll near :52850)
     buildJournal,
     onReward: grantReward,
   });

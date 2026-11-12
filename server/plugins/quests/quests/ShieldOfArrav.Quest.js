@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /** Shield of Arrav. Capture evidence and remaining presentation gaps: docs/shield-of-arrav.md. */
 module.exports = function registerShieldOfArravQuest(api) {
   const { giveReward } = require("../QuestRuntime");
@@ -866,11 +867,12 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (request.handled || ![WEAPON_STORE_DOOR_ID, BLACKARM_DOOR_ID, PHOENIX_HIDEOUT_DOOR_ID].includes(objectId)) return;
     request.handled = true;
     if (objectId === WEAPON_STORE_DOOR_ID) {
-      if (!hasItem(player, KEY_ID)) {
+      if (!hasKey(api, player, KEY_ID)) {
         player.sendMessage("The door is securely locked.");
         return;
       }
-      player.sendMessage("You unlock the door using the key you're carrying.");
+      player.sendMessage(!player.getInventory().contains(KEY_ID)
+        ? "You use your keyring to unlock the door." : "You unlock the door using the key you're carrying.");
     } else if (objectId === BLACKARM_DOOR_ID && (!isBlackArm(player) || quest.getStage(player) < STAGE_JOINED_GANG)) {
       player.sendMessage(isPhoenix(player) && joinedGang(player)
         ? "The door is securely locked."
@@ -984,6 +986,18 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (crossing) player.moveTo(new Location(crossing.destination.x, crossing.destination.y, crossing.destination.z));
   }
 
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "SHIELD_OF_ARRAV", count: 1 });
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    reward(player, completed, options);
+    grantCompletionLamps(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "shield_of_arrav",
     name: "Shield of Arrav",
@@ -994,11 +1008,12 @@ module.exports = function registerShieldOfArravQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    otherRewards: ["An antique lamp giving 500 XP"],
     xpRewards: [],
     scrollItemId: SCROLL_ITEM_ID,
     rewardItemLabel: "600 Coins",
     buildJournal,
-    onReward: reward,
+    onReward: rewardOnCompletion,
   });
 
   api.persistAttribute(DIRECTIONS_ATTRIBUTE, false);

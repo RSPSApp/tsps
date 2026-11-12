@@ -1,8 +1,8 @@
 /**
  * The Alchemical Hydra's combat method (Wiki: Alchemical Hydra/Strategies; stats from
  * monsters-complete): ranged and magic, switching every three basic attacks (every attack once
- * enraged), 35 at most and every 6 ticks, 55 and every 4 ticks enraged (52 while an incorrect
- * vent has empowered it); the phase's special in place of an attack when the count says so
+ * enraged), every 6 ticks (4 enraged), with the Wiki infobox's per-phase max hits and hit counts
+ * (Fight.maxHit / hitCount: serpentine 17x2, electric 35, flame 35, enraged 55); the phase's special in place of an attack when the count says so
  * (Fight.AlchemicalHydra.js). Protection prayers block its attacks entirely, as for any NPC.
  */
 const Common = require("./Common.AlchemicalHydra");
@@ -35,9 +35,16 @@ function combatClass() {
       if (!character || !target || !this.style) return [];
       const fight = character.getAsNpc?.()?.__hydraFight;
       const max = fight?.maxHit?.() ?? combat.maxHit;
-      const hit = new PendingHit(character, target, this, this.delay);
-      hit.setTotalDamage(Math.min(max, hit.getTotalDamage()));
-      return [hit];
+      const count = fight?.hitCount?.() ?? 1;
+      const hits = [];
+      for (let i = 0; i < count; i++) {
+        const hit = new PendingHit(character, target, this, this.delay);
+        // The forms' cache max hits don't follow the phases (the serpentine form's is 1, and
+        // none reaches the empowered 52), so a hit that lands rolls the phase's own 0..max.
+        hit.setTotalDamage(hit.isAccurate() ? Common.core.Misc.randomInclusive(0, max) : 0);
+        hits.push(hit);
+      }
+      return hits;
     }
 
     start(character, target) {

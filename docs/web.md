@@ -12,6 +12,7 @@ the Sarachnis dungeon webs are her plugin's (`docs/sarachnis.md`).
   needs to be wielded). Non-weapon items with a slash bonus (amulets) do not.
 - Chance: 100% for a Wilderness sword or a slash bonus of +100 or more, 50% for a knife, 20% for
   any slash bonus, scaled in between with a floor of 50% for slash swords. Failure costs nothing.
+- Aranea boots let the player "pass through webs without needing any other tools" (Web, Aranea boots).
 
 ## What the captures show
 
@@ -27,6 +28,10 @@ the Sarachnis dungeon webs are her plugin's (`docs/sarachnis.md`).
   in between.
 - The slashed web is a web again 99 ticks after the loc change (recording 4155: 1813 -> 1912,
   1818 -> 1917, 1834 -> 1933, three different webs).
+- With aranea boots on, Slash on the Forthos tomb web (loc 34898) wades through:
+  `human_aranea_boots_wade` (11511) with a one-tile exactmove (delay 30, angle 1024 going north and
+  0 coming back), the web left standing and no message (recordings 3926, 3927 ticks 5035-5038, 3932
+  tick 4939). No Wilderness web is recorded with the boots.
 
 ## What we do
 
@@ -34,10 +39,13 @@ the Sarachnis dungeon webs are her plugin's (`docs/sarachnis.md`).
   plays (cache attack animation, else the weapon type's slash style, a knife chops).
 - Messages and the swing sound as captured; clicking a web already being cut does nothing.
 - The web becomes the slashed one two ticks after the swing and a web again 99 ticks later.
+- With aranea boots worn, Slash wades through as recorded at the Forthos web, carried blade or not: the
+  wade with its one-tile forced step, no message, the web left standing. A wall web is crossed from
+  its tile over its edge, or stepped back onto; any other web's tile is stepped onto. Using a blade
+  on the web still slashes it.
 
 ## Not done
 
 - The `busy` lock during the two ticks (recording 4155 sets varbit 12393 for them).
-- Aranea boots wading through the web (`human_aranea_boots_wade` with a forced step in
-  recordings 3926 and 3932): the only captured webs are Sarachnis', which her plugin owns; no
-  Wilderness capture exists.
+- Whether the boots wade a Wilderness web exactly as at the Forthos web: only Sarachnis' web is
+  recorded, so the wade is reused from there.

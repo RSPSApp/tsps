@@ -505,7 +505,8 @@ test("as captured: withdrawing into a full inventory says there is no space", ()
 
   Bank.withdraw(player, TRIDENT, 0, 1, 0);
 
-  assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
+  // Spam on bank clicks: 224/01463.txt:7863, 231/03063.txt:9533.
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:You don't have enough inventory space.`]);
   assert.equal(player.getBank(0).getAmount(TRIDENT), 3);
 });
 
@@ -516,7 +517,7 @@ test("as captured: withdrawing more than the free slots takes what fits and says
 
   Bank.withdraw(player, TRIDENT, 0, 5, 0);
 
-  assert.deepEqual(player.messages, ["You don't have enough inventory space to withdraw that many."]);
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:You don't have enough inventory space to withdraw that many.`]);
   assert.equal(player.getInventory().getAmount(TRIDENT), 2);
   assert.equal(player.getBank(0).getAmount(TRIDENT), 3);
 });
@@ -667,6 +668,21 @@ test("collapsing a tab moves its items and placeholders into the main tab and sh
 
   assert.deepEqual(tabsOf(player), [[1, MYSTIC_LAVA_STAFF, 3], [0, TRIDENT, 1], [0, LAVA_BATTLESTAFF, 0]]);
   assert.deepEqual(player.getBank(0).getValidItems()[0].getMeta(), { charges: 1200 });
+});
+
+test("the old tab-button collapse keeps each stack's own count and metadata, and moves them to the main tab", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 1200 }), false);
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 5 }), false);
+  player.getBank(1).add(new Item(995, 300), false);
+
+  // Button 50070 + 4 * tab with action 1 is the old tab-button collapse.
+  assert.equal(Bank.handleButton(player, 50070 + 4, 1), true);
+
+  assert.deepEqual(player.getInventory().getValidItems(), []);
+  assert.deepEqual(player.getBank(0).getValidItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]),
+    [[TRIDENT, 1, { charges: 1200 }], [TRIDENT, 1, { charges: 5 }], [995, 300, null]]);
+  assert.deepEqual(player.getBank(1).getValidItems(), []);
 });
 
 test("removing placeholders from a tab leaves other tabs' placeholders", () => {
@@ -1413,3 +1429,18 @@ test("price checking quantities and closing returns every item", () => {
   }
 });
 
+
+test("Bank.contains counts the item in every tab, past a placeholder and across metadata stacks", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(LAVA_BATTLESTAFF, 0), false);
+  player.getBank(2).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  player.getBank(3).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 9 }), false);
+
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 1)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 2)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF_NOTE, 2)), true, "a note asks for the item it notes");
+  // The search tab holds copies of what the other tabs hold; they are not counted again.
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+});

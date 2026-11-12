@@ -157,7 +157,8 @@ export class MagicOnItemPacketListener {
         (entity: any) => {
           const target = this.findVisibleGroundItem(entity, groundItemId, x, y);
           return !!target && this.withinTelegrabRange(entity, target.getPosition());
-        }
+        },
+        { failWhenUnreachable: true }
       );
       return;
     }
@@ -266,6 +267,8 @@ export class MagicOnItemPacketListener {
    * waits for it (Wiki: "If you cast a second alchemy spell before your last one finishes, it's
    * now queued up"); a later click replaces the waiting one. An untradeable item asks first, as
    * live does (rsprox 3215): "That item cannot be traded." beside it, then Proceed/Cancel.
+   * "magic:alchemy-warning" { player, item, itemId, spellId, high, text } lets the All Settings
+   * warnings change that line: a valuable item's, or none (`text` null) to cast without asking.
    */
   private castAlchemy(player: any, spellId: number, slot: number, itemId: number, confirmed = false, source?: unknown): void {
     const inventory = player.getInventory();
@@ -291,6 +294,9 @@ export class MagicOnItemPacketListener {
       ? MagicOnItemPacketListener.HIGH_ALCH_XP
       : MagicOnItemPacketListener.LOW_ALCH_XP;
     const definition = item.getDefinition?.();
+    const warning = { player, item, itemId, spellId, high: isHighAlch,
+      text: definition.isTradeable?.() ? null as string | null : "That item cannot be traded." };
+    if (!confirmed) PluginManager.emitCustomEvent("magic:alchemy-warning", warning);
 
     // Untradeable items alch too, after a warning (rsprox 3215: Iban's staff for 12 coins); only
     // the server's own untradeable flag (PvP preset items) keeps an item out. A plugin that turns
@@ -299,7 +305,7 @@ export class MagicOnItemPacketListener {
       && definition.getHighAlchValue() > 0 && definition.getLowAlchValue() > 0,
       coins: isHighAlch ? definition.getHighAlchValue() : definition.getLowAlchValue(),
       castTicks: isHighAlch ? MagicOnItemPacketListener.HIGH_ALCH_CAST_TICKS : MagicOnItemPacketListener.LOW_ALCH_CAST_TICKS,
-      confirm: !definition.isTradeable?.(),
+      confirm: typeof warning.text === "string" && warning.text.length > 0,
       // Content may lower the level, waive the runes, keep the item or cast again on what is left (a league relic).
       requiredLevel, freeRunes: false, keepItem: false, recast: false };
     PluginManager.emitCustomEvent("magic:alchemy-policy", policy);
@@ -356,7 +362,7 @@ export class MagicOnItemPacketListener {
       }
     }
     if (!confirmed && policy.confirm) {
-      this.confirmUntradeableAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, source);
+      this.confirmAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, warning.text as string, source);
       return;
     }
     const now = World.getProcessCycle();
@@ -393,12 +399,12 @@ export class MagicOnItemPacketListener {
     if (!payment.keepTab) player.getPacketSender().sendTab(6);
     // Cast again on what is left in the slot, once this cast ends (a league relic's automatic alchemy).
     if (policy.recast === true && inventory.getItems()[slot]?.getId() === itemId) {
-      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source }, policy.castTicks);
+      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source, automatic: true }, policy.castTicks);
     }
   }
 
   /** The waiting cast is cast once the current one ends; only one waits at a time. */
-  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown }, ticks: number): void {
+  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown; automatic?: boolean }, ticks: number): void {
     const waiting = player.getAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE);
     player.setAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE, cast);
     if (waiting) {
@@ -415,14 +421,20 @@ export class MagicOnItemPacketListener {
           return;
         }
         if (player.getInventory().getItems()[queued.slot] !== queued.item) return;
+        // A dialogue, menu or prompt opened while a clicked cast waited drops it: cast under a hand-in's dialogue, it
+        // would alch the item the dialogue had checked and the dialogue would still pay. A relic's automatic recast
+        // carries on (Wiki, Golden God: actions that would normally cancel Alchemy don't while it casts automatically).
+        const sender = player.getPacketSender?.();
+        if (!queued.automatic
+          && (player.getDialogueManager?.()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.())) return;
         listener.castAlchemy(player, queued.spellId, queued.slot, queued.itemId, true, queued.source);
       }
     });
   }
 
-  private confirmUntradeableAlchemy(player: any, spellId: number, slot: number, itemId: number, itemName: string, item: any, source?: unknown): void {
+  private confirmAlchemy(player: any, spellId: number, slot: number, itemId: number, itemName: string, item: any, reason: string, source?: unknown): void {
     const spellName = spellId === MagicOnItemPacketListener.HIGH_ALCH_SPELL_ID ? "High Level Alchemy" : "Low Level Alchemy";
-    const warning = `That item cannot be traded.<br>Really cast ${spellName} on it?`;
+    const warning = `${reason}<br>Really cast ${spellName} on it?`;
     player.sendMessage(warning.replace("<br>", " "));
     const chain = new DialogueChainBuilder()
       .add(new ItemStatementDialogue(0, itemId, warning))

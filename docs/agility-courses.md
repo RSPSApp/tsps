@@ -20,11 +20,37 @@ From rsprox captures (Varrock 339 and 3154, main game; the other courses' League
   the extra laps counted (0, or 1 when a lap counts twice).
 - The client works out laps an hour from the clock's differences, so the clock counts game ticks
   from 2024 rather than the server's own tick.
+- The varbit is not course-only: enum 3507 also lists the Brimhaven Agility Arena (id 2), and the
+  arena plugin holds it at 2 while the player is inside (see [Brimhaven Agility Arena](#brimhaven-agility-arena)).
+
+## The loot tracker
+
+Every lap goes in the client's loot tracker with what spawned for it, through
+`plugins/interface/LootTracker.plugin.js` ("loot-tracker:add"): cache script 7197
+(`loottracker_sourceadd`) with the course's `lootSource` (enum 4976: 22 "Draynor Rooftop Course",
+27 "Seers' Village Rooftop Course" ...), the player's next key and category 5, then 7198
+(`loottracker_lootadd`) with a mark of grace and 1 when one spawned. From the main-game captures of
+rev 241 and 242 (20261109T090342-d73fc6a, 20261108T062407-ae5c1f1, 20261027T185126-57eba26,
+20261024T001512-d0ad0dc and more): all 1,976 Seers', Draynor, Falador and Varrock laps sent 7197
+after the helper's lap end, and the 427 marks 7198 with it, under the same key. The key counts up
+by one an entry, whatever the source (a farming harvest's entry takes the next one), and carries on
+across sessions, so it is kept with the player. Only those four courses are captured; the others
+use their enum 4976 source with the same category. The Barbarian Outpost has no source in the enum.
 
 ## Rooftop timing
 
 The captures' patterns, counted from the tick the player arrives (the runner's steps start the
 tick after):
+
+- **Which tick is the runner's first:** the server runs an object's op the tick after the player
+  arrives, as live does (the captures' `facing` at the loc), so the runner's tick 0 is live's op
+  tick. Most rooftop obstacles then wait a tick before their script starts (live's arrive delay,
+  where `busy` goes to 1): a leading `{ wait: 1 }`. Varrock's wall shimmy starts on the op tick
+  itself (rsprox 20261024T001512-d0ad0dc: `busy` with the run-up, a tick after the last step).
+- **The last obstacle of a lap** at Draynor (the crate), Varrock and Falador (the edges) keeps the
+  player a tick after the landing, the XP and the lap count; Draynor and Varrock then reset the
+  animation, while Falador's landing plays out. Seers' edge ends with the lap (main-game captures
+  of rev 241 and 242).
 
 - **Gaps:** the player turns towards the far roof, jumps (2586, sound 2462, both 15 cycles in) two
   ticks after arriving, lands (2588) a tick later and gets the XP the tick after (`gapJump`).
@@ -136,11 +162,15 @@ course's `marks` block:
   Marks on one tile stack and restart the 10 minutes. Time logged out doesn't count: the plugin
   pauses the player's course marks on logout and resumes them on login.
 - **Tiles:** every rooftop's `marks.tiles` are the Wiki's spawn spots (Template:Mark of grace
-  spawns). Captured exactly: Draynor 3098,3281,3 and 3100,3257,3 (1723, 1718); Varrock 3186,3395,3,
+  spawns). Captured exactly: Draynor 3098,3281,3 and 3100,3257,3 (1723, 1718); Falador all five
+  (108 marks in 20261025T151131-d73fc6a, 20261027T185126-57eba26 and 20261106T135636-57eba26); Varrock 3186,3395,3,
   3220,3402,3 and 3238,3408,3 (1723, 75); Canifis 3506,3495,2, 3501,3505,2 and 3490,3501,2 (90,
   91); Rellekka 2623,3675, 2628,3652, 2629,3653 and 2642,3651 (1864, 1885); Ardougne 2657,3318,3
   (all ten marks in 787). The rest are the Wiki map's pins with the roof's plane, not checked in
-  game; Varrock's pins were a tile off where captured.
+  game; Varrock's pins were a tile off where captured, and so were three of Seers' five: its
+  marks fall on 2727,3493,3, 2706,3493,2, 2709,3493,2, 2712,3481,2 and 2698,3465,2 (91 marks in
+  20261109T090342-d73fc6a, 20261110T020354-d73fc6a and 20261110T221217-d73fc6a), not the Wiki
+  map's 2727,3498, 2707,3493 and 2710,3493.
 - **Other courses:** the Wiki gives no roll chance for the non-rooftop courses. Ape Atoll uses 2/25,
   which with the cooldown gives the Wiki's 5-6 marks an hour at 95 laps an hour; the Shayzien
   courses and Werewolf use the rooftop 2/6 (Werewolf's one tile, 3540,9888, is the Wiki's). The
@@ -314,28 +344,60 @@ course's `marks` block:
 
 - **XP since the 8 May 2024 rebalance** (Wiki course tables): Al Kharid 12/36/48/48/12/6/18/36
   (216, confirmed by 1858's `helper_agility_add_xp`), Falador
-  11/22/61/27/26/61/53/30/14/13/13/14/241 (586), Seers' 45/20/20/35/15/435 (570), Ardougne's last
+  11/22/61/27/26/61/53/30/14/13/13/14/241 (586; the captures' `helper_agility_add_xp` gives the
+  unrounded 10.7/22.7/60.3/26.8/26.8/60.3/53.6/30/13.4/13.4/13.4/13.4/241.2, which are used),
+  Seers' 45/20/20/35/15/435 (570, as captured), Ardougne's last
   gap 625 (889; 787's XP is 18.75x the Wiki's on every obstacle). Each adds up to the lap with no
   bonus.
 - **Timing from captures:** Al Kharid follows 1858 (one lap, Leagues V), Pollnivneach 1788 (one
   lap: jumps put the player a plane up while crossing), Ardougne 787 (19 laps, a "Grid Master"
-  world; the steep roof ends on 2656,3297, where the last gap is jumped from). Falador and Seers'
-  have no capture, so their movement is a guess.
-- **Failures** (no message, no XP; the player lands below with anim 1332, sounds 2455 and
-  518/519, and the damage):
-  - Varrock clothes line (1723): a jump, a wobble (764, sound 2493), on 3212,3414,0 a tick later.
-    Varrock wall (1723): the fourth hold slips (1123), on the ground two ticks later. Their fail
-    chances below 46 aren't known: they use the engine's default linear curve, an approximation.
-    The Wiki's Agility course table gives 46 as the level they stop failing; using that endpoint
-    changes the approximate curve below 46 too, and is not a claimed exact OSRS probability.
+  world; the steep roof ends on 2656,3297, where the last gap is jumped from). Seers' and
+  Falador follow the main-game captures of rev 241 and 242 (Seers' 20261109T090342-d73fc6a and
+  15 others, about 1,000 laps; Falador 20261027T185126-57eba26 and 12 more, about 330 laps), and
+  Draynor's and Varrock's Leagues timing was checked against them (551 and 203 laps) and kept.
+  - **Seers':** the wall (737) and the grab on the sign (1118) with both lines as spam; the first
+    gap is two jumps, onto 2719,3495,2 and on to 2713,3494,2; the tightrope's second step is two
+    tiles in one tick (the runner's `walk` with `tilesPerTick: 2`, sent as a run step: live sends the
+    two tiles at walk speed, which the encoder can't yet say for a two-tile move); the second
+    gap is a wall scramble from wherever along it the player stands (2710 or 2712).
+  - **Falador:** the hand holds hang on 3050,3351,2, turn the corner (drawn to 3050,3352, the
+    player on 3051,3352), take three holds two ticks apart and drop onto 3050,3357 eleven ticks
+    after the jump; the second rope is diagonal from 3034,3361 to 3028,3356; the third is a roll
+    (7134) from 3026,3353 to 3021,3353 over three ticks. The ledges after it are jumped from the
+    player's own row (ledge 1, ledge 4 and the edge are each taken from two rows). The ledge
+    14922 isn't taken in any capture; its hop south is a guess.
+- **Failures** (no message, no XP; the player lands below with anim 1332, sounds 2455 and one of
+  518-521 20 cycles in, and the damage). The damage in the main-game captures is a function of
+  current Hitpoints, `floor(HP x percent / 100) + plus`; `low`/`high` are fitted by maximum
+  likelihood to the captured attempts with the Wiki's no-fail level as the endpoint (the captures
+  cover only a few levels each, so the curve away from them is less certain):
+
+  | Obstacle | Captured falls | Damage | low/high | No fail from |
+  | --- | --- | --- | --- | --- |
+  | Seers' gap 1 | 53 of 1,079 at 60-70 | 7% + 3 (5 at 36 HP to 9 at 89) | 182/274 | 79 |
+  | Seers' tightrope | 97 of 1,026 at 60-70 | 5% + 3 (4 at 36 HP to 7 at 80-89) | 114/292 | 79 |
+  | Falador hand holds | 11 of 336 at 54-59 | 7% + 2 (7 at 80 HP, 8 at 89) | 198/284 | 66 |
+  | Varrock clothes line | 14 of 203 at 30-36 | 7% + 3, at most 8 (6 at 50 HP, 7 at 59-64) | 198/322 | 46 |
+  | Varrock wall | 16 of 189 at 30-36 | 6% + 2, at most 5 (5 at 51-63 HP, 6 at 70) | 184/338 | 46 |
+
+  - Seers' gap 1: the second jump lands on the ground, 2715,3494,0, on one knee.
+  - Seers' tightrope: as far as 2710,3484, a stumble (764, sound 2493) and the ground below the
+    tick after.
+  - Falador hand holds: the jump, then on the ground below, 3050,3351,0, a tick later.
+  - Varrock clothes line (1723, and the main game): a jump, a wobble (764, sound 2493), on
+    3212,3414,0 a tick later. Varrock wall: the fourth hold slips (1123), on the ground two ticks
+    later. The wall's 6% + 2 and Falador's 7% + 2 rest on few Hitpoints levels; other rules fit them
+    too.
+  - Where the Wiki gives a damage range, it wins over the recordings: Varrock's falls stop at the
+    Wiki's maximum (8 for the clothes line, 5 for the wall), though the wall's recorded 6 at 70
+    Hitpoints goes past it. Falador's 7% + 2 reaches the Wiki's 8 only at 99.
   - Canifis gap 3 (90): on 3482,3499,0 the next tick; the Wiki's chart (175/300, never from 64);
     damage 1-8 (the upper bound is an older Wiki revision's).
   - Rellekka first tightrope (1885): two tiles, the fall (764, sound 2493), a tick later straight
     down; damage is 10% of current Hitpoints rounded up (6 at 57; the Wiki says rounded down);
     the chance below 85 is a guess.
 - **Failures not built** (no landing, animation or line known): Al Kharid tightrope 1 (the zip
-  line's fail was removed on 8 May 2024, though the course page still lists it), Falador hand
-  holds (until 66, 3-8 damage), Seers' gap 1 and tightrope (until 79), Pollnivneach market stall
+  line's fail was removed on 8 May 2024, though the course page still lists it), Pollnivneach market stall
   (Mod Ash: low 60 / high 300, floor(HP / 17 + 2) damage), Ardougne gaps 1 and 2 (until 95).
 
 ## Gnome Stronghold and Barbarian Outpost
@@ -408,6 +470,15 @@ course's `marks` block:
   lap count line, with the ticket's item box and jingle 71. The first tag is the Karamja medium
   task; the elite Karamja diary doubles a tag 1 time in 10. Karamja gloves 2-4 add 10% to obstacle
   XP (Wiki).
+- **Helper highlights:** the arena is a course to the cache's helper too — enum 3507's id 2,
+  "Brimhaven Agility Arena", whose obstacle loc types are enum 3997's entry 4000 (3610, 3551, 3553,
+  3555, 3557, 3559, 3561, 3564, 3565, 3566, 3570-3572, 3578 and 3583). The Area sets
+  `helper_agility_highlighted_course` (varbit 13140) to 2 on entering and back to 0 on leaving
+  (rsprox 1735 337/404, 1738, 1863 1969/2771, 4308 1579/1777), so the client runs script 5167 with
+  the arena and outlines its obstacles when **Highlight Agility obstacles** is on. The captures also
+  re-send 2 as each obstacle starts, and a teleport inside the arena clears it until the next
+  obstacle; neither is modelled because the varbit stays 2 for the whole visit. The arena's lap
+  clock (`helper_agility_start_lap`/`_end_lap`, sent per tag in 1735 and 1863) is not done.
 - **Pirate Jackie:** Trade and "I'd like to trade in my tickets" open the cache's Agility Arena
   Store (omnishop `agilityarena_rewards_newshop`, interface 819 in 75, 1102, 1738, 1863, 4308):
   345 Agility XP a ticket (379.5 with Karamja gloves 2+), Buy N spending N tickets; herbs noted;

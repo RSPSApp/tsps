@@ -311,7 +311,7 @@ test("quest-first logout disposal restores the original land return through the 
   early.onPlayerLogout(({ player }) => {
     if (player === owner) StaticShips.dispose(ship);
   });
-  require("../plugins/skills/sailing/StaticShips.plugin")
+  require("../plugins/skills/sailing/StaticShipHooks.Sailing")
     .register(PluginManager.createApi("SailingQuestFirstLogoutTest"));
   try {
     PluginManager.emitPlayerLogout({ player: owner, username: "QuestFirstOwner" });
@@ -438,8 +438,8 @@ test("Pandemonium's tutorial ship keeps its explicit deck tiles and dynamic locs
     assert.equal(BoatManager.getBoatAboard(npc), ship.boat, "deck NPCs join the static ship's area");
     const packets = require("../dist/game/content/sailing/WorldEntitySync")
       .WorldEntitySync.flush(fakePlayer(1, new Location(3025, 3209, 0)));
-    assert.equal(packets.filter((packet) => packet[0] === 134).length, 3,
-      "the blueprint's dynamic helm/sails/hook locs are sent");
+    assert.equal(packets.filter((packet) => packet[0] === 134).length, 4,
+      "the blueprint's dynamic helm/mast/sails/hook locs are sent (rsprox 242)");
     assert.ok(packets.some((packet) => packet[0] === 142) && packets.some((packet) => packet[0] === 143));
   } finally {
     StaticShips.dispose(ship);
@@ -592,7 +592,7 @@ test("a disposed static ship does not affect existing player boats", () => {
 });
 
 test("the static ship plugin attaches core and boards/disembarks on op1", () => {
-  const plugin = require("../plugins/skills/sailing/StaticShips.plugin");
+  const plugin = require("../plugins/skills/sailing/StaticShipHooks.Sailing");
   let handler;
   plugin.register({
     core,
@@ -618,7 +618,7 @@ test("the static ship plugin attaches core and boards/disembarks on op1", () => 
 });
 
 test("registered logout hooks receive {player} and preserve returns", () => {
-  const plugin = require("../plugins/skills/sailing/StaticShips.plugin");
+  const plugin = require("../plugins/skills/sailing/StaticShipHooks.Sailing");
   // Register through the real PluginManager api so onPlayerLogout uses the real hook contract.
   plugin.register(PluginManager.createApi("SailingLogoutTest"));
 

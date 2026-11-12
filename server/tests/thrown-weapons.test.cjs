@@ -420,9 +420,8 @@ test("each throw uses one chinchompa for good, and the last one empties the hand
   t.mock.method(TaskManager, "submit", (task) => submitted.push(task));
   const flying = thrower(ItemIdentifiers.RED_CHINCHOMPA_2, 5);
   ammo.decrementAmmo(flying, null, 1, 2);
-  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 5, "counted when the throw lands");
-  submitted[0].execute();
-  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 4);
+  assert.equal(flying.getEquipment().get(WEAPON).getAmount(), 4, "paid as it leaves the hand");
+  assert.deepEqual(submitted, [], "nothing waits for the landing");
 });
 
 test("a chinchompa has no special bar and the medium fuse has no accuracy boost", () => {
@@ -758,15 +757,17 @@ test("normal throws spend one charge, keep the final charged shot and honour amm
   assert.equal(method.canAttack(ordinary, target), true);
   assert.equal(ordinaryItem.getMetaValue(TONALZTICS_CHARGES), 2, "the eligibility check spends nothing");
   method.start(ordinary, target);
-  assert.equal(ordinaryItem.getMetaValue(TONALZTICS_CHARGES), 1);
   assert.equal(method.hits(ordinary, target)[0].getHits().length, 2);
+  method.finished(ordinary, target); // the charge is spent once the throw is rolled
+  assert.equal(ordinaryItem.getMetaValue(TONALZTICS_CHARGES), 1);
 
   const last = tonalzticsPlayer();
   const lastItem = equipTonalztics(last, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
   method = CombatFactory.getMethod(last);
   method.start(last, target);
-  assert.equal(lastItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
   assert.equal(method.hits(last, target)[0].getHits().length, 2, "the last charge's throw is still charged");
+  method.finished(last, target);
+  assert.equal(lastItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
 
   const miss = tonalzticsPlayer();
   const missItem = equipTonalztics(miss, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
@@ -776,6 +777,7 @@ test("normal throws spend one charge, keep the final charged shot and honour amm
   const missed = method.hits(miss, target)[0];
   assert.equal(missed.getHits().length, 2);
   assert.equal(missed.getHits().every((hit) => hit.getDamage() === 0), true);
+  method.finished(miss, target);
   assert.equal(missItem.getMetaValue(TONALZTICS_CHARGES), undefined, "a miss still spends the charge");
 
   const saved = tonalzticsPlayer();
@@ -795,16 +797,18 @@ test("normal throws spend one charge, keep the final charged shot and honour amm
     return emit(name, event);
   });
   method.start(saved, target);
+  assert.equal(method.hits(saved, target)[0].getHits().length, 2);
+  method.finished(saved, target);
   assert.equal(savedItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
   assert.equal(savedItem.getMetaValue(TONALZTICS_CHARGES), 1);
-  assert.equal(method.hits(saved, target)[0].getHits().length, 2);
 
   ammoSaved = tonalzticsPlayer();
   const ammoSavedItem = equipTonalztics(ammoSaved, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
   method = CombatFactory.getMethod(ammoSaved);
   method.start(ammoSaved, target);
-  assert.equal(ammoSavedItem.getMetaValue(TONALZTICS_CHARGES), 1, "core ammo saving also keeps the charge");
   assert.equal(method.hits(ammoSaved, target)[0].getHits().length, 2);
+  method.finished(ammoSaved, target);
+  assert.equal(ammoSavedItem.getMetaValue(TONALZTICS_CHARGES), 1, "core ammo saving also keeps the charge");
 });
 
 test("the last charge's hit profile is a snapshot even if the weapon is swapped before hits", (t) => {

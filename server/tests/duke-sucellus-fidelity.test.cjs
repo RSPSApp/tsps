@@ -200,6 +200,15 @@ test('five uninterrupted minutes of salt mining stop with the tired-arms message
   assert.ok(h.p.getInventory().getAmount(h.C.data.items.salt)>held);
 });
 
+// Recorded (rsprox): "You grind the mushroom into dust." is spam (356), not a game message.
+test('grinding sends its line as spam',t=>{
+  const h=H.harness(t);h.enter();const i=h.C.data.items;h.add(i.pestle);h.add(i.arder,1);
+  h.Prep.grind({player:h.p,usedItemId:i.pestle,usedWithItemId:i.arder});
+  const spam=h.packets.filter(([name,type])=>name==='sendTypedMessage'&&type===h.core.ChatType.SPAM).map(([, ,text])=>text);
+  assert.ok(spam.includes('You grind the mushroom into dust.'),JSON.stringify(spam));
+  assert.ok(!h.messages.includes('You grind the mushroom into dust.'),'not a game message');
+});
+
 test('a new grinding click cancels the previous mushroom batch',t=>{
   const h=H.harness(t),s=h.enter(),i=h.C.data.items;h.add(i.pestle);h.add(i.arder,4);h.add(i.musca,4);
   h.Prep.grind({player:h.p,usedItemId:i.pestle,usedWithItemId:i.arder});

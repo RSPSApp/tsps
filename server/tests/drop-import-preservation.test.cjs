@@ -6,7 +6,7 @@ const subtables = require('../data/definitions/npc-drop-subtables.json');
 test('the conditional-quantity import preserves upstream table identities and NPC variants', () => {
     // Exclude audited obsolete Wiki titles: five nonattackable cultists and the
     // old manta variant lose stale mappings; current encounters remain intact.
-    assert.equal(Object.keys(dump.tables).length, 1105);
+    assert.equal(Object.keys(dump.tables).length, 1106);
     assert.equal(Object.keys(dump.npcs).length, 3086);
     for (const id of [8058, 8060, 13686]) assert.ok(dump.npcs[id], `upstream variant ${id}`);
     for (const id of [8058, 8060, 13686]) assert.deepEqual(dump.npcs[id].tables, [], `quest variant ${id} has no normal boss loot`);
@@ -27,9 +27,11 @@ test('Nex keeps both existing supply bundles and her 12-slot pool', () => {
     assert.ok(!table.entries.some(entry => entry.item_id === 2434 || entry.item_id === 3024));
 });
 
-test('Vardorvis Coal uses source alternatives without changing its roll chance', () => {
+test('Vardorvis Coal uses source alternatives in the producer\'s conditional pool', () => {
     const coal = dump.tables.vardorvis.entries.find(entry => entry.item_id === 453);
-    assert.deepEqual([coal.weight, coal.out_of], [8, 100]);
+    // The ordered Forgotten Four export re-bases the 100-slot Wiki rates onto the 78-slot pool
+    // that is reachable without the perfect-kill rows; the Wiki rate stays in published_rarity.
+    assert.deepEqual([coal.weight, coal.out_of, coal.weight_basis, coal.published_rarity], [8, 78, 'conditional_pool', '8/100']);
     assert.deepEqual(coal.quantity, [130, 130]);
     assert.equal(coal.quantity_selection, 'conditional');
     assert.deepEqual(coal.quantity_alternatives.map(alt => alt.quantity), [[130, 130], [195, 195]]);
@@ -74,11 +76,13 @@ test('God Wars generals preserve exact source fractions in one exclusive pool', 
             .map(bonus => [entry.item_id, bonus.item_id])).sort((a,b) => a[0]-b[0]), expectedPairs, id);
     }
     assert.deepEqual(Object.entries(dump.tables).filter(([id]) => !GWD_REMAINDERS[id])
-        .flatMap(([id, table]) => table.entries.filter(entry => entry.weight_basis && entry.weight_basis !== 'conditional_group').map(() => id)), []);
+        .flatMap(([id, table]) => table.entries.filter(entry => entry.weight_basis && !['conditional_group', 'conditional_pool'].includes(entry.weight_basis)).map(() => id)), []);
     const conditionalTables = Object.entries(dump.tables)
         .filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_group'))
         .map(([id]) => id);
     assert.deepEqual(conditionalTables, ['corporeal_beast'], 'only the imported conditional unique group');
+    assert.deepEqual(Object.entries(dump.tables).filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_pool')).map(([id]) => id).sort(),
+        ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], 'conditional pools are the Forgotten Four');
 });
 
 test('God Wars unique outcomes do not also roll the main table independently', t => {

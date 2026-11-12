@@ -18,9 +18,13 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class LoginBrokerTest {
-    private class Backend : AutoCloseable {
+    /** With [hold], login replies wait for [release] so the broker's workers stay busy. */
+    private class Backend(private val hold: Boolean = false) : AutoCloseable {
         val packets = LinkedBlockingQueue<TspsReader>()
         val flags = LinkedBlockingQueue<Int>()
+        private val held = ArrayList<Pair<ChannelHandlerContext, ByteArray>>()
+        private var released = false
+        val forgets = LinkedBlockingQueue<Pair<String, String>>()
         val group = NioEventLoopGroup(1)
         val channel =
             ServerBootstrap()
@@ -45,7 +49,11 @@ class LoginBrokerTest {
                                             // LOGIN is var-short; the normal gateway sends it
                                             // without entering the world.
                                             val reader = TspsReader(bytes)
-                                            reader.u8()
+                                            if (reader.u8() == TspsClientPacket.LOGIN_FORGET) {
+                                                reader.u8()
+                                                forgets.add(reader.string() to reader.string())
+                                                return
+                                            }
                                             reader.u16()
                                             val name = reader.string()
                                             val secret = reader.string()
@@ -60,6 +68,12 @@ class LoginBrokerTest {
                                                     .string(name)
                                                     .string(if (ok) "a".repeat(43) else "")
                                                     .varByte(TspsServerPacket.LOGIN_RESPONSE)
+                                            synchronized(held) {
+                                                if (hold && !released) {
+                                                    held.add(ctx to response)
+                                                    return
+                                                }
+                                            }
                                             ctx.writeAndFlush(
                                                 BinaryWebSocketFrame(
                                                     Unpooled.wrappedBuffer(response)
@@ -77,6 +91,16 @@ class LoginBrokerTest {
         val port
             get() = (channel.localAddress() as InetSocketAddress).port
 
+        fun release() {
+            val replies =
+                synchronized(held) {
+                    released = true
+                    held.toList().also { held.clear() }
+                }
+            for ((ctx, response) in replies)
+                ctx.writeAndFlush(BinaryWebSocketFrame(Unpooled.wrappedBuffer(response)))
+        }
+
         override fun close() {
             channel.close().syncUninterruptibly()
             group.shutdownGracefully().syncUninterruptibly()
@@ -90,6 +114,7 @@ class LoginBrokerTest {
         kind: String = "password",
         secret: String = "test-password",
         origin: Boolean = false,
+        ip: String = "127.0.0.1",
     ): List<String> {
         val encoder = Base64.getEncoder()
         val body =
@@ -103,7 +128,7 @@ class LoginBrokerTest {
             java.net.http.HttpRequest.newBuilder(
                     URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
                 )
-                .header("X-Real-IP", "127.0.0.1")
+                .header("X-Real-IP", ip)
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
         if (origin) request.header("Origin", "https://untrusted.invalid")
         return HttpClient.newHttpClient()
@@ -157,6 +182,21 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `forget account revokes the remembered token on tsps`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                assertEquals(listOf("OK"), request(port, "forget", "c".repeat(43)))
+                assertEquals("Tester" to "c".repeat(43), backend.forgets.poll(5, TimeUnit.SECONDS))
+                assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+                // Only a well-formed token is passed on.
+                assertEquals(listOf("ERROR", "8"), request(port, "forget", "short"))
+                assertNull(backend.forgets.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
     fun `bad credentials and browser origin cannot mint a ticket`() {
         Backend().use { backend ->
             val port = freePort()
@@ -165,6 +205,151 @@ class LoginBrokerTest {
                 assertEquals(1, backend.flags.poll(5, TimeUnit.SECONDS))
                 assertEquals(listOf("ERROR", "8"), request(port, origin = true))
                 assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `requests beyond the worker queue get a busy reply instead of a dropped connection`() {
+        Backend(hold = true).use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(48)
+                try {
+                    // Distinct addresses so the per-address limit is not what refuses them.
+                    val replies =
+                        (0 until 48).map { i ->
+                            pool.submit<Result<List<String>>> {
+                                runCatching { request(port, ip = "192.0.2.${i + 1}") }
+                            }
+                        }
+                    // 4 workers and 32 queue slots can hold at most 36 logins.
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+                    while (replies.count { it.isDone } < 12 && System.nanoTime() < deadline)
+                        Thread.sleep(20)
+                    backend.release()
+                    val results = replies.map { it.get(30, TimeUnit.SECONDS) }
+                    results.forEach { assertTrue(it.isSuccess, "Dropped: ${it.exceptionOrNull()}") }
+                    val bodies = results.map { it.getOrThrow() }
+                    assertTrue(bodies.count { it == listOf("ERROR", "8") } >= 12)
+                    assertTrue(bodies.count { it.firstOrNull() == "OK" } >= 4)
+                    assertTrue(bodies.all { it.firstOrNull() == "OK" || it == listOf("ERROR", "8") })
+                } finally {
+                    pool.shutdownNow()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `requests beyond the overflow queue are closed at once, not held open`() {
+        Backend(hold = true).use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(37)
+                val stalled = ArrayList<java.net.Socket>()
+                try {
+                    // 4 running and 32 queued logins fill the workers.
+                    val held =
+                        (0 until 36).map { i ->
+                            pool.submit<Result<List<String>>> {
+                                runCatching { request(port, ip = "192.0.2.${i + 1}") }
+                            }
+                        }
+                    repeat(4) { assertNotNull(backend.flags.poll(5, TimeUnit.SECONDS)) }
+                    Thread.sleep(300)
+                    // Unfinished headers keep the overflow thread reading, then fill its 64 slots.
+                    repeat(65) {
+                        stalled +=
+                            java.net.Socket("127.0.0.1", port).apply {
+                                getOutputStream().write("POST /login-utilities/v1/session HTTP/1.1\r\n".toByteArray())
+                                getOutputStream().flush()
+                            }
+                        if (it == 0) Thread.sleep(200)
+                    }
+                    Thread.sleep(300)
+                    val started = System.nanoTime()
+                    val extra = pool.submit<Result<List<String>>> { runCatching { request(port, ip = "198.51.100.9") } }
+                    val result = extra.get(30, TimeUnit.SECONDS)
+                    val waited = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+                    assertTrue(result.isFailure, "Nothing can answer it: $result")
+                    assertTrue(waited < 3_000, "Held open $waited ms instead of closed at once")
+                    backend.release()
+                    held.forEach { it.get(30, TimeUnit.SECONDS) }
+                } finally {
+                    stalled.forEach { runCatching { it.close() } }
+                    pool.shutdownNow()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `a full rate table admits a new address and still limits the busy one`() {
+        Backend().use { backend ->
+            val port = freePort()
+            var now = 1_000L
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { now++ }).use {
+                val client = HttpClient.newHttpClient()
+                fun attempt(ip: String): List<String> =
+                    client
+                        .send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create(
+                                        "http://127.0.0.1:$port/login-utilities/v1/session"
+                                    )
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x\n"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString(),
+                        )
+                        .body()
+                        .trimEnd()
+                        .split('\n')
+                // 2047 one-off addresses plus one at its 20-a-minute limit fill the table.
+                for (i in 0 until 2047) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                repeat(20) { attempt("198.51.100.1") }
+                assertEquals("OK", request(port, ip = "198.51.100.2")[0])
+                assertEquals(listOf("ERROR", "8"), request(port, ip = "198.51.100.1"))
+            }
+        }
+    }
+
+    @Test
+    fun `concurrent new addresses at a full rate table keep it at its cap`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+                fun attempt(ip: String) =
+                    runCatching {
+                        client.send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding(),
+                        )
+                    }
+                for (i in 0 until 2048) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                assertEquals(2048, broker.rateTableSize())
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(16)
+                try {
+                    (0 until 16)
+                        .map { t ->
+                            pool.submit {
+                                for (i in 0 until 150)
+                                    attempt("2001:db8:1:${Integer.toHexString(t)}::${Integer.toHexString(i + 1)}")
+                            }
+                        }
+                        .forEach { it.get(60, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+                assertEquals(2048, broker.rateTableSize())
             }
         }
     }

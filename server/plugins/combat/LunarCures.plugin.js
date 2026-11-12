@@ -11,6 +11,8 @@ const TARGET_RANGE = 10;
 // Cache: quest_lunar_pushing_magic_animation / quest_lunar_cure_me_spot.
 const CURE_ME_ANIMATION = 4411;
 const CURE_ME_GRAPHIC = 742;
+// Both are at height 92 in rsprox captures (742: 16 casts; 747: the Lunar teleport).
+const CAST_GRAPHIC_HEIGHT = 92;
 // Uncaptured cure spells keep their existing presentation.
 const CAST_ANIMATION = 4413;
 const CAST_GRAPHIC = 747;
@@ -18,7 +20,11 @@ const spells = new WeakMap();
 const lastCureMeCycle = new WeakMap();
 
 function cure(player) {
-  const severity = player.isVenomed() ? player.getPoisonDamage() * POISON_SEVERITY_PER_DAMAGE : 0;
+  // Venom becomes poison of its last hit dealt at the lowest severity giving it, 5 x hit - 4, as an antipoison
+  // does (rsprox_transcripts/234/03280.txt:69820: next 12, last 10, becomes 46; 223/00014.txt tick 3125: venom
+  // yet to hit converts from its first, 6 becomes 26). Read before setVenomed(false) clears the last hit.
+  const lastHit = player.getLastVenomDamage?.() ?? player.getPoisonDamage();
+  const severity = player.isVenomed() ? Math.max(0, lastHit * POISON_SEVERITY_PER_DAMAGE - 4) : 0;
   player.setVenomed(false);
   player.setPoisonDamage(severity);
 }
@@ -53,7 +59,7 @@ function cast(core, player, name, effect) {
   if (!spell.canCast(player, false) || !spell.canCast(player, true)) return;
   if (name === 'cure me') lastCureMeCycle.set(player, cycle);
   player.performAnimation(new core.Animation(name === 'cure me' ? CURE_ME_ANIMATION : CAST_ANIMATION));
-  player.performGraphic(new core.Graphic(name === 'cure me' ? CURE_ME_GRAPHIC : CAST_GRAPHIC));
+  player.performGraphic(new core.Graphic(name === 'cure me' ? CURE_ME_GRAPHIC : CAST_GRAPHIC, 0, CAST_GRAPHIC_HEIGHT));
   effect();
   player.getSkillManager().addExperiences(core.Skill.MAGIC, spell.baseExperience());
 }

@@ -29,6 +29,7 @@ const MAIN_MODAL = uid(161, 16);
 const FLOATER = uid(161, 18);
 
 let core;
+let api;
 const hooks = {};
 const custom = {};
 let worldLeague = 5;
@@ -51,9 +52,10 @@ before(async () => {
       return false;
     };
   };
-  const api = new Proxy({
+  api = new Proxy({
     core,
     persistAttribute() {},
+    registerArea() {},
     getPluginConfig: (key, fallback) => (key === "league:type" ? worldLeague : pluginConfig[key] ?? fallback),
     setWorldProfile: (profile) => GameConstants.setWorldProfile(profile),
     getTaskManager: () => ({ submit: (task) => tasks.push(task) }),
@@ -65,10 +67,15 @@ before(async () => {
     onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
     emitCustomEvent: (name, payload) => emit(name, payload),
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
+  // Discovery registers areas/TutorialIsland before modes/LeagueMode. Its delayed UI uses
+  // the same deterministic tick queue as the league tutorial here.
+  const tutorialApi = new Proxy(api, { get: (target, key) => key === "core"
+    ? { ...core, TaskManager: { submit: (task) => tasks.push(task) } } : target[key] });
+  require("../plugins/areas/TutorialIsland.plugin").register(tutorialApi);
   require("../plugins/interface/ScreenHighlight.plugin").register(api);
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
 });
 
 beforeEach(() => {
@@ -93,10 +100,11 @@ async function tick() {
 }
 
 /** A real player whose packets are recorded; opens and closes keep `open` as the client would. */
-function character(name, { league = 5, isNewAccount = true, profile = "league", stage, joined = stage !== undefined } = {}) {
+function character(name, { league = 5, isNewAccount = true, profile = "league", stage, joined = stage !== undefined, tutorialProgress } = {}) {
   const player = new Player(null);
   player.setUsername(name);
   player.setProfile(profile);
+  if (tutorialProgress !== undefined) player.setAttribute("tutorial-island:progress", tutorialProgress);
   // A returning character already joined its league; a stage is only ever saved on one.
   if (joined) player.setAttribute("league:type", league);
   if (stage !== undefined) player.setAttribute("league:tutorial-stage", stage);
@@ -146,6 +154,8 @@ function character(name, { league = 5, isNewAccount = true, profile = "league", 
   player.getPacketSender = () => sender;
   player.sendMessage = (text) => sent.messages.push(text);
   player.requestLogout = () => sent.logouts++;
+  // The login gameframe mounts the journal before the first player-process UI pass.
+  mount(uid(161, 78), 629, 1);
   const previous = worldLeague;
   worldLeague = league;
   hooks.onPlayerLogin({ player, username: name, isNewAccount, profile });
@@ -546,4 +556,49 @@ test("the welcome screen names the league and the days left in it", () => {
   const [id, text] = welcomed.sent.strings.at(-1);
   assert.equal(id, uid(378, 6), "welcome_screen:motw");
   assert.match(text, /Leagues V - Raging Echoes<\/col>!<br>There are <col=670e3b>\d+ days remaining/);
+});
+
+
+test("Tutorial Island leaves new and returning Leagues VI characters' journal usable", async () => {
+  // The earlier tutorial-only cases intentionally supply area-unlock state themselves.
+  // This integration case adds the real deferred area hooks before creating its characters.
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
+  const T = require("../plugins/areas/tutorialisland/Common.TutorialIsland");
+  // A normal character remains opted into Tutorial Island, with its locked journal.
+  const ordinary = character("island control", { profile: "main" });
+  assert.equal(T.isActive(ordinary), true);
+  hooks.onPlayerProcess({ player: ordinary });
+  assert.equal(ordinary.open.has(629), false, "normal Tutorial Island still hides the journal");
+  assert.equal(ordinary.getLocation().getX(), 3094);
+
+  for (const options of [{}, { isNewAccount: false, stage: 3, tutorialProgress: T.STEP.GIELINOR_TALK }]) {
+    const league = character("pacts with island", { league: 6, ...options });
+    assert.equal(league.getProfile(), "league", "the selected character profile exists before login hooks");
+    assert.equal(league.getAttribute("league:type"), 6, "LeagueMode joined the character");
+    assert.deepEqual([league.getLocation().getX(), league.getLocation().getY()], [1503, 5602], "the actual league login selected its start tile");
+    hooks.onPlayerProcess({ player: league });
+    assert.equal(league.open.has(629), true, "Tutorial Island must leave the journal mounted");
+    assert.equal(T.isActive(league), false);
+    if (options.tutorialProgress !== undefined) {
+      assert.equal(league.getAttribute(T.PROGRESS_ATTRIBUTE), options.tutorialProgress, "leave old saved progress untouched");
+    } else assert.equal(league.getAttribute(T.PROGRESS_ATTRIBUTE), undefined, "no island onboarding was started");
+    await tick();
+    if (league.getAttribute("league:tutorial-stage") === 0) {
+      click(league, uid(MAIN, 9));
+      await settle();
+    }
+    assertPage(league, 3);
+    click(league, uid(161, 61));
+    await settle();
+    assertPage(league, 4);
+    assert.equal(click(league, uid(629, 34)), true, "the registered Leagues journal tab handles the click");
+    await settle();
+    assert.equal(league.open.get(656), uid(629, 43), "the journal handler mounted the league menu");
+    assertPage(league, 5);
+    assert.equal(points(league), 10, "ordinary menu opening still completes the task");
+    click(league, uid(378, 72));
+    await settle();
+    assert.equal(league.open.has(629), true, "welcome replay cannot reapply the island UI");
+    assert.equal(league.sent.closed.includes(uid(161, 78)), false);
+  }
 });

@@ -106,7 +106,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   const LUNAR_SPELLS_DEACTIVATED = "Lunar spells deactivated!";
   // npc-drops.json gates A special tiara on this Wiki quest condition. The row is
   // only eligible after Meteora has explained her headgear.
-  const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacyafteraskingmeteoraaboutherheadgear";
+  const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacy";
 
   // ==========================================================================
   // Stages and varbits
@@ -2351,7 +2351,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   /**
    * The forecastle's walls make walkToObject end its route on the tile the player
    * already stands on, which the reach check then rejects, so a "Climb" click from the
-   * z3 landing dies with "You can't reach that!" before Ladders can claim it. Claim the
+   * z3 landing dies with "I can't reach that!" before Ladders can claim it. Claim the
    * route as well and resolve the interaction in place; climbShipStairs moves the plane.
    */
   function routeShipStairs(event) {

@@ -38,11 +38,12 @@ function caster(extra = {}) {
   return {
     animations: [],
     graphics: [],
+    heights: [],
     attributes: new Map(),
     getIndex: () => 1,
     getPrivateArea: () => null,
     performAnimation(animation) { this.animations.push(animation.getId()); },
-    performGraphic(graphic) { this.graphics.push(graphic.getId()); },
+    performGraphic(graphic) { this.graphics.push(graphic.getId()); this.heights.push(graphic.getHeight()); },
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
     getAttribute(key) { return this.attributes.get(key) ?? null; },
     setAttribute(key, value) { this.attributes.set(key, value); },
@@ -85,12 +86,33 @@ test("the registered Cure Me handler casts with its own animation and graphic", 
     onSpellCast: (handler) => { castSelf = handler; },
     onCustomEvent() {},
   });
-  const player = caster({ isVenomed: () => false });
+  // cure() reads and writes the poison state (venom turning to poison), as on a Player.
+  const player = caster({ isVenomed: () => false, getPoisonDamage: () => 0, setPoisonDamage() {}, setVenomed() {} });
   const event = { player, spellName: "Cure Me", opId: 1, handled: false };
   castable(() => castSelf(event));
   assert.equal(event.handled, true);
   assert.deepEqual(player.animations, [seq("quest_lunar_pushing_magic_animation")]);
   assert.deepEqual(player.graphics, [spotanim("quest_lunar_cure_me_spot")]);
+});
+
+test("captured Lunar cast graphics play at their recorded heights", () => {
+  // rsprox counts: humidify 1061 at 72 (13), hunter kit 1074 at 62, plank make 1063 at 60 (110),
+  // monster examine 1059 at 32 (18), astral contact 728 at 92 (48), spellbook swap 1062 at 10.
+  const expected = { humidify: 72, "hunter kit": 62, "plank make": 60, "monster examine": 32, "astral contact": 92, "spellbook swap": 10 };
+  for (const [spell, height] of Object.entries(expected)) assert.equal(LunarSpells.CASTS[spell].graphicHeight, height, spell);
+  // Through a real cast: Humidify fills a vial and plays its graphic at 72.
+  let id = 229;
+  const vial = { getId: () => id, setId(next) { id = next; } };
+  const player = caster({ getInventory: () => ({ getValidItems: () => [vial], refreshItems() {} }) });
+  // Dream Mentor done: Humidify is one of its spells.
+  const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+  withStub(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "quest:is-complete" && event.key === "dream_mentor") { event.complete = true; return; }
+    return emit(name, event);
+  }, () => castable(() => LunarSpells.handleSelf(player, "Humidify")));
+  assert.equal(id, 227, "the vial is filled");
+  assert.deepEqual(player.graphics, [spotanim("dream_humidify_spell_spotanim")]);
+  assert.deepEqual(player.heights, [72]);
 });
 
 test("String Jewellery casts from the spellbook with its own animation and graphic", () => {

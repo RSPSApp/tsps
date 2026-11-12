@@ -1,0 +1,28 @@
+{
+  "items": [
+    "Clue box",
+    "Chronicle",
+    "Flamtaer bag",
+    "Lunar helm",
+    "Lunar torso",
+    "Lunar legs",
+    "Lunar gloves",
+    "Lunar boots",
+    "Lunar cape",
+    "Lunar amulet",
+    "Lunar ring",
+    "Lunar staff",
+    "Ring of charos",
+    "Ring of charos(a)",
+    "Steel gauntlets",
+    "Cooking gauntlets",
+    "Goldsmith gauntlets",
+    "Chaos gauntlets",
+    "Magic butterfly net",
+    "Amulet of the damned"
+  ],
+  "leagueTrophies": {
+    "leagues": ["Twisted", "Trailblazer", "Shattered relics", "Trailblazer reloaded", "Raging echoes"],
+    "tiers": ["bronze", "iron", "steel", "mithril", "adamant", "rune", "dragon"]
+  }
+}

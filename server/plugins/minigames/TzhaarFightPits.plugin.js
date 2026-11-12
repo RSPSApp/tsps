@@ -323,6 +323,16 @@ function leaveArenaOnLogout({ player }) {
   if (inside(player, ARENA)) player.moveTo(tile(WAITING_DROP));
 }
 
+/**
+ * "presets:can-use": the Fight Pits are fought in the player's own gear, so no preset (this server's PvP loadouts) in
+ * the waiting room or the arena: one would be fresh kit between or during rounds.
+ */
+function noPresetsInPits(event) {
+  if (!event.player || !(inside(event.player, WAITING) || inside(event.player, ARENA))) return;
+  event.allow = false;
+  event.message = "Leave the Fight Pits before loading a preset.";
+}
+
 function allowBountyHunterWeapons(event) {
   if (inside(event.attacker, ARENA) && inside(event.target, ARENA)) event.allowed = true;
 }
@@ -357,6 +367,7 @@ module.exports = {
     pluginApi.onShouldDropItemsOnDeath(keepItemsInPit);
     pluginApi.onCanAttack(pitCanAttack);
     pluginApi.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+    pluginApi.onCustomEvent("presets:can-use", noPresetsInPits);
     pluginApi.onPlayerLogout(dropChampionSkull);
     pluginApi.onPlayerLogout(leaveArenaOnLogout);
     pluginApi.onCanTeleport(championTeleports);

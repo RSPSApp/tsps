@@ -36,6 +36,7 @@ function playerWith(entries, level = 99) {
   };
   const sender = {
     sendSound(id) { log.push(['sound', id]); return sender; },
+    sendTypedMessage(type, text) { log.push([type === core.ChatType.SPAM ? 'spam' : 'typed', text]); return sender; },
     sendCreationMenu(menu) { player.menu = menu; return sender; },
   };
   const player = {
@@ -112,7 +113,7 @@ test('a set enchants ten bolts for their runes and XP: first now, the next 2 tic
   assert.equal(player.amounts.get(core.ItemIds.RUBY_BOLTS), 14);
   assert.deepEqual(player.log.filter(([kind]) => kind !== 'xp'), [
     ['animation', 4462], ['graphic', 759], ['sound', 2921],
-    ['message', 'The magic of the runes coaxes out the true nature of the gem tips.'],
+    ['spam', 'The magic of the runes coaxes out the true nature of the gem tips.'],
   ]);
   assert.deepEqual(player.log.find(([kind]) => kind === 'xp').slice(2), [59]);
   assert.equal(player.amounts.get(core.ItemIds.COSMIC_RUNE), 2);

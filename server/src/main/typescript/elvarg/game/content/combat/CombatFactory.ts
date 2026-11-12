@@ -1068,22 +1068,25 @@ export class CombatFactory {
                 let poisonType: PoisonType | undefined;
                 let rangedPoison = false;
                 let applyPoison = false;
+                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn.
+                const fired = resolvedHit.getFiredRangedShot?.() ?? null;
+                const weaponInterface = fired ? fired.weaponInterface : playerAttacker.getWeapon();
                 const thrownRangedWeapon =
-                    playerAttacker.getWeapon() == WeaponInterfaces.DART ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.KNIFE ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.THROWNAXE ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.JAVELIN;
+                    weaponInterface == WeaponInterfaces.DART ||
+                    weaponInterface == WeaponInterfaces.KNIFE ||
+                    weaponInterface == WeaponInterfaces.THROWNAXE ||
+                    weaponInterface == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
-                    applyPoison = Misc.getRandom(3) === 0;
-                    poisonType = CombatPoisonData.getPoisonType(
-                        playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT)
-                    );
+                    const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
+                    applyPoison = Misc.getRandom(CombatPoisonData.getMeleeRollRange(meleeWeapon)) === 0;
+                    poisonType = CombatPoisonData.getPoisonType(meleeWeapon);
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
-                    poisonType = CombatPoisonData.getPoisonType(
-                        playerAttacker.getEquipment().get(
+                    poisonType = CombatPoisonData.getPoisonType(fired
+                        ? (thrownRangedWeapon ? fired.weapon : fired.ammo)
+                        : playerAttacker.getEquipment().get(
                             thrownRangedWeapon ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT
                         )
                     );
@@ -1263,8 +1266,10 @@ export class CombatFactory {
             }
             // An accepted venom replaces the ordinary negative poison counter.
             if (isVenom) protection.clearCounter();
+            // Live names venom, only when it starts from nothing (rsprox_transcripts/237/01087.txt line 30368;
+            // 275 recorded); a poison turned to venom, or venom reapplied, says nothing.
             if (!alreadyPoisoned) {
-                player.sendMessage("You have been poisoned!");
+                player.sendMessage(isVenom ? "You have been poisoned by venom!" : "You have been poisoned!");
             }
         }
 
@@ -1595,13 +1600,27 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen).
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable")) {
+        // The Wiki's freeze resistance (the NPC's status record): a whole percentage that shortens the
+        // freeze, 100 meaning never frozen even when the spell lands (Wiki: Freeze).
+        const resistance = character.isNpc?.()
+            ? character.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
+        if (resistance >= 100) {
             return;
         }
 
-        const freeze = { target: character, source, ticks, kind };
+        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
+        // Wiki gives them a partial resistance, which says they can be frozen.
+        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+            return;
+        }
+
+        // `resisted` is set by a listener that already models this NPC's resistance exactly (the
+        // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.
+        const freeze = { target: character, source, ticks, kind, resisted: false };
         PluginManager.emitCustomEvent("combat:freeze-duration", freeze);
+        if (resistance > 0 && freeze.resisted !== true) {
+            freeze.ticks = (freeze.ticks * (100 - resistance)) / 100;
+        }
         ticks = Math.max(1, Math.floor(freeze.ticks));
         character.getTimers().registers(TimerKey.FREEZE, ticks);
         character.getTimers().registers(TimerKey.FREEZE_IMMUNITY, ticks + Misc.getTicks(3));
@@ -1734,9 +1753,8 @@ export class CombatFactory {
     }
 
     /**
-     * @param delayTicks the shot's flight time in ticks. The outcome is rolled now but the
-     *   count and the floor drop only apply when the projectile lands, so the quiver matches
-     *   the hitsplat instead of emptying at the bowstring.
+     * @param delayTicks the shot's flight time in ticks. The shot is rolled and paid now, as the
+     *   worn count drops on the firing tick; only the floor drop waits until the projectile lands.
      */
     public static decrementAmmo(player: Player, pos: Location, amount: number, delayTicks = 0) {
         // Get the ranged weapon data
@@ -1845,66 +1863,44 @@ export class CombatFactory {
             // Otherwise the device recovered it before it hit the floor.
         }
 
-        // Fixed at the shot: paying from the pack can empty this very object in place (an unequip moves it there).
+        // Paid at the shot: the slot drops on the tick the arrow leaves (rsprox_transcripts/237/01156.txt: the
+        // worn count falls with the projectile; rsprox_transcripts/227/00096.txt:101682: the last bolt clears the
+        // slot on its firing tick). Only the floor drop waits for the landing, so moving the stack mid-flight
+        // (unequip, bank, drop, quiver) cannot make the shot free.
         const ammoId = ammoItem.getId();
         const firedMeta = ammoItem.getMeta();
-        const ammoMeta = JSON.stringify(firedMeta ?? null);
-        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoId
-            && JSON.stringify(item.getMeta() ?? null) === ammoMeta;
-        const apply = () => {
-            const consumed = lost + dropped;
-            const worn = player.getEquipment().get(slot);
-            if (worn !== ammoItem && !sameAmmo(worn)) {
-                // Unequipping mid-flight puts this stack in the pack, and re-equipping wears a copy: the shot is
-                // still paid from the same ammo. A different stack swapped in is left alone.
-                const inventory = player.getInventory();
-                const at = inventory.getItems().findIndex(sameAmmo);
-                if (extra > 0) {
-                    // The stack is gone from the slot: what comes back goes to the pack (the floor if it is full).
-                    const back = new Item(ammoId, extra, firedMeta);
-                    if (inventory.getAddableAmount(back) >= extra) inventory.add(back, true);
-                    else ItemOnGroundManager.registers(player, back);
-                }
-                if (at < 0 || consumed <= 0) {
-                    return;
-                }
-                const paid = Math.min(consumed, inventory.getItems()[at].getAmount());
-                inventory.deleteAtSlot(at, paid);
-                if (dropped > 0 && pos) {
-                    ItemOnGroundManager.registerLocation(player, new Item(ammoId, Math.min(dropped, paid), firedMeta), pos);
-                }
-                return;
-            }
+        const paid = Math.min(lost + dropped, ammoItem.getAmount());
+        const landed = Math.min(dropped, paid);
+        if (paid > 0) {
+            ammoItem.decrementAmountBy(paid);
+        }
+        if (extra > 0) {
+            ammoItem.incrementAmountBy(extra);
+        }
 
-            if (dropped > 0 && pos) {
+        // If we are at 0 ammo remove the item from the equipment completely.
+        if (ammoItem.getAmount() <= 0) {
+            // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
+            // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
+            // keep theirs: no recording shows the last one go.
+            if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
+            player.getEquipment().set(slot, new Item(-1));
+
+            if (slot == Equipment.WEAPON_SLOT) {
+                WeaponInterfaceManager.assign(player);
+                player.getUpdateFlag().flag(Flag.APPEARANCE);
+            }
+        }
+
+        // Refresh the equipment interface.
+        player.getEquipment().refreshItems();
+
+        const apply = () => {
+            if (landed > 0 && pos) {
                 // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
                 // and comes back as preset ammo, owner-only like any untradeable ground item.
-                ItemOnGroundManager.registerLocation(player, new Item(worn.getId(), dropped, worn.getMeta()), pos);
+                ItemOnGroundManager.registerLocation(player, new Item(ammoId, landed, firedMeta), pos);
             }
-
-            if (consumed > 0) {
-                worn.decrementAmountBy(consumed);
-            }
-            if (extra > 0) {
-                worn.incrementAmountBy(extra);
-            }
-
-            // If we are at 0 ammo remove the item from the equipment completely.
-            if (worn.getAmount() == 0) {
-                // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
-                // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
-                // keep theirs: no recording shows the last one go.
-                if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
-                player.getEquipment().set(slot, new Item(-1));
-
-                if (slot == Equipment.WEAPON_SLOT) {
-                    WeaponInterfaceManager.assign(player);
-                    player.getUpdateFlag().flag(Flag.APPEARANCE);
-                }
-            }
-
-            // Refresh the equipment interface.
-            player.getEquipment().refreshItems();
         };
 
         if (delayTicks > 0) {

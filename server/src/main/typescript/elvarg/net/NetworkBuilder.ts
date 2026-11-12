@@ -39,6 +39,7 @@ import {
   NATIVE_CLIENT_ATTRIBUTE,
   HANDSHAKE_CAPABILITY_NATIVE_CLIENT,
   XPDROPS_ENABLED_ATTRIBUTE,
+  dataOrbsHidden,
   encodeDefaultAnimations,
   encodeGameframeBootstrap,
   encodeHandshake,
@@ -47,9 +48,11 @@ import {
   PlayerAppearance,
   resolveGameframeRoot,
   encodePluginMessage,
+  ChatType,
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
+  WORLD_MAP_KEYBOARD_CLOSE_WIDGET_ID,
   isWorldMapOrbWidget,
 } from "./protocol/WorldMapProtocol";
 import { ObjectActionPacketListener } from "./packet/impl/ObjectActionPacketListener";
@@ -67,6 +70,8 @@ import { SwitchItemSlotPacketListener } from "./packet/impl/SwitchItemSlotPacket
 import { PickupItemPacketListener } from "./packet/impl/PickupItemPacketListener";
 import { SecondGroundItemOptionPacketListener } from "./packet/impl/SecondGroundItemOptionPacketListener";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
+import { examineItem } from "../game/content/ExaminePrice";
+import { ItemOnGroundManager } from "../game/entity/impl/grounditem/ItemOnGroundManager";
 import { BoatManager } from "../game/content/sailing/BoatManager";
 import { Sailing } from "../game/content/sailing/Sailing";
 import { Bank } from "../game/model/container/impl/Bank";
@@ -185,9 +190,10 @@ const COMBAT_AUTO_RETALIATE_CHILD = 32;
  * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
  */
 const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+const COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD = 67;
 /**
- * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
- * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * The special-attack orb on the desktop and mobile HUDs: op1 uses the weapon, op2 the offhand.
+ * Rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
  * decide, as live does.
  */
 const SPECIAL_ATTACK_ORB_COMPONENTS = [
@@ -207,6 +213,52 @@ function isSpecialAttackOrb(widgetId: number): boolean {
   );
   return specialAttackOrbIds.has(widgetId);
 }
+
+/**
+ * All Settings "Ctrl+click to invert run mode" (row 207), varbit 13132 `runinvert_mode` (enum
+ * 4074): 0 Never, 1 Walk -> Run Only, 2 Run -> Walk Only, 3 Always. Live starts it at Always.
+ */
+const RUN_INVERT_MODE_VARBIT = 13132;
+const RUN_INVERT_WALK_TO_RUN = 1;
+const RUN_INVERT_RUN_TO_WALK = 2;
+
+/** Whether a Ctrl-click may invert the player's run mode, walking or running as they are. */
+export function runInvertAllowed(player: Player, running: boolean): boolean {
+  if (!CachePipeline.isInitialized()) return true;
+  const mode = player.getPacketSender().getVarbit(RUN_INVERT_MODE_VARBIT);
+  return (mode & (running ? RUN_INVERT_RUN_TO_WALK : RUN_INVERT_WALK_TO_RUN)) !== 0;
+}
+
+/**
+ * The run choice a click's key byte asks for: whether to run, or null to follow the run setting.
+ * Ctrl (1) inverts the run mode as row 207 allows; Ctrl+Shift (2) is a staff teleport that
+ * plugins take over, and walks like a Ctrl-click for everyone else. The inversion holds for
+ * this click's walk only; the run setting and orb stay as they are.
+ */
+export function clickRunOverride(player: Player, modifierFlags: number): boolean | null {
+  if (modifierFlags !== 2 && (modifierFlags & 1) === 0) return null;
+  const running = player.isRunningReturn();
+  if (!runInvertAllowed(player, running)) return null;
+  return !running && player.getRunEnergy() > 0;
+}
+
+/** Clicks that walk the player to what they target; a walk click ("move") sets its own run choice. */
+const INTERACTION_CLICKS = new Set<string>([
+  "npc_option",
+  "object_option",
+  "player_option",
+  "ground_item_action",
+  "world_entity_option",
+  "item_on_player",
+  "item_on_npc",
+  "item_on_object",
+  "item_on_ground",
+  "spell_on_player",
+  "spell_on_npc",
+  "spell_on_object",
+  "spell_on_ground",
+  "inventory_use_on",
+]);
 
 const WORLD_INTERACTIONS = new Set([
   "move",
@@ -656,6 +708,14 @@ export class ClientConnection {
           return;
         }
       }
+      // A Ctrl-click on an NPC, object, ground item or player inverts the run mode for the walk
+      // to it, as on a walk click; every such click replaces the last one's choice.
+      if (this.player && INTERACTION_CLICKS.has(packet.type)
+        && !(packet.type === "inventory_use_on" && packet.target.kind === "inventory")
+        && !(packet.type === "ground_item_action" && packet.option?.toLowerCase() === "examine")) {
+        const modifierFlags = "modifierFlags" in packet ? packet.modifierFlags ?? 0 : 0;
+        this.player.getMovementQueue().setClickRunOverride(clickRunOverride(this.player, modifierFlags));
+      }
       switch (packet.type) {
         case "plugin_message": {
           if (!this.player) continue;
@@ -921,10 +981,14 @@ export class ClientConnection {
             // The dialogue this click can answer: one opened by the click itself (an inventory
             // option's statement) must not take the same click as its option.
             const openDialogue = this.player.getDialogueManager().getCurrent();
-            const equipmentSlot = EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
+            const equipmentSlot = actionPacket.groupId === Bank.MAIN_INTERFACE_ID &&
+              (actionPacket.buttonNum !== 1 || !Bank.isOpen(this.player))
+              ? -1
+              : EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
             if (isWorldMapOrbWidget(actionPacket.widgetId) && actionPacket.buttonNum === 2) {
               this.player.getPacketSender().toggleWorldMap();
-            } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID) {
+            } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID ||
+              actionPacket.widgetId === WORLD_MAP_KEYBOARD_CLOSE_WIDGET_ID) {
               this.player.getPacketSender().closeWorldMap();
             } else if (equipmentSlot >= 0) {
               const item = this.player.getEquipment().getItems()[equipmentSlot];
@@ -950,6 +1014,8 @@ export class ClientConnection {
                 if (!this.player.isTeleportingReturn() && this.player.getStatus() !== PlayerStatus.TRADING) {
                   EquipPacketListener.unequip(this.player, equipmentSlot);
                 }
+              } else if (!itemActionHandled && item?.getId?.() > 0 && actionPacket.buttonNum === 10) {
+                examineItem(this.player, item.getId(), item.getAmount());
               } else if (!itemActionHandled && item?.getId?.() > 0) {
                 this.player.sendMessage("Nothing interesting happens.");
               }
@@ -979,8 +1045,10 @@ export class ClientConnection {
               );
             } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
-            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
-              CombatSpecial.activate(this.player);
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_OFFHAND_SPECIAL_ATTACK_CHILD && actionPacket.buttonNum === 1) {
+              CombatSpecial.activate(this.player, Equipment.SHIELD_SLOT);
+            } else if ((actionPacket.buttonNum === 1 || actionPacket.buttonNum === 2) && isSpecialAttackOrb(actionPacket.widgetId)) {
+              CombatSpecial.activate(this.player, actionPacket.buttonNum === 2 ? Equipment.SHIELD_SLOT : undefined);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
             } else if (Autocasting.handleWidgetAction(
@@ -1210,7 +1278,8 @@ export class ClientConnection {
         case "examine_npc":
           if (this.player) {
             const definition = NpcDefinition.forId(packet.id);
-            this.player.sendMessage(definition.getExamine());
+            // rsprox: examines have their own chat types (npc_examine, e.g. 237/01098.txt).
+            this.player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE, definition.getExamine());
           }
           continue;
         case "examine_object":
@@ -1225,7 +1294,9 @@ export class ClientConnection {
             // A multi-loc's text can be recorded under the variant this player sees.
             const definition = ObjectDefinition.forId(packet.id);
             const seen = ObjectDefinition.examineText(packet.id) === null ? ObjectDefinition.forPlayer(packet.id, this.player) : null;
-            this.player.sendMessage((seen && ObjectDefinition.examineText(seen.id) ? seen : definition)?.getExamine() ?? "It's nothing special.");
+            // rsprox 237/01098.txt:334474, 237/01104.txt:13832: `type=loc_examine`.
+            this.player.getPacketSender().sendTypedMessage(ChatType.LOC_EXAMINE,
+              (seen && ObjectDefinition.examineText(seen.id) ? seen : definition)?.getExamine() ?? "It's nothing special.");
           }
           continue;
         case "appearance":
@@ -1640,7 +1711,7 @@ export class ClientConnection {
     // stores; the client maps the standard mounts onto the chosen layout.
     // Mobile clients resolve to the stock mobile toplevel (601) instead.
     const layoutRoot = resolveGameframeRoot(player);
-    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true, GameConstants.WORLD_TYPE.label)) this.send(packet);
+    for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true, GameConstants.WORLD_TYPE.label, !dataOrbsHidden(player), World.getProcessCycle())) this.send(packet);
     player.getPacketSender()
       // Publish the saved spellbook before the remaining login state and quest recovery.
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())
@@ -1665,11 +1736,7 @@ export class ClientConnection {
     // At a boat's helm a click sets the heading (the client normally sends SET_HEADING).
     if (BoatManager.steerToward(player, x, y)) return;
     player.getCombat().reset();
-    // Ctrl (1) inverts the run toggle for this walk; Ctrl+Shift (2) is a staff teleport that
-    // plugins take over, and walks like a Ctrl-click for everyone else.
-    const invert = modifierFlags === 2 || (modifierFlags & 1) !== 0;
-    // The inversion holds for this path only; the run setting and orb stay as they are.
-    const runOverride = forceRun ? true : invert ? !player.isRunningReturn() && player.getRunEnergy() > 0 : null;
+    const runOverride = forceRun ? true : clickRunOverride(player, modifierFlags);
     // MovementQueue owns the destination flag and de-duplicates it; sending it
     // here as well double-posts the marker on every walk click.
     player.getMovementQueue().requestWalk(
@@ -1692,8 +1759,9 @@ export class ClientConnection {
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
       // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
       if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
-      // Inventory item actions clear the current interaction before equip checks.
-      player.clearPendingAction();
+      // Inventory item actions clear the current interaction before equip checks, except an
+      // attack: a weapon switch keeps the fight going (docs/weapon-switching.md, #4112).
+      player.clearPendingAction(true);
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }
@@ -1703,8 +1771,7 @@ export class ClientConnection {
         DropItemPacketListener.drop(player, packet.itemId, 3214, packet.slot);
       }
     } else if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
+      examineItem(player, packet.itemId, item.getAmount());
     } else {
       ItemActionPacketListener.handleAction(player, packet.widgetId, packet.itemId, packet.slot, optionIndex ?? 1, packet.option);
     }
@@ -1744,13 +1811,24 @@ export class ClientConnection {
       CacheDefinitions.getSpellName(childId, itemId ?? -1);
   }
 
+  /** The size of the ground stack being examined: the one the click names, else one the player sees on that tile. */
+  private examinedGroundStackAmount(packet: { itemId: number; x: number; y: number; stackId?: number }): number {
+    const player = this.player!;
+    const z = player.getLocation().getZ();
+    const stack = packet.stackId != null
+      ? ItemOnGroundManager.getGroundItemById(packet.stackId, player)
+      : World.getItems().find((ground) => ground.getItem().getId() === packet.itemId
+        && ground.getPosition().getX() === packet.x && ground.getPosition().getY() === packet.y
+        && ground.getPosition().getZ() === z && ItemOnGroundManager.canSee(player, ground));
+    return stack && stack.getItem().getId() === packet.itemId ? stack.getItem().getAmount() : 1;
+  }
+
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
     const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
-      const definition = ItemDefinition.forId(packet.itemId);
-      player.sendMessage(definition.getExamine() || definition.getName());
+      examineItem(player, packet.itemId, this.examinedGroundStackAmount(packet));
       return;
     }
     if (option === "take") {
@@ -1803,6 +1881,7 @@ export class ClientConnection {
     const displayEquipment = player.getEquipment().getItems();
     return {
       gender: look[Appearance.GENDER] ?? 0,
+      hidden: player.isAppearanceHidden(),
       pronouns: player.getAppearance().getPronouns(),
       colors: [
         look[Appearance.HAIR_COLOUR],

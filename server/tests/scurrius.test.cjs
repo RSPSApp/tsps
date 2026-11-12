@@ -308,6 +308,9 @@ test("the rubble lands nine ticks after the stomp, on the players still on its t
   assert.equal(hits.get(players[0]).length, 1);
   assert.ok(hits.get(players[0])[0] >= 15 && hits.get(players[0])[0] <= 22);
   assert.equal(hits.get(players[1]).length, 0);
+  // Combat Achievements hear of it (Perfect Scurrius: no damage from Falling Bricks).
+  const fell = events.filter((event) => event.name === "scurrius:rockfall-hit").map((event) => event.payload.player);
+  assert.deepEqual(fell, [players[0]]);
 });
 
 test("the rubble covers twelve floor tiles, one under each player", () => {
@@ -700,6 +703,59 @@ test("his bolts and fur balls are rolled as they land, after the player's prayer
       unprotected += land(action, stance, () => { prayers[prayer] = false; });
     }
     assert.ok(unprotected > 0, `${action}: prayer turned off on the landing tick`);
+  }
+});
+
+test("his bolts and fur balls are thrown at every player in the room at once (#4192)", (t) => {
+  // Captured (recording 84, public lair): each cast sends one projectile per player in the room,
+  // all from the same tile, and each lands on its own player; a player outside gets none.
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const npc = core.NPC.create(Common.PUBLIC_ID, Common.location(Common.CENTRE_TILE));
+  npc.isRegistered = () => true;
+  npc.setHitpoints(300);
+  const state = Fight.stateOf(npc);
+  state.phase = "enraged";
+  state.facing = new Location(3302, 9870, 0);
+  const sounds = [];
+  const makePlayer = (x, y) => {
+    const player = new Player(null);
+    const sender = new Proxy({}, { get: (_t, method) => (...args) => {
+      if (method === "sendSound") sounds.push([player, args[0]]);
+      return sender;
+    } });
+    player.getPacketSender = () => sender;
+    player.setRegistered(true);
+    player.setLocation(new Location(x, y, 0));
+    player.setHitpoints(99);
+    return player;
+  };
+  const target = makePlayer(3295, 9867);
+  const other = makePlayer(3292, 9871);
+  const outside = makePlayer(3276, 9871);
+  npc.getPlayersWithinDistance = () => [target, other, outside];
+  const thrown = [];
+  t.mock.method(core.Projectile.prototype, "sendProjectile", function sendProjectile() {
+    thrown.push({ to: this.lockon, from: `${this.start.getX()},${this.start.getY()}` });
+  });
+  const queued = [];
+  t.mock.method(core.CombatFactory, "addPendingHit", (hit) => queued.push(hit));
+  const Method = Fight._test.defineCombatMethod();
+  const method = new Method();
+  // ENRAGED weighs magic 2, ranged 2: a roll of 1 is magic, 3 ranged.
+  for (const [action, roll, sound] of [["magic", 1, Common.SOUND.magic], ["ranged", 3, Common.SOUND.ranged]]) {
+    thrown.length = 0;
+    sounds.length = 0;
+    queued.length = 0;
+    const random = t.mock.method(core.Misc, "randomInclusive", () => roll);
+    method.start(npc, target);
+    random.mock.restore();
+    assert.equal(method.action, action);
+    assert.deepEqual(thrown.map(({ to }) => to), [target, other], `${action}: one projectile per player in the room`);
+    assert.equal(new Set(thrown.map(({ from }) => from)).size, 1, `${action}: all from one tile`);
+    assert.deepEqual(sounds.filter(([, id]) => id === sound).map(([player]) => player), [target, other]);
+    assert.deepEqual(method.hits(npc, target), []);
+    runTicks(Fight._test.DISTANT_HIT_DELAY);
+    assert.deepEqual(queued.map((hit) => hit.getTarget()), [target, other], `${action}: each lands on its own player`);
   }
 });
 

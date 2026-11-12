@@ -25,8 +25,11 @@ const LEVEL = 12;
 const PRYING_TIMES_DRINK = "drink_crate_prying_times";
 /** Drinking warns until told not to (persisted, sent at login as its varbit). */
 const NO_WARNING_ATTRIBUTE = "charting:drink-no-warning";
+/** All Settings > Warnings: "Forgotten drink crate warning", the warning's own "don't ask again". */
+const WARNING_SETTING = 455;
 
 const NO_CROWBAR = "You require a crowbar to do that.";
+const NO_ROOM = "You don't have enough inventory space.";
 const WARNING = "This drink has been sealed in a crate for an unknown amount of time. It could do anything to you, good or bad. Are you sure you want to drink it?";
 const CHOICE = "Are you sure you want to drink this?";
 
@@ -103,8 +106,14 @@ function pryOpen(event) {
     itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't take it as you already have one.`);
     return;
   }
+  const bottle = new (common.core().Item)(spot.item, 1);
+  // Ours: a full inventory isn't captured; the crate stays shut, as the other charting rewards do.
+  if (player.getInventory().getAddableAmount(bottle) < 1) {
+    player.sendMessage(NO_ROOM);
+    return;
+  }
   player.getPacketSender().sendSoundEffect(SOUND_PRY, 1, 0);
-  player.getInventory().add(new (common.core().Item)(spot.item, 1), true);
+  player.getInventory().add(bottle, true);
   itemBox(player, spot.item, `You pry open the crate and take a bottle of ${name} to sample.`);
 }
 
@@ -133,8 +142,7 @@ function choose(player, consume) {
   common.api().sendMultiChatboxPrompt(player, CHOICE,
     "Yes.", consume,
     "Yes, and don't ask again.", () => {
-      player.setAttribute(NO_WARNING_ATTRIBUTE, true);
-      player.getPacketSender().sendVarbit(VARBIT_NO_WARNING, 1);
+      setNoWarning(player, true);
       consume();
     },
     "No.", () => {});
@@ -171,6 +179,17 @@ function placeCrates() {
   }
 }
 
+function setNoWarning(player, noWarning) {
+  player.setAttribute(NO_WARNING_ATTRIBUTE, noWarning);
+  player.getPacketSender().sendVarbit(VARBIT_NO_WARNING, noWarning ? 1 : 0);
+}
+
+function warningSettingClicked(request) {
+  if (request.settingId !== WARNING_SETTING) return;
+  request.handled = true;
+  setNoWarning(request.player, request.player.getAttribute(NO_WARNING_ATTRIBUTE) !== true);
+}
+
 function onLogin({ player }) {
   if (player.getAttribute(NO_WARNING_ATTRIBUTE) === true) player.getPacketSender().sendVarbit(VARBIT_NO_WARNING, 1);
 }
@@ -187,6 +206,7 @@ function attach(api) {
   api.onItemAction(drink);
   api.onServerStartup(placeCrates);
   api.onPlayerLogin(onLogin);
+  api.onCustomEvent("settings:setting-clicked", warningSettingClicked);
   api.onPlayerLogout(onLogout);
   api.onCustomEvent("interface:changed", interfaceChanged);
 }
@@ -196,4 +216,5 @@ module.exports.pryOpen = pryOpen;
 module.exports.drink = drink;
 module.exports.swallow = swallow;
 module.exports.drinks = drinks;
+module.exports.warningSettingClicked = warningSettingClicked;
 module.exports.NO_WARNING_ATTRIBUTE = NO_WARNING_ATTRIBUTE;

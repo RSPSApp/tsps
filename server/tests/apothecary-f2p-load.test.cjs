@@ -35,7 +35,7 @@ test("the ordinary Apothecary service loads and charges materials on a free worl
       JSON.stringify({
         spawn: { x: 3222, y: 3219, z: 0 },
         zones: [{ minX: 3200, maxX: 3263, minY: 3200, maxY: 3263, z: 0, tags: ["f2p"] }],
-        membersWorld: false,
+        plugins: { FreeToPlay: true },
       })
     );
     const plugins = path.join(directory, "plugins");

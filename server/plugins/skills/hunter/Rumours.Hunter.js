@@ -22,26 +22,69 @@ function eligible(player, task) {
     && (task.npc !== "HERBIBOAR" || C.questComplete(player,"bone_voyage") && player.getSkillManager().getMaxLevel(H.core.Skill.HERBLORE) >= 31)
     && (Number.isInteger(N[task.npc]) || task.npc === "RAZOR_BACKED_KEBBIT");
 }
-function assign(player, index) {
+// The six hunters' first names, in masters() order. They sign the status message ("Aco was the source of the rumour.").
+const HUNTER_NAMES = ["Gilman", "Cervus", "Ornus", "Aco", "Teco", "Wolf"];
+// How a hunter offers a rumour, from rsprox captures 1108/1115 (Cervus, Aco). {creature} is the lowercase creature name.
+const OFFERS = [
+  "There's been rumours of a rare {creature} coming in. Once you find it, bring back {part}.",
+  "I've heard rumours of a strange {creature} that you could check out for me. Once you find it, bring back {part}.",
+  "Could you check out the validity of this report for me? Someone thinks they've seen an odd {creature}. Once you find it, bring back {part}.",
+  "We've got rumours circling about an odd {creature}. You can follow up on that if you'd like? Once you find it, bring back {part}.",
+  "We've got reports of a slightly different {creature} in the local population. Once you find it, bring back {part}.",
+  "Looks like we need some information on a unique specimen amongst the local {creature} population. Once you find it, bring back {part}.",
+];
+const TOO_LOW = "I don't think you'd be able to hunt the creatures on my list. Rumour has it you're not the most experienced hunter.";
+const NEEDS_VERITY = "Looks like you could do with talking to Verity first, given you're new to this whole business.";
+/** How the hunters word the part: fur, claws, hooves, wings, horn and tail are captured; feathers, ear and tooth follow the same pattern (unverified). */
+function partPhrase(itemName) {
+  const name = itemName.toLowerCase();
+  if (/fur|fluff|tuft/.test(name)) return "some of its fur";
+  if (/claw/.test(name)) return "one of its claws";
+  if (/hoof/.test(name)) return "one of its hooves";
+  if (/wing/.test(name)) return "one of its wings";
+  if (/horn/.test(name)) return "its horn";
+  // Feathers before tail: the wagtail's "Tailfeathers" is not a tail. The tail, ear and tooth phrases follow the pattern (tail is captured).
+  if (/feather/.test(name)) return "some of its feathers";
+  if (/tail/.test(name)) return "its tail";
+  if (/ear/.test(name)) return "one of its ears";
+  if (/tooth|teeth/.test(name)) return "one of its teeth";
+  return `its ${name}`;
+}
+function say(player, npcId, text) {
+  const { DialogueChainBuilder, NpcDialogue, EndDialogue } = H.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, text), new EndDialogue(1)));
+}
+function target(task) {
+  const part = H.core.ItemDefinition.forId(H.core.ItemIdentifiers[task.part]).getName();
+  return { creature: task.name.toLowerCase(), part: partPhrase(part) };
+}
+/** "Rumour" on a guild hunter: hand in a found part (the next click offers another), else offer or remind. */
+function assign(player, index, npcId = masters()[index][0]) {
   const s = state(player), master = masters()[index], current = s.assignments[index];
-  if (!s.unlocked) { player.sendMessage("Speak to Guild Scribe Verity to learn about Hunters' Rumours first."); return; }
+  if (!s.unlocked) { say(player, npcId, NEEDS_VERITY); return; }
   if (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER) < master[1]
-    || index === 5 && !C.questComplete(player,"at_first_light")) { player.sendMessage("You do not meet this hunter's requirements."); return; }
+    || index === 5 && !C.questComplete(player,"at_first_light")) { say(player, npcId, TOO_LOW); return; }
   if (current) {
     const task = tasks[current.task], part = H.core.ItemIdentifiers[task.part];
     s.active = index;
-    if (current.found && player.getInventory().contains(part)) {
-      const I = H.core.ItemIdentifiers, sack = I[`HUNTERS_LOOT_SACK_${master[2].toUpperCase()}_`];
-      if (!C.exchange(player, [[part,1]], [[sack,1]])) { player.getInventory().full(); return; }
-      // Content may change the rumour's XP ("hunter:rumour-reward" { player, tier, xp }, a league relic's double).
-      const reward = { player, tier: master[2], xp: (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER)+5)*master[3] };
-      H.api?.emitCustomEvent?.("hunter:rumour-reward", reward);
-      player.getSkillManager().addExperiences(H.core.Skill.HUNTER,reward.xp);
-      s.completed++; s.previous = current.task; delete s.assignments[index];
-      player.sendMessage(`Rumour completed! You have completed ${s.completed} rumours.`);
-      // "hunter:rumour-completed" { player, completed }: one more (a league's "Complete 10 Hunter Rumours").
-      H.api?.emitCustomEvent?.("hunter:rumour-completed", { player, completed: s.completed });
-    } else { player.sendMessage(`Your active rumour is ${task.name}. Bring back ${H.core.ItemDefinition.forId(part).getName()}.`); return; }
+    if (!(current.found && player.getInventory().contains(part))) {
+      // Captured wording (rsprox 1104, Gilman), including its "a" before a vowel.
+      const { creature, part: phrase } = target(task);
+      say(player, npcId, `You're hunting for me at the moment. This rumour was about a ${creature}. You'll need to bring back ${phrase}.`);
+      return;
+    }
+    const I = H.core.ItemIdentifiers, sack = I[`HUNTERS_LOOT_SACK_${master[2].toUpperCase()}_`];
+    if (!C.exchange(player, [[part,1]], [[sack,1]])) { player.getInventory().full(); return; }
+    // Content may change the rumour's XP ("hunter:rumour-reward" { player, tier, xp }, a league relic's double).
+    const reward = { player, tier: master[2], xp: (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER)+5)*master[3] };
+    H.api?.emitCustomEvent?.("hunter:rumour-reward", reward);
+    player.getSkillManager().addExperiences(H.core.Skill.HUNTER,reward.xp);
+    s.completed++; s.previous = current.task; delete s.assignments[index];
+    player.sendMessage(`You have completed <col=ff3045>${s.completed}</col> rumours for the Hunter Guild.`);
+    // "hunter:rumour-completed" { player, completed }: one more (a league's "Complete 10 Hunter Rumours").
+    H.api?.emitCustomEvent?.("hunter:rumour-completed", { player, completed: s.completed });
+    say(player, npcId, "Thanks for that. I'll mark off that report for you. Would you like another rumour?");
+    return;
   }
   const blocked = Object.values(s.assignments).map(a=>a.task);
   const pool = tasks.map((task,i)=>[task,i]).filter(([task,i])=> task.masters.includes(index) && eligible(player,task)
@@ -49,30 +92,83 @@ function assign(player, index) {
   if (!pool.length) { player.sendMessage("No eligible rumours remain. Switch hunters or clear your assignments with Gilman."); return; }
   const [task,id] = pool[C.roll(0,pool.length-1)];
   s.assignments[index] = { task:id, count:0, found:false }; s.active = index;
-  player.sendMessage(`Your new rumour is ${task.name}. Hunt it until you find its rare creature part.`);
+  const { creature, part } = target(task);
+  say(player, npcId, OFFERS[C.roll(0,OFFERS.length-1)].replace("{creature}", creature).replace("{part}", part));
 }
 function interact({player,npcId,npc}) {
   const index=masters().findIndex(m=>m[0]===npcId);
   if(index<0)return false;
   if (!C.nearby(player,npc)) return true;
-  if(index===0) C.choose(player,[["Request or complete a rumour",()=>assign(player,index)],
+  if(index===0) C.choose(player,[["Request or complete a rumour",()=>assign(player,index,npcId)],
     ["Clear all my rumours",()=>C.choose(player,[["Yes, clear all assignments",()=>{const s=state(player);s.assignments={};s.active=null;}],["Keep my assignments",()=>{}]],npc)]],npc);
-  else assign(player,index);
+  else assign(player,index,npcId);
   return true;
 }
-function verity({player,npc}) {
+/** The "Rumour" op: straight to the offer or hand-in, with no menu even on Gilman (rsprox 1108: op 3, one dialogue). */
+function rumour({player,npcId,npc}) {
+  const index=masters().findIndex(m=>m[0]===npcId);
+  if(index<0)return false;
+  if(C.nearby(player,npc))assign(player,index,npcId);
+  return true;
+}
+// Guild Scribe Verity's introduction (rsprox 1104 and 1695). The "Yes please." / "No thanks." menu's wording is a guess: only "Yes please." was captured.
+const VERITY_GREETING = "Oh, hello there newcomer. I'm Guild Scribe Verity. Do you need me to explain the work we do here?";
+const VERITY_TUTORIAL = [
+  ["player", "Yes please."],
+  ["npc", "So it's nice and simple. Just chat to any of the hunters in here to help them out. They're all following reports that I've split up amongst them."],
+  ["player", "Reports?"],
+  ["npc", "Indeed. There are all sorts of interesting creatures to hunt out there. Sometimes we get reports of a particularly unique example. When that happens, one of the hunters will set out to find it."],
+  ["npc", "If you do decide to take a job from any of the hunters, they'll tell you what type of creature they're looking into. Hunt that creature until you encounter the unique specimen."],
+  ["npc", "Once you've caught it, bring some proof back to the hunter that sent you out in the first place. I'm sure they'll reward you for your time."],
+  ["player", "I see. Thanks for the information."],
+];
+/** One chain of NPC and player pages; "then" runs after the last page is dismissed. */
+function converse(player, npcId, lines, then) {
+  const { DialogueChainBuilder, NpcDialogue, PlayerDialogue, ActionDialogue, EndDialogue } = H.core;
+  const chain = new DialogueChainBuilder();
+  lines.forEach(([who, text], i) => chain.add(who === "npc" ? new NpcDialogue(i, npcId, text) : new PlayerDialogue(i, text)));
+  chain.add(then ? new ActionDialogue(lines.length, { execute: then }) : new EndDialogue(lines.length));
+  player.getDialogueManager().startDialogues(chain);
+}
+function explain(player, npcId) {
+  converse(player, npcId, VERITY_TUTORIAL, () => { state(player).unlocked = true; });
+}
+function introduce(player, npcId) {
+  const { DialogueChainBuilder, NpcDialogue, OptionDialogue } = H.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new NpcDialogue(0, npcId, VERITY_GREETING),
+    new OptionDialogue(1, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (Number(option) === 1) explain(player, npcId);
+        else state(player).unlocked = true;
+      },
+    }, "Yes please.", "No thanks."),
+  ));
+}
+/** Talk-to or Rumour-settings: the introduction until she has given it, then the consecutive-rumours menu. */
+function verity({player,npc,npcId}) {
   if(!C.nearby(player,npc))return true;
-  const s=state(player);s.unlocked=true;
+  const s=state(player);
+  if(!s.unlocked){introduce(player,npcId);return true;}
   C.choose(player,[["Allow consecutive rumours",()=>{s.repeat=true;player.sendMessage("Consecutive rumours enabled.");}],
     ["Avoid consecutive rumours",()=>{s.repeat=false;player.sendMessage("Consecutive rumours disabled.");}],
-    ["Check my rumour",()=>check({player})]],npc);
+    ["Check my rumour",()=>check({player})],
+    ["Explain Hunters' Rumours again",()=>explain(player,npcId)]],npc);
   return true;
 }
 function check({player}) {
   const s=state(player), a=s.assignments[s.active];
-  player.sendMessage(a ? `Your active rumour is ${tasks[a.task].name}.` : "You have no active Hunter rumour.");
+  if(a){const {creature,part}=target(tasks[a.task]);
+    player.sendMessage(`Your current rumour target is ${/^[aeiou]/.test(creature)?"an":"a"} ${creature}. You'll need to bring back ${part}. ${HUNTER_NAMES[s.active]} was the source of the rumour.`);}
+  else player.sendMessage("You have no active Hunter rumour.");
   return true;
 }
+// The rare part line, in the game's green, with its jingle.
+const PART_FOUND = "<col=229628>You find a rare piece of the creature! You should take it back to the Hunter Guild.";
+const PART_DROPPED = "<col=229628>You find a rare piece of the creature! Though without space in your inventory, it drops to the ground.";
+const PITY_FULL = "Free an inventory slot to receive the rare creature part on your next catch.";
+const PART_SOUND = 2655, PART_DESPAWN_TICKS = 200;
 function success({player,npcId,method,creature}) {
   if(method === "herbiboar-tracking")return;
   const s=state(player),a=s.assignments[s.active];if(!a)return;
@@ -85,14 +181,25 @@ function success({player,npcId,method,creature}) {
   const rate=rates[category];if(!rate)return;
   const outfit=C.outfit(player),pity=a.count>=rate[outfit?2:1];
   if(!pity&&Math.random()>=(outfit?1.05:1)/rate[0])return;
-  if(!C.exchange(player,[],[[part,1]])) {
-    if(pity){player.sendMessage("Free an inventory slot to receive the rare creature part on your next catch.");return;}
-    C.drop(player,[[part,1]],player.getLocation());
-  }
+  const room=C.exchange(player,[],[[part,1]]);
+  // A pity part needs a free slot: with a full inventory it is lost and comes again on the next catch.
+  // Ours: the line that says so (live's wording is unknown).
+  if(!room&&pity){player.sendMessage(PITY_FULL);return;}
+  // Without room the part lands under the player, theirs alone, for 200 ticks.
+  if(!room)H.core.ItemOnGroundManager.registerLocation(player,new H.core.Item(part,1),player.getLocation().clone(),player.getPrivateArea(),{goesGlobal:false,despawnDelay:PART_DESPAWN_TICKS});
   a.found=true;
-  player.sendMessage("You find a rare piece of the creature! Take it back to the Hunter Guild.");
+  player.sendMessage(room?PART_FOUND:PART_DROPPED);
+  player.getPacketSender().sendSound(PART_SOUND,1,0);
 }
-function owns(player,id) {return player.getInventory().contains(id)||C.hasTool(player,id)||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>player.getBank(tab)).some(bank=>bank?.contains(id));}
+function owns(player,id) {
+  // A zero-count bank placeholder/search mirror is not another owned kit.
+  if(player.getInventory().getAmount(id)>0||player.getEquipment().getAmount(id)>0||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>tab===H.core.Bank.BANK_SEARCH_TAB_INDEX?null:player.getBank(tab)).some(bank=>bank?.getAmount(id)>0))return true;
+  // A reclaimable kit is still owned; receiving another must not duplicate it on retrieval.
+  const grave={player,grave:null,office:[]};H.api.emitCustomEvent("gravestones:state",grave);
+  if([...(grave.grave?.items??[]),...grave.office].some(item=>item?.id===id&&item.amount>0))return true;
+  const retrieval={player,items:[]};H.api.emitCustomEvent("item-retrieval:items",retrieval);
+  return retrieval.items.some(item=>item.itemId===id&&item.amount>0);
+}
 function cascade(player, skill, rows) {
   const l=C.level(player,skill);
   for(const[id,low,high,required=1]of rows)if(l>=required&&Math.random()<C.probability(low,high,l))return id;
@@ -129,7 +236,9 @@ function open({player,itemId}) {
   if(!player.getInventory().contains(itemId))return true;
   let pending=pendingSacks.get(player);if(!pending)pendingSacks.set(player,pending=new Map());
   if(!pending.has(itemId))pending.set(itemId,sackRewards(player,tier));
-  const rewards=pending.get(itemId);
+  // An unsuccessful opening retains its rolls. Recheck kit ownership at delivery too:
+  // another sack may have supplied one since this reward was rolled. Keep every other roll.
+  const rewards=pending.get(itemId).filter(([id])=>id!==I.HUNTSMANS_KIT||!owns(player,id));
   if(!C.exchange(player,[[itemId,1]],rewards)){player.getInventory().full();return true;}
   for(const[id,amount]of rewards)H.api.emitCustomEvent("collection-log:obtain",{player,itemId:id,amount});
   const s=state(player);
@@ -142,4 +251,4 @@ function open({player,itemId}) {
 }
 /** `hunter:rumours-completed` { player, completed }: how many rumours the player has finished. */
 function completedCount(request){if(request?.player)request.completed=state(request.player).completed|0;}
-module.exports={ATTRIBUTE,state,masters,interact,verity,check,success,open,assign,sackRewards,tasks,completedCount};
+module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount};

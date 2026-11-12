@@ -112,6 +112,10 @@ export function clearWorldOverlays(): void {
     worldTerrainOverrides = [];
 }
 
+export function isDefinitionDataset({ key }: { key: string }): boolean {
+    return key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
+}
+
 export function loadFromPayload(payload: {
     gamemodeId: string;
     datasets: Array<{ key: string; rows: unknown[] }>;
@@ -121,6 +125,11 @@ export function loadFromPayload(payload: {
             case "customDefinitions": {
                 const { replaceCustomDefinitions } = require("../../custom/definitions/CustomDefinitionStore");
                 replaceCustomDefinitions(dataset.rows);
+                break;
+            }
+            case "customDefinitionsAppend": {
+                const { appendCustomDefinitions } = require("../../custom/definitions/CustomDefinitionStore");
+                appendCustomDefinitions(dataset.rows);
                 break;
             }
             case "definitionArchives": {

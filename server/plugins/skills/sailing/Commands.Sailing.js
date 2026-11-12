@@ -1,0 +1,227 @@
+// Developer commands for testing sailing until boats can be bought (and the Pandemonium quest
+// hands out the first raft): ::raft, ::skiff and ::sloop moor a new boat at The Pandemonium.
+const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
+const { BoatMoveMode } = require("../../../src/main/typescript/elvarg/game/content/sailing/Boat");
+const { packedHeadingToAngle } = require("../../../src/main/typescript/elvarg/game/content/sailing/HeadingUtils");
+const { PlayerRights } = require("../../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
+const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
+const { content, boatName, randomBoatName } = require("./SailingContent.Sailing");
+const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
+const { TOOLS_UNLOCKED_ATTRIBUTE, sendToolUnlocks } = require("./Cargo.Sailing");
+const { PARTS, partOptions, requirementsOf } = require("./BoatParts.Sailing");
+const { facilityNamed, facilityRequirements, hotspotsOf, setFacility, FACILITY } = require("./BoatFacilities.Sailing");
+const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
+const { visitedBoat, refreshShownBoat } = require("./Shipyard.Sailing");
+
+/** Tier names by part, in tier order (hulls and sails by wood, keels and helms by metal). */
+const WOOD_TIERS = ["wooden", "oak", "teak", "mahogany", "camphor", "ironwood", "rosewood"];
+const METAL_TIERS = ["bronze", "iron", "steel", "mithril", "adamant", "rune", "dragon"];
+const TIER_NAMES = { hull: WOOD_TIERS, sails: WOOD_TIERS, keel: METAL_TIERS, helm: METAL_TIERS };
+const BOAT_TYPES = ["raft", "skiff", "sloop"];
+
+const BOAT_DOCK = "the_pandemonium";
+const MOVE_MODES = {
+  full: BoatMoveMode.Full,
+  half: BoatMoveMode.Half,
+  reverse: BoatMoveMode.Reverse,
+  stop: BoatMoveMode.Stopped,
+};
+
+/** Moors a new boat of `type` for the player at The Pandemonium, with a random name. */
+function giveBoatOfType(player, type) {
+  const boat = Sailing.giveBoat(player, type, BOAT_DOCK, randomBoatName());
+  if (boat) sendBoatVarbits(player);
+  player.sendMessage(boat
+    ? `The ${boatName(boat)}, a ${type}, is moored for you at ${Sailing.getDock(BOAT_DOCK).name} (slot ${boat.slot}).`
+    : "You can't own another boat.");
+}
+
+function giveRaft({ player }) {
+  giveBoatOfType(player, "raft");
+}
+
+function giveSkiff({ player }) {
+  giveBoatOfType(player, "skiff");
+}
+
+function giveSloop({ player }) {
+  giveBoatOfType(player, "sloop");
+}
+
+/** Teleports to The Pandemonium's gangplank. Like any teleport, it sinks a boat you're on. */
+function toPandemonium({ player }) {
+  const { landing } = Sailing.getDock(BOAT_DOCK);
+  player.moveTo(new Location(landing.x, landing.y, landing.z));
+}
+
+/** Shows every tool in the cargo hold's tools compartment, as if their quests were done. */
+function unlockSailingTools({ player }) {
+  player.setAttribute(TOOLS_UNLOCKED_ATTRIBUTE, true);
+  sendToolUnlocks(player);
+  player.sendMessage("Every tool now shows in your cargo hold's tools compartment.");
+}
+
+const BOATMATS_USAGE = "Usage: ::boatmats <hull|keel|sails|helm> <tier 0-6 or name> [raft|skiff|sloop], or ::boatmats facility <name>";
+
+/**
+ * Spawns what building a boat part or facility costs, from the same cache row the shipyard
+ * checks: ::boatmats <hull|keel|sails|helm> <tier 0-6 or name> [raft|skiff|sloop], or
+ * ::boatmats facility <name>. A part's boat type defaults to the boat being customised in the
+ * shipyard, then the active boat.
+ */
+function spawnPartMaterials({ player, parts }) {
+  if (parts[1] === "facility") {
+    spawnFacilityMaterials(player, parts.slice(2).join(" "));
+    return;
+  }
+  const part = parts[1];
+  const tierArg = parts[2]?.toLowerCase();
+  const tier = PARTS.includes(part)
+    ? (/^\d+$/.test(tierArg ?? "") ? Number(tierArg) : TIER_NAMES[part].indexOf(tierArg))
+    : -1;
+  const type = parts[3] ?? visitedBoat(player)?.type ?? Sailing.activeBoat(player)?.type;
+  const option = BOAT_TYPES.includes(type) && tier >= 0 ? partOptions(type, part)[tier] : undefined;
+  if (option === undefined) {
+    player.sendMessage(BOATMATS_USAGE);
+    return;
+  }
+  const requirements = requirementsOf(part, option);
+  for (const [item, count] of requirements.materials) player.getInventory().adds(item, count);
+  player.sendMessage(`Spawned the materials for a ${type}'s ${requirements.name} (Sailing ${requirements.sailing}, Construction ${requirements.construction}).`);
+}
+
+function spawnFacilityMaterials(player, name) {
+  const facility = name ? facilityNamed(name) : undefined;
+  if (facility === undefined) {
+    player.sendMessage(BOATMATS_USAGE);
+    return;
+  }
+  const requirements = facilityRequirements(facility);
+  for (const [item, count] of requirements.materials) player.getInventory().adds(item, count);
+  player.sendMessage(`Spawned the materials for a ${requirements.name} (Sailing ${requirements.sailing}, Construction ${requirements.construction}).`);
+}
+
+/**
+ * ::maxboat presets: facilities by preference, each with how many the boat may have (all it has
+ * room for when not given). Each hotspot, the most restrictive first, takes the first it allows.
+ */
+/** Last: a hotspot that allows only these still gets them; a raft's one spot gets the preset's own. */
+const ANYWHERE = ["Rosewood cargo hold", "Inoculation station"];
+const LOADOUTS = {
+  default: ["Dragon cannon", "Dragon salvaging hook", ["Greater teleport focus", 1], ["Gale catcher", 1],
+    ["Salvaging station", 1], ["Range", 1], ["Keg", 1], ["Chum spreader", 1], ["Bosun's workbench", 1],
+    ["Crystal extractor", 1], ["Fathom pearl", 1], ["Ballistic attractor", 1], "Cotton trawling net", ...ANYWHERE],
+  salvaging: ["Dragon salvaging hook", ["Salvaging station", 2], ["Greater teleport focus", 1],
+    ["Gale catcher", 1], ["Bosun's workbench", 1], ["Crystal extractor", 1], ["Range", 1], ["Keg", 1], "Dragon cannon",
+    "Chum spreader", ...ANYWHERE],
+  combat: ["Dragon cannon", ["Ballistic attractor", 1], ["Greater teleport focus", 1], ["Gale catcher", 1],
+    ["Range", 1], ["Keg", 1], ["Bosun's workbench", 1], "Dragon salvaging hook", "Chum spreader", ...ANYWHERE],
+  fishing: ["Cotton trawling net", "Chum spreader", ["Greater teleport focus", 1], ["Gale catcher", 1],
+    ["Fathom pearl", 1], ["Range", 1], ["Keg", 1], "Dragon cannon", ...ANYWHERE],
+};
+const MAXBOAT_USAGE = `Usage: ::maxboat [${Object.keys(LOADOUTS).join("|")}]: every part at its best, and the preset's facilities`;
+
+/**
+ * The facility rows a preset puts on each hotspot of a boat type, by hotspot id. Matched by name
+ * against the hotspot's own rows: some facilities have one row per hook size under one name.
+ */
+function loadoutFacilities(type, loadout) {
+  const wanted = loadout.map((entry) => {
+    const [name, max] = Array.isArray(entry) ? entry : [entry, Infinity];
+    if (facilityNamed(name) === undefined) throw new Error(`::maxboat: no facility named ${name}`);
+    return { name: name.toLowerCase(), left: max };
+  });
+  const nameOf = (row) => CacheDefinitions.getDbRow(row)?.string(FACILITY.name)?.toLowerCase();
+  const chosen = new Map();
+  const hotspots = [...hotspotsOf(type)].sort((a, b) => a.allowed.length - b.allowed.length);
+  for (const hotspot of hotspots) {
+    let row;
+    const pick = wanted.find((entry) => entry.left > 0
+      && (row = hotspot.allowed.find((candidate) => nameOf(candidate) === entry.name)) !== undefined);
+    if (pick) pick.left--;
+    chosen.set(hotspot.id, pick ? row : hotspot.allowed[hotspot.allowed.length - 1]);
+  }
+  return chosen;
+}
+
+/**
+ * ::maxboat [preset]: the boat being customised in the shipyard (else the active one) gets every
+ * part's best tier and the preset's facilities, replacing what was built. Not while aboard it,
+ * whose deck would need rebuilding mid-voyage: it shows the next time it's boarded.
+ */
+function maxBoat({ player, parts }) {
+  const loadout = LOADOUTS[parts[1]?.toLowerCase() ?? "default"];
+  const boat = visitedBoat(player) ?? Sailing.activeBoat(player);
+  if (!loadout || !boat) {
+    player.sendMessage(boat ? MAXBOAT_USAGE : "You don't own a boat. Use ::raft, ::skiff or ::sloop.");
+    return;
+  }
+  if (Sailing.instanceAboard(player)) {
+    player.sendMessage("Step off the boat first; it's rebuilt the next time you board.");
+    return;
+  }
+  // The best tiered parts; a painted trim, flag or brazier stays.
+  boat.parts = { ...boat.parts, ...Object.fromEntries(PARTS.map((part) => [part, Math.max(0, partOptions(boat.type, part).length - 1)])) };
+  for (const [hotspot, row] of loadoutFacilities(boat.type, loadout)) setFacility(boat, hotspot, row);
+  sendBoatVarbits(player);
+  refreshShownBoat(player);
+  player.sendMessage(`${boatName(boat)} has its best parts and the ${parts[1]?.toLowerCase() ?? "default"} facilities.`);
+}
+
+function describe(boat) {
+  const where = boat.location.kind === "docked" ? `docked at ${boat.location.dock}`
+    : boat.location.kind === "at_sea" ? `at sea (${Math.floor(boat.location.fineX / 128)}, ${Math.floor(boat.location.fineY / 128)})`
+    : "sunk";
+  return `Slot ${boat.slot}: ${boat.type} "${boatName(boat)}", ${where}`;
+}
+
+function boatInfo({ player }) {
+  const { boats, activeBoatSlot } = player.getSailing();
+  if (boats.length === 0) {
+    player.sendMessage("You don't own a boat. Use ::raft.");
+    return;
+  }
+  for (const boat of boats) player.sendMessage(describe(boat) + (boat.slot === activeBoatSlot ? " (active)" : ""));
+  const aboard = Sailing.instanceAboard(player);
+  if (aboard) {
+    player.sendMessage(`Aboard boat ${aboard.entityIndex}: angle ${aboard.angle}, heading ${aboard.heading}, mode ${aboard.moveMode}.`);
+  }
+}
+
+function sailMode({ player, parts }) {
+  const boat = Sailing.instanceAboard(player);
+  const mode = MOVE_MODES[parts[1]];
+  if (!boat || mode === undefined) {
+    player.sendMessage("Usage (aboard): ::sailmode full|half|reverse|stop");
+    return;
+  }
+  boat.moveMode = mode;
+}
+
+function heading({ player, parts }) {
+  const boat = Sailing.instanceAboard(player);
+  const packed = Number(parts[1]);
+  if (!boat || !Number.isInteger(packed) || packed < 0 || packed > 15) {
+    player.sendMessage("Usage (aboard): ::heading 0-15");
+    return;
+  }
+  boat.heading = packedHeadingToAngle(packed);
+}
+
+module.exports = {
+  _test: { loadoutFacilities, LOADOUTS },
+  register(api) {
+    content();
+    api.registerCommand("raft", giveRaft, PlayerRights.DEVELOPER, "Moor a new raft at The Pandemonium");
+    api.registerCommand("skiff", giveSkiff, PlayerRights.DEVELOPER, "Moor a new skiff at The Pandemonium");
+    api.registerCommand("sloop", giveSloop, PlayerRights.DEVELOPER, "Moor a new sloop at The Pandemonium");
+    api.persistAttribute(TOOLS_UNLOCKED_ATTRIBUTE);
+    api.registerCommand("pandemonium", toPandemonium, PlayerRights.DEVELOPER, "Teleport to The Pandemonium");
+    api.registerCommand("sailingtools", unlockSailingTools, PlayerRights.DEVELOPER, "Unlock cargo-hold tools");
+    api.registerCommand("boatmats", spawnPartMaterials, PlayerRights.DEVELOPER, "Spawn boat-building materials");
+    api.registerCommand("maxboat", maxBoat, PlayerRights.DEVELOPER, "Best parts and a facility preset on your boat: ::maxboat [default|salvaging|combat|fishing]");
+    api.registerCommand("boatinfo", boatInfo, PlayerRights.DEVELOPER, "Show your boats and sailing state");
+    api.registerCommand("sailmode", sailMode, PlayerRights.DEVELOPER, "Set boat movement mode");
+    api.registerCommand("heading", heading, PlayerRights.DEVELOPER, "Set boat heading");
+  },
+};

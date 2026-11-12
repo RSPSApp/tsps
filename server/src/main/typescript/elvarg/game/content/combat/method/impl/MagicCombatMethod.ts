@@ -19,6 +19,7 @@ import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
 import { Autocasting } from "../../magic/Autocasting";
 import { CrossFloor } from "../../../../CrossFloor";
+import { ChatType } from "../../../../../net/protocol/ClientProtocol";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -100,6 +101,23 @@ export class MagicCombatMethod extends CombatMethod {
         return CombatPosition.edgeDistance(attacker, target);
     }
 
+    /**
+     * A blood spell that hits sends one spam line per cast: "opponent's" for one target and
+     * "opponents'" for two or more (rsprox_transcripts/226/01702.txt and 234/00821.txt: every
+     * singular line follows exactly one blood impact; 238/01224.txt tick 3066 for Blood Blitz). An accurate impact
+     * counts even for 0 damage: 234/00821.txt tick 4446, a Barrage on a just-killed nechryael spawn (base Magic XP
+     * only, no Hitpoints XP), still sent the singular line.
+     */
+    private static sendBloodDrainLine(character: Mobile, spell: CombatSpell, hits: PendingHit[]): void {
+        if (!character.isPlayer()) return;
+        const { CombatSpells } = require("../../magic/CombatSpells");
+        if (![CombatSpells.BLOOD_RUSH, CombatSpells.BLOOD_BURST, CombatSpells.BLOOD_BLITZ, CombatSpells.BLOOD_BARRAGE].includes(spell)) return;
+        const drained = hits.filter((hit) => hit.isAccurate()).length;
+        if (drained === 0) return;
+        character.getAsPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM,
+            drained === 1 ? "You drain some of your opponent's health." : "You drain some of your opponents' health.");
+    }
+
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */
     private static isBarrage(spell: any): boolean {
         return typeof spell?.spellRadius === "function" && spell.spellRadius() > 0 &&
@@ -142,15 +160,15 @@ export class MagicCombatMethod extends CombatMethod {
                 continue;
             }
 
-            let it: IterableIterator<Mobile> = null;
-            if (character.isPlayer() && target.isPlayer()) {
-                it = (character as Player).getLocalPlayers().values();
-            } else if (character.isPlayer() && target.isNpc()) {
-                it = (character as Player).getLocalNpcs().values();
-            } else if (character.isNpc() && target.isNpc()) {
-                let npcs = Object.values(World.getNpcs());
-            } else if (character.isNpc() && target.isPlayer()) {
-                let npcsValues = Object.values(World.getNpcs());
+            // The splash picks victims of the primary target's kind; an NPC caster has no local lists,
+            // so it draws from the world (canAttackSecondaryTarget applies the radius and multi rules).
+            let it: Iterable<Mobile>;
+            if (character.isPlayer()) {
+                it = target.isPlayer() ? (character as Player).getLocalPlayers().values() : (character as Player).getLocalNpcs().values();
+            } else {
+                it = target.isPlayer()
+                    ? World.getPlayers()
+                    : World.getNpcsNear(target.getLocation(), spellRadius, target.getPrivateArea());
             }
 
             for (let next of it) {
@@ -164,6 +182,7 @@ export class MagicCombatMethod extends CombatMethod {
             }
         }
         MagicCombatMethod.payBaseExperience(character, spell, hits[0].isAccurate());
+        MagicCombatMethod.sendBloodDrainLine(character, spell, hits.concat(multiCombatHits));
         if (multiCombatHits.length > 0) {
             return hits.concat(multiCombatHits);
         }
@@ -221,6 +240,14 @@ export class MagicCombatMethod extends CombatMethod {
 
         // Character didn't have autocast spell either.
         if (character.getCombat().getCastSpell() == null) {
+            return false;
+        }
+
+        // An autocast keeps the spell's own target rule (Wiki: Crumble Undead, the demonbanes); the
+        // spell-on-target packets check it before combat, so only the autocast is new here.
+        if (!character.getCombat().getCastSpell().canCastOnTarget(character, target)) {
+            character.getCombat().setCastSpell(null);
+            character.getCombat().reset();
             return false;
         }
 

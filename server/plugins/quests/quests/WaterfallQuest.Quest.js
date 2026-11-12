@@ -870,8 +870,24 @@ module.exports = function registerWaterfallQuest(api) {
     showItemMessage(player, GOLRIE_KEY_ITEM_ID, "You find a key in the crate.");
   }
 
+  /** Golrie's jail, north of the gate (the side the old crossing landed inside). */
+  function insideGolrieCell(player) {
+    const location = player.getLocation();
+    return location.getX() >= 2502 && location.getX() <= 2523
+      && location.getY() >= 9576 && location.getY() <= 9593;
+  }
+
+  /**
+   * Wiki Transcript:Waterfall Quest: from the inside the gate opens ("You open the gate and walk
+   * through."); from the outside it takes the key every time ("You use the key to unlock the
+   * gate."), as the Wiki's Key (Tree Gnome Village Dungeon) page has it needed again to re-enter.
+   */
   function unlockGolrieGate(player) {
-    if (!flag(player, GOLRIE_GATE_ATTRIBUTE) && !hasItem(player, GOLRIE_KEY_ITEM_ID)) {
+    if (insideGolrieCell(player)) {
+      player.sendMessage("You open the gate and walk through.");
+      return true;
+    }
+    if (!hasItem(player, GOLRIE_KEY_ITEM_ID)) {
       api.emitCustomEvent("npc-dialogue:start", {
         player,
         npcId: GOLRIE_NPC_ID,
@@ -879,10 +895,8 @@ module.exports = function registerWaterfallQuest(api) {
       });
       return false;
     }
-    if (!flag(player, GOLRIE_GATE_ATTRIBUTE)) {
-      setFlag(player, GOLRIE_GATE_ATTRIBUTE);
-      player.sendMessage("You use the key to unlock the gate.");
-    }
+    setFlag(player, GOLRIE_GATE_ATTRIBUTE);
+    player.sendMessage("You use the key to unlock the gate.");
     return true;
   }
 

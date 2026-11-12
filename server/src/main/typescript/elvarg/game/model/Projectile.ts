@@ -148,8 +148,12 @@ export class Projectile {
      * the projectile from where the mobile is drawn: a caster that attacks on the tick it steps
      * into range is still walking there on screen.
      */
-    public withSource(source: Mobile): Projectile {
-        this.sourceIndex = Projectile.resolveLockonTargetIndex(source);
+    public withSource(source: Mobile | null): Projectile {
+        // rsprox: a player's projectile never names its caster (0 of ~450,000 map_projanim
+        // sources); live starts it from the caster's tile. NPCs keep theirs (some are recorded so).
+        // Checked here, so plugins that build their own projectile from a player (the bone staff,
+        // Nex's Soul Split) send none either.
+        this.sourceIndex = source && !source.isPlayer?.() ? Projectile.resolveLockonTargetIndex(source) : 0;
         return this;
     }
 

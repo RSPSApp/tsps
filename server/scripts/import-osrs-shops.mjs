@@ -14,7 +14,7 @@
  * import can be re-run: `--check` must report shops.json as up to date.
  *
  * Usage:
- *   node scripts/import-osrs-shops.mjs [--docs <osrsreboxed/docs>] [--check]
+ *   node scripts/import-osrs-shops.mjs [--docs <osrsreboxed/docs>] [--existing <shops.json>] [--check]
  *
  * Default docs path: ../../osrsreboxed-db/docs relative to the repo root.
  */
@@ -160,13 +160,16 @@ const INFINITE_STOCK = 2_000_000_000;
 function parseArgs(argv) {
   let docs;
   let check = false;
+  let existing = shopsFile;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--docs") docs = argv[++i];
+    else if (argv[i] === "--existing") existing = path.resolve(argv[++i]);
     else if (argv[i] === "--check") check = true;
   }
   return {
     docs: docs ? path.resolve(docs) : path.resolve(repoRoot, "..", "osrsreboxed-db", "docs"),
     check,
+    existing,
   };
 }
 
@@ -200,16 +203,42 @@ function salesPolicy(info) {
   return { sellsAt: rate(info?.sells_at), buysAt: rate(info?.buys_at), changePer: rate(info?.change_per) };
 }
 
-function originalStock(name, items) {
+// These currencies use the item value and stock-sensitive rates in ShopManager;
+// BLOOD_MONEY uses its own item valuation. A StoreLine quote must not freeze either.
+const VALUE_PRICED_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS", "BLOOD_MONEY"]);
+
+function exportedPrice(item, info, currency) {
+  if (VALUE_PRICED_CURRENCIES.has(currency)) return undefined;
+  const shopCurrency = String(info?.currency ?? "coins").trim().toUpperCase();
+  const rowCurrency = String(item.currency ?? info?.currency ?? "coins").trim().toUpperCase();
+  // The runtime cannot charge a second currency for one row.
+  if (rowCurrency !== shopCurrency) return undefined;
+  // Preserve absent, expression, free and malformed values as unresolved. The
+  // runtime ignores zero overrides; emitting one would falsely claim a free row.
+  if (typeof item.sell !== "string" || !/^(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(item.sell)) return undefined;
+  const price = Number(item.sell.replaceAll(",", ""));
+  return Number.isSafeInteger(price) ? price : undefined;
+}
+
+function originalStock(name, items, info, currency) {
   const stock = (EXTRA_STOCK[name] ?? []).map((entry) => ({ ...entry }));
   const prices = ITEM_PRICES[name] ?? {};
+  const seenPrices = new Map();
+  for (const item of items ?? []) {
+    const price = prices[item.id] ?? exportedPrice(item, info, currency);
+    if (seenPrices.has(item.id) && seenPrices.get(item.id) !== price) {
+      throw new Error(`Conflicting exported prices for ${name}, item ${item.id}`);
+    }
+    seenPrices.set(item.id, price);
+  }
   for (const item of items ?? []) {
     const amount = stockAmount(item.stock);
     if (!Number.isInteger(item.id) || item.id <= 0 || amount === null || amount < 0) continue;
     const entry = { id: item.id, amount };
     const restock = Number(item.restock_time);
     if (Number.isFinite(restock) && restock > 0) entry.restockTicks = restock;
-    if (prices[item.id] !== undefined) entry.price = prices[item.id];
+    const price = prices[item.id] ?? exportedPrice(item, info, currency);
+    if (price !== undefined) entry.price = price;
     stock.push(entry);
   }
   const order = STOCK_ORDER[name];
@@ -273,7 +302,7 @@ function serialize(value) {
 }
 
 function main() {
-  const { docs, check } = parseArgs(process.argv.slice(2));
+  const { docs, check, existing: existingFile } = parseArgs(process.argv.slice(2));
   const itemsByShopFile = path.join(docs, "shops-items-by-shop.json");
   const shopsByNpcFile = path.join(docs, "shops-by-npc.json");
   if (!fs.existsSync(itemsByShopFile)) {
@@ -283,7 +312,7 @@ function main() {
 
   const byShop = readJson(itemsByShopFile);
   const shopsByNpc = fs.existsSync(shopsByNpcFile) ? readJson(shopsByNpcFile) : null;
-  const existing = readJson(shopsFile);
+  const existing = readJson(existingFile);
 
   const idByName = new Map();
   for (const shop of existing) {
@@ -306,7 +335,7 @@ function main() {
       currency,
       ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
       ...salesPolicy(record.shop_info),
-      originalStock: originalStock(name, record.items),
+      originalStock: originalStock(name, record.items, record.shop_info, currency),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
       npcInteractions: npcInteractions(name, record.owners, shopsByNpc),
     });

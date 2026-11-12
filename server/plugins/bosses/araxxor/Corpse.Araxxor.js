@@ -20,6 +20,7 @@ const Minions = require("./Minions.Araxxor");
 const Specials = require("./Specials.Araxxor");
 const CombatAchievements = require("./CombatAchievements.Araxxor");
 const Scoreboard = require("./Scoreboard.Araxxor");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Araxxor";
 
 /** Cache varp total_araxxor_kills: the kill count the boss log reads. Combat Achievements sends
@@ -103,7 +104,7 @@ function recordKill(player, ticks) {
 
 /** The kill count and the fight's length against the personal best (captured messages). */
 function announceKill(player, kills, ticks) {
-  player.sendMessage(`Your Araxxor kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Araxxor kill count is: <col=ff0000>${kills}</col>.`);
   const best = Number(player.getAttribute(Shared.ATTR_BEST_TICKS)) || 0;
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR_BEST_TICKS, ticks);
@@ -117,11 +118,13 @@ function announceKill(player, kills, ticks) {
 
 /**
  * The death roll: Nid is lifted out of the drops so the pet is only awarded when the
- * player actually harvests or destroys; everything else is held off the floor.
+ * player actually harvests or destroys; everything else is held off the floor. The rolls a
+ * harvested or destroyed corpse emits itself are that award, so they are left alone.
  */
 function stashRoll(event) {
   const session = sessionOf(event?.npc);
   if (event?.npcId !== Shared.BOSS_ID || !session || !Array.isArray(event.drops)) return;
+  if (session.harvested === true || session.destroyed === true) return;
   session.pendingPet = session.pendingPet ?? [];
   for (let index = event.drops.length - 1; index >= 0; index--) {
     if (event.drops[index]?.itemId === Shared.NID_ITEM_ID) {

@@ -78,6 +78,7 @@ function setup(options = {}) {
   const configs = new Map(), varbits = new Map(), xp = [], messages = [];
   let items = Array.from({ length: 28 }, () => new core.Item(-1, 0));
   let jingles = 0;
+  const typed = [];
   const inventory = {
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((n, item) => n + item.getAmount(), 0),
     isFull() { return this.getFreeSlots() === 0; },
@@ -92,11 +93,13 @@ function setup(options = {}) {
       items[slot] = left > 0 ? new core.Item(id, left) : new core.Item(-1, 0);
     },
     clear() { items = Array.from({ length: 28 }, () => new core.Item(-1, 0)); },
+    refreshItems() {},
   };
   const packet = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return packet; },
     sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendJingle() { jingles++; return packet; },
+    sendTypedMessage(type, text) { typed.push([type, text]); return packet; },
     sendInterfaceRemoval() { return packet; },
   }, { get(target, key) { return target[key] ?? (() => packet); } });
   const player = {
@@ -113,9 +116,11 @@ function setup(options = {}) {
   };
 
   const fire = (name, payload = {}) => api.emitCustomEvent(name, { player, ...payload });
+  /** Like fire, but the handlers' changes to the payload stay visible to the caller. */
+  const emit = (name, payload) => { payload.player ??= player; api.emitCustomEvent(name, payload); return payload; };
   return {
-    core, quest, player, attrs, configs, varbits, inventory, messages, hooks, tasks, spawned, areas, sounds, persisted,
-    fire,
+    api, core, quest, player, attrs, configs, varbits, inventory, messages, typed, hooks, tasks, spawned, areas, sounds, persisted,
+    fire, emit,
     xp, jingles: () => jingles,
     variant(npcId) {
       for (const fn of hooks.variants) {
@@ -288,15 +293,36 @@ test('mandatory route: pay, milk, seasoned sardine, one random Lumber Yard crate
   assert.equal(h.configs.get(180), 6, 'login replays the completed varp');
 });
 
-test('bottomless milk bucket advances the milk leg without being consumed', () => {
+test('bottomless milk bucket advances the milk leg for one use, not the whole bucket', () => {
   const h = setup();
   const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({ onServerStartup: (fn) => fn() }, {
+    get: (target, key) => target[key] ?? h.api[key],
+  }));
   h.quest.setStage(h.player, 2); // fixture: the boys have already been paid.
   h.inventory.adds(I.BOTTOMLESS_MILK_BUCKET, 1);
+  const bucket = h.inventory.getItems().find((item) => item.getId() === I.BOTTOMLESS_MILK_BUCKET);
+  bucket.setMetaValue('bottomless-milk', { uses: 2, type: I.BUCKET_OF_MILK });
   h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.inventory.getAmount(I.BOTTOMLESS_MILK_BUCKET), 1);
+  assert.equal(bucket.getMetaValue('bottomless-milk').uses, 1, 'one use is spent');
   assert.equal(h.inventory.getAmount(I.BUCKET), 0);
+});
+
+test('a bottomless bucket of another kind of milk does not count as milk for Fluffs', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({ onServerStartup: (fn) => fn() }, {
+    get: (target, key) => target[key] ?? h.api[key],
+  }));
+  h.quest.setStage(h.player, 2);
+  h.inventory.adds(I.BOTTOMLESS_MILK_BUCKET, 1);
+  h.inventory.getItems().find((item) => item.getId() === I.BOTTOMLESS_MILK_BUCKET)
+    .setMetaValue('bottomless-milk', { uses: 4, type: I.CHOCOLATEY_MILK });
+  h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
+  assert.equal(h.quest.getStage(h.player), 2, 'chocolatey milk is not what Fluffs wants');
+  assert.equal(h.messages.at(-1), 'Fluffs is not interested right now.');
 });
 
 test('completion waits until all advertised reward items fit', () => {
@@ -554,7 +580,8 @@ test('the returned kitten goes even when the scene is cut short', () => {
   assert.equal(kitten.removed, true);
 });
 
-test('Fluffs action hints reach chat once at the matching quest stage only', () => {
+test('Fluffs action hints become a message box at the matching quest stage only', () => {
+  // Real-engine coverage of Stroke: gertrudes-cat-fluffs-hint.test.cjs.
   const h = setup(), N = h.core.NpcIdentifiers;
   const record = require('../data/definitions/npc-dialogues.json')["Gertrude's Cat"];
   for (const [stage, variant, id] of [
@@ -567,15 +594,23 @@ test('Fluffs action hints reach chat once at the matching quest stage only', () 
     assert.equal(step.type, 'action');
     h.quest.setStage(h.player, stage);
     h.messages.length = 0;
-    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [step.text], 'the canonical hint is displayed exactly once');
+    const action = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    assert.deepEqual(action.steps?.map(s => [s.type, s.text]), [['message', step.text]], 'handed back as one statement step');
+    const box = { npcId: N.GERTRUDES_CAT_2, stepId: action.steps[0].id, text: step.text, kind: 'message' };
+    h.emit('npc-dialogue:action', box);
+    assert.deepEqual(box.box, { statement: true }, 'shown in a message box');
+    assert.deepEqual(h.typed.splice(0), [[h.core.ChatType.MESBOX, step.text]], 'with its mesbox chat line (232/03222.txt tick 12370)');
+    assert.deepEqual(h.messages, [], 'not an ordinary game message');
     assert.equal(h.quest.getStage(h.player), stage, 'the hint does not grant quest progress');
-    h.messages.length = 0;
-    h.fire('npc-dialogue:action', { npcId: N.SHILOP, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [], 'another NPC cannot display Fluffs hints');
+    const other = { npcId: N.SHILOP, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', other);
+    assert.equal(other.steps, undefined, 'another NPC cannot display Fluffs hints');
     h.quest.setStage(h.player, 6);
-    h.fire('npc-dialogue:action', { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step });
-    assert.deepEqual(h.messages, [], 'completed or mismatched stages stay silent');
+    const late = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
+    h.emit('npc-dialogue:action', late);
+    assert.equal(late.steps, undefined, 'completed or mismatched stages stay silent');
   }
 });
 

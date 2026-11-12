@@ -71,7 +71,22 @@ const tick = () => core.World.getProcessCycle();
 const isPlayer = (mobile) => mobile?.isPlayer?.() === true;
 const isNpc = (mobile) => mobile?.isNpc?.() === true;
 const npcName = (npc) => String(npc?.getCurrentDefinition?.()?.getName?.() ?? npc?.getDefinition?.()?.getName?.() ?? "");
-const combatTypeName = (hit) => String(hit?.getCombatType?.() ?? "").toUpperCase();
+/** "MELEE", "RANGED" or "MAGIC": a hit's CombatType is a numeric enum, so read its name. */
+function combatTypeName(hit) {
+  const type = hit?.getCombatType?.();
+  if (typeof type === "number") return String(core?.CombatType?.[type] ?? "").toUpperCase();
+  return String(type ?? "").toUpperCase();
+}
+
+/**
+ * Whether this hit kills the NPC. A resolved hit's damage is queued, not yet taken (HitQueue
+ * applies it after the hit resolves), so it kills when the queued damage reaches the hitpoints.
+ */
+function lethal(npc) {
+  const hitpoints = Number(npc.getHitpoints?.() ?? 1);
+  const queued = Number(npc.getCombat?.()?.getHitQueue?.()?.getQueuedDamage?.() ?? 0);
+  return hitpoints <= queued;
+}
 
 function weaponId(player) {
   const weapon = player.getEquipment?.()?.getItems?.()?.[core.Equipment.WEAPON_SLOT];
@@ -151,8 +166,10 @@ function onHitResolved({ attacker, target, hit }) {
     taken.set(target, log);
     return;
   }
-  if (isPlayer(attacker) && isNpc(target) && target.getHitpoints?.() <= 0 && watched(target)) {
+  if (isPlayer(attacker) && isNpc(target) && watched(target) && lethal(target)) {
     const fight = recordFor(attacker, target);
+    // Only the first lethal blow: a later hit landing on the same tick hits a dead NPC.
+    if (fight.killingBlow) return;
     fight.killingBlow = {
       tick: tick(),
       type: combatTypeName(hit),

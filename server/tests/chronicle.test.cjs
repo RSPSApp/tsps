@@ -26,6 +26,7 @@ Chronicle.register({
     TeleportType: { NORMAL: "normal" },
     TeleportHandler: {
       checkReqs: () => reqsPass,
+      confirm: (player, destination, go, level, { item } = {}) => go(item),
       teleport: (player, destination, type, _force, onArrive) => teleports.push({ destination, type, onArrive }),
     },
   },
@@ -107,7 +108,8 @@ test("a teleport lands outside the Champions' Guild and spends its charge on arr
   assert.equal(charges(player), 99, "nothing is spent until landing");
   teleports[0].onArrive();
   assert.equal(charges(player), 98);
-  assert.equal(player.messages.at(-1), "<col=ef1020>Your book has 98 charges left.</col>");
+  // Wiki Transcript:Chronicle (232/03203.txt:9123 recorded "Your book has 98 charges left.").
+  assert.equal(player.messages.at(-1), "<col=ef1020>You have 98 charges left in your book.</col>");
 });
 
 test("it lands on a free tile in the 2-tile square, or the centre if it finds none (Wiki, rsprox 3203)", () => {

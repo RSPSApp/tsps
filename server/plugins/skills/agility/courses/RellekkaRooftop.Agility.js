@@ -34,6 +34,7 @@ module.exports = {
   key: "rellekka",
   name: "Rellekka Rooftop",
   helper: 19, // the Agility helper's course (enum 3507: "Rellekka Rooftops")
+  lootSource: 29, // the loot tracker's source (enum 4976)
   lapXp: 780,
   petBase: 31063, // Giant squirrel base chance (Wiki)
   // Fremennik Diary elite: "Complete a lap of the Rellekka agility course."

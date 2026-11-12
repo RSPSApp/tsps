@@ -20,6 +20,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   const {
     ItemIdentifiers,
     StatementDialogue,
+    DialogueChainBuilder,
+    EndDialogue,
   } = api.core;
   const { registerQuest } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
@@ -31,6 +33,9 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   const VARBIT_AUTO_SMASH = 5668; // auto_smash_vials
   const BARS_ATTRIBUTE = "alfred-grimhands-barcrawl:bars";
   const AUTO_SMASH_ATTRIBUTE = "alfred-grimhands-barcrawl:auto-smash";
+  /** All Settings > Gameplay: "Automatically smash empty vials", locked until the crawl is done. */
+  const AUTO_SMASH_SETTING = 380;
+  const AUTO_SMASH_LOCKED = "You must have completed the Alfred Grimhand's Barcrawl miniquest to access this setting.";
   const BARBARIAN_GATE_IDS = new Set([2115, 2116]); // barbariangatel/r, 2545,3569-3570
 
   const ACTION_START = "barcrawl:start";
@@ -257,6 +262,18 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   function setAutoSmash(player, on) {
     player.setAttribute(AUTO_SMASH_ATTRIBUTE, on === true);
     player.getPacketSender().sendVarbit(VARBIT_AUTO_SMASH, on === true ? 1 : 0);
+  }
+
+  /** The row's lock text is the cache's own (the setting's locked message). */
+  function autoSmashSettingClicked(request) {
+    if (request.settingId !== AUTO_SMASH_SETTING) return;
+    request.handled = true;
+    const { player } = request;
+    if (quest.getStage(player) < 2) {
+      player.sendMessage(AUTO_SMASH_LOCKED);
+      return;
+    }
+    setAutoSmash(player, player.getAttribute(AUTO_SMASH_ATTRIBUTE) !== true);
   }
 
   function completeCrawl(player) {
@@ -516,7 +533,12 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
       return;
     }
     const lines = BARS.map((bar) => `${bar.name}: ${isSigned(player, bar) ? "signed" : "not signed"}`);
-    StatementDialogue.send(player, `Alfred Grimhand's Barcrawl<br><br>${lines.join("<br>")}`);
+    const pages = [lines.slice(0, 4), lines.slice(4, 8), lines.slice(8)];
+    const dialogue = new DialogueChainBuilder().add(
+      ...pages.map((page, index) => new StatementDialogue(index, `Alfred Grimhand's Barcrawl<br>${page.join("<br>")}`)),
+      new EndDialogue(pages.length),
+    );
+    player.getDialogueManager().startDialogues(dialogue);
   }
 
   function handleGateToggle(request) {
@@ -550,6 +572,7 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   api.onCustomEvent("door:toggle", handleGateToggle);
   api.onPlayerLogin(syncVars);
   api.onCustomEvent("player:bootstrap-complete", syncVars);
+  api.onCustomEvent("settings:setting-clicked", autoSmashSettingClicked);
 
   const internals = {
     BARS,
@@ -562,6 +585,7 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     drinkAt,
     completeCrawl,
     setAutoSmash,
+    autoSmashSettingClicked,
     handleAction,
     handleGateToggle,
     syncVars,

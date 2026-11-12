@@ -1109,8 +1109,11 @@ function createPestControl(api) {
 
   // Players whose death began in a match. A game that ends during the death animation moves them to the outpost and
   // clears the match, and the death then dropped their items there: Pest Control is a safe minigame (as LMS guards).
+  // Every death starts here, so one begun outside a match drops a mark an earlier death left (a death another hook
+  // handled first, or one that never finished): only the death that began in the game is safe.
   api.onPlayerBeforeDeath((event) => {
     if (event.player.getAttribute?.("pest-control:match") instanceof PestControlMatch) dyingInMatch.add(event.player);
+    else dyingInMatch.delete(event.player);
   });
 
   api.onPlayerDeath((event) => {

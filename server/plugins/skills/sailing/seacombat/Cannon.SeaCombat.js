@@ -205,7 +205,7 @@ function crewMaxHit(captain, stats, ball, privateering) {
 
 /** A keg of perildance bitter on the captain's boat raises every cannon's max hit by one. */
 function kegBonus(captain) {
-  return require("../Kegs.plugin").cannonMaxHitBonus(captain);
+  return require("../Kegs.Sailing").cannonMaxHitBonus(captain);
 }
 
 function hitChance(attackRoll, defenceRoll) {

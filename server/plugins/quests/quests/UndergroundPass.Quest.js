@@ -1832,7 +1832,7 @@ module.exports = function registerUndergroundPassQuest(api) {
   /**
    * The bridge is shot at the guide rope from across the gap, where no adjacent
    * tile is walkable; route the click to the player's own tile so the fire
-   * handler runs instead of "You can't reach that!". Roughly a bow's range.
+   * handler runs instead of "I can't reach that!". Roughly a bow's range.
    */
   function routeToGuideRope(event) {
     if (event.objectId !== ObjectIdentifiers.GUIDE_ROPE) return;

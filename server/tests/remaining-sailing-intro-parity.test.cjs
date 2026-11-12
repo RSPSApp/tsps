@@ -111,6 +111,8 @@ function setup() {
     sendPositionalHint(...args) { hints.push(args.slice(0, 4)); return sender; },
     clearHintArrow() { hints.push(['clear']); return sender; },
     sendConfig(id, value) { varbits.set(id, value); return sender; },
+    sendClientScript(id, ...args) { scripts.push({ script: id, args }); return sender; },
+    sendTypedMessage(type, text, from) { messages.push({ type, text, from }); return sender; },
     sendInterfaceRemoval() { return sender; },
     hasInterruptibleInterface() { return false; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
@@ -129,11 +131,15 @@ function setup() {
       delete(id, count) { this.deleteNumber(id, count); },
       getFreeSlots() { return 28 - [...inventory.values()].filter((count) => count > 0).length; },
       isFull() { return this.getFreeSlots() === 0; },
+      // One slot per item id: the slot is the id itself.
+      getSlotForItemId(id) { return (inventory.get(id) ?? 0) > 0 ? id : -1; },
+      setItem(slot, item) { inventory.delete(slot); this.adds(item.getId(), item.getAmount()); return { refreshItems() {} }; },
     }),
     getSkillManager: () => ({
       getMaxLevel: (skill) => levels.get(skill) ?? 99,
       getCurrentLevel: (skill) => levels.get(skill) ?? 99,
       addExperiences(skill, amount) { xp.push({ skill, amount }); },
+      addExperience(skill, amount) { xp.push({ skill, amount }); },
     }),
     getLocation: () => location,
     moveTo(value) { location = value; },
@@ -182,7 +188,8 @@ function setup() {
   };
   const emit = (name, event) => { const full = { player, ...event }; api.emitCustomEvent(name, full); if (name === 'npc-dialogue:line') lastLineSpeakerId = full.speakerId ?? null; return full; };
   const action = (npcId, stepId) => emit('npc-dialogue:action', { npcId, stepId });
-  const line = (npcId, text, step) => emit('npc-dialogue:line', { npcId, text, step });
+  // A line's event comes as its chain is built; `before` runs as it shows, as the dialogue player does.
+  const line = (npcId, text, step) => { const full = emit('npc-dialogue:line', { npcId, text, step }); full.before?.(); return full; };
   const variant = (npcId) => {
     for (const fn of [...hooks.variants].reverse()) {
       const result = fn({ player, npcId });
@@ -203,8 +210,8 @@ function setup() {
   const clickInterface = (groupId, childId, slot) => { const event = { player, groupId, childId, slot, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
   // These quest-unit calls still use their direct object hook. Register the real
   // sailing control requests; dispatcher order is outside this quest-unit helper.
-  require('../plugins/skills/sailing/Helm.plugin').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require('../plugins/skills/sailing/Sailing.plugin').register({ ...api, onPlayerLogin() {} });
+  require('../plugins/skills/sailing/Helm.Sailing').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require('../plugins/skills/sailing/Panel.Sailing').register({ ...api, onPlayerLogin() {} });
   unitHelms.add({ player, api, hooks });
   return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, flags, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
 }
@@ -229,7 +236,9 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   assert.equal(quest.completionValue, 50);
   h.emit('npc-dialogue:hook', { npcId: h.core.NpcIdentifiers.WILL, hook: 'quest:pandemonium:start' });
   assert.equal(quest.getStage(h.player), 2);
-  h.line(h.core.NpcIdentifiers.WILL, "Just let us know when you're ready, and we'll hop aboard!");
+  const interview = h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: "Just let us know when you're ready, and we'll hop aboard!" });
+  assert.equal(quest.getStage(h.player), 2, 'building the Yes branch does not finish the interview (live: 2 at Yes)');
+  interview.before();
   assert.equal(quest.getStage(h.player), 4);
   h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
   assert.equal(quest.getStage(h.player), 6);
@@ -256,35 +265,59 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   boat.fineX = 3035 * 128 + 32;
   boat.fineY = 3048 * 128 + 96;
   BoatManager.tick();
-  assert.equal(quest.getStage(h.player), 12, 'the ship arrives at the captured wreck point');
+  assert.equal(quest.getStage(h.player), 10, 'reaching the wreck alone does not arrive (rsprox 242)');
+  assert.ok(h.messages.length >= 0);
+  h.emit('sailing:sail-mode-changed', { boat, mode: 'stop' });
+  assert.equal(quest.getStage(h.player), 12, 'stopping the boat at the wreck arrives');
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
-  assert.equal(quest.getStage(h.player), 14);
+  assert.equal(quest.getStage(h.player), 12, 'the explanation replays at 12');
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
+  assert.equal(quest.getStage(h.player), 14, 'live sets 14 on the explanation\'s last line');
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(quest.getStage(h.player), 14, 'the cup popup precedes the actual shore finish');
   h.action(h.core.NpcIdentifiers.WILL, 'hQBGdU');
   assert.equal(BoatManager.all().some((entry) => entry.ownerPlayerId === 1), false, 'the tutorial ship and crew are cleaned up');
   // The real native scene suite proves the owned shore callback; this hook fixture resumes after it.
   quest.setStage(h.player, 16);
-  h.line(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'You should speak to Ribs.');
-  assert.equal(quest.getStage(h.player), 18);
+  const STEVE = h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE;
+  const page = (variant) => [{ page: 'Pandemonium', variants: [variant] }];
+  h.line(STEVE, 'Aye! To be sure! This here is the finest establishment in all the seas. Sit back! Have a drink! Let the good times, and the rum, flow!');
+  assert.equal(quest.getStage(h.player), 18, 'mid-welcome');
+  assert.equal(h.variant(STEVE), 'at-the-pandemonium-talking-to-squaking-steve-beanie-again');
+  h.line(STEVE, "Not a lot, I'm afraid. You should hoist your sails and go speak to Ribs instead. It was his map they looted. He's the old dog over in the corner. Avast!");
+  assert.equal(quest.getStage(h.player), 20, 'sent to Ribs');
+  assert.equal(h.variant(h.core.NpcIdentifiers.RIBS), 'at-the-pandemonium-talking-to-ribs');
   h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.RIBS, option: 'No, tell me about him.' });
-  assert.equal(quest.getStage(h.player), 20);
-  h.line(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'You should speak with Junior Jim.');
-  assert.equal(quest.getStage(h.player), 22);
-  h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.JUNIOR_JIM_2, option: 'I think I might have lost a cup here.' });
+  assert.equal(quest.getStage(h.player), 20, 'the tale choice no longer moves the stage');
+  h.line(h.core.NpcIdentifiers.RIBS, 'You should talk to Steve. He already put out a bounty for Will and Anne after the theft. He might have heard something about where they could have gone.');
+  assert.equal(quest.getStage(h.player), 22, 'Ribs is done');
+  assert.equal(h.variant(STEVE), 'at-the-pandemonium-talking-to-squawking-steve-beanie-again');
+  h.emit('npc-dialogue:line', { npcId: STEVE, text: 'Jolly Roger!', pages: page('at-the-pandemonium-subsequent-dialogue-with-squawking-steve-beanie') }).before?.();
+  assert.equal(quest.getStage(h.player), 22, 'only the bounty talk\'s Jolly Roger counts');
+  const jollyRoger = h.emit('npc-dialogue:line', { npcId: STEVE, text: 'Jolly Roger!', pages: page('at-the-pandemonium-talking-to-squawking-steve-beanie-again') });
+  assert.equal(quest.getStage(h.player), 22, 'not while the chain is only being built');
+  jollyRoger.before();
+  assert.equal(quest.getStage(h.player), 24, 'sent to Junior Jim');
+  assert.equal(h.variant(h.core.NpcIdentifiers.JUNIOR_JIM_2), 'talking-to-junior-jim');
+  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'Er... I do have this cup I found. Perhaps I could trade it for a boat.');
+  assert.equal(quest.getStage(h.player), 26, 'cup offered');
+  assert.equal(h.variant(h.core.NpcIdentifiers.JUNIOR_JIM_2),
+    'talking-to-junior-jim-talking-to-junior-jim-again-before-showing-him-the-cup-or-using-the-cup-on-him');
   h.inventory.set(h.core.ItemIdentifiers.OLD_CUP, 1);
-  h.action(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'jkS3Ej');
+  const give = h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.JUNIOR_JIM_2, stepId: 'jkS3Ej', kind: 'message' });
+  assert.deepEqual(give.box, { items: [h.core.ItemIdentifiers.OLD_CUP] }, 'the hand-over is an item box');
   assert.equal(quest.getStage(h.player), 28);
   assert.equal(h.sailing.boats.length, 1, 'Jim grants the raft');
   assert.equal(h.sailing.boats[0].type, 'raft');
   assert.deepEqual(h.sailing.boats[0].facilities, [0], 'the quest raft starts without the default cargo hold');
+  quest.setStage(h.player, 30);
   h.action(h.core.NpcIdentifiers.JUNIOR_JIM_2, '7jgwOg');
   assert.equal(quest.getStage(h.player), 32);
   h.action(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'g4CUrq');
   assert.equal(quest.getStage(h.player), 34);
   assert.equal(require('../plugins/skills/sailing/porttasks/Common.PortTasks').slots(h.player)[0].id, 599);
-  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'Now, unless you fancy a cheeky dip, the gangplank down the docks will be your best bet for getting on board.').after?.();
-  assert.equal(h.attrs.get('pandemonium:tutorials') & 1, 1, 'docking-point tutorial shown');
+  const docking = h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.JUNIOR_JIM_2, stepId: 'LhIFh_', kind: 'message' });
+  assert.deepEqual(docking.box, { items: [32914] }, 'the docking-point tutorial is an inline item box');
   h.emit('sailing:boarded', {});
   assert.equal(quest.getStage(h.player), 36);
   h.emit('sailing:left', { reason: 'disembark' });
@@ -298,9 +331,21 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   h.hooks.objects[0]({ player: h.player, objectId: h.core.ObjectIdentifiers.LEDGER_TABLE_3, clickType: 1 });
   h.tickOnce();
   assert.equal(quest.getStage(h.player), 44);
-  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Don't mention it, mate.").after?.();
+  h.inventory.set(h.core.ItemIdentifiers.CAPTAINS_LOG, 1);
+  const raft = h.sailing.boats[0];
+  require('../plugins/skills/sailing/BoatFacilities.Sailing').setFacility(raft, 0, 8462);
+  raft.cargo = [];
+  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Oh, and while we're on about charting, I've also chucked some useful bits and bobs in your cargo hold.");
+  assert.equal(h.varbits.get(18316), 1, 'received_repairkits as Jim mentions the cargo hold');
+  assert.deepEqual(raft.cargo.filter(Boolean).map((slot) => slot.id).sort(), [31964, 31964],
+    'the two repair kits in the raft\'s hold, no spyglass (rsprox 242 hold 963)');
+  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Oh, and while we're on about charting, I've also chucked some useful bits and bobs in your cargo hold.");
+  assert.equal(raft.cargo.filter(Boolean).length, 2, 'a replayed line gives them once');
+  assert.equal(h.attrs.get('pandemonium:cargo-hold-gifts'), true);
+  h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Don't mention it, mate.");
   assert.equal(quest.getStage(h.player), 46);
-  assert.equal(h.attrs.get('pandemonium:tutorials') & 6, 6, 'port-task and log tutorials shown');
+  assert.equal(h.inventory.get(h.core.ItemIdentifiers.CAPTAINS_LOG) ?? 0, 0, 'the starter log is replaced');
+  assert.equal(h.inventory.get(h.core.ItemIdentifiers.CAPTAINS_LOG_2), 1, 'by the full captain\'s log (31986)');
   h.action(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'C5l2Ww');
   assert.equal(quest.getStage(h.player), 48);
   h.line(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'Old Grog speaks.', { speaker: 'Old Grog' });
@@ -308,6 +353,111 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   h.action(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'SJ3WVd');
   assert.equal(quest.getStage(h.player), 50);
   assert.equal(quest.isComplete(h.player), true);
+});
+
+test('Pandemonium shows the live intro HUD steps, crew lines and stop-to-arrive on the tutorial voyage', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  const steps = () => h.scripts.filter((entry) => entry.script === 627).map((entry) => entry.args[0]);
+  const says = () => h.messages.filter((entry) => entry?.type === h.core.ChatType.NPC_SAY).map((entry) => `${entry.from}|${entry.text}`);
+  try {
+    h.emit('npc-dialogue:hook', { npcId: h.core.NpcIdentifiers.WILL, hook: 'quest:pandemonium:start' });
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    assert.ok(h.scripts.some((entry) => entry.uid === ((161 << 16) | 8) && entry.id === 345), 'sailing_intro_hud opens aboard');
+    const ship = StaticShips.all()[0];
+    const briefing = h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: 'Over to you, [player name]! Take the helm when ready.',
+      step: { speaker: 'Anne' }, pages: [{ page: 'Pandemonium', variants: ['at-the-boat-talking-to-anne-or-will'] }] });
+    briefing.before(); briefing.after();
+    assert.equal(quest.getStage(h.player), 8);
+    assert.deepEqual(steps(), [1], 'helm step after the briefing');
+    assert.deepEqual(h.hints.at(-1), [new h.core.Location(ship.boat.deckBaseX + 4, ship.boat.deckBaseY + 5, 0), 3, 70, 0], 'arrow west of the helm');
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.deepEqual(says(), ['Anne|We need to be going south.']);
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.deepEqual(steps(), [1, 2, 3], 'heading, then stop-the-boat once the sails are set');
+    h.api.emitCustomEvent('sailing:gust', { player: h.player, boat: ship.boat });
+    h.api.emitCustomEvent('sailing:trimmed', { player: h.player, boat: ship.boat, crew: false });
+    h.api.emitCustomEvent('sailing:lull', { player: h.player, boat: ship.boat, trimmed: true });
+    assert.deepEqual(steps().slice(3), [5, 6, 3], 'trim, boost, then stop again (rsprox 242 ticks 3257-3279)');
+    assert.deepEqual(says().slice(1), ['Will|parity! The sails need trimming! Don\'t miss out on that wind!', 'Anne|Very good!']);
+    ship.boat.fineX = 3033 * 128 + 64; ship.boat.fineY = 3042 * 128 + 64;
+    BoatManager.tick();
+    assert.equal(says().at(-1), 'Anne|Stop here, parity! This is where we want to be!');
+    assert.equal(steps().at(-1), 12);
+    assert.equal(quest.getStage(h.player), 10, 'still sailing until the player stops');
+    h.api.emitCustomEvent('sailing:set-supplied-sails', { player: h.player, boat: ship.boat, mode: 'stop', accepted: false });
+    assert.equal(quest.getStage(h.player), 12, 'live arrives six tiles short of the wreck root, on the stop');
+    assert.equal(steps().at(-1), 0);
+    h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
+    assert.equal(quest.getStage(h.player), 14);
+    assert.equal(steps().at(-1), 7, 'the hook step');
+    assert.deepEqual(h.hints.at(-1), [new h.core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 2, 0), 3, 90, 0]);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium Jim tutorial boxes, Old Grog and the version 2 stage migration follow rsprox 242', () => {
+  const h = setup();
+  const quest = load(h, 'Pandemonium.Quest.js');
+  const message = (stepId) => h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.JUNIOR_JIM_2, stepId, kind: 'message' });
+  const shipwright = message('EIOEfn');
+  assert.deepEqual(shipwright.box, { items: [32916] });
+  const board = message('VOIS_P');
+  assert.deepEqual(board.box, { items: [32913] });
+  assert.deepEqual(h.cameras.slice(-2), [['move', 3063, 2985, 640], ['look', 3058, 2986, 280]]);
+  assert.deepEqual(h.hints.at(-1), [new h.core.Location(3058, 2986, 0), 2, 140, 0]);
+  board.after();
+  assert.deepEqual(h.cameras.at(-1), ['reset']);
+  assert.deepEqual(h.hints.at(-1), ['clear']);
+  const log = message('mBygf3');
+  assert.deepEqual(log.box, { items: [h.core.ItemIdentifiers.CAPTAINS_LOG_2] }, 'the full captain\'s log icon');
+  assert.deepEqual(h.hints.at(-1), [new h.core.Location(3046, 2997, 0), 6, 110, 0]);
+  const departs = h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, stepId: 'C5l2Ww', kind: 'message' });
+  assert.deepEqual(departs.box, { statement: true, holdTicks: 4 }, 'Old Grog departs: a held message box');
+
+  // Finding: a teleport out of the shipyard (any visit end) closes the HUD and its arrow.
+  h.api.emitCustomEvent('sailing:shipyard-visit-ended', { player: h.player, questVisit: true });
+  quest.setStage(h.player, 28);
+  const { Sailing: SailingCore } = require('../dist/game/content/sailing/Sailing');
+  SailingCore.giveBoat(h.player, 'raft', 'the_pandemonium');
+  h.action(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'TIfJ86');
+  assert.ok(h.scripts.some((entry) => entry.uid === ((161 << 16) | 8) && entry.id === 345), 'the shipyard HUD opened');
+  const before = h.scripts.filter((entry) => entry.close === ((161 << 16) | 8)).length;
+  h.api.emitCustomEvent('sailing:shipyard-visit-ended', { player: h.player, questVisit: true });
+  assert.equal(h.scripts.filter((entry) => entry.close === ((161 << 16) | 8)).length, before + 1, 'HUD closed on leaving');
+  assert.deepEqual(h.hints.at(-1), ['clear']);
+
+  const grog = h.hooks.named.get('Old Grog')['Talk-to'];
+  quest.setStage(h.player, 44);
+  assert.equal(grog({ player: h.player, npc: null }), false, 'Grog waits until Jim is told');
+  quest.setStage(h.player, 46);
+  assert.equal(grog({ player: h.player, npc: null }), true, 'talking to Old Grog starts the finale');
+  assert.equal(h.variant(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE), 'talking-to-steve');
+  quest.setStage(h.player, 48);
+  assert.equal(h.variant(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE), 'talking-to-steve-talking-to-steve-again-after-old-grog-departs');
+
+  const raft = h.sailing.boats.find((boat) => boat.type === 'raft');
+  require('../plugins/skills/sailing/BoatFacilities.Sailing').setFacility(raft, 0, 8462);
+  raft.cargo = [{ id: h.core.ItemIdentifiers.CRATE_OF_SHIP_PARTS_7, amount: 1 }];
+  const HoldWarning = require('../plugins/skills/sailing/porttasks/HoldWarning.PortTasks');
+  const prompt = { player: h.player, boat: raft, dockId: 'the_pandemonium', title: HoldWarning.TITLE, options: HoldWarning.OPTIONS };
+  h.api.emitCustomEvent('port-tasks:hold-warning', prompt);
+  assert.equal(prompt.title, "Jim's cargo is still in the cargo hold.");
+  assert.deepEqual(prompt.options, ['Disembark anyway.', 'Remain on the boat.'], 'rsprox 242 tick 3941');
+
+  for (const [saved, live] of [[16, 16], [18, 20], [20, 22], [22, 24], [24, 24], [28, 28]]) {
+    h.attrs.set('pandemonium:stage-version', 2);
+    quest.setStage(h.player, saved);
+    for (const login of h.hooks.login) login({ player: h.player });
+    assert.equal(quest.getStage(h.player), live, `version 2 stage ${saved} -> ${live}`);
+    assert.equal(h.attrs.get('pandemonium:stage-version'), 3);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
 });
 
 test('Crab Quest uses 5/25/30/45/47/50/55/60/63 and hands in all seven shells', () => {
@@ -495,10 +645,10 @@ test('sailing-intro native stages survive a real save/load retaining only persis
     }
   }
 
-  h.attrs.set('pandemonium:tutorials', 7);
+  h.attrs.set('pandemonium:cargo-hold-gifts', true);
   h.attrs.set('quest.fallen_from_grace.troll-kills', 2);
   h.relog(h.saveState());
-  assert.equal(h.attrs.get('pandemonium:tutorials'), 7, 'tutorial flags persist across save/load');
+  assert.equal(h.attrs.get('pandemonium:cargo-hold-gifts'), true, 'Jim\'s cargo-hold gifts persist across save/load');
   assert.equal(h.attrs.get('quest.fallen_from_grace.troll-kills'), 2, 'troll kills persist across save/load');
 });
 
@@ -566,14 +716,16 @@ test('Pandemonium uses the actual static-ship blueprint and its lifecycle hooks'
   // These are the recorder's actual heading inputs, driven by this helper actor rather than
   // replayed by production on a timer. The native regression separately decodes real packets.
   const headings = new Map([[0, 0], [25, 2], [31, 1], [61, 0]]);
-  for (let tick = 0; tick < 300 && quest.getStage(h.player) < 12; tick++) {
+  const atWreck = () => ship.boat.tileX >= 3018 && ship.boat.tileX <= 3040 && ship.boat.tileY >= 3030 && ship.boat.tileY <= 3050;
+  for (let tick = 0; tick < 300 && !atWreck(); tick++) {
     if (headings.has(tick)) BoatManager.setHelmHeading(h.player, headings.get(tick));
     BoatManager.tick();
   }
   assert.notEqual(ship.boat.fineY, startY, 'the static ship actually moves on the real map');
-  assert.equal(quest.getStage(h.player), 12, `the real collision route reaches the captured wreck (boat ${ship.boat.tileX},${ship.boat.tileY})`);
-  assert.ok(Math.abs(ship.boat.tileX - 3035) <= 2 && Math.abs(ship.boat.tileY - 3048) <= 2,
-    'the boat stops at the captured wreck root');
+  assert.ok(atWreck(), `the real collision route reaches the captured wreck (boat ${ship.boat.tileX},${ship.boat.tileY})`);
+  assert.equal(quest.getStage(h.player), 10, 'live waits for the player to stop there');
+  h.api.emitCustomEvent('sailing:set-supplied-sails', { player: h.player, boat: ship.boat, mode: 'stop', accepted: false });
+  assert.equal(quest.getStage(h.player), 12, 'stopping at the wreck arrives (rsprox 242, tick 3300)');
   assert.equal(h.varbits.get(18315), 1, 'reached-wreck varbit set on arrival');
   assert.equal(ship.boat.helmPlayerId, undefined, 'arrival releases the live helm without losing the earned capability');
   assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0, 'arrival frees the facility for the salvage hook');
@@ -703,8 +855,10 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   const spec = BoatManager.getSpec(ship.boat);
   assert.equal(spec.locs.filter((loc) => loc.id === 60480).length, 1, 'the placed hook is not duplicated');
   assert.equal(spec.locs.filter((loc) => loc.id === 60464).length, 0, 'the real-world wreck is not put on the deck');
-  // Stage 12 still has to talk to Will before the hook becomes a salvage action.
+  // Stage 12 still has to hear Will out (live: its "*sigh*" sets 14) before the hook salvages.
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
+  assert.equal(quest.getStage(h.player), 12);
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
   assert.equal(quest.getStage(h.player), 14);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(quest.getStage(h.player), 14, 'the item popup cannot skip the shore scene');
@@ -772,39 +926,43 @@ test('Pandemonium deck hook routes Deploy from the player pose instead of the al
   for (const stale of StaticShips.all()) StaticShips.dispose(stale);
 });
 
-test('stage 28 shipyard UI build consumes materials and advances once through the shipped handler', () => {
+test('stage 28 shipyard UI build: Jim provides the raft cargo hold\'s materials and it advances once', () => {
   const h = setup();
   const { Sailing } = require('../dist/game/content/sailing/Sailing');
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   const BoatFacilities = require('../plugins/skills/sailing/BoatFacilities.Sailing');
-  const Shipyard = require('../plugins/skills/sailing/Shipyard.plugin.js');
+  const Shipyard = require('../plugins/skills/sailing/Shipyard.Sailing.js');
   const raft = Sailing.giveBoat(h.player, 'raft', 'the_pandemonium');
   raft.facilities = [0];
   const hold = BoatFacilities.hotspotsOf('raft')[0].allowed.find((row) =>
     /cargo hold$/i.test(BoatFacilities.facilityRequirements(row).name));
+  assert.equal(hold, 8462, 'the raft cargo hold is the row the client lets stage 28 build (script 8807)');
   const materials = BoatFacilities.facilityRequirements(hold).materials;
-  for (const [item, count] of materials) h.inventory.set(item, count + 3);
+  assert.ok(materials.length > 0, 'the hold normally costs materials');
+  // Issue 4406: the player carries none of them; live builds it anyway (rsprox 242, tick 3581).
+  for (const [item] of materials) h.inventory.delete(item);
+  // The saw and hammer from the shipyard's crates (every facility build needs them).
+  h.inventory.set(8794, 1);
+  h.inventory.set(2347, 1);
   const quest = load(h, 'Pandemonium.Quest.js');
-  h.attrs.set('quest.pandemonium.stage-version', 2);
+  h.attrs.set('pandemonium:stage-version', 3);
   quest.setStage(h.player, 28);
-  assert.equal(quest.getStage(h.player), 28, 'opening/modifying without a build stays 28');
 
   const saved = {
-    aboardVisit: Shipyard.aboardVisit, ownedBoat: Shipyard.ownedBoat,
+    aboardVisit: Shipyard.aboardVisit, ownedBoat: Shipyard.ownedBoat, visitedBoat: Shipyard.visitedBoat,
     openCustomisation: Shipyard.openCustomisation, closeCustomisation: Shipyard.closeCustomisation,
-    isBuildTrigger: Shipyard.isBuildTrigger, readOptionRow: Shipyard.readOptionRow,
-    refusal: Shipyard.refusal, setDeckLoc: BoatManager.setDeckLoc,
+    isBuildTrigger: Shipyard.isBuildTrigger, readOptionRow: Shipyard.readOptionRow, setDeckLoc: BoatManager.setDeckLoc,
   };
-  const visit = { hotspot: 0, slot: raft.slot, shown: {} };
+  const visit = { hotspot: 0, slot: raft.slot, shown: { deckBaseX: 10240, deckBaseY: 9600 } };
   Shipyard.aboardVisit = () => visit;
   Shipyard.ownedBoat = () => raft;
+  Shipyard.visitedBoat = () => raft;
   Shipyard.openCustomisation = () => {};
   Shipyard.closeCustomisation = () => {};
   Shipyard.isBuildTrigger = () => true;
   Shipyard.readOptionRow = () => hold;
-  Shipyard.refusal = () => null;
   BoatManager.setDeckLoc = () => {};
-  const modulePath = require.resolve('../plugins/skills/sailing/ShipyardFacilities.plugin.js');
+  const modulePath = require.resolve('../plugins/skills/sailing/ShipyardFacilities.Sailing.js');
   delete require.cache[modulePath];
   const Facilities = require(modulePath);
   Facilities.register(h.api);
@@ -812,18 +970,24 @@ test('stage 28 shipyard UI build consumes materials and advances once through th
   try {
     for (const handler of h.hooks.interfaceClicks) handler(event);
     assert.equal(event.handled, true, 'the shipped shipyard build handler accepted the trigger');
-    for (const [item, count] of materials) assert.equal(h.inventory.get(item), 3, `${item} materials consumed`);
+    assert.equal(h.messages.includes("You don't have the materials needed to build that."), false, 'no materials refusal');
+    assert.equal(BoatFacilities.facilityAt(raft, 0), hold, 'the cargo hold is built');
     assert.equal(quest.getStage(h.player), 30, 'the real built cargo hold advances stage 28 to 30');
+    assert.deepEqual(h.xp, [], 'Jim\'s hold gives no Construction XP (rsprox 242)');
     for (const handler of h.hooks.interfaceClicks) handler(event);
     assert.equal(quest.getStage(h.player), 30, 'duplicate UI events keep stage 30');
+
+    // Outside the quest step the same hold still costs its materials.
+    raft.facilities = [0];
+    quest.setStage(h.player, 50);
+    h.messages.length = 0;
+    for (const handler of h.hooks.interfaceClicks) handler({ ...event, handled: false });
+    assert.equal(BoatFacilities.facilityAt(raft, 0), undefined, 'no free hold after the quest step');
+    assert.ok(h.messages.includes("You don't have the materials needed to build that."));
   } finally {
-    Shipyard.aboardVisit = saved.aboardVisit;
-    Shipyard.ownedBoat = saved.ownedBoat;
-    Shipyard.openCustomisation = saved.openCustomisation;
-    Shipyard.closeCustomisation = saved.closeCustomisation;
-    Shipyard.isBuildTrigger = saved.isBuildTrigger;
-    Shipyard.readOptionRow = saved.readOptionRow;
-    Shipyard.refusal = saved.refusal;
+    Object.assign(Shipyard, { aboardVisit: saved.aboardVisit, ownedBoat: saved.ownedBoat, visitedBoat: saved.visitedBoat,
+      openCustomisation: saved.openCustomisation, closeCustomisation: saved.closeCustomisation,
+      isBuildTrigger: saved.isBuildTrigger, readOptionRow: saved.readOptionRow });
     BoatManager.setDeckLoc = saved.setDeckLoc;
     delete require.cache[modulePath];
   }
@@ -861,7 +1025,7 @@ test('Pandemonium completion extras survive stack, full and one-slot inventories
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 26, 'existing stack gains all 25 coupons with no free slot');
   assert.equal(countGround(31964).length, 2, 'both repair kits drop rather than being lost');
-  assert.equal(countGround(31803).length, 1, 'spyglass drops rather than being lost');
+  assert.equal(countGround(31803).length, 1, 'the Wiki spyglass drops rather than being lost (Ours: until Charles hands it out)');
   assert.equal(quest.complete(h.player), false, 'completion reward is once');
   h.relog();
   assert.equal(quest.complete(h.player), false, 'relog completion is not rewarded again');
@@ -872,20 +1036,18 @@ test('Pandemonium completion extras survive stack, full and one-slot inventories
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 25, 'one free slot holds the coupon stack');
   assert.equal(countGround(31964).length, 2);
-  assert.equal(countGround(31803).length, 1);
 
   ({ h, inventory, quest } = make(4));
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 25);
   assert.equal(inventory.getAmount(31964), 2, 'repair kits are granted one at a time');
-  assert.equal(inventory.getAmount(31803), 1);
+  assert.equal(inventory.getAmount(31803), 1, 'the spyglass is granted on completion');
   assert.equal(ground().length, 0);
 
   ({ h, inventory, quest } = make(0));
   assert.equal(quest.complete(h.player), true);
   assert.ok(couponGround() >= 24, 'the quest-specific 24 coupons are not silently lost');
   assert.equal(countGround(31964).length, 2);
-  assert.equal(countGround(31803).length, 1);
   clearGround();
 });
 
@@ -931,6 +1093,8 @@ test('Pandemonium camera follows the rendered ship freely before and after the h
     clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
     ship.boat.fineX = 3035 * 128 + 32; ship.boat.fineY = 3048 * 128 + 96;
     BoatManager.tick(); h.tickOnce(); h.tickOnce();
+    h.api.emitCustomEvent('sailing:set-supplied-sails', { player: h.player, boat: ship.boat, mode: 'stop', accepted: false });
+    h.tickOnce();
     assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 0,
       'arrival keeps the voyage context; the captured fixed camera belongs to later Deploy');
     assert.equal(quest.getStage(h.player), 12);
@@ -1301,7 +1465,11 @@ test('the supplied intro Sails Set emits its captured down-to-full transition', 
     const spec = BoatManager.getSpec(ship.boat);
     const sail = spec.locs.find(loc => loc.id === 59553);
     assert.ok(sail);
-    assert.deepEqual([sail.x, sail.y, sail.level, sail.shape, sail.rotation], [4, 4, 1, 10, 0]);
+    // rsprox 242 (20261104T121356 tick 3172): sails at (4,5), the mast at (4,4), the hook at (3,2).
+    assert.deepEqual([sail.x, sail.y, sail.level, sail.shape, sail.rotation], [4, 5, 1, 10, 0]);
+    assert.ok(spec.locs.some(loc => loc.id === 29505 && loc.x === 4 && loc.y === 4), 'the intro mast stands under the sails');
+    const hook = spec.locs.find(loc => loc.id === 60480);
+    assert.deepEqual([hook.x, hook.y, hook.rotation], [3, 2, 1]);
     assert.equal(sail.sailCloth, true, 'the supplied Set target remains the cloth-tagged loc');
     const definition = h.core.CacheDefinitions.getObject(59553);
     assert.equal(definition.name, 'Sails');
@@ -1325,7 +1493,7 @@ test('the supplied intro Sails Set emits its captured down-to-full transition', 
     assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 2, 'canonical Set reached FULL');
     assert.equal(ship.boat.moveMode, 2);
     assert.deepEqual(outputs.filter(output => output.kind === 'animation').map(output => output.tuple),
-      [[59553, ship.boat.deckBaseX + 4, ship.boat.deckBaseY + 4, 1, 10, 0, 13383]],
+      [[59553, ship.boat.deckBaseX + 4, ship.boat.deckBaseY + 5, 1, 10, 0, 13383]],
       'supplied Set emits exactly its captured down-to-full transition');
     const clothUpdate = outputs.findIndex(output => output.kind === 'object' && output.id === 59553);
     const transition = outputs.findIndex(output => output.kind === 'animation');

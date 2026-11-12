@@ -103,3 +103,36 @@ test('the new cap does not bypass box, net or rabbit skill requirements', t => {
     assert.equal(messages.at(-1), `You need level ${level} Hunter to do this.`);
   }
 });
+
+// rsprox captures (pyre-fur-and-smallpouch-1, rev 242; rsprox.net 1105, 1108, 1757): live leaves 5212 to
+// play out after setting up a deadfall (no reset), and baiting says "You lay the jerboa tail beneath the
+// deadfall as bait.".
+test('a deadfall set up and baited keeps its animation running and lays the bait with the captured line', t => {
+  const { p, messages } = actor(t, 99);
+  const I = core.ItemIdentifiers;
+  const maps = H.core.MapObjects;
+  H.core.MapObjects = { ...maps, exists: () => true };
+  t.after(() => { H.core.MapObjects = maps; });
+  p.getInventory().adds(I.KNIFE, 1); p.getInventory().adds(I.LOGS, 1); p.getInventory().adds(I.JERBOA_TAIL, 1);
+  const animations = [];
+  t.mock.method(p, 'performAnimation', animation => { animations.push(animation.getId()); });
+  const base = new core.GameObject(core.CacheDefinitions.getLocId('hunting_deadfall_boulder'), new core.Location(1613, 3002, 0), 10, 1, p.getPrivateArea());
+  p.setLocation(new core.Location(1613, 3001, 0));
+  Traps.lay(p, 'deadfall', base.getLocation(), base);
+  for (let i = 0; i < 3; i++) { H.tick++; C.processActions(); }
+  const trap = [...H.traps].find(entry => entry.player === p);
+  assert.ok(trap, 'the deadfall stands');
+  assert.deepEqual(animations, [5212], 'no reset after the setting-up animation');
+  Traps.bait({ player: p, object: trap.objects.at(-1), itemId: I.JERBOA_TAIL, handled: false });
+  assert.equal(messages.at(-1), 'You lay the jerboa tail beneath the deadfall as bait.');
+  assert.deepEqual(animations, [5212, 5212]);
+});
+
+test('a bird snare still resets its animation when laid', t => {
+  const { p } = actor(t);
+  p.getInventory().adds(core.ItemIdentifiers.BIRD_SNARE, 1);
+  const animations = [];
+  t.mock.method(p, 'performAnimation', animation => { animations.push(animation.getId()); });
+  lay(p, 'bird', 3200);
+  assert.ok(animations.includes(core.Animation.DEFAULT_RESET_ANIMATION.getId()));
+});

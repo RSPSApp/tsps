@@ -6,7 +6,7 @@ Runite Golems in the Wilderness Resource Area (spawns at 3191,3934 and 3178,3938
 | --- | --- |
 | `server/plugins/npcs/RuniteGolem.plugin.js` | The death, the rock, its spent form, who killed it. |
 | `server/plugins/skills/Mining.plugin.js` | The `mining:mine-npc-rock` seam, which mines an NPC by a named rock's rules. |
-| `server/plugins/achievements/diaries/WildernessResourceDiary.plugin.js` | The task's steps. |
+| `server/plugins/achievements/diaries/WildernessResourceDiary.AchievementDiaries.js` | The task's steps. |
 
 ## The golem
 

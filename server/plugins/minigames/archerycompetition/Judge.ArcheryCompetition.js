@@ -40,7 +40,8 @@ function show(player, steps, menu) {
     chain.add(new core.OptionDialogue(index, {
       executeOption(option) {
         player.getPacketSender().sendInterfaceRemoval();
-        const entry = menu[Number(option)];
+        // Native option resumes carry the one-based choice (DialogueManager.handleResume).
+        const entry = menu[Number(option) - 1];
         if (entry) entry[1]();
       },
     }, ...menu.map(([text]) => text)));
@@ -118,8 +119,7 @@ function scoreCheck(player) {
 /** Accepting an offer, first time or replay: pay only when the round can actually start. */
 function accept(player) {
   if (!Session.canStart(player)) {
-    const inventory = player.getInventory();
-    if (inventory.getFreeSlots() === 0 && !inventory.contains(core.ItemIdentifiers.BRONZE_ARROW)) {
+    if (!Session.hasArrowRoom(player)) {
       player.sendMessage("You don't have enough inventory space.");
       return;
     }

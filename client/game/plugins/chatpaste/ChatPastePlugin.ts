@@ -7,6 +7,7 @@ import type { OsrsClient } from "../../OsrsClient";
 export const MAX_PASTE_LENGTH = 80;
 
 type PasteTarget = Pick<EventTarget, "addEventListener" | "removeEventListener">;
+type PasteInput = Pick<InputManager, "addInputFilter" | "enqueueTypedChar"> & Partial<Pick<InputManager, "keyRemapper">>;
 
 /** Whether a key event is the paste shortcut: Ctrl+V, or Cmd+V on a Mac. */
 export function isPasteShortcut(event: Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "altKey" | "code" | "key">): boolean {
@@ -40,12 +41,12 @@ export class ChatPastePlugin extends Plugin {
         configKey: "chatpasteplugin",
     };
 
-    private readonly input: Pick<InputManager, "addInputFilter" | "enqueueTypedChar">;
+    private readonly input: PasteInput;
     private readonly target: PasteTarget | undefined;
     private removeFilter?: () => void;
     private readonly onPaste = (event: Event) => this.paste(event as ClipboardEvent);
 
-    constructor(input?: Pick<InputManager, "addInputFilter" | "enqueueTypedChar">, target?: PasteTarget) {
+    constructor(input?: PasteInput, target?: PasteTarget) {
         super();
         this.input = input ?? inject<OsrsClient>(CLIENT_TOKEN).inputManager;
         this.target = target ?? (typeof document !== "undefined" ? document : undefined);
@@ -70,6 +71,9 @@ export class ChatPastePlugin extends Plugin {
         const text = pasteText(event.clipboardData?.getData("text/plain") ?? "");
         if (!text) return;
         event.preventDefault();
+        // WASD camera's locked chat line ("Press Enter to Chat..."): typed keys don't reach it, nor
+        // does a paste. A search or prompt that takes text isn't blocked, so a paste still goes there.
+        if (this.input.keyRemapper?.isChatInputBlocked()) return;
         for (const char of text) this.input.enqueueTypedChar(char.charCodeAt(0));
     }
 }

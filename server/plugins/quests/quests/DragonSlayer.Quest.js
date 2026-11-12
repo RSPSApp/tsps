@@ -1,4 +1,7 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerDragonSlayerQuest(api) {
   const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, CombatSpells, CombatType, MagicCombatMethod, PendingHit, Projectile, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
@@ -286,7 +289,11 @@ module.exports = function registerDragonSlayerQuest(api) {
   const hasItem = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const hasCrandorMap = (player) => hasItem(player, ITEM.crandorMap);
   const hasAllMapPieces = (player) => MAP_PIECES.every((id) => hasItem(player, id));
-  const ownsMapPiece = (player, itemId) => hasItem(player, itemId) || hasCrandorMap(player);
+  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
+  const owns = (player, itemId) => hasItem(player, itemId) || (player.getBanks?.() ?? []).some((bank, tab) =>
+    tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(itemId) ?? 0) > 0);
+  /** A piece is owned on its own or inside the joined Crandor map, carried or banked. */
+  const ownsMapPiece = (player, itemId) => owns(player, itemId) || owns(player, ITEM.crandorMap);
   const questPoints = (player) => Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0;
   const oracleState = (player) => Number(player.getAttribute(ATTR_ORACLE)) || 0;
   const setOracleState = (player, value) => player.setAttribute(ATTR_ORACLE, value);
@@ -404,7 +411,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     const scene = new VoyageScene(player); scenes.set(player, scene); freeze(player); fade(player, true);
     player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1).sendVarbit(4606, 1);
     later(scene, 2, () => {
-      for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+      for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
       player.getPacketSender().sendSong(147).sendJingle(172, 0).sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY_BACKGROUND)
         .sendInterface(SCENE_INTERFACE.journey).sendClientScript(1131, 3);
     });
@@ -461,7 +468,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       later(scene, 3, () => {
         player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
         camera(player, scene, [2068, 5518, 300], [2062, 5518, 100]); camera(player, scene, [2074, 5526, 300], null, 1);
-        player.getPacketSender().sendCameraShake(1, 0, 5, 8); scene.jenkins?.moveTo(scene.sourceTile(2066, 5518));
+        CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 5, 8); scene.jenkins?.moveTo(scene.sourceTile(2066, 5518));
         sceneFire(scene, FIRE_LARGE, 2064, 5516);
         for (let i = 0; i < 5; i++) fireAt(scene, [2057 + i * 3, 5522], [2063 + i, 5518], i * 30);
       });
@@ -477,7 +484,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
     if (stepId === "9r5-VW") {
       event.handled = true; event.end = true; freeze(player);
-      player.getPacketSender().sendCameraShake(0, 20).sendSoundEffect(3742, 1, 0); StatementDialogue.send(player, "<col=800000>CRASH!", false); fade(player, true);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 20).sendSoundEffect(3742, 1, 0); StatementDialogue.send(player, "<col=800000>CRASH!", false); fade(player, true);
       later(scene, 3, () => { scene.cameraReleased = true; player.getPacketSender().sendCameraReset(); });
       later(scene, 4, () => {
         // rev242 tick 3339: the beach landing, where the player stays (and the camera looks) until released.
@@ -541,14 +548,14 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (request.step?.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
     else if (request.step?.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
     if (text.startsWith("Ah, it's good to feel")) request.before = () => {
-      camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8);
+      camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 10, 8);
     };
     if (text.startsWith("And this is a mighty")) request.before = () => camera(player, scene, [2073, 5516, 100], [2066, 5517, 25], 1);
     if (text.startsWith("How much longer")) request.before = () => camera(player, scene, [2069, 5513, 300], [2066, 5517, 100], 1);
     if (text.startsWith("Looks like there's a storm")) request.before = () => {
-      player.getPacketSender().sendCameraShake(1, 0); camera(player, scene, [2074, 5525, 1500], [2064, 5520, 300], 232, true); camera(player, scene, [2064, 5525, 1500], null, 1); player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0); camera(player, scene, [2074, 5525, 1500], [2064, 5520, 300], 232, true); camera(player, scene, [2064, 5525, 1500], null, 1); player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
     };
-    if (text === "We're going to sink!") request.before = () => { camera(player, scene, [2074, 5526, 600], [2066, 5517, 100]); camera(player, scene, [2064, 5518, 400], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8); };
+    if (text === "We're going to sink!") request.before = () => { camera(player, scene, [2074, 5526, 600], [2066, 5517, 100]); camera(player, scene, [2064, 5518, 400], null, 1); CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 10, 8); };
     if (text === "We're going to crash!") request.before = () => camera(player, scene, [2064, 5518, 400], null, 2);
     const face = voyageFacing(scene, request.step, text);
     if (face) {
@@ -1060,7 +1067,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       crossMazeDoor(player, event.object, at);
       return;
     }
-    if (quest.getStage(player) < STAGE_OZIACH || !hasItem(player, ITEM.mazeKey)) {
+    if (quest.getStage(player) < STAGE_OZIACH || !hasKey(api, player, ITEM.mazeKey)) {
       // RSProx 468 (ticks 6449 and 6732): this message and sound 2402 on the front door.
       player.sendMessage("This door is securely locked.");
       player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);
@@ -1245,7 +1252,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (saved(player, ELVARG_SEEN_ATTRIBUTE)) { player.moveTo(TILE.crandorLair.clone()); return; }
     const scene = new VoyageScene(player, true); scene.returnTile = TILE.crandorLair.clone(); scenes.set(player, scene);
     freeze(player); fade(player, true); player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1);
-    for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
     // rev242 capture ticks 3420-3440: the player waits out of shot in the scene's south-west corner (+3);
     // Elvarg appears facing west (+4), seven footsteps sound (+9) and she walks five tiles west (+10..+14).
     later(scene, 3, () => { player.moveTo(scene.sourceTile(2840, 9624)); scene.enter(player); });

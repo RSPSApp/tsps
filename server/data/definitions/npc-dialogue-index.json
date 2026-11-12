@@ -6704,7 +6704,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -6762,7 +6762,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -6820,7 +6820,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -6878,7 +6878,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -6936,7 +6936,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -7713,6 +7713,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -20789,6 +20790,12 @@
       "page": "Transcript:Death to the Dorgeshuun",
       "variants": [
         "a-tour-of-lumbridge-father-aereck"
+      ]
+    },
+    {
+      "page": "Transcript:The Lost Tribe",
+      "variants": [
+        "a-hole-in-the-wall-asking-father-aereck"
       ]
     },
     {
@@ -39076,6 +39083,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -40513,7 +40521,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50168,7 +50176,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50383,7 +50391,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50441,7 +50449,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50499,7 +50507,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50557,7 +50565,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -50615,7 +50623,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -53076,7 +53084,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -53134,7 +53142,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -53330,7 +53338,7 @@
       "variants": [
         "a-hole-in-the-wall-the-duke-s-adviser",
         "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest",
-        "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob",
+        "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin",
         "a-hole-in-the-wall-convincing-horacio",
         "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again",
         "a-hole-in-the-wall-opening-the-tunnel-talking-to-the-duke-after-opening-the-tunnel",
@@ -79717,6 +79725,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -79805,6 +79814,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -79893,6 +79903,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -79981,6 +79992,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -80069,6 +80081,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -80157,6 +80170,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -80245,6 +80259,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -81278,6 +81293,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -84575,6 +84591,7 @@
       "page": "Transcript:Biohazard",
       "variants": [
         "getting-started-talking-to-elena",
+        "getting-started-talking-to-elena-again",
         "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator",
         "delivering-the-samples-talking-to-elena-with-the-distillator",
         "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist",
@@ -93456,8 +93473,7 @@
     {
       "page": "Transcript:The Lost Tribe",
       "variants": [
-        "a-hole-in-the-wall-asking-bob",
-        "a-hole-in-the-wall-asking-bob-talking-to-bob-again"
+        "a-hole-in-the-wall-asking-bob"
       ]
     }
   ],

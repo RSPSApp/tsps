@@ -1,7 +1,8 @@
-// Lazy load to avoid circular container/definition bootstrap.
-const getItemDefinition = () => require('../definition/ItemDefinition').ItemDefinition as typeof import('../definition/ItemDefinition').ItemDefinition;
-
+import { lazyRequire } from "../../util/LazyRequire";
 import { MAX_STACK_AMOUNT } from "./container/StackType";
+
+// Lazy load to avoid circular container/definition bootstrap.
+const getItemDefinition = lazyRequire(() => require('../definition/ItemDefinition').ItemDefinition as typeof import('../definition/ItemDefinition').ItemDefinition);
 
 export class Item {
 
@@ -46,6 +47,36 @@ export class Item {
             return null;
         }
         return Item.cloneMetaValue(meta) as Record<string, unknown>;
+    }
+
+    /**
+     * The item meta keys #226 renamed from camelCase to kebab-case. Only these are migrated: other
+     * camelCase keys are still live (the looting bag keeps its contents under "lootingBag").
+     */
+    private static readonly RENAMED_META_KEYS: ReadonlyMap<string, string> = new Map([
+        ["toxicBlowpipe", "toxic-blowpipe"],
+        ["tridentCharges", "trident-charges"],
+        ["bloodFury", "blood-fury"],
+        ["tumekensShadowCharges", "tumekens-shadow-charges"],
+        ["barrows:lockpickCharges", "barrows:lockpick-charges"],
+        ["farming:saplingAt", "farming:sapling-at"],
+    ]);
+
+    /**
+     * Save migration, as PlayerSave's for attributes: a top-level meta key #226 renamed loads
+     * under its new name; the new key wins if both are saved. Meta nested in other meta or in
+     * player attributes is not migrated.
+     */
+    public static migrateSavedMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
+        if (!meta) return meta;
+        let migrated: Record<string, unknown> | null = null;
+        for (const [old, renamed] of Item.RENAMED_META_KEYS) {
+            if (!(old in meta)) continue;
+            migrated ??= { ...meta };
+            if (!(renamed in migrated)) migrated[renamed] = migrated[old];
+            delete migrated[old];
+        }
+        return migrated ?? meta;
     }
 
     /**

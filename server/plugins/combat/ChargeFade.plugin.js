@@ -1,13 +1,13 @@
 /**
  * The Charge spell's expiry (Wiki: Charge): the effect lasts 700 ticks and "Your magical charge fades
  * away" appears when it ends. CombatSpells.ts casts the spell and sets the expiry; it announces each
- * cast with "magic:charge-cast" ({ player, until }). The message text is the Wiki's; no capture of the
- * fade exists (the Wiki also says it is red, which is not applied here).
+ * cast with "magic:charge-cast" ({ player, until }). The line is red and ends with a full stop, as
+ * recorded (rsprox_transcripts/235/03347.txt tick 260).
  *
  * The task has its own key per player: other systems call TaskManager.cancelTasks(player) (ordinary
  * travel among them) and would otherwise end it. A recast replaces the earlier task, and logout cancels it.
  */
-const FADE_MESSAGE = "Your magical charge fades away";
+const FADE_MESSAGE = "<col=ef1020>Your magical charge fades away.</col>";
 
 let core;
 const KEYS = new WeakMap();

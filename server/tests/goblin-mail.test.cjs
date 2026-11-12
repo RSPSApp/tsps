@@ -37,3 +37,14 @@ test('legacy human-form goblin mail is safely removed at bootstrap; a full bag r
   free=0;hooks.get('player:bootstrap-complete')({player});assert.equal(unequips,1);assert.match(messages.at(-1),/space/i);
   free=1;goblin=1;hooks.get('player:bootstrap-complete')({player});assert.equal(unequips,1);
 });
+
+// Wiki (Land of the Goblins): the mail comes off when the goblin form reverts (e.g. at the quest's end).
+test('goblin mail comes off when the goblin form ends', () => {
+  const hooks = new Map();let unequips = 0;
+  const core = { Equipment: { BODY_SLOT: 4 }, EquipPacketListener: { unequip: () => { unequips++;return true; } } };
+  require('../plugins/items/GoblinMail.plugin').register({ core, onCanEquip() {}, onCustomEvent: (name,handler) => hooks.set(name,handler) });
+  const player={ getInventory:()=>({getFreeSlots:()=>1}),getEquipment:()=>({get:()=>new Item(288,1)}),getPacketSender:()=>({getVarbit:()=>0}),sendMessage(){} };
+  assert.equal(typeof hooks.get('goblin-form:ended'),'function');
+  hooks.get('goblin-form:ended')({player});
+  assert.equal(unequips,1);
+});

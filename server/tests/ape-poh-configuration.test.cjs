@@ -107,8 +107,9 @@ function actor(t, kind, { rescued = false, full = false } = {}) {
   p.moveTo(new core.Location(2542, 3096, 0)); p.setNeedsPlacement(false);
   const portal = new GameObject(yanillePortal, portalAt, 10, 2, null);
   const definition = ObjectDefinition.forPlayer(yanillePortal, p) ?? ObjectDefinition.forId(yanillePortal);
-  assert.equal(PM.emitObjectInteraction({ player: p, object: portal, objectId: yanillePortal, definition, clickType: 1,
+  assert.equal(PM.emitObjectInteraction({ player: p, object: portal, objectId: yanillePortal, definition, clickType: 2,
     location: { x: 2542, y: 3097, z: 0 }, sourceLocation: { x: 2542, y: 3096, z: 0 }, handled: false }), true);
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process(); // Home loads two ticks later
   const house = House.houseFor(p);
   ownedHouse = house;
   assert.ok(house instanceof Instance.PlayerHouseInstance); assert.equal(house.owner, p);
@@ -450,8 +451,60 @@ test('nexus: Remove warns, then discards the paid destinations', async t => {
 test('nexus: removing its room discards the paid destinations', async t => {
   const f = actor(t, 'nexus', { rescued: true }); seedExisting(f, 'nexus');
   f.house.buildingMode = true;
+  const warnings = [], send = core.StatementDialogue.send;
+  t.mock.method(core.StatementDialogue, 'send', (player, text, ...rest) => { warnings.push(text); return send(player, text, ...rest); });
   House.removeRoomPrompt(f.p, f.house, { plane: 1, x: 4, y: 6 });
+  assert.deepEqual(warnings, [Nexus.ROOM_REMOVAL_WARNING], 'removing the room warns first');
+  await f.conn.dispatch([{ type: 'dialogue_continue', widgetId: (229 << 16) | 4, childIndex: -1 }]);
+  f.conn.processTurnPackets();
   await prompt(f, /remove the/i, /^yes$/i);
   assert.equal(f.house.getRoom({ plane: 1, x: 4, y: 6 }), null);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), { slots: [], left: 0 });
+});
+
+// rsprox captures (close_modal and picks on telenexus_teleport, rev 224-239): the Teleport Menu's key
+// listeners stop chat input (script2674 runs chatdefault_stopinput), so live sends
+// chatdefault_restoreinput (2158) right after its if_closesub. The configuration (telenexus) doesn't.
+const RESTORE_INPUT = 2158;
+function recordClose(t, f) {
+  const sender = f.p.getPacketSender(), log = [];
+  const closeSub = sender.closeSubInterface.bind(sender), script = sender.sendClientScript.bind(sender);
+  t.mock.method(sender, 'closeSubInterface', (...args) => { log.push('closesub'); return closeSub(...args); });
+  t.mock.method(sender, 'sendClientScript', (id, ...args) => { log.push(`script ${id}`); return script(id, ...args); });
+  return log;
+}
+
+test('nexus: closing the Teleport Menu gives the chat its typing back', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  objectAction(f, 'teleport menu');
+  assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId('telenexus_teleport'));
+  const log = recordClose(t, f);
+  await f.conn.dispatch([{ type: 'interface_close' }]);
+  f.conn.processTurnPackets();
+  assert.equal(f.p.getInterfaceId(), -1);
+  assert.deepEqual(log.filter(entry => entry === 'closesub' || entry === `script ${RESTORE_INPUT}`).slice(-2), ['closesub', `script ${RESTORE_INPUT}`]);
+  assert.equal(log.filter(entry => entry === `script ${RESTORE_INPUT}`).length, 1);
+});
+
+test('nexus: a Teleport Menu pick restores chat input as it closes', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  const varrock = [...Nexus.destinations().values()].find(d => d.spellName === 'varrock teleport');
+  f.p.setAttribute('construction:nexus', { slots: [varrock.id], left: 0 });
+  objectAction(f, 'teleport menu');
+  const log = recordClose(t, f);
+  const rows = core.CacheDefinitions.getComponentId('telenexus_teleport:rows1');
+  await f.conn.dispatch([{ type: 'dialogue_continue', widgetId: rows, childIndex: 0 }]);
+  f.conn.processTurnPackets();
+  assert.equal(House.houseFor(f.p), null, 'the pick left the house');
+  assert.equal(log.filter(entry => entry === `script ${RESTORE_INPUT}`).length, 1);
+});
+
+test('nexus: closing the configuration sends no restore (it never stopped input)', async t => {
+  const f = actor(t, 'nexus', { rescued: true });
+  nexusOpen(f);
+  const log = recordClose(t, f);
+  await f.conn.dispatch([{ type: 'interface_close' }]);
+  f.conn.processTurnPackets();
+  assert.equal(f.p.getInterfaceId(), -1);
+  assert.equal(log.includes(`script ${RESTORE_INPUT}`), false);
 });

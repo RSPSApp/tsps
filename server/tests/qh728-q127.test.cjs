@@ -583,52 +583,45 @@ test('logout removes the owner-only fight NPCs so a relog cannot leave a hidden 
   assert.equal(h.spawned.filter((npc) => EXPERIMENT_FORMS.includes(npc.id)).length, 0);
 });
 
-test('the basement boxes supply leather gloves only in-quest, once, and with inventory space', () => {
+// Wiki (Boxes (witch's house)): a table (nothing 1/2, cabbage, needle, thread, boots, gloves 1/26), searchable outside the
+// quest; "Searching the boxes with a full inventory will always yield nothing." Lines as recorded (233/03246.txt).
+const GLOVES_ROLL = 0.99, NOTHING_ROLL = 0.1, CABBAGE_ROLL = 0.55;
+test('the basement boxes roll the Wiki table with the recorded lines, at any stage, and find nothing when full', (t) => {
   const h = setup();
   const BOXES = 24692;
   const boxes = { x: 2899, y: 9871, z: 0 };
-  h.setLocation(2901, 9873);
-
-  // Stage 0 is not in-quest; the boxes are left to default handling.
-  const before = h.object(BOXES, { location: boxes });
-  assert.equal(before.handled, false);
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
+  let roll = NOTHING_ROLL;
+  t.mock.method(Math, 'random', () => roll);
 
   // The player must be in the basement, not just clicking the object id.
-  h.setStage(1);
   h.setLocation(2905, 3460);
-  h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
+  assert.equal(h.object(BOXES, { location: boxes }).handled, false);
 
-  // The west room boxes hand out one pair.
   h.setLocation(2901, 9873);
+  for (const stage of [0, 1, 7]) {
+    h.setStage(stage);
+    roll = NOTHING_ROLL;
+    assert.equal(h.object(BOXES, { location: boxes }).handled, true, `stage ${stage}`);
+    assert.equal(h.messages.at(-1), 'You search the boxes but find nothing.');
+  }
+  roll = CABBAGE_ROLL;
   h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
+  assert.equal(h.itemAmounts.get(I.CABBAGE), 1);
+  assert.equal(h.messages.at(-1), 'You find an old cabbage in the bottom of one of the boxes!');
+  roll = GLOVES_ROLL;
   h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
-  h.itemAmounts.set(I.LEATHER_GLOVES, 0);
-  h.object(BOXES, { location: { x: 2899, y: 9872, z: 0 } });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
+  h.object(BOXES, { location: boxes });
+  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 2, 'the table keeps rolling after the gloves are found');
+  assert.equal(h.messages.at(-1), 'You find a pair of leather gloves in the bottom of one of the boxes!');
 
-  // Worn gloves count as already having them; a full inventory blocks the pair.
-  h.itemAmounts.set(I.LEATHER_GLOVES, 0);
-  h.setGloves({ getId: () => I.LEATHER_GLOVES });
-  h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
-  h.setGloves(null);
   h.setFreeSlots(0);
   h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
-  assert.ok(h.messages.some((line) => String(line).includes("couldn't hold all those items")));
-
-  // A completed quest no longer hands out the quest gloves.
-  h.setFreeSlots(28);
-  h.setStage(7);
-  h.object(BOXES, { location: boxes });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
+  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 2);
+  assert.equal(h.messages.at(-1), 'You search the boxes but find nothing.');
 });
 
-test('every cache box placement in the basement hands out the gloves, the east room before the gate', () => {
+test('every cache box placement in the basement hands out the gloves, the east room before the gate', (t) => {
+  t.mock.method(Math, 'random', () => GLOVES_ROLL);
   // Cache Boxes (24692) placements, with the room the player has to stand in.
   const placements = [
     { x: 2899, y: 9871, room: 'west' },
@@ -651,7 +644,8 @@ test('every cache box placement in the basement hands out the gloves, the east r
   }
 });
 
-test('the east room boxes are reachable before the electric gate and the west room cannot search them', () => {
+test('the east room boxes are reachable before the electric gate and the west room cannot search them', (t) => {
+  t.mock.method(Math, 'random', () => GLOVES_ROLL);
   const h = setup();
   h.setStage(1);
 
@@ -672,26 +666,8 @@ test('the east room boxes are reachable before the electric gate and the west ro
   assert.equal(other.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
 });
 
-test('the gloves are handed out once, and a lost pair can be searched for again', () => {
-  const h = setup();
-  h.setStage(1);
-  h.setLocation(2907, 9873);
-
-  h.object(24692, { location: { x: 2905, y: 9872, z: 0 } });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
-
-  // A second box does not hand out a second pair.
-  h.object(24692, { location: { x: 2906, y: 9872, z: 0 } });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
-  assert.equal(h.messages.at(-1), 'You search the boxes but find nothing.');
-
-  // Losing the pair leaves the boxes able to give it back.
-  h.itemAmounts.set(I.LEATHER_GLOVES, 0);
-  h.object(24692, { location: { x: 2908, y: 9873, z: 0 } });
-  assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1);
-});
-
-test('a full inventory blocks the boxes and the cupboard without persisting progress', () => {
+test('a full inventory blocks the boxes and the cupboard without persisting progress', (t) => {
+  t.mock.method(Math, 'random', () => GLOVES_ROLL);
   const h = setup();
   h.setStage(1);
 
@@ -700,7 +676,7 @@ test('a full inventory blocks the boxes and the cupboard without persisting prog
   h.setFreeSlots(0);
   h.object(24692, { location: { x: 2905, y: 9872, z: 0 } });
   assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
-  assert.ok(h.messages.some((line) => String(line).includes("couldn't hold all those items")));
+  assert.equal(h.messages.at(-1), 'You search the boxes but find nothing.');
 
   // The cupboard neither gives the magnet nor advances the stage while it is full.
   h.setLocation(2899, 9873);
@@ -872,6 +848,27 @@ test('a catch takes the ball and shed key, keeps the stage, and lands by the boy
   assert.equal(h.itemAmounts.get(I.KEY_9), 0);
   assert.equal(h.itemAmounts.get(I.DIARY), 1);
   assert.equal(h.itemAmounts.get(I.DOOR_KEY), 1);
+});
+
+test('logging out mid-catch still takes the ball and shed key and saves the player by the boy', () => {
+  const h = setup();
+  h.setStage(6);
+  h.give(I.BALL); h.give(I.KEY_9);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2915, 3463);
+  h.setLocation(2921, 3460);
+  const witch = nora(2923);
+  garden(h).process(witch);
+  assert.deepEqual(witch.said, ['Stop! Thief!']);
+  h.tick(2);
+  h.logout(); // the logout hooks run before the logout save
+  assert.equal(h.itemAmounts.get(I.BALL), 0);
+  assert.equal(h.itemAmounts.get(I.KEY_9), 0);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2929, 3456]);
+  assert.equal(h.movement.blocked, false);
+  h.tick(4); // the catch's own teleport then finds the catch already finished
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2929, 3456]);
+  assert.equal(h.quest.getStage(h.player), 6);
 });
 
 test('every way into the shed brings a fresh experiment, and the key is still needed after the fight', () => {

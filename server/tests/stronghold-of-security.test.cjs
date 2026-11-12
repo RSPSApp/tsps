@@ -380,6 +380,17 @@ test("Wiki: only an imbued sceptre takes pieces and fragments, up to its maximum
   assert.equal(Sceptre.chisel(use(player, Ids.CHISEL, Ids.SKULL_SCEPTRE_I_)), false, "the imbued sceptre is not chiselled");
 });
 
+// Wiki (Skull sceptre): Solztun imbues it with the boots "(equipped or in your inventory)".
+test("Solztun offers the imbue with the boots worn, not only carried", () => {
+  const player = sceptrePlayer([[Ids.SKULL_SCEPTRE]]);
+  player.worn.slots.push({ id: Ids.FIGHTING_BOOTS, amount: 1 });
+  const definition = { getName: () => "Solztun" };
+  const ask = (stepId) => Sceptre.solztunCondition({ player, definition, stepId });
+  assert.equal(ask("KfXhQ0"), true, "the imbue option shows with worn boots");
+  assert.equal(ask("VxmOO-"), true);
+  assert.equal(ask("DM2B8U"), true);
+});
+
 test("transcript: Solztun's imbue needs the sceptre and boots, and imbues every sceptre the player has", () => {
   const player = sceptrePlayer([[Ids.SKULL_SCEPTRE], [Ids.FIGHTING_BOOTS]], { bank: [[Ids.SKULL_SCEPTRE]] });
   const definition = { getName: () => "Solztun" };

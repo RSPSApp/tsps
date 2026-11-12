@@ -105,10 +105,14 @@ function timerInfo({ player }) {
   player.sendMessage(`In <col=ef1020>${left}</col> it will expire, after which your items can be retrieved from <col=ef1020>Death's Office</col> instead.`);
 }
 
-/** Logging in with a grave: the warning, the grave back in the world, and its timer. */
+/**
+ * Logging in with a grave: the warning, the grave back in the world, and its timer. The warning
+ * shows unless the player turned off All Settings' "Display a warning on login if there are items
+ * stored in an item retrieval service".
+ */
 function login({ player }) {
   if (!Storage.grave(player) && Storage.office(player).length === 0) return;
-  if (Common.getVarbit(player, "warningDisabled") !== 1) player.sendMessage(MESSAGE.loginWarning);
+  if (Common.getVarbit(player, "retrievalWarningDisabled") !== 1) player.sendMessage(MESSAGE.loginWarning);
   if (!Storage.grave(player)) return;
   Grave.spawn(player);
   Grave.sync(player);

@@ -17,6 +17,18 @@
     {"grimy": "unidentified_torstol", "clean": "torstol", "level": 75, "xp": 15}
   ],
   "recipes": [
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["marigold", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["nasturtium", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["rosemary", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_black", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_blue", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_mixed", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_orange", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_purple", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_red", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_white", 1]], "message": "You mix the flowers into the anchovy oil."},
+    {"product": "ii_imp_repellent", "level": 3, "nonBoostable": true, "xp": 5, "ticks": 0, "manual": true, "ingredients": [["ii_anchovy_oil", 1], ["flowers_waterfall_quest_yellow", 1]], "message": "You mix the flowers into the anchovy oil."},
     {"product": "3dose1attack", "level": 3, "xp": 25, "ticks": 2, "ingredients": [["guamvial", 1], ["eye_of_newt", 1]], "message": "You mix the eye of newt into your potion."},
     {"product": "guamvial", "level": 3, "xp": 0, "ticks": 1, "ingredients": [["guam_leaf", 1], ["vial_water", 1]], "message": "You put the Guam Leaf into the vial of water."},
     {"product": "3doseantipoison", "level": 5, "xp": 37.5, "ticks": 2, "ingredients": [["marrentillvial", 1], ["unicorn_horn_dust", 1]], "message": "You mix the unicorn horn into your potion."},
@@ -207,6 +219,7 @@
     {"product": "brutal_2dose4antidragon", "level": 99, "xp": 78, "ticks": 1, "ingredients": [["2dose4antidragon", 1], ["brut_caviar", 1]], "message": "You combine your potion with the fish eggs.", "unlock": "barbarian_herblore", "manual": true}
   ],
   "grinding": [
+    {"item": "anchovies", "product": "ii_anchovy_paste", "message": "You grind the anchovies into a paste."},
     {"item": "unicorn_horn", "product": "unicorn_horn_dust", "message": "You grind the unicorn horn to dust."},
     {"item": "chocolate_bar", "product": "chocolate_dust", "alternateTool": "knife", "message": "You grind the chocolate to dust."},
     {"item": "bird_nest_empty", "product": "crushed_bird_nest", "message": "You grind the bird's nest down."},

@@ -59,6 +59,8 @@ const PICKS = {
 const PICK_PERIOD = 3;
 const RAKE_PERIOD = 4;
 const CLEAR_TICKS = 5;
+/** settings_farming_dig_disable_warning: All Settings "Warning on digging up a farming patch" off. */
+const DIG_WARNING_DISABLED_VARBIT = 17797;
 const COMPOST_NAMES = ["", "compost", "supercompost", "ultracompost"];
 const RENDERED = new WeakMap();
 const LLETYA_FRUIT_PATCH = Data.CACHE.patches.find(p => p.type === "FRUIT_TREE" && p.x === 2346 && p.y === 3161 && p.z === 0);
@@ -392,7 +394,12 @@ function hasLevel(player, required, kind, refusal = `You need level ${required} 
     player.sendMessage(refusal);
     return false;
 }
-function plant(player, patch, id) {
+/** Where the seeds come from: the inventory, or a seed box used on the patch. */
+const inventorySeeds = (player, id) => ({
+    amount: () => player.getInventory().getAmount(id),
+    take: count => player.getInventory().deleteNumber(id, count),
+});
+function plant(player, patch, id, seeds = inventorySeeds(player, id)) {
     const crop = Data.SEEDS.get(id);
     const state = stateFor(player, patch);
     if (state.crop || state.scarecrow) { player.sendMessage("There is already something growing here."); return; }
@@ -414,9 +421,9 @@ function plant(player, patch, id) {
             player.sendMessage("You cannot grow any more spirit trees at your Farming level."); return;
         }
     }
-    if (player.getInventory().getAmount(id) < crop.seedCount) { player.sendMessage(`You need ${crop.seedCount} seeds to plant this crop.`); return; }
+    if (seeds.amount() < crop.seedCount) { player.sendMessage(`You need ${crop.seedCount} seeds to plant this crop.`); return; }
     if (bareHanded && barbarian.planting === 1 && Math.random() < Data.FORMULAS.barbarianPlantFailureChance) {
-        player.getInventory().deleteNumber(id, crop.seedCount);
+        seeds.take(crop.seedCount);
         player.sendMessage("You crush the seeds while trying to plant them bare-handed."); return;
     }
     // Content may keep the seed, grow the crop at once or keep it from disease and death ("farming:plant-rules", a league relic);
@@ -440,7 +447,7 @@ function plant(player, patch, id) {
     // takes root three ticks later; a sapling is dug in with the spade and planted the next tick.
     animate(player, crop.sapling ? ANIM.SAPLING : bareHanded ? ANIM.PLANT_BARE_HANDED : ANIM.PLANT);
     sound(player, crop.sapling ? SOUND.DIG : SOUND.PLANT);
-    if (!keepSeed && !crop.sapling) player.getInventory().deleteNumber(id, seedCount);
+    if (!keepSeed && !crop.sapling) seeds.take(seedCount);
     after(player, crop.sapling ? 1 : 3, () => {
         if (!keepSeed && crop.sapling) {
             if (!player.getInventory().contains(id)) return;
@@ -468,6 +475,36 @@ function plant(player, patch, id) {
         if (typeof rules.message === "string") player.sendMessage(rules.message);
         syncPatch(player, patch);
         core.PluginManager.emitCustomEvent("farming:planted", { player, crop: crop.key, seedId: id, patch });
+    });
+}
+const SEED_BOXES = ["Seed box", "Open seed box"];
+const NO_BOX_SEED = "Your seed box does not contain any seeds that can be planted in this patch.";
+/**
+ * Wiki (Seed box, 3 June 2026): the box used on a patch plants the first seed in it, in slot order, that suits the patch.
+ * With none it says so in a message box; on a tree patch, which takes saplings, nothing happens.
+ * Ours: a seed the player has the level for comes first; with none, the first of the patch's type is tried, and planting
+ * then answers as for that seed from the inventory (the level, tool and seed-count refusals).
+ */
+function plantFromBox(player, patch, box, id) {
+    if (box?.getId() !== id) return;
+    if ([...Data.CROPS.values()].some(crop => crop.type === patch.type && crop.sapling)) {
+        player.sendMessage("Nothing interesting happens."); return;
+    }
+    const fits = SeedBox.entriesOf(box).filter(([seed]) => {
+        const crop = Data.SEEDS.get(seed);
+        return crop?.type === patch.type && !(patch === TROLL_HERB_PATCH && crop.key === "GOUTWEED");
+    });
+    const level = player.getSkillManager().getCurrentLevel(core.Skill.FARMING);
+    const entry = fits.find(([seed]) => Data.SEEDS.get(seed).level <= level) ?? fits[0];
+    if (!entry) {
+        player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, NO_BOX_SEED);
+        player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, NO_BOX_SEED)));
+        return;
+    }
+    const seed = entry[0];
+    plant(player, patch, seed, {
+        amount: () => SeedBox.amountOf(box, seed),
+        take: count => SeedBox.take(box, seed, count),
     });
 }
 /** The captured planting line: "You plant a tarromin seed in the herb patch.", "You plant 3 potato seeds in the allotment." */
@@ -743,6 +780,7 @@ function dig(player, patch) {
         player.sendMessage("Chop the tree down before digging out the stump, or pay a gardener to remove it."); return;
     }
     if (!requireTool(player, "Spade", "You need a spade to clear a farming patch.")) return;
+    if (player.getPacketSender().getVarbit(DIG_WARNING_DISABLED_VARBIT) === 1) { clearCrop(player, patch, state, crop); return; }
     choose(player, [["Yes, I want to clear it for new crops.", () => {
         if (nearPatch(player, patch) && stateFor(player, patch) === state) clearCrop(player, patch, state, crop);
     }], ["No, I want to leave it as it is.", () => {}]], 0, "Are you sure you want to dig up this patch?");
@@ -901,7 +939,8 @@ function itemOnObject(event) {
     const state = stateFor(player, patch);
     if (patch.type.includes("COMPOST")) { Services.binAction(player, patch, "", id, event.itemSlot); syncPatch(player, patch); return; }
     const compostTier = ["Compost", "Supercompost", "Ultracompost"].findIndex(name => id === Data.itemId(name)) + 1;
-    if (Data.SEEDS.has(id)) plant(player, patch, id);
+    if (SEED_BOXES.includes(core.CacheDefinitions.getItem(id).name)) plantFromBox(player, patch, player.getInventory().forSlot(event.itemSlot), id);
+    else if (Data.SEEDS.has(id)) plant(player, patch, id);
     else if (id === Data.itemId("Rake")) startWork(player, patch, "rake");
     else if (id === Data.itemId("Spade") && patch.type === "HESPORI" && state.status === "grown") Hespori.harvestHespori(player, patch);
     else if (id === Data.itemId("Spade")) dig(player, patch);
@@ -1289,6 +1328,8 @@ function attach(api) {
     api.onPlayerLogin(login);
     api.onPlayerLogin(Tithe.titheLogin);
     api.onPlayerLogin(Rewards.login);
+    api.onPlayerLogin(Services.settingsLogin);
+    api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
@@ -1297,6 +1338,8 @@ function attach(api) {
     api.onPlayerLogout(SeedBox.logout);
     api.onInterfaceActionClick(SeedBox.click);
     api.onCustomEvent("interface:closed", SeedBox.closed);
+    api.onCustomEvent("player:widget-action", SeedBox.drag);
+    api.onCustomEvent("storage:death-containers", Guild.deathContainers);
     api.onInterfaceActionClick(Vault.click);
     api.onCustomEvent("player:widget-action", Vault.drag);
     api.onPlayerLogout(Geomancy.logout);
@@ -1318,6 +1361,7 @@ function attach(api) {
     api.onItemAction(Guild.rewardItem);
     api.onItemAction(Guild.storageAction);
     api.onCustomEvent("seed-box:gather", Guild.seedBoxGather);
+    api.onCustomEvent("herb-sack:gather", Guild.herbSackGather);
     api.onGroundItemPickup(Guild.seedBoxPickup);
     api.onGroundItemPickup(Guild.pickup);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, Guild.bankStorageOp);

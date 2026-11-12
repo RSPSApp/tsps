@@ -7,6 +7,8 @@ const MIMIC_ATTRIBUTE = "treasure-trails:mimic-case";
 const CASE_ATTRIBUTES = Object.freeze(Object.fromEntries(TIERS.map(tier => [tier, Object.freeze({
   minor: `treasure-trails:${tier}-minor-case`, major: `treasure-trails:${tier}-major-case`,
 })])));
+/** All Settings' clue scroll warnings (374-379), by tier. */
+const WARNING_VARBITS = Object.freeze({beginner: 10693, easy: 10694, medium: 10695, hard: 10723, elite: 10724, master: 10725});
 const MINOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.minor;
 const MAJOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.major;
 const FORM = /^(Clue scroll|Scroll box|Clue bottle|Clue nest|Clue geode) \((beginner|easy|medium|hard|elite|master)\)$/;
@@ -104,16 +106,40 @@ function taken(request) {
     : "Some of your scroll boxes were destroyed as you have too many of that tier.");
 }
 
+/** With the tier's clue scroll warning on, a clue dropped for a player at capacity is mentioned. */
+function warnMissedClue(player, tier, box) {
+  if (player.getPacketSender?.().getVarbit?.(WARNING_VARBITS[tier]) !== 1) return;
+  const article = tier === "easy" || tier === "elite" ? "an" : "a";
+  player.sendMessage(`You have a sneaking suspicion that you would have received ${article} ${tier} ${box ? "scroll box" : "clue scroll"}.`);
+}
+
+/**
+ * `treasure-trails:missed-clue` {player, tier}: a skilling source (nest, geode, bottle, Agility,
+ * salvage) rolled a clue the player could not take; the tier's warning says so.
+ */
+function missedClue(request) {
+  const tier = String(request?.tier).toLowerCase();
+  if (!request?.player || !TIERS.includes(tier)) return;
+  if (tier !== "beginner" && !core.WorldDefinition.isMembersWorld()) return;
+  warnMissedClue(request.player, tier, boxUnlocked(request.player));
+}
+
 function filterDrops(request) {
   if (!request?.player || !Array.isArray(request.drops)) return;
   const unlocked = boxUnlocked(request.player);
   const remaining = new Map(TIERS.map(tier => [tier, Math.max(0, capacity(request.player, tier) - count(request.player, tier))]));
+  const warned = new Set();
   for (let index = 0; index < request.drops.length; index++) {
     const drop = request.drops[index], type = classify(drop.itemId);
     if (!type) continue;
     if (type.tier !== "beginner" && !core.WorldDefinition.isMembersWorld()) { request.drops.splice(index--, 1); continue; }
     const room = remaining.get(type.tier);
-    if (room < 1) { request.drops.splice(index--, 1); continue; }
+    if (room < 1) {
+      request.drops.splice(index--, 1);
+      if (!warned.has(type.tier)) warnMissedClue(request.player, type.tier, unlocked);
+      warned.add(type.tier);
+      continue;
+    }
     drop.amount = Math.min(drop.amount, room);
     remaining.set(type.tier, room - drop.amount);
     if (type.form === "Clue scroll" || type.form === "Scroll box") {
@@ -273,7 +299,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("ground-items:take", prepareTake);
   api.onCustomEvent("ground-items:taken", taken);
   api.onCustomEvent("npc-drops:roll", filterDrops);
+  api.onCustomEvent("treasure-trails:missed-clue", missedClue);
   api.onPlayerLogin(sync);
 };
-Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES,
-  capacity, count, canReceive, filterDrops, openBox, openCase, milestoneRewards, sync});
+Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES, WARNING_VARBITS,
+  capacity, count, canReceive, filterDrops, missedClue, openBox, openCase, milestoneRewards, sync});

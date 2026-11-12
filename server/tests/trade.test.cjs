@@ -166,6 +166,7 @@ test("closing either trade screen cancels both offers by every interface-close r
       }
       for (const player of [alice, bob]) {
         const sender = new PacketSender(player);
+        sender.getVarbit = () => 0; // no cache here: the accept trade delay (205) is off
         player.getPacketSender = () => sender;
       }
       alice.getPacketSender()[route](alice.getInterfaceId());
@@ -187,6 +188,7 @@ test("closing either trade screen cancels both offers by every interface-close r
   for (const player of [alice, bob]) {
     const sender = new PacketSender(player);
     sender.sendString = () => sender;
+    sender.getVarbit = () => 0;
     player.getPacketSender = () => sender;
   }
   closed({ player: alice, interfaceId: 231 });

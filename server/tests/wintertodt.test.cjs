@@ -282,7 +282,10 @@ test('a round ends at 0 energy: 500+ points earn XP, a kill and rewards; fewer e
   assert.equal(winner.messages[2], 'Your subdued Wintertodt count is: <col=ff0000>1</col>.');
   const owed = Round.rewardsOwed(winner);
   assert.ok(owed === 2 || owed === 3);
-  assert.equal(winner.messages[3], `You're owed an additional ${owed} rewards from the reward cart. You're now owed ${owed} rewards.`);
+  // 233/03262 (tick 2580): the new best comes after the count and before the cart line, its number plain.
+  assert.equal(winner.messages[3], 'You have a new high score! 590');
+  assert.equal(winner.getAttribute(Round.ATTR_BEST), 590);
+  assert.equal(winner.messages[4], `You're owed an additional ${owed} rewards from the reward cart. You're now owed ${owed} rewards.`);
   assert.equal(winner.varbits.get(Shared.VARBIT.REWARDS_OWED), owed);
   assert.equal(winner.varbits.get(`varp${Shared.VARP.KILLS}`), 1);
   assert.deepEqual(loser.messages, ['You did not earn enough points to be worthy of a gift from the citizens of Kourend this time.']);
@@ -985,4 +988,19 @@ test('a stale outfit offer leaves every piece in place', () => {
   assert.equal(player.inventory.getAmount(I.BURNT_PAGE), 0);
   assert.equal(player.inventory.getAmount(I.PYROMANCER_HOOD), 1, 'nothing was removed');
   assert.equal(player.inventory.getAmount(I.PYROMANCER_ROBE), 1);
+});
+
+// 233/03262 (tick 2580): "You have a new high score! 8530" only when the round beats the player's best.
+test('a round below the best score has no high-score line; a better one does', () => {
+  const player = fakePlayer('Scorer');
+  const scores = [];
+  for (const points of [700, 600, 800]) {
+    startRound();
+    walkIn(player);
+    player.messages.length = 0;
+    Round.addPoints(player, points);
+    Round.setEnergy(0);
+    scores.push(player.messages.filter((m) => m.startsWith('You have a new high score!')));
+  }
+  assert.deepEqual(scores, [['You have a new high score! 700'], [], ['You have a new high score! 800']]);
 });

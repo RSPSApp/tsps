@@ -56,6 +56,7 @@
  * 10 ticks), the scream's hit, and the water crocodiles' bites (max 8, every 2 ticks).
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
 
@@ -521,7 +522,8 @@ class ZebakRoom extends Raid.Room {
       const top = hits === 0 ? ACID.FIRST_MAX : ACID.MAX;
       const damage = Shared.random(this.maxHit(ACID.MIN), Math.floor(top * this.damageFactor()));
       player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.GREEN)]);
-      CombatFactory.poisonEntity(player, 2);
+      // Severity 10, a 2 first hit (rsprox_transcripts/223/00014.txt tick 445: poison varp 0 -> 10).
+      CombatFactory.poisonEntity(player, 10);
       this.failPerfect(player, "was hit by vomit damage.");
     }
     // Pools placed last tick become harmful this tick.
@@ -1144,7 +1146,7 @@ class ZebakRoom extends Raid.Room {
     const players = this.roomPlayers();
     const rolled = axes.map(([slot, amplitude]) => [slot, Array.isArray(amplitude) ? Shared.random(amplitude[0], amplitude[1]) : amplitude]);
     for (const player of players) {
-      for (const [slot, amplitude] of rolled) player.getPacketSender().sendCameraShake(slot, amplitude);
+      for (const [slot, amplitude] of rolled) CameraShake.send(player.getPacketSender(), "combat", slot, amplitude);
     }
     Shared.later(this.taskKey, resetAfter, () => {
       for (const player of players) player.getPacketSender().sendCameraReset();

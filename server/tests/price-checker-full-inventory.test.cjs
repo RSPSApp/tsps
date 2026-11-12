@@ -211,3 +211,29 @@ test("adding a plain item never takes a preset copy of it, and closing returns e
   assert.equal(plates.length, 2, "two platebodies, as before");
   assert.equal(plates.filter((item) => !item.isPresetItem()).length, 1, "only one of them real");
 });
+
+test("Add-All and Withdraw-All on one rune stack move that stack, not a second stack of the same runes", async (t) => {
+  const f = actor(t, "pcstacks");
+  const RUNE = I.DEATH_RUNE;
+  const other = new core.Item(RUNE, 50);
+  other.setMetaValue("test-stack", 1); // a second, separate stack of the same id
+  f.inv.setItem(0, new core.Item(RUNE, 100));
+  f.inv.setItem(1, other);
+  f.inv.refreshItems();
+  await send(f, widget(OPEN_PRICE_CHECKER));
+  assert.equal(f.p.getInterfaceId(), PRICE_CHECKER_INTERFACE);
+  await send(f, widget(PRICE_CHECKER_INVENTORY, { slot: 0, itemId: RUNE, buttonNum: 4 })); // Add-All
+  assert.equal(f.inv.getItems()[1]?.getAmount(), 50, "the other stack stays in the inventory");
+  assert.equal(f.inv.getAmount(RUNE), 50);
+
+  await send(f, widget(PRICE_CHECKER_INVENTORY, { slot: 1, itemId: RUNE, buttonNum: 4 })); // Add-All the second
+  assert.equal(f.inv.getAmount(RUNE), 0, "both stacks are in the checker");
+  const checker = f.p.__priceCheckerContainer;
+  const first = checker.getItems().findIndex((item) => item?.getId() === RUNE && item.getAmount() === 100);
+  assert.ok(first >= 0, "the plain stack is in the checker");
+  await send(f, widget((PRICE_CHECKER_INTERFACE << 16) | 2, { slot: first, itemId: RUNE, buttonNum: 4 })); // Withdraw-All
+  assert.equal(f.inv.getAmount(RUNE), 100, "only that stack came back");
+  assert.equal(checker.getAmount(RUNE), 50, "the other stays in the checker");
+  await send(f, { type: "interface_close" });
+  assert.equal(f.inv.getAmount(RUNE), 150, "closing returns the rest");
+});

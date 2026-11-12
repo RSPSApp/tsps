@@ -68,9 +68,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   require("../plugins/skills/herblore/Events.Herblore")(api);
 });
 
@@ -276,6 +276,24 @@ test("Friendly Forager: a secondary kept 90% of the time, a 3-dose potion made w
     const usual = mix(player, "3dose1attack", [["guamvial", 1], ["eye_of_newt", 1]], 0.2);
     assert.deepEqual([usual.consume.map((item) => item.count), usual.productId], [[1, 1], obj("3dose1attack")], `${player.getUsername()} as usual`);
   }
+});
+
+test("Friendly Forager with Prescription goggles: a torstol potion (unf) the goggles already kept keeps one vial, not two", () => {
+  const Shared = require("../plugins/minigames/mixology/Shared.Mixology");
+  const Goggles = require("../plugins/minigames/mixology/Goggles.Mixology");
+  Shared.bind({ core, emitCustomEvent() {} });
+  const player = cases(FORAGER, 5).relic;
+  player.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(obj("mm_alchemist_hat"), 1));
+  Math.random = () => 0.05; // both rolls win: the goggles' 10% and the relic's 90%
+  const ingredients = ["4dose2attack", "4dose2defense", "4dose2strength", "torstolvial"].map((name) => ({ id: obj(name), count: 1 }));
+  const request = {
+    player, recipe: { product: "4dose2combat", productId: obj("4dose2combat"), ingredients }, productId: obj("4dose2combat"),
+    consume: ingredients.map((item) => ({ ...item })), returns: [{ id: obj("vial_empty"), count: 3 }],
+  };
+  Goggles.saveSecondaries(request); // the goggles answer first
+  emit("herblore:mix", request);
+  assert.deepEqual(request.consume.map((item) => item.count), [1, 1, 1, 0], "the torstol potion (unf) is kept");
+  assert.equal(request.returns[0].count, 2, "its vial is kept once: two vials back, not one");
 });
 
 test("through Herblore's own cleaning: one click cleans every grimy herb of the kind for Production Master, one for the others", () => {

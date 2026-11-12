@@ -33,7 +33,7 @@ before(async () => {
     onCustomEvent: (name, handler) => { hooks.custom[name] = handler; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
   };
-  require("../plugins/skills/sailing/PortTasks.plugin").register(api);
+  require("../plugins/skills/sailing/PortTasks.Sailing").register(api);
   common = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
   board = require("../plugins/skills/sailing/porttasks/Board.PortTasks");
   ledger = require("../plugins/skills/sailing/porttasks/Ledger.PortTasks");
@@ -194,6 +194,27 @@ test("the ledger table: a crate in both hands at the cargo port, then delivered 
   assert.ok(player.log.includes("sendConfig 5207=1") && player.log.includes("sendVarbit 19591=1"));
   assert.notEqual(player.getAttribute(common.BOARDS_ATTRIBUTE).the_pandemonium[0], common.taskById(JEWELLERY_TASK).row,
     "its entry on the board is drawn again");
+});
+
+test("Pandemonium's crate is only its box: 100 XP, no bag and no task message (rsprox 235/242)", () => {
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: 599, taken: 1, delivered: 0 }]);
+  common.carry(player, common.taskById(599).crate, 0);
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    hooks.objects["Ledger table"]["Deposit-cargo"]({ player, location: PANDEMONIUM_LEDGER });
+  } finally {
+    Math.random = random;
+  }
+  assert.ok(player.log.includes("xp 100"));
+  assert.deepEqual(player.inventory.map((item) => item.getId()), [], "no coin bag or shark paint");
+  assert.equal(player.log.some((line) => line.includes("port task.")), false, "no task message");
+  assert.equal(player.dialogues.length, 1, "the item box");
+  const box = player.dialogues[0].getDialogues().get(0);
+  assert.equal(box.text, "You deliver the crate of ship parts.", "the box's own words");
+  assert.equal(box.itemId, 32807);
+  assert.equal(common.slots(player)[0], null);
 });
 
 test("the Prying Times delivery pays only Sailing XP, with no reward bag or shark paint", () => {

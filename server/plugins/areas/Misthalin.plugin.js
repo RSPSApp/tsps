@@ -56,6 +56,8 @@ const SWAMP_CAVE_LANDINGS = new Map([
 ]);
 const SWAMP_CAVE_NEEDS_ROPE = "There is a sheer drop below the hole. You'll need a rope to get down there.";
 const SWAMP_CAVE_TIED_ROPE = "You tie the rope to the top of the hole and throw it down.";
+const SWAMP_CAVE_ROPE_QUESTION = "Attach a rope to the top of the hole?";
+const SWAMP_CAVE_ROPE_SOUND = 1774;
 
 function initialize(api) {
   pluginApi = api;
@@ -179,11 +181,22 @@ function useRopeOnDarkHole(event) {
   if (objectId !== Objects.DARK_HOLE || itemId !== Items.ROPE || !isAt(location, SWAMP_CAVE_DARK_HOLE)) return false;
   event.handled = true;
   if (swampCavesRoped(player)) return true;
+  // rsprox 227/00075.txt:174556-174605: a Yes/No menu, then the varbit, human_pickupfloor (827), sound 1774,
+  // and the line in an item box showing the rope.
+  pluginApi.sendMultiChatboxPrompt(player, SWAMP_CAVE_ROPE_QUESTION, "Yes.", () => tieRopeToDarkHole(player), "No.", () => {});
+  return true;
+}
+
+function tieRopeToDarkHole(player) {
+  if (swampCavesRoped(player) || !player.getInventory().contains(Items.ROPE)) return;
   player.getInventory().delete(Items.ROPE, 1);
   player.setAttribute(SWAMP_CAVE_ROPED_ATTRIBUTE, true);
   player.getPacketSender().sendVarbit(SWAMP_CAVE_ROPED_VARBIT, 1);
-  player.sendMessage(SWAMP_CAVE_TIED_ROPE);
-  return true;
+  player.performAnimation(climbDownAnimation);
+  player.getPacketSender().sendSound(SWAMP_CAVE_ROPE_SOUND, 1, 0);
+  const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new ItemStatementDialogue(0, Items.ROPE, SWAMP_CAVE_TIED_ROPE)).add(new EndDialogue(1)));
 }
 
 /** The tile below the side of the hole the player used, as the game's pathing does. */

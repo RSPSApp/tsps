@@ -396,3 +396,42 @@ test("Mage Arena II is a registered miniquest with the cache row's stages", () =
   assert.equal(ask(makePlayer({ stage: MageArenaII.STAGE.ALL_REMAINS })), false);
   assert.equal(ask(makePlayer({ stage: MageArenaII.STAGE.COMPLETE })), true);
 });
+
+// Issue #4374: the journal's lines fit its width. Live's completed journal (RSProx 3344 rev 235
+// t163174-163188), line for line; no line at any stage is longer than live's longest.
+test("Mage Arena I: the journal is live's short lines, so nothing runs past the box", () => {
+  const arena = QuestRuntime.questNamed("Mage Arena I");
+  const player = makePlayer();
+  arena.setStage(player, 8);
+  assert.deepEqual(arena.buildJournal(player), [
+    "<str>I spoke to Kolodion in the Mage Arena basement. He said I",
+    "<str>could train in the Mage Arena if I dueled him.",
+    "<str>I have killed Kolodion's human form.",
+    "<str>I have killed Kolodion's ogre form.",
+    "<str>I have killed Kolodion's spider form.",
+    "<str>I have killed Kolodion's ethereal form.",
+    "<str>I have killed Kolodion's demonic form and finally defeated",
+    "<str>Kolodion.",
+    "<str>I travelled through the magical pool to find a chamber",
+    "<str>containing statues of the gods. I chanted at the statue of my",
+    "<str>chosen god and received a cape.",
+    "<str>The Chamber Guardian presented me with a staff of my",
+    "<str>chosen god.",
+    "",
+    "<col=ff0000>MINIQUEST COMPLETE!",
+  ]);
+  const longest = "containing statues of the gods. I chanted at the statue of my".length;
+  for (let stage = 0; stage <= 8; stage++) {
+    arena.setStage(player, stage);
+    const lines = arena.buildJournal(player);
+    assert.ok(lines.length > 0, `stage ${stage}`);
+    for (const line of lines) {
+      assert.ok(line.replace(/<[^>]*>/g, "").length <= longest, `stage ${stage}: "${line}"`);
+    }
+  }
+  arena.setStage(player, 3);
+  assert.deepEqual(arena.buildJournal(player).slice(-2), [
+    "I have killed Kolodion's human form.",
+    "I have killed Kolodion's ogre form.",
+  ], "the forms killed so far, not yet struck");
+});

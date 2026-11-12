@@ -3,8 +3,9 @@
 /**
  * Charged crystal weapons (docs/crystal-weapons.md): the Bow of Faerdhinen and the Blade of Saeldor.
  * A new one holds 10,000 charges, one is used by every shot or swing, hit or miss, and crystal shards
- * add 100 each up to 20,000. An emptied weapon becomes its inactive form, which has no bonuses
- * until it is charged again. Shared by the two weapon plugins in this directory.
+ * add 100 each up to 20,000 (CrystalShards.js). Each charge used that leaves a multiple of 500 sends
+ * a red reminder of the charges left. An emptied weapon becomes its inactive form, which has no
+ * bonuses until it is charged again. Shared by the two weapon plugins in this directory.
  *
  * `defineCrystalWeapon(api, config)`:
  * - `name`: the weapon in messages ("bow of Faerdhinen"); `chargesKey`: the item meta holding
@@ -12,10 +13,10 @@
  * - `pairs`: [[chargedId, inactiveId]]; `usedPerPercent`: charges used per 1% of corruption progress.
  */
 
+const { MAX_CHARGES, CHARGES_PER_SHARD, SHARD_NAME, shardRoom, chargesWith, promptShards } = require("./CrystalShards");
+
 const NEW_CHARGES = 10000;
-const MAX_CHARGES = 20000;
-const CHARGES_PER_SHARD = 100;
-const SHARD_NAME = "Crystal shard";
+const WARNING_STEP = 500;
 
 function defineCrystalWeapon(api, config) {
   const core = api.core;
@@ -85,6 +86,9 @@ function defineCrystalWeapon(api, config) {
       return;
     }
     store(item, left, usedOf(item) + 1);
+    if (left % WARNING_STEP === 0) {
+      player.sendMessage(`<col=ff0000>Your ${config.name} has ${left} charges remaining.</col>`);
+    }
   }
 
   /** The last charge's attack is over: the emptied weapon becomes its inactive form. */
@@ -106,24 +110,21 @@ function defineCrystalWeapon(api, config) {
     return true;
   }
 
-  /** Each shard is 100 charges, as many as fit under the cap. */
+  /** Asks how many shards to add, each 100 charges, up to the cap. */
   function addShards(event) {
     const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
     const weapon = isWeapon(usedItemId) ? usedItem : isWeapon(usedWithItemId) ? usedWithItem : null;
     const shards = weapon === usedItem ? usedWithItem : usedItem;
     if (!weapon || !shards) return;
-    const inventory = player.getInventory();
-    const room = Math.floor((MAX_CHARGES - chargesOf(weapon)) / CHARGES_PER_SHARD);
     event.handled = true;
-    if (room < 1) {
+    if (shardRoom(chargesOf(weapon)) < 1) {
       player.sendMessage(`Your ${config.name} cannot hold any more charges.`);
       return;
     }
-    const used = Math.min(room, inventory.getAmount(shards.getId()));
-    inventory.deleteNumber(shards.getId(), used);
-    store(weapon, chargesOf(weapon) + used * CHARGES_PER_SHARD, usedOf(weapon));
-    refresh(player);
-    player.sendMessage(`You add ${used.toLocaleString("en-US")} crystal shard${used === 1 ? "" : "s"} to your ${config.name}.`);
+    promptShards(player, weapon, chargesOf, shards.getId(), (count) => {
+      store(weapon, chargesWith(chargesOf(weapon), count), usedOf(weapon));
+      refresh(player);
+    });
   }
 
   function attach() {

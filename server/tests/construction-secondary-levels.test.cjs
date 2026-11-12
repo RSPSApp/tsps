@@ -24,14 +24,14 @@ test('cache requirement tuple validation retains every non-Construction pair',()
 });
 test('active cache maps expected secondary families and preserves Construction and null-row levels',()=>{
   const expected=new Map([[5690,[13,68]],[5691,[13,88]],[5692,[13,99]],[5696,[20,14]],[5697,[20,44]],[5698,[20,90]],[5553,[7,5]],[5554,[7,14]],[5555,[7,24]],[5556,[7,29]],[5557,[7,39]],[5558,[7,44]],[5970,[19,83]],[5972,[19,83]]]);
-  const table=core.CacheDefinitions.getDbTableId('furniture'),col=core.CacheDefinitions.getDbColumn(table,'level_requirement');let count=0,withRows=0,nullRows=0; assert.equal(Data.CONSTRUCTION_BUILDABLES.length,481);
+  const table=core.CacheDefinitions.getDbTableId('furniture'),col=core.CacheDefinitions.getDbColumn(table,'level_requirement');let count=0,withRows=0,nullRows=0; assert.equal(Data.CONSTRUCTION_BUILDABLES.length,482);
   for(const b of Data.CONSTRUCTION_BUILDABLES){
     if(b.menuRowId==null){nullRows++;continue;}const r=core.CacheDefinitions.getDbRow(b.menuRowId);assert.ok(r,`missing row ${b.menuRowId}`);withRows++;assert.notEqual(b.invalidLevels,true);
     const vals=r.column(col),ci=vals.findIndex((v,i)=>i%2===0&&v===core.Skill.CONSTRUCTION.getClientId());assert.ok(ci>=0);assert.equal(b.level,vals[ci+1]);
     if(b.secondaryLevels?.length){count++;assert.ok(expected.has(b.menuRowId),String(b.menuRowId));assert.deepEqual(b.secondaryLevels,[{statId:expected.get(b.menuRowId)[0],level:expected.get(b.menuRowId)[1]}]);}
   }
   assert.deepEqual(Data.CONSTRUCTION_BUILDABLES.filter(b=>b.secondaryLevels?.some(r=>r.statId===core.Skill.FARMING.getClientId())).map(b=>b.menuRowId).sort((a,b)=>a-b),[5970,5972]);
-  assert.equal(count,expected.size);assert.equal(withRows,478);assert.equal(nullRows,3);for(const id of expected.keys()) assert.ok(Data.CONSTRUCTION_BUILDABLES.some(b=>b.menuRowId===id&&b.secondaryLevels?.length));
+  assert.equal(count,expected.size);assert.equal(withRows,479);assert.equal(nullRows,3);for(const id of expected.keys()) assert.ok(Data.CONSTRUCTION_BUILDABLES.some(b=>b.menuRowId===id&&b.secondaryLevels?.length));
   for(const [key,level] of [['SMALL_STORAGE_UNIT',30],['MEDIUM_STORAGE_UNIT',60],['LARGE_STORAGE_UNIT',90]]){const b=Data.BUILDABLE_BY_KEY.get(key);assert.equal(b.level,level);assert.equal(b.secondaryLevels,undefined);}
 });
 // Wiki: Beer barrel Cooking 5, Mithril armour (Construction) Smithing 68, Rune case space Runecraft 14/44/90 - all enforced.

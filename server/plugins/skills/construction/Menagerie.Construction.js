@@ -1,9 +1,10 @@
 "use strict";
 
-const { api, CacheDefinitions, PluginManager, MapObjects, Item, ItemDefinition, PlayerStatus } = require("./Core.Construction");
+const { api, CacheDefinitions, PluginManager, MapObjects, Item, PlayerStatus } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const PetForms = require("./PetForms.Construction");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 // The menagerie (rsprox captures, cache scripts 639-643): using a pet on menagerie furniture
 // stores it; the pet house's View opens interface 211, whose list shows slot i of enum 985 when
@@ -156,7 +157,7 @@ function interfaceClick(event) {
   const slot = event.slot;
   const slots = stored(player);
   if (event.childId === LIST && slots.has(slot) && (event.opId ?? event.action) === 10) {
-    player.sendMessage(ItemDefinition.forId(storedPet(player, slot).itemId).getExamine());
+    examineItem(player, storedPet(player, slot).itemId, 1);
     return;
   }
   if (event.childId !== LIST || !slots.has(slot) || (event.opId ?? event.action ?? 1) > 1) return;

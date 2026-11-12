@@ -42,6 +42,10 @@ const VARBIT = Object.freeze({
 
 const SOUND_CHARTED = 11166;
 const NOTIFICATION_TITLE = "Charting Complete!";
+/** settings_sailing_charting_popup: All Settings "Charting popups" off. */
+const POPUP_DISABLED_VARBIT = 18142;
+/** A sea, group, ocean or the entire sea fully charted: its popup's jingle (length in ms). */
+const FULLY_CHARTED_JINGLE = Object.freeze({ id: 830, length: 3994 });
 
 let core;
 let pluginApi;
@@ -237,9 +241,9 @@ function addXp(player, xp) {
 
 /**
  * Charts a spot, as every kind of spot does on success (rsprox, e.g. 1009, 944): its variable, the
- * task, the sea's and ocean's counts, then a sea, group or ocean completed with its messages and
- * the sea's bonus XP; the popup, the sound and the spot's XP. A spot already charted gives only
- * a current duck's repeat XP. `lines` are the spot's own messages, sent first.
+ * task, the sea's and ocean's counts, then a sea, group, ocean or the whole map completed with its
+ * messages and the sea's bonus XP; the popups, the sound and the spot's XP. A spot already charted
+ * gives only a current duck's repeat XP. `lines` are the spot's own messages, sent first.
  */
 function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) } = {}) {
   const before = chartedSet(player);
@@ -263,6 +267,7 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
     player.sendMessage(`${ocean.name} charting completion: ${blue(`${countCharted(charted, list)}/${list.length}`)}`);
   }
   let bonus = 0;
+  const completed = [];
   if (sea && seaComplete(charted, sea)) {
     const group = sea.type === SEA_TYPE.GROUP;
     player.sendMessage(`You have completed charting ${group ? "a group" : "a sea"}: ${blue(sea.name)}`);
@@ -270,24 +275,42 @@ function complete(player, spot, { lines = spot.flavour ?? [], xp = xpFor(spot) }
     bonus = seaBonusXp(sea);
     player.sendMessage(`You are awarded an additional ${blue(bonus.toLocaleString("en-US"))} Sailing XP.`);
     setSeaBit(player, sea, false);
+    completed.push(sea.name);
   }
   if (ocean && oceanComplete(charted, ocean)) {
-    player.sendMessage(`You have completed charting an ocean: ${blue(ocean.name)}`);
+    // The Miscellaneous groups' "ocean" is called a group in its lines.
+    const [kind, article] = ocean.type === SEA_TYPE.MISCELLANEOUS ? ["group", "a"] : ["ocean", "an"];
+    player.sendMessage(`You have completed charting ${article} ${kind}: ${blue(ocean.name)}`);
     setSeaBit(player, ocean, true);
     updateProgress(player, (saved) => {
       if (!saved.owed.includes(ocean.row) && !saved.paid.includes(ocean.row)) saved.owed = [...saved.owed, ocean.row];
     });
     sender.sendConfig(VARP_XP_OWED, sender.getVarp(VARP_XP_OWED) | (1 << ocean.oceanId));
-    player.sendMessage("For fully charting this ocean, Chartin' Charles McAtless on the Pandemonium will provide you with some training when you next speak to him.");
+    player.sendMessage(`For fully charting this ${kind}, Chartin' Charles McAtless on the Pandemonium will provide you with some training when you next speak to him.`);
     setSeaBit(player, ocean, false);
+    completed.push(ocean.name);
   }
-  if (charted.size >= allSpots().size) {
+  const every = allSpots();
+  if (countCharted(charted, [...every.values()]) === every.size) {
     updateProgress(player, (saved) => { saved.fullOwed = !saved.fullPaid; });
     sender.sendVarbit(VARBIT.FULL_COMPLETION, 1);
-    sender.sendVarbit(VARBIT.FULL_COMPLETION_EVER, 1);
+    // Live leaves this colour tag open.
+    player.sendMessage("<col=0090bc>You have fully charted the entire sea!");
+    player.sendMessage("For fully charting the entire sea, Chartin' Charles McAtless on the Pandemonium will provide you with some final training when you next speak to him.");
     sender.sendVarbit(VARBIT.FULL_COMPLETION_XP_OWED, 1);
+    sender.sendVarbit(VARBIT.FULL_COMPLETION_EVER, 1);
+    completed.push("Entire sea");
   }
-  pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text: spot.hint });
+  // The spot's popup, then in the same banner, 13 ticks apart, one per sea, group or ocean it
+  // completed, each with its jingle.
+  if (sender.getVarbit(POPUP_DISABLED_VARBIT) !== 1) {
+    pluginApi.emitCustomEvent("notification:show", { player, title: NOTIFICATION_TITLE, text: spot.hint });
+    for (const name of completed) {
+      pluginApi.emitCustomEvent("notification:show", {
+        player, title: NOTIFICATION_TITLE, text: `${name} fully charted!`, follow: true, jingle: FULLY_CHARTED_JINGLE,
+      });
+    }
+  }
   sender.sendSoundEffect(SOUND_CHARTED, 1, 0);
   addXp(player, xp + bonus);
   pluginApi.emitCustomEvent("charting:complete", { player, spot: spot.key, uid: spot.uid, type: spot.type });
@@ -303,6 +326,12 @@ function mark(player, spot) {
   updateProgress(player, (saved) => { saved.charted = [...saved.charted, spot.uid].sort((a, b) => a - b); });
   setSpotBit(player, spot);
   player.getPacketSender().sendConfig(VARP_TOTAL_ENTRIES, chartedSet(player).size);
+}
+
+/** A charting tool's Inspect: its object box. */
+function inspect(player, itemId, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
 }
 
 /**
@@ -344,6 +373,7 @@ module.exports = {
   seaBonusXp,
   xpFor,
   addXp,
+  inspect,
   leaveHelm,
   afterHelm,
   DATA,

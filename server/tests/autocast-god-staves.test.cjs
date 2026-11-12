@@ -99,3 +99,63 @@ test("a bladed staff's autocast god spell can be cast with it (Wiki), and a plai
     assert.equal(choose(wielding(t, staff).p, slot), null, `the plain ${staff} has no god slot`);
   }
 });
+
+// Wiki (Claws of Guthix, Void knight mace): the mace casts and autocasts Claws of Guthix; the cache's
+// autocast_spellpos gives pest_void_knight_mace its own list (17 Crumble Undead, 19 Claws, waves, surges).
+test("the void knight mace opens its own list, autocasts Claws of Guthix and meets its staff requirement", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  const f = wielding(t, I.VOID_KNIGHT_MACE);
+  assert.equal(choose(f.p, 19), S.CLAWS_OF_GUTHIX);
+  assert.equal(f.list(), I.VOID_KNIGHT_MACE, "varp 664");
+  assert.equal(choose(wielding(t, I.VOID_KNIGHT_MACE).p, 17), S.CRUMBLE_UNDEAD);
+  assert.equal(choose(wielding(t, I.VOID_KNIGHT_MACE).p, 20), null, "no Flames of Zamorak");
+  assert.ok(f.p.getEquipment().containsAllItem(S.CLAWS_OF_GUTHIX.equipmentRequired(f.p)), "it can cast Claws");
+});
+
+// rsprox_transcripts/234/03297.txt tick 212 (Lunar), 234/00843.txt tick 465 (Ancient book, a bladed staff);
+// none of the 53 recordings that open the selector sends a line (e.g. 236/03914.txt).
+test("the selector's recorded refusals, and no line when it opens", (t) => {
+  const I = core.ItemIdentifiers, B = core.MagicSpellbook;
+  const said = (f) => { const lines = []; t.mock.method(f.p, "sendMessage", (m) => lines.push(m)); return lines; };
+  const ancient = wielding(t, I.STAFF_OF_THE_DEAD, B.ANCIENT), ancientLines = said(ancient);
+  Autocasting.handleWidgetAction(ancient.p, 593, 23);
+  assert.deepEqual(ancientLines, ["You cannot autocast Ancient Magicks with that."]);
+  const lunar = wielding(t, I.STAFF_OF_THE_DEAD, B.LUNAR), lunarLines = said(lunar);
+  Autocasting.handleWidgetAction(lunar.p, 593, 23);
+  assert.deepEqual(lunarLines, ["You cannot autocast Lunar Magicks."]);
+  const normal = wielding(t, I.STAFF_OF_THE_DEAD), normalLines = said(normal);
+  Autocasting.handleWidgetAction(normal.p, 593, 23);
+  assert.equal(normal.list(), I.STAFF_OF_THE_DEAD, "the selector opened");
+  assert.deepEqual(normalLines, []);
+});
+
+// Cache scripts 243 (autocast_spellpos) and 4512/its Ancient and Arceuus forms: each selector list places only its own
+// slots, so a click on any other slot (a modified client) sets nothing.
+test("a selector click outside the weapon's list sets no autocast", (t) => {
+  const I = core.ItemIdentifiers, B = core.MagicSpellbook;
+  for (const [weapon, book, slot] of [
+    [I.STAFF_OF_FIRE, B.NORMAL, 17], // Crumble Undead: not in the standard list
+    [I.STAFF_OF_FIRE, B.NORMAL, 18], // Magic Dart
+    [I.SLAYERS_STAFF, B.NORMAL, 1], // Wind Strike: the slayer's staff lists waves, surges, Crumble Undead and Magic Dart
+    [I.VOID_KNIGHT_MACE, B.NORMAL, 18],
+    [I.STAFF_OF_FIRE, B.NORMAL, 31], // an Ancient slot on the standard book
+    [I.STAFF_OF_FIRE, B.NORMAL, 53], // an Arceuus slot
+  ]) {
+    assert.equal(choose(wielding(t, weapon, book).p, slot), null, `${weapon} book ${book} slot ${slot}`);
+  }
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 17), core.CombatSpells.CRUMBLE_UNDEAD);
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 18), core.CombatSpells.MAGIC_DART);
+  assert.equal(choose(wielding(t, I.STAFF_OF_FIRE).p, 16), core.CombatSpells.FIRE_WAVE);
+});
+
+// A forged autocast click on the Ancient book with a standard staff: the selector refuses to open, and a slot click
+// for a standard spell must not set it either (the list for the Ancient book is the Ancient one).
+test("a forged standard slot on the Ancient book sets no autocast", (t) => {
+  const I = core.ItemIdentifiers;
+  for (const weapon of [I.STAFF_OF_FIRE, I.STAFF_OF_THE_DEAD]) {
+    const f = wielding(t, weapon, core.MagicSpellbook.ANCIENT);
+    t.mock.method(f.p, "sendMessage", () => {});
+    Autocasting.handleWidgetAction(f.p, 201, 1, 16);
+    assert.equal(f.p.getCombat().getAutocastSpell(), null, `${weapon}`);
+  }
+});

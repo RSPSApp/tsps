@@ -419,12 +419,10 @@ test('an accepted logout first sets clicks back to walking, then logs out', () =
   new PlayerSession(channel).logout();
   const bytes = [...Buffer.concat(frames)];
   // SET_INTERACTION_MODE (145): default world (-2), walk, all entities (rsprox: before every
-  // logout_withreason), HIDE_NPC_OPS (148) and HIDE_OBJ_OPS (149, since 45e9204db) false so NPC and
-  // ground-item actions come back, then LOGOUT_RESPONSE (4).
+  // logout_withreason), then LOGOUT_RESPONSE (4). No HIDE_NPC_OPS/HIDE_OBJ_OPS reset: no recorded
+  // logout has one (47 of 3,157 with NPC ops hidden); the client clears both itself.
   assert.deepEqual(bytes.slice(0, 5), [145, 0xff, 0xfe, 1, 1]);
-  assert.deepEqual(bytes.slice(5, 7), [148, 0]);
-  assert.deepEqual(bytes.slice(7, 9), [149, 0]);
-  assert.equal(bytes[9], 4);
+  assert.equal(bytes[5], 4);
 });
 
 test('malformed client frames are rejected at the boundary without a throw downstream', async () => {

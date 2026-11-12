@@ -49,6 +49,8 @@ function useForms(loaded) {
 function attachFor(event) {
   const { usedItemId, usedItemSlot, usedWithItemId, usedWithItemSlot } = event;
   const usedIsHandle = usedItemId === handleId;
+  // Only the handle with a maul: a maul used on anything else is not this plugin's (and must not open the warning).
+  if (!usedIsHandle && usedWithItemId !== handleId) return null;
   const maulId = usedIsHandle ? usedWithItemId : usedItemId;
   const formId = forms.get(maulId);
   if (formId === undefined) {

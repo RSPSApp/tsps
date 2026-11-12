@@ -22,14 +22,14 @@ function scene() {
   };
   const p = {
     getInventory: () => inventory, getEquipment: () => ({ getItems: () => equipment, get: slot => equipment[slot], refreshItems: noop }),
-    getPacketSender: () => ({ sendVarbit: (...args) => varbits.push(args), sendSoundEffect: (...args) => sounds.push(args), sendEnterAmountPrompt: title => { p.prompt = title; } }),
+    getPacketSender: () => ({ sendVarbit: (...args) => varbits.push(args), sendSoundEffect: (...args) => sounds.push(args), sendEnterAmountPrompt: title => { p.prompt = title; }, sendTypedMessage: (type, text) => messages.push(type === core.ChatType.SPAM ? `spam: ${text}` : text) }),
     getDialogueManager: () => ({ startDialogues: chain => { p.dialogue = [...chain.getDialogues().values()][0]; } }),
     getUpdateFlag: () => ({ flag: noop }), setEnteredAmountAction: action => { p.entered = action; },
     getLocation: () => p.location ?? new core.Location(3252, 3270, 0), getPrivateArea: () => null,
     sendMessage: text => messages.push(text),
   };
   const api = {
-    core: { ...core, TeleportHandler: { checkReqs: () => canTeleport, teleport: (...args) => teleports.push(args) }, World: { getNpcsNear: () => [] } },
+    core: { ...core, TeleportHandler: { checkReqs: () => canTeleport, confirm: (player, destination, go, level, { item } = {}) => go(item), teleport: (...args) => teleports.push(args) }, World: { getNpcsNear: () => [] } },
     onItemAction: (_name, handlers) => { actions = handlers; }, onItemOnItem: handler => { useItem = handler; },
     onCustomEvent: noop, onPlayerLogin: noop,
     emitCustomEvent: (name, request) => events.push([name, request]),
@@ -93,12 +93,12 @@ test('Uncharge refunds the selected worn amulet safely, including a full invento
   s.actions.Uncharge({ player: s.p, item }); assert.equal(s.counts.get(I.AIR_RUNE), 7);
 });
 
-test('Steal-cowbell is refused before Cold War starts, then keeps its success and full-inventory rules', () => {
+test('Steal-cowbell is refused before Cold War starts, then keeps its success and full-inventory rules', (t) => {
   const originalRandom = Math.random;
   let started = false;
   try {
     const tasks = [], handlers = {};
-    require('../plugins/objects/DairyCow.plugin').register({ core, getTaskManager: () => ({ submit: task => tasks.push(task) }),
+    require('../plugins/objects/DairyCow.plugin').register({ core, onCustomEvent: noop, getTaskManager: () => ({ submit: task => tasks.push(task) }),
       onObjectInteraction: (name, actions) => { handlers[name] = actions; }, onItemOnObject: noop,
       emitCustomEvent: (name, request) => {
         assert.equal(name, 'quest:is-started');
@@ -134,7 +134,7 @@ test('Steal-cowbell is refused before Cold War starts, then keeps its success an
     assert.equal(messages.at(-1), 'full', 'the existing full-inventory branch is preserved');
 
     full = false; Math.random = () => 0; click();
-    assert.equal(messages.at(-1), 'You attempt to steal a cowbell...');
+    assert.equal(messages.at(-1), 'full', 'no "You attempt..." line: none is recorded');
     assert.equal(tasks.length, 1);
     tasks[0].execute();
     assert.equal(counts.get(I.COWBELLS), 1);
@@ -142,6 +142,17 @@ test('Steal-cowbell is refused before Cold War starts, then keeps its success an
 
     click(); tasks[1].execute();
     assert.equal(counts.get(I.COWBELLS), 2, 'started and completed players can steal duplicates');
+
+    // A failure, as recorded (227/00075.txt:338001-338002): two game lines, no "MOO" or stun line.
+    const stuns = [];
+    t.mock.method(core.CombatFactory, 'stunTicks', (...args) => stuns.push(args));
+    p.getPacketSender = () => ({ sendSoundEffect: noop });
+    const before = messages.length;
+    Math.random = () => 0.99; click(); tasks[2].execute();
+    assert.deepEqual(messages.slice(before), ['You fail to steal a cowbell.', 'The cow kicks you and stuns you!']);
+    assert.equal(stuns.length, 1);
+    assert.equal(stuns[0][3].message, false, 'no stun line');
+    assert.equal(stuns[0][3].graphic.id, 245, 'stunned_thieving');
   } finally {
     Math.random = originalRandom;
   }
@@ -149,8 +160,8 @@ test('Steal-cowbell is refused before Cold War starts, then keeps its success an
 
 test('milking takes seven ticks, six with either worn cowbell, and never consumes a cancelled bucket', () => {
   const tasks = [], handlers = {};
-  require('../plugins/objects/DairyCow.plugin').register({ core, getTaskManager: () => ({ submit: task => tasks.push(task) }),
-    onObjectInteraction: (name, actions) => { handlers[name] = actions; }, onItemOnObject: noop,
+  require('../plugins/objects/DairyCow.plugin').register({ core, onCustomEvent: noop, getTaskManager: () => ({ submit: task => tasks.push(task) }),
+    onObjectInteraction: (name, actions) => { handlers[name] = actions; }, onItemOnObject: noop, emitCustomEvent: noop,
   });
   for (const [amuletId, delay] of [[0, 7], [I.COWBELL_AMULET, 6], [I.COWBELL_AMULET_2, 6]]) {
     const s = scene(); s.p.performAnimation = noop; s.p.isRegistered = () => true;
@@ -160,7 +171,11 @@ test('milking takes seven ticks, six with either worn cowbell, and never consume
     assert.equal(s.counts.get(I.BUCKET), 1, 'milk is not granted at click time');
     const task = tasks.at(-1); assert.equal(task.getDelay(), delay); task.execute();
     assert.equal(s.counts.get(I.BUCKET), 0); assert.equal(s.counts.get(I.BUCKET_OF_MILK), 1);
+    assert.equal(s.messages.at(-1), 'spam: You milk the cow.', 'a spam line (rsprox)');
   }
+  const bare = scene();
+  handlers['Dairy cow'].Milk({ player: bare.p });
+  assert.equal(bare.messages.at(-1), "You'll need an empty bucket to collect the milk.", 'rsprox 227/00090.txt:200368');
   const moved = scene(); moved.p.performAnimation = noop; moved.p.isRegistered = () => true; moved.counts.set(I.BUCKET, 1);
   handlers['Dairy cow'].Milk({ player: moved.p });
   moved.p.location = new core.Location(3200, 3200, 0); tasks.at(-1).execute();

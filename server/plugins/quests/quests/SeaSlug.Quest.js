@@ -2,28 +2,34 @@
  * Sea Slug (members).
  *
  * The words come from the "Sea Slug" transcript page. Caroline, Bailey, Kennith,
- * Kent and the four Holgart ids are all indexed, so this plugin supplies the
- * variant selector, the prose-condition answers, the start hook, the completion
- * action and the stage transitions the transcript does not carry (swamp-paste
- * hand-in, Kennith's escape, Kent's slug reveal).
+ * Kent and the Holgart ids are all indexed, so this plugin supplies the variant
+ * selector, the prose-condition answers, the start hook, the completion action and
+ * the stage transitions the transcript does not carry.
+ *
+ * Live order and timing come from the user's RSProx capture of the whole quest
+ * (20261110T112750-5ab63b4, rev 242); docs/quests/sea-slug/README.md lists the facts.
  *
  * Stages (varp 159):
  *   1 started, 2 needs swamp paste, 3 boat repaired, 4 spoken to Kennith,
  *   5 sailed to Kent, 6 spoken to Kent, 7 lit torch, 8 Kennith needs escape,
  *   9 panel opened, 10 needs crane, 11 saved Kennith, 12 complete.
  *
- * The torch chain is wired directly: broken glass on damp sticks makes dry sticks, and
- * Dry sticks' "Rub-together" option lights the unlit torch (30 Firemaking) and advances
- * stage 6 -> 7. The loose panel and crane play the transcript and advance 8 -> 9 and
- * 10 -> 11. The cabin door steps through to Kennith's room: the map walls the doorway's
- * far tile off from the room with crates, so a plain one-tile cross leaves him unreachable.
- * The platform Holgart (cache id 5070) has no world spawn, so the quest owns him for its
- * players: he takes the player to the island at stage 4 and back to the shore at stage 11.
+ * - Holgart's boat (stage 3 on): every crossing, Talk-to or Travel, is a ferries `rowing`
+ *   trip (seaslug_boat_travel, the route's layer), as live rows them. Live offers Travel from
+ *   the boat repair on (Holgart 5071 is 7789, with Travel, from varp 159 = 3).
+ * - The swamp paste goes on "You give Holgart the swamp paste." (1 -> 3), then the boat
+ *   repair cutscene plays (seaslug/Scenes.SeaSlug.js), as do Kent's grab, the panel kick and
+ *   the crane.
+ * - The platform's and cabin's doors are ordinary doors (Doors.plugin.js): live opens them
+ *   in place (18168 -> 11617) and walks the player through.
+ * - The platform Holgart is the world's 6241, which shows 5070 while slug2_npc_track1 is 0.
+ *
  * Gaps: the swamp-paste mixing recipe (flour + swamp tar on a fire) is not wired here.
  */
 module.exports = function registerSeaSlugQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Animation, Graphic, HitDamage, HitMask, Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const createSeaSlugScenes = require("../seaslug/Scenes.SeaSlug");
 
   const CAROLINE_NPC_ID = NpcIdentifiers.CAROLINE; // 5067
   const KENNITH_NPC_IDS = new Set([NpcIdentifiers.KENNITH, NpcIdentifiers.KENNITH_2]);
@@ -38,10 +44,6 @@ module.exports = function registerSeaSlugQuest(api) {
     NpcIdentifiers.HOLGART_6,
     NpcIdentifiers.HOLGART_7,
   ]);
-  // The platform Holgart (cache id 5070, "Holgart (platform)", Talk-to + Travel) has no world
-  // spawn, so the quest owns him for its own players on the fishing platform.
-  const PLATFORM_HOLGART_NPC_ID = NpcIdentifiers.HOLGART_3; // 5070
-  const PLATFORM_HOLGART_TILE = { x: 2781, y: 3274, z: 0 };
 
   const VARP_SEA_SLUG = 159;
   const STAGE_STARTED = 1;
@@ -61,56 +63,78 @@ module.exports = function registerSeaSlugQuest(api) {
   const LIT_TORCH_ITEM_ID = ItemIdentifiers.LIT_TORCH;
   const UNLIT_TORCH_ITEM_ID = ItemIdentifiers.UNLIT_TORCH;
 
-  // 18168 is a shared house-door id; only the fishing platform's placements (x >= 2750)
-  // are claimed so Witchaven's houses keep the generic Doors plugin behaviour.
-  const CABIN_DOOR_OBJECT_ID = 18168;
-  const LOOSE_PANEL_OBJECT_ID = 18251;
-  const CRANE_OBJECT_ID = 18327;
+  const LOOSE_PANEL_OBJECT_ID = 18251; // slug_breakable_panel (Badly repaired wall / Broken wall)
+  const CRANE_OBJECT_ID = 18327; // seaslug_crane
   const CRANE_FOOTPRINT = { x0: 2770, x1: 2773, y0: 3287, y1: 3290, z: 1 };
+  const PLATFORM_LADDER_OBJECT_ID = 18324; // seaslug_ladder (Climb-up)
   const PLATFORM_MIN_X = 2750;
   const PLATFORM_TILE = { x: 2784, y: 3276, z: 0 };
   const ISLAND_TILE = { x: 2794, y: 3320, z: 0 };
   const SHORE_TILE = { x: 2720, y: 3305, z: 0 };
 
-  // Kennith's cabin (z=1). Crates seal the tile behind the doorway off from the room, so the
-  // crossing steps between the corridor and the cabin floor instead of one tile west.
-  const CABIN_DOOR_TILE = { x: 2767, y: 3285, z: 1 };
-  const CABIN_ROOM_TILE = { x: 2765, y: 3288, z: 1 };
-  const CABIN_CORRIDOR_TILE = { x: 2768, y: 3285, z: 1 };
-
-  const DAMP_STICKS_ITEM_ID = ItemIdentifiers.DAMP_STICKS;
-  const DRY_STICKS_ITEM_ID = ItemIdentifiers.DRY_STICKS;
   const DAMP_STICKS_ITEM_NAME = "Damp sticks";
   const BROKEN_GLASS_ITEM_NAME = "Broken glass";
   const DRY_STICKS_ITEM_NAME = "Dry sticks";
+  const DRY_STICKS_ITEM_ID = ItemIdentifiers.DRY_STICKS;
   const RUB_TOGETHER_OPTION = "Rub-together";
   const FIREMAKING_REQUIREMENT = 30;
   // Wiki chart for lighting a torch: 77.34% (198/256) at level 30, 100% from level 43.
   const TORCH_LIGHT_CHANCE_AT_30 = 198 / 256;
   const TORCH_LIGHT_MAX_LEVEL = 43;
+  // Capture ticks 276 (glass on sticks) and 297 (rub): seq/spotanim/sound with their delays.
+  const DRYING_SEQ = 4809; // seaslug_player_drying_sticks
+  const DRYING_GRAPHIC = 791; // seaslug_drying_sticks
+  const DRYING_SOUND = 3023; // slug_dry_sticks
+  const DRYING_DELAY = 15;
+  const TORCH_LIT_SOUND = 3028; // slug_torch_lit
+  // Capture tick 303: climbing up with the lit torch (not a transcript line).
+  const TORCH_LADDER_MESSAGE = "The fishermen seem afraid of your torch.";
+  const UNLIT_LADDER_VARIANT = "rescuing-kennith-attempting-to-go-upstairs-with-an-unlit-torch";
+  const LADDER_SMACK_ACTION_ID = "wgQntK"; // "The player is dealt 4 Hitpoints."
+  const LADDER_SMACK_DAMAGE = 4;
 
-  const SAIL_TO_PLATFORM_STEP_ID = "46f1OE"; // "You arrive at the fishing platform."
-  const SAIL_TO_ISLAND_STEP_ID = "zUdSJX"; // "You arrive on a small island."
-  const SAIL_TO_SHORE_STEP_ID = "w8c3IN"; // "Holgart takes the player back to Witchaven."
-  const RETURN_TO_PLATFORM_STEP_ID = "Jn71UA"; // "You arrive at the fishing platform."
-  const RETURN_TO_SHORE_STEP_ID = "i9MI4w"; // "The boat arrives at Witchaven."
-  const ARRIVAL_PLATFORM_MESSAGE = "You arrive at the fishing platform.";
-  const ARRIVAL_SHORE_MESSAGE = "The boat arrives at Witchaven.";
+  // Holgart's crossings (plugins/world/data/ferries.json).
+  const ROUTE_PLATFORM = "sea-slug-platform";
+  const ROUTE_ISLAND = "sea-slug-island";
+  const ROUTE_ISLAND_RETURN = "sea-slug-island-return";
+  const ROUTE_WITCHAVEN = "sea-slug-witchaven";
+  const TRAVEL_STEPS = {
+    "46f1OE": ROUTE_PLATFORM, // "You arrive at the fishing platform."
+    zUdSJX: ROUTE_ISLAND, // "You arrive on a small island."
+    w8c3IN: ROUTE_WITCHAVEN, // "Holgart takes the player back to Witchaven."
+    Jn71UA: ROUTE_ISLAND_RETURN, // "You arrive at the fishing platform."
+    i9MI4w: ROUTE_WITCHAVEN, // "The boat arrives at Witchaven."
+  };
+  const SWAMP_PASTE_GIVEN_STEP_ID = "rSdV8b"; // "You give Holgart the swamp paste."
+  const BOAT_REPAIR_ACTION_ID = "YlJKOo"; // "Cutscene starts, focusing on Holgart fixing the boat."
   const UNLIT_TORCH_RECEIVE_IDS = new Set(["G6lOss", "o9pnQL"]);
   const UNLIT_TORCH_DROP_ACTION_ID = "ab-u4V"; // full bag: "The unlit torch is dropped to the ground."
-  const TORCH_LIT_MESSAGE_ID = "mqmTA7"; // "Your torch lights."
-  const PANEL_KICK_MESSAGE_IDS = new Set(["vJ1GjP", "NgGUPy", "5u-9os"]);
-  const CRANE_MESSAGE_IDS = new Set(["utnJSh", "PGBTE0"]);
+  // "Bailey gives you a torch.": an item box with the unlit torch, the torch after it (capture tick 248).
+  const TORCH_BOX_STEP_IDS = new Set(["05RBJj", "wKrin9"]);
+  const CRANE_FAR_VARIANT = "freeing-kennith-using-the-crane";
 
   const START_HOOK = "quest:sea-slug:start";
   const COMPLETE_ACTION_ID = "U0muMo";
   const KENT_ACTION_ID = "EkOxin";
+  const KENT_FIRST_VARIANT = "at-the-shipwreck-island-talking-to-kent";
   const PAGE = "Sea Slug";
+  // Capture tick 450: the completion scroll's model and lines, and jingle 154.
+  const SCROLL_ITEM_ID = ItemIdentifiers.SEA_SLUG; // seasluginv
+  const COMPLETION_JINGLE = 154; // quest complete 3
 
   let quest;
-  const platformHolgarts = new Map();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  const Scenes = createSeaSlugScenes(api, {
+    onPanelOpened: (player) => advance(player, STAGE_KENNITH_NEEDS_ESCAPE, STAGE_PANEL_OPENED),
+    onCraneDone: (player) => advance(player, STAGE_NEEDS_CRANE, STAGE_SAVED_KENNITH),
+  });
+
+  /** `from` -> `to`, only from that stage. */
+  function advance(player, from, to) {
+    if (quest.getStage(player) === from) quest.setStage(player, to);
+  }
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -183,7 +207,8 @@ module.exports = function registerSeaSlugQuest(api) {
   function holgartVariant(stage, player) {
     if (stage < STAGE_STARTED) return null;
     if (stage === STAGE_STARTED) {
-      quest.setStage(player, STAGE_NEEDS_SWAMP_PASTE);
+      // Live goes straight from 1 to 3 when the paste is already in the pack (tick 38).
+      if (!held(player, SWAMP_PASTE_ITEM_ID)) quest.setStage(player, STAGE_NEEDS_SWAMP_PASTE);
       return "talking-to-holgart";
     }
     if (stage === STAGE_NEEDS_SWAMP_PASTE) {
@@ -237,7 +262,7 @@ module.exports = function registerSeaSlugQuest(api) {
   }
 
   function kentVariant(stage) {
-    if (stage === STAGE_SAILED_TO_KENT) return "at-the-shipwreck-island-talking-to-kent";
+    if (stage === STAGE_SAILED_TO_KENT) return KENT_FIRST_VARIANT;
     if (stage >= STAGE_SPOKEN_TO_KENT) return "at-the-shipwreck-island-subsequent-dialogue-with-kent";
     return null;
   }
@@ -287,12 +312,11 @@ module.exports = function registerSeaSlugQuest(api) {
     if (value.includes("kicks the loose panel near kennith after talking to bailey")) {
       return quest.getStage(player) >= STAGE_KENNITH_NEEDS_ESCAPE;
     }
-    if (value.includes("too far away from the crane")) {
-      return quest.getStage(player) === STAGE_NEEDS_CRANE && craneDistance(player) > 1;
+    if (value.includes("kicks the loose panel near kennith")) {
+      return quest.getStage(player) < STAGE_KENNITH_NEEDS_ESCAPE;
     }
-    if (value.includes("one tile from the crane")) {
-      return quest.getStage(player) === STAGE_NEEDS_CRANE && craneDistance(player) <= 1;
-    }
+    if (value.includes("too far away from the crane")) return !atCraneControls(player);
+    if (value.includes("one tile from the crane")) return atCraneControls(player);
     return null;
   }
 
@@ -311,36 +335,6 @@ module.exports = function registerSeaSlugQuest(api) {
     return true;
   }
 
-  /**
-   * The platform Holgart owns the stage 4 leg (he sails the player to the island) and the
-   * stage 11 return. He is spawned for the player only, while the quest needs him there.
-   */
-  function removePlatformHolgart(player) {
-    const npc = platformHolgarts.get(player);
-    if (!npc) return;
-    platformHolgarts.delete(player);
-    api.removeNpc(npc);
-  }
-
-  function ensurePlatformHolgart(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_SPOKEN_TO_KENNITH || stage >= STAGE_COMPLETE) {
-      removePlatformHolgart(player);
-      return;
-    }
-    if (platformHolgarts.has(player)) return;
-    const npc = api.spawnNpc({
-      id: PLATFORM_HOLGART_NPC_ID,
-      x: PLATFORM_HOLGART_TILE.x,
-      y: PLATFORM_HOLGART_TILE.y,
-      z: PLATFORM_HOLGART_TILE.z,
-      owner: player,
-      ownerOnly: true,
-      wanderRadius: 0,
-    });
-    if (npc) platformHolgarts.set(player, npc);
-  }
-
   function grantUnlitTorch(player) {
     if (held(player, UNLIT_TORCH_ITEM_ID) || held(player, LIT_TORCH_ITEM_ID)) return;
     player.getInventory().adds(UNLIT_TORCH_ITEM_ID, 1);
@@ -352,7 +346,35 @@ module.exports = function registerSeaSlugQuest(api) {
     registerPlayerGroundItem(player, UNLIT_TORCH_ITEM_ID, player.getLocation().clone());
   }
 
-  function handleAction({ player, npcId, stepId }) {
+  /** Hands a crossing to the Ferries plugin's rowing trip; without it, the plain move. */
+  function row(player, route, fallback) {
+    const request = { player, route, handled: false };
+    api.emitCustomEvent("ferries:travel", request);
+    if (!request.handled && fallback) player.moveTo(new api.core.Location(fallback.x, fallback.y, fallback.z));
+    return request.handled;
+  }
+
+  const ROUTE_FALLBACK = {
+    [ROUTE_PLATFORM]: PLATFORM_TILE,
+    [ROUTE_ISLAND]: ISLAND_TILE,
+    [ROUTE_ISLAND_RETURN]: PLATFORM_TILE,
+    [ROUTE_WITCHAVEN]: SHORE_TILE,
+  };
+
+  /** A transcript travel step: the trip replaces the step's own message, which is the box it lands with. */
+  function travelStep(event) {
+    const route = TRAVEL_STEPS[event.stepId];
+    if (!route) return false;
+    event.handled = true;
+    event.end = true;
+    if (route === ROUTE_ISLAND) advance(event.player, STAGE_SPOKEN_TO_KENNITH, STAGE_SAILED_TO_KENT);
+    row(event.player, route, ROUTE_FALLBACK[route]);
+    return true;
+  }
+
+  function handleAction(event) {
+    const { player, npcId, stepId } = event;
+    if (Scenes.marker(event)) return;
     if (stepId === COMPLETE_ACTION_ID) {
       if (npcId === CAROLINE_NPC_ID && !quest.isComplete(player)) {
         if (quest.getStage(player) < STAGE_SAVED_KENNITH) return;
@@ -361,28 +383,28 @@ module.exports = function registerSeaSlugQuest(api) {
       return;
     }
     if (stepId === KENT_ACTION_ID && npcId === KENT_NPC_ID) {
-      if (quest.getStage(player) < STAGE_SPOKEN_TO_KENT) quest.setStage(player, STAGE_SPOKEN_TO_KENT);
+      if (quest.getStage(player) >= STAGE_SPOKEN_TO_KENT) return;
+      quest.setStage(player, STAGE_SPOKEN_TO_KENT);
+      // Live closes the conversation here and Kent calls the player back three ticks later.
+      event.handled = true;
+      event.end = true;
+      Scenes.startKent(player, event.npc, npcId, KENT_FIRST_VARIANT);
       return;
     }
-    if (stepId === SAIL_TO_PLATFORM_STEP_ID) {
-      player.moveTo(new api.core.Location(PLATFORM_TILE.x, PLATFORM_TILE.y, PLATFORM_TILE.z));
+    if (travelStep(event)) return;
+    if (stepId === SWAMP_PASTE_GIVEN_STEP_ID && HOLGART_NPC_IDS.has(npcId)) {
+      handSwampPaste(player);
       return;
     }
-    if (stepId === SAIL_TO_ISLAND_STEP_ID) {
-      if (quest.getStage(player) < STAGE_SAILED_TO_KENT) quest.setStage(player, STAGE_SAILED_TO_KENT);
-      player.moveTo(new api.core.Location(ISLAND_TILE.x, ISLAND_TILE.y, ISLAND_TILE.z));
+    if (stepId === BOAT_REPAIR_ACTION_ID && HOLGART_NPC_IDS.has(npcId)) {
+      // The overhead lines after it belong to the cutscene; the conversation ends here.
+      event.handled = true;
+      event.end = true;
+      if (quest.getStage(player) === STAGE_BOAT_REPAIRED) Scenes.boatRepair(player);
       return;
     }
-    if (stepId === SAIL_TO_SHORE_STEP_ID) {
-      player.moveTo(new api.core.Location(SHORE_TILE.x, SHORE_TILE.y, SHORE_TILE.z));
-      return;
-    }
-    if (stepId === RETURN_TO_PLATFORM_STEP_ID) {
-      player.moveTo(new api.core.Location(PLATFORM_TILE.x, PLATFORM_TILE.y, PLATFORM_TILE.z));
-      return;
-    }
-    if (stepId === RETURN_TO_SHORE_STEP_ID) {
-      player.moveTo(new api.core.Location(SHORE_TILE.x, SHORE_TILE.y, SHORE_TILE.z));
+    if (TORCH_BOX_STEP_IDS.has(stepId) && event.kind === "message") {
+      event.box = { items: [UNLIT_TORCH_ITEM_ID] };
       return;
     }
     if (UNLIT_TORCH_RECEIVE_IDS.has(stepId)) {
@@ -393,49 +415,31 @@ module.exports = function registerSeaSlugQuest(api) {
       dropUnlitTorch(player);
       return;
     }
-    if (stepId === TORCH_LIT_MESSAGE_ID) {
-      if (!held(player, LIT_TORCH_ITEM_ID)) {
-        player.getInventory().deleteNumber(UNLIT_TORCH_ITEM_ID, 1);
-        player.getInventory().adds(LIT_TORCH_ITEM_ID, 1);
-      }
-      if (quest.getStage(player) === STAGE_SPOKEN_TO_KENT) quest.setStage(player, STAGE_LIT_TORCH);
-      return;
-    }
-    if (PANEL_KICK_MESSAGE_IDS.has(stepId)) {
-      if (quest.getStage(player) === STAGE_KENNITH_NEEDS_ESCAPE) quest.setStage(player, STAGE_PANEL_OPENED);
-      return;
-    }
-    if (CRANE_MESSAGE_IDS.has(stepId)) {
-      if (quest.getStage(player) === STAGE_NEEDS_CRANE) quest.setStage(player, STAGE_SAVED_KENNITH);
+    if (stepId === LADDER_SMACK_ACTION_ID) {
+      event.handled = true;
+      player.getCombat?.()?.getHitQueue?.()?.addPendingDamage?.([new HitDamage(LADDER_SMACK_DAMAGE, HitMask.RED)]);
     }
   }
 
-  /** Holgart's "already has one swamp paste" branch: hand it over, fix the boat. */
-  function handleCondition({ player, npcId, stepId }) {
-    if (stepId !== "u-qtrY" || !HOLGART_NPC_IDS.has(npcId)) return;
-    if (!held(player, SWAMP_PASTE_ITEM_ID)) return;
+  /** "You give Holgart the swamp paste.": the paste goes and the boat is mended (1 or 2 -> 3). */
+  function handSwampPaste(player) {
+    if (quest.getStage(player) >= STAGE_BOAT_REPAIRED || !held(player, SWAMP_PASTE_ITEM_ID)) return;
     player.getInventory().deleteNumber(SWAMP_PASTE_ITEM_ID, 1);
     quest.setStage(player, STAGE_BOAT_REPAIRED);
   }
 
-  function isCabinDoor(location) {
-    const x = location?.getX?.() ?? location?.x;
-    const y = location?.getY?.() ?? location?.y;
-    const z = location?.getZ?.() ?? location?.z;
-    return Number(x) === CABIN_DOOR_TILE.x &&
-      Number(y) === CABIN_DOOR_TILE.y &&
-      Number(z) === CABIN_DOOR_TILE.z;
-  }
-
-  function craneDistance(player) {
+  /**
+   * The crane works from its controls on the north side (live: refused from 2769,3287 west of
+   * it, tick 365; used from 2771,3291, tick 375, then the player steps to 2772,3291).
+   * Ours: the whole north row counts, from those two samples.
+   */
+  function atCraneControls(player) {
     const location = player.getLocation?.();
     const x = location?.getX?.() ?? location?.x;
     const y = location?.getY?.() ?? location?.y;
     const z = location?.getZ?.() ?? location?.z;
-    if (![x, y, z].every(Number.isFinite) || z !== CRANE_FOOTPRINT.z) return Infinity;
-    const dx = Math.max(CRANE_FOOTPRINT.x0 - x, 0, x - CRANE_FOOTPRINT.x1);
-    const dy = Math.max(CRANE_FOOTPRINT.y0 - y, 0, y - CRANE_FOOTPRINT.y1);
-    return Math.max(dx, dy);
+    return z === CRANE_FOOTPRINT.z && y === CRANE_FOOTPRINT.y1 + 1 &&
+      x >= CRANE_FOOTPRINT.x0 && x <= CRANE_FOOTPRINT.x1;
   }
 
   function isCraneObjectLocation(location) {
@@ -446,97 +450,36 @@ module.exports = function registerSeaSlugQuest(api) {
       y >= CRANE_FOOTPRINT.y0 && y <= CRANE_FOOTPRINT.y1;
   }
 
-  function insideCabin(location) {
-    return location.getZ() === CABIN_DOOR_TILE.z &&
-      location.getX() <= CABIN_DOOR_TILE.x &&
-      location.getY() >= CABIN_DOOR_TILE.y + 3;
-  }
-
-  /**
-   * Doors in north-south walls (face 0/2) are crossed in x, others in y. The walk route
-   * parks the player on the door tile, which counts as the east side, so a tie heads west,
-   * through the doorway. The cabin door skips to the cabin floor: its far tile is boxed in
-   * by crates and would leave Kennith sealed away.
-   */
-  function crossDoor(event) {
-    const { player, location } = event;
-    const position = player.getLocation();
-    if (isCabinDoor(location)) {
-      const destination = insideCabin(position) ? CABIN_CORRIDOR_TILE : CABIN_ROOM_TILE;
-      player.moveTo(new api.core.Location(destination.x, destination.y, destination.z));
-      return;
-    }
-    if ((Number(event.object?.getFace?.() ?? 1) & 1) === 0) {
-      // West of the door crosses east; the door tile itself counts as the east side.
-      const destinationX = position.getX() < location.x ? location.x + 1 : location.x - 1;
-      player.moveTo(new api.core.Location(destinationX, position.getY(), location.z));
-      return;
-    }
-    const destinationY = position.getY() >= location.y ? location.y - 1 : location.y + 1;
-    player.moveTo(new api.core.Location(position.getX(), destinationY, location.z));
-  }
-
-  /**
-   * The cabin can only be left by the door, whose tile the crates put out of reach from
-   * inside; route the click to the cabin floor so the interaction still fires, then
-   * crossDoor moves the player out.
-   */
-  function routeCabinDoor(event) {
-    if (event.objectId !== CABIN_DOOR_OBJECT_ID || !event.sourceLocation) return;
-    if (!isCabinDoor(event.object?.getLocation?.())) return;
-    const from = event.sourceLocation;
-    event.destination = from.z === CABIN_DOOR_TILE.z &&
-      from.x <= CABIN_DOOR_TILE.x && from.y >= CABIN_DOOR_TILE.y + 3
-      ? { x: CABIN_ROOM_TILE.x, y: CABIN_ROOM_TILE.y, z: CABIN_ROOM_TILE.z }
-      : { x: CABIN_DOOR_TILE.x, y: CABIN_DOOR_TILE.y, z: CABIN_DOOR_TILE.z };
-  }
-
   const within = (position, tile, radius) =>
     Math.max(Math.abs(position.getX() - tile.x), Math.abs(position.getY() - tile.y)) <= radius;
 
-  function moveToTile(player, tile) {
-    player.moveTo(new api.core.Location(tile.x, tile.y, tile.z));
-  }
-
-  function arriveAt(player, tile, message) {
-    player.sendMessage(message);
-    moveToTile(player, tile);
-  }
-
-  function sailToIsland(player) {
-    if (quest.getStage(player) < STAGE_SAILED_TO_KENT) quest.setStage(player, STAGE_SAILED_TO_KENT);
-    moveToTile(player, ISLAND_TILE);
-  }
-
-  /** Holgart's Travel option: the trip the current stage's Talk-to offers, without words. */
+  /** Holgart's Travel option: the crossing the current stage's Talk-to offers, without words. */
   function handleHolgartTravel({ player }) {
-    if (quest.getStage(player) < STAGE_BOAT_REPAIRED) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_BOAT_REPAIRED) return false;
     const position = player.getLocation();
-    if (within(position, ISLAND_TILE, 16)) {
-      arriveAt(player, PLATFORM_TILE, ARRIVAL_PLATFORM_MESSAGE);
-      return true;
-    }
+    if (within(position, ISLAND_TILE, 16)) return row(player, ROUTE_ISLAND_RETURN, PLATFORM_TILE);
     if (within(position, PLATFORM_TILE, 16)) {
-      if (quest.getStage(player) === STAGE_SPOKEN_TO_KENNITH) {
-        sailToIsland(player);
-      } else {
-        arriveAt(player, SHORE_TILE, ARRIVAL_SHORE_MESSAGE);
+      // Ours: the stage 4 Talk-to is the only captured way to the island.
+      if (stage === STAGE_SPOKEN_TO_KENNITH) {
+        advance(player, STAGE_SPOKEN_TO_KENNITH, STAGE_SAILED_TO_KENT);
+        return row(player, ROUTE_ISLAND, ISLAND_TILE);
       }
-      return true;
+      return row(player, ROUTE_WITCHAVEN, SHORE_TILE);
     }
-    if (within(position, SHORE_TILE, 16)) {
-      arriveAt(player, PLATFORM_TILE, ARRIVAL_PLATFORM_MESSAGE);
-      return true;
-    }
+    if (within(position, SHORE_TILE, 16)) return row(player, ROUTE_PLATFORM, PLATFORM_TILE);
     return false;
   }
 
-  /** Use Broken glass on Damp sticks: both are consumed, a pair of dry sticks is left. */
+  /** Use Broken glass on Damp sticks: the sticks dry (the glass is kept, capture tick 276). */
   function handleGlassOnSticks(event) {
-    const inventory = event.player.getInventory();
-    inventory.deleteNumber(event.usedItemId, 1);
-    inventory.deleteNumber(event.usedWithItemId, 1);
+    const { player } = event;
+    const inventory = player.getInventory();
+    inventory.deleteNumber(ItemIdentifiers.DAMP_STICKS, 1);
     inventory.adds(DRY_STICKS_ITEM_ID, 1);
+    player.performAnimation?.(new Animation(DRYING_SEQ, DRYING_DELAY));
+    player.performGraphic?.(new Graphic(DRYING_GRAPHIC, DRYING_DELAY));
+    player.getPacketSender().sendSound(DRYING_SOUND, 1, DRYING_DELAY);
     event.handled = true;
   }
 
@@ -573,54 +516,85 @@ module.exports = function registerSeaSlugQuest(api) {
       event.handled = true;
       return;
     }
-    inventory.deleteNumber(DRY_STICKS_ITEM_ID, 1);
+    // The dry sticks stay in the pack: only the torch changes (capture tick 297).
     player.sendMessage("You place the smoulding twigs to your torch.");
     player.sendMessage("Your torch lights.");
     inventory.deleteNumber(UNLIT_TORCH_ITEM_ID, 1);
     inventory.adds(LIT_TORCH_ITEM_ID, 1);
-    if (quest.getStage(player) === STAGE_SPOKEN_TO_KENT) quest.setStage(player, STAGE_LIT_TORCH);
+    player.getPacketSender().sendSound(TORCH_LIT_SOUND, 1, 0);
+    advance(player, STAGE_SPOKEN_TO_KENT, STAGE_LIT_TORCH);
     event.handled = true;
   }
 
-  /** Doors' name hook claims most "Door" locs, so claim the platform cabin first. */
-  function handleDoorToggle(event) {
-    if (event.objectId !== CABIN_DOOR_OBJECT_ID || event.location.x < PLATFORM_MIN_X) return;
-    event.handled = true;
-    crossDoor(event);
+  /** The loose panel's Kick: at stage 8 the timed kick; before, the transcript's "nothing interesting". */
+  function kickPanel(player) {
+    if (quest.getStage(player) === STAGE_KENNITH_NEEDS_ESCAPE) {
+      Scenes.kickPanel(player);
+      return;
+    }
+    if (quest.getStage(player) < STAGE_KENNITH_NEEDS_ESCAPE) {
+      // Ours: the same kick as stage 8's; the transcript's lines say the player kicks it.
+      player.performAnimation(new Animation(Scenes.PANEL.kickSeq));
+      player.getPacketSender().sendSound(Scenes.PANEL.kickSound, 1, 0);
+      startTranscript(api, player, NpcIdentifiers.KENNITH, PAGE, "at-the-fishing-platform-subsequent-dialogue-with-kennith",
+        (steps) => steps.filter((step) => step?.id === "tVEAUZ"));
+    }
+  }
+
+  function rotateCrane(player) {
+    if (quest.getStage(player) !== STAGE_NEEDS_CRANE) {
+      // The transcript's "If the player rotates the crane upstairs" line, before it is needed.
+      startTranscript(api, player, BAILEY_NPC_ID, PAGE, "rescuing-kennith-interacting-with-the-items",
+        (steps) => steps.filter((step) => step?.id === "na1ZP2"));
+      return;
+    }
+    if (atCraneControls(player)) Scenes.crane(player);
+    else startTranscript(api, player, BAILEY_NPC_ID, PAGE, CRANE_FAR_VARIANT);
   }
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    if (objectId === CABIN_DOOR_OBJECT_ID) {
-      if (event.location.x < PLATFORM_MIN_X) return;
-      event.handled = true;
-      crossDoor(event);
-      return;
-    }
     if (objectId === LOOSE_PANEL_OBJECT_ID) {
       event.handled = true;
-      startTranscript(api, player, BAILEY_NPC_ID, PAGE, "freeing-kennith");
+      kickPanel(player);
       return;
     }
-    if (objectId === CRANE_OBJECT_ID && quest.getStage(player) === STAGE_NEEDS_CRANE &&
-      isCraneObjectLocation(event.object?.getLocation?.() ?? event.location)) {
+    if (objectId === CRANE_OBJECT_ID && isCraneObjectLocation(event.object?.getLocation?.() ?? event.location)) {
+      if (quest.getStage(player) >= STAGE_COMPLETE) return;
       event.handled = true;
-      startTranscript(api, player, BAILEY_NPC_ID, PAGE, "freeing-kennith-using-the-crane");
+      rotateCrane(player);
     }
   }
 
-  function handleStageChanged({ player, key, stage }) {
-    if (key !== "sea_slug") return;
-    ensurePlatformHolgart(player);
+  /**
+   * The platform ladder while the fishermen are possessed (stages 6-10): with the lit torch the
+   * climb lands with "The fishermen seem afraid of your torch." (capture tick 303); without it
+   * the transcript's unlit-torch lines play and the climb is refused.
+   */
+  function climbPlatformLadder(request) {
+    if (request.objectId !== PLATFORM_LADDER_OBJECT_ID || request.handled) return;
+    const { player } = request;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_TO_KENT || stage >= STAGE_SAVED_KENNITH) return;
+    if (player.getLocation().getX() < PLATFORM_MIN_X) return;
+    request.handled = true;
+    if (!held(player, LIT_TORCH_ITEM_ID)) {
+      startTranscript(api, player, BAILEY_NPC_ID, PAGE, UNLIT_LADDER_VARIANT);
+      return;
+    }
+    api.emitCustomEvent("ladders:climbUp", {
+      player, object: request.object, objectId: request.objectId,
+      location: locationOf(request.object), onArrival: () => player.sendMessage(TORCH_LADDER_MESSAGE),
+    });
+  }
+
+  function locationOf(object) {
+    const location = object?.getLocation?.();
+    return location ? { x: location.getX(), y: location.getY(), z: location.getZ() } : undefined;
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
-    ensurePlatformHolgart(player);
-  }
-
-  function handleLogout({ player }) {
-    removePlatformHolgart(player);
   }
 
   quest = registerQuest(api, {
@@ -632,7 +606,9 @@ module.exports = function registerSeaSlugQuest(api) {
     questPoints: 1,
     xpRewards: [{ skillId: Skill.FISHING.getIndex(), amount: 7175, label: "Fishing" }],
     rewardItemId: ItemIdentifiers.OYSTER_PEARLS,
-    rewardItemLabel: "Oyster pearls",
+    otherRewards: ["Fishing Platform Access", "Some Oyster Pearls"],
+    scrollItemId: SCROLL_ITEM_ID,
+    completionJingleId: COMPLETION_JINGLE,
     buildJournal,
     onReward: grantReward,
   });
@@ -641,14 +617,11 @@ module.exports = function registerSeaSlugQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onCustomEvent("npc-dialogue:condition", handleCondition);
-  api.onCustomEvent("quest:stage-changed", handleStageChanged);
+  api.onCustomEvent("ladders:climb", climbPlatformLadder);
   api.onObjectInteraction(handleObjectInteraction);
-  api.onObjectRoute(routeCabinDoor);
   api.onItemOnItem(BROKEN_GLASS_ITEM_NAME, DAMP_STICKS_ITEM_NAME, handleGlassOnSticks, { noted: false });
   api.onItemAction(DRY_STICKS_ITEM_NAME, { [RUB_TOGETHER_OPTION]: handleRubSticks });
   api.onNpcInteraction("Holgart", { Travel: handleHolgartTravel });
-  api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onPlayerLogin(handleLogin);
-  api.onPlayerLogout(handleLogout);
+  api.onPlayerLogout(Scenes.interrupted);
 };

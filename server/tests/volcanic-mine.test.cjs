@@ -26,6 +26,7 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onCustomEvent() {},
     onObjectClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.objects.set(k, handler); },
     onNpcClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.npcs.set(k, handler); },
     onItemAction: (name, actions) => { hooks.items[name] = actions; },
@@ -39,6 +40,8 @@ before(() => {
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     emitCustomEvent: (name, request) => {
       if (name === 'mining:best-pickaxe' && !request.player?.pickaxeGone) request.pickaxe = { id: 11920, attemptIntervalTicks: 3, animation: new core.Animation(7139) };
+      // The prospector outfit's answer (ProspectorOutfit.Mining.js): 1.025 for the full kit.
+      if (name === 'mining:xp-multiplier' && request.player?.fullProspectorKit) request.multiplier *= 1.025;
     },
     spawnNpc: ({ id, x, y, z }) => {
       const npc = { id, location: new Location(x, y, z), glides: [], registered: true, area: null };
@@ -417,6 +420,17 @@ test('the exit ladder: the HUD reset, Pete\'s line, out at (3816,3808), Mining X
   assert.deepEqual(lines(p.boxes.at(-1)), ["I'll give you a bit of minin' trainin' and I'll remember the contribution you've made."]);
   assert.equal(varbit(p, 'points'), 0);
   assert.equal(p.inventory.getAmount(21539), 0, 'the vessel stays behind');
+});
+
+test('with the full prospector kit the Mining XP is 2.5% more (Wiki: 3.895 a point with the kit, not 3.8)', () => {
+  const p = enter();
+  p.fullProspectorKit = true;
+  const game = Game.gameOf(p);
+  ticks(51);
+  game.addPoints(p, 458);
+  click(p, Common.data.locs.exit, 1);
+  ticks(1);
+  assert.ok(Math.abs(xpOf(p) - Math.round((458 * 99) / 24.2) * 1.025) < 1e-6, `got ${xpOf(p)}`);
 });
 
 test('shop points stop at the Wiki cap of 2^21 - 1 (2,097,151); that the excess is lost and the Mining XP still paid on it are inferred, the Wiki says neither', () => {

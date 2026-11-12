@@ -155,7 +155,7 @@ function invoke(event) {
   if (!TeleportHandler.checkReqs(player, destination)) return;
   const from = source(event);
   const imbued = event.itemId === ids.imbued;
-  TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => arrive(player, from, imbued));
+  TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => arrive(player, from, imbued)));
 }
 
 function divine({ player }) {
@@ -226,7 +226,9 @@ function imbue(player) {
 
 const carries = (player, id) => player.getInventory().contains(id);
 const hasSceptre = (player) => carries(player, ids.sceptre) || player.getEquipment().contains(ids.sceptre);
-const carriesBoots = (player, boots = ids.boots) => boots.some((id) => carries(player, id));
+// Wiki (Skull sceptre): Solztun imbues it with fancy, fighting or fancier boots "(equipped or in your inventory)".
+const hasBoots = (player, id) => carries(player, id) || player.getEquipment().contains(id);
+const carriesBoots = (player, boots = ids.boots) => boots.some((id) => hasBoots(player, id));
 const banksBoots = (player, boots) => boots.some((id) => player.getBanks().some((bank) => bank?.contains?.(id)));
 
 /**
@@ -242,9 +244,9 @@ function solztunCondition({ player, definition, stepId }) {
     case "VxmOO-": return carriesBoots(player, fancyOrFighting);
     case "VjwWD6": case "ZJg2oD": case "RT1Gi_": return false;
     case "Z90S7u": case "n1blRS": case "Wrp_jR": return true;
-    case "kXhUXq": return carries(player, ItemIdentifiers.FANCY_BOOTS);
-    case "DM2B8U": return carries(player, ItemIdentifiers.FIGHTING_BOOTS);
-    case "P09MTz": return carries(player, ItemIdentifiers.FANCIER_BOOTS);
+    case "kXhUXq": return hasBoots(player, ItemIdentifiers.FANCY_BOOTS);
+    case "DM2B8U": return hasBoots(player, ItemIdentifiers.FIGHTING_BOOTS);
+    case "P09MTz": return hasBoots(player, ItemIdentifiers.FANCIER_BOOTS);
     case "rctGRz": return carriesBoots(player, fancyOrFighting) || banksBoots(player, fancyOrFighting);
     case "Jvhok1": return !(carriesBoots(player, fancyOrFighting) || banksBoots(player, fancyOrFighting));
     default: return null;

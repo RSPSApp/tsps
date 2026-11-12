@@ -2,8 +2,9 @@
 // message, graphic and sounds, then the chatbox pop-up (levelup_display, 233) unless the player
 // turned it off in Settings > Interfaces > "Level-up pop-up notifications". With "Show level &
 // unlocks", Continue opens a box per level saying what it unlocked (the OSRS Wiki transcripts'
-// text, beside the level's pictures); otherwise those lines go to the chat. A combat level
-// gained with it follows a tick later; its pop-up waits until the skill's (and its box) is done.
+// text, beside the level's pictures); otherwise those lines go to the chat if the player turned
+// on "Level-up chatbox list". A combat level gained with it follows a tick later; its pop-up
+// waits until the skill's (and its box) is done.
 //
 // Opening a pop-up interrupts what the player is doing: it emits "level-up:popup-opened"
 // { player, skill, pause }, which holds skilling until Continue. With pop-ups off, nothing stops.
@@ -41,6 +42,9 @@ const LEVEL_UP_SOUNDS = [{ soundId: 2396, delay: 0 }, { soundId: 2384, delay: 25
 const SOUND_RADIUS = 1;
 const TOTAL_LEVEL_STEP = 25;
 
+// option_level_up_chatbox_list: "Level-up chatbox list". Only with it on do the unlock lines go
+// to the chat when no unlock box shows them.
+const CHATBOX_LIST_VARBIT = 20158;
 // option_level_up_guide_list_disabled: with it set, only the plain jingle ever plays.
 const GUIDE_LIST_DISABLED_VARBIT = 20159;
 // midi_jingle ids (cache gamevals index 24 kind 18, "advance <skill>" and "advance <skill>2"),
@@ -143,6 +147,7 @@ function announceUnlocks(player, skill, oldLevel, newLevel) {
 }
 
 const listsUnlocks = (player) => player.getPacketSender().getVarbit(POPUP_LISTS_UNLOCKS_VARBIT) === 1;
+const chatboxLists = (player) => player.getPacketSender().getVarbit(CHATBOX_LIST_VARBIT) === 1;
 
 /** The level's pictures as item ids: none, one or two. */
 function picturesFor(player, skill, level) {
@@ -239,8 +244,10 @@ function showSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   const state = pending.get(player);
   if (state) state.current = { skill, from: oldLevel, to: newLevel, boxed };
   const name = skill.getName();
-  openPopup(player, SKILL_LAYERS[skill.getIndex()],
-    `Congratulations, you just advanced a ${name} level.`, `Your ${name} level is now ${newLevel}.`);
+  // As recorded: "an Agility level" (10), "an Attack level" (3); "Your Hitpoints are now N." (18).
+  const article = /^[AEIOU]/i.test(name) ? "an" : "a";
+  const now = name === "Hitpoints" ? `Your Hitpoints are now ${newLevel}.` : `Your ${name} level is now ${newLevel}.`;
+  openPopup(player, SKILL_LAYERS[skill.getIndex()], `Congratulations, you just advanced ${article} ${name} level.`, now);
 }
 
 function openCombatPopup(player, from) {
@@ -283,7 +290,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   // With "Show level & unlocks" the unlock box says it, and logs it in the chat as it opens.
   // The setting at level-up decides Continue and cancelling, even if it changes while the pop-up is open.
   const boxed = popupOpens && listsUnlocks(player);
-  if (!boxed) announceUnlocks(player, skill, oldLevel, newLevel);
+  if (!boxed && chatboxLists(player)) announceUnlocks(player, skill, oldLevel, newLevel);
   playJingle(player, skill, newLevel);
 
   const total = skills.getTotalLevel();

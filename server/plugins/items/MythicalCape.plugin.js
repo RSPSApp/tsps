@@ -21,7 +21,7 @@ function teleport({ player }) {
   const { Location, TeleportHandler, TeleportType } = core;
   const target = new Location(...MYTHS_GUILD);
   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return true;
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, target, () => TeleportHandler.teleport(player, target, TeleportType.NORMAL, false), WILDERNESS_LEVEL);
   return true;
 }
 

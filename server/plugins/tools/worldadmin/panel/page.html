@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Host local</title>
+<link rel="stylesheet" href="/panel/panel.css">
+<script src="/panel/panel.js"></script>
+<style>
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/panel/fonts/plex-sans-400.woff2") format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/panel/fonts/plex-sans-500.woff2") format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("/panel/fonts/plex-sans-600.woff2") format("woff2"); }
+  :root {
+    color-scheme: dark;
+    --bg: #16171a;
+    --panel: #1c1d21;
+    --panel-deep: #1d1f22;
+    --field: #15171a;
+    --rule: rgba(202, 169, 94, .16);
+    --line: rgba(202, 169, 94, .26);
+    --text: #e4dfd3;
+    --muted: #aaa59a;
+    --accent: #caa95e;
+    --changed: #f6c765;
+    --changed-bg: #383120;
+    --edited: #75d892;
+    --edited-bg: #1e3529;
+    --error: #ff9b94;
+    --error-bg: #361f21;
+    --warn: #f6c765;
+    --warn-bg: #383120;
+    --info: #e4dfd3;
+    --info-bg: #25272b;
+    --off: #aaa59a;
+    --badge-warn-bg: var(--error-bg);
+    --badge-warn-text: var(--error);
+    --badge-ok-bg: var(--edited-bg);
+    --badge-ok-text: var(--edited);
+    --shadow: rgba(0, 0, 0, .45);
+    --backdrop: rgba(0, 0, 0, .5);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 "IBM Plex Sans", system-ui, sans-serif;
+  }
+  .layout {
+    --server-bar-height: 58px;
+    display: grid; grid-template-columns: 213px minmax(0, 1fr);
+    grid-template-rows: var(--server-bar-height) minmax(0, 1fr);
+    height: 100vh; height: 100dvh;
+  }
+  .server-bar {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 0 34px 0 26px; background: #121315; border-bottom: 1px solid var(--rule);
+  }
+  .sidebar {
+    padding: 28px 16px; background: #121315; border-right: 1px solid var(--rule);
+    overflow: auto;
+  }
+  .brand {
+    margin: 2px 10px 28px; color: #aaa59a; font-size: 14px;
+    line-height: 1; letter-spacing: .12em; text-transform: uppercase;
+  }
+  .tabs { display: grid; gap: 4px; }
+  .tabs button {
+    display: flex; align-items: center; gap: 20px; border: 0; padding: 8px 10px;
+    background: transparent; color: #c4bfb2; font-size: 14px; line-height: 20px; text-align: left;
+  }
+  .tabs button:hover, .tabs button[aria-selected="true"] { background: #2a2c30; color: #fff; }
+  .tabs svg, .menu-toggle svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+  .tabs button[aria-selected="true"] svg { color: var(--accent); }
+  .menu-toggle, .menu-backdrop { display: none; }
+  .workspace {
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0; min-height: 0; padding: 16px 34px 0;
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--rule);
+  }
+  h1, h2, h3 { font-weight: 600; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0; flex: 1 1 auto; }
+  h3 { font-size: 16px; margin: 12px 0 4px; }
+  main { overflow: auto; padding: 0 3px 24px; margin-inline: -3px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  button {
+    background: var(--panel-deep); color: #eee9dd;
+    border: 1px solid var(--line); border-radius: 5px;
+    min-height: 36px; padding: 0 12px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #2a2c30; }
+  button.primary { background: #383120; border-color: var(--accent); color: #f6f2e8; }
+  button.primary:hover:not(:disabled) { background: #494029; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.link {
+    border: none; background: none; padding: 2px 0; color: var(--accent); text-decoration: underline;
+    min-height: 0; align-self: flex-start;
+  }
+
+  input[type="text"], input[type="search"], input[type="number"], input[type="date"], select, textarea {
+    background: var(--field); color: var(--text);
+    border: 1px solid var(--line); border-radius: 5px; min-height: 36px;
+  }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  .search { flex: 0 1 280px; min-width: 0; }
+  .search input { width: 100%; padding: 0 12px; }
+
+  dialog, .overlay-box, .tip, .banner, .badge, .map-view { border: 1px solid var(--line); }
+  .banner { border-radius: 8px; padding: 10px 12px; margin: 16px 0 0; display: flex; gap: 12px; align-items: flex-start; }
+  .banner > .text { flex: 1 1 auto; overflow-wrap: anywhere; }
+  .banner.error { background: var(--error-bg); color: var(--error); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  #local-host-disclaimer a { color: inherit; }
+  #dismiss-local-host-disclaimer { flex: none; width: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 20px; line-height: 1; }
+  #dismiss-local-host-disclaimer:hover { background: var(--line); }
+  .banner.info { background: var(--info-bg); color: var(--info); }
+
+  #panel-settings { container-type: inline-size; }
+  .settings-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px; margin-top: 24px;
+  }
+  .settings-grid > .row { border-radius: 8px; box-shadow: none; }
+  .settings-wide { grid-column: 1 / -1; }
+  .footer {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+    gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--rule);
+  }
+  .footer .status { flex: 1 1 auto; color: var(--muted); }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  dialog {
+    border-radius: 8px; background: var(--panel); color: var(--text);
+    width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0;
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  dialog::backdrop { background: var(--backdrop); }
+  .dialog-body { padding: 16px; overflow: auto; max-height: calc(100vh - 140px); }
+  .dialog-body h2 { margin: 0 0 12px; font-size: 19px; }
+  .dialog-actions { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel-deep); }
+  table.diff th { color: var(--accent); }
+  table.diff th, table.diff td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  table.diff td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  ul.list { margin: 6px 0 12px; padding-left: 20px; }
+  .seconds { display: inline-flex; gap: 6px; align-items: center; }
+  .seconds label { font-weight: 600; }
+  .seconds input { width: 90px; padding: 4px 8px; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay-box {
+    display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+    background: var(--panel); border-radius: 8px; padding: 24px 28px; max-width: 420px;
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  .overlay-box p { margin: 0; font-size: 19px; line-height: 1.3; font-weight: 700; color: var(--accent); }
+  .spinner {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid var(--panel-deep); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+  [hidden] { display: none !important; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .server-bar { padding-inline: 16px; }
+    .workspace { padding-inline: 16px; }
+    .sidebar {
+      display: none; position: fixed; z-index: 12; inset: var(--server-bar-height) auto 0 0;
+      width: min(280px, calc(100vw - 48px)); padding: 20px 16px;
+      box-shadow: 12px 0 30px var(--shadow);
+    }
+    .sidebar.open { display: block; }
+    .menu-backdrop {
+      display: block; position: fixed; z-index: 11; inset: var(--server-bar-height) 0 0;
+      width: 100%; border: 0; border-radius: 0;
+    }
+    .menu-backdrop, .menu-backdrop:hover:not(:disabled) { background: var(--backdrop); }
+    .menu-toggle {
+      display: grid; place-items: center; width: 34px; padding: 0; margin-left: -4px;
+      border: 0; background: transparent;
+    }
+    h1 { font-size: 21px; }
+  }
+  @container (max-width: 655px) {
+    .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .search { flex: 1 0 100%; }
+  }
+</style>
+</head>
+<body class="host-page">
+<div class="layout">
+  <section class="server-bar" aria-label="Server controls">
+    <div class="host-status-line" role="status">
+      <span id="server-status" class="host-status-dot host-status-starting">Starting</span>
+      <span id="server-count" class="host-status-meta" hidden></span>
+    </div>
+    <div class="host-header-actions">
+      <button type="button" id="server-power" class="host-power-button" aria-label="Start server" disabled>
+        <svg id="server-start-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v10"/><path d="M6.2 5.8a9 9 0 1 0 11.6 0"/></svg>
+        <span id="server-power-label">Start</span>
+      </button>
+      <button type="button" id="server-restart" class="host-icon-button" aria-label="Restart server" title="Restart server" disabled>↻</button>
+    </div>
+  </section>
+  <aside id="sidebar" class="sidebar">
+    <div class="brand">Host local</div>
+    <div class="tabs" role="tablist" aria-label="Sections" aria-orientation="vertical">
+      <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M10 15v4"/></svg>
+        Settings
+      </button>
+      <button type="button" role="tab" id="tab-players" aria-controls="panel-players" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        Players
+      </button>
+      <button type="button" role="tab" id="tab-plugins" aria-controls="panel-plugins" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v4m6-4v4M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v4"/></svg>
+        Plugins
+      </button>
+    </div>
+  </aside>
+  <button type="button" id="menu-backdrop" class="menu-backdrop" aria-label="Close sections menu" tabindex="-1" hidden></button>
+  <div class="workspace">
+    <header>
+      <button type="button" id="menu-toggle" class="menu-toggle" aria-label="Open sections menu" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <h1 id="page-title">Settings</h1>
+      <div class="search">
+        <input type="search" id="search" placeholder="Search settings" aria-label="Search">
+      </div>
+    </header>
+    <main>
+      <div id="flashes" aria-live="polite"></div>
+      <div id="banners" aria-live="polite"></div>
+      <div id="countdown-banner"></div>
+      <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+        <div id="local-host-disclaimer" class="banner warn">
+          <div class="text">
+            For an easy way to start your RSPS, we recommend <a href="https://rsps.app/host/" target="_blank" rel="noopener">/host</a>. It offers daily updates, custom items, NPCs and objects, a map editor, and simple gameplay toggles.<br>
+            We cannot provide support for this panel or locally hosted servers.
+          </div>
+          <button type="button" id="dismiss-local-host-disclaimer" aria-label="Dismiss local hosting disclaimer">&times;</button>
+        </div>
+        <div id="settings-fields"></div>
+      </div>
+      <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
+      <div id="panel-plugins" class="host-plugin-panel" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <p id="loading" class="empty">Loading…</p>
+    </main>
+    <footer class="footer">
+      <span class="status" id="footer-status" aria-live="polite"></span>
+      <button type="button" id="discard" disabled>Discard edits</button>
+      <button type="button" class="primary" id="save" disabled>Save</button>
+    </footer>
+  </div>
+</div>
+<div id="overlay" class="overlay" hidden>
+  <div class="overlay-box" role="status" aria-live="assertive">
+    <span id="overlay-spinner" class="spinner" aria-hidden="true"></span>
+    <p id="overlay-text"></p>
+  </div>
+</div>
+<dialog id="preview" aria-labelledby="preview-title">
+  <div class="dialog-body">
+    <h2 id="preview-title">Review changes to world.local.json</h2>
+    <div id="preview-content"></div>
+  </div>
+  <div class="dialog-actions">
+    <span class="seconds" id="seconds-wrap" hidden>
+      <label for="seconds">Countdown (seconds)</label>
+      <input type="number" id="seconds" min="1" max="86400" step="1" value="60">
+    </span>
+    <button type="button" id="preview-close">Back</button>
+    <button type="button" class="primary" id="apply" disabled>Apply</button>
+  </div>
+</dialog>
+<script>
+"use strict";
+(function () {
+  // Everything shown from the API goes through textContent; nothing from it is ever parsed as HTML.
+  var DEFAULT_SECONDS = 60;
+  var POLL_MS = 2000;
+  var state = {
+    data: null,          // last /api/catalog response
+    edits: { world: {}, plugins: {}, pluginConfig: {} },
+    rows: [],            // { el, kind, key, search, refresh() }
+    tab: "settings",
+    pluginView: new URLSearchParams(window.location.search).get("plugins") === "browse" ? "browse" : "installed",
+    dismissedFailure: null,
+    pollTimer: null,
+    reconnect: null,     // { delay } while the server is down
+    applied: false,      // an Apply was accepted; its edits clear once the server is back
+    appliedHash: null,   // world.local.json's localHash the Apply was made against
+    outcomeNote: null,   // the flash saying how the last accepted Apply ended
+    lastPlan: null,
+  };
+  var { el, same, has, createPluginPanel, filterGroups } = window.LocalPluginPanel;
+  var search = document.getElementById("search");
+  var pluginPanel = createPluginPanel({
+    state: state, components: LocalPanelComponents, search: search, plugins: document.getElementById("panel-plugins"),
+    uploadPlugin: uploadPlugin, installPlugin: installPlugin, deletePlugin: deletePlugin,
+    updateFooter: updateFooter, readOnly: readOnly, busy: busy,
+  });
+
+  async function uploadPlugin(file) {
+    try {
+      var response = await fetch("/api/plugins/import", {
+        method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
+      });
+      var result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Upload failed.");
+      await pluginInstalled(result);
+    } catch (error) {
+      flash("error", "Could not import plugin: " + error.message);
+    }
+  }
+
+  function pluginInstalled(result) {
+    flash("info", result.name + " v" + result.version + " installed. Restart the server to load it.", 5000);
+    return load(true);
+  }
+
+  async function installPlugin(plugin, button) {
+    if (readOnly() || busy()) {
+      flash("warn", "Wait until the server is online and idle to install a plugin.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Installing…";
+    try {
+      var result = await api("/api/plugins/install", { packageId: plugin.id, version: plugin.version });
+      if (!result.ok) throw new Error(result.body?.error || "Install failed.");
+      await pluginInstalled(result.body);
+    } catch (error) {
+      flash("error", "Could not install plugin: " + error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Install";
+    }
+  }
+
+  async function deletePlugin(plugin, options, button) {
+    if (readOnly() || busy() || !window.confirm("Are you sure you want to delete this plugin? This cannot be undone.")) return;
+    button.disabled = true;
+    try {
+      var result = await api("/api/plugins/delete", { packageId: plugin.packageId });
+      if (!result.ok) throw new Error(result.body?.error || "Delete failed.");
+      delete state.edits.plugins[plugin.name];
+      options.forEach(function (option) { delete state.edits.pluginConfig[option.key]; });
+      flash("info", plugin.name + " deleted. Restart the server to unload any running code.", 5000);
+      await load(true);
+    } catch (error) {
+      flash("error", "Could not delete plugin: " + error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function api(path, body) {
+    var init = { credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      init.method = "POST";
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+    return fetch(path, init).then(function (response) {
+      return response.text().then(function (text) {
+        var json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+        return { status: response.status, ok: response.ok, body: json };
+      });
+    });
+  }
+
+  function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
+
+  function build() {
+    var catalog = state.data.catalog;
+    var settings = document.getElementById("settings-fields");
+    pluginPanel.clearSpawnPicker();
+    settings.textContent = "";
+    state.rows = [];
+
+    var byName = Object.create(null);
+    catalog.plugins.forEach(function (p) { byName[p.name] = p; });
+    state.byName = byName;
+
+    var settingOrder = ["name", "experienceMultiplier", "spawn", "gameframe"];
+    var worldOptions = new Map(catalog.world.map(function (option) { return [option.key, option]; }));
+    var settingsRows = settingOrder.filter(function (key) { return worldOptions.has(key); }).map(function (key) {
+      return pluginPanel.optionRow("world", worldOptions.get(key), null);
+    });
+    function addWideSetting(kind, option) {
+      var row = pluginPanel.optionRow(kind, option, null);
+      row.el.classList.add("settings-wide");
+      settingsRows.push(row);
+    }
+    catalog.world.forEach(function (option) {
+      if (!settingOrder.includes(option.key)) addWideSetting("world", option);
+    });
+    var optionsByPlugin = new Map();
+    catalog.options.forEach(function (o) {
+      if (o.owner === "core" || !byName[o.owner]) {
+        addWideSetting("option", o);
+      } else {
+        if (!optionsByPlugin.has(o.owner)) optionsByPlugin.set(o.owner, []);
+        optionsByPlugin.get(o.owner).push(o);
+      }
+    });
+
+    var settingsGrid = el("div", { className: "settings-grid" }, settingsRows.map(function (row) { return row.el; }));
+    state.settingsGroups = [{ el: settingsGrid, rows: settingsRows }];
+    settings.appendChild(settingsGrid);
+    settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
+    state.rows = settingsRows.concat(pluginPanel.build(catalog, optionsByPlugin));
+    if (state.tab !== "plugins") search.placeholder = "Search " + state.tab;
+    document.getElementById("loading").hidden = true;
+    applySearch();
+    updateFooter();
+  }
+
+  function applySearch() {
+    if (!state.settingsGroups) return;
+    filterGroups(state.settingsGroups, document.getElementById("settings-empty"), search.value, false);
+    pluginPanel.applyPluginSearch();
+  }
+
+  // ---------- navigation ----------
+
+  var sidebar = document.getElementById("sidebar");
+  var menuToggle = document.getElementById("menu-toggle");
+  var menuBackdrop = document.getElementById("menu-backdrop");
+  var workspace = document.querySelector(".workspace");
+  var narrowLayout = window.matchMedia("(max-width: 860px)");
+
+  function setMenuOpen(open) {
+    sidebar.classList.toggle("open", open);
+    menuBackdrop.hidden = !open;
+    workspace.inert = open;
+    menuToggle.setAttribute("aria-expanded", String(open));
+    if (open) document.getElementById("tab-" + state.tab).focus();
+    else if (narrowLayout.matches) menuToggle.focus();
+  }
+  menuToggle.addEventListener("click", function () { setMenuOpen(true); });
+  menuBackdrop.addEventListener("click", function () { setMenuOpen(false); });
+  narrowLayout.addEventListener("change", function (event) {
+    if (!event.matches && sidebar.classList.contains("open")) setMenuOpen(false);
+  });
+
+  var sections = ["settings", "players", "plugins"];
+  var playersPanel;
+  var serverOnline = false;
+  function selectTab(tab) {
+    if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
+    state.tab = tab;
+    sections.forEach(function (name) {
+      var button = document.getElementById("tab-" + name);
+      var selected = name === tab;
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById("panel-" + name).hidden = !selected;
+    });
+    var title = tab[0].toUpperCase() + tab.slice(1);
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("search").placeholder = "Search " + title.toLowerCase();
+    document.querySelector("header .search").hidden = tab === "players";
+    document.querySelector(".workspace > footer").hidden = tab === "players";
+    if (tab === "players") {
+      playersPanel ||= window.LocalPlayers.mount(document.getElementById("panel-players"), el, api, flash);
+      playersPanel.setOnline(serverOnline);
+      playersPanel.refresh();
+    }
+    if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);
+  }
+  sections.forEach(function (tab) {
+    document.getElementById("tab-" + tab).addEventListener("click", function () {
+      selectTab(tab);
+      if (sidebar.classList.contains("open")) setMenuOpen(false);
+    });
+  });
+  sidebar.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && sidebar.classList.contains("open")) {
+      setMenuOpen(false);
+      return;
+    }
+    var next;
+    if (event.key === "Home") next = "settings";
+    else if (event.key === "End") next = "plugins";
+    else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      var step = event.key === "ArrowUp" ? -1 : 1;
+      next = sections[(sections.indexOf(state.tab) + step + sections.length) % sections.length];
+    }
+    else return;
+    event.preventDefault();
+    selectTab(next);
+    document.getElementById("tab-" + next).focus();
+  });
+  document.getElementById("search").addEventListener("input", applySearch);
+  document.querySelector("main").addEventListener("click", function (event) {
+    var row = event.target.closest(".toggle-row");
+    if (row && !event.target.closest("button, input, label, a, select, textarea")) {
+      row.querySelector(".switch").click();
+    }
+  });
+
+  function renderServerStatus(data) {
+    var phase = data.serverStatus || "online";
+    var running = phase === "online";
+    serverOnline = running;
+    var status = document.getElementById("server-status");
+    var text = { online: "Online", starting: "Starting", stopping: "Stopping", stopped: "Stopped", failed: "Stopped" }[phase];
+    var busy = phase === "starting" || phase === "stopping";
+    status.className = "host-status-dot host-status-" + (running ? "online" : busy ? "starting" : "offline");
+    if (status.textContent !== text) status.textContent = text;
+    var count = document.getElementById("server-count");
+    count.hidden = !running;
+    var players = data.playerCount ?? 0, bots = data.botCount ?? 0;
+    var countText = players + (players === 1 ? " player" : " players") + " · " + bots + (bots === 1 ? " bot" : " bots");
+    if (count.textContent !== countText) count.textContent = countText;
+    var power = document.getElementById("server-power");
+    var label = running || phase === "stopping" ? "Stop" : "Start";
+    power.setAttribute("aria-label", label + " server");
+    power.classList.toggle("host-stop-button", label === "Stop");
+    document.getElementById("server-start-icon").toggleAttribute("hidden", label === "Stop");
+    document.getElementById("server-power-label").textContent = label === "Stop" ? "■ Stop" : "Start";
+    power.disabled = !data.serverStatus || busy || !!data.pending || !!data.countdown?.scheduled;
+    document.getElementById("server-restart").disabled = power.disabled || !running;
+    if (playersPanel) playersPanel.setOnline(running);
+  }
+
+  async function controlServer(action) {
+    var power = document.getElementById("server-power");
+    var restart = document.getElementById("server-restart");
+    power.disabled = restart.disabled = true;
+    try {
+      var result = await api("/api/server/" + action, {});
+      if (!result.ok) throw new Error(result.body?.error || "The server did not accept the request.");
+      renderServerStatus({ ...state.data, serverStatus: result.body.serverStatus });
+      load(false);
+    } catch (error) {
+      flash("error", error.message);
+      renderServerStatus(state.data);
+    }
+  }
+  document.getElementById("server-power").addEventListener("click", function () {
+    controlServer(this.getAttribute("aria-label") === "Stop server" ? "stop" : "start");
+  });
+  document.getElementById("server-restart").addEventListener("click", function () { controlServer("restart"); });
+
+  // ---------- edits, footer ----------
+
+  function editCount() {
+    return Object.keys(state.edits.world).length + Object.keys(state.edits.plugins).length + Object.keys(state.edits.pluginConfig).length;
+  }
+  function anyInvalid() { return state.rows.some(function (r) { return r.invalid; }); }
+  function busy() {
+    var d = state.data;
+    return !!state.reconnect || !!(d && (d.pending || (d.countdown && d.countdown.scheduled)));
+  }
+
+  function updateFooter() {
+    var save = document.getElementById("save");
+    var discard = document.getElementById("discard");
+    var status = document.getElementById("footer-status");
+    var count = editCount();
+    var mode = state.data ? state.data.mode : "manual";
+    save.textContent = mode === "manual" ? "Save (takes effect next restart)" : "Save and restart";
+    var invalid = anyInvalid();
+    save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
+    discard.disabled = count === 0 && !invalid;
+    document.querySelectorAll(".host-bot-map-button").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
+    if (!state.data) status.textContent = "";
+    else if (state.data.serverStatus && state.data.serverStatus !== "online") status.textContent = "Start the server to edit settings and plugins.";
+    else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
+    else if (invalid) status.textContent = "Fix the highlighted values before saving.";
+    else if (busy()) status.textContent = "A restart is pending.";
+    else status.textContent = count === 0 ? "No unsaved edits." : count + (count === 1 ? " unsaved edit." : " unsaved edits.");
+  }
+
+  document.getElementById("discard").addEventListener("click", function () {
+    state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    state.rows.forEach(function (r) { r.invalid = false; r.refresh(); });
+    updateFooter();
+  });
+
+  /**
+   * The edits as the server takes them. A value that is what the world gets with no entry at all
+   * (world.json has none, and it equals the declared default, or the plugin's own default) goes
+   * as null, so the key leaves world.local.json instead of being written out.
+   */
+  function changesPayload() {
+    var catalog = state.data && state.data.catalog;
+    var optionsBySection = { world: {}, pluginConfig: {} };
+    if (catalog) {
+      (catalog.world || []).forEach(function (o) { optionsBySection.world[o.key] = o; });
+      (catalog.options || []).forEach(function (o) { optionsBySection.pluginConfig[o.key] = o; });
+    }
+    var changes = {};
+    ["world", "plugins", "pluginConfig"].forEach(function (section) {
+      var keys = Object.keys(state.edits[section]);
+      if (!keys.length) return;
+      var out = {};
+      keys.forEach(function (key) {
+        var value = state.edits[section][key];
+        if (value !== null && section === "plugins") {
+          var plugin = state.byName[key];
+          if (plugin && plugin.shippedSwitch === undefined && plugin.localSwitch !== undefined && value === plugin.defaultEnabled) value = null;
+        } else if (value !== null) {
+          var option = optionsBySection[section][key];
+          if (option && option.shipped === undefined && option.decl.default !== undefined && same(value, option.decl.default)) value = null;
+        }
+        out[key] = value;
+      });
+      changes[section] = out;
+    });
+    return changes;
+  }
+
+  // ---------- banners ----------
+
+  function renderBanners() {
+    renderStaticBanners();
+    renderCountdownBanner();
+  }
+
+  /** Error/info banners; rebuilt only when what they say changes, so focus and screen readers aren't disturbed by polling. */
+  function renderStaticBanners() {
+    var d = state.data;
+    var items = [];
+    if (d && d.layers && d.layers.localError) {
+      items.push({ kind: "error", text: "world.local.json does not parse, so this page is read only. Fix the file by hand, then reload: " + d.layers.localError });
+    }
+    if (d && d.lastFailure && d.lastFailure.at !== state.dismissedFailure) {
+      items.push({ kind: "error", text: d.lastFailure.message, dismiss: d.lastFailure.at });
+    }
+    if (d && d.countdown && d.countdown.available === false) {
+      items.push({ kind: "warn", text: "Countdown unavailable (GameUpdate is off): Apply restarts immediately." });
+    }
+    if (d && d.mode === "manual") {
+      items.push({ kind: "info", text: "This server can't restart itself, so saving only writes world.local.json. Restart the server by hand for it to take effect." });
+    }
+    var signature = JSON.stringify(items);
+    if (signature === state.bannerSignature) return;
+    state.bannerSignature = signature;
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    items.forEach(function (item) {
+      box.appendChild(el("div", { className: "banner " + item.kind, role: item.kind === "error" ? "alert" : null }, [
+        el("div", { className: "text", text: item.text }),
+        item.dismiss ? el("button", { type: "button", text: "Dismiss", "aria-label": "Dismiss this error",
+          onclick: function () { state.dismissedFailure = item.dismiss; renderStaticBanners(); } }) : null,
+      ]));
+    });
+  }
+
+  /** The running countdown: built once per kind, then only its text changes (role=timer is not announced on every tick). */
+  function renderCountdownBanner() {
+    var box = document.getElementById("countdown-banner");
+    var d = state.data;
+    if (!d || !(d.pending || (d.countdown && d.countdown.scheduled))) {
+      box.textContent = "";
+      state.countdownKey = null;
+      return;
+    }
+    var remaining = d.countdown ? d.countdown.remainingSeconds : 0;
+    var ours = !!d.pending;
+    var cancellable = !ours || d.pending.kind === "countdown";
+    var key = (ours ? d.pending.kind : "foreign") + "|" + cancellable;
+    if (state.countdownKey !== key) {
+      state.countdownKey = key;
+      box.textContent = "";
+      state.countdownText = el("div", { className: "text" });
+      box.appendChild(el("div", { className: "banner warn", role: "timer" }, [
+        state.countdownText,
+        cancellable ? el("button", { type: "button", text: "Cancel", "aria-label": "Cancel the restart", onclick: cancelCountdown }) : null,
+      ]));
+    }
+    state.countdownText.textContent = ours
+      ? (d.pending.kind === "countdown"
+        ? "Restarting to apply your changes in " + remaining + " s. world.local.json is written when the countdown ends."
+        : "Restarting now to apply your changes…")
+      : "A world update countdown started in game is running (" + remaining + " s left). Wait for it or cancel it before saving.";
+  }
+
+  function flash(kind, text) {
+    var box = document.getElementById("flashes");
+    var node = el("div", { className: "banner " + kind, role: kind === "error" ? "alert" : "status" }, [
+      el("div", { className: "text", text: text }),
+      el("button", { type: "button", text: "Dismiss", onclick: function () { node.remove(); } }),
+    ]);
+    box.insertBefore(node, box.firstChild);
+    return node;
+  }
+
+  // ---------- loading and polling ----------
+
+  // While the server is down (a restart, or it stopped answering) the page stays put behind an
+  // overlay and polls with backoff; it never navigates or reloads, so the browser's own
+  // "can't connect" page never appears.
+  var RECONNECT_FIRST_MS = 1000;
+  var RECONNECT_MAX_MS = 5000;
+  var overlay = document.getElementById("overlay");
+  var overlayText = document.getElementById("overlay-text");
+  var overlaySpinner = document.getElementById("overlay-spinner");
+
+  function showOverlay(text, spinning) {
+    overlayText.textContent = text;
+    overlaySpinner.hidden = !spinning;
+    overlay.hidden = false;
+  }
+
+  /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
+  function enterReconnect(unreachable) {
+    if (dialog.open) dialog.close();
+    pluginPanel.clearSpawnPicker();
+    if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
+    if (unreachable) state.reconnect.wasDown = true;
+    showOverlay("Restarting the server… reconnecting", true);
+    updateFooter();
+    stopPolling();
+    var delay = state.reconnect.delay;
+    state.reconnect.delay = Math.min(delay * 2, RECONNECT_MAX_MS);
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); }, delay);
+  }
+
+  /**
+   * Back in touch with the server. The edits are cleared only when the apply went through:
+   * nothing is pending any more and world.local.json changed since the Apply. Another restart
+   * during the countdown (nodemon on a file edit, SIGTERM) comes back with nothing pending and
+   * no failure either, but the file unchanged: the edits stay.
+   */
+  function finishReconnect(body) {
+    var wasDown = !!(state.reconnect && state.reconnect.wasDown);
+    state.reconnect = null;
+    overlay.hidden = true;
+    settleApply(body, wasDown, true);
+  }
+
+  /** What an accepted Apply came to; stays up until dismissed or the next accepted Apply. */
+  function showOutcome(kind, text) {
+    clearOutcome();
+    state.outcomeNote = flash(kind, text);
+  }
+  function clearOutcome() {
+    if (state.outcomeNote) state.outcomeNote.remove();
+    state.outcomeNote = null;
+  }
+
+  /**
+   * `wasDown`: the page lost the server for a while (a restart happened). Without that, an Apply
+   * request that was lost before reaching a server that stayed up reads as "not applied".
+   * `reconnecting`: called on the way out of the reconnect overlay.
+   */
+  function settleApply(body, wasDown, reconnecting) {
+    var settled = !body.pending;
+    var awaited = settled && !body.lastFailure && (state.applied === true || state.applied === "unknown");
+    var applied = awaited && body.layers.localHash !== state.appliedHash;
+    if (applied) state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+    if (settled || body.lastFailure) { state.applied = false; state.appliedHash = null; }
+    state.data = body;
+    build();
+    renderBanners();
+    updateFooter();
+    if (applied) {
+      showOutcome("info", "Restarted with your changes.");
+    } else if (awaited) {
+      showOutcome("warn", wasDown
+        ? "The server restarted before your change was written; nothing was saved."
+        : "Your change wasn't applied; nothing was saved.");
+    } else if (body.lastFailure) {
+      clearOutcome();
+    } else if (reconnecting) {
+      var note = flash("info", "Reconnected.");
+      setTimeout(function () { note.remove(); }, 4000);
+    }
+    schedulePoll();
+  }
+
+  function load(rebuild) {
+    return api("/api/catalog").then(function (res) {
+      if (res.status === 401) {
+        stopPolling();
+        if (state.reconnect) {
+          showOverlay("The server's access link changed — open the new link from the server log.", false);
+        } else {
+          showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…).");
+        }
+        return;
+      }
+      if (!res.ok || !res.body) {
+        if (state.reconnect) { enterReconnect(true); return; }
+        showFatal("Could not load the catalog: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      renderServerStatus(res.body);
+      if (state.reconnect) {
+        if (res.body.serverStatus === "starting") { enterReconnect(true); return; }
+        // Still the old process on its way down: keep waiting. A countdown that is still running
+        // (a network blip) returns to the page, where its Cancel is.
+        var down = res.body.pending;
+        if (down && !res.body.lastFailure && (down.kind === "now" || (res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+          enterReconnect();
+          return;
+        }
+        finishReconnect(res.body);
+        return;
+      }
+      // Nothing pending any more for an accepted Apply that the page never saw the server drop
+      // for: it was cancelled in game, or the server restarted between two polls.
+      if (state.applied && !res.body.pending) {
+        settleApply(res.body, false, false);
+        return;
+      }
+      var hadData = !!state.data;
+      var hashChanged = hadData && state.data.layers.localHash !== res.body.layers.localHash;
+      var statusChanged = hadData && state.data.serverStatus !== res.body.serverStatus;
+      state.data = res.body;
+      if (rebuild || !hadData || hashChanged || statusChanged) {
+        if (hashChanged && !rebuild && editCount() > 0) flash("warn", "world.local.json changed on disk; the page reloaded it and kept your unsaved edits where they still apply.");
+        build();
+      }
+      if (statusChanged && state.tab === "players") playersPanel?.refresh();
+      renderBanners();
+      updateFooter();
+      var pending = res.body.pending;
+      if (pending && (pending.kind === "now" || (pending.kind === "countdown" && res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
+        // The countdown reached zero (or there was none): the server is about to go down.
+        enterReconnect();
+        return;
+      }
+      schedulePoll();
+    }, function () {
+      // Network error: the server is restarting or stopped answering.
+      enterReconnect(true);
+    });
+  }
+
+  function showFatal(text) {
+    document.getElementById("loading").hidden = true;
+    var box = document.getElementById("banners");
+    box.textContent = "";
+    box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: text })]));
+    state.bannerSignature = null;
+    document.getElementById("countdown-banner").textContent = "";
+    state.countdownKey = null;
+  }
+
+  function stopPolling() {
+    if (state.pollTimer) clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+  }
+  function schedulePoll() {
+    stopPolling();
+    var status = state.data?.serverStatus;
+    var changing = status === "starting" || status === "stopping";
+    if (!status && !busy()) return;
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; load(false); },
+      busy() || changing ? POLL_MS : 5000);
+  }
+
+  function cancelCountdown() {
+    api("/api/cancel", {}).then(function (res) {
+      if (!res.ok) flash("error", "Cancel failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+      else if (res.body && res.body.cancelled) {
+        state.applied = false;
+        state.appliedHash = null;
+        flash("info", "Restart cancelled. world.local.json was not changed.");
+      }
+      else flash("warn", "There was no countdown to cancel.");
+      load(false);
+    }, function () { enterReconnect(); });
+  }
+
+  // ---------- preview and apply ----------
+
+  var dialog = document.getElementById("preview");
+  var applyButton = document.getElementById("apply");
+
+  function renderPlan(plan, extraError) {
+    var box = document.getElementById("preview-content");
+    box.textContent = "";
+    if (extraError) box.appendChild(el("div", { className: "banner error", role: "alert" }, [el("div", { className: "text", text: extraError })]));
+    if (plan.errors && plan.errors.length) {
+      box.appendChild(el("h3", { text: "Errors (nothing can be saved until these are fixed)" }));
+      box.appendChild(el("ul", { className: "list" }, plan.errors.map(function (e) { return el("li", { text: e }); })));
+    }
+    if (plan.warnings && plan.warnings.length) {
+      box.appendChild(el("h3", { text: "Warnings" }));
+      box.appendChild(el("ul", { className: "list" }, plan.warnings.map(function (w) { return el("li", { text: w }); })));
+    }
+    if (plan.diff && plan.diff.length) {
+      var table = el("table", { className: "diff" }, [
+        el("thead", null, [el("tr", null, [el("th", { scope: "col", text: "Key" }), el("th", { scope: "col", text: "Before" }), el("th", { scope: "col", text: "After" })])]),
+        el("tbody", null, plan.diff.map(function (d) {
+          return el("tr", null, [
+            el("td", { text: d.path }),
+            el("td", { text: d.before === undefined ? "(not set)" : JSON.stringify(d.before) }),
+            el("td", { text: d.after === undefined ? "(removed)" : JSON.stringify(d.after) }),
+          ]);
+        })),
+      ]);
+      box.appendChild(table);
+    } else {
+      box.appendChild(el("p", { text: "world.local.json would not change." }));
+    }
+    var d = state.data;
+    var players = d.onlinePlayers || 0;
+    var countdown = d.mode !== "manual" && players > 0 && d.countdown && d.countdown.available !== false;
+    document.getElementById("seconds-wrap").hidden = !countdown;
+    var note;
+    if (d.mode === "manual") note = "Apply writes world.local.json now. Restart the server by hand for it to take effect.";
+    else if (countdown) note = players + (players === 1 ? " player is" : " players are") + " online: Apply starts the world update countdown. The file is written when it ends; Cancel leaves it unchanged.";
+    else if (players > 0) note = "Countdown unavailable (GameUpdate is off): Apply restarts immediately.";
+    else note = "Nobody is online: Apply saves, writes world.local.json and restarts the server now.";
+    box.appendChild(el("p", { text: note }));
+    applyButton.textContent = d.mode === "manual" ? "Write file" : countdown ? "Start countdown" : "Restart now";
+    applyButton.disabled = !!(plan.errors && plan.errors.length) || !(plan.diff && plan.diff.length);
+  }
+
+  document.getElementById("save").addEventListener("click", function () {
+    // A JSON box validates on blur; make sure the one being typed in has been checked.
+    if (document.activeElement && document.activeElement.tagName === "TEXTAREA") document.activeElement.blur();
+    if (anyInvalid()) { updateFooter(); return; }
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    api("/api/preview", body).then(function (res) {
+      if (!res.ok || !res.body || !res.body.diff) {
+        flash("error", "Preview failed: " + ((res.body && res.body.error) || "HTTP " + res.status));
+        return;
+      }
+      state.lastPlan = res.body;
+      document.getElementById("seconds").value = String(DEFAULT_SECONDS);
+      renderPlan(res.body);
+      if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+    }, function () { enterReconnect(); });
+  });
+
+  document.getElementById("preview-close").addEventListener("click", function () { dialog.close(); });
+
+  applyButton.addEventListener("click", function () {
+    var body = { changes: changesPayload(), localHash: state.data.layers.localHash };
+    if (!document.getElementById("seconds-wrap").hidden) {
+      var seconds = Number(document.getElementById("seconds").value);
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400) {
+        renderPlan(state.lastPlan, "Countdown must be a whole number of seconds from 1 to 86400.");
+        return;
+      }
+      body.seconds = seconds;
+    }
+    applyButton.disabled = true;
+    api("/api/apply", body).then(function (res) {
+      var b = res.body || {};
+      // A newly accepted Apply makes the previous one's outcome note stale.
+      if ((res.status === 200 || res.status === 202) && b.applied) clearOutcome();
+      if (res.status === 200 && b.applied === "written") {
+        dialog.close();
+        state.edits = { world: {}, plugins: {}, pluginConfig: {} };
+        flash("info", "world.local.json written. Restart the server for the change to take effect.");
+        load(true);
+      } else if (res.status === 202 && b.applied === "countdown") {
+        dialog.close();
+        state.applied = true;
+        state.appliedHash = body.localHash;
+        load(false);
+      } else if (res.status === 202 && b.applied === "restarting") {
+        state.applied = true;
+        state.appliedHash = body.localHash;
+        enterReconnect();
+      } else if (res.status === 400 && b.diff) {
+        state.lastPlan = b;
+        renderPlan(b);
+      } else {
+        renderPlan(state.lastPlan, b.error || "Apply failed (HTTP " + res.status + ").");
+        if (res.status === 409) load(false);
+      }
+    }, function () {
+      // The server went away mid-request: wait for it, and judge by world.local.json afterwards.
+      state.applied = "unknown";
+      state.appliedHash = body.localHash;
+      enterReconnect();
+    });
+  });
+
+  window.addEventListener("beforeunload", function (event) {
+    if (editCount() > 0 && !state.reconnect) { event.preventDefault(); event.returnValue = ""; }
+  });
+
+  var disclaimer = document.getElementById("local-host-disclaimer");
+  var disclaimerKey = "tsps.localHostingDisclaimer.dismissed";
+  try { disclaimer.hidden = localStorage.getItem(disclaimerKey) === "1"; } catch {}
+  document.getElementById("dismiss-local-host-disclaimer").addEventListener("click", function () {
+    disclaimer.hidden = true;
+    try { localStorage.setItem(disclaimerKey, "1"); } catch {}
+    document.getElementById("search").focus();
+  });
+
+  var initialTab = new URLSearchParams(window.location.search).get("view");
+  if (sections.includes(initialTab)) selectTab(initialTab);
+  load(true);
+})();
+</script>
+</body>
+</html>

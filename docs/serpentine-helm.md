@@ -24,7 +24,10 @@ checked 26 October 2026, specifies the following:
 The [Buy 50, Item Changes and QoL update](https://oldschool.runescape.wiki/w/Update:Buy_50,_Item_Changes_and_QoL)
 explicitly includes poisoned arrows and bolts in the 50% chance, excludes the
 emerald bolt enchantment, and requires positive damage against an NPC. The handler
-now reads the selected ammunition, including self-ammo weapons and quiver selection.
+reads the worn projectile: the ammunition slot when the weapon fires from it (a bow or
+crossbow, `Ammunition.firesFromAmmoSlot`), otherwise the weapon itself (a thrown weapon,
+a chinchompa or a self-ammo bow such as the crystal bow). A (p) arrow or bolt counts by
+its own name; the combat ammunition reports it as its plain variant.
 A poisoned melee weapon does not grant this bonus to a manually cast spell.
 
 The [Trident of the Swamp](https://oldschool.runescape.wiki/w/Trident_of_the_Swamp)

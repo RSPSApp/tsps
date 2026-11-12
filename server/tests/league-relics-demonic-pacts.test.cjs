@@ -100,9 +100,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   Common = require("../plugins/modes/leaguerelics/Common.LeagueRelics");
   Unlock = require("../plugins/modes/leaguerelics/Unlock.LeagueRelics");
   require("../plugins/skills/smithing/Data.Smithing").load(core);
@@ -1671,6 +1671,25 @@ test("Transmute: Convergence goes a tier down; loose items convert in place: 10 
   assert.equal(inventory.getAmount(I.BONES), 22, "6 free slots for 10 bones");
   assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
   assert.equal(player.sent.messages.length, messages + 1);
+});
+
+test("Transmute: a click waiting for the cast is dropped under a dialogue opened meanwhile; without one it converts", (t) => {
+  const tick = withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  for (const dialogue of [true, false]) {
+    inventory.resetItems();
+    tick(5);
+    inventory.adds(I.UNCUT_DIAMOND, 1);
+    inventory.adds(I.UNCUT_RUBY, 1);
+    castOn(player, "Alchemic Convergence", 0);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), 2, "the first cast");
+    castOn(player, "Alchemic Convergence", 1); // during the cast: it waits
+    if (dialogue) player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Craft a scarab emblem?")));
+    tick(5);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), dialogue ? 2 : 0, dialogue ? "not converted under the dialogue" : "the waiting click converts both rubies held");
+    player.getDialogueManager().reset();
+  }
 });
 
 test("Transmute: an item no row has, and the lowest tier, as recorded; a stackable stack (runes) moves 10", (t) => {

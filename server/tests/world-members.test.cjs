@@ -12,20 +12,30 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const f2pZone = { minX: 3200, maxX: 3263, minY: 3200, maxY: 3263, z: 0, tags: ['f2p'] };
 const world = (extra) => ({ spawn: { x: 3222, y: 3219, z: 0 }, zones: [{ tags: [] }], ...extra });
 
-test('membersWorld defaults to true', () => {
+test('worlds default to members mode and ignore the old membersWorld field', () => {
   assert.equal(parseWorldDefinition(world()).membersWorld, true);
+  assert.equal(parseWorldDefinition(world({ membersWorld: false })).membersWorld, true);
+  assert.equal(parseWorldDefinition(world({ plugins: { FreeToPlay: false } })).membersWorld, true);
 });
 
 test('a free-to-play world needs f2p zones', () => {
-  assert.throws(() => parseWorldDefinition(world({ membersWorld: false })), WorldDefinitionValidationError);
-  assert.equal(parseWorldDefinition(world({ membersWorld: false, zones: [f2pZone] })).membersWorld, false);
-  assert.throws(() => parseWorldDefinition(world({ membersWorld: 'no' })), WorldDefinitionValidationError);
+  assert.throws(() => parseWorldDefinition(world({ plugins: { FreeToPlay: true } })), WorldDefinitionValidationError);
+  assert.equal(parseWorldDefinition(world({ plugins: { FreeToPlay: true }, zones: [f2pZone] })).membersWorld, false);
+  assert.equal(parseWorldDefinition(world({ plugins: { FreeToPlay: { enabled: true } }, zones: [f2pZone] })).membersWorld, false);
+});
+
+test('FreeToPlay is off by default and follows its explicit switch alongside a legacy plugin list', () => {
+  assert.equal(require('../plugins/modes/FreeToPlay.plugin').enabled, false);
+  assert.equal(PluginManager.parsePluginSwitches({ disabledPlugins: [] }).switches.get('freetoplay'), false);
+  assert.equal(PluginManager.parsePluginSwitches({
+    disabledPlugins: ['FreeToPlay'], plugins: { FreeToPlay: true },
+  }).switches.get('freetoplay'), true);
 });
 
 test('a free-to-play spawn must be in free land, since members-area players are sent there', () => {
   const outside = { spawn: { x: 2900, y: 3450, z: 0 } };
-  assert.throws(() => parseWorldDefinition(world({ membersWorld: false, zones: [f2pZone], ...outside })), WorldDefinitionValidationError);
-  assert.equal(parseWorldDefinition(world({ membersWorld: false, zones: [{ tags: ['f2p'] }], ...outside })).membersWorld, false);
+  assert.throws(() => parseWorldDefinition(world({ plugins: { FreeToPlay: true }, zones: [f2pZone], ...outside })), WorldDefinitionValidationError);
+  assert.equal(parseWorldDefinition(world({ plugins: { FreeToPlay: true }, zones: [{ tags: ['f2p'] }], ...outside })).membersWorld, false);
 });
 
 test('the shipped world.json has f2p zones covering the spawn', () => {
@@ -56,6 +66,11 @@ test('shipped Rellekka and Hosidius crab coasts allow multicombat without PvP', 
   for (const [x, y] of [[2677, 3711], [2704, 3728], [2736, 3712], [1700, 3589], [1800, 3050]]) {
     assert.equal(Wilderness.isMulti(x, y, 0), false, `preserve the single-combat side at ${x},${y}`);
   }
+  // The Hosidius jetty at x 1726 is single-way from y 3457 south to its boat (3453); 3458 is multi
+  // (rsprox 235/03467.txt:452793-454963, the multiway indicator a tick behind each step).
+  const inMulti = (x, y) => AreaManager.inMulti({ getArea: () => null, getLocation: () => new Location(x, y, 0) });
+  for (const y of [3453, 3454, 3455, 3456, 3457]) assert.equal(inMulti(1726, y), false, `jetty 1726,${y}`);
+  for (const [x, y] of [[1726, 3458], [1726, 3452], [1725, 3455], [1727, 3455]]) assert.equal(inMulti(x, y), true, `${x},${y}`);
 });
 
 test('Fossil Island mapped multicombat coasts retain their boundaries and plane', () => {
@@ -148,7 +163,7 @@ test('isMembersArea map-square index matches a scan of every f2p zone', () => {
   try {
     fs.mkdirSync(path.join(directory, 'data/definitions'), { recursive: true });
     fs.writeFileSync(path.join(directory, 'data/definitions/world.json'),
-      JSON.stringify({ ...shipped, membersWorld: false }));
+      JSON.stringify({ ...shipped, plugins: { ...shipped.plugins, FreeToPlay: true } }));
     process.chdir(directory);
     delete require.cache[modulePath];
     const { isMembersArea, zoneContains } = require(modulePath);
@@ -189,7 +204,7 @@ test('Wintertodt does not register its prison hooks on a free world', () => {
   try {
     fs.mkdirSync(path.join(directory, 'data/definitions'), { recursive: true });
     fs.writeFileSync(path.join(directory, 'data/definitions/world.json'),
-      JSON.stringify(world({ membersWorld: false, zones: [f2pZone] })));
+      JSON.stringify(world({ plugins: { FreeToPlay: true }, zones: [f2pZone] })));
     fs.mkdirSync(path.join(directory, 'plugins'));
     fs.symlinkSync(pluginPath, path.join(directory, 'plugins/Wintertodt.plugin.js'));
     plugin.register = () => { registrations++; };

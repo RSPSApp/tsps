@@ -110,6 +110,37 @@ test("a custom preset still takes a real non-spawnable item from the bank", (t) 
   assert.equal(banked, 0, "and taken from the bank");
 });
 
+// A preset copy can reach the bank (::maxgear banks worn items without the bank's check, or an older save). The load
+// counted and took bank copies by id, so it counted that copy, could take it, and gave back a plain item.
+test("a preset copy in the bank is not counted or taken by a custom preset", (t) => {
+  const ags = I.ARMADYL_GODSWORD;
+  const presetCopy = () => {
+    const copy = new core.Item(ags, 1);
+    for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) copy.setMetaValue(meta, true);
+    return copy;
+  };
+  const custom = () => new Presetable("mine", [new core.Item(ags, 1)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  const plainCarried = (p) => [...p.getInventory().getValidItems(), ...p.getEquipment().getValidItems()]
+    .filter((item) => item.getId() === ags && !item.isPresetItem()).length;
+
+  const only = actor(t);
+  only.p.getBank(0).setItem(0, presetCopy());
+  Presets.applyPreset(only.p, custom());
+  assert.equal(plainCarried(only.p), 0, "no real godsword is made from the banked copy");
+  assert.ok(only.messages.some((m) => /non-spawnable item/.test(m)), only.messages.join(" | "));
+  assert.equal(only.p.getBank(0).getItems()[0].isPresetItem(), true, "the copy is left in the bank");
+
+  const both = actor(t);
+  both.p.getBank(0).setItem(0, presetCopy());
+  both.p.getBank(0).setItem(1, new core.Item(ags, 1));
+  Presets.applyPreset(both.p, custom());
+  assert.equal(plainCarried(both.p), 1, "the real godsword is carried");
+  const bank = both.p.getBank(0).getItems();
+  assert.equal(bank[0].getId(), ags, "the preset copy stays in the bank");
+  assert.equal(bank[0].isPresetItem(), true);
+  assert.equal(bank.filter((item) => item?.getId() === ags && !item.isPresetItem() && item.getAmount() > 0).length, 0, "the real one was taken");
+});
+
 // The preset saves each item with its meta (charges). Loading took any copy from the bank by id but gave back a clone
 // carrying the saved meta, so a charged item came back full on every reload. It now keeps the taken copy's own meta.
 test("a custom preset gives back the real item as it is, not as it was saved", (t) => {

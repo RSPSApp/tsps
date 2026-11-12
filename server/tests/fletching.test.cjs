@@ -115,7 +115,7 @@ beforeEach(() => {
 test("every recipe resolves to cache items, animations and varbits", () => {
   for (const recipe of Shared.getRecipes()) {
     assert.ok(CacheDefinitions.getItem(recipe.outputId), `output ${recipe.outputId}`);
-    assert.ok(Shared.animationOf(recipe).getId() >= 0);
+    if (recipe.animationName != null) assert.ok(Shared.animationOf(recipe).getId() >= 0);
     if (recipe.instantVarbit) assert.ok(Shared.varbitId(recipe.instantVarbit) > 0);
   }
   assert.equal(Shared.getRecipes().length, DATA.recipes.length);
@@ -545,4 +545,32 @@ test("tipping bolts: sound 2605 and \"You fletch 10 bolts.\"; javelins use their
   const j = player({ items: { JAVELIN_SHAFT: 30, DRAGON_JAVELIN_TIPS: 30 } });
   use(j, "DRAGON_JAVELIN_TIPS", "JAVELIN_SHAFT");
   assert.equal(j.menu().getTitle(), "How many sets of 15 do you wish to make?");
+});
+
+// rsprox.net recording 801 (rev 234, an event world with 15x XP): the tip on a mithril bolt at tick 594 gives the
+// grapple, human_fletching_add_bolt_tips_mithril, sound 2605, "You add a grapple tip to a mithril bolt." and 165 XP
+// (11 x 15) at 595; a rope on it at 617 gives the roped grapple, sound 2605 and "You attach a rope to the mithril
+// grapple." at 618, with no animation and no XP.
+test("mith grapple: tip on a mithril bolt, then a rope, with the recorded lines, sound and animation", () => {
+  const p = player({ items: { MITH_GRAPPLE_TIP: 1, MITHRIL_BOLTS: 10, ROPE: 1 } });
+  use(p, "MITH_GRAPPLE_TIP", "MITHRIL_BOLTS");
+  assert.equal(p.menu(), null, "one tip is fitted without a menu");
+  assert.deepEqual(p.animations, [], "nothing plays on the click's own tick");
+  assert.deepEqual(ticksOf(p, "MITH_GRAPPLE"), [1]);
+  assert.deepEqual(p.animations, [CacheDefinitions.getSeqId("human_fletching_add_bolt_tips_mithril")]);
+  assert.deepEqual(p.sounds, [2605]);
+  assert.deepEqual(p.spam, ["You add a grapple tip to a mithril bolt."]);
+  assert.equal(p.xp(), 11);
+  assert.equal(p.count("MITHRIL_BOLTS"), 9);
+  assert.equal(p.count("MITH_GRAPPLE_TIP"), 0);
+
+  use(p, "ROPE", "MITH_GRAPPLE");
+  assert.equal(p.menu(), null);
+  assert.deepEqual(ticksOf(p, "MITH_GRAPPLE_2"), [1]);
+  assert.equal(p.animations.length, 1, "attaching the rope plays no animation");
+  assert.deepEqual(p.sounds, [2605, 2605]);
+  assert.deepEqual(p.spam, ["You add a grapple tip to a mithril bolt.", "You attach a rope to the mithril grapple."]);
+  assert.equal(p.xp(), 11, "the rope gives no XP");
+  assert.equal(p.count("MITH_GRAPPLE"), 0);
+  assert.equal(p.count("ROPE"), 0);
 });

@@ -612,8 +612,9 @@ test('AFL stages 1-4 as captured: Verity names Wolf (2), the mouse (3), Kiko dis
   assert.equal(h.quest.getStage(p), 3);
   h.continueUntil(p, () => /small toy mouse/.test(p.text)); assert.equal(p.items.get(I.TOY_MOUSE), 1); assert.equal(p.varbits.get(9843), 1);
   p.manager.reset();
-  h.itemActions.get('Toy mouse').Wind({ player: p, itemId: I.TOY_MOUSE }); assert.equal(p.items.get(I.TOY_MOUSE_WOUND_), 1);
-  assert.ok(p.messages.includes('You wind up the mouse.'));
+  // Wind belongs to construction/ClockworkToys.Construction.js (tests/construction-clockwork-toys.test.cjs).
+  assert.equal(h.itemActions.get('Toy mouse')?.Wind, undefined, 'the quest leaves Wind to the clockwork toys');
+  p.items.set(I.TOY_MOUSE, 0); p.items.set(I.TOY_MOUSE_WOUND_, 1);
   h.hooks.onItemOnNpc[0]({ player: p, itemId: I.TOY_MOUSE_WOUND_, npcId: N.GUILD_HUNTER_KIKO });
   assert.equal(p.items.get(I.TOY_MOUSE_WOUND_), 0); assert.equal(p.varbits.get(9839), 1); assert.equal(p.text, 'Here you go, little guy.');
   p.manager.advance(); assert.equal(p.text, 'A mouse? Fantastic!'); p.manager.reset();
@@ -1514,7 +1515,8 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
 
   h.namedNpcs.get('Primio').Travel({ player: p, npcId: N.PRIMIO_3 });
   h.tick(4);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3281, 3413, 0]);
+  // rsprox 226/01695.txt:41709 (and 234/03275.txt:91289, :91595): Primio lands at (3280, 3412, 0).
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3280, 3412, 0]);
   h.tick(3);
   h.namedNpcs.get('Primio').Travel({ player: p, npcId: N.PRIMIO_2 });
   h.tick(4);

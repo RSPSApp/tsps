@@ -33,6 +33,10 @@ const {
   LIMITS_ATTRIBUTE,
   HISTORY_ATTRIBUTE,
   HISTORY_LIMIT,
+  REMINDERS_ATTRIBUTE,
+  REMINDED_AT_ATTRIBUTE,
+  collectionReminder,
+  remindCollection,
   tradeHistory,
   recordHistory,
   LIMIT_WINDOW_MS,
@@ -356,6 +360,7 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
   const messages = [];
   const timers = [];
   const customEvents = new Map();
+  const npcActions = new Map();
   const emitEvent = (eventName, payload) => {
     for (const handler of customEvents.get(eventName) ?? []) handler(payload);
   };
@@ -377,6 +382,8 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
     sendMessage: message => messages.push(message),
     setEnteredAmountAction: action => { p.amountAction = action; },
     setEnteredSyntaxAction: action => { p.syntaxAction = action; },
+    dialogueResets: 0,
+    getDialogueManager: () => ({ reset() { p.dialogueResets++; } }),
   };
   const inventory = new Inventory(p);
   p.getInventory = () => inventory;
@@ -400,6 +407,7 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
       customEvents.set(eventName, handlers);
     },
     onInterfaceActionButton: (ids, handler) => buttons.push({ ids, handler }),
+    onNpcInteraction: (name, actions) => npcActions.set(name, { ...npcActions.get(name), ...actions }),
   }, { get: (api, key) => api[key] ?? (handler => { hooks[key] = handler; }) }));
 
   const click = (child, slot = 0) => {
@@ -425,7 +433,8 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
     click(30);
     return p.getAttribute(OFFERS_ATTRIBUTE)[slot];
   };
-  return { p, inventory, place, click, historyClick, emitEvent, hooks, buttons, calls, messages, timers };
+  const listen = (eventName, handler) => customEvents.set(eventName, [...(customEvents.get(eventName) ?? []), handler]);
+  return { p, inventory, place, click, historyClick, emitEvent, listen, hooks, buttons, calls, messages, timers, npcActions };
 }
 
 test('maxTradeDelay overrides volume and price caps for newly placed buys and sells', t => {
@@ -644,6 +653,115 @@ test('History Buy-offer action starts a buy for the selected row', t => {
   assert.ok(calls.some(({ name, args }) => name === 'sendConfig' && args[0] === 1151 && args[1] === HISTORY_BUY));
 });
 
+test("the clerk's History option opens the trade history on its own", t => {
+  const { p, calls, npcActions, historyClick } = exchange(t);
+  p.setInterfaceId(-1);
+  p.setAttribute(HISTORY_ATTRIBUTE, [{ itemId: HISTORY_BUY, sell: false, quantity: 1, total: 150, tax: 0 }]);
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+
+  assert.equal(p.getInterfaceId(), 383);
+  assert.deepEqual(calls.filter(({ name }) => name === 'sendSubInterface').map(({ args }) => args), [[(161 << 16) | 16, 383, 0]]);
+  assert.deepEqual(calls.find(({ name, args }) => name === 'sendInterfaceScript' && args[0] === 1645).args,
+    [1645, [0, HISTORY_BUY, 0, 1, 150n, 0n]]);
+  assert.deepEqual(calls.find(({ name }) => name === 'sendInterfaceFlagsRange').args, [(383 << 16) | 3, 0, 234, 1026]);
+
+  // Its Buy-offer row action still starts a buy on the offers screen.
+  historyClick(3, 0);
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name, args }) => name === 'sendConfig' && args[0] === 1151 && args[1] === HISTORY_BUY));
+});
+
+test("the clerk's History, opened from the offers screen, replaces it", t => {
+  const { p, calls, npcActions } = exchange(t);
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+  assert.equal(calls[0].name, 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), 383);
+});
+
+test("the clerk's History is refused where the exchange is", t => {
+  const { p, calls, npcActions, listen, messages } = exchange(t);
+  p.setInterfaceId(-1);
+  listen('grand-exchange:can-open', (request) => { request.allow = false; request.message = 'Not here.'; });
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+  assert.equal(p.getInterfaceId(), -1);
+  assert.equal(calls.some(({ name }) => name === 'sendSubInterface'), false);
+  assert.deepEqual(messages, ['Not here.']);
+});
+
+test("the clerk's Talk-to trade offers choice closes the chat and opens the exchange", t => {
+  const { p, calls, emitEvent } = exchange(t);
+  p.setInterfaceId(-1);
+  const action = { player: p, action: 'open_interface', target: 'Grand Exchange', handled: false };
+  emitEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(p.dialogueResets, 1);
+  assert.equal(calls[0].name, 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 465));
+
+  const other = { player: p, action: 'open_interface', target: 'Grand Exchange collection box', handled: false };
+  emitEvent('npc-dialogue:action', other);
+  assert.equal(other.handled, false);
+});
+
+const clerk = { getName: () => 'Grand Exchange Clerk' };
+const ON_CONDITION = 'If the player has Exchange collection reminders on login on:';
+const OFF_CONDITION = 'If the player has Exchange collection reminders on login off:';
+
+test("the clerk's Talk-to offers the reminder option the setting is not on, and its line sets it", t => {
+  const { p, hooks, emitEvent } = exchange(t);
+  const condition = (text, definition = clerk) => hooks.onNpcDialogueCondition({ player: p, definition, text });
+  // Reminders start on.
+  assert.equal(condition(ON_CONDITION), true);
+  assert.equal(condition(OFF_CONDITION), false);
+  assert.equal(condition(ON_CONDITION, { getName: () => 'Banker' }), null);
+  assert.equal(condition('If the player is on a members world:'), null);
+
+  emitEvent('npc-dialogue:line', { player: p, definition: clerk, step: { npc:
+    'Okay, when you log in, you will no longer be reminded about items waiting to be collected, unless the items only arrived after you logged out.' } });
+  assert.equal(p.getAttribute(REMINDERS_ATTRIBUTE), false);
+  assert.equal(condition(ON_CONDITION), false);
+  assert.equal(condition(OFF_CONDITION), true);
+
+  emitEvent('npc-dialogue:line', { player: p, definition: clerk, step: { npc:
+    "Okay, when you log in, we'll send you a message about any items that are waiting for you to collect them." } });
+  assert.equal(p.getAttribute(REMINDERS_ATTRIBUTE), true);
+});
+
+test('login reminds of the collection box, at most once every two minutes, unless turned off', t => {
+  const { p, messages } = exchange(t);
+  p.setAttribute(OFFERS_ATTRIBUTE, {
+    0: { itemId: PRICED, sell: true, slot: 0, quantity: 1, price: 1_609_993, total: 1_609_993, traded: 1_609_993,
+      finished: true, completesAt: null },
+  });
+  // A finished sale pays its coins less the tax.
+  const coins = 1_609_993 - tax(p.getAttribute(OFFERS_ATTRIBUTE)[0]);
+  const expected = `Grand Exchange collection: <col=ef1020>${coins.toLocaleString('en-US')} coins</col>`;
+  assert.equal(collectionReminder(p), expected);
+
+  remindCollection({ player: p }, 1_000_000);
+  assert.deepEqual(messages, [expected]);
+  remindCollection({ player: p }, 1_000_000 + 2 * 60_000 - 1);
+  assert.equal(messages.length, 1);
+  remindCollection({ player: p }, 1_000_000 + 2 * 60_000);
+  assert.equal(messages.length, 2);
+  assert.equal(p.getAttribute(REMINDED_AT_ATTRIBUTE), 1_000_000 + 2 * 60_000);
+
+  p.setAttribute(REMINDERS_ATTRIBUTE, false);
+  remindCollection({ player: p }, 10_000_000);
+  assert.equal(messages.length, 2);
+});
+
+test('the reminder lists items after coins and says nothing for an empty box', t => {
+  const { p } = exchange(t);
+  assert.equal(collectionReminder(p), null);
+  p.setAttribute(OFFERS_ATTRIBUTE, {
+    0: { itemId: HISTORY_BUY, sell: false, slot: 0, quantity: 3, price: 50, total: 200, traded: 150, finished: true, completesAt: null },
+    1: { itemId: PRICED, sell: true, slot: 1, quantity: 1, price: 90, total: 90, finished: false, completesAt: Date.now() + 1000 },
+  });
+  assert.equal(collectionReminder(p), `Grand Exchange collection: <col=ef1020>50 coins, 3 x Item ${HISTORY_BUY}</col>`);
+});
+
 test('register persists offers, limits, and history', () => {
   const persisted = new Map();
   const api = new Proxy({}, {
@@ -652,7 +770,9 @@ test('register persists offers, limits, and history', () => {
       : () => {},
   });
   plugin.register(api);
-  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE, HISTORY_ATTRIBUTE]);
+  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE, HISTORY_ATTRIBUTE, REMINDERS_ATTRIBUTE, REMINDED_AT_ATTRIBUTE]);
+  assert.equal(persisted.get(REMINDERS_ATTRIBUTE), true);
+  assert.equal(persisted.get(REMINDED_AT_ATTRIBUTE), undefined);
   assert.deepEqual(persisted.get(OFFERS_ATTRIBUTE), {});
   assert.deepEqual(persisted.get(LIMITS_ATTRIBUTE), {});
   assert.deepEqual(persisted.get(HISTORY_ATTRIBUTE), []);
@@ -1002,4 +1122,14 @@ test('a free world refuses a buy offer for a members item, and still sells one',
   seller.inventory.add(new Item(PRICED, 1), false);
   seller.place(true, PRICED, 1, 180);
   assert.equal(seller.inventory.getAmount(PRICED), 0, 'the members item is listed for sale');
+});
+
+// rsprox 226/01671.txt:24807 (and 232/03215.txt:42779): clicking an untradeable item in the GE side panel.
+test("an untradeable item clicked in the side panel says the recorded line", (t) => {
+  const UNTRADEABLE = 1099;
+  define(UNTRADEABLE, { isTradeable: () => false });
+  const { p, inventory, hooks, messages } = exchange(t);
+  inventory.add(new Item(UNTRADEABLE, 1), false);
+  hooks.onItemFirstAction({ player: p, itemId: UNTRADEABLE, slot: inventory.getSlotForItemId(UNTRADEABLE) });
+  assert.ok(messages.includes("You can't trade that item on the Grand Exchange."), messages.join(' | '));
 });

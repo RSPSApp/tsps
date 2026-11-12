@@ -59,10 +59,10 @@ test('two loading plugins declaring the same key: logged, the later one loses th
 });
 
 test('a plugin redeclaring a core key keeps loading and the core keeps the key', () => {
-  const { errors } = load({ A: plugin('Alpha', { 'CrossFloor:combat': COUNT }) });
+  const { errors } = load({ A: plugin('Alpha', { 'commands:permissions': COUNT }) });
   assert.deepEqual(loaded(), ['Alpha']);
-  assert.ok(errors.some((e) => /CrossFloor:combat/.test(e) && /core/.test(e)), errors.join('\n'));
-  assert.equal(PluginManager.getConfigDeclarations().get('CrossFloor:combat').owner, 'core');
+  assert.ok(errors.some((e) => /commands:permissions/.test(e) && /core/.test(e)), errors.join('\n'));
+  assert.equal(PluginManager.getConfigDeclarations().get('commands:permissions').owner, 'core');
 });
 
 test('an invalid declaration is logged and dropped; the plugin still loads', () => {
@@ -153,7 +153,7 @@ test('getConfigDeclarations lists loaded plugin keys with their owner plus the c
   const all = PluginManager.getConfigDeclarations();
   assert.equal(all.get('Fixture:count').owner, 'Fixture');
   assert.deepEqual(all.get('Fixture:count').decl, COUNT);
-  for (const key of ['CrossFloor:visibility', 'CrossFloor:combat', 'commands:permissions']) {
+  for (const key of ['commands:permissions']) {
     assert.equal(all.get(key).owner, 'core');
   }
 });

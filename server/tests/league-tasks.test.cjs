@@ -76,9 +76,9 @@ before(async () => {
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   // Stands in for QuestRuntime's answer.
   custom["quest:is-complete"] = [(request) => { request.complete = completedQuests.has(request.name); }];
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueTasks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Tasks.LeagueMode").register(api);
 });
 
 /** A real player whose packets are recorded in order; logged in as a new character of `profile`. */
@@ -171,9 +171,14 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     }
     for (const task of tasks) {
       assert.ok(([1, 2, 3, 4, 5, 6].includes(task.category) || (league.fromCache && task.category === -1)) && Object.values(catalog.areas).includes(task.area), task.id);
-      const cached = cacheRows.get(task.name.toLowerCase());
-      assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
-      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
+      if (league.eraCache) {
+        // The league's own cache (league-tasks-era-cache.test.cjs pins what it corrected).
+        assert.equal(task.categorySource, "era", task.id);
+      } else {
+        const cached = cacheRows.get(task.name.toLowerCase());
+        assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
+        if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
+      }
       if (task.trigger) {
         assert.ok(kinds.has(task.trigger.kind), `${task.id}: ${task.trigger.kind}`);
         for (const course of task.trigger.courses ?? []) assert.ok(courseKeys.has(course), `${task.id}: course ${course}`);

@@ -1,3 +1,4 @@
+import { lazyRequire } from "../../../util/LazyRequire";
 import { Entity } from "../Entity";
 import { getSequenceForcedPriority } from "../../cache/NpcAnimationScanner";
 import { Sound } from "../../Sound";
@@ -22,20 +23,21 @@ import { TimerRepository } from "../../../util/timers/TimerRepository";
 import { Misc } from "../../../util/Misc";
 import type { Boundary } from "../../model/Boundary";
 
-const getPlayerCtor = () =>
-  require("./player/Player").Player as typeof import("./player/Player").Player;
-const getNpcCtor = () =>
-  require("./npc/NPC").NPC as typeof import("./npc/NPC").NPC;
-const getCombatCtor = () =>
-  require("../../content/combat/Combat").Combat as typeof import("../../content/combat/Combat").Combat;
-const getMovementQueueCtor = () =>
-  require("../../model/movement/MovementQueue").MovementQueue as typeof import("../../model/movement/MovementQueue").MovementQueue;
-const getRegionManager = () =>
-  require("../../collision/RegionManager").RegionManager as typeof import("../../collision/RegionManager").RegionManager;
-const getWorld = () =>
-  require("../../World").World as typeof import("../../World").World;
-const getPlayerRights = () =>
-  require("../../model/rights/PlayerRights").PlayerRights as typeof import("../../model/rights/PlayerRights").PlayerRights;
+const getPlayerCtor = lazyRequire(() =>
+  require("./player/Player").Player as typeof import("./player/Player").Player);
+const getNpcCtor = lazyRequire(() =>
+  require("./npc/NPC").NPC as typeof import("./npc/NPC").NPC);
+const getCombatCtor = lazyRequire(() =>
+  require("../../content/combat/Combat").Combat as typeof import("../../content/combat/Combat").Combat);
+const getMovementQueueCtor = lazyRequire(() =>
+  require("../../model/movement/MovementQueue").MovementQueue as typeof import("../../model/movement/MovementQueue").MovementQueue);
+const getRegionManager = lazyRequire(() =>
+  require("../../collision/RegionManager").RegionManager as typeof import("../../collision/RegionManager").RegionManager);
+const getWorld = lazyRequire(() =>
+  require("../../World").World as typeof import("../../World").World);
+const getPlayerRights = lazyRequire(() =>
+  require("../../model/rights/PlayerRights").PlayerRights as typeof import("../../model/rights/PlayerRights").PlayerRights);
+// Not cached: tests reload PluginManager through require.cache, and this runs once per hit, not per check.
 const getPluginManager = () =>
   require("../../../plugins/PluginManager").PluginManager as typeof import("../../../plugins/PluginManager").PluginManager;
 

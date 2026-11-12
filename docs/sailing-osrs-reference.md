@@ -137,6 +137,37 @@ The gangplank's Board (op 1) opens the boat selection interface when you own sev
 - script 8778 `["", 1, "", 1]` runs;
 - players on board 19235 goes to 0.
 
+## Side panel (interface 937)
+
+rsprox captures, revs 235-238 (tabs: recordings 908, 920, 934, 948, 1030, 3451, 3455, 3461; sail
+row: about 11,000 clicks in 280 recordings, e.g. 856, 857, 901, 938, 940; sail cloth: 856, 938,
+1037, 3499, 3837).
+
+- **Tabs.** Facilities 937:33, Stats 937:34 and Crew 937:35 set `sailing_sidepanel_tabs` 19152 to
+  0, 1 and 2 on the click tick; the client draws the rest. Boarding sets it back to 0 (with the
+  boarded varbits); a shipyard visit sets it to 1, with `sailing_sidepanel_shipyard_mode`.
+- **Sail row (937:25 slots 0-2).** Each step sets the move mode 19175 and the sail button 19174 on
+  the click tick, with one sound:
+
+  | Step | Button | Sound |
+  | --- | --- | --- |
+  | Rest (0 or 4) to half: Set sails | slot 2 | 10832 |
+  | Half to full: Raise speed | slot 2 | 10836 |
+  | Full to half: Lower speed | slot 1 | 10834 |
+  | Half to stopped: Un-set sails | slot 1 | 10835 |
+  | Full to stopped: Un-set sails | slot 0 | 10833 |
+  | Rest to reversing: Reverse | slot 1 | none |
+  | Reversing to stopped: Stop boat | slot 2 | none |
+  | Full, slot 2 again | | game message "The boat is already going as fast as it can." |
+  | Reversing, slot 1 again | | game message "The boat is already reversing." |
+
+- **Straight to full sail** from rest plays 11089: the sail cloth's Set (op 2), the first
+  heading after taking the helm, and a crewmate setting sail. The sail cloth's Un-set (op 5)
+  from full plays 10833. Without anyone navigating, the cloth answers "You or a crewmate must be
+  navigating at the helm to adjust the sails."
+- Every captured sail-row click was made at the helm; what live does for a click away from it
+  is not captured.
+
 ## Per-boat varbits
 
 The server describes every owned boat to the client at login (live login capture) and whenever one changes. Each boat slot has a block of varbits, 38 ids apart: slot 1 starts at 19258, slot 2 at 19296, up to slot 5 at 19410.
@@ -229,13 +260,13 @@ From a capture of docking at Port Sarim's buoy and disembarking at its gangplank
 
 Red Rock and Last Light have neither, so they're left out.
 
-**The landing** is the one walkable tile beside the gangplank, on the jetty. Both captured ports land one tile west of their plank: Port Sarim (3050, 3193) and the Pandemonium (3069, 2987). Every other port has exactly one walkable neighbour, which matches the plank's rotation (3 west, 0 north, 1 east, 2 south) except at Entrana. Islands, where every neighbour is walkable, use the rotation.
+**The landing** is the one walkable tile beside the gangplank, on the jetty. Both captured ports land one tile west of their plank: Port Sarim (3050, 3193) and the Pandemonium (3069, 2987). Every other port has exactly one walkable neighbour, which matches the plank's rotation (3 west, 0 north, 1 east, 2 south) except at Entrana. Islands, where every neighbour is walkable, use the rotation, except the 18 mooring points with a captured disembark (rsprox, rev 235-238): live puts the player 1-4 tiles inland there (the Tear of the Soul (2321, 2774), Anglers' Retreat (2469, 2719), Brittle Isle (1955, 4058) and so on; only Last Light lands beside its plank). The other mooring points keep the rotation's tile.
 
 **The mooring** (where a boat is placed when it isn't where it was left) is the Pandemonium's captured one, applied to every port: out from the plank on the sea side, 4 tiles for a raft and 5 for a skiff or sloop, side-on (angle 1024 for an east-west plank, 512 for a north-south one).
 
 **Dock** (op 1 on a port's buoy, from the boat):
 - the boat's per-boat `port` varbit becomes the port's id;
-- `sailing_boarded_boat_last_dock` (19145) and `sailing_boarded_boat_last_standard_dock` (19146) become the port's id;
+- `sailing_boarded_boat_last_dock` (19145) and `sailing_boarded_boat_last_standard_dock` (19146) become the port's id; at a mooring point, 19145 and `sailing_boarded_boat_last_mooring_point` (19147) do instead (rsprox 944, 936, 3837, 960, 1029), and all three are sent at login;
 - "You dock the boat at Port Sarim. You will return here if you have to abandon your boat for any reason.", and sound 1794.
 
 The player stays aboard and the boat stays where it is. At sea, the `port` varbit keeps the port the boat last docked at (it was 1, the Pandemonium, until the Dock).
@@ -288,21 +319,31 @@ From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind
 **Boat schematics (59718) "Modify":**
 1. Varp 5190 is set to the boat type's row (8110-8112), and varbit 19525 to the boat's slot + 1.
 2. Script 2524 `[-1, -3]`, then interface **939** opens as the main modal. Script 8809 initialises it.
-3. 939:17 gets slots 0-50 with op 1 and script triggers.
+3. 939:17 gets slots 0-50 with op 1 and script triggers (`IF_SCRIPT_TRIGGER`, bit 23). The official client needs that event: without it, Build shows its spinner and never sends the trigger (see Build).
 4. Each option's preview is the part's **loc**. Script 8825 takes the loc id from the option's db row (script 9075, default 59660), its animation (9077) and its angle (9076), and passes the loc id to opcode 1214 (`cc_setmodel_loc`, model type 8). The client draws that loc's centrepiece model (shape 10) and never treats the id as a model id.
    - The angles come from table 188: the part's angles row (column 4 of its hull/keel/… row) holds `[boat size, offsetX, offsetY, xan, yan, zan, zoom]` tuples, and 9076 picks the one for the boat type's size (table 166 column 0). The skiff's hull is (-10, 0, 130, 1950, 0, 5000).
    - 9076 reads those tuples one value at a time: a packed db field's low 4 bits select one tuple element (1-based; 0 is the whole tuple).
 
-**Build:** script 8834 calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+**Build:** script 8834 shows the loading spinner (939:23, script 7137), then calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+- Only script 8811 (939's init and refresh) hides the spinner again, so the server closes or refreshes 939 after every Build.
+- The official client (RuneLite) sends the trigger (`IF_SCRIPT_TRIGGER`) only if the option has the script-trigger event. With op 1 alone, the spinner stayed up and nothing reached the server. The tsps browser client sends the trigger without checking the event.
 - The live packet carried `A6 81 01 00`: a zigzag varint of row **8275**, the skiff's camphor hull.
 - The server:
   1. takes the materials from the inventory;
   2. sets the part, with no refund of the old one;
-  3. gives Construction XP;
-  4. closes 939, clears varp 5190 and varbit 19525, and opens the message box (229) "With the help of some workers, you swap out the hull of your boat." with **no** "Click here to continue", then fades out;
-  5. next tick, rebuilds the boat from its new template column;
-  6. 4 ticks after the build, fades back in and reopens the message box, now with "Click here to continue". Continuing closes it and the fade overlay.
-- The hull swap also moves the per-boat trim varbit with it (trim follows hull). Lower tiers can be built too (downgrades).
+  3. closes 939, clears varp 5190 and varbit 19525, and opens the message box (229) "With the help of some workers, you swap out the hull of your boat." with **no** "Click here to continue", then fades out;
+  4. next tick, rebuilds the boat from its new template column and plays sounds 2104 and 2103 (delay 15);
+  5. 4 ticks after the build, fades back in, gives the Construction XP and reopens the message box, now with "Click here to continue". Continuing closes it and the fade overlay.
+- The message names the part: "the hull of", "the keel of" and "the trim of your boat", but "the helm on", "the mast and sails on", "the flag on" and "the brazier on your boat" (rsprox 908, 934, 937, 3461).
+- An unpainted trim follows the hull: the hull swap moves the per-boat trim varbit with it. Lower tiers can be built too (downgrades).
+- Every build gives XP, upgrade or downgrade: the stat packets after the 4-tick fade carry exactly the Wiki's value (sloop hull tier 4 1,380, keel 1,211, sails 139, helm 960; rsprox 937).
+
+**Cosmetic parts** (one option each, no tiers), rsprox 908, 937, 3461:
+- **Trims** (table 166 column 30, table 186): seven "No trim" rows (one per hull tier) and then the paints. The trim varbit (`sailing_boat_N_trim`, block +26; sidepanel 19172) is the option's position in that list: shark 7 and salvor's 10, as captured. A paint is used up (1 on a skiff, 2 on a sloop) and gives 10 or 20 Construction XP (Wiki: Trims). The raft has no trims. Choosing "No trim" takes the paint off (ours: no XP).
+- **Flags** (column 29, table 184): oak logs ×4 and a rope are used, the fabric roll is needed and kept (Wiki: Flags). 34 XP. `sailing_boat_N_flag` (block +13; sidepanel 19169) is the row's column 13 (1-3); swamp cruiser's set 0 → 2.
+- **Eternal brazier** (column 31, table 185): Sailing 78, Construction 72, 1,373 XP (capture and Wiki). Sets `sailing_boat_N_brazier` (block +14; sidepanel 19170) to 1 and `sailing_sidepanel_boat_icyseas_resistant` (19255), from its stats row's column 32.
+- Each row's loc column is `[coord, id, rotation, shape]`; the coord is a tile of the type's base template, so its deck tile is the coord less the template's corner.
+- Sail patterns (column 27, table 230) are newer than the captures (rev 241); tsps doesn't build them yet.
 
 ### The cache's sailing tables
 
@@ -310,13 +351,15 @@ Everything a part is lives in db tables. tsps reads them at runtime (`CacheDefin
 
 | Table | What | Columns used |
 | --- | --- | --- |
-| 166 | Boat types (rows 8110-8112, also the sidepanel boat type) | 18 recovery fee (raft 250, skiff 3,750, sloop 50,000); option lists by tier: 24 keels, 25 hulls, 26 sails, 27 helms, 29 trims; 31 facility hotspots |
+| 166 | Boat types (rows 8110-8112, also the sidepanel boat type) | 18 recovery fee (raft 250, skiff 3,750, sloop 50,000); option lists by tier: 24 keels, 25 hulls, 26 sails, 28 helms; 27 sail patterns, 29 flags, 30 trims, 31 eternal brazier; 32 facility hotspots (rev 241; 27 was added then) |
 | 178 | Hulls (raft "bases" 8264-8270, skiff 8271-8277, sloop 8278-8284) | 0 name, 7 Sailing, 8 Construction, 12 materials (item, count pairs), 13 stats row |
 | 177 | Keels | 3 loc [coord, id, rotation, shape], 6 Sailing, 7 Construction, 11 materials, 12 stats row |
 | 179 | Masts and sails | 15 loc [id, coord, rotation, shape], 6 Sailing, 7 Construction, 11 materials, 16 stats row |
 | 181 | Helms | 6 loc [coord, id, rotation, shape], 9 Sailing, 10 Construction, 14 materials, 15 stats row |
 | 164 | Part stats | 0 HP, 10 armour, 21 storm resistance, 22 rapids resistance, 24 base speed, 25 speed cap, 26 extra acceleration, 27 boost duration, 30 crystal-flecked immunity |
-| 186 | Trims (cosmetic painted trims) | |
+| 184 | Flags | 0 name, 5 loc, 6 Sailing, 7 Construction, 11 materials, 13 flag number |
+| 185 | Eternal brazier (one per size) | 0 name, 6 loc, 7 Sailing, 8 Construction, 12 materials, 13 stats row |
+| 186 | Trims (cosmetic painted trims) | 0 name, 2 loc, 5 Sailing, 6 Construction, 10 materials (the paint) |
 | 176 | Facilities (97 rows; some per boat size, such as each size's cargo holds and hooks) | 0 name, 6 loc (the first is placed), 8 preview angles row, 12 Sailing, 13 Construction, 17 materials, 22 category |
 | 175 | What a facility hotspot allows | 2 facility rows, in order |
 | 188 | Customisation preview angles | 0 `[boat size, offsetX, offsetY, xan, yan, zan, zoom]` tuples |
@@ -331,7 +374,7 @@ Everything a part is lives in db tables. tsps reads them at runtime (`CacheDefin
 
 These reproduce every captured boat.
 
-**Construction XP isn't in the tables.** It comes from the wiki, and the camphor skiff hull's 881 matches the capture.
+**Construction XP isn't in the tables.** It comes from the wiki (sailing-parts.json: parts by tier, the cosmetic parts, facilities by name), and the camphor skiff hull's 881 matches the capture.
 
 ## Facilities (shipyard)
 
@@ -366,9 +409,11 @@ From a capture of building and removing a range on a sloop in the shipyard.
 1. resets the customisation varbits and closes 939;
 2. plays animation 3676 (`human_poh_build`) and sound 938;
 3. takes the materials (the range: 4 steel bars, 2 charcoal, 1 tinderbox);
-4. gives **no XP**;
+4. gives the facility's Construction XP (Wiki: Facilities; the rune salvaging hook's 1,233, the crystal extractor's 3,066 and the greater teleport focus's 3,582 match rsprox 937);
 5. sets the hotspot varbits and `facilities_unaltered` 0;
 6. replaces the placeholder with the facility's loc (range 59682) on the deck.
+
+Without a saw and a hammer, the same tick resets the customisation varbits, closes 939 and opens `objectbox_double` with the saw (8794) and hammer (2347): "You need a saw and a hammer in order to build a<br>facility." (rsprox 960). The yard's Crate of saws (59733) and Crate of hammers (59732) Take-from gives one a tick after reaching it, with sound 2582 and an item box "You take a saw from the crate." (rsprox 960, 3448, 3651).
 
 There's no message.
 
@@ -384,10 +429,15 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 **Wrecks** are loc pairs: an active form with "Inspect" (60464 small, 60466 fisherman's, 60468 barracuda, 60470 large, 60472 pirate, 60474 mercenary, 60476 Fremennik, 60478 merchant) and a sunken form with no ops (the next id).
 - The cache map places every wreck sunken: 16 small spots (two groups of 8), and the other types in groups of 6 (barracuda's 43 are strung out unevenly). The small group south-east of the Pandemonium is at about (3085-3132, 2928-2989).
 - The server raises some of each group, sinks a wreck when its time is up, and raises another of the group (Wiki: "When one shipwreck sinks, another in the area immediately rises").
+- Sinking and rising animate (rsprox captures 235/3792, small and barracuda): on the tick a wreck sinks it becomes the sunken loc and plays its type's `*_shipwreck_full_to_depleted`; the next tick another of the group becomes the active loc with `*_depleted_to_full`; two ticks after each transition the loc gets its idle (`*_depleted_idle`, `*_full_idle`). Each type's four sequences are consecutive in the cache (small 13600-13603, fisherman 13604, barracuda 13608, pirate 13612, mercenary 13616, merchant 13620, Fremennik 13624, large 13628: full idle, depleted idle, full to depleted, depleted to full). Ours: a group with no other sunken wreck raises the one that sank.
 - Salvaging starts a wreck's despawn timer: small 2:30, fisherman's, barracuda, large and pirate 3:00, mercenary 3:15, Fremennik 3:45, merchant 4:00. When it sinks: "You salvage all you can from the shipwreck before it is reclaimed by the sea."
+
+**Inspect** (op 1 on an active wreck), a message box (rsprox captures, rev 235: 3457, 3461, 3467, 936, 938, 948, 1007, 4290): "It's a Barracuda shipwreck. You might be able to salvage something from the wreckage using a salvaging hook." Below the wreck's level it adds " However, you'll first need a Sailing level of 35 to do so." The names as captured: small, fisherman's, Barracuda, large, pirate, merchant; mercenary and Fremennik have no capture (ours: "mercenary", "Fremennik"). One rev 235 capture (3414) shows "It might be possible to salvage something from the wreckage, but you're not really sure how to do so yet." for a player who can't salvage yet; what decides it isn't known, so the server doesn't send it.
 
 **Deploy** (op 1 on a salvaging hook):
 - No wreck in range: "There are no shipwrecks within range of the salvaging hook." Nothing else.
+- Only sunken wrecks in range: a message box, "This shipwreck has already been plundered. Perhaps there's another one nearby?" (rsprox captures 235/3792, 235/3834).
+- Below the wreck's level: "You need a Sailing level of at least N to salvage this shipwreck." Ours: no capture or Wiki text.
 - Otherwise: "You cast out your salvaging hook towards the shipwreck...", player animation 13576, and the hook loc plays 13573.
 - 3 ticks later varbit `sailing_sidepanel_player_at_facility_n` (19193 + hotspot; 19200 for hotspot 7) goes to 1, and from then on every tick the player replays 13577 and the hook 13574.
 - The first salvage came 10 ticks after the cast: "You reel in some salvage." (spam filter), the salvage in the inventory, and the wreck's XP (small 10).
@@ -399,11 +449,14 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 - The animation replays with each, with sound 10864 after the first and 10866 after the rest.
 - With none left: "You have no more salvage to sort."
 - Loot: each salvage's pre-rolls first (1 in n each), then its main table by weight.
+- The find line is spam, with the amount written with a thousands separator ("find: 3,504 x Coins."). A find from the salvage's own collection log section (every pre-roll, and Opulent salvage's table Dragon cannonball) is a game message instead: Dragon nails, Mouldy doll, Broken compass, Rusty coin, Smashed mirror, Boat bottle, Sailors' amulet and Dragon cannon barrel every time in rev 235 captures. Opulent salvage's Dragon cannonball is spam in the earliest captures and a game message in later ones, which fits the 10 December 2025 update that put it in the collection log.
+- Salvage above the player's level is left; sorting ends with "You do not have a high enough Sailing level to sort through any more salvage." (Wiki, Opulent salvage trivia; no capture). Ours: the same line refuses Sort-salvage when all of it is above the player's level.
+- Cannonball amounts follow the Wiki (2-5, 2-7 and so on): rev 235 captures give the amounts from before the 18 March 2026 update that raised them (1-3, 1-5, 1-2, and 1 for the pre-roll Dragon cannonball).
 
 ## Shipwrights' workbench
 
 Locs 59723 (`shipwright_workbench`) and 59724 (`shipwright_workbench_small`) beside the shipwrights:
-Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.plugin.js`,
+Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.Sailing.js`,
 recipes in `plugins/skills/sailing/data/shipwrights-workbench.json`. The cache has no recipe table (only the
 part tables' materials name the products), so recipes, levels, XP and ticks are the OSRS Wiki's item pages.
 
@@ -469,8 +522,8 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - **Refused:** "The cargo hold cannot store that item." (game message).
 - **Deposit buttons** (943:13 Cargo, 14 Salvage, 15 Inventory):
   - Deposit Inventory moves everything storable, with sound 10905.
-  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit.", with sound 2277.
-- **Item stacking:** the "Item stacking" toggle (varbit 19592) sends nothing to the server. It only changes how the client draws the hold.
+  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit." / "You have nothing suitable to deposit." (Inventory), with sound 2277.
+- **Item stacking:** the toggle (943:3, op 1) is a button: the server flips `cargo_hold_draw_stacked` (varbit 19592) a tick later. It only changes how the client draws the hold.
 - **Warning:** "Dismiss" (944:8) sets varbit 19123 and hides the warning on the side panel.
 
 **The tools compartment:** shared by all your boats, and taking no space. Taking a tool is op 1 on 943:18, with sound 2582.
@@ -479,11 +532,17 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 | --- | --- | --- | --- |
 | 0 | Captain's log | 31986 | You collect your captain's log from the tools compartment. |
 | 1 | Spyglass | 31803 | You collect a spyglass from the tools compartment. |
-| 2 | Current duck | 31805 | not captured |
-| 3 | Crowbar | 31807 | not captured |
+| 2 | Current duck | 31805 | You collect your current duck from the tools compartment. |
+| 3 | Crowbar | 31807 | You collect a crowbar from the tools compartment. |
 | 4 | Diving gear | 7534 + 7535 | You collect some diving gear from the tools compartment. |
 
-Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment.
+Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment, with no message or sound. Each part of diving gear is deposited on its own click (the other part stays in the pack).
+
+Refusals, each with sound 2277:
+- No room: "You need one free slot to take a spyglass from the tools compartment." (one recording).
+- The crowbar while carrying one: "You already have a crowbar in your inventory." (one recording).
+- A current duck still out at sea: "You have a current duck out at sea. Either find it or wait # seconds to collect another."
+
 
 **Tool unlocks:** script 9138 shows a tool only once its quest progress is reached. The captain's log always shows.
 
@@ -504,8 +563,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 | Recovery | dialogue (Junior Jim) | All done! The boat is now docked here at the Pandemonium. |
 | Hull upgrade | message box | With the help of some workers, you swap out the hull of your boat. |
 | Cargo hold | game | The cargo hold cannot store that item. |
-| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. |
-| Tools compartment | game | You collect your captain's log / a spyglass / some diving gear from the tools compartment. |
+| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. / You have nothing suitable to deposit. |
+| Tools compartment | game | You collect your captain's log / a spyglass / your current duck / a crowbar / some diving gear from the tools compartment. |
+| Tools compartment | game | You need one free slot to take a spyglass from the tools compartment. / You already have a crowbar in your inventory. |
 
 ## Where tsps differs
 
@@ -556,14 +616,17 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
     - the raft's placeholder id (59661).
   - Guessed rather than captured:
     - the part names in the swap message ("mast and sails");
-    - the level, materials and "already has that" messages.
+    - the level, materials and "already has that" messages;
+    - after a refused Build (parts or a facility), the init (8809) runs again so Build's spinner goes, and 939 stays open. No capture has a refused Build;
+    - a Build that arrives after 939 has closed builds nothing.
   - Materials come from the inventory only.
 - **Ports**, guessed rather than captured:
   - Disembarking at a port's gangplank docks the boat there if it wasn't (the capture docked at the buoy first). It needs the port's level unless the boat is already docked there.
   - The too-low-level message, and that boarding a port's boat needs no level.
-  - The mooring for every port but the Pandemonium (its offsets, on each port's sea side), and the landing for islands (by the plank's rotation).
+  - The mooring for every port but the Pandemonium (its offsets, on each port's sea side), and the landing for the mooring points without a captured disembark (by the plank's rotation).
   - Locs on the shore can be used from up to 12 tiles away while aboard (the capture used a gangplank from 9).
   - Islands only differ in not being a "standard dock" (19146). Column 5's requirement isn't checked.
+  - A mooring point's level is checked against the unboosted level, for a guest disembarking too ([Wiki: Mooring point](https://oldschool.runescape.wiki/w/Mooring_point): not boostable; [Wiki: Tear of the Soul](https://oldschool.runescape.wiki/w/Tear_of_the_Soul): still required on a friend's boat). A port's level still counts a boost and a guest needs none there; neither case is captured.
 - **Sailing** is a skill (23). Salvaging and sorting give Sailing XP; nothing else does yet.
 - **Salvaging**, guessed rather than captured:
   - the hook's reach: 8 tiles from the hook to the nearest tile of the wreck (about what it is in OSRS, as played);

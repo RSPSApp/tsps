@@ -5,6 +5,12 @@
     "hole": 26419,
     "boulder": 26415,
     "crack": 26382,
+    "crackRoutes": [
+      { "crack": [2900, 3713, 0], "to": [2904, 3720, 0] },
+      { "crack": [2904, 3719, 0], "to": [2899, 3713, 0] }
+    ],
+    "crackAgility": 60,
+    "crawlAnim": 7041,
     "rope": 26370,
     "landing": [2882, 5311, 2],
     "surface": [2916, 3745, 0],

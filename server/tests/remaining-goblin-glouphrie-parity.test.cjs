@@ -74,6 +74,31 @@ test('shared scene controls publish and clear the cinematic marker in step with 
   assert.deepEqual(otherHides, [['npc', true], ['obj', true]]);
 });
 
+test('singing bowl Inspect stays on the near rim or routes to the captured approach tile', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  p.moveTo(new core.Location(2391, 9816, 0));
+  const route = h.hooks.onObjectRoute.find((fn) => fn.name === 'routeBowlInspect');
+  const event = {
+    player: p,
+    objectId: core.ObjectIdentifiers.SINGING_BOWL,
+    clickType: 1,
+    object: new core.GameObject(core.ObjectIdentifiers.SINGING_BOWL, new core.Location(2388, 9813, 0), 10, 0),
+  };
+  route(event);
+  assert.deepEqual(event.destination, { x: 2391, y: 9816, z: 0 });
+
+  delete event.destination;
+  event.clickType = 2;
+  route(event);
+  assert.equal(event.destination, undefined, 'Sing-crystal keeps its ordinary route');
+
+  event.clickType = 1;
+  p.moveTo(new core.Location(2392, 9817, 0));
+  route(event);
+  assert.deepEqual(event.destination, { x: 2388, y: 9817, z: 0 }, 'distant Inspect routes to the north rim');
+});
+
 function harness(pluginName, options = {}) {
   const pluginNames = Array.isArray(pluginName) ? pluginName : [pluginName];
   const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), areas = [];
@@ -610,9 +635,12 @@ test('LOTG machine only runs at stage 50 and completes once through the box', ()
   h.action(p, N.ZANIK_7, 'Eh5lL0');
   assert.equal(h.quest.getStage(p), 54);
   assert.ok(p.log.some((row) => row[0] === 'sendCameraMoveTo' && row[1] === 3546 && row[2] === 4389 && row[3] === 580), 'strange-box camera track');
+  const formEnded = [];
+  (h.events['goblin-form:ended'] ??= []).push((event) => formEnded.push(event.player));
   h.action(p, N.OLDAK, 'dfkFWY');
   assert.equal(h.quest.getStage(p), 56);
   assert.equal(h.quest.isComplete(p), true);
+  assert.ok(formEnded.includes(p), 'completion ends the goblin form, so goblin mail comes off (GoblinMail)');
   assert.equal(h.quest.complete(p), false);
   assert.deepEqual(p.xp.map((entry) => entry[1]), [8000, 8000, 8000, 8000]);
 });

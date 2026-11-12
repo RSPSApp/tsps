@@ -1,4 +1,6 @@
 /** Romeo & Juliet: captured handovers, potion effects and private scenes. See docs/f2p-varrock-parity.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerRomeoAndJulietQuest(api) {
   const { Animation, Graphic, PathFinder, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -490,7 +492,7 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     const scene=new RomanceScene(player,kind);scenes.set(player,scene);
     player.getMovementQueue().reset().setBlockMovement(true);player.setUntargetable(true);
     player.getPacketSender().sendVarbit(6719,2).sendVarbit(12393,1);fade(player,true);frozenDialogue(player);
-    for(let axis=0;axis<5;axis++)player.getPacketSender().sendCameraShake(axis,0,0,0);
+    for(let axis=0;axis<5;axis++)CameraShake.send(player.getPacketSender(), "atmospheric", axis,0,0,0);
     later(scene,3,()=>{
       const spawn=kind==="juliet"?[3157,3425]:[2333,4646];player.moveTo(scene.sourceTile(...spawn));scene.enter(player);fade(player,false);
       if(kind==="juliet") {
@@ -534,7 +536,7 @@ module.exports = function registerRomeoAndJulietQuest(api) {
       if(!held(player,CADAVA_POTION_ITEM_ID)){clearTimed(player);return;}
       player.getInventory().deleteNumber(CADAVA_POTION_ITEM_ID,1);player.getInventory().adds(ItemIdentifiers.VIAL,1);player.performAnimation(new Animation(829));
     });
-    later(key,4,()=>player.getPacketSender().sendCameraShake(3,0,20,2));
+    later(key,4,()=>CameraShake.send(player.getPacketSender(), "atmospheric", 3,0,20,2));
     later(key,7,()=>{player.performAnimation(new Animation(836));timedSpeech(player,null,"Urk!");});
     later(key,13,()=>{player.sendMessage("Oh dear...you are nearly dead.");fade(player,true);});
     later(key,16,()=>player.performAnimation(Animation.DEFAULT_RESET_ANIMATION));
@@ -561,6 +563,13 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   }
   function restoreJuliet({player}) { player.getPacketSender().sendVarbit(JULIET_VARBIT,quest.isComplete(player)?2:quest.getStage(player)>=STAGE_JULIET_IN_CRYPT?1:0); }
 
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "ROMEO_AND_JULIET", count: 1 });
+  }
+
   quest = registerQuest(api, {
     key: "romeo_and_juliet",
     name: "Romeo & Juliet",
@@ -568,11 +577,13 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     startedValue: STAGE_SPOKEN_TO_ROMEO,
     completionValue: STAGE_COMPLETE,
     questPoints: 5,
+    otherRewards: ["An antique lamp giving 500 XP"],
     completionJingleId: 154,
     xpRewards: [],
     scrollItemId: CADAVA_POTION_ITEM_ID,
     rewardItemLabel: "Cadava potion",
     buildJournal,
+    onReward: grantCompletionLamps,
   });
 
   api.onNpcDialogueVariant(selectVariant);

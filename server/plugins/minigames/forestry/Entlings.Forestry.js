@@ -94,7 +94,9 @@ function gift(event, player, count) {
   if (!player.isRegistered?.()) return;
   const entlings = E();
   Common.bark(player, entlings.barkPerEntling * count, true);
-  const leaves = Common.data.trees[event.site.name] ?? "Leaves";
+  // Wiki (Friendly Ent): the six leaf tiers at 1/6 each; recorded: entlings at an oak gave maple leaves (227/01723.txt:124792).
+  const tiers = Object.keys(Common.data.leaves);
+  const leaves = tiers[Common.randomInt(0, tiers.length - 1)];
   const amount = entlings.leavesPerEntling * count;
   Common.award(player, Common.data.leaves[leaves], amount);
   player.sendMessage(Common.message("leaves", { amount, leaves }));

@@ -1,9 +1,12 @@
 "use strict";
 
-const { api, CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler } = require("./Core.Construction");
+const { api, CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler, Wilderness } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Portals = require("./Portals.Construction");
+const Estate = require("./Estate.Construction");
+const Menu = require("./Menu.Construction");
+const Scrying = require("./Scrying.Construction");
 
 // The portal nexus (rsprox captures, cache enums 1375/1377 and their structs, Wiki):
 // - Destinations are enum 1377 (id -> struct: name 660, runes 664-671 already x1000, Magic level
@@ -12,7 +15,13 @@ const Portals = require("./Portals.Construction");
 //   poh_nexus_id the nexus tier (1 marble, 2 gilded, 3 crystalline).
 // - Teleport Menu opens telenexus_teleport (17); resume_pausebutton on rows1/key_listeners picks
 //   slot sub (0-based), on rows2/extra_key_listeners the alternates Grand Exchange, Seers' Village
-//   and Yanille. The teleport is instant (captured landings).
+//   and Yanille. The teleport is instant, landing where the spell would (its 5x5 square for the
+//   standard spellbook's; captured landings).
+// - Scry Mode (options_layer 3 sets poh_nexus_tele_scry_mode; the menu opens again and the nexus
+//   icon, nexus_model, becomes clickable): a pick views the destination as the scrying pool does,
+//   and the icon views the house's portal. Building mode refuses it ("You cannot use the scrying
+//   function while in building mode."); a Wilderness destination only says how many players are
+//   there (Wiki: Portal nexus).
 // - Configuration opens telenexus (19). Dragging a slotted row onto the portal (left_click_layer)
 //   makes it the left-click destination and left_click_options 2/3 picks it or its alternate;
 //   left_text clears it ("Drag from the slotted list to the portal to set the left click
@@ -23,28 +32,35 @@ const Portals = require("./Portals.Construction");
 //   from the inventory on Done, needs its Magic level, and removing refunds nothing (Wiki).
 //   Marble holds 4, gilded 8, crystalline 41 (Wiki).
 const MENU = Ids.iface("telenexus_teleport"), CONFIG = Ids.iface("telenexus");
-const ROWS = 13, KEYS = 8, ALT_ROWS = 17, ALT_KEYS = 7, OPTIONS_LAYER = 10;
+const ROWS = 13, KEYS = 8, ALT_ROWS = 17, ALT_KEYS = 7, OPTIONS_LAYER = 10, NEXUS_MODEL = 3;
+// options_layer's two buttons: teleport (Ours: it turns Scry Mode off) and Scry Mode.
+const TELEPORT_MODE = 2, SCRY_MODE = 3;
 // telenexus by component name: the rev 241 ids moved (Done was 9, now 15; the list layers shifted too).
 const child = (name) => Ids.component(`telenexus:${name}`) & 0xffff;
 const LEFT_CLICK_LAYER = child("click_layer"), LEFT_TEXT = child("click_text"), LEFT_CLICK_OPTIONS = child("radio_button_options");
 const DONE = child("telenexus_donebutton"), CONFIRM = child("telenexus_confirm");
 const NON_SLOTTED = child("non_slotted_list"), CONFIRM_DETAILS = child("confirm_details"), SLOTTED = child("slotted_list");
 const COST_INV = 619;
+const SCRY = Ids.varbit("poh_nexus_tele_scry_mode");
 const NEXUS_ID = Ids.varbit("poh_nexus_id"), LEFT = Ids.varbit("poh_nexus_left_click"), LEFT_TEMP = Ids.varbit("poh_nexus_left_click_temp");
 // The 45 slots: poh_nexus_tele_<n>, and the interfaces' poh_nexus_tele_<n>_temp copies.
 const SLOT_VARBITS = Array.from({ length: 45 }, (_, index) => Ids.varbit(`poh_nexus_tele_${index + 1}`));
 const TEMP_VARBITS = Array.from({ length: 45 }, (_, index) => Ids.varbit(`poh_nexus_tele_${index + 1}_temp`));
 const TIERS = { MARBLE_PORTAL_NEXUS: { id: 1, slots: 4 }, GILDED_PORTAL_NEXUS: { id: 2, slots: 8 }, CRYSTALLINE_PORTAL_NEXUS: { id: 3, slots: 41 } };
-// rows2: the alternates, with the middle of their captured landings.
-const ALTERNATES = [[151, [3165, 3477, 0]], [154, [2726, 3486, 0]], [156, [2583, 3095, 0]]];
+// rows2: the alternates. The Grand Exchange and Seers' Village land in the squares of their spells'
+// alternate options (SpellTeleports); Yanille on its captured tile.
+const ALTERNATES = [[151, [3163, 3478, 0], "varrock teleport"], [154, [2726, 3484, 0], "camelot teleport"], [156, [2583, 3095, 0]]];
 // Struct names that differ from the spells' destination names.
 const SPELL_NAMES = {
   "marim": "ape atoll", "lunar isle": "moonclan", "waterbirth island": "waterbirth", "fenken' castle": "fenkenstrain's castle",
   "barbarian outpost": "barbarian", "port khazard": "khazard", "ape atoll dungeon": "ape atoll dungeon",
 };
 const STATE_ATTRIBUTE = "construction:nexus";
+/** Ours: Scry Mode is kept across logins. */
+const SCRY_ATTRIBUTE = "construction:nexus-scry";
 /** rsprox captures (Remove on the nexus), shown before the usual confirmation (docs/construction.md). */
 const REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove this nexus you will have to pay for your<br><col=000000>upgrades and teleports to be used again.";
+const ROOM_REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove this room you will have to pay for your<br><col=000000>teleports to be used in the nexus again.";
 const LEFT_CLICK_DELAY_TICKS = 2;
 const PAUSEBUTTON = 1, OP1 = 1 << 1, OP10 = 1 << 10, DEPTH5 = 5 << 17, DRAG_TARGET = 1 << 20;
 
@@ -64,7 +80,7 @@ function destinations() {
       .map(([item, amount]) => [params.get(item), params.get(amount)]).filter(([item]) => item != null);
     const alternate = ALTERNATES.find(([altId]) => altId === id);
     destinationsById.set(id, {
-      id, name, spellName, runes, level: Number(params.get(673) ?? 1),
+      id, name, spellName, runes, level: Number(params.get(673) ?? 1), alternateOf: alternate?.[2],
       alternate: params.get(679) != null ? [...CacheDefinitions.getEnumValues(1377)].find(([, s]) => s === params.get(679))?.[0] : undefined,
       tile: alternate ? new Location(...alternate[1]) : spell?.destination ?? null,
     });
@@ -102,8 +118,30 @@ function teleportTo(player, house, id) {
   player.getPacketSender().sendInterfaceRemoval();
   if (!destination?.tile) return player.sendMessage("That destination isn't available yet.");
   if (!TeleportHandler.checkReqs(player, destination.tile)) return;
-  house.exitHouse(player, destination.tile.clone());
+  const tile = destination.alternateOf
+    ? Portals.landingTile(destination.alternateOf, destination.tile, true)
+    : Portals.landingTile(destination.spellName, destination.tile);
+  house.exitHouse(player, tile);
   api.emitCustomEvent("construction:portal", { player, destination: destination.spellName });
+}
+
+const scryMode = (player) => player.getAttribute(SCRY_ATTRIBUTE) === 1;
+
+/** Scry Mode's pick: view destination `id`, or the house's portal when it is null. */
+function scryTo(player, house, id) {
+  player.getPacketSender().sendInterfaceRemoval();
+  if (house.buildingMode) return player.sendMessage("You cannot use the scrying function while in building mode.");
+  if (id === null) return Scrying.look(player, house, Scrying.entranceName(house), Estate.houseExit(house.save));
+  const destination = destinations().get(id);
+  if (!destination?.tile) return player.sendMessage("That destination isn't available yet.");
+  if (Wilderness.isInLocation(destination.tile)) return player.sendMessage(Scrying.adventurers(player, destination.tile));
+  const name = Scrying.viewName(destination.name);
+  Scrying.look(player, house, name, Scrying.viewTile(name, destination.tile));
+}
+
+function pick(player, session, id) {
+  if (scryMode(player)) scryTo(player, session.house, id);
+  else teleportTo(player, session.house, id);
 }
 
 /**
@@ -140,9 +178,11 @@ function openMenu(player, found) {
   const sender = player.getPacketSender();
   sender.sendVarbit(NEXUS_ID, found.tier.id);
   sendState(player, state.slots, state.left, TEMP_VARBITS, LEFT_TEMP);
+  sender.sendVarbit(SCRY, scryMode(player) ? 1 : 0);
   sender.sendInterface(MENU);
   for (const [child, end] of [[ROWS, 30], [KEYS, 30], [ALT_ROWS, 2], [ALT_KEYS, 2]]) sender.sendInterfaceFlagsRange((MENU << 16) | child, 0, end, PAUSEBUTTON);
   sender.sendInterfaceFlagsRange((MENU << 16) | OPTIONS_LAYER, 2, 3, PAUSEBUTTON);
+  if (scryMode(player)) sender.sendInterfaceFlagsRange((MENU << 16) | NEXUS_MODEL, -1, -1, PAUSEBUTTON);
   open.set(player, { ...found, mode: "menu" });
 }
 
@@ -187,10 +227,16 @@ function menuClick(event, session) {
   const sub = event.action;
   if (event.childId === ROWS || event.childId === KEYS) {
     const id = stateOf(player, session.furniture).slots[sub];
-    if (id) teleportTo(player, session.house, id);
+    if (id) pick(player, session, id);
   } else if (event.childId === ALT_ROWS || event.childId === ALT_KEYS) {
     const alternate = ALTERNATES[sub];
-    if (alternate) teleportTo(player, session.house, alternate[0]);
+    if (alternate) pick(player, session, alternate[0]);
+  } else if (event.childId === NEXUS_MODEL) {
+    if (scryMode(player)) scryTo(player, session.house, null);
+  } else if (event.childId === OPTIONS_LAYER && (sub === TELEPORT_MODE || sub === SCRY_MODE)) {
+    // The menu opens again in the chosen mode.
+    player.setAttribute(SCRY_ATTRIBUTE, sub === SCRY_MODE ? 1 : 0);
+    openMenu(player, session);
   }
 }
 
@@ -291,6 +337,12 @@ function warnOfRemoval(removal) {
   if (TIERS[removal.furniture?.buildableKey]) removal.warning = REMOVAL_WARNING;
 }
 
+/** So does removing the room the nexus stands in. */
+function warnOfRoomRemoval(removal) {
+  if (removal.warning) return;
+  if (Object.values(removal.room?.furnitureByLocation ?? {}).some(entry => TIERS[entry.buildableKey])) removal.warning = ROOM_REMOVAL_WARNING;
+}
+
 /** Runes are paid again when a nexus is rebuilt after it or its room was removed (Wiki: Portal Nexus). */
 function forgetDestinations({ player, furniture, room }) {
   const nexus = furniture ? TIERS[furniture.buildableKey]
@@ -300,17 +352,26 @@ function forgetDestinations({ player, furniture, room }) {
   sendState(player, [], 0, SLOT_VARBITS, LEFT);
 }
 
+/** The Teleport Menu stops chat input (its key listeners); the configuration doesn't (rsprox captures). */
+function restoreChatInput({ player, interfaceId }) {
+  if (interfaceId === MENU) Menu.restoreChatInput(player);
+}
+
 function attachNexus(api) {
   api.persistAttribute(STATE_ATTRIBUTE, null);
+  api.persistAttribute(SCRY_ATTRIBUTE, 0);
   api.onCustomEvent("construction:furniture-removing", warnOfRemoval);
+  api.onCustomEvent("construction:room-removing", warnOfRoomRemoval);
   api.onCustomEvent("construction:furniture-removed", forgetDestinations);
   api.onCustomEvent("construction:room-removed", forgetDestinations);
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("player:widget-action", drag);
   api.onCustomEvent("interface:close", ({ player }) => open.delete(player));
+  api.onCustomEvent("interface:closed", restoreChatInput);
   api.onPlayerLogin(({ player }) => {
     const state = player.getAttribute(STATE_ATTRIBUTE);
     if (state) sendState(player, state.slots, state.left, SLOT_VARBITS, LEFT);
+    if (scryMode(player)) player.getPacketSender().sendVarbit(SCRY, 1);
   });
 }
 
@@ -322,4 +383,4 @@ function nexusOption(event, action) {
   return false;
 }
 
-Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, REMOVAL_WARNING, destinations });
+Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, REMOVAL_WARNING, ROOM_REMOVAL_WARNING, destinations });

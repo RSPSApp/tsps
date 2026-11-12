@@ -77,18 +77,27 @@ function processUpkeep(player) {
   player.setAttribute(COMBAT_CHARGE_TICK_ATTRIBUTE, cycle);
 }
 
-function venomChance(player, combatType) {
+function venomChance(player, combatType, hit = null) {
   const weaponId = Number(player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.() ?? -1);
   const name = String(core.ItemDefinition.forId(weaponId)?.getName?.() ?? "").toLowerCase();
   if (GUARANTEED_WEAPON_NAMES.has(name)) return 1;
-  // Read the selected projectile, including quiver and self-ammo weapons.
+  // The worn projectile: the ammunition slot only when the weapon fires from it (a bow or crossbow,
+  // Ammunition.firesFromAmmoSlot); otherwise the weapon itself (a thrown weapon, a chinchompa, a
+  // crystal bow or another self-ammo weapon), whatever (p) ammo is left in the slot.
+  // Combat.getAmmunition() reports a (p) arrow or bolt as its plain entry, so its id never names the poison.
   if (combatType === core.CombatType.RANGED) {
-    const ammoId = player.getCombat().getAmmunition()?.getItemId();
-    const ammoName = String(core.ItemDefinition.forId(ammoId ?? -1)?.getName?.() ?? "").toLowerCase();
-    return /\(p(?:\+\+?)?\)$/.test(ammoName) ? 0.5 : 0;
+    // The shot as fired (PendingHit.getFiredRangedShot): its last (p) arrow or knife is paid before it lands.
+    const fired = hit?.getFiredRangedShot?.() ?? null;
+    const shotId = fired ? Number(fired.projectile?.getId?.() ?? -1) : core.Ammunition.firesFromAmmoSlot(player)
+      ? Number(player.getEquipment().get(core.Equipment.AMMUNITION_SLOT)?.getId?.() ?? -1)
+      : weaponId;
+    const shotName = String(core.ItemDefinition.forId(shotId)?.getName?.() ?? "").toLowerCase();
+    return /\(p(?:\+\+?)?\)$/.test(shotName) ? 0.5 : 0;
   }
   if (combatType !== core.CombatType.MELEE) return 0;
-  if (name === "noxious halberd" || /^abyssal tentacle(?: \(or\))?$/.test(name) || /\(p(?:\+\+?)?\)$/.test(name)) return 0.5;
+  // The halberd's own 1/3 roll (CombatPoisonData) follows this one, so 1/4 here makes the Wiki's 1/2.
+  if (name === "noxious halberd") return 0.25;
+  if (/^abyssal tentacle(?: \(or\))?$/.test(name) || /\(p(?:\+\+?)?\)$/.test(name)) return 0.5;
   return 1 / 6;
 }
 
@@ -100,7 +109,7 @@ function onHitResolved({ attacker, target, hit }) {
   if (!wornHelm(player) || !target?.isNpc?.() || target.isVenomed?.()) {
     return;
   }
-  if (Math.random() >= venomChance(player, hit.getCombatType())) {
+  if (Math.random() >= venomChance(player, hit.getCombatType(), hit)) {
     return;
   }
   core.CombatFactory.poisonEntity(target, VENOM_SEVERITY, 2);

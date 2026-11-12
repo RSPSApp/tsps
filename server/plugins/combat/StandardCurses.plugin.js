@@ -4,6 +4,28 @@ const CURSES = [
   ['VULNERABILITY', 'DEFENCE', 10], ['ENFEEBLE', 'STRENGTH', 10], ['STUN', 'ATTACK', 10],
 ];
 const spells = new Map();
+/**
+ * A curse on a stat that is already lowered. The attack curses' line is recorded
+ * (rsprox_transcripts/228/02224.txt ticks 1158 and 1275, Confuse or Stun on Dusk: the Leagues V
+ * spellbook labels are shifted, but human_castcurse plays); no recording or Wiki page gives the
+ * strength or defence wording, so those keep the older line.
+ */
+function weakenedMessage(curse, npc) {
+  if (curse.skill === core.Skill.ATTACK) return "Your foe's attack has already been weakened.";
+  return `The spell has no effect because the ${npc ? 'NPC' : 'player'} is already weakened.`;
+}
+/**
+ * A curse on an NPC whose stats can't be lowered at all (encounter stat-drain immunity). Recorded for
+ * Enfeeble (rsprox_transcripts/227/00095.txt:81131, 227/02174.txt:5460): the line on the click's tick, with
+ * no cast animation, runes or XP. The Wiki's curse pages give no wording; the immunity belongs to the
+ * target, so all six curses share it.
+ */
+const IMMUNE_MESSAGE = 'Your target is currently immune to that spell.';
+/** Whether the NPC keeps `skill` at its base level whatever it is set to (stat-drain immunity, or a floor at base). */
+function drainImmune(npc, skill) {
+  const maximum = npc.getMaxLevel(skill);
+  return maximum > 0 && typeof npc.previewCurrentLevel === 'function' && npc.previewCurrentLevel(skill, maximum - 1) >= maximum;
+}
 let core;
 let api;
 
@@ -20,10 +42,15 @@ function disabled(event) {
   const curse = spells.get(event.spellId);
   if (event.disabled === true || !curse) return;
   const target = event.player.getCombat().getTarget();
+  if (target?.isNpc?.() && drainImmune(target.getAsNpc(), curse.skill)) {
+    event.player.sendMessage(IMMUNE_MESSAGE);
+    event.disabled = true;
+    return;
+  }
   const stats = target?.isNpc?.() ? target.getAsNpc()
     : target?.isPlayer?.() ? target.getAsPlayer().getSkillManager() : null;
   if (!stats || stats.getCurrentLevel(curse.skill) >= stats.getMaxLevel(curse.skill)) return;
-  event.player.sendMessage(`The spell has no effect because the ${target.isNpc() ? 'NPC' : 'player'} is already weakened.`);
+  event.player.sendMessage(weakenedMessage(curse, target.isNpc()));
   event.disabled = true;
 }
 
@@ -40,8 +67,7 @@ function applyCurse(event) {
   const current = npc ? npc.getCurrentLevel(curse.skill) : skills.getCurrentLevel(curse.skill);
   const maximum = npc ? npc.getMaxLevel(curse.skill) : skills.getMaxLevel(curse.skill);
   if (current < maximum) {
-    if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage(
-      `The spell has no effect because the ${npc ? 'NPC' : 'player'} is already weakened.`);
+    if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage(weakenedMessage(curse, !!npc));
     return;
   }
   const strength = { attacker, target, spell: event.spell, context: event.context, percent: curse.percent };

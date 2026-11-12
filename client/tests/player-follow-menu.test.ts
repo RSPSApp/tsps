@@ -36,6 +36,15 @@ assert.equal(follow.onClick !== undefined, true);
 follow.onClick?.();
 assert.deepEqual(calls, [["follow", 42]], "clicking Follow starts the client follow state");
 
+// All Settings "Player Trade options" off: no Trade with; Follow stays.
+const withoutTrade = buildPlayerActionEntries({
+    sid: 42, playerLabel: "Bob", targetCombatLevel: 3, localCombatLevel: 3,
+    targetTeam: 0, localTeam: 0, targetIsClanMember: false, canAttackPlayers: false,
+    showTradeOption: false, localX: 10, localY: 12, actions,
+});
+assert.equal(withoutTrade.some((entry) => entry.option === "Trade with"), false, "Trade with is hidden by the setting");
+assert.ok(withoutTrade.some((entry) => entry.option === "Follow"));
+
 // A server-sent Follow option keeps its own priority and opcode.
 const previous = new Map(ClientState.playerOptions);
 try {

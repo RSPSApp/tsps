@@ -490,6 +490,14 @@ module.exports = function registerHandInTheSandQuest(api) {
     return null;
   }
 
+  /**
+   * "hand-in-the-sand:betty-page" { player, variant }: the Hand in the Sand page Betty speaks now, or null. Another quest
+   * that also has Betty pages (Ethically Acquired Antiquities loads first) yields to it while this one applies.
+   */
+  function answerBettyPage(request) {
+    if (request?.player) request.variant = bettyVariant(request.player);
+  }
+
   function mazionVariant(player) {
     const stage = quest.getStage(player);
     if (stage === STAGE_RETURN_HEAD) {
@@ -1074,6 +1082,7 @@ module.exports = function registerHandInTheSandQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onCustomEvent("hand-in-the-sand:betty-page", answerBettyPage);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);

@@ -20,6 +20,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.ObjectDefinition.init();
   I = core.ItemIdentifiers;
   PM.emitServerStartup({});
 });
@@ -454,4 +455,284 @@ test("Ava's Devices refuses unmet Ranged and quest requirements without taking p
   assert.equal(f.inv.getAmount(I.VORKATHS_HEAD), 1);
   assert.equal(f.inv.getAmount(I.MITHRIL_ARROW), 75);
   assert.equal(f.inv.getAmount(I.COINS), 4999);
+});
+
+test("Elnock jar generator exchange requires the complete payment through Trade and Confirm", (t) => {
+  const f = actor(t);
+  f.p.setLocation(new core.Location(2592, 4318, 0));
+  const elnock = new NPC(core.NpcIdentifiers.ELNOCK_INQUISITOR, new core.Location(2592, 4319, 0));
+  elnock.setRegistered(true);
+  t.after(() => elnock.setRegistered(false));
+  f.inv.setItem(0, new core.Item(I.NATURE_IMPLING_JAR, 1));
+  const elnockDefinition = elnock.getCurrentDefinition(f.p);
+  const tradeAction = elnockDefinition.getActions().findIndex(action => action === "Trade") + 1;
+  assert.ok(tradeAction > 0);
+  assert.equal(PM.emitNpcInteraction({ player: f.p, npc: elnock, npcId: elnock.getId(), definition: elnockDefinition,
+    clickType: tradeAction, handled: false }), true);
+  assert.equal(f.p.getInterfaceId(), 540);
+  const click = (childId, slot) => PM.emitInterfaceActionClick({ player: f.p, groupId: 540, childId,
+    buttonId: (540 << 16) | childId, slot, action: 1, opId: 1, handled: false });
+  assert.equal(click(4, 6), true);
+  assert.equal(click(7, 9), true);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0, "one nature jar alone cannot pay for the generator");
+  assert.equal(f.inv.getAmount(I.NATURE_IMPLING_JAR), 1, "refused payment is preserved");
+  assert.ok(f.messages.includes("You don't have the required implings in jars to trade for this."));
+  for (let slot = 1; slot <= 3; slot++) f.inv.setItem(slot, new core.Item(I.ESSENCE_IMPLING_JAR, 1));
+  for (let slot = 4; slot <= 5; slot++) f.inv.setItem(slot, new core.Item(I.ECLECTIC_IMPLING_JAR, 1));
+  f.inv.setItem(0, preset(new core.Item(I.NATURE_IMPLING_JAR, 1)));
+  assert.equal(click(7, 9), true);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0, "restricted jars cannot pay for a plain generator");
+  assert.equal(amount(f.inv, I.NATURE_IMPLING_JAR, true), 1);
+  assert.equal(f.inv.getAmount(I.ESSENCE_IMPLING_JAR), 3);
+  f.inv.setItem(0, new core.Item(I.NATURE_IMPLING_JAR, 1));
+  for (let slot = 6; slot < 28; slot++) f.inv.setItem(slot, new core.Item(I.ASHES, 1));
+  assert.equal(f.inv.getFreeSlots(), 0);
+  assert.equal(click(7, 9), true);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 1);
+  for (const id of [I.ESSENCE_IMPLING_JAR, I.ECLECTIC_IMPLING_JAR, I.NATURE_IMPLING_JAR]) assert.equal(f.inv.getAmount(id), 0);
+  assert.equal(f.inv.getAmount(I.ASHES), 22, "unrelated inventory survives the exchange");
+  assert.equal(click(7, 9), true);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 1, "repeated Confirm cannot duplicate the reward");
+  f.p.closeInterruptibleInterfaces();
+  assert.equal(f.p.getInterfaceId(), -1, "the player closes Elnock's exchange before using the generator");
+  const generator = f.inv.getItems().find(item => item.getId() === I.JAR_GENERATOR);
+  assert.equal(generatorAction(f, generator, 1), true);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1, "the purchased generator makes a usable jar");
+  levels(f, core.Skill.HUNTER);
+  f.p.setHitpoints(99);
+  f.p.setLocation(new core.Location(2592, 4320, 0));
+  f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.BUTTERFLY_NET, 1));
+  const npc = core.NPC.create(core.NpcIdentifiers.BABY_IMPLING_2, f.p.getLocation().clone());
+  npc.setRegistered(true); npc.setNeedsPlacement(false);
+  t.after(() => npc.setRegistered(false));
+  const definition = npc.getCurrentDefinition(f.p);
+  const clickType = definition.getActions().findIndex(action => action === "Catch") + 1;
+  assert.ok(clickType > 0);
+  assert.equal(f.p.busy(), false, "the next Catch action is allowed after closing the exchange");
+  const rng = t.mock.method(Math, "random", () => 0);
+  PM.emitNpcInteraction({ player: f.p, npc, npcId: npc.getId(), definition, clickType, handled: false });
+  rng.mock.restore();
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  assert.equal(f.inv.getAmount(I.BABY_IMPLING_JAR), 1);
+});
+
+
+const GENERATOR_CHARGES_META = "impetuous-impulses:jar-generator-charges";
+function generatorAction(f, item, clickType, slot = f.inv.getItems().indexOf(item)) {
+  return PM.emitItemAction({ player: f.p, interfaceId: core.Inventory.INTERFACE_ID, item,
+    itemId: item.getId(), slot, clickType, handled: false });
+}
+
+test("jar generator makes 33 impling jars and one butterfly jar before depletion", (t) => {
+  const f = actor(t);
+  const generator = new core.Item(I.JAR_GENERATOR, 1);
+  f.inv.setItem(0, generator);
+  assert.equal(generatorAction(f, generator, 4), true, "Check is a registered generator action");
+  assert.match(f.messages.at(-1), /100%/);
+  for (let n = 0; n < 33; n++) {
+    generatorAction(f, generator, 1);
+    assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);
+    f.inv.deleteNumber(I.IMPLING_JAR, 1);
+  }
+  generatorAction(f, generator, 4);
+  assert.match(f.messages.at(-1), /1%/);
+  generatorAction(f, generator, 1);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0, "one percent cannot fund an impling jar");
+  assert.equal(generator.getMetaValue(GENERATOR_CHARGES_META), 1);
+  generatorAction(f, generator, 3);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0);
+  assert.equal(f.inv.getAmount(I.BUTTERFLY_JAR), 1);
+  assert.equal(f.inv.getItems()[0].getMetaValue(GENERATOR_CHARGES_META), undefined);
+});
+
+test("jar generator preserves charge on full bag, restricted copies and stale slots", (t) => {
+  const f = actor(t), generator = new core.Item(I.JAR_GENERATOR, 1);
+  f.inv.setItem(0, generator);
+  for (let slot = 1; slot < 28; slot++) f.inv.setItem(slot, new core.Item(I.BONES, 1));
+  generatorAction(f, generator, 1);
+  assert.equal(generator.getMetaValue(GENERATOR_CHARGES_META), undefined, "full default charge is unchanged");
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  generator.setMetaValue(GENERATOR_CHARGES_META, 3);
+  generatorAction(f, generator, 1);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0, "depletion frees the generator's own slot");
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);
+  assert.equal(f.inv.getAmount(I.BONES), 27);
+  f.inv.setItem(0, generator.clone().setId(I.JAR_GENERATOR));
+  f.inv.setItem(1, new core.Item(-1, 0));
+  const current = f.inv.getItems()[0];
+  preset(current);
+  generatorAction(f, current, 1);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  assert.equal(current.getMetaValue(GENERATOR_CHARGES_META), undefined);
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  const ordinary = new core.Item(I.JAR_GENERATOR, 1);
+  f.inv.setItem(0, ordinary);
+  f.inv.setItem(0, new core.Item(I.BONES, 1));
+  f.inv.setItem(1, ordinary);
+  generatorAction(f, ordinary, 1, 0);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  assert.equal(ordinary.getMetaValue(GENERATOR_CHARGES_META), undefined);
+  generatorAction(f, ordinary, 1, 1);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0, "bag remains full after moving it");
+});
+
+test("jar generator recharges the banked instance after a fresh complete payment", (t) => {
+  const f = actor(t), generator = new core.Item(I.JAR_GENERATOR, 1);
+  generator.setMetaValue(GENERATOR_CHARGES_META, 17);
+  // Tab 2 is valid only when tab 1 is nonempty; refresh compacts sparse tabs.
+  f.p.getBank(1).setItem(0, new core.Item(I.BONES, 1));
+  f.p.getBank(2).setItem(0, generator);
+  const payment = () => {
+    for (let slot = 0; slot < 3; slot++) f.inv.setItem(slot, new core.Item(I.ESSENCE_IMPLING_JAR, 1));
+    for (let slot = 3; slot < 5; slot++) f.inv.setItem(slot, new core.Item(I.ECLECTIC_IMPLING_JAR, 1));
+    f.inv.setItem(5, new core.Item(I.NATURE_IMPLING_JAR, 1));
+  };
+  const elnock = core.NPC.create(core.NpcIdentifiers.ELNOCK_INQUISITOR, f.p.getLocation().clone());
+  elnock.setRegistered(true); elnock.setNeedsPlacement(false);
+  t.after(() => elnock.setRegistered(false));
+  const definition = elnock.getCurrentDefinition(f.p);
+  const tradeAction = definition.getActions().findIndex(action => action === "Trade") + 1;
+  assert.ok(tradeAction > 0);
+  const offer = () => {
+    assert.equal(PM.emitNpcInteraction({ player: f.p, npc: elnock, npcId: elnock.getId(), definition,
+      clickType: tradeAction, handled: false }), true);
+    assert.equal(f.p.getInterfaceId(), 540);
+    PM.emitInterfaceActionClick({ player: f.p, buttonId: (540 << 16) | 4, slot: 6, action: 1, opId: 1, handled: false });
+    PM.emitInterfaceActionClick({ player: f.p, buttonId: (540 << 16) | 7, slot: 9, action: 1, opId: 1, handled: false });
+  };
+  // The player and bank are supplied; registered exchange and real dialogue-choice handler run.
+  payment(); offer();
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0);
+  f.p.getDialogueManager().handleOption(2);
+  assert.equal(generator.getMetaValue(GENERATOR_CHARGES_META), 17);
+  assert.equal(f.inv.getAmount(I.NATURE_IMPLING_JAR), 1);
+  offer();
+  const replacement = new core.Item(I.JAR_GENERATOR, 1);
+  replacement.setMetaValue(GENERATOR_CHARGES_META, 9);
+  f.p.getBank(2).setItem(0, replacement);
+  f.p.getDialogueManager().handleOption(1);
+  assert.equal(replacement.getMetaValue(GENERATOR_CHARGES_META), 9, "a changed generator cannot consume a stale recharge choice");
+  assert.equal(f.inv.getAmount(I.NATURE_IMPLING_JAR), 1);
+  assert.equal(f.inv.getAmount(I.ESSENCE_IMPLING_JAR), 3);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0);
+  f.p.getBank(2).setItem(0, generator);
+  offer(); f.inv.deleteNumber(I.NATURE_IMPLING_JAR, 1);
+  f.p.getDialogueManager().handleOption(1);
+  assert.equal(generator.getMetaValue(GENERATOR_CHARGES_META), 17, "payment is rechecked after choosing recharge");
+  assert.equal(f.inv.getAmount(I.ESSENCE_IMPLING_JAR), 3);
+  payment(); offer(); f.p.getDialogueManager().handleOption(1);
+  assert.equal(generator.getMetaValue(GENERATOR_CHARGES_META), 100);
+  assert.equal(f.inv.getAmount(I.JAR_GENERATOR), 0);
+  for (const id of [I.ESSENCE_IMPLING_JAR, I.ECLECTIC_IMPLING_JAR, I.NATURE_IMPLING_JAR]) assert.equal(f.inv.getAmount(id), 0);
+  f.p.setStatus(core.PlayerStatus.BANKING);
+  f.p.setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+  core.Bank.withdraw(f.p, I.JAR_GENERATOR, 0, 1, 2);
+  const withdrawn = f.inv.getItems().find(item => item.getId() === I.JAR_GENERATOR);
+  assert.ok(withdrawn);
+  assert.equal(f.p.getBank(1).getAmount(I.BONES), 1);
+  f.p.closeInterruptibleInterfaces();
+  assert.equal(f.p.busy(), false);
+  generatorAction(f, withdrawn, 1);
+  assert.equal(withdrawn.getMetaValue(GENERATOR_CHARGES_META), 97);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);
+  assert.equal(f.p.getBank(2).getAmount(I.JAR_GENERATOR), 0);
+});
+
+test("jar generator death policy never keeps or drops a lost generator", (t) => {
+  const f = actor(t), item = new core.Item(I.JAR_GENERATOR, 1);
+  assert.equal(PM.emitShouldKeepItemOnDeath(f.p, item), false);
+  const unsafe = { player: f.p, item, kept: false, shouldDropItems: true, location: f.p.getLocation(), handled: false };
+  assert.equal(PM.emitPlayerDeathItemDrop(unsafe), true);
+  const safe = { ...unsafe, shouldDropItems: false, handled: false };
+  assert.equal(PM.emitPlayerDeathItemDrop(safe), false, "safe deaths preserve items");
+});
+
+test('anchovy supplies make an impling jar that can catch a Puro-Puro impling', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  questStage(f, 'druidic_ritual');
+  levels(f, core.Skill.HERBLORE, core.Skill.HUNTER);
+  f.p.setHitpoints(99);
+  f.inv.setItem(0, new core.Item(I.ANCHOVY_PASTE, 8));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(2, new core.Item(I.SIEVE, 1));
+  f.inv.setItem(3, new core.Item(I.MARIGOLDS, 1));
+  f.inv.setItem(4, new core.Item(I.BUTTERFLY_JAR, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_PASTE), 0);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 1);
+  assert.equal(f.inv.getAmount(I.SIEVE), 1);
+  UseItemPacketListener.itemOnItem(f.p, slotOf(f, I.ANCHOVY_OIL), slotOf(f, I.MARIGOLDS));
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 1);
+
+  // The map lookup and approach are supplied; the real item-on-object listener and plugin hooks run.
+  const at = new core.Location(2937, 3210, 0);
+  f.p.setLocation(new core.Location(2937, 3209, 0));
+  const still = new core.GameObject(core.ObjectIdentifiers.LAMP_OIL_STILL, at, 10, 0, null);
+  assert.equal(core.ObjectDefinition.forPlayer(still.getId(), f.p)?.getName(), "Lamp oil still");
+  t.mock.method(core.MapObjects, 'getPrivateArea', () => still);
+  t.mock.method(core.MapObjects, 'stillStands', () => true);
+  t.mock.method(f.p.getMovementQueue(), 'walkToObject', (_object, options) => { options.execute(); return true; });
+  const useStill = (id) => UseItemPacketListener.itemOnObject(f.p, 94, still.getId(), id, slotOf(f, id), at.getX(), at.getY());
+  useStill(I.IMP_REPELLENT);
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 0);
+  useStill(I.BUTTERFLY_JAR);
+  assert.equal(f.inv.getAmount(I.BUTTERFLY_JAR), 0);
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 1);
+
+  // Seed the actor and location; the registered Catch hook and real inventory exchange run.
+  f.p.setLocation(new core.Location(2592, 4320, 0));
+  f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.BUTTERFLY_NET, 1));
+  const npc = core.NPC.create(core.NpcIdentifiers.BABY_IMPLING_2, f.p.getLocation().clone());
+  npc.setRegistered(true); npc.setNeedsPlacement(false);
+  t.after(() => npc.setRegistered(false));
+  const definition = npc.getCurrentDefinition(f.p);
+  const clickType = definition.getActions().findIndex(action => action === 'Catch') + 1;
+  assert.ok(clickType > 0);
+  const rng = t.mock.method(Math, 'random', () => 0);
+  PM.emitNpcInteraction({ player: f.p, npc, npcId: npc.getId(), definition, clickType, handled: false });
+  rng.mock.restore();
+  assert.equal(f.inv.getAmount(I.IMPLING_JAR), 0);
+  assert.equal(f.inv.getAmount(I.BABY_IMPLING_JAR), 1);
+});
+
+test('anchovy oil preserves remaining paste and refuses restricted input in a full inventory', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  f.inv.setItem(0, new core.Item(I.ANCHOVY_PASTE, 9));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(2, new core.Item(I.SIEVE, 1));
+  for (let slot = 3; slot < 28; slot++) f.inv.setItem(slot, new core.Item(I.BONES, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_PASTE), 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 1);
+  assert.equal(f.inv.getAmount(I.SIEVE), 1);
+  assert.equal(f.inv.getAmount(I.BONES), 25);
+  f.inv.setItem(0, preset(new core.Item(I.ANCHOVY_PASTE, 8)));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  UseItemPacketListener.itemOnItem(f.p, 0, 1);
+  assert.equal(amount(f.inv, I.ANCHOVY_PASTE, true), 8);
+  assert.equal(f.inv.getAmount(I.VIAL), 1);
+  assert.equal(f.inv.getAmount(I.ANCHOVY_OIL), 0);
+});
+
+test('still ignores a repellent moved while the player walks to it', (t) => {
+  const f = actor(t);
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  const at = new core.Location(2937, 3210, 0);
+  const still = new core.GameObject(core.ObjectIdentifiers.LAMP_OIL_STILL, at, 10, 0, null);
+  t.mock.method(core.MapObjects, 'getPrivateArea', () => still);
+  t.mock.method(core.MapObjects, 'stillStands', () => true);
+  let arrive;
+  t.mock.method(f.p.getMovementQueue(), 'walkToObject', (_object, options) => { arrive = options.execute; return true; });
+  const repellent = new core.Item(I.IMP_REPELLENT, 1);
+  f.inv.setItem(0, repellent);
+  UseItemPacketListener.itemOnObject(f.p, 94, still.getId(), I.IMP_REPELLENT, 0, at.getX(), at.getY());
+  assert.equal(typeof arrive, 'function');
+  f.inv.setItem(0, new core.Item(I.BONES, 1));
+  f.inv.setItem(1, repellent);
+  arrive();
+  assert.equal(f.inv.getAmount(I.IMP_REPELLENT), 1);
+  assert.equal(f.inv.getAmount(I.BONES), 1);
+  assert.notEqual(f.p.getAttribute('oil-lights:distilled-oil'), '2937,3210,0:repellent');
 });

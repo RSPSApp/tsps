@@ -16,6 +16,8 @@ import {
     deriveMenuEntriesForWidget as UI_deriveMenuEntriesForWidget,
     findBlockingWidgetInHits as UI_findBlockingWidgetInHits,
     hasContextMenuOption as UI_hasContextMenuOption,
+    isIf1MenuButton as UI_isIf1MenuButton,
+    withStackedIf1ButtonEntries as UI_withStackedIf1ButtonEntries,
 } from "../../../widgets/menu/utils";
 import { MinimapRenderer, getMinimapMaps } from "../MinimapRenderer";
 import { drawChooseOptionMenu } from "../choose-option";
@@ -401,6 +403,34 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 }
             } catch {}
 
+            // Widgets at the click across ALL roots rendered this pass, back to front.
+            // Root order matters: later roots are visually on top (WidgetsOverlay draw order).
+            const collectHits = (): any[] => {
+                const roots = Array.isArray((ui as any).__widgetRoots)
+                    ? (ui as any).__widgetRoots
+                    : [root];
+                return UI_collectWidgetsAtPointAcrossRoots(
+                    roots as any[],
+                    x | 0,
+                    y | 0,
+                    opts.visible,
+                    getStaticChildren,
+                    getInterfaceParentRoots,
+                    isInputCaptureWidget,
+                ).filter((h: any) => !h.__dummyRoot);
+            };
+            // Stacked IF1 buttons (the tanner's Tan 1/5/X/All) each add their option.
+            const withStackedButtons = (w: any, entries: any[], hits?: any[]): any[] => {
+                if (!UI_isIf1MenuButton(w)) return entries;
+                try {
+                    return UI_withStackedIf1ButtonEntries(w, entries, hits ?? collectHits(), (hit) =>
+                        UI_deriveMenuEntriesForWidget(hit, false, getWidgetFlags, getByUid, getWidgetOpMask) || [],
+                    );
+                } catch {
+                    return entries;
+                }
+            };
+
             // Prefer the hovered click target (registered during render) as the menu anchor.
             // This avoids mismatches when interfaces are layered / mounted (InterfaceParents) and ensures
             // the menu targets exactly what the user right-clicked visually.
@@ -437,6 +467,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             } catch {}
                             const real = UI_hasContextMenuOption(candEntries);
                             if (real) {
+                                candEntries = withStackedButtons(w, candEntries);
                                 ui.mouseX = x | 0;
                                 ui.mouseY = y | 0;
                                 const { widgetEntriesToSimple } = require("../../../ui/menu/MenuBridge");
@@ -471,20 +502,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 }
             } catch {}
 
-            // Collect widgets at the click across ALL roots rendered this pass.
-            // Root order matters: later roots are visually on top (WidgetsOverlay draw order).
-            const roots = Array.isArray((ui as any).__widgetRoots)
-                ? (ui as any).__widgetRoots
-                : [root];
-            const hits = UI_collectWidgetsAtPointAcrossRoots(
-                roots as any[],
-                x | 0,
-                y | 0,
-                opts.visible,
-                getStaticChildren,
-                getInterfaceParentRoots,
-                isInputCaptureWidget,
-            ).filter((h: any) => !h.__dummyRoot);
+            const hits = collectHits();
             let chosen: any | undefined;
             let entries: any[] = [];
 
@@ -522,7 +540,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 const real = UI_hasContextMenuOption(candEntries);
                 if (real) {
                     chosen = candidate;
-                    entries = candEntries;
+                    entries = withStackedButtons(candidate, candEntries, hits);
                     break;
                 }
             }

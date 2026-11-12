@@ -23,6 +23,17 @@ before(async () => {
   Delivery = require("../plugins/minigames/gnomerestaurant/Delivery.GnomeRestaurant");
   PM.emitServerStartup({});
 });
+
+const MAX = 2147483647;
+
+function gnomePlayer(t, index) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(index); p.setUsername("gnome" + index); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  p.setLocation(new core.Location(2449, 3501, 1));
+  t.after(() => p.setRegistered(false));
+  return p;
+}
 after(() => PM.emitServerShutdown({}));
 
 test("every pure essence of a hard tip is kept: what has no slot lands under the player", (t) => {
@@ -50,4 +61,17 @@ test("every pure essence of a hard tip is kept: what has no slot lands under the
   const min = essence.items.find((item) => item.id === I.PURE_ESSENCE).min;
   const floored = dropped.filter(([id]) => id === I.PURE_ESSENCE).reduce((sum, [, amount]) => sum + amount, 0);
   assert.equal(p.getInventory().getAmount(I.PURE_ESSENCE) + floored, min, `all ${min} essence, in the slots or on the floor`);
+});
+
+test("an easy coin tip onto a stack near the cap keeps the overflow under the player", (t) => {
+  const p = gnomePlayer(t, 9002);
+  p.getInventory().setItem(0, new core.Item(I.COINS, MAX - 5));
+  const dropped = [];
+  t.mock.method(ItemOnGroundManager, "registers", (player, item) => { dropped.push([item.getId(), item.getAmount()]); return null; });
+  t.mock.method(Math, "random", () => 0.99);
+  const tip = Delivery._test.rollEasyTip(() => 0.99);
+  assert.ok(tip > 5, "the tip is more than the stack has room for");
+  Delivery._test.giveTip(p, { tier: "easy", npcName: "Brimstail" });
+  assert.equal(p.getInventory().getAmount(I.COINS), MAX);
+  assert.deepEqual(dropped, [[I.COINS, tip - 5]]);
 });

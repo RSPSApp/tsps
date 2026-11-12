@@ -42,7 +42,7 @@ function cleanup(event) {
 }
 
 function shutdown() {
-  task?.stop(); Rabbits.shutdown(); Overworld.clear();
+  task?.stop(); Rabbits.shutdown(); Pitfalls.shutdown(); Overworld.clear();
   for (const player of H.players) cleanup({ player });
   for (const npc of H.hidden.keys()) C.reveal(npc);
 }
@@ -67,10 +67,21 @@ function attack(event) { return Herbiboar.attack(event) || Tracking.catchPrey(ev
 function login(event) { H.players.add(event.player); Birdhouses.login(event); Crabs.login(event); DriftNets.login(event); Catching.login(event); }
 function equipment(event) { Catching.equipment(event); Aerial.equipment(event); }
 
-function release({ player, itemId }) {
+/** The spam line for letting a caught creature go. Ours: red, black and adult tecu salamanders take the salamander line. */
+function releaseLine(itemId) {
   const I = H.core.ItemIdentifiers;
-  if (![I.FERRET, I.SWAMP_LIZARD, I.ORANGE_SALAMANDER, I.RED_SALAMANDER, I.BLACK_SALAMANDER, I.TECU_SALAMANDER, I.IMMATURE_TECU_SALAMANDER].includes(itemId)) return false;
-  if (C.exchange(player, [[itemId, 1]], [])) player.sendMessage("You release the creature.");
+  if (itemId === I.FERRET) return "You release the ferret and it runs away.";
+  if (itemId === I.SWAMP_LIZARD) return "You release the lizard and it darts away.";
+  if ([I.ORANGE_SALAMANDER, I.RED_SALAMANDER, I.BLACK_SALAMANDER, I.TECU_SALAMANDER, I.IMMATURE_TECU_SALAMANDER].includes(itemId)) {
+    return "You release the salamander and it darts away.";
+  }
+  return null;
+}
+
+function release({ player, itemId }) {
+  const line = releaseLine(itemId);
+  if (!line) return false;
+  if (C.exchange(player, [[itemId, 1]], [])) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
   return true;
 }
 

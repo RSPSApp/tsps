@@ -132,3 +132,42 @@ test("the storage works only while its interface is open, at a unit in the raid:
   assert.equal(f.inv.getAmount(I.COINS), 0, "the raid's storage is gone outside the raid");
   assert.equal(stored(f, I.COINS), 500);
 });
+
+test("a preset non-stackable is refused too, and storing All of a plain one leaves its preset copies", (t) => {
+  const f = inStorage(t);
+  f.inv.setItem(0, preset(new core.Item(I.ABYSSAL_WHIP, 1)));
+  Storage.deposit(f.p, 0, 1);
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  assert.equal(stored(f, I.ABYSSAL_WHIP), 0);
+
+  f.inv.setItem(1, new core.Item(I.ABYSSAL_WHIP, 1));
+  f.inv.setItem(2, preset(new core.Item(I.ABYSSAL_WHIP, 1)));
+  Storage.deposit(f.p, 1, 28);
+  assert.equal(stored(f, I.ABYSSAL_WHIP), 1, "only the plain whip");
+  assert.equal(Storage.privateItems(f.p).some((entry) => entry.meta?.[core.Item.PRESET_META] === true), false);
+  assert.equal(amount(f.inv, I.ABYSSAL_WHIP, true), 2, "both preset whips stay");
+});
+
+/** With the raid's shared storage open (550), its own raid kept for the view. */
+function inSharedStorage(t) {
+  const f = actor(t);
+  const raid = { players: [f.p], storageTier: 1, sharedItems: [{ id: I.CAVE_WORMS, amount: 50 }] };
+  t.mock.method(Raid, "raidOf", (player) => (player === f.p ? raid : null));
+  f.p.setInterfaceId(550);
+  f.p.setAttribute("cox:storage-view", { kind: "shared", size: 250, raid });
+  return { ...f, raid };
+}
+
+test("forged private Withdraw-all / Deposit-all buttons do nothing while the shared storage is open", (t) => {
+  const f = inSharedStorage(t);
+  f.p.setAttribute("cox:private-storage", [{ id: I.CAVE_WORMS, amount: 10 }]);
+  f.inv.setItem(0, new core.Item(I.CAVE_WORMS, 7));
+  Storage.withdrawAll({ player: f.p });
+  assert.equal(f.inv.getAmount(I.CAVE_WORMS), 7, "nothing withdrawn");
+  assert.deepEqual(f.raid.sharedItems, [{ id: I.CAVE_WORMS, amount: 50 }], "the shared store is untouched");
+  assert.equal(stored(f, I.CAVE_WORMS), 10, "the private store too");
+
+  Storage.depositOrBankAll({ player: f.p });
+  assert.equal(f.inv.getAmount(I.CAVE_WORMS), 7, "nothing deposited");
+  assert.deepEqual(f.raid.sharedItems, [{ id: I.CAVE_WORMS, amount: 50 }]);
+});

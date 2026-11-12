@@ -803,7 +803,7 @@ module.exports = function registerBetweenARockQuest(api) {
     // Wiki (Gold helmet): 30 Smithing XP.
     player.getSkillManager().addExperiences(Skill.SMITHING, 30);
     player.sendMessage("You hammer the gold bars into a golden helmet.");
-    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.plugin.js).
+    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.AchievementDiaries.js).
     api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
   }
 

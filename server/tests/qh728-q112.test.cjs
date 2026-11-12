@@ -653,8 +653,11 @@ test('fresh stage 0 reaches completion through every mandatory quest-local handl
   search(OBJ.CHAIN);
   p.items.set(ITEM.EMERALD, 1);
   p.items.set(ITEM.CHISEL, 1);
-  combine(ITEM.EMERALD, ITEM.SICKLE_B);
-  assert.equal(p.items.get(ITEM.EMERALD_SICKLE), 1);
+  // The emerald sickle is Crafting's (tests/gem-sickles-crafting.test.cjs); the quest says when it can be made.
+  const sickleRequest = { player: p, product: ITEM.EMERALD_SICKLE, allowed: false };
+  h.emit('crafting:gem-sickle-allowed', sickleRequest);
+  assert.equal(sickleRequest.allowed, true, 'the started quest allows the emerald sickle');
+  p.items.delete(ITEM.EMERALD); p.items.delete(ITEM.SICKLE_B); p.items.set(ITEM.EMERALD_SICKLE, 1);
   p.items.set(ITEM.COSMIC_RUNE, 1);
   p.items.set(ITEM.AIR_RUNE, 3);
   const enchant = h.castOnItem(p, ITEM.EMERALD_SICKLE);

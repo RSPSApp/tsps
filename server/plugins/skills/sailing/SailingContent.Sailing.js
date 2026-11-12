@@ -16,6 +16,7 @@ const StaticShips = require("./StaticShips.Sailing");
 const VARBIT = {
   // The Pandemonium is done (50): the boat customisation refuses every build below it (9022).
   SAILING_INTRO: 18314,
+  SIDE_PANEL_ONLY_ON_BOAT: 18131, // All Settings' "Sailing side panel" (454): 0 Always show, 1 Only show on boat
   LAST_PERSONAL_BOAT_BOARDED: 18554, // boat slot, from 1
   PLAYER_IS_ON_PLAYER_BOAT: 19104, // gangplank: Board / Disembark
   FACILITY_LOCKEDIN: 19105, // helm: Navigate / Stop-navigating (3)
@@ -149,6 +150,22 @@ function dockNear(player, range) {
     }
   }
   return best;
+}
+
+/**
+ * A random unblocked tile within one of `origin` (`withOrigin` lets it be `origin` itself), or
+ * `origin` when every one is blocked. `regions` is the plugin api's region manager.
+ */
+function tileBeside(regions, origin, privateArea, withOrigin) {
+  const tiles = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0 && !withOrigin) continue;
+      const tile = new Location(origin.getX() + dx, origin.getY() + dy, origin.getZ());
+      if (!regions?.blocked(tile, privateArea)) tiles.push(tile);
+    }
+  }
+  return tiles.length > 0 ? tiles[Math.floor(Math.random() * tiles.length)] : origin;
 }
 
 function dockById(id) {
@@ -307,6 +324,17 @@ function fade(player, out, cycles = FADE_CYCLES, { minimap = true } = {}) {
   if (minimap) setVarbit(player, VARBIT.MINIMAP_STATE, out ? 2 : 0);
 }
 
+/**
+ * Takes an NPC a plugin added to a boat's deck (`deck.enter`) off the deck, then out of the world.
+ * removeNpc leaves the NPC's area alone, so the deck would otherwise keep it among its NPCs.
+ */
+function removeDeckNpc(api, boat, npc) {
+  if (!npc) return;
+  const deck = BoatManager.getDeck(boat);
+  if (deck?.hasMember(npc)) deck.leave(npc, false);
+  api.removeNpc(npc);
+}
+
 module.exports = {
   dockNear,
   VARBIT,
@@ -329,6 +357,7 @@ module.exports = {
   suppliedBoatProfile,
   boatAnim,
   dockById,
+  tileBeside,
   boatName,
   randomBoatName,
   dockAtGangplank,
@@ -340,6 +369,7 @@ module.exports = {
   fade,
   animateDeckLocs,
   animateDeckLoc,
+  removeDeckNpc,
   later,
   isHelm,
   isSail,

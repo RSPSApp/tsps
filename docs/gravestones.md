@@ -79,7 +79,7 @@ custom events (listed in `gravestones/Events.Gravestones.js`). Core gives them t
   - through the first-death tutorial.
 - **At 0:** "<col=ef1020>Your gravestone has expired.</col> Items held there can now be reclaimed at <col=ef1020>Death's Office</col>, accessed from near the respawn points." The items go to the office.
 - **Clicking the HUD timer** (`toplevel*:gravestone`) prints where the items are, and "In 13 minutes, 55 seconds it will expire, …" (whole seconds of the ticks left).
-- **Logging in** with a grave, or with items in the office, prints the retrieval warning, unless setting 278 (`gravestone_disable_warning`) is on. The grave and its timer come back.
+- **Logging in** with a grave, or with items in the office, prints the retrieval warning, unless All Settings row 278 is turned off (varbit 14194 `option_item_retrieval_warning_disabled` at 1); it shows by default. The grave and its timer come back.
 - **`agent:advance-time`** moves the timer on.
 
 ## Death's Office (captured)

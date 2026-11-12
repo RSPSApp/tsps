@@ -101,10 +101,9 @@ function askEffects(player, trial, next) {
   if (player.getPacketSender().getVarbit(effectsOff) === 1 || common.trialProgress(player, trial).extra?.dontAskEffects) return next();
   const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = core();
   const answer = (off, dontAsk) => () => {
-    if (off) player.getPacketSender().sendVarbit(effectsOff, 1);
-    common.updateProgress(player, trial, (saved) => {
-      saved.extra = { ...saved.extra, ...(off && { effectsOff: true }), ...(dontAsk && { dontAskEffects: true }) };
-    });
+    // "Disable colourful fade effects" in All Settings: the same setting, saved with the others.
+    if (off) common.api().emitCustomEvent("settings:set", { player, settingId: common.COLOURFUL_FADE_SETTING, value: 1 });
+    if (dontAsk) common.updateProgress(player, trial, (saved) => { saved.extra = { ...saved.extra, dontAskEffects: true }; });
     next();
   };
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(

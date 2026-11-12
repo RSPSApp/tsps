@@ -144,3 +144,9 @@ These are server conservation guards; the exact full-bank refusal sequence was n
 
 ## Spells (captured)
 A Fire Blast paid from the pouch lowered the quantity varbits on the cast tick. The inventory pays first, and the pouch only covers the shortfall, through `registerSpellRuneSource`.
+
+## Picked-up and crafted runes (Wiki, cache)
+With "Rune-picking behaviour" (setting 306, varbit 5698 `take_runes_toggle`) on, a rune stack picked up from the ground, or the runes an altar makes, go into the carried pouch when a slot already holds that rune and has room for all of them; otherwise they go to the inventory. Pickups pass the same Ironman and take checks as an ordinary pickup (`plugins/items/TakeInto.js`). The Magic combat tutor's "Let's discuss how my runes act when I pick them up." choice sets the same row. `Pickup.RunePouch.js`; [settings.md](settings.md#pickups-into-containers).
+
+## Death
+A PvP death empties the pouch, kept or lost, and its runes drop for the killer; a lost pouch is destroyed, never kept (Wiki: Items Kept on Death). On a PvM death the runes stay in the pouch, whether the pouch is kept or goes to the grave, unless "Always empty rune pouches on death" (setting 354) is on; then they go to the grave as runes. `Death.RunePouch.js` adds the pouch to the storage items' death hook ([storage-items.md](storage-items.md#death)).

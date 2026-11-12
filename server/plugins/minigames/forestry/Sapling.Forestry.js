@@ -298,14 +298,17 @@ function clearMulch(player) {
   player.setAttribute(MULCH_ATTRIBUTE, null);
 }
 
-/** The next tick: bark by average nutrition, the tree's leaves, and bonus XP. */
+/** The next tick: bark by average nutrition, leaves of a random tier, and bonus XP. */
 function gifts(event) {
   const sapling = S();
   for (const [player, fed] of event.fed) {
     if (!player.isRegistered?.()) continue;
     const average = fed.reduce((sum, value) => sum + value, 0) / fed.length;
     Common.bark(player, lumpBark(average), true);
-    const leaves = Common.data.trees[event.site.name] ?? "Leaves";
+    // Wiki (Forestry): "20 leaves of a random tier"; Struggling Sapling lists all six at 1/6. Recorded: a willow gave
+    // yew leaves (227/00083.txt:365537), an oak willow leaves (227/01723.txt:113389), a yew plain leaves (227/01850.txt:208509).
+    const tiers = Object.keys(Common.data.leaves);
+    const leaves = tiers[Common.randomInt(0, tiers.length - 1)];
     const amount = Common.randomInt(...sapling.leaves);
     Common.award(player, Common.data.leaves[leaves], amount);
     player.sendMessage(Common.message("leaves", { amount, leaves }));

@@ -6,6 +6,7 @@ import { normalizeMenuEntries } from "./MenuEngine";
 import { MenuState } from "./MenuState";
 import { applyMenuTransform } from "./menuTransforms";
 import { preparePluginMenu } from "./menuEvents";
+import { filterMinimenuEntries } from "./minimenuFilters";
 import { hasNativeWidgetOperation, transformWidgetMenuEntries } from "../../widgets/menu/utils";
 
 type WidgetMenuEntryInput = {
@@ -25,6 +26,8 @@ type WidgetMenuEntryInput = {
     forceLeftClick?: boolean;
     /** Submenu entry texts for this op (widget.submenuActions[opIndex-1]) */
     subOptions?: string[];
+    /** The widget this entry clicks, when it isn't the menu's own (stacked IF1 buttons) */
+    widget?: any;
 };
 
 function isWidgetInspectOperation(entry: WidgetMenuEntryInput, option = entry.option): boolean {
@@ -208,6 +211,8 @@ export function worldEntriesToSimple(
         menuState?: MenuState;
         registerWithState?: boolean;
         resetMenuState?: boolean;
+        /** The client's minimenu block modes (Interfaces > Minimenu filters). */
+        blockModes?: readonly number[];
     } = {},
 ): SimpleMenuEntry[] {
     const toEvt = opts.toCssEvent;
@@ -215,7 +220,7 @@ export function worldEntriesToSimple(
     if (register && opts.resetMenuState !== false) {
         opts.menuState?.reset();
     }
-    const intermediate: SimpleMenuEntry[] = (source || []).map((e) => {
+    const intermediate: SimpleMenuEntry[] = filterMinimenuEntries(source || [], opts.blockModes).map((e) => {
         const action = e.spellCast ? MenuAction.Cast : inferMenuAction(e.option, e.targetType);
         // osrsTargetLabel already includes the level text for NPCs/players
         const label = osrsTargetLabel(e, opts.label) || undefined;
@@ -364,14 +369,15 @@ export function widgetEntriesToSimple(
             try {
                 // widget ops on item containers need slot/itemId.
                 // Dynamic CC_CREATE children store slot index in `childIndex`.
+                const widget = e.widget ?? chosenWidget;
                 const fallbackSlot =
-                    typeof chosenWidget?.childIndex === "number"
-                        ? chosenWidget.childIndex | 0
+                    typeof widget?.childIndex === "number"
+                        ? widget.childIndex | 0
                         : undefined;
                 const fallbackItemId =
-                    typeof chosenWidget?.itemId === "number" ? chosenWidget.itemId | 0 : undefined;
+                    typeof widget?.itemId === "number" ? widget.itemId | 0 : undefined;
                 hook({
-                    widget: chosenWidget,
+                    widget,
                     option,
                     target,
                     source: clickCtx?.source ?? "menu",
@@ -429,8 +435,8 @@ export function widgetEntriesToSimple(
             targetType: target ? MenuTargetType.ITEM : MenuTargetType.NONE,
             opcode: e.opcode,
             identifier: e.opIndex ?? (e.opcode === 25 ? 0 : 1),
-            param0: e.widgetAction?.slot ?? chosenWidget?.childIndex ?? -1,
-            param1: chosenWidget?.uid ?? -1,
+            param0: e.widgetAction?.slot ?? (e.widget ?? chosenWidget)?.childIndex ?? -1,
+            param1: (e.widget ?? chosenWidget)?.uid ?? -1,
             itemId: resolveWidgetItemId(e) ?? -1,
             forceLeftClick: e.forceLeftClick,
             onClick: buildOnClick(e, e.option, target),

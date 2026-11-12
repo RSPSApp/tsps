@@ -71,15 +71,13 @@ function portalClosed() {
   open = null;
 }
 
-/** The colourful fade, unless the player turned it off at the barrier (Visual-effects). */
+/** The portal's fade, unless the player turned it off at the barrier (Visual-effects). */
 function overlay(player, on) {
   const sender = player.getPacketSender();
   if (Records.setting(player, "gotr_colourful_fade_disabled") === 1) return;
   if (on) {
     Game.closeHud(player);
-    sender.sendSubInterface(Shared.OVERLAY_ATMOSPHERE_UID, Shared.iface(Shared.INTERFACE.OVERLAY), 1, {
-      postScripts: [{ scriptId: Shared.SCRIPT.OVERLAY_PORTAL, args: [OVERLAY.model, OVERLAY.colour] }],
-    });
+    Shared.openPortalEffect(player, [OVERLAY.model, OVERLAY.colour]);
   } else {
     sender.closeSubInterface(Shared.OVERLAY_ATMOSPHERE_UID);
     if (Game.isPlaying(player)) Game.openHud(player);
@@ -97,7 +95,7 @@ function stepThrough(player, tile, visible) {
     Shared.spam(player, "You step through the portal and find yourself in another part of the temple.");
     player.moveTo(Shared.location(tile));
     if (Records.setting(player, "gotr_colourful_fade_disabled") !== 1) {
-      player.getPacketSender().sendClientScript(Shared.SCRIPT.REMOVE_PORTAL);
+      Shared.clearPortalEffect(player);
     }
     Shared.later(1, () => player.isRegistered() && overlay(player, false));
   });

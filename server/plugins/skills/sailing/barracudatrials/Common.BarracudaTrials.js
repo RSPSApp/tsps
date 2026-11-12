@@ -118,6 +118,22 @@ function masterState(player, trial) {
   return trialProgress(player, trial).intro ? 1 : 0;
 }
 
+/** All Settings' "Disable colourful fade effects" row (varbit settings_colourful_fade_disabled). */
+const COLOURFUL_FADE_SETTING = 460;
+
+/** A trial's own "effects off" flag, saved before the row existed, moves into that setting once. */
+function migrateEffectsOff(player) {
+  const legacy = trials.filter((trial) => trialProgress(player, trial).extra?.effectsOff);
+  if (!legacy.length) return;
+  for (const trial of legacy) {
+    updateProgress(player, trial, (saved) => {
+      const { effectsOff, ...extra } = saved.extra;
+      saved.extra = extra;
+    });
+  }
+  pluginApi.emitCustomEvent("settings:set", { player, settingId: COLOURFUL_FADE_SETTING, value: 1 });
+}
+
 /** The saved progress as the client's variables: masters' forms, ranks reached, bests, counts. */
 function sendProgress(player) {
   const sender = player.getPacketSender();
@@ -134,7 +150,7 @@ function sendProgress(player) {
     sender.sendConfig(varp(`sailing_bt_trial_${trial.key}_completed`), saved.count);
   }
   sender.sendVarbit(varbit("sailing_bt_barracuda_intro"), intro ? 1 : 0);
-  if (trials.some((trial) => trialProgress(player, trial).extra?.effectsOff)) sender.sendVarbit(varbit("settings_colourful_fade_disabled"), 1);
+  migrateEffectsOff(player);
   const tempor = trials.find((trial) => trial.key === "tempor_tantrum");
   if (tempor && trialProgress(player, tempor).extra?.whirlpool) {
     sender.sendVarbit(varbit("sailing_bt_tempor_tantrum_collected_whirlpool_surprise"), 1);
@@ -248,6 +264,7 @@ module.exports = {
   rankBeaten,
   masterState,
   sendProgress,
+  COLOURFUL_FADE_SETTING,
   clock,
   formatTicks,
   numberWord,

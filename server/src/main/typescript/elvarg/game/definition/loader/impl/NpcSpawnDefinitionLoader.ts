@@ -248,8 +248,8 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
             const regionX = location.getX() >> 6;
             const regionY = location.getY() >> 6;
             const radius = Math.max(1, Math.ceil((viewDistance + NpcSpawnDefinitionLoader.MAX_DEFERRED_WANDER_RADIUS) / 64));
-            const levels = CrossFloor.enabled() && location.getZ() >= 0 && location.getZ() < 4
-                ? Array.from({ length: location.getZ() + 1 }, (_, level) => level)
+            const levels = CrossFloor.includesOtherPlanes(location.getZ())
+                ? [0, 1, 2, 3].filter(level => CrossFloor.visibleOnPlane(location.getZ(), level))
                 : [location.getZ()];
             for (const level of levels) {
                 for (let dx = -radius; dx <= radius; dx++) {

@@ -1,8 +1,9 @@
 "use strict";
 
 const C = require("./Context.Hunter");
-const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, xp, begin, hide, chance } = C;
+const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, catchExchange, xp, begin, hide, chance } = C;
 const tables = require("../data/impling-loot.json");
+const Matthias = require("./Matthias.Hunter");
 const falcons = new Map();
 const caught = new Map();
 // Players wearing a falconer's glove, so leaving the falconry grounds is checked for them only.
@@ -47,7 +48,8 @@ function hire({ player }) {
   if ([E.WEAPON_SLOT, E.SHIELD_SLOT, E.HANDS_SLOT].some(slot => player.getEquipment().get(slot).getId() > 0)) {
     player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return true;
   }
-  if (!exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
+  // Wiki (Falconry): an investor borrows falcons without the 500-coin fee.
+  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
   gloves(player, I.FALCONERS_GLOVE_2);
   H.players.add(player);
   player.sendMessage("Matthias lends you a falcon. Catch a kebbit, then retrieve the falcon and its prey.");
@@ -97,7 +99,7 @@ function collect(player, npc, def) {
   const generated = { player, npc, npcId: def.npc, drops: prey(def), handled: false };
   H.api.emitCustomEvent("npc-drops:generated", generated);
   if (generated.handled) return;
-  for (const drop of generated.drops) exchange(player, [], [[drop.itemId, drop.amount]]);
+  for (const drop of generated.drops) catchExchange(player, [], [[drop.itemId, drop.amount]]);
 }
 
 function retrieve({ player, npc }) {
@@ -230,7 +232,8 @@ function catchImpling(player, npc, npcId, def) {
   }
   if (!exchange(player, inputs, outputs)) return;
   player.getPacketSender().sendSound(IMPLING_CATCH_SOUND, 1, 0);
-  player.sendMessage(jarred ? JAR_MESSAGE : LOOT_MESSAGE);
+  // Spam in every recording: the jar line 395 times, the loot line 7.
+  player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, jarred ? JAR_MESSAGE : LOOT_MESSAGE);
   xp(player, puro ? def.puroXp : def.xp, "impling", npcId);
   npc.performAnimation(new H.core.Animation(ANIM.IMPLING_CAUGHT));
   // Roaming spawns (Puro-Puro's and the overworld's) manage their own removal and respawn.
@@ -316,7 +319,10 @@ function rewards(player, def) {
     const chance = { player, impling: def.key, tier: tier.toLowerCase(), oneIn: denominator };
     H.api.emitCustomEvent("hunter:impling-clue-chance", chance);
     const oneIn = Number.isInteger(chance.oneIn) && chance.oneIn > 0 ? chance.oneIn : denominator;
-    if (roll(1, oneIn) === 1 && !C.ownsClue(player, tier)) result.push([id, 1]);
+    if (roll(1, oneIn) !== 1) continue;
+    // A hit the player cannot take is lost; the tier's clue scroll warning mentions it.
+    if (C.ownsClue(player, tier)) H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: tier.toLowerCase() });
+    else result.push([id, 1]);
   }
   return result;
 }

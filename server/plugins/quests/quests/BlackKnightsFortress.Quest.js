@@ -1,11 +1,13 @@
 /**
  * Black Knights' Fortress, from the OSRS Wiki and captures.
- * The route follows two full-quest rsprox recordings, rev 240 and rev 241 (varp 130 0 -> 4): the
+ * The route follows three full-quest rsprox recordings, rev 240, 241 and 242 (varp 130 0 -> 4; rev 242
+ * wins where they differ: the scene's timing, the reward and the scroll). They give the
  * dialogue, the stage 2 and 3 journals, the dossier, the grill position and the sabotage scene's
  * NPC steps, camera, fades and sounds. The fortress as it stands after the quest (guards, doors,
  * walls, grill, main door) follows rsprox 469; the completed journal follows rsprox 1581 and 2977.
- * The stage 1 journal and the black-armour and not-disguised branches have no capture.
+ * The stage 1 journal and the not-disguised branch have no capture; rev 242 crosses the sturdy door in black armour.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 module.exports = function registerBlackKnightsFortressQuest(api) {
@@ -81,6 +83,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const MAIN_DOOR_Y_MIN = 3515;
   const MAIN_DOOR_Y_MAX = 3516;
   const CABBAGE_HOLE_LOC_ID = ObjectIdentifiers.HOLE_2;
+  const CABBAGE_HOLE_TILE = new Location(3031, 3507, 1);
   const PASSAGE_LOC_IDS = new Set([
     FORTRESS_ENTRANCE_DOOR_LOC_ID, BANQUET_HALL_DOOR_LOC_ID,
     GUARDED_STURDY_DOOR_LOC_ID, SECRET_WALL_LOC_ID,
@@ -111,10 +114,21 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const CAT_MEOW_SOUND = 333;
   /** The meow's area-sound range in tiles (sound_area range=5 in both recordings). */
   const CAT_MEOW_RANGE = 5;
-  /** Ticks after continuing past "Where has Greldo..." (rev 240: 3105 -> 3108; rev 241: 10057 -> 10059). */
+  /** Ticks after continuing past "Where has Greldo..." (rev 240: 3105 -> 3108; rev 242: 913 -> 916). */
   const NOISE_SOUND_DELAY = 3;
-  /** The throw (anim, spotanim, projectile, sound) follows the camera shake by a tick (rev 240 3068 -> 3069, rev 241 10028 -> 10029). */
-  const THROW_DELAY = 1;
+  /**
+   * The scene's clock runs from the throw. Rev 242 throws on the tick the scene starts (887: cutscene
+   * varbits, camera shake, anim, spotanim, projectile and sound together); rev 240/241 threw a tick after
+   * the shake, and every later step kept the same distance from the throw. `busy` follows a tick later.
+   */
+  const BUSY_DELAY = 1;
+  /** After the player continues past "Meow!": fade out, back at the hole, the closing line (rev 242 948 -> 951, 953, 956). */
+  const MEOW_FADE_OUT = 3;
+  const MEOW_RETURN = 5;
+  const MEOW_DONE = 8;
+  /** The dossier explodes, its box closes and the bang plays on the eighth tick; `busy` clears on the ninth (rev 242 195 -> 203, 204). */
+  const DOSSIER_EXPLOSION_SOUND = 1418;
+  const DOSSIER_EXPLOSION_SOUND_DELAY = 22;
 
   const START_HOOK = "quest:black-knights-fortress:start";
   const DOSSIER_ACTION_IDS = new Set(["RQQGDa", "kI0dT0"]);
@@ -128,8 +142,6 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const V_GUARD_NOT_DISGUISED = "infiltrating-the-fortress-talking-to-the-guards-while-not-wearing-a-disguise";
   const V_GUARD_BLACK_KNIGHT = "infiltrating-the-fortress-talking-to-the-guards-while-disguised-as-a-black-knight";
   const V_DOOR_MAIN = "infiltrating-the-fortress-trying-to-open-the-sturdy-door-while-not-wearing-a-disguise";
-  /** The cat's head has its own rig: the human chat animations leave it broken (rsprox 469). */
-  const BLACK_CAT_CHATHEAD_ANIMATION = 567;
   const V_DOOR_MEETING = "sabotaging-the-potion-interrupting-the-black-knights-meeting";
   const V_GRILL = "listen-at-grill";
   const V_GRILL_RUINED = "sabotaging-the-potion-listen-at-grill-after-ruining-the-potion";
@@ -355,7 +367,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       event.handled = true;
       return;
     }
-    if (stepId === "OIbGVl" || stepId === "jnrgsN") event.box = { statement: true };
+    if (stepId === "OIbGVl") event.box = { statement: true };
     if (npcId !== SIR_AMIK_VARZE_NPC_ID) return;
     if (DOSSIER_ACTION_IDS.has(stepId)) {
       event.handled = true;
@@ -411,14 +423,12 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       if (quest.getStage(player) === STAGE_INVESTIGATE && !hasItem(player, DOSSIER_ITEM_ID) && !player.getInventory().isFull()) player.getInventory().adds(DOSSIER_ITEM_ID, 1);
     };
     if (npcId !== FORTRESS_WITCH_NPC_ID) return;
-    if (text === "Yeth, Mithreth.") {
-      event.text = "Yeth, Mithtreth.";
+    if (text === "Yeth, Mithtreth.") {
       event.after = () => {
         if (quest.getStage(player) === STAGE_INVESTIGATE) quest.setStage(player, STAGE_SABOTAGE);
         player.performAnimation(new Animation(STOP_LISTENING_ANIMATION));
       };
     }
-    if (text === "...not to merntion the trees!") event.text = "...not to mention the trees!";
     if (text === "Purrr....") event.after = () => player.performAnimation(new Animation(STOP_LISTENING_ANIMATION));
     const state = scenes.get(player);
     if (!state) return;
@@ -428,25 +438,24 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       later(player, state, NOISE_SOUND_DELAY, () => player.getPacketSender().sendSound(NOISE_SOUND, 1, 0));
       pauseSabotage(player, state, 6, text);
     };
-    if (String(text).startsWith("Meow!")) {
-      event.text = "Meow!";
+    if (text === "Meow!") {
       event.speakerId = NpcIdentifiers.BLACK_CAT;
-      event.expression = BLACK_CAT_CHATHEAD_ANIMATION;
       event.after = () => {
         const cat = state.area.sourceTile(3027, 3507);
         player.getPacketSender().sendAreaSound(CAT_MEOW_SOUND, cat.getX(), cat.getY(), 0, 1, 0, CAT_MEOW_RANGE);
         player.getDialogueManager().reset();
         StatementDialogue.send(player, "", false);
-        later(player, state, 4, () => fade(player, true));
-        later(player, state, 6, () => { returnFromScene(player, state); fade(player, false); });
-        later(player, state, 9, () => {
+        later(player, state, MEOW_FADE_OUT, () => fade(player, true));
+        // The minimap comes back with the return, not with the rest of the controls (rev 242 953, rev 241 10103).
+        later(player, state, MEOW_RETURN, () => { returnFromScene(player, state); fade(player, false); player.getPacketSender().sendVarbit(6719, 0); });
+        later(player, state, MEOW_DONE, () => {
           quest.setStage(player, STAGE_RETURN_TO_AMIK);
           scenes.delete(player);
           player.setAttribute(SCENE_ATTRIBUTE, 0);
           controls(player, false);
           player.getPacketSender().sendCameraUnlock(false).sendCameraReset();
           playVariant(api, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, V_CABBAGE_NORMAL,
-            steps => steps.slice(steps.findIndex(step => String(step.text).startsWith("Meow!")) + 1));
+            steps => steps.slice(steps.findIndex(step => step.text === "Meow!") + 1));
         });
       };
     }
@@ -458,11 +467,13 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     }
   }
 
+  /** Starting the scene leaves `busy` (12393) to the caller: live sets it a tick after the rest. Ending clears it. */
   function controls(player, active) {
     player.getMovementQueue().reset().setBlockMovement(active);
     player.setUntargetable(active);
     for (const id of [4606, 542, 12139, 18141]) player.getPacketSender().sendVarbit(id, active ? 1 : 0);
-    player.getPacketSender().sendVarbit(6719, active ? 2 : 0).sendVarbit(12393, active ? 1 : 0);
+    player.getPacketSender().sendVarbit(6719, active ? 2 : 0);
+    if (!active) player.getPacketSender().sendVarbit(12393, 0);
   }
 
   function fade(player, out) {
@@ -506,12 +517,14 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       steps => steps.slice(steps.findIndex(step => step.id === after || step.text === after) + 1)));
   }
 
-  function throwCabbage(player) {
+  /** The cabbage flies from wherever the player stands to the hole (rev 240 3031,3506; rev 241 3031,3508; rev 242 3030,3507). */
+  function throwCabbage(player, hole) {
     player.performAnimation(new Animation(4553));
     player.getPacketSender().sendSound(THROW_SOUND, 1, 0);
     const thrown = new Graphic(771); thrown.height = 96;
     player.performGraphic(thrown);
-    player.getPacketSender().sendProjectile(new Location(3031, 3506, 1), new Location(3031, 3507, 1), 0, 196, 772, 130, 0, null, 96, 55, 60);
+    const from = player.getLocation();
+    player.getPacketSender().sendProjectile(new Location(from.getX(), from.getY(), from.getZ()), hole, 0, 196, 772, 130, 0, null, 96, 55, 60);
   }
 
   function startSabotage(event) {
@@ -523,28 +536,30 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     scenes.set(player, state);
     player.setAttribute(SCENE_ATTRIBUTE, 1);
     controls(player, true);
-    for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
-    later(player, state, THROW_DELAY, () => throwCabbage(player));
-    later(player, state, 6, () => fade(player, true));
-    later(player, state, 8, () => {
+    throwCabbage(player, CABBAGE_HOLE_TILE);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
+    later(player, state, BUSY_DELAY, () => player.getPacketSender().sendVarbit(12393, 1));
+    later(player, state, 5, () => fade(player, true));
+    later(player, state, 7, () => {
       state.area.enter(player);
       player.moveTo(state.area.sourceTile(3017, 3497));
       player.getPacketSender().sendJingle(5, 0);
+    });
+    // The cat, witch and captain appear with the camera, two ticks after the instance (rev 242 894 -> 896, rev 240 3076 -> 3078).
+    later(player, state, 9, () => {
       for (const [key, id, x, y] of [["cat", NpcIdentifiers.BLACK_CAT, 3027, 3507], ["witch", FORTRESS_WITCH_NPC_ID, 3030, 3509], ["captain", NpcIdentifiers.BLACK_KNIGHT_CAPTAIN, 3028, 3509]]) {
         const tile = state.area.sourceTile(x, y);
         state[key] = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0, face: 6, wanderRadius: 0, owner: player, ownerOnly: true });
         if (state[key]) state.area.add(state[key]);
       }
-    });
-    later(player, state, 10, () => {
       const at = state.area.sourceTile(3035, 3499), look = state.area.sourceTile(3032, 3505);
       player.getPacketSender().sendCameraMoveTo(at.getX(), at.getY(), 1500, { rate: 100, rate2: 100, heightRelative: false }).sendCameraLookAt(look.getX(), look.getY(), 300, { rate: 100, rate2: 100, heightRelative: false });
     });
-    for (const [tick, key, x, y] of [[19, "witch", 3030, 3508], [20, "witch", 3030, 3507], [22, "witch", 3030, 3508], [23, "witch", 3030, 3509], [28, "witch", 3030, 3508], [29, "witch", 3030, 3507], [30, "witch", 3030, 3506], [32, "witch", 3030, 3507], [33, "witch", 3030, 3508], [34, "witch", 3031, 3508], [38, "witch", 3030, 3508], [39, "witch", 3030, 3507], [45, "captain", 3029, 3510], [46, "captain", 3030, 3510], [53, "witch", 3030, 3506], [55, "witch", 3030, 3505], [56, "witch", 3029, 3505], [57, "witch", 3028, 3505], [58, "witch", 3027, 3505], [60, "captain", 3030, 3509], [61, "captain", 3030, 3508], [62, "captain", 3030, 3507], [63, "witch", 3028, 3505], [63, "captain", 3030, 3506], [64, "witch", 3029, 3505], [64, "captain", 3030, 3505], [66, "captain", 3031, 3505], [67, "witch", 3030, 3505], [68, "witch", 3030, 3504], [68, "captain", 3030, 3505], [69, "captain", 3031, 3505], [72, "captain", 3030, 3505], [73, "captain", 3029, 3505], [74, "captain", 3028, 3505], [75, "captain", 3027, 3505], [76, "captain", 3027, 3506], [77, "captain", 3027, 3507], [78, "witch", 3030, 3505], [79, "witch", 3030, 3506], [79, "captain", 3027, 3506], [80, "witch", 3030, 3507], [81, "witch", 3030, 3508], [82, "witch", 3031, 3508], [85, "captain", 3027, 3507]]) {
+    for (const [tick, key, x, y] of [[18, "witch", 3030, 3508], [19, "witch", 3030, 3507], [21, "witch", 3030, 3508], [22, "witch", 3030, 3509], [27, "witch", 3030, 3508], [28, "witch", 3030, 3507], [29, "witch", 3030, 3506], [31, "witch", 3030, 3507], [32, "witch", 3030, 3508], [33, "witch", 3031, 3508], [37, "witch", 3030, 3508], [38, "witch", 3030, 3507], [44, "captain", 3029, 3510], [45, "captain", 3030, 3510], [52, "witch", 3030, 3506], [54, "witch", 3030, 3505], [55, "witch", 3029, 3505], [56, "witch", 3028, 3505], [57, "witch", 3027, 3505], [59, "captain", 3030, 3509], [60, "captain", 3030, 3508], [61, "captain", 3030, 3507], [62, "witch", 3028, 3505], [62, "captain", 3030, 3506], [63, "witch", 3029, 3505], [63, "captain", 3030, 3505], [65, "captain", 3031, 3505], [66, "witch", 3030, 3505], [67, "witch", 3030, 3504], [67, "captain", 3030, 3505], [68, "captain", 3031, 3505], [71, "captain", 3030, 3505], [72, "captain", 3029, 3505], [73, "captain", 3028, 3505], [74, "captain", 3027, 3505], [75, "captain", 3027, 3506], [76, "captain", 3027, 3507], [77, "witch", 3030, 3505], [78, "witch", 3030, 3506], [78, "captain", 3027, 3506], [79, "witch", 3030, 3507], [80, "witch", 3030, 3508], [81, "witch", 3031, 3508], [84, "captain", 3027, 3507]]) {
       later(player, state, tick, () => state[key]?.getMovementQueue().addFirstStep(state.area.sourceTile(x, y)));
     }
-    later(player, state, 14, () => fade(player, false));
-    pauseSabotage(player, state, 24, "lUsX9u");
+    later(player, state, 13, () => fade(player, false));
+    pauseSabotage(player, state, 23, "lUsX9u");
   }
 
   function cleanup(player) {
@@ -585,11 +600,11 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       player.getInventory().deleteNumber(DOSSIER_ITEM_ID, 1);
       player.performAnimation(new Animation(4551));
       player.performGraphic(new Graphic(770));
+      player.getPacketSender().sendInterfaceRemoval().sendSound(DOSSIER_EXPLOSION_SOUND, 1, DOSSIER_EXPLOSION_SOUND_DELAY);
     }));
     TaskManager.submit(new CountdownTask(player, 9, () => {
       if (!reading.has(player)) return;
       reading.delete(player);
-      player.getPacketSender().sendInterfaceRemoval();
       player.getMovementQueue().setBlockMovement(false);
       player.getPacketSender().sendVarbit(12393, 0);
     }));
@@ -712,6 +727,18 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
   pluginApi = api;
   ObstacleRunner.init(api);
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "BLACK_KNIGHTS_FORTRESS", count: 2 });
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    reward(player, completed, options);
+    grantCompletionLamps(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "black_knights_fortress",
     name: "Black Knights' Fortress",
@@ -719,11 +746,14 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     startedValue: STAGE_INVESTIGATE,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,
+    // The scroll as rev 242 sends it (tick 1113): the broken cauldron, then "2 Antique Lamps" before the coins.
+    otherRewards: ["2 Antique Lamps"],
+    rewardOrder: ["other", "item"],
     completionJingleId: 152,
-    scrollItemId: COINS_ITEM_ID,
+    scrollItemId: ItemIdentifiers.BROKEN_CAULDRON,
     rewardItemLabel: "2,500 Coins",
     buildJournal,
-    onReward: reward,
+    onReward: rewardOnCompletion,
   });
 
   api.onNpcDialogueVariant(selectVariant);

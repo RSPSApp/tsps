@@ -13,6 +13,7 @@ const {
   MOBILE_GAMEFRAME_ROOT,
   orbsGroupFor,
   resolveGameframeRoot,
+  dataOrbsHidden,
 } = require('../dist/net/protocol/ClientProtocol');
 
 const player = (attrs) => ({ getAttribute: (key) => attrs[key] });
@@ -57,7 +58,7 @@ test('handshake decodes the mobile client type byte', () => {
   ]);
 });
 
-function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {}, worldName = "Old School RuneScape", greeting = null } = {}) {
+function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {}, worldName = "Old School RuneScape", greeting = null, orbsHidden = false } = {}) {
   const hooks = {}, events = [], packets = [], messages = [], messageTypes = [];
   const player = {
     getLocation: () => ({ wilderness }),
@@ -71,12 +72,13 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
       sendRootInterface: id => packets.push(['root', id]),
       sendInterfaceFlags: (...args) => packets.push(['flags', ...args]),
       sendString: (text, uid) => packets.push(['text', uid, text]),
+      getVarbit: id => (id === 4084 && orbsHidden ? 1 : 0),
     }),
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({
     core: { WorldDefinition: { getWorldDefinition: () => ({ name: worldName }) }, MOBILE_CLIENT_ATTRIBUTE, XPDROPS_ENABLED_ATTRIBUTE, encodeGameframeBootstrap,
-      ChatType: { WELCOME: 108 }, GameConstants: { WORLD_TYPE: { label: 'REGULAR' } },
-      resolveGameframeRoot, Wilderness: { isInLocation: location => location.wilderness } },
+      ChatType: { WELCOME: 108 }, GameConstants: { WORLD_TYPE: { label: 'REGULAR' } }, World: { getProcessCycle: () => 4321 },
+      resolveGameframeRoot, dataOrbsHidden, Wilderness: { isInLocation: location => location.wilderness } },
     onPlayerLogin: fn => { hooks.login = fn; },
     onCustomEvent: (name, fn) => { hooks[name] = fn; },
     onInterfaceActionButton: (id, fn) => { hooks.play = fn; },
@@ -90,6 +92,15 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
   return { hooks, player, packets, events, messages, messageTypes };
 }
 
+test('welcome screen Play leaves the orbs closed while Show data orbs is off', async () => {
+  const h = welcomeHarness({ orbsHidden: true });
+  await Promise.resolve();
+  h.hooks.play({ player: h.player });
+  const sent = h.packets.slice(3).map(row => row[1]);
+  assert.deepEqual(sent, encodeGameframeBootstrap('WelcomeTester', 161, false, 'REGULAR', false, 4321));
+  assert.equal(sent.length, encodeGameframeBootstrap('WelcomeTester', 161).length - 1, 'one mount fewer: the orbs');
+});
+
 test('welcome screen waits for synchronous login initialization and restores the saved frame once', async () => {
   for (const root of [161, 164, 548]) {
     const h = welcomeHarness({ root });
@@ -100,11 +111,11 @@ test('welcome screen waits for synchronous login initialization and restores the
     await Promise.resolve();
     assert.deepEqual(h.packets, [['root', 378], ['flags', (378 << 16) | 72, 2],
       ['text', (378 << 16) | 6, 'Welcome to Old School RuneScape!']]);
-    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown']);
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown']);
     h.hooks.play({ player: h.player });
     h.hooks.play({ player: h.player });
-    assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
-    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:shown', 'gameframe:ready']);
+    assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root, false, 'REGULAR', true, 4321));
+    assert.deepEqual(h.events, ['welcome-screen:greeting', 'welcome-screen:greeted', 'welcome-screen:shown', 'gameframe:ready']);
     assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'Play does not send it again');
   }
 });

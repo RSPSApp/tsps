@@ -27,14 +27,6 @@ const LAST_MINIGAME_TELEPORT_VARP = 888;
 const LAST_MINIGAME_TELEPORT_ATTRIBUTE = "minigame-teleport:last-minute";
 const VISITED_KELDAGRIM_ATTRIBUTE = "minigame-teleport:visited-keldagrim";
 const VISITED_TITHE_FARM_ATTRIBUTE = "minigame-teleport:visited-tithe-farm";
-const QUEST_KEYS = {
-  "Temple of the Eye": "temple_of_the_eye",
-  "Children of the Sun": "children_of_the_sun",
-  Ratcatchers: "ratcatchers",
-  "Shades of Mort'ton": "shades_of_mort_ton",
-  "Prince Ali Rescue": "prince_ali_rescue",
-  "Cabin Fever": "cabin_fever",
-};
 const OSMAN_GARDEN_UNLOCK_EVENT = "sorceress-s-garden:osman-help-status";
 const VISITED_ATTRIBUTES = {
   Keldagrim: VISITED_KELDAGRIM_ATTRIBUTE,
@@ -104,9 +96,11 @@ function refusal(player, minigame) {
   if (minigame.combat && player.getSkillManager().getCombatLevel() < minigame.combat) {
     return `You need a combat level of ${minigame.combat} to go there.`;
   }
+  // By the quest's name, as the data and the quest runtime both spell it: a separate key map
+  // drifted ("shades_of_mort_ton" for the registered "shades_of_mortton", #4294).
   for (const questName of minigame.quests ?? []) {
-    const request = { player, key: QUEST_KEYS[questName], complete: false };
-    if (request.key) pluginApi.emitCustomEvent("quest:is-complete", request);
+    const request = { player, name: questName, complete: false };
+    pluginApi.emitCustomEvent("quest:is-complete", request);
     if (request.complete !== true) return `You need to complete ${questName} to go there.`;
   }
   const garden = minigames["Sorceress's Garden"];
@@ -155,12 +149,12 @@ function teleportTo(player, x, y, minigameName) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  startHomeTeleport(core, player, destination, () => {
+  core.TeleportHandler.confirm(player, destination, () => startHomeTeleport(core, player, destination, () => {
     const minute = dateMinutes();
     player.setAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE, minute);
     player.getPacketSender().sendConfig(LAST_MINIGAME_TELEPORT_VARP, minute);
     if (minigameName) pluginApi.emitCustomEvent("minigame-teleport:arrived", { player, minigame: minigameName });
-  });
+  }), 20, { refused: () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** The minigames data key of an entry, for the arrival event (Pest Control's diary task). */

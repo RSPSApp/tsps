@@ -504,12 +504,16 @@ function removeBarricade(npc) {
 
 // --- Match lifecycle ---------------------------------------------------------------------
 
+/**
+ * Players waiting on each team. Anyone queued for removal (an abandoned practice's bots, logged out but not yet
+ * deregistered) has left: counting them kept the lobby looking busy, so the next human got no empty-lobby prompt and
+ * the old practice flag stuck to their match.
+ */
 function queueCounts() {
   const { SARADOMIN, ZAMORAK } = data.TEAM;
-  return {
-    [SARADOMIN]: game.waitingAreas[SARADOMIN].getPlayers().length,
-    [ZAMORAK]: game.waitingAreas[ZAMORAK].getPlayers().length,
-  };
+  const leaving = World.getRemovePlayerQueue();
+  const waiting = (teamId) => game.waitingAreas[teamId].getPlayers().filter((player) => !leaving.includes(player)).length;
+  return { [SARADOMIN]: waiting(SARADOMIN), [ZAMORAK]: waiting(ZAMORAK) };
 }
 
 function bothTeamsQueued() {

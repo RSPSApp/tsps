@@ -1,3 +1,4 @@
+const { storedKey } = require("../../items/KeyAvailability");
 /**
  * Shilo Village (members, requires Jungle Potion, 20 Crafting, 32 Agility).
  *
@@ -1175,6 +1176,11 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function handleCarvedDoors(player, clickType) {
     if (clickType === 1) {
+      if (storedKey(api, player, BONE_KEY) && tombDoorState(player) === TOMB_DOORS_CLOSED) {
+        player.sendMessage("You use your keyring to unlock the door.");
+        unlockCarvedDoors(player);
+        return;
+      }
       if (quest.getStage(player) >= STAGE_UNLOCKED_RASHILIYIA_TOMB && !quest.isComplete(player)) {
         teleport(player, RASHILIYIA_TOMB_TILE);
         return;

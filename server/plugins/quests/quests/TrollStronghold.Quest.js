@@ -97,7 +97,7 @@ function wakePickpocketGuard(request) {
 module.exports = function registerTrollStrongholdQuest(api) {
   const {
     Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
-    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary,
+    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary, Animation, CacheDefinitions,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
@@ -279,6 +279,8 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   /** Pockets hold one key each; once both cell keys are held, the stage moves on. */
   function addCellKey(player, itemId) {
+    // Only the pickpocket path stops at completion (Wiki, Twig and Berry: "Only during Troll Stronghold" is on the
+    // Pickpocketing rows; their kill drops are a plain 100% cell key), so a kill after the quest still drops it.
     if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) return;
     if (!held(player, itemId)) {
       const inventory = player.getInventory();
@@ -300,12 +302,25 @@ module.exports = function registerTrollStrongholdQuest(api) {
     if (godricFreed(player) && eadgarFreed(player)) quest.setStage(player, STAGE_GODRIC_FREED);
   }
 
+  /**
+   * rsprox 233/00740.txt:14465-14472 (after the quest): "You attempt to pick the guard's pocket." on the click,
+   * then human_pickpocket (881) and "You pick the guard's pocket but find nothing." a tick later.
+   */
+  function findNothing(player) {
+    player.sendMessage("You attempt to pick the guard's pocket.");
+    TaskManager.submit(new CountdownTask(player, 1, () => {
+      player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_pickpocket")));
+      player.sendMessage("You pick the guard's pocket but find nothing.");
+    }));
+  }
+
   /** Wiki: 30 Thieving; the first successful pocket holds the key. */
   function pickpocketGuard(event, keyId, variant, asleepId, awakeId, outcomeIds) {
     const { player, npc, npcId } = event;
     guardAttempts.delete(player);
-    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) {
-      player.sendMessage("You pick the guard's pocket but find nothing.");
+    const stage = quest.getStage(player);
+    if (stage < STAGE_HAS_PRISON_KEY || stage >= STAGE_COMPLETE) {
+      findNothing(player);
       return;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < GUARD_THIEVING_LEVEL) {
@@ -313,7 +328,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
       return;
     }
     if (held(player, keyId)) {
-      player.sendMessage("You pick the guard's pocket but find nothing.");
+      findNothing(player);
       return;
     }
     if (player.getInventory().isFull()) {
@@ -858,6 +873,19 @@ module.exports = function registerTrollStrongholdQuest(api) {
     syncFreedHelperState(player);
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.AGILITY, 2000, "Agility"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    grantReward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "troll_stronghold",
     name: "Troll Stronghold",
@@ -866,12 +894,12 @@ module.exports = function registerTrollStrongholdQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemId: ItemIdentifiers.LAW_TALISMAN,
     rewardItemLabel: "Law talisman",
     otherRewards: ["Access to the Troll Stronghold"],
     buildJournal,
-    onReward: grantReward,
+    onReward: rewardOnCompletion,
   });
 
   api.persistAttribute(GODRIC_FREED_ATTRIBUTE);

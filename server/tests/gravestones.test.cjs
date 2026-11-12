@@ -191,6 +191,15 @@ test("a PvM death fills a grave, food and potions form a supply pile", () => {
   assert.equal(spawned.at(-1).definition.ownerOnly, true);
 });
 
+test("in a private area (the Colosseum, Doom) food goes in the grave: no supply pile left in the instance", () => {
+  const player = account("grave-instance");
+  player.setArea(new core.PrivateArea([new core.Boundary(1792, 1855, 3072, 3135, 0)]));
+  const event = death(player, [[ABYSSAL_WHIP, 1], [SHARK, 2]]);
+  assert.equal(event.items.length, 0, "nothing falls to the instance's floor");
+  assert.deepEqual(graveOf(player).items.map(({ id }) => id), [ABYSSAL_WHIP, SHARK]);
+  assert.deepEqual(player.messages, [], "and no supply message");
+});
+
 test("with supply piles off, food goes in the grave too", () => {
   const player = account("grave2");
   player.varbits.set(Common.VARBIT.supplyPilesDisabled, 1);
@@ -437,4 +446,20 @@ test("a full grave retains the highest fee-valued items when another death adds 
   assert.equal(state.office[0].fee, 0, "the free overflow item has no Office fee");
   assert.equal(player.getAttribute("gravestones:coffer") ?? 0, 0);
   assert.equal(player.getInventory().getValidItems().length, 0);
+});
+
+test("logging in with items in Death's Office warns by default, unless the login warning row is off", () => {
+  const Storage = require("../plugins/world/gravestones/Storage.Gravestones");
+  const { CacheDefinitions } = core;
+  const WARNING = "<col=ef1020>You have items stored in an item retrieval service. Please visit the last location you died. If you die again before retrieving them, they will be lost.</col>";
+  const login = (player) => { player.messages.length = 0; hooks.onPlayerLogin({ player }); return player.messages.includes(WARNING); };
+  const player = account("office-login-warning");
+  Storage.setOffice(player, [{ id: RUNE_SCIMITAR, amount: 1 }]);
+  assert.equal(login(player), true, "a fresh account sees the warning");
+  // Row 192's gravestone payment confirmation (on by default) does not turn it off.
+  player.varbits.set(CacheDefinitions.getVarbitId("gravestone_disable_warning"), 1);
+  assert.equal(login(player), true);
+  // Row 278 sets option_item_retrieval_warning_disabled.
+  player.varbits.set(CacheDefinitions.getVarbitId("option_item_retrieval_warning_disabled"), 1);
+  assert.equal(login(player), false);
 });

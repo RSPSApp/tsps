@@ -1,6 +1,12 @@
 "use strict";
 const Common = require('./Common.DukeSucellus');
 const Model = require('./Model.DukeSucellus');
+// Recorded types (rsprox, all Duke Sucellus captures): spam for the mushroom (359), pick swing (1676), grinding (356),
+// vat additions (~160 each), crushing, emptying and salt (339) lines; the ferment, poison and vat-ready lines are game.
+/** A spam line (filterable), as these are in the recordings. */
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, text);
+}
 const vatKey = tile => `${tile[0]},${tile[1]}`;
 const vatRotation = tile => tile[0] < Common.data.site.arrival[0] ? 3 : 1;
 const ingredientRows = () => [
@@ -73,7 +79,7 @@ function pickOne(session, type) {
     session.picks[type]++;
     animate(session.player, 'picking_low');
     sound(session.player, 2581);
-    session.player.sendMessage("You pick a mushroom.");
+    spam(session.player, "You pick a mushroom.");
     if (session.picks[type] === r.picks)
       session.place(objects[`${type}Depleted`], r[type]);
     return true;
@@ -97,7 +103,7 @@ function mine(session, at) {
   session.player.getCombat().reset();
   // Start swinging on the click response; salt arrives after the pickaxe cycle.
   session.player.performAnimation(action.pickaxe.animation);
-  session.player.sendMessage("You swing your pick at the rock.");
+  spam(session.player, "You swing your pick at the rock.");
   Common.core.TaskManager.submit(new (class extends Common.core.Task {
     constructor() {
       super(1, session.player.getIndex(), false);
@@ -165,7 +171,7 @@ function grindOne(session, raw) {
   const sequence = Common.core.CacheDefinitions.getSeqId('human_herbing_grind');
   player.performAnimation(new Common.core.Animation(sequence));
   sound(player, 2608);
-  player.sendMessage("You grind the mushroom into dust.");
+  spam(player, "You grind the mushroom into dust.");
   return true;
 }
 function fill(session, at) {
@@ -186,7 +192,7 @@ function fill(session, at) {
       inventory.deleteNumber(row.id, count);
       vat.amounts[row.id] = held + count;
       added = true;
-      p.sendMessage(`You add some ${row.name} to the vat.`);
+      spam(p, `You add some ${row.name} to the vat.`);
     }
     if (row.raw) {
       const crushed = Math.min(r.ingredients - (vat.amounts[row.id] || 0), inventory.getAmount(row.raw));
@@ -194,7 +200,7 @@ function fill(session, at) {
         inventory.deleteNumber(row.raw, crushed);
         vat.amounts[row.id] = (vat.amounts[row.id] || 0) + crushed;
         added = true;
-        p.sendMessage(`You crush some ${row.id === items.muscaPowder ? "musca mushroom" : "arder mushroom"} into to the vat with your hands.`);
+        spam(p, `You crush some ${row.id === items.muscaPowder ? "musca mushroom" : "arder mushroom"} into to the vat with your hands.`);
       }
     }
   }
@@ -240,7 +246,7 @@ function empty(session, at) {
   session.vats.delete(key);
   session.place(Common.data.objects.vat, at, vatRotation(at));
   sound(session.player, 2431);
-  session.player.sendMessage('You empty all of the ingredients from the vat.');
+  spam(session.player, 'You empty all of the ingredients from the vat.');
   return true;
 }
 function check(session, tile) {
@@ -335,7 +341,7 @@ function mineStep(session, a) {
   if (!Common.give(p, Common.data.items.salt, amount))
     return false;
   p.performAnimation(a.pickaxe.animation);
-  p.sendMessage('You manage to mine some salt.');
+  spam(p, 'You manage to mine some salt.');
   p.getSkillManager().addExperiences(Common.core.Skill.MINING, 5);
   return true;
 }

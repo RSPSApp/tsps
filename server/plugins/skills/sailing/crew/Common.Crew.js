@@ -96,7 +96,7 @@ function byNpc(npcId) {
 
 /** A crewmate's stat on a boat (its saved record): their own, raised by a keg of whirlpool surprise. */
 function statOf(owned, crew, stat) {
-  return require("../Kegs.plugin").crewStat(owned, crew.stats[stat], stat);
+  return require("../Kegs.Sailing").crewStat(owned, crew.stats[stat], stat);
 }
 
 /** "Jobless Jim (H2 P1 D3)" as the assignment menu titles them. */
@@ -245,6 +245,8 @@ function placeAt(npc, location) {
 
 /** Crew aboard each boat, per slot: { crew, npc, position } (Deck.Crew.js keeps it). */
 const aboard = new Map();
+/** Everyone who has sailed on each boat this trip: they count as aboard until it ends. */
+const sailed = new Map();
 
 function crewAboard(boat) {
   return aboard.get(boat) ?? [];
@@ -253,6 +255,16 @@ function crewAboard(boat) {
 function setCrewAboard(boat, members) {
   if (members.length) aboard.set(boat, members);
   else aboard.delete(boat);
+  if (!members.length) return;
+  const ids = sailed.get(boat) ?? new Set();
+  for (const member of members) ids.add(member.crew.id);
+  sailed.set(boat, ids);
+}
+
+/** The boat's trip is over (it was left): no one counts as aboard any more. */
+function endTrip(boat) {
+  aboard.delete(boat);
+  sailed.delete(boat);
 }
 
 /** The crewmate aboard an NPC belongs to, with their boat. */
@@ -267,7 +279,8 @@ function memberFor(npc) {
 function visibilityOf(player, crew, state) {
   if (!state.recruited.includes(crew.id)) return VISIBILITY.UNRECRUITED;
   const boat = core.Sailing.instanceAboard(player);
-  if (boat && crewAboard(boat).some((member) => member.crew === crew)) return VISIBILITY.ABOARD;
+  // One cleared from the crew at sea stays "aboard" until the trip ends (rsprox).
+  if (boat && sailed.get(boat)?.has(crew.id)) return VISIBILITY.ABOARD;
   if (state.onDock && state.slots[0] === crew.id && !boat) return VISIBILITY.DOCK;
   return VISIBILITY.PANDEMONIUM;
 }
@@ -326,6 +339,7 @@ module.exports = {
   placeAt,
   crewAboard,
   setCrewAboard,
+  endTrip,
   memberFor,
   sendVarbits,
 };

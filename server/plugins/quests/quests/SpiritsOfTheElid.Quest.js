@@ -1,3 +1,4 @@
+const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
 /**
  * Spirits of the Elid (members).
  *
@@ -948,7 +949,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   }
 
   function useAncestralDoor(player) {
-    if (!held(player, ANCESTRAL_KEY_ITEM_ID)) {
+    if (!hasKey(api, player, ANCESTRAL_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
       return;
     }
@@ -1236,7 +1237,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   function ensureAncestralKey(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_BALLAD || stage >= STAGE_STATUETTE) return;
-    if (held(player, ANCESTRAL_KEY_ITEM_ID)) return;
+    if (held(player, ANCESTRAL_KEY_ITEM_ID) || ownsStoredKey(api, player, ANCESTRAL_KEY_ITEM_ID)) return;
     if (
       itemOnGroundManager.getGroundItem(
         player.getUsername(),

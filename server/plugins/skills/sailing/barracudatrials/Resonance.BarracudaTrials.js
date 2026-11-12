@@ -20,7 +20,7 @@
 // 0.5-4.5 tiles off), who sees a wave (players whose boat is within 40 tiles of the crystal), and
 // the burst's size.
 const common = require("./Common.BarracudaTrials");
-const { isHelm } = require("../SailingContent.Sailing");
+const { isHelm, removeDeckNpc } = require("../SailingContent.Sailing");
 
 const CRYSTAL = 15112;
 const HEADBAR_NPC = 15113;
@@ -141,7 +141,8 @@ function crystallise(player, boat) {
   player.sendMessage("<col=ff3045>Some crystals attach to the helm, hurting anyone who touches them!");
   BoatManager.setDeckLoc(boat, { ...helm, id: LOC_CRYSTALLISED });
   const tile = deckTile(boat, helm);
-  const npc = pluginApi.spawnNpc({ id: HEADBAR_NPC, x: tile.getX(), y: tile.getY(), z: tile.getZ() });
+  // On the deck's level (0), where everyone aboard stands, not the helm loc's template plane.
+  const npc = pluginApi.spawnNpc({ id: HEADBAR_NPC, x: tile.getX(), y: tile.getY(), z: 0 });
   if (npc) {
     BoatManager.getDeck(boat)?.enter(npc);
     npc.showHeadbar(HEADBAR, { fill: HEADBAR_FILLS[0] });
@@ -160,7 +161,7 @@ function clearHelm(player, boat, { by = "strikes" } = {}) {
   const crystallised = helms.get(boat);
   if (!crystallised) return;
   helms.delete(boat);
-  if (crystallised.npc) pluginApi.removeNpc(crystallised.npc);
+  removeDeckNpc(pluginApi, boat, crystallised.npc);
   const { BoatManager, Graphic } = common.core();
   BoatManager.setDeckLoc(boat, crystallised.loc);
   cleared.set(boat, common.clock());

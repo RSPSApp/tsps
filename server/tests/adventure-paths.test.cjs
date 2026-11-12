@@ -368,6 +368,14 @@ test("canonical Jon conversation supplies a kit and recovers a lost unopened kit
     await choose(f, "Do you have any Adventure Path starter kits");
     await menu(f);
     assert.equal(f.p.getInventory().getAmount(id), 1);
+    // A bank placeholder of the kit is not a kit.
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.p.getInventory().deleteNumber(id, 1, false);
+    f.p.getBank(1).add(new core.Item(id, 0), false);
+    jon(f, 1);
+    await choose(f, "Do you have any Adventure Path starter kits");
+    await menu(f);
+    assert.equal(f.p.getInventory().getAmount(id), 1);
 });
 test("native opt-out and opt-in use the canonical confirmation choices and Jon transform", async (t) => {
     const f = actor(t);
@@ -439,6 +447,19 @@ test("native path overview mounts its side panel and restores the last selected 
     );
     assert.equal(f.p.getPacketSender().getVarp(C.getVarpId("adventurepath_selected_task")), 1);
 });
+test("the Grand Exchange Clerk's unpaid-voucher branch never plays: Talk-to pays the voucher first", (t) => {
+    const f = actor(t);
+    login(f.p);
+    assert.equal(
+        PluginManager.emitNpcDialogueCondition({
+            player: f.p,
+            definition: { getName: () => "Grand Exchange Clerk" },
+            text: "If the player is carrying a Combat path voucher and hasn't received their reward:",
+        }),
+        false,
+    );
+});
+
 test("Lumbridge tutor conditions use actual Adventure Path participation", (t) => {
     const f = actor(t);
     login(f.p);

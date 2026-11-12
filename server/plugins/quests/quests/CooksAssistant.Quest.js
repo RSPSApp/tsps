@@ -36,21 +36,40 @@ module.exports = function registerCooksAssistantQuest(api) {
   let quest;
   const pendingStart = new WeakSet();
 
+  /** A bucket of milk, or a bottomless milk bucket holding regular milk (Wiki: one use is spent). */
+  function carries(player, itemId) {
+    if (player.getInventory().getAmount(itemId) > 0) return true;
+    if (itemId !== ItemIdentifiers.BUCKET_OF_MILK) return false;
+    const request = { player, type: itemId, holds: false };
+    api.emitCustomEvent?.("bottomless-milk:holds", request);
+    return request.holds;
+  }
+
+  function takeOne(player, itemId) {
+    if (player.getInventory().getAmount(itemId) > 0) {
+      player.getInventory().deleteNumber(itemId, 1);
+      return true;
+    }
+    if (itemId !== ItemIdentifiers.BUCKET_OF_MILK) return false;
+    const use = { player, type: itemId, spent: false };
+    api.emitCustomEvent?.("bottomless-milk:spend", use);
+    return use.spent;
+  }
+
   const deliveredIngredients = (player) => Number(player.getAttribute(DELIVERED_INGREDIENTS_ATTRIBUTE)) || 0;
 
   function deliverIngredient(player, itemId) {
     const index = REQUIRED_ITEMS.findIndex((entry) => entry.itemId === itemId);
     const bit = 1 << index;
     if (index < 0 || (deliveredIngredients(player) & bit) !== 0) return;
-    if (player.getInventory().getAmount(itemId) <= 0) return;
-    player.getInventory().deleteNumber(itemId, 1);
+    if (!takeOne(player, itemId)) return;
     player.setAttribute(DELIVERED_INGREDIENTS_ATTRIBUTE, deliveredIngredients(player) | bit);
   }
 
   function hasAllIngredients(player) {
     const inventory = player.getInventory();
     return REQUIRED_ITEMS.every((requirement, index) =>
-      (deliveredIngredients(player) & (1 << index)) !== 0 || inventory.getAmount(requirement.itemId) > 0);
+      (deliveredIngredients(player) & (1 << index)) !== 0 || carries(player, requirement.itemId));
   }
 
   /**
@@ -61,7 +80,7 @@ module.exports = function registerCooksAssistantQuest(api) {
   function hasAnyIngredient(player) {
     const inventory = player.getInventory();
     return REQUIRED_ITEMS.some((requirement, index) =>
-      (deliveredIngredients(player) & (1 << index)) === 0 && inventory.getAmount(requirement.itemId) > 0);
+      (deliveredIngredients(player) & (1 << index)) === 0 && carries(player, requirement.itemId));
   }
 
   function buildJournal(player, questHandle) {
@@ -157,7 +176,7 @@ module.exports = function registerCooksAssistantQuest(api) {
     const itemId = HANDOVER_LINE_ITEMS.get(event.text);
     if (itemId !== undefined) {
       const bit = 1 << REQUIRED_ITEMS.findIndex((entry) => entry.itemId === itemId);
-      if ((deliveredIngredients(event.player) & bit) !== 0 || event.player.getInventory().getAmount(itemId) <= 0) {
+      if ((deliveredIngredients(event.player) & bit) !== 0 || !carries(event.player, itemId)) {
         event.skip = true;
       } else {
         event.after = () => deliverIngredient(event.player, itemId);

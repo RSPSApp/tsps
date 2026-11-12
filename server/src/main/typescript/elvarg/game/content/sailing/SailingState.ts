@@ -36,6 +36,11 @@ export interface BoatParts {
     keel: number;
     sails: number;
     helm: number;
+    /** A painted trim: its position in the type's trim list. Unset, the trim follows the hull. */
+    trim?: number;
+    /** The flag flown (1-3), and whether the eternal brazier is built (1); unset when none. */
+    flag?: number;
+    brazier?: number;
 }
 
 export function baseParts(): BoatParts {
@@ -76,9 +81,13 @@ export interface SailingState {
     returnPoint: { x: number; y: number; z: number } | null;
     /** Tools compartment slots holding their tool; shared by all of the player's boats. */
     tools: number[];
+    /** Parts of a stored multi-part tool (diving gear) that are not in the compartment; absent when none. */
+    missingToolParts?: number[];
     /** The dock the player last docked at, and the last that was a port (not a mooring point). */
     lastDock: string | null;
     lastStandardDock: string | null;
+    /** The last mooring point the player docked at; absent until they dock at one. */
+    lastMooringPoint?: string | null;
     /** Docks at which this player has actually moored; absent on older saves. */
     mooredDocks?: string[];
 }
@@ -115,7 +124,13 @@ function normalizeName(raw: unknown): BoatName {
 
 function normalizeParts(raw: any): BoatParts {
     const tier = (value: unknown) => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 6 ? value as number : 0;
-    return { hull: tier(raw?.hull), keel: tier(raw?.keel), sails: tier(raw?.sails), helm: tier(raw?.helm) };
+    const parts: BoatParts = { hull: tier(raw?.hull), keel: tier(raw?.keel), sails: tier(raw?.sails), helm: tier(raw?.helm) };
+    const cosmetic = (value: unknown, min: number, max: number) => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+    // A trim below 7 is a hull tier's own "No trim": unset, so it follows the hull.
+    if (cosmetic(raw?.trim, 7, 255)) parts.trim = raw.trim;
+    if (cosmetic(raw?.flag, 1, 255)) parts.flag = raw.flag;
+    if (cosmetic(raw?.brazier, 1, 1)) parts.brazier = raw.brazier;
+    return parts;
 }
 
 function normalizeCargo(raw: unknown): (CargoSlot | null)[] {
@@ -163,13 +178,18 @@ export function normalizeSailingState(raw: any): SailingState {
         ? { x: point.x, y: point.y, z: point.z }
         : null;
     const tools = Array.isArray(raw.tools) ? [...new Set<number>(raw.tools.filter(Number.isInteger))] : [];
+    const missingToolParts = Array.isArray(raw.missingToolParts)
+        ? [...new Set<number>(raw.missingToolParts.filter(Number.isInteger))]
+        : [];
     const dockId = (value: unknown) => (typeof value === "string" ? value : null);
     const mooredDocks = Array.isArray(raw.mooredDocks)
         ? [...new Set<string>(raw.mooredDocks.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))]
         : [];
     return {
         boats, activeBoatSlot: active, returnPoint, tools,
+        ...(missingToolParts.length > 0 && { missingToolParts }),
         lastDock: dockId(raw.lastDock), lastStandardDock: dockId(raw.lastStandardDock),
+        ...(typeof raw.lastMooringPoint === "string" && { lastMooringPoint: raw.lastMooringPoint }),
         ...(mooredDocks.length > 0 && { mooredDocks }),
     };
 }

@@ -51,7 +51,8 @@ const SPECIAL_BREATH_MAX = Object.freeze({
 
 /** Wiki: shock drains two levels from every stat, poison starts at 8, ice freezes 10 ticks. */
 const SHOCK_DRAIN = 2;
-const POISON_SEVERITY = 8;
+/** Severity, which poisonEntity takes: hit x 5 (the first hit is 8). */
+const POISON_SEVERITY = 40;
 const ICE_FREEZE_TICKS = 10;
 /** Wiki (Mod Ash): 1/2 unprotected, 1/8 with a shield and/or Protect from Magic. */
 const EFFECT_DENOMINATOR_PROTECTED = 7;

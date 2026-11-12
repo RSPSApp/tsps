@@ -19,6 +19,7 @@ import { WikiPlugin } from "../../../game/plugins/wiki/WikiPlugin";
 import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { IsometricCameraPlugin } from "../../../game/plugins/isometric/IsometricCameraPlugin";
+import { WasdCameraPlugin } from "../../../game/plugins/wasdcamera/WasdCameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
@@ -62,6 +63,7 @@ import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin
 import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
+import { CustomXpDropsPlugin } from "../../../game/plugins/customxpdrops/CustomXpDropsPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
 import { AgilityTrackerPlugin } from "../../../game/plugins/agilitytracker/AgilityTrackerPlugin";
@@ -135,9 +137,11 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     LowEndDevicePlugin,
     CameraPlugin,
     IsometricCameraPlugin,
+    WasdCameraPlugin,
     QuestHelperPlugin,
     XpTrackerPlugin,
     XpGlobesPlugin,
+    CustomXpDropsPlugin,
     AgilityTrackerPlugin,
     GatheringTrackerPlugin,
     SlayerTrackerPlugin,

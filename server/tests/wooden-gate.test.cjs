@@ -2013,16 +2013,15 @@ test("Harold's bedroom door rotates without needing a separate open cache loc", 
 });
 
 
-test('Death Plateau equipment door swings open after the quest unlocks it', () => {
+// rsprox 233/03252.txt:36053-36090: inviswall 38848 on the doorway and castledoor_inactive 3744 the tile north, the
+// opener walking over; the door is back two ticks later.
+test('Death Plateau equipment door passes the player through as recorded', () => {
   const h = buildHarness();
   try {
     assert.deepEqual(h.click(3743, 2894, 3566, 1, 'Open', 'Large door'), [
       ['deregister', 3743, 2894, 3566, 1],
-      ['register', 3743, 2894, 3567, 2],
-    ]);
-    assert.deepEqual(h.click(3743, 2894, 3567, 2, 'Open', 'Large door'), [
-      ['deregister', 3743, 2894, 3567, 2],
-      ['register', 3743, 2894, 3566, 1],
+      ['register', 38848, 2894, 3566, 1],
+      ['register', 3744, 2894, 3567, 2],
     ]);
   } finally { h.restore(); }
 });
@@ -2051,8 +2050,9 @@ test('Mort Myre gate swings through its captured leaves and closes after passage
       assert.deepEqual(steps, [[x, fromNorth ? 3457 : 3458]], 'pass to the opposite side on the clicked column');
       for (const [openId, ox, oy, face] of opened) assert.equal(at(openId, ox, oy)?.getFace(), face);
       for (const [closedId, cx, cy] of closed) assert.equal(at(closedId, cx, cy), null);
-      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), true);
-      assert.equal(RegionManager.canMove(x, 3457, x, 3458, 0, 1, 1, null), true);
+      // 226/01638.txt:21703: inviswall 38848 holds both gate tiles while open; only the opener walks over it.
+      for (const ix of [3443, 3444]) assert.equal(at(38848, ix, 3458)?.getFace(), 3, `inviswall on ${ix},3458`);
+      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false, 'no one follows through');
       assert.equal(h.sounds.at(-1)[1].getId(), 71, 'capture 1638 opening sound');
       const close = h.submitted.at(-1);
       assert.equal(close.getDelay(), 2);
@@ -2062,6 +2062,7 @@ test('Mort Myre gate swings through its captured leaves and closes after passage
       close.tick();
       for (const [closedId, cx, cy, face] of closed) assert.equal(at(closedId, cx, cy)?.getFace(), face);
       for (const [openId, ox, oy] of opened) assert.equal(at(openId, ox, oy), null);
+      for (const ix of [3443, 3444]) assert.equal(at(38848, ix, 3458), null, 'the inviswalls go with the open leaves');
       assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false);
     }
   } finally {

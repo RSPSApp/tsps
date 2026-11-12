@@ -9,7 +9,7 @@ Two travel networks where an interface picks the destination, played as live OSR
 **Travel** on a spirit tree opens the menu interface (187) in the main modal:
 - **The packets:** `toplevel_mainmodal_open`, then the menu script (217) with "Spirit Tree Locations" and the trees joined by `|`, ending with Cancel, then pause-button events on 187:3, slots 0–127.
 - **Order:** the trees come in the game's order: Tree Gnome Village, Gnome Stronghold, Battlefield of Khazard, Grand Exchange, Feldip Hills, Prifddinas, Port Sarim, Etceteria, Brimhaven, Hosidius, Farming Guild, Your house, Poison Waste, Laguna Aurorae.
-- **Greyed** (`<col=5f5f5f>`): trees the player can't travel to now. That's a farming patch without a grown, checked spirit tree; a missing requirement; and the house, which has no spirit tree on this server.
+- **Greyed** (`<col=5f5f5f>`): trees the player can't travel to now. That's a farming patch without a grown, checked spirit tree; a missing requirement; and a house with no spirit tree built (or no house).
 
 Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), as the game does; without it the chatbox can't be typed in afterwards. The Magic Mushtrees' interface does the same.
 
@@ -27,7 +27,7 @@ Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), a
 - **Tree Gnome Village's tree:** `bolren_got_orbs` (varbit 598) at 2. Tree Gnome Village now sends it: 1 once the first orb is back, 2 once complete, on login and whenever its stage changes (QuestRuntime's `quest:stage-changed`).
 - **The Grand Exchange, Battlefield, Feldip Hills, Prifddinas and Laguna Aurorae trees:** Tree Gnome Village's varp (111) at 9.
 - **The Gnome Stronghold's tree:** The Grand Tree's varp (150) at 160.
-- **The Poison Waste tree:** The Path of Glouphrie's varbit (15288), which this server doesn't have, so it shows Talk-to only. Talk-to still opens the menu. It's named "Spirit Tree", like the farming patches, and is taken only at its own tile.
+- **The Poison Waste tree:** The Path of Glouphrie's varbit (15288), which its quest plugin sends. Talk-to also opens the menu. It's named "Spirit Tree", like the farming patches, and is taken only at its own tile.
 
 **Last-destination** goes straight to the last tree travelled to. The first time, the tree says "This once, you will have to tell me where you wish to go, for I do not yet know where to take you back." and the menu opens.
 
@@ -39,7 +39,7 @@ Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), a
 - **The network:** Tree Gnome Village.
 - **Leaving the Gnome Stronghold's tree:** The Grand Tree.
 - **Prifddinas:** Song of the Elves.
-- **Poison Waste:** The Path of Glouphrie.
+- **Poison Waste:** The Path of Glouphrie, from the crystal chime healing Incomitatus (stage 38; Wiki: Spirit Tree (Incomitatus)) rather than its completion.
 - **Laguna Aurorae:** Pandemonium, 58 Sailing and having moored there at least once.
 - **The Farming Guild:** 85 Farming.
 
@@ -51,10 +51,14 @@ Quests this server doesn't have don't block, as elsewhere. Quest varps are sent 
 - **Travel on a grown tree:** Farming opens the same menu (`spirit-trees:open`).
 - **Which trees are grown:** SpiritTrees asks Farming (`spirit-trees:grown`) for the spirit tree patches the player has grown and checked.
 
-Before this, the plugin listened for "Spirit Tree", the farming patch's name. The permanent trees are named "Spirit tree", so their Travel did nothing, and the network was a chatbox list.
+**Your house** (captured, rev 224–237):
+- **The label** names where the house stands: "Your house (Yanille)". It's offered once a Spirit tree or Spiritual fairy tree is built in the house, and greyed otherwise ("<col=5f5f5f>Your house (Rellekka)</col>"). A player with no house sees a greyed "Your house". SpiritTrees asks Construction for all of this (`construction:spirit-tree`: `owns`, `location`, `built`).
+- **Choosing it:** the same bark message and reach. Two ticks later the box closes and Construction takes over (`construction:spirit-tree-travel`): the house loads as a house teleport does, with its loading screen and jingle and the house's default building mode. The player stands on the tile east of the tree's footprint, and the loading screen lifts two ticks after that. The trip is reported as a `teleport:landed`, as the other trees' trips are.
+- **Last-destination** takes them back to the house after a trip there.
+- **The Fairy's Flight relic's** spirit tree list still leaves the house out (it lists fixed tiles only).
+- **Not captured:** choosing it while already inside the house (it reloads the house beside the tree), and the landing in a rotated superior garden (always east of the tree).
 
-**Not done:**
-- the house's tree.
+Before this, the plugin listened for "Spirit Tree", the farming patch's name. The permanent trees are named "Spirit tree", so their Travel did nothing, and the network was a chatbox list.
 
 ## Magic Mushtrees
 

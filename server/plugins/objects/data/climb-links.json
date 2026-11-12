@@ -8,9 +8,23 @@
       "downLanding": { "x": 3048, "y": 9640, "z": 1 }
     },
     {
+      "name": "Port Sarim Rat Pits manhole (the pit ladder is 56 tiles west of the manhole's underground square, outside the generic search; landings match the RuneLite shortest-path transports 3018,3231,0 -> 2962,9650,0 and 2962,9650,0 -> 3018,3233,0)",
+      "up": { "id": 10309, "x": 2962, "y": 9651, "z": 0 },
+      "down": { "id": 10321, "x": 3018, "y": 3232, "z": 0 },
+      "landing": { "x": 3018, "y": 3233, "z": 0 },
+      "downLanding": { "x": 2962, "y": 9650, "z": 0 }
+    },
+    {
       "name": "Wizards' Tower basement ladder",
       "up": { "id": 2148, "x": 3103, "y": 9576, "z": 0 },
       "down": { "id": 2147, "x": 3104, "y": 3162, "z": 0 }
+    },
+    {
+      "name": "Forthos Ruin spiral staircase (landings match the shortest-path transports)",
+      "up": { "id": 34864, "x": 1798, "y": 9967, "z": 0 },
+      "down": { "id": 34865, "x": 1669, "y": 3567, "z": 0 },
+      "landing": { "x": 1670, "y": 3569, "z": 0 },
+      "downLanding": { "x": 1800, "y": 9968, "z": 0 }
     },
     {
       "name": "Grand Tree base staircase (Anita's floor)",

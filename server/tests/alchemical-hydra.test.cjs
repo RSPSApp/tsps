@@ -163,7 +163,7 @@ test('poison: a 3x3 splash (up to 7, poison 6 on the target) leaves pools hittin
   fight.landPoison(player.getLocation(), player);
   assert.equal(player.damage.length, 1);
   assert.ok(player.damage[0] <= Common.data.poison.splashMax);
-  assert.deepEqual(player.poison, [Common.data.poison.poisonTargeted]);
+  assert.deepEqual(player.poison, [Common.data.poison.poisonTargeted * 5], 'severity 30, a first hit of 6');
   assert.equal(fight.pools.length, 9);
   fight.tickCount += 1;
   fight.tickPools([player]);
@@ -399,4 +399,47 @@ test('basic attacks are well-formed flights whose hits land with them (#1862)', 
   assert.equal(Combat.flightEnd('magic', 1), 45);
   assert.equal(Combat.flightEnd('ranged', 2), 45);
   assert.equal(Combat.flightEnd('magic', 4), 60);
+});
+
+test('basic attacks follow the Wiki infobox per phase: serpentine 17x2, electric 35 (26x2 empowered), flame 35 (52 empowered), enraged 55 (#970)', (t) => {
+  const Combat = require('../plugins/bosses/alchemicalhydra/Combat.AlchemicalHydra');
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', () => {});
+  const player = new Player(null, loc(1360, 10265));
+  player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+  player.setHitpoints(99);
+  const npc = core.NPC.create(Common.ids.npcs.serpentine, loc(1364, 10265));
+  const fight = new Fight(fakeLair(null), npc);
+  npc.__hydraFight = fight;
+  t.after(() => fight.stop());
+  const swing = () => {
+    const method = new (Combat.combatClass())();
+    method.style = 'ranged';
+    method.delay = 2;
+    return method.hits(npc, player);
+  };
+  const cases = [
+    { phase: 0, empowered: false, form: 'serpentine', hits: 2, max: 17 },
+    { phase: 0, empowered: true, form: 'serpentine', hits: 2, max: 26 },
+    { phase: 1, empowered: false, form: 'electric', hits: 1, max: 35 },
+    { phase: 1, empowered: true, form: 'electric', hits: 2, max: 26 },
+    { phase: 2, empowered: false, form: 'flame', hits: 1, max: 35 },
+    { phase: 2, empowered: true, form: 'flame', hits: 1, max: 52 },
+    { phase: 3, empowered: false, form: 'enraged', hits: 1, max: 55, enraged: true },
+  ];
+  for (const c of cases) {
+    npc.setNpcTransformationId(Common.ids.npcs[c.form]);
+    fight.phase = c.phase;
+    fight.empowered = c.empowered;
+    fight.enraged = c.enraged === true;
+    let top = 0;
+    for (let i = 0; i < 400; i++) {
+      const hits = swing();
+      assert.equal(hits.length, c.hits, `${c.form}${c.empowered ? ' empowered' : ''}: hits an attack`);
+      for (const hit of hits) {
+        assert.ok(hit.getTotalDamage() <= c.max, `${c.form}: ${hit.getTotalDamage()} > ${c.max}`);
+        top = Math.max(top, hit.getTotalDamage());
+      }
+    }
+    assert.ok(top > c.max * 0.8, `${c.form}${c.empowered ? ' empowered' : ''} reaches near ${c.max} (best ${top})`);
+  }
 });

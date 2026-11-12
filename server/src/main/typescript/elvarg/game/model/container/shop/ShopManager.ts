@@ -13,6 +13,7 @@ import { ShopIdentifiers } from "../../../../util/ShopIdentifiers";
 import { encodeShopClose, encodeShopOpen } from "../../../../net/protocol/ClientProtocol";
 import { PlayerSave } from "../../../entity/impl/player/persistence/PlayerSave";
 import { Inventory } from "../impl/Inventory";
+import { examineItem } from "../../../content/ExaminePrice";
 
 export interface ShopItemContainerAction {
     kind: "value" | "buy_sell" | "x";
@@ -381,8 +382,7 @@ export class ShopManager {
             // must still hold the item the client showed there.
             if (!item || (packet.itemId != null && packet.itemId > 0 && packet.itemId !== item.itemId)) return true;
             if (examine) {
-                const definition = ItemDefinition.forId(item.itemId);
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.itemId, item.amount);
             } else {
                 this.handleItemContainerAction(player, {
                     kind: amount != null ? "buy_sell" : "value",
@@ -399,8 +399,7 @@ export class ShopManager {
             const item = player.getInventory().getItems()[packet.slot];
             if (!item || item.getId() < 0) return true;
             if (examine) {
-                const definition = ItemDefinition.forId(item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.getId(), item.getAmount());
             } else {
                 this.handleItemContainerAction(player, {
                     kind: amount != null ? "buy_sell" : "value",
@@ -553,17 +552,25 @@ export class ShopManager {
         sender.sendVarbit(this.QUANTITY_VARBIT, this.quantityMode(player));
         sender.sendSubInterface(targetUid, this.MAIN_INTERFACE_ID, 0)
             .sendSubInterface((161 << 16) | 79, this.SIDE_INTERFACE_ID, 1)
-            .sendInterfaceScript(1074, [516, shop.definition.getName(), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
+            .sendInterfaceScript(1074, [516, this.title(shop.definition.getName()), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
             .sendInterfaceFlagsRange((this.MAIN_INTERFACE_ID << 16) | 16, 0, 299, 1662)
             .sendInterfaceScript(149, [this.SIDE_INTERFACE_ID << 16, 93, 4, 7, 0, -1, "Value", "Sell 1", "Sell 5", "Sell 10", "Sell 50"])
             .sendInterfaceFlagsRange(this.SIDE_INTERFACE_ID << 16, 0, 27, 1086)
             .sendItemContainer(player.getInventory(), this.INVENTORY_INTERFACE_ID);
         player.getSession().sendClientPacket(encodeShopOpen(
-            String(shop.definition.getId()), shop.definition.getName(),
+            String(shop.definition.getId()), this.title(shop.definition.getName()),
             this.currencyItemId(shop.definition.getCurrency()), this.isGeneralStore(shop), 1, 1, stock
         ));
         if (opening) Sounds.sendSound(player, Sound.CONTAINER_OPEN);
         return true;
+    }
+
+    /**
+     * The title a shop shows: its name without the Wiki's " (shop)" disambiguation ("Slayer
+     * Equipment", "Oziach"), which the shop data keeps to tell the shop from its owner.
+     */
+    private static title(name: string): string {
+        return name.replace(/ \(shop\)$/, "");
     }
 
     private static refresh(shopId: number): void {
@@ -732,9 +739,8 @@ export class ShopManager {
             return;
         }
 
-        // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases), or as
-        // a bundle of several per item bought (`amount`, the PvP Arena's Blighted surge sack (x50)).
-        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId, amount: 1 };
+        // Content may change the delivered item or bundle size; capacity upgrades opt into a delivery receipt.
+        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId, amount: 1, captureDelivery: false };
         PluginManager.emitCustomEvent("shop:delivery", delivery);
         const deliverId = Number.isInteger(delivery.deliverId) && delivery.deliverId > 0 ? delivery.deliverId : itemId;
         const perPurchase = Number.isInteger(delivery.amount) && delivery.amount > 0 ? delivery.amount : 1;
@@ -763,11 +769,16 @@ export class ShopManager {
             shop.definition.getCurrency(),
             unitPrices.slice(0, removed).reduce((total, each) => total + each, 0)
         );
+        // Opt-in receipt for one nonstackable item: retain the actual newly filled slot and object.
+        const deliveredSlot = delivery.captureDelivery && removed === 1 && perPurchase === 1 && !delivered.isStackable?.()
+            ? inventory.getEmptySlot() : -1;
         inventory.adds(deliverId, removed * perPurchase);
+        const deliveredItem = deliveredSlot >= 0 ? inventory.getItems()[deliveredSlot] : null;
         PluginManager.emitCustomEvent("shop:purchase", {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(),
             itemId, amount: removed, originalStock: (shop.originalAmounts.get(itemId) ?? 0) > 0,
             currency: shop.definition.getCurrency(),
+            ...(delivery.captureDelivery ? { deliverId, deliveredSlot, deliveredItem } : {}),
         });
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
         this.refresh(shop.definition.getId());

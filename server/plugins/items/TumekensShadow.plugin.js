@@ -10,8 +10,8 @@
  * Amascut, and it can't be used against other players. Casting gives the usual damage-based
  * Magic experience.
  *
- * Charged with two soul runes and five chaos runes a charge, up to 20,000; uncharging returns
- * every rune.
+ * Charged with two soul runes and five chaos runes a charge, up to 20,000; aether runes can stand
+ * in for soul runes. Uncharging returns every rune paid but the aether runes (Wiki).
  *
  * The cast (rsprox captures): TOA_SOT_CAST_B (9493) with TUMEKENS_SHADOW_CASTING / _TRAVEL /
  * _IMPACT (2125-2127) and sound 6410.
@@ -21,6 +21,11 @@
  */
 
 const CHARGES_KEY = "tumekens-shadow-charges";
+/**
+ * Aether runes paid for the charges still on the staff (Wiki: they "will not be refunded if the staff is uncharged").
+ * Read through aetherOf, which caps it at two a charge, so casts spend the soul-rune share last.
+ */
+const AETHER_KEY = "tumekens-shadow-aether-runes";
 const MAX_CHARGES = 20000;
 const SOULS_PER_CHARGE = 2;
 const CHAOS_PER_CHARGE = 5;
@@ -132,12 +137,27 @@ function shadowBonuses({ player, bonuses }) {
 
 // ------------------------------------------------------------------ charges
 
-function setCharges(player, item, charges) {
+function aetherOf(item) {
+  const paid = Number(item?.getMetaValue?.(AETHER_KEY)) || 0;
+  return Math.max(0, Math.min(Math.floor(paid), chargesOf(item) * SOULS_PER_CHARGE));
+}
+
+/** The soul runes an uncharge would give back: every soul share not paid in aether runes. */
+function soulRefund(item, charges = chargesOf(item)) {
+  return Math.max(0, charges * SOULS_PER_CHARGE - aetherOf(item));
+}
+
+function setCharges(player, item, charges, aether = 0) {
   staff.setCharges(item, charges);
+  item.setMetaValue(AETHER_KEY, charges > 0 && aether > 0 ? aether : undefined);
   player.getInventory().refreshItems();
 }
 
-/** Two soul runes and five chaos runes a charge, as many as the inventory affords. */
+/**
+ * Two soul runes and five chaos runes a charge, as many as the inventory affords. Aether runes
+ * count as soul runes (Wiki: "Aether runes can be used in place of soul runes"); plain soul runes
+ * go first. The aether runes paid are kept on the staff, since Uncharge doesn't refund them.
+ */
 function chargeShadow(event) {
   const { player } = event;
   const I = ids();
@@ -156,7 +176,7 @@ function chargeShadow(event) {
     return true;
   }
   const batches = (count) => Math.min(
-    Math.floor(count(I.SOUL_RUNE) / SOULS_PER_CHARGE),
+    Math.floor((count(I.SOUL_RUNE) + count(I.AETHER_RUNE)) / SOULS_PER_CHARGE),
     Math.floor(count(I.CHAOS_RUNE) / CHAOS_PER_CHARGE),
     MAX_CHARGES - current,
   );
@@ -169,9 +189,12 @@ function chargeShadow(event) {
     player.sendMessage("You need two soul runes and five chaos runes for each charge.");
     return true;
   }
-  takePlain(inventory, I.SOUL_RUNE, affordable * SOULS_PER_CHARGE);
+  const souls = Math.min(plainAmount(inventory, I.SOUL_RUNE), affordable * SOULS_PER_CHARGE);
+  if (souls > 0) takePlain(inventory, I.SOUL_RUNE, souls);
+  const aether = affordable * SOULS_PER_CHARGE - souls;
+  if (aether > 0) takePlain(inventory, I.AETHER_RUNE, aether);
   takePlain(inventory, I.CHAOS_RUNE, affordable * CHAOS_PER_CHARGE);
-  setCharges(player, shadow, current + affordable);
+  setCharges(player, shadow, current + affordable, aetherOf(shadow) + aether);
   player.sendMessage(current === 0
     ? `You apply ${plural(affordable, "charge")} to your Tumeken's shadow.`
     : `You apply an additional ${plural(affordable, "charge")} to your Tumeken's shadow. It now has ${plural(current + affordable, "charge")} in total.`);
@@ -187,10 +210,10 @@ function checkShadow({ player, item }) {
  * Whether the whole refund fits. Runes stack only onto the same metadata, so a preset stack isn't
  * room, and each new stack needs a slot of its own.
  */
-function refundFits(inventory, charges) {
+function refundFits(inventory, charges, souls) {
   const { Item } = core();
   const I = ids();
-  const refund = [new Item(I.SOUL_RUNE, charges * SOULS_PER_CHARGE), new Item(I.CHAOS_RUNE, charges * CHAOS_PER_CHARGE)];
+  const refund = [new Item(I.SOUL_RUNE, souls), new Item(I.CHAOS_RUNE, charges * CHAOS_PER_CHARGE)].filter((rune) => rune.getAmount() > 0);
   const meta = (item) => JSON.stringify(item.getMeta() ?? null);
   const hasStack = (rune) => inventory.getValidItems().some((item) => item.getId() === rune.getId() && meta(item) === meta(rune));
   return inventory.getFreeSlots() >= refund.filter((rune) => !hasStack(rune)).length
@@ -206,7 +229,7 @@ function unchargeShadow({ player, item }) {
     return true;
   }
   const inventory = player.getInventory();
-  if (!refundFits(inventory, charges)) {
+  if (!refundFits(inventory, charges, soulRefund(item, charges))) {
     player.sendMessage(INVENTORY_TOO_FULL);
     return true;
   }
@@ -217,14 +240,17 @@ function unchargeShadow({ player, item }) {
     const carried = [inventory, player.getEquipment()].some((container) => container.getItems().includes(item));
     const left = chargesOf(item);
     if (!carried || item.getId() !== staffId || left <= 0) return;
-    if (!refundFits(inventory, left)) {
+    const souls = soulRefund(item, left);
+    if (!refundFits(inventory, left, souls)) {
       player.sendMessage(INVENTORY_TOO_FULL);
       return;
     }
-    inventory.addItem(new Item(I.SOUL_RUNE, left * SOULS_PER_CHARGE));
+    if (souls > 0) inventory.addItem(new Item(I.SOUL_RUNE, souls));
     inventory.addItem(new Item(I.CHAOS_RUNE, left * CHAOS_PER_CHARGE));
     setCharges(player, item, 0);
-    player.sendMessage(`You uncharge your Tumeken's shadow, regaining ${plural(left * SOULS_PER_CHARGE, "soul rune")} and ${plural(left * CHAOS_PER_CHARGE, "chaos rune")} in the process.`);
+    // No capture of an aether-charged uncharge: with no soul runes back the message names only the chaos runes.
+    const regained = souls > 0 ? `${plural(souls, "soul rune")} and ${plural(left * CHAOS_PER_CHARGE, "chaos rune")}` : plural(left * CHAOS_PER_CHARGE, "chaos rune");
+    player.sendMessage(`You uncharge your Tumeken's shadow, regaining ${regained} in the process.`);
   }, "No.", () => {});
   return true;
 }
@@ -239,7 +265,7 @@ module.exports = {
     pluginApi.registerCombatMethodResolver(staff.resolver);
     pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.registerBonusProvider({ apply: shadowBonuses });
-    for (const rune of ["Soul rune", "Chaos rune"]) {
+    for (const rune of ["Soul rune", "Aether rune", "Chaos rune"]) {
       pluginApi.onItemOnItem(rune, "Tumeken's shadow", chargeShadow);
       pluginApi.onItemOnItem(rune, "Tumeken's shadow (uncharged)", chargeShadow);
     }

@@ -4,7 +4,7 @@ require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
-let core, quest, hooks, itemOnObject, variant, line, action, named;
+let core, quest, hooks, itemOnObject, itemOnNpc, variant, line, action, named;
 before(async () => {
   await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
   core = PluginManager.getCoreApi();
@@ -14,9 +14,14 @@ before(async () => {
     onCustomEvent(name, fn) { hooks.set(name, [...hooks.get(name) ?? [], fn]); },
     onNpcDialogueVariant(fn) { variant = fn; },
     onItemOnObject(fn) { itemOnObject = fn; },
+    onItemOnNpc(fn) { itemOnNpc = fn; },
     onObjectInteraction(name, map) { named.set(name, map); },
   }, {get: (target, key) => key in target ? target[key] : () => {}});
   require('../plugins/quests/quests/PlagueCity.Quest')(api);
+  // The real bottomless milk bucket answers the quest's holds/spend events.
+  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({core, onServerStartup: fn => fn(),
+    onCustomEvent(name, fn) { hooks.set(name, [...hooks.get(name) ?? [], fn]); },
+  }, {get: (target, key) => key in target ? target[key] : () => {}}));
   quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'plague_city');
   action = event => dispatch('npc-dialogue:action', event);
   line = event => dispatch('npc-dialogue:line', event);
@@ -69,23 +74,52 @@ test('Bravek only consumes cure and grants warrant at the actual transcript hand
   give(inv,I.HANGOVER_CURE);
   variant({player,npcId:npc}); assert.equal(inv.getAmount(I.HANGOVER_CURE),1); assert.equal(quest.getStage(player),26);
   act(player,npc,'nxSgWb'); assert.equal(inv.getAmount(I.A_SCRUFFY_NOTE),1);
-  act(player,npc,'Z2OftI'); assert.equal(inv.getAmount(I.HANGOVER_CURE),0); assert.equal(quest.getStage(player),26);
+  act(player,npc,'Pn2ogc'); assert.equal(inv.getAmount(I.WARRANT),0,'no warrant before the cure');
+  // Capture 20261110T113734-5ab63b4 tick 672: the stage moves as Bravek drinks the cure.
+  act(player,npc,'Z2OftI'); assert.equal(inv.getAmount(I.HANGOVER_CURE),0); assert.equal(quest.getStage(player),27);
   act(player,npc,'Pn2ogc'); assert.equal(inv.getAmount(I.WARRANT),1); assert.equal(quest.getStage(player),27);
   act(player,npc,'Pn2ogc'); assert.equal(inv.getAmount(I.WARRANT),1);
 });
+// Wiki (Bottomless milk bucket): Plague City is among the quests a filled bucket serves, "a single charge" at a time.
+test('a bottomless milk bucket of hangover cure serves Bravek for one use', () => {
+  const {player, inv} = fixture(26), I=core.ItemIdentifiers, npc=core.NpcIdentifiers.BRAVEK;
+  const bucket = new core.Item(I.BOTTOMLESS_MILK_BUCKET, 1);
+  bucket.setMetaValue('bottomless-milk', {uses: 3, type: I.HANGOVER_CURE});
+  inv.add(bucket, false);
+  const usesLeft = () => inv.getItems().find(item => item?.getId() === I.BOTTOMLESS_MILK_BUCKET)?.getMetaValue('bottomless-milk')?.uses;
+  const used = {player, npcId: npc, itemId: I.BOTTOMLESS_MILK_BUCKET, handled: false};
+  itemOnNpc(used);
+  assert.equal(used.handled, true, 'using the bucket on Bravek starts the hand-in');
+  assert.equal(variant({player, npcId: npc}), 'finding-elena-talking-to-bravek-after-getting-the-hangover-cure');
+  act(player, npc, 'Z2OftI');
+  assert.equal(quest.getStage(player), 27);
+  assert.equal(usesLeft(), 2, 'one use, not the whole bucket');
+  act(player, npc, 'Pn2ogc'); assert.equal(inv.getAmount(I.WARRANT), 1);
+  // Regular milk is not a hangover cure.
+  const other = fixture(26);
+  const milk = new core.Item(I.BOTTOMLESS_MILK_BUCKET, 1);
+  milk.setMetaValue('bottomless-milk', {uses: 3, type: I.BUCKET_OF_MILK});
+  other.inv.add(milk, false);
+  const refused = {player: other.player, npcId: npc, itemId: I.BOTTOMLESS_MILK_BUCKET, handled: false};
+  itemOnNpc(refused);
+  assert.equal(refused.handled, false);
+  act(other.player, npc, 'Z2OftI');
+  assert.equal(quest.getStage(other.player), 26);
+});
+
 test('barrel is location scoped, and Elena requires the cell unlock with its key', () => {
   const {player, inv}=fixture(27), I=core.ItemIdentifiers, O=core.ObjectIdentifiers, npc=core.NpcIdentifiers.ELENA_2;
-  assert.match(variant({player,npcId:npc}),/basement-door.*without-the-key/);
+  // Talk-to only reaches Elena in the open cell (capture tick 775: "I can't reach that!" through the door).
+  assert.match(variant({player,npcId:npc}),/after-unlocking/);
   assert.equal(quest.getStage(player),27);
-  const talk = {player,npcId:npc,stepId:'Gtrtgc',handled:false};
-  action(talk);assert.equal(talk.handled,true);
-  const repeat = {player,npcId:npc,stepId:'Gtrtgc',handled:false};
-  action(repeat);assert.equal(repeat.handled,false);
+  const locked = {player,npcId:npc,stepId:'Gtrtgc',kind:'message',handled:false};
+  action(locked);assert.equal(locked.handled,false);assert.deepEqual(locked.box,{statement:true});
   const barrel=named.get('Barrel').Search;
   assert.equal(barrel({player,objectId:O.BARREL_11,location:{x:3221,y:9910,z:0}}),false);
   barrel({player,objectId:O.BARREL_11,location:{x:2534,y:3268,z:0}}); assert.equal(inv.getAmount(I.A_SMALL_KEY),1);
-  itemOnObject({player,itemId:I.A_SMALL_KEY,objectId:O.DOOR_78,location:{x:2539,y:9672,z:0}});
-  assert.match(variant({player,npcId:npc}),/after-unlocking/); assert.equal(quest.getStage(player),28);
+  const key={player,itemId:I.A_SMALL_KEY,objectId:O.DOOR_78,location:{x:2539,y:9672,z:0}};
+  itemOnObject(key); assert.equal(key.handled,true);
+  assert.equal(quest.getStage(player),27,'Elena is freed by her conversation, not the key');
   assert.equal(inv.getAmount(I.A_SMALL_KEY),1);
 });
 test('water and barrel handlers leave unrelated objects and missing supplies alone', () => {
@@ -106,7 +140,9 @@ test('grill requires attempted opening before accepting one rope and publishes n
  itemOnObject({player,itemId:I.ROPE,objectId:11422,location});
  assert.equal(quest.getStage(player),9);assert.equal(inv.getAmount(I.ROPE),0);assert.equal(vars.get(1787),1);
  itemOnObject({player,itemId:I.ROPE,objectId:11422,location});assert.equal(quest.getStage(player),9);
- act(player,core.NpcIdentifiers.EDMOND_2,'oCU2uO');assert.equal(quest.getStage(player),10);assert.equal(vars.get(1787),2);
+ // The pull is Edmond's scene now (capture ticks 268-301); the stage moves at its end.
+ const pull={player,npcId:core.NpcIdentifiers.EDMOND_2,stepId:'oCU2uO',handled:false};
+ action(pull);assert.equal(pull.handled,true);assert.equal(pull.end,true);assert.equal(quest.getStage(player),9);
 });
 test('mask replacement has capacity and repeat guards, including an equipped mask', () => {
  const {player,inv}=fixture(2),I=core.ItemIdentifiers,npc=core.NpcIdentifiers.ALRENA;
@@ -128,7 +164,7 @@ test('clerk permission waits for the actual permission line', () => {
  variant({player,npcId});assert.equal(quest.getStage(player),24);
  line({player,npcId,text:'I suppose they can come in then. If they keep it short.'});assert.equal(quest.getStage(player),25);
 });
-test('warrant entry defers to the real Doors event chain without replaying dialogue', () => {
+test('warrant entry: the mourner speaks first, then the sneak-in opens the door through Doors', () => {
  const runtime=require('../plugins/quests/QuestRuntime'), original=runtime.startTranscript, events=new Map(), operations=[], transcripts=[];
  const dispatch=(name,event)=>{ for(const fn of events.get(name)??[])fn(event); };
  const doorCore={...core,
@@ -151,9 +187,12 @@ test('warrant entry defers to the real Doors event chain without replaying dialo
  const object=new core.GameObject(37321,new core.Location(2533,3272,0),0,3);
  const click={player,object,objectId:37321,location:{x:2533,y:3272,z:0},handled:false};
  dispatch('door:toggle',click);
- assert.equal(click.handled,false,'the partial quest handler yields warrant entry to the door system');
+ assert.equal(click.handled,true,'from outside, the mourner answers the door (capture ticks 716-722)');
+ assert.deepEqual(transcripts,['freeing-elena-attempting-to-enter-the-plague-house-with-the-warrant']);
+ player.setLocation(new core.Location(2533,3272,0));
  dispatch('door:open',{player,object,handled:false});
- assert.equal(transcripts.length,0,'door:open must not restart the warrant dialogue');
+ assert.equal(transcripts.length,1,'door:open must not restart the warrant dialogue');
+ assert.ok(operations.some(([op,id])=>op==='register'&&id===37322),'the pass-through door opens');
  assert.equal(quest.getStage(player),27);
  assert.equal(inv.getAmount(core.ItemIdentifiers.WARRANT),1);
 });

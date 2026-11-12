@@ -27,6 +27,7 @@ module.exports = {
   key: "ardougne",
   name: "Ardougne Rooftop",
   helper: 20, // the Agility helper's course (enum 3507: "Ardougne Rooftops")
+  lootSource: 30, // the loot tracker's source (enum 4976)
   lapXp: 889,
   petBase: 34440, // Giant squirrel base chance (Wiki)
   // Ardougne Diary elite: "Complete a lap of Ardougne's rooftop agility course."

@@ -85,7 +85,9 @@ function mapFlags(player) {
   pluginApi?.emitCustomEvent("world:map-flags", request);
   return request.flags | 0;
 }
+const PVP_WORLD_LEVEL_DIFFERENCE_CONFIG = "Wilderness:pvpWorldLevelDifference";
 const PVP_WORLD_ATTACK_RANGE = 15;
+let unlevelledPvpRange = PVP_WORLD_ATTACK_RANGE;
 const VARBIT_IN_WILDERNESS = 5963;
 const PVP_LAYOUT_SCRIPT = 386;
 const PVP_LEVEL_SCRIPT = 388;
@@ -146,17 +148,19 @@ function wildernessLevelOf(player) {
  * it. On a normal world, 0 means neither player has a levelled constraint, and whether
  * they may fight at all is decided elsewhere. Both players must
  * be within range of each other, so the usable range is the shallower of their two
- * Wilderness levels; standing deeper alone does not widen it. On a PvP world the flat
- * +15 applies everywhere, and the shallower side still caps the total.
+ * Wilderness levels; standing deeper alone does not widen it. On a PvP world, each
+ * levelled tile keeps its +15 bonus and each unlevelled tile uses the configured range.
  */
 function wildernessAttackRange(attacker, target) {
-  const base = hasGlobalWorldTag("pvp") ? PVP_WORLD_ATTACK_RANGE : 0;
   const attackerLevel = wildernessLevelOf(attacker);
   const targetLevel = wildernessLevelOf(target);
-  const sharedLevel = Math.min(attackerLevel, targetLevel);
-  // Normal-world unlevelled PvP ground must not erase the other side's cap via the 0 sentinel.
-  // On a PvP world, that side has a real +/-15 range, so the minimum still applies.
-  return base + (base === 0 && sharedLevel === 0 ? Math.max(attackerLevel, targetLevel) : sharedLevel);
+  if (hasGlobalWorldTag("pvp")) {
+    const attackerRange = attackerLevel > 0 ? attackerLevel + PVP_WORLD_ATTACK_RANGE : unlevelledPvpRange;
+    const targetRange = targetLevel > 0 ? targetLevel + PVP_WORLD_ATTACK_RANGE : unlevelledPvpRange;
+    return Math.min(attackerRange, targetRange);
+  }
+  // On a normal world, an unlevelled tile leaves the other tile's cap in force.
+  return Math.min(attackerLevel, targetLevel) || Math.max(attackerLevel, targetLevel);
 }
 
 /**
@@ -165,7 +169,7 @@ function wildernessAttackRange(attacker, target) {
  */
 function canAttackByWildernessLevel(attacker, target) {
   const range = wildernessAttackRange(attacker, target);
-  if (range <= 0) {
+  if (range === 0 && !hasGlobalWorldTag("pvp")) {
     return true;
   }
   return Math.abs(combatLevelOf(attacker) - combatLevelOf(target)) <= range;
@@ -329,7 +333,7 @@ function refreshWildernessUi(player, facts, inWilderness) {
   if (inWilderness) {
     // The varbit is the client's "you may attack players here" switch, so it follows the
     // PvP ground rather than the level: only the original Wilderness is levelled, and
-    // elsewhere the level row stays empty while PvP worlds still enforce +/-15.
+    // elsewhere the level row stays empty while PvP worlds enforce the unlevelled range.
     syncWildernessState(player, true);
     player.getPacketSender().sendInteractionOption("Attack", 2, true);
 
@@ -599,6 +603,10 @@ const WEB_REGROW_TICKS = 99;
 const WEB_SLASH_MESSAGE = "You slash the web apart.";
 const WEB_FAIL_MESSAGE = "You fail to cut through it.";
 const WEB_NO_BLADE_MESSAGE = "Only a sharp blade can cut through this sticky web.";
+// rsprox 236/03927.txt:5035-5038, 236/03932.txt:4939 (the Forthos tomb web): with aranea boots on, Slash wades
+// through - human_aranea_boots_wade with a one-tile exactmove (delay 30), the web left standing, no message.
+const ARANEA_WADE_ANIMATION = 11511; // human_aranea_boots_wade
+const WADE_CYCLES = 30;
 /** Webs being cut, as "x,y,z", until they turn into the slashed web. */
 const websBeingSlashed = new Set();
 
@@ -633,6 +641,13 @@ function webTool(player, usedItem) {
   return best ? { item: best, chance: bestChance } : null;
 }
 
+/** Wiki (Web): "Wearing aranea boots will allow players to pass through webs without needing any other tools." */
+function wearsAraneaBoots(api, player) {
+  const id = player.getEquipment().getItems()[Equipment.FEET_SLOT]?.getId?.() ?? -1;
+  const I = api.core.ItemIdentifiers;
+  return [I.ARANEA_BOOTS, I.ARANEA_BOOTS_2, I.ARANEA_BOOTS_3, I.ARANEA_BOOTS_4, I.ARANEA_BOOTS_5].includes(id);
+}
+
 /** Live: a knife chops, a weapon swings its own slash animation. */
 function webSlashAnimation(item) {
   const definition = item.getDefinition();
@@ -642,6 +657,28 @@ function webSlashAnimation(item) {
   const style = definition.getWeaponInterface()?.getFightType()
     .find((type) => type.getBonusType() === BonusManager.ATTACK_SLASH);
   return style?.getAnimation() ?? KNIFE_SLASH_ANIMATION;
+}
+
+/**
+ * The wade: off the web's tile across its edge for a wall web (face 0-3: west, north, east, south), otherwise onto the
+ * web's tile, as recorded both ways (9919 -> 9920 and back).
+ */
+function wadeThroughWeb(api, player, object) {
+  const { Location, ForceMovement, ForceMovementTask } = api.core;
+  const from = player.getLocation();
+  const web = object.getLocation();
+  let to = web;
+  if (from.getX() === web.getX() && from.getY() === web.getY()) {
+    if (object.getType() > 3) return;
+    const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
+    to = new Location(web.getX() + ex, web.getY() + ey, web.getZ());
+  }
+  const dx = to.getX() - from.getX();
+  const dy = to.getY() - from.getY();
+  if (dx === 0 && dy === 0) return;
+  const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+  api.getTaskManager().submit(new ForceMovementTask(player, 1,
+    new ForceMovement(from.clone(), new Location(dx, dy), 0, WADE_CYCLES, direction, ARANEA_WADE_ANIMATION)));
 }
 
 function webKey(object) {
@@ -673,6 +710,12 @@ function slashWeb(api, event, usedItem) {
   const { player, object } = event;
   const key = webKey(object);
   if (player.busy() || websBeingSlashed.has(key) || !MapObjects.get(WEB_OBJECT_ID, object.getLocation(), object.getPrivateArea())) return;
+  // Wiki (Web, Aranea boots): the boots "pass through webs" with no tool. Slash then wades, as recorded at the
+  // Forthos web; using a blade on the web still slashes it.
+  if (!usedItem && wearsAraneaBoots(api, player)) {
+    wadeThroughWeb(api, player, object);
+    return;
+  }
   const tool = webTool(player, usedItem);
   if (!tool) {
     player.sendMessage(WEB_NO_BLADE_MESSAGE);
@@ -692,6 +735,12 @@ function slashWeb(api, event, usedItem) {
 module.exports = {
   name: "Wilderness",
   description: "The Wilderness: PvP attack rules, the overlay, teleport limits and web slashing.",
+  config: {
+    [PVP_WORLD_LEVEL_DIFFERENCE_CONFIG]: {
+      type: "number", label: "Unlevelled PvP combat level difference", default: PVP_WORLD_ATTACK_RANGE, integer: true, min: 0,
+      help: "Maximum combat level difference on unlevelled PvP ground on PvP worlds. Levelled Wilderness tiles keep their usual range.",
+    },
+  },
   _test: { canAttack, webCutChance, webTool, webSlashAnimation, slashWeb, websBeingSlashed },
   register(api) {
     require("./wilderness/Statistics.Wilderness")(api, isInWilderness);
@@ -699,6 +748,8 @@ module.exports = {
     require("./wilderness/FountainOfRune.Wilderness")(api);
     require("./wilderness/DemonicRuins.Wilderness")(api);
     pluginApi = api;
+    const levelDifference = api.getPluginConfig(PVP_WORLD_LEVEL_DIFFERENCE_CONFIG, PVP_WORLD_ATTACK_RANGE);
+    unlevelledPvpRange = Number.isInteger(levelDifference) && levelDifference >= 0 ? levelDifference : PVP_WORLD_ATTACK_RANGE;
     const state = createState();
 
     api.onServerStartup(() => registerWildernessArea(api, state));

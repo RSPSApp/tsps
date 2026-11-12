@@ -252,8 +252,23 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   assert.equal(p.getLocation().getX(), 2394);
   assert.equal(h.variant(p, N.DAERO).variant, 'chapter-1-the-underground-hangar-speaking-to-daero-in-the-underground-hangar');
 
+  // The panel opens Waydar's sliding puzzle; the stage moves when its last piece slides home. The scramble is
+  // fixed (Math.random = 0 takes each first neighbour) so the way back is known; the real board is not recorded.
+  const randomBefore = Math.random;
+  Math.random = () => 0;
   const panel = h.object(p, O.REINITIALISATION_PANEL, 'Operate');
+  Math.random = randomBefore;
   assert.equal(panel.handled, true);
+  assert.equal(h.quest.getStage(p), STAGE.daero, 'operating the panel only opens the puzzle');
+  const { neighbours, slide, solvedBoard } = require('../plugins/treasuretrails/trails/Puzzle.TreasureTrails');
+  // The blank walks slot 24 -> p1 -> ... -> pn; the way back clicks p(n-1) ... slot 24.
+  const walk = solvedBoard(), visited = [24];
+  for (let i = 0; i < 101; i++) { const at = neighbours(walk.indexOf(-1))[0]; visited.push(at); slide(walk, at); }
+  const way = visited.slice(0, -1);
+  const pieces = core.CacheDefinitions.getComponentId('trail_slidepuzzle:pieces');
+  for (const slot of way.reverse()) {
+    (h.hooks.onInterfaceActionButton ?? []).forEach(fn => fn({ player: p, buttonId: pieces, action: 0, slot, handled: false }));
+  }
   assert.equal(h.quest.getStage(p), STAGE.reinitialised);
   assert.equal(h.variant(p, N.DAERO).variant, 'chapter-1-the-underground-hangar-speaking-to-daero-in-the-underground-hangar-after-the-puzzle-is-complete');
   assert.equal(p.getAttribute('quest.monkey_madness_i.post-puzzle-talk'), undefined,
@@ -302,31 +317,31 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   assert.equal(p.inventory.getAmount(I.MAMULET_MOULD), 1);
 
   // Zooknock: first talk, then the three amulet parts in either order.
-  assert.equal(h.variant(p, N.ZOOKNOCK).variant, 'chapter-2-talking-to-zooknock');
+  assert.equal(h.variant(p, N.ZOOKNOCK_3).variant, 'chapter-2-talking-to-zooknock');
   assert.equal(p.varbits.get(127) ?? 0, 0, 'opening Zooknock does not advance Quest Helper');
   assert.equal(p.getAttribute('quest.monkey_madness_i.zooknock-met'), undefined);
-  h.line(p, N.ZOOKNOCK,
+  h.line(p, N.ZOOKNOCK_3,
     'I am Zooknock, the 10th squad mage. These are Bunkwicket and Waymottin, two of our finest sappers. I assume you will want to know how we got here?');
   const shapeshiftLine = 'Garkor had long decided that we need a monkey insider. I have the necessary magic to perform the shapeshifting spell, but we needed a human to transform.';
   assert.ok(transcriptLine(shapeshiftLine), 'the line the plugin matches is the transcript line');
-  h.line(p, N.ZOOKNOCK, shapeshiftLine);
+  h.line(p, N.ZOOKNOCK_3, shapeshiftLine);
   assert.equal(p.varbits.get(127), 5, 'Quest Helper advances after the Garkor/Zooknock conversation');
   p.inventory.adds(I.GOLD_BAR, 1);
   // Item-on-NPC starts the transcript, whose message steps run the real
   // hand-over handler (the same code a live dialogue reaches).
-  h.itemOnNpc(p, N.ZOOKNOCK, I.MONKEY_DENTURES);
+  h.itemOnNpc(p, N.ZOOKNOCK_3, I.MONKEY_DENTURES);
   assert.equal(p.getAttribute('quest.monkey_madness_i.dentures-given'), true);
   assert.equal(p.inventory.getAmount(I.MONKEY_DENTURES), 0);
-  h.itemOnNpc(p, N.ZOOKNOCK, I.MAMULET_MOULD);
+  h.itemOnNpc(p, N.ZOOKNOCK_3, I.MAMULET_MOULD);
   assert.equal(p.getAttribute('quest.monkey_madness_i.mould-given'), true);
   assert.equal(p.inventory.getAmount(I.MAMULET_MOULD), 0);
-  assert.equal(h.condition(p, N.ZOOKNOCK, 'aH18LQ'), false,
+  assert.equal(h.condition(p, N.ZOOKNOCK_3, 'aH18LQ'), false,
     'the branch is not ready until the gold-bar handover message runs');
-  h.itemOnNpc(p, N.ZOOKNOCK, I.GOLD_BAR);
+  h.itemOnNpc(p, N.ZOOKNOCK_3, I.GOLD_BAR);
   assert.equal(p.inventory.getAmount(I.GOLD_BAR), 0);
-  assert.equal(h.condition(p, N.ZOOKNOCK, 'aH18LQ'), true,
+  assert.equal(h.condition(p, N.ZOOKNOCK_3, 'aH18LQ'), true,
     'the transcript checks the all-items-given condition after FYkajk consumes the bar');
-  h.action(p, N.ZOOKNOCK, 'URF9yW');
+  h.action(p, N.ZOOKNOCK_3, 'URF9yW');
   assert.equal(p.inventory.getAmount(I.ENCHANTED_BAR), 1);
   assert.equal(p.inventory.getAmount(I.MAMULET_MOULD), 1);
 
@@ -363,16 +378,26 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   h.action(p, N.MONKEY_CHILD, '795Rk5');
   assert.equal(p.inventory.getAmount(I.MONKEY_TALISMAN), 1);
 
-  // Zooknock turns the talisman and monkey remains into the greegree.
+  // Tunnel content id 7170 handles the initial exchange; 1442 is the arena actor.
   p.inventory.adds(I.MONKEY_BONES, 1);
-  h.itemOnNpc(p, N.ZOOKNOCK, I.MONKEY_TALISMAN);
-  h.action(p, N.ZOOKNOCK, 'RiFs2s');
-  h.itemOnNpc(p, N.ZOOKNOCK, I.MONKEY_BONES);
-  h.action(p, N.ZOOKNOCK, '-wRWky');
-  h.action(p, N.ZOOKNOCK, 'hOYpYN');
+  h.itemOnNpc(p, N.ZOOKNOCK_3, I.MONKEY_TALISMAN);
+  h.action(p, N.ZOOKNOCK_3, 'RiFs2s');
+  h.itemOnNpc(p, N.ZOOKNOCK_3, I.MONKEY_BONES);
+  h.action(p, N.ZOOKNOCK_3, '-wRWky');
+  assert.equal(p.inventory.getAmount(I.MONKEY_TALISMAN), 0);
+  assert.equal(p.inventory.getAmount(I.MONKEY_BONES), 0);
   assert.equal(p.inventory.getAmount(I.KARAMJAN_MONKEY_GREEGREE), 1);
+  h.action(p, N.ZOOKNOCK_3, 'hOYpYN');
+  assert.equal(h.quest.getStage(p), STAGE.atoll, 'the initial scene is not complete before its Chapter 3 marker');
+  // A repeated hand-back during the unfinished scene cannot charge or grant again.
+  h.action(p, N.ZOOKNOCK_3, '-wRWky');
+  assert.equal(p.inventory.getAmount(I.KARAMJAN_MONKEY_GREEGREE), 1);
+  h.action(p, N.ZOOKNOCK_3, 'qNLIG9');
   assert.equal(h.quest.getStage(p), STAGE.chapters);
   assert.equal(p.configs.get(MM_MAIN), 4, 'Quest Helper keys the zoo trip on mm_main 4');
+  h.action(p, N.ZOOKNOCK_3, 'qNLIG9');
+  assert.equal(h.quest.getStage(p), STAGE.chapters, 'replaying the chapter marker does not advance again');
+  assert.equal(p.inventory.getAmount(I.KARAMJAN_MONKEY_GREEGREE), 1);
   equip(p, core.Equipment.WEAPON_SLOT, I.KARAMJAN_MONKEY_GREEGREE);
 
   // Ardougne Zoo: talk the minder as a monkey, take a monkey, then leave.

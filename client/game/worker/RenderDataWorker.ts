@@ -14,7 +14,7 @@ import {
     varReadsMatch,
     writeSquare,
 } from "./MapSquareCache";
-import { loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
+import { isDefinitionDataset, loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
 import { getDefinitionArchiveKey, replaceDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import type { ArchivedDefinitionBundle } from "../../rs/config/ArchivedDefinitionRegistry";
 import { TransferDescriptor } from "threads";
@@ -36,6 +36,7 @@ import {
 } from "../../rs/cache/loader/CacheLoaderFactory";
 import { Bzip2 } from "../../rs/compression/Bzip2";
 import { Gzip } from "../../rs/compression/Gzip";
+import { BaseTypeLoader } from "../../rs/config/TypeLoader";
 import { BasTypeLoader } from "../../rs/config/bastype/BasTypeLoader";
 import { IdkTypeLoader } from "../../rs/config/idktype/IdkTypeLoader";
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
@@ -357,7 +358,7 @@ const worker = {
             if (statePromise !== workerStatePromise) return;
             loadFromPayload(payload);
             state?.objTypeLoader.clearCache();
-            if (state && payload.datasets.some(dataset => dataset.key === "definitionArchives" || dataset.key === "customDefinitions")) {
+            if (state && payload.datasets.some(isDefinitionDataset)) {
                 state.locTypeLoader.clearCache();
                 state.npcTypeLoader.clearCache();
                 state.seqTypeLoader.clearCache();
@@ -460,7 +461,7 @@ const worker = {
                 await writeSquare(key, { data: data as unknown as SdMapData, reads });
             }
             if (cacheable && sdInput.mapProfileEnabled) {
-                console.info(`[map-profile] ${sdInput.mapX},${sdInput.mapY} store: ${shouldStore(outcome.complete, data) ? "written" : `skipped (complete=${outcome.complete})`} reads=${reads.length}`);
+                console.info(`[map-profile] ${sdInput.mapX},${sdInput.mapY} store: ${shouldStore(outcome.complete, data) ? "written" : `skipped (complete=${outcome.complete}${BaseTypeLoader.decodeFailures.size > 0 ? `, ${BaseTypeLoader.decodeFailureSummary()}` : ""})`} reads=${reads.length}`);
             }
             if (cacheable && data) dropLoadedTextures(data as unknown as SdMapData, sdInput.loadedTextureIds);
 

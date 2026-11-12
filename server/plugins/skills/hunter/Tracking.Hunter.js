@@ -3,7 +3,7 @@
 // Trail coordinates/varbits adapted from GregHib/void (BSD-3-Clause).
 // See Tracking.LICENSE. Trail generation and handlers are local implementations.
 const data = require("../data/tracking-data.json");
-const { H, ANIM, requireLevel, hasTool, nearby, exchange, xp, begin, roll, distance } = require("./Context.Hunter");
+const { H, ANIM, requireLevel, hasTool, nearby, exchange, catchExchange, xp, begin, roll, distance } = require("./Context.Hunter");
 const trails = new Map();
 const ATTRIBUTE = "hunter.pursuit-charges";
 
@@ -87,9 +87,9 @@ function catchPrey({ player, object }) {
   if (state.step !== state.path.length - 1 || !same(last.end, tile(object.getLocation()))) { player.sendMessage("You fail to find the creature here."); return true; }
   const def = data.creatures[last.kebbit], rewards = def.loot.map(key => [H.core.ItemIdentifiers[key], 1]);
   if (!requireLevel(player, def.level)) return true;
-  if (!exchange(player, [], rewards, false)) { player.getInventory().full(); return true; }
+  if (!catchExchange(player, [], rewards, false)) { player.getInventory().full(); return true; }
   begin(player, 2, ANIM.NOOSE, () => {
-    if (trails.get(player) !== state || !requireLevel(player, def.level) || !hasTool(player, H.core.ItemIdentifiers.NOOSE_WAND) || !exchange(player, [], rewards)) return;
+    if (trails.get(player) !== state || !requireLevel(player, def.level) || !hasTool(player, H.core.ItemIdentifiers.NOOSE_WAND) || !catchExchange(player, [], rewards)) return;
     clear({ player }); xp(player, def.xp, "tracking", H.core.NpcIdentifiers[last.kebbit.toUpperCase()], { creature: last.kebbit.toUpperCase() });
     player.sendMessage(`You catch a ${last.kebbit.replaceAll("_", " ")}!`);
   });

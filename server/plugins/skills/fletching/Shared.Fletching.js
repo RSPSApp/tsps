@@ -77,9 +77,16 @@ function seq(name) {
   return new core.Animation(id);
 }
 
+/** The recipe's animation, or null for a recipe that plays none (`"animation": false`). */
 function animationOf(recipe) {
+  if (recipe.animationName == null) return null;
   recipe.animation ??= seq(recipe.animationName);
   return recipe.animation;
+}
+
+function animate(player, recipe) {
+  const animation = animationOf(recipe);
+  if (animation) player.performAnimation(animation);
 }
 
 function varbitId(name) {
@@ -129,7 +136,7 @@ function resolveRecipe(entry) {
     tool: recipe.tool ?? null,
     held: (recipe.held ?? []).map((name) => ({ name, ids: toolIds[name] })),
     materials: recipe.materials.map(resolveMaterial),
-    animationName: recipe.animation ?? DEFAULT_ANIMATION,
+    animationName: recipe.animation === false ? null : recipe.animation ?? DEFAULT_ANIMATION,
     animation: null,
     sound: recipe.sound ? sound(recipe.sound) : null,
     message: recipe.message ?? null,
@@ -407,7 +414,7 @@ function makeBatch(player, wholeRecipe, via, provenance = null) {
   }
   const inputs = consumePlan(player, plan.inputs);
   player.getInventory().addItem(new core.Item(recipe.outputId, amount));
-  player.performAnimation(animationOf(recipe));
+  animate(player, recipe);
   if (recipe.sound) core.Sounds.sendSound(player, recipe.sound);
   if (recipe.message) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, formatMessage(recipe.message, amount));
   const xp = recipe.xpEach != null ? recipe.xpEach * amount : recipe.xp;
@@ -446,7 +453,7 @@ function knifeSaving(player, recipe) {
 
 /** The animation (and the sound, with `startSound`) that opens the loop before the first batch. */
 function playOpening(player, recipe) {
-  player.performAnimation(animationOf(recipe));
+  animate(player, recipe);
   if (recipe.startSound && recipe.sound) core.Sounds.sendSound(player, recipe.sound);
 }
 
@@ -477,7 +484,7 @@ function createTask(player, recipe, batches, via, provenance) {
     }
 
     resumeAnimation() {
-      player.performAnimation(animationOf(recipe));
+      animate(player, recipe);
     }
 
     execute() {

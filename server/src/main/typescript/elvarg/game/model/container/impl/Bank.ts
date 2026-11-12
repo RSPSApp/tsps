@@ -15,10 +15,12 @@ import { EnteredSyntaxAction } from "../../EnteredSyntaxAction";
 import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { ChatType } from "../../../../net/protocol/ClientProtocol";
+import { examineItem } from "../../../content/ExaminePrice";
 const getPluginManager = () =>
     require("../../../../plugins/PluginManager").PluginManager as typeof import("../../../../plugins/PluginManager").PluginManager;
 
 /** Live OSRS's wording (rsprox recordings 454, 3066, 4151, 3467, 1059). */
+// Both are spam on bank clicks in every recording (e.g. 224/01463.txt:7863, 231/03063.txt:9533); shops send the first as a game message.
 const INVENTORY_FULL_MESSAGE = "You don't have enough inventory space.";
 const WITHDRAW_PARTIAL_MESSAGE = "You don't have enough inventory space to withdraw that many.";
 const NEW_TAB_MESSAGE = "To create a new tab, drag items from your bank onto this tab.";
@@ -870,8 +872,7 @@ export class Bank extends ItemContainer {
             const entry = Bank.resolveDisplaySlot(player, packet.slot);
             if (!entry || (packet.itemId != null && packet.itemId !== Bank.displayItemId(entry.item))) return true;
             if (packet.buttonNum === Bank.EXAMINE_OP) {
-                const definition = ItemDefinition.forId(entry.item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, entry.item.getId(), entry.item.getAmount());
                 return true;
             }
             if (entry.item.getAmount() === 0) {
@@ -909,8 +910,7 @@ export class Bank extends ItemContainer {
             } else if (packet.buttonNum === 9) {
                 Bank.deposits(player, item.getId(), packet.slot, item.getAmount());
             } else if (packet.buttonNum === 10) {
-                const definition = ItemDefinition.forId(item.getId());
-                player.sendMessage(definition.getExamine() || definition.getName());
+                examineItem(player, item.getId(), item.getAmount());
             }
             return true;
         }
@@ -1082,19 +1082,8 @@ export class Bank extends ItemContainer {
                             if (empty) {
                                 return true;
                             }
-                            let items: Item[] = player.getBank(bankId).getValidItems();
-                            if (player.getBank(0).getFreeSlots() < items.length) {
-                                player.sendMessage("You don't have enough free slots in your Main tab to do that.");
-                                return true;
-                            }
-                            let noteWithdrawal: boolean = player.withdrawAsNote();
-                            player.setNoteWithdrawal(false);
-                            for (let item of items) {
-                                player.getBank(bankId).switchsItem(player.getInventory(), item.clone(), player.getBank(bankId).getSlotForItemId(item.getId()), false, false);
-                            }
-                            player.setNoteWithdrawal(noteWithdrawal);
-                            this.reconfigureTabs(player);
-                            player.getBank(player.getCurrentBankTab()).refreshItems();
+                            // The same collapse as the tab menu: each stack moves to the main tab as it is.
+                            Bank.collapseTab(player, bankId);
                         } else {
                             if (!empty || bankId === 0) {
                                 player.setCurrentBankTab(bankId);
@@ -1285,9 +1274,16 @@ export class Bank extends ItemContainer {
         return 0;
     }
 
+    /** Whether the bank holds at least `item`'s amount of its id (a note's item), in every tab together. */
     public static contains(player: Player, item: Item): boolean {
-        let tab = this.getTabForItem(player, item.getId());
-        return player.getBank(tab).getAmount(item.getId()) >= item.getAmount();
+        const definition = ItemDefinition.forId(item.getId());
+        const id = definition.isNoted() ? definition.unNote() : item.getId();
+        let amount = 0;
+        for (let tab = 0; tab < this.TOTAL_BANK_TABS; tab++) {
+            // The search tab only shows copies of the other tabs' items; placeholders add 0.
+            if (tab !== this.BANK_SEARCH_TAB_INDEX) amount += player.getBank(tab).getAmount(id);
+        }
+        return amount >= item.getAmount();
     }
 
     /** This tab's slots so far (it grows); the player's space is getCapacity. */
@@ -1401,7 +1397,7 @@ export class Bank extends ItemContainer {
         // Make sure we have enough space in the other container
         if (to.getFreeSlots() <= 0 && (!(to.contains(item.getId()) && item.getDefinition().isStackable()))
                 && !(this.getPlayer().withdrawAsNote() && canWithdrawAsNote && to.contains(noteId))) {
-            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            if (to instanceof Inventory) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, INVENTORY_FULL_MESSAGE);
             else to.full();
             return this;
         }
@@ -1422,7 +1418,7 @@ export class Bank extends ItemContainer {
                 }
             }
         }
-        if (shortened) this.getPlayer().sendMessage(WITHDRAW_PARTIAL_MESSAGE);
+        if (shortened) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, WITHDRAW_PARTIAL_MESSAGE);
 
         // Make sure we aren't taking more than we have.
         if (item.getAmount() > this.getAmount(item.getId())) {
@@ -1453,7 +1449,7 @@ export class Bank extends ItemContainer {
         if (this.getPlayer().withdrawAsNote() && canWithdrawAsNote) arriving.setId(noteId);
         const room = to.getAddableAmount(arriving);
         if (room <= 0) {
-            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            if (to instanceof Inventory) this.getPlayer().getPacketSender().sendTypedMessage(ChatType.SPAM, INVENTORY_FULL_MESSAGE);
             else to.full();
             return this;
         }

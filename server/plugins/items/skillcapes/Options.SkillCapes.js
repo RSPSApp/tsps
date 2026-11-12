@@ -8,7 +8,8 @@
  * - Fletching "Search": a mithril grapple and a bronze crossbow, three times a day (varbit
  *   free_grapple; animation searchcape_grapple).
  * - Magic "Spellbook": change spellbook up to five times a day ("Choose spellbook: (5/5 left)",
- *   varbit sb_swap_check); "Check" says how many changes were used.
+ *   varbit sb_swap_check; with none left, a message box says so); "Check" says how many changes
+ *   were used.
  * - Ranging "Commune": the undead chicken's metal-gathering, on or off. Worn, the cape saves
  *   ammunition as Ava's accumulator (72%), or 80% once Vorkath's head has been used on a Ranging
  *   or max cape; the head is used up and the upgrade covers every such cape the player owns.
@@ -38,6 +39,7 @@ const GRAPPLE_LEFT = [
   "You may search the cape one more time today.",
   "You search the cape for the final time today.",
 ];
+const SPELLBOOK_LIMIT_TEXT = "You may only switch spellbooks five times per day. Try again tomorrow.";
 const SPELLBOOK_VARBIT = "sb_swap_check";
 const GRAPPLE_VARBIT = "free_grapple";
 const ROL_TOGGLE_VARBIT = "rol_toggle";
@@ -178,6 +180,11 @@ function changeSpellbook(player, name) {
 
 function spellbookMenu(player) {
   const left = SPELLBOOKS_PER_DAY - Capes.dailyUses(player, SPELLBOOK_KEY);
+  // With every change of the day used, the option opens a message box instead of the menu.
+  if (left <= 0) {
+    Capes.messageBox(player, SPELLBOOK_LIMIT_TEXT);
+    return;
+  }
   const current = currentBook(player);
   const pairs = BOOKS.filter((book) => book !== current).flatMap((book) => [book.name, () => changeSpellbook(player, book.name)]);
   api.sendMultiChatboxPrompt(player, `Choose spellbook: (${left}/${SPELLBOOKS_PER_DAY} left)`, ...pairs, "Cancel", () => {});

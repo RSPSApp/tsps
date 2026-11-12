@@ -97,6 +97,8 @@ class PriceCheckerContainer extends ItemContainer {
     const first = inventory.getItems()[slot];
     if (!first || first.getId() <= 0) return 0;
     const id = first.getId();
+    // Read before the move: emptying the slot turns `first` into an empty item, which isn't stackable.
+    const stackable = first.getDefinition().isStackable();
     const slots = [slot, ...inventory.getItems().map((_, index) => index).filter((index) => index !== slot)];
     let left = amount;
     let moved = 0;
@@ -114,7 +116,7 @@ class PriceCheckerContainer extends ItemContainer {
       this.add(piece, false);
       left -= take;
       moved += take;
-      if (first.getDefinition().isStackable()) break;
+      if (stackable) break;
     }
     return moved;
   }
@@ -173,6 +175,8 @@ class PriceCheckerContainer extends ItemContainer {
     ) {
       if (this.items[slot]?.getId() == id) {
         const inventory = this.player.getInventory();
+        // Read before the move: emptying the slot turns its item into an empty one, which isn't stackable.
+        const stackable = this.items[slot].getDefinition().isStackable();
         const slots = [slot, ...this.items.map((_, index) => index).filter((index) => index !== slot)];
         let left = amount;
         let moved = false;
@@ -190,7 +194,7 @@ class PriceCheckerContainer extends ItemContainer {
           inventory.add(piece, false);
           left -= take;
           moved = true;
-          if (source.getDefinition().isStackable()) break;
+          if (stackable) break;
         }
         this.refreshItems();
         inventory.refreshItems();

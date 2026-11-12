@@ -34,7 +34,7 @@ import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { CollisionFlag } from "../../../common/CollisionFlag";
-import { VARBIT_IN_WILDERNESS } from "../../../common/vars";
+import { VARBIT_IN_WILDERNESS, VARBIT_TRADE_OPTION_DISABLED } from "../../../common/vars";
 import {
     getWorldLocChanges,
     getWorldLocSpawns,
@@ -633,6 +633,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 menuEntries.push(...buildPlayerActionEntries({
                     sid, playerLabel, targetCombatLevel, localCombatLevel, targetTeam, localTeam,
                     targetIsClanMember, canAttackPlayers, localX, localY,
+                    showTradeOption: (host.osrsClient.varManager?.getVarbit(VARBIT_TRADE_OPTION_DISABLED) ?? 0) === 0,
                     actions: {
                         option: sendPlayerOption,
                         follow: (serverId) => {
@@ -1393,14 +1394,19 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             shouldLeftClickOpenMenu(simpleEntries, !!host.osrsClient.settings?.leftClickOpensMenu)
         );
         if (leftClickMenuToggle) {
+            const leftClickX = inputManager.leftClickX;
+            const leftClickY = inputManager.leftClickY;
+            // The press that opens the menu is spent, as a right click's is. Left in place, the
+            // Choose Option overlay reads it this same frame as a click at the menu's corner
+            // (its header) and closes the menu again.
+            inputManager.clickMode3 = ClickMode.NONE;
+            inputManager.saveClickX = -1;
+            inputManager.saveClickY = -1;
             host.osrsClient.menuOpen = true;
             host.osrsClient.menuOpenedFrame = frameCount;
-            host.osrsClient.menuX = inputManager.leftClickX;
-            host.osrsClient.menuY = inputManager.leftClickY;
-            const clickedFromLeft = host.computeTileAt(
-                inputManager.leftClickX,
-                inputManager.leftClickY,
-            );
+            host.osrsClient.menuX = leftClickX;
+            host.osrsClient.menuY = leftClickY;
+            const clickedFromLeft = host.computeTileAt(leftClickX, leftClickY);
             if (clickedFromLeft) {
                 host.osrsClient.menuTile = clickedFromLeft;
                 host.hoverTileX = clickedFromLeft.tileX;

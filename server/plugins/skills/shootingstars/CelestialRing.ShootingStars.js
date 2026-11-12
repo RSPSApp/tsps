@@ -151,9 +151,10 @@ const SINGING_SEQUENCE = "prif_crystal_singing";
 const SINGING_SOUND = 8;
 const SINGING_ATTRIBUTE = "celestial-signet:singing";
 
+/** The elven signet itself (23943): 23944 is its noted form and 23945 its bank placeholder (cache obj.sym). */
 function elvenSignet(player) {
-  const { ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3 } = Common.core.ItemIdentifiers;
-  return player.getInventory().getItems().find((item) => item && [ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3].includes(item.getId()));
+  const { ELVEN_SIGNET } = Common.core.ItemIdentifiers;
+  return player.getInventory().getItems().find((item) => item && item.getId() === ELVEN_SIGNET);
 }
 
 function ringToSing(player) {

@@ -224,7 +224,7 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   h.action(p, 'sXzRb_');
   h.choice(p, 'Dialogue 1', N.CURPILE_FYOD);
   h.choice(p, 'Sani Piliu.', N.CURPILE_FYOD);
-  h.condition(p, '3l6Jxc');
+  h.condition(p, 'P7_hRO');
   assert.equal(stage(h, p), 55, 'quiz pass condition');
 
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
@@ -322,13 +322,13 @@ test('a failed Curpile quiz knocks the player back without losing the stage leg'
   const p = makePlayer();
   h.quest.setStage(p, 52);
   assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:' }), true);
-  h.action(p, 'kDZQpN');
+  h.action(p, 'OGn3Rx');
   assert.deepEqual(p.moves.at(-1), [3522, 3285, 0], 'knocked out back to Mort\'ton');
   assert.equal(stage(h, p), 52, 'the retry page stays available');
   h.action(p, 'sXzRb_');
   h.choice(p, 'Dialogue 5', N.CURPILE_FYOD);
   h.choice(p, 'Cyreg Paddlehorn.', N.CURPILE_FYOD);
-  h.condition(p, '3l6Jxc');
+  h.condition(p, 'P7_hRO');
   assert.equal(stage(h, p), 55, 'a correct retry passes');
 });
 

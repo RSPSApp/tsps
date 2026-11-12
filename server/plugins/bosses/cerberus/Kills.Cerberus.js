@@ -5,6 +5,7 @@
  * the pets table's, and she respawns as she sat, from her world spawn.
  */
 const Common = require("./Common.Cerberus");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Counts the kill; `announce(kills)` tells the player the count before any task finishes. */
 function countKill(player, ownKills, announce) {
@@ -31,7 +32,7 @@ function cerberusDeath({ npc, killer }) {
   const player = killer?.isPlayer?.() ? killer : null;
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
-  const total = countKill(player, own, (kills) => player.sendMessage(Common.message("killCount", { kills })));
+  const total = countKill(player, own, (kills) => sendBossKillCount(player, Common.message("killCount", { kills })));
   player.setAttribute(Common.KILLS_ATTRIBUTE, Math.max(own, total ?? 0));
   if (total == null) player.getPacketSender().sendConfig(Common.data.kill.killCountVarp, own);
 }

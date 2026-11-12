@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * The Tourist Trap (members).
  *
@@ -47,7 +48,9 @@ function handleDriverAgreement(stageOf, advance, driverId, coinsId, event) {
 }
 
 module.exports = function registerTouristTrapQuest(api) {
-  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+  const CAPTAIN_KEY_LINE = "The mercenary captain drops a metal key on the floor. You quickly grab the key and add it to your inventory.";
+  const CAPTAIN_KEY_BOX = "The mercenary captain drops a metal key on the floor.<br>You quickly grab the key and add it to your inventory.";
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const IRENA_NPC_IDS = new Set([
@@ -149,7 +152,13 @@ module.exports = function registerTouristTrapQuest(api) {
   const FEATHER_ITEM_ID = ItemIdentifiers.FEATHER;
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
-  const BRONZE_BARS_REQUIRED = 3;
+  // Wiki (The Tourist Trap, Prototype dart tip): one bronze bar.
+  const BRONZE_BARS_REQUIRED = 1;
+  // Wiki skilling success charts (Mod Ash: "24% - 96% for the Smithing bit. 24% - 99% for the Fletching bit").
+  const DART_TIP_CHANCE = { low: 61, high: 245 };
+  const DART_CHANCE = { low: 61, high: 254 };
+  // Wiki (Prototype dart): "10 Fletching experience is given after attaching the feather."
+  const DART_FLETCHING_XP = 10;
   const FEATHERS_REQUIRED = 10;
 
   const CAMP_GATE_IDS = new Set([2673, 2674]);
@@ -660,7 +669,11 @@ module.exports = function registerTouristTrapQuest(api) {
       context.handledItemIds.add(METAL_KEY_ITEM_ID);
     } else if (giveItem(player, METAL_KEY_ITEM_ID)) {
       context.handledItemIds.add(METAL_KEY_ITEM_ID);
-      player.sendMessage("The mercenary captain drops a metal key. You pick it up.");
+      // rsprox 235/03792.txt tick 14948 (and the Wiki's Mercenary Captain): the line in chat, then
+      // the same line in an item box (objectbox, 193) showing the key.
+      player.sendMessage(CAPTAIN_KEY_LINE);
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, METAL_KEY_ITEM_ID, CAPTAIN_KEY_BOX)));
     }
   }
 
@@ -713,7 +726,7 @@ module.exports = function registerTouristTrapQuest(api) {
       moveTo(player, MINING_CAMP_EXIT_TILE);
       return;
     }
-    if (!held(player, METAL_KEY_ITEM_ID)) {
+    if (!hasKey(api, player, METAL_KEY_ITEM_ID)) {
       player.sendMessage("This gate needs a key in order to be opened.");
       return;
     }
@@ -800,11 +813,16 @@ module.exports = function registerTouristTrapQuest(api) {
     }
     if (!held(player, TECHNICAL_PLANS_ITEM_ID) || !held(player, HAMMER_ITEM_ID)
       || !held(player, BRONZE_BAR_ITEM_ID, BRONZE_BARS_REQUIRED)) {
-      player.sendMessage("You need the technical plans, a hammer and 3 bronze bars.");
+      player.sendMessage("You need the technical plans, a hammer and a bronze bar.");
       return;
     }
     if (skillLevel(player, Skill.SMITHING) < 20) {
       player.sendMessage("You need a Smithing level of 20 to make the prototype dart tip.");
+      return;
+    }
+    if (!succeeds(DART_TIP_CHANCE, skillLevel(player, Skill.SMITHING))) {
+      // Not recorded. The Wiki says the bar may be destroyed on a failure but gives no rate, so it is kept here.
+      player.sendMessage("You fail to forge the prototype dart tip.");
       return;
     }
     player.getInventory().deleteNumber(BRONZE_BAR_ITEM_ID, BRONZE_BARS_REQUIRED);
@@ -983,6 +1001,13 @@ module.exports = function registerTouristTrapQuest(api) {
     }
   }
 
+  /** OSRS's skilling roll: `low` at level 1 to `high` at 99, out of 256. */
+  function succeeds({ low, high }, level) {
+    const clamped = Math.min(99, Math.max(1, level));
+    const chance = (1 + Math.floor((low * (99 - clamped)) / 98 + (high * (clamped - 1)) / 98 + 0.5)) / 256;
+    return Math.random() < chance;
+  }
+
   function handleItemOnItem(event) {
     const { player, usedItemId: itemId, usedWithItemId: otherItemId } = event;
     const isFeather = itemId === FEATHER_ITEM_ID || otherItemId === FEATHER_ITEM_ID;
@@ -999,8 +1024,14 @@ module.exports = function registerTouristTrapQuest(api) {
     }
     event.handled = true;
     player.getInventory().deleteNumber(FEATHER_ITEM_ID, FEATHERS_REQUIRED);
+    if (!succeeds(DART_CHANCE, skillLevel(player, Skill.FLETCHING))) {
+      // Not recorded. The Wiki's guide has "30-50+" feathers brought at low Fletching, so a failure spends the ten.
+      player.sendMessage("You fail to attach the feathers to the dart tip.");
+      return;
+    }
     player.getInventory().deleteNumber(PROTOTYPE_DART_TIP_ITEM_ID, 1);
     player.getInventory().adds(PROTOTYPE_DART_ITEM_ID, 1);
+    player.getSkillManager()?.addExperiences?.(Skill.FLETCHING, DART_FLETCHING_XP);
     player.sendMessage("You successfully attach the feathers to the dart tip.");
     advance(player, STAGE_PROTOTYPE_DART);
   }

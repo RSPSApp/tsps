@@ -61,7 +61,7 @@ before(() => {
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
   };
   require('../plugins/minigames/NightmareZone.plugin').register(api);
-  require('../plugins/achievements/diaries/ArdougneSalveDiary.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneSalveDiary.AchievementDiaries').register(api);
   const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
   const AchievementDiaries = require('../plugins/achievements/AchievementDiaries.plugin');
   Progress(api);
@@ -418,6 +418,49 @@ test('a restart mid-dream: logging in still marked as dreaming wakes the player 
   assert.equal(outside.location, start, 'a player not dreaming stays put');
 });
 
+/** The same save loaded into a new player after a restart: no logout ran, and this server has no dream for it. */
+function restarted(p) {
+  const back = fakePlayer({ quests: [...p.quests] });
+  back.getAttribute = p.getAttribute;
+  back.setAttribute = p.setAttribute;
+  back.location = p.location;
+  return back;
+}
+
+test("a restart mid-dream pays the dream's points at the next login, once", () => {
+  const p = dreamer();
+  ticks(Common.data.arena.firstSpawnTicks);
+  // A boss with several forms pays only for its last one: kill until the counter shows points.
+  for (let i = 0; i < 10 && !(varbit(p, 'nzone_currentpoints') > 0); i++) Dream.bossDied({ npc: [...Dream.dreams.get(p).npcs][0] });
+  const earned = varbit(p, 'nzone_currentpoints');
+  assert.ok(earned > 0);
+  const before = Common.points(p);
+  const back = restarted(p); // a new player object: this server has no dream for it
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'the points gathered before the restart');
+  const [x, y] = Common.data.lobby.afterDream;
+  assert.deepEqual([back.location.getX(), back.location.getY()], [x, y], 'by Dominic');
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'a second login pays nothing more');
+});
+
+test('a restart during the entry fade gives the fee back and keeps the dream prepared', () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setCoffer(p, 5000);
+  Common.setPreparedDream(p, { mode: 'endurance', difficulty: 'normal' });
+  Dream.start(p);
+  ticks(1);
+  assert.equal(Common.coffer(p), 4000);
+  assert.equal(Common.preparedDream(p), null, 'the vial is emptied a tick into the fade');
+  const back = restarted(p);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'the fee is back');
+  assert.deepEqual(Common.preparedDream(back), { mode: 'endurance', difficulty: 'normal' });
+  assert.equal(Common.points(back), 0);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'refunded once');
+});
+
 test('real executeHit protects before absorption spends points', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
@@ -557,6 +600,30 @@ test('Resources: Buy-10 of flax (sub 0) gives noted flax for 750 points; too few
   button('resources', { player: p, slot: 0, opId: 3 });
   assert.ok(p.messages.includes(Common.message('notEnoughPoints')));
   assert.equal(p.inventory.getAmount(1780), 10);
+});
+
+test("Resources: an ironman buys only scrolls of redirection (Wiki: Dom Onion's Reward Shop)", () => {
+  const p = fakePlayer();
+  p.ironman = true;
+  assert.ok(hooks.objects.get('Rewards chest:Search')({ player: p, object: { getId: () => core.CacheDefinitions.getLocId('nzone_lobby_chest') } }));
+  Common.addPoints(p, 100000);
+  button('resources', { player: p, slot: 0, opId: 3 });
+  assert.equal(p.inventory.getAmount(1780), 0, 'no flax');
+  // The recorded refusal, byte for byte (rsprox 237/01150.txt:342295).
+  assert.equal(Common.message('ironmanResource'), 'Ironmen can purchase redirection scrolls, but not other resources.');
+  assert.deepEqual(p.messages.filter((m) => m.startsWith('Ironmen')), ['Ironmen can purchase redirection scrolls, but not other resources.']);
+  // The recorded click: the herb box (11738) gets the same line.
+  const herbBox = p.invs[464].findIndex((item) => item.id === 11738);
+  assert.ok(herbBox >= 0, 'the herb box is on the Resources tab');
+  p.messages.length = 0;
+  button('resources', { player: p, slot: herbBox * 2, opId: 2 });
+  assert.equal(p.inventory.getAmount(11738), 0, 'no herb box');
+  assert.deepEqual(p.messages, ['Ironmen can purchase redirection scrolls, but not other resources.']);
+  assert.equal(Common.points(p), 100000, 'no points spent');
+  const scroll = p.invs[464].findIndex((item) => item.id === 11740);
+  assert.ok(scroll >= 0, 'the scroll is on the Resources tab');
+  button('resources', { player: p, slot: scroll * 2, opId: 1 }); // a sub is twice its item's index
+  assert.equal(p.inventory.getAmount(11740), 1, 'a scroll of redirection');
 });
 
 test('Benefits: Buy-5 of absorption (sub 9) puts 5 doses in its barrel for 5,000 points', () => {

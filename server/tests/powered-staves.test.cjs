@@ -15,8 +15,15 @@ const { FightType } = require("../dist/game/content/combat/FightType");
 
 const core = PluginManager.getCoreApi();
 
+const prompts = [];
+
 function register(plugin, pluginCore = core) {
   const hooks = { resolvers: [], events: new Map(), actions: new Map(), itemOnItem: [], specials: [] };
+  // Uncharge and Dismantle ask on the destroy prompt (DestroyItem); these tests answer Yes.
+  hooks.events.set("destroy-item:confirm", [(request) => {
+    prompts.push(request);
+    request.confirm(request.player, request.item);
+  }]);
   plugin.register({
     core: pluginCore,
     registerCombatMethodResolver: (resolver) => hooks.resolvers.push(resolver),
@@ -75,6 +82,12 @@ function player({ weapon = null, magic = 99, items = {}, at = new Location(3200,
     getPacketSender: () => ({
       sendVarbit: (id, value) => state.varbits.set(id, value),
       sendEnterAmountPrompt: (title) => { state.prompt = title; },
+      sendTypedMessage: (type, text) => { state.box = text; },
+      sendSound: (id) => { state.sound = id; },
+    }),
+    // An objectbox is continued at once: only the chain's actions run.
+    getDialogueManager: () => ({
+      startDialogues: (chain) => [...chain.getDialogues().values()].forEach((dialogue) => dialogue.isSelfAdvancing?.() !== undefined && dialogue.send(self)),
     }),
     setEnteredAmountAction: (action) => { state.amountAction = action; },
     isSpecialActivated: () => state.special != null,
@@ -351,8 +364,13 @@ test("Thammaron's sceptre (a) autocasts, and Dismantle on an uncharged one gives
   const bare = new Item(I.THAMMARONS_SCEPTRE_U_, 1);
   const q = player();
   q.inventoryItems.push(bare);
+  prompts.length = 0;
   assert.equal(accursed.actions.get("Thammaron's sceptre (u)").Dismantle({ player: q, item: bare }), true);
+  assert.equal(q.state.box, "Thammaron's sceptre (u) will be dismantled for <col=ef1020>7500 <col=ef1020>Revenant ether</col>.");
+  assert.deepEqual([prompts[0].question, prompts[0].note],
+    ["Are you sure you want to dismantle this weapon?", "Your weapon will be broken down for <col=ef1020>7500 Revenant ether</col>."]);
   assert.equal(q.amounts.get(I.REVENANT_ETHER), 7500);
+  assert.deepEqual(q.state.messages, [], "no chat message");
   assert.equal(7500, DISMANTLE_ETHER);
 });
 
@@ -554,4 +572,25 @@ test("a kept charge with extra charges given back (combat:consume-charge extra) 
   } finally {
     trident.events.set("combat:consume-charge", trident.events.get("combat:consume-charge").filter((each) => each !== saver));
   }
+});
+
+test("Accursed and Thammaron's sceptres: Uncharge asks first and plays the destroy sound; the (u) splits back on Yes", () => {
+  const { CHARGES_KEY } = Accursed._test;
+  const charged = staffItem(I.ACCURSED_SCEPTRE, CHARGES_KEY, 30);
+  const p = player();
+  p.inventoryItems.push(charged);
+  prompts.length = 0;
+  assert.equal(accursed.actions.get("Accursed sceptre").Uncharge({ player: p, item: charged }), true);
+  assert.deepEqual([prompts[0].question, prompts[0].note, prompts[0].slot],
+    ["Are you sure you want to uncharge it?", "If you uncharge this weapon, all the revenant ether will be returned to your inventory.", 0]);
+  assert.equal(charged.getId(), I.ACCURSED_SCEPTRE_U_);
+  assert.equal(p.state.sound, 2381);
+  assert.deepEqual(p.state.messages, []);
+
+  prompts.length = 0;
+  assert.equal(accursed.actions.get("Accursed sceptre (u)").Dismantle({ player: p, item: charged }), true);
+  assert.deepEqual([prompts[0].question, prompts[0].note], ["Are you sure you want to dismantle this weapon?", "You will receive its components back."]);
+  assert.equal(charged.getId(), I.THAMMARONS_SCEPTRE_U_);
+  assert.equal(p.amounts.get(I.SKULL_OF_VETION), 1);
+  assert.deepEqual(p.state.messages, []);
 });

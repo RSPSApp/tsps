@@ -15,7 +15,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Travel = require("../plugins/items/KourendTravelItems.plugin");
 const Tyss = require("../plugins/npcs/Tyss.plugin");
-const Finish = require("../plugins/achievements/diaries/KourendDiaryTravelFinish.plugin");
+const Finish = require("../plugins/achievements/diaries/KourendDiaryTravelFinish.AchievementDiaries");
 
 let core = null;
 let api = null;

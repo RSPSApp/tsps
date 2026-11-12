@@ -61,7 +61,7 @@ function clean({ player, itemId }) {
   }
   inventory.refreshItems();
   if (!full) {
-    player.sendMessage(MESSAGE.CLEANED);
+    Shared.spam(player, MESSAGE.CLEANED);
     Shared.sound(player, CLEAN_SOUND);
   }
   return true;

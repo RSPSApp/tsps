@@ -76,3 +76,23 @@ test("Wormbrain drops one map piece for a player owed it, none for anyone else",
   holding.getInventory().add(new core.Item(core.ItemIdentifiers.MAP_PART_2, 1));
   assert.equal(mapPiecesDropped(holding), 0, "already carrying it");
 });
+
+test("a map piece or Crandor map in the bank counts as owned; a placeholder does not", (t) => {
+  const owed = (name) => {
+    const p = player(t, name);
+    dragonSlayer().setStage(p, STAGE_OZIACH);
+    p.setAttribute(INSTRUCTIONS_ATTRIBUTE, 0);
+    return p;
+  };
+  const bankedPiece = owed("wormbrainqa5");
+  bankedPiece.getBank(1).add(new core.Item(core.ItemIdentifiers.MAP_PART_2, 1));
+  assert.equal(mapPiecesDropped(bankedPiece), 0, "the piece is in a bank tab");
+
+  const bankedMap = owed("wormbrainqa6");
+  bankedMap.getBank(0).add(new core.Item(core.ItemIdentifiers.CRANDOR_MAP, 1));
+  assert.equal(mapPiecesDropped(bankedMap), 0, "the joined map holds the piece");
+
+  const placeholder = owed("wormbrainqa7");
+  placeholder.getBank(0).add(new core.Item(core.ItemIdentifiers.MAP_PART_2, 0));
+  assert.equal(mapPiecesDropped(placeholder), 1, "a placeholder is not the piece");
+});

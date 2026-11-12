@@ -267,3 +267,15 @@ test("the Wiki's immune monsters take no recoil, other monsters and players stil
     PluginManager.emitCustomEvent = original;
   }
 });
+
+// Wiki (Category:Monsters immune to recoil) lists "Judge of Yama (A Kingdom Divided)" only; the Yama fight's
+// Judge (yama_judge_of_yama, 14180) shares the name and takes recoil.
+test("only A Kingdom Divided's Judge of Yama is immune, not the Yama fight's", () => {
+  const judge = (id) => ({ isNpc: () => true, getAsNpc: () => ({ getId: () => id, getCurrentDefinition: () => ({ getName: () => "Judge of Yama" }) }) });
+  const quest = { target: judge(10938), allow: true };
+  events.get("combat:recoil-target")(quest);
+  assert.equal(quest.allow, false, "A Kingdom Divided");
+  const yama = { target: judge(14180), allow: true };
+  events.get("combat:recoil-target")(yama);
+  assert.equal(yama.allow, true, "the Yama fight");
+});

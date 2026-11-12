@@ -68,12 +68,19 @@ function actor(t) {
     messages.push(message);
     return p.getPacketSender();
   });
+  // The drink lines are spam, as live sends them (rsprox: type=spam).
+  const spam = [];
+  const sendTyped = p.getPacketSender().sendTypedMessage.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(), "sendTypedMessage", (type, message) => {
+    if (type === core.ChatType.SPAM) spam.push(message);
+    return sendTyped(type, message);
+  });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
   });
-  return { p, c, inv: p.getInventory(), eq: p.getEquipment(), messages };
+  return { p, c, inv: p.getInventory(), eq: p.getEquipment(), messages, spam };
 }
 
 async function send(f, packet) {
@@ -184,6 +191,11 @@ function giveDrink(f, slot, id) {
   assert.equal(held.getAmount(), 1);
   assert.equal(held.getMeta(), null);
 }
+/** Lands the hits queued on the player: a divine potion's 10 arrives as a hitsplat, on the player's hit phase. */
+function landHits(f) {
+  core.World.processCycle++;
+  f.p.getCombat().getHitQueue().process(core.World.processCycle);
+}
 function advancePotionTimer(f) {
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
   for (let tick = 0; tick < 3; tick++) f.p.getTimers().process();
@@ -213,6 +225,7 @@ for (const [hp, after] of [[11, 1], [99, 89]]) {
     giveDrink(f, 0, I.DIVINE_SUPER_ATTACK_POTION_4_);
     await browserOp(f, 0, "Drink");
     assert.equal(f.inv.getItems()[0].getId(), 23700);
+    landHits(f);
     assert.equal(f.p.getHitpoints(), after);
     assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
     assert.ok(f.p.getAttribute("potions:divine:state").endsAt > Date.now());
@@ -260,7 +273,10 @@ async function boostThenBrew(f, divine) {
   await browserOp(f, 0, "Drink");
   assert.equal(f.inv.getItems()[0].getId(), divine ? 23700 : I.SUPER_ATTACK_3_);
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
-  if (divine) assert.equal(f.p.getHitpoints(), 89);
+  if (divine) {
+    landHits(f);
+    assert.equal(f.p.getHitpoints(), 89);
+  }
   advancePotionTimer(f);
   await browserOp(f, 1, "Drink");
   assert.equal(f.inv.getItems()[1].getId(), I.SARADOMIN_BREW_3_);
@@ -376,7 +392,9 @@ for (const [name, drink, next] of [
   });
 }
 
-test("a death reset and later reboost update the maintained divine level", async t => {
+// Dying ends a divine potion: its timers go to 0 right after "Oh dear, you are dead!" with no line
+// (rsprox_transcripts/237/01148.txt and seven more in revision 237; 229/02508.txt:23248-23252).
+test("a death ends the divine effect; a later boost is an ordinary one", async t => {
   const f = divineActor(t, 99);
   await boostThenBrew(f, true);
   const expiry = f.p.getAttribute("potions:divine:state").endsAt;
@@ -425,10 +443,10 @@ test("a death reset and later reboost update the maintained divine level", async
   assert.equal(f.p.isDyingReturn(), false);
   assert.equal(f.p.getHitpoints(), 99);
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 99);
-  assert.equal(f.p.getAttribute("potions:divine:state").endsAt, expiry);
+  assert.ok(Number.isFinite(expiry), "the potion was running before the death");
+  assert.equal(f.p.getAttribute("potions:divine:state"), null, "the death cleared it");
   PM.emitPlayerProcess({ player: f.p });
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 99);
-  assert.equal(f.p.getAttribute("potions:divine:state").targets.find(entry => entry.skillIndex === core.Skill.ATTACK.getIndex()).target, 99);
 
   giveDrink(f, 0, I.SUPER_ATTACK_4_);
   await browserOp(f, 0, "Drink");
@@ -436,7 +454,7 @@ test("a death reset and later reboost update the maintained divine level", async
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
   PM.emitPlayerProcess({ player: f.p });
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
-  assert.equal(f.p.getAttribute("potions:divine:state").endsAt, expiry);
+  assert.equal(f.p.getAttribute("potions:divine:state"), null, "no divine effect holds the new boost");
 });
 
 // ------------------------------------------------------------------ the tests
@@ -996,7 +1014,7 @@ test("ordinary cider restores health and boosts Farming while returning its glas
   assert.equal(skills.getCurrentLevel(core.Skill.ATTACK), 96);
   assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 96);
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
-  assert.deepEqual(f.messages.slice(-2), ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
+  assert.deepEqual(f.spam.slice(-2), ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]);
 });
 
 test("cider remains intact during a potion cooldown", async t => {
@@ -1576,5 +1594,5 @@ test("ordinary restore restores Defence without restoring Mining", async t => {
   }
   assert.equal(f.p.getHitpoints(), 99);
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
-  assert.ok(f.messages.some(message => typeof message === "string" && message.length > 0));
+  assert.ok(f.spam.some(message => typeof message === "string" && message.length > 0));
 });

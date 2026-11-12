@@ -27,8 +27,25 @@ import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
 import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
 import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
+import { encodeContentData } from "../../net/protocol/ClientProtocol";
 
 const STRUCT_PARAMS_OPCODE = 249;
+const CACHE_EDITOR_SOURCE = "cache-editor";
+type CustomDefinitionFields = { baseId: number; fields: Record<string, unknown> };
+
+function customDefinitionRows(definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return [...definitions].map(([key, row]) => {
+        const [kind, id] = key.split(":");
+        return { kind, id: Number(id), baseId: row.baseId, fields: structuredClone(row.fields) };
+    });
+}
+
+function customDefinitionDataset(source: string, definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return {
+        key: source === CACHE_EDITOR_SOURCE ? "customDefinitions" : "customDefinitionsAppend",
+        rows: customDefinitionRows(definitions),
+    };
+}
 
 export interface ServerCustomItem {
     id: number;
@@ -68,7 +85,9 @@ export class CacheDefinitions {
      * overrides. Kept apart from `customItems`, which is the item loader's own JSON pipeline, so a
      * loc or npc overlay needs no encoder and no cache repack.
      */
-    private static customDefinitions = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    private static customDefinitions = new Map<string, CustomDefinitionFields>();
+    /** Each source's rows (the cache editor's document, the custom pets); customDefinitions is all of them. */
+    private static customDefinitionSources = new Map<string, Map<string, CustomDefinitionFields>>();
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
@@ -421,18 +440,22 @@ export class CacheDefinitions {
     static getStructParams(id: number): ReadonlyMap<number, number | string> {
         const cached = this.structParams.get(id);
         if (cached) return cached;
-        const params = new Map<number, number | string>();
         this.structArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
             .getArchive(ConfigType.OSRS.struct);
         const file = this.structArchive.getFile(id);
-        if (file) {
-            const buffer = new ByteBuffer(new Int8Array(file.data));
-            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
-                if (opcode !== STRUCT_PARAMS_OPCODE) break; // the only struct opcode
-                Type.readParamsMap(buffer, params);
-            }
-        }
+        const params = file ? this.decodeStructParams(new Int8Array(file.data)) : new Map<number, number | string>();
         this.structParams.set(id, params);
+        return params;
+    }
+
+    /** A struct file's params; also read from an older cache by scripts/league-era-cache.ts. */
+    static decodeStructParams(data: Int8Array): Map<number, number | string> {
+        const params = new Map<number, number | string>();
+        const buffer = new ByteBuffer(data);
+        for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+            if (opcode !== STRUCT_PARAMS_OPCODE) break; // the only struct opcode
+            Type.readParamsMap(buffer, params);
+        }
         return params;
     }
 
@@ -453,34 +476,38 @@ export class CacheDefinitions {
     static getEnumValues(id: number): ReadonlyMap<number, number | string> {
         const cached = this.enumValues.get(id);
         if (cached) return cached;
-        const values = new Map<number, number | string>();
         // The enums archive is decoded once; decompressing it for each new enum caused a hitch.
         this.enumArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
             .getArchive(ConfigType.DAT2.enums);
         const file = this.enumArchive.getFile(id);
-        if (file) {
-            const buffer = new ByteBuffer(new Int8Array(file.data));
-            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
-                if (opcode === 1 || opcode === 2) buffer.readUnsignedByte(); // key / value type
-                else if (opcode === 3) buffer.readString(); // default string
-                else if (opcode === 4) buffer.readInt(); // default int
-                else if (opcode === 5 || opcode === 6) {
-                    const size = buffer.readUnsignedShort();
-                    for (let i = 0; i < size; i++) {
-                        const key = buffer.readInt();
-                        values.set(key, opcode === 5 ? buffer.readString() : buffer.readInt());
-                    }
-                } else if (opcode === 7 || opcode === 8) {
-                    buffer.readUnsignedShort(); // the dense table's size
-                    const size = buffer.readUnsignedShort();
-                    for (let i = 0; i < size; i++) {
-                        const key = buffer.readUnsignedShort();
-                        values.set(key, opcode === 7 ? buffer.readString() : buffer.readInt());
-                    }
-                } else break;
-            }
-        }
+        const values = file ? this.decodeEnumValues(new Int8Array(file.data)) : new Map<number, number | string>();
         this.enumValues.set(id, values);
+        return values;
+    }
+
+    /** An enum file's key -> value entries; also read from an older cache by scripts/league-era-cache.ts. */
+    static decodeEnumValues(data: Int8Array): Map<number, number | string> {
+        const values = new Map<number, number | string>();
+        const buffer = new ByteBuffer(data);
+        for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+            if (opcode === 1 || opcode === 2) buffer.readUnsignedByte(); // key / value type
+            else if (opcode === 3) buffer.readString(); // default string
+            else if (opcode === 4) buffer.readInt(); // default int
+            else if (opcode === 5 || opcode === 6) {
+                const size = buffer.readUnsignedShort();
+                for (let i = 0; i < size; i++) {
+                    const key = buffer.readInt();
+                    values.set(key, opcode === 5 ? buffer.readString() : buffer.readInt());
+                }
+            } else if (opcode === 7 || opcode === 8) {
+                buffer.readUnsignedShort(); // the dense table's size
+                const size = buffer.readUnsignedShort();
+                for (let i = 0; i < size; i++) {
+                    const key = buffer.readUnsignedShort();
+                    values.set(key, opcode === 7 ? buffer.readString() : buffer.readInt());
+                }
+            } else break;
+        }
         return values;
     }
 
@@ -667,29 +694,64 @@ export class CacheDefinitions {
         return this.customModels ?? [];
     }
 
-    /** Registers overlay rows (`{ kind, id, baseId, fields }`); replaces any previous set. */
-    static registerCustomDefinitions(rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[]): number {
-        const next = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    /**
+     * Registers overlay rows (`{ kind, id, baseId, fields }`) for one source, replacing that
+     * source's previous rows only: the cache editor's document (the default) and generated rows
+     * such as the custom pets' followers live side by side. An id another source already has is
+     * refused.
+     */
+    static registerCustomDefinitions(
+        rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[],
+        source = CACHE_EDITOR_SOURCE,
+    ): number {
+        const next = new Map<string, CustomDefinitionFields>();
         const counts = this.getBaseCounts();
         for (const row of rows) {
             const count = row?.kind === "loc" ? counts.objects : row?.kind === "npc" ? counts.npcs : counts.items;
             if (!row || !["loc", "npc", "item"].includes(row.kind) || !Number.isInteger(row.id) || row.id < Math.max(50000, count) || row.id >= 65535 ||
                 !Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= count || next.has(`${row.kind}:${row.id}`)) throw new Error("Invalid custom definition identity");
             if (row.kind === "item" && this.customItems.has(row.id)) throw new Error("Item ID already belongs to custom-items");
+            const owner = this.getCustomDefinitionOwner(row.kind, row.id);
+            if (owner !== undefined && owner !== source) throw new Error(`Custom ${row.kind} ${row.id} already belongs to ${owner}`);
             const fields = structuredClone(row.fields ?? {});
             if (Object.keys(fields).some(key => ["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"].includes(key))) throw new Error("Invalid custom definition field");
             next.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields });
         }
-        this.customDefinitions = next;
+        if (next.size) {
+            try {
+                encodeContentData("server", [customDefinitionDataset(source, next)]);
+            } catch (error) {
+                throw new Error(`Cannot encode custom definitions from ${source}: ${(error as Error).message}`);
+            }
+        }
+        this.customDefinitionSources.set(source, next);
+        this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
         this.customDefinitionCache = new Map();
-        return this.customDefinitions.size;
+        return next.size;
+    }
+
+    static getCustomDefinitionOwner(kind: string, id: number): string | undefined {
+        const key = `${kind}:${id}`;
+        for (const [source, rows] of this.customDefinitionSources) {
+            if (rows.has(key)) return source;
+        }
+        return undefined;
     }
 
     static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {
-        return [...this.customDefinitions.entries()].map(([key, row]) => {
-            const [kind, id] = key.split(":");
-            return { kind, id: Number(id), baseId: row.baseId, fields: { ...row.fields } };
-        });
+        return customDefinitionRows(this.customDefinitions);
+    }
+
+    static getCustomDefinitionDatasets() {
+        // Start with a replacement, even on an empty world. Subsequent packets add plugin rows.
+        const editor = this.customDefinitionSources.get(CACHE_EDITOR_SOURCE);
+        const datasets = [customDefinitionDataset(CACHE_EDITOR_SOURCE, editor ?? new Map())];
+        for (const [source, definitions] of this.customDefinitionSources) {
+            if (source !== CACHE_EDITOR_SOURCE && definitions.size) {
+                datasets.push(customDefinitionDataset(source, definitions));
+            }
+        }
+        return datasets;
     }
 
     /** True when this id is authored here rather than read from the cache. */

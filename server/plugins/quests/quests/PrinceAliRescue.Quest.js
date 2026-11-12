@@ -743,12 +743,16 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     createKey(event.player);
   }
 
-  /** "Smelt" with the key print and a bronze bar makes the key before the smelting menu. */
+  /**
+   * "Smelt" with the key print and a bronze bar makes the key before the smelting menu, while the
+   * key is still needed: once the prince is out, Smelt is the furnace's own menu again.
+   */
   function makeKeyOnSmelt(event) {
     // The object packet lowercases the option ("smelt").
     if (String(event.option ?? "").toLowerCase() !== "smelt" || !isFurnace(event.definition)) return;
     const { player } = event;
-    if (quest.getStage(player) < STAGE_SPOKEN_TO_OSMAN) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_TO_OSMAN || stage >= STAGE_PRINCE_SAVED) return;
     if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) return;
     event.handled = true;
     createKey(player);
@@ -778,6 +782,19 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     }
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.SMITHING, 500, "Smithing"], [api.core.Skill.CRAFTING, 500, "Crafting"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    reward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "prince_ali_rescue",
     name: "Prince Ali Rescue",
@@ -786,12 +803,12 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     scrollItemId: COINS_ITEM_ID,
     rewardItemLabel: "700 Coins",
     otherRewards: ["Free passage through the Al Kharid gate"],
     buildJournal,
-    onReward: reward,
+    onReward: rewardOnCompletion,
   });
 
   api.onNpcDialogueVariant(selectVariant);

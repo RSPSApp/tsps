@@ -16,6 +16,7 @@ const {
   lowerSkillByMax,
   restoreSkillToBaseWithFormula,
 } = require("./ConsumableEffects");
+const { allowsBlightedItems, isBlightedItem } = require("./BlightedItems");
 
 const EAT_OPTION = "Eat";
 const EAT_ANIMATION = 829; // human_eat
@@ -25,8 +26,6 @@ const COMBO_ATTACK_DELAY = 2;
 const EAT_DELAY = 3;
 const COMBO_DELAY = 3;
 const HEAL_MESSAGE = "It heals some health.";
-/** Sent when a sac's venom immunity ends but its poison immunity goes on (rsprox 1094). */
-const VENOM_RESISTANCE_ENDED = "<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>";
 /** tracking_food_eaten: every bite counts (rsprox recordings). */
 const VARP_FOOD_EATEN = 4518;
 const FOOD_EATEN_ATTRIBUTE = "food:eaten";
@@ -49,8 +48,6 @@ let core;
 let idsByName;
 /** Each player's pending second hunter-meat heal: a newer meat replaces it. */
 const pendingSecondHeals = new WeakMap();
-/** Each player's pending "venom resistance has worn off" message: a newer sac replaces it. */
-const venomWatches = new WeakMap();
 
 function init(api) {
   pluginApi = api;
@@ -215,24 +212,12 @@ function applyStats(player, effect) {
 /**
  * Wiki (Araxyte venom sac): poison immunity for 11.7 minutes, 39 of the 18-second steps, the first of them
  * venom immunity too. A stronger dose already running is kept. The venom immunity ends on the next pulse of
- * the shared poison clock, which the sac does not restart (rsprox 1094: the message follows 15 ticks later).
+ * the shared poison clock, which the sac does not restart (rsprox 1094: the message follows 15 ticks later);
+ * CombatPoisonEffect sends that line, as it does for every dose.
  */
 function startPoisonDose(player, seconds) {
   const timer = player.getCombat().getPoisonImmunityTimer();
   if (timer.secondsRemaining() < seconds) timer.start(seconds);
-  const clock = player.getCombat().getPoisonClock();
-  const token = {};
-  venomWatches.set(player, token);
-  core.TaskManager.submit(new (class extends core.Task {
-    constructor() { super(1, {}, false); }
-    execute() {
-      if (venomWatches.get(player) !== token || !player.isRegistered() || !clock.hasCounter()) return this.stop();
-      if (clock.isVenomImmune()) return;
-      this.stop();
-      venomWatches.delete(player);
-      player.sendMessage(VENOM_RESISTANCE_ENDED);
-    }
-  })());
 }
 
 /** Wiki (Kebab): a random skill but Hitpoints, never drained below 1 nor when 2 or lower. */
@@ -298,12 +283,9 @@ function mayEat(player, itemId, food) {
     return false;
   }
   if (timers.has(food.combo ? core.TimerKey.KARAMBWAN : core.TimerKey.FOOD)) return false;
-  if (food.wildernessOnly) {
-    const location = player.getLocation();
-    if (core.Wilderness.levelAt(location.getX(), location.getY()) <= 0) {
-      player.sendMessage(`The ${itemName(itemId).toLowerCase()} can be eaten only in the Wilderness.`);
-      return false;
-    }
+  if (isBlightedItem(core, itemId) && !allowsBlightedItems(core, player)) {
+    player.sendMessage(`The ${itemName(itemId).toLowerCase()} can be eaten only in the Wilderness.`);
+    return false;
   }
   return true;
 }
@@ -380,7 +362,9 @@ function eat(event) {
   startTimers(player, food, bite);
   player.getPacketSender().sendInterfaceRemoval();
   player.getSkillManager().stopSkillable();
-  core.Sounds.sendSound(player, core.Sound.FOOD_EAT);
+  // A drink sends the liquid sound, as potions do (rsprox captures: bottle of wine and fruit blast send
+  // 2401, rec 20261111T225402-5ab63b4 ticks 26 and 37).
+  core.Sounds.sendSound(player, food.option === "Drink" ? core.Sound.DRINK : core.Sound.FOOD_EAT);
   player.performAnimation(new core.Animation(EAT_ANIMATION));
 
   const message = eatMessage(food, bite, itemId);
@@ -394,7 +378,13 @@ function eat(event) {
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
   const foodEvent = { player, itemId, hitpointsBefore, meta };
   const after = applyFood(player, food, Math.random, foodEvent);
-  player.sendMessage(message);
+  // A food with `say` sends its eat line as a spam message and is spoken overhead on the same tick: the
+  // cup of tea's "You drink the tea." (type=spam) and "Aaah, nothing like a nice cuppa tea!" ([say]),
+  // rsprox_transcripts/237/01104.txt tick 1286 and 237/04101.txt:114871 (Wiki: the player exclaims it).
+  if (food.say) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
+    player.forceChat(food.say);
+  } else player.sendMessage(message);
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;

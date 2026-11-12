@@ -85,6 +85,15 @@ function potionTier(player) {
 }
 
 /**
+ * rsprox (61 Vorkath recordings): every protection line (prayer, shield, either potion) is spam;
+ * only "You're horribly burnt..." is a game message.
+ */
+function sendBreathLine(player, line) {
+  if (line.startsWith("You're horribly burnt")) player.sendMessage(line);
+  else player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, line);
+}
+
+/**
  * The breath's lines, one per protection, as captured: prayer or shield first ("You're
  * horribly burnt..." with neither), then the potion's.
  */
@@ -347,7 +356,7 @@ function combatClass() {
       // The impact graphics went out with the shots (Shared.sendShot).
       const breath = hit.vorkathBreath;
       if (!breath) return;
-      for (const line of breath.messages ?? []) target.sendMessage(line);
+      for (const line of breath.messages ?? []) sendBreathLine(target, line);
       if (breath.variant === Shared.Attack.VENOM && Math.random() < 0.5) {
         CombatFactory.poisonEntity(target, 6, 2);
       }
@@ -395,5 +404,5 @@ module.exports = {
   edgeDistance,
   isAdjacent,
   breathOutcome,
-  _test: { edgeDistance, isAdjacent, breathMessages },
+  _test: { edgeDistance, isAdjacent, breathMessages, sendBreathLine },
 };

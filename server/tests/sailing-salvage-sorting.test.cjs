@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/sailing-salvage-sorting.test.cjs
 // Sorting salvage at a salvaging station: Opulent salvage's shared seed, herb and gem tables
-// (through NpcDrops), the Sailors' amulet duplicate rule, clues and Soup, and the line
-// after the last salvage.
+// (through NpcDrops), the Sailors' amulet duplicate rule, clues and Soup, the find line's
+// format and chat type, the level refusal, and the line after the last salvage.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -36,7 +36,7 @@ before(async () => {
     emitted.push([name, event]);
     handlers[name]?.(event);
   };
-  plugin = require("../plugins/skills/sailing/Salvaging.plugin");
+  plugin = require("../plugins/skills/sailing/Salvaging.Sailing");
   plugin.register({
     core,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },
@@ -54,7 +54,7 @@ before(async () => {
   data = require("../plugins/skills/sailing/data/sailing-salvage.json");
 });
 
-function player() {
+function player(level = 99) {
   const p = new Player(null);
   p.setUsername("salvageSort");
   p.setRegistered(true);
@@ -64,7 +64,7 @@ function player() {
   p.getPacketSender = () => ({ sendSound: () => {}, sendSoundEffect: () => {}, sendClientScript: () => {},
     sendTypedMessage: (_type, text) => p.messages.push(`spam: ${text}`), sendItemContainer: () => {}, sendMessage: () => {} });
   p.sendMessage = (text) => p.messages.push(text);
-  p.getSkillManager = () => ({ getCurrentLevel: () => 99, addExperiences: () => {} });
+  p.getSkillManager = () => ({ getCurrentLevel: () => level, addExperiences: () => {} });
   p.getMovementQueue = () => ({ size: () => 0 });
   p.getDialogueManager = () => ({ startDialogues: () => {} });
   p.performAnimation = () => {};
@@ -132,8 +132,8 @@ test("the last salvage sorted is followed by \"You have no more salvage to sort.
 
 test("Sailors' amulet isn't rolled while the player owns one", () => {
   const opulent = data.salvage[OPULENT];
-  assert.deepEqual(plugin.rollLoot(opulent, () => 0), { item: SAILORS_AMULET_INERT, amount: 1 });
-  assert.deepEqual(plugin.rollLoot(opulent, () => 0, () => true), { item: FACILITY_BOTTLE, amount: 1 }, "the next pre-roll");
+  assert.deepEqual(plugin.rollLoot(opulent, () => 0), { item: SAILORS_AMULET_INERT, amount: 1, collectionLog: true });
+  assert.deepEqual(plugin.rollLoot(opulent, () => 0, () => true), { item: FACILITY_BOTTLE, amount: 1, collectionLog: true }, "the next pre-roll");
 
   const p = player();
   p.getInventory().add(new Item(32399, 1), true);
@@ -193,7 +193,7 @@ test("pre-roll clues: a Fishy or Martial salvage clue replaces the sort's loot",
   assert.equal(data.salvage[32851].clue.preRoll, undefined);
   // Rolled ahead of the other pre-rolls, and only with a chance.
   assert.deepEqual(plugin.rollLoot(data.salvage[FISHY], () => 0, undefined, 285), { clue: true });
-  assert.deepEqual(plugin.rollLoot(data.salvage[FISHY], () => 0), { item: 31989, amount: 1 });
+  assert.deepEqual(plugin.rollLoot(data.salvage[FISHY], () => 0), { item: 31989, amount: 1, collectionLog: true });
 
   const sort = (salvage, scroll, allowed) => {
     const p = player();
@@ -209,7 +209,7 @@ test("pre-roll clues: a Fishy or Martial salvage clue replaces the sort's loot",
   const p = sort(FISHY, easy, true);
   assert.equal(p.getInventory().getAmount(easy), 1);
   assert.equal(p.getInventory().getAmount(31989), 0, "no boat bottle from the same sort");
-  assert.ok(p.messages.includes("spam: You sort through the fishy salvage and find: 1 x Clue scroll (easy)."));
+  assert.ok(p.messages.includes("spam: You sort through the fishy salvage and find: 1 x Clue scroll (easy)."), "a clue isn't a collection log find");
 
   const hard = PluginManager.getCoreApi().ItemIdentifiers.CLUE_SCROLL_HARD_;
   const q = sort(MARTIAL, hard, true);
@@ -220,4 +220,70 @@ test("pre-roll clues: a Fishy or Martial salvage clue replaces the sort's loot",
   const r = sort(FISHY, easy, false);
   assert.equal(r.getInventory().getAmount(easy), 0);
   assert.equal(r.getInventory().getAmount(31989), 1);
+});
+
+/** The table roll that lands on `name` in a salvage's table. */
+function tableRoll(salvage, name) {
+  let before = 0;
+  for (const line of salvage.table) {
+    if (line.name === name) return (before + 0.5) / salvage.total;
+    before += line.weight;
+  }
+  throw new Error(`${name} isn't in ${salvage.name}'s table`);
+}
+
+test("the find line writes 1,000 or more with a thousands separator", () => {
+  const opulent = data.salvage[OPULENT];
+  const p = player();
+  // Skip the five pre-rolls, land on Coins (1,000-5,000), then 3,504 of them.
+  sortOne(p, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, tableRoll(opulent, "Coins"), 2504.5 / 4001]);
+  assert.equal(p.getInventory().getAmount(COINS), 3504);
+  assert.ok(p.messages.includes("spam: You sort through the opulent salvage and find: 3,504 x Coins."), p.messages.join(" | "));
+});
+
+test("a collection log find is a game message, every other find spam", () => {
+  // Every pre-roll is one of its salvage's collection log items; of the tables, only Opulent
+  // salvage's Dragon cannonball is.
+  for (const salvage of Object.values(data.salvage)) {
+    for (const line of salvage.preRolls) assert.equal(line.collectionLog, true, `${salvage.name}: ${line.name}`);
+  }
+  const logged = Object.values(data.salvage).flatMap((salvage) => salvage.table.filter((line) => line.collectionLog).map((line) => `${salvage.name}: ${line.name}`));
+  assert.deepEqual(logged, ["Opulent salvage: Dragon cannonball"]);
+
+  // Opulent salvage's Dragon nails (its third pre-roll), 2 of them.
+  const p = player();
+  sortOne(p, OPULENT, [0.999, 0.999, 0.999, 0, 0.5]);
+  assert.equal(p.getInventory().getAmount(31406), 2);
+  assert.ok(p.messages.includes("You sort through the opulent salvage and find: 2 x Dragon nails."), p.messages.join(" | "));
+
+  // Its table's Dragon cannonball.
+  const opulent = data.salvage[OPULENT];
+  const q = player();
+  sortOne(q, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, tableRoll(opulent, "Dragon cannonball"), 0]);
+  assert.equal(q.getInventory().getAmount(31916), 2);
+  assert.ok(q.messages.includes("You sort through the opulent salvage and find: 2 x Dragon cannonball."), q.messages.join(" | "));
+
+  // A table find next to it stays spam.
+  const r = player();
+  sortOne(r, OPULENT, [0.999, 0.999, 0.999, 0.999, 0.999, 0.999, tableRoll(opulent, "Rune cannonball"), 0]);
+  assert.ok(r.messages.includes("spam: You sort through the opulent salvage and find: 2 x Rune cannonball."), r.messages.join(" | "));
+});
+
+test("salvage above the player's level is left, and sorting ends with the level line", () => {
+  const LARGE = 32853;
+  // Only Large salvage (53) at level 40: nothing is sorted.
+  const p = player(40);
+  sortOne(p, LARGE, [0.999]);
+  assert.equal(p.getInventory().getAmount(LARGE), 1);
+  assert.deepEqual(p.messages, ["You do not have a high enough Sailing level to sort through any more salvage."]);
+
+  // With Small salvage too, the Small one is sorted, then the line.
+  const q = player(40);
+  q.getInventory().add(new Item(LARGE, 1), true);
+  sortOne(q, SMALL, [0.999, 0.999, 0.999, 0.999, 0.15, 0.999]);
+  assert.equal(q.getInventory().getAmount(SMALL), 0);
+  assert.equal(q.getInventory().getAmount(LARGE), 1);
+  assert.equal(q.messages[0], "You begin sorting through your salvage...");
+  assert.match(q.messages[1], /^spam: You sort through the small salvage and find: /);
+  assert.equal(q.messages.at(-1), "You do not have a high enough Sailing level to sort through any more salvage.");
 });

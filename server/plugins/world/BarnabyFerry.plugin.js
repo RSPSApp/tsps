@@ -9,7 +9,10 @@
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-// shortcut: shared ferry fade timings; replace with Barnaby's exact sequence when a capture is available.
+// rsprox 224/01440.txt ticks 15777-15780 (Ardougne to Brimhaven): "You pay Captain Barnaby 30 coins." with
+// the fade, then three ticks later "You board the ship and sail to Brimhaven." and the move onto the
+// ship's deck (2775,3233,1). The other two ports' boarding lines are the transcript's; their deck tiles
+// aren't recorded, so they still land on the dock.
 const FERRY_ROUTES = require("./data/ferries.json").routes;
 const DIALOGUES = require("../../data/definitions/npc-dialogues.json");
 
@@ -68,7 +71,7 @@ function sail(player, port, fare) {
   if (fare <= 0) return;
   inventory.deleteNumber(ItemIdentifiers.COINS, fare);
   inventory.refreshItems();
-  player.sendMessage(`You pay ${fare} coins and board the ship.`);
+  player.sendMessage(`You pay Captain Barnaby ${fare} coins.`);
 }
 
 function portNamed(name) {

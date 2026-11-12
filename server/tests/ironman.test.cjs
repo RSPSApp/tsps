@@ -84,6 +84,17 @@ test("no trading either way, with the captured lines", () => {
   assert.equal(mains.handled, false, "two normal accounts trade as before");
 });
 
+test("the refusal names an Ironman by their pronouns", () => {
+  const main = account("main");
+  for (const [pronouns, line] of [[1, "iron is an Ironman. She stands alone."], [2, "iron is an Ironman. They stand alone."]]) {
+    const iron = account("iron", "ironman");
+    iron.getAppearance().setPronouns(pronouns);
+    main.messages.length = 0;
+    hooks.onTradeRequest({ player: main, target: iron, handled: false });
+    assert.deepEqual(main.messages, [line]);
+  }
+});
+
 test("onCanTrade refuses the window itself, whichever side is the Ironman", () => {
   const iron = account("iron", "ironman");
   const main = account("main");
@@ -658,6 +669,12 @@ test('new mainland characters choose an account type without enabling Tutorial I
     const old=actor(t);await login(old,false);assert.notEqual(old.p.getInterfaceId(),890);assert.notEqual(old.p.getAttribute(pending),true);
     const request={player:old.p,upgrades:false};PM.emitCustomEvent('ironman:open-setup',request);await button(old,22);
     assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(old.p),'none');assert.ok(!old.p.getEnteredAmountAction(),'mainland setup still refuses upgrades');
+  });
+  await t.test('account:skip-onboarding (the agent MCP login) closes the designer and leaves no setup pending',async t=>{
+    const f=actor(t);await login(f,true);assert.equal(f.p.getInterfaceId(),679,'PRE: the designer is up');
+    PM.emitCustomEvent('account:skip-onboarding',{player:f.p});await flush();await flush();
+    assert.notEqual(f.p.getInterfaceId(),679,'designer closed');assert.notEqual(f.p.getInterfaceId(),890,'no Ironman setup after it');
+    assert.notEqual(f.p.getAttribute(pending),true);assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
   });
   await t.test('interrupted choice survives persistence-shaped attributes and waits for the welcome modal',async t=>{
     const f=actor(t);await login(f,true);await appearance(f);assert.equal(f.p.getAttribute(pending),true);

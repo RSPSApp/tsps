@@ -61,7 +61,7 @@ const api = {
   core: {
     CacheDefinitions, Location, Item, ItemIdentifiers, Task,
     TaskManager: { submit: (task) => tasks.push(task) },
-    TeleportHandler: { checkReqs: () => true },
+    TeleportHandler: { checkReqs: () => true, confirm: (player, destination, go, level, { item } = {}) => go(item), },
     Animation: class { constructor(id) { this.id = id; } },
     Graphic: class { constructor(id) { this.id = id; } },
     DialogueChainBuilder, StatementDialogue, EndDialogue: class {},
@@ -680,7 +680,7 @@ test("native saved Renu owners can fly to Auburnvale and use its published bird 
   Quetzals.register(nativeApi);
   require("../plugins/modes/league/Common.LeagueMode").init(nativeApi);
   require("../plugins/modes/league/Account.LeagueMode")(nativeApi);
-  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(nativeApi);
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(nativeApi);
   require("../plugins/quests/quests/ChildrenOfTheSun.Quest")(nativeApi);
   const league = require("../plugins/modes/leagueareas/Common.LeagueAreaUnlocks");
   const loader = new NpcSpawnDefinitionLoader();

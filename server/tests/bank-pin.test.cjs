@@ -461,9 +461,11 @@ function farmingStorage(t, { pin = true } = {}) {
     sendInterfaceRemoval() { player.interface = -1; mounted.clear(); return this; },
     sendSubInterface(_target, id) { mounted.add(id); return this; },
     sendVarbit() { return this; }, sendInterfaceFlagsRange() { return this; }, sendInterfaceScript() { return this; },
+    sendTypedMessage() { return this; },
     isSubInterfaceOpen: id => mounted.has(id),
   });
   player.getPacketSender = () => nativeSender;
+  player.getDialogueManager ??= () => ({ startDialogues() {} });
   player.getHitpoints = () => owner.getHitpoints();
   player.getStatus = () => core.PlayerStatus.NONE;
   player.isNeedsPlacement = () => false;

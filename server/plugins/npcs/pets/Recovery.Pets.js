@@ -1,4 +1,5 @@
 // Cache241: pet_insurance148, init6126, enum985; three31-bit masks/nine4-bit location packs.
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const PET_ENUM = 985, INIT_SCRIPT = 6126, ROW_START = 6, ROW_STRIDE = 5;
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 const SESSIONS = new WeakMap(), PENDING = new WeakMap();
@@ -41,6 +42,10 @@ function locationOf(player, family) {
   api.emitCustomEvent("gravestones:state", storage);
   const stored = [...(storage.grave?.items ?? []), ...(storage.office ?? [])];
   if (variants.some(p => stored.some(entry => entry && entry.id === p.itemId && entry.amount > 0))) return 4;
+  // So is one an item-retrieval NPC keeps after a death (Zulrah, Vorkath, the Voice of Yama, ...).
+  const retrieval = {player, items: []};
+  api.emitCustomEvent("item-retrieval:items", retrieval);
+  if (variants.some(p => retrieval.items.some(entry => entry && entry.itemId === p.itemId && entry.amount > 0))) return 4;
   return 0;
 }
 function rows(player) {
@@ -152,7 +157,7 @@ function click(event) {
     const lost = Number.isInteger(lostIndex) && context.rows.get(lostIndex);
     const held = Number.isInteger(heldIndex) && context.rows.get(heldIndex);
     const row = lost && !lost.location ? lost : held?.location ? held : null;
-    if (row) player.sendMessage(core.ItemDefinition.forId(row.itemId).getExamine());
+    if (row) examineItem(player, row.itemId, 1);
     return;
   }
   if (action !== 1) return;

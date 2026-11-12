@@ -35,7 +35,7 @@ function grant(player, request, skill, name = skill.getName()) {
     return null;
   }
   inventory.deleteAtSlot(request.slot, 1);
-  return `You have been awarded ${request.lamp.xp.toLocaleString("en-GB")} ${name} XP!`;
+  return `<col=0000ff>Your wish has been granted!</col><br>You have been awarded ${request.lamp.xp.toLocaleString("en-GB")} ${name} experience!`;
 }
 
 module.exports = function attachLamps(api) {

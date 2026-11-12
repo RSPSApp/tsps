@@ -39,6 +39,7 @@ before(async () => {
     ...real,
     TeleportHandler: {
       checkReqs: () => true,
+      confirm: (player, destination, go, level, { item } = {}) => go(item),
       teleport: (player, tile, type, warning, onArrival) => {
         teleports.push({ player, tile: [tile.getX(), tile.getY(), tile.getZ()], type });
         onArrival?.();

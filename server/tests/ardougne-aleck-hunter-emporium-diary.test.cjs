@@ -6,7 +6,7 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
-const Diary = require("../plugins/achievements/diaries/ArdougneAleckHunterEmporiumDiary.plugin");
+const Diary = require("../plugins/achievements/diaries/ArdougneAleckHunterEmporiumDiary.AchievementDiaries");
 const shopData = require("../data/definitions/shops.json").find(({ id }) => id === 1007);
 
 ItemDefinition.forId = (id) => ({

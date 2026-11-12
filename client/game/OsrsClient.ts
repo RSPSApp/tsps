@@ -53,6 +53,10 @@ import {
     VARBIT_LEAGUE_RELIC_8,
     VARBIT_ROOF_REMOVAL,
     VARBIT_ACTIVE_SPELLBOOK,
+    VARBIT_FOLLOWEROPS_DEPRIORITISED,
+    VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
+    VARBIT_MOUSECAM_DISABLED,
+    VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION,
     VARBIT_STAMINA_ACTIVE,
     VARC_COMBAT_LEVEL,
     VARC_ACTIVE_TAB,
@@ -60,6 +64,7 @@ import {
     VARP_ATTACK_STYLE,
     VARP_MAP_FLAGS_CACHED,
     VARP_MASTER_VOLUME,
+    VARP_MOUSE_BUTTONS,
     VARP_MUSIC_VOLUME,
     VARP_OPTION_ATTACK_PRIORITY_NPC,
     VARP_OPTION_ATTACK_PRIORITY_PLAYER,
@@ -201,7 +206,9 @@ import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { chatHistory } from "../rs/cs2/ChatHistory";
-import { FriendLoginUpdates } from "./chat/FriendLoginUpdates";
+import { addExaminePriceLine, EXAMINE_PRICE_ALCH_VARBIT, EXAMINE_PRICE_GE_VARBIT } from "./examinePrice";
+import { alchemyValues, guidePrice, itemPricesPending } from "../network/serverConnection/domain/itemPrices";
+import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
@@ -391,6 +398,7 @@ import { WorldMapController, type WorldMapRenderedIcon } from "./worldMap/WorldM
 import type { PluginWorldMapPointEntry, RenderedWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 import type { WorldMapViewport } from "./worldMap/WorldMapTypes";
 import { WorldViewManager } from "./worldview/WorldViewManager";
+import { keybindingTabFor } from "./keybindingTabs";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
 
@@ -398,28 +406,10 @@ const DEVICE_OPTION_INTERFACE_SCALING = 27;
 // configurable keybinding, so it stays hardcoded.
 const ESCAPE_TAB_SHORTCUT = 3;
 
-// All Settings keybindings map a varbit to the side-panel tab it opens. Values
-// are OSRS key codes: 0 = unbound, 1 = F1 ... 12 = F12. Names/tabs verified
-// against RuneLite VarbitID (STONE_*_KEY) and interface-layouts.json tabIds.
-// The server (Settings.plugin.js) owns the current values and defaults.
-const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
-    { varbit: 4675, tab: 0 }, // Combat
-    { varbit: 4676, tab: 1 }, // Stats
-    { varbit: 4677, tab: 2 }, // Journal/Quests
-    { varbit: 4678, tab: 3 }, // Inventory
-    { varbit: 4679, tab: 4 }, // Worn equipment
-    { varbit: 4680, tab: 5 }, // Prayer
-    { varbit: 4682, tab: 6 }, // Magic
-    { varbit: 4683, tab: 7 }, // Clan chat
-    { varbit: 4684, tab: 8 }, // Friends
-    { varbit: 4686, tab: 11 }, // Options (settings)
-    { varbit: 4687, tab: 10 }, // Options (secondary)
-    { varbit: 4688, tab: 13 }, // Music
-    { varbit: 4689, tab: 10 }, // Logout
-];
-
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
+// The side-panel switch script 914 calls: (display enum, tab, the open tab's key closes it, 0).
+const TAB_OPEN_SCRIPT = 71;
 const AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT = 5167;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
@@ -469,7 +459,8 @@ const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
 const VARC_CHATBOX_SELECTED_TAB = 41;
-const ACCOUNT_TYPE_MAIN = 0;
+/** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
+const VARC_OSM_CHATBOX_DISABLED = 1220;const ACCOUNT_TYPE_MAIN = 0;
 const SCRIPT_HIGHLIGHT_SCREEN_COMPONENT = 2463;
 const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
 // Chatbox search: its title says whether this one is a spawn search, and 138 closes it.
@@ -701,10 +692,17 @@ export class OsrsClient {
     showMouseOverText: boolean = true;
 
     /**
-     * Mouse camera enabled/disabled (set by MOUSECAM opcode).
-     * When false, disables mouse-based camera rotation.
+     * Mouse camera enabled/disabled (set by the MOUSECAM opcode and varbit 4134).
+     * When false, the middle mouse button doesn't turn the camera.
      */
-    mouseCamEnabled: boolean = true;
+    get mouseCamEnabled(): boolean {
+        return this.inputManager.mouseCamEnabled;
+    }
+
+    set mouseCamEnabled(enabled: boolean) {
+        this.inputManager.mouseCamEnabled = enabled;
+        if (!enabled) this.inputManager.mouseWheelDown = false;
+    }
 
     /**
      * Render local player model in the 3D scene (set by RENDERSELF opcode).
@@ -913,6 +911,11 @@ export class OsrsClient {
     sceneGeometry?: SceneGeometry;
     /** The minimap as last drawn, for plugins marking it. */
     minimapGeometry?: MinimapGeometry;
+    /**
+     * The rate this player's Hitpoints XP is paid at (the world's times a league's), sent by the
+     * server's Hitpoints XP Rate plugin. A Hitpoints gain divided by it is the OSRS-rate gain.
+     */
+    hitpointsXpRate = 1;
     playerEcs: PlayerEcs = new PlayerEcs();
     private continuousMovement?: ContinuousMovement;
     playerAnimController!: PlayerAnimController;
@@ -1312,14 +1315,7 @@ export class OsrsClient {
                     event.stopImmediatePropagation();
                     return;
                 }
-                const shortcut = this.resolveKeyShortcut(event);
-                if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
-                    return;
-                }
-
-                this.switchToTab(shortcut);
-                event.preventDefault();
-                if (event.key !== "Escape") event.stopImmediatePropagation();
+                this.handleSidePanelHotkey(event);
             },
             true,
         );
@@ -1608,8 +1604,11 @@ export class OsrsClient {
         return false;
     }
 
-    /** Mounts a sub-interface and runs everything the open packet asked for. */
-    private mountSubInterface(payload: any): void {
+    /**
+     * Mounts a sub-interface and runs everything the open packet asked for. `remount` mounts
+     * an open again after a root change, which the server does not resend the contents of.
+     */
+    private mountSubInterface(payload: any, remount = false): void {
         if (!this.widgetManager) {
             return;
         }
@@ -1659,7 +1658,7 @@ export class OsrsClient {
                 this.widgetManager.invalidateWidgetRender(w);
             }
         }
-        this.customInterfaces.onInterfaceOpened(payload.groupId | 0);
+        this.customInterfaces.onInterfaceOpened(payload.groupId | 0, remount);
     }
 
     /**
@@ -2902,7 +2901,7 @@ export class OsrsClient {
                         this.mountSubInterface({
                             ...entry.payload,
                             targetUid: standardTargetUid,
-                        });
+                        }, true);
                     }
                     // Trigger initial onVarTransmit for root interface widgets
                     this.triggerInitialVarTransmitForGroup(payload.groupId);
@@ -2956,9 +2955,8 @@ export class OsrsClient {
                         this.mountSubInterface(payload);
                     } else {
                         // A server-defined interface the client has not seen yet: fetch its
-                        // definition, then mount. This costs one round trip on the first
-                        // open of a session, so a server should not send component updates
-                        // in the same batch as that open - they would land before the
+                        // definition, then mount. Updates for it that arrive in the meantime
+                        // (its contents, sent with the open) are held and applied once its
                         // widgets exist.
                         const pendingGroupId = payload.groupId | 0;
                         const pendingTargetUid = payload.targetUid | 0;
@@ -4381,27 +4379,53 @@ export class OsrsClient {
         input.saveClickY = -1;
         if (!action) return;
 
+        if (action.type === "cancel_server_switch") {
+            this.loginState.serverSwitchConfirm = null;
+            return;
+        }
+        if (action.type === "confirm_server_switch") {
+            const asked = this.loginState.serverSwitchConfirm;
+            this.loginState.serverSwitchConfirm = null;
+            // The list may have been refreshed while it asked: switch to the server it named.
+            const index = asked ? this.loginRenderer.serverList.findIndex((server) =>
+                server.name === asked.name && server.address === asked.address &&
+                server.worldId === asked.worldId && server.signalUrl === asked.signalUrl) : -1;
+            if (index >= 0) this.switchToServer(index, true);
+            return;
+        }
         if (action.type === "select_server") {
-            const server = this.loginRenderer.serverList[action.index];
-            const transport = server?.transport ?? "websocket";
-            const isCurrent =
-                transport === this.loginState.serverTransport &&
-                (transport === "webrtc"
-                    ? server?.worldId === this.loginState.serverWorldId &&
-                      server?.signalUrl === this.loginState.serverSignalUrl
-                    : server?.address === this.loginState.serverAddress &&
-                      server?.secure === this.loginState.serverSecure);
-            if (isCurrent) {
-                this.processLoginAction({ type: "close_server_list" });
-                return;
-            }
-
-            this.loginState.serverListOpen = false;
-            this.performLogout(() => this.processLoginAction(action));
+            this.switchToServer(action.index, false);
             return;
         }
 
         this.processLoginAction(action);
+    }
+
+    /**
+     * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
+     * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
+     */
+    private switchToServer(index: number, confirmed: boolean): void {
+        const server = this.loginRenderer.serverList[index];
+        const transport = server?.transport ?? "websocket";
+        const isCurrent =
+            transport === this.loginState.serverTransport &&
+            (transport === "webrtc"
+                ? server?.worldId === this.loginState.serverWorldId &&
+                  server?.signalUrl === this.loginState.serverSignalUrl
+                : server?.address === this.loginState.serverAddress &&
+                  server?.secure === this.loginState.serverSecure);
+        if (isCurrent) {
+            this.processLoginAction({ type: "close_server_list" });
+            return;
+        }
+        if (!confirmed && this.varManager?.getVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION) !== 1) {
+            this.loginState.serverSwitchConfirm = server ?? null;
+            return;
+        }
+
+        this.loginState.serverListOpen = false;
+        this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -4409,6 +4433,21 @@ export class OsrsClient {
         const script = this.cs2Vm.context?.loadScript?.(scriptId | 0);
         if (!script) return;
         this.cs2Vm.run(script, args, []);
+    }
+
+    /** Switch the side panel for a keybinding's key (F-keys and Esc). */
+    private handleSidePanelHotkey(event: KeyboardEvent): void {
+        const shortcut = this.resolveKeyShortcut(event);
+        if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
+            return;
+        }
+
+        // A hotkey, Esc included, closes its own open side panel unless "Side panel can be
+        // closed by the hotkeys" is off (script 907 binds the cache's own key handler the same way).
+        const keepsPanelOpen = this.varManager?.getVarbit(VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL) === 1;
+        this.switchToTab(shortcut, false, !keepsPanelOpen);
+        event.preventDefault();
+        if (event.key !== "Escape") event.stopImmediatePropagation();
     }
 
     /** Resolve a keydown to a side-panel tab using the All Settings keybindings. */
@@ -4427,20 +4466,18 @@ export class OsrsClient {
 
         const varManager = this.varManager;
         if (!varManager) return undefined;
-        for (const binding of KEYBINDING_TABS) {
-            if (varManager.getVarbit(binding.varbit) === pressed) return binding.tab;
-        }
-        return undefined;
+        return keybindingTabFor(pressed, (varbit) => varManager.getVarbit(varbit));
     }
 
     /** Switch the stock side panel through its cache script so all tab widgets update together. */
-    switchToTab(tab: number, forceOpen = false): void {
+    switchToTab(tab: number, forceOpen = false, closesOpenTab = true): void {
         if (forceOpen && this.varManager?.getVarcInt(VARC_ACTIVE_TAB) === tab) return;
         const rootInterface = this.widgetManager?.rootInterface ?? DEFAULT_ROOT_INTERFACE;
         const displayEnum = DISPLAY_ENUM_BY_ROOT_INTERFACE[rootInterface] ?? DEFAULT_DISPLAY_ENUM;
-        const script = this.cs2Vm?.context?.loadScript?.(TAB_SWITCH_SCRIPT);
-        if (script) this.cs2Vm.run(script, [1, displayEnum, tab], []);
-        else this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        const script = this.cs2Vm?.context?.loadScript?.(closesOpenTab ? TAB_SWITCH_SCRIPT : TAB_OPEN_SCRIPT);
+        if (!script) this.varManager?.setVarcInt(VARC_ACTIVE_TAB, tab);
+        else if (closesOpenTab) this.cs2Vm.run(script, [1, displayEnum, tab], []);
+        else this.cs2Vm.run(script, [displayEnum, tab, 0, 0], []);
     }
 
     private substituteWidgetScriptMagicArgs(intArgs: number[], widget: any): number[] {
@@ -4510,6 +4547,10 @@ export class OsrsClient {
         if (!widgetManager) {
             return;
         }
+
+        // An open All Settings window follows the mobile chat toggle (MobileHudLayout). Checked
+        // here, between frames, because the toggle's cs2 runs inside a layout batch.
+        widgetManager.syncMobileChatToggle();
 
         const rootInterface = widgetManager.rootInterface;
         if (rootInterface !== -1 && this.renderer && this.renderer.canvas) {
@@ -4601,6 +4642,21 @@ export class OsrsClient {
 
     private applyInterfaceScalingPercentDeviceOption(value: number): void {
         this.audioVarp.applyInterfaceScalingPercentDeviceOption(value);
+    }
+
+    /**
+     * Single mouse button mode, the middle-mouse camera and follower options apply as soon as
+     * their var changes, and again at login (a logout resets the vars without a change, so a
+     * value left by the last account is replaced by the next login's varps). Varbit changes
+     * arrive through their varp, so they are re-read on every varp update, as the roof varbit is.
+     */
+    private applyControlSettingVars(): void {
+        const varManager = this.varManager;
+        if (!varManager) return;
+        this.settings.leftClickOpensMenu = varManager.getVarp(VARP_MOUSE_BUTTONS) === 1;
+        const mouseCamEnabled = varManager.getVarbit(VARBIT_MOUSECAM_DISABLED) !== 1;
+        if (this.mouseCamEnabled !== mouseCamEnabled) this.mouseCamEnabled = mouseCamEnabled;
+        ClientState.followerOpsLowPriority = varManager.getVarbit(VARBIT_FOLLOWEROPS_DEPRIORITISED) === 1;
     }
 
     private applyAudioVarpChange(varpId: number, value: number): void {
@@ -6256,6 +6312,7 @@ export class OsrsClient {
 
             case "open_server_list":
                 this.loginState.serverListOpen = true;
+                this.loginState.serverSwitchConfirm = null;
                 this.loginState.virtualKeyboardVisible = false;
                 this.loginRenderer
                     .fetchServerList()
@@ -6265,6 +6322,7 @@ export class OsrsClient {
             case "close_server_list":
                 this.loginState.serverListOpen = false;
                 this.loginState.hoveredServerIndex = -1;
+                this.loginState.serverSwitchConfirm = null;
                 return undefined;
 
             case "refresh_server_list":
@@ -6596,8 +6654,9 @@ export class OsrsClient {
             } catch {}
 
             if (this.isLoggedIn()) {
-                for (const message of this.friendLoginUpdates.drain()) {
-                    chatHistory.addMessage(5, message, "", "");
+                const messages = this.friendLoginUpdates.drain();
+                if (friendLoginNoticesShown((id) => this.varManager.getVarbit(id))) {
+                    for (const message of messages) chatHistory.addMessage(5, message, "", "");
                 }
             }
 
@@ -6978,6 +7037,7 @@ export class OsrsClient {
                 } else if (varpId === VARP_OPTION_ATTACK_PRIORITY_NPC) {
                     ClientState.npcAttackOption = clamp(newValue | 0, 0, 3);
                 }
+                this.applyControlSettingVars();
                 // Varbit changes arrive through their underlying varp, so re-read the
                 // roof varbit on every varp update.
                 try {
@@ -7056,6 +7116,8 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            this.widgetManager.isMobileChatDisabled = () =>
+                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {
@@ -7464,14 +7526,17 @@ export class OsrsClient {
     }
 
     /** Display an item's cache-defined Examine text in game chat. */
-    examineWidgetItem(widget: { itemId?: number; fileId?: number } | null | undefined): boolean {
+    examineWidgetItem(
+        widget: { itemId?: number; itemQuantity?: number; fileId?: number } | null | undefined,
+    ): boolean {
         // A worn-equipment slot (387, 84) keeps its ops on a static layer and draws the item in a
         // CC_CREATE child (script 546), so a static widget without an item examines its child's.
         const own = widget?.itemId ?? -1;
-        const itemId = own >= 0 || widget?.fileId === -1
-            ? own
+        const item = own >= 0 || widget?.fileId === -1
+            ? widget
             : this.widgetManager?.getDynamicChildrenByParent(widget as any)
-                .find((child) => (child.itemId ?? -1) >= 0)?.itemId ?? -1;
+                .find((child) => (child.itemId ?? -1) >= 0);
+        const itemId = item?.itemId ?? -1;
         if (!(itemId >= 0)) return false;
         try {
             const examine = this.objTypeLoader?.load?.(itemId)?.examine;
@@ -7479,6 +7544,16 @@ export class OsrsClient {
                 return false;
             }
             chatHistory.addMessage("game", examine);
+            const varbit = (id: number) => this.varManager.getVarbit(id) | 0;
+            if (varbit(EXAMINE_PRICE_GE_VARBIT) !== 1 && varbit(EXAMINE_PRICE_ALCH_VARBIT) !== 1) {
+                return true;
+            }
+            void addExaminePriceLine(itemId, item?.itemQuantity ?? 1, {
+                definition: (id) => this.objTypeLoader?.load?.(id),
+                guidePrice,
+                alchemy: alchemyValues,
+                varbit,
+            }, itemPricesPending(), (line) => chatHistory.addMessage("game", line));
             return true;
         } catch {
             return false;

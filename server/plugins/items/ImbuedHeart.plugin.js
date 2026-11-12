@@ -56,6 +56,14 @@ function resetOnDeath(event) {
   Timers.reset(event.player);
 }
 
+/**
+ * Wiki (Imbued heart): "The quickest way a player can reset the cooldown is by travelling back and forth through the
+ * ... free-for-all (white) portal, or by drinking from the Pool of Refreshment". The saturated heart shares the timer.
+ */
+function resetAtFerox(event) {
+  if (event?.player) Timers.reset(event.player);
+}
+
 module.exports = {
   name: "ImbuedHeart",
   description: "Adds the imbued and saturated hearts' Invigorate Magic boost with its seven-minute (five for saturated) shared cooldown, and the saturated upgrade.",
@@ -68,5 +76,7 @@ module.exports = {
     api.onItemAction("Imbued heart", { Invigorate: invigorate.bind(null, api, IMBUED) });
     api.onItemAction("Saturated heart", { Invigorate: invigorate.bind(null, api, SATURATED) });
     api.onPlayerDeath(resetOnDeath);
+    api.onCustomEvent("pool-of-refreshment:drunk", resetAtFerox);
+    api.onCustomEvent("free-for-all-portal:used", resetAtFerox);
   },
 };

@@ -144,6 +144,26 @@ export class WidgetManager {
      */
     minimapState = 0;
 
+    /**
+     * Whether the mobile chatbox is toggled off (varc OSM_CHATBOX_DISABLED, 1220). Set by the
+     * client; windows that reserve the chat's height use it to grow into the freed space.
+     */
+    isMobileChatDisabled: (() => boolean) | null = null;
+
+    private lastMobileChatDisabled = false;
+
+    /**
+     * Lay the All Settings window (group 134) out again when the mobile chat is toggled, so it
+     * grows into or gives back the chat's space (MobileHudLayout). Call between frames.
+     */
+    syncMobileChatToggle(): void {
+        const disabled = this.isMobileChatDisabled?.() ?? false;
+        if (disabled === this.lastMobileChatDisabled) return;
+        this.lastMobileChatDisabled = disabled;
+        const root = this.groups.get(134)?.root;
+        if (root) this.invalidateWidget(root, "chat-toggle");
+    }
+
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */
     compassWidget: WidgetNode | null = null;
 

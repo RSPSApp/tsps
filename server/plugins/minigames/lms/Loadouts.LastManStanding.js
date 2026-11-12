@@ -16,6 +16,7 @@
  */
 const Common = require("./Common.LastManStanding");
 const Profile = require("./Profile.LastManStanding");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const OP1 = 1 << 1;
 const OP10 = 1 << 10;
@@ -119,7 +120,7 @@ function click(event) {
   const { build, part } = where;
   if (event.opId === 10 || event.action === 10) {
     const id = part === "menu" ? itemOf(build, slot) : null;
-    if (id > 0) player.sendMessage(Common.core.ItemDefinition.forId(id)?.getExamine() ?? nameOf(id));
+    if (id > 0) examineItem(player, id, 1);
     return;
   }
   if (part === "inventory") {

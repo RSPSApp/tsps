@@ -57,7 +57,9 @@ Rules for both:
   rather than pushed on every open.
 - The first open of a session waits on a fetch. Updates sent in the same batch are held by
   the client and applied once the widgets exist, so an interface can be populated straight
-  after opening it.
+  after opening it. What was sent with an open stays with it until the server closes or
+  reopens it: a root change (Play on the welcome screen, after an open right at login)
+  mounts it again with its rows, tab, query and selection, and nothing needs resending.
 
 Adding an interface of this kind should need no client change. If it does, the missing
 capability belongs in the runtime as a declared option, not in a feature-specific module.

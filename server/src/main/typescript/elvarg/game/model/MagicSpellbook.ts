@@ -33,17 +33,22 @@ export class MagicSpellbook {
         return MagicSpellbook.NORMAL;
     }
 
-    public static changeSpellbook(player: Player, book: MagicSpellbook, bypassRequirements = false) {
+    /**
+     * Switches `player` to `book`: false when refused (Lunar's 40 Defence), true otherwise.
+     * `message` is the line sent on a switch; null sends none (the caller has its own).
+     */
+    public static changeSpellbook(player: Player, book: MagicSpellbook, bypassRequirements = false,
+        message: string | null = "You have changed your magic spellbook."): boolean {
         if (book === player.getSpellbook()) {
             // Refresh the client spellbook. The spell unlock states went out with the
             // login mount and are not re-sent (quest varps share their storage).
             player.getPacketSender().sendTabInterface(6, book.getInterfaceId());
-            return;
+            return true;
         }
         if (!bypassRequirements && book === MagicSpellbook.LUNAR) {
             if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 40) {
                 player.sendMessage("You need at least level 40 Defence to use the Lunar spellbook.");
-                return;
+                return false;
             }
         }
 
@@ -54,7 +59,7 @@ export class MagicSpellbook {
         getAutocasting().setAutocast(player, null);
 
         //Send notification message
-        player.sendMessage("You have changed your magic spellbook.");
+        if (message !== null) player.sendMessage(message);
 
         //Send the new spellbook interface to the client side tabs
         player.getPacketSender().sendTabInterface(6, player.getSpellbook().getInterfaceId());
@@ -62,6 +67,7 @@ export class MagicSpellbook {
         // "magic:spellbook-changed" { player, spellbook }: the book switched to, by its key ("lunar").
         const key = Object.keys(MagicSpellbook).find((name) => (MagicSpellbook as any)[name] === book)?.toLowerCase() ?? null;
         getPluginManager().emitCustomEvent("magic:spellbook-changed", { player, spellbook: key });
+        return true;
     }
 
     /**

@@ -114,6 +114,7 @@ function harness({ realTranscript = false } = {}) {
   const itemActions = [];
   const npcInteractions = [];
   const registeredNpcHooks = [];
+  const registeredBeforeNpcHooks = [];
   const npcDeaths = [];
   const logins = [];
   const logouts = [];
@@ -128,6 +129,11 @@ function harness({ realTranscript = false } = {}) {
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
+    onBeforeNpcInteraction(handler) {
+      const start = PluginManager.beforeNpcInteractionHooks.length;
+      PluginManager.createApi('q123-real-dispatch').onBeforeNpcInteraction(handler);
+      registeredBeforeNpcHooks.push(...PluginManager.beforeNpcInteractionHooks.splice(start));
+    },
     onNpcInteraction(name, actions) {
       npcInteractions.push({ name, actions });
       if (realTranscript) {
@@ -186,9 +192,12 @@ function harness({ realTranscript = false } = {}) {
       const npc = new NPC(parentId, player.getLocation().clone());
       const definition = npc.getCurrentDefinition(player);
       const event = { player, npc, npcId: definition.getId(), definition, clickType: 1, handled: false };
+      PluginManager.beforeNpcInteractionHooks.push(...registeredBeforeNpcHooks);
       PluginManager.npcInteractionHooks.push(...registeredNpcHooks);
       try { PluginManager.emitNpcInteraction(event); } finally {
-        for (const hook of registeredNpcHooks) PluginManager.npcInteractionHooks.splice(PluginManager.npcInteractionHooks.indexOf(hook), 1);
+        for (const [hooks, owned] of [[PluginManager.beforeNpcInteractionHooks, registeredBeforeNpcHooks], [PluginManager.npcInteractionHooks, registeredNpcHooks]]) {
+          for (const hook of owned) { const index = hooks.indexOf(hook); if (index >= 0) hooks.splice(index, 1); }
+        }
       }
       return event;
     },
@@ -207,7 +216,7 @@ function harness({ realTranscript = false } = {}) {
       return conditions.at(-1)({ player, npcId, stepId, pages: [{ page: 'Wanted!' }] });
     },
     choice(npcId, option) {
-      const event = { player, npcId, option, handled: false };
+      const event = { player, npcId, option, pages: [{ page: 'Wanted!' }], handled: false };
       emit('npc-dialogue:choice', event);
       return event;
     },
@@ -389,7 +398,10 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
   assert.equal(h.spawns.some(npc => npc.id === N.MAGE_OF_ZAMORAK_3), false, 'map transform owns the chapel mage; no duplicate child');
 
   // Mage price: 20 pure essence.
-  assert.equal(h.variant(N.MAGE_OF_ZAMORAK_3).variant, 'zamorakian-mage');
+  // Stages 8/9 own the shared mage through the before-interaction hook; the
+  // generic variant selector deliberately yields to that registered route.
+  assert.equal(h.dispatchNpc(N.MAGE_OF_ZAMORAK_3).handled, true);
+  assert.equal(h.transcripts.at(-1).variant, 'zamorakian-mage');
   h.choice(N.MAGE_OF_ZAMORAK_3, 'Solus Dellagar.');
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(wireValue(p), 8);
@@ -844,6 +856,9 @@ test('real investigation dialogue earns helper facts and the wilderness meeting 
     assert.equal(h.quest.getStage(p), 9);
     p.items.set(I.PURE_ESSENCE, 20);
     h.dispatchNpc(3229); r.finish();
+    assert.equal(h.quest.getStage(p), 9, 'reopening shared topics does not pay for Solus information');
+    assert.equal(p.items.get(I.PURE_ESSENCE), 20, 'essence stays until the Solus topic is selected');
+    r.choose('Solus Dellagar.');
     assert.equal(h.quest.getStage(p), 10);
     assert.equal(p.items.get(I.PURE_ESSENCE), 0);
     r.sender.sendConfig(492, 4); h.login(); h.bootstrap();

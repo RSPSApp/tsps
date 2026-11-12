@@ -70,10 +70,10 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
-  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
   require("../plugins/areas/DeathsOffice.plugin").register(api);
   // The Gravestones plugin's answer, as far as Death's Office asks it here.
   api.onCustomEvent("gravestones:state", (state) => (state.inTutorial = inDeathTutorial.has(state.player)));
@@ -243,6 +243,10 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
   assert.equal(query("league:area-at", { x: 3222, y: 3218 }).name, "Misthalin");
   assert.equal(areaAt(1200, 3350), KOUREND, "the Stranglewood counts as Kourend in Trailblazer Reloaded");
   assert.equal(areaAt(1200, 3350, { league: 5 }), VARLAMORE, "and as Varlamore in Raging Echoes");
+  // The Dagannoth Kings' lair is on no surface square: open by default, Fremennik in Raging Echoes,
+  // whose Fremennik Province (Wiki) lists Waterbirth Island Dungeon and has the Kings as its echo boss.
+  assert.equal(areaAt(2926, 4375), null, "the Kings' lair is open in Trailblazer Reloaded");
+  assert.equal(areaAt(2926, 4375, { league: 5 }), FREMENNIK, "and Fremennik in Raging Echoes");
   assert.equal(areaAt(3000, 3000, { league: 99 }), null, "no league, no areas");
 });
 

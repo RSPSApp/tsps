@@ -19,6 +19,7 @@
  */
 const Area = require("./Area.Vorkath");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR = "vorkath:retrieval";
 const OWNER = "vorkath";
@@ -198,7 +199,7 @@ function clickItem(event) {
   if (!entry) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(core.ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;
@@ -223,6 +224,20 @@ function collect({ player, npc, definition }) {
   return true;
 }
 
+/**
+ * Logging in with items at Torfinn (Wiki, Item Retrieval Service: "Players with items stored in an Item Retrieval
+ * Service will now be told of this when logging in"), as recorded (234/00833.txt:27, 234/03283.txt:27), unless
+ * All Settings' retrieval warning is turned off (option_item_retrieval_warning_disabled, as the gravestones' is).
+ */
+const LOGIN_REMINDER = "<col=ff3045>You have items stored in an item retrieval service. Please visit Torfinn in Rellekka. If you die again before retrieving them, they will be lost.</col>";
+
+function loginReminder({ player }) {
+  if (!held(player)) return;
+  const varbit = core.CacheDefinitions.getVarbitId?.("option_item_retrieval_warning_disabled");
+  if (varbit != null && varbit >= 0 && player.getPacketSender().getVarbit?.(varbit) === 1) return;
+  player.sendMessage(LOGIN_REMINDER);
+}
+
 /** Generic read-only view of what Torfinn holds (clue capacity and the like). */
 function retrievalItems(request) {
   for (const { id, amount } of held(request.player)?.items ?? []) request.items.push({ itemId: id, amount });
@@ -245,6 +260,7 @@ function attach(pluginApi) {
   pluginApi.onInterfaceActionButton(COMPONENT.button, button);
   pluginApi.onInterfaceActionButton(COMPONENT.items, clickItem);
   pluginApi.onCustomEvent("item-retrieval:items", retrievalItems);
+  pluginApi.onPlayerLogin(loginReminder);
 }
 
 module.exports = { attach, held, open, collect, button, clickItem, deathDrops, announce, summary, FEE, ATTR };

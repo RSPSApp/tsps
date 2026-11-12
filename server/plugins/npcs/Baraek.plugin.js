@@ -34,25 +34,18 @@ function sellFur(core, event) {
 
   const inventory = event.player.getInventory();
   const coins = core.ItemIdentifiers.COINS;
-  const fur = core.ItemIdentifiers.FUR;
-  const coinAmount = inventory.getAmount(coins);
-  if (coinAmount < price) {
+  // rsprox 226/01663.txt:8340: "Baraek sells you a fur." gives fur (948), the cache's bear fur (Wiki store: Bear fur).
+  const fur = core.ItemIdentifiers.BEAR_FUR;
+  if (inventory.getAmount(coins) < price) {
     refuse(event, "You don't have enough coins.");
     return;
   }
-  if (inventory.getFreeSlots() < 1 && coinAmount !== price) {
-    refuse(event, "You need a free inventory slot for the fur.");
-    return;
-  }
 
-  const furBefore = inventory.getAmount(fur);
   inventory.deleteNumber(coins, price);
-  inventory.adds(fur, 1);
-  if (inventory.getAmount(fur) !== furBefore + 1) {
-    inventory.adds(coins, price);
-    refuse(event, "You need a free inventory slot for the fur.");
-    return;
-  }
+  // Wiki (Transcript:Baraek): with a full inventory the fur "Drops to the ground".
+  const item = new core.Item(fur, 1);
+  if (inventory.getAddableAmount(item) >= 1) inventory.adds(fur, 1);
+  else core.ItemOnGroundManager.registerLocation(event.player, item, event.player.getLocation().clone());
   event.handled = true;
   event.box = { items: [fur] };
 }

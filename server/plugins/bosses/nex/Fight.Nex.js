@@ -14,6 +14,7 @@
 const Common = require("./Common.Nex");
 const Attacks = require("./Attacks.Nex");
 const Specials = require("./Specials.Nex");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const SIZE = 3;
 const BOSS_NAME = "Nex";
@@ -591,7 +592,7 @@ class Fight {
     const own = Common.count(player, Common.KILLS_ATTRIBUTE) + 1;
     player.setAttribute(Common.KILLS_ATTRIBUTE, own);
     player.getPacketSender().sendConfig(varps.kills, own);
-    require("./CombatAchievements.Nex").killed(player, own, (kills) => player.sendMessage(kill.count.replace("[n]", kills)));
+    require("./CombatAchievements.Nex").killed(player, own, (kills) => sendBossKillCount(player, kill.count.replace("[n]", kills)));
     const best = Common.count(player, Common.BEST_ATTRIBUTE);
     const duration = kill.duration.replace("[time]", Common.formatTicks(ticks));
     if (!best || ticks < best) {

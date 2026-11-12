@@ -9,7 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const Finish = require("../plugins/achievements/diaries/KaramjaDiaryFinish.plugin");
+const Finish = require("../plugins/achievements/diaries/KaramjaDiaryFinish.AchievementDiaries");
 const Cart = require("../plugins/world/ShiloCart.plugin");
 const Lady = require("../plugins/world/LadyOfTheWaves.plugin");
 const Palm = require("../plugins/objects/LeafyPalmTree.plugin");
@@ -99,6 +99,7 @@ function playerAt(x, y, z = 0, { coins = 0, items = {}, area = null } = {}) {
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new core.Location(x, y, z),
     getPrivateArea: () => area,
+    getArea: () => null, // no area rules here (TeleportHandler.destinationAllowed reads it before a voyage)
     isPlayer: () => true,
     isRegistered: () => true,
     sendMessage: (message) => messages.push(message),

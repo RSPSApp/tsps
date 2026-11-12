@@ -10,7 +10,7 @@ const { WorldConfigStore } = require('../dist/game/definition/WorldConfigStore')
 const { WorldConfigCatalog } = require('../dist/plugins/WorldConfigCatalog');
 
 const SHIPPED = {
-  name: 'Test', description: '', experienceMultiplier: 1, membersWorld: true,
+  name: 'Test', description: '', experienceMultiplier: 1,
   spawn: { x: 3222, y: 3218, z: 0 }, zones: [], gameframe: 'modern-resizable',
   plugins: { Base: true }, pluginConfig: { 'Opt:a': true },
 };
@@ -118,8 +118,12 @@ test('warns about dependents and members content on a free world', () => {
   let r = run({}, { plugins: { Base: false } });
   assert.deepEqual(r.plan.errors, []);
   assert.ok(r.plan.warnings.some((w) => w.includes('Child')));
-  r = run({}, { world: { membersWorld: false } });
+  r = run({}, { plugins: { FreeToPlay: true } });
+  assert.ok(r.plan.errors.some((e) => e.includes('FreeToPlay needs the spawn')));
   assert.ok(r.plan.warnings.some((w) => w.includes('Mem')));
+  r = run({}, { plugins: { FreeToPlay: true } }, { ...SHIPPED, zones: [{ tags: ['f2p'] }] });
+  assert.deepEqual(r.plan.errors, []);
+  assert.deepEqual(r.plan.nextLocal.plugins, { FreeToPlay: true });
 });
 
 test('malformed local file is reported by read and refused by write', () => {
@@ -173,11 +177,10 @@ test('structured settings normalize before mixed-format layering and editor writ
     pluginConfig: { 'Prayer:sequentialBurying': false },
   };
   const effective = mergeWorldConfig(shipped, local);
-  assert.deepEqual(effective.plugins, { Base: true, Prayer: true }, 'settings alone do not enable a plugin');
+  assert.deepEqual(effective.plugins, { Base: true, Prayer: true, CrossFloor: true }, 'settings alone do not enable a plugin');
   assert.equal(mergeWorldConfig(shipped, {}).pluginConfig['Prayer:sequentialBurying'], true);
   assert.deepEqual(effective.pluginConfig, {
     'Prayer:sequentialBurying': false,
-    'CrossFloor:visibility': true,
     'characters:maxPerAccount': 6,
     'PlayerBots:ai': { enabled: false },
     'league:type': 6,

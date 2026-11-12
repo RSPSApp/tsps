@@ -192,13 +192,16 @@ function loot(player, npc, corpse) {
   removeCorpse(npc);
   if (generated.handled) return;
   const kept = all.filter((drop) => Number.isInteger(drop.itemId) && drop.amount > 0);
-  // Wiki (Seed box), 6 May 2026: "The seed box now works with looting Sailing creatures while opened."
+  // Wiki (Seed box, Herb sack, Rune pouch), 6 May 2026: they "now work with looting Sailing creatures"; the
+  // bags while opened, the pouch while Rune-picking is on (`runePicking`).
   // Taken off the drops first, so a full bag's placing below doesn't put a copy on the floor.
   for (const drop of kept) {
     if (drop.noted) continue;
-    const request = { player, itemId: drop.itemId, amount: drop.amount, stored: 0 };
-    api.emitCustomEvent("seed-box:gather", request);
-    drop.amount -= request.stored;
+    for (const event of ["seed-box:gather", "herb-sack:gather", "rune-pouch:gather"]) {
+      const request = { player, itemId: drop.itemId, amount: drop.amount, stored: 0, runePicking: true };
+      api.emitCustomEvent(event, request);
+      drop.amount -= request.stored;
+    }
   }
   all.splice(0, all.length, ...kept.filter((drop) => drop.amount > 0));
   if (!all.length) return;

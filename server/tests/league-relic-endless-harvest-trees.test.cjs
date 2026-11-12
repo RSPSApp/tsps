@@ -150,21 +150,17 @@ test("Demonic Endless Harvest fishes through forced random stops; ordinary and R
   }
 });
 
-test("Demonic Endless Harvest follows relocated minnow spots through real pathing; manual walking cancels", async (t) => {
+test("Demonic Endless Harvest does not chase a moved minnow spot", async (t) => {
+  // Wiki: Endless Harvest (Demonic Pacts League), notes: "Your character will chase the fishing spot as
+  // it moves. You will not chase minnows, and will stop harvesting when they move." The 23 April 2026
+  // changelog's "this applies to all fish types" is the relocation the line above it describes.
   const f = pactsCharacter(t, { 0: 1 });
-  const { npc, item } = await fish(t, f, { minnow: true });
-  const before = catches(f, item);
+  const { npc } = await fish(t, f, { minnow: true });
+  const start = f.player.getLocation().getX();
   npc.moveTo(new core.Location(2611, 3444, 0));
   await ticks(f, 12);
-  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), true);
-  assert.ok(catches(f, item) > before, "resumed minnow catches");
-  assert.ok(f.player.getLocation().getX() > 2608, "walked after the moving spot");
-  // A manual route replaces a pending automatic interaction.
-  npc.moveTo(new core.Location(2612, 3443, 0));
-  core.TaskManager.process();
-  f.player.getMovementQueue().walkToTile(new core.Location(2608, 3441, 0), () => {});
-  await ticks(f, 12);
-  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), false);
+  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), false, "harvesting stops when the minnows move");
+  assert.equal(f.player.getLocation().getX(), start, "the player does not walk after them");
 });
 
 test("relocated spots stop without Demonic Endless Harvest; resumption rechecks the tool and relic", async (t) => {

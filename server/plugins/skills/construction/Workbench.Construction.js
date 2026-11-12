@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, Item, Skill } = require("./Core.Construction");
+const { api, Animation, CountdownTask, Item, Skill, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
@@ -23,10 +23,15 @@ const LIST_SCRIPT = 1406;
 const OP1_EVENTS = 1 << 1;
 const PAUSE_BUTTON_EVENTS = 1;
 const BUILD_ANIMATION = Ids.seq("human_poh_build");
+const WORKBENCH_ANIMATION = Ids.seq("human_use_workbench_stool_2");
+// Wiki (Flatpack): each flatpack takes 8 ticks to make. Ours: one with many nails lands 2 ticks after the last.
+const FLATPACK_TICKS = 8;
+const FLATPACK_AFTER_LAST_NAIL = 2;
 
 const FLATPACK_OF = new Map(WORKBENCH.categories.flatMap(category => category.flatpacks));
 const FURNITURE_OF_FLATPACK = new Map(WORKBENCH.categories.flatMap(category => category.flatpacks.map(([key, item]) => [item, key])));
 const benches = new WeakMap();
+const pending = new Map(); // player -> the flatpacks (item ids) still on their way, oldest first
 
 function workAt(event) {
   const house = House.houseFor(event.player);
@@ -54,16 +59,48 @@ function openCategory(player, bench, index) {
     .sendInterfaceFlagsRange(FURNITURE_LIST, 1, bench.choices.length, PAUSE_BUTTON_EVENTS);
 }
 
+/**
+ * Makes a flatpack. rsprox captures (poh_furniture_creation in flatpack mode): a piece without nails
+ * takes its materials and XP on the pick, with the workbench stool animation and no hammer sound. With
+ * nails, the pick hammers (animation and sound) and the nails go in one a tick as when building; the
+ * last one takes the rest of the materials and the XP, with the stool animation instead of the hammer.
+ * The flatpack follows (FLATPACK_TICKS).
+ */
 function makeFlatpack(player, bench, buildable) {
   if (House.houseFor(player) !== bench.house) return;
   if (buildable.level > bench.limit) return player.sendMessage(`This workbench can only make furniture up to level ${bench.limit}.`);
   const materials = House.getBuildMaterials(player, bench.house, null, buildable);
   if (!(materials instanceof Map)) return Menu.refuse(player, materials);
+  const nails = House.nailsOf(buildable);
+  if (nails === 0) return finishFlatpack(player, buildable, materials, FLATPACK_TICKS);
+  House.hammer(player, BUILD_ANIMATION);
+  House.hammerNails(player, { ...buildable, buildAnimationId: BUILD_ANIMATION }, {
+    building: () => House.houseFor(player) === bench.house,
+    rest: (withoutNails) => House.getBuildMaterials(player, bench.house, null, withoutNails),
+    complete: (rest) => finishFlatpack(player, buildable, rest, Math.max(FLATPACK_TICKS - nails, FLATPACK_AFTER_LAST_NAIL)),
+    lastNail: false,
+  });
+}
+
+/** Uses the materials, gives the XP and hands the flatpack over `ticks` later (at once on logout). */
+function finishFlatpack(player, buildable, materials, ticks) {
   House.useMaterials(player, buildable, materials);
-  player.performAnimation(new Animation(BUILD_ANIMATION));
-  // Kept materials (a league fragment's planks) may leave no slot free: the flatpack then falls to the floor.
-  player.getInventory().forceAdd(player, new Item(FLATPACK_OF.get(buildable.key), 1));
+  player.performAnimation(new Animation(WORKBENCH_ANIMATION));
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
+  pending.set(player, [...(pending.get(player) ?? []), FLATPACK_OF.get(buildable.key)]);
+  // Keyed to its own object: nothing that cancels the player's tasks may lose a flatpack already paid for.
+  TaskManager.submit(new CountdownTask({}, ticks, () => deliverFlatpacks(player, 1)));
+}
+
+/** Kept materials (a league fragment's planks) may leave no slot free: the flatpack then falls to the floor. */
+function deliverFlatpacks(player, count = Infinity) {
+  const queue = pending.get(player) ?? [];
+  for (const flatpack of queue.splice(0, count)) player.getInventory().forceAdd(player, new Item(flatpack, 1));
+  if (queue.length === 0) pending.delete(player);
+}
+
+function deliverOnLogout({ player }) {
+  deliverFlatpacks(player);
 }
 
 function interfaceClick(event) {
@@ -128,6 +165,7 @@ function attachWorkbench(api) {
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("interface:close", closeBench);
   api.onItemOnObject(installFlatpack, { noted: false });
+  api.onPlayerLogout(deliverOnLogout);
 }
 
-Object.assign(module.exports, { attachWorkbench, _test: { makeFlatpack, FLATPACK_OF } });
+Object.assign(module.exports, { attachWorkbench, _test: { makeFlatpack, FLATPACK_OF, FLATPACK_TICKS } });

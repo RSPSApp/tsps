@@ -17,6 +17,10 @@
  *   listed tree's tile, so the patches stay Farming's.
  * - Player-grown trees (Farming) open the same menu ("spirit-trees:open"); Farming answers
  *   which of its spirit tree patches are grown and checked ("spirit-trees:grown").
+ * - "Your house" names where the player's house stands ("Your house (Yanille)") and is offered
+ *   once a spirit tree is built in it (Construction's "construction:spirit-tree"). Travel there
+ *   is the same bark and reach; two ticks later the house loads and the player stands beside
+ *   its tree ("construction:spirit-tree-travel").
  *
  * The network needs Tree Gnome Village; leaving the Gnome Stronghold's tree needs The Grand
  * Tree. Quests this server doesn't have don't block, as elsewhere.
@@ -68,10 +72,12 @@ function loadTrees() {
   return JSON.parse(fs.readFileSync(file, "utf8")).trees;
 }
 
-function questComplete(player, name) {
+/** The quest is complete, or (with `stage`) has reached that stage, as Poison Waste's chimed tree. */
+function questComplete(player, name, stage) {
   if (!name) return true;
   const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === name);
-  return quest ? quest.isComplete(player) : true;
+  if (!quest) return true;
+  return stage === undefined ? quest.isComplete(player) : quest.isComplete(player) || quest.getStage(player) >= stage;
 }
 
 function hasSkills(player, skills) {
@@ -79,6 +85,20 @@ function hasSkills(player, skills) {
     const skill = core.Skill.values().find((candidate) => candidate.getName() === name);
     return !skill || player.getSkillManager().getMaxLevel(skill) >= level;
   });
+}
+
+/** Construction's answer for "Your house": { owns, location, built }. */
+function houseTree(player) {
+  const request = { player, owns: false, location: null, built: false };
+  pluginApi.emitCustomEvent("construction:spirit-tree", request);
+  return request;
+}
+
+/** The menu's name for a tree: the house's carries where it stands. */
+function label(player, tree) {
+  if (!tree.house) return tree.name;
+  const house = houseTree(player);
+  return house.owns && house.location ? `${tree.name} (${house.location})` : tree.name;
 }
 
 const near = (tile, x, y, z, reach) => tile && tile[2] === z && Math.abs(tile[0] - x) <= reach && Math.abs(tile[1] - y) <= reach;
@@ -102,14 +122,14 @@ function destinationsEvent(request) {
   const grown = grownPatches(request.player);
   for (const tree of trees) {
     const tile = destination(request.player, tree, grown);
-    if (tile) request.list.push({ name: tree.name, location: new core.Location(tile[0], tile[1], tile[2] ?? 0) });
+    if (Array.isArray(tile)) request.list.push({ name: tree.name, location: new core.Location(tile[0], tile[1], tile[2] ?? 0) });
   }
 }
 
-/** Where a tree puts the player, or null when they can't travel there now. */
+/** Where a tree puts the player ("house" for their own house's tree), or null when they can't travel there now. */
 function destination(player, tree, grown) {
-  if (tree.house) return null;
-  if (!questComplete(player, tree.requires) || !hasSkills(player, tree.skills)) return null;
+  if (tree.house) return houseTree(player).built ? "house" : null;
+  if (!questComplete(player, tree.requires, tree.requiresStage) || !hasSkills(player, tree.skills)) return null;
   if (tree.mooredAt && !(player.getSailing().mooredDocks ?? []).includes(tree.mooredAt)) return null;
   if (tree.grown) {
     const patch = grown.find((candidate) => near(tree.grown, candidate.x, candidate.y, candidate.z, 3));
@@ -146,7 +166,7 @@ function canUseNetwork(player, from) {
 function openMenu(player, from, head) {
   const grown = grownPatches(player);
   const choices = trees.map((tree) => ({ tree, to: destination(player, tree, grown) }));
-  const labels = choices.map(({ tree, to }) => (to ? tree.name : `${GREY}${tree.name}</col>`));
+  const labels = choices.map(({ tree, to }) => (to ? label(player, tree) : `${GREY}${label(player, tree)}</col>`));
   player.setAttribute(MENU_ATTRIBUTE, { from: from?.name ?? null, head, choices });
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
@@ -172,7 +192,18 @@ function travel(player, tree, to) {
   TaskManager.submit(new (class extends Task {
     constructor() { super(MOVE_TICKS, player, false); }
     execute() {
-      if (player.isRegistered() && player.getHitpoints() > 0) {
+      if (player.isRegistered() && player.getHitpoints() > 0 && to === "house") {
+        sender.closeSubInterface(CHATBOX_MODAL);
+        // The house's loading holds the player still from here on.
+        movement.setBlockMovement(false);
+        this.handedOff = true;
+        const from = player.getLocation?.()?.clone?.() ?? null;
+        const fromInstance = player.getPrivateArea?.() != null;
+        pluginApi.emitCustomEvent("construction:spirit-tree-travel", { player });
+        if (player.getPrivateArea?.() != null && from && !player.getLocation().equals(from)) {
+          pluginApi.emitCustomEvent("teleport:landed", { player, from, fromInstance, to: player.getLocation().clone() });
+        }
+      } else if (player.isRegistered() && player.getHitpoints() > 0) {
         const from = player.getLocation?.()?.clone?.() ?? null;
         const fromInstance = player.getPrivateArea?.() != null;
         const destination = new Location(to[0], to[1], to[2]);
@@ -184,7 +215,7 @@ function travel(player, tree, to) {
       this.stop();
     }
     stop() {
-      movement.setBlockMovement(false);
+      if (!this.handedOff) movement.setBlockMovement(false);
       super.stop();
     }
   })());

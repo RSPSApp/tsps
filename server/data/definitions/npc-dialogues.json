@@ -47759,8 +47759,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Agelus's Farm Shop",
+                "action": "open_shop",
+                "target": "Agelus' Farm Shop",
                 "id": "7fXH5U"
               }
             ]
@@ -130925,6 +130925,24 @@
           "id": "4g3EY1"
         }
       ],
+      "getting-started-talking-to-elena-again": [
+        {
+          "player": "Hello Elena."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Hello friend. Any luck finding my distillator?"
+        },
+        {
+          "player": "No, I'm afraid not."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Speak to Jerico, he might be able to help you cross the wall. He lives in a house south east of here, north of the chapel."
+        }
+      ],
       "getting-started-talking-to-jerico": [
         {
           "player": "Hello Jerico."
@@ -130957,6 +130975,9 @@
         }
       ],
       "getting-started-talking-to-jerico-again": [
+        {
+          "player": "Hello Jerico."
+        },
         {
           "type": "line",
           "speaker": "Jerico",
@@ -132957,7 +132978,7 @@
           "text": "Now you look like someone who goes to a lot of fancy dress parties."
         },
         {
-          "player": "Errr...what are you saying exactly?"
+          "player": "Errr... what are you saying exactly?"
         },
         {
           "type": "line",
@@ -134069,6 +134090,11 @@
             }
           ],
           "id": "15RG3w"
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Amik Varze",
+          "text": "Don't forget to read that dossier of information I gave you."
         }
       ],
       "infiltrating-the-fortress-trying-to-open-the-main-door-to-the-fortress": [
@@ -134282,7 +134308,7 @@
         {
           "type": "line",
           "speaker": "Witch",
-          "text": "...not to merntion the trees!"
+          "text": "...not to mention the trees!"
         },
         {
           "type": "line",
@@ -134292,7 +134318,7 @@
         {
           "type": "line",
           "speaker": "Greldo",
-          "text": "Yeth, Mithreth."
+          "text": "Yeth, Mithtreth."
         }
       ],
       "reporting-back-to-sir-amik-varze": [
@@ -134424,7 +134450,7 @@
         {
           "type": "line",
           "speaker": "Black Cat",
-          "text": "Meow!No special dialogue with catspeak amulet equipped"
+          "text": "Meow!"
         },
         {
           "player": "Looks like my work here is done. Seems like that's successfully sabotaged their little secret weapon plan."
@@ -134483,11 +134509,6 @@
           "type": "line",
           "speaker": "Sir Amik Varze",
           "text": "Absolutely right. Please accept this reward."
-        },
-        {
-          "type": "message",
-          "text": "Sir Amik hands you 2500 coins.",
-          "id": "jnrgsN"
         },
         {
           "type": "action",
@@ -188253,8 +188274,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -190721,8 +190742,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -430049,6 +430070,7 @@
               "options": [
                 {
                   "text": "I would like to enter Port Phasmatys - here's 2 Ectotokens.",
+                  "condition": "If the player has at least 2 Ectotokens:",
                   "steps": [
                     {
                       "player": "I would like to enter Port Phasmatys - here's 2 Ectotokens."
@@ -430056,7 +430078,7 @@
                     {
                       "type": "action",
                       "text": "Player pays 2 ecto-tokens.",
-                      "id": "s_ymV_"
+                      "id": "XeyqNB"
                     },
                     {
                       "type": "end"
@@ -430064,12 +430086,14 @@
                     {
                       "type": "action",
                       "text": "Player goes through the gate.",
-                      "id": "ckKoYZ"
+                      "id": "4mgRym"
                     }
-                  ]
+                  ],
+                  "id": "hFAul2"
                 },
                 {
                   "text": "I'm not paying you Ectotokens just to go through a gate.",
+                  "condition": "If the player has at least 2 Ectotokens:",
                   "steps": [
                     {
                       "player": "I'm not paying you Ectotokens just to go through a gate."
@@ -430080,7 +430104,24 @@
                     {
                       "type": "end"
                     }
-                  ]
+                  ],
+                  "id": "dQ6WYp"
+                },
+                {
+                  "text": "I don't have that many Ectotokens.",
+                  "condition": "If the player has fewer than 2 Ectotokens:",
+                  "steps": [
+                    {
+                      "player": "I don't have that many Ectotokens."
+                    },
+                    {
+                      "npc": "In that case, you need to go to the Temple and earn some. Talk to the disciples - they will tell you how."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "ZBMVXZ"
                 },
                 {
                   "text": "Where can I get Ectotokens?",
@@ -431122,7 +431163,7 @@
                     {
                       "type": "line",
                       "speaker": "Velorina",
-                      "text": "I have a vision of a small wooden shack, the land it was built on the unholy soil of Morytania. I sense the sea is very close, and that there are looms castles to the west and the east."
+                      "text": "I have a vision of a small wooden shack, the land it was built on the unholy soil of Morytania. I sense the sea is very close, and that there looms castles to the west and the east."
                     }
                   ]
                 },
@@ -431399,6 +431440,11 @@
               "type": "line",
               "speaker": "Old crone",
               "text": "All his rituals came from a book written by an ancient sorcerer from the East called Haricanto. Bring me this strange book."
+            },
+            {
+              "type": "line",
+              "speaker": "Old crone",
+              "text": "I cannot read the strange letters of the eastern lands. I will need something to help me translate the book."
             },
             {
               "type": "choice",
@@ -432743,69 +432789,162 @@
       "something-to-translate-the-book-of-haricanto-talking-to-robin": [
         {
           "type": "condition",
+          "text": "If the player has an oak longbow in their inventory:",
+          "steps": [
+            {
+              "player": "Would you sign this oak longbow for me?"
+            },
+            {
+              "type": "line",
+              "speaker": "Robin",
+              "text": "I'm sorry, I don't sign autographs."
+            },
+            {
+              "type": "line",
+              "speaker": "Robin",
+              "text": "While you're here, though, why don't you have a game of Runedraw with me? If you've got 25 gold pieces I've got a bag of runes we can use."
+            }
+          ],
+          "id": "lyGghs"
+        },
+        {
+          "type": "condition",
           "text": "If the player does not have an oak longbow in their inventory:",
           "steps": [
             {
               "type": "line",
               "speaker": "Robin",
               "text": "Hey you, why don't you have a game of Runedraw with me? If you've got 25 gold pieces I've got a bag of runes we can use."
+            }
+          ],
+          "id": "AZZDOx"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have 25 coins:",
+          "steps": [
+            {
+              "player": "I don't have enough money on me for a game of Runedraw at the moment."
             },
             {
-              "type": "condition",
-              "text": "If the player does not have 25 coins:",
-              "steps": [
-                {
-                  "player": "I don't have enough money on me for a game of Runedraw at the moment."
-                },
-                {
-                  "type": "end"
-                }
-              ],
-              "id": "52Y4Rr"
-            },
+              "type": "end"
+            }
+          ],
+          "id": "4sGI8H"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has at least 25 coins:",
+          "steps": [
             {
-              "type": "condition",
-              "text": "If the player has at least 25 coins:",
-              "steps": [
+              "type": "choice",
+              "options": [
                 {
-                  "type": "choice",
-                  "options": [
+                  "text": "Yes, I'll give you a game.",
+                  "steps": [
                     {
-                      "text": "Yes, I'll give you a game.",
+                      "player": "Yes, I'll give you a game."
+                    },
+                    {
+                      "type": "action",
+                      "action": "open_interface",
+                      "target": "Rune-Draw",
+                      "id": "ELEZLT"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player wins:",
                       "steps": [
                         {
-                          "player": "Yes, I'll give you a game."
+                          "type": "message",
+                          "text": "You've won the game of Runedraw!",
+                          "id": "YmLLg7"
                         },
                         {
-                          "type": "action",
-                          "action": "open_interface",
-                          "target": "Rune-Draw",
-                          "id": "1qdKTp"
+                          "player": "So are you going to pay up then? You owe me [#] gold coins!"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Robin",
+                          "text": "How about another game? I'll pay you back with the winnings."
+                        },
+                        {
+                          "player": "What if you lose again?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Robin",
+                          "text": "Er ... we'll deal with that when we come to it."
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Yes, I'll give you a game.",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "DKXbNb",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-3e9eeb0d7e9d1a5f"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "How do you play Runedraw?",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "i9NuBP",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-c54bd6a7ee9d5875"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "No, you didn't pay up the last time you lost.",
+                              "steps": [
+                                {
+                                  "player": "No, you didn't pay up the last time you lost."
+                                },
+                                {
+                                  "type": "end"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "id": "b8dZzm"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player loses:",
+                      "steps": [
+                        {
+                          "type": "message",
+                          "text": "You've lost the game of Runedraw.",
+                          "id": "-Q3ZiP"
                         },
                         {
                           "type": "condition",
-                          "text": "If the player wins:",
+                          "text": "If Robin does not owe the player any coins:",
                           "steps": [
                             {
-                              "type": "message",
-                              "text": "You've won the game of Runedraw!",
-                              "id": "Q_ww9k"
-                            },
-                            {
-                              "player": "So are you going to pay up then? You owe me [#] gold coins!"
+                              "player": "Well done, you beat me."
                             },
                             {
                               "type": "line",
                               "speaker": "Robin",
-                              "text": "How about another game? I'll pay you back with the winnings."
-                            },
-                            {
-                              "player": "What if you lose again?"
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Er ... we'll deal with that when we come to it."
+                              "text": "How about another game?"
                             },
                             {
                               "type": "choice",
@@ -432815,11 +432954,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "iYrVpV",
+                                      "id": "RpWdP2",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-89fea2307231f33d"
+                                          "branch": "jump-3e9eeb0d7e9d1a5f"
                                         }
                                       ]
                                     }
@@ -432830,16 +432969,21 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "reference": "above",
-                                      "id": "6Jxrls"
+                                      "id": "-Bq--m",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "jump-c54bd6a7ee9d5875"
+                                        }
+                                      ]
                                     }
                                   ]
                                 },
                                 {
-                                  "text": "No, you didn't pay up the last time you lost.",
+                                  "text": "No, that doesn't sound fun.",
                                   "steps": [
                                     {
-                                      "player": "No, you didn't pay up the last time you lost."
+                                      "player": "No, that doesn't sound fun."
                                     },
                                     {
                                       "type": "end"
@@ -432849,17 +432993,12 @@
                               ]
                             }
                           ],
-                          "id": "yavzUW"
+                          "id": "PxJuD9"
                         },
                         {
                           "type": "condition",
-                          "text": "If the player loses:",
+                          "text": "If Robin owes the player coins:",
                           "steps": [
-                            {
-                              "type": "message",
-                              "text": "You've lost the game of Runedraw.",
-                              "id": "gtlJxk"
-                            },
                             {
                               "player": "Well done, you beat me. But you still owe me [#] gold pieces."
                             },
@@ -432876,11 +433015,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "G3mCTg",
+                                      "id": "x382Xq",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-89fea2307231f33d"
+                                          "branch": "jump-3e9eeb0d7e9d1a5f"
                                         }
                                       ]
                                     }
@@ -432891,8 +433030,13 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "reference": "above",
-                                      "id": "Hbzf8Z"
+                                      "id": "ucWvOj",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "jump-c54bd6a7ee9d5875"
+                                        }
+                                      ]
                                     }
                                   ]
                                 },
@@ -432901,11 +433045,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "melFQw",
+                                      "id": "Ciye6j",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-2379dfc142d531b7"
+                                          "branch": "jump-22247f17331ab065"
                                         }
                                       ]
                                     }
@@ -432914,82 +433058,82 @@
                               ]
                             }
                           ],
-                          "id": "ehle2x"
-                        },
-                        {
-                          "type": "condition",
-                          "text": "If the player wins 100 coins:",
-                          "steps": [
-                            {
-                              "player": "I've had enough of you not paying up - you owe me 100 gold coins. I'm going to tell the ghosts what you're doing."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Please don't do that!!! They will suck the life from my bones!!!"
-                            },
-                            {
-                              "player": "How about you signing my longbow then?"
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Yes, anything!!!"
-                            },
-                            {
-                              "type": "message",
-                              "text": "Robin signs the oak longbow for you.",
-                              "id": "pX0ymv"
-                            },
-                            {
-                              "type": "action",
-                              "action": "receive",
-                              "text": "a Signed oak bow",
-                              "id": "YWXokZ"
-                            }
-                          ],
-                          "id": "u4Yl8o"
+                          "id": "DXMtvO"
                         }
-                      ]
+                      ],
+                      "id": "sy7msq"
                     },
                     {
-                      "text": "How do you play Runedraw?",
+                      "type": "condition",
+                      "text": "If the player wins 100 coins:",
                       "steps": [
                         {
-                          "player": "How do you play Runedraw?"
+                          "player": "I've had enough of you not paying up - you owe me 100 gold coins. I'm going to tell the ghosts what you're doing."
                         },
                         {
                           "type": "line",
                           "speaker": "Robin",
-                          "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+                          "text": "Please don't do that!!! They will suck the life from my bones!!!"
+                        },
+                        {
+                          "player": "How about you signing my longbow then?"
                         },
                         {
                           "type": "line",
                           "speaker": "Robin",
-                          "text": "If a player draws the Death rune then the game is over, and they have lost."
+                          "text": "Yes, anything!!!"
                         },
                         {
-                          "type": "line",
-                          "speaker": "Robin",
-                          "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+                          "type": "message",
+                          "text": "Robin signs the oak longbow for you.",
+                          "id": "y4p5hS"
+                        },
+                        {
+                          "type": "action",
+                          "action": "receive",
+                          "text": "a Signed oak bow",
+                          "id": "exeGvc"
                         }
-                      ]
+                      ],
+                      "id": "4gRzlH"
+                    }
+                  ]
+                },
+                {
+                  "text": "How do you play Runedraw?",
+                  "steps": [
+                    {
+                      "player": "How do you play Runedraw?"
                     },
                     {
-                      "text": "No, that doesn't sound fun.",
-                      "steps": [
-                        {
-                          "player": "No, that doesn't sound fun."
-                        }
-                      ]
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "If a player draws the Death rune then the game is over, and they have lost."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+                    }
+                  ]
+                },
+                {
+                  "text": "No, that doesn't sound fun.",
+                  "steps": [
+                    {
+                      "player": "No, that doesn't sound fun."
                     }
                   ]
                 }
-              ],
-              "id": "dRrkcd"
+              ]
             }
           ],
-          "id": "AZZDOx"
+          "id": "4W6TSD"
         }
       ],
       "something-to-translate-the-book-of-haricanto-talking-to-robin-talking-to-robin-after-getting-the-bow-signed": [
@@ -433925,6 +434069,16 @@
                   ]
                 },
                 {
+                  "text": "Oppose dialogue 5",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Ghost villager",
+                      "text": "My answer is no."
+                    }
+                  ]
+                },
+                {
                   "text": "Oppose dialogue 4",
                   "steps": [
                     {
@@ -434558,7 +434712,7 @@
         {
           "type": "line",
           "speaker": "Velorina",
-          "text": "You don't need to tell me [player name] - I sensed the removal of Necrovarus's psychic barrier!"
+          "text": "You don't need to tell me [player name]- I sensed the removal of Necrovarus's psychic barrier!"
         },
         {
           "player": "Only happy to help out."
@@ -434730,7 +434884,7 @@
           ]
         }
       ],
-      "jump-89fea2307231f33d": [
+      "jump-3e9eeb0d7e9d1a5f": [
         {
           "player": "Yes, I'll give you a game."
         },
@@ -434738,7 +434892,7 @@
           "type": "action",
           "action": "open_interface",
           "target": "Rune-Draw",
-          "id": "1qdKTp"
+          "id": "ELEZLT"
         },
         {
           "type": "condition",
@@ -434747,7 +434901,7 @@
             {
               "type": "message",
               "text": "You've won the game of Runedraw!",
-              "id": "Q_ww9k"
+              "id": "YmLLg7"
             },
             {
               "player": "So are you going to pay up then? You owe me [#] gold coins!"
@@ -434773,11 +434927,11 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "id": "iYrVpV",
+                      "id": "DKXbNb",
                       "steps": [
                         {
                           "type": "call",
-                          "branch": "jump-89fea2307231f33d"
+                          "branch": "jump-3e9eeb0d7e9d1a5f"
                         }
                       ]
                     }
@@ -434788,8 +434942,13 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "6Jxrls"
+                      "id": "i9NuBP",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-c54bd6a7ee9d5875"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -434807,7 +434966,7 @@
               ]
             }
           ],
-          "id": "yavzUW"
+          "id": "b8dZzm"
         },
         {
           "type": "condition",
@@ -434816,63 +434975,136 @@
             {
               "type": "message",
               "text": "You've lost the game of Runedraw.",
-              "id": "gtlJxk"
+              "id": "-Q3ZiP"
             },
             {
-              "player": "Well done, you beat me. But you still owe me [#] gold pieces."
-            },
-            {
-              "type": "line",
-              "speaker": "Robin",
-              "text": "Err ... how about another game? We can settle up after we've finished playing."
-            },
-            {
-              "type": "choice",
-              "options": [
+              "type": "condition",
+              "text": "If Robin does not owe the player any coins:",
+              "steps": [
                 {
-                  "text": "Yes, I'll give you a game.",
-                  "steps": [
+                  "player": "Well done, you beat me."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Robin",
+                  "text": "How about another game?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
                     {
-                      "type": "jump",
-                      "id": "G3mCTg",
+                      "text": "Yes, I'll give you a game.",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "jump-89fea2307231f33d"
+                          "type": "jump",
+                          "id": "RpWdP2",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3e9eeb0d7e9d1a5f"
+                            }
+                          ]
                         }
                       ]
-                    }
-                  ]
-                },
-                {
-                  "text": "How do you play Runedraw?",
-                  "steps": [
+                    },
                     {
-                      "type": "jump",
-                      "reference": "above",
-                      "id": "Hbzf8Z"
-                    }
-                  ]
-                },
-                {
-                  "text": "No, you didn't pay up the last time you lost.",
-                  "steps": [
-                    {
-                      "type": "jump",
-                      "id": "melFQw",
+                      "text": "How do you play Runedraw?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "jump-2379dfc142d531b7"
+                          "type": "jump",
+                          "id": "-Bq--m",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c54bd6a7ee9d5875"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No, that doesn't sound fun.",
+                      "steps": [
+                        {
+                          "player": "No, that doesn't sound fun."
+                        },
+                        {
+                          "type": "end"
                         }
                       ]
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "PxJuD9"
+            },
+            {
+              "type": "condition",
+              "text": "If Robin owes the player coins:",
+              "steps": [
+                {
+                  "player": "Well done, you beat me. But you still owe me [#] gold pieces."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Robin",
+                  "text": "Err ... how about another game? We can settle up after we've finished playing."
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Yes, I'll give you a game.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "x382Xq",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3e9eeb0d7e9d1a5f"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "How do you play Runedraw?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "ucWvOj",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c54bd6a7ee9d5875"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No, you didn't pay up the last time you lost.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "Ciye6j",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-22247f17331ab065"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "id": "DXMtvO"
             }
           ],
-          "id": "ehle2x"
+          "id": "sy7msq"
         },
         {
           "type": "condition",
@@ -434897,22 +435129,45 @@
             {
               "type": "message",
               "text": "Robin signs the oak longbow for you.",
-              "id": "pX0ymv"
+              "id": "y4p5hS"
             },
             {
               "type": "action",
               "action": "receive",
               "text": "a Signed oak bow",
-              "id": "YWXokZ"
+              "id": "exeGvc"
             },
             {
               "type": "end"
             }
           ],
-          "id": "u4Yl8o"
+          "id": "4gRzlH"
         }
       ],
-      "jump-2379dfc142d531b7": [
+      "jump-c54bd6a7ee9d5875": [
+        {
+          "player": "How do you play Runedraw?"
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "If a player draws the Death rune then the game is over, and they have lost."
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-22247f17331ab065": [
         {
           "player": "No, you didn't pay up the last time you lost."
         },
@@ -444005,9 +444260,36 @@
                                           "text": "But green too much like skin. Nearly make you look naked!"
                                         },
                                         {
-                                          "type": "jump",
-                                          "reference": "previous",
-                                          "id": "VKa_6b"
+                                          "type": "choice",
+                                          "options": [
+                                            {
+                                              "text": "Why are you arguing about the colour of your armour?",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-0e7d80c33faa9aaa"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "Do you want me to pick an armour colour for you?",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-f8a9ac04bf855df0"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "I'll leave you to it.",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-aff70d22fc752ac8"
+                                                }
+                                              ]
+                                            }
+                                          ]
                                         }
                                       ]
                                     },
@@ -445280,9 +445562,36 @@
           "text": "But green too much like skin. Nearly make you look naked!"
         },
         {
-          "type": "jump",
-          "reference": "previous",
-          "id": "VKa_6b"
+          "type": "choice",
+          "options": [
+            {
+              "text": "Why are you arguing about the colour of your armour?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-0e7d80c33faa9aaa"
+                }
+              ]
+            },
+            {
+              "text": "Do you want me to pick an armour colour for you?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-f8a9ac04bf855df0"
+                }
+              ]
+            },
+            {
+              "text": "I'll leave you to it.",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-aff70d22fc752ac8"
+                }
+              ]
+            }
+          ]
         }
       ],
       "jump-f8a9ac04bf855df0": [
@@ -445641,9 +445950,36 @@
                   "text": "But green too much like skin. Nearly make you look naked!"
                 },
                 {
-                  "type": "jump",
-                  "reference": "previous",
-                  "id": "VKa_6b"
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Why are you arguing about the colour of your armour?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-0e7d80c33faa9aaa"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Do you want me to pick an armour colour for you?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-f8a9ac04bf855df0"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I'll leave you to it.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-aff70d22fc752ac8"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -494140,7 +494476,7 @@
               "npc": "We have gangs?"
             },
             {
-              "player": "Erm, yes...anyway, I managed to get half the shield back."
+              "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
             },
             {
               "npc": "Only half?"
@@ -494149,7 +494485,7 @@
               "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
             },
             {
-              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
             },
             {
               "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494161,8 +494497,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "BVuQV2"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "APqx78"
             }
           ],
           "id": "QqHvp-"
@@ -494237,8 +494574,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "3b-0_w"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "Mf6ptc"
             }
           ],
           "id": "RaNFxc"
@@ -494273,16 +494611,16 @@
           "text": "If the player has Priest in Peril completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+              "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
             },
             {
-              "npc": "Ahh, the Temple Knights...little is known of them."
+              "npc": "Oh?"
             },
             {
-              "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+              "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "3q8-VQ"
@@ -494292,16 +494630,16 @@
           "text": "If the player has In Aid of the Myreque completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+              "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
             },
             {
-              "npc": "Oh?"
+              "npc": "What is it?"
             },
             {
-              "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+              "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "dHMXRQ"
@@ -494361,6 +494699,20 @@
             },
             {
               "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
+            },
+            {
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "WIZR3H"
             }
           ],
           "id": "4Ij9Rt"
@@ -494426,6 +494778,15 @@
             },
             {
               "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
             }
           ],
           "id": "0sSqOl"
@@ -494447,11 +494808,12 @@
               "npc": "And?"
             },
             {
-              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
             },
             {
-              "type": "unavailable",
-              "id": "z2xH5U"
+              "type": "message",
+              "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+              "id": "A6tdo0"
             },
             {
               "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -494470,7 +494832,7 @@
               "npc": "Oh! Whatever can we do!"
             },
             {
-              "player": "Calm down, I have arrested the ringleader."
+              "player": "Don't worry. I put a stop to their plots."
             },
             {
               "npc": "Oh, thank Saradomin for that. So, tell me the story!"
@@ -494850,7 +495212,7 @@
                     "npc": "We have gangs?"
                   },
                   {
-                    "player": "Erm, yes...anyway, I managed to get half the shield back."
+                    "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
                   },
                   {
                     "npc": "Only half?"
@@ -494859,7 +495221,7 @@
                     "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
                   },
                   {
-                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
                   },
                   {
                     "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494871,8 +495233,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "BVuQV2"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "APqx78"
                   }
                 ],
                 "id": "QqHvp-"
@@ -494947,8 +495310,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "3b-0_w"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "Mf6ptc"
                   }
                 ],
                 "id": "RaNFxc"
@@ -494983,16 +495347,16 @@
                 "text": "If the player has Priest in Peril completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+                    "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
                   },
                   {
-                    "npc": "Ahh, the Temple Knights...little is known of them."
+                    "npc": "Oh?"
                   },
                   {
-                    "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+                    "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "3q8-VQ"
@@ -495002,16 +495366,16 @@
                 "text": "If the player has In Aid of the Myreque completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+                    "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
                   },
                   {
-                    "npc": "Oh?"
+                    "npc": "What is it?"
                   },
                   {
-                    "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+                    "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "dHMXRQ"
@@ -495071,6 +495435,20 @@
                   },
                   {
                     "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
+                  },
+                  {
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "WIZR3H"
                   }
                 ],
                 "id": "4Ij9Rt"
@@ -495136,6 +495514,15 @@
                   },
                   {
                     "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
                   }
                 ],
                 "id": "0sSqOl"
@@ -495157,11 +495544,12 @@
                     "npc": "And?"
                   },
                   {
-                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
                   },
                   {
-                    "type": "unavailable",
-                    "id": "z2xH5U"
+                    "type": "message",
+                    "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+                    "id": "A6tdo0"
                   },
                   {
                     "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -495180,7 +495568,7 @@
                     "npc": "Oh! Whatever can we do!"
                   },
                   {
-                    "player": "Calm down, I have arrested the ringleader."
+                    "player": "Don't worry. I put a stop to their plots."
                   },
                   {
                     "npc": "Oh, thank Saradomin for that. So, tell me the story!"
@@ -531635,8 +532023,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Jennifer's General Field Supplies",
+                "action": "open_shop",
+                "target": "Jennifer's General Supplies",
                 "id": "5CeRPR"
               }
             ]
@@ -536226,6 +536614,9 @@
                       "player": "Tell me more."
                     },
                     {
+                      "npc": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "QNbrzb"
@@ -536238,7 +536629,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -536305,13 +536696,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "9fHaCZ",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-7cd35e89205a4500"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "9fHaCZ"
                                     }
                                   ]
                                 },
@@ -536338,13 +536724,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "CySmbo",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-5a526e163aa93237"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "CySmbo"
                                     }
                                   ]
                                 },
@@ -536560,60 +536941,6 @@
         },
         {
           "npc": "That strange device will guide you in the same way the key did. Feel it, but be careful as it is very powerful. Good luck."
-        }
-      ]
-    },
-    "branches": {
-      "jump-7cd35e89205a4500": [
-        {
-          "npc": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "npc": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "npc": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "CySmbo",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-5a526e163aa93237"
-            }
-          ]
-        }
-      ],
-      "jump-5a526e163aa93237": [
-        {
-          "npc": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "npc": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "npc": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "l9j7rY"
         }
       ]
     }
@@ -647811,6 +648138,11 @@
                       "player": "Tell me more."
                     },
                     {
+                      "type": "line",
+                      "speaker": "Jorral",
+                      "text": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "kXluF_"
@@ -647823,7 +648155,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -647895,13 +648227,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "iZayEM",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-79bf75cd79a02093"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "iZayEM"
                                     }
                                   ]
                                 },
@@ -647934,13 +648261,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "BzGWef",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-df1ff5d3385709dd"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "BzGWef"
                                     }
                                   ]
                                 },
@@ -650169,70 +650491,6 @@
       ]
     },
     "branches": {
-      "jump-79bf75cd79a02093": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "BzGWef",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-df1ff5d3385709dd"
-            }
-          ]
-        }
-      ],
-      "jump-df1ff5d3385709dd": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "ZkS_lE"
-        }
-      ],
       "jump-e0c8ede1de79cc3c": [
         {
           "player": "I don't care about some dusty building."
@@ -733594,8 +733852,8 @@
       "inspecting-the-goblin-stove": [
         {
           "type": "message",
-          "text": "Just a plain stove. Nothing here.",
-          "id": "1J3qkz"
+          "text": "Just a plain stove. Nothing there.",
+          "id": "kxDt7S"
         }
       ],
       "starting-off": [
@@ -735536,14 +735794,6 @@
                 {
                   "type": "line",
                   "speaker": "Observatory professor",
-                  "text": "How are you getting on finding me some molten glass?"
-                },
-                {
-                  "player": "Here it is."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Observatory professor",
                   "text": "Did you bring me the mould?"
                 },
                 {
@@ -735877,54 +736127,56 @@
           "type": "choice",
           "options": [
             {
-              "text": "Talk about the Observatory quest."
-            }
-          ]
-        },
-        {
-          "player": "Yes, here it is. You may as well take this mould too.",
-          "steps": [
-            {
-              "type": "action",
-              "text": "The player hands the observatory professor the observatory lens.",
-              "id": "p1dzXH"
-            }
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Wonderful, at last I can fix the telescope."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
-        },
-        {
-          "player": "Sounds interesting. Count me in."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
-        },
-        {
-          "player": "Okay. See you there."
-        },
-        {
-          "type": "message",
-          "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
-          "steps": [
-            {
-              "type": "end"
-            }
-          ],
-          "id": "57NA_7"
-        },
-        {
-          "type": "choice",
-          "options": [
+              "text": "Talk about the Observatory quest.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Is the lens finished?"
+                },
+                {
+                  "player": "Yes, here it is. You may as well take this mould too.",
+                  "steps": [
+                    {
+                      "type": "action",
+                      "text": "The player hands the observatory professor the observatory lens.",
+                      "id": "HgpGGr"
+                    }
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Wonderful, at last I can fix the telescope."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
+                },
+                {
+                  "player": "Sounds interesting. Count me in."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
+                },
+                {
+                  "player": "Okay. See you there."
+                },
+                {
+                  "type": "message",
+                  "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
+                  "steps": [
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "vj7Nry"
+                }
+              ]
+            },
             {
               "text": "Talk about Treasure Trails."
             }
@@ -743835,7 +744087,7 @@
                   "player": "I'm here about the farmers east of here."
                 },
                 {
-                  "player": "Hello there, just dropping in to thank you again. It all went perfectly. Alice and her husband can communicate again."
+                  "player": "Hello there, just dropping in to thank you again. It all went perfectly. Alice and Malcolm can communicate again."
                 },
                 {
                   "npc": "I can't help but shed a tear about my own family. My sisters are so vile, I refuse to talk to them these days."
@@ -784413,6 +784665,50 @@
               "type": "line",
               "speaker": "Jethick",
               "text": "Hello, I don't recognise you. We don't get many newcomers around here."
+            },
+            {
+              "player": "How come?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague of course. Not many people want to come to a place like this and the few that do normally get stopped by the mourners."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "All you'll find here now are the dead and the dying. Even our own king has abandoned us."
+            },
+            {
+              "player": "Your king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Yes, King Tyras of West Ardougne. He's the brother of King Lathas, the ruler of East Ardougne."
+            },
+            {
+              "player": "So where is the king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Well he's always been a bit of an explorer. He's led multiple expeditions into the uncharted lands to the west."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague first started when he came back from one of these expeditions. More than a few suspect that some of his men caught it out there and brought it back with them."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The king didn't care though. He just left on another expedition to the west. He hasn't been seen since. He left the city warder Bravek in charge but he's no better."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Anyway, you clearly didn't come here to talk about kings. So tell me, what brings you to West Ardougne?"
             }
           ],
           "id": "gYdBsh"
@@ -784517,6 +784813,52 @@
           "type": "line",
           "speaker": "Jethick",
           "text": "They live in the small timbered building at the far north side of town. I've not seen her around here in a while, mind."
+        },
+        {
+          "type": "line",
+          "speaker": "Jethick",
+          "text": "I don't suppose you could run me a little errand while you're over there? I borrowed this book from them, can you return it?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, I'll return it for you.",
+              "steps": [
+                {
+                  "player": "Yes, I'll return it for you."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Jethick shows you the book, but you don't have room to take it.",
+                      "id": "iU5foK"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "w5QLTg"
+                },
+                {
+                  "type": "message",
+                  "text": "Jethick gives you a book.",
+                  "id": "j0IeQT"
+                }
+              ]
+            },
+            {
+              "text": "No, I don't have time for that.",
+              "steps": [
+                {
+                  "player": "No, I don't have time for that."
+                }
+              ]
+            }
+          ]
         }
       ],
       "finding-elena-returning-the-book-to-ted-rehnison": [
@@ -785020,6 +785362,21 @@
                                   ]
                                 }
                               ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "This is urgent though! Someone's been kidnapped!",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "C6ctb6",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-a431ec56a3a4bb0c"
                             }
                           ]
                         }
@@ -819976,7 +820333,7 @@
                 {
                   "type": "action",
                   "action": "open_shop",
-                  "target": "Armour Shop (Jatizso)",
+                  "target": "Armour Shop",
                   "id": "ElIUsG"
                 }
               ]
@@ -840142,7 +840499,12 @@
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Well, a top-notch fellow like yourself is just the right sort we've been seeking for our organisation."
+          "text": "Well, a top-notch adventurer like yourself is just the right sort we've been seeking for our organisation."
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Tiffy Cashien",
+          "text": "So, are you ready to begin testing?"
         },
         {
           "type": "choice",
@@ -883087,6 +883449,11 @@
           "text": "If the player has one free space in their in their inventory:",
           "steps": [
             {
+              "type": "message",
+              "text": "Bailey gives you a torch.",
+              "id": "05RBJj"
+            },
+            {
               "type": "action",
               "action": "receive",
               "text": "an unlit torch",
@@ -883491,17 +883858,6 @@
               "player": "Not one."
             },
             {
-              "player": "Kennith, I've made an opening in the wall. You can come out through there."
-            },
-            {
-              "type": "line",
-              "speaker": "Kennith",
-              "text": "Are there any sea slugs on the other side?"
-            },
-            {
-              "player": "Not one."
-            },
-            {
               "type": "line",
               "speaker": "Kennith",
               "text": "How will I get downstairs?"
@@ -883532,8 +883888,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "I need to get closer to that.",
-              "id": "j1zwz0"
+              "text": "I need to get closer to use that.",
+              "id": "b2e13Y"
             },
             {
               "type": "end"
@@ -1125386,13 +1125742,236 @@
           "type": "choice",
           "options": [
             {
-              "text": "I seek a shield that will protect me from dragonbreath."
+              "text": "I seek a shield that will protect me from dragonbreath.",
+              "steps": [
+                {
+                  "player": "I seek a shield that will protect me from dragonbreath."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Duke Horacio",
+                  "text": "A knight going on a dragon quest, hmm? What dragon do you intend to slay?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Elvarg, the dragon of Crandor island!",
+                      "condition": "During Dragon Slayer I:",
+                      "steps": [
+                        {
+                          "player": "Elvarg, the dragon of Crandor island!"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Duke Horacio",
+                          "text": "Elvarg? Are you sure?"
+                        },
+                        {
+                          "type": "choice",
+                          "prompt": "Well, are you sure?",
+                          "options": [
+                            {
+                              "text": "Yes.",
+                              "steps": [
+                                {
+                                  "player": "Yes."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "Well, you're a braver [man/woman] than I!"
+                                },
+                                {
+                                  "player": "Why is everyone so scared of this dragon?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "Back in my father's day, Crandor was an important city-state. Politically it was as important as Falador and Varrock and its ships traded with every port."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "But, one day, when I was little, all contact was lost. The trading ships and the diplomatic envoys just stopped coming."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "I remember my father being very scared. He posted lookouts on the roof to warn if the dragon was approaching. All the city rulers worried that Elvarg would devastate the whole continent."
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "I'd better leave that dragon alone.",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "saWr2f"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "So, are you going to give me the shield or not?",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "cn7FgA"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "No.",
+                              "steps": [
+                                {
+                                  "type": "call",
+                                  "branch": "nzGmXm"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "id": "7GKyg9"
+                    },
+                    {
+                      "text": "Oh, no dragon in particular",
+                      "steps": [
+                        {
+                          "player": "Oh, no dragon in particular. I just feel like killing a dragon."
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has not finished Dragon Slayer I:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "JVYlhB"
+                            }
+                          ],
+                          "id": "zHKrL2"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has finished Dragon Slayer I:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "vSAAt1"
+                            }
+                          ],
+                          "id": "MzcOcB"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "text": "Have you any quests for me?"
+              "text": "Have you any quests for me?",
+              "steps": [
+                {
+                  "player": "Have you any quests for me?"
+                },
+                {
+                  "type": "condition",
+                  "text": "Before starting the Rune Mysteries quest.",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "Well, it's not really a quest but I recently discovered this strange talisman."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "It seems to be mystical and I have never seen anything like it before. Would you take it to the head wizard at"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "the Wizards' Tower for me? It's just south-west of here and should not take you very long at all. I would be awfully grateful."
+                    },
+                    {
+                      "type": "choice",
+                      "options": [
+                        {
+                          "text": "Yes.",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "RlDs-9"
+                            }
+                          ]
+                        },
+                        {
+                          "text": "No.",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "dFi-kP"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "id": "1Xm1Mf"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and still having the talisman.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "AHm0E4"
+                    }
+                  ],
+                  "id": "Cz-xNJ"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and having lost the talisman.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "Xlvoxu"
+                    }
+                  ],
+                  "id": "3RS_bB"
+                },
+                {
+                  "type": "action",
+                  "text": "After giving the talisman to Sedridor.",
+                  "id": "KISUz1"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and having the Research package.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "fGthc3"
+                    }
+                  ],
+                  "id": "VAZRgi"
+                }
+              ]
             },
             {
-              "text": "Where can I find money?"
+              "text": "Where can I find money?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "p5txee"
+                }
+              ]
             },
             {
               "text": "What happened in the cellar?",
@@ -1125619,25 +1126198,7 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "Last night I was in the kitchen and I heard a noise from the cellar. I opened the trapdoor and saw a creature dart into a hole in the wall."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "It looked a bit like a goblin, but it had big bulging eyes. It wasn't wearing armour, but it had this odd helmet with a light on it."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "The tunnel was too dark for me to follow it, so I went to tell the Duke. But when we went down to the cellar the hole had been blocked up, and no one believes me."
-                },
-                {
-                  "player": "I believe you."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "Thank you, [player name]! If you can convince the Duke I'm telling the truth then we can get to the bottom of this mystery."
+                  "text": "No. But we should find whoever is responsible and slay them! With an axe!"
                 }
               ]
             },
@@ -1125653,7 +1126214,106 @@
           ]
         }
       ],
-      "a-hole-in-the-wall-asking-bob-talking-to-bob-again": [
+      "a-hole-in-the-wall-asking-father-aereck": [
+        {
+          "type": "line",
+          "speaker": "Father Aereck",
+          "text": "Welcome to this church of holy Saradomin."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Could you tell me more about prayers?"
+            },
+            {
+              "text": "Could you tell me more about Saradomin?"
+            },
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Father Aereck",
+                  "text": "It's a shame, isn't it? The castle is even older than this church, and so it's terrible that it would be damaged, even if it's only the cellar."
+                }
+              ]
+            },
+            {
+              "text": "I'd better be going."
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-asking-donie-or-gee": [
+        {
+          "type": "line",
+          "speaker": "Donie/Gee",
+          "text": "Hello there, can I help you?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Where am I?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "tMJJz9"
+                }
+              ]
+            },
+            {
+              "text": "How are you today?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "cjSB-d"
+                }
+              ]
+            },
+            {
+              "text": "Are there any quests I can do here?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "PX3n9d"
+                }
+              ]
+            },
+            {
+              "text": "Your shoe lace is untied.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "oSaymb"
+                }
+              ]
+            },
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Donie/Gee",
+                  "text": "I heard the wall collapsed or something. I don't know why. Perhaps you could get to the bottom of this mystery!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin": [
         {
           "type": "choice",
           "options": [
@@ -1125665,24 +1126325,53 @@
                 },
                 {
                   "type": "line",
-                  "speaker": "Bob",
-                  "text": "I told you about the creature I saw. You should go and tell the Duke."
+                  "speaker": "NPC",
+                  "text": "Last night I was in the kitchen and I heard a noise from the cellar. I opened the trapdoor and saw a creature dart into a hole in the wall."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "It looked a bit like a goblin, but it had big bulging eyes. It wasn't wearing armour, but it had this odd helmet with a light on it."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "The tunnel was too dark for me to follow it, so I went to tell the Duke. But when we went down to the cellar the hole had been blocked up, and no one believes me."
+                },
+                {
+                  "player": "I believe you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "Thank you, [player name]! If you can convince the Duke I'm telling the truth then we can get to the bottom of this mystery."
                 }
               ]
-            },
-            {
-              "text": "Give me a quest!"
-            },
-            {
-              "text": "Have you anything to sell?"
-            },
-            {
-              "text": "Can you repair my items for me?"
             }
           ]
         }
       ],
-      "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob": [
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-them-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "I told you about the creature I saw. You should go and tell the Duke."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin": [
         {
           "type": "line",
           "speaker": "Sigmund",
@@ -1125692,10 +1126381,10 @@
           "type": "choice",
           "options": [
             {
-              "text": "Bob says he saw something in the cellar.",
+              "text": "[NPC] says he saw something in the cellar.",
               "steps": [
                 {
-                  "player": "Bob says he saw something in the cellar. Like a goblin with big eyes."
+                  "player": "[NPC] says he saw something in the cellar. Like a goblin with big eyes."
                 },
                 {
                   "type": "line",
@@ -1125826,10 +1126515,10 @@
               ]
             },
             {
-              "text": "Bob says he saw something in the cellar",
+              "text": "[NPC] says he saw something in the cellar",
               "steps": [
                 {
-                  "player": "Bob says he saw something in the cellar. Like a goblin with big eyes."
+                  "player": "[NPC] says he saw something in the cellar. Like a goblin with big eyes."
                 },
                 {
                   "type": "line",
@@ -1125854,7 +1126543,7 @@
                       "text": "Your grace, this is the adventurer who defeated the dragon Elvarg. I think you should listen to [him/her/them]."
                     }
                   ],
-                  "id": "PbfBX1"
+                  "id": "QQJ5aZ"
                 },
                 {
                   "type": "condition",
@@ -1125866,7 +1126555,7 @@
                       "text": "Your grace, this adventurer took that talisman you discovered to Sedridor. I think you should listen to [him/her/them]."
                     }
                   ],
-                  "id": "We9PoA"
+                  "id": "qSGrsq"
                 },
                 {
                   "type": "line",
@@ -1126341,7 +1127030,7 @@
                 {
                   "type": "line",
                   "speaker": "Sigmund",
-                  "text": "It is unknown to me, your grace. But the fact it is there is enough to prove Bob's story. It must have been dropped by a goblin as it fled."
+                  "text": "It is unknown to me, your grace. But the fact it is there is enough to prove [NPC]'s story. It must have been dropped by a goblin as it fled."
                 },
                 {
                   "type": "line",
@@ -1127150,12 +1127839,8 @@
                                       "text": "I'd better leave that dragon alone.",
                                       "steps": [
                                         {
-                                          "player": "I'd better leave that dragon alone."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "That's a relief. I would hate to see such a promising adventurer cut down in [his/her] prime."
+                                          "type": "call",
+                                          "branch": "saWr2f"
                                         }
                                       ]
                                     },
@@ -1127163,33 +1127848,8 @@
                                       "text": "So, are you going to give me the shield or not?",
                                       "steps": [
                                         {
-                                          "player": "So, are you going to give me the shield or not?"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "If you really think you're up to it then perhaps you are the one who can kill this dragon."
-                                        },
-                                        {
-                                          "type": "message",
-                                          "text": "The Duke hands you a heavy orange shield.",
-                                          "id": "LnbjYr"
-                                        },
-                                        {
-                                          "type": "action",
-                                          "action": "receive",
-                                          "text": "Anti-dragon shield",
-                                          "id": "igRDii"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "Take care out there. If you kill it..."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "If you kill it, for Saradomin's sake make sure it's really dead!"
+                                          "type": "call",
+                                          "branch": "cn7FgA"
                                         }
                                       ]
                                     }
@@ -1127201,9 +1127861,8 @@
                               "text": "No.",
                               "steps": [
                                 {
-                                  "type": "line",
-                                  "speaker": "Duke Horacio",
-                                  "text": "Very wise. There are some monsters that are best left alone."
+                                  "type": "call",
+                                  "branch": "nzGmXm"
                                 }
                               ]
                             }
@@ -1127223,12 +1127882,8 @@
                           "text": "If the player has not finished Dragon Slayer I:",
                           "steps": [
                             {
-                              "type": "line",
-                              "speaker": "Duke Horacio",
-                              "text": "I don't have an infinite supply of these shields, you know. I'll only give one for a truly worthy cause."
-                            },
-                            {
-                              "type": "end"
+                              "type": "call",
+                              "branch": "JVYlhB"
                             }
                           ],
                           "id": "zHKrL2"
@@ -1127238,23 +1127893,8 @@
                           "text": "If the player has finished Dragon Slayer I:",
                           "steps": [
                             {
-                              "player": "Oh, no dragon in particular. I just feel like killing a dragon."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Duke Horacio",
-                              "text": "Of course. Now you've slain Elvarg, you've earned the right to call the shield your own!"
-                            },
-                            {
-                              "type": "message",
-                              "text": "The Duke hands you the shield.",
-                              "id": "if_uB3"
-                            },
-                            {
-                              "type": "action",
-                              "action": "receive",
-                              "text": "Anti-dragon shield",
-                              "id": "emj6I8"
+                              "type": "call",
+                              "branch": "vSAAt1"
                             }
                           ],
                           "id": "MzcOcB"
@@ -1128739,6 +1129379,85 @@
           "type": "line",
           "speaker": "Sigmund",
           "text": "I only advise the Duke. But if you want to make yourself useful, there are evil goblins to slay on the other side of the river."
+        }
+      ],
+      "saWr2f": [
+        {
+          "player": "I'd better leave that dragon alone."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "That's a relief. I would hate to see such a promising adventurer cut down in [his/her] prime."
+        }
+      ],
+      "cn7FgA": [
+        {
+          "player": "So, are you going to give me the shield or not?"
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "If you really think you're up to it then perhaps you are the one who can kill this dragon."
+        },
+        {
+          "type": "message",
+          "text": "The Duke hands you a heavy orange shield.",
+          "id": "LnbjYr"
+        },
+        {
+          "type": "action",
+          "action": "receive",
+          "text": "Anti-dragon shield",
+          "id": "igRDii"
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Take care out there. If you kill it..."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "If you kill it, for Saradomin's sake make sure it's really dead!"
+        }
+      ],
+      "nzGmXm": [
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Very wise. There are some monsters that are best left alone."
+        }
+      ],
+      "JVYlhB": [
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "I don't have an infinite supply of these shields, you know. I'll only give one for a truly worthy cause."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "vSAAt1": [
+        {
+          "player": "Oh, no dragon in particular. I just feel like killing a dragon."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Of course. Now you've slain Elvarg, you've earned the right to call the shield your own!"
+        },
+        {
+          "type": "message",
+          "text": "The Duke hands you the shield.",
+          "id": "if_uB3"
+        },
+        {
+          "type": "action",
+          "action": "receive",
+          "text": "Anti-dragon shield",
+          "id": "emj6I8"
         }
       ],
       "RlDs-9": [

@@ -78,6 +78,13 @@ function actor(t, { thieving = 99, at = [WILD[0] - 1, WILD[1]] } = {}) {
   sender.sendMessage = (message) => { f.messages.push([clock, message]); return sendMessage(message); };
   const sendSound = sender.sendSound.bind(sender);
   sender.sendSound = (id, volume, delay) => { f.sounds.push([clock, id, delay]); return sendSound(id, volume, delay); };
+  // Every inventory the client is shown, as the ids it holds (an inventory copy used for planning must never be).
+  f.shown = [];
+  const sendItemContainer = sender.sendItemContainer.bind(sender);
+  sender.sendItemContainer = (container, interfaceId, ...rest) => {
+    if (interfaceId === core.Inventory.INTERFACE_ID) f.shown.push(container.getItems().map((item) => item?.getId?.() ?? -1));
+    return sendItemContainer(container, interfaceId, ...rest);
+  };
   const perform = player.performAnimation.bind(player);
   player.performAnimation = (animation) => { f.animations.push([clock, animation.getId()]); return perform(animation); };
   t.after(() => {
@@ -191,6 +198,21 @@ test("the Muddy chest opens with exactly the room it needs and keeps the key whe
   assert.equal(count(full, I.UNCUT_RUBY), 0);
   assert.equal(count(full, I.MUDDY_KEY), 1, "the key is kept");
   assert.equal(credited(full, MUDDY_TASK), false);
+});
+
+test("a full pack keeps the key on the client too: the refusal shows no inventory without it (issue 4684)", async (t) => {
+  // The room check plans on a copy of the inventory with the key taken out; that copy was sent to the client, so
+  // the key looked used up although the refusal kept it.
+  const f = actor(t);
+  fill(f, 2);
+  f.inv.setItem(0, new core.Item(I.MUDDY_KEY, 1));
+  f.shown.length = 0;
+  await click(f, chestAt(t, MUDDY_CHEST), "Open");
+  ticks(f, 12);
+  assert.ok(f.messages.some(([, message]) => message === "You need more inventory space to open the chest."));
+  assert.equal(count(f, I.MUDDY_KEY), 1, "the key is kept");
+  assert.deepEqual(f.shown.filter((ids) => !ids.includes(I.MUDDY_KEY)), [], "the client is never shown the pack without the key");
+  assert.equal(credited(f, MUDDY_TASK), false);
 });
 
 test("the Muddy chest plans its room on the real stacks: a preset rune stack needs a slot of its own and the key is kept", async (t) => {

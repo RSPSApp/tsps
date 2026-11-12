@@ -187,6 +187,10 @@ function wrenchOff(player) {
   ));
 }
 
+function wrenchOffEvent({ player }) {
+  wrenchOff(player);
+}
+
 function canEquipGreegree(event) {
   const { player, item } = event;
   if (!FORMS.has(item.getId())) return;
@@ -260,6 +264,8 @@ module.exports = {
     api.onCustomEvent("equipment:changed", syncOnEquipmentChange);
     api.onCustomEvent("player:bootstrap-complete", syncOnLogin);
     api.onCustomEvent("greegree:form", answerForm);
+    // "greegree:wrench-off" { player }: content where the greegree loses its power (Kruk's Dungeon, Monkey Madness II).
+    api.onCustomEvent("greegree:wrench-off", wrenchOffEvent);
   },
 };
 

@@ -139,7 +139,9 @@ function defineBryophytaCombatMethod() {
     handleAfterHitEffects(hit) {
       const target = hit.getTarget();
       if (this.stance === CombatType.MELEE && hit.getTotalDamage?.() > 0 && target?.isPlayer?.() && roll(DATA.poison.chance)) {
-        CombatFactory.poisonEntity(target, DATA.poison.damage);
+        // poisonEntity takes severity, hit x 5: rsprox_transcripts/227/00569.txt:19727, 227/01858.txt:250797 and
+        // 234/03275.txt:354628 set the poison varp 0 -> 40 for the 8 the data gives.
+        CombatFactory.poisonEntity(target, DATA.poison.damage * 5);
       }
     }
   };

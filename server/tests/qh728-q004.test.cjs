@@ -153,8 +153,9 @@ test('AFL mandatory route runs stage 0 to 12 through the real NPC, object, item 
   h.continueUntil(p, () => /small toy mouse/.test(p.text)); assert.equal(p.items.get(I.TOY_MOUSE), 1); assert.equal(p.varbits.get(9843), 1);
   h.finish(p);
 
-  h.itemActions.get('Toy mouse').Wind({ player: p, itemId: I.TOY_MOUSE });
-  assert.equal(p.items.get(I.TOY_MOUSE_WOUND_), 1); assert.ok(p.messages.includes('You wind up the mouse.'));
+  // Wind belongs to construction/ClockworkToys.Construction.js (tests/construction-clockwork-toys.test.cjs).
+  assert.equal(h.itemActions.get('Toy mouse')?.Wind, undefined, 'the quest leaves Wind to the clockwork toys');
+  p.items.set(I.TOY_MOUSE, 0); p.items.set(I.TOY_MOUSE_WOUND_, 1);
   h.hooks.onItemOnNpc[0]({ player: p, itemId: I.TOY_MOUSE_WOUND_, npcId: N.GUILD_HUNTER_KIKO });
   assert.equal(p.items.get(I.TOY_MOUSE_WOUND_), 0); assert.equal(p.varbits.get(9839), 1);
   h.continueUntil(p, () => p.text === 'A mouse? Fantastic!'); h.finish(p);

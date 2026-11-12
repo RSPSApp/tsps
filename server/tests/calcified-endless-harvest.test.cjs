@@ -39,7 +39,7 @@ after(() => PM.emitServerShutdown({}));
 
 /**
  * The tile beside `rock` a miner can stand on: the first orthogonal neighbour the map does not block (the
- * first diagnostic runs stood on the west one and got "You can't reach that!", the tile being rock or wall).
+ * first diagnostic runs stood on the west one and got "I can't reach that!", the tile being rock or wall).
  */
 function standTile(rock) {
   const at = rock.getLocation();

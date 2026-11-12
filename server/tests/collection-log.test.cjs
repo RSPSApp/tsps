@@ -464,7 +464,7 @@ test("Barrows logs its chest rewards once, including overflow, and uses its pers
   const delivered = [];
   player.getInventory = () => ({ forceAdd: (_player, item) => { delivered.push(item); return false; } });
   const sender = player.getPacketSender();
-  sender.sendObject = sender.sendObjectRemoval = () => sender;
+  sender.sendObject = sender.sendObjectRemoval = sender.sendJingle = () => sender;
   sender.sendMessage = player.sendMessage;
   const run = { tunnel: 0, killed: [0, 1, 2, 3, 4, 5], points: 1000, kills: 6, chests: 8, chestOpen: true, looted: false };
   player.setAttribute("barrows", run);

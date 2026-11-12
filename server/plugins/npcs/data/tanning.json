@@ -2,9 +2,9 @@
   "source": "https://oldschool.runescape.wiki/w/Mary_(Getting_Ahead)",
   "coins": 995,
   "messagesSource": "rsprox captures 90, 91, 1104, 1846, 1857, 1858, 1862, 3276, 3333 (Leagues/event worlds; none tans snake hide)",
-  "pricesSource": "https://oldschool.runescape.wiki/w/Sbott (2/5/25/45 coins: soft, hard, snakeskins, dragon leather)",
+  "pricesSource": "https://oldschool.runescape.wiki/w/Sbott (2/5 coins leather; 25 the Tai Bwo Wannai snake hide, 45 the Temple Trekking swamp snake hide and dragon leather)",
   "prices": {
-    "Sbott": [2, 5, 25, 25, 45, 45, 45, 45]
+    "Sbott": [2, 5, 25, 45, 45, 45, 45, 45]
   },
   "hides": [
     { "raw": 1739, "product": 1741, "name": "Soft leather", "price": 1, "hide": "cowhide" },

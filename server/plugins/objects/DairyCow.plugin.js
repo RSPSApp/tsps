@@ -1,7 +1,8 @@
 /**
  * Dairy cow (a scenery loc, not a killable NPC), as per OSRS:
  *
- *   Dairy cow > Milk            empty bucket -> bucket of milk (milking animation)
+ *   Dairy cow > Milk            empty bucket -> bucket of milk (milking animation); with no
+ *                               empty bucket, a bottomless milk bucket fills a use every 7 ticks
  *   Dairy cow > Steal-cowbell   15 Thieving, 16 XP; success 50%@1 -> 78%@99,
  *                               stuns you on failure
  *
@@ -25,7 +26,11 @@ const THIEVING_ANIMATION = new Animation(881);
 const STEAL_LEVEL = 15;
 const STEAL_XP = 16;
 const STEAL_STUN_TICKS = 8;
+const STUNNED_THIEVING_GRAPHIC = 245;
 const COLD_WAR_QUEST_KEY = "cold_war";
+// rsprox 227/00090.txt:200368, 232/00424.txt:88405.
+const NO_BUCKET_MESSAGE = "You'll need an empty bucket to collect the milk.";
+const BOTTOMLESS_FULL_MESSAGE = "Your bottomless milk bucket, surprisingly, is full.";
 const COLD_WAR_REQUIRED_MESSAGE = "You need to have started Cold War to steal a cowbell.";
 
 let TaskManager;
@@ -37,16 +42,20 @@ function stealChance(level) {
   return Math.min(0.78, 0.5 + (0.28 * (level - 1)) / 98);
 }
 
+function wearsCowbell(player) {
+  const amulet = player.getEquipment().get(pluginApi.core.Equipment.AMULET_SLOT)?.getId();
+  return amulet === ItemIdentifiers.COWBELL_AMULET || amulet === ItemIdentifiers.COWBELL_AMULET_2;
+}
+
 function milkCow(event) {
   const { player } = event;
   if (!player.getInventory().containsNumber(ItemIdentifiers.BUCKET)) {
-    player.sendMessage("You need an empty bucket to milk the cow.");
+    milkIntoBottomless(player);
     return;
   }
   const from = player.getLocation().clone();
   const token = {};
-  const amulet = player.getEquipment().get(pluginApi.core.Equipment.AMULET_SLOT)?.getId();
-  const faster = amulet === ItemIdentifiers.COWBELL_AMULET || amulet === ItemIdentifiers.COWBELL_AMULET_2;
+  const faster = wearsCowbell(player);
   milking.set(player, token);
   player.performAnimation(MILKING_ANIMATION);
   TaskManager.submit(new pluginApi.core.CountdownTask(player, faster ? 6 : 7, () => {
@@ -57,8 +66,60 @@ function milkCow(event) {
     player.getInventory().deleteNumber(ItemIdentifiers.BUCKET, 1);
     player.getInventory().adds(ItemIdentifiers.BUCKET_OF_MILK, 1);
     player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
-    player.sendMessage("You milk the cow.");
+    // rsprox: a spam line (10 recordings).
+    player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, "You milk the cow.");
   }));
+}
+
+/**
+ * Wiki (Bottomless milk bucket): with no empty bucket, a bottomless milk bucket fills from the
+ * cow a use every 7 ticks (6 with the cowbell amulet) until it is full or the player stops.
+ */
+function milkIntoBottomless(player) {
+  const request = { player, bucket: null, full: false };
+  pluginApi.emitCustomEvent("bottomless-milk:fillable", request);
+  if (!request.bucket) {
+    player.sendMessage(request.full ? BOTTOMLESS_FULL_MESSAGE : NO_BUCKET_MESSAGE);
+    return;
+  }
+  const from = player.getLocation().clone();
+  const token = {};
+  milking.set(player, token);
+  player.performAnimation(MILKING_ANIMATION);
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(wearsCowbell(player) ? 6 : 7, player); }
+    execute() {
+      if (milking.get(player) !== token || !player.isRegistered() || !player.getLocation().equals(from)) {
+        this.stop();
+        return;
+      }
+      const added = { player, bucket: request.bucket, added: false, full: false };
+      pluginApi.emitCustomEvent("bottomless-milk:add-milk", added);
+      if (!added.added || added.full) {
+        milking.delete(player);
+        player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+        if (added.full) player.sendMessage(BOTTOMLESS_FULL_MESSAGE);
+        this.stop();
+        return;
+      }
+      player.performAnimation(MILKING_ANIMATION);
+    }
+  })());
+}
+
+/**
+ * An inventory item action clears the player's interaction (Player.clearPendingAction), which
+ * ends a milking under way, as it ends a chop or a mining action (Woodcutting, Mining).
+ */
+function stopMilking({ player }) {
+  if (!milking.has(player)) return;
+  milking.delete(player);
+  player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+}
+
+/** Using the bottomless bucket itself on the cow fills it even with an empty bucket carried. */
+function bottomlessOnCow(event) {
+  milkIntoBottomless(event.player);
 }
 
 function coldWarStarted(player) {
@@ -88,7 +149,6 @@ function stealCowbell(event) {
   player.getMovementQueue().reset();
   player.setPositionToFace(new Location(event.location.x, event.location.y, event.location.z));
   player.performAnimation(THIEVING_ANIMATION);
-  player.sendMessage("You attempt to steal a cowbell...");
   player.getClickDelay().reset();
 
   TaskManager.submit(new (class extends Task {
@@ -100,10 +160,13 @@ function stealCowbell(event) {
           player.getSkillManager().addExperiences(Skill.THIEVING, STEAL_XP);
           player.sendMessage("You steal a cowbell.");
         } else {
-          player.sendMessage("The cow kicks you and stuns you.");
-          player.sendMessage("MOO");
+          // rsprox 227/00075.txt:338001-338002, :338122-338123 (Leagues V): both lines, then the cow's
+          // "MOO" as a chathead line two ticks later (not modelled: the cow is a loc, not an NPC).
+          player.sendMessage("You fail to steal a cowbell.");
+          player.sendMessage("The cow kicks you and stuns you!");
           Sounds.sendSound(player, Sound.THIEVING_STUNNED);
-          CombatFactory.stunTicks(player, STEAL_STUN_TICKS, true);
+          // As recorded: stunned_thieving (245) at height 124, and no "You've been stunned!" line.
+          CombatFactory.stunTicks(player, STEAL_STUN_TICKS, true, { graphic: new pluginApi.core.Graphic(STUNNED_THIEVING_GRAPHIC, 0, 124), message: false });
           player.getMovementQueue().reset();
         }
       }
@@ -123,5 +186,10 @@ module.exports = {
     api.onObjectInteraction("Dairy Cow", actions);
     api.onItemOnObject("Bucket", "Dairy cow", milkCow, { noted: false });
     api.onItemOnObject("Bucket", "Dairy Cow", milkCow, { noted: false });
+    api.onItemOnObject("Bottomless milk bucket", "Dairy cow", bottomlessOnCow);
+    api.onItemOnObject("Bottomless milk bucket", "Dairy Cow", bottomlessOnCow);
+    api.onItemOnObject("Bottomless milk bucket (empty)", "Dairy cow", bottomlessOnCow);
+    api.onItemOnObject("Bottomless milk bucket (empty)", "Dairy Cow", bottomlessOnCow);
+    api.onCustomEvent("player:interaction-cleared", stopMilking);
   },
 };

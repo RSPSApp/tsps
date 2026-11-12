@@ -1315,8 +1315,11 @@ module.exports = function registerFremennikTrialsQuest(api) {
       player.sendMessage("Only Fremenniks may use this spinning wheel.");
       return;
     }
-    take(player, GOLDEN_FLEECE, 1);
-    give(player, GOLDEN_WOOL, 1);
+    // The click may land after a walk: spin only the fleece still in the used slot, in place.
+    const inventory = player.getInventory();
+    if (inventory.forSlot(event.itemSlot)?.getId() !== GOLDEN_FLEECE) return;
+    inventory.setItem(event.itemSlot, new api.core.Item(GOLDEN_WOOL, 1));
+    inventory.refreshItems();
     // Wiki (Golden wool): "Level 1 is required, and the action grants 2.5 XP" (Crafting).
     player.getSkillManager().addExperiences(Skill.CRAFTING, GOLDEN_WOOL_XP);
     player.sendMessage("You spin the golden fleece into golden wool.");

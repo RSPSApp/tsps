@@ -19,6 +19,7 @@
  */
 const Shared = require("./Shared.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Desiccated pages (both tables roll this id). */
 const PAGES_ITEM_ID = 30640;
@@ -161,7 +162,7 @@ function recordKill(player, session, ticks) {
 }
 
 function announceKill(player, kills, ticks) {
-  player.sendMessage(`Your Royal Titans kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Royal Titans kill count is: <col=ff0000>${kills}</col>.`);
   const best = player.getAttribute(Shared.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Shared.BEST_TICKS_ATTRIBUTE, ticks);
@@ -295,12 +296,20 @@ function claim({ player, npc }, option) {
   return true;
 }
 
+/** The Wiki gives each titan two primary rolls on its table (rolls=2 on its repeated rows). */
+const PRIMARY_ROLLS = 2;
+
 /** Loot: two primary rolls (death roll + one extra), scaled; no pages; tertiary as rolled. */
 function loot(player, session, npc, share) {
   const id = npc.getId() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
-  // The death roll was the top damager's: every claimant rolls their own in its place, so nothing is copied between them.
-  const extra = { player, npc, npcId: id, rolls: 1, drops: [] };
-  api.emitCustomEvent("npc-drops:extra-rolls", extra);
+  // The death roll was the top damager's: every claimant rolls their own in its place, so nothing is copied between
+  // them. The table repeats itself `rolls` times when the export carries it (the Wiki's rolls=2), so only the primary
+  // rolls it does not already make are added: one extra with no exported count, none with rolls=2.
+  const own = { player, npc, npcId: id, rolls: 1 };
+  api.emitCustomEvent("npc-drops:table-rolls", own);
+  const missing = Math.max(0, PRIMARY_ROLLS - (Number.isInteger(own.rolls) ? Math.max(1, own.rolls) : 1));
+  const extra = { player, npc, npcId: id, rolls: missing, drops: [] };
+  if (missing > 0) api.emitCustomEvent("npc-drops:extra-rolls", extra);
   const drops = scaleDrops([...ownRoll(player, npc, id), ...extra.drops], share, false);
   claimPet(drops, CLAIM_PET_RATE);
   player.performAnimation(new core.Animation(CLAIM_ANIMATION));

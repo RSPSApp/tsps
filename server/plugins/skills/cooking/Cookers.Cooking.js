@@ -60,7 +60,7 @@ function availableOnWorld(cookable) {
 
 function cookableFor(itemId) {
   const cookable = Common.cookables().get(itemId) ?? deliberateBurnFor(itemId);
-  return cookable && availableOnWorld(cookable) ? cookable : undefined;
+  return cookable && !cookable.facility && availableOnWorld(cookable) ? cookable : undefined;
 }
 
 // Wiki: cooking a raw karambwan yields a poison karambwan until Tinsay teaches
@@ -278,13 +278,14 @@ function rumoursMet(player, cookable) {
 }
 
 /**
- * Whether the player may cook this food anywhere, without messages: a members' world, the
- * Cooking level and the quest and rumour gates. Bots pick their food with it; canCook adds the
+ * Whether the player may cook this food on a fire or range, without messages: not food for one
+ * facility (the Camdozaal preparation table), a members' world, the Cooking level and the quest
+ * and rumour gates. Bots pick their food with it; canCook adds the
  * cooker's own checks and tells a player why not.
  */
 function canCookFood(player, cookable) {
   const requiredLevel = untrainedKarambwan(player, cookable) ? 1 : cookable.level;
-  return availableOnWorld(cookable) && Common.level(player) >= requiredLevel
+  return !cookable.facility && availableOnWorld(cookable) && Common.level(player) >= requiredLevel
     && duringQuestMet(player, cookable) && rumoursMet(player, cookable);
 }
 
@@ -334,6 +335,8 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     animation: cookAnimationFor(object.getDefinition().getName()),
     cooker: FIRE_OBJECT_NAMES.has(object.getDefinition().getName()) ? "fire" : "range",
     objectId: object.getId(),
+    objectType: object.getType(),
+    objectFace: object.getFace(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
     // Repeated clicks must not shorten the initial captured first-food delay.
@@ -355,7 +358,7 @@ function carriedCookables(player, onFire) {
   for (const item of player.getInventory().getItems()) {
     if (!item || Common.core.ItemDefinition.forId(item.getId()).isNoted()) continue;
     const cookable = Common.cookables().get(item.getId());
-    if (cookable && availableOnWorld(cookable)
+    if (cookable && !cookable.facility && availableOnWorld(cookable)
       && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
   }
   return [...found.values()];
@@ -404,11 +407,31 @@ function openCookMenu(player, title, items, most, choose) {
     { mode: COOK_MENU_MODE, maxAmount: most, lastAmount: most }));
 }
 
+/** The active cooker can be unchanged scenery lazily copied into a template. */
+function currentCooker(session) {
+  const { MapObjects, ObjectManager, World } = Common.core;
+  const { objectId, location, privateArea } = session;
+  if (privateArea?.isDestroyed()) return null;
+  const matches = (object) => object && object.getId() === objectId
+    && object.getPrivateArea() === privateArea && object.getLocation().equals(location)
+    && object.getType() === session.objectType && object.getFace() === session.objectFace;
+  const current = MapObjects.get(objectId, location, privateArea)
+    ?? ObjectManager.objectsAt(location).find(matches);
+  if (current) return matches(current) ? current : null;
+  if (!privateArea?.usesTemplateMap()) return null;
+  const cooker = privateArea.resolveObject(objectId, location);
+  if (!matches(cooker)) return null;
+  const sameSlot = (object) => object.getPrivateArea() === privateArea
+    && object.getType() === session.objectType && object.getLocation().equals(location);
+  if (privateArea.getObjects().some(sameSlot)
+    || ObjectManager.objectsAt(location).some(sameSlot)
+    || World.getRemovedObjects().some(sameSlot)) return null;
+  return cooker;
+}
+
 /** One step of the cook loop for every cooking player, once a tick. */
 function cookTick(task) {
   task.cycle++;
-  const { MapObjects } = Common.core;
-
   for (const [player, session] of activeSessions) {
     if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
       activeSessions.delete(player);
@@ -428,7 +451,7 @@ function cookTick(task) {
       continue;
     }
 
-    const object = MapObjects.get(session.objectId, session.location, session.privateArea);
+    const object = currentCooker(session);
     if (!object || !object.isWithinInteractionDistance(player.getLocation())) {
       stopCooking(player);
       continue;
@@ -546,6 +569,11 @@ function cookOne(player, session) {
     });
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
+  } else if (cookable.failsWithoutBurning) {
+    // Wiki (Drunk dragon): "sometimes no experience is gained" until 38 Cooking, but "you will always
+    // receive a finished drunk dragon": the item, no XP, no burn line (none is recorded for it).
+    player.getInventory().addItem(new Item(session.cookable.burnt, 1));
+    countCook(player, false);
   } else {
     player.getInventory().addItem(new Item(session.cookable.burnt, 1));
     if (cookable.returnOnBurn && cookable.returnItem !== undefined) inventory.addItem(new Item(cookable.returnItem, 1));
@@ -603,7 +631,7 @@ function handleCookClick(event) {
 /** "cooking:cooked": what request.rawId cooks into and the XP, for content that cooks as it gathers (a league relic). */
 function answerCooked(request) {
   const cookable = Common.cookables().get(request.rawId);
-  if (cookable) {
+  if (cookable && !cookable.facility) {
     request.cookedId = cookable.cooked;
     request.xp = cookable.xp;
   }
@@ -612,7 +640,7 @@ function answerCooked(request) {
 /** "cooking:raw-xp": the Cooking XP for cooking request.rawId, e.g. for the infernal harpoon. */
 function answerRawXp(request) {
   const cookable = Common.cookables().get(request.rawId);
-  if (cookable) {
+  if (cookable && !cookable.facility) {
     request.xp = cookable.xp;
   }
 }

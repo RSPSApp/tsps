@@ -31,8 +31,9 @@ function itemName(itemId) {
 // ---- The items, handed over ----
 
 /**
- * Whether the character holds the item anywhere: inventory, worn, banked (not a placeholder), or
- * in its grave or Death's Office (`gravestones:state`).
+ * Whether the character holds the item anywhere: inventory, worn, banked (not a placeholder), in
+ * its grave or Death's Office (`gravestones:state`), or kept by an item-retrieval NPC after a
+ * death (`item-retrieval:items`: Zulrah's priestess, Vorkath's Torfinn, the Voice of Yama, ...).
  */
 function holds(player, itemId) {
   const containers = [player.getInventory(), player.getEquipment()];
@@ -41,7 +42,10 @@ function holds(player, itemId) {
   if (containers.some((container) => container?.getItems?.().some((item) => item && held(item.getId(), item.getAmount())))) return true;
   const storage = { player, grave: null, office: [] };
   Common.api.emitCustomEvent("gravestones:state", storage);
-  return [...(storage.grave?.items ?? []), ...(storage.office ?? [])].some((entry) => entry && held(entry.id, entry.amount));
+  if ([...(storage.grave?.items ?? []), ...(storage.office ?? [])].some((entry) => entry && held(entry.id, entry.amount))) return true;
+  const retrieval = { player, items: [] };
+  Common.api.emitCustomEvent("item-retrieval:items", retrieval);
+  return retrieval.items.some((entry) => entry && held(entry.itemId, entry.amount));
 }
 
 /** Each active set's item, to a character who holds none: into the inventory, else the bank, else the floor. */
@@ -89,7 +93,7 @@ function recalled(player) {
 function teleport(player, location, wildernessLevel) {
   const { TeleportHandler, TeleportType } = core();
   if (!TeleportHandler.checkReqs(player, location, wildernessLevel)) return false;
-  TeleportHandler.teleport(player, location, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, location, () => TeleportHandler.teleport(player, location, TeleportType.NORMAL, false), wildernessLevel);
   return true;
 }
 

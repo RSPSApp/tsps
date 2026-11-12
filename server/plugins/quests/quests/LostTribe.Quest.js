@@ -33,29 +33,25 @@
  *
  * Side progress is kept in persisted attributes and mirrored to the cache side varbits
  * on every change (and on login, because client varps are per-session):
- *   varbit 534 ham (13-14): 1 H.A.M. robes found, 2 silverware found
- *   varbit 537 contact (17-18): 1 met Mistag, 2 told the Duke about the cave goblins
- *   varbit 535 mistag_denial: first (panic) greeting seen
+ *   varbit 534 ham (13-14): bit 0 the H.A.M. robes, bit 1 the silverware (0 -> 1 -> 3 in
+ *     rsprox 20261112T152024-5ab63b4, ticks 999 and 1185)
  *   varbit 538 hole_2_dug: deep hole at 3224,9601 squeezed through
- *   varbit 541 bookmark (22-24): goblin symbol book read
+ *   varbit 540 sigmund_leaving: 1 for 30 ticks while the dismissed Sigmund walks out (1238-1268)
+ *   varbit 541 bookmark (22-24): the goblin symbol book's open spread, 0-5 (rsprox_transcripts/232/03222.txt)
  *   varbit 533 returned_brooch: brooch returned to Mistag for a mining helmet
- *   varbits 536 maze_warned, 539 sigmund_accused, 540 sigmund_leaving are unused by
- *   this server's map and left at 0.
+ *   varbits 535 mistag_denial, 536 maze_warned, 537 contact and 539 sigmund_accused stay 0, as
+ *   that capture leaves them through the whole quest; contact is kept as an attribute only.
  *
- * Sources: OSRS Wiki "The Lost Tribe", its Quick guide and Transcript page, plus the
- * cache (object/NPC transforms, varbits, placements) for all ids and tiles.
+ * Sources: rsprox 20261112T152024-5ab63b4 (revision 242, the whole quest; docs/quests/the-lost-tribe/README.md),
+ * OSRS Wiki "The Lost Tribe", its Quick guide and Transcript page, plus the cache (object/NPC
+ * transforms, varbits, placements) for all ids and tiles.
  *
  * Gaps / approximations:
- *  - The emotes are always available in this server and emote clicks cannot be observed
- *    (the Emotes plugin claims the interface button first), so Mistag's goblin-bow
- *    condition keys off the panic greeting having already happened: talk once (panic),
- *    he bows next talk.
  *  - The maze has no trap state here; the dirt tunnel is walkable end to end, so wrong
  *    paths cost nothing (no swamp gas, no pit) and the symbol rocks keep their default
- *    Look-at.
- *  - No light-source requirement is enforced; 17 Mining, 13 Agility and 13
- *    Thieving are checked at the start, and Sigmund's pickpocket re-checks 13
- *    Thieving.
+ *    Look-at. The tunnel's darkness overlay is not drawn.
+ *  - 17 Mining, 13 Agility and 13 Thieving are checked at the start, and Sigmund's
+ *    pickpocket re-checks 13 Thieving.
  *  - The H.A.M. trapdoor is opened by swapping 6434 -> 6435 (open trapdoor) for the
  *    whole world; Ladders/ClimbLinks handle the climb itself.
  *  - Sigmund's post-firing spawn (6290 -> 5323) also stands around the H.A.M. hideout
@@ -65,33 +61,42 @@
  */
 module.exports = function registerLostTribeQuest(api) {
   const {
+    Animation,
+    CountdownTask,
     GameObject,
     Item,
     ItemDefinition,
     ItemIdentifiers,
     Location,
+    NPC,
     NpcIdentifiers,
     ObjectDefinition,
     ObjectIdentifiers,
     ObjectManager,
+    PathFinder,
     Skill,
+    TaskManager,
+    World,
   } = api.core;
   const questRuntime = require("../QuestRuntime");
   const { registerQuest, refreshQuestList, startTranscript } = questRuntime;
   const mining = require("../../skills/Mining.plugin.js");
 
   const treatyScene = require("../losttribe/Treaty.LostTribe")(api, completeTreaty);
+  const cellarHole = require("../losttribe/Cellar.LostTribe")(api);
+  const witnesses = require("../losttribe/Witness.LostTribe")(api);
 
   const PAGE = "The Lost Tribe";
 
   const VARP = 465; // "lost_tribe"
   const VARBIT_STAGE = 532; // lost_tribe_quest, bits 0-10
   const VARBIT_RETURNED_BROOCH = 533;
-  const VARBIT_HAM = 534; // bits 13-14
-  const VARBIT_GREETED = 535; // lost_tribe_mistag_denial
-  const VARBIT_CONTACT = 537; // bits 17-18
+  const VARBIT_HAM = 534; // bits 13-14: bit 0 robes, bit 1 silverware
   const VARBIT_HOLE2 = 538; // lost_tribe_hole_2_dug
+  const VARBIT_SIGMUND_LEAVING = 540; // lost_tribe_sigmund_leaving: shows npc 6289 as Sigmund
   const VARBIT_BOOKMARK = 541; // bits 22-24
+  /** The varbit's value for each saved H.A.M. step: none, the robes, the robes and the silverware. */
+  const HAM_VARBIT_VALUES = [0, 1, 3];
 
   const STAGE_ASK_PEOPLE = 1;
   const STAGE_TELL_DUKE = 2;
@@ -111,18 +116,27 @@ module.exports = function registerLostTribeQuest(api) {
   const BITS_ATTRIBUTE = "quest.the_lost_tribe.bits";
   const HAM_ATTRIBUTE = "quest.the_lost_tribe.ham"; // 0..2
   const CONTACT_ATTRIBUTE = "quest.the_lost_tribe.contact"; // 0..2
+  const BOOKMARK_ATTRIBUTE = "quest.the_lost_tribe.bookmark"; // the symbol book's spread, 0..5
   const BIT_RETURNED_BROOCH = 1 << 0;
   const BIT_GREETED = 1 << 1;
-  const BIT_BOOKMARK = 1 << 2;
+  const BIT_BOOKMARK = 1 << 2; // the symbol book was given (its page is BOOKMARK_ATTRIBUTE)
   const BIT_HOLE2 = 1 << 3;
 
   const SIGMUND_ID = NpcIdentifiers.SIGMUND_13; // 5322, Lumbridge Castle
   const SIGMUND_HAM_ID = NpcIdentifiers.SIGMUND_14; // 5323, H.A.M. hideout after the firing
   const SIGMUND_IDS = new Set([SIGMUND_ID, SIGMUND_HAM_ID]);
+  // lost_tribe_sigmund (6288, shown at lost_tribe_quest 0-9) and lost_tribe_sigmund_leaving (6289,
+  // shown while varbit 540 is 1): the castle spawn, and the one that walks out once he is dismissed.
+  const SIGMUND_CASTLE_SPAWN_ID = 6288;
+  const SIGMUND_LEAVING_ID = 6289;
+  // rsprox 20261112T152024-5ab63b4, ticks 1238-1268: he leaves from his tile (3211,3219 there) by
+  // two north-west steps and one west to 3208,3221, and is gone 15 ticks after the dismissal;
+  // varbit 540 clears 30 ticks after it. Ours: he walks there from wherever he stands.
+  const SIGMUND_EXIT_TILE = [3208, 3221];
+  const SIGMUND_LEAVING_DESPAWN_TICKS = 15;
+  const SIGMUND_LEAVING_TICKS = 30;
   const DUKE_HORACIO_ID = NpcIdentifiers.DUKE_HORACIO; // 815
-  const COOK_ID = NpcIdentifiers.COOK_7; // 4626
-  const HANS_ID = NpcIdentifiers.HANS; // 3105
-  const BOB_ID = NpcIdentifiers.BOB_15; // 10619
+  const DONIE_IDS = new Set([NpcIdentifiers.DONIE, NpcIdentifiers.GEE]); // 921, 6816
   const RELDO_IDS = new Set([NpcIdentifiers.RELDO, NpcIdentifiers.RELDO_2]); // 4242/4243
   const GENERAL_IDS = new Set([
     NpcIdentifiers.GENERAL_BENTNOZE, // 669
@@ -138,6 +152,8 @@ module.exports = function registerLostTribeQuest(api) {
     NpcIdentifiers.MISTAG_3, // 7298 (met Mistag)
     NpcIdentifiers.MISTAG_4, // 7299 (after the quest)
   ]);
+  // lost_tribe_mistag (5324): the mine's spawn, which shows 7297-7299 by lost_tribe_quest.
+  const MISTAG_SPAWN_IDS = new Set([5324, ...MISTAG_IDS]);
 
   const HAM_TRAPDOOR_CLOSED = ObjectIdentifiers.TRAPDOOR_35; // 6434, 3118,3244
   const HAM_TRAPDOOR_OPEN = ObjectIdentifiers.TRAPDOOR_36; // 6435, Climb-down
@@ -148,8 +164,14 @@ module.exports = function registerLostTribeQuest(api) {
   ]);
   const HAM_CRATE = ObjectIdentifiers.CRATE_65; // 6911, 3152,9645
   const LIBRARY_BOOKCASE = ObjectIdentifiers.BOOKCASE_25; // 6916, 3207,3496
+  // rsprox 20261112T152024-5ab63b4, ticks 999-1003: the chest shows opendungeonchest (2194) with
+  // chest_open (52) as the robes are found, and closes again as the player's line is continued.
+  const SIGMUND_CHEST_OPEN = ObjectIdentifiers.CHEST_7; // 2194
+  const CHEST_OPEN_SOUND = 52;
 
-  const BROOCH_TILE = { x: 3224, y: 9616 };
+  // The brooch lies 10 steps into the tunnel, at 3230,9610 (obj_add_specific, line 2418 of that
+  // capture's transcript; picked up at tick 262).
+  const BROOCH_TILE = { x: 3230, y: 9610 };
   const CELLAR_WALL_TILES = new Set(["3219,9618", "3221,9618"]);
   const DEEP_HOLE_TILE = "3224,9601";
   const LIBRARY_BOOKCASE_TILE = "3207,3496,0";
@@ -158,14 +180,49 @@ module.exports = function registerLostTribeQuest(api) {
   const HAM_LADDER_TILE = "3118,9643,0";
   const HAM_HIDEOUT_LANDING = { x: 3119, y: 9643 };
   const HAM_SURFACE_LANDING = { x: 3119, y: 3244 };
-  const LUMBRIDGE_LANDING = { x: 3209, y: 3214 };
-  const MISTAG_LANDING = { x: 3319, y: 9616 };
 
+  // The chest's set, in the order it fills the inventory (that capture, tick 999): the key is used up,
+  // and the shirt takes its slot.
   const HAM_ROBE_SET = [
-    ItemIdentifiers.HAM_HOOD, // 4302
+    ItemIdentifiers.HAM_SHIRT, // 4298
     ItemIdentifiers.HAM_ROBE, // 4300
-    ItemIdentifiers.HAM_CLOAK, // 4304
+    ItemIdentifiers.HAM_HOOD, // 4302
   ];
+
+  // The generals show both greetings once "That good idea. Watch." is continued (ticks 518-527):
+  // the chat closes, the player does the victory dance (2128, 45 cycles in) with Bentnoze's
+  // (6137) a tick later, the bow (2127) with Wartface's (6136) four ticks after that, and the
+  // message box comes four ticks after the bow.
+  const GENERALS_WATCH_LINE = "That good idea. Watch.";
+  const HUMAN_GOBLIN_DANCE = 2128; // human_cave_goblin_dance
+  const HUMAN_GOBLIN_BOW = 2127; // human_cave_goblin_bow
+  const GOBLIN_EMOTE_DELAY = 45;
+  const BENTNOZE_DANCE = 6137; // surface_goblin_update_dance
+  const WARTFACE_BOW = 6136; // surface_goblin_update_bow
+  const GENERALS_DANCE_TICK = 1;
+  const GENERALS_BOW_TICK = 5;
+  const GENERALS_MESSAGE_TICK = 9;
+  const BENTNOZE_IDS = new Set([NpcIdentifiers.GENERAL_BENTNOZE, NpcIdentifiers.GENERAL_BENTNOZE_5, NpcIdentifiers.GENERAL_BENTNOZE_6]);
+  const WARTFACE_IDS = new Set([NpcIdentifiers.GENERAL_WARTFACE, NpcIdentifiers.GENERAL_WARTFACE_5, NpcIdentifiers.GENERAL_WARTFACE_6]);
+
+  // Mistag panics at every Talk-to until the player does the Goblin Bow emote by him, which starts
+  // his friendly greeting by itself (ticks 845-869: three talks, then the emote at 862).
+  const EMOTE_GOBLIN_BOW = 22; // emotes.json slot
+  const EMOTE_GOBLIN_SALUTE = 23;
+  /** Ours: how close to Mistag an emote counts (the capture's player stood beside him). */
+  const MISTAG_EMOTE_RANGE = 6;
+  const MISTAG_CONTACT_LINE = "We blocked up our tunnel behind us";
+  // He bows as he greets the player (tick 865): dttd_zanik_bow.
+  const MISTAG_GREETING_LINE = "Greetings, friend. I am sorry I panicked";
+  const MISTAG_BOW = 6000;
+
+  const PICKPOCKET_ANIMATION = 881; // human_pickpocket (tick 972)
+  const PICKPOCKET_ACTION_ID = "nQOgNz"; // "You steal a little key."
+  const NO_CHEST_KEY_ACTION_ID = "_mH8yB"; // "You don't have the key to open this chest."
+  const HAM_MEMBER_LINE = "Sigmund must be a member";
+  const BOOK_SYMBOL_LINE = "Hey... The symbol";
+  const BOOK_SYMBOL_EXPRESSION = 568; // chathap2 (tick 395)
+  const DUKE_PERMISSION_LINE = "Hmm, very well. I give you permission";
 
   // Condition step ids on the "The Lost Tribe" page (and the chest/key pair).
   const BOW_CONDITION_ID = "Ds1-NK";
@@ -173,47 +230,65 @@ module.exports = function registerLostTribeQuest(api) {
   const KEY_CONDITION_ID = "oEnj9o";
   const NO_KEY_CONDITION_ID = "Xjjjh9";
   const NO_TREATY_CONDITION_ID = "cXIAOU";
-  const DRAGON_SLAYER_CONDITION_ID = "PbfBX1";
-  const RUNE_MYSTERIES_CONDITION_ID = "We9PoA";
-  /** Kazgar's water-mill option needs Death to the Dorgeshuun, which this server lacks. */
+  const DRAGON_SLAYER_CONDITION_ID = "QQJ5aZ";
+  const RUNE_MYSTERIES_CONDITION_ID = "qSGrsq";
+  /** Kazgar's nested water-mill option ("After Death to the Dorgeshuun" on the transcript). */
   const WATERMILL_OPTION_CONDITION_ID = "UEIaPX";
   // Action / message step ids.
   const TAKE_BOOK_ACTION_ID = "ThLyr1";
   const READ_PAGES_ACTION_ID = "8WepSb";
-  const WAY_OUT_ACTION_ID = "yWjjdW";
-  const POST_QUEST_WAY_OUT_ACTION_ID = "uzpbCL";
   const ROBES_FOUND_ACTION_ID = "RCYXcm";
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
   const CUTSCENE_START_ACTION_ID = "oIhMoa";
   const KAZGAR_ESCORT_ACTION_ID = "m471ps";
   const BROOCH_HELMET_ACTION_ID = "a-40GY";
+  const MESSAGE_BOX_STEP_IDS = new Set([TAKE_BOOK_ACTION_ID, EMOTES_TAUGHT_MESSAGE_ID, NO_CHEST_KEY_ACTION_ID]);
 
   const START_HOOK = "quest:the-lost-tribe:start";
 
-  const BOB_RUMOUR_LINE = "If you can convince the Duke";
-  const DUKE_BOB_LINE = "Bob says he saw something in the cellar. Like a goblin with big eyes.";
+  // The witness's last line moves 1 to 2 as it opens (tick 73), the Duke's permission 2 to 3 (121).
+  const WITNESS_RUMOUR_LINE = "If you can convince the Duke";
   const DUKE_RELDO_LINE = "librarian in Varrock";
   const RELDO_BOOK_LINE = "book about ancient goblin tribes";
   const DUKE_SILVERWARE_LINE = "Unless it is returned";
 
-  const SYMBOL_BOOK_PAGES = [{
-    44: "<col=800000>A History of the Goblin Race</col>",
-    46: "Ancient goblin equipment bears symbols that identify",
-    47: "the tribes. The surviving records name twelve tribes.",
-    48: "",
-    49: "The four directions are recorded as:",
-    50: "Rekeshuun — north; Idithuun — south;",
-    51: "Ekeleshuun — east; Narogoshuun — west.",
-    60: "The Dorgeshuun are the goblins of the strong spears.",
-    62: "Compare the symbols in this book with the marks in",
-    63: "the cellar tunnels to find the safe route.",
-  }];
+  // The goblin symbol book is its own cache interface, lost_tribe_symbol_book (183), with all its
+  // text in the cache (Wiki, Transcript:Goblin symbol book): six spreads, each a layer the server
+  // shows in turn, and two "Turn page" arrows (transmitop) the server answers. rsprox_transcripts/
+  // 232/03222.txt reads it (lines 35971-35990, 36008-36040, 36738-36803, 38279): the spreads go
+  // titles, page 1-3, directions, symbols, and the last spread hides the right arrow. Each arrow
+  // click writes the new spread to varbit 541 (lost_tribe_bookmark, e.g. 5 -> 4 at line 36009), and
+  // the book reopens there (line 35979: bookmark 5, the symbols). Getting the book is a quest bit.
+  const SYMBOL_BOOK = 183;
+  const SYMBOL_BOOK_SPREADS = [
+    33, // lost_tribe_titles: "A History of the Goblin Race" (shown by default)
+    38, // lost_tribe_page_1
+    42, // lost_tribe_page_2
+    46, // lost_tribe_page_3: "In the following pages I present a list of the tribes and their symbols."
+    15, // lost_tribe_directions: Thorobshuun ... Narogoshuun
+    14, // lost_tribe_symbols: Drogokishuun ... Yurkolgokh (the last spread)
+  ];
+  const SYMBOL_BOOK_RIGHT_ARROW = 16;
+  const SYMBOL_BOOK_LEFT_ARROW = 17;
+  const SYMBOL_BOOK_RIGHT_ARROW_LAYER = 18;
+  const SYMBOL_BOOK_LEFT_ARROW_LAYER = 19;
+  const SCRIPT_MAINMODAL_OPEN = 2524;
+  /** The spread each reader has open (never persisted). */
+  const symbolBookSpread = new WeakMap();
+  /** Readers who turned to the last spread this time, for the player's line as they close it. */
+  const symbolBookFinished = new WeakSet();
+  /** Sigmund's chest each player has open, until their line after the robes is continued. */
+  const openedChest = new WeakMap();
+  /** The chest a player just searched, for the robes' step to open. */
+  const pendingChest = new WeakMap();
+  /** The pickaxe each player dug the rubble with, for the dig's item box. */
+  const digItem = new WeakMap();
+  const DIG_TICKS = 3;
+  const BOOKCASE_EMPTY_TICKS = 4;
+  const DIG_ACTION_ID = "Zom9NQ"; // "You dig a narrow tunnel through the rocks."
 
   let quest;
-
-  /** Transient flag for the greeting conversation now playing (never persisted). */
-  const greetingFirst = new WeakMap();
 
   function bits(player) {
     return Number(player.getAttribute(BITS_ATTRIBUTE)) || 0;
@@ -232,9 +307,23 @@ module.exports = function registerLostTribeQuest(api) {
     return Number(player.getAttribute(HAM_ATTRIBUTE)) || 0;
   }
 
+  function hamVarbitValue(player) {
+    return HAM_VARBIT_VALUES[getHam(player)] ?? 0;
+  }
+
   function setHam(player, value) {
     player.setAttribute(HAM_ATTRIBUTE, value | 0);
-    player.getPacketSender().sendVarbit(VARBIT_HAM, value | 0);
+    player.getPacketSender().sendVarbit(VARBIT_HAM, hamVarbitValue(player));
+  }
+
+  function getBookmark(player) {
+    const spread = Number(player.getAttribute(BOOKMARK_ATTRIBUTE)) || 0;
+    return Math.max(0, Math.min(SYMBOL_BOOK_SPREADS.length - 1, spread | 0));
+  }
+
+  function setBookmark(player, spread) {
+    player.setAttribute(BOOKMARK_ATTRIBUTE, spread);
+    player.getPacketSender().sendVarbit(VARBIT_BOOKMARK, spread);
   }
 
   function getContact(player) {
@@ -243,7 +332,6 @@ module.exports = function registerLostTribeQuest(api) {
 
   function setContact(player, value) {
     player.setAttribute(CONTACT_ATTRIBUTE, value | 0);
-    player.getPacketSender().sendVarbit(VARBIT_CONTACT, value | 0);
     player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
   }
 
@@ -265,11 +353,9 @@ module.exports = function registerLostTribeQuest(api) {
     const packet = player.getPacketSender();
     packet.sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
     packet.sendVarbit(VARBIT_RETURNED_BROOCH, hasBit(player, BIT_RETURNED_BROOCH) ? 1 : 0);
-    packet.sendVarbit(VARBIT_HAM, getHam(player));
-    packet.sendVarbit(VARBIT_GREETED, hasBit(player, BIT_GREETED) ? 1 : 0);
-    packet.sendVarbit(VARBIT_CONTACT, getContact(player));
+    packet.sendVarbit(VARBIT_HAM, hamVarbitValue(player));
     packet.sendVarbit(VARBIT_HOLE2, hasBit(player, BIT_HOLE2) ? 1 : 0);
-    packet.sendVarbit(VARBIT_BOOKMARK, hasBit(player, BIT_BOOKMARK) ? 1 : 0);
+    packet.sendVarbit(VARBIT_BOOKMARK, getBookmark(player));
   }
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -317,14 +403,25 @@ module.exports = function registerLostTribeQuest(api) {
       : `${location.x},${location.y}`;
   }
 
-  /** Mirrors the player through the two-tile cellar wall (steps 3 in x). */
-  function stepThroughX(player, location) {
-    const current = player.getLocation();
-    const destination =
-      current.getX() <= location.x
-        ? new Location(location.x + 3, location.y, current.getZ())
-        : new Location(location.x - 3, location.y, current.getZ());
-    player.moveTo(destination);
+  const later = (player, ticks, callback) => TaskManager.submit(new CountdownTask(player, ticks, () => {
+    if (player.isRegistered()) callback();
+  }));
+
+  /** The steps after the step with `id`, wherever it sits: a conversation resumed from there. */
+  function stepsFrom(steps, id, inclusive = true) {
+    for (let index = 0; index < (steps?.length ?? 0); index++) {
+      const step = steps[index];
+      if (step?.id === id) return steps.slice(inclusive ? index : index + 1);
+      for (const nested of [step?.steps, ...(step?.options ?? []).map((option) => option.steps)]) {
+        const found = stepsFrom(nested, id, inclusive);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function localNpc(player, ids) {
+    return [...(player.getLocalNpcs?.() ?? [])].find((npc) => ids.has(npc.getId())) ?? null;
   }
 
   /** Mirrors the player through a wall that runs east-west (steps in y). */
@@ -363,7 +460,7 @@ module.exports = function registerLostTribeQuest(api) {
     } else if (stage === STAGE_ASK_PEOPLE) {
       variant = "a-hole-in-the-wall-the-duke-s-adviser-talking-to-sigmund-again-after-starting-the-quest";
     } else if (stage === STAGE_TELL_DUKE) {
-      variant = "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob";
+      variant = `${witnesses.WITNESS_VARIANT}-talking-to-sigmund-after-talking-to-who-saw-the-goblin`;
     } else if (stage === STAGE_DIG) {
       variant = "a-hole-in-the-wall-convincing-horacio-talking-to-sigmund-again";
     } else if (stage <= STAGE_FIND_RELDO) {
@@ -387,23 +484,33 @@ module.exports = function registerLostTribeQuest(api) {
     return true;
   }
 
+  /**
+   * rsprox 20261112T152024-5ab63b4, ticks 972-976: the pickpocket plays human_pickpocket facing
+   * him, and the key comes with an item box; a second try while carrying it is a game message.
+   */
   function pickpocketSigmund(event) {
-    const { player, npcId } = event;
+    const { player, npc, npcId } = event;
     if (npcId !== SIGMUND_ID) return false;
     if (quest.getStage(player) !== STAGE_MISTAG || getContact(player) < 2) {
+      // Ours: no capture of an early pickpocket.
       player.sendMessage("You have no reason to pick his pocket right now.");
       return true;
     }
+    if (npc) player.setPositionToFace(npc.getLocation());
     if (held(player, ItemIdentifiers.KEY_10)) {
-      player.sendMessage("You already have his key.");
+      player.sendMessage("You have already stolen Sigmund's key.");
       return true;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < 13) {
       player.sendMessage("You need a Thieving level of at least 13 to pick this pocket.");
       return true;
     }
-    if (!giveItem(player, ItemIdentifiers.KEY_10)) return true;
-    player.sendMessage("You steal a little key.");
+    if (freeSlots(player) < 1) {
+      player.getInventory().full();
+      return true;
+    }
+    player.performAnimation(new Animation(PICKPOCKET_ANIMATION));
+    playVariant(player, SIGMUND_ID, "property-recovery-pickpocketing-sigmund-s-key");
     return true;
   }
 
@@ -446,33 +553,83 @@ module.exports = function registerLostTribeQuest(api) {
     return true;
   }
 
-  function talkCook(event) {
-    const { player, npcId } = event;
-    if (npcId !== COOK_ID || quest.getStage(player) !== STAGE_ASK_PEOPLE) return false;
-    playVariant(player, npcId, "a-hole-in-the-wall-asking-the-cook");
-    return true;
-  }
-
-  function talkHans(event) {
-    const { player, npcId } = event;
-    if (npcId !== HANS_ID || quest.getStage(player) !== STAGE_ASK_PEOPLE) return false;
-    playVariant(player, npcId, "a-hole-in-the-wall-asking-hans");
-    return true;
-  }
-
-  function talkBob(event) {
-    const { player, npcId } = event;
-    if (npcId !== BOB_ID) return false;
+  /** The player's witness, or null before the quest has them asking around. */
+  function witnessOf(player) {
     const stage = quest.getStage(player);
-    if (stage === STAGE_ASK_PEOPLE) {
-      playVariant(player, npcId, "a-hole-in-the-wall-asking-bob");
-      return true;
-    }
-    if (stage === STAGE_TELL_DUKE) {
-      playVariant(player, npcId, "a-hole-in-the-wall-asking-bob-talking-to-bob-again");
-      return true;
-    }
-    return false;
+    if (stage < STAGE_ASK_PEOPLE) return null;
+    return witnesses.of(player, stage > STAGE_ASK_PEOPLE, unavailableWitnesses(player));
+  }
+
+  /** Father Aereck answers The Restless Ghost while it is under way; the quest leaves him to it. */
+  function restlessGhostUnderWay(player) {
+    const started = { player, key: "the_restless_ghost", started: false };
+    api.emitCustomEvent("quest:is-started", started);
+    return started.started === true && !hasQuest(player, "the_restless_ghost");
+  }
+
+  function unavailableWitnesses(player) {
+    return restlessGhostUnderWay(player) ? [NpcIdentifiers.FATHER_AERECK] : [];
+  }
+
+  /**
+   * The Cook, Hans, Bob and Father Aereck while the player asks around: their own "Asking ..."
+   * section, whose cellar question the witness answers with the witness's lines instead
+   * (answerWitnessQuestion); the witness answers it again until the Duke is told.
+   */
+  function talkWitnessCandidate(event) {
+    const { player, npcId } = event;
+    const candidate = witnesses.candidate(npcId);
+    if (!candidate || unavailableWitnesses(player).includes(npcId)) return false;
+    const stage = quest.getStage(player);
+    const asking = stage === STAGE_ASK_PEOPLE || (stage === STAGE_TELL_DUKE && witnessOf(player) === candidate);
+    if (!asking) return false;
+    playVariant(player, npcId, candidate.variant);
+    return true;
+  }
+
+  /** Donie and Gee know only that the wall fell (Transcript: "Asking Donie or Gee"). */
+  function talkDonieOrGee(event) {
+    const { player, npcId } = event;
+    if (!DONIE_IDS.has(npcId) || quest.getStage(player) !== STAGE_ASK_PEOPLE) return false;
+    playVariant(player, npcId, "a-hole-in-the-wall-asking-donie-or-gee");
+    return true;
+  }
+
+  /** The witness's cellar question plays the witness section (or its repeat) in its place. */
+  function answerWitnessQuestion(choice) {
+    const { player, npcId } = choice;
+    const candidate = witnesses.candidate(npcId);
+    if (!candidate || !witnesses.CELLAR_QUESTION.test(String(choice.option ?? ""))) return;
+    const stage = quest.getStage(player);
+    if ((stage !== STAGE_ASK_PEOPLE && stage !== STAGE_TELL_DUKE) || witnessOf(player) !== candidate) return;
+    choice.end = true;
+    const variant = stage === STAGE_ASK_PEOPLE ? witnesses.WITNESS_VARIANT : witnesses.WITNESS_AGAIN_VARIANT;
+    playVariant(player, npcId, variant, witnesses.witnessAnswer);
+  }
+
+  /**
+   * Father Aereck's "Asking" section lists "Could you tell me more about prayers?" and "... about
+   * Saradomin?" with no lines, and no dialogue page has them: they are left out rather than closing
+   * the chat. Ours: no source shows what they lead to.
+   */
+  function dropEmptyAereckOptions(notice) {
+    if (notice.npcId !== NpcIdentifiers.FATHER_AERECK || !Array.isArray(notice.options)) return;
+    if (!notice.options.some((option) => witnesses.CELLAR_QUESTION.test(String(option?.text ?? "")))) return;
+    notice.options = notice.options.filter((option) => option?.steps?.length || witnesses.CELLAR_QUESTION.test(String(option?.text ?? ""))
+      || /^I'd better be going/.test(String(option?.text ?? "")));
+  }
+
+  /** Options naming "[NPC]" (the Duke's, Sigmund's) name the player's witness. */
+  function nameWitnessInMenu(notice) {
+    dropEmptyAereckOptions(notice);
+    if (notice.npcId !== DUKE_HORACIO_ID && !SIGMUND_IDS.has(notice.npcId)) return;
+    const options = Array.isArray(notice.options) ? notice.options : [];
+    if (!options.some((option) => String(option?.text ?? "").includes("[NPC]"))) return;
+    const witness = witnessOf(notice.player);
+    if (!witness) return;
+    notice.options = options.map((option) => (String(option?.text ?? "").includes("[NPC]")
+      ? { ...option, text: witnesses.fill(option.text, witness) }
+      : option));
   }
 
   function talkReldo(event) {
@@ -491,21 +648,21 @@ module.exports = function registerLostTribeQuest(api) {
     return true;
   }
 
-  /** The friendly half of the greetings transcript, without the panic + end before it. */
-  function greetingConditionSteps(steps) {
-    return steps.filter((step) => step.type === "condition");
+  /** The greetings section's panic: its lines up to the first emote condition. */
+  function panicSteps(steps) {
+    const end = steps.findIndex((step) => step.type === "condition");
+    return end === -1 ? steps : steps.slice(0, end);
   }
+
+  /** The lines under one of the greetings section's emote conditions. */
+  const emoteSteps = (conditionId) => (steps) => steps.find((step) => step.id === conditionId)?.steps ?? [];
 
   function talkMistag(event) {
     const { player, npcId } = event;
     if (!MISTAG_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
     if (stage === STAGE_FIND_GENERALS) {
-      const first = !hasBit(player, BIT_GREETED);
-      if (first) setBit(player, BIT_GREETED);
-      greetingFirst.set(player, first);
-      playVariant(player, npcId, "meeting-the-lost-tribe-greetings", first ? undefined : greetingConditionSteps);
-      greetingFirst.delete(player);
+      playVariant(player, npcId, "meeting-the-lost-tribe-greetings", panicSteps);
       return true;
     }
     if (stage === STAGE_MISTAG) {
@@ -529,6 +686,18 @@ module.exports = function registerLostTribeQuest(api) {
       return true;
     }
     return false;
+  }
+
+  /** The Goblin Bow by Mistag starts his friendly greeting; the Goblin Salute scares him. */
+  function greetMistag({ player, slot }) {
+    if (slot !== EMOTE_GOBLIN_BOW && slot !== EMOTE_GOBLIN_SALUTE) return;
+    if (quest.getStage(player) !== STAGE_FIND_GENERALS) return;
+    const mistag = localNpc(player, MISTAG_SPAWN_IDS);
+    if (!mistag || mistag.getLocation().getDistance(player.getLocation()) > MISTAG_EMOTE_RANGE) return;
+    if (player.getDialogueManager().isActive()) return;
+    const conditionId = slot === EMOTE_GOBLIN_BOW ? BOW_CONDITION_ID : SALUTE_CONDITION_ID;
+    playVariant(player, mistag.getCurrentDefinition?.(player)?.getId?.() ?? mistag.getId(), "meeting-the-lost-tribe-greetings",
+      emoteSteps(conditionId));
   }
 
   function handleItemOnNpc(event) {
@@ -608,6 +777,7 @@ module.exports = function registerLostTribeQuest(api) {
         return;
       }
       quest.setStage(player, STAGE_ASK_PEOPLE);
+      witnesses.pick(player, unavailableWitnesses(player));
     }
   }
 
@@ -615,48 +785,98 @@ module.exports = function registerLostTribeQuest(api) {
     const { player, stepId } = event;
     if (stepId === DRAGON_SLAYER_CONDITION_ID) return hasQuest(player, "dragon_slayer_i");
     if (stepId === RUNE_MYSTERIES_CONDITION_ID) return hasQuest(player, "rune_mysteries");
-    if (stepId === BOW_CONDITION_ID) return greetingFirst.get(player) === false;
-    if (stepId === SALUTE_CONDITION_ID) return false;
+    // The emote branches play from greetMistag's emote, never from a Talk-to.
+    if (stepId === BOW_CONDITION_ID || stepId === SALUTE_CONDITION_ID) return false;
     if (stepId === KEY_CONDITION_ID) return held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_KEY_CONDITION_ID) return !held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_TREATY_CONDITION_ID) return !held(player, ItemIdentifiers.PEACE_TREATY);
-    if (stepId === WATERMILL_OPTION_CONDITION_ID) return false;
+    if (stepId === WATERMILL_OPTION_CONDITION_ID) return hasQuest(player, "death_to_the_dorgeshuun");
     // Unknown condition: leave it for the owning plugin (null = unanswered).
     return null;
   }
 
-  function handleDialogueLine(event) {
-    treatyScene.line(event);
-    const { player, npcId, text } = event;
-    const stage = quest.getStage(player);
-    if (npcId === BOB_ID && stage === STAGE_ASK_PEOPLE && text.includes(BOB_RUMOUR_LINE)) {
-      quest.setStage(player, STAGE_TELL_DUKE);
+  const onPage = (event) => event.pages?.some(({ page }) => page === PAGE) === true;
+
+  /** The witness section's "NPC" speaks as the player's witness, and "[NPC]" is their name. */
+  function nameWitnessInLine(event) {
+    const { player, npcId, step } = event;
+    if (DONIE_IDS.has(npcId) && step?.speaker === "Donie/Gee") {
+      event.speakerName = event.definition?.getName?.() ?? undefined;
       return;
     }
-    if (npcId === DUKE_HORACIO_ID && stage === STAGE_TELL_DUKE && text === DUKE_BOB_LINE) {
-      quest.setStage(player, STAGE_DIG);
+    const witness = witnessOf(player);
+    if (!witness) return;
+    if (step?.speaker === witnesses.PLACEHOLDER_SPEAKER) {
+      event.speakerName = witness.name;
+      event.speakerId = witness.npcId;
+    }
+    if (String(event.text).includes("[NPC]")) event.text = witnesses.fill(event.text, witness);
+  }
+
+  function handleDialogueLine(event) {
+    treatyScene.line(event);
+    if (!onPage(event)) return;
+    nameWitnessInLine(event);
+    const { player, npcId, text, step } = event;
+    const stage = quest.getStage(player);
+    // Line events come as the conversation is built; `before` runs as the line itself shows.
+    if (step?.speaker === witnesses.PLACEHOLDER_SPEAKER && stage === STAGE_ASK_PEOPLE && text.includes(WITNESS_RUMOUR_LINE)) {
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_ASK_PEOPLE) quest.setStage(player, STAGE_TELL_DUKE);
+      };
+      return;
+    }
+    if (npcId === DUKE_HORACIO_ID && stage === STAGE_TELL_DUKE && text.startsWith(DUKE_PERMISSION_LINE)) {
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_TELL_DUKE) quest.setStage(player, STAGE_DIG);
+      };
+      return;
+    }
+    if (GENERAL_IDS.has(npcId) && stage === STAGE_FIND_GENERALS && text === GENERALS_WATCH_LINE) {
+      event.after = () => demonstrateGreetings(player, npcId);
+      return;
+    }
+    if (MISTAG_SPAWN_IDS.has(npcId) && stage === STAGE_FIND_GENERALS && text.startsWith(MISTAG_GREETING_LINE)) {
+      event.before = () => localNpc(player, MISTAG_SPAWN_IDS)?.performAnimation(new Animation(MISTAG_BOW));
+      return;
+    }
+    if (MISTAG_SPAWN_IDS.has(npcId) && stage === STAGE_FIND_GENERALS && text.startsWith(MISTAG_CONTACT_LINE)) {
+      event.before = () => {
+        if (quest.getStage(player) !== STAGE_FIND_GENERALS) return;
+        setContact(player, Math.max(getContact(player), 1));
+        quest.setStage(player, STAGE_MISTAG);
+      };
+      return;
+    }
+    if (typeof step?.player === "string" && text.startsWith(BOOK_SYMBOL_LINE)) {
+      event.expression = BOOK_SYMBOL_EXPRESSION;
+      return;
+    }
+    if (typeof step?.player === "string" && text.startsWith(HAM_MEMBER_LINE) && openedChest.has(player)) {
+      event.after = () => closeSigmundChest(player);
       return;
     }
     if (npcId === DUKE_HORACIO_ID && stage === STAGE_MISTAG && getContact(player) < 2 && text.includes(DUKE_SILVERWARE_LINE)) {
-      setContact(player, 2);
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_MISTAG && getContact(player) < 2) setContact(player, 2);
+      };
       return;
     }
     if (npcId === DUKE_HORACIO_ID && stage === STAGE_SHOW_BROOCH && text.includes(DUKE_RELDO_LINE)) {
-      quest.setStage(player, STAGE_FIND_RELDO);
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_SHOW_BROOCH) quest.setStage(player, STAGE_FIND_RELDO);
+      };
       return;
     }
     if (RELDO_IDS.has(npcId) && stage === STAGE_FIND_RELDO && text.includes(RELDO_BOOK_LINE)) {
-      quest.setStage(player, STAGE_FIND_BOOK);
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_FIND_RELDO) quest.setStage(player, STAGE_FIND_BOOK);
+      };
     }
   }
 
   function handleDialogueCondition(event) {
     const { player, stepId } = event;
-    if (stepId === BOW_CONDITION_ID && quest.getStage(player) === STAGE_FIND_GENERALS) {
-      setContact(player, Math.max(getContact(player), 1));
-      quest.setStage(player, STAGE_MISTAG);
-      return;
-    }
     if (stepId === NO_TREATY_CONDITION_ID) {
       const stage = quest.getStage(player);
       if (stage === STAGE_TREATY || stage === STAGE_ESCORTED) giveItem(player, ItemIdentifiers.PEACE_TREATY);
@@ -665,6 +885,8 @@ module.exports = function registerLostTribeQuest(api) {
 
   function handleDialogueAction(event) {
     const { player, stepId } = event;
+    // These messages are message boxes live (229, ticks 368, 527, 993), not chat lines.
+    if (event.kind === "message" && MESSAGE_BOX_STEP_IDS.has(stepId) && onPage(event)) event.box = { statement: true };
     if (stepId === EMOTES_TAUGHT_MESSAGE_ID && event.kind === "message"
       && GENERAL_IDS.has(event.npcId) && quest.getStage(player) === STAGE_FIND_GENERALS) {
       player.setAttribute(EMOTES_TAUGHT_ATTRIBUTE, true);
@@ -673,32 +895,52 @@ module.exports = function registerLostTribeQuest(api) {
     }
     if (stepId === TAKE_BOOK_ACTION_ID) {
       if (!hasBit(player, BIT_BOOKMARK)) {
-        if (giveItem(player, ItemIdentifiers.GOBLIN_SYMBOL_BOOK)) setBit(player, BIT_BOOKMARK);
+        // A full inventory keeps the book on the shelf: no "You take the book" box.
+        if (!giveItem(player, ItemIdentifiers.GOBLIN_SYMBOL_BOOK)) {
+          event.end = true;
+          return;
+        }
+        setBit(player, BIT_BOOKMARK);
       }
       return;
     }
-    if (stepId === READ_PAGES_ACTION_ID) {
-      if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
+    if (stepId === DIG_ACTION_ID) {
+      const pickaxe = digItem.get(player);
+      digItem.delete(player);
+      if (pickaxe !== undefined) event.box = { items: [pickaxe] };
+      return;
+    }
+    if (stepId === PICKPOCKET_ACTION_ID) {
+      if (!held(player, ItemIdentifiers.KEY_10) && !giveItem(player, ItemIdentifiers.KEY_10)) {
+        event.end = true;
+        return;
+      }
+      event.box = { items: [ItemIdentifiers.KEY_10] };
       return;
     }
     if (stepId === ROBES_FOUND_ACTION_ID) {
       if (getHam(player) < 1) {
-        if (freeSlots(player) < HAM_ROBE_SET.length) {
+        if (freeSlots(player) + (held(player, ItemIdentifiers.KEY_10) ? 1 : 0) < HAM_ROBE_SET.length) {
           player.getInventory().full();
+          event.end = true;
           return;
         }
-        if (held(player, ItemIdentifiers.KEY_10)) {
-          player.getInventory().deleteNumber(ItemIdentifiers.KEY_10, 1);
-        }
+        player.getInventory().deleteNumber(ItemIdentifiers.KEY_10, 1);
         for (const itemId of HAM_ROBE_SET) giveItem(player, itemId);
         setHam(player, 1);
+        openSigmundChest(player);
       }
+      event.box = { items: [HAM_ROBE_SET[0]] };
       return;
     }
     if (stepId === SILVERWARE_FOUND_ACTION_ID) {
       if (quest.getStage(player) === STAGE_MISTAG && getContact(player) >= 2) {
-        if (!held(player, ItemIdentifiers.SILVERWARE) && !giveItem(player, ItemIdentifiers.SILVERWARE)) return;
+        if (!held(player, ItemIdentifiers.SILVERWARE) && !giveItem(player, ItemIdentifiers.SILVERWARE)) {
+          event.end = true;
+          return;
+        }
         setHam(player, 2);
+        event.box = { items: [ItemIdentifiers.SILVERWARE] };
       }
       return;
     }
@@ -712,18 +954,13 @@ module.exports = function registerLostTribeQuest(api) {
           return;
         }
         quest.setStage(player, STAGE_TREATY);
+        sigmundLeaves(player);
+        event.box = { items: [ItemIdentifiers.PEACE_TREATY] };
       }
       return;
     }
     if (stepId === KAZGAR_ESCORT_ACTION_ID) {
-      if (quest.getStage(player) >= STAGE_TREATY) {
-        if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
-        player.moveTo(new Location(MISTAG_LANDING.x, MISTAG_LANDING.y, 0));
-      }
-      return;
-    }
-    if (stepId === WAY_OUT_ACTION_ID || stepId === POST_QUEST_WAY_OUT_ACTION_ID) {
-      player.moveTo(new Location(LUMBRIDGE_LANDING.x, LUMBRIDGE_LANDING.y, 0));
+      if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {
@@ -740,10 +977,121 @@ module.exports = function registerLostTribeQuest(api) {
     }
   }
 
+  function showSymbolBookSpread(player, spread) {
+    const sender = player.getPacketSender();
+    const uid = (child) => (SYMBOL_BOOK << 16) | child;
+    SYMBOL_BOOK_SPREADS.forEach((layer, index) => sender.sendInterfaceDisplayState(uid(layer), index !== spread));
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_LEFT_ARROW_LAYER), spread === 0);
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_RIGHT_ARROW_LAYER), spread === SYMBOL_BOOK_SPREADS.length - 1);
+  }
+
   function readSymbolBook({ player }) {
-    questRuntime.openBook(player, "A History of the Goblin Race", SYMBOL_BOOK_PAGES, () => {
-      if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
+    const spread = getBookmark(player);
+    symbolBookSpread.set(player, spread);
+    showSymbolBookSpread(player, spread);
+    const sender = player.getPacketSender();
+    sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+    sender.sendInterface(SYMBOL_BOOK);
+  }
+
+  function turnSymbolBookPage(event) {
+    const buttonId = Number(event.buttonId ?? 0);
+    if ((event.groupId ?? (buttonId >>> 16)) !== SYMBOL_BOOK) return;
+    const child = event.childId ?? (buttonId & 0xffff);
+    if (child !== SYMBOL_BOOK_RIGHT_ARROW && child !== SYMBOL_BOOK_LEFT_ARROW) return;
+    const { player } = event;
+    const current = symbolBookSpread.get(player);
+    if (current === undefined) return;
+    event.handled = true;
+    const spread = current + (child === SYMBOL_BOOK_RIGHT_ARROW ? 1 : -1);
+    if (spread < 0 || spread >= SYMBOL_BOOK_SPREADS.length) return;
+    symbolBookSpread.set(player, spread);
+    setBookmark(player, spread);
+    // rsprox 20261112T152024-5ab63b4, tick 387: turning to the symbols spread moves 5 to 6.
+    const stage = quest.getStage(player);
+    if (spread === SYMBOL_BOOK_SPREADS.length - 1 && (stage === STAGE_FIND_RELDO || stage === STAGE_FIND_BOOK)) {
+      quest.setStage(player, STAGE_FIND_GENERALS);
+      symbolBookFinished.add(player);
+    }
+    showSymbolBookSpread(player, spread);
+  }
+
+  /** Closing the book after reaching the symbols: "Hey... The symbol of the 'Dorgeshuun' tribe ..." (tick 395). */
+  function closeSymbolBook({ player, interfaceId }) {
+    if (interfaceId !== SYMBOL_BOOK || !symbolBookSpread.has(player)) return;
+    symbolBookSpread.delete(player);
+    if (!symbolBookFinished.has(player)) return;
+    symbolBookFinished.delete(player);
+    playVariant(player, NpcIdentifiers.RELDO, "investigation-a-history-of-the-goblin-race",
+      (steps) => stepsFrom(steps, READ_PAGES_ACTION_ID, false) ?? []);
+  }
+
+  /** The generals' greetings, after "That good idea. Watch." is continued (ticks 518-529). */
+  function demonstrateGreetings(player, npcId) {
+    if (quest.getStage(player) !== STAGE_FIND_GENERALS) return;
+    player.setAttribute(EMOTES_TAUGHT_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    const movement = player.getMovementQueue();
+    movement.reset();
+    movement.setBlockMovement(true);
+    later(player, GENERALS_DANCE_TICK, () => {
+      player.performAnimation(new Animation(HUMAN_GOBLIN_DANCE, GOBLIN_EMOTE_DELAY));
+      localNpc(player, BENTNOZE_IDS)?.performAnimation(new Animation(BENTNOZE_DANCE));
     });
+    later(player, GENERALS_BOW_TICK, () => {
+      player.performAnimation(new Animation(HUMAN_GOBLIN_BOW, GOBLIN_EMOTE_DELAY));
+      localNpc(player, WARTFACE_IDS)?.performAnimation(new Animation(WARTFACE_BOW));
+    });
+    TaskManager.submit(new CountdownTask(player, GENERALS_MESSAGE_TICK, () => {
+      movement.setBlockMovement(false);
+      if (!player.isRegistered()) return;
+      playVariant(player, npcId, "investigation-the-goblin-generals",
+        (steps) => stepsFrom(steps, EMOTES_TAUGHT_MESSAGE_ID) ?? []);
+    }));
+  }
+
+  /** The robes' chest stands open for the player until their line after it is continued. */
+  function openSigmundChest(player) {
+    const chest = pendingChest.get(player);
+    pendingChest.delete(player);
+    if (!chest) return;
+    const sender = player.getPacketSender();
+    sender.sendObject(new GameObject(SIGMUND_CHEST_OPEN, chest.getLocation().clone(), chest.getType(), chest.getFace(), null));
+    sender.sendSound(CHEST_OPEN_SOUND, 0, 0);
+    openedChest.set(player, chest);
+  }
+
+  function closeSigmundChest(player) {
+    const chest = openedChest.get(player);
+    openedChest.delete(player);
+    if (chest) player.getPacketSender().sendObject(chest);
+  }
+
+  /** Dismissed, Sigmund (6289 while varbit 540 is 1) walks out of the Duke's room for this player. */
+  function sigmundLeaves(player) {
+    const sender = player.getPacketSender();
+    const castle = localNpc(player, new Set([SIGMUND_CASTLE_SPAWN_ID, SIGMUND_ID]));
+    sender.sendVarbit(VARBIT_SIGMUND_LEAVING, 1);
+    later(player, SIGMUND_LEAVING_TICKS, () => sender.sendVarbit(VARBIT_SIGMUND_LEAVING, 0));
+    if (!castle) return;
+    const from = castle.getLocation();
+    const leaving = NPC.create(SIGMUND_LEAVING_ID, from.clone());
+    leaving.setOwner(player);
+    leaving.setOwnerOnly(true);
+    leaving.setScriptedMovement?.(true);
+    leaving.__skipDefaultRespawn = true;
+    World.getAddNPCQueue().push(leaving);
+    // The add queue registers him during the next world tick; he sets off once he is in the world.
+    const walkOut = (tries) => later(player, 1, () => {
+      if (leaving.isRegistered?.()) PathFinder.calculateWalkRoute(leaving, ...SIGMUND_EXIT_TILE);
+      else if (tries > 1) walkOut(tries - 1);
+    });
+    walkOut(3);
+    TaskManager.submit(new CountdownTask(leaving, SIGMUND_LEAVING_DESPAWN_TICKS, () => {
+      if (leaving.isRegistered?.()) World.getRemoveNPCQueue().push(leaving);
+    }));
   }
 
   function completeTreaty(player) {
@@ -770,29 +1118,54 @@ module.exports = function registerLostTribeQuest(api) {
       player.sendMessage("You need a Mining level of at least 17 to dig through the rubble.");
       return;
     }
-    const pickaxe = mining.findBestPickaxe(player);
-    if (pickaxe) player.performAnimation(pickaxe.animation);
-    quest.setStage(player, STAGE_FIND_BROOCH);
-    player.sendMessage("You dig a narrow tunnel through the rocks.");
-    ensureBrooch(player);
+    // rsprox 20261112T152024-5ab63b4, ticks 173-181: the pickaxe's wall swing, then three ticks on
+    // the stage moves 3 to 4 with an item box of the pickaxe used.
+    const used = mining.PICKAXES.find((entry) => entry.id === event.itemId) ?? mining.findBestPickaxe(player);
+    const movement = player.getMovementQueue();
+    movement.reset();
+    movement.setBlockMovement(true);
+    player.setPositionToFace(new Location(event.location.x, event.location.y, 0));
+    if (used) player.performAnimation(mining.swingAnimation(used, { swing: "wall" }));
+    TaskManager.submit(new CountdownTask(player, DIG_TICKS, () => {
+      movement.setBlockMovement(false);
+      if (!player.isRegistered() || quest.getStage(player) !== STAGE_DIG) return;
+      player.performAnimation(new Animation(-1));
+      quest.setStage(player, STAGE_FIND_BROOCH);
+      digItem.set(player, event.itemId);
+      playVariant(player, SIGMUND_ID, "a-hole-in-the-wall-opening-the-tunnel");
+      ensureBrooch(player);
+    }));
   }
 
-  function openSigmundChest(event) {
+  function searchSigmundChest(event) {
     const { player } = event;
     event.handled = true;
     if (getHam(player) >= 1) {
       player.sendMessage("You have already searched this chest.");
       return;
     }
-    startTranscript(api, player, SIGMUND_ID, PAGE, "property-recovery-opening-sigmund-s-chest");
+    if (event.object) pendingChest.set(player, event.object);
+    playVariant(player, SIGMUND_ID, "property-recovery-opening-sigmund-s-chest");
   }
 
+  /**
+   * The first search takes the book; the take box is where live ends it (ticks 363-369). Live
+   * searched it straight after the Duke, without asking Reldo first.
+   */
   function searchGoblinBookcase(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage !== STAGE_FIND_BOOK || hasBit(player, BIT_BOOKMARK)) return;
     event.handled = true;
-    startTranscript(api, player, NpcIdentifiers.RELDO, PAGE, "investigation-a-history-of-the-goblin-race");
+    if ((stage !== STAGE_FIND_RELDO && stage !== STAGE_FIND_BOOK) || hasBit(player, BIT_BOOKMARK)) {
+      // rsprox 20261112T152024-5ab63b4, ticks 370-374: any other search, the book already taken.
+      player.sendMessage("You search the bookcase...");
+      later(player, BOOKCASE_EMPTY_TICKS, () => player.sendMessage("You find nothing of interest."));
+      return;
+    }
+    playVariant(player, NpcIdentifiers.RELDO, "investigation-a-history-of-the-goblin-race", (steps) => {
+      const take = steps.findIndex((step) => step.id === TAKE_BOOK_ACTION_ID);
+      return take === -1 ? steps : steps.slice(0, take + 1);
+    });
   }
 
   function searchHamCrate(event) {
@@ -802,12 +1175,13 @@ module.exports = function registerLostTribeQuest(api) {
     const banked = (player.getBanks?.() ?? []).some(bank => (bank?.getAmount(ItemIdentifiers.SILVERWARE) ?? 0) > 0);
     if (getHam(player) >= 2 && (held(player, ItemIdentifiers.SILVERWARE) || banked || quest.getStage(player) !== STAGE_MISTAG)) {
       event.handled = true;
-      player.sendMessage("You have already taken the silverware.");
+      // rsprox 20261112T152024-5ab63b4, tick 1191: a search after the silverware.
+      player.sendMessage("You search the crate but find nothing.");
       return;
     }
     if (quest.getStage(player) !== STAGE_MISTAG || getContact(player) < 2) return;
     event.handled = true;
-    startTranscript(api, player, SIGMUND_ID, PAGE, "property-recovery-searching-the-h-a-m-hideout");
+    playVariant(player, SIGMUND_ID, "property-recovery-searching-the-h-a-m-hideout");
   }
 
   function openHamTrapdoor(event) {
@@ -838,8 +1212,7 @@ module.exports = function registerLostTribeQuest(api) {
     const location = event.location;
     const key = tileKey(location);
     if (id === ObjectIdentifiers.HOLE_8 && CELLAR_WALL_TILES.has(key)) {
-      event.handled = true;
-      stepThroughX(event.player, location);
+      event.handled = cellarHole.squeeze(event.player, location);
       return;
     }
     if (id === ObjectIdentifiers.HOLE_9 && tileKey(location) === DEEP_HOLE_TILE) {
@@ -849,7 +1222,7 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (SIGMUND_CHEST_LOCATIONS.has(`${id}:${tileKey(location, true)}`)) {
-      openSigmundChest(event);
+      searchSigmundChest(event);
       return;
     }
     if (id === LIBRARY_BOOKCASE && tileKey(location, true) === LIBRARY_BOOKCASE_TILE) {
@@ -1024,6 +1397,7 @@ module.exports = function registerLostTribeQuest(api) {
   api.persistAttribute(BITS_ATTRIBUTE);
   api.persistAttribute(HAM_ATTRIBUTE);
   api.persistAttribute(CONTACT_ATTRIBUTE);
+  api.persistAttribute(BOOKMARK_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "the_lost_tribe",
@@ -1047,15 +1421,21 @@ module.exports = function registerLostTribeQuest(api) {
 
   api.onNpcInteraction("Sigmund", { "Talk-to": talkSigmund, Pickpocket: pickpocketSigmund });
   api.onNpcInteraction("Duke Horacio", { "Talk-to": talkDuke });
-  api.onNpcInteraction("Cook", { "Talk-to": talkCook });
-  api.onNpcInteraction("Hans", { "Talk-to": talkHans });
-  api.onNpcInteraction("Bob", { "Talk-to": talkBob });
+  api.onNpcsInteraction(["Cook", "Hans", "Bob", "Father Aereck"], { "Talk-to": talkWitnessCandidate });
+  api.onNpcsInteraction(["Donie", "Gee"], { "Talk-to": talkDonieOrGee });
   api.onNpcInteraction("Reldo", { "Talk-to": talkReldo });
   api.onNpcInteraction("General Bentnoze", { "Talk-to": talkGenerals });
   api.onNpcInteraction("General Wartface", { "Talk-to": talkGenerals });
   api.onNpcInteraction("Mistag", { "Talk-to": talkMistag });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction("Goblin symbol book", { Read: readSymbolBook });
+  api.onInterfaceActionClick(turnSymbolBookPage);
+  api.onInterfaceActionClick(cellarHole.warningClick);
+  api.onCustomEvent("interface:closed", closeSymbolBook);
+  api.onCustomEvent("interface:closed", cellarHole.warningClosed);
+  api.onCustomEvent("player:emote", greetMistag);
+  api.onCustomEvent("npc-dialogue:choice", answerWitnessQuestion);
+  api.onCustomEvent("npc-dialogue:menu", nameWitnessInMenu);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);
@@ -1065,4 +1445,5 @@ module.exports = function registerLostTribeQuest(api) {
   api.onItemOnObject(digRubble, { noted: false });
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogin(cellarHole.restoreWarningCount);
 };

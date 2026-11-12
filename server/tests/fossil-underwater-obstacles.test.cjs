@@ -29,6 +29,8 @@ before(() => {
     persistAttribute() {},
     onObjectRoute: (handler) => hooks.route.push(handler),
     onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
+    onObjectInteraction() {},
+    onPlayerProcess() {},
     onCanTeleport() {},
     registerArea() {},
     onPlayerLogout() {},
@@ -70,7 +72,7 @@ function tick(count = 1) {
   for (let i = 0; i < count; i++) TaskManager.process();
 }
 
-test('an obstacle: from either side, the cave-wall swim to the far side, no XP (231/00714)', (t) => {
+test('an obstacle: from either side, the cave-wall swim to the far side (231/00714)', (t) => {
   const p = realPlayer(t, 3759, 10260);
   // The click runs the tick after arriving (when the recording faces it); the swim is the tick after.
   navigate(p, 30962, 3758, 10260);
@@ -82,7 +84,8 @@ test('an obstacle: from either side, the cave-wall swim to the far side, no XP (
   navigate(p, 30962, 3758, 10260);
   tick(6);
   assert.deepEqual(at(p), [3759, 10260, 1], 'and back');
-  assert.equal(p.xp, 0);
+  // The captures record no XP; agility-shortcuts.json gives the Wiki's 4.5 a crossing.
+  assert.equal(p.xp, 2, 'XP for each crossing');
 });
 
 test('the ship-wall obstacle at 3754,10244 is crossed north-south, its join pieces east and west', (t) => {

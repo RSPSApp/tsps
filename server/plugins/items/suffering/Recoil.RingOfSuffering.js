@@ -78,8 +78,10 @@ function onHitResolved({ attacker, target, hit }) {
   useCharges(player, ring, recoil);
 }
 
+// rsprox (15 recordings): "Your ring currently has N recoil charges remaining. The recoil effect is currently enabled."
 function checkCharges({ player, item }) {
-  player.sendMessage(`Your ring of suffering has ${charges(item).toLocaleString("en-US")} charges left.`);
+  const state = player.getAttribute?.(DISABLED_ATTRIBUTE) === true ? "disabled" : "enabled";
+  player.sendMessage(`Your ring currently has ${charges(item).toLocaleString("en-US")} recoil charges remaining. The recoil effect is currently ${state}.`);
 }
 
 function chargeRing(event) {
@@ -94,27 +96,43 @@ function chargeRing(event) {
   if (!baseByRecoil.has(ringId) && !recoilByBase.has(ringId)) {
     return false;
   }
-  const room = MAX_CHARGES - charges(ring);
-  if (room < CHARGES_PER_RECOIL) {
+  event.handled = true;
+  if (MAX_CHARGES - charges(ring) < CHARGES_PER_RECOIL) {
     player.sendMessage("Your ring of suffering cannot hold any more charges.");
-    event.handled = true;
     return;
   }
-  player.getInventory().deleteNumber(consumedId, 1);
+  // rsprox 237/01150.txt:596557-596596: with several rings held, "How many rings do you wish to use?", then
+  // "You load your ring with 106 rings of recoil. It now has 4,240 recoil charges." One ring loads straight away.
+  const held = Number(player.getInventory().getAmount?.(consumedId) ?? 1);
+  if (held > 1) {
+    player.setEnteredAmountAction?.({ execute: (count) => loadRings(player, ring, consumedId, Math.floor(Number(count) || 0)) });
+    player.getPacketSender().sendEnterAmountPrompt("How many rings do you wish to use?");
+    return;
+  }
+  loadRings(player, ring, consumedId, 1);
+}
+
+function loadRings(player, ring, consumedId, wanted) {
+  const ringId = Number(ring?.getId?.() ?? -1);
+  if (!baseByRecoil.has(ringId) && !recoilByBase.has(ringId)) return;
+  const held = Number(player.getInventory().getAmount?.(consumedId) ?? 1);
+  const count = Math.min(wanted, held, Math.floor((MAX_CHARGES - charges(ring)) / CHARGES_PER_RECOIL));
+  if (count < 1) return;
+  player.getInventory().deleteNumber(consumedId, count);
   player.setAttribute(core.CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, 0);
   if (recoilByBase.has(ringId)) {
     ring.setId(recoilByBase.get(ringId));
   }
-  setCharges(ring, charges(ring) + CHARGES_PER_RECOIL);
+  setCharges(ring, charges(ring) + count * CHARGES_PER_RECOIL);
   refresh(player);
-  player.sendMessage("You add the ring of recoil to your ring of suffering.");
-  event.handled = true;
+  player.sendMessage(`You load your ring with ${count.toLocaleString("en-US")} ring${count === 1 ? "" : "s"} of recoil. It now has ${charges(ring).toLocaleString("en-US")} recoil charges.`);
 }
 
 function toggleRecoil({ player, item }) {
   const disabled = player.getAttribute?.(DISABLED_ATTRIBUTE) === true;
   player.setAttribute?.(DISABLED_ATTRIBUTE, !disabled);
-  player.sendMessage(`The recoil effect is now ${disabled ? "enabled" : "disabled"}.`);
+  // rsprox: "You enable the recoil effect of your ring." / "You disable the recoil effect of your ring."
+  player.sendMessage(`You ${disabled ? "enable" : "disable"} the recoil effect of your ring.`);
   void item;
 }
 
@@ -148,4 +166,4 @@ function attach(api) {
 }
 
 module.exports = attach;
-module.exports._test = { charges, wornRing, useCharges, onHitResolved, chargeRing, discharge, MAX_CHARGES };
+module.exports._test = { charges, wornRing, useCharges, onHitResolved, chargeRing, loadRings, discharge, MAX_CHARGES };

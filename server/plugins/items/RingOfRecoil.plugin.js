@@ -6,7 +6,10 @@
  * (the Wiki's transcript gives every line). It also keeps the monsters on the Wiki's immune
  * list from being recoiled (`combat:recoil-target`).
  */
-const IMMUNE_NPCS = new Set(require("./data/recoil-immune-npcs.json").names);
+const IMMUNE_DATA = require("./data/recoil-immune-npcs.json");
+const IMMUNE_NPCS = new Set(IMMUNE_DATA.names);
+/** By id where the name is shared with a monster that is not immune (the two Judges of Yama). */
+const IMMUNE_NPC_IDS = new Set(IMMUNE_DATA.ids ?? []);
 
 const RING_OF_RECOIL_CHARGE = 40;
 const FULL_MESSAGE = "The ring is fully charged. There would be no point in breaking it.";
@@ -64,7 +67,8 @@ function askToBreak({ player, item, interfaceId }) {
 
 /** `combat:recoil-target`: the Wiki's immune monsters take no recoil. */
 function recoilTarget(check) {
-  if (check.target?.isNpc?.() && IMMUNE_NPCS.has(check.target.getAsNpc().getCurrentDefinition().getName())) {
+  const npc = check.target?.isNpc?.() ? check.target.getAsNpc() : null;
+  if (npc && (IMMUNE_NPC_IDS.has(npc.getId?.()) || IMMUNE_NPCS.has(npc.getCurrentDefinition().getName()))) {
     check.allow = false;
   }
 }

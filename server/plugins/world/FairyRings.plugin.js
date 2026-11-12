@@ -64,6 +64,15 @@ const FAVOURITE_CODE_TEXT = 151;
 const FAVOURITE_STARS = [161, 162, 163, 164, 165, 167, 168, 169, 170, 171];
 const MAX_FAVOURITES = 10;
 const LOG_FAVOURITE_OP = 2;
+/**
+ * fairyring_fave_1..10: each favourite slot is 64 + the code's index (its dial letters and a set
+ * flag), 0 when empty. fairyrings_favourite_opvis has one bit per filled slot.
+ */
+const FAVOURITE_VARBITS = Array.from({ length: MAX_FAVOURITES }, (_, slot) => 20240 + slot);
+const FAVOURITE_SET = 64;
+const FAVOURITE_OPVIS_VARBIT = 20239;
+/** The dials turning to a code picked from the travel log. */
+const USE_CODE_SOUND = 2871;
 
 const FLOWERS_GRAPHIC = 569;
 const VANISH_ANIMATION = 3265;
@@ -212,25 +221,81 @@ function setDials(player, code) {
   });
 }
 
-function sendFavourites(player) {
-  const sender = player.getPacketSender();
-  const favourites = codeList(player, FAVOURITES_ATTRIBUTE);
-  for (let slot = 0; slot < MAX_FAVOURITES; slot++) {
-    const ring = rings.get(favourites[slot]);
-    sender.sendString(ring?.logText ?? "", (LOG_INTERFACE << 16) | (FAVOURITE_TEXT + slot));
-    sender.sendString(ring?.code ?? "", (LOG_INTERFACE << 16) | (FAVOURITE_CODE_TEXT + slot));
-  }
+/**
+ * The 10 favourite slots, in order, "" where empty. A removed favourite leaves its slot empty and
+ * the next one added fills the first empty slot.
+ */
+function favouriteSlots(player) {
+  const saved = String(player.getAttribute(FAVOURITES_ATTRIBUTE) ?? "").split(",");
+  const slots = Array.from({ length: MAX_FAVOURITES }, (_, slot) => (rings.has(saved[slot]) ? saved[slot] : ""));
+  return slots.map((code, slot) => (code && slots.indexOf(code) === slot ? code : ""));
 }
 
+function saveFavourites(player, slots) {
+  player.setAttribute(FAVOURITES_ATTRIBUTE, slots.join(",").replace(/,+$/, ""));
+}
+
+/** A code as the travel log and its messages write it: "A K R". */
+function spacedCode(code) {
+  return code.split("").join(" ");
+}
+
+function sendFavouriteVarbits(player, slots = favouriteSlots(player)) {
+  const sender = player.getPacketSender();
+  let filled = 0;
+  slots.forEach((code, slot) => {
+    const ring = rings.get(code);
+    sender.sendVarbit(FAVOURITE_VARBITS[slot], ring ? FAVOURITE_SET + ring.index : 0);
+    if (ring) filled |= 1 << slot;
+  });
+  sender.sendVarbit(FAVOURITE_OPVIS_VARBIT, filled);
+}
+
+function sendFavourites(player, slots) {
+  const sender = player.getPacketSender();
+  slots.forEach((code, slot) => {
+    const ring = rings.get(code);
+    sender.sendString(ring?.logText ?? "", (LOG_INTERFACE << 16) | (FAVOURITE_TEXT + slot));
+    sender.sendString(ring ? spacedCode(ring.code) : "", (LOG_INTERFACE << 16) | (FAVOURITE_CODE_TEXT + slot));
+  });
+}
+
+/** The used codes, less the favourites (shown in their own slots instead), the hideout and the favourites. */
 function sendTravelLog(player) {
   const sender = player.getPacketSender();
+  const slots = favouriteSlots(player);
   const used = new Set(codeList(player, USED_CODES_ATTRIBUTE));
   for (const ring of rings.values()) {
     if (ring.logComponent <= 0) continue;
-    sender.sendString(used.has(ring.code) ? ring.logText : "", (LOG_INTERFACE << 16) | ring.logComponent);
+    const shown = used.has(ring.code) && !slots.includes(ring.code);
+    sender.sendString(shown ? ring.logText : "", (LOG_INTERFACE << 16) | ring.logComponent);
   }
   sender.sendString(HIDEOUT_TEXT, (LOG_INTERFACE << 16) | HIDEOUT_COMPONENT);
-  sendFavourites(player);
+  sendFavourites(player, slots);
+}
+
+/** The modal background, the dials on the main modal and the travel log beside them. */
+function openDialInterfaces(player) {
+  player.getPacketSender()
+    .sendClientScript(MODAL_BACKGROUND_SCRIPT, ...MODAL_BACKGROUND)
+    .sendInterface(DIALS_INTERFACE)
+    .sendSubInterface(SIDE_MODAL, LOG_INTERFACE, 3);
+}
+
+/**
+ * After a favourite is added or removed: the log's text again, both interfaces reopened (the log
+ * lays its rows out as it opens) and its search box closed.
+ */
+function refreshTravelLog(player) {
+  sendTravelLog(player);
+  openDialInterfaces(player);
+  player.getPacketSender().sendClientScript(MESLAYER_CLOSE_SCRIPT, SEARCH_MESLAYER);
+}
+
+/** "Use code": the dials turn to the code. */
+function useCode(player, code) {
+  player.getPacketSender().sendSoundEffect(USE_CODE_SOUND, 1, 0, 1);
+  setDials(player, code);
 }
 
 function ringTile(location) {
@@ -261,10 +326,7 @@ function openDial({ player, location }) {
   configuredRing.set(player, ringTile(location));
   setDials(player, "");
   sendTravelLog(player);
-  player.getPacketSender()
-    .sendClientScript(MODAL_BACKGROUND_SCRIPT, ...MODAL_BACKGROUND)
-    .sendInterface(DIALS_INTERFACE)
-    .sendSubInterface(SIDE_MODAL, LOG_INTERFACE, 3);
+  openDialInterfaces(player);
   core.TaskManager.submit(new (class extends core.Task {
     constructor() {
       super(1, player, false);
@@ -486,38 +548,45 @@ function confirmDial(player) {
  * op. Decided from the op: IF_BUTTON packets carry no menu text.
  */
 function logAction(player, childId, op) {
-  const favourites = codeList(player, FAVOURITES_ATTRIBUTE);
+  const slots = favouriteSlots(player);
   const favouriteSlot = childId >= FAVOURITE_TEXT && childId < FAVOURITE_TEXT + MAX_FAVOURITES
     ? childId - FAVOURITE_TEXT
     : FAVOURITE_STARS.indexOf(childId);
   if (favouriteSlot >= 0) {
+    if (!slots[favouriteSlot]) return;
     if (op === LOG_FAVOURITE_OP || FAVOURITE_STARS.includes(childId)) {
-      favourites.splice(favouriteSlot, 1);
-      player.setAttribute(FAVOURITES_ATTRIBUTE, favourites.join(","));
-      sendFavourites(player);
-    } else if (favourites[favouriteSlot]) {
-      setDials(player, favourites[favouriteSlot]);
+      slots[favouriteSlot] = "";
+      saveFavourites(player, slots);
+      sendFavouriteVarbits(player, slots);
+      refreshTravelLog(player);
+    } else {
+      useCode(player, slots[favouriteSlot]);
     }
     return;
   }
   if (childId === HIDEOUT_COMPONENT) {
-    setDials(player, HIDEOUT_CODE);
+    useCode(player, HIDEOUT_CODE);
     return;
   }
   const ring = ringsByComponent.get(childId);
   if (!ring) return;
   const adding = op === LOG_FAVOURITE_OP || childId === ring.starComponent;
   if (!adding) {
-    setDials(player, ring.code);
+    useCode(player, ring.code);
     return;
   }
-  if (favourites.includes(ring.code)) return;
-  if (favourites.length >= MAX_FAVOURITES) {
+  if (slots.includes(ring.code)) return;
+  const free = slots.indexOf("");
+  if (free < 0) {
+    // Ours: the line when all 10 slots are full.
     player.sendMessage("You can't have more than 10 favourite fairy ring codes.");
     return;
   }
-  player.setAttribute(FAVOURITES_ATTRIBUTE, [...favourites, ring.code].join(","));
-  sendFavourites(player);
+  slots[free] = ring.code;
+  saveFavourites(player, slots);
+  player.sendMessage(`Added ${spacedCode(ring.code)} to your favourites.`);
+  sendFavouriteVarbits(player, slots);
+  refreshTravelLog(player);
 }
 
 function interfaceAction(event) {
@@ -597,9 +666,21 @@ function useExitRing({ player, objectId, location }) {
   fairyTeleport(player, ring, ringTile(location), false);
 }
 
+/**
+ * The ring's "Favourites" picks a favourite from its sub-menu; chosen without one (the option
+ * itself), it only says so.
+ */
+function favouritesOption({ player }) {
+  if (!player) return;
+  player.sendMessage("You will need to select a favourite from the sub-menu.");
+}
+
+/** At login: the last destination and the favourite slots. */
 function sendLastOnLogin({ player }) {
   const ring = rings.get(String(player.getAttribute(LAST_CODE_ATTRIBUTE) ?? ""));
   if (ring) sendLastDestination(player, ring);
+  const slots = favouriteSlots(player);
+  if (slots.some(Boolean)) sendFavouriteVarbits(player, slots);
 }
 
 function attach(api) {
@@ -625,7 +706,9 @@ function protectRingCentre(event) {
 
 /** The rings' options, as the cache names them (op 3 is a plain "Last-destination", not a multiloc). */
 function ringOptions() {
-  return { Zanaris: zanaris, Configure: openDial, "Last-destination": lastDestination, Use: useExitRing };
+  return {
+    Zanaris: zanaris, Configure: openDial, "Last-destination": lastDestination, Favourites: favouritesOption, Use: useExitRing,
+  };
 }
 
 module.exports = {
@@ -646,7 +729,11 @@ module.exports = {
     hasLightSource,
     playerDied,
     ringOptions,
+    sendLastOnLogin,
     rings: () => rings,
+    FAVOURITE_VARBITS,
+    FAVOURITE_OPVIS_VARBIT,
+    USE_CODE_SOUND,
     DIAL_VARBITS,
     DIAL_LETTERS,
     LAST_CODE_ATTRIBUTE,

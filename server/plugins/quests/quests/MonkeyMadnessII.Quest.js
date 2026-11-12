@@ -318,6 +318,22 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   const MONKEY_TALISMAN_ITEM = ItemIdentifiers.MONKEY_TALISMAN; // 4023
   const KRUKS_PAW_ITEM = ItemIdentifiers.KRUKS_PAW; // 19523
   const KRUK_GREEGREE_ITEM = ItemIdentifiers.KRUK_MONKEY_GREEGREE; // 19525
+  // Canonical Transcript:Zooknock postquest page. These are free replacements,
+  // distinct from the tunnel's paid remains exchange and the MM2 paw quest step.
+  const ZOOKNOCK_RECLAIMS = [
+    ["vCCtz2", "qhilom", ItemIdentifiers.NINJA_MONKEY_GREEGREE],
+    ["eUnnK9", "bzMEBy", ItemIdentifiers.NINJA_MONKEY_GREEGREE_2],
+    ["mmr4it", "l9BRxu", KRUK_GREEGREE_ITEM],
+    ["QE-M1k", "VulznX", ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE],
+    ["0HZd3F", "O3moWv", ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE_2],
+    ["moHRJE", "6WKlze", ItemIdentifiers.GORILLA_GREEGREE],
+    ["FuxRIL", "S-kK90", ItemIdentifiers.BEARDED_GORILLA_GREEGREE],
+    ["Jkpi5j", "g6Dp--", ItemIdentifiers.KARAMJAN_MONKEY_GREEGREE],
+    ["34nXxJ", "1FErIR", ItemIdentifiers.MSPEAK_AMULET],
+    ["zZr5-T", "Xrklqr", ItemIdentifiers._10TH_SQUAD_SIGIL],
+  ];
+  const ZOOKNOCK_RECLAIM_CONDITIONS = new Map(ZOOKNOCK_RECLAIMS.map(([condition, , item]) => [condition, item]));
+  const ZOOKNOCK_RECLAIM_MESSAGES = new Map(ZOOKNOCK_RECLAIMS.map(([, message, item]) => [message, item]));
   const SATCHEL_ITEM = ItemIdentifiers.SATCHEL; // 19527
   const FILLED_SATCHEL_ITEM = ItemIdentifiers.SATCHEL_2; // 19528
   const CHARGED_ONYX_ITEM = ItemIdentifiers.CHARGED_ONYX; // 19560
@@ -852,6 +868,42 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     return true;
   }
 
+  // MM1 asks before opening a paid tunnel exchange. Keep the quest's Talk-to
+  // ownership here; item-on-NPC dispatch runs every hook even after handled.
+  function answerZooknockOwnership(event) {
+    if (!ZOOKNOCK_IDS.has(event.npcId)) return;
+    const stage = stageOf(event.player);
+    event.owned = stage === STAGE_KRUK_KILLED || stage >= STAGE_ZOOKNOCK_SAVED
+      || (stage >= STAGE_GREE_GREE && !hasKrukGreegree(event.player));
+  }
+
+  function isPostquestZooknock(event) {
+    return event.npcId === NpcIdentifiers.ZOOKNOCK_4 && stageOf(event.player) >= STAGE_COMPLETE
+      && event.pages?.some(page => page.page === ZOOKNOCK_PAGE && page.variants?.includes(POST_QUEST));
+  }
+
+  function hasReclaim(player, itemId) {
+    return hasItem(player, itemId) || bankHasItem(player, itemId);
+  }
+
+  function handleZooknockReclaim(event) {
+    const itemId = ZOOKNOCK_RECLAIM_MESSAGES.get(event.stepId);
+    if (event.kind !== "message" || !itemId || !isPostquestZooknock(event)) return false;
+    event.handled = true;
+    // Recheck at delivery, not just while resolving the condition. Never replace
+    // an already-owned item or drop a free reward on a full inventory.
+    if (hasReclaim(event.player, itemId)) {
+      event.player.sendMessage("You already have one of those.");
+      event.end = true;
+    } else if (!tryAddItem(event.player, itemId)) {
+      event.player.sendMessage("You need a free inventory slot before Zooknock can hand you a replacement.");
+      event.end = true;
+    } else {
+      event.box = { items: [itemId] };
+    }
+    return true;
+  }
+
   function handleZooknockTalk(event) {
     const { player, npcId } = event;
     const stage = stageOf(player);
@@ -1038,6 +1090,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   // ==========================================================================
 
   function handleDialogueAction(event) {
+    if (handleZooknockReclaim(event)) return;
     const { player, stepId } = event;
     if (!DIALOGUE_NPC_IDS.has(event.npcId)) return;
     switch (stepId) {
@@ -1227,6 +1280,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   }
 
   function answerCondition(event) {
+    if (isPostquestZooknock(event) && ZOOKNOCK_RECLAIM_CONDITIONS.has(event.stepId)) {
+      return hasReclaim(event.player, ZOOKNOCK_RECLAIM_CONDITIONS.get(event.stepId));
+    }
     const { player, stepId } = event;
     if (!DIALOGUE_NPC_IDS.has(event.npcId)) return null;
     switch (stepId) {
@@ -1491,6 +1547,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       api.sendMultiChatboxPrompt(player, "Enter the hidden trapdoor?", "Yes.", () => {
         player.moveTo(DUNGEON_ENTRY);
         player.sendMessage("You enter the Ape Atoll dungeon.");
+        // Wiki (Monkey Madness II): entering Kruk's Dungeon to find Kruk, the greegree will "wrench itself from your
+        // hands", dropping to the ground with a full inventory. The later Kruk-greegree entry needs it worn.
+        if (stage === STAGE_ARCHER_ASKED) api.emitCustomEvent("greegree:wrench-off", { player });
       }, "No.", () => player.getPacketSender().sendInterfaceRemoval());
       return;
     }
@@ -1646,8 +1705,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       event.handled = true;
       // Wiki (Royal seed pod): it "can teleport up to level 30 wilderness"; the usual teleport rules apply otherwise.
       if (!TeleportHandler.checkReqs(player, GRAND_TREE_KING, SEED_POD_WILDERNESS_LIMIT)) return;
-      TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
-        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree."));
+      TeleportHandler.confirm(player, GRAND_TREE_KING, () => TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
+        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree.")), SEED_POD_WILDERNESS_LIMIT);
       return;
     }
     if (option !== "read") return;
@@ -2114,6 +2173,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     onReward: grantReward,
   });
 
+  api.onCustomEvent("monkey-madness-ii:zooknock-ownership", answerZooknockOwnership);
   api.onNpcDialogueVariant(selectNarnodeVariant);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);

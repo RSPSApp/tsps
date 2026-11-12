@@ -4,10 +4,12 @@
  * notifications layer, runs notification_display_init (3343) with the title, text and colour, and
  * closes it 13 ticks later; a popup waiting behind it opens 2 ticks after that.
  *
- *   api.emitCustomEvent("notification:show", { player, title, text, colour?, jingle? })
+ *   api.emitCustomEvent("notification:show", { player, title, text, colour?, jingle?, follow? })
  *
  * `colour` is the title's RGB (-1 for the default); `jingle` is { id, length } (length in ms, as
- * the jingle packet carries it) to play as the popup opens.
+ * the jingle packet carries it) to play as the popup opens. A `follow` popup queued behind another
+ * takes over the same banner 13 ticks after it, without closing it in between (sea charting's
+ * "fully charted!" popups after the task's).
  */
 const NOTIFICATIONS_UID = (161 << 16) | 13;
 const NOTIFICATION_DISPLAY = 660;
@@ -32,12 +34,21 @@ function showNext(player) {
   const next = queue.waiting.shift();
   if (!next) return;
   queue.showing = true;
+  player.getPacketSender().sendSubInterface(NOTIFICATIONS_UID, NOTIFICATION_DISPLAY, OVERLAY);
+  display(player, queue, next);
+}
+
+/** Fills the open banner with a popup, then hands it to a following popup or closes it. */
+function display(player, queue, popup) {
   const sender = player.getPacketSender();
-  sender.sendSubInterface(NOTIFICATIONS_UID, NOTIFICATION_DISPLAY, OVERLAY);
-  sender.sendInterfaceScript(SCRIPT_NOTIFICATION_INIT, [next.title, next.text, next.colour]);
-  if (next.jingle) sender.sendJingle(next.jingle.id, next.jingle.length ?? 0);
+  sender.sendInterfaceScript(SCRIPT_NOTIFICATION_INIT, [popup.title, popup.text, popup.colour]);
+  if (popup.jingle) sender.sendJingle(popup.jingle.id, popup.jingle.length ?? 0);
   later(SHOWN_TICKS, () => {
     if (player.isRegistered?.() === false) return;
+    if (queue.waiting[0]?.follow) {
+      display(player, queue, queue.waiting.shift());
+      return;
+    }
     sender.closeSubInterface(NOTIFICATIONS_UID);
     later(GAP_TICKS, () => {
       queue.showing = false;
@@ -55,6 +66,7 @@ function show(request) {
     text: String(request.text ?? ""),
     colour: Number.isInteger(request.colour) ? request.colour : -1,
     jingle: request.jingle ?? null,
+    follow: request.follow === true,
   });
   showNext(player);
 }

@@ -48,3 +48,53 @@ test("a full inventory leaves the final stones in the box, to be searched for ag
   assert.deepEqual([inv.getAmount(I.SQUARE_STONE_2), inv.getAmount(I.SQUARE_STONE)], [2, 2]);
   assert.notEqual(p.getAttribute(PUZZLE), FINAL_SEARCH, "and the puzzle moves on");
 });
+
+function talePlayer(t, index) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(index); p.setUsername(`tale${index}`); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  t.after(() => p.setRegistered(false));
+  return p;
+}
+
+function fillInventory(p, free = 0) {
+  const inv = p.getInventory();
+  for (let slot = 0; slot < 28 - free; slot++) inv.setItem(slot, new core.Item(I.LOGS, 1));
+  return inv;
+}
+
+test("harvesting the kelda hops with a full inventory leaves them on the patch", (t) => {
+  const p = talePlayer(t, 9051);
+  const quest = QuestRuntime.questNamed("Forgettable Tale...");
+  quest.setStage(p, 6);
+  p.setAttribute("quest.forgettable_tale.farming", 8);
+  const inv = fillInventory(p);
+  const patchId = core.ObjectIdentifiers.KELDA_HOPS;
+  const harvest = () => PM.emitObjectInteraction({ player: p, object: { getId: () => patchId, getLocation: () => p.getLocation() },
+    objectId: patchId, definition: { getActions: () => ["Harvest"], getName: () => "Kelda hops" }, clickType: 1,
+    location: p.getLocation(), handled: false });
+  harvest();
+  assert.equal(inv.getAmount(I.KELDA_HOPS), 0);
+  assert.equal(p.getAttribute("quest.forgettable_tale.farming"), 8, "the hops stay grown");
+  assert.equal(quest.getStage(p), 6, "the quest does not move on");
+  inv.setItem(27, new core.Item(-1, 0));
+  harvest();
+  assert.equal(inv.getAmount(I.KELDA_HOPS), 1);
+  assert.equal(quest.getStage(p), 7);
+});
+
+test("dialogue hand-outs with a full inventory go to the floor, not nowhere", (t) => {
+  const p = talePlayer(t, 9052);
+  QuestRuntime.questNamed("Forgettable Tale...").setStage(p, 8);
+  const inv = fillInventory(p);
+  const registered = [];
+  const ground = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager;
+  const original = ground.registers;
+  ground.registers = (player, item) => { registered.push([item.getId(), item.getAmount()]); };
+  t.after(() => { ground.registers = original; });
+  for (const stepId of ["Z9bb9f", "oKT26B", "QDUHsY", "5-Cvcz"]) {
+    PM.emitCustomEvent("npc-dialogue:action", { player: p, npcId: -1, stepId, handled: false });
+  }
+  assert.deepEqual(registered, [[I.KELDA_STOUT, 1], [I.KELDA_HOPS, 1], [I.MARRENTILL_SEED, 2], [I.KELDA_SEED, 1]]);
+  assert.equal(inv.getFreeSlots(), 0);
+});

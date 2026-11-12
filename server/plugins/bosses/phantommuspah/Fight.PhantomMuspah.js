@@ -180,7 +180,7 @@ class Fight {
     const { homing, specials, overlay } = Common.data;
     Common.animate(this.muspah, homing.anim);
     this.muspah.performGraphic(Common.graphic(homing.spot));
-    this.player.sendMessage(specials.message);
+    Common.fightMessage(this.player, specials.message);
     Common.overlayFade(this.player, overlay.dark);
     this.at(HOMING_DARK_TICKS, () => Common.overlayFade(this.player, overlay.clear));
     this.spikes.startHoming();
@@ -427,6 +427,7 @@ function freezeDuration(event) {
   const { npcs } = Common.data;
   if (![npcs.ranged, npcs.melee, npcs.shielded, npcs.final].includes(event.target?.getId?.())) return;
   event.ticks *= 0.66;
+  event.resisted = true; // its 33% resistance is applied here, not again by the generic rule
 }
 
 /** A hit on the Muspah: the shield, the shield skip, and the form switch's count. */

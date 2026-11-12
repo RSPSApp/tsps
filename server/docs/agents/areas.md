@@ -51,6 +51,13 @@ register(api) {
 - Rules still read the actor's live state (tile, combat level); membership only decides who
   is asked, and can trail a teleport by a tick.
 
+The PvP preset plugin also asks an area's optional `canLoadPreset(player)` policy. `true`
+permits re-gearing despite that area's teleport refusal, `false` refuses it, and `null` or
+an absent method keeps the teleport fallback. Account, custom-event, wilderness, duel,
+combat and global teleport vetoes still apply. Bounty Hunter's safe lobby permits loads
+only while the player's live tile is inside the lobby; arena loads and lobby teleports
+remain refused.
+
 See `plugins/areas/Wilderness.plugin.js` for the worked example.
 
 ## Content spread across the map

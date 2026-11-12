@@ -121,7 +121,7 @@ test('Elder Raley reclaims only a missing unread postquest schematic', t => {
 
 test('native shipyard build refuses unlearned rosewood then consumes materials after Read', t => {
   const parts = require('../plugins/skills/sailing/BoatParts.Sailing');
-  const shipyard = require('../plugins/skills/sailing/Shipyard.plugin');
+  const shipyard = require('../plugins/skills/sailing/Shipyard.Sailing');
   const common = require('../plugins/skills/sailing/schematics/Common.Schematics');
   const row = common.rows().find(row => row.key === 'rosewood_hull');
   for (const learn of [false, true]) {
@@ -131,6 +131,11 @@ test('native shipyard build refuses unlearned rosewood then consumes materials a
     if (learn) { p.getInventory().setItem(0, new core.Item(row.itemId)); read(p, 0); assert.equal(common.learned(p, row), true, JSON.stringify(p.messages)); p.getPacketSender().sendInterfaceRemoval(); }
     core.Sailing.giveBoat(p, 'skiff', 'the_pandemonium');
     shipyard.beginVisit(p, core.Sailing.getDock('the_pandemonium'), 0);
+    // A Build only counts while the schematics' customisation (939) is open, so open it first.
+    const schematicsId = core.CacheDefinitions.getLocId('sailing_shipyard_schematics');
+    const schematics = new core.GameObject(schematicsId, new core.Location(2082, 2724, 0), 10, 0, null);
+    PM.emitObjectInteraction({ player: p, object: schematics, objectId: schematicsId, location: { x: 2082, y: 2724, z: 0 }, clickType: 1, handled: false });
+    assert.equal(p.getInterfaceId(), 939);
     const boat = p.getSailing().boats[0], optionRow = row.buildRowIds.find(id => parts.optionFor(boat, id));
     assert.ok(optionRow);
     const requirement = parts.requirementsOf('hull', optionRow);

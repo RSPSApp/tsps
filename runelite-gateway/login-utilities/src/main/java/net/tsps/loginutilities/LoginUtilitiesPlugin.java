@@ -189,13 +189,21 @@ public class LoginUtilitiesPlugin extends Plugin {
       generation.incrementAndGet();
       account = null;
       prepared = null;
+      final Vault forgetting = vault;
+      final HostConfiguration forgettingHost = host;
       worker.execute(
           () -> {
+            Account saved = null;
             try {
-              vault.forget();
+              saved = forgetting.read();
             } catch (Exception ignored) {
             }
-            ;
+            try {
+              forgetting.forget();
+            } catch (Exception ignored) {
+            }
+            // Deleting the local copy alone would leave the token valid on the server.
+            if (saved != null) revoke(forgettingHost, saved);
           });
       configManager.setConfiguration("loginUtilities", "forget", false);
       clientThread.invokeLater(
@@ -456,6 +464,22 @@ public class LoginUtilitiesPlugin extends Plugin {
     if (!reply.token.matches("[A-Za-z0-9_-]{43}") || !reply.ticket.matches("[A-Za-z0-9_-]{43}"))
       throw new IOException("Invalid login response");
     return reply;
+  }
+
+  /** Best effort: asks the server to drop a remembered token. */
+  private void revoke(HostConfiguration target, Account saved) {
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder(target.endpoint)
+              .timeout(Duration.ofSeconds(10))
+              .header("Content-Type", "text/plain; charset=utf-8")
+              .POST(
+                  HttpRequest.BodyPublishers.ofString(
+                      "forget\n" + encode(saved.username) + "\n" + encode(saved.token) + "\n"))
+              .build();
+      http.send(request, HttpResponse.BodyHandlers.discarding());
+    } catch (Exception ignored) {
+    }
   }
 
   static String encode(String value) {

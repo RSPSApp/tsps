@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/sea-charting.test.cjs
 // Sailing's sea charting against the cache and the rsprox captures (docs/sea-charting.md).
 const assert = require("node:assert/strict");
-const { before, test } = require("node:test");
+const { after, before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -40,10 +40,10 @@ before(() => {
     onObjectInteraction: (handler) => { if (typeof handler === "function") objectHandlers.push(handler); },
     onBeforeObjectInteraction: (handler) => beforeObjectHandlers.push(handler),
   };
-  require("../plugins/skills/sailing/Sailing.plugin").register(real);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Panel.Sailing").register(real);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
   require("../plugins/interface/Notifications.plugin").register(real);
-  require("../plugins/skills/sailing/Charting.plugin").register(api);
+  require("../plugins/skills/sailing/Charting.Sailing").register(api);
 });
 
 let nextIndex = 900;
@@ -110,6 +110,7 @@ function captain({ level = 99 } = {}) {
       addExperiences: (skill, amount) => xp.push(amount),
     }),
     getEquipment: () => ({ get: () => undefined, getItems: () => [], contains: () => false }),
+    getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getBank: () => ({ contains: () => false }),
     getDialogueManager: () => ({
       startDialogues: (chain) => { player.chain = chain; current = [...chain.getDialogues().values()][0]; },
@@ -304,6 +305,74 @@ test("an ocean's last task owes its bonus from Chartin' Charles (rsprox: Western
   }
 });
 
+const notifications = require("../plugins/interface/Notifications.plugin");
+/** The popup texts shown and queued for the player, in order. */
+function popups(player) {
+  const shown = player.sent.filter(([key, script]) => key === "sendInterfaceScript" && script === 3343).map(([, , args]) => args[1]);
+  return [...shown, ...(notifications._test.queues.get(player)?.waiting ?? []).map((popup) => popup.text)];
+}
+
+test("the Miscellaneous groups complete as a group, not an ocean (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const misc = [...common.allSeas().values()].find((sea) => sea.type === common.SEA_TYPE.MISCELLANEOUS);
+    assert.equal(misc.name, "Miscellaneous");
+    const list = common.oceanSpots(misc);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    const last = list.at(-1);
+    const from = player.messages().length;
+    common.complete(player, last);
+    const messages = player.messages().slice(from);
+    const at = messages.indexOf(`You have completed charting a group: ${blue("Miscellaneous")}`);
+    assert.ok(at > 0, messages.join("\n"));
+    assert.equal(messages[at - 2], `You have completed charting a group: ${blue(last.sea.name)}`);
+    assert.equal(messages[at + 1], "For fully charting this group, Chartin' Charles McAtless on the Pandemonium will provide you with some training when you next speak to him.");
+    assert.ok(!messages.some((line) => line.includes("an ocean") || line.includes("this ocean")), messages.join("\n"));
+    assert.deepEqual(popups(player).slice(-3), [last.hint, `${last.sea.name} fully charted!`, "Miscellaneous fully charted!"]);
+    assert.deepEqual(common.progress(player).owed, [misc.row]);
+  } finally {
+    leave(player);
+  }
+});
+
+test("a sea's and an ocean's last task queue their own popups after the task's (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
+    const list = common.oceanSpots(ocean);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    const last = list.at(-1);
+    const before = popups(player).length;
+    common.complete(player, last);
+    assert.deepEqual(popups(player).slice(before), [last.hint, `${last.sea.name} fully charted!`, "Sunset Ocean fully charted!"]);
+  } finally {
+    leave(player);
+  }
+});
+
+test("the last of every task charts the entire sea: its lines, variables and popup (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const all = [...common.allSpots().values()];
+    for (const spot of all.slice(0, -1)) common.complete(player, spot);
+    const from = player.sent.length;
+    const fromMessages = player.messages().length;
+    common.complete(player, all.at(-1));
+    const messages = player.messages().slice(fromMessages);
+    const at = messages.indexOf("<col=0090bc>You have fully charted the entire sea!");
+    assert.ok(at > 0, messages.join("\n"));
+    assert.equal(messages[at + 1], "For fully charting the entire sea, Chartin' Charles McAtless on the Pandemonium will provide you with some final training when you next speak to him.");
+    const full = ["sailing_charting_full_completion", "sailing_charting_full_completion_xp_owed",
+      "sailing_charting_full_completion_ever_complete"].map(varbit);
+    const order = player.sent.slice(from).filter(([key, id]) => key === "sendVarbit" && full.includes(id)).map(([, id]) => id);
+    assert.deepEqual(order, full, "live's order: complete, then the lines, then owed and ever-complete");
+    assert.equal(popups(player).at(-1), "Entire sea fully charted!");
+    assert.equal(common.progress(player).fullOwed, true);
+  } finally {
+    leave(player);
+  }
+});
+
 test("the charts are saved and sent again at login", () => {
   const player = captain();
   try {
@@ -356,6 +425,11 @@ test("the crab statue hands over a Medallion fragment (rsprox 944)", () => {
 });
 
 const spyglass = require("../plugins/skills/sailing/charting/Spyglass.Charting");
+// The combat tab's weapon setup needs a whole player; here it only mounts the tab.
+const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+const realAssign = WeaponInterfaceManager.assign;
+WeaponInterfaceManager.assign = (player) => player.getPacketSender().sendTabInterface(0, 593);
+after(() => { WeaponInterfaceManager.assign = realAssign; });
 
 test("the spyglass far from any view: nothing to look at (rsprox 907 and others)", () => {
   const player = captain();
@@ -408,6 +482,70 @@ test("the spyglass by the Wizards' Tower plays its captured view, then charts it
     spyglass.lookThrough({ player });
     assert.equal(player.messages().at(-1), "There isn't anything nearby worth looking at.");
   } finally {
+    leave(player);
+  }
+});
+
+test("a spyglass view locks the tabs, XP drops and world options, then gives them back (rsprox 948, 939)", () => {
+  const player = captain();
+  player.setAttribute("xp-drops:enabled", true);
+  const hudResets = [];
+  PluginManager.createApi("SpyglassHudTest").onCustomEvent("boss-hud:reset", (event) => hudResets.push(event.player));
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, { fineX: 3104 * 128 + 64, fineY: 3183 * 128 + 64 });
+  tick(); // the boarded sidepanel is mounted a tick after boarding
+  const TOPLEVEL = 161;
+  assert.equal(player.varbits.get(19151), 1, "sailing_sidepanel_visible: the sidepanel is on the combat tab");
+  try {
+    const from = player.sent.length;
+    spyglass.lookThrough({ player });
+    tick(2);
+    assert.deepEqual(hudResets, [player], "the fade out clears the NPC health overlay");
+    assert.ok(!player.sent.slice(from).some(([key]) => key === "sendHideNpcOps"), "the world stays clickable until the cutscene tick");
+    tick(2);
+    const closed = player.sent.slice(from).filter(([key]) => key === "closeSubInterface").map(([, uid]) => uid & 0xffff);
+    // xp_drops, then combat, magic, stats, journal, inventory, worn items, prayer, settings, emotes.
+    assert.deepEqual(closed.sort((a, b) => a - b), [9, 76, 77, 78, 79, 80, 81, 82, 87, 88]);
+    assert.ok(player.sent.slice(from).every(([key, uid]) => key !== "closeSubInterface" || uid >>> 16 === TOPLEVEL));
+    assert.deepEqual(player.sent.slice(from).filter(([key]) => key === "sendHideNpcOps" || key === "sendHideObjOps"),
+      [["sendHideNpcOps", true], ["sendHideObjOps", true]]);
+
+    const restoreFrom = player.sent.length;
+    tick(23);
+    const restored = player.sent.slice(restoreFrom);
+    assert.ok(restored.some(([key]) => key === "sendCameraReset"));
+    assert.deepEqual(restored.filter(([key]) => key === "sendHideNpcOps" || key === "sendHideObjOps"),
+      [["sendHideNpcOps", false], ["sendHideObjOps", false]]);
+    assert.ok(restored.some(([key, uid, group]) => key === "sendSubInterface" && uid === ((TOPLEVEL << 16) | 9) && group === 122), "XP drops back");
+    const tabs = restored.filter(([key]) => key === "sendTabInterface").map(([, slot, group]) => [slot, group]);
+    for (const group of [320, 629, 149, 387, 541, 218, 116, 216]) assert.ok(tabs.some(([, each]) => each === group), `tab ${group} back`);
+    const combatTab = restored.filter(([key, uid]) => key === "sendSubInterface" && uid === ((TOPLEVEL << 16) | 76)).map(([, , group]) => group);
+    assert.equal(combatTab.at(-1), 937, "the sailing sidepanel back on the combat tab");
+    assert.deepEqual(hudResets, [player, player], "the fade back in clears it again");
+  } finally {
+    leave(player);
+  }
+});
+
+test("a random event that took the player during a view keeps its tabs closed at the view's end", () => {
+  const events = require("../plugins/npcs/random-events/Teleports.RandomEvents");
+  const realSessionOf = events.sessionOf;
+  const player = captain();
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, { fineX: 3104 * 128 + 64, fineY: 3183 * 128 + 64 });
+  tick();
+  try {
+    spyglass.lookThrough({ player });
+    tick(4);
+    events.sessionOf = (each) => (each === player ? { kind: "drill" } : realSessionOf(each));
+    const from = player.sent.length;
+    tick(23);
+    const restored = player.sent.slice(from);
+    assert.ok(restored.some(([key]) => key === "sendCameraReset"), "the view still ends");
+    assert.ok(!restored.some(([key]) => key === "sendTabInterface"), "no tab is re-mounted");
+    assert.deepEqual(restored.filter(([key]) => key === "sendHideNpcOps"), [["sendHideNpcOps", false]]);
+  } finally {
+    events.sessionOf = realSessionOf;
     leave(player);
   }
 });
@@ -533,6 +671,125 @@ test("every current's route runs from its release to its end a tile at a time", 
   }
 });
 
+/** Where a duck sets off on each leg after its first: the tile before each leg's first step. */
+function legCorners(key) {
+  const spot = common.spotByKey(key);
+  const steps = currentDuck.routeSteps(spot.route);
+  return [...currentDuck.legStarts(spot.route, steps)].sort((a, b) => a - b).map((i) => steps[i - 1]);
+}
+
+test("a duck quacks again where each leg of its current starts (rsprox 948)", () => {
+  // Every "Quack!" the swimming duck gave in the captures, after the one on release.
+  assert.deepEqual(legCorners("current_duck_crystal_sea"),
+    [[1936, 3295], [1958, 3302], [1971, 3298], [1989, 3304], [2003, 3299], [2020, 3307], [2041, 3304]]);
+  assert.deepEqual(legCorners("current_duck_gulf_of_kourend"), [[1809, 3656], [1814, 3645], [1816, 3632],
+    [1820, 3619], [1822, 3609], [1823, 3595], [1821, 3609], [1825, 3622], [1824, 3637], [1828, 3648], [1834, 3653],
+    [1838, 3664], [1846, 3669], [1856, 3680], [1853, 3694], [1850, 3706], [1839, 3702]]);
+});
+
+/** The quacks' area sounds since `from`: [x, y, delay]. */
+function quacks(player, from = 0) {
+  return player.sent.slice(from).filter(([key, id]) => key === "sendAreaSound" && id === 413).map(([, , x, y, , , delay]) => [x, y, delay]);
+}
+
+test("the swimming duck quacks on each leg; stopped, it quacks twice every 10 ticks (rsprox 940, 948)", () => {
+  const player = duckCaptain();
+  try {
+    const duck = releaseAndFollow(player);
+    const corners = [...duck.legs].sort((a, b) => a - b).map((i) => duck.steps[i - 1]);
+    const from = player.sent.length;
+    for (let i = 0; i < duck.steps.length + 3 && !duck.stopped; i++) tick();
+    assert.equal(duck.stopped, true);
+    const [endX, endY] = duck.steps.at(-1);
+    const swimming = quacks(player, from);
+    // The release's quack, then one per leg.
+    const [startX, startY] = duck.spot.route[0];
+    assert.deepEqual(swimming.slice(0, corners.length + 1), [[startX, startY, 0], ...corners.map(([x, y]) => [x, y, 0])]);
+    // The stop: two quacks, the second 12 client cycles later.
+    assert.deepEqual(swimming.slice(corners.length + 1), [[endX, endY, 0], [endX, endY, 12]]);
+    const stopped = player.sent.length;
+    tick(9);
+    assert.deepEqual(quacks(player, stopped), []);
+    tick(1);
+    assert.deepEqual(quacks(player, stopped), [[endX, endY, 0], [endX, endY, 12]]);
+    tick(10);
+    assert.equal(quacks(player, stopped).length, 4);
+  } finally {
+    currentDuck.ducks.delete(player);
+    leave(player);
+  }
+});
+
+/** An inventory click on a tool, as the item action listener hands it to the plugins. */
+function itemOption(player, itemId, option, clickType) {
+  const slot = player.getInventory().getSlotForItemId(itemId);
+  const event = { player, interfaceId: 149, item: player.getInventory().get(slot), itemId, slot, clickType, option, handled: false };
+  PluginManager.emitItemAction(event);
+  return event;
+}
+
+test("Inspect on the duck and the spyglass opens the tool's object box (rsprox 948, 3455)", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const spyglass = require("../plugins/skills/sailing/charting/Spyglass.Charting");
+  for (const [itemId, text] of [[ITEM_DUCK, currentDuck.INSPECT], [31803, spyglass.INSPECT]]) {
+    const player = captain();
+    player.getInventory().add(new Item(itemId, 1), true);
+    const event = itemOption(player, itemId, "Inspect", 2);
+    assert.equal(event.handled, true, String(itemId));
+    const [box] = dialogueTexts(player);
+    assert.ok(box?.includes(text), box);
+    assert.ok(box?.includes(String(itemId)), box);
+    assert.equal(player.getInventory().getAmount(itemId), 1);
+  }
+});
+
+test("Dismiss sends the duck back to the tools compartment (Wiki: Transcript:Current duck)", () => {
+  const player = duckCaptain();
+  try {
+    const event = itemOption(player, ITEM_DUCK, "Dismiss", 5);
+    assert.equal(event.handled, true);
+    assert.equal(player.getInventory().getAmount(ITEM_DUCK), 0);
+    assert.ok(player.getSailing().tools.includes(2));
+    assert.equal(player.messages().at(-1), "You dismiss the duck and he flies away.");
+  } finally {
+    leave(player);
+  }
+});
+
+test("a completed sea's popup takes over the task's banner 13 ticks later, with jingle 830 (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Ardent Ocean");
+    const list = common.oceanSpots(ocean);
+    // The earlier tasks with the popups off (All Settings), so none is still queued.
+    player.getPacketSender().sendVarbit(18142, 1);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    player.getPacketSender().sendVarbit(18142, 0);
+    const last = list.at(-1);
+    const from = player.sent.length;
+    common.complete(player, last);
+    const banner = [];
+    for (let t = 0; t <= 45; t++) {
+      for (const entry of player.sent.splice(from)) {
+        const [key, a, b] = entry;
+        if (key === "sendInterfaceScript" && a === 3343) banner.push([t, b[1]]);
+        if (key === "sendJingle") banner.push([t, "jingle", a]);
+        if (key === "sendSubInterface" && b === 660) banner.push([t, "open"]);
+        if (key === "closeSubInterface" && a === ((161 << 16) | 13)) banner.push([t, "close"]);
+      }
+      tick();
+    }
+    assert.deepEqual(banner, [
+      [0, "open"], [0, last.hint],
+      [13, `${last.sea.name} fully charted!`], [13, "jingle", 830],
+      [26, "Ardent Ocean fully charted!"], [26, "jingle", 830],
+      [39, "close"],
+    ]);
+  } finally {
+    leave(player);
+  }
+});
+
 const weather = require("../plugins/skills/sailing/charting/Weather.Charting");
 const ITEM_STATION = 31809;
 const ITEM_STATION_FULL = 31810;
@@ -650,6 +907,43 @@ test("a drink crate: no crowbar, the drink, already holding one (rsprox 907, 948
   }
 });
 
+test("with a full inventory the weather troll keeps her station and the crate its drink", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = captain();
+  player.questsDone = new Set(["prying_times"]);
+  atTheHelm(player);
+  const spot = common.spotByKey("weather_troll_rimmington_strait");
+  const troll = { getLocation: () => new Location(spot.location[0], spot.location[1], 0) };
+  const crate = common.spotByKey("drink_crate_mango_gin");
+  try {
+    player.getInventory().add(new Item(ITEM_CROWBAR, 1), true);
+    while (player.getInventory().getFreeSlots() > 0) player.getInventory().add(new Item(1351, 1), true);
+    player.chain = null;
+
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 0);
+    assert.equal(player.getAttribute("charting:weather-station"), undefined);
+    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
+    assert.equal(dialogueTexts(player).length, 0);
+
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 0);
+    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
+    assert.equal(dialogueTexts(player).length, 0);
+    assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
+
+    // The last slot free: both hand over as usual.
+    player.getInventory().delete(1351, 1);
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 1);
+    player.getInventory().delete(1351, 1);
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 1);
+  } finally {
+    leave(player);
+  }
+});
+
 test("drinking a crate's drink charts it, with its own lines (rsprox 907)", () => {
   const player = captain();
   player.questsDone = new Set(["prying_times"]);
@@ -729,13 +1023,110 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
       if (syntax && answer === 1955) [...player.chain.getDialogues().values()].at(-1).execute?.() ?? [...player.chain.getDialogues().values()].at(-1).action?.execute?.();
       syntax.execute(String(answer));
     }
-    assert.match(dialogueTexts(player).join(), /The mermaid, satisfied with your answer/);
-    tick(10);
+    // The box opens with no continue while she dives (rsprox 944): an empty continue line, no events.
+    assert.ok(dived(player));
+    assert.deepEqual(player.sent.filter(([key]) => key === "sendString").slice(-1)[0].slice(1, 2), [""]);
+    assert.equal(player.sent.filter(([key]) => key === "sendInterfaceFlagsRange").at(-1).at(-1), 0);
+    assert.doesNotMatch(dialogueTexts(player).join(), /satisfied with your answer|There you go/);
+    tick(1);
+    assert.equal(player.varbits.get(6719), 2); // minimap_state: off a tick after the fade out
+    tick(7);
+    assert.equal(player.varbits.get(6719), 0);
+    assert.equal(spotBit(player, spot), 0);
+    tick(2);
     assert.equal(spotBit(player, spot), 1);
     assert.deepEqual(player.xp, [175]);
-    assert.match(dialogueTexts(player).join(), /There you go. Hope the dive got you everything you needed!/);
+    assert.ok(player.sent.some(([key, uid]) => key === "closeSubInterface" && uid === ((161 << 16) | 1)));
+    // Then the same box to continue, and only after it her closing line.
+    const steps = [...player.chain.getDialogues().values()].map((step) => JSON.stringify(step));
+    assert.match(steps[0], /The mermaid, satisfied with your answer/);
+    assert.match(steps[1], /There you go. Hope the dive got you everything you needed!/);
   } finally {
     leave(player);
+  }
+});
+
+/** The dive text sent as the message box, since the last check. */
+function dived(player, from = 0) {
+  return player.sent.slice(from).some(([key, text]) => key === "sendString" && /^The mermaid, satisfied with your answer/.test(text));
+}
+
+/** Diving gear on, the riddle asked: answers go in as the item search and count prompts would. */
+const riddledPlayers = [];
+function riddled(uid) {
+  const player = captain();
+  riddledPlayers.push(player);
+  const spot = common.spotsOfType("mermaid_guide").find((each) => each.uid === uid);
+  const npc = mermaidAt(spot);
+  player.getEquipment = () => ({ contains: (id) => id === 7534 || id === 7535 });
+  const prompts = { syntax: null, amount: null };
+  player.setEnteredSyntaxAction = (action) => { prompts.syntax = action; };
+  player.setEnteredAmountAction = (action) => { prompts.amount = action; };
+  const lastStep = () => [...player.chain.getDialogues().values()].at(-1);
+  const riddle = () => { const step = lastStep(); (step.execute ?? step.action.execute).call(step.action ?? step); };
+  mermaid.dive({ player, npc });
+  riddle();
+  const titles = () => player.sent.filter(([key, id]) => key === "sendInterfaceScript" && id === 750).map(([, , args]) => args[0]);
+  const counts = () => player.sent.filter(([key]) => key === "sendEnterAmountPrompt").map(([, title]) => title);
+  return { player, spot, prompts, riddle, titles, counts };
+}
+
+/** Riddled divers leave their boats even when a test fails part way. */
+test.afterEach(() => { for (const player of riddledPlayers.splice(0)) leave(player); });
+
+test("a mermaid takes any of an answer's alternatives, and Selina's coal riddle only coal (rsprox 944, the Wiki)", () => {
+  // Selina, the Ooglog Channel: one answer; charcoal is wrong, coal right (rsprox 944).
+  const coal = riddled(126);
+  assert.deepEqual(coal.titles(), ["Submit your answer to the mermaid's puzzle:"]);
+  coal.prompts.syntax.execute("973");
+  assert.match(dialogueTexts(coal.player).join(), /I don't think that's right... You should try again./);
+  coal.riddle();
+  coal.prompts.syntax.execute("453");
+  assert.ok(dived(coal.player));
+  leave(coal.player);
+
+  // The Wiki's alternatives: grimy tarromin, a light bow tie, a teak plank, a rune med helm.
+  for (const [uid, ids] of [[350, [203]], [324, [19985]], [312, [8780]], [45, [1103, 1147]], [128, [213]]]) {
+    const each = riddled(uid);
+    for (const id of ids) each.prompts.syntax.execute(String(id));
+    assert.ok(dived(each.player), String(uid));
+    leave(each.player);
+  }
+});
+
+test("a mermaid's quantity riddle asks how many of each item (rsprox 940, 948)", () => {
+  // Gloria, Catherby: 5 cabbage seeds.
+  const seeds = riddled(46);
+  seeds.prompts.syntax.execute("5324");
+  assert.deepEqual(seeds.counts(), ["Cabbage seed: How many should there be?"]);
+  assert.ok(!dived(seeds.player));
+  seeds.prompts.amount.execute(4);
+  assert.match(dialogueTexts(seeds.player).join(), /I don't think that's right/);
+  seeds.riddle();
+  seeds.prompts.syntax.execute("5324");
+  seeds.prompts.amount.execute(5);
+  assert.ok(dived(seeds.player));
+  leave(seeds.player);
+
+  // Gloria's ring of returning: six items, three air runes, in the order given.
+  const ring = riddled(321);
+  for (const [id, count] of [[442, 1], [1755, 1], [1627, 1], [1592, 1], [564, 1], [556, 3]]) {
+    ring.prompts.syntax.execute(String(id));
+    ring.prompts.amount.execute(count);
+  }
+  assert.equal(ring.titles().at(-1), "Submit your sixth answer to the mermaid's puzzle:");
+  assert.equal(ring.counts().at(-1), "Air rune: How many should there be?");
+  assert.ok(dived(ring.player));
+  leave(ring.player);
+});
+
+test("every mermaid answer is a real item, and counts only where the riddle asks for quantities", () => {
+  const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+  for (const spot of common.spotsOfType("mermaid_guide")) {
+    const { answers, counts, riddle } = spot.mermaid;
+    for (const id of answers.flat()) assert.notEqual(ItemDefinition.forId(id)?.getName?.() ?? "null", "null", `${spot.key} ${id}`);
+    assert.equal(Boolean(counts), /quantity/.test(riddle.at(-1)), spot.key);
+    if (counts) assert.equal(counts.length, answers.length, spot.key);
   }
 });
 
@@ -798,5 +1189,38 @@ test("a full inventory leaves the crab statue uncharted until its fragment fits 
     assert.equal(player.getInventory().getAmount(32395), 1, "the fragment, once there's room");
   } finally {
     leave(player);
+  }
+});
+
+test("All Settings' Charting popups off (settings_sailing_charting_popup): the charting is told in chat only", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("settings_sailing_charting_popup"), off);
+      chart(player, "generic_rock_bay_of_sarim");
+      tick();
+      assert.ok(player.messages().includes(`Charting complete: ${blue("Find a treacherous rock formation near Draynor Village.")}`));
+      const popup = player.sent.some(([key, script]) => key === "sendInterfaceScript" && script === 3343);
+      assert.equal(popup, off === 0, off ? "no popup" : "the popup, as by default");
+    } finally {
+      leave(player);
+    }
+  }
+});
+
+test("All Settings' Current duck hint arrow off: the released duck gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = duckCaptain();
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_current_duck_hintarrow_disabled"), off);
+      currentDuck.trackCurrent({ player });
+      tick(2);
+      assert.ok(currentDuck.ducks.get(player), "the duck is out either way");
+      assert.equal(player.sent.some(([key]) => key === "sendEntityHint"), off === 0);
+      assert.equal(player.varbits.get(14192), off ? undefined : 5, "current_hint_arrow");
+    } finally {
+      leave(player);
+    }
   }
 });

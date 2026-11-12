@@ -37,6 +37,8 @@ const FIRST_PRODUCT_COMPONENT = 9;
 const LAST_PRODUCT_COMPONENT = 38;
 // The rusted anvil in Lumbridge can only be used to smith bronze.
 const RUSTED_ANVIL_BRONZE_ONLY_MESSAGE = "You can only use bronze bars to smith on this anvil.";
+// Wiki (Rusted anvil): selecting Smith without any bronze bars.
+const RUSTED_ANVIL_NO_BRONZE_MESSAGE = "You need a bronze bar to smith equipment on this anvil.";
 
 /** player -> the bar the open interface shows. */
 const OPEN_MENUS = new Map();
@@ -296,7 +298,7 @@ function smith(event) {
 function smithRustedAnvil(event) {
   if (!anvilAccess(event)) return;
   if (!event.player.getInventory().contains(Core.ItemIdentifiers.BRONZE_BAR)) {
-    event.player.sendMessage(RUSTED_ANVIL_BRONZE_ONLY_MESSAGE);
+    event.player.sendMessage(RUSTED_ANVIL_NO_BRONZE_MESSAGE);
     return;
   }
   openInterface(event.player, Core.ItemIdentifiers.BRONZE_BAR, event.object);

@@ -792,7 +792,9 @@ module.exports = function registerWantedQuest(api) {
   function tiffyVariantKey(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) return null;
-    if (stage === 0) return meetsRequirements(player) ? V_TIFFY_START : null;
+    // Before starting, Sir Tiffy's common menu also offers armour. Its jobs
+    // reference enters this quest below, after checking the start requirements.
+    if (stage === 0) return null;
     if (stage === STAGE_STARTED) return V_TIFFY_CONTINUE;
     if (stage === STAGE_DECLINED) {
       quest.setStage(player, STAGE_CRISIS);
@@ -853,7 +855,7 @@ module.exports = function registerWantedQuest(api) {
   function talkToTiffy(event) {
     const { player, npcId } = event;
     if (quest.isComplete(player)) return false;
-    if (quest.getStage(player) === 0 && !meetsRequirements(player)) return false;
+    if (quest.getStage(player) === 0) return false;
     return playClaimedVariant(player, npcId, tiffyVariantKey(player));
   }
 
@@ -1190,6 +1192,17 @@ module.exports = function registerWantedQuest(api) {
   function handleDialogueAction(event) {
     const { player, npcId, stepId } = event;
     if (!player) return;
+    if (npcId === SIR_TIFFY_CASHIEN_NPC_ID && stepId === "jx2XNl"
+      && quest.getStage(player) === 0 && meetsRequirements(player)) {
+      // The common post-Recruitment Drive menu's jobs reference enters the
+      // existing Wanted! offer without replaying another copy of that menu.
+      event.handled = true;
+      event.end = true;
+      startTranscript(api, player, npcId, PAGE, V_TIFFY_START, (steps) =>
+        steps.find((step) => step.type === "choice")?.options
+          ?.find((option) => option.text === "Do you have any jobs for me yet?")?.steps ?? [], event.npc);
+      return;
+    }
     if (stepId === "WqZIre") { // "The player is teleported to Camelot."
       event.handled = true;
       teleport(player, CAMELOT_TILE);

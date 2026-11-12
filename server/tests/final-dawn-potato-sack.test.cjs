@@ -58,3 +58,20 @@ test("with room it empties into an empty sack and three potatoes", (t) => {
   assert.equal(f.p.getInventory().getAmount(EMPTY_SACK), 1);
   assert.equal(f.p.getInventory().getAmount(POTATO), 3);
 });
+
+// Farming's Fill, Remove-one and use-potato turn the safehouse Potatoes(3) into another count. The ground sack only
+// checked for Potatoes(3) or an empty sack, so any other count respawned it: an endless supply of potatoes.
+test("a safehouse sack at another count still stops the ground sack respawning", (t) => {
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  const registered = [];
+  t.mock.method(ItemOnGroundManager, "registerLocation", (_p, item) => { registered.push(item.getId()); });
+  t.mock.method(ItemOnGroundManager, "getGroundItem", () => null);
+  for (const [held, expectRespawn] of [["sack_potato_2", false], ["sack_potato_10", false], [null, true]]) {
+    const f = farmer(t, 0);
+    f.p.getInventory().deleteNumber(SACK, 1);
+    if (held) f.p.getInventory().add(new core.Item(core.CacheDefinitions.getObjId(held), 1), false);
+    registered.length = 0;
+    PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+    assert.equal(registered.includes(SACK), expectRespawn, `holding ${held ?? "no sack"}`);
+  }
+});

@@ -124,6 +124,14 @@ test('brewing before the recipe preserves all ingredients', t => {
   assert.deepEqual(f.p.getInventory().getItems().map(item => [item.getId(), item.getAmount()]), ids);
   assert.match(f.messages.join(' '), /Sanfew/);
 });
+// Wiki (Guthix rest): before starting One Small Favour, "You have no idea what effect this would have."
+test('brewing before starting One Small Favour gives the Wiki line and keeps the ingredients', t => {
+  const f = player(t, 0); ingredients(f);
+  const ids = f.p.getInventory().getItems().map(item => [item.getId(), item.getAmount()]);
+  make(f.p);
+  assert.deepEqual(f.p.getInventory().getItems().map(item => [item.getId(), item.getAmount()]), ids);
+  assert.ok(f.messages.includes('You have no idea what effect this would have.'), f.messages.join(' | '));
+});
 test('brewing requires level eighteen after learning; drinking does not', t => {
   const low = player(t, 12, 17); ingredients(low); make(low.p);
   assert.equal(low.p.getInventory().getAmount(core.ItemIdentifiers.HARRALANDER), 1);

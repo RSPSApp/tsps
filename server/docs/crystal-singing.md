@@ -1,7 +1,7 @@
 # Crystal singing (Prifddinas singing bowl)
 
 Code: `plugins/items/CrystalSinging.plugin.js`. Test: `tests/crystal-singing.test.cjs`.
-Crystal armour keeps `CrystalArmour.plugin.js`, the celestial signet `CelestialRing.ShootingStars.js`.
+Crystal armour is sung here too (its charges: `docs/crystal-armour.md`); the celestial signet keeps `CelestialRing.ShootingStars.js`.
 
 ## Flow (rsprox captures)
 
@@ -9,14 +9,23 @@ Crystal armour keeps `CrystalArmour.plugin.js`, the celestial signet `CelestialR
   recipes the inventory has the materials for. Nothing to make is the statement
   "You do not have all of the required materials and requirements to make anything." (310, 819).
 - Singing takes the materials and gives the products on the same tick, plays sound 8, and awards the same XP
-  in Smithing and Crafting. Five ticks later the chatbox says "With the help of the crystal bowl, you sing a
-  beautiful song and shape the crystals." (1134, 1159, 1162).
+  in Smithing and Crafting. Five ticks later an item box of the product says "With the help of the crystal bowl,
+  you sing a beautiful song and shape the crystals." (312, 1134, 1159, 1162).
+- The menu is titled "What would you like to make?" with several products and "How many would you like to make?"
+  with one (312, 1159).
+- Crystal armour is in the same menu. Choosing a piece first shows its warning beside an armour seed ("This will
+  consume your armour seed as well as your crystal shards. Reverting the helmet will not give you any crystal shards
+  back.", and the body's and legs' with three and two seeds), then "Are you sure you wish to proceed?" (Yes. / Yes,
+  and don't ask again. / No.). The second answer is saved and skips both from then on (ours: no capture of it) (1159).
 - A menu amount sings that many at once: capture 1134 sings 25 crystal bows from 25 seeds for 1,000 shards.
 
 ## Recipes
 
 | Product | Materials | Shards | Smithing and Crafting | XP each | Source |
 | --- | --- | --- | --- | --- | --- |
+| Crystal helm | crystal armour seed | 50 | 70 | 2,500 | capture 1159, Wiki |
+| Crystal body | 3 crystal armour seeds | 150 | 74 | 7,500 | capture 1159, Wiki |
+| Crystal legs | 2 crystal armour seeds | 100 | 72 | 5,000 | capture 1159, Wiki |
 | Eternal teleport crystal | enhanced crystal teleport seed | 100 | 80 | 5,000 | capture 312, Wiki |
 | Blade of Saeldor | enhanced crystal weapon seed | 100 | 82 | 5,000 | capture 1159, Wiki |
 | Bow of Faerdhinen | enhanced crystal weapon seed | 100 | 82 | 5,000 | capture 1159, Wiki |
@@ -27,7 +36,7 @@ Crystal armour keeps `CrystalArmour.plugin.js`, the celestial signet `CelestialR
 | Crystal felling axe | crystal tool seed + dragon felling axe | 120 | 76 | 6,000 | Wiki |
 | Enhanced crystal key | crystal key | 10 | 80 | 500 | capture 1149, Wiki (KeyChests data) |
 
-The weapon and tool recipes also need Song of the Elves (Wiki). A seed or the crystal key used on the bowl
+The armour, weapon and tool recipes also need Song of the Elves (Wiki). A seed or the crystal key used on the bowl
 opens the menu of what it goes into.
 
 ## Recipes book

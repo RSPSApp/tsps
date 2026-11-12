@@ -216,6 +216,11 @@ visibility, fixed-view-distance configuration, movement and targetability guards
 and supported server camera mode. Known follow and untimed target modes are snapshotted;
 a timed target glide or other in-flight camera scene is refused without changing it because its actual
 client interpolation/yaw/pitch is not observable or resumable by this server.
+Additive shakes and the scripted pitch-unlock constraint do not change that base
+camera mode, so ending them cannot strand an otherwise normal player outside
+viewing. Ending either modifier also cannot release a genuinely controlled shot.
+The reset on leaving viewing clears additive shake/pitch modifiers; they are not
+part of the saved base-mode contract.
 The close, replacement-modal, jail-return, removal, death and match-finish routes
 relinquish viewing ownership before resetting anything, so reentrant cleanup
 cannot close a replacement interface. Death-task movement/targetability locks

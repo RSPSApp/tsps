@@ -1084,3 +1084,45 @@ test('a native Attack request while viewing cannot turn the jailed viewer into a
   if (viewingUnit().active.has(viewer)) await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
   restoredViewer(viewer,game,origin);
 });
+
+
+test('native orb remains usable after real all-axis stop-shakes and restores its prior target', async () => {
+  const { a,viewer,game } = await viewerGame();
+  const CameraShake = require('../plugins/interface/CameraShake.plugin');
+  viewer.getPacketSender().sendCameraTarget({player:a.getIndex()});
+  // The actual quest cleanup producer stops all five additive shake axes.
+  for (let axis=0;axis<5;axis++) {
+    CameraShake.send(viewer.getPacketSender(),'atmospheric',axis,5,3,8);
+    CameraShake.send(viewer.getPacketSender(),'atmospheric',axis,0);
+  }
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  assert.deepEqual(position(viewer),[origin.getX(),origin.getY(),origin.getZ()]);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'target',target:{player:a.getIndex()}});
+  assert.equal(viewer.isAppearanceHidden(),false);
+});
+
+test('native orb remains usable after scripted pitch unlock is released', async () => {
+  const { viewer,game } = await viewerGame();
+  viewer.getPacketSender().sendCameraUnlock(true).sendCameraUnlock(false);
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer,game,origin);
+});
+
+test('additive shakes do not block viewing or erase an actual controlled camera scene', async () => {
+  const { viewer,game } = await viewerGame();
+  const CameraShake = require('../plugins/interface/CameraShake.plugin');
+  CameraShake.send(viewer.getPacketSender(),'barrows',0,5,2,8);
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer,game,origin);
+  const at = viewer.getLocation();
+  viewer.getPacketSender().sendCameraMoveTo(at.getX(),at.getY(),300,false);
+  CameraShake.send(viewer.getPacketSender(),'atmospheric',0,0);
+  viewer.getPacketSender().sendCameraUnlock(false);
+  await openView(viewer,game,false);
+  assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'},'ending modifiers cannot relinquish a real scripted shot');
+});

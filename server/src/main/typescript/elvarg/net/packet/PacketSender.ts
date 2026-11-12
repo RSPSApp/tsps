@@ -1109,7 +1109,7 @@ export class PacketSender {
   }
 
   sendCameraShake(slot: number, randomAmplitude: number, sineAmplitude = 0, sineFrequency = 0): this {
-    this.cameraState = { mode: "controlled" };
+    // Shake is additive; starting or stopping an axis does not change the base camera mode.
     this.player.getSession().sendClientPacket(encodeCameraShake(slot, randomAmplitude, sineAmplitude, sineFrequency));
     return this;
   }
@@ -1147,7 +1147,7 @@ export class PacketSender {
   }
 
   sendCameraUnlock(unlock: boolean): this {
-    this.cameraState = { mode: "controlled" };
+    // cam_unlock changes only the scripted pitch constraint, not follow/target/scene ownership.
     this.player.getSession().sendClientPacket(encodeCameraUnlock(unlock));
     return this;
   }

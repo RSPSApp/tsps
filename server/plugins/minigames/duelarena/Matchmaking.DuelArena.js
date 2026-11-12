@@ -432,9 +432,14 @@ function busy(player) {
     || player.getDueling?.().inDuel?.() || matchOf.has(player);
 }
 
+/** Wiki (Emir's Arena): "members = No (Yes for ranked)"; unranked duels stay on every world. */
+function rankedWorld() {
+  return Common.core.WorldDefinition.isMembersWorld();
+}
+
 /** Sign up: the group answers a tick later ("Requesting..."), and pairing goes on. */
 function signUp(player) {
-  if (signedUp.has(player) || matchOf.has(player)) return;
+  if (!rankedWorld() || signedUp.has(player) || matchOf.has(player)) return;
   Group.join(player, () => {
     signedUp.set(player, Common.core.World.getProcessCycle());
     Common.varbit(player, "pvpa_affinitystatus", SIGNED_UP);
@@ -495,6 +500,8 @@ function mountPanel(player) {
 
 function openPvpArena(event) {
   if (event.groupId !== GROUPING_GROUP || event.childId !== OPEN_CHILD || (event.opId ?? event.action) !== 1) return;
+  // Ranked play is members-only; a free world has no ranked panel (what live shows there isn't recorded).
+  if (!rankedWorld()) return;
   event.handled = true;
   pluginApi.emitCustomEvent("side-channels:replace-grouping", {
     player: event.player, group: Common.interfaceId(SIDEPANEL), onMount: () => mountPanel(event.player),

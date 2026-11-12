@@ -373,3 +373,15 @@ test('the rank floor: a win from rank 10 pays back what was taken plus the gain'
   for (const handler of hooks.beforeDeath) handler({ player: b, preventDeath: false });
   assert.equal(Rank.rank(a), 10 + 25, 'the 10 taken back and the 25 gained');
 });
+
+test('a free world has no ranked Duels: the PvP Arena button and Sign up do nothing (Wiki: "Yes for ranked")', (t) => {
+  const Common = require('../plugins/minigames/duelarena/Common.DuelArena');
+  t.mock.method(Common.core.WorldDefinition, 'isMembersWorld', () => false);
+  const a = realPlayer(t, 'Freeplay');
+  const open = { player: a, groupId: 76, childId: 2, opId: 1, action: 1, handled: false };
+  for (const handler of hooks.clicks) handler(open);
+  assert.equal(open.handled, false, 'the Grouping tab button opens no ranked panel');
+  panel(a, 'left');
+  tick(3);
+  assert.notEqual(varbit(a, 'pvpa_affinitystatus'), 3, 'not signed up');
+});

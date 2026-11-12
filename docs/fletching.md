@@ -88,7 +88,7 @@ From the Wiki recipes:
 - **Darts and bolts in Make-X:** 2 ticks.
 - **Ogre arrow shafts and wolfbone tips:** 2 to 6 per log or bone.
 
-No capture covers javelin timing, the spool or the Varlamore and Sailing recipes, nor messages for the other knife products, crossbows, ogre arrows or kebbit and antler bolts. Their timing follows the Wiki, and the spool's messages are our own. Where no animation is recorded, the generic `human_fletching` plays; a recipe recorded with none (the grapple's rope) sets `"animation": false`. Two grapple tips at once open the generic make menu: no capture shows more than one tip held.
+No capture covers javelin timing, the spool or the Varlamore and Sailing recipes, nor messages for the other knife products, crossbows, ogre arrows or kebbit and antler bolts. Their timing follows the Wiki, and the spool's messages are our own. Where no animation is recorded, the generic `human_fletching` plays; a recipe recorded with none (the grapple's rope) sets `"animation": false`. Two grapple tips (or two grapples and two ropes) at once open the generic make menu: no capture shows more than one held. The rope's tick follows recording 801 (+1); Leagues recording 4308 attached it on the click's own tick, and neither is a main-game world.
 
 ## Testing
 

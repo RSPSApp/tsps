@@ -46,7 +46,7 @@ runtime.startTranscript = (api, player, npcId, page, variant, select) => {
   return true;
 };
 
-function setup({ boneVoyage = false } = {}) {
+function setup({ boneVoyage = false, handInTheSand = false } = {}) {
   const realCore = PluginManager.getCoreApi();
   const hooks = {
     variants: [], conditions: [], custom: new Map(), login: [], logout: [],
@@ -107,6 +107,8 @@ function setup({ boneVoyage = false } = {}) {
 
   require('../plugins/quests/quests/EthicallyAcquiredAntiquities.Quest')(api);
   if (boneVoyage) require('../plugins/quests/quests/BoneVoyage.Quest')(api);
+  // Plugins load in localeCompare order, so Hand in the Sand registers after EAA, as here.
+  if (handInTheSand) require('../plugins/quests/quests/HandInTheSand.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'ethically_acquired_antiquities');
 
   const attrs = new Map(), inventory = new Map();
@@ -658,15 +660,19 @@ test('shared NPC selectors claim only their EAA dialogue windows', () => {
   h.quest.setStage(p, STAGE.betty);
   assert.equal(h.crewTalk(9312), false, 'stage 18 Port Sarim crew fall through');
 
-  // Betty 18-21 only.
+  // Betty 18-37: "again after visiting Curator Haig Halen" once Haig has been seen (24+), as the transcript has.
   h.quest.setStage(p, STAGE.betty);
   assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty');
   h.quest.setStage(p, STAGE.readNotes);
   assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again');
   h.quest.setStage(p, STAGE.haig);
-  assert.equal(h.variant(npcs.BETTY), null);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again');
+  h.quest.setStage(p, STAGE.storeroom);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
+  h.quest.setStage(p, STAGE.return_);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
 
-  // Haig 22-35 only.
+  // Haig 22-37: after the diadem's return is arranged (36), his own transcript page.
   h.quest.setStage(p, STAGE.haig);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curtor-haig-halen');
   h.quest.setStage(p, STAGE.storeroom);
@@ -674,10 +680,10 @@ test('shared NPC selectors claim only their EAA dialogue windows', () => {
   h.quest.setStage(p, 35);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-finding-the-diadem');
   h.quest.setStage(p, STAGE.return_);
-  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), null);
+  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return');
 });
 
-test('registered order releases Haig to the real Bone Voyage hook after stage 35', () => {
+test('registered order releases Haig to the real Bone Voyage hook once EAA is complete', () => {
   const h = withPrerequisites(setup({ boneVoyage: true }));
   const npcs = N();
   const p = h.player;
@@ -692,9 +698,31 @@ test('registered order releases Haig to the real Bone Voyage hook after stage 35
   h.quest.setStage(p, STAGE.storeroom);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curtor-haig-halen-talking-to-haig-again');
 
-  // Stage 36 is outside EAA's window: EAA yields and Bone Voyage's variant wins.
+  // Stage 36 is EAA's "after arranging the diadem's return" page; once EAA is done, Bone Voyage's variant wins.
   h.quest.setStage(p, STAGE.return_);
-  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'starting-out-talking-to-curator-haig-halen');
+  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return');
   h.quest.setStage(p, STAGE.complete);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'starting-out-talking-to-curator-haig-halen');
+});
+
+test("EAA's Betty pages leave Betty to Hand in the Sand while one of its pages applies", () => {
+  const h = withPrerequisites(setup({ handInTheSand: true }));
+  const npcs = N();
+  const p = h.player;
+  const hits = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'hand_in_the_sand');
+  assert.ok(hits, 'real Hand in the Sand plugin registered after EAA');
+  // EAA at the storeroom (24) with Hand in the Sand at its make-serum stage (70): Hand in the Sand's first Betty page.
+  h.quest.setStage(p, STAGE.storeroom);
+  hits.setStage(p, 70);
+  assert.equal(h.variant(npcs.BETTY), 'talking-to-betty');
+  // Its later pages too (the bottled water given, no lens yet), and its returning page after the orb.
+  p.setAttribute('quest.hand_in_the_sand.serum', 2);
+  assert.equal(h.variant(npcs.BETTY), 'talking-to-betty-talking-to-betty-without-the-rose-tinted-lens');
+  hits.setStage(p, 100);
+  assert.equal(h.variant(npcs.BETTY), 'the-truth-serum-returning-to-betty');
+  // Without a Hand in the Sand page (not started, or done), EAA's own Betty page applies again.
+  hits.setStage(p, 0);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
+  hits.setStage(p, 160);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
 });

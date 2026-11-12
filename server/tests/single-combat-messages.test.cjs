@@ -33,7 +33,8 @@ function mobile(kind, name) {
     setMobileInteraction() {},
     setPositionToFace() {},
     performAnimation() {},
-    getPacketSender: () => ({ sendConfig() {} }),
+    // Typed messages are logged as "spam:..." (ChatType.SPAM is 105).
+    getPacketSender: () => ({ sendConfig() {}, sendTypedMessage: (type, m) => messages.push(type === 105 ? `spam:${m}` : m) }),
   };
   self.combat = new Combat(self);
   self.getCombat = () => self.combat;
@@ -78,7 +79,7 @@ test("something else is fighting you: 'I'm already under attack.', once, and the
   assert.equal(permission(you, rat), CanAttackResponse.ALREADY_UNDER_ATTACK);
   assert.equal(deny(you, rat, CanAttackResponse.ALREADY_UNDER_ATTACK), true);
   deny(you, rat, CanAttackResponse.ALREADY_UNDER_ATTACK);
-  assert.deepEqual(you.messages, ["I'm already under attack."]);
+  assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
 });
 
 test("an npc waits for a taken target instead of giving up", () => {

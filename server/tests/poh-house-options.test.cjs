@@ -140,6 +140,10 @@ test("Call Servant without a servant refuses; Leave House closes the panel; sett
   openPanel(f);
   assert.deepEqual(press(f, 22), ["You must hire a servant from the Servants' Guild in Ardougne first."]);
   assert.equal(closed(f), false);
+  f.p.getAttribute("construction:house").servant = { id: core.NpcIdentifiers.RICK, uses: 0 };
+  f.messages.length = 0;
+  assert.deepEqual(press(f, 22), ["You need a bell pull in your house to be able to call your servant like this."]);
+  assert.equal(closed(f), false);
   for (const child of [8, 9, 11, 12, 14, 17, 19]) press(f, child);
   assert.deepEqual(f.sounds, [2266, 2266, 2266, 2266, 2266, 2266, 2266]);
   f.messages.length = 0;

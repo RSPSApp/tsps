@@ -97,7 +97,7 @@ function wakePickpocketGuard(request) {
 module.exports = function registerTrollStrongholdQuest(api) {
   const {
     Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
-    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary,
+    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary, Animation, CacheDefinitions,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
@@ -279,7 +279,8 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   /** Pockets hold one key each; once both cell keys are held, the stage moves on. */
   function addCellKey(player, itemId) {
-    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) return;
+    // Wiki (Berry): the cell key comes from pickpocketing "Only during Troll Stronghold".
+    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY || quest.getStage(player) >= STAGE_COMPLETE) return;
     if (!held(player, itemId)) {
       const inventory = player.getInventory();
       const before = inventory.getAmount(itemId);
@@ -300,12 +301,25 @@ module.exports = function registerTrollStrongholdQuest(api) {
     if (godricFreed(player) && eadgarFreed(player)) quest.setStage(player, STAGE_GODRIC_FREED);
   }
 
+  /**
+   * rsprox 233/00740.txt:14465-14472 (after the quest): "You attempt to pick the guard's pocket." on the click,
+   * then human_pickpocket (881) and "You pick the guard's pocket but find nothing." a tick later.
+   */
+  function findNothing(player) {
+    player.sendMessage("You attempt to pick the guard's pocket.");
+    TaskManager.submit(new CountdownTask(player, 1, () => {
+      player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_pickpocket")));
+      player.sendMessage("You pick the guard's pocket but find nothing.");
+    }));
+  }
+
   /** Wiki: 30 Thieving; the first successful pocket holds the key. */
   function pickpocketGuard(event, keyId, variant, asleepId, awakeId, outcomeIds) {
     const { player, npc, npcId } = event;
     guardAttempts.delete(player);
-    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) {
-      player.sendMessage("You pick the guard's pocket but find nothing.");
+    const stage = quest.getStage(player);
+    if (stage < STAGE_HAS_PRISON_KEY || stage >= STAGE_COMPLETE) {
+      findNothing(player);
       return;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < GUARD_THIEVING_LEVEL) {
@@ -313,7 +327,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
       return;
     }
     if (held(player, keyId)) {
-      player.sendMessage("You pick the guard's pocket but find nothing.");
+      findNothing(player);
       return;
     }
     if (player.getInventory().isFull()) {

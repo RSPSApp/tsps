@@ -1666,9 +1666,12 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
   assert.notEqual(CacheDefinitions.getLocId('league_6_yama_exit'), null, 'the league exit exists in this cache');
   assert.deepEqual(Music.tracksAt(1503, 5602, 0), [], 'Wiki polygons do not cover the league map');
   const previous = AreaManager.areas;
+  const arrival = new Location(1503, 5602, 0);
+  // Earlier cases remove temporary areas. Resolve that restored registry before adding a new
+  // one with the same area/boundary counts, which otherwise reuses the earlier search index.
+  assert.equal(AreaManager.get(arrival), null, 'no existing area supplies the lair policy before registration');
   AreaManager.areas = [...areas, ...previous];
   try {
-    const arrival = new Location(1503, 5602, 0);
     const area = AreaManager.get(arrival);
     for (const classic of [false, true]) {
       const player = makePlayer();
@@ -1731,5 +1734,8 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
       assert.notEqual(AreaManager.get(tile), area, 'adjacent squares and other planes are outside the lair');
       assert.equal(area.getMusicTrack({ getLocation: () => tile }), null, 'stale membership cannot override another tile');
     }
-  } finally { AreaManager.areas = previous; }
+  } finally {
+    AreaManager.areas = previous;
+    AreaManager.get(arrival); // Leave the search index in sync with the restored registry too.
+  }
 });

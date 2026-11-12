@@ -62,7 +62,6 @@ function stand(player, row) {
     const tile = new core.Location(row.x + dx, row.y + dy, 0);
     if (core.RegionManager.blocked(tile, player.getPrivateArea())) continue;
     player.moveTo(tile);
-    player.setNeedsPlacement(false);
     if (core.PathFinder.reachedObject(player, row.x, row.y, rect ? footprint.getSizeX() : 1,
       rect ? footprint.getSizeY() : 1, row.face, rect ? 10 : row.type, rect ? definition.getBlockingMask() : 0)) return definition;
   }
@@ -105,6 +104,8 @@ function actor(t) {
 async function useItem(f, itemId, row) {
   const { player, connection } = f;
   const definition = stand(player, row);
+  for (let tick = 0; tick < 3 && player.isNeedsPlacement(); tick++) core.World.process();
+  assert.equal(player.isNeedsPlacement(), false, 'engine placement completes before ordinary input');
   const slot = player.getInventory().getItems().findIndex(i => i?.getId() === itemId);
   assert.ok(slot >= 0);
   let reached = 0;

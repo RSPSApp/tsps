@@ -36,7 +36,8 @@ function guide(name, tile) {
   return ({ player }) => {
     const { Task, TaskManager, Location } = api.core;
     const movement = player.getMovementQueue();
-    player.sendMessage(`${name} shows you the way through the tunnels.`);
+    // Spam in every recording (Kazgar 17, Mistag 5, Dartog 4; e.g. 224/01441.txt:20778).
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, `${name} shows you the way through the tunnels.`);
     fade(player, true);
     movement.setBlockMovement(true).reset();
     let ticks = 0;

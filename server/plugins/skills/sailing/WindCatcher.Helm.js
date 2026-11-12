@@ -33,7 +33,7 @@ const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill"
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const { SIDEPANEL_GROUP, SIDEPANEL_FACILITIES_CHILD, facilityRowSlot, playSound, getVarbit } = require("./SailingContent.Sailing");
+const { SIDEPANEL_GROUP, SIDEPANEL_FACILITIES_CHILD, facilityRowSlot, playSound, getVarbit, spam } = require("./SailingContent.Sailing");
 
 /** Each catcher's locs (off, on), how many motes it holds and what a mote owed full XP pays. */
 const CATCHERS = [
@@ -143,8 +143,9 @@ function storeFromTrim(player, boat, { actor = player, crew = false } = {}) {
     actor.forceChat?.("I've caught a wind mote!");
   } else {
     const where = boat.helmPlayerId === player.getIndex() ? "helm" : "sails";
-    player.sendMessage(`You trim the sails, catching the wind and storing a wind mote in your ${where}.`);
-    player.sendMessage(OWED);
+    // rsprox: both spam lines in every recording (432 times each).
+    spam(player, `You trim the sails, catching the wind and storing a wind mote in your ${where}.`);
+    spam(player, OWED);
   }
   player.getPacketSender().sendGraphic(new Graphic(GRAPHIC_STORED), catcherTile(boat, catcher.loc));
   return true;

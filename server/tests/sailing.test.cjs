@@ -3403,6 +3403,7 @@ test("gusts and trimming follow live's timing (rsprox): a gust, Trim, the boost 
       sendObjectAnimation: () => {},
       sendGraphic: (graphic) => log.push(`graphic ${graphic.id}`),
       sendSoundEffect: (id) => log.push(`sound ${id}`),
+      sendTypedMessage: (type, text) => log.push(`typed ${type} ${text}`),
     }),
   };
   const getPlayers = World.getPlayers;
@@ -3428,7 +3429,7 @@ test("gusts and trimming follow live's timing (rsprox): a gust, Trim, the boost 
     assert.equal(trim.trimSails(player, boat), true);
     const trimmed = take();
     assert.deepEqual(trimmed.filter((line) => !line.startsWith("graphic")), [
-      "message You trim the sails, catching the wind for a burst of speed!", "seq 13353", "cloth 10000", "sound 10842", "sound 10841",
+      "typed 105 You trim the sails, catching the wind for a burst of speed!", "seq 13353", "cloth 10000", "sound 10842", "sound 10841",
     ]);
     assert.equal(boat.boostSpeed, 64, "half a tile a tick more (rsprox 856, 908)");
     assert.equal(trim.trimSails(player, boat), false, "nothing left to catch");

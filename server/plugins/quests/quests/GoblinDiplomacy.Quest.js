@@ -1,8 +1,13 @@
-/** Goblin Diplomacy: revision 240 capture 20260817T005704 and the OSRS Wiki. */
+/**
+ * Goblin Diplomacy, as live plays it: revision 242 capture 20261112T150929-5ab63b4 (the whole quest:
+ * the start, the orange, blue and brown fittings and the reward) and the OSRS Wiki transcript.
+ * The capture facts are in docs/quests/goblin-diplomacy/README.md.
+ */
 const CameraShake = require("../../interface/CameraShake.plugin");
+const { createQuestScenes } = require("../QuestScenes");
 
 module.exports = function registerGoblinDiplomacyQuest(api) {
-  const { Skill, Location, Animation, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Direction } = api.core;
+  const { Skill, Location, Animation, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, CacheDefinitions } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const GENERAL_BENTNOZE_NPC_ID = NpcIdentifiers.GENERAL_BENTNOZE;
@@ -11,10 +16,12 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
 
   const MAIN_VARBIT = 2378;
   const GRUBFOOT_VARBIT = 13594;
-  const SCENE_ATTRIBUTE = "goblin-diplomacy:cutscene";
+  /** Saved while a fitting plays: the tile the player comes back to after a logout or a server stop inside it. */
+  const SCENE_EXIT_ATTRIBUTE = "goblin-diplomacy:scene-exit";
+  /** The old dressing room's marker; a save made inside it is put back outside the hut once. */
+  const LEGACY_SCENE_ATTRIBUTE = "goblin-diplomacy:cutscene";
+  const LEGACY_SCENE_EXIT = new Location(2957, 3509, 0);
   const CRATES_ATTRIBUTE = "goblin-diplomacy:crates";
-  const FADE_UID = (161 << 16) | 1;
-  const scenes = new WeakMap();
   const STAGE_STARTED = 1;
   const STAGE_ORANGE_REJECTED = 3;
   const STAGE_BLUE_REJECTED = 4;
@@ -40,18 +47,13 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   ]);
 
   const GENERAL_IDS = new Set([GENERAL_BENTNOZE_NPC_ID, GENERAL_WARTFACE_NPC_ID]);
-  const QUEST_NPC_IDS = new Set([
-    GENERAL_BENTNOZE_NPC_ID,
-    GENERAL_WARTFACE_NPC_ID,
-    ...GRUBFOOT_NPC_IDS,
-  ]);
 
   /** "message" step that ends the brown hand-in cutscene. */
   const COMPLETE_MESSAGE_STEP_ID = "QqWnqy";
 
-  /** Condition step ids of the orange/blue "showing the generals ... armour" transcripts. */
-  const ORANGE_HAND_IN_STEP_ID = "mZ3adF";
-  const BLUE_HAND_IN_STEP_ID = "bypXXZ";
+  /** Condition step ids of the "showing the generals ... armour" hand-ins and wrong-colour answers. */
+  const HAND_IN_STEP_IDS = ["mZ3adF", "bypXXZ", "IEyrMp"];
+  const WRONG_COLOUR_STEP_IDS = ["wrZYpt", "HPfEZV", "M4wLnN"];
 
   /** Custom-event slug carried by "Yes." on "Start the Goblin Diplomacy quest?". */
   const START_HOOK = "quest:goblin-diplomacy:start";
@@ -68,6 +70,15 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const VARIANT_ORANGE_GRUBFOOT = "showing-the-generals-different-goblin-armours-orange-painted-goblin-armour-talking-to-grubfoot";
   const VARIANT_START_GRUBFOOT = "starting-off-talking-to-grubfoot";
 
+  /**
+   * The transcript's own questions, as the menu shows them once the quest is under way (capture ticks 224 and 262:
+   * the hand-in first when the armour is carried, then these; "Do you want me to pick an armour colour for you?" is gone).
+   */
+  const MENU_QUESTIONS = ["Why are you arguing about the colour of your armour?", "Wouldn't you prefer peace?", "I'll leave you to it."];
+
+  /** "Shows the previous options": from the mid-quest menu, back to it. */
+  const BACK_TO_MENU = { type: "jump", reference: "previous" };
+
   const CONDITION_NON_ORANGE = "non-orange";
   const CONDITION_NON_BLUE = "non-blue";
   const CONDITION_ORANGE_PAINTED = "orange-painted";
@@ -76,6 +87,58 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const CONDITION_BLUE_DYE_ON_MAIL = "blue dye on the goblin mail";
   const CONDITION_PAINTED_ARMOUR = "a painted goblin armour";
   const CONDITION_REGULAR_ARMOUR = "uses regular goblin armour";
+
+  // ---- the fitting, as the capture plays it (ticks 188-217, 227-251, 265-290) ----------------------------------------
+
+  /** The scene is a copy of the 3 x 3 chunks from 2944, 3504 (rebuild_region at ticks 189, 228, 266). */
+  const SCENE_INSTANCE = { sourceChunk: [368, 438], size: 3 };
+  const SCENE_BOUNDS = [[2944, 2967, 3504, 3527, 0]];
+  const PLAYER_TILE = [2957, 3513, 0];
+  const PLAYER_FACES = [2955, 3511];
+  const GENERALS = [["general_bentnoze_red_noop", [2958, 3512, 0]], ["general_wartface_green_noop", [2958, 3511, 0]]];
+  /** The generals face the curtain until the fitting is judged, then the player; the player then faces Wartface. */
+  const GENERALS_FACE = [2953, 3511];
+  const WARTFACE_TILE = [2958, 3511];
+  const GRUBFOOT_TILE = [2954, 3511, 0];
+  const GRUBFOOT_FACES = [2956, 3511];
+  /** Where Grubfoot heads on "Yes General Wartface?"; he is called back before he gets there (ticks 193, 269-270). Ours: the tile. */
+  const GRUBFOOT_ANSWERS_AT = [2957, 3511, 0];
+  const CURTAIN_TILE = [2953, 3511];
+  const IN_FRONT_OF_CURTAIN = [2954, 3511];
+  const OUT_OF_CURTAIN = [2955, 3511];
+  /** Grubfoot wears the armour of the stage he is shown at, and the armour handed over after. */
+  const GRUBFOOT_LOOKS = {
+    [STAGE_STARTED]: ["catwalk_goblin_brown_noop", "catwalk_goblin_orange_noop"],
+    [STAGE_ORANGE_REJECTED]: ["catwalk_goblin_orange_noop", "catwalk_goblin_blue_noop"],
+    [STAGE_BLUE_REJECTED]: ["catwalk_goblin_blue_noop", "catwalk_goblin_brown_noop"],
+  };
+  /** The copy's cave entrance and hut doors are their op-less variants (loc_add_change at ticks 189, 228, 266). */
+  const SCENE_LOCS = [
+    { name: "xmas20_goblin_cave_entrance_noop", x: 2947, y: 3506, type: 10, face: 3 },
+    { name: "goblin_outpost_poordoor_double_inner_noop", x: 2957, y: 3509, type: 0, face: 1 },
+    { name: "goblin_outpost_poordoor_doubler_inner_noop", x: 2958, y: 3509, type: 0, face: 1 },
+  ];
+  const CAMERA = { move: [2961, 3514, 450], look: [2957, 3512, 150], rates: { rate: 232, rate2: 232, heightRelative: false } };
+  /** Script 948's length in this scene's fades ([0, 255, 0, 0, 25] and [0, 0, 0, 255, 25]). */
+  const FADE_CYCLES = 25;
+  const CURTAIN_OPEN = "curtain_open";
+  const CURTAIN_CLOSING = "curtain_closing";
+  /** Grubfoot is at most three tiles from the curtain; past this he is put there. */
+  const WALK_BACK_TICKS = 6;
+  /** Ticks after Grubfoot is back at the curtain: [tick, step] (orange 194-205, blue 233-244, brown 272-283). */
+  const CHANGING = [
+    [1, "face-curtain"], [2, "open"], [3, "in"], [4, "face-out"], [4, "close"],
+    [8, "change"], [8, "open"], [9, "out"], [10, "out-again"], [10, "close"], [11, "speak"],
+  ];
+  /** Lines the generals turn to the player for, and the player to Wartface (ticks 213, 247, 286). */
+  const VERDICT_LINES = new Set(["Human! Get us blue armour!", "Human! Get us brown armour!", "Thank you for sorting out argument, human. You have reward now."]);
+  /** The cutscene's own client state, set with cutscene_status and cleared with it (ticks 189 / 216). */
+  const SCENE_VARBITS = [["fov_clamp", 3], ["draw_distance_max_override", 1]];
+  const SCENE_VARPS = [["option_areasounds_override", 30], ["areasounds_override", 1]];
+  const SETTINGS_SET_DRAW_DISTANCE_SCRIPT = 6021;
+
+  const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
+  const fittings = new WeakMap();
 
   const page = (variant) => ({ page: PAGE_GOBLIN_DIPLOMACY, variant });
 
@@ -190,6 +253,11 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const SCENE_ENDS = new Set(["C7D_Q0", "0v3cKx", COMPLETE_MESSAGE_STEP_ID]);
   const SCENE_CHANGES = new Set(["7xpvaw", "UNwweE"]);
 
+  /** A stage with a fitting to play: orange, blue or brown wanted. Brown accepted (the tick before completion) has none. */
+  function fittingStage(player) {
+    return Boolean(GRUBFOOT_LOOKS[quest.getStage(player)]);
+  }
+
   function armourFor(player) {
     const stage = quest.getStage(player);
     return stage === STAGE_STARTED ? ORANGE_GOBLIN_MAIL_ITEM_ID : stage === STAGE_ORANGE_REJECTED ? BLUE_GOBLIN_MAIL_ITEM_ID : GOBLIN_MAIL_ITEM_ID;
@@ -200,16 +268,20 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     return stage === STAGE_STARTED ? VARIANT_ORANGE_GENERALS : stage === STAGE_ORANGE_REJECTED ? VARIANT_BLUE_GENERALS : VARIANT_BROWN_GENERALS;
   }
 
+  function handInSteps(variant) {
+    return loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].variants[variant].find(step => HAND_IN_STEP_IDS.includes(step.id)).steps;
+  }
+
   function handleDialogueAction(event) {
     if (!GENERAL_IDS.has(event.npcId)) return;
     if (SCENE_STARTS.has(event.stepId)) return startScene(event);
-    const state = scenes.get(event.player);
-    if (SCENE_CHANGES.has(event.stepId) && state) {
-      changeArmour(event.player, state, event.stepId);
+    const fitting = fittings.get(event.player);
+    if (SCENE_CHANGES.has(event.stepId) && fitting) {
       event.handled = true;
+      changeArmour(event.player, fitting, event.stepId);
     } else if (SCENE_ENDS.has(event.stepId)) {
       event.handled = true;
-      finishScene(event.player, state);
+      finishScene(event.player, fitting);
     }
   }
 
@@ -224,58 +296,266 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       };
       if (has(player, ORANGE_GOBLIN_MAIL_ITEM_ID)) event.after = () => playArmour(player, event.npcId);
     }
-    const state = scenes.get(player);
-    if (!state) return;
+    const fitting = fittings.get(player);
+    if (!fitting?.scene) return;
     const speaker = event.step?.speaker;
     if (speaker === "General Wartface") event.speakerId = NpcIdentifiers.GENERAL_WARTFACE_7;
     if (speaker === "General Bentnoze") event.speakerId = NpcIdentifiers.GENERAL_BENTNOZE_7;
-    if (speaker === "Grubfoot") event.speakerId = state.grubfoot?.getId();
-    if (text === "Yes General Wartface?") event.before = () => state.grubfoot?.getMovementQueue().addFirstStep(state.area.sourceTile(2956, 3511));
-    if (text === "Put on this armour!" && state.stage === STAGE_BLUE_REJECTED) event.after = () => changeArmour(player, state, text);
+    if (speaker === "Grubfoot") event.speakerId = lookOf(fitting.grubfoot);
+    if (text === "Yes General Wartface?") event.before = () => Scenes.walk(fitting.grubfoot, GRUBFOOT_ANSWERS_AT);
+    if (VERDICT_LINES.has(text)) event.before = () => turnToPlayer(player, fitting);
+    // The brown hand-in has no "goes into the changing room" step: he changes once the line is continued.
+    if (text === "Put on this armour!" && fitting.stage === STAGE_BLUE_REJECTED) event.after = () => changeArmour(player, fitting, text);
   }
 
   function playArmour(player, npcId, usedItem) {
     return startTranscript(api, player, npcId, PAGE_GOBLIN_DIPLOMACY, armourVariant(player), steps => {
       const wanted = armourFor(player);
       const condition = steps.find(step => step.type === "condition" && (usedItem === undefined || usedItem === wanted
-        ? [ORANGE_HAND_IN_STEP_ID, BLUE_HAND_IN_STEP_ID, "IEyrMp"].includes(step.id)
-        : ["wrZYpt", "HPfEZV", "M4wLnN"].includes(step.id)));
+        ? HAND_IN_STEP_IDS.includes(step.id)
+        : WRONG_COLOUR_STEP_IDS.includes(step.id)));
       return condition?.steps ?? [];
     });
   }
 
   function handleItemOnNpc(event) {
     if (!GENERAL_IDS.has(event.npcId) || ![ORANGE_GOBLIN_MAIL_ITEM_ID, BLUE_GOBLIN_MAIL_ITEM_ID, GOBLIN_MAIL_ITEM_ID].includes(event.itemId)) return;
-    if (quest.getStage(event.player) < STAGE_STARTED || quest.isComplete(event.player)) return;
+    if (!fittingStage(event.player)) return;
     event.handled = true;
     if (!has(event.player, event.itemId)) return;
     playArmour(event.player, event.npcId, event.itemId);
   }
 
+  /**
+   * Talking to a general while the quest is under way: one of the start conversation's openings, then the menu live
+   * shows (capture ticks 221-224 and 253-262): "I have some <colour> armour here." while the armour is carried, which
+   * plays the hand-in, then the transcript's own questions.
+   */
   function handleGeneralTalk(event) {
     const { player, npcId } = event;
-    if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return false;
+    if (!fittingStage(player)) return false;
     event.handled = true;
     const variants = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].variants;
     const intros = variants[VARIANT_START_GENERALS][0].options;
     const intro = intros[Math.floor(Math.random() * intros.length)].steps;
     const end = intro.findIndex(step => step.type === "choice" || step.type === "jump");
     const prefix = end < 0 ? intro : intro.slice(0, end);
-    if (has(player, armourFor(player))) {
-      const handin = variants[armourVariant(player)].find(step => [ORANGE_HAND_IN_STEP_ID, BLUE_HAND_IN_STEP_ID, "IEyrMp"].includes(step.id)).steps;
-      startTranscript(api, player, npcId, PAGE_GOBLIN_DIPLOMACY, armourVariant(player), () => [...prefix, ...handin]);
-    } else {
-      const colour = quest.getStage(player) === STAGE_STARTED ? "orange" : quest.getStage(player) === STAGE_ORANGE_REJECTED ? "blue" : "brown";
-      startTranscript(api, player, npcId, PAGE_GOBLIN_DIPLOMACY, armourVariant(player), () => [...prefix,
-        { type: "line", speaker: "General Wartface", text: `Human! Get us ${colour} armour!` }]);
-    }
+    const variant = armourVariant(player);
+    startTranscript(api, player, npcId, PAGE_GOBLIN_DIPLOMACY, variant, () => [...prefix, midQuestMenu(player, variant)]);
     return true;
   }
 
-  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
-  function fade(player, out) {
-    const mount = player.getPacketSender().mountSubInterface(FADE_UID, 174, 1, { postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 25] : [0, 0, 0, 255, 25] }] });
-    if (!out) TaskManager.submit(new CountdownTask(player, 2, () => player.getPacketSender().closeSubInterfaceMount(mount)));
+  /**
+   * The menu after the opening. Ours (no capture picks a question under way): without the armour it is the same menu less
+   * the hand-in, and an answer comes back to this menu, not to the transcript's pre-quest menus that offer to start the
+   * quest again.
+   */
+  function midQuestMenu(player, variant) {
+    const start = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].variants[VARIANT_START_GENERALS][0].options;
+    const firstMenu = start.flatMap(option => option.steps).find(step => step.type === "choice" && step.options.some(o => o.text === MENU_QUESTIONS[0]));
+    const options = [];
+    if (has(player, armourFor(player))) {
+      const handIn = handInSteps(variant);
+      options.push({ text: handIn[0].player, steps: handIn });
+    }
+    const branches = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].branches;
+    for (const text of MENU_QUESTIONS) {
+      const steps = firstMenu.options.find(option => option.text === text).steps;
+      options.push({ text, steps: text === MENU_QUESTIONS.at(-1) ? steps : [...answerOf(steps, branches), BACK_TO_MENU] });
+    }
+    return { type: "choice", options };
+  }
+
+  /** A question's answer: its lines, up to the menu the transcript follows them with. */
+  function answerOf(steps, branches) {
+    let body = steps;
+    // An option's steps can be a call to the shared branch, or a jump that wraps one.
+    while (body.length === 1 && (body[0].type === "call" || (body[0].type === "jump" && body[0].steps?.length === 1))) {
+      body = body[0].type === "call" ? branches[body[0].branch] : body[0].steps;
+    }
+    const end = body.findIndex(step => step.type === "choice" || step.type === "jump" || step.type === "call");
+    return end < 0 ? body : body.slice(0, end);
+  }
+
+  // ---- the fitting -------------------------------------------------------------------------------------------------------
+
+  function gameval(kind, name) {
+    const id = kind === "npc" ? CacheDefinitions.getNpcId(name) : kind === "loc" ? CacheDefinitions.getLocId(name) : CacheDefinitions.getSeqId(name);
+    if (!Number.isInteger(id)) throw new Error(`Goblin Diplomacy: no ${kind} ${name} in the cache.`);
+    return id;
+  }
+
+  function lookOf(npc) {
+    const transform = npc?.getNpcTransformationId?.();
+    return Number.isInteger(transform) && transform >= 0 ? transform : npc?.getId();
+  }
+
+  /** Each tick of a fitting is keyed on its scene, so a logout or the scene ending drops what is left of it. */
+  function later(player, fitting, ticks, callback) {
+    Scenes.later(fitting.scene ?? player, ticks, () => {
+      if (fittings.get(player) === fitting && player.isRegistered?.() !== false) callback();
+    });
+  }
+
+  /** The hand-in carries on after `marker` (a step id or a line). */
+  function carryOn(player, fitting, marker) {
+    startTranscript(api, player, fitting.npcId, PAGE_GOBLIN_DIPLOMACY, fitting.variant, steps => {
+      const body = steps.find(step => HAND_IN_STEP_IDS.includes(step.id)).steps;
+      return body.slice(body.findIndex(step => step.id === marker || step.text === marker) + 1);
+    });
+  }
+
+  function sceneVars(player, on) {
+    const sender = player.getPacketSender();
+    for (const [name, value] of SCENE_VARBITS) sender.sendVarbit(CacheDefinitions.getVarbitId(name), on ? value : 0);
+    for (const [name, value] of SCENE_VARPS) sender.sendConfig(CacheDefinitions.getVarpId(name), on ? value : 0);
+    // Live runs settings_set_draw_distance as the override goes on and off (ticks 189, 216), so it applies.
+    sender.sendInterfaceScript(SETTINGS_SET_DRAW_DISTANCE_SCRIPT);
+  }
+
+  /**
+   * The continue past "I have some <colour> armour here.": the chat is held and the screen fades out (tick 188); next tick
+   * the fitting room is a copy with the generals and Grubfoot in it, the cutscene's client state is on and the side tabs
+   * close (189); then the camera and the fade in (190), and Wartface calls Grubfoot (191).
+   */
+  function startScene(event) {
+    const { player, npcId } = event;
+    event.handled = true;
+    if (fittings.has(player) || !fittingStage(player) || !has(player, armourFor(player))) { event.end = true; return; }
+    const stage = quest.getStage(player);
+    const at = player.getLocation();
+    const fitting = { stage, npcId, variant: armourVariant(player), exit: [at.getX(), at.getY(), at.getZ()], scene: null, grubfoot: null };
+    fittings.set(player, fitting);
+    player.getMovementQueue().reset().setBlockMovement(true);
+    Scenes.fade(player, true, FADE_CYCLES);
+    Scenes.hold(player);
+    later(player, fitting, 1, () => openScene(player, fitting));
+    later(player, fitting, 2, () => {
+      Scenes.camera(player, CAMERA.move, CAMERA.look, CAMERA.rates);
+      Scenes.fade(player, false, FADE_CYCLES);
+    });
+    later(player, fitting, 3, () => carryOn(player, fitting, event.stepId));
+  }
+
+  function openScene(player, fitting) {
+    const scene = Scenes.open(player, "Goblin armour fitting", SCENE_BOUNDS, { canTeleport: () => false, canAttack: () => false },
+      { instance: SCENE_INSTANCE, at: PLAYER_TILE, exit: fitting.exit });
+    fitting.scene = scene;
+    Scenes.face(player, PLAYER_FACES);
+    Scenes.controls(player, true, true);
+    sceneVars(player, true);
+    Scenes.hideTabs(player);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
+    for (const [name, tile] of GENERALS) Scenes.actor(scene, gameval("npc", name), tile, GENERALS_FACE);
+    fitting.grubfoot = Scenes.actor(scene, gameval("npc", GRUBFOOT_LOOKS[fitting.stage][0]), GRUBFOOT_TILE, GRUBFOOT_FACES);
+    for (const { name, ...placement } of SCENE_LOCS) Scenes.loc(scene, { id: gameval("loc", name), ...placement });
+  }
+
+  function curtain(fitting, animation) {
+    const area = fitting.scene?.area;
+    if (!area) return;
+    const object = area.getTemplateObjects(area.sourceTile(...CURTAIN_TILE)).find(candidate => candidate.getType() === 0);
+    if (object) fitting.scene.owner.getPacketSender().sendObjectAnimation(object, new Animation(gameval("seq", animation)));
+  }
+
+  /**
+   * The continue past "Put on this armour!": the chat is held and Grubfoot walks back to the curtain. From the tick he is there, CHANGING: he turns to it, it opens, he is moved through it and it closes; four ticks on
+   * he wears the new armour (a transform), comes out a tile a tick and asks "What do you think?".
+   */
+  function changeArmour(player, fitting, marker) {
+    const grubfoot = fitting.grubfoot;
+    Scenes.hold(player);
+    if (!grubfoot) return later(player, fitting, 1, () => carryOn(player, fitting, marker));
+    Scenes.walk(grubfoot, [...IN_FRONT_OF_CURTAIN, 0]);
+    let waited = 0;
+    // Tasks run before NPCs move, so a check from a task that finds him there means he arrived the tick before.
+    const back = (fromTask) => {
+      // Ours: a walk that is somehow blocked ends with him put there, so the scene never stalls.
+      if (!standsOn(grubfoot, IN_FRONT_OF_CURTAIN) && waited++ >= WALK_BACK_TICKS) grubfoot.moveTo(Scenes.tileFor(grubfoot, [...IN_FRONT_OF_CURTAIN, 0]));
+      if (!standsOn(grubfoot, IN_FRONT_OF_CURTAIN)) return later(player, fitting, 1, () => back(true));
+      const lag = fromTask ? 1 : 0;
+      for (const [tick, step] of CHANGING) {
+        const run = () => changing(player, fitting, step, marker);
+        if (tick - lag <= 0) run(); else later(player, fitting, tick - lag, run);
+      }
+    };
+    back(false);
+  }
+
+  function standsOn(npc, [x, y]) {
+    const here = Scenes.toSource(npc);
+    return here.getX() === x && here.getY() === y;
+  }
+
+  function changing(player, fitting, step, marker) {
+    const grubfoot = fitting.grubfoot;
+    switch (step) {
+      case "face-curtain": return Scenes.face(grubfoot, CURTAIN_TILE);
+      case "face-out": return Scenes.face(grubfoot, IN_FRONT_OF_CURTAIN);
+      case "open": return curtain(fitting, CURTAIN_OPEN);
+      case "close": return curtain(fitting, CURTAIN_CLOSING);
+      case "in": return grubfoot.moveTo(Scenes.tileFor(grubfoot, [...CURTAIN_TILE, 0]));
+      case "change": return grubfoot.setNpcTransformationId(gameval("npc", GRUBFOOT_LOOKS[fitting.stage][1]));
+      case "out": return grubfoot.moveTo(Scenes.tileFor(grubfoot, [...IN_FRONT_OF_CURTAIN, 0]));
+      case "out-again": return grubfoot.moveTo(Scenes.tileFor(grubfoot, [...OUT_OF_CURTAIN, 0]));
+      case "speak": return carryOn(player, fitting, marker);
+    }
+  }
+
+  function turnToPlayer(player, fitting) {
+    Scenes.face(player, WARTFACE_TILE);
+    for (const npc of fitting.scene?.actors ?? []) if (npc !== fitting.grubfoot) npc.setPositionToFace(player.getLocation());
+  }
+
+  /**
+   * The continue past the fitting's last line: the armour goes, the stage moves on, the chat is held and the screen fades
+   * out (ticks 215, 249, 287); next tick the player is back where they talked from with the client state and tabs restored
+   * (216, 250, 288); then the fade in and the chat closes (217, 251, 289), and the brown fitting completes the quest a tick
+   * later (290).
+   */
+  function finishScene(player, fitting) {
+    if (!fitting || !has(player, armourFor(player)) || quest.getStage(player) !== fitting.stage) return;
+    player.getInventory().deleteNumber(armourFor(player), 1);
+    quest.setStage(player, fitting.stage === STAGE_STARTED ? STAGE_ORANGE_REJECTED : fitting.stage === STAGE_ORANGE_REJECTED ? STAGE_BLUE_REJECTED : STAGE_BROWN_ACCEPTED);
+    sync(player);
+    Scenes.fade(player, true, FADE_CYCLES);
+    Scenes.hold(player);
+    fitting.finished = true;
+    later(player, fitting, 1, () => {
+      Scenes.end(player, false);
+      player.moveTo(new Location(...fitting.exit));
+    });
+    // The scene's own tasks went with it; what is left of the way out is keyed on the player.
+    const online = () => player.isRegistered?.() !== false;
+    Scenes.later(player, 2, () => {
+      if (!online()) return;
+      Scenes.fade(player, false, FADE_CYCLES);
+      player.getDialogueManager().reset();
+      player.getPacketSender().sendInterfaceRemoval();
+    });
+    Scenes.later(player, 3, () => {
+      // A logout before this completes it at the next login.
+      if (online() && fitting.stage === STAGE_BLUE_REJECTED && quest.getStage(player) === STAGE_BROWN_ACCEPTED) quest.complete(player);
+    });
+  }
+
+  /** The scene ended (its way out, a logout or the player walking out of it): its client state goes. */
+  function sceneEnded(player, scene, logout) {
+    const fitting = fittings.get(player);
+    if (fitting?.scene === scene) fittings.delete(player);
+    sceneVars(player, false);
+    if (!logout) Scenes.restoreTabs(player);
+    player.getPacketSender().sendCameraUnlock(false);
+  }
+
+  /** A logout before the room opened (the first tick's fade): nothing was copied, only the controls are back. */
+  function handleLogout({ player }) {
+    const fitting = fittings.get(player);
+    if (!fitting) return;
+    if (fitting.scene) return Scenes.end(player, true);
+    fittings.delete(player);
+    Scenes.controls(player, false);
+    Scenes.closeFade(player);
   }
 
   function sync(player) {
@@ -285,130 +565,6 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     for (let i = 0; i < 3; i++) player.getPacketSender().sendVarbit(2379 + i, crates >> i & 1);
   }
 
-  function controls(player, active) {
-    player.getMovementQueue().reset().setBlockMovement(active);
-    player.setUntargetable(active);
-    player.getPacketSender().sendVarbit(6719, active ? 2 : 0).sendVarbit(12393, active ? 1 : 0);
-  }
-
-  class DressingRoom extends TemplatedInstanceArea {
-    constructor(owner) {
-      super(3, 3); this.owner = owner;
-      for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) this.setChunk(0, x, y, { sourceChunkX: 368 + x, sourceChunkY: 438 + y, sourcePlane: 0, rotation: 0 });
-    }
-    sourceTile(x, y) { return this.tile(x - 2944, y - 3504, 0); }
-    getName() { return "Goblin armour fitting"; }
-    canAttack() { return false; }
-    canTeleport() { return false; }
-    postLeave(actor, logout) {
-      super.postLeave(actor, logout);
-      if (actor === this.owner && !scenes.get(actor)?.returning) cleanup(actor);
-    }
-  }
-
-  function later(player, state, ticks, fn) {
-    TaskManager.submit(new CountdownTask(player, ticks, () => {
-      if (scenes.get(player) === state && player.isRegistered?.() !== false) fn();
-    }));
-  }
-
-  /** The generals stand east of Grubfoot and face west; he faces east, toward them and the camera. */
-  function actor(player, state, id, x, y, face = Direction.WEST) {
-    const tile = state.area.sourceTile(x, y);
-    const npc = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0, face: face.getId(), owner: player, ownerOnly: true, wanderRadius: 0 });
-    if (npc) state.area.add(npc);
-    return npc;
-  }
-
-  function resume(player, state, ticks, marker) {
-    player.getDialogueManager().reset();
-    StatementDialogue.send(player, "", false);
-    later(player, state, ticks, () => startTranscript(api, player, state.npcId, PAGE_GOBLIN_DIPLOMACY, state.variant, steps => {
-      const body = steps.find(step => [ORANGE_HAND_IN_STEP_ID, BLUE_HAND_IN_STEP_ID, "IEyrMp"].includes(step.id)).steps;
-      return body.slice(body.findIndex(step => step.id === marker || step.text === marker) + 1);
-    }));
-  }
-
-  function startScene(event) {
-    const { player, npcId } = event;
-    event.handled = true;
-    if (scenes.has(player) || !has(player, armourFor(player))) { event.end = true; return; }
-    const stage = quest.getStage(player);
-    const state = { area: new DressingRoom(player), returnTile: player.getLocation().clone(), stage, npcId, variant: armourVariant(player), returning: false };
-    scenes.set(player, state);
-    player.setAttribute(SCENE_ATTRIBUTE, 1);
-    controls(player, true); fade(player, true);
-    later(player, state, 1, () => {
-      for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
-      state.area.enter(player); player.moveTo(state.area.sourceTile(2944, 3504));
-      actor(player, state, NpcIdentifiers.GENERAL_BENTNOZE_7, 2958, 3512);
-      actor(player, state, NpcIdentifiers.GENERAL_WARTFACE_7, 2958, 3511);
-      state.grubfoot = actor(player, state, stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_5 : stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_6 : NpcIdentifiers.GRUBFOOT_7, 2954, 3511, Direction.EAST);
-    });
-    later(player, state, 2, () => {
-      const at = state.area.sourceTile(2961, 3514), look = state.area.sourceTile(2957, 3512);
-      player.getPacketSender().sendCameraMoveTo(at.getX(), at.getY(), 450, { rate: 232, rate2: 232, heightRelative: false }).sendCameraLookAt(look.getX(), look.getY(), 150, { rate: 232, rate2: 232, heightRelative: false });
-      fade(player, false);
-    });
-    resume(player, state, 3, event.stepId);
-  }
-
-  function curtain(player, state, animation) {
-    const object = state.area.getTemplateObjects(state.area.sourceTile(2953, 3511)).find(object => object.getType() === 0);
-    if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(animation));
-  }
-
-  /**
-   * Grubfoot walks to the curtain, steps through it while it is open, changes, and walks back
-   * out. The curtain is a wall the walk queue cannot pass, so the step through it is an exact
-   * move, which glides him across and turns him the way he goes (west in, east out).
-   */
-  function changeArmour(player, state, marker) {
-    state.grubfoot?.getMovementQueue().addFirstStep(state.area.sourceTile(2954, 3511));
-    later(player, state, 3, () => curtain(player, state, 4346));
-    later(player, state, 4, () => state.grubfoot?.exactMove(state.area.sourceTile(2953, 3511)));
-    later(player, state, 5, () => curtain(player, state, 4347));
-    later(player, state, 9, () => {
-      if (state.grubfoot) api.removeNpc(state.grubfoot);
-      state.grubfoot = actor(player, state, state.stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_6 : state.stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_7 : NpcIdentifiers.GRUBFOOT_5, 2953, 3511, Direction.EAST);
-      curtain(player, state, 4346);
-    });
-    later(player, state, 10, () => state.grubfoot?.exactMove(state.area.sourceTile(2954, 3511)));
-    later(player, state, 11, () => { state.grubfoot?.getMovementQueue().addFirstStep(state.area.sourceTile(2955, 3511)); curtain(player, state, 4347); });
-    resume(player, state, 12, marker);
-  }
-
-  function returnFromScene(player, state) {
-    state.returning = true;
-    if (player.getPrivateArea() === state.area) state.area.leave(player, false);
-    player.moveTo(state.returnTile); state.area.destroy();
-    player.getPacketSender().sendCameraUnlock(false).sendCameraReset();
-  }
-
-  function finishScene(player, state) {
-    if (!state || !has(player, armourFor(player)) || quest.getStage(player) !== state.stage) return;
-    player.getInventory().deleteNumber(armourFor(player), 1);
-    quest.setStage(player, state.stage === STAGE_STARTED ? STAGE_ORANGE_REJECTED : state.stage === STAGE_ORANGE_REJECTED ? STAGE_BLUE_REJECTED : STAGE_BROWN_ACCEPTED);
-    sync(player); fade(player, true);
-    player.getDialogueManager().reset(); StatementDialogue.send(player, "", false);
-    later(player, state, 1, () => { returnFromScene(player, state); controls(player, false); });
-    later(player, state, 2, () => fade(player, false));
-    later(player, state, 3, () => {
-      scenes.delete(player); player.setAttribute(SCENE_ATTRIBUTE, 0);
-      if (state.stage === STAGE_BLUE_REJECTED) quest.complete(player);
-      else player.getPacketSender().sendInterfaceRemoval();
-    });
-  }
-
-  function cleanup(player) {
-    const state = scenes.get(player);
-    scenes.delete(player);
-    if (state) returnFromScene(player, state);
-    player.setAttribute(SCENE_ATTRIBUTE, 0); controls(player, false);
-    player.getPacketSender().sendCameraReset().closeSubInterface(FADE_UID);
-  }
-
-  function handleLogout({ player }) { cleanup(player); }
   function handleBootstrap({ player }) { sync(player); }
   function handleStageChanged({ player, key }) { if (key === "goblin_diplomacy") sync(player); }
 
@@ -476,7 +632,11 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   }
 
   function refreshQuestsOnLogin({ player }) {
-    if (player.getAttribute(SCENE_ATTRIBUTE)) { player.moveTo(new Location(2957, 3509, 0)); cleanup(player); }
+    if (player.getAttribute(LEGACY_SCENE_ATTRIBUTE)) {
+      player.setAttribute(LEGACY_SCENE_ATTRIBUTE, 0);
+      player.moveTo(LEGACY_SCENE_EXIT);
+    }
+    // The brown fitting's stage is saved a tick before the quest completes; a logout between them completes it here.
     if (quest.getStage(player) === STAGE_BROWN_ACCEPTED) quest.complete(player);
     sync(player);
     refreshQuestList(player);
@@ -493,7 +653,9 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     completionJingleId: 153,
     xpRewards: [{ skillId: Skill.CRAFTING.getIndex(), amount: 200, label: "Crafting" }],
     rewardItemId: GOLD_BAR_ITEM_ID,
-    rewardItemLabel: "A Gold bar",
+    rewardItemLabel: "A Gold Bar",
+    // The scroll shows the goblin armour (questscroll:quest_model, tick 290).
+    scrollItemId: GOBLIN_MAIL_ITEM_ID,
     buildJournal,
     onReward: reward,
   });
@@ -513,5 +675,5 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   api.onNpcInteraction("General Bentnoze", { "Talk-to": handleGeneralTalk });
   api.onNpcInteraction("General Wartface", { "Talk-to": handleGeneralTalk });
   api.persistAttribute(CRATES_ATTRIBUTE, 0);
-  api.persistAttribute(SCENE_ATTRIBUTE, 0);
+  api.persistAttribute(LEGACY_SCENE_ATTRIBUTE, 0);
 };

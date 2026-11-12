@@ -169,7 +169,7 @@ function lay(player, kind, location, base = null, ground = null) {
         if (queue.canWalk(dx, dy)) { queue.walkStep(dx, dy); break; }
       }
     }
-  }, restore)) return;
+  }, restore, { reset: !def.keepsAnimation })) return;
   if (!placed && def.item && exchange(player, [[def.item, 1]], [])) {
     placed = H.core.ItemOnGroundManager.registerLocation(player, new H.core.Item(def.item, 1), location.clone());
   }
@@ -242,7 +242,7 @@ function collect(event, reset = false, check = true) {
       player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
     }
     if (reset) begin(player, RESET_LAY_TICKS, null, () => lay(player, kind, location, base));
-  })) return true;
+  }, undefined, { reset: !def.keepsAnimation })) return true;
   if (def.dismantleSoundFirst) player.getPacketSender().sendSound(DISMANTLE_SOUND, 1, NET_DISMANTLE_SOUND_DELAY);
   if (def.dismantleTicks === 1) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, "You dismantle the trap.");
   return true;
@@ -329,7 +329,10 @@ function bait(event) {
   if (!exchange(player, [[itemId, amount]], [])) { player.sendMessage(`You need ${amount} of that bait.`); return; }
   trap.bait = { id: itemId, amount, baits };
   player.performAnimation(new H.core.Animation(ANIM.SMALL));
-  player.sendMessage("You bait the trap.");
+  // rsprox captures (pyre-fur-and-smallpouch-1, rev 242): "You lay the jerboa tail beneath the deadfall
+  // as bait."; the other deadfall baits take the same line. Other traps keep this server's wording.
+  if (trap.kind === "deadfall") player.sendMessage(`You lay the ${H.core.CacheDefinitions.getItem(itemId).name.toLowerCase()} beneath the deadfall as bait.`);
+  else player.sendMessage("You bait the trap.");
 }
 
 function eligible(trap, npc, creature) {

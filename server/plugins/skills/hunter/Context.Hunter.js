@@ -201,11 +201,16 @@ function cancel(player) {
   player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
 }
 
-function begin(player, ticks, animation, finish, onCancel) {
+/**
+ * A timed Hunter action. It resets the player's animation when it finishes, unless `reset` is false:
+ * live leaves the deadfall's setting-up, dismantling and baiting animation to play out (rsprox
+ * captures pyre-fur-and-smallpouch-1, rev 242; rsprox.net 1105, 1108, 1757: no reset after 5212).
+ */
+function begin(player, ticks, animation, finish, onCancel, { reset = true } = {}) {
   if (!active(player) || player.busy() || H.actions.has(player)) return false;
   player.getSkillManager().stopSkillable();
   H.players.add(player);
-  H.actions.set(player, { due: H.tick + ticks, location: player.getLocation().clone(), area: player.getPrivateArea(), finish, cancel: onCancel });
+  H.actions.set(player, { due: H.tick + ticks, location: player.getLocation().clone(), area: player.getPrivateArea(), finish, cancel: onCancel, reset });
   if (animation != null) player.performAnimation(new H.core.Animation(animation));
   return true;
 }
@@ -217,7 +222,7 @@ function processActions() {
       cancel(player);
     } else if (H.tick >= action.due) {
       H.actions.delete(player);
-      player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
+      if (action.reset !== false) player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
       action.finish();
     }
   }

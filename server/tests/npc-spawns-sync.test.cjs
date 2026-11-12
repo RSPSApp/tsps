@@ -73,6 +73,17 @@ test("a new spawn inherits a stationary NPC's explicit radius over the implicit 
     { id: 0, name: 'Tool Leprechaun' }, { walkSeqId: 12042, attackable: false }), undefined);
 });
 
+test("an id's own default rows decide before a same-name id's explicit ones (by id, else by name)", () => {
+  // Gull 281 roams on the default 5; a couple of explicit 0 rows on another Gull id must not pin it (#1775).
+  const rows = [
+    ...Array.from({ length: 4 }, (_, i) => ({ id: 281, name: 'Gull', x: i, y: 0, level: 0 })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: 1338, name: 'Gull', x: i, y: 1, level: 0, wanderRadius: 0 })),
+  ];
+  assert.equal(matching.chooseWanderRadius(rows, { id: 281, name: 'Gull' }, { walkSeqId: 6812, attackable: false }), undefined);
+  // An id with no rows of its own still takes the name's explicit radius.
+  assert.equal(matching.chooseWanderRadius(rows, { id: 1339, name: 'Gull' }, { walkSeqId: 6812, attackable: false }), 0);
+});
+
 test('an attackable NPC keeps the effective majority, not a stray explicit radius', () => {
   const rows = [
     ...Array.from({ length: 6 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 0, level: 0 })),
@@ -349,7 +360,9 @@ test("multi-version NPCs: each place has its own version, and quest stages are l
   // One Achilka per stop, each with that stop's id.
   assert.deepEqual([ids(1389, 3075), ids(1259, 3124), ids(1399, 3245)], [[14727], [14728], [14729]]);
   assert.deepEqual([ids(2415, 4451), ids(2410, 4456)], [[5843], [5844]], "Zanaris's grey and light-grey sheep");
-  assert.deepEqual([ids(1703, 3142), ids(3277, 3411)], [[12889], [12888]], "Primio at both ends of his route");
+  // Varrock's Primio is the multi-NPC live spawns (13371, vmq2_first_travel picks 12886/12887/12888;
+  // rev 242 capture tick 408), so she has no Travel before the first trip is agreed.
+  assert.deepEqual([ids(1703, 3142), ids(3277, 3411)], [[12889], [13371]], "Primio at both ends of his route");
 });
 
 test("pairs closest first: a Wiki spawn on an existing one isn't added on top of it", () => {

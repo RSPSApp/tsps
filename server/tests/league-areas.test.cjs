@@ -70,10 +70,10 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
-  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
   require("../plugins/areas/DeathsOffice.plugin").register(api);
   // The Gravestones plugin's answer, as far as Death's Office asks it here.
   api.onCustomEvent("gravestones:state", (state) => (state.inTutorial = inDeathTutorial.has(state.player)));
@@ -244,6 +244,27 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
   assert.equal(areaAt(1200, 3350), KOUREND, "the Stranglewood counts as Kourend in Trailblazer Reloaded");
   assert.equal(areaAt(1200, 3350, { league: 5 }), VARLAMORE, "and as Varlamore in Raging Echoes");
   assert.equal(areaAt(3000, 3000, { league: 99 }), null, "no league, no areas");
+});
+
+test("the Citharede Abbey's square (53,49) is the desert; the Abandoned Mine in the square below stays Morytania", () => {
+  // Wiki (Citharede Abbey, leagueRegion = Desert): the abbey and the Giants' Plateau east of Al
+  // Kharid, map square 53,49, tiles 3392-3455 by 3136-3199. That square's cabbage field is the
+  // abbey task's own "in the Citharede Abbey", so the whole square must be the desert.
+  for (const [x, y] of [[3413, 3178], [3400, 3140], [3392, 3136], [3455, 3199]]) {
+    assert.equal(areaAt(x, y), DESERT, `the Giants' Plateau square (${x}, ${y})`);
+  }
+  // The Abandoned Mine is in the surface square below (53,50; its entrance 3451, 3233, the Wiki's
+  // shooting-star pin) and stays Morytania, as do its underground levels: map y + 6400 takes the
+  // surface square (3422, 9625 is Haunted Mine's upper level, square 53,150 -> surface 53,50).
+  assert.equal(areaAt(3451, 3233), MORYTANIA, "the Abandoned Mine's entrance square");
+  assert.equal(areaAt(3422, 9625), MORYTANIA, "the Haunted Mine's levels under that square");
+  assert.equal(areaAt(3413, 3240), MORYTANIA, "the square just south of the plateau");
+  // Every league moves it: it was Morytania before this square was reassigned.
+  for (const league of [4, 5, 6]) {
+    assert.equal(areaAt(3413, 3178, { league }), DESERT, `league ${league}: the abbey`);
+    assert.equal(areaAt(3451, 3233, { league }), MORYTANIA, `league ${league}: the mine`);
+    assert.equal(areaAt(3422, 9625, { league }), MORYTANIA, `league ${league}: the mine's levels`);
+  }
 });
 
 test("a locked area refuses a walk, a teleport and a respawn; open ground and a main character are untouched", () => {

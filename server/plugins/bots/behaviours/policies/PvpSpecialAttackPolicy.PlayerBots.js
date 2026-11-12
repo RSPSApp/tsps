@@ -19,6 +19,7 @@ const {
   invalidatePvpCombatSnapshot,
   resolveInventorySlotByItemId,
   SUPPORTED_SPEC_WEAPONS,
+  SUPPORTED_KO_WEAPONS,
   COMBAT_ITEM_IDS,
 } = require("./PvpCombatRuntimeCache.PlayerBots");
 
@@ -50,7 +51,7 @@ function trackSpecWeaponHold(pvp, player, nowMs) {
   const holdingSpecWeapon =
     currentWeaponId > 0 &&
     currentWeaponId !== primaryWeaponId &&
-    SUPPORTED_SPEC_WEAPONS.includes(currentWeaponId);
+    SUPPORTED_KO_WEAPONS.includes(currentWeaponId);
   if (!holdingSpecWeapon) {
     pvp.heldSpecWeaponId = 0;
     pvp.specWeaponStowAt = 0;
@@ -295,7 +296,7 @@ function maybeSwitchBackToPrimaryWeapon(context) {
     currentWeaponId <= 0 ||
     primaryWeaponId <= 0 ||
     currentWeaponId === primaryWeaponId ||
-    !SUPPORTED_SPEC_WEAPONS.includes(currentWeaponId)
+    !SUPPORTED_KO_WEAPONS.includes(currentWeaponId)
   ) {
     pvp.heldSpecWeaponId = 0;
     pvp.specWeaponStowAt = 0;

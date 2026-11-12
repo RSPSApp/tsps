@@ -156,6 +156,19 @@ function isRaidItem(id) {
   return (id >= 20799 && id <= 20801) || (id >= 20853 && id <= 20996) || (id >= 21036 && id <= 21042);
 }
 
+/**
+ * Leaving the raid puts every stat back at its base level, boosted or drained, whether or not a raid potion is
+ * running: rsprox_transcripts/234/00820.txt:322071-322080 (all to 99: Hitpoints from 124, Prayer from 95) and
+ * 234/03285.txt:288215-288224 (Herblore 104 to 92, Crafting 90 to 78). Only the stats that differ are sent, as there.
+ */
+function restoreStats(player) {
+  const skills = player.getSkillManager();
+  for (const skill of core().Skill.values()) {
+    const base = skills.getMaxLevel(skill);
+    if (skills.getCurrentLevel(skill) !== base) skills.setCurrentLevels(skill, base);
+  }
+}
+
 function loc({ x, y, z = 0 }) {
   const { Location } = core();
   return new Location(x, y, z);
@@ -340,17 +353,14 @@ function animate(player, id) {
   player.performAnimation(new (core().Animation)(id));
 }
 
-/** The best axe the player can use, held or carried: { id, animation }. */
-const AXES = [
-  { id: 13241, level: 61, animation: 2117 }, { id: 6739, level: 61, animation: 2846 },
-  { id: 1359, level: 41, animation: 867 }, { id: 1357, level: 31, animation: 869 },
-  { id: 1355, level: 21, animation: 871 }, { id: 1361, level: 6, animation: 873 },
-  { id: 1353, level: 6, animation: 875 }, { id: 1349, level: 1, animation: 877 }, { id: 1351, level: 1, animation: 879 },
-];
-
+/**
+ * The best axe the player can use, held or carried: { id, animation }, as Woodcutting judges it (every axe, with each
+ * one's own requirements: the infernal axe's Firemaking, the crystal axe's Agility, members-only on free worlds).
+ */
 function axeOf(player) {
-  const woodcutting = level(player, "WOODCUTTING");
-  return AXES.find((axe) => woodcutting >= axe.level && (has(player, axe.id) || wielding(player, axe.id))) ?? null;
+  const request = { player, itemId: null, axe: null };
+  api().emitCustomEvent("woodcutting:axe", request);
+  return request.axe ? { id: request.axe.id, animation: request.axe.animationId } : null;
 }
 
 /**
@@ -552,17 +562,12 @@ function crossFire(player, object) {
   balanceWalk(player, destination, -1, null);
 }
 
-/** The best pickaxe the player can use, held or carried: { id, animation }. */
-const PICKAXES = [
-  { id: 23680, level: 71, animation: 8347 }, { id: 13243, level: 61, animation: 4482 }, { id: 11920, level: 61, animation: 7139 },
-  { id: 1275, level: 41, animation: 624 }, { id: 1271, level: 31, animation: 628 }, { id: 1273, level: 21, animation: 629 },
-  { id: 12297, level: 11, animation: 3873 }, { id: 1269, level: 6, animation: 627 }, { id: 1267, level: 1, animation: 626 },
-  { id: 1265, level: 1, animation: 625 },
-];
-
+/** The best pickaxe the player can use, held or carried: { id, animation }, as Mining judges it (its own list and rules). */
 function pickaxeOf(player) {
-  const mining = level(player, "MINING");
-  return PICKAXES.find((pickaxe) => mining >= pickaxe.level && (has(player, pickaxe.id) || wielding(player, pickaxe.id))) ?? null;
+  const request = { player, pickaxe: null };
+  api().emitCustomEvent("mining:best-pickaxe", request);
+  const animation = request.pickaxe?.animation;
+  return request.pickaxe ? { id: request.pickaxe.id, animation: typeof animation === "number" ? animation : animation?.getId?.() } : null;
 }
 
 function preciseTiming(player) {
@@ -592,8 +597,8 @@ module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
   MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, MAIN_MODAL_UID, EVENT,
-  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
+  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, restoreStats, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
   balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, besideFootprint, walkStraight, styleMethod, strike,
-  onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf, PICKAXES,
+  onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf,
 };

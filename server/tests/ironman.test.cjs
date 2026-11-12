@@ -84,6 +84,17 @@ test("no trading either way, with the captured lines", () => {
   assert.equal(mains.handled, false, "two normal accounts trade as before");
 });
 
+test("the refusal names an Ironman by their pronouns", () => {
+  const main = account("main");
+  for (const [pronouns, line] of [[1, "iron is an Ironman. She stands alone."], [2, "iron is an Ironman. They stand alone."]]) {
+    const iron = account("iron", "ironman");
+    iron.getAppearance().setPronouns(pronouns);
+    main.messages.length = 0;
+    hooks.onTradeRequest({ player: main, target: iron, handled: false });
+    assert.deepEqual(main.messages, [line]);
+  }
+});
+
 test("onCanTrade refuses the window itself, whichever side is the Ironman", () => {
   const iron = account("iron", "ironman");
   const main = account("main");
@@ -347,12 +358,12 @@ test("StaffCrowns: a staff crown wins, else the account's icon, else none", () =
 });
 
 test("no presets for an Ironman (they hand out items); normal accounts keep them", () => {
-  const iron = { player: account("iron", "ironman"), allow: true, message: null };
-  custom["presets:can-use"](iron);
-  assert.deepEqual([iron.allow, iron.message], [false, "As an Ironman, you cannot use presets."]);
-  const main = { player: account("main"), allow: true, message: null };
-  custom["presets:can-use"](main);
-  assert.equal(main.allow, true);
+  const iron = { player: account("iron", "ironman"), barred: false, message: null };
+  custom["presets:account-barred"](iron);
+  assert.deepEqual([iron.barred, iron.message], [true, "As an Ironman, you cannot use presets."]);
+  const main = { player: account("main"), barred: false, message: null };
+  custom["presets:account-barred"](main);
+  assert.equal(main.barred, false);
 });
 
 for (const source of ["pickup", "telegrab"]) {
@@ -620,5 +631,73 @@ test("Ironmen use GE only for single-bond buys, with safe collection", async t =
     assert.equal(f.p.getInterfaceId(), 465, "correct PIN resumes GE");
     await selectBuy(f, I.OLD_SCHOOL_BOND); await confirm(f);
     assert.equal(placed(f).length, 1, "legal purchase after PIN");
+  });
+});
+
+test('new mainland characters choose an account type without enabling Tutorial Island',async t=>{
+  process.env.DISABLE_PLAYER_BOTS='1';
+  const PM=PluginManager,{PlayerSession}=require('../dist/net/PlayerSession'),{ClientConnection}=require('../dist/net/NetworkBuilder');
+  PM.loadFromDirectory(path.resolve(__dirname,'../plugins'));core.RegionManager.init();core.ObjectDefinition.init();PM.emitServerStartup({});
+  t.after(()=>PM.emitServerShutdown({}));
+  const pending='ironman:initial-setup-pending';let index=1700;
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  function actor(scope){
+    const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel)),c=new ClientConnection(channel);c.player=p;
+    p.setUsername('newiron'+index++);p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));p.setAttribute('bot-skip-persistence',true);
+    p.setLocation(new core.Location(3089,3524,0));assert.equal(core.World.getPlayers().add(p),true);p.setNeedsPlacement(false);
+    scope.after(()=>{PM.emitPlayerLogout({player:p,username:p.getUsername()});core.World.getPlayers().remove(p);core.TaskManager.cancelTasks(p);core.TaskManager.cancelTasks(p.getIndex());});
+    return {p,c};
+  }
+  async function login(f,isNewAccount){PM.emitPlayerLogin({player:f.p,username:f.p.getUsername(),isNewAccount});await flush();}
+  async function appearance(f){
+    assert.equal(f.p.getInterfaceId(),679,'initial character designer comes first');
+    const look=f.p.getAppearance().getLook();
+    await f.c.dispatch([{type:'appearance',gender:look[0],kits:[1,7,2,3,4,5,6].map(i=>look[i]),colors:[8,9,10,11,12].map(i=>look[i])}]);f.c.processTurnPackets();await flush();
+  }
+  async function button(f,child){await f.c.dispatch([{type:'widget_action',widgetId:(890<<16)|child,groupId:890,childId:child,buttonNum:1,slot:-1,itemId:-1}]);f.c.processTurnPackets();await flush();}
+  for(const [child,mode] of [[22,'ironman'],[23,'ultimate'],[24,'hardcore']]) await t.test(mode,async t=>{
+    const f=actor(t);await login(f,true);await appearance(f);
+    assert.equal(f.p.getInterfaceId(),890,'new character gets the existing native setup');assert.equal(f.p.getAttribute(pending),true);
+    await button(f,child);assert.ok(f.p.getEnteredAmountAction());
+    await f.c.dispatch([{type:'dialogue_amount',amount:1}]);f.c.processTurnPackets();await flush();
+    assert.equal(f.p.getAttribute('ironman:mode'),mode);assert.notEqual(f.p.getAttribute(pending),true);
+  });
+  await t.test('None finishes the initial choice and existing characters get no upgrade entitlement',async t=>{
+    const f=actor(t);await login(f,true);await appearance(f);assert.equal(f.p.getInterfaceId(),890);
+    await button(f,21);assert.notEqual(f.p.getInterfaceId(),890);assert.notEqual(f.p.getAttribute(pending),true);assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
+    const old=actor(t);await login(old,false);assert.notEqual(old.p.getInterfaceId(),890);assert.notEqual(old.p.getAttribute(pending),true);
+    const request={player:old.p,upgrades:false};PM.emitCustomEvent('ironman:open-setup',request);await button(old,22);
+    assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(old.p),'none');assert.ok(!old.p.getEnteredAmountAction(),'mainland setup still refuses upgrades');
+  });
+  await t.test('interrupted choice survives persistence-shaped attributes and waits for the welcome modal',async t=>{
+    const f=actor(t);await login(f,true);await appearance(f);assert.equal(f.p.getAttribute(pending),true);
+    const saved=JSON.parse(JSON.stringify({[pending]:f.p.getAttribute(pending)}));
+    PM.emitPlayerDisconnect({player:f.p,username:f.p.getUsername(),source:'test'});
+    const restored=actor(t);restored.p.setAttribute(pending,saved[pending]);restored.p.getPacketSender().sendInterface(378);
+    await login(restored,false);assert.equal(restored.p.getInterfaceId(),378);
+    restored.p.getPacketSender().sendInterfaceRemoval();await flush();assert.equal(restored.p.getInterfaceId(),890);
+    await button(restored,21);assert.notEqual(restored.p.getAttribute(pending),true);
+  });
+  await t.test('Cancel retains the initial choice; replacement invalidates an old Proceed callback',async t=>{
+    const f=actor(t);await login(f,true);await appearance(f);await button(f,24);
+    await f.c.dispatch([{type:'dialogue_amount',amount:0}]);f.c.processTurnPackets();await flush();
+    assert.equal(f.p.getInterfaceId(),890);assert.equal(f.p.getAttribute(pending),true);
+    assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
+    await button(f,24);const stale=f.p.getEnteredAmountAction();assert.ok(stale);
+    f.p.getPacketSender().sendInterface(12);await flush();assert.notEqual(f.p.getAttribute(pending),true);
+    stale.execute(1);assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
+  });
+  await t.test('ordinary economic input waits for the initial decision, then None permits normal play',async t=>{
+    const f=actor(t);f.p.setAttribute(pending,true);f.p.getPacketSender().sendInterface(378);await login(f,false);
+    const at=f.p.getLocation(),coins=core.ItemIdentifiers.COINS;
+    const pile=core.ItemOnGroundManager.registerLocation(f.p,new core.Item(coins,123),at.clone(),null,{public:true});
+    t.after(()=>core.ItemOnGroundManager.deregister(pile));
+    await new Promise(resolve=>setTimeout(resolve,350));
+    const take=async()=>{await f.c.dispatch([{type:'ground_item_action',itemId:coins,x:at.getX(),y:at.getY(),option:'Take'}]);f.c.processTurnPackets();await flush();for(let i=0;i<3;i++){core.World.process();await flush();}};
+    await take();assert.equal(f.p.getInventory().getAmount(coins),0,'no ordinary pickup before the initial choice');assert.equal(f.p.getInterfaceId(),378);
+    await f.c.dispatch([{type:'interface_close'}]);f.c.processTurnPackets();await flush();assert.equal(f.p.getInterfaceId(),890);
+    await button(f,21);assert.notEqual(f.p.getAttribute(pending),true);
+    await take();assert.equal(f.p.getInventory().getAmount(coins),123,'normal pickup works after choosing None');
   });
 });

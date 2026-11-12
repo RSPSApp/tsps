@@ -40,7 +40,7 @@
  * Queen; the plugin does not add duplicate static children. The Queen's reveal
  * enables the post-reveal Lady Shauna form for this player. The Hughes chest
  * uses an owner-only visual over the unchanged map chest and clipping.
- * The graceful recolour and letter-reading interface remain unimplemented.
+ * The letter-reading interface remains unimplemented.
  */
 module.exports = function registerQueenOfThievesQuest(api) {
   const {

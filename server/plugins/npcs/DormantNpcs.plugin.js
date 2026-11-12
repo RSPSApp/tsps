@@ -200,6 +200,7 @@ function killed({ killer, npc }) {
 
 module.exports = {
   name: "DormantNpcs",
+  description: "Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them.",
   members: true,
   register(pluginApi) {
     pluginApi.persistAttribute(ROCK_CRAB_KILLS_ATTRIBUTE);

@@ -103,6 +103,7 @@ function bind(api) {
 
 module.exports = {
   name: "SaveHistory",
+  description: "Owner commands ::snapshots and ::rollback, which list a player's saved copies and restore an earlier one.",
   _test: { parseTarget, findSnapshot },
   register(api) {
     bind(api);

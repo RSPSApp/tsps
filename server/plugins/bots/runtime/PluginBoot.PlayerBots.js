@@ -192,7 +192,15 @@ function bootPlayerBotsRuntime(options = {}) {
     botCount: config.botCount,
     wildernessRoamerBotCount: config.wildernessRoamerBotCount,
     wildernessActiveRegionBotsPerRegion: config.wildernessActiveRegionBotsPerRegion,
+    wildernessActiveRegionBotsByRegion: config.wildernessActiveRegionBotsByRegion,
     wildernessActiveRegionInset: config.wildernessActiveRegionInset,
+    // Asked as PvP bots come and go, once every plugin has registered: a world that has no place
+    // for them (a Hardcore World) answers `bots:pvp-allowed` { allowed: false }.
+    pvpAllowed: () => {
+      const query = { allowed: true };
+      api.emitCustomEvent("bots:pvp-allowed", query);
+      return query.allowed !== false;
+    },
     botBaseCooldownMs: config.botBaseCooldownMs,
     spawn,
     spawnOffsets,
@@ -243,6 +251,7 @@ function bootPlayerBotsRuntime(options = {}) {
       api?.log?.("bot_startup_spawned", summary);
     },
     onActiveRegionsUpdated: (handler) => api?.onActiveRegionsUpdated?.(handler),
+    onPlayerMapSquareChange: (handler) => api?.onPlayerMapSquareChange?.(handler),
     getActiveRegionSnapshot: () => api?.getActiveRegionSnapshot?.(),
     botStatesByName,
     botmeUsernames,

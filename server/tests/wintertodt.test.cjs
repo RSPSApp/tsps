@@ -54,6 +54,7 @@ function fakeApi() {
     onCustomEvent: (name, handler) => (hooks.custom[name] ??= []).push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onObjectRoute: () => {},
+    onSpellDisabled: () => {},
   };
 }
 
@@ -64,6 +65,8 @@ function container(size) {
   const self = {
     slots,
     getItems: () => slots.map(view),
+    // Plain mock slots copied as real Items for Ignisia's native inventory preflight.
+    getCopiedItems: () => slots.map(slot => new (Shared.core().Item)(slot?.id ?? -1, slot?.amount ?? 0)),
     setItem(slot, item) {
       const id = item?.getId?.() ?? -1;
       slots[slot] = id > 0 ? { id, amount: item.getAmount?.() || 1 } : null;
@@ -189,6 +192,7 @@ before(() => {
   CachePipeline.initialize();
   RegionManager.init();
   const api = fakeApi();
+  require("../plugins/skills/herblore/Common.Herblore").init(api);
   Doors(api);
   Braziers(api);
   Supplies(api);
@@ -273,11 +277,15 @@ test('a round ends at 0 energy: 500+ points earn XP, a kill and rewards; fewer e
   assert.equal(Round.isActive(), false);
   assert.equal(winner.xp, 9900);
   const gained = 9900 * (PluginManager.getCoreApi().GameConstants.EXPERIENCE_MULTIPLIER ?? 1);
-  assert.equal(winner.messages[1], `You have gained ${gained.toLocaleString('en-US')} Firemaking XP.`);
+  // 233/03254:15102: "You have gained 9900 Firemaking XP." (no separator).
+  assert.equal(winner.messages[1], `You have gained ${gained} Firemaking XP.`);
   assert.equal(winner.messages[2], 'Your subdued Wintertodt count is: <col=ff0000>1</col>.');
   const owed = Round.rewardsOwed(winner);
   assert.ok(owed === 2 || owed === 3);
-  assert.equal(winner.messages[3], `You're owed an additional ${owed} rewards from the reward cart. You're now owed ${owed} rewards.`);
+  // 233/03262 (tick 2580): the new best comes after the count and before the cart line, its number plain.
+  assert.equal(winner.messages[3], 'You have a new high score! 590');
+  assert.equal(winner.getAttribute(Round.ATTR_BEST), 590);
+  assert.equal(winner.messages[4], `You're owed an additional ${owed} rewards from the reward cart. You're now owed ${owed} rewards.`);
   assert.equal(winner.varbits.get(Shared.VARBIT.REWARDS_OWED), owed);
   assert.equal(winner.varbits.get(`varp${Shared.VARP.KILLS}`), 1);
   assert.deepEqual(loser.messages, ['You did not earn enough points to be worthy of a gift from the citizens of Kourend this time.']);
@@ -410,6 +418,27 @@ test('cold hits take ten times their hitsplat from warmth, show on bar 79, and k
   assert.deepEqual(player.damage, [99], 'a hit for all your hitpoints');
 });
 
+test('warmth dropping below 10% asks the ring of life to save the player; 10% and 0% do not', () => {
+  const player = fighter('Lifesaver');
+  startRound();
+  const asked = [];
+  (hooks.custom['ring-of-life:activate'] ??= []).push((request) => asked.push(request.player));
+  const cost = Warmth.damageFor(player, 'standard') * 10;
+  Warmth.setWarmth(player, 100 + cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 100);
+  assert.deepEqual(asked, [], 'exactly 10% is not below it');
+  Warmth.setWarmth(player, 99 + cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 99);
+  assert.deepEqual(asked, [player], 'wiki: a ring of life will activate if warmth drops below 10%');
+  Warmth.setWarmth(player, cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 0);
+  assert.deepEqual(asked, [player], 'dropping to 0% is instant death, not a save');
+  hooks.custom['ring-of-life:activate'].pop();
+});
+
 test('warmth regenerates 8% a minute plus 1% per warm item; food and potions restore it', () => {
   const player = fighter('Thawing');
   for (const id of [I.PYROMANCER_HOOD, I.PYROMANCER_GARB]) player.equipment.adds(id);
@@ -417,9 +446,9 @@ test('warmth regenerates 8% a minute plus 1% per warm item; food and potions res
   Round._round.ticks = 99;
   ticks(1);
   assert.equal(Warmth.warmthOf(player), 600, '80 + 2 x 10 at the 100-tick beat');
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 20 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHARK, heal: 0, restores: 20 });
   assert.equal(Warmth.warmthOf(player), 950);
-  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 3 });
+  hooks.custom['food:eaten'][0]({ player, itemId: I.SHRIMPS, heal: 0, restores: 3 });
   assert.equal(Warmth.warmthOf(player), 950, 'under 4 healed does nothing');
   Warmth.setWarmth(player, 100);
   player.inventory.adds(Shared.ITEM.REJUVENATION_2);
@@ -455,6 +484,47 @@ test('lighting needs a tinderbox or torch and a healthy pyromancer; it pays 25 p
   Corners.setBrazier(SW, Shared.BRAZIER.UNLIT);
   hooks.objects.Brazier.Light({ player: torch, object: swBrazier });
   assert.equal(torch.animations.at(-1), Shared.ANIM.LIGHT_TORCH, 'capture: 7174 with the bruma torch');
+});
+
+test('the pyromancer outfit raises the Firemaking XP of feeding but not of lighting, and no other skill', () => {
+  // The Firemaking plugin answers "firemaking:xp-multiplier" with the outfit's bonus.
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const api = fakeApi();
+  require('../plugins/skills/Firemaking.plugin').register({
+    ...api,
+    getTaskManager: () => ({ submit() {} }),
+    getObjectManager: () => ({ register() {}, deregister() {} }),
+    getItemOnGroundManager: () => ({ registerLocation() {}, getGroundItem() {}, deregister() {} }),
+    getWorld: () => ({ getObjects: () => [] }),
+    onPlayerDisconnect() {}, onItemOnItem() {}, onItemOnGroundItem() {}, onGroundItemClick() {}, log() {},
+  });
+  startRound();
+  Corners.setBrazier(SW, Shared.BRAZIER.UNLIT);
+  const dressed = fighter('Pyromancer');
+  const Item = Shared.core().Item;
+  dressed.inventory.adds(Shared.ITEM.TINDERBOX);
+  dressed.inventory.adds(Shared.ITEM.BRUMA_KINDLING, 1);
+  dressed.equipment.setItem(Equipment.HEAD_SLOT, new Item(I.PYROMANCER_HOOD, 1));
+  hooks.objects.Brazier.Light({ player: dressed, object: swBrazier });
+  ticks(3);
+  // rsprox 233/03254 (tick 450): the full outfit worn, lighting gives exactly 6 x 99 = 594.
+  assert.equal(dressed.xp, 6 * 99, 'no outfit bonus on lighting');
+  dressed.equipment.setItem(Equipment.BODY_SLOT, new Item(I.PYROMANCER_GARB, 1));
+  dressed.equipment.setItem(Equipment.LEG_SLOT, new Item(I.PYROMANCER_ROBE, 1));
+  dressed.equipment.setItem(Equipment.FEET_SLOT, new Item(I.PYROMANCER_BOOTS, 1));
+  dressed.xp = 0;
+  hooks.objects['Burning brazier'].Feed({ player: dressed, object: swBrazier });
+  ticks(3);
+  assert.equal(dressed.xp, 99 * 3.8 * 1.025, 'the full set: 2.5% on feeding kindling');
+  assert.equal(dressed.xpBySkill.Construction ?? 0, 0);
+});
+
+// rsprox_transcripts/233/03262: between rounds, "There's no use for bruma roots at this time." on the spam channel.
+test("feeding a brazier between rounds: the bruma roots line, as spam", () => {
+  const player = fighter('Early');
+  hooks.objects['Burning brazier'].Feed({ player, object: swBrazier });
+  assert.deepEqual(player.spam, ["There's no use for bruma roots at this time."]);
+  assert.ok(!player.messages.includes("There's no use for bruma roots at this time."));
 });
 
 test('feeding burns kindling first, then roots, one every 3 ticks, until they run out', () => {
@@ -626,11 +696,12 @@ test("the Wintertodt's attacks follow its energy: standard ones fade, brazier on
   const ctx = { ticks: 5, energy: 3500, players: Round.playersInPrison, isActive: Round.isActive, broadcast: Round.broadcast };
   Attacks.useRandom(() => 0.5);
   attacksTick(ctx);
-  assert.equal(player.messages.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
+  // Spam, as recorded 53 times (233/03254, 03262).
+  assert.equal(player.spam.at(-1), Attacks.COLD_MESSAGE, 'a roll under full energy hits');
   attacksTick({ ...ctx, ticks: 10 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, '10-tick cooldown');
   attacksTick({ ...ctx, ticks: 15, energy: 100 });
-  assert.equal(player.messages.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
+  assert.equal(player.spam.filter((m) => m === Attacks.COLD_MESSAGE).length, 1, 'rare near the end');
   assert.equal(Attacks.standardChance(3500), 1);
   assert.ok(Math.abs(Attacks.standardChance(2100) - 0.216) < 0.001, '60% energy: 0.6 cubed');
   Attacks.useRandom(Math.random);
@@ -668,8 +739,13 @@ test('the cart: Check counts, Search takes one every 3 ticks, and the last ends 
   assert.equal(player.animations.at(-1), Shared.ANIM.CART_SEARCH);
   ticks(3);
   assert.equal(Round.rewardsOwed(player), 1);
-  assert.match(player.spam.at(-1), /^You found some loot: \d+ x .+/);
+  // 233/03264: "You found some loot: Grimy torstol" (one, no "1 x"), "...: 4,886 x Coins" (commas).
+  assert.match(player.spam.at(-1), /^You found some loot: (?!1 x )((\d{1,3}(,\d{3})*) x )?.+/);
   assert.deepEqual(player.sounds, [Shared.SOUND.PICK]);
+  const I2 = Shared.core().ItemIdentifiers;
+  assert.equal(Cart.lootText({ id: I2.GRIMY_TORSTOL, amount: 1 }), "Grimy torstol");
+  assert.equal(Cart.lootText({ id: I2.COINS, amount: 4886 }), "4,886 x Coins");
+  assert.equal(Cart.lootText({ id: I2.MAHOGANY_LOGS, amount: 10 }), "10 x Mahogany logs");
   Cart.check({ player });
   assert.equal(player.messages.at(-1), 'You are owed one more reward from the cart.', 'capture');
   ticks(3);
@@ -912,4 +988,19 @@ test('a stale outfit offer leaves every piece in place', () => {
   assert.equal(player.inventory.getAmount(I.BURNT_PAGE), 0);
   assert.equal(player.inventory.getAmount(I.PYROMANCER_HOOD), 1, 'nothing was removed');
   assert.equal(player.inventory.getAmount(I.PYROMANCER_ROBE), 1);
+});
+
+// 233/03262 (tick 2580): "You have a new high score! 8530" only when the round beats the player's best.
+test('a round below the best score has no high-score line; a better one does', () => {
+  const player = fakePlayer('Scorer');
+  const scores = [];
+  for (const points of [700, 600, 800]) {
+    startRound();
+    walkIn(player);
+    player.messages.length = 0;
+    Round.addPoints(player, points);
+    Round.setEnergy(0);
+    scores.push(player.messages.filter((m) => m.startsWith('You have a new high score!')));
+  }
+  assert.deepEqual(scores, [['You have a new high score! 700'], [], ['You have a new high score! 800']]);
 });

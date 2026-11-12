@@ -1,5 +1,5 @@
 // Settings: "All Settings" browser (134), the keybindings panel (121) and the
-// side panel's "Game client layout" dropdown (116:40).
+// "Game client layout" dropdown, on the side panel (116:40) and in All Settings.
 // Component ids, varbits and the settings catalog order below are verified
 // against cache rev 237 and cross-checked with RuneLite (InterfaceID.Settings,
 // VarbitID).
@@ -25,6 +25,14 @@ const XPDROPS_ORB_COMPONENTS = ["orbs:xp_drops", "orbs_osm:xp_drops"];
 const XPDROPS_OVERLAY_UID = (ROOT_INTERFACE << 16) | 9; // toplevel_osrs_stretch:xp_drops
 const XPDROPS_INTERFACE_ID = 122;
 const XPDROPS_SETUP_INTERFACE_ID = 137;
+// CS2 1010 builds the skill picker under child 18; Configure is op1 on each dynamic row.
+const XPDROPS_SKILL_PICKER_BUTTON = (XPDROPS_SETUP_INTERFACE_ID << 16) | 18;
+const XPDROPS_SKILL_PICKER_ACTION = 1;
+const XPDROPS_SKILL_PICKER_TOTAL_SLOT = 24;
+const XPDROPS_SKILL_ENUM = 681;
+const XPDROPS_SETUP_STATE_VARP = 638; // cache CS2 1010 onVarTransmit
+const XPDROPS_SETUP_SKILL_VARBIT = 4703; // xpdrops_setup_skill
+const XPDROPS_SETUP_STATE_MASK = 0x3f800000; // varbits 4703 and 4704, bits 23-29
 const XPDROPS_ENABLED_VARBIT = 4702;
 // XP drops setup: each dropdown's option rows are created in a list component paired with its
 // header (scripts 1010, 1030, 1031), and the cache's script 1036 sets that dropdown's varbit to
@@ -44,6 +52,21 @@ const XPDROPS_SETUP_MAX_ROW = 31;
 // The varps behind them, saved as whole values: the browser transmits them, the official client
 // only reports the row it chose.
 const XPDROPS_SETUP_ATTRIBUTE = "settings:xpdrops-setup";
+// Cache CS2 1002, indexed by the client skill id; its second varp for each skill is +24.
+const XPDROPS_TRACKER_START_VARPS = [1229, 1233, 1230, 1234, 1231, 1235, 1232, 1244, 1246, 1247, 1243, 1245, 1239, 1242, 1241, 1237, 1236, 1238, 1248, 1249, 1240, 1251, 1250, 4964];
+const XPDROPS_TRACKER_TOTAL_START_VARP = 1228;
+const XPDROPS_TRACKER_TOTAL_END_VARP = 1252;
+const XPDROPS_TRACKER_END_OFFSET = 24;
+const XPDROPS_TRACKER_TOTAL_MAX_XP = 0x7fffffff;
+// Cache group 137:30 is Tracker start, 38 Goal start, and 42 Goal end.
+const XPDROPS_TRACKER_FIELDS = new Map([
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 30, "start"],
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 38, "start"],
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 42, "end"],
+]);
+// The widgets' cache actions: option 7 is “Set to XP value”; option 10 is “Set to current XP”.
+const XPDROPS_SET_XP_ACTION = 7;
+const XPDROPS_SET_CURRENT_XP_ACTION = 10;
 
 // The side panel's volume sliders: the cache's scripts (9232, 9238, 9244, 9250) set the varp in
 // the client, then trigger the slider's op (if_triggeroplocal) with the new volume when it is
@@ -79,7 +102,9 @@ const UNMUTED_DEFAULT_VOLUME = 100;
 // children of 116:40, so clicks only reach us when that range has op1 flags
 // (encodeGameframeFlags sends them).
 const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
-// Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317.
+// Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317. The cache
+// has the first three; our client adds the two 317 layouts, to both dropdowns.
+const GAMEFRAME_LAYOUT_ENUM = 3509;
 const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
@@ -87,6 +112,10 @@ const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
+// All Settings > Interfaces: "Game client layout" (12), a dropdown on enum 3509 like the side
+// panel's, and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
+const GAME_CLIENT_LAYOUT_SETTING = 12;
+const SHOW_DATA_ORBS_SETTING = 8;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
@@ -102,11 +131,11 @@ const NPC_ATTACK_OPTIONS_SETTING = 56;
 // Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
 // a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
-// The enhanced client's mouseover text setting (cache script 4582 toggles it), from rev 241
-// mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client reports itself as
-// enhanced (clienttype 10) and draws the top-left text, so this must be 0 (shown): then HUD
-// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) drop 23px below the
-// text instead of sitting under it, as on live.
+// The enhanced client's mouseover text setting (All Settings row 147; cache script 4582 toggles
+// it), from rev 241 mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client
+// reports itself as enhanced (clienttype 10) and draws the top-left text while this is 0; HUD
+// overlays laid out by script 4731 (Wintertodt, the Gauntlet, ToA...) then drop 23px below the
+// text, as on live, and move back up when the player hides it.
 const MOUSEOVER_TEXT_DISABLED_VARBIT = 10035;
 // Opaque player attribute; NetworkBuilder/WelcomeScreen read it to boot the
 // saved gameframe.
@@ -138,19 +167,69 @@ const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
 // The values the player chose for the rows in data/settings.json, and the category shown
 // ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
-// The collection-log notification rows (85/171) share varp 2856 with "Enable precise timing" (82).
-const COLLECTION_LOG_NOTIFY_VARP = 2856;
+// The varps the browser client transmits whole when a row changes its varbit in the client: the
+// cache's toggle script (3965) flips Anti Drag (115), precise timing (82) and Esc closes (57)
+// there before the click is sent, and the buff bar's relic op (script 3231) flips Display Relics
+// (127) with no click at all. The Minimenu rows (4503) flip there too, and the spacing slider
+// changes its varbit with no click at all. The rows saved from them are the settings.json rows on
+// these varps; other bits (the collection-log notifications on 2856) belong to their own plugins.
+const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503]);
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
+/** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
+const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
+const QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE = "settings:quest-list-show-242";
+/**
+ * Row 278 used to flip varbit 13113, which is row 192's (gravestone payment confirmation); 278 is
+ * 14194. A 13113 saved before is 278's, so it is dropped once and 192 starts at its default.
+ */
+const GRAVESTONE_CONFIRM_KEY = "varbit:13113";
+const GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE = "settings:gravestone-confirm-192";
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
-const QUEST_COLOUR_VARPS = new Set([3409,3410,3411,3412]);
-const QUEST_COLOUR_SETTINGS = {224:3410,225:3409,226:3411,227:3412};
-const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 2;
+// Colour rows: the varp holding the colour + 1 (0 for the default) and the default colour.
+// The varps are cache script 4181's, the defaults each row's struct (param 1230).
+// Chat colours by chatbox mode (opaque, transparent, split private chat), quest list (224-227)
+// and music player track colours (485-488).
+const OPAQUE_CHAT_COLOURS = {
+  87: [2992, 0x0000ff], 89: [2993, 0x7f0000], 92: [2994, 0x2020ef], 94: [2995, 0x000000],
+  97: [2996, 0x7f0000], 99: [2997, 0x7f0000], 101: [2998, 0x7f007f], 103: [2999, 0x7e3200],
+  105: [3060, 0x007a00], 193: [3191, 0x7f0000], 196: [3192, 0x000000], 198: [3193, 0x000000],
+  434: [4697, 0x006600],
+};
+const TRANSPARENT_CHAT_COLOURS = {
+  88: [3000, 0x9090ff], 90: [3001, 0xbf2020], 93: [3002, 0x4040ff], 95: [3003, 0xffffff],
+  98: [3004, 0xef5050], 100: [3005, 0x7f0000], 102: [3006, 0xdf20ff], 104: [3007, 0xff20df],
+  106: [3061, 0x00d300], 194: [3194, 0x7f0000], 197: [3195, 0xffffff], 199: [3196, 0xffffff],
+  435: [4698, 0xffff00],
+};
+const SPLIT_CHAT_COLOURS = { 91: [3008, 0x00ffff], 96: [3009, 0xffff00] };
+const COLOUR_SETTINGS = {
+  ...OPAQUE_CHAT_COLOURS, ...TRANSPARENT_CHAT_COLOURS, ...SPLIT_CHAT_COLOURS,
+  224: [3410, 0xff0000], 225: [3409, 0xffff00], 226: [3411, 901389], 227: [3412, 10461087],
+  485: [5235, 0xff0000], 486: [5236, 901389], 487: [5401, 3991270], 488: [5237, 10461087],
+};
+const varpsOf = (rows) => Object.values(rows).map(([varp]) => varp);
+// "Reset ... colours" rows and the colour varps each one clears.
+const COLOUR_RESETS = {
+  107: varpsOf(OPAQUE_CHAT_COLOURS), 108: varpsOf(TRANSPARENT_CHAT_COLOURS), 109: varpsOf(SPLIT_CHAT_COLOURS),
+  228: [3409, 3410, 3411, 3412], 489: [5235, 5236, 5401, 5237],
+};
+// The picker (colour_pallet) opens as an overlay in All Settings' popup layer, which script 4185
+// sizes it against. Its palette swatches and custom-colour buttons need op1 to be clickable;
+// a swatch or Ok sends the colour as a count reply, Cancel or close sends CANCEL_COLOUR.
+const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 9;
 const SETTINGS_COLOUR_INTERFACE = 288;
 const SETTINGS_COLOUR_SCRIPT = 4185;
+const SETTINGS_COLOUR_PALETTE = (SETTINGS_COLOUR_INTERFACE << 16) | 11;
+const SETTINGS_COLOUR_PALETTE_LAST = 152;
+const SETTINGS_COLOUR_CUSTOM = (SETTINGS_COLOUR_INTERFACE << 16) | 8;
+const SETTINGS_COLOUR_CUSTOM_LAST = 4;
+// settings_colour_modal_opened: 1 while the picker is open.
+const SETTINGS_COLOUR_MODAL_OPENED_VARBIT = 12284;
+const OVERLAY = 1;
 const CANCEL_COLOUR = 2147483647;
-const pendingQuestColours = new WeakMap();
+const pendingColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
@@ -164,6 +243,21 @@ const ALL_SETTINGS_VOLUME_VARPS = new Map([
   [31, 169], // sound effects
   [32, 872], // area sounds
 ]);
+// "Reset volume sliders to default" (a button row): every slider back to a new account's 100.
+const RESET_VOLUME_SETTING = 468;
+const DEFAULT_VOLUME = 100;
+// Interfaces > Minimenu options: "Minimenu spacing value" (a number row) and "Reset minimenu
+// spacing" (a button row) set the spacing the slider row (393, varbit 11523) keeps, then run
+// script 7460, which clamps it to 0-100 and applies it in the client as the slider does.
+// Ours: the prompt's wording (no capture of it).
+const MINIMENU_SPACING_SETTING = 393;
+const MINIMENU_SPACING_VALUE_SETTING = 394;
+const RESET_MINIMENU_SPACING_SETTING = 395;
+const MINIMENU_SPACING_SCRIPT = 7460;
+const MAX_MINIMENU_SPACING = 100;
+const MINIMENU_SPACING_PROMPT = "Enter the minimenu spacing (0-100):";
+const FLOATER_CHATBOX_VARBIT = 16075;
+const CHATBOX_BUSY_VARBIT = 12393;
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -172,8 +266,13 @@ const KEYBINDINGS_ESC_TOGGLE = (KEYBINDINGS_INTERFACE_ID << 16) | 103;
 // panel), one child per option (0 = None, 1..12 = F1..F12, 13 = Esc).
 const KEYBINDINGS_POPUP_CONTAINER = (KEYBINDINGS_INTERFACE_ID << 16) | 111;
 
-// "Esc closes current interface" toggle and the dropdown's active-row tracker.
+// "Esc closes current interface" toggle (All Settings row 57, on varp 1224) and the dropdown's
+// active-row tracker. It is saved as a keybind (keybind_4681), not in the settings values.
 const ESC_CLOSES_VARBIT = 4681;
+const ESC_CLOSES_SETTING = 57;
+const ESC_CLOSES_VARP = 1224;
+// "Restore default keybinds" (All Settings row 58, Controls), the panel's 121:104 button as a row.
+const RESTORE_KEYBINDS_SETTING = 58;
 const ACTIVE_KEYBIND_SLOT_VARBIT = 4690;
 
 // WidgetFlags.FLAG_TRANSMIT_OP1 - lets the client send a click to us.
@@ -184,23 +283,23 @@ const KEY_NONE = 0;
 const MAX_KEY_VALUE = 13;
 
 // One row per keybind in interface 121, in cache order (the client's CS2 984
-// binds each varbit to button child buttonChild). defaultKey mirrors the OSRS
-// defaults and seeds a fresh account.
+// binds each varbit to button child buttonChild). defaultKey is the key a new account starts
+// with, which Restore default keybinds puts back (Inventory on Esc, Logout unbound).
 const TAB_VARBIT_MAP = [
   { slot: 1, varbit: 4675, defaultKey: 1, buttonChild: 9 }, // Combat
   { slot: 2, varbit: 4676, defaultKey: 2, buttonChild: 16 }, // Stats
   { slot: 3, varbit: 4677, defaultKey: 3, buttonChild: 23 }, // Journal/Quests
-  { slot: 4, varbit: 4678, defaultKey: 4, buttonChild: 30 }, // Inventory
-  { slot: 5, varbit: 4679, defaultKey: 5, buttonChild: 37 }, // Worn equipment
-  { slot: 6, varbit: 4680, defaultKey: 6, buttonChild: 44 }, // Prayer
-  { slot: 7, varbit: 4682, defaultKey: 7, buttonChild: 51 }, // Magic
-  { slot: 8, varbit: 4684, defaultKey: 9, buttonChild: 58 }, // Friends
-  { slot: 9, varbit: 6517, defaultKey: 0, buttonChild: 65 }, // Account
-  { slot: 10, varbit: 4689, defaultKey: 10, buttonChild: 72 }, // Logout
-  { slot: 11, varbit: 4686, defaultKey: 11, buttonChild: 79 }, // Options (settings)
-  { slot: 12, varbit: 4687, defaultKey: 0, buttonChild: 86 }, // Options (secondary)
-  { slot: 13, varbit: 4683, defaultKey: 8, buttonChild: 93 }, // Clan chat
-  { slot: 14, varbit: 4688, defaultKey: 12, buttonChild: 100 }, // Music/Emotes
+  { slot: 4, varbit: 4678, defaultKey: 13, buttonChild: 30 }, // Inventory
+  { slot: 5, varbit: 4679, defaultKey: 4, buttonChild: 37 }, // Worn equipment
+  { slot: 6, varbit: 4680, defaultKey: 5, buttonChild: 44 }, // Prayer
+  { slot: 7, varbit: 4682, defaultKey: 6, buttonChild: 51 }, // Magic
+  { slot: 8, varbit: 4684, defaultKey: 8, buttonChild: 58 }, // Friends
+  { slot: 9, varbit: 6517, defaultKey: 9, buttonChild: 65 }, // Account
+  { slot: 10, varbit: 4689, defaultKey: 0, buttonChild: 72 }, // Logout
+  { slot: 11, varbit: 4686, defaultKey: 10, buttonChild: 79 }, // Options (settings)
+  { slot: 12, varbit: 4687, defaultKey: 11, buttonChild: 86 }, // Emotes
+  { slot: 13, varbit: 4683, defaultKey: 7, buttonChild: 93 }, // Clan chat
+  { slot: 14, varbit: 4688, defaultKey: 12, buttonChild: 100 }, // Music
 ];
 
 // The settings catalog, from the cache: enum 422 lists
@@ -218,6 +317,47 @@ const PARAM_SETTING_OPTIONS = 1091;
 const SETTING_TYPE_TOGGLE = 0;
 const SETTING_TYPE_DROPDOWN = 2;
 const SEARCH_VIEW = -1;
+
+// Row locks. A setting struct with param 1115 set can be locked, and param 1116 is the text a
+// locked row shows. The cache's settings scripts grey the row out while script 2520 says it is
+// locked (from vars the server sends); the server decides with ROW_UNLOCKS. A click on a
+// locked row, or a dropdown option chosen for one, says the row's text and changes nothing.
+const PARAM_SETTING_LOCKABLE = 1115;
+const PARAM_SETTING_LOCKED_TEXT = 1116;
+const DIARY_TIERS = ["easy", "medium", "hard", "elite"];
+
+/** Asks another plugin through a custom event; true when it answered `field` with true. */
+function answered(event, request, field) {
+  pluginApi?.emitCustomEvent(event, request);
+  return request[field] === true;
+}
+
+/** setting id -> whether the player has unlocked the row. Rows not listed are never locked here. */
+const ROW_UNLOCKS = new Map([
+  // Deep Wilderness lever default option: any tier of the Wilderness Diary.
+  [296, (player) => DIARY_TIERS.some((tier) => answered("diary:is-complete", { player, diary: "wilderness", tier, complete: false }, "complete"))],
+  // Disable Phantom Muspah messages: Secrets of the North. Ours: script 2520 has no case for this
+  // row, so the client never greys it out; the row's own locked text names the quest.
+  [302, (player) => answered("quest:is-complete", { player, key: "secrets_of_the_north", complete: false }, "complete")],
+  // Make-X barbarian potions: Barbarian Training's Herblore section (varbit 3761 brut_herb_potion = 3).
+  [373, (player) => answered("herblore:unlocked", { player, unlock: "barbarian_herblore", allowed: null }, "allowed")],
+]);
+
+/**
+ * Whether a row is locked for the player. When it is, the row's locked text is sent and the
+ * caller must leave the setting as it is. Every path that changes a setting from its row (a
+ * click, a dropdown option, a value the client transmits) goes through this first.
+ */
+function refuseLockedSetting(player, settingId) {
+  const lockedText = catalog().settings.get(settingId)?.lockedText;
+  const unlocked = ROW_UNLOCKS.get(settingId);
+  if (lockedText === undefined || !unlocked || unlocked(player)) return false;
+  player.sendMessage(lockedText);
+  // The client may already have flipped the var itself; send the value the row keeps.
+  const row = SETTINGS[settingId];
+  if (row && !row.options) sendSettingVar(player, varKey(row), getSettingVar(player, row));
+  return true;
+}
 
 // The keybind settings (ids 16..29, All Settings > Controls) and the varbit each drives
 // (the varbits are TAB_VARBIT_MAP's).
@@ -251,7 +391,10 @@ function catalog() {
       settings.set(Number(settingId), {
         category: categoryId,
         type: Number(params.get(PARAM_SETTING_TYPE) ?? SETTING_TYPE_TOGGLE),
-        optionCount: options === undefined ? 0 : CacheDefinitions.getEnumValues(Number(options)).size,
+        optionCount: options === undefined ? 0
+          : Number(options) === GAMEFRAME_LAYOUT_ENUM ? GAMEFRAME_LAYOUT_ROOTS.length
+          : CacheDefinitions.getEnumValues(Number(options)).size,
+        lockedText: Number(params.get(PARAM_SETTING_LOCKABLE)) === 1 ? params.get(PARAM_SETTING_LOCKED_TEXT) : undefined,
       });
     }
     byCategory.set(categoryId, rows);
@@ -296,6 +439,33 @@ function showCategory(player, category) {
 }
 
 const varKey = (row) => (row.varp !== undefined ? `varp:${row.varp}` : `varbit:${row.varbit}`);
+
+/**
+ * Rev 242 made "Hide quests in progress" (218) and "Hide completed quests" (219) the three-way
+ * "Show ..." dropdowns: 0 always first/last, 1 use the sorting setting, 2 hide. A saved rev 241 toggle
+ * (1 = hide) would now read as "use the sorting setting", so those two values are cleared once, as
+ * live 242 logins show them (0) for an account that hid completed quests on 241.
+ */
+function migrateQuestListShowSettings(player) {
+  if (player.getAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE) === true) return;
+  player.setAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, true);
+  const saved = savedSettings(player);
+  const keys = QUEST_LIST_SHOW_VARBITS.map((id) => `varbit:${id}`).filter((key) => Object.hasOwn(saved, key));
+  if (!keys.length) return;
+  const next = { ...saved };
+  for (const key of keys) delete next[key];
+  player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
+}
+
+function migrateGravestoneConfirmSetting(player) {
+  if (player.getAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE) === true) return;
+  player.setAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, true);
+  const saved = savedSettings(player);
+  if (!Object.hasOwn(saved, GRAVESTONE_CONFIRM_KEY)) return;
+  const next = { ...saved };
+  delete next[GRAVESTONE_CONFIRM_KEY];
+  player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, next);
+}
 
 function savedSettings(player) {
   const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
@@ -346,6 +516,7 @@ function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
   const setting = catalog().settings.get(settingId);
   if (setting?.type !== SETTING_TYPE_DROPDOWN || !Number.isInteger(option) || option < 0 || option >= setting.optionCount) return false;
+  if (refuseLockedSetting(player, settingId)) return true;
   const request = { player, settingId, option, handled: false };
   pluginApi?.emitCustomEvent("settings:option-chosen", request);
   if (request.handled) return true;
@@ -367,6 +538,8 @@ function chooseSettingOption(player, settingId, option) {
  * whose live default is not zero (`default` in settings.json) until the player chooses.
  */
 function restoreSettings({ player }) {
+  migrateQuestListShowSettings(player);
+  migrateGravestoneConfirmSetting(player);
   const saved = savedSettings(player);
   for (const [key, value] of Object.entries(saved)) {
     if (Number.isInteger(value)) setSettingVar(player, key, value);
@@ -374,6 +547,12 @@ function restoreSettings({ player }) {
   for (const row of Object.values(SETTINGS)) {
     if (row.default !== undefined && saved[varKey(row)] === undefined) sendSettingVar(player, varKey(row), row.default);
   }
+}
+
+/** Login: the client may start with the text hidden, so send the player's choice (shown by default). */
+function sendMouseoverText({ player }) {
+  const key = `varbit:${MOUSEOVER_TEXT_DISABLED_VARBIT}`;
+  sendSettingVar(player, key, savedSettings(player)[key] ?? 0);
 }
 
 /**
@@ -386,9 +565,10 @@ function clickSetting({ player, slot, argsData, scriptTrigger }) {
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
-  if (QUEST_COLOUR_SETTINGS[settingId] !== undefined) return openQuestColour(player, settingId);
-  if (settingId === 228) {
-    for (const id of QUEST_COLOUR_VARPS) setSettingVar(player, `varp:${id}`, 0);
+  if (refuseLockedSetting(player, settingId)) return true;
+  if (COLOUR_SETTINGS[settingId] !== undefined) return openColour(player, settingId);
+  if (COLOUR_RESETS[settingId] !== undefined) {
+    for (const id of COLOUR_RESETS[settingId]) setSettingVar(player, `varp:${id}`, 0);
     return true;
   }
   if (player.getAttribute("settings-view") === SEARCH_VIEW) {
@@ -467,12 +647,53 @@ function applyDefaultKeybindings(player) {
   setKeybind(player, ESC_CLOSES_VARBIT, 1);
 }
 
+/** Every key back to its default and saved, from the keybindings panel's button or its All Settings row. */
+function restoreDefaultKeybindings(player) {
+  applyDefaultKeybindings(player);
+  player.getPacketSender().sendMessage("Keybindings restored to default.");
+  return true;
+}
+
+function clickRestoreKeybinds(request) {
+  if (request.handled || request.settingId !== RESTORE_KEYBINDS_SETTING) return;
+  request.handled = restoreDefaultKeybindings(request.player);
+}
+
+/**
+ * Login. A key drives one tab, so when a key the player chose is also another tab's default (a save
+ * made before that default existed), the chosen one keeps it and the defaulted tab is left unbound.
+ */
 function syncPlayerKeybindings(player) {
+  const chosen = new Set(TAB_VARBIT_MAP
+    .filter((tab) => getKeybind(player, tab.varbit) !== tab.defaultKey)
+    .map((tab) => getKeybind(player, tab.varbit)));
   for (const tab of TAB_VARBIT_MAP) {
-    setKeybind(player, tab.varbit, getKeybind(player, tab.varbit));
+    const key = getKeybind(player, tab.varbit);
+    const taken = key !== KEY_NONE && key === tab.defaultKey && chosen.has(key);
+    setKeybind(player, tab.varbit, taken ? KEY_NONE : key);
   }
+  setKeybind(player, ESC_CLOSES_VARBIT, getEscCloses(player));
+}
+
+function getEscCloses(player) {
   const esc = player.getAttribute(keybindAttribute(ESC_CLOSES_VARBIT));
-  setKeybind(player, ESC_CLOSES_VARBIT, typeof esc === "number" ? esc : 1);
+  return typeof esc === "number" ? esc : 1;
+}
+
+/**
+ * "Esc closes the current interface" clicked, in All Settings (row 57) or the keybindings panel.
+ * The browser flips it itself and transmits varp 1224 first, which saved it already.
+ */
+function toggleEscCloses(player) {
+  if (refuseLockedSetting(player, ESC_CLOSES_SETTING)) return true;
+  if (SettingVarpTransmit.take(player, ESC_CLOSES_VARP, settingVarpTick()) !== undefined) return true;
+  setKeybind(player, ESC_CLOSES_VARBIT, getEscCloses(player) === 1 ? 0 : 1);
+  return true;
+}
+
+function clickEscCloses(request) {
+  if (request.handled || request.settingId !== ESC_CLOSES_SETTING) return;
+  request.handled = toggleEscCloses(request.player);
 }
 
 function getGameframeRoot(player) {
@@ -522,6 +743,43 @@ function sendGameframeLayout(player, root) {
   for (const packet of encodeGameframeFlags(root)) {
     player.getSession().sendClientPacket(packet);
   }
+  // The client moves the open mounts onto the new root, but live also reopens the orbs on
+  // its orbs pane, which re-runs their onLoad scripts that place the Activity Adviser and
+  // store orbs for this layout.
+  if (!pluginApi.core.dataOrbsHidden(player)) sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
+}
+
+/** "Game client layout" chosen in All Settings: the same switch as the side panel's dropdown. */
+function chooseGameClientLayout(request) {
+  if (request.handled || request.settingId !== GAME_CLIENT_LAYOUT_SETTING) return;
+  const root = selectGameframeOption(request.player, request.option);
+  if (root === undefined) return;
+  request.handled = true;
+  sendGameframeLayout(request.player, root);
+}
+
+/** Live closes the orbs while orbs_disabled is 1 and opens them when it goes back to 0. */
+function showDataOrbs(player) {
+  const sender = player.getPacketSender();
+  if (pluginApi.core.dataOrbsHidden(player)) sender.closeSubInterface(ORBS_PANE_UID);
+  else sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(getGameframeRoot(player)), 1);
+}
+
+function clickShowDataOrbs(request) {
+  if (request.handled || request.settingId !== SHOW_DATA_ORBS_SETTING) return;
+  request.handled = toggleSetting(request.player, SHOW_DATA_ORBS_SETTING);
+  if (request.handled) showDataOrbs(request.player);
+}
+
+/**
+ * Something that hid the orbs for a while (the Leagues tutorial) is done with them: the
+ * player's own choice comes back, and the orbs open or stay closed to match.
+ */
+function restoreDataOrbs({ player }) {
+  const row = SETTINGS[SHOW_DATA_ORBS_SETTING];
+  const key = varKey(row);
+  sendSettingVar(player, key, savedSettings(player)[key] ?? row.default ?? 0);
+  showDataOrbs(player);
 }
 
 function receiveGameframeLayout(event) {
@@ -533,7 +791,6 @@ function receiveGameframeLayout(event) {
   player.setAttribute(MOBILE_CLIENT_ATTRIBUTE, data.mobile ? true : null);
   const root = getGameframeRoot(player);
   sendGameframeLayout(player, root);
-  player.getPacketSender().sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function choosePlayerAttackOption({ player, slot }) {
@@ -567,24 +824,27 @@ function openQuestSettings({ player }) {
   return openAllSettings(player);
 }
 
-function openQuestColour(player, settingId) {
+function openColour(player, settingId) {
   const sender = player.getPacketSender();
-  const varp = QUEST_COLOUR_SETTINGS[settingId];
-  const defaults = {224:0xff0000,225:0xffff00,226:901389,227:10461087};
+  const [varp, defaultColour] = COLOUR_SETTINGS[settingId];
   const stored = sender.getVarp(varp);
-  sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, 0);
-  sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaults[settingId]);
+  sender.sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 1);
+  sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, OVERLAY);
+  sender.sendInterfaceFlagsRange(SETTINGS_COLOUR_PALETTE, 0, SETTINGS_COLOUR_PALETTE_LAST, TRANSMIT_OP1);
+  sender.sendInterfaceFlagsRange(SETTINGS_COLOUR_CUSTOM, 0, SETTINGS_COLOUR_CUSTOM_LAST, TRANSMIT_OP1);
+  sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaultColour);
   const action = { acceptsZero: true, acceptsNegative: true, execute(value) {
-    if (pendingQuestColours.get(player) !== action) return;
+    if (pendingColours.get(player) !== action) return;
     if (player.getEnteredAmountAction && player.getEnteredAmountAction() !== action) return;
-    pendingQuestColours.delete(player);
+    pendingColours.delete(player);
+    sender.sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 0);
     sender.closeSubInterface(SETTINGS_COLOUR_MODAL_UID);
     if (value === CANCEL_COLOUR) return;
     if (!Number.isInteger(value) || value < -1 || value > 0xffffff) return;
     setSettingVar(player, `varp:${varp}`, value + 1);
     selectSetting(player, 0);
   } };
-  pendingQuestColours.set(player, action);
+  pendingColours.set(player, action);
   player.setEnteredAmountAction(action);
   return true;
 }
@@ -601,9 +861,10 @@ function startSettingsSearch({ player }) {
 /** All Settings closed, by any route: its search lets go of the keyboard and chat takes it back. */
 function endSettingsSearch({ player, interfaceId }) {
   if (interfaceId === ALL_SETTINGS_INTERFACE_ID || interfaceId === SETTINGS_COLOUR_INTERFACE) {
-    const action = pendingQuestColours.get(player);
-    pendingQuestColours.delete(player);
+    const action = pendingColours.get(player);
+    pendingColours.delete(player);
     if (action && player.getEnteredAmountAction?.() === action) player.setEnteredAmountAction(null);
+    if (action) player.getPacketSender().sendVarbit(SETTINGS_COLOUR_MODAL_OPENED_VARBIT, 0);
   }
   if (interfaceId !== ALL_SETTINGS_INTERFACE_ID) return;
   player.getPacketSender()
@@ -653,6 +914,54 @@ function releaseAllSettingsVolume(player, argsData) {
   return true;
 }
 
+/** The volume reset row clicked: each slider's varp set and sent as if the player had dragged it. */
+function resetVolumeSliders(request) {
+  if (request.handled || request.settingId !== RESET_VOLUME_SETTING) return;
+  request.handled = true;
+  const sender = request.player.getPacketSender();
+  for (const varpId of ALL_SETTINGS_VOLUME_VARPS.values()) {
+    request.player.applyAudioSettingFromClient?.(varpId, DEFAULT_VOLUME);
+    sender.sendConfig(varpId, DEFAULT_VOLUME);
+  }
+}
+
+/** The minimenu spacing set, saved with its slider row and applied in the client. */
+function setMinimenuSpacing(player, value) {
+  const spacing = Math.max(0, Math.min(MAX_MINIMENU_SPACING, Math.trunc(Number(value) || 0)));
+  setSettingVar(player, varKey(SETTINGS[MINIMENU_SPACING_SETTING]), spacing);
+  player.getPacketSender().sendClientScript(MINIMENU_SPACING_SCRIPT, spacing);
+}
+
+/** "Reset minimenu spacing" clicked: no spacing, as a new account starts. */
+function resetMinimenuSpacing(request) {
+  if (request.handled || request.settingId !== RESET_MINIMENU_SPACING_SETTING) return;
+  request.handled = true;
+  setMinimenuSpacing(request.player, 0);
+}
+
+/** "Minimenu spacing value" clicked: the spacing is asked for as a number. */
+function askMinimenuSpacing(request) {
+  if (request.handled || request.settingId !== MINIMENU_SPACING_VALUE_SETTING) return;
+  request.handled = true;
+  const { player } = request;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(FLOATER_CHATBOX_VARBIT, 1);
+  sender.sendVarbit(CHATBOX_BUSY_VARBIT, 1);
+  const closed = () => {
+    sender.sendVarbit(FLOATER_CHATBOX_VARBIT, 0);
+    sender.sendVarbit(CHATBOX_BUSY_VARBIT, 0);
+  };
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute: (amount) => {
+      setMinimenuSpacing(player, amount);
+      closed();
+    },
+    cancel: closed,
+  });
+  sender.sendEnterAmountPrompt(MINIMENU_SPACING_PROMPT);
+}
+
 function enableVolumeSliders(player) {
   for (const slider of VOLUME_SLIDER_VARPS.keys()) player.getPacketSender?.()?.sendInterfaceFlagsRange?.(slider, -1, -1, TRANSMIT_TRIGGER);
 }
@@ -697,12 +1006,19 @@ function toggleMute({ player, buttonId }) {
 let xpDropsVarps = null;
 
 function xpDropsSetupVarps() {
-  xpDropsVarps ??= new Set([...XPDROPS_SETUP_DROPDOWNS.values()].map((varbit) => CacheDefinitions.getVarbit(varbit).baseVar));
+  xpDropsVarps ??= new Set([
+    XPDROPS_SETUP_STATE_VARP,
+    ...[...XPDROPS_SETUP_DROPDOWNS.values()].map((varbit) => CacheDefinitions.getVarbit(varbit).baseVar),
+    ...Array.from({ length: 48 }, (_, index) => index + 1228),
+    4964,
+    4965,
+  ]);
   return xpDropsVarps;
 }
 
 function saveXpDropsSetup(player, varpId, value) {
-  player.setAttribute(XPDROPS_SETUP_ATTRIBUTE, { ...(player.getAttribute(XPDROPS_SETUP_ATTRIBUTE) ?? {}), [varpId]: value | 0 });
+  const savedValue = varpId === XPDROPS_SETUP_STATE_VARP ? value & XPDROPS_SETUP_STATE_MASK : value | 0;
+  player.setAttribute(XPDROPS_SETUP_ATTRIBUTE, { ...(player.getAttribute(XPDROPS_SETUP_ATTRIBUTE) ?? {}), [varpId]: savedValue });
 }
 
 function restoreXpDropsSetup({ player }) {
@@ -710,11 +1026,16 @@ function restoreXpDropsSetup({ player }) {
   if (!saved || typeof saved !== "object") return;
   const varps = xpDropsSetupVarps();
   for (const [varpId, value] of Object.entries(saved)) {
-    if (varps.has(Number(varpId)) && Number.isInteger(value)) player.getPacketSender().sendConfig(Number(varpId), value);
+    const id = Number(varpId);
+    if (!varps.has(id) || !Number.isInteger(value)) continue;
+    const restored = id === XPDROPS_SETUP_STATE_VARP
+      ? (player.getPacketSender().getVarp(id) & ~XPDROPS_SETUP_STATE_MASK) | (value & XPDROPS_SETUP_STATE_MASK)
+      : value;
+    player.getPacketSender().sendConfig(id, restored);
   }
 }
 
-/** The browser applies the setup itself and transmits the varp; keep it for the next login. */
+/** The cache applies setup changes and transmits the varp; keep them for the next login. */
 function transmitXpDropsSetup(transmission) {
   const { player, varpId, value } = transmission;
   if (!xpDropsSetupVarps().has(varpId)) return;
@@ -735,33 +1056,135 @@ function chooseXpDropsSetupRow({ player, buttonId, slot }) {
   return true;
 }
 
+function xpDropsTrackerVarps(skillId) {
+  if (skillId === -1) return [XPDROPS_TRACKER_TOTAL_START_VARP, XPDROPS_TRACKER_TOTAL_END_VARP];
+  const start = XPDROPS_TRACKER_START_VARPS[skillId];
+  if (!Number.isInteger(start)) return null;
+  return [start, skillId === 23 ? 4965 : start + XPDROPS_TRACKER_END_OFFSET];
+}
+
+function setXpDropsTrackerValue(player, varpId, value) {
+  const maxXp = varpId === XPDROPS_TRACKER_TOTAL_START_VARP || varpId === XPDROPS_TRACKER_TOTAL_END_VARP
+    ? XPDROPS_TRACKER_TOTAL_MAX_XP
+    : pluginApi.core.SkillManager.MAX_EXPERIENCE;
+  const bounded = Math.max(0, Math.min(maxXp, Math.trunc(Number(value) || 0)));
+  player.getPacketSender().sendConfig(varpId, bounded);
+  saveXpDropsSetup(player, varpId, bounded);
+}
+
+function currentXpForTracker(player, skillId) {
+  const manager = player.getSkillManager();
+  if (skillId === -1) {
+    return pluginApi.core.Skill.values().reduce((total, skill) => total + manager.getExperience(skill), 0);
+  }
+  const skill = pluginApi.core.Skill.values().find((entry) => entry.getClientId() === skillId);
+  return skill ? manager.getExperience(skill) : null;
+}
+
+/** The native cache picker sends IF_BUTTONX on 137:18, with its dynamic row in `slot`. */
+function chooseXpDropsSetupSkill(event) {
+  const { player, slot } = event;
+  if (event.buttonId !== XPDROPS_SKILL_PICKER_BUTTON || event.action !== XPDROPS_SKILL_PICKER_ACTION) return false;
+  if (!Number.isInteger(slot) || slot < 0 || slot > XPDROPS_SKILL_PICKER_TOTAL_SLOT) return false;
+
+  const sender = player.getPacketSender();
+  sender.sendVarbit(XPDROPS_SETUP_SKILL_VARBIT, slot + 1);
+  saveXpDropsSetup(player, XPDROPS_SETUP_STATE_VARP, sender.getVarp(XPDROPS_SETUP_STATE_VARP));
+  return true;
+}
+
+/** Native setup-menu option: ask for XP or copy the selected skill's current XP into its goal. */
+function xpDropsTrackerFieldClick(event) {
+  const field = XPDROPS_TRACKER_FIELDS.get(event.buttonId);
+  if (!field || (event.action !== XPDROPS_SET_XP_ACTION && event.action !== XPDROPS_SET_CURRENT_XP_ACTION)) return false;
+  if (event.action === XPDROPS_SET_CURRENT_XP_ACTION && (field !== "start" || event.childId === 42)) return false;
+
+  const selectedRow = event.player.getPacketSender().getVarbit(XPDROPS_SETUP_SKILL_VARBIT);
+  const selectedSkill = selectedRow === XPDROPS_SKILL_PICKER_TOTAL_SLOT + 1
+    ? -1
+    : CacheDefinitions.getEnumValues(XPDROPS_SKILL_ENUM).get(selectedRow);
+  const varps = xpDropsTrackerVarps(selectedSkill);
+  if (!varps) return false;
+  const targetVarp = field === "start" ? varps[0] : varps[1];
+  if (event.action === XPDROPS_SET_CURRENT_XP_ACTION) {
+    const experience = currentXpForTracker(event.player, selectedSkill);
+    if (!Number.isInteger(experience)) return false;
+    setXpDropsTrackerValue(event.player, targetVarp, experience);
+    return true;
+  }
+
+  const { player } = event;
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute: (amount) => setXpDropsTrackerValue(player, targetVarp, amount),
+  });
+  player.getPacketSender().sendEnterAmountPrompt("Enter the XP value:");
+  return true;
+}
+
 function settingVarpTick() {
   return pluginApi?.core?.World?.getProcessCycle?.() ?? 0;
 }
 
-/** The client's local setting change already arrived as a whole-varp transmission. */
-function rememberSettingVarpTransmit(transmission) {
-  if (transmission.varpId !== COLLECTION_LOG_NOTIFY_VARP || !transmission.player) return;
-  SettingVarpTransmit.remember(transmission.player, transmission.varpId, transmission.value, settingVarpTick());
+/** setting id -> its row, var key and bits, for the settings.json rows on each transmitted varp. */
+let transmittedRows = null;
+
+function transmittedSettingRows(varpId) {
+  if (!transmittedRows) {
+    transmittedRows = new Map([...TRANSMITTED_SETTING_VARPS].map((varp) => [varp, []]));
+    for (const [settingId, row] of Object.entries(SETTINGS)) {
+      if (row.varp !== undefined || row.varbit === undefined || row.options) continue;
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      transmittedRows.get(baseVar)?.push({ settingId: Number(settingId), row, key: varKey(row), startBit, mask: 2 ** (endBit - startBit + 1) - 1 });
+    }
+  }
+  return transmittedRows.get(varpId) ?? [];
+}
+
+/**
+ * The browser changed a row's varbit itself and sent the whole varp: keep each of our rows' bits
+ * that changed, as a click on the row would. A locked row keeps its value.
+ */
+function saveTransmittedSettings(transmission) {
+  const { player, varpId, value } = transmission;
+  if (!player || !TRANSMITTED_SETTING_VARPS.has(varpId)) return;
+  const saved = savedSettings(player);
+  let changed = false;
+  for (const { settingId, row, key, startBit, mask } of transmittedSettingRows(varpId)) {
+    const next = (value >>> startBit) & mask;
+    if (next === (saved[key] ?? row.default ?? 0)) continue;
+    // Only a toggle's click follows its transmission (a slider or dropdown change has none to stand for).
+    if (catalog().settings.get(settingId)?.type === SETTING_TYPE_TOGGLE) changed = true;
+    if (!refuseLockedSetting(player, settingId)) setSettingVar(player, key, next);
+  }
+  if (varpId === ESC_CLOSES_VARP) {
+    const { startBit } = CacheDefinitions.getVarbit(ESC_CLOSES_VARBIT);
+    const esc = (value >>> startBit) & 1;
+    if (esc !== getEscCloses(player)) {
+      changed = true;
+      if (!refuseLockedSetting(player, ESC_CLOSES_SETTING)) setKeybind(player, ESC_CLOSES_VARBIT, esc);
+    }
+  }
+  // Only a change of one of these rows stands for the row click that follows it.
+  if (changed) SettingVarpTransmit.remember(player, varpId, value, settingVarpTick());
+  transmission.handled = true;
 }
 
 /** One listener for both the XP drops varps and the setting varps the client transmits. */
 function handleSettingsVarpTransmit(transmission) {
-  rememberSettingVarpTransmit(transmission);
+  saveTransmittedSettings(transmission);
   transmitXpDropsSetup(transmission);
 }
 
 /**
- * One row click sends both the local varp change and the row click. When the varp already carries
- * the new value, save it instead of toggling it a second time.
+ * One row click sends both the local varp change and the row click. When the varp already carried
+ * the new value, it was saved then; don't toggle it a second time.
  */
 function consumeTransmittedSettingVarp(player, row) {
   if (row.varp !== undefined || row.varbit === undefined) return false;
   const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
-  if (baseVar !== COLLECTION_LOG_NOTIFY_VARP) return false;
-  if (SettingVarpTransmit.take(player, baseVar, settingVarpTick()) === undefined) return false;
-  setSettingVar(player, varKey(row), getSettingVar(player, row));
-  return true;
+  if (!TRANSMITTED_SETTING_VARPS.has(baseVar)) return false;
+  return SettingVarpTransmit.take(player, baseVar, settingVarpTick()) !== undefined;
 }
 
 /** The official client transmits a row click only once the server enables it, as live does. */
@@ -798,11 +1221,13 @@ function xpDropsOrbIds(api) {
 
 module.exports = {
   name: "Settings",
+  description: "All Settings browser, keybindings panel and game client layout dropdown, saving the chosen settings and XP drop options per player.",
   applyDefaultKeybindings,
   syncPlayerKeybindings,
   openAllSettings,
   openKeybindings,
   keybindVarbitForRow,
+  refuseLockedSetting,
   register(api) {
     api.persistAttribute(XPDROPS_ENABLED_ATTRIBUTE);
     api.onPlayerLogin(syncXpDrops);
@@ -810,6 +1235,8 @@ module.exports = {
     api.onPlayerLogin(restoreXpDropsSetup);
     api.onCustomEvent("player:varp-transmit", handleSettingsVarpTransmit);
     api.onInterfaceActionButton([...XPDROPS_SETUP_DROPDOWNS.keys()], chooseXpDropsSetupRow);
+    api.onInterfaceActionClick(chooseXpDropsSetupSkill);
+    api.onInterfaceActionClick(xpDropsTrackerFieldClick);
     api.onInterfaceActionButton([...VOLUME_SLIDER_VARPS.keys()], releaseVolumeSlider);
     api.onInterfaceActionButton([...VOLUME_MUTE_BUTTONS.keys()], toggleMute);
     api.onPlayerLogin(enableVolumeSlidersLater);
@@ -830,13 +1257,24 @@ module.exports = {
 
     pluginApi = api;
     api.persistAttribute(SETTINGS_VALUES_ATTRIBUTE);
+    api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
+    api.persistAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
+    api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
     api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onCustomEvent("settings:set", setSettingValue);
+    api.onCustomEvent("settings:setting-clicked", resetVolumeSliders);
+    api.onCustomEvent("settings:setting-clicked", resetMinimenuSpacing);
+    api.onCustomEvent("settings:setting-clicked", askMinimenuSpacing);
+    api.onCustomEvent("settings:setting-clicked", clickEscCloses);
+    api.onCustomEvent("settings:setting-clicked", clickRestoreKeybinds);
+    api.onCustomEvent("settings:setting-clicked", clickShowDataOrbs);
+    api.onCustomEvent("settings:option-chosen", chooseGameClientLayout);
+    api.onCustomEvent("settings:restore-data-orbs", restoreDataOrbs);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);
@@ -868,17 +1306,9 @@ module.exports = {
       return applyKeybind(player, varbit, slot);
     });
 
-    api.onInterfaceActionButton(KEYBINDINGS_ESC_TOGGLE, ({ player }) => {
-      const current = getKeybind(player, ESC_CLOSES_VARBIT);
-      setKeybind(player, ESC_CLOSES_VARBIT, current === 1 ? 0 : 1);
-      return true;
-    });
+    api.onInterfaceActionButton(KEYBINDINGS_ESC_TOGGLE, ({ player }) => toggleEscCloses(player));
 
-    api.onInterfaceActionButton(KEYBINDINGS_RESTORE_DEFAULTS, ({ player }) => {
-      applyDefaultKeybindings(player);
-      player.getPacketSender().sendMessage("Keybindings restored to default.");
-      return true;
-    });
+    api.onInterfaceActionButton(KEYBINDINGS_RESTORE_DEFAULTS, ({ player }) => restoreDefaultKeybindings(player));
 
     api.persistAttribute(CLIENT_LAYOUT_ATTRIBUTE, DEFAULT_GAMEFRAME_ROOT);
     api.persistAttribute(CLIENT_LAYOUT_317_ATTRIBUTE, false);
@@ -892,7 +1322,6 @@ module.exports = {
       syncPlayerKeybindings(player);
       if (worldGameframeOption !== undefined) selectGameframeOption(player, worldGameframeOption);
       syncGameframeVarbit(player);
-      player.getPacketSender().sendVarbit(MOUSEOVER_TEXT_DISABLED_VARBIT, 0);
     });
 
     api.registerCommand("keybinds", ({ player }) => openKeybindings(player), undefined, "Open keybindings");

@@ -256,8 +256,8 @@ test('native Yarlo partial-removal dialogue groups the remaining furniture with 
   const expected = [
     "Ah, young man, how's the redecoration coming on?",
     "I've been removing the old furniture.",
-    'You still need to remove: - A broken stool in the kitchen - A broken stool in the bedroom - A broken chair in the bedroom',
-    '- A broken table in the kitchen - A broken table in the bedroom - The rotten carpet',
+    'You still need to remove:<br>- A broken stool in the kitchen<br>- A broken stool in the bedroom<br>- A broken chair in the bedroom',
+    '- A broken table in the kitchen<br>- A broken table in the bedroom<br>- The rotten carpet',
   ];
   for (let visit = 0; visit < 2; visit++) {
     fixture.talk();
@@ -280,7 +280,8 @@ test('native Yarlo lists just the final furniture and cancellation cannot advanc
   assert.deepEqual(await fixture.read(), [
     "Ah, young man, how's the redecoration coming on?",
     "I've been removing the old furniture.",
-    'You still need to remove: - The old campbed - The rotten carpet',
+    // rsprox 226/01702.txt:27405 sets the box text with <br> between the rows.
+    'You still need to remove:<br>- The old campbed<br>- The rotten carpet',
   ]);
 });
 
@@ -307,7 +308,7 @@ test('native Yarlo advances from all-removed furniture only after the briefing f
   assert.deepEqual(fixture.player.getAttribute('daddys-home:furniture'), [2, 2, 2, 2, 2, 2, 2]);
 });
 
-test('Marlo starts the miniquest on the Wiki dialogue route', () => {
+test('Marlo starts the quest on the Wiki dialogue route', () => {
   const player = createPlayer();
   const event = talkTo(player, api.core.NpcIdentifiers.MARLO);
   assert.equal(event.handled, true);
@@ -319,7 +320,7 @@ test('Marlo starts the miniquest on the Wiki dialogue route', () => {
   runOption(player, 3); // Tell me where he lives...
   runAction(player);
   assert.equal(quest.getStage(player), 1);
-  assert.match(player.messages.at(-1), /started a new miniquest/);
+  assert.match(player.messages.at(-1), /started a new quest/);
 });
 
 test('removing all seven furnishings sets the stage and the transform bits', () => {
@@ -550,6 +551,26 @@ test('login resends every furniture bit from the saved state', () => {
     [10563, 10564, 10565, 10566, 10567, 10568, 10569].map((id) => player.varbits.get(id)),
     [2, 3, 2, 3, 2, 2, 3],
   );
+});
+
+test('rev 242 quest point: credited once to an earlier completion, never on top of a new one', () => {
+  const login = (player) => { for (const handler of handlers.login) handler({ player }); };
+  const veteran = createPlayer();
+  quest.setStage(veteran, quest.completionValue);
+  veteran.setAttribute('quest.points', 40);
+  login(veteran);
+  login(veteran);
+  assert.equal(veteran.getAttribute('quest.points'), 41, 'the miniquest completion gains its point once');
+
+  const newcomer = createPlayer();
+  newcomer.setAttribute('quest.points', 40);
+  login(newcomer);
+  quest.setStage(newcomer, 0);
+  assert.equal(quest.questPoints, 1);
+  newcomer.setAttribute('quest.points', 41); // what complete() awards
+  quest.setStage(newcomer, quest.completionValue);
+  login(newcomer);
+  assert.equal(newcomer.getAttribute('quest.points'), 41, 'a completion after the first login is not credited again');
 });
 
 test('a player who already owns a house is paid 1,000 coins', () => {

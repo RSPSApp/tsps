@@ -48,7 +48,8 @@ const state = {
 };
 const present = new Set();
 const shown = new WeakMap();
-const champions = new WeakSet();
+/** Champion -> the process cycle their skull goes. The skull is its own: it never touches the real skull timer. */
+const champions = new WeakMap();
 /** The target state of the toggle prompt the player is looking at (true = enable). */
 const pendingXpToggle = new WeakMap();
 
@@ -148,9 +149,10 @@ function endGame(winner) {
   state.champion = winner.getDisplayName();
   api.emitCustomEvent("fight-pits:champion", { player: winner });
   if (state.defeatedLevels > 0) winner.getInventory().adds(Items.TOKKUL, state.defeatedLevels);
-  champions.add(winner);
-  winner.setSkullTimer(CHAMPION_SKULL_TICKS);
-  winner.setSkullIconOverride(FIGHT_PIT_SKULL_ICON);
+  // Wiki (Skull (status)): the champion's skull "is purely cosmetic and has no effect on gameplay or items kept on
+  // death", so it is drawn on its own and never sets (or, going, clears) a real PvP skull.
+  champions.set(winner, core.World.getProcessCycle() + CHAMPION_SKULL_TICKS);
+  winner.setSkullIconOverride(FIGHT_PIT_SKULL_ICON, true);
 }
 
 function syncOverlay(player) {
@@ -187,6 +189,7 @@ function tick() {
 // somebody is in it.
 function processPits({ player }) {
   const cycle = core.World.getProcessCycle();
+  if (champions.has(player) && cycle >= champions.get(player)) dropChampionSkull({ player });
   if (!present.has(player) || state.lastCycle === cycle) return;
   state.lastCycle = cycle;
   tick();
@@ -290,7 +293,6 @@ function blockFightPitXp(event) {
 function dropChampionSkull({ player }) {
   if (!champions.has(player)) return;
   champions.delete(player);
-  player.setSkullTimer(0);
   player.setSkullIconOverride(null);
 }
 
@@ -327,10 +329,11 @@ function allowBountyHunterWeapons(event) {
 
 module.exports = {
   name: "TzhaarFightPits",
+  description: "Adds the TzHaar Fight Pits: a waiting room, player-versus-player rounds against a champion, spawning monsters, gas and an XP toggle.",
   members: true,
   _test: {
     enterArena, leaveArena, ATTACK_OPTION_SLOT, endGame, dropChampionSkull,
-    championTeleports, championChangesGear, championPrays, championHitByMonster,
+    championTeleports, championChangesGear, championPrays, championHitByMonster, processPits,
     fightPitXpEnabled, noteXpPrompt, chooseXpToggle, blockFightPitXp, XP_DISABLED_ATTRIBUTE,
     isChampion: (player) => champions.has(player),
   },

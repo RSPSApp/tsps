@@ -1,5 +1,15 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
-  "4": {},
-  "5": {}
+  "4": {
+    "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
+    "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"}
+  },
+  "5": {
+    "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
+    "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"}
+  },
+  "6": {
+    "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
+    "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"}
+  }
 }

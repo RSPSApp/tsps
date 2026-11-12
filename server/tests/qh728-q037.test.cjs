@@ -59,13 +59,21 @@ function setup() {
   const hooks = {
     variants: [], conditions: [], custom: new Map(), login: [], logout: [], death: [],
     npcInteractions: [], npcActions: new Map(), objectActions: new Map(), itemActions: [],
-    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [], areas: [], playerProcess: [],
+    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [], zoneExits: [], areas: [], playerProcess: [],
   };
   const spawned = [], removed = [], messages = [], xp = [], varbits = new Map(), drops = [];
+  const tasks = [], camera = [];
+  const movement = {
+    blocked: false,
+    reset() { return this; },
+    isMovementBlocked() { return this.blocked; },
+    setBlockMovement(value) { this.blocked = value; return this; },
+  };
   const core = {
     ...realCore,
     Misc: { ...realCore.Misc, randomInclusive: () => 1 },
     Item: realCore.Item,
+    TaskManager: { submit(task) { tasks.push(task); } },
   };
   const api = new Proxy({
     core,
@@ -89,6 +97,7 @@ function setup() {
     onNpcDeath(fn) { hooks.npcDeaths.push(fn); },
     registerArea(area) { hooks.areas.push(area); },
     onZoneEnter(zone, fn) { hooks.zones.push({ zone, fn }); },
+    onZoneExit(zone, fn) { hooks.zoneExits.push({ zone, fn }); },
     onPlayerProcess(fn) { hooks.playerProcess.push(fn); },
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onPlayerLogout(fn) { hooks.logout.push(fn); },
@@ -135,6 +144,8 @@ function setup() {
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     getVarbit(id) { return varbits.get(id) ?? 0; },
     sendConfig() { return sender; },
+    sendCameraMoveTo(...args) { camera.push(args); return sender; },
+    sendCameraReset() { camera.push("reset"); return sender; },
     sendJingle() { return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const inventoryApi = {
@@ -174,6 +185,7 @@ function setup() {
     getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues() {}, getCurrent: () => null, reset() {}, isActive: () => false, advance() {} }),
     getLocation: () => location,
+    getMovementQueue: () => movement,
     moveTo: (value) => { location = value; },
     sendMessage: (text) => messages.push(text),
     getUsername: () => 'qh728-q037',
@@ -260,7 +272,7 @@ function setup() {
   const login = () => { for (const fn of hooks.login) fn({ player }); };
   return {
     core: realCore, player, quest, attrs, inventory, slots, equipment, messages, xp, varbits,
-    api, spawned, removed, drops, hooks, variant, condition, choice, action, conditionEvent, hook,
+    api, spawned, removed, drops, hooks, tasks, camera, movement, variant, condition, choice, action, conditionEvent, hook,
     npcEvent, npcAction, objectAction, itemAction, itemOnItem, itemOnObject, npcDeath, zoneEnter, login,
     fire,
     setLocation(x, y, z = 0) { location = new realCore.Location(x, y, z); },
@@ -287,18 +299,20 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   // Start and the five-minute wait; the agent time advance is the registered hook.
   h.choice(MARTIN, 'Ask about the quest.');
   assert.equal(h.quest.getStage(h.player), 5);
-  assert.equal(h.quest.isStarted(h.player), false, 'cache start threshold is 10');
+  assert.equal(h.quest.isStarted(h.player), false, 'the cache unstarted state is inclusive up to 10');
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-before-5-minutes-have-passed');
   h.fire('agent:advance-time', { ms: 6 * 60 * 1000, handledBy: [] });
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-after-5-minutes-have-passed');
   h.choice(MARTIN, 'Ask about the quest.');
   assert.equal(h.quest.getStage(h.player), 10);
-  assert.equal(h.quest.isStarted(h.player), true);
+  // Ready to accept is still unstarted: the cache's unstartedstate (10) is inclusive, and the start hook sets 20 (d1a769ed8).
+  assert.equal(h.quest.isStarted(h.player), false);
 
   // Refusing the offer keeps the ready-to-accept copy so the start hook is reachable again.
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin-after-5-minutes-have-passed');
   h.hook(MARTIN, 'quest:fairytale-ii-cure-a-queen:start');
   assert.equal(h.quest.getStage(h.player), 20);
+  assert.equal(h.quest.isStarted(h.player), true, 'accepting starts the quest');
   assert.equal(h.varbits.get(2326), 20);
 
   // Search the right potion shelf: the certificate is added and the condition is one-shot.
@@ -418,19 +432,23 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.itemOnItem(I.PESTLE_AND_MORTAR, I.GORAK_CLAWS);
   assert.equal(h.inventory.get(I.GORAK_CLAW_POWDER), 1);
   h.itemOnItem(I.GORAK_CLAW_POWDER, I.MAGIC_ESSENCE_UNF_);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_), 1);
+  // Wiki (Magic essence): Magic essence(3), 130 Herblore XP.
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_), 1);
+  assert.deepEqual(h.xp.at(-1), [h.core.Skill.HERBLORE.getIndex(), 130]);
+  h.xp.length = 0;
   assert.equal(h.quest.getStage(h.player), 73);
 
   // Use the potion on the sleeping queen multi loc, then the imported reward/complete nodes.
   h.setLocation(2354, 4455, 0);
-  h.itemOnObject(I.MAGIC_ESSENCE_4_, 16316);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_) ?? 0, 0);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_), 1);
+  h.itemOnObject(I.MAGIC_ESSENCE_3_, 16316);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_) ?? 0, 0);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_2_), 1);
   assert.equal(h.quest.getStage(h.player), 75);
   assert.equal(h.varbits.get(2326), 75);
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FAIRY_QUEEN_2));
   h.action('SuXalx', N.FAIRY_QUEEN_2, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
   h.action('Vca-Ck', N.FAIRY_QUEEN_2);
   assert.equal(h.quest.getStage(h.player), 90);
   assert.equal(h.quest.isComplete(h.player), true);
@@ -441,7 +459,7 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   ]);
   h.action('Vca-Ck', N.FAIRY_QUEEN_2);
   assert.equal(h.xp.length, 2, 'repeat completion does not award again');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
 
   // Login replay keeps the completion wire and does not duplicate the reward.
   h.varbits.set(2326, 0);
@@ -470,12 +488,13 @@ test('full-bag reward branch stays pending until a slot is free', () => {
   assert.equal(h.condition('-LSx7-', QUEEN), true);
   assert.equal(h.condition('e2I60y', QUEEN), false);
   h.action('SuXalx', QUEEN, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP) ?? 0, 0, 'a stale receipt cannot grant into a full bag');
+  // Wiki (Antique lamp (A Tail of Two Cats)): the Fairy Queen gives that quest's lamp, 6543.
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2) ?? 0, 0, 'a stale receipt cannot grant into a full bag');
   h.setFull(false);
   assert.equal(h.condition('-LSx7-', QUEEN), false);
   assert.equal(h.condition('e2I60y', QUEEN), true);
   h.action('SuXalx', QUEEN, 'message');
-  assert.equal(h.inventory.get(I.ANTIQUE_LAMP), 1);
+  assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
   h.action('Vca-Ck', QUEEN);
   assert.equal(h.quest.getStage(h.player), 90);
   assert.equal(h.quest.isComplete(h.player), true);
@@ -568,4 +587,34 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   } finally {
     conditionHooks.length = conditionCount;
   }
+});
+
+test('the first room entry owns the pan until completion and retries after an exit', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 20);
+  h.login();
+  assert.equal(h.varbits.get(2339), 0);
+  h.setLocation(2388, 4469);
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 0, 'the approach corridor does not trigger the pan');
+
+  h.setLocation(2388, 4470);
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 1);
+  assert.equal(h.movement.blocked, true);
+  h.hooks.zoneExits[0].fn({ player: h.player });
+  assert.equal(h.camera.at(-1), 'reset');
+  assert.equal(h.movement.blocked, false);
+  assert.equal(h.varbits.get(2339), 0);
+
+  h.zoneEnter();
+  assert.equal(h.tasks.length, 2);
+  for (let tick = 0; tick < 9; tick++) h.tasks[1].execute();
+  assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.camera.at(-1), 'reset');
+  assert.equal(h.movement.blocked, false);
+  h.login();
+  h.zoneEnter();
+  assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.tasks.length, 2, 'the completed pan does not replay');
 });

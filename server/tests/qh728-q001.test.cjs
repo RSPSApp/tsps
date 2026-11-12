@@ -337,11 +337,11 @@ test('Animal Magnetism runs every mandatory leg from a fresh stage 0 to completi
     const choice = (npcId, option) => PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId, option, handled: false });
     const variant = (npcId) => PluginManager.emitNpcDialogueVariant({ player, npcId });
     const treeEvent = () => {
-      const npc = { getId: () => N.UNDEAD_TREE, getContentId: () => N.UNDEAD_TREE };
+      const npc = { getId: () => N.COL_00FFFF_UNDEAD_TREE_COL, getContentId: () => N.COL_00FFFF_UNDEAD_TREE_COL };
       return {
         player,
         npc,
-        npcId: N.UNDEAD_TREE,
+        npcId: N.COL_00FFFF_UNDEAD_TREE_COL,
         definition: { getName: () => 'Undead tree', getActions: () => ['Chop', null, null, null, null] },
         clickType: 1,
         handled: false,

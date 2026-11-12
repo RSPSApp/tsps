@@ -56,9 +56,11 @@ function register(name, key, overrides = {}) {
 function player() {
   const attributes = new Map(), items = new Map(), bank = new Map(), vars = new Map(), packets = [], messages = [], equipment = new Map(), xp = [];
   let location = new core.Location(3158, 9713, 0), area = null, current = null, blocked = false, force = null, interfaceId = -1, chatboxGroupId = -1;
+  let renderAnimations = null;
   const id = index++;
   const inventory = { getAmount: id => items.get(id) || 0, contains: id => (items.get(id) || 0) > 0,
     adds: (id, amount) => items.set(id, (items.get(id) || 0) + amount),
+    delete: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     getItems: () => [...items].map(([id, amount]) => new core.Item(id, amount)),
     getFreeSlots: () => 28 - [...items].reduce((sum, [id, amount]) => sum + (id === 995 ? Number(amount > 0) : amount), 0),
@@ -74,12 +76,14 @@ function player() {
     getInventory: () => inventory, getBank: () => ({ getAmount: id => bank.get(id) || 0 }), getBanks: () => [{ getAmount: id => bank.get(id) || 0 }],
     getEquipment: () => ({ get: id => equipment.has(id) ? new core.Item(equipment.get(id), 1) : null, setItem: (slot, item) => { if (item.getId() >= 0) equipment.set(slot, item.getId()); else equipment.delete(slot); }, refreshItems() {} }),
     getUpdateFlag: () => ({ flag() {} }), getInterfaceId: () => interfaceId,
+    setRenderAnimations: value => { renderAnimations = value; }, getRenderAnimations: () => renderAnimations,
     getLocation: () => location, moveTo: to => { location = to; }, getArea: () => area, setArea: a => { area = a; },
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getIndex: () => id,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, getUsername: () => 'ParityTester', getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }), getDialogueManager: () => ({ reset: () => { current = null; }, getCurrent: () => current, isActive: () => !!current, startDialogues: chain => { current = chain; } }),
-    getMovementQueue: () => ({ setBlockMovement: value => { blocked = value; }, reset() {} }), isBlocked: () => blocked,
+    getMovementQueue: () => ({ setBlockMovement: value => { blocked = value; }, reset() {}, requestWalk: to => { location = to; } }), isBlocked: () => blocked,
     getSkillManager: () => ({ getMaxLevel: () => 50, getCurrentLevel: () => 50, addExperiences: (skill, amount) => xp.push([skill, amount]) }),
+    forcePositionToFace: to => { p.facing = to; },
     sendMessage: text => messages.push(text), setUntargetable() {}, performAnimation() {}, performGraphic() {},
     getCombat: () => ({ reset() {} }), setForceMovement: value => { force = value; }, getForceMovement: () => force,
   }; return p;
@@ -108,6 +112,26 @@ test('Porcine note opens native interface before the private camera scene; logou
   assert.equal(q.quest.getStage(p), 3); assert.ok(p.packets.some(([m]) => m === 'sendCameraReset'));
 });
 
+test('Porcine interrupted fade is closed on logout and the rope remains usable after login', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player();
+  q.quest.setStage(p, 3);
+  sceneAction(q, p, 'K_pMcL'); q.emit('interface:closed', {player:p, interfaceId:222});
+  const previousRender = [809, 823, 819, 820, 821, 822, 824];
+  p.setRenderAnimations(previousRender);
+  sceneAction(q, p, 'GiFHeZ'); q.tick(20);
+  assert.deepEqual(p.getRenderAnimations(), [6280, 6280, -1, -1, -1, -1, -1]);
+  q.call('onPlayerLogout', {player:p});
+  assert.equal(p.getRenderAnimations(), previousRender);
+  const closed = p.packets.length;
+  assert.ok(p.packets.some(([m,uid]) => m === 'closeSubInterface' && uid === ((161<<16)|1)));
+  q.tick(60);
+  assert.equal(p.packets.length, closed, 'cancelled scene cannot restore a fade or camera');
+  q.call('onPlayerLogin', {player:p});
+  q.call('onObjectInteraction', {player:p,objectId:40330,clickType:1});
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()], [3149,3347]);
+  assert.equal(p.isBlocked(), false); assert.equal(p.getPrivateArea(), null);
+});
+
 test('Porcine note opens before closing the real current-cache chatbox and preserves its modal', () => {
   const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 3);
   const sent = [];
@@ -133,7 +157,12 @@ test('Porcine note opens before closing the real current-cache chatbox and prese
 test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and advance only after waking', () => {
   const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 3);
   sceneAction(q,p,'K_pMcL'); q.emit('interface:closed',{player:p,interfaceId:222}); q.tick(1);
-  sceneAction(q,p,'eShaqt'); q.tick(13); sceneAction(q,p,'GiFHeZ'); q.tick(56);
+  sceneAction(q,p,'eShaqt'); q.tick(13); sceneAction(q,p,'GiFHeZ');
+  assert.deepEqual([p.facing.getX(), p.facing.getY()], [3167, 9676]);
+  q.tick(20);
+  assert.deepEqual(p.getRenderAnimations(), [6280, 6280, -1, -1, -1, -1, -1]);
+  q.tick(36);
+  assert.equal(p.getRenderAnimations()[0], 6280, 'the player remains unconscious through the next view');
   assert.ok(p.packets.some(([m,,,,,id]) => m === 'sendProjectile' && id === 1817));
   assert.ok(p.packets.some(([m,x,y,h,r]) => m === 'sendCameraMoveTo' && x === 3167 && y === 9693 && h === 900 && r.rate2 === 10));
   sceneAction(q,p,'32r40G'); q.tick(16); sceneAction(q,p,'Rb2zDN'); q.tick(6);
@@ -141,7 +170,12 @@ test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and
   assert.ok(p.packets.some(([m,x,y,h,r]) => m === 'sendCameraLookAt' && x === 3162 && y === 9699 && h === 50 && r.rate2 === 1));
   assert.equal(q.quest.getStage(p),3); sceneAction(q,p,'EaeUfj'); q.tick(4);
   assert.equal(q.quest.getStage(p),4); assert.equal(p.vars.get(10582),20); assert.equal(p.getLocation().getX(),3095); assert.equal(p.getLocation().getY(),3267); assert.equal(p.isBlocked(),false);
+  assert.equal(p.getRenderAnimations(), null, 'waking restores the normal pose');
   assert.deepEqual(cameras(p), PORCINE_CAMERA);
+  const fades = p.packets.filter(([m]) => m === 'mountSubInterface');
+  assert.ok(fades.length > 0);
+  assert.deepEqual(fades[0].slice(1), [(161 << 16) | 1, 174, 1, {postScripts: [{scriptId: 948, args: [0,255,0,0,50]}]}]);
+  assert.ok(p.packets.some(([m,uid]) => m === 'closeSubInterface' && uid === ((161<<16)|1)));
   const sounds = [], sender = new PacketSender({ getSession: () => ({ sendClientPacket: packet => { sounds.push(packet); return true; } }) });
   for (const [method, ...args] of p.packets) if (['sendSound', 'sendSoundEffect'].includes(method)) sender[method](...args);
   assert.deepEqual(sounds, [[2313,77],[3308,86],[694,0],[2453,40]].map(([id,delay]) => encodeSound(id, { loops: 1, delay })));
@@ -196,6 +230,39 @@ test('Porcine preserves the recorded eye-protection warning and checks goggles a
   q.call('onCanUnequip', unequip); assert.equal(unequip.allow, false); assert.ok(p.messages.at(-1).includes('leave your eye protection on'));
   p.bank.set(24942, 1); assert.equal(q.resolve('onNpcDialogueCondition', { player: p, npcId: 10432, stepId: 'aIPCCD' }), true);
   q.quest.setStage(p, 6); unequip.allow = null; q.call('onCanUnequip', unequip); assert.equal(unequip.allow, null);
+});
+
+test('Porcine cave rope is left to loc-teleports except while the foot is uncut, and climbing down is a spam line', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, false, 'LocTeleports plays the captured climb (animation, fade, message)');
+  const other = { player: p, objectId: 40331, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', other);
+  assert.equal(other.handled, false, 'only the cave rope is looked at');
+  p.equipment.set(core.Equipment.HEAD_SLOT, 24942);
+  q.call('onObjectInteraction', { player: p, objectId: 40341, clickType: 1, handled: false });
+  assert.deepEqual(p.packets.findLast(([m]) => m === 'sendTypedMessage'), ['sendTypedMessage', core.ChatType.SPAM, 'You climb down the rope.']);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+  const entry = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../plugins/world/data/loc-teleports.json'), 'utf8')).locs.find(loc => loc.id === 40330);
+  assert.equal(entry.message, 'You climb up the rope.'); assert.equal(entry.messageType, 'spam');
+  assert.equal(entry.anim, 828); assert.equal(entry.fade, true);
+});
+
+test('Porcine rope with the sourhog dead and the foot uncut stays in the cave', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 6);
+  const rope = { player: p, objectId: 40330, clickType: 1, handled: false };
+  q.call('onBeforeObjectInteraction', rope);
+  assert.equal(rope.handled, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3158, 9713]);
+});
+
+test('Porcine blockage Yes does not put the wiki stage direction in chat', () => {
+  const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player(); q.quest.setStage(p, 5);
+  q.call('onObjectInteraction', { player: p, objectId: 40331, clickType: 1, handled: false });
+  q.emit('npc-dialogue:action', { player: p, npcId: 10432, stepId: 'f8rW5G', kind: 'action', text: 'The player climbs over the blockage.' });
+  assert.equal(p.messages.length, 0, 'capture 1693 sends no chat line for the crossing');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3157, 9703]);
 });
 
 test('Sleeping Giants leaves its repair instance before the captured public sword tutorial', () => {
@@ -288,4 +355,36 @@ test('Sleeping Giants tutorial pickup gives the captured three-stage preform qua
   assert.equal(p.vars.get(13938),5);assert.equal(p.vars.get(13939),41);assert.equal(p.vars.get(13950),41);assert.equal(p.vars.get(13948),981);
   assert.deepEqual(Array.from({length:6},(_,index)=>Foundry.get(p,13940+index)),[1,2,0,0,0,0]);
   assert.equal(p.vars.get(13903),50);assert.equal(p.vars.get(13914),0);
+});
+
+test('Sleeping Giants bucket of water cools the poured mould before the preform can be taken', () => {
+  const q=foundryQuest(),p=player();q.quest.setStage(p,7);q.emit('giants-foundry:start-commission',{player:p,words:[3,4],tutorial:true});
+  require('../plugins/minigames/giantsfoundry/Preform.GiantsFoundry')(q.api);
+  for(const[id,value]of[[13913,5],[13914,2],[13910,8],[13911,8],[13912,6]])Foundry.set(p,id,value);
+  Foundry.setField(p,'pouredAt',Foundry.tick()-19);
+  // Hot metal cannot be taken out.
+  q.namedObjects.get('Mould jig (Poured metal):Pick-up')({player:p});
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),undefined);
+  assert.equal([...p.getDialogueManager().getCurrent().getDialogues().values()][0].getText(),'The preform is still molten! You need to cool it down.');
+  // Using the bucket on the jig cools the metal, empties the bucket and leaves the preform in it.
+  p.getInventory().adds(1929,1);
+  const use={player:p,itemId:1929,objectId:44777,handled:false};
+  q.call('onItemOnObject',use);
+  assert.equal(use.handled,true);
+  assert.equal(Foundry.get(p,13914),3);
+  assert.equal(p.getInventory().getAmount(1929),0);
+  assert.equal(p.getInventory().getAmount(1925),1);
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),undefined);
+  // The cooled preform comes out without needing a second bucket.
+  q.namedObjects.get('Mould jig (Cooled metal):Pick-up')({player:p});
+  assert.equal(p.equipment.get(core.Equipment.WEAPON_SLOT),27010);
+  assert.equal(p.vars.get(13903),50);assert.equal(p.vars.get(13914),0);
+});
+
+test('Sleeping Giants Kovac follows up once the water has been poured on the mould', () => {
+  const q=foundryQuest(),p=player();q.quest.setStage(p,7);
+  Foundry.set(p,13914,2);
+  assert.equal(q.resolve('onNpcDialogueVariant',{npcId:11468,player:p}),'make-a-sword-before-picking-up-the-preform');
+  Foundry.set(p,13914,3);
+  assert.equal(q.resolve('onNpcDialogueVariant',{npcId:11468,player:p}),'make-a-sword-talk-to-kovac-after-using-a-bucket-of-water');
 });

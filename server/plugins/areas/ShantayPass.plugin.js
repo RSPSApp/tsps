@@ -6,6 +6,7 @@ const Common = require("./shantaypass/Common.ShantayPass");
 
 module.exports = {
   name: "ShantayPass",
+  description: "Shantay Pass: the gate into the desert, Shantay and his pass, and his jail.",
   register(api) {
     Common.init(api);
     require("./shantaypass/Gate.ShantayPass")(api);

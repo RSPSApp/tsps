@@ -43,6 +43,7 @@ function clearPlayer(api, event) { Hunt.clear(event); Church.clear(api, event); 
 
 module.exports = {
   name: "EasterEvents",
+  description: "The 2026 Easter event 'The brave chocolate egg': hunt Archibald around Varrock using the scribbled notes and egg box, within its calendar window.",
   register(api) {
     Lock.init(api);
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE, 0);

@@ -74,6 +74,12 @@ module.exports = function registerDeathPlateauQuest(api) {
   // Wiki: continue east past the second goat. Quest Helper marks the endpoint at 2865,3609.
   const SCOUT_BOUNDS = new Boundary(2864, 2870, 3608, 3612, 0);
   const COMBINATION_ITEM_ID = ItemIdentifiers.COMBINATION;
+  const COMBINATION_SCROLL = "messagescroll_handwriting";
+  const COMBINATION_LINES = [
+    "Red is North of Blue. Yellow is South of Purple.",
+    "Green is North of Purple. Blue is West of",
+    "Yellow. Purple is East of Red.",
+  ];
   const IOU_ITEM_ID = ItemIdentifiers.IOU;
   const SECRET_WAY_MAP_ITEM_ID = ItemIdentifiers.SECRET_WAY_MAP;
   const CLIMBING_BOOTS_ITEM_ID = ItemIdentifiers.CLIMBING_BOOTS;
@@ -81,6 +87,13 @@ module.exports = function registerDeathPlateauQuest(api) {
   const CERTIFICATE_ITEM_ID = ItemIdentifiers.CERTIFICATE_2;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const HAROLD_DOOR_ID = ObjectIdentifiers.DOOR_115;
+  // RSProx 3252 (castle) and 3247 (inn): these stairs change floors without a climb animation.
+  const STAIRS = new Map([
+    [ObjectIdentifiers.STAIRS_23, { from: [2897, 3566, 0], to: [2897, 3569, 1] }],
+    [ObjectIdentifiers.STAIRS_22, { from: [2897, 3567, 1], to: [2897, 3565, 0] }],
+    [ObjectIdentifiers.STAIRCASE_79, { from: [2914, 3539, 0], to: [2914, 3542, 1] }],
+    [ObjectIdentifiers.STAIRCASE_82, { from: [2914, 3540, 1], to: [2914, 3538, 0] }],
+  ]);
   const CLIMBING_BOOTS_PRICE = 12;
   const BUY_CLIMBING_BOOTS_IDS = new Set(["FgkYXO", "7mwtJo"]);
 
@@ -572,8 +585,11 @@ module.exports = function registerDeathPlateauQuest(api) {
           return;
         }
         player.getInventory().deleteNumber(IRON_BAR_ITEM_ID, 1);
-        player.getInventory().deleteNumber(CLIMBING_BOOTS_ITEM_ID, 1);
-        player.getInventory().adds(SPIKED_BOOTS_ITEM_ID, 1);
+        // In place (setId keeps the boots' meta: preset climbing boots make preset spiked boots).
+        const converted = player.getInventory().getItems?.().find((item) => item?.getId() === CLIMBING_BOOTS_ITEM_ID);
+        if (converted) converted.setId(SPIKED_BOOTS_ITEM_ID);
+        else { player.getInventory().deleteNumber(CLIMBING_BOOTS_ITEM_ID, 1); player.getInventory().adds(SPIKED_BOOTS_ITEM_ID, 1); }
+        player.getInventory().refreshItems?.();
       }
       if (quest.getStage(player) < STAGE_BOOTS) quest.setStage(player, STAGE_BOOTS);
       return;
@@ -594,7 +610,12 @@ module.exports = function registerDeathPlateauQuest(api) {
 
   function readCombination({ player, itemId }) {
     if (itemId !== COMBINATION_ITEM_ID || !hasCombination(player)) return false;
-    for (const line of ["Red is north of Blue.", "Yellow is south of Purple.", "Green is north of Purple.", "Blue is west of Yellow.", "Purple is east of Red."]) player.sendMessage(line);
+    const sender = player.getPacketSender();
+    sender.sendInterface(CacheDefinitions.getInterfaceId(COMBINATION_SCROLL));
+    // The handwritten note centers its three lines in the middle of the parchment.
+    COMBINATION_LINES.forEach((line, index) => {
+      sender.sendString(line, CacheDefinitions.getComponentId(`${COMBINATION_SCROLL}:messagescroll${index + 5}_hw`));
+    });
     return true;
   }
 
@@ -705,6 +726,17 @@ module.exports = function registerDeathPlateauQuest(api) {
     request.handled = true;
   }
 
+  function walkQuestStairs(request) {
+    const stairs = STAIRS.get(request.objectId);
+    const location = request.object?.getLocation();
+    if (request.handled || !stairs || !location?.equals(new Location(...stairs.from))) return;
+    request.handled = true;
+    const direction = stairs.to[2] > stairs.from[2] ? "ladders:climbUp" : "ladders:climbDown";
+    api.emitCustomEvent(direction, {
+      player: request.player, object: request.object, destination: new Location(...stairs.to), animate: false,
+    });
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
   }
@@ -748,6 +780,7 @@ module.exports = function registerDeathPlateauQuest(api) {
   api.onInterfaceActionClick(gambleClick);
   api.onCustomEvent("interface:closed", closeGamble);
   api.onCustomEvent("door:toggle", guardQuestDoors);
+  api.onCustomEvent("ladders:climb", walkQuestStairs);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(forgetGamble);
   api.onPlayerDisconnect(forgetGamble);

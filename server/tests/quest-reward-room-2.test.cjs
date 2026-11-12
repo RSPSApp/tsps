@@ -9,6 +9,8 @@
 // No capture shows a full bag at any of these: refusal wording is ours.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
+const { mkdtempSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
@@ -17,10 +19,14 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { encodeWidgetSetAnimation } = require("../dist/net/protocol/ClientProtocol");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
+const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
 
 const HOME = [3222, 3218];
 const CONTINUE_CHILD = { 231: 5, 217: 5, 193: 0, 229: 2 };
@@ -31,7 +37,7 @@ const CURSE = "curse_of_arrav";
 const BIT_LEVER_NORTH_PULLED = 1 << 7;
 const SKELETON_NOTHING = "You search the skeleton, but find nothing of interest.";
 const SHELVES_NOTHING = "You search the shelves, but find nothing of interest.";
-const NO_REACH = "You can't reach that!";
+const NO_REACH = "I can't reach that!";
 
 let core;
 let I;
@@ -59,8 +65,10 @@ const quest = (key) => {
 };
 
 function actor(t, key, stage) {
+  const outboundPackets = [];
   const channel = {
-    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: (packet) => { outboundPackets.push(Buffer.from(packet)); return true; },
     close() {}, onData() {}, onError() {}, onClose() {},
   };
   const p = new Player(new PlayerSession(channel));
@@ -81,7 +89,7 @@ function actor(t, key, stage) {
     core.TaskManager.cancelTasks(p);
   });
   quest(key).setStage(p, stage);
-  return { p, c, inv: p.getInventory(), messages };
+  return { p, c, inv: p.getInventory(), messages, outboundPackets };
 }
 
 const stageOf = (f, key) => quest(key).getStage(f.p);
@@ -180,13 +188,161 @@ async function clickLoc(t, f, id) {
 
 // ------------------------------------------------------------------ The Dig Site
 
+test("Dig Site: the teddy bush works and giving the guide tea unlocks the native panning route", async (t) => {
+  const f = actor(t, DIG, 1);
+  core.RegionManager.loadMapFiles(3357, 3372);
+  f.p.setLocation(new core.Location(3357, 3371, 0));
+  await send(f, { type: "object_option", id: O.BUSH_10, x: 3357, y: 3372, action: "Search" });
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.TEDDY), 1);
+  f.p.getDialogueManager().reset();
+  await send(f, { type: "object_option", id: O.BUSH_10, x: 3357, y: 3372, action: "Search" });
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.TEDDY), 1, "the same player cannot collect a second teddy while holding one");
+
+  f.p.setLocation(new core.Location(3378, 3377, 0));
+  const guide = core.NPC.create(N.PANNING_GUIDE, new core.Location(3377, 3377, 0));
+  core.World.getNpcs().add(guide);
+  t.after(() => core.World.getNpcs().remove(guide));
+  put(f, I.PANNING_TRAY, 1);
+  const pan = async () => {
+    await send(f, { type: "object_option", id: O.PANNING_POINT, x: 3379, y: 3377, action: "Pan" });
+    ticks(f, 8);
+  };
+  await pan();
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY), 1, "the unpaid guide stops the pan");
+  f.p.getDialogueManager().reset();
+
+  put(f, I.CUP_OF_TEA_2, 2);
+  put(f, I.CUP_OF_TEA_2, 3);
+  const tea = async (slot) => {
+    await send(f, { type: "item_on_npc", targetIndex: guide.getIndex(), itemId: I.CUP_OF_TEA_2, slot, widgetId: 3214 });
+    ticks(f, 5);
+    f.p.getDialogueManager().reset();
+  };
+  await tea(2);
+  assert.equal(f.inv.forSlot(2).getId(), -1);
+  assert.equal(f.inv.getAmount(I.CUP_OF_TEA_2), 1, "the clicked cup is handed over");
+  assert.equal(f.p.getPacketSender().getVarbit(2544), 1);
+  await tea(3);
+  assert.equal(f.inv.getAmount(I.CUP_OF_TEA_2), 1, "one tea permanently buys access");
+  await pan();
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY_3), 1, "the real panning point fills the tray");
+  f.p.getDialogueManager().reset();
+
+  t.mock.method(Math, "random", () => 17 / 40);
+  await send(f, { type: "inventory_action", slot: 1, itemId: I.PANNING_TRAY_3, widgetId: 3214, option: "Search" });
+  assert.equal(f.inv.getAmount(I.PANNING_TRAY), 1, "searching empties the tray");
+  assert.equal(f.inv.getAmount(I.SPECIAL_CUP), 1, "the quest cup can be found");
+});
+
+test("Dig Site: panning refusals use player chat and nuggets show the gold tray box", async (t) => {
+  const empty = actor(t, DIG, 0);
+  put(empty, I.PANNING_TRAY, 0);
+  empty.outboundPackets.length = 0;
+  await send(empty, { type: "inventory_action", slot: 0, itemId: I.PANNING_TRAY, widgetId: 3214, option: "Search" });
+  await new Promise((resolve) => setImmediate(resolve));
+  let dialogue = empty.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof PlayerDialogue);
+  assert.equal(dialogue.getText(), "Err, why am I searching an empty tray?");
+  const playerHead = (217 << 16) | 2;
+  const emptyTrayExpression = encodeWidgetSetAnimation(playerHead, 554);
+  assert.ok(empty.outboundPackets.some((packet) => packet.includes(emptyTrayExpression)), "native player head receives chatquiz1 (554)");
+  await send(empty, { type: "dialogue_continue", widgetId: (217 << 16) | 5, childIndex: -1 });
+  assert.equal(empty.p.getDialogueManager().isActive(), false, "the native player-chat continue packet closes the line");
+
+  const full = actor(t, DIG, 0);
+  full.p.setAttribute("dig-site:panning-permission", true);
+  core.RegionManager.loadMapFiles(3378, 3377);
+  full.p.setLocation(new core.Location(3378, 3377, 0));
+  put(full, I.PANNING_TRAY_3, 0);
+  full.outboundPackets.length = 0;
+  await send(full, { type: "object_option", id: O.PANNING_POINT, x: 3379, y: 3377, action: "Pan" });
+  ticks(full, 8);
+  await new Promise((resolve) => setImmediate(resolve));
+  dialogue = full.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof PlayerDialogue);
+  assert.equal(dialogue.getText(), "I already have a full panning tray; perhaps I should<br>search it first.");
+  const fullTrayExpression = encodeWidgetSetAnimation(playerHead, 576);
+  assert.ok(full.outboundPackets.some((packet) => packet.includes(fullTrayExpression)), "native player head receives chatcon2 (576)");
+
+  const nuggets = actor(t, DIG, 0);
+  put(nuggets, I.PANNING_TRAY_3, 0);
+  t.mock.method(Math, "random", () => 5 / 40);
+  await send(nuggets, { type: "inventory_action", slot: 0, itemId: I.PANNING_TRAY_3, widgetId: 3214, option: "Search" });
+  dialogue = nuggets.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof ItemStatementDialogue);
+  assert.equal(dialogue.getItemId(), I.PANNING_TRAY_2, "the objectbox shows tray_gold (678)");
+  assert.equal(dialogue.getText(), "You find some gold nuggets within the mud.");
+  assert.equal(nuggets.inv.getAmount(I.NUGGETS), 1, "the reward remains gold nuggets (680)");
+  assert.equal(nuggets.inv.getAmount(I.PANNING_TRAY_3), 0, "the searched mud tray is consumed");
+});
+
+async function reloadDigSite(t, original) {
+  const directory = mkdtempSync(path.join(tmpdir(), "tsps-digsite-"));
+  const previousDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  try {
+    const persistence = new JsonPlayerPersistence();
+    const username = original.p.getUsername();
+    persistence.save(original.p);
+    await persistence.flush();
+
+    const saved = new JsonPlayerPersistence().load(username);
+    assert.ok(saved);
+    const restored = actor(t, DIG, 0);
+    restored.p.setUsername(username);
+    saved.applyToPlayer(restored.p);
+    assert.equal(stageOf(restored, DIG), stageOf(original, DIG));
+    return restored;
+  } finally {
+    JsonPlayerPersistence.SAVE_DIRECTORY = previousDirectory;
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test("Dig Site: the journal remembers the curator's stamp after a stage 1 reload", async (t) => {
+  const started = actor(t, DIG, 1);
+  put(started, I.UNSTAMPED_LETTER, 0);
+  await talk(t, started, N.CURATOR_HAIG_HALEN);
+
+  const restored = await reloadDigSite(t, started);
+  assert.equal(restored.inv.getAmount(I.SEALED_LETTER), 1);
+  const digSite = quest(DIG);
+  assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /curator stamped my letter/);
+});
+
+test("Dig Site: the first student signs after a reload following letter delivery", async (t) => {
+  const started = actor(t, DIG, 1);
+  put(started, I.UNSTAMPED_LETTER, 0);
+  await talk(t, started, N.CURATOR_HAIG_HALEN);
+  assert.equal(started.inv.getAmount(I.SEALED_LETTER), 1);
+  await talk(t, started, N.EXAMINER);
+  assert.equal(started.inv.getAmount(I.SEALED_LETTER), 0);
+
+  const restored = await reloadDigSite(t, started);
+  await talk(t, restored, N.STUDENT);
+  assert.equal(restored.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1);
+  assert.equal(stageOf(restored, DIG), 2);
+});
+
+test("Dig Site: a legacy save after the first exam still points to the students", async (t) => {
+  const digSite = quest(DIG);
+  for (const stage of [2, 3]) {
+    const restored = await reloadDigSite(t, actor(t, DIG, stage));
+    assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /three students/);
+  }
+});
+
 test("Dig Site: the student refuses a full bag and the exam waits; with room he signs", async (t) => {
-  const control = actor(t, DIG, 1);
+  // The students only take part once the examiner has the curator's stamped letter (stage 1).
+  const letterDelivered = (f) => { f.p.setAttribute("quest.the_dig_site.letter_delivered", true); return f; };
+  const control = letterDelivered(actor(t, DIG, 1));
   await talk(t, control, N.STUDENT);
   assert.equal(control.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1, "control: the certificate");
   assert.equal(stageOf(control, DIG), 2, "control: and the stage");
 
-  const f = actor(t, DIG, 1);
+  const f = letterDelivered(actor(t, DIG, 1));
   fill(f);
   await talk(t, f, N.STUDENT);
   assert.equal(stageOf(f, DIG), 1, "the exam waits");

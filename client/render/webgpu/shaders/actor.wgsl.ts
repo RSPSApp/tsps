@@ -643,14 +643,10 @@ function fragmentWgsl(alpha: boolean, ext?: WebGPUSceneShaders): string {
         : "";
 
     return `
-// brightness.glsl: the Settings "Screen brightness" on a lit surface (texel x vertex colour).
-// u_brightness is OSRS's gamma exponent (lower is brighter); flat colours already carry it
-// (hslToRgb), textures get the same change relative to the gamma the scene was tuned at.
-const TUNED_BRIGHTNESS: f32 = 0.8;
-
+// brightness.glsl: textures are uploaded at gamma 1.0; apply native gamma once,
+// then ordinary vertex lighting. White untextured samples preserve the HSL palette.
 fn applyBrightness(texel: vec3<f32>, lit: vec3<f32>) -> vec3<f32> {
-    let regamma = pow(max(texel, vec3<f32>(1.0 / 255.0)), vec3<f32>(scene.u_brightness - TUNED_BRIGHTNESS));
-    return texel * regamma * lit * TUNED_BRIGHTNESS;
+    return pow(max(texel, vec3<f32>(0.0)), vec3<f32>(scene.u_brightness)) * lit;
 }
 
 fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
@@ -713,6 +709,21 @@ ${slots?.shade ?? ""}
 const ACTOR_KINDS: ActorKind[] = ["npc", "gfx", "player", "projectile"];
 
 export const ACTOR_FRAGMENT_ENTRY = "fs_actor";
+/** Writes 1 wherever a model covers the pixel: the Shader Effects prayer aura's player silhouette. */
+export const ACTOR_MASK_FRAGMENT_ENTRY = "fs_mask";
+const ACTOR_MASK_WGSL = `
+@fragment
+fn fs_mask(input: ActorVertexOutput) -> @location(0) vec4<f32> {
+    var coverage = input.v_color.a;
+    if (input.v_texId != 0u) {
+        coverage = coverage * sampleModelTexture(input.v_texId, input.v_texCoord).a;
+    }
+    if (coverage < 0.3) {
+        discard;
+    }
+    return vec4<f32>(1.0);
+}
+`;
 export const ACTOR_DEPTH_FRAGMENT_ENTRY = "fs_depth";
 
 /** Vertex entry for an actor kind; `depth` picks the depth-pass entry. */
@@ -764,6 +775,7 @@ struct DepthVertexOutput {
         ACTOR_COMMON_WGSL +
         outputs +
         fragmentWgsl(options.alpha, ext) +
+        (depth || ext ? "" : ACTOR_MASK_WGSL) +
         entries;
     return device.createShaderModule({
         code,

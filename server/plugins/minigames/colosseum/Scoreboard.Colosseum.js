@@ -34,6 +34,10 @@ const GLORY = {
 };
 const TITLE = "Colosseum Statistics";
 const LOCKED = "999999";
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 
 /** The titles' perks as the board lists them (rsprox 237/04109), with the Glory each needs (Wiki). */
 const PERKS = [
@@ -164,6 +168,7 @@ function gloryLines(player) {
 
 function show(player, panel) {
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   sender.sendInterfaceDisplayState(uid(PANEL.GLORY), panel !== PANEL.GLORY);
   sender.sendInterfaceDisplayState(uid(PANEL.STATS), panel !== PANEL.STATS);

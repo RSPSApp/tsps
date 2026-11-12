@@ -15,6 +15,8 @@
  *   task's areas (varp slayer_area).
  * - A kill counts when the NPC counts for the task (Data.npcCountsFor); Konar's must be in her
  *   area, Krystilia's in the Wilderness. Slayer XP is the monster's hitpoints.
+ * - Content may offer a choice of tasks with a kill count the player picks (Offer.Slayer.js,
+ *   "slayer:task-offer": a league relic); the pick comes here (assignPicked).
  * - Mortimer offers a choice of tasks instead (Choice.Slayer.js); the chosen one comes here
  *   (assignChosen) with its modifier (varbits slayer_modifier_id, _value, _negative): Slayer
  *   points on completion, a longer or shorter task, more clue scrolls, more superior uniques
@@ -27,6 +29,7 @@
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const SlaughterBracelet = require("./SlaughterBracelet.Slayer");
+const ExpeditiousBracelet = require("./ExpeditiousBracelet.Slayer");
 const MorytaniaDiary = require("./MorytaniaDiary.Slayer");
 
 const COMPLETE = "<col=ef1020>You have completed your task! You killed</col> {amount} {name}<col=ef1020>. You gained</col> {xp} xp<col=ef1020>.";
@@ -122,6 +125,24 @@ function hasUnlock(player, unlockRow) {
   return unlock ? hasUnlockBit(player, unlock.bit) : false;
 }
 
+/**
+ * Bought unlocks the Rewards screen can switch off again (script 414), by unlock bit, with the varbit that holds
+ * "off": Bigger and Badder's superiors, Stop the Wyvern's fossil wyvern block, and the longer revenant tasks.
+ */
+const TOGGLES = new Map([
+  [35, "slayer_toggleoff_superiormobs"],
+  [43, "slayer_toggleoff_fossilwyvernblock"],
+  [53, "slayer_toggleoff_longerrevenants"],
+]);
+
+/** Bought and not switched off: the unlock's effect applies to assignment. */
+function unlockActive(player, unlockRow) {
+  const unlock = Data.get().unlocks.get(unlockRow);
+  if (!unlock || !hasUnlockBit(player, unlock.bit)) return false;
+  const toggle = TOGGLES.get(unlock.bit);
+  return !toggle || State.varbit(player, toggle) !== 1;
+}
+
 /** Unlock bits 0-31, 32-63, 64-95 are slayer_rewards_unlocks, ...1, ...2. */
 function hasUnlockBit(player, bit) {
   const varp = ["slayer_rewards_unlocks", "slayer_rewards_unlocks1", "slayer_rewards_unlocks2"][bit >> 5];
@@ -162,7 +183,7 @@ function hasSlayerCape(player, inventory) {
 function eligible(player, master, entry, blocked) {
   const task = entry.task;
   if (entry.unlockRow != null && !hasUnlock(player, entry.unlockRow)) return false;
-  if (task.blockedByUnlockRow != null && hasUnlock(player, task.blockedByUnlockRow)) return false;
+  if (task.blockedByUnlockRow != null && unlockActive(player, task.blockedByUnlockRow)) return false;
   if (blocked.has(task.id)) return false;
   if (task.id === Data.BOSS_TASK_ID) return bossChoices(player).length > 0;
   if (player.getSkillManager().getMaxLevel(core.Skill.SLAYER) < Data.taskLevel(task.id)) return false;
@@ -226,18 +247,30 @@ function assign(player, master, random = Math.random) {
   const repeat = previous && hasSlayerCape(player, true) && random() < CAPE_REPEAT_CHANCE;
   const entry = repeat ? previous : weightedPick(choices, random);
   const bossId = entry.task.id === Data.BOSS_TASK_ID ? rollBoss(player, random) : 0;
-  const area = master.locations ? pickArea(entry, random) : null;
-  const { task, amount } = setTask(player, master, entry, bossId, area, null, random);
-  const name = task.displayName;
-  const line = area
-    ? `You are to bring balance to ${amount} ${name} ${area.text}.`
-    : `Your new task is to kill ${amount} ${name}.`;
-  return { line };
+  return { line: assignLine(player, master, entry, bossId, null, random) };
 }
 
-/** One of the boss tasks the player qualifies for, by boss id. */
-function rollBoss(player, random = Math.random) {
-  const bosses = bossChoices(player);
+/**
+ * Sets the task (Konar's with one of its areas) and returns the master's line for it. `amount`
+ * is a kill count the player chose (Offer.Slayer.js); without it the count is rolled.
+ */
+function assignLine(player, master, entry, bossId, amount, random) {
+  const area = master.locations ? pickArea(entry, random) : null;
+  const set = setTask(player, master, entry, bossId, area, null, random, amount);
+  const name = set.task.displayName;
+  return area
+    ? `You are to bring balance to ${set.amount} ${name} ${area.text}.`
+    : `Your new task is to kill ${set.amount} ${name}.`;
+}
+
+/** A task the player picked from an offer (Offer.Slayer.js), with the kill count they chose; returns the master's line. */
+function assignPicked(player, master, entry, bossId, amount, random = Math.random) {
+  return assignLine(player, master, entry, bossId, amount, random);
+}
+
+/** One of the boss tasks the player qualifies for (and `allowed` lets through), by boss id. */
+function rollBoss(player, random = Math.random, allowed = null) {
+  const bosses = bossChoices(player).filter(([, task]) => !allowed || allowed(task));
   return bosses.length ? bosses[Math.floor(random() * bosses.length)][0] : 0;
 }
 
@@ -245,7 +278,7 @@ function rollBoss(player, random = Math.random) {
 function rollAmount(player, entry, bossId, random) {
   if (bossId) return between(BOSS_AMOUNT.min, BOSS_AMOUNT.max, random);
   const extension = entry.task.extension;
-  const extended = extension && hasUnlock(player, extension.unlockRow);
+  const extended = extension && unlockActive(player, extension.unlockRow);
   if (extended && !extension.additive) return between(extension.min, extension.max, random);
   return between(entry.min, entry.max, random) + (extended ? between(extension.min, extension.max, random) : 0);
 }
@@ -255,10 +288,10 @@ function rollAmount(player, entry, bossId, random) {
  * the base roll set (live sends the base count, then the changed one; the original count stays
  * the base roll).
  */
-function setTask(player, master, entry, bossId, area, chosenModifier, random) {
+function setTask(player, master, entry, bossId, area, chosenModifier, random, chosenAmount = null) {
   player.setAttribute(PREVIOUS_TASK_ATTRIBUTE, entry.task.id);
   const task = bossId ? Data.get().bosses.get(bossId) ?? entry.task : entry.task;
-  const base = rollAmount(player, entry, bossId, random);
+  const base = Number.isInteger(chosenAmount) && chosenAmount > 0 ? chosenAmount : rollAmount(player, entry, bossId, random);
   if (chosenModifier) {
     State.update(player, {
       slayer_modifier_id: chosenModifier.id,
@@ -406,7 +439,8 @@ function npcKilled({ killer, npc }) {
   player.setAttribute(TASK_XP_ATTRIBUTE, (Number(player.getAttribute(TASK_XP_ATTRIBUTE)) || 0) + (kill.taskXp ?? kill.xp) * boost);
   if (task.modifier) killModifiers.set(npc, { player, modifier: task.modifier });
   if (SlaughterBracelet.preventsDecrement(player, npc)) return;
-  const remaining = task.count - 1;
+  // An expeditious bracelet credits a second kill; a task cannot go below zero.
+  const remaining = Math.max(0, task.count - 1 - ExpeditiousBracelet.extraKills(player, npc));
   State.setVarp(player, "slayer_count", remaining);
   if (remaining > 0) return;
   complete(player, task);
@@ -443,9 +477,8 @@ function complete(player, task) {
     return;
   }
   const reward = taskReward(player, task.masterId);
-  const totalTasks = State.varbit(player, "slayer_tasks_completed") + State.varbit(player, "slayer_wilderness_tasks_completed");
-  if (totalTasks <= reward.freeTasks) {
-    player.sendMessage(fill(FREE_TASK, { streak, tasks: streak === 1 ? "task" : "tasks", more: reward.freeTasks + 1 - totalTasks }));
+  if (streak <= reward.freeTasks) {
+    player.sendMessage(fill(FREE_TASK, { streak, tasks: streak === 1 ? "task" : "tasks", more: reward.freeTasks + 1 - streak }));
     return;
   }
   // Whole points, as the message shows them: a multiplier may be fractional (a league fragment's +10%).
@@ -564,6 +597,8 @@ function attach(pluginApi) {
 }
 
 module.exports = {
+  TOGGLES,
+  unlockActive,
   init,
   attach,
   current,
@@ -572,9 +607,12 @@ module.exports = {
   killBoost,
   assign,
   assignChosen,
+  assignPicked,
+  bossChoices,
   eligible,
   blockedTaskIds,
   weightedPick,
+  rollAmount,
   rollBoss,
   stillHunting,
   clear,

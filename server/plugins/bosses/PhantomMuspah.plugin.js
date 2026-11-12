@@ -13,6 +13,7 @@ const Scoreboard = require("./phantommuspah/Scoreboard.PhantomMuspah");
 
 module.exports = {
   name: "PhantomMuspah",
+  description: "The Phantom Muspah past Secrets of the North: a private lair, its five forms and spikes, lightning clouds, shockwave, corruption and loot.",
   members: true,
   register(api) {
     Common.init(api);

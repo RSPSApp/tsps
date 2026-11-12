@@ -6,7 +6,7 @@ import { Misc } from "../../../../util/Misc";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { BonusManager } from "../../../model/equipment/BonusManager";
 import { Skill } from "../../../model/Skill";
-import { applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
+import { withHitVictim, hitVictimOf, applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
 import type { Player } from '../../../entity/impl/player/Player';
 import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
@@ -18,6 +18,8 @@ type RollCacheEntry = {
     cycle: number;
     defenceLevel: number;
     npcLevels?: string;
+    /** The victim the attacker's rolls were built against; target-sensitive modifiers change them. */
+    victim?: Mobile | null;
     effectiveAttackLevel?: number;
     effectiveDefenseLevel?: number;
     effectiveRangedAttack?: number;
@@ -62,11 +64,12 @@ export class AccuracyFormulasDpsCalc {
             : entity.getAsPlayer().getSkillManager().getCurrentLevel(Skill.DEFENCE);
         const npcLevels = entity.isNpc() ? [Skill.ATTACK, Skill.RANGED, Skill.MAGIC]
             .map((skill) => entity.getAsNpc().getCurrentLevel(skill)).join(",") : undefined;
+        const victim = hitVictimOf(entity);
         const cached = this.rollCache.get(entity);
-        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel && cached.npcLevels === npcLevels) {
+        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel && cached.npcLevels === npcLevels && cached.victim === victim) {
             return cached;
         }
-        const next: RollCacheEntry = { cycle, defenceLevel, npcLevels, defenseMeleeRolls: new Map<number, number>() };
+        const next: RollCacheEntry = { cycle, defenceLevel, npcLevels, victim, defenseMeleeRolls: new Map<number, number>() };
         this.rollCache.set(entity, next);
         return next;
     }
@@ -240,17 +243,22 @@ export class AccuracyFormulasDpsCalc {
         const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
         const defenceStyle = resolveSpecialAttackType(traits?.defenceRollAttackType) ?? defenceType ?? attackStyle;
 
-        let attRoll: number;
-        if (attackStyle === CombatType.MELEE) {
-            attRoll = AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
-        } else if (attackStyle === CombatType.RANGED) {
-            attRoll = AccuracyFormulasDpsCalc.attackRangedRoll(entity);
-            attRoll = PluginManager.modifyRangedAttackRoll(entity, enemy, attRoll);
-        } else if (attackStyle === CombatType.MAGIC) {
-            attRoll = AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy);
-        } else {
+        const attackRoll = (): number | null => {
+            if (attackStyle === CombatType.MELEE) {
+                return AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
+            } else if (attackStyle === CombatType.RANGED) {
+                return PluginManager.modifyRangedAttackRoll(entity, enemy, AccuracyFormulasDpsCalc.attackRangedRoll(entity));
+            } else if (attackStyle === CombatType.MAGIC) {
+                return AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy);
+            }
+            return null;
+        };
+        // Target-sensitive gear checks the hit's own victim, not the attacker's primary target.
+        const rolledAttack = withHitVictim(entity, enemy, attackRoll);
+        if (rolledAttack === null) {
             return null;
         }
+        let attRoll: number = rolledAttack;
 
         let defRoll: number;
         if (defenceStyle === CombatType.MELEE) {
@@ -277,10 +285,23 @@ export class AccuracyFormulasDpsCalc {
         if (enemy.isNpc()) {
             defRoll = Math.floor(defRoll * enemy.getAsNpc().getDefenceRollFactor());
         }
+        if (attackStyle === CombatType.MAGIC && defenceStyle === CombatType.MAGIC) {
+            defRoll = AccuracyFormulasDpsCalc.magicDefenceRollEvent(entity, enemy, defRoll);
+        }
 
         attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);
 
         return { attack: attRoll, defence: defRoll };
+    }
+
+    /**
+     * Lets plugins change a magic attack's defence roll (combat:magic-defence-roll: attacker, target,
+     * spell, defenceRoll), after the target's gear and defence factor are settled.
+     */
+    private static magicDefenceRollEvent(entity: any, enemy: any, defenceRoll: number): number {
+        const request = { attacker: entity, target: enemy, spell: entity.getCombat?.()?.getSelectedSpell?.(), defenceRoll };
+        PluginManager.emitCustomEvent("combat:magic-defence-roll", request);
+        return Number.isFinite(request.defenceRoll) && request.defenceRoll >= 0 ? Math.floor(request.defenceRoll) : defenceRoll;
     }
 
     private static scopedAccuracyScale = 1;
@@ -301,7 +322,12 @@ export class AccuracyFormulasDpsCalc {
         if (rolls == null) {
             return false;
         }
-        return this.randomInclusive(rolls.attack) > this.randomInclusive(rolls.defence);
+        const attackRolled = this.randomInclusive(rolls.attack);
+        const defenceRolled = this.randomInclusive(rolls.defence);
+        // Plugins may grant a further roll by changing `accurate` (combat:accuracy-rolled).
+        const rolled = { attacker: entity, target: enemy, combatType: style, attack: rolls.attack, defence: rolls.defence, attackRolled, defenceRolled, accurate: attackRolled > defenceRolled };
+        PluginManager.emitCustomEvent("combat:accuracy-rolled", rolled);
+        return rolled.accurate === true;
     }
 
     /** Number of successful independent accuracy rolls out of `count`. */
@@ -531,31 +557,36 @@ export class AccuracyFormulasDpsCalc {
             return cache.effectiveRangedAttack;
         }
 
-        let player = entity.getAsPlayer();
+        cache.effectiveRangedAttack = AccuracyFormulasDpsCalc.playerEffectiveRangedAttack(entity.getAsPlayer(), true);
+        return cache.effectiveRangedAttack;
+    }
+
+    /** A player's effective Ranged attack level; `styleBonus` adds Accurate's +3 (a boat cannon has no style). */
+    private static playerEffectiveRangedAttack(player: Player, styleBonus: boolean): number {
         let rngStrength = AccuracyFormulasDpsCalc.scalePercent(
             player.getSkillManager().getCurrentLevel(Skill.RANGED),
             AccuracyFormulasDpsCalc.rangedAttackPrayerPercent(player)
         );
 
         let fightStyle = player.getFightType().getStyle();
-        if (fightStyle == FightStyle.ACCURATE)
+        if (styleBonus && fightStyle == FightStyle.ACCURATE)
             rngStrength += 3;
         rngStrength += 8;
 
-        rngStrength = applyCombatEffectiveLevelModifiers(entity, rngStrength, { combatType: CombatType.RANGED, purpose: "accuracy" });
+        rngStrength = applyCombatEffectiveLevelModifiers(player, rngStrength, { combatType: CombatType.RANGED, purpose: "accuracy" });
 
         //    if (dragonHunter(input))
         //        rngStrength =
-        cache.effectiveRangedAttack = rngStrength;
         return rngStrength;
     }
 
     /**
      * A player's ranged attack roll with an accuracy bonus given in place of the worn one (a boat
-     * cannon's, its cannonball's and the gear it counts). Prayers, style and set effects apply.
+     * cannon's, its cannonball's and the gear it counts). Prayers and set effects apply; the
+     * attack style doesn't, as a cannon has none (Wiki, Boat combat: the roll's formula has no style term).
      */
     public static rangedAttackRollWithBonus(player: Mobile, accuracyBonus: number): number {
-        const roll = AccuracyFormulasDpsCalc.effectiveRangedAttack(player) * (accuracyBonus + 64);
+        const roll = AccuracyFormulasDpsCalc.playerEffectiveRangedAttack(player.getAsPlayer(), false) * (accuracyBonus + 64);
         return Math.floor(applyRangedAttackAccuracyModifiers(player, roll));
     }
 

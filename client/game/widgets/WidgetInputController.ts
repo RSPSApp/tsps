@@ -34,6 +34,10 @@ export class WidgetInputController {
 
     constructor(private readonly deps: WidgetInputControllerDeps) {}
 
+    invalidateHoverCache(): void {
+        this.state.cachedHoverHits = null;
+    }
+
     onInterfaceClosed(groupId: number): void {
         if (groupId === ALL_SETTINGS_GROUP) {
             // A search in All Settings takes the keyboard from chat (script 2157). Script 2158

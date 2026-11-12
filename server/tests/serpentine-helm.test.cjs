@@ -35,6 +35,8 @@ SerpentineHelm.register({
     World: { getProcessCycle: () => cycle },
     ItemDefinition: { forId: (id) => ({ getName: () => weaponNames.get(id) ?? "" }) },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
+    // These players' ranged weapons fire from the ammo slot (bows and crossbows).
+    Ammunition: { firesFromAmmoSlot: () => true },
   },
   persistAttribute() {},
   onItemAction() {},
@@ -61,6 +63,7 @@ function createPlayer({ helm = null, weapon = 0, inCombat = true, scales = 0, am
   const equipment = new Array(14).fill(null).map(() => item(0));
   if (helm) equipment[Equipment.HEAD_SLOT] = helm;
   if (weapon) equipment[Equipment.WEAPON_SLOT] = item(weapon);
+  if (ammo) equipment[Equipment.AMMUNITION_SLOT] = item(ammo);
   const attributes = new Map();
   const immunity = { starts: 0, protectBriefly(seconds, venom) { assert.equal(seconds, 2); assert.equal(venom, true); this.starts++; } };
   const messages = [];
@@ -77,7 +80,7 @@ function createPlayer({ helm = null, weapon = 0, inCombat = true, scales = 0, am
       addItem: () => {},
       refreshItems: () => {},
     }),
-    getCombat: () => ({ getTarget: () => (inCombat ? {} : null), getAttacker: () => defending ? {} : null, getAmmunition: () => ammo == null ? null : { getItemId: () => ammo }, getPoisonImmunityTimer: () => immunity }),
+    getCombat: () => ({ getTarget: () => (inCombat ? {} : null), getAttacker: () => defending ? {} : null, getPoisonImmunityTimer: () => immunity }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (message) => messages.push(message),
@@ -185,7 +188,13 @@ test("ordinary ranged and magic hits cannot use the helm's basic melee venom cha
   assert.equal(resolve({ roll: 1 / 6 }), 0);
 });
 
-for (const weapon of [ItemIds.NOXIOUS_HALBERD, ItemIds.ABYSSAL_TENTACLE, ItemIds.ABYSSAL_TENTACLE_OR_]) {
+// The halberd's own 1/3 melee roll follows the helm's: 1/4 + 3/4 * 1/3 = the Wiki's 1/2.
+test("the noxious halberd's helm roll is 1/4, making 1/2 with its own 1/3", () => {
+  assert.equal(resolve({ weapon: ItemIds.NOXIOUS_HALBERD, roll: 0.24 }), 1);
+  assert.equal(resolve({ weapon: ItemIds.NOXIOUS_HALBERD, roll: 0.25 }), 0);
+});
+
+for (const weapon of [ItemIds.ABYSSAL_TENTACLE, ItemIds.ABYSSAL_TENTACLE_OR_]) {
   test(`poisonous melee weapon ${weapon} has a 50% helm chance`, () => {
     assert.equal(resolve({ weapon, roll: 0.49 }), 1);
     assert.equal(resolve({ weapon, roll: 0.5 }), 0);

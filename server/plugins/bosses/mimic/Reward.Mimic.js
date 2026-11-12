@@ -23,6 +23,7 @@
  */
 
 const Shared = require("./Shared.Mimic");
+const RewardScreen = require("../../treasuretrails/CasketRewardScreen.plugin");
 const Lair = require("./Lair.Mimic");
 const State = require("./State.Mimic");
 const Pool = require("./Pool.Mimic");
@@ -66,14 +67,12 @@ function validateDrops(drops) {
   });
 }
 
-/** Grant rewards, dropping overflow at the player; return totals for the loot window. */
+/** Queue the same clue reward screen contract; log acquisition on opening. */
 function give(player, drops) {
-  const { Item } = Shared.core();
+  RewardScreen.queue(player, drops);
   const credited = new Map();
   const inventory = player.getInventory();
-  for (const { itemId, amount, creditId: id, stackable } of drops) {
-    if (stackable) inventory.forceAdd(player, new Item(id, amount));
-    else for (let i = 0; i < amount; i++) inventory.forceAdd(player, new Item(id, 1));
+  for (const { itemId, amount, creditId: id } of drops) {
     credited.set(id, (credited.get(id) ?? 0) + amount);
     pluginApi?.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
   }
@@ -81,10 +80,12 @@ function give(player, drops) {
   return [...credited].map(([id, amount]) => ({ id, amount }));
 }
 
-/** The casket loot window (display-only; the items above are already credited). */
+/** Display inventory141 now; the shared close handler transfers it into the bag. */
 function showLoot(player, stacks) {
   const sender = player.getPacketSender?.();
   if (!sender) return;
+  // This is a modal reward screen, so normal close/replacement/logout owns it.
+  player.setInterfaceId(LOOT_INTERFACE);
   sender.sendSubInterface(GAMEFRAME_OVERLAY_UID, LOOT_INTERFACE, 0);
   sender.sendInterfaceScript(1065, [LOOT_GRID_UID], undefined, undefined, {
     [LOOT_CONTAINER]: {

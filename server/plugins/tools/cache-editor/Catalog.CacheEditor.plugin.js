@@ -31,11 +31,8 @@ function register(api) {
   const root = path.resolve(__dirname, "../../..");
   let applied = 0;
   try {
-      const document = Document.read(root);
-      const verdict = Document.check(core, document);
-      if (!verdict.ok) throw new Error(verdict.problems.join("; "));
-      // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
-      applied = core.CacheDefinitions.registerCustomDefinitions(document.rows);
+    // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
+    applied = Document.apply(core, root);
   } catch (error) {
       console.error("[cache-editor] overlay document not applied:", error.message);
   }
@@ -59,9 +56,11 @@ function register(api) {
 
   // Every login replaces the client overlay, including an empty world.
   api.onPlayerLogin(({ player }) => {
-    const rows = core.CacheDefinitions.getCustomDefinitions();
     if (!player.getSession()) return;
-    player.getPacketSender().sendContentData("server", [{ key: "customDefinitions", rows }]);
+    const sender = player.getPacketSender();
+    for (const dataset of core.CacheDefinitions.getCustomDefinitionDatasets()) {
+      sender.sendContentData("server", [dataset]);
+    }
   });
   api.registerContentEndpoint("cache-kinds", () => ({ kinds: inspect.kinds(core) }));
   api.registerContentEndpoint("cache-inspect", (query) => inspect.describe(core, {
@@ -122,4 +121,4 @@ function register(api) {
   }));
 }
 
-module.exports = { name: "CacheEditorCatalog", register };
+module.exports = { name: "CacheEditorCatalog", description: "Serves read-only cache data to the cache editor page and applies its saved overlay rows at startup so authored changes are live on the next boot.", register };

@@ -281,8 +281,14 @@ function resolveSceptre(attacker) {
   return staff?.resolver.resolve(attacker) ?? null;
 }
 
+/** "item:fill-charges": a sceptre handed out ready to use (PvP Arena load-outs) comes full. */
+function fillCharges(event) {
+  staff?.fillCharges(event);
+}
+
 module.exports = {
   name: "WarpedSceptre",
+  description: "Adds the warped sceptre as a chargeable powered weapon fed with chaos and earth runes, including its cast animation and Magic level check.",
   members: true,
   _test: {
     charges,
@@ -322,5 +328,6 @@ module.exports = {
     api.onCustomEvent("interface:closed", closeChargingInterface);
     api.onPlayerLogout(closeChargingInterface);
     api.registerCombatMethodResolver({ resolve: resolveSceptre });
+    api.onCustomEvent("item:fill-charges", fillCharges);
   },
 };

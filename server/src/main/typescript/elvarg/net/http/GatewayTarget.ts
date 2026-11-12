@@ -1,3 +1,9 @@
+import * as fs from "fs";
+import * as path from "path";
+import { CachePipeline, parseCacheTarget } from "../../game/cache/CachePipeline";
+import { GameConstants } from "../../game/GameConstants";
+import { isMembersWorld } from "../../game/definition/WorldDefinition";
+
 /**
  * What RSProx needs to point the official client at this server's gateway (runelite-gateway/README.md):
  * a jav_config and the binary world list it names. Served next to the game socket so a
@@ -14,7 +20,6 @@ export class GatewayTarget {
     private static readonly DEFAULT_HOST = "127.0.0.1";
     /** A bare host name or address: no scheme, port, path or spaces. */
     private static readonly HOST_PATTERN = /^[A-Za-z0-9.-]+$/;
-    private static readonly REVISION = 241;
     private static readonly WORLD_ID = 1;
     private static readonly WORLD_FLAG_MEMBERS = 0x1;
 
@@ -49,7 +54,17 @@ export class GatewayTarget {
         return null;
     }
 
-    /** Revision 241's jav_config keys, with the codebase and world list pointed here. */
+    /** The revision of the cache this server runs: the active one, or `target.txt`'s before it loads. */
+    private static revision(): number {
+        if (CachePipeline.isInitialized()) return CachePipeline.getActive().revision;
+        return parseCacheTarget(fs.readFileSync(path.join(process.cwd(), "target.txt"), "utf8").trim()).revision;
+    }
+
+    /**
+     * The official client's jav_config keys (as of revision 241), with the codebase and world list pointed
+     * here and param 25 naming the active cache's revision. Live 242 adds params 30 and 31 (display-name
+     * changes); they are not sent.
+     */
     private static javConfig(websocketPort: number): string {
         const host = GatewayTarget.host();
         const worldList = `http://${host}:${websocketPort}${GatewayTarget.WORLD_LIST_PATH}`;
@@ -91,20 +106,27 @@ export class GatewayTarget {
             "param=20=",
             "param=21=0",
             "param=22=",
-            `param=25=${GatewayTarget.REVISION}`,
+            `param=25=${GatewayTarget.revision()}`,
             "param=28=",
             "param=29=1",
             "",
         ].join("\n");
     }
 
-    /** One world: `u32 length, u16 count`, then `u16 id, u32 flags, host, activity, u8 location, u16 population`. */
+    /**
+     * One world: `u32 length, u16 count`, then `u16 id, u32 flags, host, activity, u8 location, u16 population`.
+     * The flags are members (when this is a members world) plus the world type's own bits, and the
+     * activity is the world type's, else "tsps" (GameConstants.WORLD_TYPE).
+     */
     private static worldList(): Buffer {
+        const type = GameConstants.WORLD_TYPE;
+        const flags = Buffer.alloc(4);
+        flags.writeUInt32BE(((isMembersWorld() ? GatewayTarget.WORLD_FLAG_MEMBERS : 0) | type.flags) >>> 0, 0);
         const world = Buffer.concat([
             Buffer.from([GatewayTarget.WORLD_ID >> 8, GatewayTarget.WORLD_ID & 0xff]),
-            Buffer.from([0, 0, 0, GatewayTarget.WORLD_FLAG_MEMBERS]),
+            flags,
             Buffer.from(`${GatewayTarget.host()}\0`, "latin1"),
-            Buffer.from("tsps\0", "latin1"),
+            Buffer.from(`${type.activity ?? "tsps"}\0`, "latin1"),
             Buffer.from([0]),
             Buffer.from([0, 0]),
         ]);

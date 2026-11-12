@@ -37,7 +37,7 @@ before(async () => {
   diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("ardougne");
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   Progress(api);
-  require("../plugins/achievements/diaries/ArdougneTeleportDiary.plugin").register(api);
+  require("../plugins/achievements/diaries/ArdougneTeleportDiary.AchievementDiaries").register(api);
   require("../plugins/combat/SpellTeleports.plugin").register(api);
 
   require("../plugins/quests/quests/PlagueCity.Quest")(api);
@@ -48,7 +48,8 @@ before(async () => {
   require("../dist/plugins/PluginManager").PluginManager.emitCustomEvent = dispatch;
 });
 
-function fixture(t, { stage = 29, privateOrigin = false, runes = true } = {}) {
+// Stage 30: Plague City complete and Edmond's scroll read, which teaches the spell (Wiki: Ardougne teleport scroll).
+function fixture(t, { stage = 30, privateOrigin = false, runes = true } = {}) {
   const player = new Player(null);
   const varbits = new Map();
   const sender = new Proxy({}, { get: (_target, key) => key === "sendVarbit"
@@ -90,7 +91,7 @@ test("the real Ardougne spell lands at y=3304 and advances diary progress", (t) 
 
   assert.equal(player.getLocation().getX(), 2663);
   assert.equal(player.getLocation().getY(), 3304);
-  assert.equal(quest.getStage(player), 29);
+  assert.equal(quest.getStage(player), 30);
   assert.ok(Progress.doneTasks(player, diary).has(TASK));
   assert.equal(Progress.tierCount(player, diary, "medium"), 1);
   assert.equal(varbits.get(diary.tiers.medium.countVarbit), 1);

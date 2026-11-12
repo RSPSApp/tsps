@@ -1,10 +1,12 @@
 import { sendPlayerOption } from "../../../network/ServerConnection";
+import { type ChatRequest, chatRequestSlot, isChatRequestLine } from "../../chatRequests";
 import { ClickRegistry } from "../../../widgets/gl/click-registry";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import {
     collectWidgetsAtPointAcrossRoots,
     findBlockingWidgetInHits,
 } from "../../../widgets/menu/utils";
+import { isChatMessageAreaWidget } from "./chatboxClickThrough";
 
 export function getUiClickRegistry(rendererCanvas: unknown): ClickRegistry | null {
     const clicks = (rendererCanvas as any)?.__clicks;
@@ -32,6 +34,7 @@ export function getWorldClickBlockingWidgetAtPoint(
     clickedWidget: any,
     px: number,
     py: number,
+    chatClickThrough = false,
 ): any | null {
     if (clickedWidget !== null) {
         return clickedWidget;
@@ -40,7 +43,10 @@ export function getWorldClickBlockingWidgetAtPoint(
     if (!widgetManager || widgetManager.rootInterface === -1) {
         return null;
     }
-    const hits = collectInputWidgetsAtPoint(widgetManager, px, py);
+    let hits = collectInputWidgetsAtPoint(widgetManager, px, py);
+    // A click-through chatbox's message area passes clicks to the world (its lines' options
+    // join the world's right-click menu instead).
+    if (chatClickThrough) hits = hits.filter((hit) => !isChatMessageAreaWidget(hit));
     if (hits.length === 0) {
         return null;
     }
@@ -111,23 +117,27 @@ export function collectInputWidgetsAtPoint(
 
 /**
  * Cache chatbox scripts render request lines as ordinary text widgets, so
- * they do not expose a React-style row onClick. Consume a click on the
- * rendered type-101 line here and send the native Trade player option.
+ * they do not expose a React-style row onClick. Consume a click on a rendered
+ * request line here (a trade, a challenge, a load-out share) and send the
+ * player option that answers it.
  */
 export function handleTradeRequestChatClick(
     widgets: readonly any[],
-    tradeRequestTargetsByName: ReadonlyMap<string, number>,
+    chatRequestsByName: ReadonlyMap<string, ChatRequest>,
 ): boolean {
     for (let i = widgets.length - 1; i >= 0; i--) {
-        const text = String(widgets[i]?.text ?? "")
+        const raw = String(widgets[i]?.text ?? "");
+        if (!isChatRequestLine(raw)) continue;
+        const text = raw
             .replace(/<[^>]*>/g, "")
             .trim()
             .toLowerCase();
-        if (!text.includes("wishes to trade with you.")) continue;
 
-        for (const [name, playerId] of tradeRequestTargetsByName) {
+        for (const [name, request] of chatRequestsByName) {
             if (!text.includes(name)) continue;
-            sendPlayerOption(playerId, 2);
+            const slot = chatRequestSlot(request.option);
+            if (slot === undefined) continue;
+            sendPlayerOption(request.playerId, slot);
             return true;
         }
     }

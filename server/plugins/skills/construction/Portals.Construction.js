@@ -1,12 +1,12 @@
 "use strict";
 
-const { api, Skill, TeleportHandler, TeleportType, Wilderness, SpellTeleports, LunarSpells, ArceuusSpells, ObjectIdentifiers } = require("./Core.Construction");
+const { api, Skill, TeleportHandler, TeleportType, Wilderness, SpellTeleports, LunarSpells, ArceuusSpells, SpellbookLocks, MagicSpellbook, ObjectIdentifiers, ItemIdentifiers, ItemDefinition } = require("./Core.Construction");
 const Data = require("./Data.Construction");
 const Instance = require("./Instance.Construction");
 const aliases = { moonclan: "LUNAR_ISLE", "ape atoll": "MARIM", "kourend castle": "KOUREND", "fenkenstrain's castle": "FENKENSTRAINS_CASTLE", waterbirth: "WATERBIRTH_ISLAND", watchtower: "YANILLE_WATCHTOWER", barbarian: "BARBARIAN_OUTPOST", khazard: "PORT_KHAZARD" };
 function houseDestinations() {
   // Reuse the spell system's costs and destinations; home/house spells cannot be directed.
-  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations(), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
+  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations().map(data => ({ ...data, spellbook: MagicSpellbook.LUNAR })), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
     .filter(data => data.runes.length && data.name !== "teleport to house")
     .map(data => {
       const name = data.name.replace(/ teleport$/, "");
@@ -20,8 +20,59 @@ function houseDestinations() {
     });
 }
 
+// Marim accepts the noted form of its 100 bananas; quantities stay unchanged.
+function directingCost(destination, nexus) {
+  const multiplier = nexus ? 1000 : 100;
+  return destination.runes.map(rune => {
+    let id = rune.getId();
+    if (!nexus && destination.name === "ape atoll teleport" && id === ItemIdentifiers.BANANA) {
+      const noteId = ItemDefinition.forId(id).getNoteId();
+      if (noteId >= 0) id = noteId;
+    }
+    return { id, amount: rune.getAmount() * multiplier };
+  });
+}
+
 function current(player, house, furniture) {
   return player.getPrivateArea() === house && house.save.rooms.flat(2).some(room => Object.values(room?.furnitureByLocation ?? {}).includes(furniture));
+}
+
+const DIRECT_ACTION = "direct this teleport";
+
+/**
+ * Wiki (Portal chamber): directing "requires the same Magic level and quest requirements as casting the spell", and the
+ * owner needn't be on that spellbook "provided they have unlocked it". So: the book's own quest (core SpellbookLocks;
+ * Desert Treasure I, Lunar Diplomacy), an Arceuus teleport's quest, then the standard spells' list (SpellTeleports).
+ */
+function questLockRefusal(player, name) {
+  const destination = houseDestinations().find(data => data.name === name);
+  if (!destination) return null;
+  const book = destination.spellbook === undefined ? null : SpellbookLocks.lockingQuest(player, destination.spellbook);
+  if (book) return `You need to complete ${book.name} to ${DIRECT_ACTION}.`;
+  if (destination.quest) {
+    const query = { player, key: destination.quest.key, complete: false };
+    api.emitCustomEvent("quest:is-complete", query);
+    if (!query.complete) return `You need to complete ${destination.quest.name} to ${DIRECT_ACTION}.`;
+  }
+  const lock = { player, name, action: DIRECT_ACTION, refusal: null };
+  api.emitCustomEvent("magic:teleport-quest-lock", lock);
+  return lock.refusal;
+}
+
+// The ordinary Ape Atoll destination requires its RFD rescue, including on older completed saves.
+function mayConfigureHouseDestination(player, name) {
+  const refusal = questLockRefusal(player, name);
+  if (refusal) { player.sendMessage(refusal); return false; }
+  if (name !== "ape atoll teleport") return true;
+  const rescue = { player, rescue: "king-awowogei", complete: false };
+  api.emitCustomEvent("recipe-for-disaster:rescue-status", rescue);
+  if (rescue.complete) return true;
+  const quest = { player, key: "recipe_for_disaster", complete: false };
+  api.emitCustomEvent("quest:is-complete", quest);
+  if (quest.complete) return true;
+  // TSPS fallback: the retail refusal text has not been established.
+  player.sendMessage("You must free King Awowogei before configuring this teleport.");
+  return false;
 }
 
 function configureHouseDestination(player, house, furniture, name) {
@@ -43,10 +94,11 @@ function configureHouseDestination(player, house, furniture, name) {
   if (known.includes(name)) { player.sendMessage("That destination is already configured."); return false; }
   const limit = furniture.buildableKey === "MARBLE_PORTAL_NEXUS" ? 4 : furniture.buildableKey === "GILDED_PORTAL_NEXUS" ? 8 : Infinity;
   if (nexus && known.length >= limit) { player.sendMessage("Upgrade your nexus or remove a destination first."); return false; }
-  const multiplier = nexus ? 1000 : 100;
+  if (!mayConfigureHouseDestination(player, destination.name)) return false;
+  const cost = directingCost(destination, nexus);
   const inventory = player.getInventory();
-  if (destination.runes.some(rune => inventory.getAmount(rune.getId()) < rune.getAmount() * multiplier)) { player.sendMessage("You do not have all the required runes in your inventory."); return false; }
-  for (const rune of destination.runes) inventory.delete(rune.getId(), rune.getAmount() * multiplier);
+  if (cost.some(({ id, amount }) => inventory.getAmount(id) < amount)) { player.sendMessage("You do not have all the required runes in your inventory."); return false; }
+  for (const { id, amount } of cost) inventory.delete(id, amount);
   furniture.destinations = nexus ? [...known, name] : [name];
   if (!nexus) {
     const tier = furniture.buildableKey.startsWith("TEAK") ? 0 : furniture.buildableKey.startsWith("MAHOGANY") ? 1 : 2;
@@ -78,7 +130,7 @@ function chooseDestination(player, house, furniture, mode, page = 0) {
       else travel();
     } else if (house.owner === player) {
       if (mode === "add") {
-        for (const rune of destination.runes) player.sendMessage(`${rune.getAmount() * (nexus ? 1000 : 100)} x ${rune.getDefinition().getName()}`);
+        for (const { id, amount } of directingCost(destination, nexus)) player.sendMessage(`${amount} x ${ItemDefinition.forId(id).getName()}`);
         api.sendMultiChatboxPrompt(player, "Consume these runes to direct the teleport?", "Yes", () => { configureHouseDestination(player, house, furniture, destination.name); }, "No", () => {});
       } else api.sendMultiChatboxPrompt(player, "Remove this teleport without refunding runes?", "Yes", () => {
         if (house.owner !== player || !current(player, house, furniture)) return;
@@ -116,4 +168,4 @@ function useHousePortal(event) {
   return true;
 }
 
-Object.assign(module.exports, { houseDestinations, configureHouseDestination, useHousePortal });
+Object.assign(module.exports, { houseDestinations, configureHouseDestination, mayConfigureHouseDestination, current, useHousePortal });

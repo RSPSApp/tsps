@@ -6,6 +6,8 @@
  */
 module.exports = {
   name: "Wintertodt",
+  description: "Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart.",
+  members: true,
   register(api) {
     require("./wintertodt/Doors.Wintertodt")(api);
     require("./wintertodt/Braziers.Wintertodt")(api);

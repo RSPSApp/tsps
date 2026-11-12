@@ -12,6 +12,7 @@ function limitCapacityPurchase(event) {
   if (!isCapacityPurchase(event)) return;
   if (event.player.getAttribute(CAPACITY_ATTRIBUTE)) {
     event.limit = 0;
+    event.message = "You have already unlocked the larger water container.";
     return;
   }
   event.limit = Math.min(event.limit, 1);
@@ -37,8 +38,8 @@ function purchaseCapacity(event) {
 }
 
 function explainCapacityShop({ player, shopId }) {
-  if (shopId === Common.data.shop) {
-    player.sendMessage("The heat-proof vessel is a permanent 10,000-point upgrade, giving 70 throws in later games.");
+  if (shopId === Common.data.shop && !player.getAttribute(CAPACITY_ATTRIBUTE)) {
+    player.sendMessage("The heat-proof vessel is a permanent 10,000-point upgrade, giving 72 throws in later games.");
   }
 }
 

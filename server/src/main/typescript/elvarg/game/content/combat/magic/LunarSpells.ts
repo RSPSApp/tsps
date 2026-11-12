@@ -17,6 +17,8 @@ import { Spell } from "./Spell";
 import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
+import { StatementDialogue } from "../../../model/dialogues/entries/impl/StatementDialogue";
+import { lockingQuest } from "./SpellbookLocks";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
@@ -72,7 +74,7 @@ const WATER_CONTAINERS = new Map<number, number>([
 /** Unstrung -> strung (Wiki: String Jewellery); 4 Crafting XP each. */
 const UNSTRUNG = new Map<number, number>([
     [1673, 1692], [1675, 1694], [1677, 1696], [1679, 1698], [1681, 1700], [1683, 1702],
-    [21099, 21108], [21102, 21111], [21105, 21114], [4082, 4081], [4021, 4022], [1714, 1716], [1720, 1722],
+    [21099, 21108], [21102, 21111], [21105, 21114], [4082, 4081], [4022, 4021], [1714, 1716], [1720, 1722],
 ]);
 const STRING_CRAFTING_XP = 4;
 /** Log -> [plank, coins]: 70% of the sawmill's price (Wiki: Plank Make). */
@@ -80,6 +82,11 @@ const PLANKS = new Map<number, [number, number]>([
     [1511, [960, 70]], [1521, [8778, 175]], [6333, [8780, 350]], [6332, [8782, 1050]],
     [32904, [31432, 1750]], [32907, [31435, 3500]], [32910, [31438, 5250]],
 ]);
+/**
+ * All Settings' Plank Make confirmations (420-423), by log: basic, oak, teak and mahogany. With one
+ * on, the spell asks before it takes coins for that log.
+ */
+const PLANK_CONFIRM_VARBITS = new Map<number, number>([[1511, 624], [1521, 2319], [6333, 2320], [6332, 3939]]);
 const HUNTER_KIT = 11159;
 /** Hunter kit's contents; a player holding all of them is refused (Wiki: Hunter Kit). */
 const HUNTER_KIT_CONTENTS = [10150, 10010, 10006, 10031, 10029, 596, 11260, 10008, 34631];
@@ -105,6 +112,28 @@ const DREAM_HEAL_TICKS = 33;
 /** Energy Transfer costs the caster 10 Hitpoints (Wiki). */
 const ENERGY_TRANSFER_HITPOINTS = 10;
 
+/**
+ * Wiki (Dream Mentor, Rewards): the quest gives "the ability to use" these seven Lunar spells; the rest of the book
+ * needs only Lunar Diplomacy's spellbook. Captured refusal (rec 1695 tick 219, rec 3448 tick 532): "You must have
+ * completed <Quest> to use this spell."
+ */
+const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
+
+/** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
+export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
+    if (!DREAM_MENTOR_SPELLS.has(key)) return false;
+    const query = { player, key: "dream_mentor", complete: false };
+    PluginManager.emitCustomEvent("quest:is-complete", query);
+    if (query.complete === true) return false;
+    // Content may lift the requirement ("magic:spell-unlocked", the Grimoire league relic: "all ... spells regardless of
+    // area, quest, or diary requirements"), as the Mage Arena's god spells allow.
+    const unlock = { player, name: key, unlocked: false };
+    PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+    if (unlock.unlocked === true) return false;
+    player.sendMessage("You must have completed Dream Mentor to use this spell.");
+    return true;
+}
+
 class LunarSpell extends Spell {
     private requirements?: { level: number; runes: Item[] };
     constructor(readonly name: string, readonly data: SpellData) { super(); this.members = true; }
@@ -121,13 +150,17 @@ class LunarSpell extends Spell {
     equipmentRequired(): Item[] { return []; }
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return MagicSpellbook.LUNAR; }
-    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
-    pay(player: Player): boolean {
+    /** Whether the player could cast it now (Defence, level, runes), without paying; the reason sent when not. */
+    castable(player: Player): boolean {
         if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 40) {
             player.sendMessage("You need at least level 40 Defence to cast Lunar spells.");
             return false;
         }
-        if (!this.canCast(player, false) || !this.canCast(player, true)) return false;
+        return this.canCast(player, false);
+    }
+    /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
+    pay(player: Player): boolean {
+        if (!this.castable(player) || !this.canCast(player, true)) return false;
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
@@ -152,9 +185,12 @@ class LunarSpell extends Spell {
 class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
-        if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
-            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
+        // The cast's own checks come before anything asks (the boat-at-sea warning), so it never asks for a cast that
+        // can't happen; paying checks them again.
+        if (!TeleportHandler.checkReqs(player, this.teleport.destination) || !this.castable(player)) return true;
+        TeleportHandler.confirm(player, this.teleport.destination, () => this.cast(player, () => TeleportHandler.teleport(player,
+            this.teleport.destination, TeleportType.LUNAR, false, () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name }))));
+        return true;
     }
 }
 
@@ -239,6 +275,7 @@ export class LunarSpells {
         const groupTeleport = this.GROUP_TELEPORTS.get(key);
         const spell = this.SELF.get(key);
         if (!teleport && !groupTeleport && !spell) return false;
+        if (spell && refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         if (teleport) return teleport.castTeleport(player);
         if (groupTeleport) return this.castGroupTeleport(player, groupTeleport);
@@ -259,16 +296,19 @@ export class LunarSpells {
     }
 
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
-        if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
-        return spell.cast(player, () => {
+        if (!TeleportHandler.checkReqs(player, spell.teleport.destination) || !spell.castable(player)) return true;
+        TeleportHandler.confirm(player, spell.teleport.destination, () => spell.cast(player, () => {
             TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
                 () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
+                // A passenger is asked too (the boat-at-sea warning) before they go.
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
-                    TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
+                    TeleportHandler.confirm(target, spell.teleport.destination,
+                        () => TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false));
                 }
             });
-        });
+        }));
+        return true;
     }
 
     /**
@@ -348,16 +388,31 @@ export class LunarSpells {
         return false;
     }
 
-    /** Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. */
+    /**
+     * Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. Only an unlocked book is
+     * swapped to (Wiki): a locked quick pick is refused before the cast, and the menu lists only open books.
+     */
     private static castSpellbookSwap(player: Player, spell: LunarSpell, option: number): boolean {
         const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
         const quick = option >= 2 && option <= 4 ? books[option - 2] : undefined;
+        if (quick && this.refuseLockedBook(player, quick)) return true;
         return spell.cast(player, () => {
             // Spellbook Swap ends Magic Imbue (Wiki).
             player.setAttribute("lunar:magic-imbue-until", null);
             if (quick) this.swapTo(player, quick);
             else this.openSpellbookSwap(player);
         });
+    }
+
+    /** A book the player hasn't unlocked (core SpellbookLocks): refused with the captured message box, and true. */
+    private static refuseLockedBook(player: Player, book: MagicSpellbook): boolean {
+        const quest = lockingQuest(player, book);
+        if (!quest) return false;
+        // Captured (a league recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks."
+        const bookName = book === MagicSpellbook.ANCIENT ? "Ancient Magicks" : "that spellbook";
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new StatementDialogue(0, `You need to have completed ${quest.name} in order to use ${bookName}.`)));
+        return true;
     }
 
     /** Bakes every uncooked pie one after another, a cast (runes and XP) per pie (Wiki: Bake Pie). */
@@ -378,10 +433,14 @@ export class LunarSpells {
             const item = next();
             if (!item || !spell.pay(player)) return false;
             const [pie, , experience] = PIES.get(item.getId())!;
+            const rawId = item.getId();
             item.setId(pie);
             player.getInventory().refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
             player.getSkillManager().addExperiences(Skill.COOKING, experience);
+            PluginManager.emitCustomEvent("cooking:success", {
+                player, skill: Skill.COOKING, rawId, itemId: pie, amount: 1, location: player.getLocation().clone(),
+            });
             return next() !== undefined;
         };
         if (bake()) this.repeat(player, BAKE_TICKS, bake);
@@ -457,7 +516,11 @@ export class LunarSpells {
     public static handlePlayerTarget(player: Player, target: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         if (!["energy transfer", "heal other", "vengeance other", "stat spy"].includes(key)) return false;
-        if (target === player || !this.acceptsAid(target) || !this.sameInstance(player, target) ||
+        if (refuseBeforeDreamMentor(player, key)) return true;
+        // Stat Spy only reads the target's stats: the duel rule is for the spells that aid one.
+        const aid = key !== "stat spy";
+        if (target === player || !this.acceptsAid(target) || (aid && (this.inDuel(player) || this.inDuel(target))) ||
+            !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
@@ -523,6 +586,7 @@ export class LunarSpells {
     public static handleNpcTarget(player: Player, target: any, name: string | undefined): boolean {
         if (name?.trim().toLowerCase() !== "monster examine" || !target || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
+        if (refuseBeforeDreamMentor(player, "monster examine")) return true;
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
             player.setPositionToFace(target.getLocation());
@@ -593,6 +657,7 @@ export class LunarSpells {
         if (key !== "plank make" && key !== "stat restore pot share" && key !== "boost potion share") return false;
         const item = player.getInventory().getItems()[slot];
         if (!item || item.getId() !== itemId) return false;
+        if (refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         const spell = this.SPELLS.get(key)!;
         if (key === "plank make") return this.castPlankMake(player, spell, itemId);
@@ -625,13 +690,27 @@ export class LunarSpells {
             PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) {
-            this.repeat(player, PLANK_TICKS, make,
-                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
-                PLANK_FIRST_REPEAT_TICKS);
-        } else {
-            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+        const start = (): void => {
+            if (make()) {
+                this.repeat(player, PLANK_TICKS, make,
+                    () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                    PLANK_FIRST_REPEAT_TICKS);
+            } else {
+                PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+            }
+        };
+        const confirm = PLANK_CONFIRM_VARBITS.get(logId);
+        if (confirm === undefined || player.getPacketSender().getVarbit?.(confirm) !== 1
+            || !inventory.contains(logId) || inventory.getAmount(COINS) < plank[1]) {
+            start();
+            return true;
         }
+        // Ours: the question and its options (no capture of the confirmation).
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
+                player.getPacketSender().sendInterfaceRemoval();
+                if ((option as number) === 1) start();
+            } }, "Yes", "No").setTitle(`Pay ${plank[1]} coins for each plank?`)));
         return true;
     }
 
@@ -651,10 +730,18 @@ export class LunarSpells {
         return spell.cast(player, share.apply);
     }
 
-    /** Players other than the caster within `distance` who accept aid and are alive. */
+    /**
+     * A duel is the two duelists' alone: no one else's Vengeance, healing or energy reaches them (the Duel Arena's open
+     * map would otherwise let a spectator within range aid one, past the No Magic rule too), and a duelist aids no one.
+     */
+    private static inDuel(player: Player): boolean {
+        return player.getDueling?.()?.inDuel?.() === true;
+    }
+
+    /** Players other than the caster within `distance` who accept aid, are alive and aren't in a duel. */
     private static forNearbyPlayers(player: Player, distance: number, effect: (target: Player) => void): void {
         World.getPlayers().forEach(target => {
-            if (target && target !== player && this.acceptsAid(target) && target.getHitpoints() > 0 &&
+            if (target && target !== player && this.acceptsAid(target) && !this.inDuel(target) && target.getHitpoints() > 0 &&
                 this.sameInstance(player, target) &&
                 player.getLocation().isWithinDistance(target.getLocation(), distance)) effect(target);
         });
@@ -710,14 +797,16 @@ export class LunarSpells {
         player.sendMessage("You have 2 minutes before your spellbook changes back!");
     }
 
+    /** Wiki (Spellbook Swap): the menu offers only "the spellbooks they have access to". */
     private static openSpellbookSwap(player: Player): void {
-        const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
+        const books = ([[MagicSpellbook.NORMAL, "Standard"], [MagicSpellbook.ANCIENT, "Ancient"], [MagicSpellbook.ARCEUUS, "Arceuus"]] as const)
+            .filter(([book]) => lockingQuest(player, book) === null);
         const builder = new DialogueChainBuilder();
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
-            const book = books[(option as number) - 1];
+            const book = books[(option as number) - 1]?.[0];
             player.getPacketSender().sendInterfaceRemoval();
-            if (book) this.swapTo(player, book);
-        } }, "Standard", "Ancient", "Arceuus"));
+            if (book && !this.refuseLockedBook(player, book)) this.swapTo(player, book);
+        } }, ...books.map(([, label]) => label)));
         player.getDialogueManager().startDialogues(builder);
     }
 }

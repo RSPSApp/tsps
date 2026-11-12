@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { cacheKey, cachePrefix, isCacheable, MAX_SQUARES, shouldStore } from "../game/worker/MapSquareCache";
 import { MapManager } from "../game/MapManager";
+import { ByteBuffer } from "../rs/io/ByteBuffer";
+import { ArchiveTypeLoader, BaseTypeLoader } from "../rs/config/TypeLoader";
+import { Type } from "../rs/config/Type";
 
 const info: any = { game: "oldschool", environment: "live", name: "c1", revision: 230, timestamp: "t", size: 5 };
 const input: any = {
@@ -64,4 +67,26 @@ assert.ok(!isCacheable({ ...input, mapRegionReplacements: new Map([[(51 << 8) | 
 assert.ok(shouldStore(true, {}));
 assert.ok(!shouldStore(false, {}));
 assert.ok(!shouldStore(true, undefined));
+
+// A type that throws mid-decode stays cached half-decoded, so the square built with it is missing
+// that loc (#4240: rev 242 multilocs against a stale ByteBuffer.js). Such a build is never stored.
+class ThrowingType extends Type {
+    decodeOpcode(): void {
+        throw new TypeError("buffer.readSignedMedium is not a function");
+    }
+}
+const brokenLocs = new ArchiveTypeLoader(ThrowingType, info, {
+    id: 6, fileCount: 1, getFile: () => ({ getDataAsBuffer: () => new ByteBuffer(new Int8Array([97, 0])) }),
+} as any);
+const consoleError = console.error;
+console.error = () => {};
+try {
+    BaseTypeLoader.clearDecodeFailures();
+    brokenLocs.load(0);
+} finally {
+    console.error = consoleError;
+}
+assert.ok(!shouldStore(true, {}), "a worker whose types failed to decode stores no squares");
+BaseTypeLoader.clearDecodeFailures();
+assert.ok(shouldStore(true, {}));
 console.log("map-square-cache ok");

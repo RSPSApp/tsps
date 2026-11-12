@@ -26,7 +26,8 @@ const CAPE_SLOT = 1;
 before(async () => {
   await CachePipeline.initialize();
   const core = PluginManager.getCoreApi();
-  Avarice({ core, persistAttribute() {}, onPlayerProcess() {}, ...modifierStubs() });
+  // Avarice listens for custom events since #3700.
+  Avarice({ core, persistAttribute() {}, onPlayerProcess() {}, onCustomEvent() {}, ...modifierStubs() });
   CapeOfSkulls.register({ core, onCanEquip() {}, onCustomEvent() {}, onPlayerLogin() {} });
   SkullPrevention.register({ core: { CombatFactory }, onCanAttack() {} });
 });
@@ -40,9 +41,15 @@ function modifierStubs() {
   return stubs;
 }
 
+let nextName = 0;
 function player({ at = WILDERNESS, timer = 0, type = SkullType.WHITE_SKULL } = {}) {
   const equipment = [];
+  const attributes = new Map();
+  const username = `skuller${nextName++}`;
   const p = {
+    getUsername: () => username,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
     skullTimer: timer,
     skullType: type,
     messages: [],
@@ -105,6 +112,42 @@ test("retaliating does not skull, and nothing changes outside the Wilderness", (
   const skulled = player({ at: new Location(3222, 3218, 0), timer: 100 });
   CombatFactory.handleSkull(skulled, player({ at: new Location(3222, 3219, 0) }));
   assert.equal(skulled.skullTimer, 100);
+});
+
+// #1284 review: the already-skulled branch extended the skull on every hit, before any retaliation check, so a skulled
+// player who only fought back got a fresh 30 minutes. Wiki (Skull (status)): only initiating combat resets it.
+test("a skulled player who only hits back keeps the skull's time; attacking someone new restarts it", () => {
+  const pker = player();
+  const victim = player({ timer: 600 });
+  CombatFactory.handleSkull(pker, victim);
+  victim.attacker = pker;
+  CombatFactory.handleSkull(victim, pker);
+  assert.equal(victim.skullTimer, 600, "retaliation leaves the timer");
+
+  // Hitting back before the attacker is set (a splash): the attacked-by record says it is retaliation too.
+  const caster = player();
+  const splashed = player({ timer: 600 });
+  CombatFactory.handleSkull(caster, splashed);
+  CombatFactory.handleSkull(splashed, caster);
+  assert.equal(splashed.skullTimer, 600);
+
+  // Control: the same skulled player picking a fight with a third player restarts the 30 minutes.
+  CombatFactory.handleSkull(victim, player());
+  assert.equal(victim.skullTimer, PVP_TICKS);
+});
+
+test("hitting back after a splash, or before the first hit lands, does not skull (Wiki: attacked, not damaged)", () => {
+  // The attack is queued and splashes (or is still in flight): no damage map entry and no attacker set on impact.
+  const aggressor = player();
+  const victim = player();
+  CombatFactory.handleSkull(aggressor, victim);
+  assert.ok(aggressor.skullTimer > 0, "the aggressor is skulled for attacking first");
+  CombatFactory.handleSkull(victim, aggressor);
+  assert.equal(victim.skullTimer, 0, "the victim hits back unskulled");
+  // A third player the victim never attacked: attacking them still skulls.
+  const bystander = player();
+  CombatFactory.handleSkull(victim, bystander);
+  assert.ok(victim.skullTimer > 0, "attacking someone who didn't attack first still skulls");
 });
 
 test("the skull icon is redrawn on the tick the skull runs out", () => {

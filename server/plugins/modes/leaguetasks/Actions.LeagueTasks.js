@@ -6,6 +6,14 @@
  *   entry that is a list takes any of its items), `equip-any-set { sets }` every piece of one of the
  *   sets, on
  *   `equipment:changed` (every worn-items refresh) and at login.
+ * - `equip-each { items, any? }`: every one of the items worn at some point, `any` any one of them
+ *   completing alone (the ones sharing a slot - five godswords, six god books - cannot be worn at
+ *   once, so they are collected over time); `equip-count { items, count }`: that many different ones
+ *   of the items over time ("N unique Echo Items"). Both keep what has been worn in
+ *   `league:task-worn` (task id -> the worn units' keys), so the same item worn twice does not count
+ *   twice and the progress survives a logout. A unit is an item name, an item id, or a list of
+ *   either ("any of"); every equip kind understands all three, and `count` on a plain `equip` is the
+ *   stack size the item must be worn with ("a stack of at least 100 Black Chinchompas").
  * - `produce { items, count }`: that many of the items made or gathered, whatever the skill:
  *   `skills:produced` { itemId, amount } (cooking, crafting, fletching, herblore, smithing),
  *   `fishing:success` { itemId }, `woodcutting:success` { logId, logAmount? }, `mining:success` { itemId } and
@@ -28,6 +36,19 @@
  *   the items if listed, `thieving:success` { method: "stall", stall, itemId }.
  * - `pick { plants, count }`: a field's crop picked (by the plant: Wheat for its grain),
  *   `world:picked` { plant }; `pick-each { plants: { plant: count } }`: each of them that many.
+ * - `obtain { items, count }`: the named items obtained from any source that reports one - a logged
+ *   obtain (`collection-log:obtain`: NPC drops, minigame and content rewards, shops), an actually
+ *   awarded loot roll (`npc-drops:roll`: Zalcano, the Revenants), a Motherlode Mine nugget, a mined
+ *   gem, a fishing casket or an old boot, a searched bird's nest seed, a coin pouch's coins, a Target
+ *   round's score, a Miscellania collection, a Fortis Colosseum run's Glory, or the Rogue's Castle
+ *   chest's loot - counted by amount; an `amount` task ("at least N") is satisfied by one source.
+ *   `obtain-all { items }`: every one of the items obtained at some point, the ones gathered kept in
+ *   `league:task-obtained` (a same-numbered boot twice counts once; "Obtain every Revenant weapon").
+ * - `coin-pouch { coins }`, `archery-target { points }`, `miscellania { approval }`,
+ *   `colosseum-glory { glory }`, `motherlode-nuggets { count }`, `nest-seed { items }`: a single
+ *   source event of that kind reaching the amount ("Open a stack ... at least 800 Coins",
+ *   "Achieve 250 points", "an approval rating of 100%", "Obtain 40,000 Glory", "Obtain 20 Golden
+ *   Nuggets", "a Magic seed ... from a birds nest").
  * - `collection-log { category, count }`: that many of the category's slots filled, asked of the
  *   log (`collection-log:slots`) when one fills (`collection-log:slot-filled`) and at login.
  * - `check-health { types | crops, count }`: a grown crop's health checked, by the farming
@@ -50,6 +71,7 @@
  *   `gather-with { skill, tools, items?, count }` (`woodcutting:success`'s axeId, `mining:success`'s pickaxeId),
  *   `teleport { spells, count }` (`spell:teleport-arrival`, by SpellTeleports' lower-cased name),
  *   `rifts { count }` (`guardians-of-the-rift:rift-closed`'s own total of rifts closed),
+ *   `prayer-restore { amount, count }` (`altars:prayed`'s `restored`, one prayer restoring at least that),
  *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes), `emote { slots, count }`
  *   (`player:emote`, by the emote tab's slot), `take { items, source, count }` (`ground-items:taken`,
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
@@ -59,6 +81,13 @@
  *   (`magic:alchemy-completed`, an alchemy paying at least that many coins), `bank { place, count }`
  *   (`bank:opened`, the bank opened inside the place: a town's bank), `npc-op { npcs, option, count }`
  *   (`npc:operated`, a menu option, "talk-to" or "pet", that something answered on an NPC of the name),
+ *   `object-op { objects?, objectIds?, option?, place?, area?, count }` (`object:operated`, a menu
+ *   option something answered on a loc: the cache ids and/or the loc's names, the option lower-cased:
+ *   "open", "fill"; a task naming neither the ids nor the names takes any loc, one naming only the
+ *   option that option's locs),
+ *   `item-op { items?, itemIds?, option?, amount?, count }` (`item:operated`, an item's own inventory
+ *   action something answered - its cache id and/or name, the option lower-cased: "open", "open-all";
+ *   an `amount` the one action must have covered at once, "28 Coin Pouches at once"),
  *   `shortcut { shortcuts, count }` (`agility:obstacle`'s `shortcut`, an agility shortcut crossed, by
  *   its name in agility-shortcuts.json).
  * - `deed { event, items?, where?, count }`: a content plugin's own event of the deed (the generator's
@@ -80,6 +109,10 @@ const Complete = require("./Complete.LeagueTasks");
 
 /** Progress toward open counted tasks: task id -> count. */
 const PROGRESS_ATTRIBUTE = "league:task-progress";
+/** The items worn over time toward open `equip-each` / `equip-count` tasks: task id -> { unit index: 1 }. */
+const WORN_ATTRIBUTE = "league:task-worn";
+/** The items obtained over time toward open `obtain-all` tasks: task id -> { item id: 1 } (persisted). */
+const OBTAINED_ATTRIBUTE = "league:task-obtained";
 
 /** League type -> { equip, eatHeal: tasks; produce, hunt, pickpocket, clue, laps, eat, drink: Map(lower-cased name -> tasks) }. */
 const index = new Map();
@@ -93,12 +126,12 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { enter: new Map(), deeds: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
+  const entry = { enter: new Map(), deeds: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map(), obtain: new Map(), obtainAll: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "enter") entry.enter.set(trigger.place, (entry.enter.get(trigger.place) ?? []).concat(task));
     else if (trigger?.kind === "rifts") entry.rifts.push(task);
-    else if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
+    else if (EQUIP_KINDS.has(trigger?.kind)) entry.equip.push(task);
     else if (trigger?.kind === "produce") for (const item of trigger.items ?? []) add(entry.produce, item, task);
     else if (trigger?.kind === "hunt") for (const npc of trigger.npcs ?? []) add(entry.hunt, npc, task);
     else if (trigger?.kind === "pickpocket") for (const npc of trigger.npcs ?? []) add(entry.pickpocket, npc, task);
@@ -113,6 +146,8 @@ function indexOf(type) {
     else if (trigger?.kind === "pick") for (const plant of trigger.plants ?? []) add(entry.pick, plant, task);
     else if (trigger?.kind === "pick-each") entry.pickEach.push(task);
     else if (trigger?.kind === "collection-log") entry.collectionLog.push(task);
+    else if (trigger?.kind === "obtain") for (const item of trigger.items ?? []) add(entry.obtain, item, task);
+    else if (trigger?.kind === "obtain-all") entry.obtainAll.push(task);
     else if (trigger?.kind === "deed") entry.deeds.set(trigger.event, (entry.deeds.get(trigger.event) ?? []).concat(task));
     else if (EVENT_KINDS.has(trigger?.kind)) add(entry.events, trigger.kind, task);
     else if (trigger?.kind === "prayer") for (const prayer of trigger.prayers ?? []) add(entry.prayer, prayer, task);
@@ -182,20 +217,90 @@ function npcName(id) {
   return Number.isInteger(id) && id >= 0 ? Common.core.CacheDefinitions.getNpc(id)?.name ?? null : null;
 }
 
+function objectName(id) {
+  return Number.isInteger(id) && id >= 0 ? Common.core.CacheDefinitions.getObject(id)?.name ?? null : null;
+}
+
+/** The kinds awarded by what is worn (see the head), all checked on `equipment:changed` and at login. */
+const EQUIP_KINDS = new Set(["equip", "equip-all", "equip-any-set", "equip-each", "equip-count"]);
+
+/** What the player wears, by item name (`key`) and by cache id: a unit a trigger names. */
+function wornIndexOf(player) {
+  const byName = new Map();
+  const byId = new Map();
+  for (const item of player.getEquipment().getItems()) {
+    if (!item || item.getId() < 0) continue;
+    const id = item.getId();
+    byId.set(id, item);
+    const name = itemName(id);
+    if (name) byName.set(key(name), item);
+  }
+  return { byName, byId };
+}
+
+/** Whether a trigger unit (an item name, a cache item id, or a list meaning "any of") is worn. */
+function wornUnit(worn, unit) {
+  if (Array.isArray(unit)) return unit.some((each) => wornUnit(worn, each));
+  if (typeof unit === "number") return worn.byId.has(unit);
+  return worn.byName.has(key(unit));
+}
+
+/** The amount a unit is worn with (a stack of chinchompas), 0 when it is not; an item is at least one. */
+function wornAmount(worn, unit) {
+  if (Array.isArray(unit)) return Math.max(0, ...unit.map((each) => wornAmount(worn, each)));
+  const item = typeof unit === "number" ? worn.byId.get(unit) : worn.byName.get(key(unit));
+  if (!item) return 0;
+  const amount = item.getAmount?.();
+  return Number.isFinite(amount) ? Math.max(0, amount) : 1;
+}
+
+/** The worn-over-time units kept for the open equip tasks (task id -> { unit index: 1 }), persisted. */
+function wornOf(player) {
+  const value = player.getAttribute(WORN_ATTRIBUTE);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function checkWorn(player) {
   const type = Common.leagueOf(player);
   if (type === null) return;
   const tasks = indexOf(type).equip;
   if (!tasks.length) return;
-  const worn = new Set(player.getEquipment().getItems().filter((item) => item && item.getId() >= 0).map((item) => key(itemName(item.getId()))));
+  const worn = wornIndexOf(player);
+  const done = new Set(Common.completedIds(player));
+  let store = null;
   for (const task of tasks) {
-    if (!inArea(player, type, task)) continue;
-    // An equip-all slot may take either of several ("either some platelegs or a plateskirt").
-    const wears = (item) => (Array.isArray(item) ? item.some((each) => worn.has(key(each))) : worn.has(key(item)));
-    const { kind, items, sets } = task.trigger;
-    const met = kind === "equip-any-set" ? sets.some((set) => set.every(wears)) : kind === "equip-all" ? items.every(wears) : items.some(wears);
-    if (met) Complete.complete(player, task.id, type);
+    if (done.has(task.id) || !inArea(player, type, task)) continue;
+    const { kind, items, sets, count } = task.trigger;
+    if (kind === "equip-any-set") {
+      // Every piece of one of the sets, worn at once (Void Knight's three helms share a top and robe).
+      if (sets.some((set) => set.every((unit) => wornUnit(worn, unit)))) Complete.complete(player, task.id, type);
+      continue;
+    }
+    if (kind === "equip") {
+      // Any one of the items worn; a `count` is the stack it must be worn with ("100 Black Chinchompas").
+      if (items.some((unit) => wornUnit(worn, unit) && wornAmount(worn, unit) >= (Number(count) || 1))) Complete.complete(player, task.id, type);
+      continue;
+    }
+    if (kind === "equip-all") {
+      // Every entry worn at once; an entry that is a list takes any of its items ("either legs or skirt").
+      if (items.every((unit) => wornUnit(worn, unit))) Complete.complete(player, task.id, type);
+      continue;
+    }
+    // equip-each / equip-count: gathered over time, so items sharing a slot (five godswords, six god
+    // books, the three Cerberus boots) all count. Each worn unit is kept once, so wearing the same one
+    // again is no new unit, and the progress is persisted (a logout does not lose it).
+    store ??= { ...wornOf(player) };
+    const seen = { ...(store[task.id] && typeof store[task.id] === "object" ? store[task.id] : {}) };
+    items.forEach((unit, index) => { if (wornUnit(worn, unit)) seen[index] = 1; });
+    const alternatives = task.trigger.any === undefined ? [] : [].concat(task.trigger.any);
+    const reached = (kind === "equip-count"
+      ? Object.keys(seen).length >= Math.max(1, Number(count) || 1)
+      : items.every((_unit, index) => seen[index] === 1))
+      || alternatives.some((unit) => wornUnit(worn, unit));
+    if (reached) { delete store[task.id]; Complete.complete(player, task.id, type); }
+    else store[task.id] = seen;
   }
+  if (store) player.setAttribute(WORN_ATTRIBUTE, store);
 }
 
 function equipmentChanged({ player }) {
@@ -344,13 +449,182 @@ function checkedHealth({ player, type, crop }) {
   count(player, "checkHealth", `crop:${crop}`);
 }
 
+/**
+ * `obtain { items, count?, source? }`: the named items obtained, counted by amount. A source is
+ * told apart so a deed is not credited from the wrong one: "logged" (any `collection-log:obtain`:
+ * NPC drops, minigame and content rewards, shops), "drop" (an actually awarded `npc-drops:roll`:
+ * Zalcano, the Revenants), "mining" (`mining:gem`: a rock's gem pre-roll), "geode"
+ * (`treasure-trails:clue-item`: a clue geode), "fishing" (`fishing:junk`: a casket, an old boot),
+ * "impling" / "crystal-impling" (`hunter:impling-loot`), "random-event" (`random-events:reward`),
+ * "nuggets" (`motherlode:nuggets`), "nest" (`woodcutting:nest-search`), "rogues-chest"
+ * (`rogues-chest:loot`) and "cache-open" (`phantom-muspah:frozen-cache`). A task naming no source
+ * takes any of them (its item is unique to its source, e.g. the Big Harpoonfish).
+ */
+function obtained(source, { player, itemId, amount }) {
+  if (!player) return;
+  const id = Number(itemId);
+  if (!Number.isInteger(id)) return;
+  countSourced(player, "obtain", itemName(id), Number(amount ?? 1) || 1, source);
+  checkObtainAll(player, id);
+}
+
+/** As `count`, but for a trigger that names a source, only the tasks wanting that source (or none). */
+function countSourced(player, kind, name, amount, source) {
+  const type = Common.leagueOf(player);
+  if (type === null || !(amount > 0)) return;
+  const tasks = (indexOf(type)[kind].get(key(name)) ?? []).filter((task) => !task.trigger.source || task.trigger.source === source);
+  countTasks(player, type, tasks, amount);
+}
+
+/** An awarded loot roll (`npc-drops:roll`, source "drop") or the Rogue's Castle chest's loot
+ * (`rogues-chest:loot`, source "rogues-chest") for every drop: each one the roll really granted
+ * counts, never a potential one. */
+function rolled(source, { player, drops }) {
+  if (!player || !Array.isArray(drops)) return;
+  for (const drop of drops) {
+    const itemId = Number(drop?.itemId ?? drop?.id);
+    if (!Number.isInteger(itemId)) continue;
+    countSourced(player, "obtain", itemName(itemId), Number(drop.amount ?? 1) || 1, source);
+    checkObtainAll(player, itemId);
+  }
+}
+
+/** A bird's nest searched (`woodcutting:nest-search`): the seed taken out, credited to the "nest"
+ * source and, for the High level seed task, the `nest-seed` kind. */
+function nestSearch(event) {
+  obtained("nest", { player: event.player, itemId: event.itemId, amount: 1 });
+  onEvent("nest-seed")(event);
+}
+
+/** An impling's loot (`hunter:impling-loot`): each reward, with the Crystal impling its own source. */
+function implingLoot({ player, impling, rewards }) {
+  if (!player || !Array.isArray(rewards)) return;
+  const source = String(impling ?? "").toUpperCase() === "CRYSTAL" ? "crystal-impling" : "impling";
+  for (const [itemId, amount] of rewards) obtained(source, { player, itemId, amount });
+}
+
+/** `motherlode-nuggets { count }`: golden nuggets taken from the sack, `motherlode:nuggets` { amount }. */
+function nuggets({ player, amount }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  countTasks(player, type, indexOf(type).events.get("motherlode-nuggets") ?? [], Number(amount ?? 1) || 1);
+}
+
+/** `haircut { count }`: a makeover of the hair type, `makeover:applied` { player, type }. */
+function haircut({ player, type }) {
+  if (!player || Number(type) !== 0) return; // TYPE_HAIR
+  const league = Common.leagueOf(player);
+  if (league === null) return;
+  countTasks(player, league, indexOf(league).events.get("haircut") ?? []);
+}
+
+/** `agility-tickets { count }`: Brimhaven Agility Arena tags, `minigame:points`
+ * { player, minigame: "brimhaven-agility-arena", points } (a doubled tag counts twice). */
+function agilityTickets({ player, minigame, points }) {
+  if (!player || minigame !== "brimhaven-agility-arena") return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  countTasks(player, type, indexOf(type).events.get("agility-tickets") ?? [], Number(points ?? 1) || 1);
+}
+
+/** `agility-ticket-streak { tickets, count }`: a clean run of Brimhaven tags reaches the count,
+ * `brimhaven-agility-arena:streak` { player, tickets } (reset by a missed pillar: the cycle ended with no
+ * tag, or the player left the arena). */
+function agilityTicketStreak({ player, tickets }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const streak = Number(tickets) || 0;
+  const tasks = (indexOf(type).events.get("agility-ticket-streak") ?? []).filter((task) => streak >= Number(task.trigger.tickets));
+  countTasks(player, type, tasks);
+}
+
+/** `coin-pouch { coins, count }`: a coin pouch opened for at least that many coins at once,
+ * `coin-pouch:opened` { player, coins, all, pouches } (Open-all's whole stack, or a single Open). */
+function coinPouch({ player, coins, pouches }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const amount = Number(coins) || 0;
+  const opened = Number(pouches) || 0;
+  // A task with `coins` needs that many paid at once; one with `pouches` ("Open 28 ... at once"), that
+  // many opened. Either missing is no floor. Only a completed open emits the event, so a refusal is no deed.
+  const tasks = (indexOf(type).events.get("coin-pouch") ?? []).filter((task) => (!(Number(task.trigger.coins) > 0) || amount >= Number(task.trigger.coins))
+    && (!(Number(task.trigger.pouches) > 0) || opened >= Number(task.trigger.pouches)));
+  countTasks(player, type, tasks);
+}
+
+/** `archery-target { points, count }`: a finished Target round scoring at least that many points,
+ * `archery-competition:score` { player, score, tickets }. */
+function archeryTarget({ player, score }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const points = Number(score) || 0;
+  const tasks = (indexOf(type).events.get("archery-target") ?? []).filter((task) => points >= Number(task.trigger.points));
+  countTasks(player, type, tasks);
+}
+
+/** `miscellania { approval, count }`: a Miscellania collection made at least that approval,
+ * `miscellania:collected` { player, approval } (a percentage, 0-100). */
+function miscellaniaCollect({ player, approval }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const rating = Number(approval) || 0;
+  const tasks = (indexOf(type).events.get("miscellania") ?? []).filter((task) => rating >= Number(task.trigger.approval));
+  countTasks(player, type, tasks);
+}
+
+/** `colosseum-glory { glory, count }`: a run's Glory at least that much, `colosseum:glory`
+ * { player, glory } (each wave's running total; the best is kept by the minigame). */
+function colosseumGlory({ player, glory }) {
+  if (!player) return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const earned = Number(glory) || 0;
+  const tasks = (indexOf(type).events.get("colosseum-glory") ?? []).filter((task) => earned >= Number(task.trigger.glory));
+  countTasks(player, type, tasks);
+}
+
+/** The items obtained over time toward the open `obtain-all` tasks (task id -> { unit index: 1 }). */
+function obtainedStoreOf(player) {
+  const value = player.getAttribute(OBTAINED_ATTRIBUTE);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+/** Each open `obtain-all { items }` task, when one more of its items is obtained ("Obtain every
+ * Revenant weapon"): every one of the items gathered, kept across a logout in `league:task-obtained`. */
+function checkObtainAll(player, itemId) {
+  const type = Common.leagueOf(player);
+  if (type === null || !Number.isInteger(itemId)) return;
+  const tasks = indexOf(type).obtainAll;
+  if (!tasks.length) return;
+  const name = key(itemName(itemId));
+  if (!name) return;
+  const done = new Set(Common.completedIds(player));
+  let store = null;
+  for (const task of tasks) {
+    if (done.has(task.id) || !inArea(player, type, task)) continue;
+    const items = task.trigger.items ?? [];
+    if (!items.some((unit) => key(unit) === name)) continue;
+    store ??= { ...obtainedStoreOf(player) };
+    const seen = { ...(store[task.id] && typeof store[task.id] === "object" ? store[task.id] : {}) };
+    items.forEach((unit, index) => { if (key(unit) === name) seen[index] = 1; });
+    if (items.every((_unit, index) => seen[index] === 1)) { delete store[task.id]; Complete.complete(player, task.id, type); }
+    else store[task.id] = seen;
+  }
+  if (store) player.setAttribute(OBTAINED_ATTRIBUTE, store);
+}
+
 /** Kinds counted once per event, a filter on the event's payload (temple-trek's difficulty, pest-control's boat). */
 const EVENT_KINDS = new Map([
   ["slayer-tasks", () => true],
   ["superior-kills", () => true],
   ["temple-trek", (trigger, event) => trigger.difficulty === event.difficulty],
   ["pest-control", (trigger, event) => trigger.boats.includes(event.boat)],
-  ["pet", (trigger, event) => !trigger.skilling || !!event.skill],
+  ["pet", (trigger, event) => (trigger.skilling === true ? !!event.skill : !event.skill)],
   ["tempoross", () => true],
   ["open-chest", (trigger, event) => trigger.chests.some((chest) => key(chest) === key(event.chest))],
   ["plant", (trigger, event) => (!trigger.crops || trigger.crops.includes(event.crop)) && (!trigger.patches || trigger.patches.includes(event.patch?.type))],
@@ -367,6 +641,7 @@ const EVENT_KINDS = new Map([
     && (!trigger.items || trigger.items.some((each) => key(each) === key(itemName(event.itemId))))],
   ["bird-nest", () => true],
   ["alch", (trigger, event) => Number(event.coins) >= Number(trigger.coins)],
+  ["prayer-restore", (trigger, event) => Number(event.restored) >= Number(trigger.amount)],
   ["buy", (trigger, event) => trigger.shops.includes(event.shopName) && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
   ["pickpocket-loot", (trigger, event) => trigger.npcs.some((npc) => key(npc) === key(event.target))
     && (event.loot ?? []).some((entry) => trigger.items.some((each) => key(each) === key(itemName(Number(entry?.id ?? entry?.itemId)))))],
@@ -377,7 +652,40 @@ const EVENT_KINDS = new Map([
   ["bank", () => true],
   ["shortcut", (trigger, event) => trigger.shortcuts.includes(event.shortcut)],
   ["npc-op", (trigger, event) => trigger.option === String(event.option ?? "").toLowerCase() && trigger.npcs.some((npc) => key(npc) === key(npcName(event.npcId)))],
+  // An object's option something answered. The task names the object by cache id and/or name; an
+  // `option` it gives must be the one clicked ("open", "fill"); a task naming neither is every one. A
+  // task with an `event` is credited only by that content's success event (a chest that really gave its
+  // loot, an oven that really fired), never by the click pipeline's `object:operated`.
+  ["object-op", (trigger, event) => (trigger.event ?? "object:operated") === (event.source ?? "object:operated")
+    && (trigger.option === undefined || trigger.option === String(event.option ?? "").toLowerCase())
+    && (!trigger.objectIds || trigger.objectIds.includes(Number(event.objectId)))
+    && (!trigger.objects || trigger.objects.some((object) => key(object) === key(objectName(event.objectId))))],
+  // An item's own inventory action something answered (Open on a mystery box), by the item's cache
+  // id and/or name and the option clicked, one lower-cased ("open", "open-all"); an `amount` the one
+  // action must have covered at once ("28 Coin Pouches at once").
+  ["item-op", (trigger, event) => (trigger.option === undefined || trigger.option === String(event.option ?? "").toLowerCase())
+    && (!trigger.itemIds || trigger.itemIds.includes(Number(event.itemId)))
+    && (!trigger.items || trigger.items.some((item) => key(item) === key(itemName(event.itemId))))
+    && (!(trigger.amount > 0) || Number(event.amount ?? 1) >= Number(trigger.amount))],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
+  // A clean run of Brimhaven Agility Arena tags ("Receive 30 ... without missing any pillars").
+  ["agility-ticket-streak", () => true],
+  // A haircut ("Go and get a haircut"): the makeover applied to the hair (never a beard).
+  ["haircut", () => true],
+  // Brimhaven Agility Arena tags ("Receive an Agility Arena Ticket"); summed (see `agilityTickets`).
+  ["agility-tickets", () => true],
+  // A coin pouch opened for that many coins at once ("Open a stack ... at least 800 Coins").
+  ["coin-pouch", () => true],
+  // A finished Target round at or above the score ("Achieve 250/750/1000 points").
+  ["archery-target", () => true],
+  // A Miscellania collection at or above the approval percentage ("with an approval rating of 100%").
+  ["miscellania", () => true],
+  // A Fortis Colosseum run's Glory at or above the amount ("Obtain 40,000/58,000 Glory").
+  ["colosseum-glory", () => true],
+  // Golden nuggets from the Motherlode Mine sack (the count is the sum; see `nuggets`).
+  ["motherlode-nuggets", () => true],
+  // A bird's nest searched, for one of the seeds the task names ("a Magic seed ... from a birds nest").
+  ["nest-seed", (trigger, event) => trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
 ]);
 
 function onEvent(kind) {
@@ -411,7 +719,7 @@ function didDeed(name, event) {
   const type = player ? Common.leagueOf(player) : null;
   if (type === null) return;
   const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
-    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => String(event[field]).toLowerCase() === String(value).toLowerCase()));
+    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
   countTasks(player, type, tasks);
 }
 
@@ -455,6 +763,8 @@ function login({ player, league }) {
 
 module.exports = function attach(api) {
   api.persistAttribute(PROGRESS_ATTRIBUTE, {});
+  api.persistAttribute(WORN_ATTRIBUTE, {});
+  api.persistAttribute(OBTAINED_ATTRIBUTE, {});
   api.onCustomEvent("equipment:changed", equipmentChanged);
   // Worn in an area: also as the player crosses into a map square there (league areas are squares).
   api.onPlayerMapSquareChange?.(({ player }) => player && checkWorn(player));
@@ -494,8 +804,15 @@ module.exports = function attach(api) {
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   api.onCustomEvent("shop:purchase", onEvent("buy"));
   api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));
+  api.onCustomEvent("altars:prayed", onEvent("prayer-restore"));
   api.onCustomEvent("bank:opened", onEvent("bank"));
   api.onCustomEvent("npc:operated", onEvent("npc-op"));
+  api.onCustomEvent("object:operated", onEvent("object-op"));
+  api.onCustomEvent("item:operated", onEvent("item-op"));
+  // A loc's own success events: a chest that gave its loot, an oven that fired (see the `object-op` accepts).
+  // They carry their own `source` so a task waiting on the click pipeline is not credited by them, and vice versa.
+  api.onCustomEvent("chest:opened", (event) => onEvent("object-op")({ ...event, source: "chest:opened", option: "open" }));
+  api.onCustomEvent("pottery:fired", (event) => onEvent("object-op")({ ...event, source: "pottery:fired", option: "fire" }));
   api.onCustomEvent("agility:obstacle", onEvent("shortcut"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
@@ -503,6 +820,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("mining:success", (event) => gatheredWith({ ...event, gatherSkill: "mining", toolId: event.pickaxeId }));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:slot-filled", logged);
+
   api.onCustomEvent("world:picked", picked);
   api.onCustomEvent("magic:cast-committed", cast);
   api.onCustomEvent("magic:item-spell-cast", cast);
@@ -511,6 +829,27 @@ module.exports = function attach(api) {
   api.onCustomEvent("prayer:buried", buried);
   api.onCustomEvent("potions:drunk", drank);
   api.onCustomEvent("league:login", login);
+  // Obtain: each source event, told apart so a deed is only ever credited from the right one.
+  api.onCustomEvent("collection-log:obtain", (event) => obtained("logged", event));
+  api.onCustomEvent("npc-drops:roll", (event) => rolled("drop", event));
+  api.onCustomEvent("rogues-chest:loot", (event) => rolled("rogues-chest", event));
+  api.onCustomEvent("mining:gem", (event) => obtained("mining", { player: event.player, itemId: event.itemId, amount: 1 }));
+  // A gem rock's own find is a plain mining:success, so its gem counts here too ("Obtain a Gem While Mining").
+  api.onCustomEvent("mining:success", (event) => obtained("mining", { player: event.player, itemId: event.itemId, amount: 1 }));
+  api.onCustomEvent("mining:geode", (event) => obtained("geode", { player: event.player, itemId: event.itemId, amount: 1 }));
+  api.onCustomEvent("fishing:junk", (event) => obtained("fishing", { player: event.player, itemId: event.itemId, amount: Number(event.amount ?? 1) || 1 }));
+  api.onCustomEvent("hunter:impling-loot", implingLoot);
+  api.onCustomEvent("random-events:reward", (event) => obtained("random-event", { player: event.player, itemId: event.itemId, amount: Number(event.amount ?? 1) || 1 }));
+  api.onCustomEvent("phantom-muspah:frozen-cache", (event) => obtained("cache-open", { player: event.player, itemId: event.itemId, amount: 1 }));
+  api.onCustomEvent("woodcutting:nest-search", nestSearch);
+  api.onCustomEvent("motherlode:nuggets", nuggets);
+  api.onCustomEvent("makeover:applied", haircut);
+  api.onCustomEvent("minigame:points", agilityTickets);
+  api.onCustomEvent("brimhaven-agility-arena:streak", agilityTicketStreak);
+  api.onCustomEvent("coin-pouch:opened", coinPouch);
+  api.onCustomEvent("archery-competition:score", archeryTarget);
+  api.onCustomEvent("miscellania:collected", miscellaniaCollect);
+  api.onCustomEvent("colosseum:glory", colosseumGlory);
   watchPlaces(api);
   watchDeeds(api);
 };

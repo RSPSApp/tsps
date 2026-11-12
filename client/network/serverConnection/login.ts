@@ -24,6 +24,11 @@ export function subscribeLoginResponse(
     return () => state.loginResponseListeners.delete(cb);
 }
 
+/** The flags of the login a resumed session repeats (LOGIN_FLAG_*). */
+export function getSessionLoginFlags(): number {
+    return state.sessionLoginFlags;
+}
+
 /**
  * Subscribe to logout response events from server.
  */
@@ -50,6 +55,8 @@ export async function sendLogin(
     state.sessionPassword = password;
     state.sessionRevision = revision;
     state.sessionLoginFlags = flags;
+    state.loginExtension?.loginAttempt();
+    state.loginOnWelcome = null;
     const attemptId = ++state.loginConnectAttemptId;
     if (state.webRtcConfig && !await resolveServerTransport()) return;
     if (attemptId !== state.loginConnectAttemptId) return;
@@ -176,9 +183,11 @@ export function sendLogout(): void {
  */
 export function suppressReconnection(): void {
     // Clear session credentials - user logged out intentionally
+    state.hasLoggedIn = false;
     state.sessionUsername = null;
     state.sessionPassword = null;
     state.sessionLoginFlags = 0;
+    state.loginOnWelcome = null;
     clearLoginConnectRetryTimer();
     try {
         const g: any = (typeof window !== "undefined" ? window : globalThis) as any;

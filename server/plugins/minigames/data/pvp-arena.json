@@ -1,0 +1,476 @@
+{
+  "$comment": [
+    "PvP Arena unranked duels (plugins/minigames/duelarena/). Captured: rsprox 20261106T111454, 20261107T010112, 20261107T022508 and 20261107T023226 (rev 242.1, world 578 PvP Arena): challenges both ways, the duel screen's two steps, copying a load-out, cancelling from either side, six fights (wins, a death, forfeits on both sides), the exits, the supplies chest and load-out sharing.",
+    "Load-out values are indices into enum 4390 (item) and 4389 (spellbook: 0 Ancient, 1 Standard, 2 Lunar); the defaults are what the supplies chest first sent (20261106T111454 tick 251).",
+    "Not captured: a disconnect mid-fight (a forfeit, as Legacy Duels count it) and the time limit running out (both leave, nobody wins).",
+    "Ranked 1v1 Duels: rsprox 20261107T115758, 115923 (seven fights), 121755 (an ignored invitation), 122426 (abandoning at the staging steps) and 122509 (an opponent who never came), world 578. Wiki: Elo-style ranking from 2,500 (here K 50, which gives the captured 25 between equal ranks), the tiers, 16 points a win plus 1 per win of the streak (10 at most), 12 a loss, 15,000 at most of either, the weekly build rotation."
+  ],
+  "itemEnum": 4390,
+  "spellbooks": {
+    "$comment": "Load-out value -> spellbook (enum 4389).",
+    "values": [
+      "ANCIENT",
+      "NORMAL",
+      "LUNAR"
+    ]
+  },
+  "wornSlots": {
+    "hat": 0,
+    "back": 1,
+    "front": 2,
+    "rhand": 3,
+    "torso": 4,
+    "lhand": 5,
+    "legs": 7,
+    "hands": 9,
+    "feet": 10,
+    "ring": 12,
+    "quiver": 13
+  },
+  "quiverAmount": 5000,
+  "builds": [
+    {
+      "name": "Max/Med",
+      "letter": "a",
+      "levels": {
+        "ATTACK": 99,
+        "STRENGTH": 99,
+        "DEFENCE": 99,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 99
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 419,
+          "back": 197,
+          "front": 155,
+          "rhand": 294,
+          "torso": 420,
+          "lhand": 421,
+          "legs": 422,
+          "hands": 179,
+          "feet": 423,
+          "ring": 424,
+          "quiver": 360
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          403,
+          425,
+          18,
+          39,
+          426,
+          427,
+          18,
+          39,
+          428,
+          429,
+          18,
+          39,
+          430,
+          39,
+          39,
+          375
+        ]
+      }
+    },
+    {
+      "name": "Zerker",
+      "letter": "b",
+      "levels": {
+        "ATTACK": 75,
+        "STRENGTH": 99,
+        "DEFENCE": 50,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 63
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 410,
+          "back": 197,
+          "front": 155,
+          "rhand": 414,
+          "torso": 408,
+          "legs": 409,
+          "hands": 179,
+          "feet": 418,
+          "ring": 222,
+          "quiver": 417
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          416,
+          405,
+          18,
+          39,
+          406,
+          407,
+          18,
+          39,
+          335,
+          39,
+          18,
+          39,
+          39,
+          39,
+          39,
+          375
+        ]
+      }
+    },
+    {
+      "name": "1 Def Pure",
+      "letter": "c",
+      "levels": {
+        "ATTACK": 60,
+        "STRENGTH": 99,
+        "DEFENCE": 1,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 63
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 102,
+          "back": 197,
+          "front": 155,
+          "rhand": 192,
+          "torso": 151,
+          "lhand": 202,
+          "legs": 149,
+          "hands": 187,
+          "feet": 418,
+          "ring": 222,
+          "quiver": 360
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          403,
+          132,
+          18,
+          39,
+          295,
+          39,
+          18,
+          39,
+          123,
+          39,
+          18,
+          39,
+          39,
+          39,
+          39,
+          375
+        ]
+      }
+    }
+  ],
+  "battletype": {
+    "unranked": 1005
+  },
+  "arena": {
+    "$comment": "The battle arena: region 13384's chunks 417-422 x 578-582, planes 0-3, copied unrotated (every captured rebuild_region).",
+    "chunk": [
+      417,
+      578
+    ],
+    "size": [
+      6,
+      5
+    ],
+    "planes": 4,
+    "sides": [
+      {
+        "spawn": [
+          3356,
+          4646
+        ],
+        "trapdoor": [
+          3351,
+          4645
+        ],
+        "portal": [
+          3347,
+          4646
+        ],
+        "dead": [
+          3350,
+          4647
+        ],
+        "exits": [
+          [
+            3358,
+            3273
+          ],
+          [
+            3359,
+            3272
+          ]
+        ]
+      },
+      {
+        "spawn": [
+          3367,
+          4646
+        ],
+        "trapdoor": [
+          3372,
+          4645
+        ],
+        "portal": [
+          3376,
+          4646
+        ],
+        "dead": [
+          3373,
+          4647
+        ],
+        "exits": [
+          [
+            3376,
+            3274
+          ],
+          [
+            3376,
+            3272
+          ],
+          [
+            3375,
+            3276
+          ]
+        ]
+      }
+    ]
+  },
+  "fight": {
+    "$comment": "Captured: the first count one tick after arriving, then every two ticks; 'Combat has begun!' with FIGHT!; the time limit counts down from 2000 ticks.",
+    "countFrom": 10,
+    "countEvery": 2,
+    "timeLimit": 2000,
+    "timerEvery": 2
+  },
+  "sounds": {
+    "$comment": "Synth ids, as captured: discard is the supplies chest's discard sound (LMS's chest plays the same).",
+    "discard": 2381
+  },
+  "music": {
+    "$comment": "Midi ids, as captured: 147 'silence' plays as the win jingle starts.",
+    "silence": 147
+  },
+  "jingles": {
+    "$comment": "Jingle ids, as captured: 98 'duel win2'.",
+    "win": 98
+  },
+  "inviteTicks": 100,
+  "messages": {
+    "unofficial": "<col=ef1020>As this is an unofficial duel, you will not receive rank or reward points for participating.</col>",
+    "challenging": "Challenging {name}...",
+    "invited": "{name} is inviting you to an unranked duel.",
+    "cancelling": "Cancelling challenge.",
+    "cancelled": "{name} has cancelled the challenge.",
+    "participation": "{label} Duel participation: <col=ef1020>{count}</col>",
+    "notBegun": "The fight has not yet begun.",
+    "begun": "<col=ef1020>Combat has begun!</col>",
+    "won": "<col=ef1020>{name} has won!</col>",
+    "wins": "{label} Duel wins: <col=ef1020>{wins}</col> / {count}",
+    "over": "The fight is over.",
+    "cantReach": "I can't reach that!",
+    "quitTitle": "Are you sure you wish to quit this Duel?",
+    "sharing": "Sending load-out sharing offer...",
+    "shareOffer": "wishes to share load-outs with you.",
+    "closedMenu": "{name} has closed the menu.",
+    "copied": "You've copied the {build} load-out of {name}, <col=ef1020>including</col> its rune pouch contents.",
+    "notChanged": "Your load-out has not been changed.",
+    "copyPopup": "Copy load-out from {name}?|Are you sure you want to copy this player's load-out?<br><br>If you do, it will overwrite your current {build} build.|<col=ff0000>No</col>|<col=0dc10d>Yes</col>",
+    "seek": "Attempt to scroll to item:",
+    "duelType": "Which kind of duel?",
+    "rankedInvited": "A <col=ef1020>Duel</col> awaits you! Come to the <col=ef1020>staging area</col>, upstairs in the Arena hospital.",
+    "rankedWaiting": "Your <col=ef1020>Duel</col> is still waiting. Come to the <col=ef1020>staging area</col>, upstairs in the Arena hospital.",
+    "rankedInvitedPopup": "A <col=ef1020>Duel</col> awaits you!",
+    "rankedWaitingPopup": "Your <col=ef1020>Duel</col> is still waiting.",
+    "popupTitle": "PvP Arena",
+    "noInvitation": "You do not currently appear to have a fight invitation.",
+    "readyHint": "<col=ef1020>When you are ready, please use the option in the supply chest to indicate that you are ready to fight.</col>",
+    "noRecruiting": "This isn't a very suitable place for recruitment.",
+    "fixedBuild": "You cannot alter the build for this ranked fight.",
+    "rankedWon": "Congratulations! Your victory has <col=ff0000>increased your ranking</col> by <col=ff0000>{rank}</col>, and has earned you <col=ff0000>{points} Arena Reward Points</col>.",
+    "rankedLost": "Your defeat has <col=ff0000>decreased your ranking</col> by <col=ff0000>{rank}</col>, but has earned you <col=ff0000>{points} Arena Reward Points</col>.",
+    "rankedAbandoned": "Your defeat has <col=ff0000>decreased your ranking</col> by <col=ff0000>{rank}</col>. You were not awarded any Arena Reward Points.",
+    "opponentLate": "The Duel has been cancelled because the opponent took too long to arrive.",
+    "opponentLeft": "The Duel has been cancelled because the opponent left.",
+    "abandonTitle": "Select an option",
+    "rankLine": "You have a ranking of {rank}<br><br>This gives you the rank of {title}.",
+    "findTitle": "Select an option",
+    "groupDuels": "Official 1v1 Duels group",
+    "groupTournaments": "Official 1v1 Tournaments group",
+    "groupUnofficial": "Join an unofficial tournament",
+    "noTournaments": "Tournaments aren't available here.",
+    "leftArena": "This isn't a suitable place for PvP Arena recruitment, so you will be removed from the recruitment group."
+  },
+  "characterAttributes": {
+    "$comment": "Per-character attributes the fight starts afresh and Stash puts back (key -> the arena's starting value): the ring of recoil's damage count, the imbued heart's cooldown.",
+    "ring-of-recoil:damage": 0,
+    "imbued-heart:ready-at": 0
+  },
+  "ranked": {
+    "$comment": "Captured: the invitation takes 15 rank (pvpa_upfront_paid); arriving owes it back (pvpa_owed_join_refund); once both are up each gets it back and stakes what a loss costs (25 between equal ranks); a win returns the stake with the gain. An ignored invitation lapses after 566 ticks and keeps the 15; the one who came gets theirs back. The staging timer starts at 299. Reminders every 10 ticks, the popup every 20. The pairing interval and the abandon's opponent outcome are inferred. world: the number the gateway lists this world under (GatewayTarget.WORLD_ID). tiers: [title, from, the board's Rank icon]; captured: the steel scimitar for Steel (objectbox, zoom 400); the other metals follow, the Dragon tiers a dragon scimitar (inferred).",
+    "startRank": 2500,
+    "maxRank": 15000,
+    "k": 50,
+    "upfront": 15,
+    "inviteTicks": 566,
+    "stagingTicks": 299,
+    "timerEvery": 2,
+    "remindEvery": 10,
+    "popupEvery": 20,
+    "pairEvery": 5,
+    "winPoints": 16,
+    "streakBonusCap": 10,
+    "lossPoints": 12,
+    "pointsCap": 15000,
+    "battletype": 1006,
+    "rotation": {
+      "$comment": "Wiki: the ranked build rotates weekly, Tuesday to Wednesday midnight UK; Zerker the week of 2026-11-04. The order after it is inferred.",
+      "from": "2026-11-04T00:00:00Z",
+      "builds": [
+        1,
+        2,
+        0
+      ]
+    },
+    "staging": {
+      "$comment": "A copy of the staging room per pair (live copies the whole hospital, unrotated). Landing tiles by the steps taken; leaving lands outside the hospital.",
+      "chunk": [
+        419,
+        408
+      ],
+      "size": [
+        4,
+        3
+      ],
+      "planes": 4,
+      "landings": {
+        "pvpa_stagingarea_entry": [
+          3361,
+          3279,
+          1
+        ],
+        "pvpa_stagingarea_entry02": [
+          3373,
+          3279,
+          1
+        ]
+      },
+      "out": [
+        3364,
+        3276,
+        0
+      ]
+    },
+    "tiers": [
+      [
+        "Bronze",
+        0,
+        "bronze_scimitar"
+      ],
+      [
+        "Iron",
+        1000,
+        "iron_scimitar"
+      ],
+      [
+        "Steel",
+        2000,
+        "steel_scimitar"
+      ],
+      [
+        "Mithril",
+        3000,
+        "mithril_scimitar"
+      ],
+      [
+        "Adamant",
+        4000,
+        "adamant_scimitar"
+      ],
+      [
+        "Rune",
+        5000,
+        "rune_scimitar"
+      ],
+      [
+        "Dragon",
+        6000,
+        "dragon_scimitar"
+      ],
+      [
+        "Dragon Elite",
+        7000,
+        "dragon_scimitar"
+      ],
+      [
+        "Dragon Master",
+        8000,
+        "dragon_scimitar"
+      ],
+      [
+        "Dragon Grandmaster",
+        9000,
+        "dragon_scimitar"
+      ]
+    ],
+    "numeralTiersBelow": 6000,
+    "world": 1,
+    "group": {
+      "$comment": "The 1v1 Duels group as captured: the clan's name, owner and channel key, clan setting 33 (its battletype), its creation, and the chatbox's loading texts.",
+      "name": "1v1Duels",
+      "owner": "PvPA Duels",
+      "key": 122090,
+      "typeSetting": 33,
+      "created": "2022-06-22T20:20:00Z",
+      "seeking": "Seeking group...",
+      "requesting": "Requesting..."
+    }
+  }
+}

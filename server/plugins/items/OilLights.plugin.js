@@ -1,6 +1,8 @@
 /** Wiki oil lamps and sapphire lanterns: assemble, distil fuel, light and extinguish. */
 const OIL_ATTRIBUTE='oil-lights:distilled-oil';
 const RIMMINGTON_STILL_LOCATION='2937,3210,0',RIMMINGTON_OIL_VARBIT=281;
+// Separate still contents; retaining existing oil is a conservative server policy (retail collision not captured).
+const REPELLENT_STATE=RIMMINGTON_STILL_LOCATION+':repellent';
 let api;
 let core;
 let families,filled,lit,empty;
@@ -18,8 +20,23 @@ function extinguish({player,item}){const f=lit.get(item.getId());if(!f)return fa
 function syncOil({player}){player.getPacketSender().sendVarbit(RIMMINGTON_OIL_VARBIT,player.getAttribute(OIL_ATTRIBUTE)===RIMMINGTON_STILL_LOCATION?1:0);}
 function fuel(e){
  const p=e.player,I=core.ItemIdentifiers,name=core.ObjectDefinition.forPlayer(e.objectId??e.object.getId(),p)?.getName();if(!['Lamp oil still','Lamp still'].includes(name))return;
- const f=empty.get(e.itemId);if(e.itemId!==I.SWAMP_TAR&&!f)return;e.handled=true;
+ const f=empty.get(e.itemId),isRepellent=e.itemId===I.IMP_REPELLENT,isJar=e.itemId===I.BUTTERFLY_JAR;
+ if(e.itemId!==I.SWAMP_TAR&&!f&&!isRepellent&&!isJar)return;
  const l=e.object.getLocation(),still=l.getX()+','+l.getY()+','+l.getZ();
+ if((isRepellent||isJar)&&(e.handled||still!==RIMMINGTON_STILL_LOCATION))return;
+ e.handled=true;
+ if(isRepellent||isJar){
+  const inv=p.getInventory(),item=e.item,slot=e.itemSlot;
+  if(inv.getItems()[slot]!==item||item?.getId()!==e.itemId)return;
+  if(item.isPresetItem?.()===true||item.getMetaValue?.(core.Item.PRESET_META)===true||item.getMetaValue?.(core.Item.UNTRADEABLE_META)===true||item.getMetaValue?.(core.Item.UNBANKABLE_META)===true){p.sendMessage('Preset items cannot be used for this.');return;}
+  if(isRepellent){
+   if(p.getAttribute(OIL_ATTRIBUTE)){p.sendMessage('The still already contains something.');return;}
+   inv.deleteAtSlot(slot,1);p.setAttribute(OIL_ATTRIBUTE,REPELLENT_STATE);refresh(p);return;
+  }
+  if(p.getAttribute(OIL_ATTRIBUTE)!==REPELLENT_STATE){p.sendMessage('Use imp repellent on the still first.');return;}
+  item.setId(I.IMPLING_JAR);p.setAttribute(OIL_ATTRIBUTE,0);refresh(p);return;
+ }
+ if(e.itemId===I.SWAMP_TAR&&p.getAttribute(OIL_ATTRIBUTE)===REPELLENT_STATE){p.sendMessage('The still already contains something.');return;}
  if(e.itemId===I.SWAMP_TAR){if(p.getAttribute(OIL_ATTRIBUTE)===still){p.sendMessage('The still already contains lamp oil.');return;}if(!p.getInventory().contains(I.SWAMP_TAR))return;p.getInventory().deleteNumber(I.SWAMP_TAR,1);p.setAttribute(OIL_ATTRIBUTE,still);syncOil({player:p});p.sendMessage('You distil the swamp tar into lamp oil.');return;}
  if(p.getAttribute(OIL_ATTRIBUTE)!==still){p.sendMessage('Use swamp tar on the still to make lamp oil first.');return;}
  const item=p.getInventory().getItems().find(i=>i?.getId()===e.itemId);if(!item)return;
@@ -43,4 +60,4 @@ function attach(pluginApi){
  api.onItemOnItem(light,{noted:false});api.onItemOnItem(lens,{noted:false});api.onItemOnObject(fuel,{noted:false});
  api.onItemAction('Oil lamp',{Extinguish:extinguish});api.onItemAction('Oil lantern',{Extinguish:extinguish});api.onItemAction('Bullseye lantern',{Extinguish:extinguish});api.onItemAction('Sapphire lantern',{Extinguish:extinguish});
 }
-module.exports={name:'OilLights',members:true,register(api){attach(api);}};
+module.exports={name:'OilLights',description:'Handles oil lamps and lanterns: assembling them, distilling lamp oil at the Rimmington still, lighting with a tinderbox and extinguishing them.',members:true,register(api){attach(api);}};

@@ -108,14 +108,16 @@ test('the kept items are the most valuable by Grand Exchange price, not store va
 });
 
 test('an item with no Grand Exchange price is ranked by its high alchemy value (Wiki: Items Kept on Death)', () => {
-  // Dragon defender: high alch 40,804, store value 68,007. A dragon scimitar trades for more than the
+  // Dragon defender: store value 68,007, so an alchemy value of 40,804, though it cannot be alchemised
+  // (Wiki: Not alchemisable; item-alch.json gives it none). A dragon scimitar trades for more than the
   // alch value but less than the store value, so only the alch value lets the scimitar win.
   const defender = new Item(I.DRAGON_DEFENDER, 1);
   const scimitar = new Item(I.DRAGON_SCIMITAR, 1);
   assert.equal(defender.getDefinition().hasGrandExchangeValue(), false);
-  assert.equal(PlayerDeathTask.keepValue(defender), defender.getDefinition().getHighAlchValue());
+  assert.equal(defender.getDefinition().getHighAlchValue(), 0, 'it cannot be alchemised');
+  assert.equal(PlayerDeathTask.keepValue(defender), 40804);
   const scimitarPrice = PlayerDeathTask.keepValue(scimitar);
-  assert.ok(scimitarPrice > defender.getDefinition().getHighAlchValue() && scimitarPrice < defender.getDefinition().getValue(),
+  assert.ok(scimitarPrice > 40804 && scimitarPrice < defender.getDefinition().getValue(),
     `dragon scimitar price ${scimitarPrice} sits between the defender's alch and store values`);
   const player = fakePlayer({ items: [defender, scimitar], skulled: true, protectItem: true });
   assert.deepEqual(names(PlayerDeathTask.getItemsToKeep(player)), ['Dragon scimitar']);
@@ -198,7 +200,7 @@ test('the death preview does not protect unkept untradeables that a PvM grave ta
     handlers.get((387 << 16) | 5)({ player });
     assert.equal(sent.args[5], count);
     assert.deepEqual(sent.args.slice(6, 6 + count), PlayerDeathTask.getItemsToKeep(player).map(item => item.getId()));
-    assert.ok(sent.inventories[468].slots.every(slot => slot.itemId === 1991),
+    assert.ok(sent.inventories[468].slots.every(slot => slot.itemId === 367),
       'the six extra untradeables must not add protected icons to the selected kept slots');
     assert.equal(sent.inventories[584].slots.length, items.length - count);
 
@@ -226,7 +228,81 @@ test('the death preview does not protect unkept untradeables that a PvM grave ta
   assert.equal(sent.args[5], 4, 'an always-kept hook adds a legitimate protected item beyond the normal three');
   assert.ok(sent.args.slice(6).includes(items[4].getId()));
   assert.ok(!sent.inventories[584].slots.some(slot => slot.itemId === items[4].getId()), 'the always-kept item has no lost marker');
-  assert.deepEqual(untradeableStates(), new Array(5).fill(1991), 'the other unprotected defenders still go to the grave');
+  assert.deepEqual(untradeableStates(), new Array(5).fill(367), 'the other unprotected defenders still go to the grave');
+});
+
+test('the Items Kept on Death markers: grave with its fee on PvM, lost on PvP or with no grave, deleted for the looting bag', (t) => {
+  // Clientscript 974: 323 kept, 367 to the gravestone (the count less one is the item's fee),
+  // 1991 lost to the killer or dropped, any other marker (368) deleted.
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const handlers = new Map();
+  const custom = new Map();
+  let gravesEnabled = true;
+  const api = {
+    core: PluginManager.getCoreApi(),
+    getPrayerHandler: () => ({ isActivated: () => false, PROTECT_ITEM: 0 }),
+    getPluginConfig: (key, fallback) => key === 'Gravestones:enabled' ? gravesEnabled : fallback,
+    onInterfaceActionButton: (uid, handler) => handlers.set(uid, handler),
+    onPlayerDeathDrops() {},
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    emitCustomEvent: (name, query) => custom.get(name)?.(query),
+  };
+  custom.set('ironman:mode', query => { query.mode = null; });
+  require('../plugins/world/gravestones/Death.Gravestones').attach(api);
+  const Fees = require('../plugins/world/gravestones/Fees.Gravestones');
+  custom.set('gravestones:fee', query => { query.fee = Fees.graveFee(query.items, false); });
+  require('../plugins/interface/ItemsKeptOnDeath.plugin').register(api);
+  const keep = PluginManager.emitShouldKeepItemOnDeath;
+  t.after(() => { PluginManager.emitShouldKeepItemOnDeath = keep; });
+  PluginManager.emitShouldKeepItemOnDeath = (owner, item) =>
+    item.getDefinition().getName() === 'Looting bag' ? false : keep(owner, item);
+
+  const NOTED_WHIP = 4152;
+  const ids = [I.TWISTED_BOW, I.ARMADYL_GODSWORD, I.ABYSSAL_WHIP, I.DRAGON_SCIMITAR, I.RUNE_SCIMITAR, I.SHARK,
+    I.LOOTING_BAG, I.COINS, NOTED_WHIP];
+  const stacks = { [I.COINS]: 1000000, [NOTED_WHIP]: 10 };
+  const items = ids.map(id => new Item(id, stacks[id] ?? 1));
+  let sent;
+  const sender = {
+    sendSubInterface() { return sender; },
+    sendInterfaceScript(id, args, _varps, _varbits, inventories) { sent = inventories; return sender; },
+    sendInterfaceFlagsRange() { return sender; },
+    sendString() { return sender; },
+  };
+  const player = {
+    ...fakePlayer({ items, skulled: true }),
+    setInterfaceId() {}, getInterfaceId: () => 4, getPacketSender: () => sender,
+  };
+  const markers = () => Object.fromEntries(sent[584].slots.map(slot =>
+    [slot.itemId, [sent[468].slots[slot.slot].itemId, sent[468].slots[slot.slot].quantity]]));
+  const fee = id => Fees.graveFee([{ id, amount: 1 }], false);
+
+  handlers.get((387 << 16) | 5)({ player });
+  const pvm = markers();
+  assert.equal(Object.keys(pvm).length, items.length, 'skulled: every item is listed as unkept');
+  for (const id of ids.filter(id => id !== I.LOOTING_BAG)) {
+    assert.deepEqual(pvm[id], [367, 1 + fee(id)], `${new Item(id, 1).getDefinition().getName()} goes to the grave with its fee`);
+  }
+  assert.deepEqual(pvm[I.TWISTED_BOW], [367, 100001]);
+  assert.deepEqual(pvm[I.SHARK], [367, 1]);
+  assert.deepEqual(pvm[I.COINS], [367, 1], 'a stack of coins is priced by one coin');
+  // The client counts each item in the stack: ten noted whips owe ten times one whip's fee.
+  assert.deepEqual(pvm[NOTED_WHIP], [367, 1 + fee(NOTED_WHIP)], 'a stack is priced by one item');
+  assert.ok(fee(NOTED_WHIP) > 0 && 10 * fee(NOTED_WHIP) === Fees.graveFee([{ id: NOTED_WHIP, amount: 10 }], false),
+    'the fee the client shows for the stack is the grave fee for it');
+  const counts = new Set(Object.values(pvm).map(([, count]) => count));
+  assert.ok(counts.size > 2, `the fee bands differ: ${[...counts]}`);
+  assert.deepEqual(pvm[I.LOOTING_BAG], [368, 1], 'the looting bag disappears completely');
+
+  handlers.get((4 << 16) | 12)({ player, action: 2 });
+  const pvp = markers();
+  for (const id of ids.filter(id => id !== I.LOOTING_BAG)) assert.deepEqual(pvp[id], [1991, 1]);
+  assert.deepEqual(pvp[I.LOOTING_BAG], [368, 1]);
+
+  gravesEnabled = false;
+  handlers.get((387 << 16) | 5)({ player });
+  const dropped = markers();
+  for (const id of ids.filter(id => id !== I.LOOTING_BAG)) assert.deepEqual(dropped[id], [1991, 1], 'no grave: dropped where you die');
 });
 
 test('the Bounty Hunter risk skull counts what a death drops, by Grand Exchange price', () => {
@@ -453,7 +529,7 @@ test('ordinary preview matches completed death across skull and Protect Item sta
     // Snapshot every 972 argument, including both full inventory-state payloads.
     assert.deepEqual(sent.scripts, [[972, [Number(row.skull), Number(row.prayer), 0, 0, '', row.kept.length, ...paddedKept], undefined, undefined, {
       584: { capacity: 50, slots: lost.map((itemId, slot) => ({ slot, itemId, quantity: 1 })) },
-      468: { capacity: 50, slots: lost.map((_id, slot) => ({ slot, itemId: 1991, quantity: 1 })) },
+      468: { capacity: 50, slots: lost.map((_id, slot) => ({ slot, itemId: 367, quantity: 1 })) },
     }]], `${row.name}: complete preview snapshot`);
     assert.deepEqual(sent.strings, [[`Guide risk value:<br><col=ffffff>${lost.reduce((sum, id) => sum + prices.get(id), 0).toLocaleString()}</col>`, (4 << 16) | 18]]);
 

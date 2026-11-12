@@ -194,6 +194,7 @@ export function processWidgetReleaseInput(
 
             // Clear deferred action - drag completed so we don't want the "Use" action
             widgetInteraction.deferredWidgetAction = null;
+            widgetInteraction.dragPassThroughWidget = null;
 
             widgetInteraction.draggedOnWidget = null;
             widgetInteraction.clickedWidgetParent = null;
@@ -213,11 +214,12 @@ export function processWidgetReleaseInput(
             // For draggable widgets, onClick fires on release (not mousedown)
             // Check if this was a draggable widget that we deferred onClick for
             if (widgetInteraction.isWidgetDraggable(widgetInteraction.clickedWidget)) {
-                const { option, target, slot, itemId, opIndex } = getPrimaryWidgetAction(
-                    widgetInteraction.clickedWidget,
-                );
+                // A script-draggable item with no op of its own runs the op of the widget beneath it.
+                const actionWidget = widgetInteraction.dragPassThroughWidget ?? widgetInteraction.clickedWidget;
+                widgetInteraction.dragPassThroughWidget = null;
+                const { option, target, slot, itemId, opIndex } = getPrimaryWidgetAction(actionWidget);
                 deps.handleWidgetAction({
-                    widget: widgetInteraction.clickedWidget,
+                    widget: actionWidget,
                     option,
                     target,
                     source: "primary",

@@ -25,7 +25,7 @@ const events = new Set();
 
 function start(site) {
   const pheasant = P();
-  const tiles = Common.freeTiles(site.location, pheasant.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, pheasant.range, site.size);
   if (tiles.length < 5) return null;
   const event = { site, nests: [], pheasants: [], elapsed: 0, nextFlight: pheasant.cycle[0], flights: 0, eggTakers: new Set(), over: false };
   event.forester = Common.spawnNpc(pheasant.npcs.forester, tiles[0]);

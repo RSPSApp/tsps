@@ -15,15 +15,11 @@ travel: normal dialogue, fairy ring UI, inventory actions and combat after check
 
 An earlier headless MCP run covered the route through stage 65. A separate
 continuation played from stage 65 through the Gorak fight, potion and Queen's
-awakening, and completed the quest. The first-entry Fairy Nuff room cutscene
-still lacks evidence for its camera choreography, and the Queen's awakening
-does not reproduce every native chathead.
+awakening, and completed the quest. The Queen's awakening does not reproduce
+every native chathead.
 
 ## Findings
 
-- **open** Fairy Nuff's first-entry room cutscene remains unimplemented. The Wiki
-  confirms the scene, but no first-entry capture or cache client script supplies
-  its camera choreography.
 - **open** The Queen's awakening uses a shared transcript with one chathead;
   the native scene has dialogue from the Queen, Nuff and Very Wise.
 
@@ -49,12 +45,17 @@ this evidence does not establish their fresh-account packet timing. The Wiki's
 [Surprise! section](https://oldschool.runescape.wiki/w/Fairytale_II_-_Cure_a_Queen#Surprise!)
 independently describes Study revealing the back and reading the sign.
 
-The document display fixes in [#2162](https://github.com/RSPSApp/tsps/issues/2162)
-were already on the base branch. Recording 424 does not show Fairy Nuff's
-first-entry room scene, and the active cache has no client script that supplies
-its camera track. The Wiki confirms a short cutscene, but the scene remains
-unimplemented until its choreography can be supported by a first-entry capture
-or native client data.
+### Fairy Nuff's first room entry
+
+The [quest guide](https://oldschool.runescape.wiki/w/Fairytale_II_-_Cure_a_Queen)
+places the scene before taking the certificate. A [live OSRS playthrough](https://www.youtube.com/watch?v=hF-DnX6GvD8&t=38s)
+shows a low camera sweep past the wall lamp, broken shelves and spilled potions.
+The cache-242 object placements give the shot targets. The camera coordinates
+and duration are reconstructed from the footage.
+
+Walking into the grotto at stage 20 starts the pan. The scene restores control
+and saves varbit 2339's completion state when it finishes. Interrupted visits
+can retry. Existing saves that already took or studied the certificate skip it.
 
 ## Start-to-finish audit findings
 
@@ -86,12 +87,6 @@ The audit also corrected progression issues beyond the issue comments:
   prerequisites.
 
 ## Evidence gaps
-
-The local decoded RSProx corpus and available recordings 424 and 426 contain no
-first-entry Fairy Nuff cutscene. The Wiki confirms that entering the ransacked
-room triggers a short scene, but its camera track and duration remain unknown.
-The 2339 varbit is a stage marker and no cache client script reads it as a camera
-track, so the scene is left unimplemented until there is evidence to reproduce.
 
 The Wiki gives no exact Tanglefoot Farming/Strength damage formula; that remains
 an open Fairytale I parity gap.

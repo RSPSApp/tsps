@@ -25,6 +25,8 @@ const BUTTONS = [BTN_DEPOSIT_WORN, BTN_DEPOSIT_INV, BTN_QUANTITY_X, ...BTN_QUANT
 const QUANTITY_MODE_VARBIT = 4430;
 const QUANTITY_INPUT_VARP = 1794;
 const QUANTITY_ATTRIBUTE = "bank-deposit-box:quantity";
+/** bank_depositbox_oplocu_askquantity: All Settings "Bank Deposit Box item quantity check" off. */
+const DEPOSIT_ALL_ON_USE_VARBIT = 15958;
 const DEPOSIT_ANIMATION = new Animation(834); // seq.human_leverdown
 const CONTAINER_FLAGS = 0x2047e; // Op1-6, Op10, Depth1
 
@@ -152,8 +154,8 @@ function promptItemOnBooth(event) {
   const { player, itemId, itemSlot } = event;
   const count = player.getInventory().getAmount(itemId);
   if (count <= 0) return;
-  if (count === 1) {
-    deposit(player, itemSlot, itemId, 1);
+  if (count === 1 || player.getPacketSender().getVarbit(DEPOSIT_ALL_ON_USE_VARBIT) === 1) {
+    deposit(player, itemSlot, itemId, count);
     return;
   }
 
@@ -173,6 +175,7 @@ function openDepositBox({ player }) {
 
 module.exports = {
   name: "BankDepositBooth",
+  description: "Opens the bank deposit box from the Deposit option and handles its deposit buttons and items used on it.",
   register(api) {
     pluginApi = api;
     api.onObjectInteraction("Bank deposit box", { Deposit: openDepositBox });

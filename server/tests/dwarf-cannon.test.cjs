@@ -132,6 +132,8 @@ test("setting up: the captured ticks, messages, sounds, locs and vars, then 30 b
     assert.ok(at(2).includes("varbit 12393=0") && at(2).includes("spam You place the cannon base on the ground."));
     assert.ok(at(2).includes("anim 827") && at(2).includes("sound 2876"));
     assert.ok(at(2).includes(`varp 4=${Cannon.packCoord(sw)}`) && at(2).includes("varp 2=1"));
+    // The buff bar shows the cannon's ammo only while mcannon_world is the client's world (301) modulo 128.
+    assert.ok(at(2).includes("varbit 1968=45"), "mcannon_world matches the client's world");
     assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [sw.getX(), sw.getY() - 1]);
     assert.ok(at(4).includes("spam You add the stand.") && at(4).includes("varp 2=2"), "the stand 2 ticks later");
     assert.ok(at(7).includes("spam You add the barrels."), "the barrels 3 ticks later");
@@ -232,6 +234,52 @@ test("targeting: singles only what fights you; never through walls or at cannon-
   assert.notEqual(Firing.targetFor(cannon, p), behindWall, "the wall row blocks the shot");
   const kurask = core.NpcDefinition.forId(core.NpcIdentifiers.KURASK);
   assert.ok(Data.NO_CANNON_NPCS.includes(kurask.getName()), "Kurask by its cache name");
+});
+
+test("the Mage Arena's battle mages and Kolodion are never targeted (Wiki)", () => {
+  const p = gunner();
+  const cannon = built(p);
+  for (const [id, x, y] of [[core.NpcIdentifiers.BATTLE_MAGE, 3260, 3262], [core.NpcIdentifiers.BATTLE_MAGE_3, 3261, 3262], [core.NpcIdentifiers.KOLODION_7, 3259, 3262]]) {
+    const npc = spawnNpc(id, x, y);
+    assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);
+  }
+  assert.equal(Firing.targetFor(cannon, p), null);
+});
+
+test("accuracy: a powered staff uses whichever of Ranged and melee is higher; other magic stays melee (Wiki)", () => {
+  const p = gunner();
+  built(p);
+  const bat = spawnNpc(core.NpcIdentifiers.GIANT_BAT, 3260, 3262);
+  const { getMethod } = core.CombatFactory;
+  const { specialRolls, rollAccuracy } = core.AccuracyFormulasDpsCalc;
+  const rolls = { [core.CombatType.MELEE]: 100, [core.CombatType.RANGED]: 100 };
+  let used = null;
+  core.AccuracyFormulasDpsCalc.specialRolls = (_a, _t, style) => ({ attack: rolls[style], defence: 1 });
+  core.AccuracyFormulasDpsCalc.rollAccuracy = (_a, _t, style) => ((used = style), true);
+  const styleWith = (method) => {
+    core.CombatFactory.getMethod = () => method;
+    used = null;
+    Firing.shoot(Cannon.cannonOf(p), p, bat);
+    return used;
+  };
+  const powered = { type: () => core.CombatType.MAGIC, poweredStaff: true };
+  const autocast = { type: () => core.CombatType.MAGIC };
+  try {
+    rolls[core.CombatType.MELEE] = 100;
+    rolls[core.CombatType.RANGED] = 9000;
+    assert.equal(styleWith(powered), core.CombatType.RANGED, "powered staff, Ranged higher");
+    rolls[core.CombatType.MELEE] = 9000;
+    rolls[core.CombatType.RANGED] = 100;
+    assert.equal(styleWith(powered), core.CombatType.MELEE, "powered staff, melee higher");
+    rolls[core.CombatType.MELEE] = 100;
+    rolls[core.CombatType.RANGED] = 9000;
+    assert.equal(styleWith(autocast), core.CombatType.MELEE, "any other magic staff counts as melee");
+    assert.equal(styleWith({ type: () => core.CombatType.RANGED }), core.CombatType.RANGED, "a ranged weapon");
+  } finally {
+    core.CombatFactory.getMethod = getMethod;
+    core.AccuracyFormulasDpsCalc.specialRolls = specialRolls;
+    core.AccuracyFormulasDpsCalc.rollAccuracy = rollAccuracy;
+  }
 });
 
 test("the captured shots fall in their directions' zones (at the NPC's south-west tile)", () => {
@@ -738,3 +786,15 @@ for (const steelHeadroom of [1, 20]) {
     }
   });
 }
+
+// Wiki (Turoth): "the dwarf multicannon is ineffective"; (Vyrewatch Sentinel): Cannons "Immune". The cannon targeted
+// both, and on Turoth its cannonballs could even land with the owner's broad ammo worn.
+test("a Turoth and a Vyrewatch Sentinel are never targeted (Wiki)", () => {
+  const p = gunner();
+  built(p);
+  for (const [id, x, y] of [[core.NpcIdentifiers.TUROTH, 3260, 3262], [core.NpcIdentifiers.VYREWATCH_SENTINEL, 3261, 3262]]) {
+    const npc = spawnNpc(id, x, y);
+    npc.getCombat().setUnderAttack(p);
+    assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);
+  }
+});

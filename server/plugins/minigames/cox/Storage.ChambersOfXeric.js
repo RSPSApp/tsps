@@ -102,13 +102,25 @@ function stacks(id) {
   return definition(id)?.isStackable?.() === true || definition(id)?.isNoted?.() === true;
 }
 
+/** The most one stack can hold, as in the inventory and the bank. */
+const MAX_STACK = 2147483647;
+
+/** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A stored stack keeps no meta, so a preset (or meta-untradeable, unbankable) stack would come back plain. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
 /** A store of items: a list of { id, amount, meta? } with a size. Stackables stack, others take a slot each. */
 function addTo(list, size, id, amount, meta = null) {
   if (stacks(id)) {
     const existing = list.find((entry) => entry.id === id);
     if (existing) {
-      existing.amount += amount;
-      return amount;
+      const added = Math.max(0, Math.min(amount, MAX_STACK - existing.amount));
+      existing.amount += added;
+      return added;
     }
     if (list.length >= size) return 0;
     list.push({ id, amount });
@@ -175,8 +187,21 @@ function tierOf(raid) {
 // ---------------------------------------------------------------- the interfaces
 
 /** What the player has open: { kind: "private" | "shared", size, raid }. */
+/**
+ * The storage the player has open: only while its interface is open, and the raid's own storage only inside the raid
+ * (the mountain's withdraw-only unit is outside it). The view was kept after the interface closed, so a click on the
+ * storage or side components from anywhere (the Wilderness too) deposited and withdrew: a remote bank.
+ */
 function viewOf(player) {
-  return player.getAttribute(ATTR_VIEW) ?? null;
+  const view = player.getAttribute(ATTR_VIEW) ?? null;
+  if (!view) return null;
+  const expected = view.kind === "private" ? Shared.INTERFACE.PRIVATE_STORAGE : Shared.INTERFACE.SHARED_STORAGE;
+  const raid = Raid.raidOf(player);
+  const open = player.getInterfaceId?.() === expected
+    && (view.mount || (raid != null && (view.kind !== "shared" || view.raid === raid)));
+  if (open) return view;
+  player.setAttribute(ATTR_VIEW, null);
+  return null;
 }
 
 function sendSide(player, privateView) {
@@ -273,7 +298,11 @@ function deposit(player, slot, amount) {
     return;
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
-  const stored = stacks(id) ? depositStack(inventory, store, view.size, item, amount) : depositEach(inventory, store, view.size, slot, amount);
+  if (stacks(id) && restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
+  const stored = stacks(id) ? depositStack(inventory, store, view.size, slot, amount) : depositEach(inventory, store, view.size, slot, amount);
   if (stored <= 0) {
     player.sendMessage(view.kind === "private" ? "Not enough space in your private storage." : "The shared storage is full.");
     return;
@@ -282,10 +311,11 @@ function deposit(player, slot, amount) {
   else refresh(player);
 }
 
-function depositStack(inventory, store, size, item, amount) {
-  const id = item.getId();
-  const stored = addTo(store, size, id, Math.min(amount, inventory.getAmount(id)), item.getMeta());
-  if (stored > 0) inventory.delete(id, stored);
+/** The clicked stack, by its slot: another stack of the same id (a preset one) is never taken instead. */
+function depositStack(inventory, store, size, slot, amount) {
+  const item = inventory.getItems()[slot];
+  const stored = addTo(store, size, item.getId(), Math.min(amount, item.getAmount()), item.getMeta());
+  if (stored > 0) inventory.deleteAtSlot(slot, stored);
   return stored;
 }
 
@@ -310,7 +340,9 @@ function withdraw(player, id, amount, first = null) {
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
   const inventory = player.getInventory();
   const stackable = definition(id)?.isStackable?.() === true;
-  const room = stackable ? (inventory.contains(id) || inventory.getFreeSlots() > 0 ? Infinity : 0) : inventory.getFreeSlots();
+  // A stack takes only what its slot can still hold (the stack cap, or a free slot for a stack whose meta
+  // differs): pulling more out of the store would delete the rest.
+  const room = stackable ? inventory.getAddableAmount(new Item(id, countIn(store, id))) : inventory.getFreeSlots();
   const wanted = Math.min(amount, countIn(store, id), room);
   if (wanted <= 0) {
     player.sendMessage("Not enough space in your inventory.");
@@ -386,9 +418,12 @@ function depositOrBankAll({ player }) {
   const items = privateItems(player);
   for (const entry of [...items]) {
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (bank.getFreeSlots() <= 0 && !bank.contains(entry.id)) continue;
-    bank.add(new Item(entry.id, entry.amount), false);
-    takeFrom(items, entry.id, entry.amount);
+    // Only what the bank can hold leaves the storage (the stack cap, its space), with the entry's own meta, and
+    // from that entry: the rest stays stored rather than being deleted.
+    const moving = bank.getAddableAmount(new Item(entry.id, entry.amount, entry.meta ?? null));
+    if (moving <= 0) continue;
+    bank.add(new Item(entry.id, moving, entry.meta ?? null), false);
+    pullFrom(items, entry.id, moving, entry);
   }
   if (items.length > 0) player.sendMessage("Not enough space in your bank.");
   refresh(player);
@@ -419,15 +454,17 @@ function dragPrivate(event) {
   refresh(player);
 }
 
+/** The storage's own switch buttons: only from the other storage, open at a unit in the raid. */
 function switchToShared({ player }) {
   const raid = Raid.raidOf(player);
-  if (raid && tierOf(raid) > 0) openShared(player, raid);
+  const view = viewOf(player);
+  if (raid && view?.kind === "private" && !view.mount && tierOf(raid) > 0) openShared(player, raid);
   return true;
 }
 
 function switchToPrivate({ player }) {
   const raid = Raid.raidOf(player);
-  openPrivate(player, TIERS[tierOf(raid)].personal);
+  if (raid && viewOf(player)?.kind === "shared") openPrivate(player, TIERS[tierOf(raid)].personal);
   return true;
 }
 
@@ -607,5 +644,5 @@ module.exports = function registerCoxStorage(api) {
 
 Object.assign(module.exports, {
   TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
-  dragPrivate, isUltimateIronman,
+  dragPrivate, isUltimateIronman, depositOrBankAll,
 });

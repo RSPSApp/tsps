@@ -19,7 +19,11 @@
     },
     { "quest": "Heroes' Quest", "items": ["DRAGON_BATTLEAXE", "DRAGON_MACE"] },
     { "quest": "Monkey Madness I", "items": ["DRAGON_SCIMITAR", "DRAGON_SCIMITAR_OR_"] },
-    { "quest": "Monkey Madness II", "items": ["HEAVY_BALLISTA", "HEAVY_BALLISTA_OR_"] },
+    {
+      "quest": "Monkey Madness II",
+      "items": ["HEAVY_BALLISTA", "HEAVY_BALLISTA_OR_"],
+      "message": "You must have completed Monkey Madness II and the advanced combat training from Duke to be able to wield this weapon."
+    },
     { "quest": "Regicide", "items": ["DRAGON_HALBERD"] },
     { "quest": "Legends' Quest", "items": ["DRAGON_SQ_SHIELD", "DRAGON_SQ_SHIELD_G_"] },
     { "quest": "Desert Treasure I", "items": ["ANCIENT_STAFF"] },
@@ -54,7 +58,7 @@
       "items": [
         "WHITE_2H_SWORD", "WHITE_BATTLEAXE", "WHITE_CLAWS", "WHITE_DAGGER", "WHITE_DAGGER_P_",
         "WHITE_DAGGER_P_PLUS_", "WHITE_DAGGER_P_PLUS_PLUS_", "WHITE_HALBERD", "WHITE_LONGSWORD",
-        "WHITE_MACE", "WHITE_MAGIC_STAFF", "WHITE_SCIMITAR", "WHITE_SWORD", "WHITE_WARHAMMER",
+        "WHITE_MACE", "WHITE_MAGIC_STAFF", "WHITE_SCIMITAR", "WHITE_SHORTSWORD", "WHITE_WARHAMMER",
         "WHITE_BOOTS", "WHITE_CHAINBODY", "WHITE_FULL_HELM", "WHITE_GLOVES", "WHITE_KITESHIELD",
         "WHITE_MED_HELM", "WHITE_PLATEBODY", "WHITE_PLATELEGS", "WHITE_PLATESKIRT", "WHITE_SQ_SHIELD"
       ]

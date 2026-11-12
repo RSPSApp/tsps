@@ -18,6 +18,11 @@ const Tools = require("./Tools.GiantsFoundry");
 const ANIM_STORAGE = 899; // human_furnace
 const HEADER_COMPONENT = 2; // combat_interface:header
 const SOUND_PICK_UP = 1051;
+/**
+ * The preform is a giant's two-handed sword: human_weapon_giant01 ready, turn, walk and run
+ * (cache sequences 9460, 823, 9461, 820-822, 9459), where the item's own default is a one-handed pose.
+ */
+const STANCE = [9460, 823, 9461, 820, 821, 822, 9459];
 const POURED_AT = "pouredAt";
 const JIG = { EMPTY: 0, POURED: 2, COOLED: 3 };
 /** Molten metal cools about a degree a tick in the jig (rsprox: 980-998 at pickup). */
@@ -38,7 +43,9 @@ const MESSAGE = {
   GLOVES_COOL: (gloves) => `Your ${gloves} cool the preform as you reach for it.`,
   /** Not captured: every recorded pickup was made in ice gloves. */
   BUCKET_COOLS: "You cool the preform with your bucket of water as you take it from the mould.",
-  TOO_HOT: "The preform is too hot to pick up. You need ice gloves or a bucket of water.",
+  /** Not captured either (no recorded pour used water); the quest says the metal must be cooled first. */
+  BUCKET_COOLED: "You pour the water over the hot preform, cooling it down.",
+  TOO_HOT: "The preform is still molten! You need to cool it down.",
 };
 
 function spam(player, text) {
@@ -49,6 +56,17 @@ function hasFreeHands(player) {
   const { Equipment } = Shared.core();
   const equipment = player.getEquipment();
   return !equipment.get(Equipment.WEAPON_SLOT)?.isValid?.() && !equipment.get(Equipment.SHIELD_SLOT)?.isValid?.();
+}
+
+/** Two hands on the sword: the walk and stand poses follow the preform while it is worn. */
+function holdStance(player) {
+  const { Flag } = Shared.core();
+  player.setRenderAnimations(STANCE);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+}
+
+function releaseStance(player) {
+  if (player.getRenderAnimations() === STANCE) player.setRenderAnimations(null);
 }
 
 function refreshWeapon(player) {
@@ -72,6 +90,7 @@ function equip(player) {
   const { Equipment, Item } = Shared.core();
   player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(Shared.ITEM.PREFORM, 1));
   refreshWeapon(player);
+  holdStance(player);
   player.getPacketSender().sendString("Preform", (Shared.INTERFACE.COMBAT_TAB << 16) | HEADER_COMPONENT);
   openHud(player);
 }
@@ -81,6 +100,7 @@ function unequip(player) {
   const { Equipment, Item } = Shared.core();
   if (!Shared.wornPreform(player)) return false;
   player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(-1, 0));
+  releaseStance(player);
   refreshWeapon(player);
   closeHud(player);
   return true;
@@ -141,6 +161,33 @@ function coolingGloves(player) {
   return COOLING_GLOVES.includes(id) ? id : null;
 }
 
+/** Whether an item-on-object event names the mould jig (the map holds its multiloc). */
+function isMouldJig(player, objectId) {
+  if (objectId === Shared.OBJECT.MOULD_JIG_MULTI) return true;
+  const { ObjectDefinition } = Shared.core();
+  const name = ObjectDefinition.forPlayer(objectId, player)?.getName?.();
+  return Shared.OBJECT.MOULD_JIG.includes(name);
+}
+
+/**
+ * Pouring the bucket over the jig cools the poured metal so it can be taken out: the Wiki's
+ * quest walkthrough says "use a bucket of water to cool the sword", and Kovac's next line is
+ * "take the preform and put it in your hand". Every capture drank from the ice gloves instead,
+ * so the text is the only part not recorded.
+ */
+function coolMould(event) {
+  const { player, itemId } = event;
+  if (event.handled || itemId !== Shared.ITEM.BUCKET_OF_WATER || !isMouldJig(player, event.objectId)) return;
+  if (!Shared.questComplete(player)) return;
+  if (Shared.get(player, Shared.VARBIT.MOULD_STATE) !== JIG.POURED) return;
+  event.handled = true;
+  Shared.set(player, Shared.VARBIT.MOULD_STATE, JIG.COOLED);
+  player.getInventory().delete(Shared.ITEM.BUCKET_OF_WATER, 1);
+  player.getInventory().adds(Shared.ITEM.BUCKET, 1);
+  player.getInventory().refreshItems();
+  spam(player, MESSAGE.BUCKET_COOLED);
+}
+
 /** Takes the poured preform from the jig, working out its difficulty, quality and stages. */
 function pickUp({ player }) {
   if (!Shared.questComplete(player)) return false;
@@ -149,19 +196,19 @@ function pickUp({ player }) {
     return true;
   }
   const gloves = coolingGloves(player);
-  const bucket = player.getInventory().contains(Shared.ITEM.BUCKET_OF_WATER);
-  if (gloves === null && !bucket) {
-    Shared.statement(player, MESSAGE.TOO_HOT);
-    return true;
-  }
-  Shared.set(player, Shared.VARBIT.MOULD_STATE, JIG.COOLED);
-  if (gloves !== null) {
-    spam(player, MESSAGE.GLOVES_COOL(Shared.itemName(gloves)));
-  } else {
-    player.getInventory().delete(Shared.ITEM.BUCKET_OF_WATER, 1);
-    player.getInventory().adds(Shared.ITEM.BUCKET, 1);
-    player.getInventory().refreshItems();
-    spam(player, MESSAGE.BUCKET_COOLS);
+  const cooled = Shared.get(player, Shared.VARBIT.MOULD_STATE) === JIG.COOLED;
+  if (!cooled) {
+    if (gloves !== null) {
+      spam(player, MESSAGE.GLOVES_COOL(Shared.itemName(gloves)));
+    } else if (player.getInventory().contains(Shared.ITEM.BUCKET_OF_WATER)) {
+      player.getInventory().delete(Shared.ITEM.BUCKET_OF_WATER, 1);
+      player.getInventory().adds(Shared.ITEM.BUCKET, 1);
+      player.getInventory().refreshItems();
+      spam(player, MESSAGE.BUCKET_COOLS);
+    } else {
+      Shared.statement(player, MESSAGE.TOO_HOT);
+      return true;
+    }
   }
   const difficulty = Shared.get(player, Shared.VARBIT.ALLOY_DIFFICULTY);
   const quality = Math.max(0, difficulty + Mould.playerScore(player));
@@ -208,17 +255,22 @@ function keepPreformWorn(event) {
 /** A preform worn outside the cave (an old save) goes back into storage. */
 function checkLogin({ player }) {
   if (Shared.wornPreform(player) && !Shared.inRoom(player.getLocation())) store(player);
-  else if (Shared.wornPreform(player)) openHud(player);
+  else if (Shared.wornPreform(player)) {
+    holdStance(player);
+    openHud(player);
+  }
 }
 
 module.exports = function attachPreform(api) {
   api.onObjectInteraction(Shared.OBJECT.PREFORM_STORAGE, { "Store-preform": storePreform, "Take-preform": takePreform });
   api.onObjectInteraction("Mould jig (Poured metal)", { "Pick-up": pickUp });
   api.onObjectInteraction("Mould jig (Cooled metal)", { "Pick-up": pickUp });
+  api.onItemOnObject(coolMould, { noted: false });
   api.onCanUnequip(keepPreformWorn);
   api.onPlayerLogin(checkLogin);
 };
 
 Object.assign(module.exports, {
-  hasFreeHands, rollSeeds, equip, unequip, store, storeOnLeave, noticeStoredPreform, openHud, closeHud, MESSAGE,
+  hasFreeHands, rollSeeds, equip, unequip, STANCE, store, storeOnLeave, noticeStoredPreform, openHud, closeHud, MESSAGE,
+  coolMould, isMouldJig,
 });

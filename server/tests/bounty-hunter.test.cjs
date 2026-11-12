@@ -18,10 +18,12 @@ test("rogues need to be within five levels; assigned targets use their matchmaki
   const bh = require("../plugins/minigames/bountyhunter/State.BountyHunter");
   const areas = [];
   const state = { ...bh, arena: new Set(), targets: new Map(), immuneUntil: new WeakMap() };
-  Area(new Proxy({
+  const api = new Proxy({
     core: { Area: class {}, Boundary: class {}, World: { getProcessCycle: () => 100 } },
     registerArea: (area) => areas.push(area),
-  }, { get: (object, key) => object[key] ?? (() => {}) }), state);
+    getPluginConfig: (_key, fallback) => fallback,
+  }, { get: (object, key) => object[key] ?? (() => {}) });
+  Area(api, state);
   const actor = (level) => ({ isPlayer: () => true,
     getSkillManager: () => ({ getCombatLevel: () => level }), sendMessage() {},
     getPacketSender: () => ({ sendVarbit() {} }) });
@@ -47,6 +49,21 @@ test("rogues need to be within five levels; assigned targets use their matchmaki
   require("../plugins/minigames/bountyhunter/Hud.BountyHunter")({ core: { CacheDefinitions: { getVarbitId: (name) => name } } }, state);
   Area._test.endImmunity({ attacker, target: actor(100) });
   assert.equal(state.immuneUntil.has(attacker), false, 'a hit on a player ends it');
+
+  for (const difference of [12, 0]) {
+    api.getPluginConfig = (key) => {
+      assert.equal(key, "BountyHunter:levelDifference");
+      return difference;
+    };
+    Area(api, state);
+    const arena = areas.at(-1);
+    for (const offset of [-difference - 1, -difference, difference, difference + 1]) {
+      const target = actor(100 + offset);
+      state.arena.add(target);
+      assert.equal(arena.canAttack(attacker, target), Math.abs(offset) <= difference);
+      state.arena.delete(target);
+    }
+  }
 });
 
 test("an Exit gate takes a player from the arena into the lobby", (t) => {
@@ -160,6 +177,7 @@ test("combat XP blocked in the arena still sends fake XP drops", async () => {
       XPDROPS_ENABLED_ATTRIBUTE: "xp-drops:enabled",
     },
     registerArea: noop,
+    getPluginConfig: (_key, fallback) => fallback,
     onPrayerDisabled: noop,
     onCanGainExperience: noop,
     onAttackTiming: noop,

@@ -15,6 +15,7 @@ import { Misc } from "../../../../util/Misc";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { Equipment } from "../../../model/container/impl/Equipment";
 import { PrayerHandler } from "../../PrayerHandler";
+import { TeleBlock } from "./TeleBlock";
 import { CombatEffectSpell } from "./CombatEffectSpell";
 import { CombatNormalSpell, CombatNormalSpellOptions } from "./CombatNormalSpell";
 import { CombatSpell } from "./CombatSpell";
@@ -39,6 +40,19 @@ class ChargeSpell extends Spell {
     }
 
     cast(player: Player): boolean {
+        // Wiki (Charge): it needs the Mage Arena I miniquest, which ends with the statues' god cape (the Mage Arena
+        // plugin answers "mage-arena:cape-received"). Refused before the runes; TSPS wording for the line.
+        const arena = { player, received: null as boolean | null };
+        PluginManager.emitCustomEvent("mage-arena:cape-received", arena);
+        if (arena.received !== true) {
+            // A league relic may lift every spell's quest requirement (Wiki: Grimoire), as for Dream Mentor's spells.
+            const unlock = { player, name: "charge", unlocked: false };
+            PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+            if (unlock.unlocked !== true) {
+                player.sendMessage("You need to complete the Mage Arena to cast this spell.");
+                return true;
+            }
+        }
         // The cooldown is checked before the runes are taken, so a refused cast costs nothing.
         if (!this.canCast(player, false) || !this.canCast(player, true)) {
             return true;
@@ -46,7 +60,12 @@ class ChargeSpell extends Spell {
         player.getSkillManager().addExperiences(Skill.MAGIC, this.baseExperience());
         const until = World.getProcessCycle() + CombatSpells.CHARGE_TICKS;
         player.setAttribute(CombatSpells.CHARGE_UNTIL, until);
-        player.sendMessage("You feel charged with magic power.");
+        // rsprox_transcripts/235/03344.txt tick 5704: the red line, human_casting (811), teleport_casting
+        // (111) at delay 32 and height 128, and synth sound 1651.
+        player.sendMessage("<col=ef1020>You feel charged with magic power.</col>");
+        player.performAnimation(new Animation(811));
+        player.performGraphic(new Graphic(111, 32, 128 as GraphicHeight));
+        player.getPacketSender().sendSoundEffect(1651, 1, 0, 255);
         // The plugin that says "Your magical charge fades away" schedules itself from this.
         PluginManager.emitCustomEvent("magic:charge-cast", { player, until });
         return true;
@@ -289,6 +308,70 @@ export class CombatAncientSpellExtend extends CombatSpell {
 
 
 
+/**
+ * The staves that cast each god spell (Wiki: Saradomin Strike, Claws of Guthix, Flames of Zamorak): the god staff and
+ * the bladed staff of the same god, and for Flames the charged revenant sceptres too.
+ */
+const SARADOMIN_STRIKE_STAVES = new Set([ItemIdentifiers.SARADOMIN_STAFF, ItemIdentifiers.STAFF_OF_LIGHT]);
+/** Wiki (Claws of Guthix): a Guthix staff, the void knight mace or the staff of balance. */
+const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.STAFF_OF_BALANCE]);
+const FLAMES_OF_ZAMORAK_STAVES = new Set([
+    ItemIdentifiers.ZAMORAK_STAFF, ItemIdentifiers.STAFF_OF_THE_DEAD, 12902, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
+    ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,
+]);
+
+/**
+ * Wiki (Claws of Guthix, Flames of Zamorak): a hit lowers Defence or Magic by 1 + 5%; it neither
+ * stacks nor reapplies until the stat is back to its base level (a boosted stat is drained too).
+ * A player's cast only: the Mage Arena's battle mages cast the same spells and drain nothing
+ * (rsprox_transcripts/238/04155.txt: a guthix_mage's Claws lands at ticks 1865, 1877 and 1889 with no
+ * Defence update).
+ */
+function godSpellDrain(cast: Mobile, castOn: Mobile, skill: Skill): void {
+    if (!cast.isPlayer()) return;
+    if (castOn.isNpc()) {
+        const npc = castOn.getAsNpc();
+        const current = npc.getCurrentLevel(skill);
+        if (current < npc.getMaxLevel(skill)) return;
+        npc.setCurrentLevels(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    } else if (castOn.isPlayer()) {
+        const skills = castOn.getAsPlayer().getSkillManager();
+        const current = skills.getCurrentLevel(skill);
+        if (current < skills.getMaxLevel(skill)) return;
+        // setCurrentLevelCombat sends the stat itself.
+        skills.setCurrentLevelCombat(skill, Math.max(0, current - (1 + Math.floor(current * 0.05))));
+    }
+}
+
+/** Wiki (Saradomin Strike): a player's hit lowers the target's Prayer points by 1; most NPCs have none. */
+function saradominStrikeDrain(cast: Mobile, castOn: Mobile): void {
+    if (!cast.isPlayer() || !castOn.isPlayer()) return;
+    const skills = castOn.getAsPlayer().getSkillManager();
+    const current = skills.getCurrentLevel(Skill.PRAYER);
+    if (current <= 0) return;
+    skills.setCurrentLevelCombat(Skill.PRAYER, current - 1);
+}
+
+/**
+ * Wiki (Shadow spells): a hit lowers the target's Attack by 10% (rush, burst) or 15% (blitz, barrage),
+ * players and monsters alike, unless it is already lowered; an Ancient sceptre's x1.1 arrives as `multiplier`.
+ * The player branch is each spell's own; this is the NPC one.
+ */
+function shadowDrainNpc(castOn: Mobile, percent: number, multiplier: number): void {
+    if (castOn.isPlayer()) return;
+    const npc = castOn.getAsNpc?.();
+    if (!npc) return;
+    const level = npc.getCurrentLevel(Skill.ATTACK);
+    if (level < npc.getMaxLevel(Skill.ATTACK)) return;
+    npc.setCurrentLevels(Skill.ATTACK, level - Math.floor(level * percent * multiplier));
+}
+
+/** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
+function godStaffRequired(player: Player, staves: Set<number>): Item[] {
+    const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
+    return [new Item(staves.has(weaponId) ? weaponId : staves.values().next().value as number)];
+}
+
 export class CombatSpells {
     public static readonly CHARGE_UNTIL = "charge:until";
     public static readonly CHARGE_NEXT_CAST = "charge:next-cast";
@@ -511,7 +594,7 @@ export class CombatSpells {
         },
 
         itemsRequired(player) {
-            return [new Item(556, 1), new Item(558, 1), new Item(554, 3)];
+            return [new Item(556, 2), new Item(558, 1), new Item(554, 3)];
         },
 
         levelRequired() {
@@ -736,6 +819,18 @@ export class CombatSpells {
     });
 
     public static CRUMBLE_UNDEAD = new CombatNormalSpell({
+        /**
+         * Wiki (Crumble Undead): it can only be cast on undead enemies; anything else gets this line.
+         * A scripted, unattackable target (Enakhra's Lament's boneguard) is left to its quest's handler.
+         */
+        canCastOnTarget(cast, target) {
+            const definition = target.isNpc() ? target.getAsNpc().getCurrentDefinition() : null;
+            if (definition && (definition.isUndead?.() || !definition.isAttackable?.())) return true;
+            if (cast.isPlayer()) {
+                cast.getAsPlayer().sendMessage("This spell only affects skeletons, zombies, ghosts and shades.");
+            }
+            return false;
+        },
         castAnimation() {
             return new Animation(724);
         },
@@ -750,7 +845,7 @@ export class CombatSpells {
             return 15;
         },
         startGraphic() {
-            return new Graphic(145, 6553600);
+            return new Graphic(145, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 24.5;
@@ -861,7 +956,7 @@ export class CombatSpells {
             return 25;
         },
         startGraphic() {
-            return new Graphic(87, 6553600);
+            return new Graphic(87, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 30;
@@ -924,16 +1019,13 @@ export class CombatSpells {
             return new Graphic(329);
         },
         maximumHit() {
-            return 19;
+            return 10; // Magic / 10 and the Slayer's staff (e) are added by plugins/items/SlayersStaff.plugin.js.
         },
         startGraphic() {
             return null; // None live; 327 is the Slayer salt sprinkle.
         },
         baseExperience() {
             return 30;
-        },
-        equipmentRequired(player) {
-            return [new Item(4170)];
         },
         itemsRequired(player) {
             return [new Item(558, 4), new Item(560, 1)];
@@ -1032,9 +1124,10 @@ export class CombatSpells {
         baseExperience: () => {
             return 35;
         },
-        equipmentRequired: (player: Player) => {
-            return [new Item(2415)];
-        },
+        finishCast: (cast: Mobile, castOn: Mobile) => saradominStrikeDrain(cast, castOn),
+        // rsprox_transcripts/235/03344.txt tick 4503.
+        missingEquipmentMessage: "You must be wielding the Staff of Saradomin or the Staff of Light to cast this spell.",
+        equipmentRequired: (player: Player) => godStaffRequired(player, SARADOMIN_STRIKE_STAVES),
         itemsRequired: (player: Player) => {
             return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
         },
@@ -1066,11 +1159,10 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
-        equipmentRequired: (player: Player): Item[] => {
-            return [new Item(2416)];
-        },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.DEFENCE),
+        equipmentRequired: (player: Player): Item[] => godStaffRequired(player, CLAWS_OF_GUTHIX_STAVES),
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 4), new Item(565, 2), new Item(554, 1)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1100,11 +1192,12 @@ export class CombatSpells {
         baseExperience: (): number => {
             return 35;
         },
-        equipmentRequired: (player: Player): Item[] => {
-            return [new Item(2417)];
-        },
+        finishCast: (cast: Mobile, castOn: Mobile) => godSpellDrain(cast, castOn, Skill.MAGIC),
+        // rsprox_transcripts/235/03344.txt tick 5691.
+        missingEquipmentMessage: "You must be wielding the Staff of Zamorak, Staff of the Dead, Thammaron's Sceptre, or the Accursed Sceptre to cast this spell.",
+        equipmentRequired: (player: Player): Item[] => godStaffRequired(player, FLAMES_OF_ZAMORAK_STAVES),
         itemsRequired: (player: Player): Item[] => {
-            return [new Item(556, 4), new Item(565, 2), new Item(554, 2)];
+            return [new Item(556, 1), new Item(565, 2), new Item(554, 4)];
         },
         levelRequired: (): number => {
             return 60;
@@ -1129,7 +1222,7 @@ export class CombatSpells {
             return 17;
         },
         startGraphic: (): Graphic => {
-            return new Graphic(158, GraphicHeight.MIDDLE);
+            return new Graphic(158, GraphicHeight.HIGH);
         },
         baseExperience: (): number => {
             return 36;
@@ -1163,7 +1256,7 @@ export class CombatSpells {
             return 18;
         },
         startGraphic() {
-            return new Graphic(161, GraphicHeight.MIDDLE);
+            return new Graphic(161, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 37.5;
@@ -1195,7 +1288,7 @@ export class CombatSpells {
             return new Graphic(169);
         },
         startGraphic() {
-            return new Graphic(167, 6553600);
+            return new Graphic(167, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 76;
@@ -1226,7 +1319,7 @@ export class CombatSpells {
             return 19;
         },
         startGraphic() {
-            return new Graphic(164, GraphicHeight.MIDDLE);
+            return new Graphic(164, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 40;
@@ -1258,7 +1351,7 @@ export class CombatSpells {
             return new Graphic(172);
         },
         startGraphic: function () {
-            return new Graphic(170, 6553600);
+            return new Graphic(170, GraphicHeight.HIGH);
         },
         baseExperience: function () {
             return 83;
@@ -1294,7 +1387,7 @@ export class CombatSpells {
         },
 
         startGraphic() {
-            return new Graphic(155, GraphicHeight.MIDDLE);
+            return new Graphic(155, GraphicHeight.HIGH);
         },
 
         baseExperience() {
@@ -1324,7 +1417,7 @@ export class CombatSpells {
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1456, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1457, GraphicHeight.HIGH),
         maximumHit: () => 21,
-        startGraphic: () => new Graphic(1455, GraphicHeight.MIDDLE),
+        startGraphic: () => new Graphic(1455, GraphicHeight.SURGE_CAST),
         baseExperience: () => 44.5,
         itemsRequired: () => [new Item(556, 7), new Item(21880)],
         levelRequired: () => 81,
@@ -1350,7 +1443,7 @@ export class CombatSpells {
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1462, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1463, GraphicHeight.HIGH),
         maximumHit: () => 23,
-        startGraphic: () => new Graphic(1461, GraphicHeight.MIDDLE),
+        startGraphic: () => new Graphic(1461, GraphicHeight.SURGE_CAST),
         baseExperience: () => 48.2,
         itemsRequired: () => [new Item(556, 7), new Item(557, 10), new Item(21880)],
         levelRequired: () => 90,
@@ -1389,7 +1482,7 @@ export class CombatSpells {
         maximumHit: () => 16,
         startGraphic: () => new Graphic(1865),
         baseExperience: () => 27,
-        itemsRequired: () => [new Item(554, 3), new Item(566)],
+        itemsRequired: () => [new Item(554, 3), new Item(562)],
         levelRequired: () => 44,
         spellId: () => 20398,
     }, true);
@@ -1547,13 +1640,13 @@ export class CombatSpells {
             return new Graphic(80, GraphicHeight.HIGH); // Live, a Stun that lands shows stunned; 107 is Weaken's impact.
         },
         startGraphic() {
-            return new Graphic(173, 6553600);
+            return new Graphic(173, GraphicHeight.HIGH);
         },
         baseExperience() {
             return 90;
         },
         itemsRequired(player) {
-            return [new Item(557, 12), new Item(555, 12), new Item(556, 1)];
+            return [new Item(557, 12), new Item(555, 12), new Item(566, 1)];
         },
         levelRequired() {
             return 80;
@@ -1564,6 +1657,8 @@ export class CombatSpells {
     });
 
     public static TELEBLOCK = new TeleBlockSpell({
+        // Wiki: Tele Block deals no damage; without a declared maximum a player's cast defaults to 1.
+        maximumHit: () => 0,
         castAnimation: function () {
             return new Animation(1819);
         },
@@ -1581,10 +1676,7 @@ export class CombatSpells {
                     return;
                 }
                 // Wiki: 5 minutes, halved when Protect from Magic was already up.
-                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 150 : 300;
-                player.getCombat().getTeleblockTimer().start(seconds);
-                player.getPacketSender().sendEffectTimer(seconds, EffectTimer.TELE_BLOCK)
-                    .sendMessage("You have just been teleblocked!");
+                TeleBlock.apply(player, cast.isPlayer() ? (cast as Player).getUsername() : "a monster");
             } else if (castOn.isNpc()) {
                 if (cast.isPlayer()) {
                     (cast as Player).sendMessage("Your spell has no effect on this target.");
@@ -1633,6 +1725,7 @@ export class CombatSpells {
         () => { return new Animation(1978); },
         () => { },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.1, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
                 if (player.getSkillManager().getCurrentLevel(Skill.ATTACK) < player.getSkillManager().getMaxLevel(Skill.ATTACK)) {
@@ -1685,7 +1778,7 @@ export class CombatSpells {
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return Projectile.createProjectile(cast, castOn, 360, 0, 20, 43, 31); },
         () => { return new Graphic(361); },
-        () => { return 18; },
+        () => { return 16; },
         () => { return 34; },
         () => {
             return [
@@ -1705,7 +1798,7 @@ export class CombatSpells {
         () => { return 1; },
         () => { return null; },
         () => { return new Graphic(389); },
-        () => { return 13; },
+        () => { return 17; },
         () => { return 36; },
         () => { return [new Item(556, 2), new Item(554, 2), new Item(562, 4), new Item(560, 2)]; },
         () => { return 62; },
@@ -1717,6 +1810,7 @@ export class CombatSpells {
         () => { return new Animation(1979); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.1, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
 
@@ -1800,6 +1894,7 @@ export class CombatSpells {
         () => { return new Animation(1978); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.15, multiplier);
             if (castOn.isPlayer()) {
                 const player = castOn as Player;
 
@@ -1842,7 +1937,7 @@ export class CombatSpells {
     public static ICE_BLITZ = new CombatAncientSpellExtend(
 
         () => { return new Animation(1978); },
-        () => { return new Graphic(366, 6553600); },
+        () => { return new Graphic(366, GraphicHeight.HIGH); },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => { getCombatFactory().freezeTicks(castOn, Math.floor(24 * multiplier), null, cast, "ice"); },
         () => { return 0; },
         (cast: Mobile, castOn: Mobile) => { return null; },
@@ -1876,6 +1971,7 @@ export class CombatSpells {
         () => { return new Animation(1979); },
         () => { return null; },
         (cast: Mobile, castOn: Mobile, damage: number, multiplier: number) => {
+            shadowDrainNpc(castOn, 0.15, multiplier);
             if (castOn.isPlayer()) {
                 const player: Player = castOn as Player;
 

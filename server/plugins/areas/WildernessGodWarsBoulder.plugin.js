@@ -19,15 +19,20 @@ const CAVERN_SIDE = { x: 3055, y: 10165, z: 3 };
 
 let core;
 
+/** The game cycle of each player's last move: one a tick (each queued click moved them at once, with XP each way in). */
+const lastMove = new WeakMap();
+
 function moveBoulder(event) {
   const { npc, player } = event;
   if (npc?.getRealId?.() !== BOULDER_ID || event.clickType !== 1) return;
   event.handled = true;
+  if (lastMove.get(player) === core.World.getProcessCycle()) return;
   const skills = player.getSkillManager();
   if (skills.getCurrentLevel(core.Skill.STRENGTH) < LEVEL) {
     player.sendMessage(`You need a Strength level of ${LEVEL} to move this boulder.`);
     return;
   }
+  lastMove.set(player, core.World.getProcessCycle());
   const goingIn = player.getLocation().getX() >= CAVERN_SIDE.x;
   const to = goingIn ? HALLWAY_SIDE : CAVERN_SIDE;
   player.moveTo(new core.Location(to.x, to.y, to.z));
@@ -37,6 +42,7 @@ function moveBoulder(event) {
 
 module.exports = {
   name: "WildernessGodWarsBoulder",
+  description: "Lets players with 60 Strength move the boulder blocking the Wilderness God Wars Dungeon corridor, gaining 5.5 Strength XP going in.",
   members: true,
   register(api) {
     core = api.core;

@@ -52,9 +52,9 @@ function gather(request) {
   if (placed > 0 && xp > 0) player.getSkillManager().addExperiences(skill, (xp * placed) / amount);
 }
 
-/** `storage:room`: the bank's room counts, so a full inventory keeps gathering. */
+/** `storage:room`: the bank's room counts for the relic's own skills, so a full inventory keeps gathering. */
 function room(request) {
-  if (!request.room && active(request.player) && banks(request.player) && Common.bankHasRoom(request.player, request.itemId)) request.room = true;
+  if (!request.room && harvested(request.skill) && active(request.player) && banks(request.player) && Common.bankHasRoom(request.player, request.itemId)) request.room = true;
 }
 
 /** A rock or tree stands while a character of an endless league (Demonic Pacts) gathers from it. */
@@ -69,4 +69,5 @@ module.exports = function attach(api) {
   api.onCustomEvent("storage:room", room);
   api.onCustomEvent("mining:deplete-rock", endless);
   api.onCustomEvent("woodcutting:deplete-tree", endless);
+  api.onCustomEvent("fishing:continue", endless);
 };

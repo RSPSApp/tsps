@@ -30,6 +30,21 @@ const Bots = require("./lms/Bots.LastManStanding");
 
 module.exports = {
   name: "LastManStanding",
+  description: "Adds Last Man Standing in Casual, Competitive and High Stakes modes, with ranks, load-outs, stashed belongings and Lisa's supply chest.",
+  config: {
+    "LastManStanding:seedBots": {
+      type: "boolean", label: "Seed Last Man Standing with bots", default: true,
+      help: "Fills lobbies with bots that fight on the PvP brain. Turn off for players only.",
+    },
+    "LastManStanding:minPlayers": {
+      type: "number", label: "Players needed to start", defaultText: "The mode's own minimum (24 for the competitive modes)", integer: true, min: 1,
+      help: "Lowest number of players a game needs. Cannot go above the mode's own minimum.",
+    },
+    "LastManStanding:highStakes": {
+      type: "boolean", label: "High Stakes mode", default: false,
+      help: "Opens the High Stakes mode, which costs 500,000 from the coffer to start. Closed when off.",
+    },
+  },
   register(api) {
     Common.init(api);
     Profile.attachProfile(api);

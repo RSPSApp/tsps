@@ -460,8 +460,10 @@ function barXp(player, bar) {
   const Items = core.ItemIdentifiers;
   if (bar.barId !== Items.GOLD_BAR) return bar.xp;
   const gauntlets = [Items.GOLDSMITH_GAUNTLETS].includes(equipped(player, core.Equipment.HANDS_SLOT));
-  const cape = [Items.SMITHING_CAPE, Items.SMITHING_CAPE_T_].includes(equipped(player, core.Equipment.CAPE_SLOT));
-  return gauntlets || cape ? bar.xp + GOLDSMITH_GAUNTLETS_BONUS_XP : bar.xp;
+  // The Smithing cape's perk, which the max cape has too (Wiki: Smithing cape), as at an ordinary furnace.
+  const cape = { player, skill: "SMITHING", result: false };
+  pluginApi.emitCustomEvent("skillcape:has-perk", cape);
+  return gauntlets || cape.result === true ? bar.xp + GOLDSMITH_GAUNTLETS_BONUS_XP : bar.xp;
 }
 
 /** Turns the pot's ore into bars, up to 28 of each in the dispenser, and pours them. */
@@ -554,6 +556,18 @@ function checkDispenser({ player }) {
   listPages(player, BARS.map((bar) => `${bar.name}: ${bars[bar.barId] ?? 0}`));
 }
 
+/**
+ * Swaps one `fromId` for `toId` in its own slot (the used slot when it holds one), keeping the item's meta:
+ * a preset bucket (PvP presets) stays a preset copy.
+ */
+function swapBucket(inventory, fromId, toId, slot) {
+  const at = Number.isInteger(slot) && inventory.getItems()[slot]?.getId() === fromId ? slot : inventory.getSlotForItemId(fromId);
+  if (at < 0) return false;
+  const meta = inventory.getItems()[at].getMeta?.();
+  inventory.setItem(at, new core.Item(toId, 1, meta)).refreshItems();
+  return true;
+}
+
 /** Bucket of water on the dispenser (generic hook: the dispenser's base loc has no name). */
 function coolWithWater(event) {
   const { player, objectId, itemId } = event;
@@ -567,14 +581,13 @@ function coolWithWater(event) {
     return;
   }
   player.performAnimation(new core.Animation(THROW_WATER_ANIMATION));
-  player.getInventory().deleteNumber(core.ItemIdentifiers.BUCKET_OF_WATER, 1);
-  player.getInventory().addItem(new core.Item(core.ItemIdentifiers.BUCKET, 1));
+  swapBucket(player.getInventory(), core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.BUCKET, event.slot);
   player.getPacketSender().sendSound(COOL_BARS_SOUND);
   spam(player, "You throw the water over the bars.");
   for (const recipient of recipients) cool(recipient);
 }
 
-function fillBucket({ player }) {
+function fillBucket({ player, slot }) {
   const inventory = player.getInventory();
   const Items = core.ItemIdentifiers;
   if (!inventory.contains(Items.BUCKET)) {
@@ -583,8 +596,7 @@ function fillBucket({ player }) {
   }
   player.performAnimation(new core.Animation(FILL_ANIMATION));
   player.getPacketSender().sendSound(FILL_SOUND);
-  inventory.deleteNumber(Items.BUCKET, 1);
-  inventory.addItem(new core.Item(Items.BUCKET_OF_WATER, 1));
+  swapBucket(inventory, Items.BUCKET, Items.BUCKET_OF_WATER, slot);
   spam(player, "You fill the bucket from the sink.");
 }
 

@@ -201,6 +201,9 @@ function openMuddyChest(event, random = Math.random) {
   inventory.deleteNumber(ids().MUDDY_KEY, 1);
   give(player, loot);
   credit(player, MUDDY_TASK);
+  // "chest:opened" { player, objectId }: the chest really gave its loot, for a league's "Open 1/10 Muddy
+  // Chests" (a locked click or a full pack returns above without it, so an attempt is no deed).
+  api.emitCustomEvent("chest:opened", { player, objectId: MUDDY_CHEST });
   return true;
 }
 
@@ -296,6 +299,9 @@ function searchRoguesChest(event, random = Math.random) {
     if (!tierComplete(player, "medium") || player.getInventory().getFreeSlots() < ROGUES_FREE_SLOTS) return;
     const { loot, text } = roguesLoot(player, tierComplete(player, "hard") || tierComplete(player, "elite"), random);
     give(player, loot);
+    // "rogues-chest:loot" { player, drops }: the loot the chest just handed over, for a league's
+    // "Loot a dragonstone from the chest in Rogue's Castle" (the dragonstone, noted).
+    api.emitCustomEvent("rogues-chest:loot", { player, drops: loot.map((item) => ({ itemId: item.getId(), amount: item.getAmount() })) });
     player.sendMessage(`You find some ${text} inside.`);
     player.performAnimation(new core.Animation(ANIM.OPEN_CHEST));
     player.getSkillManager().addExperiences(core.Skill.THIEVING, ROGUES_THIEVING_XP);
@@ -305,6 +311,7 @@ function searchRoguesChest(event, random = Math.random) {
   return true;
 }
 
+/** A chest's option; false (not one of these chests, or outside the Wilderness) lets other handlers have it. */
 function interact(event) {
   const { player, objectId, object } = event;
   if (!player || !object || (objectId !== MUDDY_CHEST && objectId !== ROGUES_CHEST)) return false;
@@ -318,12 +325,12 @@ function interact(event) {
 
 module.exports = {
   name: "WildernessChests",
+  description: "Adds the Wilderness diary chests: the Muddy chest in the Lava Maze (muddy key) and the Rogues' chest in Rogues' Castle, with their loot.",
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
-    pluginApi.onObjectInteraction((event) => {
-      if (interact(event)) event.handled = true;
-    });
+    pluginApi.onObjectInteraction("Closed chest", { Open: interact });
+    pluginApi.onObjectInteraction("Chest", { Open: interact, "Search for traps": interact });
   },
   _test: { muddyLoot, roguesLoot, muddyAlways, muddyRare, roguesTable, muddyRoom, restocking, busy, MUDDY_CHEST, ROGUES_CHEST, ROGUES_CHEST_OPEN, ROGUES_RESTOCK_TICKS, ROGUES_FREE_SLOTS },
 };

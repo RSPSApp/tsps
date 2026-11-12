@@ -260,6 +260,21 @@ export class ServerPacketReader {
     }
 }
 
+export interface CharacterSummary {
+    name: string;
+    combatLevel: number;
+    totalLevel: number;
+    lastPlayedAt: number;
+    primary: boolean;
+    hasSave: boolean;
+}
+
+export interface CharacterListPayload {
+    maxCharacters: number;
+    defaultIndex: number;
+    characters: CharacterSummary[];
+}
+
 /**
  * Decoded message type (same format as JSON messages)
  */
@@ -1038,15 +1053,19 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
-        case ServerPacketId.WIDGET_SET_NPC_HEAD:
+        case ServerPacketId.WIDGET_SET_NPC_HEAD: {
+            // Unsigned: custom NPC ids (50000-65534) are past a signed short. 0xffff is "no head".
+            const uid = reader.readInt();
+            const npcId = reader.readShort();
             return {
                 type: "widget",
                 payload: {
                     action: "set_npc_head",
-                    uid: reader.readInt(),
-                    npcId: reader.readSignedShort(),
+                    uid,
+                    npcId: npcId === 0xffff ? -1 : npcId,
                 },
             };
+        }
 
         case ServerPacketId.WIDGET_SET_FLAGS_RANGE:
             return {
@@ -1817,6 +1836,13 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 if (!easing) return null;
                 return { type: "camera", payload: { mode: "rotate", pitch, yaw, cycles, easing } };
             }
+            if (mode === 13) {
+                const x = reader.readShort(), y = reader.readShort(), height = reader.readSignedShort();
+                const cycles = reader.readShort(), easing = CAMERA_EASINGS[reader.readByte()];
+                reader.readByte(); // Reserved flags: coordinate rotations use absolute, fixed endpoints.
+                if (!easing) return null;
+                return { type: "camera", payload: { mode: "rotate_coordinate", x, y, height, cycles, easing } };
+            }
             if (mode === 11) {
                 const centreX = reader.readShort(), centreY = reader.readShort(), x = reader.readShort(), y = reader.readShort();
                 const height = reader.readSignedShort(), cycles = reader.readShort();
@@ -1841,6 +1867,10 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             }
             if (mode === 7) {
                 return { type: "camera", payload: { mode: "translate", dx: reader.readInt(), dy: reader.readInt() } };
+            }
+            if (mode === 14) {
+                // cam_skybox: a cache model drawn as the sky; -1 clears it.
+                return { type: "camera", payload: { mode: "skybox", model: reader.readInt() } };
             }
             return null;
         }
@@ -1931,6 +1961,36 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         // ========================================
         // LOGIN/LOGOUT RESPONSE
         // ========================================
+
+        case ServerPacketId.CHARACTER_LIST: {
+            const maxCharacters = reader.readByte();
+            const defaultIndex = reader.readByte();
+            const count = reader.readByte();
+            const characters: CharacterSummary[] = [];
+            for (let i = 0; i < count; i++) {
+                const name = reader.readString();
+                const combatLevel = reader.readByte();
+                const totalLevel = reader.readShort();
+                const lastPlayedAt = Number(reader.readLong());
+                const flags = reader.readByte();
+                characters.push({
+                    name,
+                    combatLevel,
+                    totalLevel,
+                    lastPlayedAt,
+                    primary: (flags & 1) !== 0,
+                    hasSave: (flags & 2) !== 0,
+                });
+            }
+            return { type: "character_list", payload: { maxCharacters, defaultIndex, characters } };
+        }
+
+        case ServerPacketId.CHARACTER_RESULT: {
+            const ok = reader.readBoolean();
+            const code = reader.readByte();
+            const message = reader.readString();
+            return { type: "character_result", payload: { ok, code, message } };
+        }
 
         case ServerPacketId.LOGIN_RESPONSE: {
             // What's left once this packet is read: a batch carries more packets after it.

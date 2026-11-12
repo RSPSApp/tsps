@@ -6,6 +6,7 @@
  */
 const Common = require("./Common.Skotizo");
 const CombatAchievements = require("./CombatAchievements.Skotizo");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 function bossBeforeDeath(event) {
   const session = event.npc?.__skotizoLair;
@@ -14,7 +15,7 @@ function bossBeforeDeath(event) {
   const player = session.player;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   const total = CombatAchievements.killed(player, own, (kills) => {
-    player.sendMessage(`Your Skotizo kill count is: <col=ff0000>${kills}</col>.`);
+    sendBossKillCount(player, `Your Skotizo kill count is: <col=ff0000>${kills}</col>.`);
   });
   player.setAttribute(Common.KILLS_ATTRIBUTE, Math.max(own, total ?? 0));
   if (total == null) player.getPacketSender().sendConfig(Common.DATA.killCountVarp, own);

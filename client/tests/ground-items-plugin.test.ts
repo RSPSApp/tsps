@@ -29,6 +29,17 @@ const prices: Record<number, number> = { [WHIP]: 1_500_000, [SCIM]: 15_000, [BON
 const store = new GroundItemStore();
 store.setMetadataResolver((id) => ({ name: objs[id].name, gePrice: 0, haPrice: 0, tradeable: true }));
 const messages: string[] = [];
+const browserNotifications: string[] = [];
+const notificationDocument = { hidden: false, focused: false, hasFocus() { return this.focused; } };
+Object.defineProperties(globalThis, {
+    Notification: { value: class { static permission = "granted"; }, configurable: true },
+    document: { value: notificationDocument, configurable: true },
+    navigator: { value: { serviceWorker: { getRegistration: async () => ({
+        showNotification: async (_title: string, options: { body: string }) => {
+            browserNotifications.push(options.body);
+        },
+    }) } }, configurable: true },
+});
 const spawned: any[] = [];
 const killed: number[] = [];
 let filter: ((type: string, event: any) => boolean) | undefined;
@@ -105,6 +116,17 @@ async function main(): Promise<void> {
     const whipText = texts.find((t) => t[0].startsWith("Abyssal"))!;
     assert.equal(whipText[3], 0xffff9600, "over 1M: the high value colour");
     assert.equal(texts.find((t) => t[0].startsWith("Coins"))![3], 0xffffffff);
+
+    // Bridge height moves text by the sampled terrain delta and retains the item's model/support offset.
+    const originalHeight = client.sceneGeometry.tileHeight;
+    client.sceneGeometry.tileHeight = () => -2;
+    const bridgeTexts = JSON.parse(plugin.widgetOverlay.signature())[1] as any[];
+    for (const text of texts) {
+        const raised = bridgeTexts.find((entry) => entry[0] === text[0])!;
+        assert.equal(raised[2], text[2] - 20, "ground labels follow the bridge surface");
+    }
+    client.sceneGeometry.tileHeight = originalHeight;
+    plugin.widgetOverlay.signature();
 
     // Coverage: where the frame signature() built will draw, so moving labels redraw their own
     // rects rather than the whole UI. Unknown until a draw has supplied the font.
@@ -269,17 +291,40 @@ async function main(): Promise<void> {
     set("menuHighlightMode", "NAME");
 
     // --- Notifications ---------------------------------------------------------------------------
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    browserNotifications.length = 0;
     messages.length = 0;
     set("notifyHighlightedDrops", false);
     set("notifyTier", "MEDIUM");
     store.update({ kind: "delta", serial: 4, upserts: [stack(WHIP, 1, 3210, 3210)], removes: [] } as any);
     assert.deepEqual(messages, ["<col=ff0000>You received a valuable drop: Abyssal whip</col>"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(browserNotifications, ["You received a valuable drop: Abyssal whip"],
+        "a real qualifying Ground Items mutation reaches the browser while visible but unfocused");
     set("hiddenItems", "Abyssal whip");
     changed();
     store.update({ kind: "delta", serial: 5, upserts: [stack(WHIP, 1, 3211, 3211)], removes: [] } as any);
     assert.equal(messages.length, 1, "hidden: no tier notification");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(browserNotifications.length, 1, "a hidden-listed item sends no browser notification");
     set("hiddenItems", "Coins");
     set("notifyTier", "OFF");
+    set("notifyHighlightedDrops", true);
+    changed();
+    notificationDocument.focused = true;
+    store.update({ kind: "delta", upserts: [stack(SCIM, 1, 3212, 3212)], removes: [] } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(browserNotifications.length, 1, "a highlighted drop in the focused game stays in chat");
+    notificationDocument.focused = false;
+    store.update({ kind: "delta", upserts: [stack(SCIM, 1, 3213, 3213)], removes: [] } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(browserNotifications.at(-1), "You received a highlighted drop: Rune scimitar",
+        "the highlighted-list path also delivers from an unfocused game");
+    const delivered = browserNotifications.length;
+    store.update({ kind: "snapshot", stacks: store.getAllStacks() } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(browserNotifications.length, delivered, "replaying existing stacks is not a new drop");
+    set("notifyHighlightedDrops", false);
     changed();
 
     // --- Loot beams --------------------------------------------------------------------------------

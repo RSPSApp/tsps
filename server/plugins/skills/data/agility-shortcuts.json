@@ -22,6 +22,7 @@
       "name": "Barbarian Outpost pipe",
       "object": 20210,
       "level": 35,
+      "xp": 10,
       "script": "barbarianOutpostPipe",
       "params": {"northOfY":3560,"north":[2552,3561,0],"south":[2552,3558,0]}
     },
@@ -160,10 +161,11 @@
           {"anim":"BALANCE_FALL"},
           {"wait":1},
           {"hit":[1,3]},
-          {"msg":"You slip and fall."}
+          {"msg":"You slip and fall."},
+          {"use":"extinguishLights"}
         ]
       },
-      "unverified": "the failure's steps (no capture)",
+      "unverified": "the failure's steps (no capture); the light going out is the Wiki's",
       "between": {"ends":[[3221,9556,0],[3221,9552,0]],"cross":[{"use":"hops","args":["object","to"]}]}
     },
     {
@@ -179,10 +181,11 @@
           {"anim":"BALANCE_FALL"},
           {"wait":1},
           {"hit":[1,3]},
-          {"msg":"You slip and fall."}
+          {"msg":"You slip and fall."},
+          {"use":"extinguishLights"}
         ]
       },
-      "unverified": "the failure's steps (no capture)",
+      "unverified": "the failure's steps (no capture); the light going out is the Wiki's",
       "between": {
         "ends": [[3208,9572,0],[3204,9572,0]],
         "cross": [
@@ -223,10 +226,11 @@
       "object": 16533,
       "level": 31,
       "xp": 3,
+      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, ending with the other-side line.",
       "start": "You attempt to balance on the stepping stone.",
-      "end": "You manage to make the jump.",
+      "end": "You manage to make it to the other side of the river.",
       "between": {
-        "ends": [[3149,3363,0],[3154,3363,0]],
+        "ends": [[3149,3363,0],[3155,3363,0]],
         "via": [[3151,3363]],
         "cross": [{"use":"hops","args":["...via","to"]}]
       }
@@ -675,6 +679,7 @@
       "between": {"ends":[[3759,5670,0],[3765,5671,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {"name":"Stile (Kandarin)","object":993,"level":1,"stile":{}},
+    {"name":"Stile (Piscatoris falconry)","object":19222,"level":1,"stile":{}},
     {
       "name": "Log balance (East Ardougne, heading east)",
       "object": 16546,
@@ -1259,6 +1264,12 @@
       "name": "Broken wall (Al Kharid)",
       "object": 33344,
       "level": 70,
+      "requires": [
+        {
+          "skills": {"agility":70},
+          "quest": {"key":"prince_ali_rescue","message":"You need to complete Prince Ali Rescue to use this shortcut."}
+        }
+      ],
       "end": "You climb over the wall.",
       "between": {"ends":[[3295,3157,0],[3295,3158,0]],"cross":[{"use":"climbOver","args":["to"]}]}
     },
@@ -2230,12 +2241,12 @@
       "between": {
         "ends": [[1475,3687,0],[1470,3687,0]],
         "cross": {
-          "forward": [{"use":"climbOver","args":["to","CLIMB_ROCKS",2]}],
-          "back": [{"use":"climbOver","args":["to","CLIMB_WALL",2]}]
+          "forward": [{"render":"CLIMB_WALL"},{"walk":[[1474,3687],[1473,3687],[1472,3687],[1471,3687],[1470,3687]]},{"render":null}],
+          "back": [{"use":"crawlDown","args":[[1469,3687],"to","west"]}]
         }
       },
-      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. Locs and walkable ends checked in osrs-241_2026-10-20.",
-      "unverified": "climb animation and duration (no live capture)"
+      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. rsprox 231/00725 (and 00726): west to east faces west (tick 237, face_angle 512), then one exact move east over 4 ticks (delay2 120, angle 512: backwards, down the rocks) with sequence 1148 (tick 238); east to west is a 5-tick walk, a tile a tick, with an appearance change at each end (ticks 743-747).",
+      "unverified": "the east-to-west render animation: the recording shows only that the appearance changes; 737 (human_climbing) is the climbing walk used for the other rock climbs (crawlUp)"
     },
     {
       "name": "Handholds (Lizardman Canyon, west)",
@@ -2436,6 +2447,36 @@
       ]
     },
     {
+      "name": "Rocks (Karuulm Slayer Dungeon, east of the entrance)",
+      "object": 34544,
+      "at": [1321,10205,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "rsprox 3013, 3014 (rev 239): no requirement; the player faces the rocks, then an exact move two tiles across (cycle 0 to 60, climb-over 839) in 2 ticks, and the message and the animation reset come 2 ticks after the move starts. The other two stepover rocks are the same loc, so they use the same crossing.",
+      "unverified": "the return trip and the two other stepover rocks (1302,10205 and 1311,10215) were not captured; they mirror this one across their own footprint.",
+      "between": {"ends":[{"object":[-1,0,0]},{"object":[1,0,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
+      "name": "Rocks (Karuulm Slayer Dungeon, west)",
+      "object": 34544,
+      "at": [1302,10205,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "same loc and crossing as the rocks east of the entrance (rsprox 3013, 3014).",
+      "unverified": "not captured; the reachable side is east (1303,10205), the far side west (1301,10205) by the collision map.",
+      "between": {"ends":[{"object":[-1,0,0]},{"object":[1,0,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
+      "name": "Rocks (Karuulm Slayer Dungeon, north)",
+      "object": 34544,
+      "at": [1311,10215,0],
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "note": "same loc and crossing as the rocks east of the entrance (rsprox 3013, 3014), turned to cross north.",
+      "unverified": "not captured; the reachable side is south (1311,10214), the far side north (1311,10216) by the collision map.",
+      "between": {"ends":[{"object":[0,-1,0]},{"object":[0,1,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
       "name": "Tunnel (Stronghold Slayer Cave)",
       "object": [30174,30175],
       "level": 72,
@@ -2624,6 +2665,19 @@
       "note": "rsprox captures 1098, 1100, 1105, 1108 (Leagues worlds only)"
     },
     {
+      "name": "Crumbled wall (Tree Gnome Village)",
+      "object": 2185,
+      "level": 1,
+      "between": {
+        "ends": [[2509,3252,0],[2509,3254,0]],
+        "cross": [
+          {"sound":2453,"delay":10},
+          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+        ]
+      },
+      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+    },
+    {
       "name": "Rocks (Catherby)",
       "object": 17042,
       "at": [2869,3429,0],
@@ -2631,7 +2685,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
-          "skills": {"agility":32,"strength":32,"ranged":35},
+          "skills": {"agility":32,"strength":35,"ranged":35},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
@@ -2818,6 +2872,30 @@
       "note": "The Wiki's Agility shortcuts list: Tonali Cavern's stepping stone, level 46, no XP (it was named and levelled as Nemus Retreat's here)."
     },
     {
+      "name": "Log balance (Tonali Cavern)",
+      "object": 56718,
+      "at": [[1302,9398,0],[1305,9398,0]],
+      "level": 46,
+      "render": "BALANCE_WALK",
+      "between": {
+        "ends": [[1301,9398,0],[1306,9398,0]],
+        "via": [[1302,9398,0],[1303,9398,0],[1304,9398,0],[1305,9398,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "rsprox_transcripts/234/03285.txt (#3828): both ways between 1301,9398 and 1306,9398 in the balance walk, a tile a tick with sound 2470 on each. https://oldschool.runescape.wiki/w/Log_balance_(Tonali_Cavern): level 46, no XP."
+    },
+    {
       "name": "Log balance (Tlati Rainforest)",
       "object": 57593,
       "at": [[1283,3139,0],[1283,3146,0]],
@@ -2832,7 +2910,6 @@
       "at": [[1392,3323,0],[1395,3323,0]],
       "level": 41,
       "xp": 9.5,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
       "between": {
         "ends": [[1391,3323,0],[1396,3323,0]],
         "cross": [
@@ -2840,7 +2917,38 @@
           {"move":"to","anim":"CLIMB_LOOP","speed":[0,90],"ticks":3}
         ]
       },
-      "note": "rsprox captures 1105 (Leagues worlds only)"
+      "note": "rsprox captures 1105 (Leagues worlds only); RSProx 20261109T224258-5ab63b4 (rev 242) has both directions"
+    },
+    {
+      "name": "Log balance (Nemus Retreat)",
+      "object": 56990,
+      "at": [[1401,3284,0],[1401,3290,0]],
+      "level": 45,
+      "xp": 19.5,
+      "render": "BALANCE_WALK",
+      "between": {
+        "ends": [[1401,3283,0],[1401,3291,0]],
+        "via": [[1401,3284,0],[1401,3285,0],[1401,3286,0],[1401,3287,0],[1401,3288,0],[1401,3289,0],[1401,3290,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["via4"]},
+          {"sound":2470},
+          {"walk":["via5"]},
+          {"sound":2470},
+          {"walk":["via6"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "RSProx 20261109T224258-5ab63b4 (rev 242) ticks 1377-1402: both ways between 1401,3291 and 1401,3283, a tile a tick with sound 2470 on each, 19.5 xp. https://oldschool.runescape.wiki/w/Log_balance_(Auburn_Valley): the identical second shortcut south-east of Nemus Retreat (ids 56990-56993; 56992 and 56993 are the log between the ends)."
     },
     {
       "name": "Log balance (Auburn Valley)",
@@ -2848,9 +2956,28 @@
       "at": [[1453,3330,0],[1453,3335,0]],
       "level": 45,
       "xp": 19.5,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
       "render": "BALANCE_WALK",
-      "between": {"ends":[[1453,3329,0],[1453,3336,0]],"cross":[{"walk":["to"]}]}
+      "between": {
+        "ends": [[1453,3329,0],[1453,3336,0]],
+        "via": [[1453,3330,0],[1453,3331,0],[1453,3332,0],[1453,3333,0],[1453,3334,0],[1453,3335,0]],
+        "cross": [
+          {"sound":2470},
+          {"walk":["via0"]},
+          {"sound":2470},
+          {"walk":["via1"]},
+          {"sound":2470},
+          {"walk":["via2"]},
+          {"sound":2470},
+          {"walk":["via3"]},
+          {"sound":2470},
+          {"walk":["via4"]},
+          {"sound":2470},
+          {"walk":["via5"]},
+          {"sound":2470},
+          {"walk":["to"]}
+        ]
+      },
+      "note": "RSProx 20261109T224258-5ab63b4 (rev 242) ticks 980-994 and 1332: 1453,3336 to 1453,3329, a tile a tick with sound 2470 on each, 19.5 xp; the reverse mirrors it."
     },
     {
       "name": "Rocks (The Proudspire, lower)",
@@ -3013,6 +3140,12 @@
       "at": [[1324,9766,0],[1324,3364,0]],
       "level": 59,
       "unverified": "the movement and both ends (no capture; ends from the map)",
+      "requires": [
+        {
+          "skills": {"agility":59},
+          "quest": {"key":"shadows_of_custodia","message":"You need to complete Shadows of Custodia to use this shortcut."}
+        }
+      ],
       "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[{"use":"tunnel","args":["to"]}]}
     },
     {
@@ -3842,7 +3975,8 @@
       "object": [53234,53236],
       "at": [[2832,3248,0],[2832,3251,0]],
       "level": 84,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
+      "levelMessage": {"itembox": {"item": 6517, "text": "You need an Agility level of at least 84 to climb up these rocks."}},
+      "unverified": "the reverse direction (only one direction was captured; it mirrors that one); the top rock's refusal (only the bottom rock was clicked below 84)",
       "between": {
         "ends": [[2832,3247,0],[2832,3252,0]],
         "cross": [
@@ -3851,7 +3985,7 @@
           {"anim":-1}
         ]
       },
-      "note": "rsprox captures 362"
+      "note": "rsprox captures 362; the refusal from 20261106T101002 (revision 242) tick 3375, item agility_climb 6517"
     },
     {
       "name": "Crevice (Deepfin Mine)",
@@ -4169,9 +4303,15 @@
             {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
             {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
           ]
+        },
+        {
+          "method": "barehanded",
+          "skills": {"agility": 78},
+          "params": {"barehanded": true}
         }
       ],
-      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+      "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

@@ -47,7 +47,7 @@ afterEach(() => {
 
 function makePlayer(attributes = {}) {
   const attrs = new Map(Object.entries(attributes));
-  const messages = [], texts = [], strings = new Map(), hidden = new Map(), sounds = [], animations = [];
+  const messages = [], spam = [], texts = [], strings = new Map(), hidden = new Map(), sounds = [], animations = [];
   const rotates = [], scripts = [];
   const experience = new Map();
   const varps = new Map();
@@ -70,6 +70,10 @@ function makePlayer(attributes = {}) {
     // As the real one: closing interfaces also ends the dialogue.
     sendInterfaceRemoval() { interfaceId = -1; player.manager.reset(); return sender; },
     sendSound(id) { sounds.push(id); return sender; },
+    sendTypedMessage(type, message) {
+      (type === PluginManager.getCoreApi().ChatType.SPAM ? spam : messages).push(message);
+      return sender;
+    },
     sendInterfaceRotateSpeed(uid, speedX, speedY) { rotates.push({ uid, speedX, speedY }); return sender; },
     sendClientScript(id, ...args) { scripts.push({ id, args }); return sender; },
     isChatboxInterface() { return true; },
@@ -91,7 +95,7 @@ function makePlayer(attributes = {}) {
     varbit: (id) => sender.getVarbit(id),
     get menu() { return menu; },
     set menu(value) { menu = value; },
-    attrs, messages, texts, strings, hidden, sounds, animations, experience, rotates, scripts,
+    attrs, messages, spam, texts, strings, hidden, sounds, animations, experience, rotates, scripts,
   };
   player.manager = new DialogueManager(player);
   return player;
@@ -235,7 +239,9 @@ test("questions, answers and progress follow the capture", () => {
   assert.equal(player.varbit(varbit), 3);
   assert.equal(player.attrs.get(KUDOS), 2);
   assert.deepEqual(player.sounds, [3648, 3648, 3648, 3653]);
-  assert.ok(player.messages.includes("You have earned Kudos with the Museum!"));
+  // Spam, as rsprox 227/01723.txt:300257.
+  assert.ok(player.spam.includes("You have earned Kudos with the Museum!"));
+  assert.ok(!player.messages.includes("You have earned Kudos with the Museum!"));
   continueChat(player, ids.quiz);
   assert.deepEqual(player.texts.slice(-2), ["Nice job, mate. That looks about right.", "Bonza, mate! I think that's all of them."]);
   assert.equal(player.getInterfaceId(), -1);
@@ -316,4 +322,35 @@ test("login restores the quiz varbits", () => {
   for (const handler of world.login) handler({ player });
   assert.equal(player.varbit(ids.agreed), 1);
   assert.equal(player.varbit(CacheDefinitions.getVarbitId(dragon.varbit)), 2);
+});
+
+test("pending quiz XP uses the world's rate once, keeping the native base reward", (t) => {
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { Skill } = require("../dist/game/model/Skill");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const originalRate = GameConstants.EXPERIENCE_MULTIPLIER;
+  try {
+    for (const rate of [1, 10]) {
+      GameConstants.EXPERIENCE_MULTIPLIER = rate;
+      const world = makeWorld();
+      const player = makePlayer({ [STATE]: { agreed: true, rewarded: true, xpPending: true } });
+      const skills = new SkillManager(player);
+      // Keep this reward check clear of unrelated level-up interfaces.
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        skills.skills.maxLevel[skill.getIndex()] = 99;
+      }
+      t.mock.method(skills, "updateSkill", () => {});
+      player.getSkillManager = () => skills;
+      for (const handler of world.login) handler({ player });
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        assert.equal(skills.getExperience(skill), 1000 * rate);
+      }
+      for (const handler of world.login) handler({ player });
+      for (const skill of [Skill.SLAYER, Skill.HUNTER]) {
+        assert.equal(skills.getExperience(skill), 1000 * rate, "relogin must not repeat the reward");
+      }
+    }
+  } finally {
+    GameConstants.EXPERIENCE_MULTIPLIER = originalRate;
+  }
 });

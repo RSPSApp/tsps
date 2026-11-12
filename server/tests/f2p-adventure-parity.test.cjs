@@ -16,7 +16,7 @@ const noop = () => {};
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..')); new NpcDefinitionLoader().load(); });
 
 function harness(name) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), itemActions = new Map();
   const objectManager = {register: object => objects.push(object), deregister: object => { const i=objects.indexOf(object); if(i>=0)objects.splice(i,1); }};
   const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
@@ -25,6 +25,7 @@ function harness(name) {
     getObjectManager: () => objectManager,
     getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
     onObjectFirstClick: (ids, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
+    onItemAction: (name, actions) => { if (typeof name === 'string') itemActions.set(name, { ...(itemActions.get(name) ?? {}), ...actions }); },
     persistAttribute: noop,
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(fn => fn(event)),
@@ -47,7 +48,7 @@ function harness(name) {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
     return null;
   };
-  const h = { api, hooks, events, tasks, npcs, removed, objects, ground, clicks, quest: runtime.getRegisteredQuests().at(-1),
+  const h = { api, hooks, events, tasks, npcs, removed, objects, ground, clicks, itemActions, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     line(p, npcId, text) { const event = { player: p, npcId, text }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId }; h.emit('npc-dialogue:action', event); return event; },
@@ -138,27 +139,139 @@ test('Dragon Slayer deposits Oracle offerings individually and repairs ship only
 
 test('Dragon Slayer sails through the private fire and crash sequence, then collects the head before returning to Oziach', () => {
   const h=harness('DragonSlayer'),p=player();h.quest.setStage(p,8);p.moveTo(new core.Location(3048,3207,1));
+  const faces=[];p.setPositionToFace=at=>faces.push([at.getX(),at.getY()]);
   h.action(p,N.CAPTAIN_NED,'1nn6tK');h.tick(20);assert.ok(p.getArea() instanceof core.TemplatedInstanceArea);assert.match(p.text,/salt spray/);
+  // rev242 capture ticks 3158-3333: south of Ned the whole voyage, facing east, then each speaker in turn.
+  const scene=p.getArea(),tile=(x,y)=>{const at=scene.sourceTile(x,y);return [at.getX(),at.getY()];};
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],tile(2066,5516));
+  assert.deepEqual(faces.slice(0,2),[tile(2067,5516),tile(2066,5517)],'east on arrival, then Ned as he speaks');
   h.continueUntil(p,()=>p.text==='Clouds surround the ship.');
   assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===543));
   const stormShotCount = p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length;
   h.tick(4); assert.equal(p.text, 'Clouds surround the ship.');
   assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, stormShotCount);
-  h.tick(1); assert.match(p.text, /Looks like there's a storm/);
+  h.tick(1); assert.match(p.text, /Looks like there's a storm/); assert.deepEqual(faces.at(-1),tile(2063,5518),'Jenkins as he speaks');
   assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, stormShotCount + 3);
   p.manager.advance(); assert.equal(p.text, 'Oh, well. The weather had been so good up until now.');
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===545));h.tick(1);assert.equal(p.text,'Did you see that?');
   p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(p.text,"It's the dragon!");
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===546));h.tick(9);assert.equal(p.text,"We're going to sink!");p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(h.quest.getStage(p),9);assert.equal(p.configs.get(176),8);h.tick(5);assert.equal(p.blocked,false);
-  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2852,3238]);assert.equal(p.getArea(),null);
-  const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2849,3238],'the captured beach landing (rev242 tick 3339)');assert.equal(p.getArea(),null);
+  p.moveTo(new core.Location(2849,9638,0));const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
-  h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
+  // rev242 capture ticks 3606-3617: walked to the tile west of her head, facing it, then the cut.
+  assert.ok(p.forceMovement,'walked there, not teleported');assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2849,9638]);
+  h.tick(3);assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2852,9638]);assert.deepEqual(faces.at(-1),[2853,9638]);
+  assert.equal(p.forceMovement,null);assert.ok(!p.animations.includes(6654));
+  h.tick(1);assert.ok(p.animations.includes(6654));assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===3744&&row[3]===35));
+  h.tick(6);assert.equal(p.items.get(I.ELVARGS_HEAD),1);
+  assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===3745));assert.ok(p.log.some(row=>row[0]==='sendSong'&&row[1]===147));assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
   // seq 6655 is 10.0 ticks in the cache (sum of its frame delays, 300 client ticks), so the player stays held to its end: free at tick 21, not 14 (cache length, ours)
   assert.equal(p.blocked,true,'still in the head-cut animation 3 ticks after it started');h.tick(6);assert.equal(p.blocked,true);h.tick(1);assert.equal(p.blocked,false);
   h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
 });
 
+
+test('Dragon Slayer hands over the maze key and the anti-dragon shield in item boxes (rev242 ticks 1756, 2808)', () => {
+  const stepsOf = page => {
+    const steps = new Map();
+    const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; if (node.id) steps.set(node.id, node.text); Object.values(node).forEach(walk); };
+    walk(runtime.loadTranscripts({ core })[page]);
+    return steps;
+  };
+  // The Duke plays this page's shield conversation, the wording live uses (rev242 ticks 2790-2811).
+  const duke = harness('DragonSlayer'), dukePlayer = player(); duke.quest.setStage(dukePlayer, 2);
+  assert.deepEqual(duke.hooks.onNpcDialogueVariant.map(fn => fn({ player: dukePlayer, npcId: N.DUKE_HORACIO })).find(Boolean),
+    { page: 'Dragon Slayer I', variant: 'protection-from-a-dragon-s-breath-talking-to-duke-horacio' });
+  for (const [page, npcId, stepId, item, text] of [
+    ['Dragon Slayer I', N.GUILDMASTER, 'xUz7Ja', I.MAZE_KEY, 'The Guildmaster hands you a key.'],
+    ['Dragon Slayer I', N.DUKE_HORACIO, 'KoKING', I.ANTI_DRAGON_SHIELD, 'The Duke hands you a heavy orange shield.'],
+    ['Duke Horacio', N.DUKE_HORACIO, 'LnbjYr', I.ANTI_DRAGON_SHIELD, 'The Duke hands you a heavy orange shield.'],
+  ]) {
+    assert.equal(stepsOf(page).get(stepId), text, `${stepId} is still the hand-over step in ${page}`);
+    const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+    const event = h.action(p, npcId, stepId);
+    assert.equal(p.items.get(item), 1, text);
+    assert.deepEqual(event.box, { items: [item] });
+    h.action(p, npcId, stepId);
+    assert.equal(p.items.get(item), 1, 'only one');
+  }
+});
+
+test("Dragon Slayer's Guildmaster offers the captured follow-up menus after each answer (rev242 ticks 1141-1756)", () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2); p.attrs.set('quest.points', 32);
+  const MELZAR = "Where is Melzar's map piece?", THALZAR = "Where is Thalzar's map piece?", LOZAR = "Where is Lozar's map piece?";
+  const MAP = 'Where can I find a map to Crandor?', SHIP = 'What kind of ship do I need?';
+  const BREATH = "How can I protect myself from the dragon's breath?", OKAY = "Okay, I'll get going!";
+  const ask = (option, expected) => {
+    h.choose(p, option); continueToMenu(h, p);
+    assert.deepEqual(p.prompt.options, expected, `after ${option}`);
+  };
+  // The quest builds these menus from the transcript's option texts: a re-export that rewords one fails here.
+  const texts = new Set();
+  const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return;
+    if (node.type === 'choice') (node.options || []).forEach(option => texts.add(option.text)); Object.values(node).forEach(walk); };
+  walk(runtime.loadTranscripts({ core })['Dragon Slayer I'].variants['a-quest-for-the-rune-platebody-talking-to-the-guildmaster-after-talking-to-oziach']);
+  for (const text of [MELZAR, THALZAR, LOZAR, MAP, SHIP, BREATH, OKAY, "What's so special about this dragon?"]) assert.ok(texts.has(text), text);
+  h.talk(p, N.GUILDMASTER); continueToMenu(h, p);
+  ask('I talked to Oziach...', [MAP, SHIP, BREATH, "What's so special about this dragon?", OKAY]);
+  ask(MAP, [MELZAR, THALZAR, LOZAR]);
+  ask(MELZAR, [THALZAR, LOZAR, SHIP, BREATH, OKAY]);
+  ask(LOZAR, [MELZAR, THALZAR, SHIP, BREATH, OKAY]);
+  ask(SHIP, [MAP, BREATH, OKAY]);
+  ask(BREATH, [MAP, SHIP, OKAY]);
+  ask(MAP, [MELZAR, THALZAR, LOZAR]);
+  ask(THALZAR, [MELZAR, LOZAR, SHIP, BREATH, OKAY]);
+});
+
+test('Dragon Slayer map pieces can be studied: their transcript line in an item box (rev242 ticks 2942-2948)', () => {
+  const h = harness('DragonSlayer'), p = player();
+  const study = h.itemActions.get('Map part')?.Study;
+  assert.ok(study, 'Map part has a Study action');
+  for (const [item, start] of [
+    [I.MAP_PART, "This is a piece of map that you found in Melzar's Maze."],
+    [I.MAP_PART_3, 'This is a piece of map that you found in a secret chest in the Dwarven Mine.'],
+    [I.MAP_PART_2, 'This is a piece of map that you got from Wormbrain, the goblin thief.'],
+  ]) {
+    p.log.length = 0;
+    study({ player: p, itemId: item, option: 'Study' });
+    assert.ok(p.text.startsWith(start), p.text);
+    assert.ok(p.log.some(row => row[0] === 'sendItemOnInterfaces' && row[2] === item), 'an item box showing the piece');
+    p.manager.advance();
+  }
+});
+
+test('Dragon Slayer map chests open first, then give the map in an item box as they shut (rev242 ticks 1421-1435, 2693-2709)', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player();
+  h.quest.setStage(p, 2); p.attrs.set('dragon-slayer.oracle', 3);
+  const chest = (id, x, y) => new core.GameObject(id, new core.Location(x, y, 0), 10, 3, null);
+  const ids = () => h.objects.map(object => object.getId());
+  const sounds = () => p.log.filter(row => row[0] === 'sendSoundEffect').map(row => row[1]);
+
+  // The Oracle's chest: Open plays the lid's inscription, and only then does the lid open.
+  h.clicks.get(O.CHEST_14)({ player: p, objectId: O.CHEST_14, object: chest(O.CHEST_14, 3057, 9841) });
+  assert.equal(p.text, 'As you open the chest, you notice an inscription on the lid:');
+  assert.deepEqual(ids(), []);
+  h.continueUntil(p, () => p.text.startsWith('I cannot stop you')); p.manager.advance();
+  assert.deepEqual(ids(), [O.CHEST_15]); assert.ok(p.animations.includes(536)); assert.deepEqual(sounds(), [52]);
+  assert.equal(p.items.get(I.MAP_PART_3), undefined, 'opening gives nothing');
+  h.clicks.get(O.CHEST_15)({ player: p, objectId: O.CHEST_15, object: h.objects[0] });
+  assert.equal(p.text, 'You find a map piece in the chest.'); assert.equal(p.items.get(I.MAP_PART_3), 1);
+  assert.ok(p.log.some(row => row[0] === 'sendItemOnInterfaces' && row[2] === I.MAP_PART_3), 'an item box with the map piece');
+  assert.deepEqual(ids(), [O.CHEST_14], 'it shuts as the map is found'); assert.deepEqual(sounds(), [52, 51]);
+
+  // Melzar's chest: "You open the chest." as it opens; the same find; nothing more once the map is owned.
+  h.clicks.get(O.CHEST_16)({ player: p, objectId: O.CHEST_16, object: chest(O.CHEST_16, 2935, 9657) });
+  assert.equal(p.messages.at(-1), 'You open the chest.'); assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_17]);
+  h.clicks.get(O.CHEST_17)({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.equal(p.text, 'You find a map piece in the chest.'); assert.equal(p.items.get(I.MAP_PART), 1);
+  assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_16]);
+  h.clicks.get(O.CHEST_16)({ player: p, objectId: O.CHEST_16, object: h.objects[1] });
+  h.clicks.get(O.CHEST_17)({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.equal(p.messages.at(-1), 'You find nothing in the chest.'); assert.equal(p.items.get(I.MAP_PART), 1);
+  h.hooks.onObjectSecondClick[0]({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_16], 'Close shuts it');
+});
 
 test('Dragon Slayer completion removes carried and every bank-tab head, but preserves optional-head completion and rewards', () => {
   for (const withHead of [true, false]) {
@@ -236,6 +349,9 @@ test('Dragon Slayer start warns and changes stage when Guildmaster actually sets
 test('Dragon Slayer logout releases an interrupted wall crossing without a stale exact move', () => {
   const h=harness('DragonSlayer'),p=player();h.quest.setStage(p,9);p.moveTo(new core.Location(2845,9636));
   h.clicks.get(core.ObjectIdentifiers.WALL_161)({player:p});assert.ok(p.forceMovement);assert.equal(p.blocked,true);
+  // rev242 capture ticks 3488, 3493, 3547: the crossing message is on the filterable spam channel (105).
+  assert.deepEqual(p.log.filter(row=>row[0]==='sendTypedMessage'),[['sendTypedMessage',105,'You climb over the low wall.']]);
+  assert.ok(!p.messages.includes('You climb over the low wall.'));
   h.hooks.onPlayerLogout[0]({player:p});assert.equal(p.forceMovement,null);assert.equal(p.blocked,false);h.tick(5);assert.equal(p.getLocation().getX(),2845);
 });
 
@@ -284,7 +400,12 @@ test('Dragon Slayer replays captured camera commands in order, with dialogue-tri
   assert.deepEqual(line("Looks like there's a storm coming up, cap'n."), [shot('sendCameraLookAt', 2064, 5520, 300, 232), shot('sendCameraMoveTo', 2074, 5525, 1500, 232), shot('sendCameraMoveTo', 2064, 5525, 1500, 1)]);
   p.log.length = 0; h.action(p, N.CAPTAIN_NED, '1XD38w');
   assert.deepEqual(directed(), [shot('sendCameraMoveTo', 2072, 5517, 300, 232), shot('sendCameraLookAt', 2062, 5515, 100, 232), shot('sendCameraMoveTo', 2072, 5520, 300, 1)]);
-  h.tick(4); p.log.length = 0; h.action(p, N.CAPTAIN_NED, '07qPBA'); h.tick(2); assert.equal(directed().length, 0);
+  h.tick(4); p.log.length = 0; h.action(p, N.CAPTAIN_NED, '07qPBA');
+  // rev242 ticks 3270-3271: plane 2 on the same tile for one tick, then back.
+  const hopFrom = p.getLocation();
+  h.tick(1); assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [hopFrom.getX(), hopFrom.getY(), 2]);
+  h.tick(1); assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [hopFrom.getX(), hopFrom.getY(), 1]);
+  assert.equal(directed().length, 0);
   h.tick(1); assert.deepEqual(directed(), [shot('sendCameraMoveTo', 2068, 5518, 300, 232), shot('sendCameraLookAt', 2062, 5518, 100, 232), shot('sendCameraMoveTo', 2074, 5526, 300, 1)]);
   h.tick(6); assert.deepEqual(directed().slice(3), [shot('sendCameraMoveTo', 2074, 5526, 600, 232), shot('sendCameraLookAt', 2066, 5517, 100, 232), shot('sendCameraMoveTo', 2064, 5518, 400, 1)]);
   assert.deepEqual(line("We're going to crash!"), [shot('sendCameraMoveTo', 2064, 5518, 400, 2)]);
@@ -298,6 +419,9 @@ test('Elvarg introduction uses both recorded shots and releases the camera only 
   const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 9);
   h.clicks.get(core.ObjectIdentifiers.HOLE_40)({ player: p });
   h.tick(3); assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, 0);
+  // rev242 capture tick 3423 (+3): the player waits out of shot in the scene's south-west corner.
+  const corner = p.getArea().sourceTile(2840, 9624);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [corner.getX(), corner.getY()]);
   h.tick(1); const area = p.getArea(), origin = area.sourceTile(2816, 9600);
   const directed = () => p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).map(([kind, x, y, height, options]) =>
     [kind, x - origin.getX() + 2816, y - origin.getY() + 9600, height, options]);
@@ -309,8 +433,11 @@ test('Elvarg introduction uses both recorded shots and releases the camera only 
     ['sendCameraLookAt', 2866, 9640, 150, { rate: 2, rate2: 2, heightRelative: false }],
     ['sendCameraMoveTo', 2848, 9639, 250, { rate: 2, rate2: 2, heightRelative: false }],
   ]);
-  h.tick(8); assert.ok(p.getArea(), 'private scene remains active through tick fifteen');
+  h.tick(2); assert.deepEqual(p.log.filter(row => row[0] === 'sendSoundEffect' && row[1] === 3753).map(row => row[3]), [25, 50, 75, 100, 125, 150, 175],
+    'seven footsteps at +9 (rev242 tick 3429)');
+  h.tick(6); assert.ok(p.getArea(), 'private scene remains active through tick fifteen');
   h.tick(1); assert.equal(p.getArea(), null, 'return teleport stays at captured tick sixteen');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2833, 9658], 'the ruin entrance landing (rev242 tick 3436)');
   assert.deepEqual(p.log.filter(row => row[0] === 'sendCameraTranslate'), [['sendCameraTranslate', 2816 - origin.getX(), 9600 - origin.getY()]]);
   assert.equal(p.blocked, true);
   const returnedAt = p.getLocation();

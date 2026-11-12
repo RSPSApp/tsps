@@ -289,7 +289,9 @@ function finishRun(player, wavesCleared, wonJad) {
 function rescueGroundItems(player, area) {
   const { ItemOnGroundManager, World } = core;
   for (const item of [...World.getItems()]) {
-    if (item.getPrivateArea() !== area) continue;
+    // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
+    // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
+    if (item.isPendingRemoval?.() || item.getPrivateArea() !== area) continue;
     ItemOnGroundManager.deregister(item);
     ItemOnGroundManager.registerLocation(player, item.getItem(), tile(EXIT), null);
   }
@@ -377,6 +379,7 @@ function splitTzKek(player, session, npc) {
 
 module.exports = {
   name: "TzhaarFightCaves",
+  description: "Adds the TzHaar Fight Cave: 63 waves ending with TzTok-Jad, healers, wave resume on logout and the cave's entry and exit.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

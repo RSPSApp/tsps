@@ -917,8 +917,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     stop() {
       const player = this.draynorPlayer;
       const ownsActivity = player.getSkill() === this;
-      const digSequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
-      if (this.isRunning() && ownsActivity && player.getAnimation()?.getId() === digSequence && player.getHitpoints() > 0 && !player.isDying) {
+      // Not gated on getAnimation(): Mobile clears it every tick, so it is null by the time the dig ends.
+      if (this.isRunning() && ownsActivity && player.getHitpoints() > 0 && !player.isDying) {
         player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
       }
       if (ownsActivity) player.setSkill(null);

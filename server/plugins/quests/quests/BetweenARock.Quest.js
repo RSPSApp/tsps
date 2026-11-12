@@ -803,7 +803,7 @@ module.exports = function registerBetweenARockQuest(api) {
     // Wiki (Gold helmet): 30 Smithing XP.
     player.getSkillManager().addExperiences(Skill.SMITHING, 30);
     player.sendMessage("You hammer the gold bars into a golden helmet.");
-    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.plugin.js).
+    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.AchievementDiaries.js).
     api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
   }
 
@@ -949,6 +949,11 @@ module.exports = function registerBetweenARockQuest(api) {
   // ==========================================================================
   // Combat
   // ==========================================================================
+
+  function handleDropContext({ context }) {
+    // The quest awards this page with its mine, stage and inventory checks.
+    context.handledItemIds.add(BOOK_PAGE_1_ITEM);
+  }
 
   function handleNpcDeath(event) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
@@ -1182,6 +1187,7 @@ module.exports = function registerBetweenARockQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("mining:success", handleMiningSuccess);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", handleDropContext);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.registerArea(createArzinianMineArea());

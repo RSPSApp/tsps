@@ -23,5 +23,14 @@ export const KEEPALIVE_INTERVAL_MS = 5000;
 export const LOGIN_FLAG_REMEMBER = 1;
 /** LOGIN packet flags: the password field holds that token. */
 export const LOGIN_FLAG_TOKEN = 2;
-export const RECONNECT_DELAY_MAX_MS = 1000;
-export const RECONNECT_MAX_ATTEMPTS = 1;
+/** LOGIN packet flags: send the character list after login instead of entering the game. */
+export const LOGIN_FLAG_CHARACTER_SELECT = 4;
+/**
+ * A dropped connection is retried this many times, waiting RECONNECT_DELAY_INITIAL_MS, then
+ * double that, up to RECONNECT_DELAY_MAX_MS, before the player is sent to the login screen.
+ * A retry that never opens counts too (the attempts only reset once a socket opens), so a
+ * single failed retry used to be enough to boot a player who was still logged in.
+ */
+export const RECONNECT_DELAY_INITIAL_MS = 500;
+export const RECONNECT_DELAY_MAX_MS = 2000;
+export const RECONNECT_MAX_ATTEMPTS = 3;

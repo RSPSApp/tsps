@@ -80,6 +80,8 @@ export class Combat {
     private previousCast: CombatSpell | null = null;
     private generation = 0;
     private deniedNoticeGeneration = -1;
+    private foughtNpcNoticeGeneration = -1;
+    private foughtNpcNoticeCycle = -1;
     private static combatDebugCache?: boolean;
     /** COMBAT_DEBUG=1. Read lazily so argv/env parsing order cannot defeat it. */
     private static get DEBUG(): boolean {
@@ -279,6 +281,8 @@ export class Combat {
         this.cycleState = null;
         if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
         this.character.getMovementQueue().reset();
+        // A retaliation chase isn't the player's click: it follows the run setting.
+        if (autoRetaliation) this.character.getMovementQueue().endClickRunOverride();
         this.character.setFollowing(null);
         this.faceTarget(target, true);
         if (this.character.isPlayer()) {
@@ -346,7 +350,10 @@ export class Combat {
         }
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
-        if (permission !== CanAttackResponse.CAN_ATTACK) {
+        if (permission !== CanAttackResponse.CAN_ATTACK && this.walksInOnFoughtNpc(permission, target, method)) {
+            this.trace(`approach=permission:${CanAttackResponse[permission]}`, target);
+            state.attackBlocked = true;
+        } else if (permission !== CanAttackResponse.CAN_ATTACK) {
             this.trace(`bail=permission:${CanAttackResponse[permission]}`, target);
             this.handleAttackDenied(permission, target, generation);
             if (!this.isTransientDenial(permission) ||
@@ -497,8 +504,16 @@ export class Combat {
 
         const permission = CombatFactory.canAttackPermission(this.character, target, true, method);
         if (permission !== CanAttackResponse.CAN_ATTACK) {
-            this.handleAttackDenied(permission, target, generation);
-            return;
+            // Walking in on an NPC someone else is fighting: out of reach, it is an approach like
+            // any other, so a route that runs out still ends in "I can't reach that!" below. A step
+            // that arrived this cycle is answered on the next (live: the third line comes the
+            // tick after arrival, rsprox 83 t18213, 1098 t4926).
+            const stepped = this.character.getMovementQueue().didMoveThisCycle();
+            if (!this.walksInOnFoughtNpc(permission, target, method, stepped)) {
+                this.handleAttackDenied(permission, target, generation);
+                return;
+            }
+            if (CombatRange.canReach(this.character, method, target)) return;
         }
         if (state.attackBlocked && CombatRange.canReach(this.character, method, target)) {
             // Denied before movement but in range now; the next cycle re-evaluates.
@@ -531,7 +546,12 @@ export class Combat {
         }
 
         this.character.getMovementQueue().reset();
-        if (cycle < this.nextAttackCycle && !this.attackTiming(method, target).ignoreDelay) {
+        // A bypassing special must reach executeAttack while the old cooldown is still active.
+        // Check the selected method too: an explicit spell can override an armed special.
+        const special = this.character.isPlayer() ? this.character.getAsPlayer().getCombatSpecial() : null;
+        const bypass = special?.getCombatMethod() === method &&
+            CombatSpecial.activeTraitsFor(this.character)?.bypassAttackDelay === true;
+        if (cycle < this.nextAttackCycle && !bypass && !this.attackTiming(method, target).ignoreDelay) {
             this.trace(`cooldown next=${this.nextAttackCycle} in=${this.nextAttackCycle - cycle}`, target);
             this.renewInteraction(target, generation);
             return;
@@ -733,6 +753,8 @@ export class Combat {
         if (target == null) this.reset();
         else this.attack(target);
     }
+    /** Whether the current fight began as a reply to an attack (auto-retaliate), not a click. */
+    public isAutoRetaliating(): boolean { return this.autoRetaliating; }
     public stopAutoRetaliation(): void {
         // A target equal to the current attacker is retaliation, including
         // combat that began before the server started tagging its source.
@@ -921,7 +943,10 @@ export class Combat {
         const specialTraits = this.character && this.character.isPlayer()
             ? CombatSpecial.activeTraitsFor(this.character)
             : null;
-        const bypass = bypassDelay || specialTraits?.bypassAttackDelay === true;
+        const specialMethod = this.character.isPlayer()
+            ? this.character.getAsPlayer().getCombatSpecial()?.getCombatMethod()
+            : null;
+        const bypass = bypassDelay || (specialMethod === method && specialTraits?.bypassAttackDelay === true);
         const timing = this.attackTiming(method, target);
         if (!bypass && !timing.ignoreDelay && cycle < this.nextAttackCycle) {
             if (renew) this.renewInteraction(target, generation);
@@ -947,11 +972,18 @@ export class Combat {
         } else if (!bypass && timing.minimumDelay > 0) {
             this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
             this.sendAttackTimer();
-        } else if (specialTraits?.bypassAttackDelay === true && specialTraits.attackSpeedTicks != null) {
-            // A bypassing special (Quick Smash) armed before the target was clicked: keep any
-            // cooldown already running and leave at least its own delay after it.
-            this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
-                specialTraits.attackSpeedTicks));
+        } else if (specialMethod === method && specialTraits?.bypassAttackDelay === true) {
+            if (specialTraits.attackSpeedTicks != null) {
+                // Quick Smash keeps a cooldown already running and leaves its own minimum delay.
+                this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                    specialTraits.attackSpeedTicks));
+            } else {
+                // Momentum Throw bypasses the old deadline but starts a full weapon cooldown.
+                const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                    method.attackSpeed(this.character));
+                this.nextAttackCycle = cycle + Math.max(1, speed | 0);
+                this.sendAttackTimer();
+            }
         }
         this.lastAttackTarget = target;
 
@@ -1039,6 +1071,34 @@ export class Combat {
             (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
     }
 
+    /**
+     * Single combat for a player attacking in melee an NPC someone else is fighting (live, and
+     * LostCity player_combat.rs2): the player still walks in. The refusal is said by both
+     * checks of the click tick (before and after its step), and again the tick after arrival, where the
+     * attack ends. Ranged and magic are refused on the spot, as before (rsprox 2745 t4982).
+     * True while the player keeps walking in.
+     */
+    private walksInOnFoughtNpc(
+        permission: CanAttackResponse,
+        target: Mobile,
+        method: CombatMethod,
+        steppedThisCycle = false
+    ): boolean {
+        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()
+            || method.type() !== CombatType.MELEE) {
+            return false;
+        }
+        // In reach without having stepped there this cycle: the refusal ends it here.
+        if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
+        const cycle = World.getProcessCycle();
+        if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
+            this.foughtNpcNoticeGeneration = this.generation;
+            this.foughtNpcNoticeCycle = cycle;
+            this.character.getAsPlayer().sendMessage("Someone else is fighting that.");
+        }
+        return true;
+    }
+
     private cancelIfCurrent(target: Mobile, generation: number): void {
         if (this.target === target && this.generation === generation) this.reset();
     }
@@ -1070,8 +1130,8 @@ export class Combat {
                     : "Someone else is fighting that.");
                 break;
             case CanAttackResponse.LEVEL_DIFFERENCE_TOO_GREAT:
-                player?.sendMessage("Your level difference is too great.");
-                player?.sendMessage("You need to move deeper into the Wilderness.");
+                // One game message on live (rsprox_transcripts/229/02787.txt).
+                player?.sendMessage("Your level difference is too great!<br>You need to move deeper into the Wilderness.");
                 break;
             case CanAttackResponse.NOT_ENOUGH_SPECIAL_ENERGY:
                 if (player) {

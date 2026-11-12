@@ -24,6 +24,7 @@ const Primio = require("./quetzals/Primio.Quetzals");
 
 module.exports = {
   name: "Quetzals",
+  description: "Quetzal Transport System: Renu's flights, landing sites, quetzal whistles and recharges from Pitri, and Primio's Varrock to Fortis trips.",
   members: true,
   _test: {
     landingSites: () => Common.landingSites(), introduce: Renu.introduce, unlock: Renu.unlock, chooseSite: Renu.chooseSite,

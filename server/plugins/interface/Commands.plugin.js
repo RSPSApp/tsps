@@ -81,6 +81,7 @@ function openCommands({ player, parts = [] }) {
 
 module.exports = {
   name: "Commands",
+  description: "A searchable in-game list of the commands available to the player, opened with ::commands.",
   register(api) {
     pluginApi = api;
     api.registerCustomInterface(buildInterface());

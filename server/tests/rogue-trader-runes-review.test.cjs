@@ -27,7 +27,7 @@ test('Buy all the runes takes no coins when the runes do not fit', async (t) => 
   const f = H.actor(t);
   f.p.getInventory().add(new core.Item(COINS(), 100000), true);
   const start = f.p.getInventory().getAmount(COINS());
-  for (let i = 0; i < 27; i++) f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SWORD, 1), true);
+  for (let i = 0; i < 27; i++) f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1), true);
   const { pending } = await reachOffer(f, t);
   assert.match(pending.options[0], /^Buy all the runes for \d+$/);
   await H.choose(f, 1);

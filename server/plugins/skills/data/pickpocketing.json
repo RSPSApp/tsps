@@ -29,7 +29,7 @@
       "low": 150,
       "high": 240,
       "coinPouch": {"id": 22522, "coins": 9},
-      "petBase": 256961,
+      "petBase": 257211,
       "table": [
         {"id": 995, "name": "Coins", "amount": 9, "rate": "123/128"},
         {"id": 5318, "name": "Potato seed", "amount": 1, "rate": "5/128"}
@@ -48,7 +48,7 @@
       "low": 135,
       "high": 239,
       "coinPouch": {"id": 22523, "coins": [1, 21]},
-      "petBase": 256836,
+      "petBase": 257211,
       "first": [
         {"clue": "easy", "rate": "1/50"}
       ],
@@ -104,13 +104,14 @@
       "channel": "game",
       "attemptLine": "You attempt to pick the workman's pocket...",
       "successLine": "You pick the workman's pocket...",
+      "successTicks": 3,
       "level": 25,
       "xp": 10.4,
       "stunDamage": 1,
       "low": 100,
       "high": 240,
       "estimatedFrom": "warrior",
-      "petBase": 256586,
+      "petBase": 257211,
       "lootQuest": {"key": "the_dig_site", "name": "The Dig Site"},
       "table": [
         {"id": 995, "name": "Coins", "amount": 10, "rate": "1/11", "rateAfterQuest": "4/11"},
@@ -134,7 +135,7 @@
       "low": 100,
       "high": 240,
       "coinPouch": {"id": 22524, "coins": 18},
-      "petBase": 256586,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 18}
       ]
@@ -150,7 +151,7 @@
       "low": 75,
       "high": 240,
       "coinPouch": {"id": 22525, "coins": [25, 40]},
-      "petBase": 256411,
+      "petBase": 257211,
       "table": [
         {"id": 995, "name": "Coins", "amount": [25, 40], "rate": "123/144"},
         {"id": 556, "name": "Air rune", "amount": 8, "rate": "9/144"},
@@ -172,7 +173,7 @@
       "high": 240,
       "estimatedFrom": "rogue",
       "coinPouch": {"id": 22526, "coins": [10, 50]},
-      "petBase": 256311,
+      "petBase": 257211,
       "table": [
         {"id": 10964, "name": "Bat shish", "amount": 1, "rate": "1/20"},
         {"id": 10963, "name": "Coated frogs' legs", "amount": 1, "rate": "1/20"},
@@ -203,7 +204,7 @@
       "stunDamage": 3,
       "low": 90,
       "high": 240,
-      "petBase": 256261,
+      "petBase": 257211,
       "table": [
         {"id": 5318, "name": "Potato seed", "amount": [1, 4], "rate": "1/5.65"},
         {"id": 5319, "name": "Onion seed", "amount": [1, 3], "rate": "1/7.53"},
@@ -263,7 +264,7 @@
       "low": 50,
       "high": 240,
       "coinPouch": {"id": 22527, "coins": 30},
-      "petBase": 256211,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 30}
       ]
@@ -282,7 +283,7 @@
       "high": 240,
       "estimatedFrom": "guard",
       "coinPouch": {"id": 22528, "coins": 40},
-      "petBase": 256086,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 40}
       ]
@@ -298,7 +299,7 @@
       "low": 35,
       "high": 200,
       "coinPouch": {"id": 28822, "coins": 85},
-      "petBase": 255961,
+      "petBase": 257211,
       "first": [
         {"clue": "easy", "rate": "1/85"}
       ],
@@ -320,7 +321,7 @@
       "low": 50,
       "high": 240,
       "coinPouch": {"id": 22530, "coins": 30},
-      "petBase": 255886,
+      "petBase": 257211,
       "table": [
         {"id": 995, "name": "Coins", "amount": 30, "rate": "5/7"},
         {"id": 179, "name": "Antipoison(1)", "amount": 1, "rate": "1/7"},
@@ -338,7 +339,7 @@
       "low": 50,
       "high": 240,
       "coinPouch": {"id": 22531, "coins": 50},
-      "petBase": 255836,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 50}
       ]
@@ -356,7 +357,7 @@
       "high": 240,
       "estimatedFrom": "knight",
       "coinPouch": {"id": 22531, "coins": 50},
-      "petBase": 255836,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 50}
       ],
@@ -375,7 +376,7 @@
       "high": 240,
       "estimatedFrom": "knight",
       "coinPouch": {"id": 32895, "coins": 20},
-      "petBase": 255711,
+      "petBase": 257211,
       "table": [
         {"id": 995, "name": "Coins", "amount": 20, "rate": "170/200"},
         {"id": 31906, "name": "Bronze cannonball", "amount": 1, "rate": "14/200"},
@@ -405,7 +406,7 @@
         "id": 22529,
         "coins": 40
       },
-      "petBase": 256086,
+      "petBase": 257211,
       "always": [
         {
           "id": 995,
@@ -435,7 +436,7 @@
         "id": 22532,
         "coins": 50
       },
-      "petBase": 255836,
+      "petBase": 257211,
       "always": [
         {
           "id": 995,
@@ -456,7 +457,7 @@
       "low": 50,
       "high": 160,
       "coinPouch": {"id": 22534, "coins": 60},
-      "petBase": 255586,
+      "petBase": 257211,
       "always": [
         {"id": 995, "name": "Coins", "amount": 60}
       ]
@@ -472,7 +473,7 @@
       "low": 15,
       "high": 160,
       "coinPouch": {"id": 22533, "coins": 60},
-      "petBase": 133000,
+      "petBase": 134625,
       "always": [
         {"id": 2309, "name": "Bread", "amount": 1},
         {"id": 995, "name": "Coins", "amount": 60}
@@ -489,7 +490,7 @@
       "low": 35,
       "high": 160,
       "coinPouch": {"id": 22535, "coins": 80},
-      "petBase": 125306,
+      "petBase": 127056,
       "always": [
         {"id": 995, "name": "Coins", "amount": 80},
         {"id": 562, "name": "Chaos rune", "amount": 2}
@@ -509,7 +510,7 @@
       "low": 33,
       "high": 140,
       "coinPouch": {"id": 22536, "coins": 300},
-      "petBase": 106843,
+      "petBase": 108718,
       "first": [
         {"clue": "medium", "rate": "1/150"}
       ],
@@ -534,7 +535,7 @@
       "low": 39,
       "high": 160,
       "coinPouch": {"id": 22537, "coins": [200, 300]},
-      "petBase": 97175,
+      "petBase": 99175,
       "first": [
         {"clue": "elite", "rate": "1/900"}
       ],
@@ -561,7 +562,7 @@
       "low": 8,
       "high": 128,
       "coinPouch": {"id": 24703, "coins": [230, 315]},
-      "petBase": 97125,
+      "petBase": 99175,
       "first": [
         {"id": 24777, "name": "Blood shard", "amount": 1, "rate": "1/5000"}
       ],
@@ -588,7 +589,7 @@
       "low": 6,
       "high": 100,
       "coinPouch": {"id": 22538, "coins": [280, 350]},
-      "petBase": 97050,
+      "petBase": 99175,
       "table": [
         {"id": 995, "name": "Coins", "amount": [280, 350], "rate": "105/128"},
         {"id": 560, "name": "Death rune", "amount": 2, "rate": "8/128"},
@@ -612,7 +613,7 @@
       "low": 6,
       "high": 100,
       "coinPouch": {"id": 22538, "coins": [280, 350]},
-      "petBase": 97050,
+      "petBase": 99175,
       "first": [
         {"id": 23962, "name": "Crystal shard", "amount": 1, "rate": "1/35"},
         {"id": 23959, "name": "Enhanced crystal teleport seed", "amount": 1, "rate": "1/1024"}
@@ -639,7 +640,7 @@
       "stunDamage": 4,
       "low": -200,
       "high": 200,
-      "petBase": 174493,
+      "petBase": 176743,
       "table": [
         {"id": 6529, "name": "Tokkul", "amount": [3, 7], "rate": "182/195"},
         {"id": 1623, "name": "Uncut sapphire", "amount": 1, "rate": "5/195"},

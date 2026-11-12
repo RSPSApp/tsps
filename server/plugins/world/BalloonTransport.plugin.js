@@ -13,6 +13,7 @@ const Controls = require("./balloontransport/Controls.BalloonTransport");
 
 module.exports = {
   name: "BalloonTransport",
+  description: "Balloon transport after Enlightened Journey: Auguste's balloon map, trips between Entrana, Taverley, Varrock, Castle Wars and others, and shared log storage.",
   members: true,
   register(api) {
     Common.init(api);

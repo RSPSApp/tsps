@@ -13,6 +13,7 @@
  * UNVERIFIED (no capture): the refusal messages, 5/X/All, and the portal loop three ticks after.
  */
 const Common = require("./Common.DeathsOffice");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const CREDIT_PERCENT = 105;
 const MIN_CREDIT = 10000;
@@ -135,7 +136,7 @@ function selectItem(event) {
   const item = player.getInventory().getItems()[slot];
   if (!item || item.getId() <= 0) return;
   if ((event.opId ?? event.action) === EXAMINE_OP) {
-    player.sendMessage(item.getDefinition().getExamine());
+    examineItem(player, item.getId(), item.getAmount());
     return;
   }
   if (restricted(item)) {

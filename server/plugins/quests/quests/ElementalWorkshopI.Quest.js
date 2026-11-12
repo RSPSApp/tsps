@@ -89,11 +89,12 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const SURFACE_STAIRS = ObjectIdentifiers.STAIRCASE_10;
   const WORKSHOP_STAIRS = ObjectIdentifiers.STAIRCASE_11;
 
-  const PICKAXES = new Set([
-    ItemIdentifiers.BRONZE_PICKAXE, ItemIdentifiers.IRON_PICKAXE, ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.BLACK_PICKAXE, ItemIdentifiers.MITHRIL_PICKAXE, ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-  ]);
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
+  function hasPickaxe(player) {
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
+  }
 
   let quest;
   // The rocks are shared scenery; each player's mined earth elemental is a private spawn.
@@ -359,6 +360,11 @@ module.exports = function registerElementalWorkshopIQuest(api) {
           event.handled = true;
           return;
         }
+        if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 20) {
+          player.sendMessage("You need level 20 Smithing to smelt elemental metal.");
+          event.handled = true;
+          return;
+        }
         player.getInventory().deleteNumber(ItemIdentifiers.ELEMENTAL_ORE, 1);
         player.getInventory().deleteNumber(ItemIdentifiers.COAL, 4);
         player.getInventory().adds(ItemIdentifiers.ELEMENTAL_METAL, 1);
@@ -438,7 +444,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
       event.handled = true;
       return;
     }
-    if (![...PICKAXES].some((id) => has(player, id))) {
+    if (!hasPickaxe(player)) {
       player.sendMessage("You need a pickaxe to mine this rock.");
       event.handled = true;
       return;

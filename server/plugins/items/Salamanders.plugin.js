@@ -1,5 +1,5 @@
 /**
- * Salamanders (OSRS Wiki: Salamander, Swamp lizard, Orange/Red/Black salamander): one weapon,
+ * Salamanders (OSRS Wiki: Salamander, Swamp lizard, Orange/Red/Black/Tecu salamander): one weapon,
  * three styles. Every style burns one compatible tar. Scorch is slash, Flare ranged, Blaze magic
  * whose max hit is floor(0.5 + Magic * (64 + hidden bonus) / 640). The style buttons, speed and
  * reach come from the SALAMANDER interface and its WeaponProfile; this plugin picks the combat
@@ -10,7 +10,10 @@ const BLAZE_MAGIC_BONUS_BY_ITEM = {
   ORANGE_SALAMANDER: 59,
   RED_SALAMANDER: 77,
   BLACK_SALAMANDER: 92,
+  TECU_SALAMANDER: 104,
 };
+// The carried creatures, which a death does not leave behind unless Protect Item keeps them.
+const CREATURE_ITEMS = [...Object.keys(BLAZE_MAGIC_BONUS_BY_ITEM)];
 const TAR_PER_ATTACK = 1;
 const ATTACK_GRAPHIC = 952; // cache: firebreath; rsprox 1607
 const ATTACK_GRAPHIC_SLOT = 1;
@@ -24,7 +27,7 @@ const BLAZE_ATTACK_RANGE = 1;
 const BLAZE_SPELL_LEVEL = 1; // the wield requirement (Attack/Ranged/Magic) is the real gate
 
 let core = null;
-const TARS = ["GUAM_TAR", "MARRENTILL_TAR", "TARROMIN_TAR", "HARRALANDER_TAR"];
+const TARS = ["GUAM_TAR", "MARRENTILL_TAR", "TARROMIN_TAR", "HARRALANDER_TAR", "IRIT_TAR"];
 let BlazeCombatMethod = null;
 let scorchCombatMethod = null;
 let flareCombatMethod = null;
@@ -181,13 +184,22 @@ function decrementAmmo(player, _position, amount) {
   return true;
 }
 
+/** Wiki (Items Kept on Death): living creatures such as salamanders run away rather than drop or enter a grave. */
+function runAway(event) {
+  if (event.kept || event.shouldDropItems === false) return;
+  const id = Number(event.item.getId());
+  if (CREATURE_ITEMS.some((name) => core.ItemIdentifiers[name] === id)) event.handled = true;
+}
+
 module.exports = {
   name: "Salamanders",
+  description: "Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature.",
   members: true,
-  _test: { blazeBaseMaxHit, resolveSalamander, decrementAmmo, blazeSpell, BLAZE_MAGIC_BONUS_BY_ITEM },
+  _test: { runAway, blazeBaseMaxHit, resolveSalamander, decrementAmmo, blazeSpell, BLAZE_MAGIC_BONUS_BY_ITEM },
   register(api) {
     core = api.core;
     api.registerCombatMethodResolver({ resolve: resolveSalamander });
     api.registerRangedAmmoHandler({ checkAmmo, decrementAmmo });
+    api.onPlayerDeathItemDrop(runAway);
   },
 };

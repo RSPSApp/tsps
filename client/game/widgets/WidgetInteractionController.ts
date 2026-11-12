@@ -1,3 +1,4 @@
+import type { ChatRequest } from "../chatRequests";
 import { ClickMode } from "../InputManager";
 import type { InputManager } from "../InputManager";
 import type { WidgetManager } from "../../widgets/WidgetManager";
@@ -20,7 +21,9 @@ export type WidgetInteractionControllerDeps = {
     getWidgetManager: () => WidgetManager | undefined;
     getInputManager: () => InputManager | undefined;
     getRendererCanvas: () => unknown;
-    getTradeRequestTargetsByName: () => ReadonlyMap<string, number>;
+    getChatRequestsByName: () => ReadonlyMap<string, ChatRequest>;
+    /** Whether the transparent chatbox's message area is click-through now. */
+    isChatboxClickThrough?: () => boolean;
 };
 
 /**
@@ -55,6 +58,11 @@ export class WidgetInteractionController {
     lastDragHitY: number = -1;
 
     deferredWidgetAction: any = null;
+    /**
+     * The widget beneath a pressed script-draggable item that offers the menu op (the bolt pouch's
+     * slot under its bolts): a release without a drag runs this widget's op.
+     */
+    dragPassThroughWidget: any = null;
 
     dragRenderAreaAbsX?: number;
     dragRenderAreaAbsY?: number;
@@ -147,6 +155,7 @@ export class WidgetInteractionController {
         this.dragSourceWidget = null;
         this.draggedOnWidget = null;
         this.deferredWidgetAction = null;
+        this.dragPassThroughWidget = null;
         this.lastDragHitX = -1;
         this.lastDragHitY = -1;
         delete this.dragRenderAreaAbsX;
@@ -184,6 +193,7 @@ export class WidgetInteractionController {
             this.clickedWidget,
             px,
             py,
+            this.deps.isChatboxClickThrough?.() ?? false,
         );
     }
 
@@ -194,7 +204,7 @@ export class WidgetInteractionController {
     handleTradeRequestChatClick(widgets: readonly any[]): boolean {
         return handleTradeRequestChatClick(
             widgets,
-            this.deps.getTradeRequestTargetsByName(),
+            this.deps.getChatRequestsByName(),
         );
     }
 

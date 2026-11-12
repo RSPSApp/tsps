@@ -22,12 +22,11 @@ const RUINS_DATA = require("./data/runecrafting-ruins.json");
 const OURANIA_DATA = require("./data/ourania-altar.json");
 const Pouches = require("./runecrafting/Pouches.Runecrafting");
 const Combination = require("./runecrafting/Combination.Runecrafting");
+const Raiments = require("./runecrafting/Raiments.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
 let ABYSS_OBSTACLES;
-let PICKAXE_IDS;
-let AXE_IDS;
 let CRAFT_RUNES_GRAPHIC;
 /** The craft graphic (spotanim runecrafting) plays at height 92 (rsprox capture 1693). */
 const CRAFT_RUNES_GRAPHIC_HEIGHT = 92;
@@ -37,6 +36,8 @@ let OURANIA_ALTAR;
 let OURANIA_RUNES;
 let OURANIA_ESSENCE;
 let ABYSS_INNER_RING;
+/** Where the Mage of Zamorak lands a player: the outer ring (Wiki: Abyss; rsprox_transcripts/226/01636.txt). */
+let ABYSS_OUTER_RING_LANDING;
 
 const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
@@ -64,6 +65,14 @@ const OURANIA_DIARY_MESSAGE = "Your medium level knowledge of the local area all
 const OURANIA_NO_ESSENCE = "You do not have any pure or daeyalt essences to bind.";
 const RIFT_GUARDIAN_BASE = 1795758;
 const BLOOD_RIFT_GUARDIAN_BASE = 804984;
+
+/**
+ * Wiki (Rift guardian): 804,984 for "Blood runes (Arceuus)" (the dark essence altar, ObjectIdentifiers.BLOOD_ALTAR),
+ * 1,795,758 for every other altar, the true Blood Altar (Altar 83, pure essence) among them.
+ */
+function riftGuardianBase(altarId) {
+  return altarId === ObjectIdentifiers.BLOOD_ALTAR ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE;
+}
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
@@ -150,6 +159,7 @@ function initialize(api) {
   CRAFT_RUNES_ANIMATION = new Animation(791);
   RUNE_ESSENCE_MINE = new Location(2913, 4832, 0);
   ABYSS_INNER_RING = new Location(3040, 4839, 0);
+  ABYSS_OUTER_RING_LANDING = new Location(3063, 4824, 0);
   // rc_zmi_dungeon_cracked_center_altar.
   OURANIA_ALTAR = ObjectIdentifiers.ALTAR_31;
   OURANIA_RUNES = OURANIA_DATA.runes.map((rune) => ({ ...rune, runeId: ItemIdentifiers[rune.rune] }));
@@ -158,26 +168,6 @@ function initialize(api) {
     { id: ItemIdentifiers.DAEYALT_ESSENCE, xpScale: OURANIA_XP_SCALE * DAEYALT_XP_SCALE },
   ];
 
-  PICKAXE_IDS = [
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.BLACK_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-    ItemIdentifiers.DRAGON_PICKAXE,
-  ];
-  AXE_IDS = [
-    ItemIdentifiers.BRONZE_AXE,
-    ItemIdentifiers.IRON_AXE,
-    ItemIdentifiers.STEEL_AXE,
-    ItemIdentifiers.BLACK_AXE,
-    ItemIdentifiers.MITHRIL_AXE,
-    ItemIdentifiers.ADAMANT_AXE,
-    ItemIdentifiers.RUNE_AXE,
-    ItemIdentifiers.DRAGON_AXE,
-  ];
 
   // What each altar binds. Wiki (Runecraft): clicking an altar converts all the essence in the
   // inventory, so rune and pure essence go together where both work.
@@ -289,12 +279,12 @@ function initialize(api) {
   ]);
 
   ABYSS_OBSTACLES = new Map([
-    [ObjectIdentifiers.ROCK_111, { objectName: "Rock", action: "Mine", skill: Skill.MINING, toolIds: PICKAXE_IDS, toolMessage: "You need a pickaxe to mine through the rock.", fail: "You fail to mine through the rock." }],
-    [ObjectIdentifiers.TENDRILS_4, { objectName: "Tendrils", action: "Chop", skill: Skill.WOODCUTTING, toolIds: AXE_IDS, toolMessage: "You need an axe to chop through the tendrils.", fail: "You fail to chop through the tendrils." }],
-    [ObjectIdentifiers.BOIL, { objectName: "Boil", action: "Burn-down", skill: Skill.FIREMAKING, toolIds: [ItemIdentifiers.TINDERBOX], toolMessage: "You need a tinderbox to burn through the boil.", fail: "You fail to burn through the boil." }],
-    [ObjectIdentifiers.EYES, { objectName: "Eyes", action: "Distract", skill: Skill.THIEVING, toolIds: null, toolMessage: null, fail: "You fail to distract the eyes." }],
-    [ObjectIdentifiers.GAP_42, { objectName: "Gap", action: "Squeeze-through", skill: Skill.AGILITY, toolIds: null, toolMessage: null, fail: "You fail to squeeze through the gap." }],
-    [ObjectIdentifiers.PASSAGE_4, { objectName: "Passage", action: "Go-through", skill: null, toolIds: null, toolMessage: null, fail: null }],
+    [ObjectIdentifiers.ROCK_111, { objectName: "Rock", action: "Mine", skill: Skill.MINING, tool: "pickaxe", toolMessage: "You need a pickaxe to mine through the rock.", fail: "You fail to mine through the rock." }],
+    [ObjectIdentifiers.TENDRILS_4, { objectName: "Tendrils", action: "Chop", skill: Skill.WOODCUTTING, tool: "axe", toolMessage: "You need an axe to chop through the tendrils.", fail: "You fail to chop through the tendrils." }],
+    [ObjectIdentifiers.BOIL, { objectName: "Boil", action: "Burn-down", skill: Skill.FIREMAKING, tool: [ItemIdentifiers.TINDERBOX], toolMessage: "You need a tinderbox to burn through the boil.", fail: "You fail to burn through the boil." }],
+    [ObjectIdentifiers.EYES, { objectName: "Eyes", action: "Distract", skill: Skill.THIEVING, tool: null, toolMessage: null, fail: "You fail to distract the eyes." }],
+    [ObjectIdentifiers.GAP_42, { objectName: "Gap", action: "Squeeze-through", skill: Skill.AGILITY, tool: null, toolMessage: null, fail: "You fail to squeeze through the gap." }],
+    [ObjectIdentifiers.PASSAGE_4, { objectName: "Passage", action: "Go-through", skill: null, tool: null, toolMessage: null, fail: null }],
   ]);
 }
 
@@ -308,12 +298,24 @@ function runeMultiplier(level, runeData) {
   return amount;
 }
 
-function hasTool(player, itemIds) {
-  const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
-  if (weapon && itemIds.includes(weapon.getId())) {
-    return true;
+/**
+ * Wiki (Abyss): the rock needs a "Pickaxe" and the tendrils an "Axe"; "the quality of the pickaxe does not impact
+ * success rate". So any one the player can use, as Mining and Woodcutting judge them (crystal, infernal, 3rd age...).
+ */
+function hasTool(player, tool) {
+  if (tool === "pickaxe") {
+    const request = { player, pickaxe: null };
+    pluginApi.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
-  return itemIds.some((itemId) => player.getInventory().contains(itemId));
+  if (tool === "axe") {
+    const request = { player, itemId: null, axe: null };
+    pluginApi.emitCustomEvent("woodcutting:axe", request);
+    return request.axe != null;
+  }
+  // The boil's tinderbox: held or wielded.
+  const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+  return tool.some((itemId) => weapon?.getId() === itemId || player.getInventory().contains(itemId));
 }
 
 function hasCompletedRuneMysteries(player) {
@@ -397,7 +399,10 @@ function ardougneMediumComplete(player) {
 /** Every pure and daeyalt essence becomes a rune rolled at the player's level (Wiki: Ourania Altar). */
 function craftOurania(player) {
   const inventory = player.getInventory();
-  if (!OURANIA_ESSENCE.some((essence) => inventory.contains(essence.id))) {
+  // What binds in place of pure essence binds as it does, after it.
+  const essences = OURANIA_ESSENCE.flatMap((essence) => essence.id !== ItemIdentifiers.PURE_ESSENCE ? [essence] : [essence,
+    ...standIns(player).filter((id) => !OURANIA_ESSENCE.some((own) => own.id === id)).map((id) => ({ id, xpScale: essence.xpScale }))]);
+  if (!essences.some((essence) => inventory.contains(essence.id))) {
     const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, OURANIA_NO_ESSENCE)));
     return;
@@ -408,7 +413,7 @@ function craftOurania(player) {
   // Roll and simulate the whole batch before spending essence, including diary bonus runes.
   const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
   const plan = [];
-  for (const essence of OURANIA_ESSENCE) {
+  for (const essence of essences) {
     while (preview.contains(essence.id)) {
       preview.deleted(essence.id, 1, false);
       const rune = rollOuraniaRune(weights);
@@ -436,6 +441,14 @@ function craftOurania(player) {
     entry.essenceIds.add(essence.id);
     crafted.set(rune, entry);
   }
+  // The raiments' bonus runes, a share of each colour's base runes and no XP (Wiki: Ourania Altar).
+  for (const [rune, entry] of crafted) {
+    const bonus = Raiments.bonusRunes(player, entry.essence);
+    if (bonus <= 0) continue;
+    inventory.addItem(new Item(rune.runeId, bonus));
+    entry.runeAmount += bonus;
+    entry.bonus = bonus;
+  }
 
   player.performGraphic(CRAFT_RUNES_GRAPHIC);
   player.performAnimation(CRAFT_RUNES_ANIMATION);
@@ -444,7 +457,7 @@ function craftOurania(player) {
   if (diary) spam(player, OURANIA_DIARY_MESSAGE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
   // The rift guardian rolls per essence at the altar's own base; each rune is reported for its colour.
-  for (const [rune, { essence, runeAmount, essenceIds }] of crafted) {
+  for (const [rune, { essence, runeAmount, essenceIds, bonus }] of crafted) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
@@ -453,6 +466,7 @@ function craftOurania(player) {
       runeId: rune.runeId,
       amountPerEssence: 1,
       runeAmount,
+      bonusRunes: bonus ?? 0,
       objectId: OURANIA_ALTAR,
       essenceIds: [...essenceIds],
     });
@@ -460,15 +474,21 @@ function craftOurania(player) {
 }
 
 /**
- * The essence an altar binds: its own, and, where pure essence works, what content binds in its
- * place ("runecrafting:essence" { player, pure }: push item ids to `pure`, a league relic's soul
+ * What content binds in place of pure essence, or with `dark` of Kourend's dark essence fragments
+ * ("runecrafting:essence" { player, dark, pure }: push item ids to `pure`, a league relic's soul
  * shards).
  */
-function bindable(player, essence) {
-  if (!essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)) return essence.ids;
-  const request = { player, pure: [] };
+function standIns(player, dark = false) {
+  const request = { player, dark, pure: [] };
   pluginApi.emitCustomEvent("runecrafting:essence", request);
-  return essence.ids.concat(request.pure.filter((id) => Number.isInteger(id) && !essence.ids.includes(id)));
+  return [...new Set(request.pure.filter((id) => Number.isInteger(id) && id >= 0))];
+}
+
+/** The essence an altar binds: its own, and what binds in place of its pure or dark essence. */
+function bindable(player, essence) {
+  const dark = essence.ids.includes(ItemIdentifiers.DARK_ESSENCE_FRAGMENTS);
+  if (!dark && !essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)) return essence.ids;
+  return essence.ids.concat(standIns(player, dark).filter((id) => !essence.ids.includes(id)));
 }
 
 function handleCraftRunes(event) {
@@ -497,7 +517,14 @@ function handleCraftRunes(event) {
   }
 
   const { essence } = runeData;
-  const essenceIds = bindable(player, essence);
+  let essenceIds = bindable(player, essence);
+  // Wiki (Daeyalt essence): every altar that binds pure essence binds daeyalt essence too, for 50%
+  // more experience; with both held the daeyalt binds first and the pure essence takes a second
+  // click. Kourend's dark essence altars never take it.
+  if (essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)
+    && player.getInventory().contains(ItemIdentifiers.DAEYALT_ESSENCE)) {
+    essenceIds = [ItemIdentifiers.DAEYALT_ESSENCE];
+  }
   if (!essenceIds.some((essenceId) => player.getInventory().contains(essenceId))) {
     // The true Blood Altar's and Kourend's refusals are message boxes (rsprox captures 1636, 1673).
     if (essence.mesbox) {
@@ -515,12 +542,17 @@ function handleCraftRunes(event) {
   const inventory = player.getInventory();
   const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
   const plan = [];
+  // The raiments' bonus runes (no XP) come with the first stack, rolled once for the whole craft.
+  let bonus = Raiments.bonusRunes(
+    player, essenceIds.reduce((sum, essenceId) => sum + preview.getAmount(essenceId), 0) * amountPerEssence);
+  const bonusRunes = bonus;
   for (const essenceId of essenceIds) {
     // Simulate each complete input stack in order: its freed slot can hold the runes.
     const count = preview.getAmount(essenceId);
     if (count <= 0) continue;
     preview.deleted(essenceId, count, false);
-    const output = new Item(runeData.runeId, count * amountPerEssence);
+    const output = new Item(runeData.runeId, count * amountPerEssence + bonus);
+    bonus = 0;
     if (preview.getAddableAmount(output) < output.getAmount()) {
       inventory.full();
       event.handled = true;
@@ -536,7 +568,8 @@ function handleCraftRunes(event) {
     inventory.deleteNumber(essenceId, count);
     inventory.addItem(output);
     craftedEssence += count;
-    craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
+    craftedXp += count * (runeData.essenceXp?.[essenceId]
+      ?? (essenceId === ItemIdentifiers.DAEYALT_ESSENCE ? runeData.xp * DAEYALT_XP_SCALE : runeData.xp));
     craftedEssenceIds.push(essenceId);
   }
 
@@ -551,10 +584,12 @@ function handleCraftRunes(event) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
-      petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+      petBase: riftGuardianBase(event.objectId),
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      runeAmount: craftedEssence * amountPerEssence + bonusRunes,
+      bonusRunes,
       source: "altar",
       altarId: event.objectId,
       objectId: event.objectId,
@@ -578,7 +613,7 @@ function answerAltarRune(request) {
   const level = request.player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING);
   request.rune = {
     runeId: runeData.runeId, level: runeData.level, xp: runeData.xp, amount: runeMultiplier(level, runeData),
-    petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+    petBase: riftGuardianBase(request.objectId),
   };
 }
 
@@ -872,19 +907,42 @@ function afterTicks(ticks, action) {
   })());
 }
 
+/** Abyssal bracelet (5) to (1), most charges first. */
+const ABYSSAL_BRACELETS = [11095, 11097, 11099, 11101, 11103];
+
+/**
+ * Wiki (Abyssal bracelet): worn, it prevents the Abyss's skull, using 1 charge an entry, and crumbles after the last.
+ * Already skulled, it only keeps the skull's timer from resetting, and uses no charge.
+ */
+function abyssalBraceletProtects(player) {
+  const { Equipment, Item } = pluginApi.core;
+  const worn = player.getEquipment().getItems()[Equipment.HANDS_SLOT];
+  const index = ABYSSAL_BRACELETS.indexOf(worn?.getId?.());
+  if (index < 0) return false;
+  if (player.isSkulled?.()) return true;
+  const next = ABYSSAL_BRACELETS[index + 1];
+  player.getEquipment().setItem(Equipment.HANDS_SLOT, next === undefined ? new Item(-1, 0) : new Item(next, 1));
+  player.getEquipment().refreshItems?.();
+  if (next === undefined) player.sendMessage("Your abyssal bracelet crumbles to dust.");
+  return true;
+}
+
 function teleportToAbyss(player) {
   if (!hasCompletedEnterTheAbyss(player)) {
     player.sendMessage(ABYSS_LOCKED_MESSAGE);
     return;
   }
-  if (!TeleportHandler.checkReqs(player, ABYSS_INNER_RING)) {
+  if (!TeleportHandler.checkReqs(player, ABYSS_OUTER_RING_LANDING)) {
     return;
   }
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
-  // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
-  pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  // The Mage of Zamorak skulls the player for 10 minutes (Wiki), unless a worn abyssal bracelet prevents it.
+  if (!abyssalBraceletProtects(player)) {
+    pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
+  }
   // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
-  requestTeleport(player, ABYSS_INNER_RING, () => {
+  // The outer ring: its obstacles (the inner ring's way in) and its monsters come first.
+  requestTeleport(player, ABYSS_OUTER_RING_LANDING.clone(), () => {
     pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
   });
 }
@@ -939,7 +997,7 @@ function handleAbyssObstacle(event) {
   }
 
   const player = event.player;
-  if (obstacle.toolIds && !hasTool(player, obstacle.toolIds)) {
+  if (obstacle.tool && !hasTool(player, obstacle.tool)) {
     player.sendMessage(obstacle.toolMessage);
     return true;
   }
@@ -1011,8 +1069,37 @@ function handleEnterRift(event) {
   return true;
 }
 
+/** The world Dark Altar converts every carried dense block, even at zero Prayer. */
+function convertDenseEssence(player) {
+  if (!player || !pluginApi.core.WorldDefinition.isMembersWorld()) return;
+  const inventory = player.getInventory();
+  const replacements = [];
+  for (const [slot, item] of inventory.getItems().entries()) {
+    if (item?.getId() !== ItemIdentifiers.DENSE_ESSENCE_BLOCK) continue;
+    replacements.push({ slot, item: new Item(ItemIdentifiers.DARK_ESSENCE_BLOCK, item.getAmount(), item.getMeta()), amount: item.getAmount() });
+  }
+  if (!replacements.length) return;
+  const amount = replacements.reduce((total, entry) => total + entry.amount, 0);
+  for (const entry of replacements) inventory.setItem(entry.slot, entry.item);
+  inventory.refreshItems();
+  const skills = player.getSkillManager();
+  skills.decreaseCurrentLevel(Skill.PRAYER, amount, 0);
+  skills.addExperiences(Skill.RUNECRAFTING, amount * 2.5);
+}
+
+function venerateDarkAltar({ player }) {
+  convertDenseEssence(player);
+}
+
+function useDenseOnDarkAltar(event) {
+  if (event.objectId !== ObjectIdentifiers.DARK_ALTAR || event.itemId !== ItemIdentifiers.DENSE_ESSENCE_BLOCK) return;
+  event.handled = true;
+  convertDenseEssence(event.player);
+}
+
 module.exports = {
   name: "Runecrafting",
+  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals.",
   register(api) {
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
@@ -1020,15 +1107,18 @@ module.exports = {
     api.onPlayerLogin(syncTiaraOptions);
     api.onPlayerDeath(cancelTravelOnDeath);
     api.onCustomEvent("equipment:changed", syncTiaraOptions);
+    api.onCustomEvent("runecrafting:dark-altar-venerate", venerateDarkAltar);
     api.onItemOnObject(handleTalismanOnRuins, { noted: false });
     api.onItemOnObject(handleBindTiara, { noted: false });
+    api.onItemOnObject(useDenseOnDarkAltar, { noted: false });
     api.onObjectInteraction("Mysterious ruins", { Enter: handleEnterRuins });
     api.onObjectInteraction("Altar", { "Craft-rune": handleCraftRunes });
     api.onObjectInteraction("Blood Altar", { Bind: handleCraftRunes });
     api.onObjectInteraction("Portal", { Use: handleExitPortal });
 
     Pouches.attach(api);
-    Combination.attach(api);
+    Combination.attach(api, { standIns });
+    Raiments.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

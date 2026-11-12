@@ -4,6 +4,7 @@
  * cave's respawn. Slayer experience is the gryphon's 400 hitpoints, as Tasks.Slayer.js gives.
  */
 const Common = require("./Common.ShellbaneGryphon");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 function bossDied({ npc, killer }) {
   if (npc?.getId?.() !== Common.ids.npcs.boss) return;
@@ -14,7 +15,7 @@ function bossDied({ npc, killer }) {
   const kills = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, kills);
   player.getPacketSender().sendConfig(Common.ids.varps.kills, kills);
-  Common.later(1, () => player.sendMessage(Common.message("killCount", { kills })));
+  Common.later(1, () => sendBossKillCount(player, Common.message("killCount", { kills })));
 }
 
 /** "npc-drops:roll": the second main-table roll. */

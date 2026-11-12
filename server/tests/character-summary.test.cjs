@@ -11,7 +11,7 @@ function fixture(world = { plugins: { CustomCharacterSummary: true } }) {
   const commands = new Set(["teleports", "presets", "commands", "lockxp"]);
   const api = {
     core: {
-      WorldDefinition: { readWorldConfig: () => world },
+      WorldDefinition: { readWorldConfig: () => world, getWorldDefinition: () => ({ name: "Old School RuneScape" }) },
       Bank: { TOTAL_BANK_TABS: 3, BANK_SEARCH_TAB_INDEX: 2 },
       ItemIdentifiers: { COINS: 995, BLOOD_MONEY: 13307, PLATINUM_TOKEN: 13204, TOKKUL: 6529, STARDUST: 25527, MARK_OF_GRACE: 11849 },
       Skill: Object.fromEntries(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER", "WOODCUTTING"].map(name => [name, name])),
@@ -63,6 +63,7 @@ function player(attributes = {}, bot = false) {
     sendVarbit(id, value) { varbits.set(id, value); return this; },
     getVarbit: id => varbits.get(id) ?? 0,
     sendMessage(message) { messages.push(message); return this; },
+    sendTypedMessage(_type, message) { messages.push(message); return this; },
     sendInterfaceScript() {}, sendInterfaceFlagsRange() {},
     sendInterfaceDisplayState(uid, hide) { hidden.set(uid, hide); controls.push([uid, hide]); return this; },
     sendInterfacePosition(uid, x, y) { positions.set(uid, { x, y }); controls.push([uid, x, y]); return this; },
@@ -122,8 +123,12 @@ test("dismissing the real welcome screen restores the custom summary after its s
     ...f.api,
     core: {
       ...f.api.core,
+      ChatType: { WELCOME: 108 },
+      GameConstants: { WORLD_TYPE: { label: "REGULAR" } },
+      World: { getProcessCycle: () => 4321 },
       Wilderness: { isInLocation: () => false },
       resolveGameframeRoot: () => 161,
+      dataOrbsHidden: () => false,
       encodeGameframeBootstrap: () => [{ targetUid: contentUid, groupId: 712 }],
     },
     getPluginConfig: (_key, fallback) => fallback,

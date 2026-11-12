@@ -11,6 +11,7 @@ export type LocFrameSoundHandler = (
 
 export class LocAnimated {
     seqType?: SeqType;
+    private readonly preparedSeqType?: SeqType;
 
     frame = 0;
     /** Client cycles into the current keyframe (0-based) and its length, for smoothed frames. */
@@ -45,8 +46,10 @@ export class LocAnimated {
         readonly y: number,
         readonly level: number,
         readonly rotation: number,
+        private readonly preparedOrigin?: { tileX: number; tileY: number; shape: number },
     ) {
-        this.seqType = seqType;
+        if (preparedOrigin) this.preparedSeqType = seqType;
+        else this.seqType = seqType;
         this.cycleStart = cycle - 1;
         // Initialize sound context once with position data
         this.soundContext = { x, y, level };
@@ -59,6 +62,32 @@ export class LocAnimated {
                 this.cycleStart -= Math.floor(Math.random() * seqType.frameLengths[this.frame]);
             }
         }
+    }
+
+    /** Play an already-baked packet animation on the exact tile and object slot. */
+    static playPrepared(
+        locs: readonly LocAnimated[] | undefined,
+        tile: { x: number; y: number },
+        locId: number,
+        level: number,
+        shape: number,
+        rotation: number,
+        sequence: number,
+        cycle: number,
+    ): boolean {
+        const loc = locs?.find((candidate) => {
+            const origin = candidate.preparedOrigin;
+            return origin && origin.tileX === (tile.x & 63) && origin.tileY === (tile.y & 63) &&
+                origin.shape === shape && candidate.id === locId && candidate.level === level &&
+                candidate.rotation === rotation && candidate.preparedSeqType?.id === sequence;
+        });
+        if (!loc) return false;
+        loc.seqType = loc.preparedSeqType;
+        loc.frame = 0;
+        loc.frameCycle = 0;
+        loc.cycleStart = cycle - 1;
+        loc.lastSoundFrame = -1;
+        return true;
     }
 
     /**
@@ -75,7 +104,9 @@ export class LocAnimated {
         }
         for (const loc of next) {
             const old = byLoc.get(loc.key());
-            if (!old || old.seqType?.id !== loc.seqType?.id) continue;
+            const sequence = loc.seqType ?? loc.preparedSeqType;
+            if (!old || old.seqType?.id !== sequence?.id) continue;
+            loc.seqType = sequence;
             loc.frame = old.frame;
             loc.frameCycle = old.frameCycle;
             loc.frameLength = old.frameLength;

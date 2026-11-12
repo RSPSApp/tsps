@@ -8,9 +8,11 @@ const Dialogue = require("./tzhaarketrak/Dialogue.TzHaarKetRak");
 const Challenge = require("./tzhaarketrak/Challenge.TzHaarKetRak");
 const Rewards = require("./tzhaarketrak/Rewards.TzHaarKetRak");
 const Scoreboard = require("./tzhaarketrak/Scoreboard.TzHaarKetRak");
+const EscapeCrystal = require("./tzhaarketrak/EscapeCrystal.TzHaarKetRak");
 
 module.exports = {
   name: "TzHaarKetRak",
+  description: "Adds TzHaar-Ket-Rak's Challenges: fights against one to six JalTok-Jads, their rewards and a scoreboard.",
   members: true,
   register(api) {
     Common.init(api);
@@ -18,5 +20,6 @@ module.exports = {
     Challenge.attach(api, { lastJadDown: Rewards.lastJadDown, completed: Rewards.completed, failed: Rewards.failed, refused: Rewards.refused });
     Rewards.attach(api);
     Scoreboard.attach(api);
+    EscapeCrystal.attach(api);
   },
 };

@@ -72,6 +72,7 @@
  *    to during the fight says the one-line ghost-busting variant instead.
  */
 module.exports = function registerAscentOfArceuusQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Location,
     Skill,
@@ -791,7 +792,7 @@ module.exports = function registerAscentOfArceuusQuest(api) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.HUNTER, 1500);
     skills.addExperiences(Skill.RUNECRAFTING, 500);
-    player.getInventory().adds(COINS_ITEM_ID, 2000);
+    giveReward(player, COINS_ITEM_ID, 2000);
   }
 
   function handleLogin({ player }) {

@@ -51,6 +51,8 @@ sleep 15
 systemctl is-active --quiet rsps-game-server || { journalctl -u rsps-game-server -n 50 --no-pager; exit 1; }
 if [ -n "$id" ]; then
     node ../.github/scripts/web-deploy.mjs publish "/var/lib/rsps-web/$id" /var/www/flarum "$sha" "$id" "$(cat target.txt)"
+    node ../.github/scripts/prune-web-deploy.mjs /var/www/flarum /var/lib/rsps-web "/var/lib/rsps-web/$id" /var/log/nginx \
+        || printf 'Web deployment published, but stale artifact cleanup failed\n' >&2
     install -d -m 700 /var/lib/rsps-web/baseline
     rsync -rc --delete "/var/lib/rsps-web/$id/" /var/lib/rsps-web/baseline/
     # Only the last verified upload is needed as the next transfer's checksum/delta basis.

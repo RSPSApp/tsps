@@ -16,6 +16,7 @@ import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { PrimaryWidgetAction } from "./widgetPrimaryAction";
 import { isCombatSkillWidgetAction } from "../widgetActionPayload";
+import { isChatMessageAreaWidget, isChatboxClickThroughActive } from "../interaction/chatboxClickThrough";
 
 /** Whether a widget offers a menu op of its own: an op with text, shown by its flags or onOp. */
 function offersMenuOp(w: any, getWidgetFlags: (w: any) => number, getWidgetOpMask: (w: any) => number): boolean {
@@ -56,13 +57,20 @@ export function processWidgetClickInput(
         state.cachedHoverHits = null;
 
         if (!widgetInteraction.clickedWidget) {
+            widgetInteraction.dragPassThroughWidget = null;
             // Find widget with click handlers
             const clickHits = collectFromAllRoots(input.leftClickX, input.leftClickY);
             if (widgetInteraction.handleTradeRequestChatClick(clickHits)) {
                 return;
             }
+            // A click-through chatbox's message area leaves the press to the world.
+            const chatClickThrough = isChatboxClickThroughActive(
+                (id) => deps.getVarManager?.()?.getVarbit(id) ?? 0,
+                (uid) => widgetManager?.getWidgetByUid(uid),
+            );
             for (let i = clickHits.length - 1; i >= 0; i--) {
                 const w = clickHits[i];
+                if (chatClickThrough && isChatMessageAreaWidget(w)) continue;
                 const hitWidgetGroupId =
                     (w.groupId ?? (typeof w.uid === "number" ? w.uid >>> 16 : 0)) | 0;
                 const hasInventoryItem =
@@ -147,7 +155,16 @@ export function processWidgetClickInput(
                     !(!isDynamicWidget && hasTransmitOps && !opsCleared) &&
                     !(w.eventHandlers?.onClick || w.eventHandlers?.onClickRepeat || w.eventHandlers?.onHold ||
                         w.eventHandlers?.onRelease || w.onClick || w.onClickRepeat || w.onHold || w.onRelease);
-                if (dragOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
+                const opBeneath = dragOnly
+                    ? clickHits.slice(0, i).reverse().find((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))
+                    : undefined;
+                // An item a cache script made draggable (cc_setdraggable with cc_setobject: the bolt
+                // pouch's bolts over their slot's Remove) keeps the press, so it can be dragged; a
+                // release without a drag runs the op beneath, as a draggable widget's action waits
+                // for the release. A draggable area with no item (a resize handle) lets it through.
+                if (opBeneath && w.isDraggable === true && (w.itemId ?? -1) >= 0) {
+                    widgetInteraction.dragPassThroughWidget = opBeneath;
+                } else if (opBeneath) {
                     continue;
                 }
                 // OSRS fires onClick on the widgets under the mouse and runs the top menu entry,

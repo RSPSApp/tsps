@@ -17,6 +17,7 @@ const URI_STANDARD = "standard-dialogue";
 const URI_REFUSAL = "speaking-with-another-player-s-uri-or-with-incorrect-attire";
 let api;
 let core;
+const URI_TRANSFORM_HARD_CLUES = 300;
 let catalogues = new Map();
 const uris = new WeakMap();
 // A trail's live fight (Wiki "Saradomin wizard", "Double agent"): player -> { npc, token }, and back.
@@ -292,18 +293,36 @@ function nextItem(trail, random = Math.random, player = null) {
 function advance(player, snapshot, random = Math.random, said = {}, show = true, removeUri = true) {
   const trail = stillHeld(player, snapshot);
   if (!trail) return false;
+  const inventory = player.getInventory();
+  const finalReward = trail.state.completed + 1 >= trail.state.length ? nextItem(trail, random, player) : null;
+  const mergeCasket = finalReward && inventory.getItems().some(item => item && item.getId() === finalReward.item.getId() && item.getAmount() > 0);
+  if (mergeCasket) {
+    // Reserve this clue's slot while checking and crediting through the shared stack-aware API.
+    // No refresh/callback can observe the temporary vacancy; refusal restores the exact clue.
+    const clue = inventory.getItems()[trail.slot];
+    let credited = false;
+    inventory.setItem(trail.slot, new core.Item(-1, 0));
+    try {
+      if (inventory.getAddableAmount(finalReward.item) >= finalReward.item.getAmount()) {
+        inventory.add(finalReward.item, false);
+        credited = true;
+      }
+    } finally {
+      if (!credited) inventory.setItem(trail.slot, clue);
+    }
+    if (!credited) { inventory.full(finalReward.item.getId()); return false; }
+  }
   if (removeUri) dismissUri(player);
   dismissEncounter(player);
-  const inventory = player.getInventory();
   for (const kind of ["challenge", "puzzle", "light", "skill"]) {
     const slot = auxiliarySlot(player, trail, kind);
     if (slot >= 0) inventory.setItem(slot, new core.Item(-1, 0));
   }
-  const { casket, item: received } = nextItem(trail, random, player);
+  const { casket, item: received } = finalReward ?? nextItem(trail, random, player);
   // Live captures: "You've found a new clue!" and "You've obtained a casket!", in a message box.
   const words = casket ? said.casket ?? "You've obtained a casket!" : said.clue ?? "You've found a new clue!";
   // The exact slot matters when scrolls of several tiers are carried.
-  inventory.setItem(trail.slot, received);
+  if (!mergeCasket) inventory.setItem(trail.slot, received);
   inventory.refreshItems();
   if (show) Dialogue.itemBox(player, received.getId(), words);
   return true;
@@ -375,7 +394,7 @@ function meetUri(player, npc, npcId, trail) {
   const casket = trail.state.completed + 1 >= trail.state.length;
   const words = (!casket && trail.tier.uriClueMessage) || Dialogue.message(steps, casket) || (casket ? "You've obtained a casket!" : "You have been given a new clue!");
   if (!advance(player, trail, Math.random, {}, false, false)) return;
-  const received = !casket && trail.tier.uriClueDisplay ? core.CacheDefinitions.getObjId(trail.tier.uriClueDisplay) : player.getInventory().getItems()[trail.slot].getId();
+  const received = casket ? data(trail.tier).casket : trail.tier.uriClueDisplay ? core.CacheDefinitions.getObjId(trail.tier.uriClueDisplay) : player.getInventory().getItems()[trail.slot].getId();
   Dialogue.play(player, npcId, what ? [...said, { player: what.player }] : said,
     () => {
       if (uris.get(player)?.npc === npc) dismissUri(player);
@@ -660,6 +679,11 @@ function restore({ player }) {
     const varbit = core.CacheDefinitions.getVarbitId(`collection_clues_${tier.name}_completed`);
     if (varbit != null) player.getPacketSender().sendVarbit(varbit, Number(player.getAttribute(completedAttribute(tier))) || 0);
   }
+  // The Uri transform emote (emotes tab slot 45) unlocks at 300 hard clues: the cache's lock text
+  // and the Wiki's Uri transform page. The emotes plugin leaves count-based unlocks to their owner.
+  const uri = core.CacheDefinitions.getVarbitId("emote_uri_transform");
+  const hard = Number(player.getAttribute(completedAttribute({ name: "hard" }))) || 0;
+  if (uri != null && hard >= URI_TRANSFORM_HARD_CLUES) player.getPacketSender().sendVarbit(uri, 1);
 }
 
 function categoryCount(request) {

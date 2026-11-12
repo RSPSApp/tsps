@@ -15,6 +15,18 @@ Detail behind the plugin rules in [AGENTS.md](../../AGENTS.md).
 validation and safety checks centralised in its emit/register paths so plugins stay simple.
 Do not add feature-specific logic to it unless it is genuinely generic hook infrastructure.
 
+## Extending login
+
+`api.registerLoginExtension(factory)` installs one per-connection login extension. The factory receives
+`api`, packet sending, pending-login access, name reservations, busy-name checks and a rejecting callback.
+It can return `authenticated`, `accepted`, `packet` and `entered` handlers. Authentication stays in core;
+`authenticated` runs after credential checks and can select the pending player/save. `accepted` runs after
+the unchanged login response. `packet` returns false synchronously for messages it does not handle, so
+ordinary game-turn processing does not gain an asynchronous wait. `entered` runs after world admission.
+The factory and authentication/packet handlers fail closed; name locks and socket cleanup stay in core.
+Only one extension can register, to prevent competing authentication flows. See the disabled-by-default
+`plugins/accounts/Characters.plugin.js` and its units.
+
 ## Core access
 
 Core classes and helpers are exposed on the shared, frozen `api.core` object (built once by
@@ -113,6 +125,11 @@ api.onItemAction("Spade", { Dig: dig });
 api.onItemOnObject("Knife", "Web", slashWeb, { noted: false });
 ```
 
+An item option with a submenu (Rub > Xeric's Glade) reaches the handler as that option, with
+`event.subOption` set to the entry's cache label and `event.subOpId` its 1-based index. Answer
+the entry when it is set: a handler that only reads `event.option` reopens the option's own menu
+([docs/item-submenus.md](../../../docs/item-submenus.md)).
+
 `onNpcsInteraction` is the many-names-one-handler form: it registers the same actions for
 each exact, case-sensitive name, so a family of NPCs that share a transcript needs one line.
 
@@ -192,7 +209,7 @@ decides (what it lists is off, everything else on).
 ## Members content
 
 Every plugin whose content is members-only in OSRS (members skills, areas, bosses, minigames,
-members items) must export `members: true`. When world.json sets `"membersWorld": false`,
+members items) must export `members: true`. When world.json enables `plugins.FreeToPlay`,
 `PluginManager` skips those plugins entirely.
 
 - Check the OSRS wiki page's "Members" field when unsure; F2P content (e.g. Castle Wars,
@@ -256,7 +273,9 @@ bot-sites.json sites by id, property by property, and adds new ones (`plugins/bo
   same rule.
 - world.json `pluginConfig` keys are `<plugin name>:<camelCaseOption>`, the plugin's `name`
   as registered (`TutorialIsland:allowSkip`, `PlayerBots:sites`). Read them with
-  `api.getPluginConfig(key, defaultValue)`, and give the key one constant.
+  `api.getPluginConfig(key, defaultValue)`, and give the key one constant. Every new
+  `getPluginConfig` read must also be declared in the plugin's `config` export
+  (tests/world-config-completeness.test.cjs fails on an undeclared key).
 - Derive from the cache where the cache knows the answer. A rule that reads definitions
   (`plugins/objects/Doors.plugin.js` builds its open/closed pairs this way) beats a
   hand-picked id list that only covers what someone happened to test.

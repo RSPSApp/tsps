@@ -55,10 +55,12 @@
  * Source: OSRS Wiki (Animal Magnetism, Quick guide, Transcript:Animal Magnetism).
  */
 module.exports = function registerAnimalMagnetismQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Direction,
     Equipment,
     ItemIdentifiers,
+    NPC,
     NpcDefinition,
     NpcIdentifiers,
     Skill,
@@ -121,7 +123,8 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const MALCOLM_2_NPC_ID = NpcIdentifiers.MALCOLM_2; // 4412, wearing the crone-made amulet
   const TURAEL_NPC_ID = NpcIdentifiers.TURAEL_4; // 13618
   const AYA_NPC_ID = NpcIdentifiers.AYA; // 13619, Turael's replacement after While Guthix Sleeps
-  const UNDEAD_TREE_NPC_ID = NpcIdentifiers.UNDEAD_TREE; // 4417 (spawn 4418 resolves here at stage 150+)
+  const UNDEAD_TREE_BASE_NPC_ID = 4418; // active cache: nasty_tree, transforms to Tree/Undead tree
+  const UNDEAD_TREE_NPC_ID = NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL; // 4417 (spawn 4418 resolves here at stage 150+)
   const COW31337KILLER_NPC_ID = NpcIdentifiers.COW31337KILLER; // 4420, cutscene only
   const SNEAKY_UNDEAD_FOWL_NPC_ID = NpcIdentifiers.SNEAKY_UNDEAD_FOWL; // 4419, cutscene only
 
@@ -149,6 +152,41 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const AVAS_ACCUMULATOR_ITEM_ID = ItemIdentifiers.AVAS_ACCUMULATOR; // 10499
   const STEEL_ARROW_ITEM_ID = ItemIdentifiers.STEEL_ARROW; // 886
   const COINS_ITEM_ID = ItemIdentifiers.COINS; // 995
+  const AVAS_ASSEMBLER_ITEM_ID = ItemIdentifiers.AVAS_ASSEMBLER; // 22109
+  const VORKATHS_HEAD_ITEM_ID = ItemIdentifiers.VORKATHS_HEAD; // 21907
+  const MITHRIL_ARROW_ITEM_ID = ItemIdentifiers.MITHRIL_ARROW; // 888
+
+  // Ava's Devices (cache interface 67): each row is a Buy-1/5/X/All button (ops 1-4, click
+  // mask 0x1e in the cache) whose child model and the cost text beside it are filled in by the
+  // server. The cost text follows the Wiki's interface image (File:Ava's_Devices_interface.png):
+  // each part the player can't pay is struck through, the "OR"/"AND" joins never are.
+  const DEVICES_INTERFACE = 67;
+  const DEVICES_INTERFACE_NAME = "Ava's Devices";
+  const DEVICE_OP = { ONE: 1, FIVE: 2, X: 3, ALL: 4 };
+  const DEVICE_ROWS = [
+    {
+      button: 2, info: 6, itemId: AVAS_ATTRACTOR_ITEM_ID, name: "Ava's attractor",
+      coins: 999, arrows: null, head: false, tradeIn: null,
+      // Not in the capture (it only refuses the other two); written in their pattern.
+      refusal: "You need <col=ef1020>999 coins</col>.",
+    },
+    {
+      button: 7, info: 11, itemId: AVAS_ACCUMULATOR_ITEM_ID, name: "Ava's accumulator",
+      coins: 999, arrows: STEEL_ARROW_ITEM_ID, head: false, tradeIn: AVAS_ATTRACTOR_ITEM_ID,
+      arrowsName: "steel arrows", tradeInName: "Attractor",
+      refusal: "You need either <col=ef1020>999 coins or an Attractor</col>, and also <col=ef1020>75 steel arrows</col>.",
+      rangedLevel: 50, diary: true,
+    },
+    {
+      button: 12, info: 16, itemId: AVAS_ASSEMBLER_ITEM_ID, name: "Ava's assembler",
+      coins: 4999, arrows: MITHRIL_ARROW_ITEM_ID, head: true, tradeIn: AVAS_ACCUMULATOR_ITEM_ID,
+      arrowsName: "mithril arrows", tradeInName: "Accumulator",
+      refusal: "You need either <col=ef1020>4999 coins or an Accumulator, Vorkath's head and also 75 mithril arrows</col>.",
+      quest: "dragon_slayer_ii", questName: "Dragon Slayer II", diary: true,
+    },
+  ];
+  const DEVICE_BUTTONS = DEVICE_ROWS.map((row) => (DEVICES_INTERFACE << 16) | row.button);
+  const DEVICE_ARROW_COST = 75;
   const CRONE_MADE_AMULET_ITEM_ID = ItemIdentifiers.CRONE_MADE_AMULET; // 10500
   const CRONE_MADE_AMULET_ITEM_ID_2 = ItemIdentifiers.CRONE_MADE_AMULET_2; // 17110
   const ECTO_TOKEN_ITEM_ID = ItemIdentifiers.ECTO_TOKEN; // 4278
@@ -710,6 +748,13 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   /** Chicken purchases and the "Amazing! Success!" continuation. */
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    // "Devices, please." ends on the transcript's "(Ava's Devices interface opens.)".
+    if (npcId === AVA_NPC_ID && String(event.target ?? "").startsWith(DEVICES_INTERFACE_NAME)) {
+      event.handled = true;
+      event.end = true;
+      openDevices(player);
+      return;
+    }
     if (MALCOLM_NPC_IDS.has(npcId)) {
       if (stepId === ACTION_RECEIVE_ONE_CHICKEN_ID) {
         event.handled = true;
@@ -993,6 +1038,166 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   }
 
   // ==========================================================================
+  // Ava's Devices
+  // ==========================================================================
+
+  /** Only plain stacks pay: a preset (untradeable, unbankable) copy never buys a fresh device. */
+  function restrictedItem(item) {
+    return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+  }
+
+  function plainSlots(inventory, itemId) {
+    if (typeof inventory.getItems !== "function") return null; // a test stand-in has no slots (and no presets)
+    return inventory.getItems()
+      .map((item, slot) => (item?.getId() === itemId && !restrictedItem(item) ? slot : -1))
+      .filter((slot) => slot >= 0);
+  }
+
+  function plainAmount(inventory, itemId) {
+    const slots = plainSlots(inventory, itemId);
+    if (!slots) return inventory.getAmount(itemId);
+    return slots.reduce((total, slot) => total + inventory.getItems()[slot].getAmount(), 0);
+  }
+
+  function takePlain(inventory, itemId, amount) {
+    const slots = plainSlots(inventory, itemId);
+    if (!slots) {
+      inventory.deleteNumber(itemId, amount);
+      return;
+    }
+    let left = amount;
+    for (const slot of slots) {
+      if (left <= 0) break;
+      const taken = Math.min(left, inventory.getItems()[slot].getAmount());
+      inventory.deleteAtSlot(slot, taken);
+      left -= taken;
+    }
+  }
+
+  function openDevices(player) {
+    if (quest.getStage(player) < STAGE_COMPLETE) {
+      player.sendMessage("You need to complete Animal Magnetism before Ava will make you a device.");
+      return;
+    }
+    const sender = player.getPacketSender();
+    sender.sendInterface(DEVICES_INTERFACE);
+    // The device models are the cache's own (no model packets in the capture); only the cost
+    // text is sent.
+    refreshDeviceCosts(player);
+  }
+
+  /** The cost text for one row, striking through each part the player can't pay right now. */
+  function deviceCostText(player, row) {
+    const inventory = player.getInventory();
+    const part = (text, payable) => (payable ? text : `<str>${text}</str>`);
+    const lines = [];
+    let first = part(`${row.coins} coins`, plainAmount(inventory, COINS_ITEM_ID) >= row.coins);
+    if (row.tradeIn) {
+      first += ` OR an ${part(row.tradeInName, canTradeIn(inventory, row))}`;
+    }
+    lines.push(first);
+    if (row.arrows) {
+      lines.push(`AND ${part(`${DEVICE_ARROW_COST} ${row.arrowsName}`, plainAmount(inventory, row.arrows) >= DEVICE_ARROW_COST)}`);
+    }
+    if (row.head) {
+      lines.push(`AND ${part("the head of Vorkath", plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) >= 1)}`);
+    }
+    return lines.join(",<br>");
+  }
+
+  function refreshDeviceCosts(player) {
+    if (player.getInterfaceId() !== DEVICES_INTERFACE) return;
+    const sender = player.getPacketSender();
+    for (const row of DEVICE_ROWS) {
+      sender.sendString(deviceCostText(player, row), (DEVICES_INTERFACE << 16) | row.info);
+    }
+  }
+
+  /** Why this device can't be bought at all right now, or null. */
+  function deviceRefusal(player, row) {
+    if (row.rangedLevel && player.getSkillManager().getMaxLevel(Skill.RANGED) < row.rangedLevel) {
+      return `You need a Ranged level of at least ${row.rangedLevel} for ${row.name}.`;
+    }
+    if (row.quest && !questComplete(player, row.quest)) {
+      return `You need to complete ${row.questName} before Ava can make ${row.name}.`;
+    }
+    return null;
+  }
+
+  function canTradeIn(inventory, row) {
+    return !!row.tradeIn && plainAmount(inventory, row.tradeIn) > 0;
+  }
+
+  /** Why one more device can't be paid for, or null. */
+  function deviceShortfall(player, row) {
+    const inventory = player.getInventory();
+    // Every payment, trade-ins included, comes only from plain stacks: a preset device is never
+    // traded for a plain one, and preset coins never buy one. Consumption uses the same rule.
+    // Any missing part gives the row's one fixed refusal line, whatever else is held.
+    const tradeIn = canTradeIn(inventory, row);
+    const missing = (row.head && plainAmount(inventory, VORKATHS_HEAD_ITEM_ID) < 1)
+      || (row.arrows && plainAmount(inventory, row.arrows) < DEVICE_ARROW_COST)
+      || (!tradeIn && plainAmount(inventory, COINS_ITEM_ID) < row.coins);
+    if (missing) return row.refusal;
+    // A traded-in device or a used-up head frees its slot; coins alone need a free one.
+    if (!tradeIn && !row.head && inventory.getFreeSlots() < 1) {
+      return "You don't have enough inventory space.";
+    }
+    return null;
+  }
+
+  function buyDevices(player, row, wanted) {
+    if (player.getInterfaceId() !== DEVICES_INTERFACE || wanted <= 0) return;
+    const refusal = deviceRefusal(player, row);
+    if (refusal) {
+      player.sendMessage(refusal);
+      return;
+    }
+    const inventory = player.getInventory();
+    let bought = 0;
+    while (bought < wanted) {
+      const shortfall = deviceShortfall(player, row);
+      if (shortfall) {
+        if (bought === 0) player.sendMessage(shortfall);
+        break;
+      }
+      if (row.head) takePlain(inventory, VORKATHS_HEAD_ITEM_ID, 1);
+      if (row.arrows) takePlain(inventory, row.arrows, DEVICE_ARROW_COST);
+      if (canTradeIn(inventory, row)) takePlain(inventory, row.tradeIn, 1);
+      else takePlain(inventory, COINS_ITEM_ID, row.coins);
+      inventory.adds(row.itemId, 1);
+      bought++;
+    }
+    if (bought === 0) return;
+    // The capture shows no message for a purchase: the diary task (when it completes) and then
+    // the refreshed cost text, in that order.
+    if (row.diary) {
+      api.emitCustomEvent("diary:task", {
+        player,
+        diary: "lumbridge",
+        task: "purchase-an-upgraded-device-from-ava",
+      });
+    }
+    refreshDeviceCosts(player);
+  }
+
+  function handleDevicesButton(event) {
+    const { player } = event;
+    const row = DEVICE_ROWS.find((candidate) => ((DEVICES_INTERFACE << 16) | candidate.button) === event.buttonId);
+    if (!row || player.getInterfaceId() !== DEVICES_INTERFACE) return true;
+    const op = event.opId ?? event.action;
+    if (op === DEVICE_OP.X) {
+      player.setEnteredAmountAction({
+        execute: (amount) => buyDevices(player, row, Math.max(0, Math.trunc(Number(amount) || 0))),
+      });
+      player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+      return true;
+    }
+    buyDevices(player, row, op === DEVICE_OP.ONE ? 1 : op === DEVICE_OP.FIVE ? 5 : 28);
+    return true;
+  }
+
+  // ==========================================================================
   // Interactions
   // ==========================================================================
 
@@ -1001,40 +1206,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     const { player, npcId, clickType } = event;
     if (npcId === AVA_NPC_ID && event.definition?.getActions?.()[clickType - 1] === "Devices") {
       event.handled = true;
-      if (quest.getStage(player) < STAGE_COMPLETE) {
-        player.sendMessage("You need to complete Animal Magnetism before Ava will upgrade your device.");
-        return;
-      }
-      if (player.getSkillManager().getMaxLevel(Skill.RANGED) < 50) {
-        player.sendMessage("You need a Ranged level of at least 50 to use Ava's accumulator.");
-        return;
-      }
-
-      const inventory = player.getInventory();
-      const hasAttractor = inventory.getAmount(AVAS_ATTRACTOR_ITEM_ID) > 0;
-      if (inventory.getAmount(STEEL_ARROW_ITEM_ID) < 75) {
-        player.sendMessage("You need 75 steel arrows to upgrade your device.");
-        return;
-      }
-      if (!hasAttractor && inventory.getAmount(COINS_ITEM_ID) < 999) {
-        player.sendMessage("You need 999 coins or Ava's attractor, as well as 75 steel arrows.");
-        return;
-      }
-      if (!hasAttractor && inventory.getFreeSlots() < 1) {
-        player.sendMessage("You need at least one free inventory space to buy Ava's accumulator.");
-        return;
-      }
-
-      inventory.deleteNumber(STEEL_ARROW_ITEM_ID, 75);
-      if (hasAttractor) inventory.deleteNumber(AVAS_ATTRACTOR_ITEM_ID, 1);
-      else inventory.deleteNumber(COINS_ITEM_ID, 999);
-      inventory.adds(AVAS_ACCUMULATOR_ITEM_ID, 1);
-      player.sendMessage("Ava upgrades your device to an accumulator.");
-      api.emitCustomEvent("diary:task", {
-        player,
-        diary: "lumbridge",
-        task: "purchase-an-upgraded-device-from-ava",
-      });
+      openDevices(player);
       return;
     }
     if (npcId === AVA_NPC_ID && quest.getStage(player) === STAGE_NOT_STARTED && !meetsRequirements(player)) {
@@ -1212,7 +1384,24 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     startTranscript(api, event.player, OLD_CRONE_NPC_ID, PAGE, EQUIP_CRONE_AMULET_VARIANT);
   }
 
-  /** The undead tree: inert wood until the blessed axe is in the pack. */
+  // Wiki Undead_tree: 0–3 melee, all combat levels, ordinary tolerance; cache supplies combat stats.
+  // shortcut: four ticks is one rsprox 3153 attack pair (5410/5414), verify with a sustained capture.
+  const TREE_COMBAT = { aggressive: true, maxHit: 3, attackAnim: 73, attackSpeed: 4, huntRange: 1, combatFollowDistance: 0 };
+
+  /** Solid, stationary trunks use ordinary melee and tolerance, including deferred spawns. */
+  function handleNpcAdded({ npc }) {
+    const id = npc.getId();
+    if (id === UNDEAD_TREE_BASE_NPC_ID || id === NpcIdentifiers.COL_00FFFF_TREE_COL_3 || id === UNDEAD_TREE_NPC_ID) {
+      npc.setFlag(NPC.BLOCKS_PLAYERS_FLAG, true);
+      npc.getMovementQueue().setBlockMovement(true).reset();
+      for (const treeId of [UNDEAD_TREE_BASE_NPC_ID, NpcIdentifiers.COL_00FFFF_TREE_COL_3, UNDEAD_TREE_NPC_ID]) {
+        Object.assign(NpcDefinition.forId(treeId), TREE_COMBAT);
+      }
+      npc.isAggressiveTo = () => true;
+    }
+  }
+
+  /** Chopping progress is independent of the tree's ordinary attacks. */
   function handleChopUndeadTree(event) {
     const { player } = event;
     const stage = quest.getStage(player);
@@ -1348,7 +1537,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     player.getSkillManager().addExperiences(Skill.FLETCHING, 1000);
     player.getSkillManager().addExperiences(Skill.SLAYER, 1000);
     player.getSkillManager().addExperiences(Skill.WOODCUTTING, 2500);
-    player.getInventory().adds(itemId, 1);
+    giveReward(player, itemId, 1);
   }
 
   quest = registerQuest(api, {
@@ -1371,6 +1560,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     onReward: grantReward,
   });
 
+  api.onCustomEvent("npc:added", handleNpcAdded);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction(handleNpcInteraction);
@@ -1383,6 +1573,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Research notes", { Translate: handleTranslateNotes });
   api.onInterfaceActionButton(NOTES_PUZZLE_BUTTONS, handleNotesPuzzleButton);
+  api.onInterfaceActionButton(DEVICE_BUTTONS, handleDevicesButton);
   api.onCustomEvent("interface:closed", handleInterfaceClosed);
   api.onCanEquip(handleCanEquip);
   api.onPlayerLogin(handleLogin);

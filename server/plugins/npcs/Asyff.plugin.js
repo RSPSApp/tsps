@@ -70,6 +70,7 @@ function onDialogueAction(api, event) {
 
 module.exports = {
   name: "Asyff",
+  description: "Adds Asyff's Custom Fur Clothing in Varrock: two dashing kebbit furs and 800 coins at 66 Hunter make a spottier cape.",
   members: true,
   register(api) {
     api.onNpcInteraction("Asyff", { "Fur Clothing": onAsyffFurClothing.bind(null, api) });

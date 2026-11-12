@@ -114,6 +114,7 @@ function stealCowbell(event) {
 
 module.exports = {
   name: "DairyCow",
+  description: "Dairy cows: Milk fills an empty bucket, and Steal-cowbell is a 15 Thieving action unlocked once Cold War is started.",
   register(api) {
     pluginApi = api;
     TaskManager = api.getTaskManager();

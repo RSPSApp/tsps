@@ -34,7 +34,7 @@ const BOND_CONVERT_INTERFACE = 862;
 const BOND_MANAGEMENT_INTERFACE = 863;
 const uid = (group, child) => (group << 16) | child;
 const BOND_POUCH_BUTTON = uid(ACCOUNT_INTERFACE, 37); // action "Bond Pouch"
-const VIEW_BONDS_BUTTON = uid(BOND_MAIN_INTERFACE, 7); // script 1146: "View Your Bonds"
+const VIEW_BONDS_BUTTON = uid(BOND_MAIN_INTERFACE, 8); // bond_main:bond_pouch_body (7 before rev 242), script 1146: "View Your Bonds"
 const BACK_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 2); // script 1929: "Buy or Redeem Bonds"
 const CONVERT_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 23); // script 1929: "Convert"
 const CONVERT_DIALOG_TARGET = uid(BOND_MANAGEMENT_INTERFACE, 24);
@@ -453,6 +453,7 @@ function openConvertDialog(event) {
 
 module.exports = {
   name: "Bonds",
+  description: "Old school bonds: tradeable and untradeable forms, bond pouch interface, redeeming for membership days, converting and gifting bonds.",
   register(api) {
     pluginApi = api;
     api.persistAttribute(MEMBERSHIP_ATTRIBUTE);
@@ -466,6 +467,12 @@ module.exports = {
     api.onInterfaceActionButton(QUANTITY_BUTTON_IDS, selectQuantity);
     api.onInterfaceActionButton(CONVERT_BUTTON, openConvertDialog);
     api.onItemDropPolicy(protectBondDrop);
+    // The bank incinerator asks this instead of the drop policy.
+    api.onCustomEvent("destroy-item:allowed", (request) => {
+      if (!BOND_IDS.has(request.itemId)) return;
+      request.allowed = false;
+      request.message = "This object cannot be dropped or destroyed.";
+    });
     api.onShouldKeepItemOnDeath(keepBondOnDeath);
     api.onItemOnPlayer(donateBond);
     api.onTradeCompleted(convertTradedBonds);

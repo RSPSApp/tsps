@@ -53,6 +53,9 @@ function giveGeode(player, geodeId) {
   const inventory = player.getInventory();
   inventory.forceAdd(player, new core.Item(geodeId, 1));
   player.sendMessage("You find a clue geode!");
+  // "mining:geode" { player, itemId }: the geode found here (after any box rewrite), for a
+  // league's "Obtain a Clue Geode While Mining".
+  pluginApi?.emitCustomEvent?.("mining:geode", { player, itemId: geodeId });
 }
 
 function rollClueGeodes({ player, skill, petBase }, random = Math.random) {
@@ -69,7 +72,11 @@ function rollClueGeodes({ player, skill, petBase }, random = Math.random) {
     if (tier.name !== "beginner") pluginApi?.emitCustomEvent?.("combat-achievements:tier", achievement);
     const base = geodeChance(petBase, level, tier.modifier, achievement.currentThresholdMet === true);
     const chance = base < 1 ? base : Math.max(1, Math.floor(base / (boost.multiplier > 1 ? boost.multiplier : 1)));
-    if (chance < 1 || Math.floor(random() * chance) !== 0 || ownsClue(player, tier)) {
+    if (chance < 1 || Math.floor(random() * chance) !== 0) {
+      continue;
+    }
+    if (ownsClue(player, tier)) {
+      pluginApi?.emitCustomEvent?.("treasure-trails:missed-clue", { player, tier: tier.name });
       continue;
     }
     giveGeode(player, tier.geodeId);

@@ -29,6 +29,8 @@ const FIRST_WORN_OPTION_CLICK = 2;
 let core;
 let I;
 let raidDeaths = 0;
+/** Enough ticks for a player death to resolve (four after animation 836 starts, 18a208f32). */
+const DEATH_TICKS = 6;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -40,9 +42,23 @@ before(async () => {
     raidDeaths++;
     event.handled = true;
   });
-  for (const name of ["Ironman", "LeagueMode", "LeaguePoints", "LeagueRelics"]) {
-    require(`../plugins/modes/${name}.plugin`).register(PluginManager.createApi(name));
-  }
+  const arenaItems = require("../plugins/minigames/barbarianassault/Items.BarbarianAssault");
+  const plugins = [
+    ["minigames/BarbarianAssault.plugin.js", {
+      name: "BarbarianAssault",
+      dependsOn: ["Shopkeepers"],
+      register(api) {
+        arenaItems.init(api);
+        api.registerRangedAmmoHandler(arenaItems.rangedAmmoHandler);
+      },
+    }],
+    ["modes/Ironman.plugin.js", require("../plugins/modes/Ironman.plugin")],
+    ["modes/LeagueMode.plugin.js", require("../plugins/modes/LeagueMode.plugin")],
+    ["npcs/Shopkeepers.plugin.js", { name: "Shopkeepers", register() {} }],
+  ];
+  PluginManager.loadPluginCandidatesWithDependencies(plugins.map(([pluginPath, plugin]) => ({
+    pluginPath, plugin, pluginName: plugin.name, dependsOn: plugin.dependsOn ?? [],
+  })));
   require("../plugins/commands/AdminCommands.plugin").register(PluginManager.createApi("AdminCommands"));
   require("../plugins/commands/SaveHistory.plugin").register(PluginManager.createApi("SaveHistory"));
 });
@@ -88,6 +104,27 @@ function askAdamToLeaveIronman(player) {
 
 /** Typing ::text in the chatbox. */
 const type = (player, text) => CommandPacketListener.execute(player, text);
+
+test("Barbarian Assault claims arena ammo before the Raging Echoes saving passive", t => {
+  const { Equipment, Item, Location } = core;
+  const { ITEM, ROLE } = require("../plugins/minigames/barbarianassault/Data.BarbarianAssault");
+  const Match = require("../plugins/minigames/barbarianassault/Match.BarbarianAssault");
+  const player = character("echoesarcher", "league");
+  player.setAttribute("league:type", 5);
+  player.setAttribute("league:masteries", { ranged: 1 });
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(I.SHORTBOW));
+  player.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(ITEM.BULLET_ARROW, 10));
+  let match = { players: new Map([[player, { role: ROLE.ATTACKER }]]) };
+  t.mock.method(Match, "matchFor", who => who === player ? match : null);
+  t.mock.method(Math, "random", () => 0);
+
+  const location = new Location(3222, 3219, 0);
+  assert.equal(PluginManager.decrementRangedAmmo(player, location, 1), true);
+  assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9);
+  match = null;
+  assert.equal(PluginManager.decrementRangedAmmo(player, location, 1), true);
+  assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9, "the passive saves ammo outside the arena");
+});
 
 test("a league character logs in as a standard Ironman; a main character is untouched", () => {
   const league = character("leaguer", "league");
@@ -157,7 +194,9 @@ test("the admin and save commands address the league character on a league world
       GameConstants.setWorldProfile(profile);
       calls.length = 0;
       const owner = character(`owner${profile}`, profile, core.PlayerRights.OWNER);
-      type(owner, "unban bob");
+      // Banning looks the account up first (unbanning no longer does, since 67e82676a); the recorder says it does
+      // not exist, so nothing is banned.
+      type(owner, "ban bob");
       type(owner, "snapshots bob");
       type(owner, "rollback bob #7");
       type(owner, "reprocorruptsave bob");
@@ -168,6 +207,7 @@ test("the admin and save commands address the league character on a league world
         ["restoreSnapshot", "bob", 7, profile],
         ["resolveFilePath", "bob", profile],
       ], `every save lookup names the ${profile} profile`);
+      assert.ok(owner.sent.messages.includes("Player bob does not exist."), "ban asks the save store, by profile");
       assert.ok(owner.sent.messages.includes("#7  2026-10-01 00:00:00 UTC  autosave"), "the snapshot listed");
       assert.ok(owner.sent.messages.includes("bob is rolled back to #7  2026-10-01 00:00:00 UTC  autosave."));
       assert.ok(owner.sent.messages.some((text) => text.startsWith("No save file found for bob at ")));
@@ -193,14 +233,15 @@ test("a death Undying Retribution prevents never reaches a raid's death handler;
   league.setHitpoints(0); // a killing blow: Player.setHitpoints appends the death itself
   assert.notEqual(league.isDying, true, "the death never starts");
   assert.equal(league.getHitpoints(), maxHitpoints, "hitpoints restored");
-  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+  // A death resolves four ticks after its animation starts (18a208f32, rsprox 426/1084/1085/2508): six ticks covers it.
+  for (let tick = 0; tick < DEATH_TICKS; tick++) core.TaskManager.process();
   assert.equal(raidDeaths, 0, "nothing for a raid to count: no death task ran");
   const readyAt = Number(league.getAttribute("league:undying-retribution-ready-at"));
   assert.ok(readyAt > Date.now(), "on cooldown");
 
   league.setHitpoints(0);
   assert.equal(league.isDying, true, "on cooldown the death goes ahead");
-  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+  for (let tick = 0; tick < DEATH_TICKS; tick++) core.TaskManager.process();
   assert.equal(raidDeaths, 1, "the raid handled the real death");
   assert.equal(league.getAttribute("league:undying-retribution-ready-at"), 0, "a real death ends the cooldown even when another plugin handled it");
 });
@@ -219,6 +260,19 @@ test("the Arcane grimoire changes spellbook, goes back to the previous one and r
   const league = character("sorcerer", "league");
   login(league);
   assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL);
+  // Only unlocked books (the relics page: "providing players have unlocked them"; core SpellbookLocks). The quest
+  // plugins aren't loaded here, so this answers "quest:is-complete" for the quests the test marks done.
+  const done = new Set();
+  PluginManager.createApi("GrimoireQuests").onCustomEvent("quest:is-complete", (query) => {
+    if (query.player === league && done.has(query.key)) query.complete = true;
+  });
+  const setQuest = (key, complete) => (complete ? done.add(key) : done.delete(key));
+  click(league, 1);
+  pick(league, "Ancient");
+  assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL, "no Ancients before Desert Treasure I");
+  assert.equal(league.sent.messages.at(-1), "You need to complete Desert Treasure I to use that spellbook.");
+  setQuest("desert_treasure_i", true);
+  setQuest("lunar_diplomacy", true);
 
   assert.equal(click(league, 4), true, "Check Previous");
   assert.equal(league.sent.messages.at(-1), "You haven't changed spellbook with the grimoire yet.");

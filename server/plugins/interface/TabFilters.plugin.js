@@ -78,6 +78,7 @@ function showSpellsLackingLevel({ player }) {
 
 module.exports = {
   name: "TabFilters",
+  description: "Prayer and spellbook filter menus that hide prayers or spells, saved per player, with unusable spells hidden for new accounts.",
   register(api) {
     api.persistAttribute(PRAYER_FILTERS_ATTRIBUTE, 0);
     api.persistAttribute(MAGIC_FILTERS_ATTRIBUTE, 0);

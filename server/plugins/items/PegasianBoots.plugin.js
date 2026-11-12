@@ -127,16 +127,22 @@ function infuse(player, recipe) {
   return true;
 }
 
-function attachRecipe(recipe) {
-  api.onItemOnItem(recipe.crystalName, recipe.baseName, (event) => askToInfuse(recipe, event), { noted: false });
+/** A crystal used on its boots, either way round: the recipe both items' names belong to. */
+function useCrystalOnBoots(event) {
+  const names = [event.usedItem, event.usedWithItem].map((item) => item?.getDefinition?.()?.getName?.());
+  const recipe = RECIPES.find(({ crystalName, baseName }) => names.includes(crystalName) && names.includes(baseName));
+  if (recipe) askToInfuse(recipe, event);
 }
 
 module.exports = {
   name: "PegasianBoots",
+  description: "Lets players infuse a Cerberus crystal onto boots to make Pegasian, Primordial or Eternal boots, at 60 Magic and Runecraft for 200 experience each.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
-    RECIPES.forEach(attachRecipe);
+    api.onItemOnItem("Pegasian crystal", "Ranger boots", useCrystalOnBoots, { noted: false });
+    api.onItemOnItem("Primordial crystal", "Dragon boots", useCrystalOnBoots, { noted: false });
+    api.onItemOnItem("Eternal crystal", "Infinity boots", useCrystalOnBoots, { noted: false });
   },
   _test: { RECIPES, infuse },
 };

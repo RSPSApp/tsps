@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Boundary } from "../model/Boundary";
 import { Location } from "../model/Location";
+import { isFreeToPlayWorld, normalizeWorldPluginConfig, preserveLegacyCrossFloorDefault, type ScopedPluginSettings } from "./WorldPluginConfig";
 
 export type WorldZoneTag = string;
 
@@ -25,6 +26,7 @@ export const WORLD_GAMEFRAMES = ["modern-resizable", "modern-fixed", "317-resiza
 export type WorldGameframe = (typeof WORLD_GAMEFRAMES)[number];
 
 export interface WorldDefinitionData {
+    name: string;
     spawn: WorldPosition;
     /** Shown under the world's name in the world list (up to 120 characters). */
     description: string;
@@ -32,7 +34,7 @@ export interface WorldDefinitionData {
     experienceMultiplier: number;
     /** Optional: when set, players are switched to this layout on login. */
     gameframe?: WorldGameframe;
-    /** False makes this a free-to-play world (FreeToPlay plugin); needs zones tagged "f2p". */
+    /** Derived from the FreeToPlay plugin switch. */
     membersWorld: boolean;
     /** Per-plugin settings, read by PluginManager.getPluginConfig; carried for /api/world. */
     pluginConfig?: Record<string, unknown>;
@@ -52,14 +54,21 @@ type JsonObject = Record<string, unknown>;
  * world.json's, except pluginConfig and plugins, which are merged key by key. Read by both
  * the world definition and PluginManager (plugins, pluginConfig).
  */
-export function readWorldConfig(): JsonObject {
+export function readWorldConfig(scopedSettings?: ScopedPluginSettings): JsonObject {
     // Resolved per call from the working directory, as PluginManager always did.
     const shipped = object(JSON.parse(fs.readFileSync(path.resolve("data/definitions/world.json"), "utf8")), "world.json");
     // Optional per-deployment overrides (gitignored), so a live world can differ from the
     // shipped world.json (e.g. its XP rate or tutorial) and still update from main by fast-forward.
     const localFile = path.resolve("data/definitions/world.local.json");
-    if (!fs.existsSync(localFile)) return shipped;
+    if (!fs.existsSync(localFile)) return preserveLegacyCrossFloorDefault(normalizeWorldPluginConfig(shipped, scopedSettings));
     const local = object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json");
+    return mergeWorldConfig(shipped, local, scopedSettings);
+}
+
+/** The layering rule of readWorldConfig, for callers that already hold both layers. */
+export function mergeWorldConfig(shipped: JsonObject, local: JsonObject, scopedSettings?: ScopedPluginSettings): JsonObject {
+    shipped = normalizeWorldPluginConfig(shipped, scopedSettings);
+    local = normalizeWorldPluginConfig(local, scopedSettings);
     const merged: JsonObject = { ...shipped, ...local };
     for (const key of ["pluginConfig", "plugins"]) {
         const shippedValue = shipped[key];
@@ -68,7 +77,7 @@ export function readWorldConfig(): JsonObject {
             merged[key] = { ...shippedValue, ...localValue };
         }
     }
-    return merged;
+    return preserveLegacyCrossFloorDefault(merged);
 }
 
 function isPlainObject(value: unknown): value is JsonObject {
@@ -175,10 +184,11 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     if (world.gameframe !== undefined && !WORLD_GAMEFRAMES.includes(world.gameframe as WorldGameframe)) {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
-    if (world.membersWorld !== undefined && typeof world.membersWorld !== "boolean") {
-        throw new WorldDefinitionValidationError("world.json membersWorld must be a boolean");
+    const name = world.name === undefined ? "Old School RuneScape" : world.name;
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) {
+        throw new WorldDefinitionValidationError("world.json name must be plain text between 1 and 64 characters");
     }
-    const membersWorld = world.membersWorld !== false;
+    const membersWorld = !isFreeToPlayWorld(world);
     const description = world.description ?? "";
     if (typeof description !== "string" || description.length > 120) {
         throw new WorldDefinitionValidationError("world.json description must be a string of at most 120 characters");
@@ -189,10 +199,11 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     const spawn = parseWorldPosition(world.spawn, "world.json spawn");
     // Players outside free land are sent to the spawn, so it must be inside.
     if (!membersWorld && !zones.some((zone) => zone.tags.includes("f2p") && zoneContains(zone, spawn.x, spawn.y))) {
-        throw new WorldDefinitionValidationError("world.json membersWorld false needs the spawn inside a zone tagged \"f2p\"");
+        throw new WorldDefinitionValidationError('FreeToPlay needs the spawn inside a zone tagged "f2p"');
     }
     return {
         spawn,
+        name: name.trim(),
         description: description.trim(),
         zones,
         experienceMultiplier,
@@ -277,6 +288,7 @@ function syncRuntime(): void {
 function copyWorldDefinition(): WorldDefinitionData {
     return {
         spawn: { ...definition.spawn },
+        name: definition.name,
         description: definition.description,
         zones: definition.zones.map((zone) => ({ ...zone, tags: [...zone.tags] })),
         experienceMultiplier: definition.experienceMultiplier,

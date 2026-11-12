@@ -17,12 +17,15 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const LOBSTER = 379;
 const COINS = 995;
+const LOGS = 1511;
+const HELM = 1153; // iron full helm
 
 const cacheDefinitionForId = ItemDefinition.forId;
 
 // Item definitions normally come from the cache; stub the few this test uses.
 const DEFINITIONS = {
-  [LOBSTER]: { name: "Lobster", stackable: false, value: 150 },
+  // The trade screen shows the Grand Exchange price (ge), not the store value.
+  [LOBSTER]: { name: "Lobster", stackable: false, value: 150, ge: 180 },
   [COINS]: { name: "Coins", stackable: true, value: 1 },
 };
 ItemDefinition.forId = (id) => {
@@ -32,6 +35,7 @@ ItemDefinition.forId = (id) => {
     getName: () => def.name,
     isStackable: () => def.stackable,
     getValue: () => def.value,
+    getGrandExchangeValue: () => def.ge ?? def.value,
     isTradeable: () => true,
     isNoted: () => false,
   };
@@ -162,6 +166,7 @@ test("closing either trade screen cancels both offers by every interface-close r
       }
       for (const player of [alice, bob]) {
         const sender = new PacketSender(player);
+        sender.getVarbit = () => 0; // no cache here: the accept trade delay (205) is off
         player.getPacketSender = () => sender;
       }
       alice.getPacketSender()[route](alice.getInterfaceId());
@@ -183,6 +188,7 @@ test("closing either trade screen cancels both offers by every interface-close r
   for (const player of [alice, bob]) {
     const sender = new PacketSender(player);
     sender.sendString = () => sender;
+    sender.getVarbit = () => 0;
     player.getPacketSender = () => sender;
   }
   closed({ player: alice, interfaceId: 231 });
@@ -226,14 +232,24 @@ test("the offer screen shows who you trade with, both offers' values and accepta
   const { alice, bob } = startTrade();
   const text = (component) => alice.texts.get((335 << 16) | component);
 
-  assert.equal(text(31), "Trading with: bob");
-  assert.equal(text(24), "You offer:<br>(Value: <col=ffffff>450</col> coins)");
+  assert.equal(text(31), "Trading With: bob", "rsprox_transcripts/227/00548.txt trademain:title");
+  assert.equal(text(24), "You offer:<br>(Value: <col=ffffff>540</col> coins)", "3 lobsters at the 180 GE price");
   assert.equal(text(27), "bob offers:<br>(Value: <col=ffffff>200</col> coins)");
   assert.equal(text(9), "bob has 27 free inventory slots.");
 
   bob.getTrading().acceptTrade();
   assert.equal(text(30), "Other player has accepted.");
   assert.equal(bob.texts.get((335 << 16) | 30), "Waiting for other player...");
+});
+
+test("the confirm screen puts its status in the title and the partner below, as live", () => {
+  // rsprox_transcripts/227/00548.txt: tradeconfirm:title (334:4) and tradeconfirm:tradeopponent (334:30).
+  const { alice, bob } = startTrade();
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  const text = (component) => alice.texts.get((334 << 16) | component);
+  assert.equal(text(4), "Are you sure you want to make this trade?");
+  assert.equal(text(30), "Trading with:<br>bob");
 });
 
 const TRIDENT = 11907;
@@ -509,6 +525,45 @@ test('native trades preserve confirmation, settle once and still cancel through 
     assert.equal(saves.length, before + 2, 'late accept/decline never settles twice');
     assert.deepEqual([count(a, COINS), count(b, LOBSTER), count(b, COINS)], [200, 3, 300]);
   });
+  await t.test('Shield of Arrav handover items can be traded directly', async test => {
+    require('../plugins/quests/quests/ShieldOfArrav.Quest')(PluginManager.createApi('ShieldOfArravTrade'));
+    const { WEAPON_STORE_KEY: key, WEAPON_STORE_KEY_2: note, PHOENIX_CROSSBOW: crossbow,
+      HALF_CERTIFICATE: left, HALF_CERTIFICATE_2: right, CERTIFICATE: certificate } = core.ItemIdentifiers;
+    const pair = [actor(test), actor(test)];
+    const [alice, bob] = pair.map(f => f.player);
+    const inventory = alice.getInventory();
+    inventory.setItem(0, new Item(key, 1));
+    inventory.setItem(1, new Item(key, 1).setMetaValue(Item.UNTRADEABLE_META, true));
+    inventory.setItem(2, new Item(key, 1));
+    inventory.setItem(3, new Item(note, 2));
+    inventory.setItem(4, new Item(crossbow, 1));
+    inventory.setItem(5, new Item(left, 2));
+    inventory.setItem(6, new Item(certificate, 1));
+    bob.getInventory().setItem(0, new Item(right, 2));
+    alice.getTrading().requestTrade(bob);
+    bob.getTrading().requestTrade(alice);
+    await action(pair[0], 0, 0, 3, key);
+    for (const [slot, id] of [[1, key], [3, note], [4, crossbow], [5, left], [6, certificate]]) {
+      await action(pair[0], 0, slot, 1, id);
+    }
+    await action(pair[1], 0, 0, 1, right);
+
+    const offer = alice.getTrading().getContainer();
+    assert.equal(offer.getAmount(key), 2, 'both normal keys enter the offer');
+    assert.equal(count(alice, key), 1, 'the untradeable copy stays in the inventory');
+    assert.equal(offer.getAmount(certificate), 0, 'the combined certificate cannot be traded');
+    await action(pair[0], 1, offer.getSlotForItemId(key), 1, key);
+    assert.equal(offer.getAmount(key), 1, 'a key can be removed from the offer');
+    for (const f of pair) await action(f, 2);
+    for (const f of pair) await action(f, 4);
+    ended(pair);
+    assert.deepEqual([key, note, crossbow, left].map(id => count(bob, id)), [1, 1, 1, 1]);
+    assert.equal(count(alice, right), 1);
+    assert.equal(count(alice, certificate), 1);
+    for (const id of [key, note, crossbow, left, right]) {
+      assert.equal(ItemDefinition.forId(id).isTradeable(), false, 'the cache trade flag stays false');
+    }
+  });
   for (const stage of ['offer', 'confirm']) for (const cancel of ['decline', 'interface-close']) {
     await t.test(stage + ' ' + cancel + ' returns offers and closes both sessions', async test => {
       const pair = await start(test); if (stage === 'confirm') await confirm(pair);
@@ -524,4 +579,22 @@ test('native trades preserve confirmation, settle once and still cancel through 
       assert.deepEqual([count(pair[0].player, LOBSTER), count(pair[1].player, COINS)], [3, 500]);
     });
   }
+});
+
+test("a slot filled between the two accepts refuses the trade instead of deleting what is offered", () => {
+  const { alice, bob } = startTrade();
+  // Bob has exactly the 3 free slots Alice's 3 lobsters need at the first accept.
+  for (let i = bob.getInventory().getFreeSlots(); i > 3; i--) bob.getInventory().adds(LOGS, 1);
+  assert.equal(bob.getInventory().getFreeSlots(), 3);
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  alice.getTrading().getButtonDelay().stop();
+  bob.getTrading().getButtonDelay().stop();
+  bob.getInventory().adds(HELM, 1); // taken off on the confirm screen: the equipment tab stays usable
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  assert.equal(count(bob, LOBSTER), 0, "nothing given into too little room");
+  assert.equal(alice.getTrading().getContainer().getAmount(LOBSTER), 3, "the lobsters are still on offer, not deleted");
+  assert.ok(bob.messages.includes("Trade cannot be accepted, you don't have enough free inventory space."));
+  assert.equal(count(alice, COINS), 0, "and Alice did not receive Bob's side either");
 });

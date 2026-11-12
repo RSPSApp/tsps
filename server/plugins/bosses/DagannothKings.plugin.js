@@ -24,6 +24,7 @@ const Hud = require("./dagannothkings/Hud.DagannothKings");
 
 module.exports = {
   name: "DagannothKings",
+  description: "The Dagannoth Kings of Waterbirth Island Dungeon: the public and Slayer-task lairs, Prime's magic, Supreme's ranged, Rex's melee and the spinolyps.",
   members: true,
   register(api) {
     Common.init(api);

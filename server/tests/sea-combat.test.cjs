@@ -24,6 +24,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
 const { CombatPosition } = require("../dist/game/content/combat/CombatPosition");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { FightType } = require("../dist/game/content/combat/FightType");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 
 const common = require("../plugins/skills/sailing/seacombat/Common.SeaCombat");
@@ -56,11 +57,11 @@ before(() => {
   content();
   const real = PluginManager.createApi("SeaCombatTest");
   api = { ...real, persistAttribute() {}, sendMultiChatboxPrompt: () => true };
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  require("../plugins/skills/sailing/Crew.plugin").register(api);
-  require("../plugins/skills/sailing/SeaCombat.plugin").register(api);
-  require("../plugins/skills/sailing/StaticShips.plugin").register(api);
-  require("../plugins/skills/sailing/PortTasks.plugin").register(api);
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  require("../plugins/skills/sailing/Crew.Sailing").register(api);
+  require("../plugins/skills/sailing/SeaCombat.Sailing").register(api);
+  require("../plugins/skills/sailing/StaticShipHooks.Sailing").register(api);
+  require("../plugins/skills/sailing/PortTasks.Sailing").register(api);
   require("../plugins/npcs/NpcDrops.plugin").register(api);
 });
 
@@ -244,8 +245,16 @@ test("a player's cannon max hit: their ranged max hit with the cannon's and cann
   player.getSkillManager().setMaxLevel?.(Skill.RANGED, 99, false);
   const rune = common.cannonAt(59451);
   const ball = common.ballByItem(RUNE_CANNONBALL);
-  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49.
-  assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49);
+  // 99 Ranged, no prayer, no gear: floor((107 * (26 + 201 + 64) + 320) / 640) = 49. The Wiki's formula (Boat combat)
+  // has no attack-style term, so the captain's stance - Punch is Accurate, +3 - changes neither the max hit nor accuracy.
+  const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+  const rolls = [];
+  for (const stance of [FightType.UNARMED_PUNCH, FightType.UNARMED_KICK, FightType.UNARMED_BLOCK]) {
+    player.setFightType(stance);
+    assert.equal(Cannon._test.playerMaxHit(player, rune, ball), 49, `stance ${stance.name ?? stance}`);
+    rolls.push(AccuracyFormulasDpsCalc.rangedAttackRollWithBonus(player, 0));
+  }
+  assert.deepEqual(rolls, [107 * 64, 107 * 64, 107 * 64], "accuracy: (99 + 8) * 64 in every stance");
 });
 
 test("a crewmate's max hit: the captain's Sailing, scaled by Privateering (Wiki)", () => {
@@ -535,16 +544,39 @@ test("a Barracuda Trial's hazards sink a boat without its cargo going", () => {
   assert.equal(cargo.countIn(owned, ADAMANT_CANNONBALL), 100);
 });
 
-test("at 0 HP the boat is lost with all of its cargo, and the player escapes to shore", () => {
-  const player = captain();
-  const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
-  cargo.store(owned, ADAMANT_CANNONBALL, 100);
-  cargo.store(owned, cargo.REPAIR_KIT, 2);
-  ShipCombat.damagePlayerBoat(player, 10_000, { creature: new NPC(OSPREY, new Location(3000, 3000, 0)) });
-  assert.equal(Sailing.instanceAboard(player), undefined, "escaped");
-  assert.equal(owned.location.kind, "sunk", "until a shipwright recovers it");
-  assert.equal(owned.cargo.filter(Boolean).length, 0, "all cargo lost (Wiki)");
-});
+for (const attacker of ["creature", "ship"]) {
+  test("combat capsize by " + attacker + " selectively loses cargo and survives recovery/save", () => {
+    const player = captain();
+    const { owned } = aboardWithCannon(player);
+    const before = [
+      { id: ADAMANT_CANNONBALL, amount: 100 }, null,
+      { id: cargo.REPAIR_KIT, amount: 2 }, { id: 32307, amount: 37 },
+      { id: 32366, amount: 4 }, { id: 32435, amount: 3 },
+      { id: 32847, amount: 7 }, { id: 32845, amount: 11 },
+      { id: 32309, amount: 29 }, { id: 32368, amount: 2 },
+      { id: 11334, amount: 17 }, // Fish offcuts (distinct from fine offcuts)
+    ];
+    owned.cargo = structuredClone(before);
+    const expected = [...structuredClone(before.slice(0, 5)), null, null, null, null, null, { id: 11334, amount: 17 }];
+    for (const [slot, category] of [[0, "supplies"], [2, "supplies"], [3, "supplies"], [4, "supplies"],
+      [5, "cargo"], [6, "salvage"], [7, "bounty"], [8, "fish"], [9, "fish"], [10, "supplies"]]) {
+      assert.equal(cargo.categoryOf(before[slot].id), category, "cache item at slot " + slot);
+    }
+    ShipCombat.damagePlayerBoat(player, 10_000, attacker === "creature"
+      ? { creature: new NPC(OSPREY, new Location(3000, 3000, 0)) } : { ship: {} });
+    assert.equal(Sailing.instanceAboard(player), undefined, "escaped");
+    assert.equal(owned.location.kind, "sunk", "until a shipwright recovers it");
+    assert.deepEqual(owned.cargo, expected, "quantities and slots retained");
+    const { normalizeSailingState } = require("../dist/game/content/sailing/SailingState");
+    player.setSailing(normalizeSailingState(JSON.parse(JSON.stringify(player.getSailing()))));
+    const restored = player.getSailing().boats.find((boat) => boat.slot === owned.slot);
+    assert.deepEqual(restored.cargo, expected, "saved sunk state");
+    assert.equal(Sailing.recover(player, owned.slot, "the_pandemonium"), null);
+    cargo.dropLostOnRecovery(restored);
+    cargo.dropLostOnRecovery(restored);
+    assert.deepEqual(restored.cargo, expected, "repeated recovery policy is lossless");
+  });
+}
 
 test("a repair kit's Apply repairs the boat as captured; its hitpoints by tier", () => {
   const player = captain();
@@ -667,7 +699,7 @@ test("from a deck: ranged and magic at sea creatures are allowed, melee isn't, n
 });
 
 test("the first heading after taking the helm sets sail; a heading with the sails lowered only turns (rsprox)", () => {
-  const helm = require("../plugins/skills/sailing/Helm.plugin");
+  const helm = require("../plugins/skills/sailing/Helm.Sailing");
   const player = captain();
   const { boat } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
   const listeners = [];

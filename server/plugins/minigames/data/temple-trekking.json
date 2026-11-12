@@ -286,13 +286,7 @@
     "druid_pouch_empty": 2957, "druid_pouch": 2958, "rotten_food": 2959, "stew": 2003,
     "templetrek_short_vine": 7778, "templetrek_long_vine": 7777,
     "templetrek_swamp_snake_hide": 7801, "nail_beast_nail": 10937,
-    "lumberjack": [10941, 10939, 10940, 10933],
-    "vampyre_ring": 21140,
-    "silverWeapons": {
-      "$comment": "What hurts a juvinate (Wiki, 'Silver weapons'), plus Efaritay's aid (vampyre_ring) worn.",
-      "weapons": [7639, 7640, 7641, 7642, 7643, 7644, 7645, 7646, 7647, 7648, 22398, 24699, 33718, 2952, 2963, 22435, 24695, 33711, 24697, 33713, 10491, 2402, 6745, 6746, 8279, 8281, 19675, 29589],
-      "ammo": [9145, 9292, 9299, 9306]
-    }
+    "lumberjack": [10941, 10939, 10940, 10933]
   },
 
   "food": {

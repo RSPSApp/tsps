@@ -285,6 +285,7 @@ function menuClosed({ player, interfaceId }) {
 
 module.exports = {
   name: "SpiritTrees",
+  description: "Spirit tree network: the location menu, travel, talk-to and last-destination, with trees you cannot use greyed out.",
   members: true,
   _test: { loadTrees: () => loadTrees(), destination, canUseNetwork, treeAt, openMenu, chooseTree, travelOption, talkToOption, lastDestinationOption, openFromPatch, ownTreeTravel },
   register(api) {

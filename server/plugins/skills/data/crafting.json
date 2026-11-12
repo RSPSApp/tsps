@@ -283,6 +283,16 @@
       }
     ]
   },
+  "huntersPouches": {
+    "$comment": "The Hunters' Guild pouches a needle sews from fur (Leather.Crafting.js): `fur` of the fur, `from` the closed pouch an upgrade turns into `item`. Levels and XP: OSRS Wiki (each pouch's page). No menu: the needle on the fur makes one, the animation at once and the pouch 2 ticks later (rsprox captures pyre-fur-and-smallpouch-1/-2, rev 242).",
+    "recipes": [
+      { "fur": "FOX_FUR", "amount": 4, "item": "SMALL_MEAT_POUCH", "level": 35, "xp": 30, "members": true },
+      { "fur": "SUNLIGHT_ANTELOPE_FUR", "amount": 3, "from": "SMALL_MEAT_POUCH", "item": "LARGE_MEAT_POUCH", "level": 65, "xp": 60, "members": true },
+      { "fur": "LARUPIA_FUR", "amount": 4, "item": "SMALL_FUR_POUCH", "level": 35, "xp": 20, "members": true },
+      { "fur": "GRAAHK_FUR", "amount": 3, "from": "SMALL_FUR_POUCH", "item": "MEDIUM_FUR_POUCH", "level": 50, "xp": 40, "members": true },
+      { "fur": "KYATT_FUR", "amount": 3, "from": "MEDIUM_FUR_POUCH", "item": "LARGE_FUR_POUCH", "level": 65, "xp": 60, "members": true }
+    ]
+  },
   "combine": {
     "$comment": "One item used on another, both used up; `materials` used up too, `tools` kept. `ticks` per item (Wiki).",
     "recipes": [
@@ -741,6 +751,7 @@
         "item": "UNPOWERED_ORB",
         "label": "Unpowered staff orb",
         "name": "unpowered staff orb",
+        "made": "an orb",
         "level": 46,
         "xp": 52.5,
         "members": true
@@ -1503,7 +1514,7 @@
     ]
   },
   "strungAmulets": {
-    "$comment": "A ball of wool on unstrung jewellery, 4 XP (Wiki: ball of wool products).",
+    "$comment": "String material and unstrung jewellery, 4 XP (Wiki: ball of wool products and pre-nature amulet). The optional fourth field names the material; wool is the default.",
     "xp": 4,
     "pairs": [
       [
@@ -1527,6 +1538,12 @@
       [
         "EMERALD_AMULET_U_",
         "EMERALD_AMULET"
+      ],
+      [
+        "EMERALD_AMULET_U_",
+        "PRE_NATURE_AMULET",
+        "amulet",
+        "MAGIC_STRING"
       ],
       [
         "RUBY_AMULET_U_",

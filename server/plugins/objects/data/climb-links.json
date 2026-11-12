@@ -1,10 +1,30 @@
 {
-  "$comment": "Endpoints verified from cache osrs-241_2026-10-20 placements and climb actions. The Wizards' Tower surface and basement are 6414 tiles apart, beyond the generic 6400-tile underground search. Each pair's up object offers Climb-up; down offers Climb-down.",
+  "$comment": "Endpoints verified from cache osrs-241_2026-10-20 placements and climb actions; the Lady Lumbridge landing is from a revision 242 capture. The Wizards' Tower surface and basement are 6414 tiles apart, beyond the generic 6400-tile underground search. Each pair's up object offers Climb-up; down offers Climb-down.",
   "pairs": [
+    {
+      "name": "Lady Lumbridge's hold ladder, Port Sarim (Dragon Slayer I capture 20261106T101002 tick 2917: down from 3049,3208,1 lands on 3048,9640,1 in the hold, 6432 tiles north)",
+      "up": { "id": 2592, "x": 3049, "y": 9640, "z": 1 },
+      "down": { "id": 2590, "x": 3049, "y": 3208, "z": 1 },
+      "downLanding": { "x": 3048, "y": 9640, "z": 1 }
+    },
+    {
+      "name": "Port Sarim Rat Pits manhole (the pit ladder is 56 tiles west of the manhole's underground square, outside the generic search; landings match the RuneLite shortest-path transports 3018,3231,0 -> 2962,9650,0 and 2962,9650,0 -> 3018,3233,0)",
+      "up": { "id": 10309, "x": 2962, "y": 9651, "z": 0 },
+      "down": { "id": 10321, "x": 3018, "y": 3232, "z": 0 },
+      "landing": { "x": 3018, "y": 3233, "z": 0 },
+      "downLanding": { "x": 2962, "y": 9650, "z": 0 }
+    },
     {
       "name": "Wizards' Tower basement ladder",
       "up": { "id": 2148, "x": 3103, "y": 9576, "z": 0 },
       "down": { "id": 2147, "x": 3104, "y": 3162, "z": 0 }
+    },
+    {
+      "name": "Forthos Ruin spiral staircase (landings match the shortest-path transports)",
+      "up": { "id": 34864, "x": 1798, "y": 9967, "z": 0 },
+      "down": { "id": 34865, "x": 1669, "y": 3567, "z": 0 },
+      "landing": { "x": 1670, "y": 3569, "z": 0 },
+      "downLanding": { "x": 1800, "y": 9968, "z": 0 }
     },
     {
       "name": "Grand Tree base staircase (Anita's floor)",
@@ -17,6 +37,13 @@
       "up": { "id": 17385, "x": 2463, "y": 9897, "z": 0 },
       "down": { "id": 2446, "x": 2463, "y": 3497, "z": 0 },
       "landing": { "x": 2463, "y": 3498, "z": 0 }
+    },
+    {
+      "name": "Ardougne Castle main staircase (the upper flight is walled on its west, north and east sides, so it is only usable from the south; landings match the RuneLite shortest-path transports 2571,3298,0 <-> 2571,3294,1)",
+      "up": { "id": 15645, "x": 2571, "y": 3295, "z": 0 },
+      "down": { "id": 15648, "x": 2571, "y": 3295, "z": 1 },
+      "landing": { "x": 2571, "y": 3294, "z": 1 },
+      "downLanding": { "x": 2571, "y": 3298, "z": 0 }
     }
   ]
 }

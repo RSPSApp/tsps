@@ -64,8 +64,12 @@
  */
 module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const {
+    ActionDialogue,
+    CacheDefinitions,
+    DialogueChainBuilder,
     ItemIdentifiers,
     Location,
+    NpcDialogue,
     NpcIdentifiers,
     ObjectIdentifiers,
     Skill,
@@ -77,6 +81,14 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   // ==========================================================================
 
   const PAGE = "Making Friends with My Arm";
+  const LARRY_COAST_BOATS = new Set(["peng_boat_rell", "peng_boat_3ops"]);
+  const LARRY_COAST_TILE = [2708, 3732];
+  // Recordings 1767 and 1768 show all three lines; their selection weights are not known.
+  const LARRY_ICEBERG_LINES = [
+    "Did I ever tell you about this one time...",
+    "On the way I'll tell you how I got this great rucksack. I had this paper hat lying around...",
+    "On the way I'll tell you how I learned to teleport. Well, this one time I got stuck in a wall...",
+  ];
 
   // varp 1785 "my2arm_perm_1", varbit 6528 "my2arm_status" (bits 0-7).
   const VARP_MY2ARM = 1785;
@@ -193,14 +205,6 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const REDUCED_CADAVA_POTION_ITEM_ID = ItemIdentifiers.REDUCED_CADAVA_POTION; // 22589
   const GOAT_DUNG_ITEM_ID = ItemIdentifiers.GOAT_DUNG; // 22590
   const WEISS_FIRE_NOTES_ITEM_ID = ItemIdentifiers.WEISS_FIRE_NOTES; // 22591
-  const PICKAXE_ITEM_IDS = new Set([
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-  ]);
   const COFFIN_PLANK_COUNT = 5;
   const COFFIN_CONSTRUCTION_XP = 715;
   const FIREMAKING_REQUIREMENT = 66;
@@ -314,9 +318,11 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
     if (!held(player, itemId, amount)) player.getInventory().adds(itemId, amount);
   };
 
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
   function hasPickaxe(player) {
-    for (const itemId of PICKAXE_ITEM_IDS) if (held(player, itemId)) return true;
-    return false;
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
 
   function isQuestComplete(player, key) {
@@ -1105,6 +1111,34 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
     player.sendMessage("You climb the steps into Mother's throne room.");
   }
 
+  // The coastal boat is a multiloc; its Weiss/Iceberg options appear after the first trip.
+  function isLarryCoastBoat(event) {
+    return LARRY_COAST_BOATS.has(CacheDefinitions.getLocNames().get(event.objectId))
+      && event.location?.x === LARRY_COAST_TILE[0] && event.location?.y === LARRY_COAST_TILE[1]
+      && quest.getStage(event.player) >= STAGE_ARRIVED;
+  }
+
+  function larryBoat(event, route) {
+    if (!isLarryCoastBoat(event)) return false;
+    event.handled = true;
+    api.emitCustomEvent("ferries:travel", { player: event.player, route });
+    return true;
+  }
+
+  function sailToWeiss(event) {
+    return larryBoat(event, "larry-weiss");
+  }
+
+  function sailToIceberg(event) {
+    if (!isLarryCoastBoat(event)) return false;
+    event.handled = true;
+    const { player } = event;
+    const line = LARRY_ICEBERG_LINES[Math.floor(Math.random() * LARRY_ICEBERG_LINES.length)];
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new NpcDialogue(0, LARRY_RELLEKKA_NPC_ID, line))
+      .add(new ActionDialogue(1, { execute: () => api.emitCustomEvent("ferries:travel", { player, route: "larry-iceberg" }) })));
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
@@ -1458,6 +1492,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   api.onNpcInteraction("Odd Mushroom", { "Talk-to": talkToOddMushroom });
   api.onNpcInteraction("Wise Old Man", { "Talk-to": talkToWiseOldMan });
   api.onNpcInteraction("Apothecary", { "Talk-to": talkToApothecary });
+  api.onObjectInteraction("Boat", { Weiss: sailToWeiss, Iceberg: sailToIceberg });
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemAction("Weiss fire notes", { Read: readNotes });

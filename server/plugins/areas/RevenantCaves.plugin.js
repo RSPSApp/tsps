@@ -241,11 +241,18 @@ function readScroll(player, slot, destination) {
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  const inventory = player.getInventory();
-  if (inventory.getItems()[slot]?.getId?.() !== SCROLL) return;
-  inventory.deleteAtSlot(slot, 1);
-  sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
-  core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
+  core.TeleportHandler.confirm(player, to, () => {
+    const inventory = player.getInventory();
+    // The clicked slot, else wherever the scroll is now (moved while a warning asked).
+    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+    if (at < 0) {
+      sender.sendVarbit(BUSY_VARBIT, 0);
+      return;
+    }
+    inventory.deleteAtSlot(at, 1);
+    sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
+    core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
+  }, SCROLL_LEVEL_LIMIT, { item: SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** "Teleport": a sub-option picks the entrance; a left-click uses the configured one. */
@@ -292,7 +299,9 @@ function onDeath({ player, killer }) {
   player.setAttribute(FEE_PAID_ATTRIBUTE, false);
   if (!byPlayer) return;
   if (inside) player.sendMessage("You died to another player in the Revenant Cave, you've lost your entry fee.");
-  core.ItemOnGroundManager.registerLocation(killer.getAsPlayer?.() ?? killer, new core.Item(COINS, FEE), location.clone());
+  // An Ironman killer takes no other player's loot: the fee drops for the victim (PlayerDeathTask.lootOwner).
+  const owner = core.PlayerDeathTask.lootOwner(player, killer.getAsPlayer?.() ?? killer);
+  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, FEE), location.clone());
 }
 
 function sendStateOnLogin({ player }) {
@@ -344,6 +353,7 @@ function createCavesArea() {
 
 module.exports = {
   name: "RevenantCaves",
+  description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
   members: true,
   _test: {
     enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves, createCavesArea,

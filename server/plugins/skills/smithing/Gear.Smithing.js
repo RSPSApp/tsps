@@ -51,6 +51,8 @@ function useRingCharges(player, count) {
   player.getEquipment().set(Core.Equipment.RING_SLOT, new Core.Item(-1));
   player.getEquipment().refreshItems();
   player.sendMessage("<col=7f007f>Your Ring of Forging has melted.</col>");
+  // Wiki (Ring of forging): "the smelting will stop once the ring crumbles".
+  require("./Sessions.Smithing").stop(player, false);
 }
 
 /** The bars the worn Varrock armour smelts two of, or none. */

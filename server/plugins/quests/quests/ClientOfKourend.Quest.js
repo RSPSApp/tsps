@@ -370,7 +370,7 @@ module.exports = function registerClientOfKourendQuest(api) {
     if (inventory.get(slot) !== item) return null;
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
+    manager.addExperience(skill, LAMP_XP, true);
     if (manager.getExperience(skill) === before) return null;
     inventory.deleteAtSlot(slot, 1);
     return `You have been awarded ${LAMP_XP} ${name ?? skill.getName()} XP!`;

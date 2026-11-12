@@ -1,6 +1,7 @@
 import * as fs from "fs";
+import { isMembersWorld } from "../../WorldDefinition";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
-import { ItemOnGround, State } from "../../../entity/impl/grounditem/ItemOnGround";
+import { GroundPickupReplacement, ItemOnGround, State } from "../../../entity/impl/grounditem/ItemOnGround";
 import { ItemOnGroundManager } from "../../../entity/impl/grounditem/ItemOnGroundManager";
 import { GameConstants } from "../../../GameConstants";
 import { Item } from "../../../model/Item";
@@ -12,6 +13,8 @@ interface RawGroundItemSpawn {
     location?: { x?: number; y?: number; z?: number };
     amt?: number;
     respawn?: number;
+    members?: boolean;
+    pickupReplacement?: GroundPickupReplacement;
 }
 
 /**
@@ -47,12 +50,17 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
         let invalid = 0;
         let unsupported = 0;
         let applied = 0;
+        let membersSkipped = 0;
         for (const source of sources) {
             candidates += source.definitions.length;
             for (const raw of source.definitions) {
                 const item = this.toItemOnGround(raw);
                 if (!item) {
                     invalid++;
+                    continue;
+                }
+                if (raw.members === true && !isMembersWorld()) {
+                    membersSkipped++;
                     continue;
                 }
                 if (!CacheDefinitions.hasItem(item.getItem().getId())) {
@@ -67,7 +75,7 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
         (invalid > 0 || unsupported > 0 ? console.warn : console.debug)(
             `[ground-items] Loaded ${applied} definitions from ` +
             `${sources.map((source) => source.name).join("+") || "none"} ` +
-            `(candidates=${candidates}, invalid=${invalid}, unsupported=${unsupported})`
+            `(candidates=${candidates}, invalid=${invalid}, unsupported=${unsupported}, membersSkipped=${membersSkipped})`
         );
         return contributed.failures === 0;
     }
@@ -92,13 +100,18 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
         const z = Number(raw?.location?.z);
         const amount = raw?.amt === undefined ? 1 : Number(raw.amt);
         const respawn = raw?.respawn === undefined ? 0 : Number(raw.respawn);
+        const replacement = raw?.pickupReplacement;
         if (
             !Number.isInteger(id) || id < 0 ||
             !Number.isInteger(x) ||
             !Number.isInteger(y) ||
             !Number.isInteger(z) || z < 0 || z > 3 ||
             !Number.isInteger(amount) || amount <= 0 ||
-            !Number.isInteger(respawn) || respawn < 0
+            !Number.isInteger(respawn) || respawn < 0 ||
+            (raw.members !== undefined && typeof raw.members !== "boolean") ||
+            (replacement !== undefined && (!replacement || !Number.isInteger(replacement.id)
+                || !CacheDefinitions.hasItem(replacement.id) || (replacement.telegrabDenial !== undefined
+                    && (typeof replacement.telegrabDenial !== "string" || !replacement.telegrabDenial))))
         ) {
             return null;
         }
@@ -110,7 +123,8 @@ export class GroundItemSpawnDefinitionLoader extends DefinitionLoader {
             false,
             respawn > 0 ? respawn : -1,
             null,
-            true
+            true,
+            replacement
         );
     }
 }

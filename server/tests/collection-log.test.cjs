@@ -105,6 +105,25 @@ test("the log's contents come from the cache: 5 tabs, their categories and items
   assert.ok(Data.isLogged(CARPENTERS_BOOTS));
 });
 
+test("as captured: an item in two tabs counts once, in the earlier tab, and the tab maximums add up to the total", () => {
+  // rsprox 2026 captures: 2944=1699 with 4614/4616/4618/4620/4622 = 332/67/611/257/432 (their sum),
+  // and an Abyssal dagger (Abyssal Sire and Slayer) raised 4613 and 2943 by one, 4621 by none.
+  const ABYSSAL_DAGGER = 13265;
+  const tabs = Data.tabs();
+  assert.deepEqual(Data.categoriesOf(ABYSSAL_DAGGER).map((category) => category.name).sort(), ["Abyssal Sire", "Slayer"]);
+  assert.ok(tabs[0].items.has(ABYSSAL_DAGGER) && !tabs[4].items.has(ABYSSAL_DAGGER));
+  assert.equal(tabs.reduce((sum, tab) => sum + tab.items.size, 0), Data.load().itemTotal);
+  const player = createPlayer();
+  tasks.length = 0;
+  Progress.obtain(player, ABYSSAL_DAGGER, 1, { silent: true });
+  Progress.obtain(player, ABYSSAL_DAGGER, 1, { silent: true });
+  runTicks(5);
+  const varp = player.getPacketSender().getVarp;
+  assert.deepEqual([2943, 4613, 4621].map(varp), [1, 1, 0]);
+  assert.equal([4614, 4616, 4618, 4620, 4622].map(varp).reduce((sum, max) => sum + max, 0), varp(2944));
+  tasks.length = 0;
+});
+
 test("as captured: a new item - message, sound and popup on the tick, counts 5 ticks on, popup closed at 13", () => {
   const player = createPlayer();
   tasks.length = 0;

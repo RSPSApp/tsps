@@ -12,6 +12,7 @@ const Vines = require("./brimhavendungeon/Vines.BrimhavenDungeon");
 
 module.exports = {
   name: "BrimhavenDungeon",
+  description: "Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance and the vines that need an axe to go deeper.",
   members: true,
   _test: { Entry, Vines },
   register(api) {

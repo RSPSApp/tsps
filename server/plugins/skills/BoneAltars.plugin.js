@@ -98,9 +98,12 @@ function graphicTile(player, object) {
   return new core.Location(clamp(at.getX(), location.getX(), sizeX), clamp(at.getY(), location.getY(), sizeY), location.getZ());
 }
 
-/** A data-file altar's offering: its scale of the burying experience, rounded up as burying is. */
+/**
+ * A data-file altar's offering: its scale of the burying experience. Experience keeps tenths (SkillManager floors the
+ * rest), so 350% of bones' 4.5 is the Wiki's 15.7, not 16 (Wiki: Bones, Bat bones, Monkey bones at the Chaos altar).
+ */
 function dataBlessing(altar) {
-  return (bone) => ({ experience: Math.ceil(bone.xp * altar.xpScale), message: DATA.message });
+  return (bone) => ({ experience: bone.xp * altar.xpScale, message: DATA.message });
 }
 
 /** One offering of the first `boneId` carried; false when there is none left or the altar is gone. */
@@ -110,6 +113,7 @@ function offer(player, object, altar, boneId, bone, cost = 1) {
   if (slot < 0 || (cost > 1 && inventory.getAmount(boneId) < cost)) return false;
   const blessing = altar.blessing(bone);
   if (!blessing) return false;
+  lastOffering.set(player, core.World.getProcessCycle());
   const kept = spared(player, altar);
   if (!kept) {
     if (cost > 1) inventory.deleteNumber(boneId, cost);
@@ -127,6 +131,9 @@ function offer(player, object, altar, boneId, bone, cost = 1) {
   player.getPacketSender().sendSound(DATA.sound, 1, 0).sendGlobalGraphic(new core.Graphic(spotanim), tile);
   return true;
 }
+
+/** The game cycle of each player's last offering: one a tick, as the Libation bowl's (LibationBowl.RalosRise). */
+const lastOffering = new WeakMap();
 
 /** Each player's repeating offering, retained while the level-up dialogue is open. */
 const offerings = new WeakMap();
@@ -181,6 +188,8 @@ function startOffering(player, object, altar, itemId, offering = undefined) {
   stopOffering({ player });
   // Register the loop before the immediate offering so its first XP drop can pause it too.
   keepOffering(player, object, altar, itemId, bone, cost);
+  // Several uses in one tick each offered at once (N bones, N chaos altar saves, a tick): one offering a tick.
+  if (lastOffering.get(player) === core.World.getProcessCycle()) return true;
   if (!offer(player, object, altar, itemId, bone, cost)) stopOffering({ player });
   return true;
 }
@@ -207,13 +216,15 @@ function offerOnAltar(request) {
 
 module.exports = {
   name: "BoneAltars",
+  description: "Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last.",
   members: true,
-  _test: { altarAt, spared, zealotPieces, graphicTile },
+  _test: { altarAt, spared, zealotPieces, graphicTile, dataBlessing },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     api.onItemOnObject(useBoneOnAltar, { noted: false });
     api.onCustomEvent("level-up:popup-opened", pauseOffering);
     api.onCustomEvent("bone-altars:offer", offerOnAltar);
+    api.onCustomEvent("player:interaction-cleared", stopOffering);
   },
 };

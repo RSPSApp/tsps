@@ -187,6 +187,7 @@ function registerParts() {
 
 module.exports = {
   name: "DorgeshKaanLamps",
+  description: "Dorgesh-Kaan's broken lamps: ten per player, fixed with a light orb for Firemaking and Crafting XP (52 of each needed).",
   members: true,
   register(registry) {
     api = registry;

@@ -1,4 +1,5 @@
 const { DisplayNames } = require("../../src/main/typescript/elvarg/game/entity/impl/player/DisplayNames");
+const NameChanger = require("./NameChanger.DisplayName");
 
 /**
  * ::displayname <new name> - the name other players see; the login name stays the account's key
@@ -37,19 +38,30 @@ function cooldownLeft(player, now) {
   return Math.max(0, changedAt + days(COOLDOWN_DAYS_CONFIG, 28) * DAY_MS - now);
 }
 
-/** Why the player can't take `name` now (a message), or null. */
-function refusal(player, name, now) {
-  if (name.length < 1) return "Usage: ::displayname <new name>";
-  if (name.length > MAX_LENGTH) return `Display names can be at most ${MAX_LENGTH} characters long.`;
-  if (!/^[A-Za-z0-9 ]+$/.test(name)) return "Display names can only use letters, numbers and spaces.";
+/**
+ * Why the player can't take `name` now, or null: { kind, text }, the kind being "invalid",
+ * "unavailable" (a moderator's name), "taken" or "cooldown" (the name changer's answers).
+ */
+function problemOf(player, name, now) {
+  const problem = (kind, text) => ({ kind, text });
+  if (name.length < 1) return problem("invalid", "Usage: ::displayname <new name>");
+  if (name.length > MAX_LENGTH) return problem("invalid", `Display names can be at most ${MAX_LENGTH} characters long.`);
+  if (!/^[A-Za-z0-9 ]+$/.test(name)) return problem("invalid", "Display names can only use letters, numbers and spaces.");
   // OSRS: nobody may pass as a moderator; staff are the moderators.
   if (!player.isStaff() && name.replace(/ /g, "").toLowerCase().includes("mod")) {
-    return "Display names can't contain \"mod\".";
+    return problem("unavailable", "Display names can't contain \"mod\".");
   }
-  if (name === player.getDisplayName()) return "That is already your display name.";
+  if (name === player.getDisplayName()) return problem("taken", "That is already your display name.");
+  const taken = DisplayNames.refusal(player.getUsername(), name, now);
+  if (taken) return problem("taken", taken);
   const wait = cooldownLeft(player, now);
-  if (wait > 0) return `You can change your display name again in ${daysLeft(wait)}.`;
-  return DisplayNames.refusal(player.getUsername(), name, now);
+  if (wait > 0) return problem("cooldown", `You can change your display name again in ${daysLeft(wait)}.`);
+  return null;
+}
+
+/** Why the player can't take `name` now (a message), or null. */
+function refusal(player, name, now) {
+  return problemOf(player, name, now)?.text ?? null;
 }
 
 function showDisplayName(player, now) {
@@ -60,13 +72,14 @@ function showDisplayName(player, now) {
     : "Change it with ::displayname <new name>.");
 }
 
+/** True once the name is changed. */
 function changeDisplayName(player, name) {
   const now = Date.now();
   // Checked again: the name may have been taken while the prompt was open.
   const problem = refusal(player, name, now);
   if (problem) {
     player.sendMessage(problem);
-    return;
+    return false;
   }
   const previous = player.getDisplayName();
   try {
@@ -74,11 +87,12 @@ function changeDisplayName(player, name) {
   } catch (error) {
     console.error(`[display-name] failed to save ${player.getUsername()}'s new name`, error);
     player.sendMessage("Your display name could not be changed. Please try again later.");
-    return;
+    return false;
   }
   player.setDisplayName(name);
   player.sendMessage(`Your display name is now ${name}.`);
   pluginApi.emitCustomEvent("display-names:changed", { player, previous, name });
+  return true;
 }
 
 function requestDisplayName(player, raw) {
@@ -113,16 +127,33 @@ function displayNameCommand({ player, raw }) {
   return true;
 }
 
-function openNameChanger({ player }) {
-  player.setEnteredSyntaxAction({ execute: name => requestDisplayName(player, name) });
-  player.getPacketSender().sendEnterInputPrompt("Enter a new display name:");
-}
+NameChanger.useRules({ cleanName, problemOf, cooldownLeft, change: changeDisplayName, daysText: daysLeft });
 
 module.exports = {
   name: "DisplayName",
+  description: "The ::displayname command, setting the name other players see within the 12-character, 28-day and 35-day reservation rules.",
+  config: {
+    "DisplayName:cooldownDays": {
+      type: "number", label: "Display name change cooldown (days)", default: 28, min: 0,
+      help: "Days a player waits between display name changes. 0 lets them change at any time.",
+    },
+    [NameChanger.SESSION_MINUTES_CONFIG]: {
+      type: "number", label: "Name changer session (minutes)", default: 10, min: 1,
+      help: "How long a Name Changer session lasts after Look up names, before it has to be started again.",
+    },
+    "DisplayName:holdDays": {
+      type: "number", label: "Old display name hold (days)", default: 35, min: 0,
+      help: "Days a name a player gave up stays held for its old owner.",
+    },
+  },
   register(api) {
     pluginApi = api;
     api.registerCommand("displayname", displayNameCommand, undefined, "Change the name other players see");
-    api.onInterfaceActionButton(NAME_CHANGER_BUTTON, openNameChanger);
+    NameChanger.attach(api);
+    api.onInterfaceActionButton(NAME_CHANGER_BUTTON, NameChanger.openNameChanger);
+    api.onInterfaceActionButton(NameChanger.BONDS_UID, NameChanger.redeemBonds);
+    api.onCustomEvent("network:plugin-message", NameChanger.receiveRequest);
+    api.onCustomEvent("interface:closed", NameChanger.closed);
+    api.onPlayerLogout(NameChanger.loggedOut);
   },
 };

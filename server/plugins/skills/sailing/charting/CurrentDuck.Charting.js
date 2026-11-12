@@ -22,6 +22,8 @@ const SOUND_RANGE = 10;
 const VARP_DUCK_RESET = 5038; // sailing_charting_current_duck_reset
 const VARBIT_HINT_ARROW = 14192; // current_hint_arrow
 const HINT_ARROW_DUCK = 5;
+/** sailing_current_duck_hintarrow_disabled: All Settings "Current duck hint arrow" off. */
+const VARBIT_DUCK_ARROW_DISABLED = 18133;
 /** How far from a duck marker the duck can be released (the captures: up to 8 from the boat's centre). */
 const RELEASE_RANGE = 8;
 /** From the deck to the stopped duck: the boat's reach across the water (ours, as the quest had it). */
@@ -135,8 +137,10 @@ function release(player, spot) {
   player.getInventory().delete(ITEM_DUCK, 1);
   const sender = player.getPacketSender();
   player.sendMessage(RELEASED);
-  sender.sendVarbit(VARBIT_HINT_ARROW, HINT_ARROW_DUCK);
-  sender.sendEntityHint(npc);
+  if (sender.getVarbit(VARBIT_DUCK_ARROW_DISABLED) !== 1) {
+    sender.sendVarbit(VARBIT_HINT_ARROW, HINT_ARROW_DUCK);
+    sender.sendEntityHint(npc);
+  }
   const duck = { player, spot, npc, steps: routeSteps(spot.route), stopped: false };
   // Remember the remaining journey as well as its stopped lifetime across a relog/restart.
   player.setAttribute(RESET_ATTRIBUTE, Date.now() + (duck.steps.length + 1) * 600 + STOPPED_LIFETIME_MS);

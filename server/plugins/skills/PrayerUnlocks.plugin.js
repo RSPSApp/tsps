@@ -19,6 +19,8 @@
  *  - "prayer:unlock" { player, prayer } -> in: the admin command grants a scroll prayer.
  *  - "prayer:sync-unlocks" { player } -> in: a bypass just started or ended, so re-send the
  *    client flags for its new effective state.
+ *  - "ironman:mode-changed" { player } -> in: the account type decides PvP mode's bypass (an
+ *    Ironman, so every league character, gets none), so re-send the flags too.
  */
 
 const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
@@ -107,6 +109,20 @@ function sendKnightWaves(player) {
 function syncUnlocks({ player }) {
   sendKnightWaves(player);
   for (const scroll of scrolls()) sendUnlock(player, scroll);
+  deactivateLocked(player);
+}
+
+/** A prayer whose unlock just went away (a relic reset, becoming an Ironman) does not stay on. */
+function deactivateLocked(player) {
+  const { PrayerHandler, PrayerData } = core;
+  const active = player.getPrayerActive?.();
+  if (!active || !PrayerHandler) return;
+  for (const name of ["CHIVALRY", "PIETY", "RIGOUR", "AUGURY", "PRESERVE"]) {
+    if (active[PrayerHandler[name]] !== true) continue;
+    const event = { player, prayer: PrayerData[name], disabled: null };
+    prayerRequirements(event);
+    if (event.disabled === true) PrayerHandler.deactivatePrayer(player, PrayerHandler[name]);
+  }
 }
 
 /** King's Ransom stands in for the Knight Waves, so its stage drives the varbit. */
@@ -181,6 +197,7 @@ const SCROLL_ITEM_NAMES = ["Dexterous prayer scroll", "Arcane prayer scroll", "T
 
 module.exports = {
   name: "PrayerUnlocks",
+  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -192,6 +209,7 @@ module.exports = {
     pluginApi.onPrayerDisabled(prayerRequirements);
     pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);
     pluginApi.onCustomEvent("prayer:sync-unlocks", syncUnlocks);
+    pluginApi.onCustomEvent("ironman:mode-changed", syncUnlocks);
     pluginApi.onCustomEvent("quest:stage-changed", kingsRansomStageChanged);
     for (const name of SCROLL_ITEM_NAMES) {
       pluginApi.onItemAction(name, { Read: readScroll });

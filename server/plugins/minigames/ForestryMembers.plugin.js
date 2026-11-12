@@ -20,6 +20,7 @@ const Leprechaun = require("./forestry/Leprechaun.Forestry");
 
 module.exports = {
   name: "Forestry (members)",
+  description: "Adds Forestry's members-only events on members worlds: Pheasant Control, the frightened fox, the Enchantment Ritual, the Flowering Bush and entlings.",
   members: true,
   register(api) {
     Pheasant.attachPheasant(api);

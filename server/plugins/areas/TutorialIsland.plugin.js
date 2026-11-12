@@ -16,10 +16,21 @@
  */
 const Common = require("./tutorialisland/Common.TutorialIsland");
 
+/** Other plugins query the loaded tutorial, including worlds using legacy plugin switches. */
+function availability(query) { query.available = true; }
+
 module.exports = {
   name: "TutorialIsland",
+  description: "The Tutorial Island onboarding for new players: guided steps, starter items and the route to Lumbridge.",
+  config: {
+    "TutorialIsland:allowSkip": {
+      type: "boolean", label: "Allow skipping Tutorial Island", default: true,
+      help: "The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it.",
+    },
+  },
   register(api) {
     Common.init(api);
+    api.onCustomEvent("tutorial:availability", availability);
     require("./tutorialisland/Interface.TutorialIsland")(api);
     require("./tutorialisland/Instructors.TutorialIsland")(api);
     require("./tutorialisland/Skills.TutorialIsland")(api);

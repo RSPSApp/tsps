@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
-const plugin = require("../plugins/achievements/diaries/FremennikDiary.plugin");
+const plugin = require("../plugins/achievements/diaries/FremennikDiary.AchievementDiaries");
 
 const handlers = new Map();
 const zones = [];
@@ -31,6 +31,8 @@ const Item = {
   SUPER_DEFENCE_4_: 2442,
   BUCKET: 1925,
   ASTRAL_RUNE: 9075,
+  ADAMANTITE_BAR: 2361,
+  DAGANNOTH_BONES: 6729,
 };
 
 plugin.register({
@@ -42,6 +44,7 @@ plugin.register({
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = request.player.completeQuests.has(request.key);
     else if (name === "quest:is-started") request.started = request.player.startedQuests.has(request.key);
+    else if (name === "diary:is-complete") request.complete = request.player.completeTiers?.has(request.tier) === true;
     else if (name === "diary:task") tasks.push(request);
   },
 });
@@ -262,6 +265,11 @@ test("hard producers, including quest gates and the 56-astral guard", () => {
   assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
   fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 56, amountPerEssence: 1 });
   assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
+  // The Raiments of the Eye's bonus runes count toward the 56 (Wiki: Raiments of the Eye).
+  fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 27, amountPerEssence: 2 });
+  assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
+  fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 27, amountPerEssence: 2, bonusRunes: 2 });
+  assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 2);
 });
 
 test("elite sets: Dagannoth Kings reset, GWD generals and the spiritual mage", () => {
@@ -340,4 +348,29 @@ test("native-context diary guards accept an owned POH and a three-dose super def
   assert.equal(fired("mix-a-super-defence-potion-in-the-fremennik-prov"), 1);
   fire("herblore:made", { player: player(3000, 3000), itemId: Item.SUPER_DEFENCE_3_ });
   assert.equal(fired("mix-a-super-defence-potion-in-the-fremennik-prov"), 1);
+});
+
+test("elite diary notes the Dagannoth Kings' bones; hard diary notes GWD aviansie adamantite bars", () => {
+  const BONES = 6729;
+  const roll = (p, n, id, itemIds) => {
+    const drops = itemIds.map((itemId) => ({ itemId, amount: 1, noted: false }));
+    fire("npc-drops:roll", { player: p, npc: n, npcId: id, drops });
+    return drops.map((drop) => drop.noted);
+  };
+  const dksTiers = (tiers) => Object.assign(player(), { completeTiers: new Set(tiers) });
+  for (const id of [2265, 2266, 2267]) {
+    assert.deepEqual(roll(dksTiers(["elite"]), npc(id, "Dagannoth King"), id, [BONES, Item.COAL]), [true, false]);
+    assert.deepEqual(roll(dksTiers(["hard"]), npc(id, "Dagannoth King"), id, [BONES]), [false]);
+  }
+  // Regular dagannoth bones are not the Kings'.
+  assert.deepEqual(roll(dksTiers(["elite"]), npc(2259, "Dagannoth"), 2259, [BONES]), [false]);
+
+  const ADAMANT_BAR = 2361;
+  const gwd = npc(3169, "Aviansie", 2870, 5265, 2);
+  assert.deepEqual(roll(dksTiers(["hard"]), gwd, 3169, [ADAMANT_BAR]), [true]);
+  assert.deepEqual(roll(dksTiers(["medium", "elite"]), gwd, 3169, [ADAMANT_BAR]), [false]);
+  // Wilderness aviansie always drop them noted (Wiki: Aviansie).
+  assert.deepEqual(roll(dksTiers([]), npc(3169, "Aviansie", 3018, 10155), 3169, [ADAMANT_BAR]), [true]);
+  // Other monsters' bars stay as dropped.
+  assert.deepEqual(roll(dksTiers(["hard"]), npc(1, "Goblin", 2870, 5265, 2), 1, [ADAMANT_BAR]), [false]);
 });

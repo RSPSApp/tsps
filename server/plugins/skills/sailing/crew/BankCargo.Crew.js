@@ -8,10 +8,11 @@
 //   box "Your crew start moving the contents of the cargo hold..." (no continue either); at 7 the
 //   cargo goes to the bank and the screen fades back in; at 10 their closing line, by whether the
 //   bank had room. The lines are the crewmate's transcript's.
-// The Wiki's Deckhandiness 2 for banking isn't enforced: its refusal was never captured.
+// Wiki (Crew Management): "At least one crewmate must have Deckhandiness level 2 or higher to use the "Bank Cargo"
+// option." The refusal was never captured, so its line is this server's.
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
-const { openBoatSelection, MODE } = require("../BoatSelection.plugin");
+const { openBoatSelection, MODE } = require("../BoatSelection.Sailing");
 const { dockNear, fade } = require("../SailingContent.Sailing");
 
 const MOVE_CARGO = "Move Cargo to Bank";
@@ -21,6 +22,10 @@ const DOCK_RANGE = 16;
 /** No boat here, for a crewmate whose lines weren't captured. */
 const NO_BOAT = "Your boat isn't docked here.";
 const FADE_CYCLES = 50;
+/** TSPS wording: no recording shows the Deckhandiness refusal. */
+const NO_DECKHAND = "None of your crew is a good enough deckhand to bank your cargo.";
+/** TSPS wording, once after the crewmate's closing line: what the bank refused stayed aboard. */
+const KEPT_IN_HOLD = "Your crew left some cargo in the hold: it can't be put in your bank.";
 const MOVING_TICKS = 3;
 const MOVED_TICKS = 7;
 const DONE_TICKS = 10;
@@ -44,13 +49,21 @@ function holdEmpty(boat) {
 
 /**
  * Moves a boat's cargo into the bank, as much as fits: a full bank, or a stack at its maximum,
- * leaves the rest in the hold. True if all of it went.
+ * leaves the rest in the hold, and so does what the bank refuses. `fitted`: everything the bank
+ * accepts went; `kept`: the slots it refused (asked quietly, so no refusal per slot).
  */
 function moveToBank(player, boat) {
   const { Bank, Item } = cache();
   let all = true;
+  let kept = 0;
   boat.cargo.forEach((slot, index) => {
     if (!slot || slot.amount <= 0) return;
+    // The bank's own rules apply: a courier crate (Port Tasks) or an unbankable item stays in the hold.
+    const held = new Item(slot.id, slot.amount);
+    if (held.isUnbankable?.() || pluginApi?.emitCanBankItem?.(player, held, { quiet: true }) === false) {
+      kept++;
+      return;
+    }
     const tab = Bank.getTabForItem(player, slot.id);
     const bank = player.getBank(tab);
     const moving = bank.getAddableAmount(new Item(slot.id, slot.amount));
@@ -63,7 +76,7 @@ function moveToBank(player, boat) {
     all = false;
   });
   if (Bank.isOpen(player)) player.getBank(player.getCurrentBankTab()).refreshItems();
-  return all;
+  return { fitted: all, kept };
 }
 
 /** The crewmate's at-port variant: where their bank-cargo conversation lives. */
@@ -135,17 +148,18 @@ function bankBoat(player, npcId, crew, boat) {
   const busy = () => player.getDialogueManager().getCurrent?.() === waiting;
   fade(player, true, FADE_CYCLES, { minimap: false });
   player.getPacketSender().sendVarbit(common.VARBIT.BUSY, 1);
-  let fitted = true;
+  let moved = { fitted: true, kept: 0 };
   TaskManager.submit(new CountdownTask(player, MOVING_TICKS, () => {
     if (busy() && branch.moving) StatementDialogue.send(player, branch.moving, false);
   }));
   TaskManager.submit(new CountdownTask(player, MOVED_TICKS, () => {
-    fitted = moveToBank(player, boat);
+    moved = moveToBank(player, boat);
     fade(player, false, FADE_CYCLES, { minimap: false });
   }));
   TaskManager.submit(new CountdownTask(player, DONE_TICKS, () => {
     player.getPacketSender().sendVarbit(common.VARBIT.BUSY, 0);
-    const result = fitted ? branch.fitted : branch.full;
+    const result = moved.fitted ? branch.fitted : branch.full;
+    if (moved.kept > 0) player.sendMessage(KEPT_IN_HOLD);
     if (!busy()) return;
     if (result) say(player, npcId, crew, result);
     else player.getPacketSender().sendInterfaceRemoval();
@@ -162,10 +176,26 @@ function confirm(player, npcId, crew, boat) {
  * Banking from the dock: the boat docked here (or the one chosen when there are several), then
  * the confirmation. `checked`: the transcript has already answered whether the hold is empty.
  */
+/**
+ * Wiki (Crew Management): a crewmate with Deckhandiness 2 is needed, and a keg of whirlpool surprise
+ * "can be used to boost any level 1 Deckhandiness crewmates to level 2", so a boat's keg counts.
+ */
+function hasDeckhand(player, boats) {
+  const level = (member, owned) => owned
+    ? common.statOf(owned, member, common.STAT.DECKHANDINESS)
+    : member.stats[common.STAT.DECKHANDINESS];
+  return common.all().some((member) => common.isRecruited(player, member.id)
+    && (boats.length ? boats.some((owned) => level(member, owned) >= 2) : level(member, null) >= 2));
+}
+
 function startBanking(player, npc, crew, { checked = false } = {}) {
   const npcId = headOf(npc, crew);
   const dock = dockNear(player, DOCK_RANGE);
   const boats = dock ? boatsAt(player, dock) : [];
+  if (!hasDeckhand(player, boats)) {
+    player.sendMessage(NO_DECKHAND);
+    return undefined;
+  }
   if (!boats.length) return noBoat(player, npcId, crew);
   const loaded = boats.filter((boat) => !holdEmpty(boat));
   if (!loaded.length) {
@@ -227,3 +257,4 @@ module.exports = attach;
 module.exports.moveToBank = moveToBank;
 module.exports.answerCondition = answerCondition;
 module.exports.startBanking = startBanking;
+module.exports.hasDeckhand = hasDeckhand;

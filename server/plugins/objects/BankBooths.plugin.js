@@ -187,13 +187,111 @@ function confirmExchange(api, event, slot) {
     // overflowing stacks, so delete/add would silently destroy currency here.
     inventory.setItems(replacement);
     inventory.refreshItems();
+    // rsprox_transcripts/226/01645.txt: a mesbox (objectbox_double) with coins_1000 (1003) and the token model (3991).
+    manager.startDialogues(new api.core.DialogueChainBuilder().add(new api.core.DoubleItemStatementDialogue(0, 1003, 3991,
+      itemId === COINS ? "The bank exchanges your coins for platinum tokens." : "The bank exchanges your platinum tokens for coins.")));
   } }, "Yes", "No").setTitle(itemId === COINS
     ? "Exchange your coins for platinum tokens?" : "Exchange your platinum tokens for coins?");
   manager.startDialogues(new api.core.DialogueChainBuilder().add(dialogue));
 }
 
 function useCurrencyOnBanker(api, event) {
-  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() === "Banker") confirmExchange(api, event, event.slot);
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() !== "Banker") return;
+  const { COINS, PLATINUM_TOKEN } = api.core.ItemIdentifiers;
+  if (event.itemId === COINS || event.itemId === PLATINUM_TOKEN) {
+    confirmExchange(api, event, event.slot);
+    return;
+  }
+  // rsprox_transcripts/226/01645.txt (tick 4882, a Mort myre pear): any other unnoted item gets the banker's line.
+  event.handled = true;
+  const { DialogueChainBuilder, NpcDialogue } = api.core;
+  const npcId = event.npcId ?? event.target?.getId?.();
+  event.player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    // Recorded with chatsad2 (611, DialogueExpression.VERY_SAD): rsprox 226/01645 tick 4882, 234/03299.
+    .add(new NpcDialogue(0, npcId, "Hand me a banknote, and I'll try to convert it to an item.", "Banker", 611)));
+}
+
+/** How many of the notes in `slot` the inventory can take unnoted: the free slots, and the note's own once it empties. */
+function unnoteCount(inventory, slot) {
+  const held = inventory.forSlot(slot)?.getAmount() ?? 0;
+  const free = inventory.getFreeSlots();
+  return held <= free + 1 ? held : free;
+}
+
+/**
+ * A banknote used on a banker (rsprox_transcripts/226/01645.txt): "Un-note the banknotes?" Yes/No, then as many as
+ * the inventory can take come back unnoted with "The bank exchanges your banknotes for items." ("your banknote for
+ * an item." for one). With no room, the banker says "You don't have any inventory space." and asks nothing.
+ */
+function unnoteOnBanker(api, event) {
+  const { player, itemId } = event;
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() !== "Banker") return;
+  const { ItemDefinition, CacheDefinitions, DialogueChainBuilder, NpcDialogue, ItemStatementDialogue } = api.core;
+  const definition = ItemDefinition.forId(itemId);
+  const slot = event.slot;
+  const inventory = player.getInventory();
+  if (!definition?.isNoted?.() || !Number.isInteger(slot) || inventory.forSlot(slot)?.getId() !== itemId) return;
+  event.handled = true;
+  const unnoted = definition.unNote();
+  const npcId = event.npcId ?? event.target?.getId?.() ?? CacheDefinitions.getNpcId("banker1_new");
+  if (unnoteCount(inventory, slot) <= 0) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      // Recorded with chatsad1 (610, DialogueExpression.SLIGHTLY_SAD): rsprox 226/01645.
+      .add(new NpcDialogue(0, npcId, "You don't have any inventory space.", "Banker", 610)));
+    return;
+  }
+  api.sendMultiChatboxPrompt(player, "Un-note the banknotes?", "Yes", () => {
+    if (inventory.forSlot(slot)?.getId() !== itemId) return;
+    const count = unnoteCount(inventory, slot);
+    if (count <= 0) return;
+    inventory.deleteNumber(itemId, count);
+    inventory.adds(unnoted, count);
+    inventory.refreshItems();
+    const text = count === 1 ? "The bank exchanges your banknote for an item." : "The bank exchanges your banknotes for items.";
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, unnoted, text)));
+  }, "No", () => {});
+}
+
+// OSRS Wiki Rune_pouch_note: used on a banker or bank booth the note becomes one Rune pouch, or
+// "You already have one of those." when the player owns a pouch. Noted-ness is not filtered: the
+// note shares a cache noteId link with item 24588, so the noted hooks must not see it first.
+function ownsRunePouch(api, player) {
+  const { RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_ } = api.core.ItemIdentifiers;
+  const ids = [RUNE_POUCH, RUNE_POUCH_L_, DIVINE_RUNE_POUCH, DIVINE_RUNE_POUCH_L_];
+  // By amount: an empty bank placeholder keeps the pouch's id with amount 0 and is not a pouch.
+  const held = (container) => ids.some((id) => container.getAmount(id) > 0);
+  return held(player.getInventory())
+    || player.getBanks().some((bank, index) => bank && index !== api.core.Bank.BANK_SEARCH_TAB_INDEX && held(bank));
+}
+
+function exchangeRunePouchNote(api, event, slot) {
+  const { player, itemId } = event;
+  const { RUNE_POUCH_NOTE, RUNE_POUCH } = api.core.ItemIdentifiers;
+  const inventory = player.getInventory();
+  if (itemId !== RUNE_POUCH_NOTE || !Number.isInteger(slot) || inventory.forSlot(slot)?.getId() !== itemId) return false;
+  event.handled = true;
+  if (ownsRunePouch(api, player)) {
+    player.sendMessage("You already have one of those.");
+    return true;
+  }
+  // A single note frees its own slot; a stack needs a free one for the pouch.
+  if (inventory.forSlot(slot).getAmount() > 1 && inventory.getFreeSlots() <= 0) {
+    player.sendMessage("You don't have enough inventory space.");
+    return true;
+  }
+  inventory.deleteAtSlot(slot, 1, false);
+  inventory.add(new api.core.Item(RUNE_POUCH, 1), false);
+  inventory.refreshItems();
+  player.sendMessage("You exchange the promissory note.");
+  return true;
+}
+
+function useRunePouchNoteOnBanker(api, event) {
+  if ((event.definition ?? event.target?.getDefinition?.())?.getName?.() === "Banker") exchangeRunePouchNote(api, event, event.slot);
+}
+
+function useRunePouchNoteOnBankObject(api, event) {
+  if (BANK_OBJECT_NAMES.has(event.object?.getDefinition?.()?.getName?.())) exchangeRunePouchNote(api, event, event.itemSlot);
 }
 
 function useCurrencyOnBankObject(api, event) {
@@ -202,6 +300,7 @@ function useCurrencyOnBankObject(api, event) {
 
 module.exports = {
   name: "BankBooths",
+  description: "Opens the bank from bank booths, bank chests and Banker NPCs, and handles the bank tab and settings buttons.",
   handleBankButton,
   handleBankInterfaceAction,
   register(api) {
@@ -210,7 +309,10 @@ module.exports = {
     api.onObjectInteraction("Bank Chest", { Use: openBankFromInteraction.bind(null, api) });
     api.onNpcInteraction("Banker", { "Talk-to": talkToBanker.bind(null, api), Bank: openBankFromInteraction.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", bankerDialogueAction.bind(null, api));
+    api.onItemOnNpc(useRunePouchNoteOnBanker.bind(null, api));
+    api.onItemOnObject(useRunePouchNoteOnBankObject.bind(null, api));
     api.onItemOnNpc(useCurrencyOnBanker.bind(null, api), { noted: false });
+    api.onItemOnNpc(unnoteOnBanker.bind(null, api), { noted: true });
     api.onItemOnObject(useCurrencyOnBankObject.bind(null, api), { noted: false });
     api.onButtonClick(bankButton.bind(null, api));
     api.onInterfaceActionClick(bankInterfaceAction.bind(null, api));

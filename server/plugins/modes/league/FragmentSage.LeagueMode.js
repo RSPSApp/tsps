@@ -89,7 +89,7 @@ function recalled(player) {
 function teleport(player, location, wildernessLevel) {
   const { TeleportHandler, TeleportType } = core();
   if (!TeleportHandler.checkReqs(player, location, wildernessLevel)) return false;
-  TeleportHandler.teleport(player, location, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, location, () => TeleportHandler.teleport(player, location, TeleportType.NORMAL, false), wildernessLevel);
   return true;
 }
 

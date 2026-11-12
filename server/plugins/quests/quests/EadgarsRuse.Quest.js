@@ -22,8 +22,7 @@
  * Gaps: the patrolling-guard and goutweed-guard knockouts are not simulated; the
  * stage-85 "Did you get that parrot back?" line and the generic Eadgar stew
  * exchange are absent from the transcript dump; Trollheim Teleport is reward text
- * only (no spell-unlock API); goutweed is exchanged for ranarr weed rather than
- * the level-scaled herb table; Troll thistle NPC movement is not simulated.
+ * only (no spell-unlock API); Troll thistle NPC movement is not simulated.
  */
 module.exports = function registerEadgarsRuseQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
@@ -103,7 +102,16 @@ module.exports = function registerEadgarsRuseQuest(api) {
   const RAW_CHICKEN = ItemIdentifiers.RAW_CHICKEN;
   const GRAIN = ItemIdentifiers.GRAIN;
   const BURNT_MEAT = ItemIdentifiers.BURNT_MEAT;
-  const RANARR_WEED = ItemIdentifiers.RANARR_WEED;
+  /**
+   * Wiki (Sanfew, Goutweed Exchange): "Sanfew will trade any goutweed for a single herb, which is rolled off the
+   * standard herb drop table." That is the shared `herb` table, rolled by NpcDrops.
+   */
+  function goutweedHerb(player) {
+    const request = { player, table: { entries: [{ always: true, shared_table: "herb" }] }, drops: [] };
+    api.emitCustomEvent("npc-drops:roll-table", request);
+    const drop = request.drops.find((entry) => Number.isInteger(entry?.itemId) && entry.amount > 0);
+    return drop ? { itemId: drop.itemId, amount: 1 } : null;
+  }
   const LIQUOR_ITEM_IDS = new Set([
     ItemIdentifiers.VODKA,
     ItemIdentifiers.GIN,
@@ -692,8 +700,12 @@ module.exports = function registerEadgarsRuseQuest(api) {
       return;
     }
     if (npcId === SANFEW_NPC_ID && value.includes("more goutweed") && held(player, GOUTWEED)) {
+      // Roll first so a missing herb never costs the goutweed; the goutweed's slot then takes
+      // the herb, so a full inventory still has room.
+      const herb = goutweedHerb(player);
+      if (!herb) return;
       player.getInventory().deleteNumber(GOUTWEED, 1);
-      player.getInventory().adds(RANARR_WEED, 1);
+      player.getInventory().adds(herb.itemId, herb.amount);
     }
   }
 

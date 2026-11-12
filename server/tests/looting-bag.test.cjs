@@ -42,7 +42,7 @@ before(() => {
       BANK_SEARCH_TAB_INDEX: real.Bank.BANK_SEARCH_TAB_INDEX,
       actionAmount: real.Bank.actionAmount,
       isOpen: (player) => player.bankOpen === true,
-      getTabForItem: () => 0,
+      getTabForItem: (player, id) => player.realBanks ? real.Bank.getTabForItem(player, id) : 0,
     },
   };
   const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
@@ -59,8 +59,10 @@ before(() => {
     onItemAction: (name, actions) => { hooks.actions = actions; },
     onItemDropPolicy: (fn) => { hooks.dropPolicy = fn; },
     onInterfaceActionClick: (fn) => hooks.clicks.push(fn),
+    onShouldKeepItemOnDeath: (fn) => { hooks.keep = fn; },
     onPlayerDeathItemDrop: (fn) => { hooks.death = fn; },
     onPlayerDefeated: (fn) => { hooks.defeated = fn; },
+    onPlayerLogin: (fn) => { hooks.login = fn; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => {
       player.prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), pairs };
       return true;
@@ -95,14 +97,11 @@ function inventory(items) {
 }
 
 function bankTab() {
-  const held = new Map();
-  return {
-    held,
-    getAddableAmount: (item) => item.getAmount(),
-    add: (item) => held.set(item.getId(), (held.get(item.getId()) ?? 0) + item.getAmount()),
-    full() {},
-    refreshItems() {},
-  };
+  const tab = new (PluginManager.getCoreApi().Bank)(null);
+  tab.refreshItems = () => tab;
+  tab.full = () => tab;
+  Object.defineProperty(tab, "held", { get: () => new Map(tab.getValidItems().map(item => [item.getId(), tab.getAmount(item.getId())])) });
+  return tab;
 }
 
 function player({ at = WILDERNESS, items = [] } = {}) {
@@ -112,6 +111,7 @@ function player({ at = WILDERNESS, items = [] } = {}) {
     messages: [], spam: [], packets: [], prompt: null, amountAction: null, amountPrompt: null,
     bankOpen: false, bankQuantity: 0,
     location: new Location(at[0], at[1], 0),
+    getUsername: () => "bagfixture",
     getLocation: () => p.location,
     getInventory: () => p.inv,
     getAttribute: (key) => attributes.get(key),
@@ -380,7 +380,8 @@ test("the bank's looting bag view: View, Deposit-1/5/10/X/All, Deposit loot, Dis
   op(0, 7);
   assert.equal(bankTabs.held.get(FIRE_RUNE), 13, "Deposit-All");
   click({ player: p, groupId: 15, childId: bankside("lootingbag_bankall"), handled: false });
-  assert.equal(bankTabs.held.get(MITHRIL_PLATELEGS_NOTE), 1, "Deposit loot");
+  assert.equal(bankTabs.held.get(core.ItemDefinition.forId(MITHRIL_PLATELEGS_NOTE).unNote()), 1, "Deposit loot unnotes");
+  assert.equal(bankTabs.held.has(MITHRIL_PLATELEGS_NOTE), false);
   assert.equal(stored(bag).length, 0);
   click({ player: p, groupId: 15, childId: bankside("lootingbag_dismiss"), handled: false });
   assert.equal(p.varbits.get(core.Bank.VIEW_CONTAINER_VARBIT), 0);
@@ -616,5 +617,97 @@ test("bank Deposit-X keeps its selected item across another bag operation", asyn
     assert.equal(p.getEnteredAmountAction(), null, "normal amount dispatch consumes the callback");
     assert.equal(bankTabs.held.get(COINS) ?? 0, 0, "a rune prompt must not bank coins");
     assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[COINS, 7]]);
+  });
+});
+
+test('native bank container button and bag Deposit loot preserve notes, metadata and failed remainders', async t => {
+  const real = PluginManager.getCoreApi();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  t.mock.method(PluginManager, 'emitInterfaceActionClick', event => click(event).handled);
+  const emitted = [];
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => { emitted.push(name); hooks.events[name]?.(event); });
+  function actor(entries, bagId = OPEN_BAG) {
+    const channel = new HeadlessBinaryChannel(), session = new PlayerSession(channel);
+    const p = new Player(session);
+    session.setPlayer(p);
+    const connection = new ClientConnection(channel);
+    connection.player = p;
+    p.realBanks = true; p.bankOpen = true;
+    p.setStatus(real.PlayerStatus.BANKING).setInterfaceId(real.Bank.MAIN_INTERFACE_ID);
+    p.setCurrentBankTab(0);
+    const bag = bagWith(bagId, entries);
+    p.getInventory().setItem(0, bag);
+    hooks.events[real.Bank.INVENTORY_OP_EVENT]({ player: p, item: bag, slot: 0, op: 1 });
+    const send = name => {
+      const id = real.CacheDefinitions.getComponentId(name);
+      assert.ok(Number.isInteger(id), name);
+      return connection.dispatch([{ type: 'widget_action', widgetId: id, groupId: id >>> 16,
+        childId: id & 65535, buttonNum: 1 }], true);
+    };
+    return { p, bag, send };
+  }
+  const base = core.ItemDefinition.forId(MITHRIL_PLATELEGS_NOTE).unNote();
+  for (const button of ['bankside:lootingbag_bankall', 'bankmain:depositcontainers']) {
+    await t.test(button + ': mixed noted/unnoted contents merge into an existing base stack', async () => {
+      const f = actor([{ id: MITHRIL_PLATELEGS_NOTE, amount: 3 }, { id: base, amount: 1 }]);
+      f.p.getBank(0).add(item(base, 2), false);
+      const packets = [];
+      const sender = f.p.getPacketSender(), original = sender.sendItemContainer;
+      sender.sendItemContainer = function(container, ...args) { packets.push(container); return original.call(this, container, ...args); };
+      await f.send(button);
+      assert.equal(f.p.getBank(0).getAmount(base), 6);
+      assert.equal(f.p.getBank(0).getAmount(MITHRIL_PLATELEGS_NOTE), 0);
+      assert.deepEqual(stored(f.bag), []);
+      assert.equal(f.p.getInventory().forSlot(0), f.bag);
+      assert.ok(packets.every(container => !(container instanceof core.Inventory) || container === f.p.getInventory()), 'no staging inventory packet');
+    });
+  }
+  await t.test('partial stack headroom, metadata and existing tab are preserved', async () => {
+    const meta = { diagnostic: 'selected' }, other = { diagnostic: 'other' };
+    const f = actor([{ id: MITHRIL_PLATELEGS_NOTE, amount: 7, meta }]);
+    f.p.getBank(0).add(item(COINS, 1), false);
+    f.p.getBank(1).add(new core.Item(base, 2147483644, meta), false);
+    f.p.getBank(1).add(new core.Item(base, 4, other), false);
+    await f.send('bankmain:depositcontainers');
+    assert.deepEqual(stored(f.bag), [{ id: MITHRIL_PLATELEGS_NOTE, amount: 4, meta }]);
+    assert.deepEqual(f.p.getBank(1).getValidItems().map(i => [i.getAmount(), i.getMeta()]), [[2147483647, meta], [4, other]]);
+    await f.send('bankmain:depositcontainers');
+    assert.equal(stored(f.bag)[0].amount, 4, 'repeated failure cannot remove more');
+    f.p.getBank(1).getItems()[0].setAmount(2147483643);
+    await f.send('bankmain:depositcontainers');
+    assert.deepEqual(stored(f.bag), []);
+    assert.equal(f.p.getBank(1).getItems()[0].getAmount(), 2147483647);
+  });
+  await t.test('full bank and bank-policy veto leave contents and bag intact', async () => {
+    const f = actor([{ id: MITHRIL_PLATELEGS_NOTE, amount: 3 }], CLOSED_BAG);
+    t.mock.method(real.Bank, 'freeSlots', () => 0);
+    await f.send('bankmain:depositcontainers');
+    assert.equal(stored(f.bag)[0].amount, 3);
+    assert.equal(f.p.getBank(0).getAmount(base), 0);
+    assert.equal(f.p.getInventory().forSlot(0), f.bag);
+    real.Bank.freeSlots.mock.restore();
+    t.mock.method(PluginManager, 'emitCanBankItem', (_p, entry) => entry.getId() !== MITHRIL_PLATELEGS_NOTE);
+    await f.send('bankside:lootingbag_bankall');
+    assert.equal(stored(f.bag)[0].amount, 3);
+    assert.equal(f.p.getBank(0).getAmount(base), 0);
+    PluginManager.emitCanBankItem.mock.restore();
+  });
+  await t.test('ordinary items, closed banks and non-container bank actions do not empty a bag', async () => {
+    const f = actor([{ id: MITHRIL_PLATELEGS_NOTE, amount: 3 }]);
+    f.p.getInventory().setItem(1, item(COINS, 25));
+    emitted.length = 0;
+    await f.send('bankmain:depositcontainers');
+    assert.equal(emitted.includes(real.Bank.INVENTORY_OP_EVENT), false, 'bulk Empty must not invoke per-item Fill operations');
+    assert.equal(f.p.getInventory().getAmount(COINS), 25);
+    assert.equal(f.p.getBank(0).getAmount(COINS), 0);
+    const closed = actor([{ id: MITHRIL_PLATELEGS_NOTE, amount: 3 }]);
+    closed.p.bankOpen = false;
+    closed.p.setStatus(real.PlayerStatus.NONE).setInterfaceId(-1);
+    await closed.send('bankmain:depositcontainers');
+    assert.equal(stored(closed.bag)[0].amount, 3);
+    assert.equal(closed.p.getBank(0).getAmount(base), 0);
   });
 });

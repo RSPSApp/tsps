@@ -38,6 +38,30 @@ export class CombatSpecial {
     private static readonly registry: CombatSpecial[] = [];
     private static readonly byId = new Map<string, CombatSpecial>();
     private static readonly byItemId = new Map<number, CombatSpecial>();
+    /**
+     * Custom weapons' special attack settings (custom-items.json `specialAttack`), by item id:
+     * `from`, the weapon whose special they use when they register none of their own, and
+     * `drainAmount`, their cost in percent whichever special they use.
+     */
+    private static readonly itemSpecials = new Map<number, { from?: number; drainAmount?: number }>();
+
+    /**
+     * Sets a weapon's special attack settings. With `from`, the weapon uses that item's special
+     * unless a special is registered for the weapon itself (one registered for its own id always
+     * comes first). With `drainAmount`, that is its cost in percent; otherwise its special's own
+     * cost (for `from` when borrowed). Resolved when looked up, so registration order does not
+     * matter.
+     */
+    public static setItemSpecial(itemId: number, settings: { from?: number; drainAmount?: number }): void {
+        if (!Number.isInteger(itemId) || itemId <= 0) return;
+        const from = Number.isInteger(settings.from) && (settings.from as number) > 0 && settings.from !== itemId ? settings.from : undefined;
+        const drainAmount = Number.isFinite(settings.drainAmount) ? settings.drainAmount : undefined;
+        if (from === undefined && drainAmount === undefined) return;
+        CombatSpecial.itemSpecials.set(itemId, {
+            ...(from !== undefined ? { from } : {}),
+            ...(drainAmount !== undefined ? { drainAmount } : {}),
+        });
+    }
 
     public static register(definition: CombatSpecialDefinition): CombatSpecial | null {
         if (!definition || typeof definition.id !== "string" || !definition.id.trim().length) {
@@ -68,7 +92,10 @@ export class CombatSpecial {
     }
 
     public static getForWeaponId(itemId: number): CombatSpecial | null {
-        return ItemAliases.lookup(CombatSpecial.byItemId, itemId) ?? null;
+        const own = ItemAliases.lookup(CombatSpecial.byItemId, itemId);
+        if (own) return own;
+        const from = CombatSpecial.itemSpecials.get(Number(itemId))?.from;
+        return from !== undefined ? ItemAliases.lookup(CombatSpecial.byItemId, from) ?? null : null;
     }
 
     constructor(definition: CombatSpecialDefinition){
@@ -136,19 +163,29 @@ export class CombatSpecial {
         return CombatSpecial.cost(player, special, special.getDrainAmountForWeaponId(weaponId), "check").cost;
     }
 
-    /** `isCost` false spends an amount directly (Unleash), without cost modifiers. */
-    public static drain(character: Mobile, amount: number, isCost = true) {
+    /**
+     * `isCost` false spends an amount directly (Unleash), without cost modifiers. `itemId`: the item whose special
+     * this was, for "combat-special:performed", when it isn't the wielded weapon (a shield's).
+     */
+    public static drain(character: Mobile, amount: number, isCost = true, itemId?: number) {
         const special: CombatSpecial | null = character.isPlayer?.() ? ((character as any).getAsPlayer?.()?.getCombatSpecial?.() ?? null) : null;
-        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, amount, "drain").cost : amount);
+        const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
+        const settings = weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
+        // Implementations pass their native cost; price custom weapons before applying the usual modifiers.
+        const base = isCost && settings ? settings.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount : amount;
+        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : amount);
 
         CombatSpecial.ensureRestoreTask(character);
 
         if (character.isPlayer()) {
             let p = character.getAsPlayer();
             CombatSpecial.updateBar(p);
-            // "combat-special:performed" { player, itemId }: a special attack performed, with the weapon wielded.
+            // "combat-special:performed" { player, itemId }: a special attack performed, with the item whose special it
+            // was (the wielded weapon unless the caller names another).
             const { PluginManager } = require("../../../plugins/PluginManager");
-            PluginManager.emitCustomEvent("combat-special:performed", { player: p, itemId: p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1 });
+            PluginManager.emitCustomEvent("combat-special:performed", {
+                player: p, itemId: itemId ?? p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1,
+            });
         }
     }
 
@@ -246,8 +283,10 @@ export class CombatSpecial {
         player.getPacketSender().sendSpecialAttackState(false);
     }
 
-    public static activate(player: Player) {
-        if (player.getCombatSpecial() == null) {
+    public static activate(player: Player, equipmentSlot?: number) {
+        const selected = equipmentSlot === undefined ? player.getCombatSpecial()
+            : CombatSpecial.getForWeaponId(player.getEquipment().get(equipmentSlot).getId());
+        if (selected == null || (equipmentSlot !== undefined && selected.getTraits()?.skipAttack !== true)) {
             return;
         }
 
@@ -258,9 +297,14 @@ export class CombatSpecial {
         // Loaded lazily, as PrayerHandler does: PluginManager imports Player.
         const { PluginManager } = require("../../../plugins/PluginManager");
         const disabledMessage = PluginManager.emitSpecialAttackDisabled(player);
-        if (!player.isSpecialActivated() && disabledMessage !== null) {
+        if ((equipmentSlot !== undefined || !player.isSpecialActivated()) && disabledMessage !== null) {
             player.sendMessage(disabledMessage);
             CombatSpecial.updateBar(player);
+            return;
+        }
+
+        if (equipmentSlot !== undefined) {
+            CombatSpecial.activateUtility(player, selected, equipmentSlot);
             return;
         }
 
@@ -321,9 +365,8 @@ export class CombatSpecial {
                     }
                     return;
                 } else {
-                    // Uninformed player activating a queued-attack special outside combat.
-                    player.sendMessage("Although not required, this special attack should be used during combat");
-                    player.sendMessage("for maximum effect.");
+                    // Pressed with no target (rsprox_transcripts/232/03142.txt:83476 and :84215, a normal world): one line.
+                    player.sendMessage("Warning: Since the maul's special is an instant attack, it will be wasted when used on a first strike.");
                 }
             }
         }
@@ -335,18 +378,20 @@ export class CombatSpecial {
      * OSRS does it: no target and no attack swing (Lumber Up, Rock Knocker,
      * Fishstabber, Rampage, Sanctuary, Power of Death, Virulence, Entice, ...).
      * The plugin's start() owns the drain and the effect, so core only gates on
-     * energy and finishes by clearing the activated state.
+     * energy and clears the activated state unless using a separate equipment slot.
      */
-    private static activateUtility(player: Player, spec: CombatSpecial): void {
-        const equippedWeaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+    private static activateUtility(player: Player, spec: CombatSpecial, equipmentSlot?: number): void {
+        const equippedWeaponId = player.getEquipment().get(equipmentSlot ?? Equipment.WEAPON_SLOT).getId();
         const drainAmount = spec.getDrainAmountForWeaponId(equippedWeaponId);
         if (!CombatSpecial.affordable(player, spec, drainAmount)) {
             player.sendMessage("You don't have enough power left.");
             return;
         }
 
+        const activated = player.isSpecialActivated();
         spec.getCombatMethod().start(player, player);
-        player.setSpecialActivated(false);
+        // An offhand utility must leave the weapon's queued special alone.
+        player.setSpecialActivated(equipmentSlot !== undefined && activated);
         CombatSpecial.updateBar(player);
     }
 
@@ -364,6 +409,10 @@ export class CombatSpecial {
 
     /** Energy cost for a specific weapon variant (defaults to the base cost). */
     public getDrainAmountForWeaponId(itemId?: number): number {
+        const settings = itemId !== undefined ? CombatSpecial.itemSpecials.get(Number(itemId)) : undefined;
+        if (settings?.drainAmount !== undefined) return settings.drainAmount;
+        // A borrowed special costs what it costs for the weapon it is borrowed from.
+        if (settings?.from !== undefined && !this.identifiers.includes(Number(itemId))) itemId = settings.from;
         if (itemId !== undefined) {
             const override = this.drainAmountByItemId[itemId] ?? this.drainAmountByItemId[ItemAliases.baseOf(itemId) ?? -1];
             if (typeof override === "number") {

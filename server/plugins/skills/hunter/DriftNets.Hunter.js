@@ -215,7 +215,13 @@ function rewards(player, count) {
   H.api.emitCustomEvent("minigame:chance", fossils);
   for (let i = 0; i < count; i++) {
     if (C.roll(1, 25) === 1) { const f = fossil(3, 14, fossils.multiplier); if (f) result.push(f); }
-    else if (boost.allowed !== false && C.roll(1, bottleOneIn) === 1 && !C.ownsClue(player, "MEDIUM") && !result.some(([id]) => id === clueId)) result.push([clueId, 1]);
+    else if (boost.allowed !== false && C.roll(1, bottleOneIn) === 1) {
+      // Wiki Drift net fishing: a won clue becomes pufferfish when another clue cannot be received.
+      const unavailable = C.ownsClue(player, "MEDIUM") || result.some(([id]) => id === clueId);
+      result.push([unavailable ? I.PUFFERFISH : clueId, 1]);
+      // The tier's clue scroll warning mentions the lost clue.
+      if (unavailable) H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: "medium" });
+    }
     else result.push([fish[C.roll(0, fish.length - 1)], 1]);
   }
   return result;

@@ -7,6 +7,7 @@ const Common = require("./ironman/Common.Ironman");
 
 module.exports = {
   name: "Ironman",
+  description: "Adds Ironman, Ultimate and Hardcore Ironman accounts, chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command.",
   register(api) {
     Common.init(api);
     require("./ironman/Account.Ironman")(api);
@@ -18,5 +19,6 @@ module.exports = {
     require("./ironman/Ultimate.Ironman")(api);
     require("./ironman/Hardcore.Ironman")(api);
     require("./ironman/Setup.Ironman")(api);
+    require("./ironman/Onboarding.Ironman")(api);
   },
 };

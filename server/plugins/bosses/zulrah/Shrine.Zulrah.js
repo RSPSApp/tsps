@@ -23,6 +23,8 @@ const Access = require("./Access.Zulrah");
 const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
 const BOSS_NAME = "Zulrah";
@@ -179,7 +181,7 @@ function onZulrahDeath({ npc }) {
   const ticks = fight.duration();
   CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
-  player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
+  sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR.BEST_TIME, ticks);
     Shared.api().emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
@@ -241,6 +243,9 @@ function onlyWhenSurfaced(event) {
  * A death at the shrine: what would drop is held by Zul-Gwenwynig. A later unsafe death
  * anywhere else, before collecting, loses what she holds.
  */
+/** The game cycle of each player's death whose items she is taking, so one death's items gather and a new one starts over. */
+const heldDeathCycle = new WeakMap();
+
 function holdForPriestess(event) {
   const { player, item } = event;
   const atShrine = Fight.fightOf(player) != null || Shared.inShrine(player.getLocation());
@@ -251,7 +256,12 @@ function holdForPriestess(event) {
     return;
   }
   if (!event.dropEligible) return;
-  const held = heldItems(player) ?? { items: [], paid: false };
+  // A new death here (Zulrah's deaths are unsafe): what she held from the last one is lost (Wiki, Zulrah: "permanently
+  // lost if the player dies an unsafe death before reclaiming them"), as Nex's chest does. The items came on top of it.
+  const cycle = Shared.core().World.getProcessCycle();
+  const newDeath = heldDeathCycle.get(player) !== cycle;
+  heldDeathCycle.set(player, cycle);
+  const held = (!newDeath && heldItems(player)) || { items: [], paid: false };
   held.items.push([item.getId(), item.getAmount()]);
   player.setAttribute(Shared.ATTR.RETRIEVAL, held);
   event.handled = true;
@@ -387,7 +397,7 @@ function retrievalItemAction(event) {
   if (!entry) return false;
   const op = event.opId ?? event.action;
   if (op === RETRIEVAL_EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry[0]).getExamine());
+    examineItem(player, entry[0], entry[1]);
     return true;
   }
   if (op !== RETRIEVAL_TAKE_OP) return false;

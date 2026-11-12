@@ -215,6 +215,7 @@ function bind(registry) {
 
 module.exports = {
   name: "SirRenitee",
+  description: "Sir Renitee, Falador's herald: reports a player's family crest and repaints it for a fee.",
   members: true,
   register(registry) {
     bind(registry);

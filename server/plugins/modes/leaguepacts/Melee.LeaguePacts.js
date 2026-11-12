@@ -35,10 +35,12 @@
  *   talent_unique_blindbag_chance (+2% per unique heavy melee weapon in the inventory, up to 10%)
  *   and 68 talent_unique_blindbag_damage (+N% Blindbag max hit per unique one, up to 10%): Blindbag
  *   puts a random heavy melee weapon from the inventory (not the Dramen staff: Wiki, 6 May 2026) in
- *   the weapon slot (bonuses recounted),
- *   rolls an ordinary melee hit with it and puts the weapon back; the hit may Blindbag again (a
- *   guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a weapon-slot item with a melee
- *   attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
+ *   the weapon slot (the carried item itself, charges and all; bonuses recounted), attacks with it
+ *   through the method it has wielded (CombatFactory.getMethod: a multi-hit weapon's two hitsplats,
+ *   the scythe's) and puts the weapon back. The chance is rolled once per attack ("each melee
+ *   attack"), not per hitsplat, so a two-hit weapon rolls once; the Blindbag attack may Blindbag
+ *   again, once for the attack (a guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a
+ *   weapon-slot item with a melee attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
  * - 71 talent_2h_melee_echos: a landed two-handed melee hit (not a special, not on a player) has a
  *   5% chance to emit `league:pact-ranged-echo` { player, target, source: "melee" } (Ranged unit).
  * - 66 talent_hit_restore_spec_energy: each melee hitsplat that deals damage restores N% energy.
@@ -49,7 +51,15 @@
  *   talent_defence_recoil_scaling (+N% of the summed defence bonuses on Thorns, and on reflected
  *   damage landing (`combat:damage-apply`) from a wearer of a ring of recoil or suffering:
  *   approximation, a vengeance at the same time is counted as well). Thorns is reflected damage
- *   (no XP, respects `combat:recoil-immune`) and never hits players.
+ *   (respects `combat:recoil-immune`) and never hits players. Each Thorns hit (the second one too)
+ *   pays combat XP for its damage as it is queued, on the tick the NPC's hit lands: 4 per damage
+ *   split across the current melee style's skills (Controlled shares Attack, Strength and Defence)
+ *   and 4/3 to Hitpoints, by the NPC's combat XP multiplier. With a weapon that is no melee weapon,
+ *   or while autocasting, it is Attack, whatever melee style came before (rsprox captures, Leagues
+ *   VI, 237/01104, 237/04057, 237/04099, 238/04142: 194 of 194 Thorns hits on idle players paid
+ *   it; a rune pickaxe or dragon dagger on Strength, then an earth battlestaff, and a tentacle on
+ *   Controlled, then a shadowflame quadrant, all paid Attack). The second hit's XP is ours: no
+ *   capture shows it.
  * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current, with
  *   talent_defence_boost's visible boost) that an NPC's hit is
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
@@ -286,6 +296,32 @@ function queueDerived(player, target, parent, kind, extra = {}) {
   }
 }
 
+/**
+ * The melee method a wielded weapon attacks with: the combat-method resolvers' (multi-hit
+ * weapons, the scythe, the dual macuahuitl), else the core's plain melee one.
+ */
+function wieldedMeleeMethod(player) {
+  const method = core.CombatFactory.getMethod(player);
+  return isMelee(method?.type?.()) ? method : core.CombatFactory.MELEE_COMBAT;
+}
+
+/**
+ * A Blindbag attack's hits, built by the swapped-in weapon's own method, so a multi-hit
+ * weapon hits as many times as it does wielded. The plain method keeps the parent's delay.
+ */
+function blindbagHits(player, target, parent, uniques) {
+  const method = wieldedMeleeMethod(player);
+  if (method === core.CombatFactory.MELEE_COMBAT) return [queueDerived(player, target, parent, "blindbag", { uniques })];
+  building = { player, kind: "blindbag", uniques };
+  try {
+    const hits = method.hits(player, target) ?? [];
+    for (const hit of hits) derived.set(hit, "blindbag");
+    return hits;
+  } finally {
+    building = null;
+  }
+}
+
 /** 44, 68, 72: an attack with a random heavy melee weapon from the inventory, as though wielded. */
 function blindbag(player, target, parent) {
   const carried = heavyWeaponsCarried(player);
@@ -300,17 +336,29 @@ function blindbag(player, target, parent) {
   const slot = core.Equipment.WEAPON_SLOT;
   const held = equipment.getItems()[slot];
   const chosen = carried[Math.floor(Math.random() * carried.length)];
-  let hit;
-  equipment.setItem(slot, new core.Item(chosen, 1));
+  // The carried item itself, charges and all: a charged scythe or Obligator attacks charged and
+  // spends its own charges, as though equipped.
+  const item = player.getInventory().getItems().find((each) => each?.getId?.() === chosen);
+  if (!item) return;
+  let hits;
+  equipment.setItem(slot, item);
   core.BonusManager.update(player);
   try {
-    hit = queueDerived(player, target, parent, "blindbag", { uniques: carried.length });
+    hits = blindbagHits(player, target, parent, carried.length);
   } finally {
     equipment.setItem(slot, held);
     core.BonusManager.update(player);
+    // A weapon that ran out of charges turned into its uncharged form in the weapon slot, and the
+    // client was sent that slot: show both containers as they are now.
+    if (item.getId() !== chosen) {
+      player.getEquipment().refreshItems();
+      player.getInventory().refreshItems();
+    }
   }
-  chains.set(hit, depth);
-  core.CombatFactory.addPendingHit(hit);
+  if (hits.length === 0) return;
+  // One attack, one roll of its own: the first of its hits carries the chain (a scythe's three too).
+  chains.set(hits[0], depth);
+  for (const hit of hits) core.CombatFactory.addPendingHit(hit);
 }
 
 /** A melee hit queued: once per attack, 26's heal, 43's extra hit and 44's Blindbag. */
@@ -323,6 +371,8 @@ function dealt({ player, target, hit }) {
   if (!isMelee(hit?.getCombatType?.()) || !target || isRangedEcho(hit)) return;
   const kind = derived.get(hit);
   if (kind === "double") return;
+  // A Blindbag attack's later hits (a scythe's, one per target) are the same attack: once per attack.
+  if (kind === "blindbag" && !chains.has(hit)) return;
   if (player.isSpecialActivated() && !kind) {
     specials.add(hit);
     return;
@@ -351,8 +401,29 @@ function recoilBonus(player) {
   return Math.max(0, Math.floor((total * percent) / 100));
 }
 
-function reflect(player, attacker, damage) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setSource(player);
+/** Thorns' XP for a hit of `damage`: the melee style's skills, or Attack off a melee weapon. */
+function thornsExperience(player, attacker, damage) {
+  if (damage <= 0) return;
+  const { Skill } = core;
+  const rate = 4 * (attacker.getCombatXpMultiplier?.() ?? 1);
+  const held = weapon(player);
+  const melee = player.getCombat().getAutocastSpell?.() == null && (held === null || isMeleeWeapon(held));
+  const indices = melee ? player.getFightType().getStyle().skill(core.CombatType.MELEE) : [Skill.ATTACK.getIndex()];
+  const skills = player.getSkillManager();
+  for (const index of indices) skills.addExperience(Skill.values()[index], (damage * rate) / indices.length, true);
+  skills.addExperience(Skill.HITPOINTS, (damage * rate) / 3, true);
+}
+
+/**
+ * A reflected hit. Thorns counts as the wearer's damage — that is what let it stop a "magic
+ * damage only" Combat Achievement (Jagex, Further Leagues VI Changes) — while the pact's shield
+ * reflect only bounces the damage back, as recoil and vengeance do, and a monster killed by
+ * recoil alone drops nothing (Wiki: Ring of recoil). So only Thorns' caller asks for the credit.
+ */
+function reflect(player, attacker, damage, credits = false) {
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected();
+  if (credits) hit.markCreditsSource();
+  hit.setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
   return hit;
 }
@@ -363,10 +434,21 @@ function thorns(player, attacker, hit) {
   const damage = thornsDamage(player);
   const second = value(player, "thornsDouble") ? Math.floor(damage * THORNS_SECOND_FRACTION) : 0;
   const splats = Math.max(1, hit.getHits?.()?.length ?? 1);
+  // The XP budget: the hitpoints the NPC has left after damage already queued, shared by every splat.
+  let remaining = attacker.getHitpoints() - (attacker.getCombat().getHitQueue().getQueuedDamage?.() ?? 0);
+  const paid = (amount) => {
+    const counted = Math.max(0, Math.min(amount, remaining));
+    remaining -= counted;
+    return counted;
+  };
   for (let i = 0; i < splats; i++) {
-    if (attacker.getHitpoints() <= 0) return;
-    thornsHits.add(reflect(player, attacker, damage));
-    if (second > 0) thornsHits.add(reflect(player, attacker, second));
+    if (attacker.getHitpoints() <= 0 || remaining <= 0) return;
+    thornsHits.add(reflect(player, attacker, damage, true));
+    thornsExperience(player, attacker, paid(damage));
+    if (second > 0) {
+      thornsHits.add(reflect(player, attacker, second, true));
+      thornsExperience(player, attacker, paid(second));
+    }
     distanceHeal(player, attacker);
   }
 }

@@ -53,8 +53,8 @@ Like OSRS, it is free-to-play, with half experience on free-to-play worlds, wher
   - The plugin answers the transcript's conditions: whether the player has mined a star, whether they carry stardust, and whether it's a members world.
 - **Her shop**, Dusuri's Star Shop, sells for stardust: Celestial ring (uncharged) 2,000, Star fragment 3,000, Bag full of gems 300, Soft clay pack 150. The stock is 50/50/100/1,000, as captured.
   - **Value message:** the live game's is "Celestial ring (uncharged): currently costs 2,000 stardust.". The shared shop code still prints "… currently costs 2,000 x stardust.".
-  - **Buy-back price:** [80% of the purchase price](https://oldschool.runescape.wiki/w/Dusuri%27s_Star_Shop#Stock): 1,600 / 2,400 / 240 / 120 stardust. The `shop:sell-price` custom event lets Dusuri supply this rate to the shared shop's displayed refund, Value message and sale payment.
-  - The `shop:can-sell` policy lets her accept her stocked untradeable rewards. Per-item metadata locks still prevent a sale, and other shops keep their existing sale policy.
+  - **Buy-back price:** [80% of the purchase price](https://oldschool.runescape.wiki/w/Dusuri%27s_Star_Shop#Stock): 1,600 / 2,400 / 240 / 120 stardust. The rate comes from her shop's generated data (the Wiki's "Buys at" 80%), which the shared shop applies to the displayed refund, Value message and sale payment, as for the other reward-currency shops.
+  - The shared shop accepts her stocked untradeable rewards, as any shop buying its stock back for its own currency does. Per-item metadata locks still prevent a sale, and other shops keep their existing sale policy.
 
 ## Celestial ring
 
@@ -65,6 +65,15 @@ Like OSRS, it is free-to-play, with half experience on free-to-play worlds, wher
   - **Check** says how many charges it has.
 - **Extra ore:** charged, it gives a 1 in 10 extra ore for rocks up to adamantite (`mining:extra-ore`, in the Mining plugin). A charge is spent for every such ore, whether it procs or not. Crashed stars spend none.
 - The ring's messages aren't captured; the wording is ours.
+
+## Celestial signet
+
+Wiki: https://oldschool.runescape.wiki/w/Celestial_signet (fetched for this change).
+
+- **Same as the ring:** the signet takes stardust (Charge, or stardust used on it), Check and Uncharge, gives the +4 Mining boost, and a charged one gives the 1 in 10 extra ore and spends a charge per qualifying ore, then turns back into the uncharged signet at zero.
+- **Crystal tools:** worn, charged or not, it gives the elven signet's 10% chance of not using a charge, now for the crystal axe and crystal pickaxe as well as the crystal harpoon (see `docs/fishing.md`).
+- **Singing:** using a celestial ring (charged or not) or an elven signet on a singing bowl needs a celestial ring, an elven signet, 1,000 stardust and 100 crystal shards in the inventory and 70 Smithing and 70 Crafting (boostable). After 3 ticks it makes a celestial signet and gives 5,000 Smithing and 5,000 Crafting XP, as the Wiki's creation section lists.
+- **Limits:** Conwenna and Reese singing it for 150 shards below level 70 isn't modelled. The Wiki doesn't say what happens to a charged ring's stardust, so a charged ring keeps its charges in the signet. The singing line and the refusal lines are ours.
 
 ## Clue geodes
 

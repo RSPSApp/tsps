@@ -58,19 +58,27 @@
  *    stages, objects and a private Janus trap scene; the potato sack, knife and
  *    purse are the captured ground pickups. The Enforcer patrol and detection
  *    are simulated from capture 3128; the Tonali agility shortcuts are not.
+ *  - The descent (stage 53) still moves the player straight to the cavern. The
+ *    crypt's lower floors (Strange Tiles here; stairs, ropes and lifts in Ladders
+ *    and LocTeleports) are walkable from then on, and the lift platform activates
+ *    when inspected, as captured at stage 54.
  *  - Post-quest: Itzla's lost-blade repurchase checks the inventory (not the
  *    bank) for the Arkan blade and sells it back for 250,000 coins.
  *
  * Source: OSRS Wiki "The Final Dawn", its quick guide, transcript and journal;
  * every id via scripts/lookup-gameval.ts and the cache definitions.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTheFinalDawnQuest(api) {
   const {
     ActionDialogue,
+    Animation,
     CountdownTask,
     DialogueChainBuilder,
     Equipment,
     GameObject,
+    Graphic,
     Item,
     ItemIdentifiers,
     Location,
@@ -354,6 +362,43 @@ module.exports = function registerTheFinalDawnQuest(api) {
     ["1299,9455,1", [1304, 9446, 2]], ["1304,9446,2", [1299, 9455, 1]],
     ["1323,9443,1", [1316, 9446, 2]], ["1316,9446,2", [1323, 9443, 1]],
   ]);
+  // The crypt's lower floors (#3828): the cache's sun (56669) and moon (56670) Strange Tiles
+  // between floors 0 and 1, each landing on its partner. rsprox_transcripts/232/03128.txt and
+  // 237/01162.txt (stage 54) and 234/03285.txt (after the quest) step on five pairs; the last
+  // sun pair and moon pair are the only tiles of their kind left on each floor.
+  const CRYPT_STRANGE_TILE_PAIRS = [
+    [[1332, 9382, 0], [1328, 9379, 1]],
+    [[1315, 9387, 0], [1319, 9384, 1]],
+    [[1303, 9389, 0], [1298, 9383, 1]],
+    [[1290, 9396, 0], [1293, 9394, 1]],
+    [[1296, 9402, 0], [1292, 9409, 1]],
+    [[1320, 9396, 0], [1325, 9397, 1]],
+    [[1315, 9409, 0], [1322, 9407, 1]],
+  ];
+  const CRYPT_STRANGE_TILE_LINKS = new Map(CRYPT_STRANGE_TILE_PAIRS.flatMap(([a, b]) => [[a.join(","), b], [b.join(","), a]]));
+  // Every Strange Tile: rsprox_transcripts/234/03285.txt moves the player two ticks after they step
+  // on, with vmq4_sun_teleport_spotanim (3342) or vmq4_moon_teleport_spotanim (3344) and sound 4425.
+  // The sun tiles are loc 56669 on the cache's map; the rest are moon tiles (56670).
+  const STRANGE_TILE_DELAY = 2;
+  const STRANGE_TILE_SOUND = 4425;
+  const SUN_TELEPORT_SPOTANIM = 3342;
+  const MOON_TELEPORT_SPOTANIM = 3344;
+  const SUN_STRANGE_TILES = new Set([
+    "1316,9446,2", "1323,9443,1",
+    "1332,9382,0", "1328,9379,1", "1303,9389,0", "1298,9383,1",
+    "1296,9402,0", "1292,9409,1", "1320,9396,0", "1325,9397,1",
+  ]);
+  // The lift between the cavern and the Tlati Rainforest's pit (#3828): Inspect on the
+  // inactive platform turns varbit 16694 on, which shows the Use variant at both ends
+  // (LocTeleports plays the ride). rsprox_transcripts/234/03285.txt and 232/03128.txt: arrive,
+  // human_pickupfloor (827) two ticks later, then the varbit and the message box a tick after.
+  const CRYPT_LIFT_OBJECT = 56647; // vmq4_crypt_lift
+  const LIFT_ACTIVATED_VARBIT = 16694; // vmq4_lift_activated
+  const LIFT_ACTIVATED_ATTRIBUTE = "the-final-dawn:lift-activated";
+  const LIFT_TOUCH_ANIM = 827; // human_pickupfloor
+  const LIFT_TOUCH_SOUND = 9740; // with the touch, 20 client cycles late
+  const CRYPT_EXIT_OBJECT = 56637; // vmq4_crypt_of_tonali_exit
+  const LIFT_ACTIVATED_MESSAGE = "You touch the platform and it seems to activate. It appears to be a lift to the surface.";
   const SAFEHOUSE_PLANT_OBJECT = 56470;
   const SAFEHOUSE_SAND_POT_OBJECT = 56472;
   const SAFEHOUSE_STAIRS_OBJECT = 52630;
@@ -465,7 +510,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
   const MOON_ORDER_VARBIT = 16692; // vmq4_moon_puzzle_order
   // Quest Helper mirrors of captured progress. Only values produced by the
   // plugin's real actions/attributes are sent; route features it does not model
-  // (drawer choice 16666, lift 16694) are left untouched.
+  // (drawer choice 16666) are left untouched.
   const BEER_GIVEN_VARBIT = 16670; // vmq4_teumo_wife_beer_given
   const TEMPLE_DRAW_UNLOCKED_VARBIT = 16667; // vmq4_temple_draw_unlocked
   const SUN_PROGRESS_VARBIT = 16675; // vmq4_sun_puzzle_progress
@@ -592,6 +637,18 @@ module.exports = function registerTheFinalDawnQuest(api) {
 
   function held(player, itemId) {
     return player.getInventory().getAmount(itemId) > 0;
+  }
+
+  /**
+   * The safehouse sack in any fill: farming's Fill, Remove-one and use-potato change Potatoes(3) to another count,
+   * and that sack must still stop the ground one respawning.
+   */
+  function heldPotatoSack(player) {
+    for (let count = 1; count <= 10; count++) {
+      const id = api.core.CacheDefinitions.getObjId(`sack_potato_${count}`);
+      if (id != null && id >= 0 && held(player, id)) return true;
+    }
+    return false;
   }
 
   function freeSlots(player) {
@@ -765,7 +822,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     for (const entry of loot) {
       if (entry.itemId === KNIFE_ITEM && held(player, KNIFE_ITEM)) continue;
       if (entry.itemId === POTATO_SACK_ITEM &&
-        (held(player, POTATO_SACK_ITEM) || held(player, EMPTY_SACK_ITEM))) continue;
+        (heldPotatoSack(player) || held(player, EMPTY_SACK_ITEM))) continue;
       if (entry.itemId === COIN_PURSE_ITEM &&
         (held(player, COIN_PURSE_ITEM) || held(player, EMPTY_COIN_PURSE_ITEM) || held(player, SANDY_COIN_PURSE_ITEM))) continue;
       const tile = new Location(entry.x, entry.y, entry.z);
@@ -907,6 +964,25 @@ module.exports = function registerTheFinalDawnQuest(api) {
     sender.sendVarbit(FINAL_RANUL_VARBIT, flags & BIT_RANUL ? 1 : 0);
     sender.sendVarbit(FINAL_TABLET_VARBIT, flags & BIT_TABLET_ONE ? 1 : 0);
     sender.sendVarbit(FINAL_DOOR_VARBIT, flags & BIT_DOOR ? 1 : 0);
+    sender.sendVarbit(LIFT_ACTIVATED_VARBIT, liftActivated(player) ? 1 : 0);
+  }
+
+  function liftActivated(player) {
+    return Number(player.getAttribute(LIFT_ACTIVATED_ATTRIBUTE)) === 1;
+  }
+
+  /** Runs on the tick after arriving: the touch a tick later, the lift on the tick after that. */
+  function activateLift(player) {
+    Scenes.later(player, 1, () => {
+      player.performAnimation(new Animation(LIFT_TOUCH_ANIM));
+      player.getPacketSender().sendSound(LIFT_TOUCH_SOUND, 1, 20);
+    });
+    Scenes.later(player, 2, () => {
+      if (!player.isRegistered() || liftActivated(player)) return; // logged out, or a second Inspect landed first
+      player.setAttribute(LIFT_ACTIVATED_ATTRIBUTE, 1);
+      player.getPacketSender().sendVarbit(LIFT_ACTIVATED_VARBIT, 1);
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LIFT_ACTIVATED_MESSAGE)));
+    });
   }
 
   function handleBootstrap({ player }) {
@@ -1213,11 +1289,18 @@ module.exports = function registerTheFinalDawnQuest(api) {
     safehouseDoorNpcs.set(player, attached);
   }
 
-  function handleStrangeTileStep({ player }) {
-    const stage = quest.getStage(player);
+  /** Where a Strange Tile takes the player at this stage, or null. */
+  function strangeTileDestination(key, stage) {
+    // The crypt's lower floors are open from the descent on, during the quest and after it.
+    if (CRYPT_STRANGE_TILE_LINKS.has(key)) return stage >= STAGE_DESCEND ? CRYPT_STRANGE_TILE_LINKS.get(key) : null;
     // Sun and moon are both available from stage55; their mandatory Strange-Tile links
     // are what let the player reach the moon room and earn stage60.
-    if (stage < STAGE_CAVERN || stage > STAGE_DOORS) return;
+    if (stage < STAGE_CAVERN || stage > STAGE_DOORS) return null;
+    return STRANGE_TILE_LINKS.get(key) ?? null;
+  }
+
+  function handleStrangeTileStep({ player }) {
+    const stage = quest.getStage(player);
     const location = player.getLocation();
     const key = `${location.getX()},${location.getY()},${location.getZ()}`;
     const landing = strangeTileArrivals.get(player);
@@ -1225,12 +1308,19 @@ module.exports = function registerTheFinalDawnQuest(api) {
       strangeTileArrivals.delete(player);
       return;
     }
-    const destination = STRANGE_TILE_LINKS.get(key);
+    const destination = strangeTileDestination(key, stage);
     if (!destination) return;
-    const [x, y, z] = destination;
-    strangeTileArrivals.set(player, `${x},${y},${z}`);
-    player.getMovementQueue().reset();
-    player.moveTo(new Location(x, y, z));
+    // Two ticks after stepping on, if still there: over to the partner tile with the tile's spotanim and sound.
+    Scenes.later(player, STRANGE_TILE_DELAY, () => {
+      const at = player.getLocation();
+      if (!player.isRegistered() || `${at.getX()},${at.getY()},${at.getZ()}` !== key) return;
+      const [x, y, z] = destination;
+      strangeTileArrivals.set(player, `${x},${y},${z}`);
+      player.getMovementQueue().reset();
+      player.moveTo(new Location(x, y, z));
+      player.performGraphic(new Graphic(SUN_STRANGE_TILES.has(key) ? SUN_TELEPORT_SPOTANIM : MOON_TELEPORT_SPOTANIM));
+      player.getPacketSender().sendSound(STRANGE_TILE_SOUND, 1, 0);
+    });
   }
 
   function handleTeumoBasementEnter({ player }) {
@@ -1538,10 +1628,14 @@ module.exports = function registerTheFinalDawnQuest(api) {
     const { player, itemId, objectId } = event;
     if (objectId === SAFEHOUSE_SAND_POT_OBJECT && itemId === EMPTY_COIN_PURSE_ITEM) {
       event.handled = true;
-      if (quest.getStage(player) !== STAGE_PURSE_OPEN) return;
+      // The sandy purse can be emptied at any stage, so it can be filled again until the blackjack is made.
+      const stage = quest.getStage(player);
+      if (stage < STAGE_PURSE_OPEN || stage > STAGE_TRAP || held(player, MAKESHIFT_BLACKJACK_ITEM)) return;
+      // A second use in the same tick finds the purse already filled: nothing to fill, nothing to add.
+      if (!held(player, EMPTY_COIN_PURSE_ITEM)) return;
       player.getInventory().deleteNumber(EMPTY_COIN_PURSE_ITEM, 1);
       player.getInventory().adds(SANDY_COIN_PURSE_ITEM, 1);
-      setStage(player, STAGE_PURSE_SAND);
+      if (stage === STAGE_PURSE_OPEN) setStage(player, STAGE_PURSE_SAND);
       player.sendMessage("You fill the coin purse with sand from the plant pot.");
       return;
     }
@@ -1623,14 +1717,23 @@ module.exports = function registerTheFinalDawnQuest(api) {
     player.sendMessage("You read the emissary scroll.");
   }
 
+  const POTATOES_PER_SACK = 3;
+
   function emptyPotatoSack(event) {
     const { player, itemId, option } = event;
-    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return;
-    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return;
+    // Outside the quest the sack is a plain Potatoes(3): return false so farming's Empty answers it (a name-based
+    // action that returns anything else counts as handled).
+    if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return false;
+    if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return false;
     event.handled = true;
+    // The empty sack takes the sack's slot; the three potatoes need three more, or they were lost.
+    if (player.getInventory().getFreeSlots() < POTATOES_PER_SACK) {
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
     player.getInventory().deleteNumber(POTATO_SACK_ITEM, 1);
     player.getInventory().adds(EMPTY_SACK_ITEM, 1);
-    player.getInventory().adds(POTATO_ITEM, 3);
+    player.getInventory().adds(POTATO_ITEM, POTATOES_PER_SACK);
     player.sendMessage("You empty the sack of potatoes.");
   }
 
@@ -1947,8 +2050,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
       setBit(player, BIT_TABLET_ONE);
       setBit(player, BIT_TABLET_TWO);
       syncQuestVarbits(player);
-      for (const axis of [0, 1]) player.getPacketSender().sendCameraShake(axis, 4);
-      player.getPacketSender().sendCameraShake(2, 2);
+      for (const axis of [0, 1]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 4);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 2, 2);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       checkRuinsExplored(player);
       return;
@@ -1984,7 +2087,24 @@ module.exports = function registerTheFinalDawnQuest(api) {
       return;
     }
 
+    // The inactive platform's Inspect; once on, its Use is LocTeleports' ride to the surface.
+    if (objectId === CRYPT_LIFT_OBJECT && !liftActivated(player)) {
+      event.handled = true;
+      if (stage >= STAGE_DESCEND) activateLift(player);
+      return;
+    }
+
+    // During the crypt assault the way out is shut: leaving would end the assault's scene, and the
+    // passageway back in is the quest's until the descent.
+    if (objectId === CRYPT_EXIT_OBJECT && stage >= STAGE_CRYPT && stage < STAGE_DESCEND) {
+      event.handled = true;
+      return;
+    }
+
     if (objectId === CRYPT_ENTRY_OBJECT) {
+      // From the descent on, the passageway is the captured way in (LocTeleports, #3828); the
+      // crypt assault before it is the quest's.
+      if (stage >= STAGE_DESCEND) return;
       event.handled = true;
       if (stage === STAGE_CRYPT) {
         cameraBeat(player, [1307, 9358, 470], [1313, 9354, 469], 90);
@@ -2223,7 +2343,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
     }
     if (checkpoint === 2 && locateTileMatches(player, 1373, 9539)) {
       player.sendMessage("The fragment crumbles in your hand and the dust blows towards a nearby wall, causing a symbol to appear.");
-      for (const axis of [0, 1, 2]) player.getPacketSender().sendCameraShake(axis, 5);
+      for (const axis of [0, 1, 2]) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 5);
       Scenes.later(player, 2, () => player.getPacketSender().sendCameraReset());
       player.getInventory().deleteNumber(KEYSTONE_FRAGMENT_ITEM, 1);
       setStage(player, STAGE_SYMBOL);
@@ -2889,6 +3009,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
   api.persistAttribute(TEMPLE_CHEST_SOLVED_ATTRIBUTE, 0);
   api.persistAttribute(WAVE_ATTRIBUTE, 1);
   api.persistAttribute(NEYPOTZLI_CHECKPOINT_ATTRIBUTE, 0);
+  api.persistAttribute(LIFT_ACTIVATED_ATTRIBUTE, 0);
   api.persistAttribute(SAFEHOUSE_ATTRIBUTE);
   api.persistAttribute(TEUMO_INTRO_ATTRIBUTE);
   api.persistAttribute(POST_ATTALA_ATTRIBUTE);
@@ -2948,7 +3069,7 @@ module.exports = function registerTheFinalDawnQuest(api) {
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onCustomEvent("perilous-moons:transport", handlePerilousTransport);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
-  for (const key of STRANGE_TILE_LINKS.keys()) {
+  for (const key of [...STRANGE_TILE_LINKS.keys(), ...CRYPT_STRANGE_TILE_LINKS.keys()]) {
     const [x, y, z] = key.split(",").map(Number);
     api.onZoneEnter({ minX: x, maxX: x, minY: y, maxY: y, levels: [z] }, handleStrangeTileStep);
   }

@@ -11,6 +11,7 @@ function loadCustomNpcSpawns() {
 
 module.exports = {
   name: "NpcSpawns",
+  description: "Registers the NPC spawn list and the map editor's custom spawn patch as definition sources.",
   register(api) {
     api.registerDefinitionSource("npc_spawns", "data/definitions/npc-spawns.json");
     api.registerDefinitionSource("npc_spawns", {

@@ -183,6 +183,19 @@ function handleLogout({ player }) {
   if (match) match.abort("A team member left the arena. The wave is lost.");
 }
 
+/**
+ * The escape crystal in the arena (Wiki: Escape crystal, "Where it works"): leaving loses the wave
+ * for the team, as a logout does, and everyone goes back to the surface. The shared EscapeCrystal
+ * plugin decides when it fires and uses it up (`escape-crystal:escape`).
+ */
+function handleEscapeCrystal(request) {
+  const match = request.handled ? null : matchOf(request.player);
+  if (!match) return;
+  request.handled = true;
+  match.abort("A team member left the arena. The wave is lost.");
+  request.escaped = true;
+}
+
 function handleCanTeleport(event) {
   const match = matchOf(event.player);
   if (!match) return;
@@ -218,12 +231,14 @@ function attach(pluginApi) {
   pluginApi.onPlayerLogout?.(handleLogout);
   pluginApi.onPlayerDisconnect?.(handleLogout);
   pluginApi.onCanTeleport?.(handleCanTeleport);
+  pluginApi.onCustomEvent?.("escape-crystal:escape", handleEscapeCrystal);
   pluginApi.onCanTrade?.(handleCanTrade);
   pluginApi.registerRangedAmmoHandler?.(Items.rangedAmmoHandler);
 }
 
 module.exports = {
   name: "BarbarianAssault",
+  description: "Runs Barbarian Assault: Commander Connad, the Outpost ladder, role assignment and the nine waves plus the final Queen wave in private arenas.",
   members: true,
   // Our role-aware Honour Points handler must replace Shopkeepers' generic one.
   dependsOn: ["Shopkeepers"],

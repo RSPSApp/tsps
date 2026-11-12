@@ -14,7 +14,8 @@
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
- * that box. "npc-dialogue:start" plays a named variant on demand
+ * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
+ * plays, then continue normally or, with `box.advance`, move on by itself. "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -22,8 +23,12 @@
 const fs = require("fs");
 const path = require("path");
 const { isDeepStrictEqual } = require("node:util");
+/** successor id -> the retired id whose transcript it plays until it has its own (data/retired-npcs.json). */
+const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").successors)
+  .map(([retired, successor]) => [successor.id, Number(retired)]));
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
@@ -440,6 +445,33 @@ function nestOrphanConditions(steps) {
   });
 }
 
+/**
+ * The quest start warning ("Before starting this quest, be aware that your combat level is
+ * lower than the recommended level of N") sits under this exact wiki condition. Plugins that
+ * need other wording answer their own conditions first; this only settles the bare form.
+ */
+function combatLevelCondition(player, text) {
+  const match = /^If the player's combat level is lower than (\d+):$/.exec(String(text ?? ""));
+  return match ? player.getSkillManager().getCombatLevel() < Number(match[1]) : null;
+}
+
+/**
+ * The transcripts' bare skill-level wording, "If the player has at least 46 Hunter:" and its
+ * siblings "under 46 Hunter" / "less than 60 Smithing", answered from the player's base level in
+ * that skill: the Wiki marks these not boostable (Hunter Guild, Blast Furnace), as Rumours.Hunter.js
+ * and AtFirstLight.Quest.js read them. A plugin answers a boostable one first (Adventurer Ada's Sailing).
+ * Unanswered, a sibling run took its first branch whatever the level, so
+ * Pellem and Imia refused every player (issue #4434). Plugins answer their own conditions first.
+ */
+function skillLevelCondition(player, text) {
+  const match = /^If the player has (at least|under|less than) (\d+) ([A-Z][a-z]+):$/.exec(String(text ?? ""));
+  if (!match) return null;
+  const skill = Skill.values().find((entry) => entry.getName().toLowerCase() === match[3].toLowerCase());
+  if (!skill) return null;
+  const level = player.getSkillManager().getMaxLevel(skill);
+  return match[1] === "at least" ? level >= Number(match[2]) : level < Number(match[2]);
+}
+
 /** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
 function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
@@ -488,7 +520,7 @@ function flatten(steps, opts = {}) {
       }
       // { menu }: "shows other/previous/initial options" - replay a menu already seen.
       if (target && typeof target === "object" && target.menu) {
-        out.push({ type: "gomenu", menu: target.menu });
+        out.push({ type: "gomenu", menu: target.menu, ...(target.via ? { via: target.via } : {}) });
         continue;
       }
       // Expanded when the conversation reaches it (startDialogue's run), so its conditions see
@@ -526,6 +558,14 @@ function flatten(steps, opts = {}) {
  * `step.shops` ("Ned's Handmade Rope (100% Wool) (Default)", "... (Fremennik Isles)");
  * "npc-dialogue:shop" lets a plugin pick one by game state, else the Default version opens.
  */
+/** Four 53-character lines a page: the layout before ChatTextLayout, for a core without it. */
+function characterPages(text) {
+  const lines = Misc.wrapText(text, 53);
+  const pages = [];
+  for (let start = 0; start < lines.length; start += 4) pages.push(lines.slice(start, start + 4).join(" "));
+  return pages;
+}
+
 function shopName(api, player, npcId, step) {
   if (!Array.isArray(step.shops)) return step.target;
   const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
@@ -592,7 +632,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     PluginManager.emitNpcDialogueCondition({
       player, npc: event.npc, npcId, definition, pages: context.pages,
       text: step.text, stepId: step.id,
-    });
+    }) ?? combatLevelCondition(player, step.text) ?? skillLevelCondition(player, step.text);
 
   // "shows other/previous/initial options" ({{tact|other}} etc.) replays a menu
   // that has already been shown. "previous2/3" walk further back, "initial" is
@@ -600,7 +640,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
   const resolveMenuJump = (reference) => {
     const current = context.currentMenu;
     const history = context.menuHistory;
-    if (/^other/i.test(reference)) return current ? { menu: current } : "end";
+    if (/^other/i.test(reference)) return current ? { menu: current, via: "other" } : "end";
     if (/^initial/i.test(reference)) return history[0] || context.pageInitialMenu
       ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
@@ -725,11 +765,20 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
   const flattenOptions = () => ({ resolveCondition, resolveJump, lazyConditions: true,
     wrapBranch: (chosen, branch) => [{ type: "condition_chosen", id: chosen.id, text: chosen.text }, ...branch] });
 
-  function presentMenu(menu, offset = 0, tail = []) {
+  /**
+   * `via` is how a menu jump reached it ("other" for "shows other options"). A plugin's
+   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`), or
+   * replace `options` with option nodes from this or an earlier menu (`history`), given the option
+   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again.
+   */
+  function presentMenu(menu, offset = 0, tail = [], via = null) {
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
-    const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
+    const notice = {
+      player, npcId, definition, prompt: step.prompt || "Select an option", warning: null,
+      options: step.options || [], history: context.menuHistory, via, chosen: context.lastChoice ?? null,
+    };
     api.emitCustomEvent("npc-dialogue:menu", notice);
     // A plugin asked the question itself.
     if (notice.handled) return;
@@ -738,13 +787,17 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       warned.add(step);
       startChain(new DialogueChainBuilder()
         .add(new api.core.StatementDialogue(0, String(notice.warning)))
-        .add(new ActionDialogue(1, { execute: () => presentMenu(menu, offset, tail) })));
+        .add(new ActionDialogue(1, { execute: () => presentMenu(menu, offset, tail, via) })));
       return;
     }
     if (!context.menuHistory.includes(menu)) context.menuHistory.push(menu);
     // An option the wiki guards ("If the player is wearing the Ring of Charos(a):") is hidden
     // only once a plugin answers its condition false; unanswered ones still show.
-    const options = (step.options || []).filter((option) =>
+    const offered = Array.isArray(notice.options) ? notice.options : (step.options || []);
+    // An option borrowed from an earlier menu continues as it did there, with that menu's own steps.
+    const ownMenu = (option) => (step.options || []).includes(option) ? menu
+      : context.menuHistory.find((shown) => (shown.step?.options || []).includes(option)) ?? menu;
+    const options = offered.filter((option) =>
       !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
     const more = options.length - offset > 5;
     const visible = options.slice(offset, offset + (more ? 4 : 5));
@@ -761,6 +814,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         || "Continue.";
       return [label, () => {
         if (cancelled) return;
+        // The guard was answered when the menu was drawn; worn gear can come off while it stays open (a ring of
+        // charos(a) for a [Charm] option), so ask again and draw the menu afresh if it no longer holds.
+        if (option.condition && resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) === false) {
+          presentMenu(menu, offset, tail);
+          return;
+        }
         // Quest-gated choices carry a slug like "quest:cook-s-assistant:start";
         // let the owning quest run its action, then play the branch.
         if (option.hook) {
@@ -772,11 +831,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
-        context.currentMenu = menu;
-        run([...(option.steps || []), ...rest, ...tail], recordOption(option));
+        const own = ownMenu(option);
+        context.currentMenu = own;
+        context.lastChoice = option.text;
+        run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
       }];
     });
-    if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail));
+    if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));
     if (visible.length === 1) pairs.push("Goodbye.", close);
     // A parsed menu with no options is a wiki-export gap; continue the branch
     // instead of silently closing the chat.
@@ -850,7 +911,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         if (next && next.type === "choice") {
           continue;
         }
-        chain.add(new ActionDialogue(index++, { execute: () => presentMenu(step.menu) }));
+        chain.add(new ActionDialogue(index++, { execute: () => presentMenu(step.menu, 0, [], step.via ?? null) }));
         startChain(chain);
         return;
       }
@@ -935,7 +996,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return;
         }
         playedAny = true;
-        const lines = Misc.wrapText(formatted, 53);
+        // Pages as the chatbox holds them: four lines of font 497 in 380 pixels (ChatTextLayout).
+        const pages = api.core?.ChatTextLayout?.pages(formatted) ?? characterPages(formatted);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
@@ -965,8 +1027,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           : undefined;
         if (hold) chain.add(hold);
         let held;
-        for (let start = 0; start < lines.length; start += 4) {
-          const text = lines.slice(start, start + 4).join(" ");
+        for (const text of pages) {
           const dialogue = isPlayer
             ? new PlayerDialogue(index++, text, expression)
             : new NpcDialogue(index++, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
@@ -1019,12 +1080,29 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           if (first !== undefined || message.box?.statement === true) {
             const text = formatPlayerText(String(message.text ?? ""), player);
             const box = new DialogueChainBuilder();
-            box.add(message.box?.statement === true
-              ? new api.core.StatementDialogue(0, text)
-              : second === undefined
-                ? new ItemStatementDialogue(0, first, text)
-                : new DoubleItemStatementDialogue(0, first, second, text));
-            box.add(new ActionDialogue(1, { execute: () => {
+            // `box.holdTicks` (statement boxes): the box first shows that many ticks without
+            // "Click here to continue" while a scene plays out, as live sends it; then it gains
+            // its continue, or with `box.advance` the conversation moves on by itself.
+            const holdTicks = message.box?.statement === true && Number.isInteger(message.box.holdTicks)
+              && message.box.holdTicks > 0 ? message.box.holdTicks : 0;
+            let boxIndex = 0;
+            if (holdTicks) {
+              const held = new ActionDialogue(boxIndex++, { execute: () => {
+                presentOwned(() => api.core.StatementDialogue.send(player, text, false));
+                api.core.TaskManager.submit(new api.core.CountdownTask(player, holdTicks, () => {
+                  if (manager.getCurrent?.() === held) manager.advance();
+                }));
+              } }, true);
+              box.add(held);
+            }
+            if (!holdTicks || message.box.advance !== true) {
+              box.add(message.box?.statement === true
+                ? new api.core.StatementDialogue(boxIndex++, text)
+                : second === undefined
+                  ? new ItemStatementDialogue(boxIndex++, first, text)
+                  : new DoubleItemStatementDialogue(boxIndex++, first, second, text));
+            }
+            box.add(new ActionDialogue(boxIndex, { execute: () => {
               message.after?.();
               run(rest, currentRecord);
             } }));
@@ -1112,10 +1190,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
 module.exports = {
   name: "NpcDialogues",
+  description: "Plays Talk-to dialogue transcripts for NPCs from the generated dialogue data, with hooks so quests can alter lines, choices and conditions.",
   // Shared by quest transcript playback and dialogue regressions.
   pickVariant,
   aliasKeys,
   flatten,
+  combatLevelCondition,
+  skillLevelCondition,
   formatPlayerText,
   startDialogue,
   collectPageLines,
@@ -1179,8 +1260,10 @@ module.exports = {
     const resolveTranscript = (event) => {
       const { data, aliases, index, speakerIdByName } = load();
       const npcId = event.npcId;
-      // A transform the index doesn't know (Dr Harlow 16277) falls back to the spawned parent (3480).
-      const entries = [npcId, event.npc?.getId?.()].map((id) => index[String(id)]).find(Array.isArray) ?? [];
+      // A transform the index doesn't know (Dr Harlow 16277) falls back to the spawned parent (3480),
+      // and a successor of a retired NPC (Captain Harlan 16821) to the NPC it replaced (3216).
+      const entries = [npcId, event.npc?.getId?.(), PREDECESSOR.get(npcId)]
+        .map((id) => index[String(id)]).find(Array.isArray) ?? [];
       const pages = entries
         .map((entry) => ({ page: String(entry.page ?? "").replace(/^Transcript:/, ""), variants: Array.isArray(entry.variants) ? entry.variants : [] }))
         .filter((entry) => Object.hasOwn(data, entry.page));

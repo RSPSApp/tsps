@@ -1040,6 +1040,7 @@ export function collectWidgetsWithKeyHandlers(
     root: any,
     visible: Map<number, boolean>,
     getStaticChildren?: (uid: number) => any[],
+    hasHandler: (w: any) => boolean = (w) => !!(w.eventHandlers?.onKey || w.onKey),
 ): any[] {
     const hits: any[] = [];
     const visit = (w: any, ox: number, oy: number) => {
@@ -1049,8 +1050,8 @@ export function collectWidgetsWithKeyHandlers(
         if (!selfVisible) return;
         const x = ox + ((w.x as number) | 0);
         const y = oy + ((w.y as number) | 0);
-        // Check for onKey handler
-        if (w.eventHandlers?.onKey || w.onKey) {
+        // Check for a key handler (onKey unless the caller asks for another)
+        if (hasHandler(w)) {
             // Store absolute position for event coordinate calculation
             w._absX = x;
             w._absY = y;

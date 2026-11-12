@@ -58,6 +58,7 @@ const api = {
   onItemAction() {},
   onItemOnItem() {},
   onObjectInteraction() {},
+  onPlayerLogin() {},
   onCanUseItem(handler) { handlers.set("can-use-item", [handler]); },
   onPlayerLogout(handler) { handlers.set("logout", [handler]); },
   onPlayerDisconnect(handler) { handlers.set("disconnect", [handler]); },
@@ -648,4 +649,123 @@ test("loss of skilling ownership cancels burial without resetting another action
   assert.equal(who.xp.get(Skill.PRAYER), undefined);
   assert.equal(who.getSkill(), other);
   assert.equal(who.animations.length, count);
+});
+
+test("a refused inventory wield interrupts an altar offering and the player can offer again", async (t) => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { EquipmentRequirements } = require("../dist/game/model/equipment/EquipmentRequirements");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const core = PluginManager.getCoreApi();
+  let player = null;
+  t.after(() => {
+    let cleanupError = null;
+    try {
+      if (player) {
+        PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+        PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+        player.setRegistered(false);
+        core.TaskManager.cancelTasks(player.getIndex());
+        core.TaskManager.cancelTasks(player);
+        assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+        assert.equal(core.TaskManager.hasActiveTask(player), false);
+      }
+    } catch (error) {
+      cleanupError = error;
+      throw error;
+    } finally {
+      try {
+        PluginManager.emitServerShutdown({});
+      } catch (error) {
+        if (!cleanupError) throw error;
+        cleanupError.shutdownError = error;
+      }
+    }
+  });
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2947, 3820);
+  PluginManager.emitServerStartup({});
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  player = new Player(new PlayerSession(channel));
+  player.setIndex(1785);
+  player.setUsername("prayerwieldrefusal");
+  player.setRegistered(true);
+  player.setLocation(new core.Location(2946, 3820, 0));
+  player.needsPlacement = false;
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  const skills = player.getSkillManager();
+  skills.setCurrentLevel(core.Skill.PRAYER, 99, false).setMaxLevels(core.Skill.PRAYER, 99, false);
+  skills.setExperience(core.Skill.PRAYER, core.SkillManager.getExperienceForLevel(99));
+  skills.setCurrentLevel(core.Skill.ATTACK, 1, false).setMaxLevels(core.Skill.ATTACK, 1, false);
+  const bones = CacheDefinitions.getObjId("bones");
+  const runeSword = CacheDefinitions.getObjId("rune_sword");
+  const bronzeSword = CacheDefinitions.getObjId("bronze_sword");
+  const altarId = CacheDefinitions.getLocId("chaosaltar");
+  assert.deepEqual(EquipmentRequirements.getUnmet(player, ItemDefinition.forId(runeSword)), { label: "Attack", level: 40 });
+  assert.equal(CacheDefinitions.getItem(runeSword).inventoryActions.includes("Wield"), true);
+  assert.equal(CacheDefinitions.getItem(bronzeSword).inventoryActions.includes("Wield"), true);
+  for (let i = 0; i < 8; i++) player.getInventory().add(new core.Item(bones, 1), false);
+  player.getInventory().add(new core.Item(runeSword, 1), false);
+  player.getInventory().add(new core.Item(bronzeSword, 1), false);
+  const location = new core.Location(2947, 3820, 0);
+  assert.ok(core.MapObjects.getPrivateArea(player, altarId, location), "active map supplies the altar");
+  const gains = [], messages = [];
+  const add = skills.addExperiences.bind(skills);
+  t.mock.method(skills, "addExperiences", (skill, amount) => {
+    if (skill === core.Skill.PRAYER) gains.push(amount);
+    return add(skill, amount);
+  });
+  const send = player.sendMessage.bind(player);
+  t.mock.method(player, "sendMessage", (message) => { messages.push(message); return send(message); });
+  let turns = 0;
+  const turn = () => {
+    assert.ok(++turns <= 30, "bounded selected engine turns");
+    player.resetUpdating();
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    core.TaskManager.process();
+    connection.processTurnPackets();
+    const movement = player.getMovementQueue();
+    movement.beginCycle();
+    movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process();
+    core.TaskManager.processWalkTo(player.getIndex());
+  };
+  const offer = () => connection.dispatch([{ type: "item_on_object", objectId: altarId, x: 2947, y: 3820,
+    itemId: bones, slot: player.getInventory().getSlotForItemId(bones), widgetId: 149 << 16 }]);
+  const wield = (id) => connection.dispatch([{ type: "inventory_action", widgetId: 149 << 16,
+    itemId: id, slot: player.getInventory().getSlotForItemId(id), option: "Wield",
+    optionIndex: CacheDefinitions.getItem(id).inventoryActions.indexOf("Wield") + 1 }]);
+  await offer();
+  for (let i = 0; i < 8 && gains.length === 0; i++) turn();
+  assert.deepEqual(gains, [15.75], "ordinary use starts an offering");
+  assert.ok(core.TaskManager.hasActiveTask(player.getIndex()), "repeat is live");
+  const before = player.getInventory().getAmount(bones);
+  const oldWeapon = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId();
+  await wield(runeSword);
+  turn();
+  assert.ok(messages.includes("You need an Attack level of at least 40 to wear this."), "real requirement refusal is sent");
+  assert.equal(player.getInventory().getAmount(runeSword), 1, "refused sword remains carried");
+  assert.equal(player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), oldWeapon, "equipment is unchanged");
+  assert.equal(player.getInventory().getAmount(bones), before, "refusal does not consume a bone");
+  for (let i = 0; i < 5; i++) turn();
+  // The inventory hard-interruption rule is applied to a refused Wield as an inference.
+  assert.deepEqual(gains, [15.75], "the inventory interaction interrupts the offering");
+  assert.equal(player.getInventory().getAmount(bones), before, "the stopped offering preserves bones");
+  await wield(bronzeSword);
+  turn();
+  assert.equal(player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), bronzeSword, "a later ordinary wield succeeds");
+  assert.equal(player.getInventory().getAmount(bronzeSword), 0);
+  assert.equal(player.getInventory().getAmount(runeSword), 1);
+  await offer();
+  for (let i = 0; i < 8 && gains.length === 1; i++) turn();
+  assert.deepEqual(gains, [15.75, 15.75], "a new ordinary offering starts");
+  const resumed = player.getInventory().getAmount(bones);
+  for (let i = 0; i < 4; i++) turn();
+  assert.deepEqual(gains, [15.75, 15.75, 15.75], "the new offering repeats once at the usual cadence");
+  assert.ok([resumed - 1, resumed].includes(player.getInventory().getAmount(bones)));
 });

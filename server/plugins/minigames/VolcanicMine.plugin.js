@@ -10,6 +10,7 @@ const Capacity = require("./volcanicmine/Capacity.VolcanicMine");
 
 module.exports = {
   name: "VolcanicMine",
+  description: "Adds the Volcanic Mine on Fossil Island: Petrified Pete, vents, gas, lava, the boulder, hazards and the reward on exit.",
   members: true,
   register(api) {
     Common.init(api);

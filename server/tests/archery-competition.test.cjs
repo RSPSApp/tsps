@@ -17,6 +17,7 @@ const ItemIds = CORE.ItemIdentifiers;
 
 let installedCore;
 let projectileSends;
+let targetRoute;
 
 function install() {
   const core = { ...CORE };
@@ -26,9 +27,9 @@ function install() {
     createProjectile: (...args) => ({ sendProjectile: () => projectileSends.push(args) }),
   };
   Session._test.reset();
-  Session._test.init({ core });
-  Judge._test.init({ core });
-  Targets._test.init({ core });
+  Session._test.init({ core, emitCustomEvent() {} });
+  Judge._test.init({ core, emitCustomEvent() {} });
+  Targets({ core, onObjectInteraction() {}, onObjectRoute: (handler) => { targetRoute = handler; } });
   return core;
 }
 
@@ -226,6 +227,18 @@ test("Fire-at shoots an arrow with the ranged animation and a projectile at the 
   assert.equal(p.animationIds.length, 1, "another Target object is ignored");
 });
 
+test("Fire-at before entering handles the click without walking toward the target", () => {
+  const p = player({});
+  const route = { player: p, objectId: CORE.ObjectIdentifiers.TARGET_2, destination: null };
+  targetRoute(route);
+  assert.deepEqual(route.destination, { x: 2679, y: 3426, z: 0 });
+
+  Session.startRound(p);
+  route.destination = null;
+  targetRoute(route);
+  assert.equal(route.destination, null, "active rounds still walk to the targets");
+});
+
 test("the judge refuses under 40 Ranged", () => {
   const low = player({ ranged: 30 });
   Judge._test.talkTo({ player: low });
@@ -249,7 +262,7 @@ test("the judge's finishing dialogue pays once and offers the replay", () => {
 test("starting without 200 coins is refused with the wiki lines", () => {
   const p = player({ coins: 0 });
   Judge._test.talkTo({ player: p });
-  chooseOption(p, 0);
+  chooseOption(p, 1); // the one-based choice native resumes carry: "Sure, I'll give it a go."
   const texts = dialogueTexts(p);
   assert.ok(texts.includes("Oops, I don't have enough coins on me..."));
   assert.ok(texts.includes("Never mind, come back when you've got enough."));

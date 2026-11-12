@@ -120,7 +120,8 @@ function setup({ tasteOfHope = false } = {}) {
     deleteNumber(id, amount) { items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)); },
     isFull: () => freeSlots <= 0,
     getFreeSlots: () => freeSlots,
-    forceAdd(id, amount) { items.set(id, (items.get(id) ?? 0) + amount); },
+    // The real signature: forceAdd(player, item).
+    forceAdd(player, item) { const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1; items.set(id, (items.get(id) ?? 0) + amount); },
   };
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },

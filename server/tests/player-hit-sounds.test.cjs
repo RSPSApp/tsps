@@ -54,7 +54,31 @@ function fixture(t,options={}){
 const hurt = (id=518)=>encodeSound(id,{loops:1,delay:20});
 const legacy = id=>encodeSound(id,{loops:1,delay:0});
 
-test('NPC body0 positive health loss emits one recorded variant to nearby listeners at application',t=>{
+test('an unrelated observer hears no hurt voice from nearby NPC combat, including bot targets',t=>{
+  const f=fixture(t,{gender:1}),observer=actor(t);
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[hurt(509)],'the damaged player retains the voice');
+  assert.deepEqual(f.spectator.frames,[],'an unrelated player retains no private voice');
+  assert.deepEqual(observer.frames,[],'another player at the same tile receives no voice');
+  f.p.setPlayerBot(true);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(observer.frames,[],'a neighbouring bot fight must not add full-volume hurt synths');
+});
+
+test('a positive NPC hit nearby does not give a zero-hit observer a hurt voice',t=>{
+  const f=fixture(t),observer=actor(t);
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  const zero=new c.PendingHit(f.attacker,observer.p,method,{damage:0,rollAccuracy:false,experience:false,handleAfterHitEffects:false});
+  c.CombatFactory.executeHit(zero);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  observer.p.getCombat().getHitQueue().process(c.World.processCycle);
+  assert.equal(observer.p.getHitpoints(),50);
+  assert.deepEqual(observer.frames,[legacy(511)],'only their own block plays, not a voice from another target');
+  assert.deepEqual(f.frames,[hurt()],'the genuine positive hit still speaks');
+});
+
+test('NPC body0 positive health loss emits one private variant to the damaged player at application',t=>{
   const f=fixture(t);t.mock.method(Math,'random',()=>0);
   c.CombatFactory.executeHit(f.hit());
   assert.deepEqual(f.frames,[],'no premature513 and no hurt sound before actual HP loss');
@@ -62,20 +86,20 @@ test('NPC body0 positive health loss emits one recorded variant to nearby listen
   f.tick();
   assert.equal(f.p.getHitpoints(),45);
   assert.deepEqual(f.frames,[hurt()]);
-  assert.deepEqual(f.spectator.frames,[hurt()],'nearby listeners receive their own private synth packet');
+  assert.deepEqual(f.spectator.frames,[]);
 });
 test('all four recorded variants are selected without asserting native probability weights',t=>{
   const f=fixture(t);let roll=0;
   t.mock.method(Math,'random',()=>roll);
   for(const value of [0,0.25,0.5,0.999]){roll=value;c.CombatFactory.executeHit(f.hit([1]));f.tick();}
   assert.deepEqual(f.frames,[518,519,520,521].map(hurt));
-  assert.deepEqual(f.spectator.frames,[518,519,520,521].map(hurt));
+  assert.deepEqual(f.spectator.frames,[]);
 });
 test('guaranteed positive ordinary damage on an inaccurate roll still follows actual health loss',t=>{
   const f=fixture(t);t.mock.method(Math,'random',()=>0);
   const hit=f.hit();t.mock.method(hit,'isAccurate',()=>false);
   c.CombatFactory.executeHit(hit);f.tick();
-  assert.equal(f.p.getHitpoints(),45);assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.equal(f.p.getHitpoints(),45);assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[]);
 });
 test('final mitigation to zero produces no hurt sound, while a resolved zero retains block511',t=>{
   const f=fixture(t);
@@ -95,14 +119,14 @@ test('delayed multipart damage waits through a real hit-queue stall and speaks p
   let hold=-1;t.mock.method(f.p.getCombat(),'getIncomingHitCycle',()=>hold);
   const hit=f.hit([1,2,3]);t.mock.method(hit,'getHitDelays',()=>[0,2,4]);
   c.CombatFactory.executeHit(hit);f.tick();
-  assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[hurt()]);assert.equal(f.p.getHitpoints(),49);
+  assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[]);assert.equal(f.p.getHitpoints(),49);
   hold=c.World.processCycle+5;
   for(let i=0;i<4;i++)f.tick();
   assert.equal(f.p.getHitpoints(),49);assert.deepEqual(f.frames,[hurt()],'later parts remain silent while stalled');
-  assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.deepEqual(f.spectator.frames,[]);
   f.tick();
   assert.equal(f.p.getHitpoints(),44);assert.deepEqual(f.frames,[hurt(),hurt(),hurt()]);
-  assert.deepEqual(f.spectator.frames,[hurt(),hurt(),hurt()]);
+  assert.deepEqual(f.spectator.frames,[]);
 });
 test('multiple pending ordinary hits emit only when released, one per applied positive splat',t=>{
   const f=fixture(t);t.mock.method(Math,'random',()=>0);
@@ -111,19 +135,19 @@ test('multiple pending ordinary hits emit only when released, one per applied po
   f.p.getCombat().getHitQueue().addPendingHit(f.hit([3]),c.World.processCycle+1);
   f.tick();f.tick();assert.deepEqual(f.frames,[]);
   f.tick();assert.equal(f.p.getHitpoints(),45);assert.deepEqual(f.frames,[hurt(),hurt()]);
-  assert.deepEqual(f.spectator.frames,[hurt(),hurt()]);
+  assert.deepEqual(f.spectator.frames,[]);
 });
 test('HP cap suppresses later overkill parts and preserves actual loss before reactive healing',t=>{
   const f=fixture(t);t.mock.method(Math,'random',()=>0);
   const hit=f.hit([4,4]);f.p.setHitpoints(2);
   c.CombatFactory.executeHit(hit);f.tick();
-  assert.equal(f.p.getHitpoints(),0);assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.equal(f.p.getHitpoints(),0);assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[]);
   const g=fixture(t);
   g.p.setLocation(new c.Location(3322,3218));g.spectator.p.setLocation(new c.Location(3322,3218));
   const h=g.hit([4]);h.getHits()[0].onApplied(()=>g.p.setHitpoints(50));
   c.CombatFactory.executeHit(h);g.tick();
   assert.equal(g.p.getHitpoints(),50);assert.deepEqual(g.frames,[hurt()],'reactive healing does not erase the observed actual loss');
-  assert.deepEqual(g.spectator.frames,[hurt()]);
+  assert.deepEqual(g.spectator.frames,[]);
 });
 test('poison, recoil and nonordinary mask damage do not acquire ordinary hurt audio',t=>{
   const f=fixture(t);
@@ -137,12 +161,12 @@ test('poison, recoil and nonordinary mask damage do not acquire ordinary hurt au
   }
   assert.deepEqual(f.frames,[]);
 });
-test('body1 hits use recorded 509 and 510 variants for nearby listeners',t=>{
+test('body1 hits use recorded 509 and 510 variants privately',t=>{
   const f=fixture(t,{gender:1});let roll=0;
   t.mock.method(Math,'random',()=>roll);
   for(const value of [0,0.999]){roll=value;c.CombatFactory.executeHit(f.hit([1]));f.tick();}
   assert.deepEqual(f.frames,[hurt(509),hurt(510)]);
-  assert.deepEqual(f.spectator.frames,[hurt(509),hurt(510)]);
+  assert.deepEqual(f.spectator.frames,[]);
 });
 test('PvP hurt packets go to both participants with an independent body0 variant per client',t=>{
   const f=fixture(t,{pvp:true});const rolls=[0,3];
@@ -158,6 +182,34 @@ test('body1 PvP hits use the recorded body1 variants for both participants',t=>{
   c.CombatFactory.executeHit(f.hit());f.tick();
   assert.deepEqual(f.frames,[hurt(509)]);assert.deepEqual(f.spectator.frames,[hurt(509)]);
 });
+
+test('PvP hurt voices reach the two hit participants without full-volume spectator noise',t=>{
+  const f=fixture(t,{gender:1,pvp:true}),near=actor(t),edge=actor(t);
+  edge.p.setLocation(new c.Location(3237,3218));
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[hurt(509)],'the victim keeps the recorded voice');
+  assert.deepEqual(f.spectator.frames,[hurt(509)],'the attacker keeps a private voice');
+  assert.deepEqual(near.frames,[],'an unrelated player on the same tile gets no private hurt synth');
+  assert.deepEqual(edge.frames,[],'a fight fifteen tiles away does not sound like local damage');
+  f.p.setPlayerBot(true);f.frames.length=0;f.spectator.frames.length=0;
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[],'bot recipients remain suppressed');
+  assert.deepEqual(f.spectator.frames,[hurt(509)],'a human attacker still hears a bot victim');
+  assert.deepEqual(near.frames,[]);
+});
+
+test('delayed PvP voices retain their actual attacker after combat target changes',t=>{
+  const f=fixture(t,{pvp:true}),other=actor(t);
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  const hit=f.hit([3]);t.mock.method(hit,'getHitDelays',()=>[2]);
+  c.CombatFactory.executeHit(hit);
+  f.p.getCombat().setTarget(other.p);f.attacker.getCombat().setTarget(other.p);
+  f.tick();f.tick();f.tick();
+  assert.equal(f.p.getHitpoints(),47);
+  assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.deepEqual(other.frames,[],'switching current targets cannot change a pending hit\'s listeners');
+});
 test('NPC-morphed players preserve the legacy fallback and block sound',t=>{
   const f=fixture(t,{morph:true});
   c.CombatFactory.executeHit(f.hit([2,3]));
@@ -170,24 +222,48 @@ test('physical body rather than pronouns selects the captured PvM voice group',t
   const f=fixture(t);t.mock.method(Math,'random',()=>0);
   f.p.getAppearance().setPronouns(1);
   c.CombatFactory.executeHit(f.hit());f.tick();assert.deepEqual(f.frames,[hurt()]);
-  assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.deepEqual(f.spectator.frames,[]);
 });
 for(const change of ['body','morph']){
   test('delayed applied damage stops using the recorded group after a '+change+' change',t=>{
     const f=fixture(t);t.mock.method(Math,'random',()=>0);
     const hit=f.hit([1,2]);t.mock.method(hit,'getHitDelays',()=>[0,3]);
     c.CombatFactory.executeHit(hit);f.tick();assert.deepEqual(f.frames,[hurt()]);
-    assert.deepEqual(f.spectator.frames,[hurt()]);
+    assert.deepEqual(f.spectator.frames,[]);
     if(change==='body')f.p.getAppearance().setLook(c.Appearance.GENDER,1);
     else f.p.setNpcTransformationId(c.NpcIdentifiers.MAN);
     f.tick();f.tick();
     assert.equal(f.p.getHitpoints(),47);
     assert.deepEqual(f.frames,change==='body'?[hurt(),hurt(509)]:[hurt()]);
-    assert.deepEqual(f.spectator.frames,change==='body'?[hurt(),hurt(509)]:[hurt()]);
+    assert.deepEqual(f.spectator.frames,[]);
   });
 }
 test('bot recipients remain suppressed for both recorded and legacy hurt sounds',t=>{
   const f=fixture(t,{bot:true});t.mock.method(c.Misc,'getRandom',()=>0);
   c.CombatFactory.executeHit(f.hit());f.tick();assert.deepEqual(f.frames,[]);
-  assert.deepEqual(f.spectator.frames,[hurt()],'network listeners can hear a nearby bot target');
+  assert.deepEqual(f.spectator.frames,[],'an unrelated listener does not hear an NPC attacking a bot');
+});
+
+test('the Hit sounds setting picks the voice: Type A is the body0 set, Type B the body1 set, whatever the body',t=>{
+  const api=PluginManager.createApi('HitSoundsSettingTest');
+  const choose=(player,option)=>{const request={player,settingId:382,option,handled:false};api.emitCustomEvent('settings:option-chosen',request);return request.handled;};
+  const f=fixture(t);t.mock.method(c.Misc,'getRandom',()=>0);
+  assert.equal(choose(f.p,1),true,'the plugin owns row 382');
+  assert.equal(f.p.getPacketSender().getVarbit(10731),1);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[hurt(509)],'a body0 player on Type B hears the body1 voice');
+  const g=fixture(t,{gender:1});
+  assert.equal(choose(g.p,0),true);
+  c.CombatFactory.executeHit(g.hit());g.tick();
+  assert.deepEqual(g.frames,[hurt(518)],'a body1 player on Type A hears the body0 voice');
+  assert.equal(choose(g.p,2),false,'only the two options');
+});
+
+test('until the player chooses, Hit sounds follows the body type',t=>{
+  const Plugin=require('../plugins/combat/PlayerHitSounds.plugin');
+  const male=actor(t),female=actor(t,1);
+  assert.equal(Plugin.hitSoundsType(male.p),0);
+  assert.equal(Plugin.hitSoundsType(female.p),1);
+  female.p.setAttribute('hit-sounds:type',0);
+  assert.equal(Plugin.hitSoundsType(female.p),0,'a choice wins over the body type');
 });

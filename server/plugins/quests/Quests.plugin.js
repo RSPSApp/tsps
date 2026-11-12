@@ -109,25 +109,40 @@ function forPlayers(api) {
   });
 }
 
+let itemIds = null;
+
+/** Watchtower's members-only ground spawns: the death rune and the two cave nightshades. */
+function watchtowerGroundItems() {
+  const { CAVE_NIGHTSHADE, DEATH_RUNE } = itemIds;
+  return [
+    { id: DEATH_RUNE, location: { x: 2500, y: 2967, z: 0 }, amt: 1, respawn: 200 },
+    { id: CAVE_NIGHTSHADE, location: { x: 2528, y: 9415, z: 0 }, amt: 1, respawn: 100 },
+    { id: CAVE_NIGHTSHADE, location: { x: 2530, y: 9462, z: 0 }, amt: 1, respawn: 100 },
+  ];
+}
+
+function registerWatchtowerGroundItems(api) {
+  if (!api.core.WorldDefinition.isMembersWorld()) return;
+  itemIds = api.core.ItemIdentifiers;
+  api.registerDefinitionSource("ground_items", { name: "watchtower", load: watchtowerGroundItems });
+}
+
 function questsForWorld({ WorldDefinition }) {
   return WorldDefinition.isMembersWorld() ? QUESTS : QUESTS.filter((quest) => F2P_QUESTS.has(quest));
 }
 
 module.exports = {
   name: "Quests",
+  description: "Registers every implemented quest from the quests folder, members and free-to-play, plus their shared widgets and ground items.",
+  config: {
+    "quests:equipment-requirements": {
+      type: "boolean", label: "Quest equipment and spellbook requirements", default: true,
+      help: "Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements.",
+    },
+  },
   QUESTS,
   register(api) {
-    if (api.core.WorldDefinition.isMembersWorld()) {
-      const { CAVE_NIGHTSHADE, DEATH_RUNE } = api.core.ItemIdentifiers;
-      api.registerDefinitionSource("ground_items", {
-        name: "watchtower",
-        load: () => [
-          { id: DEATH_RUNE, location: { x: 2500, y: 2967, z: 0 }, amt: 1, respawn: 200 },
-          { id: CAVE_NIGHTSHADE, location: { x: 2528, y: 9415, z: 0 }, amt: 1, respawn: 100 },
-          { id: CAVE_NIGHTSHADE, location: { x: 2530, y: 9462, z: 0 }, amt: 1, respawn: 100 },
-        ],
-      });
-    }
+    registerWatchtowerGroundItems(api);
     require("./Equipment.Quests")(api);
     require("./Shops.Quests")(api);
     require("./QuestRuntime").registerQuestWidgets(forPlayers(api));

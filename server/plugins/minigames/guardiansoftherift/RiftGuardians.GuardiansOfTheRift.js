@@ -9,7 +9,8 @@
  * - +2: "You carve out a place for the cell and carefully place it inside the guardian." (spam),
  *   gotr_chisel_guardian, sound 2586 x2.
  * - +4: the guardian rises at the pile (rift_guardian_spawn), which is gone for six ticks while it
- *   walks out; +5: the cell is used up, "The powers
+ *   walks out; 4 ticks after it rises, its first step carries sequence -1 (delay 95), ending the
+ *   spawn sequence; +5: the cell is used up, "The powers
  *   of the weak cell extend into the essence. A Guardian comes to life.", sound 956, 80 Crafting
  *   XP, the cell's Runecraft XP (30 weak, 250 overcharged) and the pile's energy (6/15/27/45).
  *   A limit reached during the assembly: "The powers of the cell extend into the essence, but no
@@ -39,6 +40,15 @@ const PILES = [
  */
 const PILE_AWAY_TICKS = 6;
 const PILE_SIZE = 2;
+/**
+ * rsprox capture 20261020T162558 (63 of 64 guardians): a guardian rises for 4 ticks, then walks
+ * out, and its first step carries sequence -1 with delay 95, which ends rift_guardian_spawn. That
+ * sequence loops (frame step 16, 99 loops) at forced priority 10 with no movement setting. While it
+ * plays, the client holds the guardian's steps and drops its attack (6) and block (4) sequences.
+ * Without the reset, the guardian looks frozen at the pile while it fights (issue 3837).
+ */
+const RISE_TICKS = 4;
+const RISEN_RESET_DELAY = 95;
 /** Wiki: energy for a guardian, 2x+1 of the cell's strengthening value (6 for a weak cell). */
 const GUARDIAN_ENERGY = [0, 6, 15, 27, 45];
 const CRAFTING_XP = 80;
@@ -135,12 +145,21 @@ function spawn(pile, tier) {
   guardians.add(npc);
   npc.__gotrTier = tier;
   npc.__gotrNextAttack = 0;
+  npc.__gotrRising = true;
   // Guardians rise among the crowd at the pile; nothing standing there should pin them in.
   Shared.prepareNpc(npc, { walkThrough: true });
   npc.performAnimation(new (Shared.core().Animation)(Shared.seq("rift_guardian_spawn")));
-  Shared.later(2, () => npc.isRegistered() && Shared.core().PathFinder.calculateWalkRoute(npc,
-    Shared.random(POST.minX, POST.maxX), Shared.random(POST.minY, POST.maxY)));
+  Shared.later(RISE_TICKS, () => rise(npc));
   Game.setRiftGuardians(alive());
+}
+
+/** Risen: the spawn sequence ends, and the guardian walks out to its post (capture). */
+function rise(npc) {
+  if (!npc.isRegistered()) return;
+  const { Animation, PathFinder } = Shared.core();
+  npc.__gotrRising = false;
+  npc.performAnimation(new Animation(Animation.DEFAULT_RESET_ANIMATION.getId(), RISEN_RESET_DELAY));
+  PathFinder.calculateWalkRoute(npc, Shared.random(POST.minX, POST.maxX), Shared.random(POST.minY, POST.maxY));
 }
 
 /** Full power: every guardian dies with the creatures (Wiki). */
@@ -159,6 +178,8 @@ function dismissAll() {
  * (issue 2698).
  */
 function guardianTurn(npc, now) {
+  // A guardian still rising stands at the pile (capture): its first step ends the spawn sequence.
+  if (npc.__gotrRising) return;
   const from = Creatures.tileOf(npc);
   const target = Creatures.nearestCreature(from, Creatures.sizeOf(npc), Infinity);
   if (!target) return;

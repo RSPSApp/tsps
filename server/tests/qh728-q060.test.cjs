@@ -47,7 +47,8 @@ function makePlayer() {
     },
     deleteItem: (id) => inventory.deleteNumber(id, 1),
     isFull: () => full,
-    forceAdd: (item) => inventory.adds(item.getId(), item.getAmount()),
+    // The real signature: forceAdd(player, item).
+    forceAdd: (player, item) => inventory.adds(item.getId?.() ?? item.id, item.getAmount?.() ?? item.amount ?? 1),
   };
   const sender = new Proxy({}, {
     get: (_target, prop) => (...args) => {

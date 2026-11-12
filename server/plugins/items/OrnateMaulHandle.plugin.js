@@ -115,6 +115,7 @@ function revertHandle(event) {
 
 module.exports = {
   name: "OrnateMaulHandle",
+  description: "Lets the ornate maul handle be attached to a granite maul, with a warning, for the cheaper Quick Smash special, and removed again.",
   members: true,
   _test: { loadHandleForms, SKIP_WARNING_ATTRIBUTE },
   register(api) {

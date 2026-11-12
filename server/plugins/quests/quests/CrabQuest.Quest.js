@@ -1,48 +1,38 @@
 /**
  * Crab Quest (members).
  *
- * The words come from the "Crab Quest" transcript page (OSRS Wiki). This plugin
- * supplies the bottle start, the shell hand-in, the string-instrument chain, the
- * crab-hunting investigations, the ceremony and the completion reward.
+ * The words come from the "Crab Quest" transcript page (OSRS Wiki); the places, ids, order
+ * and timing from a full live run (RSProx capture 20261103T014803-ee79c12, revision 241).
  *
  * Stages (varbit 15842 "crab_main", varp 5739 bits 0-6), as live sends them and as
  * Quest Helper's loadSteps keys on them:
  *   0 not started, 5 drank from the bottle, 10/15/20 the crab's explanation,
  *   25 gathering shells, 30 seven shells handed in, 35/37 gathering the floatsam,
  *   40 instrument made, 45 instrument handed in, 47 instrument tuned and recruiting,
- *   50 all eleven leaders recruited, 55 dance lesson, 60 ceremony, 63 complete.
+ *   50 the band is complete, 55 dance lesson, 60 ceremony, 63 complete.
  *
- * The main beach crab (16471) and the quest scenery (bottle 62439/62440, palms
- * 62470, magic tree 62473, trees 62475, plant 62477, bush 62478) are not placed
- * in this cache's maps or npc-spawns.json, so the crab is an owner-only spawn and
- * the scenery is registered at runtime (the A Ruff Situation pattern). The five
- * Floatsam NPCs (16475-16477) are world spawns and are used as-is.
+ * The bottle (loc 62438) is the only quest loc in the real map. Drinking from it puts the
+ * player into a private copy of Dognose Island (Dream.CrabQuest.js), where live adds the
+ * crab, the floatsam, the shells, the drums and the recruit scenery for the owner only.
+ * Drinking again inside wakes the player on the real beach with progress kept; the dream's
+ * "headache" (no boats, no teleports) is the instance. The ceremony is its own instance
+ * (Ceremony.CrabQuest.js) and the player wakes on the beach when it ends.
  *
- * Source: OSRS Wiki "Crab Quest" page, quick guide and transcript; cache ids and
- * the varbit confirmed with scripts/lookup-gameval.ts and CacheDefinitions.
- *
- * Gaps: quest scenery has no map placements, so the runtime objects use the Quest Helper
- * coordinates (magic tree 3043,2640; palms/bushes/plant/trees around it). The wiki "sit down and wait" coax is
- * approximated by investigating a scared tree a second time. The dance lesson and
- * ceremony play captured fades and camera moves (after the dance camera, before the
- * ceremony camera, and the final dance arc); the capture's skybox (cam_skybox 61359) has
- * no core packet yet. The shy crab 16484 is spawned at 3045,2653 with the captured opening
- * conversation; its later relocation/scutter-away is a remaining gap. The dream/headache
- * (boat and teleport lock) is not implemented. No post-quest beach-crab variant exists, so a
- * completed player replays "crab-hunting-talking-to-the-crab-again". The Crab
- * dance emote is not unlocked (the dance conditions answer "not unlocked"). The
+ * Gaps: logout or death inside the dream wakes the player on the beach (TSPS policy: the
+ * capture shows neither). A recruit is not shown at its hiding place while it talks (the
+ * capture spawns it there; only six of the eleven tiles are captured), only on the practice
+ * tiles; the band's practice rhythm animations are not played. No post-quest beach-crab
+ * variant exists, so a completed player replays "crab-hunting-talking-to-the-crab-again".
+ * The Crab dance emote is not unlocked (the dance conditions answer "not unlocked"). The
  * requirement refusal is a plain system message because the transcript has none.
- * Shells and recruits are de-duplicated by per-item/per-spot flags, and the instrument
- * hand-in/tuning stages only advance on the transcript's own hand-in and tune messages.
  */
 module.exports = function registerCrabQuestQuest(api) {
   const {
-    GameObject,
-    Item,
+    Animation,
+    Graphic,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
-    ObjectManager,
     Skill,
   } = api.core;
   const { loadTranscripts, registerQuest, refreshQuestList, startTranscript } =
@@ -50,6 +40,41 @@ module.exports = function registerCrabQuestQuest(api) {
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
+  const Dream = require("../crab/Dream.CrabQuest")(api, { onLeave: dreamClosed });
+  const Ceremony = require("../crab/Ceremony.CrabQuest")(api);
+  // The ceremony variant hands over to the captured cutscene at this message, and the quest's
+  // closing lines (complete, waking up) follow the last message box of the cutscene.
+  const CEREMONY_START_STEP = "dTDVEF";
+  const CEREMONY_LAST_MESBOX_STEP = "wyTQfj";
+  const CEREMONY_VARIANT = "crab-rave-the-ceremony";
+
+  // The bottle's sips (transcript message ids): the first, back to reality, back to the dream,
+  // and each one's "...and immediately black out." that the instance change hangs on.
+  const FIRST_BLACKOUT_STEP = "Cc5OQV";
+  const REALITY_BLACKOUT_STEP = "51SJsJ";
+  const DREAM_BLACKOUT_STEP = "H_lEXB";
+  const BLACKOUT_TEXT = "...and immediately black out.";
+  const BOTTLE_VARIANTS = new Map([
+    [FIRST_BLACKOUT_STEP, "drinking-from-bottle"],
+    [REALITY_BLACKOUT_STEP, "drinking-from-bottle-drinking-from-the-bottle-again-to-go-back-to-reality"],
+    [DREAM_BLACKOUT_STEP, "drinking-from-bottle-drinking-from-the-bottle-again-to-go-back-to-the-dream"],
+  ]);
+  // Capture ticks after the sip: black-out message and fade 2, instance 4, fade-in with the
+  // dizzy spotanim 9, getting up 13, the first line 14.
+  const BLACKOUT_DELAY = 2;
+  const INSTANCE_DELAY = 2;
+  const FADE_IN_DELAY = 5;
+  const GET_UP_DELAY = 4;
+  const RESUME_DELAY = 1;
+  const DIZZY_GRAPHIC = 245; // stunned_thieving, height 124
+  const DIZZY_HEIGHT = 124;
+  const GET_UP_ANIMATION = 7330; // human_death_reverse
+  const DREAM_ENTRY_TILE = { x: 3056, y: 2639 };
+  const CRAB_NET_VARBIT = 15888; // "crab_net", set with crab_put_back_in_instance
+  const DREAM_BOAT_REFUSAL =
+    "The headache from drinking from the bottle on the beach makes it difficult to find your boat. You feel that swigging from that bottle again would fix it.";
+  const DREAM_TELEPORT_REFUSAL =
+    "The headache from drinking from the bottle stops you from remembering how to teleport. Drinking from the bottle again may help with this.";
 
   const STAGE_VERSION_ATTRIBUTE = "crab-quest:stage-version";
   const STAGE_VERSION = 2;
@@ -117,10 +142,17 @@ module.exports = function registerCrabQuestQuest(api) {
   // Interface 216 slot 54 (cache enum 1001 -> sprite 5248) is the real Sit emote;
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
+  // The dream's one floatsam: its multi parent and the forms crab_floatsam_hidden picks.
+  // crab_flotsam_multi (crab_floatsam_multi 16478 in the revision 241 capture); its
+  // crab_floatsam_hidden varbit picks the form.
+  const FLOATSAM_RAW_NPC_ID = 16820;
   const FLOATSAM_NPC_IDS = new Set([
-    NpcIdentifiers.FLOATSAM, // 16475, "Net"
-    NpcIdentifiers.FLOATSAM_2, // 16476
-    NpcIdentifiers.FLOATSAM_3, // 16477
+    // Rev 242 renamed Floatsam (16475-16478) to Flotsam under new ids; the multi parent's
+    // crab_floatsam_hidden form is one of these.
+    FLOATSAM_RAW_NPC_ID, // 16820, crab_flotsam_multi
+    NpcIdentifiers.FLOTSAM, // 16817, "Net"
+    NpcIdentifiers.FLOTSAM_2, // 16818
+    NpcIdentifiers.FLOTSAM_3, // 16819
   ]);
 
   // Items from the 2026 quest, absent from the generated ItemIdentifiers.
@@ -143,33 +175,60 @@ module.exports = function registerCrabQuestQuest(api) {
     ItemIdentifiers.ENCHANTED_LYRE_4_, // 6127
   ]);
 
-  // Objects from the 2026 quest, absent from the generated ObjectIdentifiers.
+  // Objects from the 2026 quest, absent from the generated ObjectIdentifiers (capture gamevals).
   const CRAB_BOTTLE_RAW_OBJECT_ID = 62438; // crab_bottle_multi; cache shows 62439/62440
   const CRAB_BOTTLE_OBJECT_ID = 62439; // "Bottle", Drink
   const CRAB_BOTTLE_POST_OBJECT_ID = 62440; // "Bottle", Reminisce
-  const CRAB_PALM_OBJECT_ID = 62470; // "Palm", Investigate
-  const CRAB_SHY_PALM_OBJECT_ID = 62472; // "Palm" (crab_palm_update03), Investigate
-  const CRAB_MAGIC_TREE_OBJECT_ID = 62473; // "Magic tree", Investigate
-  const CRAB_TREE_OBJECT_ID = 62475; // "Tree", Investigate
-  const CRAB_PLANT_OBJECT_ID = 62477; // "Plant", Investigate
-  const CRAB_BUSH_OBJECT_ID = 62478; // "Bush", Investigate
+  const CRAB_PALM_OBJECT_ID = 62470; // crab_palm_update01, Investigate
+  const CRAB_PALM_2_OBJECT_ID = 62471; // crab_palm_update02
+  const CRAB_PALM_3_OBJECT_ID = 62472; // crab_palm_update03 (the shy crab's palm is one)
+  const CRAB_MAGIC_TREE_OBJECT_ID = 62473; // crab_magictree, Investigate
+  const CRAB_MAGIC_TREE_NOOP_OBJECT_ID = 62474; // crab_magictree_noop, before recruiting
+  const CRAB_TREE_OBJECT_ID = 62475; // crab_avium_tree_1
+  const CRAB_TREE_2_OBJECT_ID = 62476; // crab_avium_tree_2
+  const CRAB_PLANT_OBJECT_ID = 62477; // crab_groundcover_plant4_withered
+  const CRAB_BUSH_OBJECT_ID = 62478; // crab_enakh_leaflessbush
 
   const BOTTLE_TILE = { x: 3055, y: 2639 };
-  const MAIN_CRAB_TILE = { x: 3057, y: 2637 };
+  // crab_maincrab 16469 until the instrument is handed in, then crab_maincrab_practising 16470.
+  const MAIN_CRAB_TILE = { x: 3054, y: 2637, face: [3053, 2636] };
+  const MAIN_CRAB_PRACTISING_TILE = { x: 3056, y: 2637, face: [3057, 2638] };
   const SHY_CRAB_PALM_TILE = { x: 3044, y: 2653 };
   const SHY_CRAB_TILE = { x: 3045, y: 2653 };
   const SHY_CRAB_RELOCATED_TILE = { x: 3055, y: 2650 };
   const NET_TILE = { x: 3061, y: 2646 };
+  const FLOATSAM_TILE = { x: 3051, y: 2632 };
+  // Each shell item's tile, in ALL_SHELL_ITEM_IDS order (capture obj_add_specific).
   const SHELL_TILES = [
-    { x: 3059, y: 2648 },
-    { x: 3051, y: 2634 },
-    { x: 3063, y: 2642 },
-    { x: 3040, y: 2636 },
-    { x: 3036, y: 2643 },
-    { x: 3044, y: 2652 },
-    { x: 3050, y: 2655 },
-    { x: 3057, y: 2632 },
-    { x: 3060, y: 2634 },
+    { x: 3059, y: 2648 }, // crab_shell_1
+    { x: 3044, y: 2652 }, // crab_shell_2
+    { x: 3051, y: 2634 }, // crab_shell_3
+    { x: 3036, y: 2643 }, // crab_shell_4
+    { x: 3050, y: 2655 }, // crab_shell_5
+    { x: 3063, y: 2642 }, // crab_shell_6
+    { x: 3040, y: 2636 }, // crab_shell_7
+    { x: 3048, y: 2645 }, // crab_shell_bad1
+    { x: 3055, y: 2654 }, // crab_shell_bad2
+  ];
+  // The dream's own locs from the moment it is built: three invisible markers, the seven
+  // shell, bass and drum multilocs the crab's varbits dress, and the magic tree without ops.
+  const DREAM_LOCS = [
+    { id: 13723, x: 3059, y: 2639, shape: 22 }, { id: 13723, x: 3061, y: 2644, shape: 22 },
+    { id: 13723, x: 3055, y: 2635, shape: 22 },
+    { id: 62442, x: 3057, y: 2637 }, { id: 62444, x: 3057, y: 2638 }, { id: 62446, x: 3056, y: 2638 },
+    { id: 62454, x: 3056, y: 2636 }, { id: 62448, x: 3055, y: 2638 }, { id: 62450, x: 3055, y: 2637 },
+    { id: 62452, x: 3055, y: 2636 },
+    { id: 62459, x: 3056, y: 2637, rotation: 3 }, // crab_bass_multi_quest
+    { id: 62468, x: 3056, y: 2639, rotation: 3 }, { id: 62469, x: 3057, y: 2639, rotation: 3 },
+    { id: 62466, x: 3054, y: 2637, rotation: 2 }, { id: 62467, x: 3054, y: 2638, rotation: 2 },
+  ];
+  const MAGIC_TREE_NOOP_LOC = { id: CRAB_MAGIC_TREE_NOOP_OBJECT_ID, x: 3043, y: 2640, rotation: 1 };
+  const SHY_CRAB_PALM_LOC = { id: CRAB_PALM_3_OBJECT_ID, ...SHY_CRAB_PALM_TILE, rotation: 3 };
+  // Practice tiles: six captured recruits (bandmates 3, 4, 5, 7, 10, 11), and the five other
+  // tiles the complete band takes at stage 50, in bandmate order for the rest.
+  const BANDMATE_PRACTICE_TILES = [
+    [3057, 2637], [3057, 2638], [3056, 2638], [3055, 2638], [3055, 2637], [3056, 2636],
+    [3055, 2636], [3054, 2637], [3054, 2638], [3056, 2639], [3057, 2639],
   ];
 
   // Message step ids that mean "this crab joined the practice" and its bit.
@@ -212,13 +271,14 @@ module.exports = function registerCrabQuestQuest(api) {
   const CEREMONY_DANCE_STEP = "twF4TG";
   const CEREMONY_COMPLETE_STEP = "Wk9imR";
   const SHELL_COLLECTION_MESSAGE_STEP = "Uf9RIo";
+  const SIX_LEADERS_VARIANT = "crab-hunting-after-finding-all-six-leaders-to-join-practise";
+  const WAIT_FOR_LEADERS_OPTION = "Wait for leaders to turn up.";
 
   const DISASTER_NAME = "A disaster.";
   const BASS_NAME = "A bass.";
   const BANJO_NAME = "I don't actually know.";
   const PLAY_STYLE_OPTIONS = new Set(["Let me show you!", "I can try and explain.", BANJO_NAME]);
 
-  const CUTSCENE_BOUNDS = [[3020, 3080, 2620, 2670, 0]];
   const SHY_CRAB_ATTRIBUTE = "crab-quest:shy-met"; // legacy boolean, migrated to progress
   const SHY_CRAB_PROGRESS_ATTRIBUTE = "crab-quest:shy-progress";
   const SHY_CRAB_HIDDEN = 0;
@@ -261,6 +321,7 @@ module.exports = function registerCrabQuestQuest(api) {
   const NEED_NET_TEXT = "You need a big net to gather items from this floatsam.";
   const NO_SPACE_TEXT = "You can't carry any more floatsam.";
   const NOTHING_LEFT_TEXT = "There is nothing left here.";
+  // The revision 241 capture spells it "floatsam"; revision 242 renamed the NPCs Flotsam.
   const CRAFT_MESSAGE_TEXT = "You fashion a makeshift string instrument out of the flotsam.";
   const SHELL_COLLECTION_RECOVERY_TEXT =
     "As you look at the bottle, you notice familiar shells nearby. You collect them.";
@@ -274,7 +335,13 @@ module.exports = function registerCrabQuestQuest(api) {
   const SHELLS_HANDED_MASK_ATTRIBUTE = "crab-quest:shells-handed-mask";
   const SHELLS_PICKED_ATTRIBUTE = "quest.crab_quest.shells-picked";
   const NET_PICKED_ATTRIBUTE = "quest.crab_quest.net-picked";
-  const MATERIALS_FISHED_ATTRIBUTE = "quest.crab_quest.materials-fished";
+  const MATERIALS_FISHED_ATTRIBUTE = "quest.crab_quest.materials-fished"; // legacy: all three caught
+  const FLOATSAM_CAUGHT_ATTRIBUTE = "crab-quest:floatsam-caught"; // 0..3, crab_floatsam_hidden
+  // "Wait for leaders to turn up.": the rest of the band joins (live sets every bandmate bit).
+  const BAND_COMPLETE_ATTRIBUTE = "crab-quest:band-complete";
+  // Set while the player is in the dream or the ceremony, so a session that ends without a
+  // normal logout (a crash, a restart) still logs back in on the real beach.
+  const IN_INSTANCE_ATTRIBUTE = "crab-quest:in-instance";
   const INSTRUMENT_MADE_ATTRIBUTE = "quest.crab_quest.instrument-made";
   const INSTRUMENT_NAME_ATTRIBUTE = "quest.crab_quest.instrument-name";
   const MAGIC_TREE_MET_ATTRIBUTE = "quest.crab_quest.magic-tree-met";
@@ -304,128 +371,144 @@ module.exports = function registerCrabQuestQuest(api) {
   const MATERIAL_ITEM_IDS = new Set([PLANK_ITEM_ID, BARREL_ITEM_ID, BOWSTRING_ITEM_ID]);
 
   /**
-   * The fourteen investigation spots. `first` is the "too scared" line (missing
-   * when the crab comes straight out), `variant` is the conversation, and
-   * `joinBit` marks a spot whose end message recruits a band member.
+   * The investigation spots, with the loc live adds there once recruiting starts (capture
+   * tick 6215: id, tile and rotation). `first` is the "too scared" line (missing when the crab
+   * comes straight out), `variant` is the conversation, and `joinBit` marks a spot whose end
+   * message recruits a band member. The order is the saved SCARED/MET bit order: keep it.
    */
   const SPOTS = [
     {
-      objectId: CRAB_MAGIC_TREE_OBJECT_ID,
-      x: 3043,
-      y: 2640,
+      objectId: CRAB_MAGIC_TREE_OBJECT_ID, x: 3043, y: 2640, rotation: 1,
       sitTile: { x: 3042, y: 2640 }, // QH sitForCrabSix
       first: "crab-hunting-investigating-the-magic-tree",
       variant: "crab-hunting-investigating-the-magic-tree-sitting-by-the-magic-tree",
       joinBit: 1 << 0,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3042,
-      y: 2637,
+      objectId: CRAB_PALM_OBJECT_ID, x: 3042, y: 2637, rotation: 0,
       sitTile: { x: 3041, y: 2638 }, // QH sitForCrabOne
       first: "crab-hunting-investigating-the-palm-south-of-the-magic-tree",
       variant: "crab-hunting-investigating-the-palm-south-of-the-magic-tree-sitting-by-the-palm",
       joinBit: 1 << 1,
     },
     {
-      // Not a QH spot. Its solid loc sits on the only land corridor into the
-      // magic-tree/avium pocket, making the leaders at 3043,2640 and 3042,2637
-      // unreachable. Keep the entry so saved SCARED/MET bit indices stay stable,
-      // but never place it.
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3039,
-      y: 2644,
-      place: false,
+      objectId: CRAB_PALM_OBJECT_ID, x: 3038, y: 2637, rotation: 1,
       variant: "crab-hunting-investigating-the-palm-south-west-of-the-magic-tree",
     },
     {
-      objectId: CRAB_TREE_OBJECT_ID,
-      x: 3037,
-      y: 2644,
+      objectId: CRAB_TREE_OBJECT_ID, x: 3036, y: 2644, rotation: 2,
       sitTile: { x: 3037, y: 2643 }, // capture: player sits south of the 2x2 avium tree
       first: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree",
       variant: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree-sitting-by-the-palm",
       joinBit: 1 << 2,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3037,
-      y: 2647,
+      objectId: CRAB_PALM_2_OBJECT_ID, x: 3037, y: 2647, rotation: 2,
       variant: "crab-hunting-investigating-the-western-most-palm",
       joinBit: 1 << 3,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3039,
-      y: 2647,
+      objectId: CRAB_PALM_3_OBJECT_ID, x: 3039, y: 2647, rotation: 0,
       variant: "crab-hunting-investigating-the-palm-directly-east-of-the-western-most-palm",
       joinBit: 1 << 4,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3040,
-      y: 2649,
+      objectId: CRAB_PALM_OBJECT_ID, x: 3040, y: 2649, rotation: 3,
       variant: "crab-hunting-investigating-the-palm-directly-north-east-of-the-western-most-palm",
       joinBit: 1 << 5,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3048,
-      y: 2658,
+      objectId: CRAB_PALM_OBJECT_ID, x: 3048, y: 2658, rotation: 3,
       variant: "crab-hunting-investigating-the-northern-most-palm",
       joinBit: 1 << 6,
       chathead: PENGUIN_CRAB_NPC_ID,
     },
     {
-      objectId: CRAB_PALM_OBJECT_ID,
-      x: 3040,
-      y: 2636,
+      // The shy crab's palm: placed and handled by investigateShyCrabPalm, kept here only
+      // so the saved bit order stays the same.
+      objectId: CRAB_PALM_3_OBJECT_ID, x: 3044, y: 2653, rotation: 3, place: false,
       variant: "crab-hunting-investigating-the-palm-directly-north-of-the-magic-tree",
     },
     {
-      objectId: CRAB_TREE_OBJECT_ID,
-      x: 3047,
-      y: 2656,
+      objectId: CRAB_TREE_OBJECT_ID, x: 3046, y: 2656, rotation: 2,
       sitTile: { x: 3046, y: 2655 }, // QH sitForCrabTen
       first: "crab-hunting-investigating-the-north-western-most-tree",
       variant: "crab-hunting-investigating-the-north-western-most-tree-sitting-by-the-tree",
       joinBit: 1 << 7,
     },
     {
-      objectId: CRAB_TREE_OBJECT_ID,
-      x: 3063,
-      y: 2653,
+      objectId: CRAB_TREE_2_OBJECT_ID, x: 3050, y: 2657, rotation: 0,
       first: "crab-hunting-investigating-the-north-eastern-most-tree",
       variant: "crab-hunting-investigating-the-north-eastern-most-tree-sitting-by-the-tree",
     },
     {
-      objectId: CRAB_PLANT_OBJECT_ID,
-      x: 3054,
-      y: 2656,
+      objectId: CRAB_PLANT_OBJECT_ID, x: 3054, y: 2656, rotation: 3,
       variant: "crab-hunting-investigating-the-plant",
       joinBit: 1 << 8,
     },
     {
-      objectId: CRAB_BUSH_OBJECT_ID,
-      x: 3050,
-      y: 2636,
+      objectId: CRAB_BUSH_OBJECT_ID, x: 3049, y: 2635, rotation: 3,
       variant: "crab-hunting-investigating-the-western-bush",
       joinBit: 1 << 9,
     },
     {
-      objectId: CRAB_BUSH_OBJECT_ID,
-      x: 3057,
-      y: 2640,
+      objectId: CRAB_BUSH_OBJECT_ID, x: 3057, y: 2640, rotation: 0,
       variant: "crab-hunting-investigating-the-eastern-bush",
       joinBit: 1 << 10,
     },
   ];
 
-  /** Tracked per-player owner-only spawns, keyed by role. */
-  const trackedNpcs = new WeakMap();
+  // The floatsam's catches in order (capture: one cast, a catch every 3/6/6 ticks).
+  const FLOATSAM_ITEMS = [
+    { itemId: BOWSTRING_ITEM_ID, text: "You catch a sea-soaked bowstring." },
+    { itemId: BARREL_ITEM_ID, text: "You catch a small battered barrel." },
+    { itemId: PLANK_ITEM_ID, text: "You catch a weathered rosewood plank." },
+  ];
+  const FLOATSAM_CAST_TEXT = "You cast out your net...";
+  const FLOATSAM_CAST_DELAY = 2;
+  const FLOATSAM_CATCH_DELAYS = [3, 6, 6];
+  const NET_ANIMATION = 620; // human_largenet
+
+  // The dance lesson and ceremony (capture): the skybox, the two sand circles and their finals.
+  const SKYBOX_MODEL = 61359;
+  const CIRCLE_CRAB_LOC = 62479;
+  const CIRCLE_HUMAN_LOC = 62480;
+  const CIRCLE_CRAB_FINAL_LOC = 62481;
+  const CIRCLE_HUMAN_FINAL_LOC = 62482;
+  const CRAB_CIRCLE_TILE = [3062, 2641];
+  const HUMAN_CIRCLE_TILE = [3062, 2642];
+  const MINIMAP_STATE_VARBIT = 6719;
+  const MINIMAP_OFF = 2;
+  // Sand circle frames 14511-14518 (crab_sand_circle_1..8), the crab's dance/hide/reveal and
+  // the player's headbang, kick, spin and cry, on the lines live sends them with.
+  const DANCE_LINE_EFFECTS = new Map([
+    ["The point of the dance is to make a sturdy sand nest.", [{ camera: [3067, 2637, 470, 1, 0] }]],
+    ["That's definitely a skill I need to level up.", [{ crabCircle: 14511, crab: 14501 }]],
+    ["You can sway and wave your claws in time with the music if you want to...", [{ crabCircle: 14512, crab: 14501 }]],
+    ["But to be honest, the only thing that really matters...", [{ crabCircle: 14513, player: 10050, crab: 14501 }]],
+    ["Is what your back legs are doing.", [{ crabCircle: 14514 }]],
+    ["I don't have back legs! Unless I put one at the front and one at the back, like this?", [{ crabCircle: 14515, crab: 14501 }]],
+    ["Use those legs to move the sand and gently and push it away.", [{ crabCircle: 14516, crab: 14501 }]],
+    ["I will just use one.", [{ crabCircle: 14517, crab: 14501 }]],
+    ["As you slowly turn around on the spot...", [{ crabCircle: 14518, humanLoc: CIRCLE_HUMAN_LOC, crab: 14501 }]],
+    ["You can change direction once you've done a full rotation.", [{ humanCircle: 14512, penguin: true, crab: 14501 }]],
+    ["Oh no you don't!", [{ crab: 14501 }]],
+    ["What?", [{ player: 423, penguin: false, crab: 14501 }]],
+    ["Nothing!", [{ humanCircle: 14513, player: 10050, crab: 14501 }]],
+    ["Am I doing this right?", [{ humanCircle: 14514, crab: 14501 }]],
+    ["Not really.", [{ humanCircle: 14515 }]],
+    ["We are just drawing a circle.", [{ humanCircle: 14516 }]],
+    ["That's how it starts.", [{ humanCircle: 14517 }]],
+    ["But if you do it long enough, you have a nest.", [{ humanCircle: 14518, humanLoc: CIRCLE_HUMAN_FINAL_LOC, crabLoc: CIRCLE_CRAB_FINAL_LOC }]],
+    ["Noooooooooooooo! Lil' guy!", [{ player: 2107, crab: 1314, camera: [3066, 2637, 470, 1, 1] }]],
+    ["What have I done!", [{ player: 860, crab: 14500 }]],
+    ["I should have listened to you!", [{ player: 860 }]],
+    ["Disputable.", [{ crab: 1316 }]],
+  ]);
 
   let quest;
-  let objectsInstalled = false;
+  /** Players netting the floatsam now; the token stops a stale cast. */
+  const netting = new Map();
 
   // ==========================================================================
   // State helpers
@@ -492,8 +575,18 @@ module.exports = function registerCrabQuestQuest(api) {
     );
   }
 
+  /** How many of the floatsam's three items have been netted (an old save's flag is all three). */
+  function floatsamCaught(player) {
+    if (player.getAttribute(MATERIALS_FISHED_ATTRIBUTE) === true) return FLOATSAM_ITEMS.length;
+    return Math.min(FLOATSAM_ITEMS.length, Number(player.getAttribute(FLOATSAM_CAUGHT_ATTRIBUTE)) || 0);
+  }
+
   function materialsFished(player) {
-    return player.getAttribute(MATERIALS_FISHED_ATTRIBUTE) === true;
+    return floatsamCaught(player) >= FLOATSAM_ITEMS.length;
+  }
+
+  function bandIsComplete(player) {
+    return player.getAttribute(BAND_COMPLETE_ATTRIBUTE) === true || quest.getStage(player) >= STAGE_ALL_LEADERS;
   }
 
   function instrumentMade(player) {
@@ -520,11 +613,13 @@ module.exports = function registerCrabQuestQuest(api) {
     for (let index = 0; index < SHELL_COUNT; index++) {
       sender.sendVarbit(CRAB_SEASHELL_VARBIT + index, handedMask & (1 << index) ? 1 : 0);
     }
-    // The server's single net action grants all three materials at once.
-    sender.sendVarbit(CRAB_FLOATSAM_HIDDEN_VARBIT, materialsFished(player) ? 3 : 0);
+    sender.sendVarbit(CRAB_FLOATSAM_HIDDEN_VARBIT, floatsamCaught(player));
+    // crab_bandmate_N: at practice (all of them once the band is complete); crab_recruited_
+    // bandmate_N: the player talked them into it (capture tick 6544).
+    const bandComplete = bandIsComplete(player);
     BANDMATE_JOIN_BITS.forEach((bit, index) => {
       const recruited = hasFlag(player, RECRUITED_ATTRIBUTE, bit) ? 1 : 0;
-      sender.sendVarbit(CRAB_BANDMATE_VARBIT + index, recruited);
+      sender.sendVarbit(CRAB_BANDMATE_VARBIT + index, recruited || bandComplete ? 1 : 0);
       sender.sendVarbit(CRAB_RECRUITED_BANDMATE_VARBIT + index, recruited);
     });
     const shyProgress = shyCrabProgress(player);
@@ -536,15 +631,12 @@ module.exports = function registerCrabQuestQuest(api) {
       CRAB_KICKED_PENGUIN_VARBIT,
       hasFlag(player, RECRUITED_ATTRIBUTE, PENGUIN_JOIN_BIT) ? 1 : 0
     );
-    // This server plays the quest on the beach rather than a private instance,
-    // but the flag still means "currently in the quest" for Quest Helper.
-    sender.sendVarbit(
-      CRAB_INSTANCE_VARBIT,
-      stage >= STAGE_START && !quest.isComplete(player) ? 1 : 0
-    );
-    // shortcut: the early-return trigger is unproven; keep guiding recruitment
-    // until another capture establishes when 15881 becomes true.
-    sender.sendVarbit(CRAB_PARTIAL_COMPLETE_VARBIT, 0);
+    // crab_put_back_in_instance and crab_net: the player is in the dream (capture 5953, 7046).
+    const dreaming = Dream.active(player) || Ceremony.active(player) ? 1 : 0;
+    sender.sendVarbit(CRAB_INSTANCE_VARBIT, dreaming);
+    sender.sendVarbit(CRAB_NET_VARBIT, dreaming);
+    // crab_partial_complete: set as the sixth recruit leaves for practice (capture tick 6520).
+    sender.sendVarbit(CRAB_PARTIAL_COMPLETE_VARBIT, leaderCount(player) >= SIX_LEADER_COUNT ? 1 : 0);
   }
 
   function pandemoniumComplete(player) {
@@ -565,8 +657,8 @@ module.exports = function registerCrabQuestQuest(api) {
   function setStage(player, stage) {
     if (quest.getStage(player) >= stage) return;
     quest.setStage(player, stage);
-    syncNpcs(player);
     syncVarbits(player);
+    syncDream(player);
   }
 
   function recountLeaders(player) {
@@ -613,6 +705,12 @@ module.exports = function registerCrabQuestQuest(api) {
     });
   }
 
+  /** A message box (mesbox), as live sends "There is nothing left here.". */
+  function mesbox(player, text) {
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  }
+
   /** Plays a composed list of raw transcript steps with one NPC's chathead. */
   function playSteps(player, npcId, steps) {
     if (!Array.isArray(steps) || steps.length === 0) return false;
@@ -625,171 +723,267 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   // ==========================================================================
-  // World setup
+  // The dream
   // ==========================================================================
 
-  function registerObject(objectId, tile, rotation = 0) {
-    const object = new GameObject(objectId, new Location(tile.x, tile.y, 0), 10, rotation, null);
-    ObjectManager.register(object, true);
-  }
-
-  function installObjects() {
-    if (objectsInstalled) return;
-    objectsInstalled = true;
-    registerObject(CRAB_BOTTLE_RAW_OBJECT_ID, BOTTLE_TILE);
-    registerObject(CRAB_SHY_PALM_OBJECT_ID, SHY_CRAB_PALM_TILE);
-    for (const spot of SPOTS) {
-      if (spot.place === false) continue;
-      registerObject(spot.objectId, spot, spot.rotation ?? 0);
-    }
-  }
-
-  function tracked(player) {
-    let map = trackedNpcs.get(player);
-    if (!map) {
-      map = new Map();
-      trackedNpcs.set(player, map);
-    }
-    return map;
-  }
-
-  function trackedBaseId(npc) {
-    const realId = npc?.getRealId?.();
-    return Number.isFinite(realId) ? realId : npc?.getId?.();
-  }
-
-  function spawnTracked(player, key, definition) {
-    const map = tracked(player);
-    const existing = map.get(key);
-    if (existing) {
-      if (trackedBaseId(existing) === definition.id) return existing;
-      // The stage moved across a base-id change (16469 -> 16470): remove the old
-      // owner actor and spawn the new parent instead of keeping the hidden one.
-      api.removeNpc(existing);
-      map.delete(key);
-    }
-    const npc = api.spawnNpc({ ...definition, owner: player, ownerOnly: true });
-    if (npc) map.set(key, npc);
-    return npc;
-  }
-
-  function removeTracked(player, key) {
-    const map = trackedNpcs.get(player);
-    const npc = map?.get(key);
-    if (npc) {
-      api.removeNpc(npc);
-      map.delete(key);
-    }
-  }
-
-  function removeAllTracked(player) {
-    const map = trackedNpcs.get(player);
-    if (!map) return;
-    for (const npc of map.values()) api.removeNpc(npc);
-    trackedNpcs.delete(player);
-  }
-
-  function syncGroundItems(player) {
-    const manager = api.getItemOnGroundManager();
-    if (!manager?.registerLocation || !manager?.getGroundItem) return;
+  /** What the dream shows for the quest's state; re-run after every change, idempotent. */
+  function syncDream(player) {
+    if (!Dream.active(player) || player.isPlayerBot?.() === true) return;
     const stage = quest.getStage(player);
-    const privateArea = player.getPrivateArea?.() ?? null;
-    if (stage >= STAGE_SHELLS && stage < STAGE_INSTRUMENT) {
-      const handedMask = handedShellMask(player);
-      for (let index = 0; index < SHELL_TILES.length; index++) {
-        // Only a colour actually handed in is permanent. A picked-then-lost
-        // shell (or net) is re-registered at its canonical ground tile; a held
-        // item is skipped so it cannot duplicate.
-        if (handedMask & (1 << index)) continue;
-        const itemId = ALL_SHELL_ITEM_IDS[index];
-        if (hasItem(player, itemId)) continue;
-        const tile = SHELL_TILES[index];
-        const position = new Location(tile.x, tile.y, 0);
-        if (manager.getGroundItem(player.getUsername(), itemId, position, privateArea)) continue;
-        manager.registerLocation(player, new Item(itemId, 1), position);
-      }
+    const complete = quest.isComplete(player);
+    for (const loc of DREAM_LOCS) Dream.loc(player, loc);
+    if (stage >= STAGE_TUNING || complete) {
+      for (const spot of SPOTS) if (spot.place !== false) Dream.loc(player, { id: spot.objectId, x: spot.x, y: spot.y, rotation: spot.rotation });
+      Dream.loc(player, SHY_CRAB_PALM_LOC);
+    } else {
+      Dream.loc(player, MAGIC_TREE_NOOP_LOC);
     }
-    if (stage >= STAGE_INSTRUMENT && stage < STAGE_RECRUITING && !hasItem(player, BIG_FISHING_NET_ITEM_ID)) {
-      const position = new Location(NET_TILE.x, NET_TILE.y, 0);
-      if (!manager.getGroundItem(player.getUsername(), BIG_FISHING_NET_ITEM_ID, position, privateArea)) {
-        manager.registerLocation(player, new Item(BIG_FISHING_NET_ITEM_ID, 1), position);
-      }
+    const crab = stage >= STAGE_RECRUITING
+      ? { id: MAIN_CRAB_PRACTISING_RAW_NPC_ID, ...MAIN_CRAB_PRACTISING_TILE }
+      : { id: MAIN_CRAB_RAW_NPC_ID, ...MAIN_CRAB_TILE };
+    if (!danceActive(player)) Dream.npc(player, "main-crab", crab);
+    if (floatsamCaught(player) < FLOATSAM_ITEMS.length && !complete) {
+      Dream.npc(player, "floatsam", { id: FLOATSAM_RAW_NPC_ID, ...FLOATSAM_TILE, wanderRadius: 2 });
+    } else {
+      Dream.removeNpc(player, "floatsam");
     }
-  }
-
-  function sendCamera(player, move, look) {
-    const sender = player.getPacketSender();
-    sender.sendCameraMoveTo(move[0], move[1], move[2], { rate: 232, rate2: 100, heightRelative: false });
-    sender.sendCameraLookAt(look[0], look[1], look[2], { rate: 232, rate2: 100, heightRelative: false });
-  }
-
-  function startDanceScene(player) {
-    if (Scenes.get(player)?.name === "crab-dance") return Scenes.get(player);
-    const scene = Scenes.open(player, "crab-dance", CUTSCENE_BOUNDS);
-    Scenes.actor(scene, 16480, [3060, 2640, 0]);
-    Scenes.actor(scene, 16482, [3064, 2640, 0]);
-    Scenes.actor(scene, MAIN_CRAB_END_NPC_ID, [3062, 2641, 0]);
-    Scenes.loc(scene, { id: 62479, x: 3062, y: 2641 });
-    Scenes.loc(scene, { id: 62480, x: 3062, y: 2642 });
-    player.moveTo(new Location(3062, 2642, 0));
-    Scenes.fade(player, true);
-    Scenes.later(scene, 1, () => {
-      sendCamera(player, [3071, 2637, 470], [3062, 2641, 50]);
-      Scenes.later(scene, 1, () => Scenes.fade(player, false));
-    });
-    return scene;
-  }
-
-  function startCeremonyScene(player) {
-    const scene = Scenes.get(player)?.name === "crab-ceremony"
-      ? Scenes.get(player)
-      : Scenes.open(player, "crab-ceremony", CUTSCENE_BOUNDS);
-    Scenes.fade(player, true);
-    Scenes.later(scene, 1, () => {
-      sendCamera(player, [3071, 2624, 450], [3062, 2632, 100]);
-      player.getPacketSender().sendCameraMoveArc(3062, 2632, 3062, 2632, 450, 400, "linear");
-      sendCamera(player, [3052, 2641, 600], [3061, 2644, 100]);
-      Scenes.later(scene, 1, () => Scenes.fade(player, false));
-      for (const [id, x, y] of [[16480, 3060, 2643], [16482, 3064, 2643], [MAIN_CRAB_END_NPC_ID, 3062, 2643]]) {
-        if (!scene.actors.some((npc) => npc.getId?.() === id)) Scenes.actor(scene, id, [x, y, 0]);
+    const bandComplete = bandIsComplete(player);
+    BANDMATE_JOIN_BITS.forEach((bit, index) => {
+      const key = `bandmate-${index + 1}`;
+      if (bandComplete || hasFlag(player, RECRUITED_ATTRIBUTE, bit)) {
+        const [x, y] = BANDMATE_PRACTICE_TILES[index];
+        Dream.npc(player, key, { id: BAND_CRAB_NPC_ID, x, y, face: [x, y - 1] });
+      } else {
+        Dream.removeNpc(player, key);
       }
     });
-    return scene;
-  }
-
-  function syncNpcs(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
-    const stage = quest.getStage(player);
-    if (stage >= STAGE_START && !quest.isComplete(player)) {
-      const rawNpcId = stage >= STAGE_RECRUITING
-        ? MAIN_CRAB_PRACTISING_RAW_NPC_ID
-        : MAIN_CRAB_RAW_NPC_ID;
-      spawnTracked(player, "main-crab", {
-        id: rawNpcId,
-        ...MAIN_CRAB_TILE,
-        z: 0,
-        wanderRadius: 0,
-      });
+    const shy = shyCrabProgress(player);
+    if (stage >= STAGE_TUNING && shy >= SHY_CRAB_FOUND && !complete) {
+      const tile = shy >= SHY_CRAB_SCUTTERED ? SHY_CRAB_RELOCATED_TILE : SHY_CRAB_TILE;
+      Dream.npc(player, "shy-crab", { id: SHY_CRAB_NPC_ID, ...tile, face: [tile.x, tile.y - 1] });
     } else {
-      removeTracked(player, "main-crab");
-    }
-    if (stage >= STAGE_RECRUITING && !quest.isComplete(player) && shyCrabProgress(player) >= SHY_CRAB_FOUND) {
-      const tile = shyCrabProgress(player) >= SHY_CRAB_SCUTTERED ? SHY_CRAB_RELOCATED_TILE : SHY_CRAB_TILE;
-      spawnTracked(player, "shy-crab", { id: SHY_CRAB_NPC_ID, ...tile, z: 0, wanderRadius: 0 });
-    } else {
-      removeTracked(player, "shy-crab");
+      Dream.removeNpc(player, "shy-crab");
     }
     syncGroundItems(player);
   }
 
-  /** The captured scutter is a delete at 3045,2653 and an add at 3055,2650. */
-  function relocateShyCrab(player) {
-    removeTracked(player, "shy-crab");
-    spawnTracked(player, "shy-crab", {
-      id: SHY_CRAB_NPC_ID,
-      ...SHY_CRAB_RELOCATED_TILE,
-      z: 0,
-      wanderRadius: 0,
+  /** Shells until the seven are in, and the big net until the instrument is handed in. */
+  function syncGroundItems(player) {
+    const stage = quest.getStage(player);
+    const handedMask = handedShellMask(player);
+    ALL_SHELL_ITEM_IDS.forEach((itemId, index) => {
+      // A colour handed in is gone for good; one held is not doubled. A picked and lost
+      // shell comes back on its tile the next time the dream is built.
+      const show = stage < STAGE_INSTRUMENT && !(handedMask & (1 << index)) && !hasItem(player, itemId)
+        && !hasFlag(player, SHELLS_PICKED_ATTRIBUTE, 1 << index);
+      if (show) Dream.groundItem(player, itemId, SHELL_TILES[index]);
+    });
+    if (stage < STAGE_RECRUITING && !hasItem(player, BIG_FISHING_NET_ITEM_ID) && !hasFlag(player, NET_PICKED_ATTRIBUTE, 1)) {
+      Dream.groundItem(player, BIG_FISHING_NET_ITEM_ID, NET_TILE);
+    }
+  }
+
+  function enterDream(player) {
+    player.setAttribute(IN_INSTANCE_ATTRIBUTE, true);
+    Dream.enter(player, DREAM_ENTRY_TILE);
+    syncVarbits(player);
+    syncDream(player);
+  }
+
+  function leaveDream(player) {
+    Dream.leave(player);
+  }
+
+  /** The dream closed (woken, logged out or moved elsewhere): its varbits follow. */
+  function dreamClosed(player, logout) {
+    danceScenes.delete(player);
+    if (!Ceremony.active(player)) player.setAttribute(IN_INSTANCE_ATTRIBUTE, false);
+    if (logout) {
+      // Saved on the real beach, never on an instance tile.
+      const tile = new Location(DREAM_ENTRY_TILE.x, DREAM_ENTRY_TILE.y, 0);
+      player.setLocation?.(tile);
+      return;
+    }
+    if (player.isRegistered?.() === false) return;
+    syncVarbits(player);
+  }
+
+  /** Steps after `stepId` in the list that holds it (the rest of a bottle sip). */
+  function stepsAfter(steps, stepId) {
+    if (!Array.isArray(steps)) return null;
+    const index = steps.findIndex((step) => step?.id === stepId);
+    if (index >= 0) return steps.slice(index + 1);
+    for (const step of steps) {
+      const nested = stepsAfter(step?.steps, stepId)
+        ?? (Array.isArray(step?.options) ? step.options.map((option) => stepsAfter(option.steps, stepId)).find(Boolean) : null);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  /**
+   * A sip's black-out: the transcript stops at "...and immediately black out." and the
+   * capture's timing takes over (fade, instance change, fade-in, getting up) before the rest
+   * of the variant plays.
+   */
+  function blackOut(player, stepId) {
+    const rest = stepsAfter(variantSteps(BOTTLE_VARIANTS.get(stepId)), stepId) ?? [];
+    const intoDream = stepId !== REALITY_BLACKOUT_STEP;
+    const sender = player.getPacketSender();
+    player.getMovementQueue().reset().setBlockMovement(true);
+    Scenes.later(player, BLACKOUT_DELAY, () => {
+      player.sendMessage(BLACKOUT_TEXT);
+      Scenes.fade(player, true);
+      Scenes.later(player, 1, () => sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
+      Scenes.later(player, INSTANCE_DELAY, () => {
+        if (intoDream) enterDream(player);
+        else leaveDream(player);
+        Scenes.later(player, FADE_IN_DELAY, () => {
+          Scenes.fade(player, false);
+          sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
+          if (intoDream) player.performGraphic(new Graphic(DIZZY_GRAPHIC, DIZZY_HEIGHT));
+          Scenes.later(player, intoDream ? GET_UP_DELAY : 0, () => {
+            if (intoDream) player.performAnimation(new Animation(GET_UP_ANIMATION));
+            Scenes.later(player, RESUME_DELAY, () => {
+              player.getMovementQueue().setBlockMovement(false);
+              if (rest.length) playSteps(player, MAIN_CRAB_NPC_ID, rest);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  // ==========================================================================
+  // The dance lesson (in the dream; capture ticks 6557-6674)
+  // ==========================================================================
+
+  const danceScenes = new Map();
+  const DANCE_VARIANT = "crab-rave";
+  const DANCE_LESSON_DELAY = 7;
+  const CEREMONY_ASK_DELAY = 6;
+
+  function danceActive(player) {
+    return danceScenes.has(player);
+  }
+
+  function danceLoc(player, id, [x, y]) {
+    Dream.loc(player, { id, x, y });
+  }
+
+  function danceLocAnim(player, [x, y], animation) {
+    const object = Dream.locAt(player, x, y);
+    if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(animation));
+  }
+
+  function dreamCamera(player, move, look) {
+    const sender = player.getPacketSender();
+    if (move) {
+      const at = Dream.tile(player, move[0], move[1]);
+      sender.sendCameraMoveTo(at.getX(), at.getY(), move[2], { rate: move[3], rate2: move[4], heightRelative: false });
+    }
+    if (look) {
+      const at = Dream.tile(player, look[0], look[1]);
+      sender.sendCameraLookAt(at.getX(), at.getY(), look[2], { rate: look[3], rate2: look[4], heightRelative: false });
+    }
+  }
+
+  function danceCrab(player) {
+    return Dream.npcFor(player, "dance-crab");
+  }
+
+  function startDanceScene(player) {
+    if (!Dream.active(player) || danceActive(player)) return;
+    danceScenes.set(player, {});
+    const sender = player.getPacketSender();
+    Scenes.fade(player, true);
+    Scenes.later(player, 1, () => sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
+    Scenes.later(player, 2, () => {
+      Scenes.controls(player, true, true);
+      sender.sendCameraUnlock(true);
+      sender.sendCameraSkybox(SKYBOX_MODEL);
+    });
+    Scenes.later(player, 4, () => {
+      Dream.removeNpc(player, "main-crab");
+      Dream.npc(player, "dance-crab", { id: MAIN_CRAB_END_NPC_ID, x: 3062, y: 2641, face: [3061, 2641] });
+      danceLoc(player, CIRCLE_HUMAN_LOC, HUMAN_CIRCLE_TILE);
+      danceLoc(player, CIRCLE_CRAB_LOC, CRAB_CIRCLE_TILE);
+      player.moveTo(Dream.tile(player, HUMAN_CIRCLE_TILE[0], HUMAN_CIRCLE_TILE[1]));
+      dreamCamera(player, [3071, 2637, 470, 232, 100], [3062, 2641, 50, 232, 100]);
+    });
+    Scenes.later(player, 5, () => {
+      Scenes.fade(player, false);
+      sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF);
+    });
+    // The lesson's first line follows on its own (capture tick 6564, seven after the fade).
+    Scenes.later(player, DANCE_LESSON_DELAY, () => {
+      if (danceActive(player)) startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, DANCE_VARIANT);
+    });
+  }
+
+  /** The dance's per-line effects, keyed by the line's text (capture, same tick as the line). */
+  function danceLine(player, text, request) {
+    if (!danceActive(player)) return;
+    const effects = DANCE_LINE_EFFECTS.get(text);
+    if (!effects) return;
+    const previous = request.before;
+    request.before = () => {
+      previous?.();
+      for (const effect of effects) danceEffect(player, effect);
+    };
+  }
+
+  function danceEffect(player, effect) {
+    const crab = danceCrab(player);
+    if (effect.crabCircle !== undefined) danceLocAnim(player, CRAB_CIRCLE_TILE, effect.crabCircle);
+    if (effect.humanCircle !== undefined) danceLocAnim(player, HUMAN_CIRCLE_TILE, effect.humanCircle);
+    if (effect.humanLoc) danceLoc(player, effect.humanLoc, HUMAN_CIRCLE_TILE);
+    if (effect.crabLoc) danceLoc(player, effect.crabLoc, CRAB_CIRCLE_TILE);
+    if (effect.player !== undefined) player.performAnimation(new Animation(effect.player));
+    if (effect.crab !== undefined) crab?.performAnimation?.(new Animation(effect.crab));
+    if (effect.camera) dreamCamera(player, effect.camera, null);
+    if (effect.penguin === true) Dream.npc(player, "dance-penguin", { id: PENGUIN_CRAB_NPC_ID, x: 3063, y: 2642, face: [3062, 2642] });
+    if (effect.penguin === false) Scenes.later(player, 1, () => Dream.removeNpc(player, "dance-penguin"));
+  }
+
+  /** The ceremony cutscene, then the closing lines on the real beach. */
+  function startCeremony(player) {
+    if (Ceremony.active(player) || !Dream.active(player)) return;
+    Ceremony.play(player, {
+      enter: (who) => Dream.leave(who),
+      exitTile: DREAM_ENTRY_TILE,
+      done: (who, logout) => {
+        who.setAttribute(IN_INSTANCE_ATTRIBUTE, false);
+        syncVarbits(who);
+        if (logout) return;
+        const rest = stepsAfter(variantSteps(CEREMONY_VARIANT), CEREMONY_LAST_MESBOX_STEP) ?? [];
+        if (rest.length) playSteps(who, MAIN_CRAB_END_NPC_ID, rest);
+      },
+    });
+  }
+
+  function endDanceScene(player) {
+    if (!danceActive(player)) return;
+    const sender = player.getPacketSender();
+    Scenes.fade(player, true);
+    Scenes.later(player, 1, () => sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
+    Scenes.later(player, 2, () => {
+      danceScenes.delete(player);
+      Scenes.controls(player, false);
+      Dream.removeNpc(player, "dance-crab");
+      Dream.removeNpc(player, "dance-penguin");
+      player.moveTo(Dream.tile(player, 3055, 2637));
+      sender.sendCameraUnlock(false);
+      sender.sendCameraReset();
+      sender.sendCameraSkybox(-1);
+      syncDream(player);
+    });
+    Scenes.later(player, 4, () => Scenes.fade(player, false));
+    // Then the crab asks for help with the ceremony (capture tick 6676).
+    Scenes.later(player, CEREMONY_ASK_DELAY, () => {
+      if (Dream.active(player) && quest.getStage(player) === STAGE_CEREMONY) {
+        startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, CEREMONY_VARIANT);
+      }
     });
   }
 
@@ -827,13 +1021,9 @@ module.exports = function registerCrabQuestQuest(api) {
       startTranscript(api, player, MAIN_CRAB_NPC_ID, PAGE, "drinking-from-bottle");
       return;
     }
-    startTranscript(
-      api,
-      player,
-      MAIN_CRAB_NPC_ID,
-      PAGE,
-      "drinking-from-bottle-drinking-from-the-bottle-again-to-go-back-to-the-dream"
-    );
+    // Inside the dream the bottle wakes the player; on the real beach it sends them back.
+    const variant = BOTTLE_VARIANTS.get(Dream.active(player) ? REALITY_BLACKOUT_STEP : DREAM_BLACKOUT_STEP);
+    startTranscript(api, player, MAIN_CRAB_NPC_ID, PAGE, variant);
   }
 
   // ==========================================================================
@@ -928,12 +1118,13 @@ module.exports = function registerCrabQuestQuest(api) {
       return;
     }
     if (stage === STAGE_DANCE_READY) {
-      startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, "crab-rave");
+      // A lesson cut short (a logout) starts over with its scene, which plays the lines.
+      if (Dream.active(player) && !danceActive(player)) startDanceScene(player);
+      else startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, DANCE_VARIANT);
       return;
     }
     if (stage === STAGE_CEREMONY) {
-      startCeremonyScene(player);
-      startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, "crab-rave-the-ceremony");
+      startTranscript(api, player, MAIN_CRAB_END_NPC_ID, PAGE, CEREMONY_VARIANT);
       return;
     }
     startTranscript(api, player, MAIN_CRAB_NPC_ID, PAGE, "drinking-from-bottle");
@@ -963,7 +1154,7 @@ module.exports = function registerCrabQuestQuest(api) {
     if (FLOATSAM_NPC_IDS.has(npcId)) {
       if (action !== "Net") return;
       event.handled = true;
-      netFloatsam(player);
+      netFloatsam(player, event.npc);
     }
   }
 
@@ -972,13 +1163,19 @@ module.exports = function registerCrabQuestQuest(api) {
     if (quest.isComplete(player) || stage < STAGE_TUNING || stage >= STAGE_ALL_LEADERS) return;
     if (shyCrabProgress(player) >= SHY_CRAB_FOUND) return;
     player.setAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, SHY_CRAB_FOUND);
-    syncNpcs(player);
+    syncDream(player);
     player.sendMessage("A crab comes out shyly.");
     syncVarbits(player);
     playSteps(player, SHY_CRAB_NPC_ID, SHY_CRAB_LINES);
   }
 
-  function netFloatsam(player) {
+  /**
+   * The floatsam: one cast, then the bowstring, the barrel and the plank, a catch every
+   * 3/6/6 ticks with the net animation each time; the last one empties it (capture 6159-6177).
+   */
+  function netFloatsam(player, npc) {
+    // The floatsam is the dream's own; nothing on the real beach changes the quest.
+    if (!Dream.active(player)) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_INSTRUMENT || stage >= STAGE_RECRUITING || hasItem(player, INSTRUMENT_ITEM_ID)) {
       playSteps(player, MAIN_CRAB_NPC_ID, variantSteps("drinking-from-bottle-interacting-with-the-floatsam"));
@@ -988,30 +1185,49 @@ module.exports = function registerCrabQuestQuest(api) {
       player.sendMessage(NEED_NET_TEXT);
       return;
     }
-    const missing = [PLANK_ITEM_ID, BARREL_ITEM_ID, BOWSTRING_ITEM_ID].filter(
-      (itemId) => !hasItem(player, itemId)
-    );
-    if (missing.length === 0 || hasItem(player, INSTRUMENT_ITEM_ID)) {
-      player.sendMessage(NOTHING_LEFT_TEXT);
+    if (materialsFished(player)) {
+      mesbox(player, NOTHING_LEFT_TEXT);
       return;
     }
-    if (player.getInventory().getFreeSlots() < missing.length) {
+    if (player.getInventory().getFreeSlots() < FLOATSAM_ITEMS.length - floatsamCaught(player)) {
       player.sendMessage(NO_SPACE_TEXT);
       return;
     }
-    for (const itemId of missing) player.getInventory().adds(itemId, 1);
-    player.setAttribute(MATERIALS_FISHED_ATTRIBUTE, true);
-    if (hasAllMaterials(player)) setStage(player, STAGE_MATERIALS_READY);
-    else setStage(player, STAGE_MATERIALS);
-    syncVarbits(player);
-    startTranscript(
-      api,
-      player,
-      MAIN_CRAB_NPC_ID,
-      PAGE,
-      "making-the-string-instrument-fishing-up-floatsam",
-      (steps) => steps.filter((step) => step.id !== "Euz0TY")
-    );
+    if (netting.has(player)) return;
+    const casting = {};
+    netting.set(player, casting);
+    if (npc) player.setPositionToFace(npc.getLocation());
+    player.getMovementQueue().reset();
+    if (stage < STAGE_MATERIALS) setStage(player, STAGE_MATERIALS);
+    const stillNetting = () => netting.get(player) === casting && Dream.active(player) && player.isRegistered?.() !== false;
+    Scenes.later(player, FLOATSAM_CAST_DELAY, () => {
+      if (!stillNetting()) return netting.delete(player);
+      player.sendMessage(FLOATSAM_CAST_TEXT);
+      player.performAnimation(new Animation(NET_ANIMATION));
+      const catchNext = () => {
+        const caught = floatsamCaught(player);
+        const next = FLOATSAM_ITEMS[caught];
+        if (!next || !stillNetting()) return netting.delete(player);
+        Scenes.later(player, FLOATSAM_CATCH_DELAYS[caught], () => {
+          if (!stillNetting()) return netting.delete(player);
+          if (!hasItem(player, next.itemId)) player.getInventory().adds(next.itemId, 1);
+          player.setAttribute(FLOATSAM_CAUGHT_ATTRIBUTE, caught + 1);
+          player.sendMessage(next.text);
+          player.performAnimation(new Animation(NET_ANIMATION));
+          if (caught + 1 >= FLOATSAM_ITEMS.length) {
+            netting.delete(player);
+            if (hasAllMaterials(player)) setStage(player, STAGE_MATERIALS_READY);
+            syncVarbits(player);
+            syncDream(player);
+            Scenes.later(player, 1, () => mesbox(player, NOTHING_LEFT_TEXT));
+            return;
+          }
+          syncVarbits(player);
+          catchNext();
+        });
+      };
+      catchNext();
+    });
   }
 
   // ==========================================================================
@@ -1111,6 +1327,12 @@ module.exports = function registerCrabQuestQuest(api) {
       player.setAttribute(INSTRUMENT_NAME_ATTRIBUTE, "banjo");
       return;
     }
+    if (option === WAIT_FOR_LEADERS_OPTION && quest.getStage(player) === STAGE_TUNING) {
+      // Capture tick 6544: stage 50 and every bandmate at practice, the recruited bits kept.
+      player.setAttribute(BAND_COMPLETE_ATTRIBUTE, true);
+      setStage(player, STAGE_ALL_LEADERS);
+      return;
+    }
     if (!PLAY_STYLE_OPTIONS.has(option)) {
       if (option === "I will experiment, then!") setStage(player, STAGE_TUNING);
       return;
@@ -1132,10 +1354,33 @@ module.exports = function registerCrabQuestQuest(api) {
       return;
     }
     if (stage === STAGE_PLEA && text === "See ya!") setStage(player, STAGE_SHELLS);
+    danceLine(player, text, event);
+  }
+
+  /** The shell a hand-in message names, from the message its own variant plays. */
+  function handedShellFor(text) {
+    for (const [itemId, variant] of SHELL_MESSAGE_VARIANTS) {
+      if (variantSteps(variant).some((step) => step.type === "message" && step.text === text)) return itemId;
+    }
+    return null;
   }
 
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    // "You hand in a ... shell." is an item box with that shell (capture: objectbox 193).
+    if (event.kind === "message" && typeof event.text === "string" && event.text.startsWith("You hand in ")) {
+      const itemId = handedShellFor(event.text);
+      if (itemId !== null) event.box = { items: [itemId] };
+    }
+    if (npcId === MAIN_CRAB_NPC_ID && event.kind === "message" && BOTTLE_VARIANTS.has(stepId) && !quest.isComplete(player)) {
+      // Into the dream needs to be out of it, and back to reality needs to be in it.
+      if ((stepId === REALITY_BLACKOUT_STEP) === Dream.active(player)) {
+        event.handled = true;
+        event.end = true;
+        blackOut(player, stepId);
+      }
+      return;
+    }
     if (stepId === SHY_CRAB_BLUSH_STEP || stepId === SHY_CRAB_SCUTTER_STEP) {
       if (npcId !== SHY_CRAB_NPC_ID && npcId !== SHY_CRAB_CONTENT_ID) return;
       event.handled = true;
@@ -1144,7 +1389,7 @@ module.exports = function registerCrabQuestQuest(api) {
         player.sendMessage("The crab appears to turn bright red.");
       } else {
         player.setAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, SHY_CRAB_SCUTTERED);
-        relocateShyCrab(player);
+        syncDream(player);
         player.sendMessage("The crab scutters away.");
       }
       syncVarbits(player);
@@ -1153,6 +1398,8 @@ module.exports = function registerCrabQuestQuest(api) {
     if (!CRAB_NPC_IDS.has(npcId) || !stepId) return;
     const joinedBit = JOINED_STEP_BITS.get(stepId);
     if (joinedBit !== undefined) {
+      // Live shows the scutter as a message box (capture tick 6519).
+      if (event.kind === "message") event.box = { statement: true };
       if (!hasFlag(player, RECRUITED_ATTRIBUTE, joinedBit)) {
         setFlag(player, RECRUITED_ATTRIBUTE, joinedBit);
         if (stepId === MAGIC_TREE_STEP) player.setAttribute(MAGIC_TREE_MET_ATTRIBUTE, true);
@@ -1160,6 +1407,11 @@ module.exports = function registerCrabQuestQuest(api) {
         if (stepId === KID_CRAB_STEP) player.setAttribute(KID_CRAB_MET_ATTRIBUTE, true);
         recountLeaders(player);
         syncVarbits(player);
+        syncDream(player);
+        // The sixth recruit: the player's own "enough leaders" line follows the scutter.
+        if (leaderCount(player) === SIX_LEADER_COUNT && quest.getStage(player) < STAGE_ALL_LEADERS) {
+          event.after = () => playSteps(player, MAIN_CRAB_NPC_ID, variantSteps(SIX_LEADERS_VARIANT));
+        }
       }
       return;
     }
@@ -1182,27 +1434,25 @@ module.exports = function registerCrabQuestQuest(api) {
     }
     if (stepId === DANCE_BEGINS_STEP) {
       event.handled = true;
-      startDanceScene(player);
       setStage(player, STAGE_DANCE_READY);
+      startDanceScene(player);
       return;
     }
     if (stepId === DANCE_ENDS_STEP) {
       event.handled = true;
-      sendCamera(player, [3071, 2624, 450], [3062, 2632, 100]);
       setStage(player, STAGE_CEREMONY);
+      endDanceScene(player);
       return;
     }
-    if (stepId === CEREMONY_DANCE_STEP) {
+    if (stepId === CEREMONY_START_STEP) {
       event.handled = true;
-      sendCamera(player, [3061, 2644, 800], [3051, 2644, 100]);
-      player.getPacketSender().sendCameraMoveArc(3051, 2644, 3051, 2644, 800, 360, "ease_in_out_sine");
+      event.end = true;
+      startCeremony(player);
       return;
     }
     if (stepId === CEREMONY_COMPLETE_STEP) {
       event.handled = true;
-      Scenes.end(player, false);
       if (!quest.isComplete(player)) quest.complete(player);
-      syncNpcs(player);
       syncVarbits(player);
       return;
     }
@@ -1330,13 +1580,14 @@ module.exports = function registerCrabQuestQuest(api) {
       drinkFromBottle(player);
       return;
     }
-    if (objectId === CRAB_SHY_PALM_OBJECT_ID) {
+    const at = Dream.toSource(player, location);
+    if (objectId === CRAB_PALM_3_OBJECT_ID && at.x === SHY_CRAB_PALM_TILE.x && at.y === SHY_CRAB_PALM_TILE.y) {
       if (definition?.getActions?.()[clickType - 1] !== "Investigate") return;
       event.handled = true;
       investigateShyCrabPalm(player);
       return;
     }
-    const spot = spotAt(objectId, location);
+    const spot = spotAt(objectId, at);
     if (!spot) return;
     if (definition?.getActions?.()[clickType - 1] !== "Investigate") return;
     event.handled = true;
@@ -1344,7 +1595,8 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   function handleGroundItemPickup(event) {
-    const { player, groundItemId, location } = event;
+    const { player, groundItemId } = event;
+    const location = Dream.toSource(player, event.location);
     const shellIndex = ALL_SHELL_ITEM_IDS.indexOf(groundItemId);
     if (shellIndex >= 0) {
       const tile = SHELL_TILES[shellIndex];
@@ -1389,20 +1641,15 @@ module.exports = function registerCrabQuestQuest(api) {
     }
   }
 
-  function restoreScene(player) {
-    if (quest.isComplete(player)) return;
-    const stage = quest.getStage(player);
-    if (stage === STAGE_DANCE_READY) startDanceScene(player);
-    else if (stage === STAGE_CEREMONY) startCeremonyScene(player);
-  }
-
+  /** Login is always on the real beach: the dream and the ceremony end with the session. */
   function handleLogin({ player }) {
-    installObjects();
+    if (player.getAttribute(IN_INSTANCE_ATTRIBUTE) === true) {
+      player.setAttribute(IN_INSTANCE_ATTRIBUTE, false);
+      player.moveTo(new Location(DREAM_ENTRY_TILE.x, DREAM_ENTRY_TILE.y, 0));
+    }
     refreshQuestList(player);
     migrateSubState(player);
-    syncNpcs(player);
     syncVarbits(player);
-    restoreScene(player);
   }
 
   function handleBootstrap({ player }) {
@@ -1413,9 +1660,25 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   function handleLogout({ player }) {
-    Scenes.end(player, true);
+    // Before the rebuild tick the player is still in the dream, so the ceremony's area cannot
+    // end it: stop it here, or it would build and play for an offline player.
+    Ceremony.end(player, true);
+    netting.delete(player);
+    Scenes.cancel(player);
     Scenes.closeFade(player);
-    removeAllTracked(player);
+  }
+
+  /** The dream's headache: no boat, no teleport, until the bottle wakes the player. */
+  function canBoardDream(event) {
+    if (event.allow === false || !Dream.active(event.player)) return;
+    event.allow = false;
+    event.reason = DREAM_BOAT_REFUSAL;
+  }
+
+  function canTeleportDream(event) {
+    if (!Dream.active(event.player)) return;
+    event.allow = false;
+    event.player.sendMessage(DREAM_TELEPORT_REFUSAL);
   }
 
   // ==========================================================================
@@ -1484,6 +1747,9 @@ module.exports = function registerCrabQuestQuest(api) {
   api.persistAttribute(SHELLS_PICKED_ATTRIBUTE);
   api.persistAttribute(NET_PICKED_ATTRIBUTE);
   api.persistAttribute(MATERIALS_FISHED_ATTRIBUTE);
+  api.persistAttribute(FLOATSAM_CAUGHT_ATTRIBUTE, 0);
+  api.persistAttribute(BAND_COMPLETE_ATTRIBUTE, false);
+  api.persistAttribute(IN_INSTANCE_ATTRIBUTE, false);
   api.persistAttribute(INSTRUMENT_MADE_ATTRIBUTE);
   api.persistAttribute(INSTRUMENT_NAME_ATTRIBUTE);
   api.persistAttribute(MAGIC_TREE_MET_ATTRIBUTE);
@@ -1512,6 +1778,8 @@ module.exports = function registerCrabQuestQuest(api) {
   });
 
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("sailing:can-board", canBoardDream);
+  api.onCustomEvent("teleport:can-start", canTeleportDream);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
@@ -1522,7 +1790,6 @@ module.exports = function registerCrabQuestQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onPlayerLogin(migrateStage);
-  api.onServerStartup(installObjects);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onPlayerLogout(handleLogout);

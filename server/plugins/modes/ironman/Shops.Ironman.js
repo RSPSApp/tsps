@@ -17,7 +17,7 @@ function buyLimit(request) {
 /** Presets (this server's PvP loadouts) hand out items, so an Ironman can't use them. */
 function presets(request) {
   if (!Common.isIron(request.player)) return;
-  request.allow = false;
+  request.barred = true;
   request.message = Common.message("presets");
 }
 
@@ -33,5 +33,5 @@ function grandExchangeOffer(request) {
 module.exports = function attach(api) {
   api.onCustomEvent("shop:buy-limit", buyLimit);
   api.onCustomEvent("ge:offer-confirmed", grandExchangeOffer);
-  api.onCustomEvent("presets:can-use", presets);
+  api.onCustomEvent("presets:account-barred", presets);
 };

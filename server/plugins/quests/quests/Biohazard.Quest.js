@@ -16,6 +16,12 @@
  * distraction, the pigeon cage, the Mourner fence/cauldron, the HQ doors and
  * crate, the Varrock bedroom door and guard search, the courier vial hand-offs
  * and the Ormart/Kilron wall crossings.
+ *
+ * Scenes, boxes, timings and ids follow a full rsprox capture of the quest
+ * (20261110T121228-5ab63b4, revision 242); see docs/quests/biohazard/README.md.
+ * Every object action plays the transcript's own scene, and its {{tbox}} lines
+ * are message boxes (with the Wiki's item pictures) while its {{mes}} lines are
+ * chat, as the capture shows.
  */
 module.exports = function registerBiohazardQuest(api) {
   const {
@@ -23,6 +29,8 @@ module.exports = function registerBiohazardQuest(api) {
     ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  let obstacleRunnerReady = false;
 
   const ELENA_NPC_IDS = new Set([
     NpcIdentifiers.ELENA, // 1102
@@ -79,6 +87,8 @@ module.exports = function registerBiohazardQuest(api) {
 
   const VARP_BIOHAZARD = 68;
   const VARBIT_FREE_CLOTHES = 9106;
+  /** biohazard_met_julie: set as Julie asks for a priest at Guidor's door (capture tick 1070). */
+  const VARBIT_MET_JULIE = 9105;
   const ARDOUGNE_WALL_DOOR_IDS = new Set([
     ObjectIdentifiers.ARDOUGNE_WALL_DOOR,
     ObjectIdentifiers.ARDOUGNE_WALL_DOOR_2,
@@ -97,25 +107,76 @@ module.exports = function registerBiohazardQuest(api) {
   const CAULDRON_OBJECT_ID = 37327;
   const MOURNER_FENCE_OBJECT_ID = 2068;
   const MOURNER_HQ_DOOR_ID = 2036;
+  const MOURNER_HQ = { minX: 2542, maxX: 2557, minY: 3321, maxY: 3327 };
+  const HQ_BACK_DOOR = { x: 2551, y: 3328, z: 0 };
+  const HQ_DOOR_MOURNER_NPC_ID = NpcIdentifiers.MOURNER_12;
+  const HQ_TRAPDOOR_ID = 8783;
+  const HQ_TRAPDOOR = { x: 2542, y: 3327, z: 0 };
+  const SICKEST_MOURNER_ATTACK_IDS = new Set(["DQWtoR", "MoUbVk", "PmbGHX"]);
+
   const MOURNER_CAGE_GATE_IDS = new Set([2058, 2060]);
   const MOURNER_CRATE_ID = 2064;
   const BEDROOM_DOOR_CLOSED_ID = 2032;
   const BEDROOM_DOOR_OPEN_ID = 2033;
-  /** Guidor's bedroom door, the only "Bedroom door" in south-east Varrock. */
-  const GUIDOR_BEDROOM_DOOR = { x: 3282, y: 3382 };
 
   const FREE_GOWN_ATTRIBUTE = "biohazard:free-gown-given";
+  const MET_JULIE_ATTRIBUTE = "biohazard:met-julie";
   const GIVEN_VIALS_ATTRIBUTE = "biohazard:given-vials";
   /** Refunded wrong-vial transactions, one entry per failed courier hand-over. */
   const CHANCY_REFUND_ATTRIBUTE = "biohazard:chancy-refunds";
   // Imported Biohazard message EYYSjv from Elena's lost-items capacity branch.
   const ELENA_CAPACITY_MESSAGE = "Elena tries to give you some items but you don't have enough room for them.";
 
-  const WEST_ARDOUGNE_LANDING = new Location(2554, 3266, 0);
-  const EAST_ARDOUGNE_LANDING = new Location(2560, 3266, 0);
+  /** Where the rope ladder drops the player: capture ticks 258 (west) and 655 (east). */
+  const WEST_ARDOUGNE_LANDING = new Location(2556, 3267, 0);
+  const EAST_ARDOUGNE_LANDING = new Location(2559, 3267, 0);
+  /**
+   * The rope ladder scene (capture ticks 254-260 and 651-657): the throw box at T, the
+   * ladder (bioladder 2065) replaces both Wall locs (bioladderwall 2066, the map's own) at
+   * T+1, the player faces the near ladder tile at T+2, the climb box and
+   * human_reachforladder at T+3, the landing at T+4, and the walls are back with the drop box
+   * at T+6, when the helper turns north. The first two boxes have no continue.
+   */
+  const ROPE_LADDER_OBJECT_ID = 2065;
+  const LADDER_WALL_OBJECT_ID = 2066;
+  const LADDER_TILES = Object.freeze([[2558, 3267, 1], [2557, 3267, 3]]);
+  const LADDER_BOX_TICKS = 3;
+  const CLIMB_LADDER_ANIMATION = 828; // human_reachforladder
+  const NORTH_ANGLE_TILE = [0, 1];
+  /** Released pigeons: three biopigeon_launch projectiles to the watchtower (capture tick 205). */
+  const PIGEON_LAUNCH_SPOTANIM = 72;
+  const PIGEON_FLIGHTS = Object.freeze([
+    { to: [2560, 3304], start: 5, end: 126, endHeight: 500 },
+    { to: [2561, 3305], start: 15, end: 146, endHeight: 480 },
+    { to: [2559, 3303], start: 25, end: 106, endHeight: 520 },
+  ]);
+  const PIGEON_START_HEIGHT = 64;
+  const PIGEON_SLOPE = 20;
+  const PIGEON_PROGRESS = 10;
+  /** The release box shows five ticks without a continue, then again with one (ticks 205, 210). */
+  const PIGEON_BOX_TICKS = 5;
+  /** The yard fence squeeze: message, regicide_tightfit and a 76-cycle exact move (ticks 304, 331). */
+  const SQUEEZE_ANIMATION = 1237;
+  const SQUEEZE_CYCLES = 76;
+  const SQUEEZE_TICKS = 3;
+  /** Cupboards (ticks 73-76, 88-89, 384-387, 411-412): human_openchest / human_closechest. */
+  const OPEN_CUPBOARD_ANIMATION = 536;
+  const CLOSE_CUPBOARD_ANIMATION = 535;
+  const CUPBOARD_OPEN_SOUND = 58; // cupboard_open, both cupboards opening and Jerico's closing
+  const NURSE_CUPBOARD_CLOSE_SOUND = 60; // door_close
+  /** Captured with its full stop (ticks 270, 275); the transcript's {{mes}} line has none. */
+  const GAS_MASK_MESSAGE = "You should leave your gas mask on while you're in West Ardougne.";
+  /**
+   * West Ardougne inside its walls. Ours: the bounds are not captured; the wall line east
+   * (x 2557-2558) is the one the ladder crosses.
+   */
+  const WEST_ARDOUGNE = { minX: 2460, maxX: 2556, minY: 3264, maxY: 3337 };
+  /** South-east Varrock's gate (2050/2051), where the guard searches the player (tick 944). */
+  const SOUTH_EAST_VARROCK_GATE_IDS = new Set([2050, 2051]);
+  const SOUTH_EAST_VARROCK_GATE_X = 3264;
+  const SOUTH_EAST_VARROCK_GATE_YS = new Set([3405, 3406]);
   const WATCHTOWER_TILE = { x: 2562, y: 3301 };
   const MOURNER_YARD = { minX: 2542, maxX: 2555, minY: 3328, maxY: 3333 };
-  const VARROCK_SOUTH_EAST_ZONE = { minX: 3265, maxX: 3287, minY: 3376, maxY: 3407 };
 
 
   const STAGE_STARTED = 1;
@@ -190,6 +251,10 @@ module.exports = function registerBiohazardQuest(api) {
   ]);
 
   let quest;
+  /** Doors the quest opens once a conversation ends ("door:open" through Doors.plugin). */
+  const pendingDoors = new WeakMap();
+  /** A door opened for the quest, so its own door:toggle passes it to Doors. */
+  const passingDoors = new WeakSet();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   const hasAllVials = (player) =>
@@ -201,6 +266,15 @@ module.exports = function registerBiohazardQuest(api) {
 
   const wornId = (player, slot) => player.getEquipment().get(slot)?.getId?.();
   const wearingGasMask = (player) => wornId(player, Equipment.HEAD_SLOT) === GAS_MASK_ITEM_ID;
+  const MOURNER_OUTFIT = [
+    [Equipment.HEAD_SLOT, GAS_MASK_ITEM_ID],
+    [Equipment.BODY_SLOT, ItemIdentifiers.MOURNER_TOP],
+    [Equipment.LEG_SLOT, ItemIdentifiers.MOURNER_TROUSERS],
+    [Equipment.HANDS_SLOT, ItemIdentifiers.MOURNER_GLOVES],
+    [Equipment.FEET_SLOT, ItemIdentifiers.MOURNER_BOOTS],
+    [Equipment.CAPE_SLOT, ItemIdentifiers.MOURNER_CLOAK],
+  ];
+  const wearingMournerOutfit = (player) => MOURNER_OUTFIT.every(([slot, itemId]) => wornId(player, slot) === itemId);
   const wearingMedicalGown = (player) => wornId(player, Equipment.BODY_SLOT) === MEDICAL_GOWN_ITEM_ID;
   const wearingPriestGown = (player) =>
     wornId(player, Equipment.BODY_SLOT) === PRIEST_GOWN_TOP_ITEM_ID &&
@@ -322,11 +396,8 @@ module.exports = function registerBiohazardQuest(api) {
 
   function giveCoins(player, amount) {
     const inventory = player.getInventory();
-    if (held(player, COINS_ITEM_ID)) {
-      inventory.adds(COINS_ITEM_ID, amount);
-      return true;
-    }
-    if (freeSlots(player) < 1) {
+    // Every coin must fit: a stack near the cap, or one with other metadata and no free slot, kept part or none.
+    if (inventory.getAddableAmount(new api.core.Item(COINS_ITEM_ID, amount)) < amount) {
       player.sendMessage("You need a free inventory space to take the coins.");
       return false;
     }
@@ -357,6 +428,146 @@ module.exports = function registerBiohazardQuest(api) {
     );
   }
 
+  /**
+   * The transcript's {{mes}} lines, sent as chat; every other Biohazard message step is a
+   * {{tbox}} and shows as a message box (capture: 229 messagebox, 193 objectbox, 11 double).
+   */
+  const CHAT_MESSAGE_IDS = new Set(["ObjHDu", "GvIvgu", "pJP40N", "Nidx7g", "qBP3ae", "m1Ysdw"]);
+  /** The item pictures the Wiki's boxes carry (and the capture's if_setobject), by step id. */
+  const BOX_ITEMS = new Map([
+    ["4g3EY1", [ItemIdentifiers.SPADE]],
+    ["tahENM", [BIRD_FEED_ITEM_ID]],
+    ["MfnHaX", [BIRD_FEED_ITEM_ID]],
+    ["s19b5i", [MEDICAL_GOWN_ITEM_ID]],
+    ["sjfA7d", [MEDICAL_GOWN_ITEM_ID]],
+    ["MDhZ7U", [MOURNER_KEY_ITEM_ID]],
+    ["I3WJuP", [DISTILLATOR_ITEM_ID]],
+    ["A6Q5pT", [DISTILLATOR_ITEM_ID]],
+    ["Vpxjql", [PLAGUE_SAMPLE_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID]],
+    ["EYYSjv", [PLAGUE_SAMPLE_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID]],
+    ["iL_fQb", [PLAGUE_SAMPLE_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID]],
+    ["CQkuOd", [TOUCH_PAPER_ITEM_ID]],
+    ["9S8xcG", [TOUCH_PAPER_ITEM_ID]],
+    ["K6WP1U", [PRIEST_GOWN_TOP_ITEM_ID]],
+  ]);
+  /** Boxes shown without a continue while the scene plays (see the ladder and pigeon notes). */
+  const HELD_BOXES = new Map([
+    ["NoNFvc", { holdTicks: PIGEON_BOX_TICKS }],
+    ...["9oMhpG", "vosgpt", "ROff35", "Op62O1", "FlwWvG", "jQrUuy"]
+      .map((id) => [id, { holdTicks: LADDER_BOX_TICKS, advance: true }]),
+  ]);
+
+  function messageBox(stepId, text) {
+    if (CHAT_MESSAGE_IDS.has(stepId)) return null;
+    const items = BOX_ITEMS.get(stepId);
+    if (items) return { items };
+    // A courier's or the guard's vial ("You give him / He takes / He gives you the vial of ...").
+    const vial = /the vial of/i.test(String(text ?? "")) ? vialFromText(text) : null;
+    if (vial) return { items: [vial] };
+    return { statement: true, ...(HELD_BOXES.get(stepId) ?? {}) };
+  }
+
+  function later(player, ticks, action) {
+    api.core.TaskManager.submit(new api.core.CountdownTask(player, ticks, action));
+  }
+
+  function sendSound(player, soundId) {
+    player.getPacketSender().sendSoundEffect(soundId, 1, 0);
+  }
+
+  function animate(player, animationId) {
+    player.performAnimation(new api.core.Animation(animationId));
+  }
+
+  /** The rope ladder over the wall, or the two Wall locs it replaces. */
+  function showRopeLadder(shown) {
+    const [from, to] = shown ? [LADDER_WALL_OBJECT_ID, ROPE_LADDER_OBJECT_ID] : [ROPE_LADDER_OBJECT_ID, LADDER_WALL_OBJECT_ID];
+    for (const [x, y, face] of LADDER_TILES) {
+      const location = new Location(x, y, 0);
+      const current = api.core.MapObjects.get(from, location);
+      if (!current) continue;
+      ObjectManager.deregister(current, true);
+      ObjectManager.register(new GameObject(to, new Location(x, y, 0), 10, face, null), true);
+    }
+  }
+
+  /** Crossings using the shared ladder; the walls come back when the last one ends. */
+  let ladderCrossings = 0;
+  const ladderScenes = new WeakMap();
+
+  function endLadderScene(player) {
+    const scene = ladderScenes.get(player);
+    if (!scene || scene.ended) return;
+    scene.ended = true;
+    ladderScenes.delete(player);
+    if (scene.shown && --ladderCrossings === 0) showRopeLadder(false);
+  }
+
+  /** Logging out cancels the player's scene timers, so the scene ends here instead. */
+  function endLadderSceneOnLogout({ player }) {
+    endLadderScene(player);
+  }
+
+  /** "... throws a rope ladder over the wall.": the ladder goes up and the player looks at it. */
+  function throwRopeLadder(player, westbound) {
+    endLadderScene(player);
+    const scene = { shown: false, ended: false };
+    ladderScenes.set(player, scene);
+    later(player, 1, () => {
+      if (scene.ended) return;
+      scene.shown = true;
+      if (ladderCrossings++ === 0) showRopeLadder(true);
+    });
+    const [x, y] = westbound ? LADDER_TILES[0] : LADDER_TILES[1];
+    later(player, 2, () => player.setPositionToFace(new Location(x, y, 0)));
+    // The drop box ends the scene; an interrupted one must not leave the ladder up.
+    later(player, LADDER_BOX_TICKS * 2, () => { if (ladderScenes.get(player) === scene) endLadderScene(player); });
+  }
+
+  /** "You climb up the rope ladder...": the climb, and the landing a tick later. */
+  function climbRopeLadder(player, westbound) {
+    animate(player, CLIMB_LADDER_ANIMATION);
+    later(player, 1, () => {
+      // Omart's first crossing counts once the player lands (the varp moves with the landing).
+      if (westbound && quest.getStage(player) === STAGE_RELEASED_PIGEONS) quest.setStage(player, STAGE_CLIMBED_LADDER);
+      player.moveTo(westbound ? WEST_ARDOUGNE_LANDING : EAST_ARDOUGNE_LANDING);
+    });
+  }
+
+  /** "...and drop down on the other side.": the walls are back and the helper turns north. */
+  function dropDownFromLadder(player, npc) {
+    endLadderScene(player);
+    const at = npc?.getLocation?.();
+    if (at) npc.setPositionToFace(new Location(at.getX() + NORTH_ANGLE_TILE[0], at.getY() + NORTH_ANGLE_TILE[1], at.getZ()));
+  }
+
+  const LADDER_THROWS = new Map([["9oMhpG", true], ["ROff35", true], ["FlwWvG", false]]);
+  const LADDER_CLIMBS = new Map([["vosgpt", true], ["Op62O1", true], ["jQrUuy", false]]);
+  const LADDER_DROPS = new Set(["v1MvBF", "3Xl8ZM", "PIRzeQ"]);
+
+  /** Jerico's pigeons fly at the watchtower, seen by everyone nearby. */
+  function launchPigeons(player) {
+    const from = player.getLocation().clone();
+    for (const flight of PIGEON_FLIGHTS) {
+      const to = new Location(flight.to[0], flight.to[1], from.getZ());
+      new api.core.Projectile(from, to, null, PIGEON_LAUNCH_SPOTANIM, flight.start, flight.end,
+        PIGEON_START_HEIGHT / 4, flight.endHeight / 4, player.getPrivateArea?.() ?? null)
+        .withAngle(PIGEON_SLOPE).withProgress(PIGEON_PROGRESS).sendProjectile();
+    }
+  }
+
+  function inWestArdougne(player) {
+    const at = player.getLocation();
+    return at.getZ() === 0 && at.getX() >= WEST_ARDOUGNE.minX && at.getX() <= WEST_ARDOUGNE.maxX
+      && at.getY() >= WEST_ARDOUGNE.minY && at.getY() <= WEST_ARDOUGNE.maxY;
+  }
+
+  function inMournerHq(player) {
+    const at = player.getLocation();
+    return at.getZ() <= 1 && at.getX() >= MOURNER_HQ.minX && at.getX() <= MOURNER_HQ.maxX
+      && at.getY() >= MOURNER_HQ.minY && at.getY() <= MOURNER_HQ.maxY;
+  }
+
   function inMournerYard(location) {
     const x = location?.getX?.() ?? location?.x ?? 0;
     const y = location?.getY?.() ?? location?.y ?? 0;
@@ -365,7 +576,7 @@ module.exports = function registerBiohazardQuest(api) {
 
   function nearWatchtower(player) {
     const location = player.getLocation?.();
-    if (!location) return false;
+    if (!location || (location.getZ?.() ?? location.z ?? 0) !== 0) return false;
     const x = location.getX?.() ?? location.x ?? 0;
     const y = location.getY?.() ?? location.y ?? 0;
     return Math.max(Math.abs(x - WATCHTOWER_TILE.x), Math.abs(y - WATCHTOWER_TILE.y)) <= 5;
@@ -420,6 +631,9 @@ module.exports = function registerBiohazardQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 1250);
+    // The cage key leaves the backpack as the quest completes (tick 1241).
+    const keys = player.getInventory().getAmount(MOURNER_KEY_ITEM_ID);
+    if (keys > 0) player.getInventory().deleteNumber(MOURNER_KEY_ITEM_ID, keys);
   }
 
   function elenaVariant(stage, player) {
@@ -435,13 +649,14 @@ module.exports = function registerBiohazardQuest(api) {
       return "delivering-the-samples-talking-to-elena-again-before-visiting-the-chemist";
     }
     if (stage >= STAGE_FOUND_DISTILLATOR) {
-      if (held(player, DISTILLATOR_ITEM_ID)) {
-        player.getInventory().deleteNumber(DISTILLATOR_ITEM_ID, 1);
-        quest.setStage(player, STAGE_GIVEN_DISTILLATOR);
-        return "delivering-the-samples-talking-to-elena-with-the-distillator";
-      }
-      return "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator";
+      // She takes it as she hands out the sample and vials (Vpxjql, capture tick 723).
+      return held(player, DISTILLATOR_ITEM_ID)
+        ? "delivering-the-samples-talking-to-elena-with-the-distillator"
+        : "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator";
     }
+    // Before the wall is crossed she points to Jerico (captured at stage 1, tick 29). Ours: the
+    // same reminder until the crossing, as no capture covers stages 2-4.
+    if (stage >= STAGE_STARTED && stage < STAGE_CLIMBED_LADDER) return "getting-started-talking-to-elena-again";
     if (stage >= STAGE_STARTED) {
       return "infiltrating-the-mourner-hq-talking-to-elena-without-the-distillator";
     }
@@ -493,6 +708,8 @@ module.exports = function registerBiohazardQuest(api) {
   }
 
   function selectVariant({ npcId, player }) {
+    // Talking to someone is a new conversation: a door click walked away from stays shut.
+    pendingDoors.delete(player);
     const stage = quest.getStage(player);
     if (ELENA_NPC_IDS.has(npcId)) {
       // Plague City registers after this quest; keep Elena's own quest until
@@ -560,8 +777,25 @@ module.exports = function registerBiohazardQuest(api) {
     if (VARROCK_COURIERS.has(npcId)) {
       return varrockCourierVariant(stage, player, VARROCK_COURIERS.get(npcId));
     }
+    if (npcId === SICKEST_MOURNER_NPC_ID) {
+      if (stage < STAGE_POISONED_STEW) return null;
+      return held(player, MOURNER_KEY_ITEM_ID) || stage >= STAGE_FOUND_DISTILLATOR
+        ? "infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs-talking-to-sickest-mourner-again-while-holding-the-key"
+        : "infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs";
+    }
     if (MOURNER_NPC_IDS.has(npcId)) {
       if (stage < STAGE_CLIMBED_LADDER) return null;
+      const at = player.getLocation();
+      const inside = at.getZ() <= 1 && at.getX() >= MOURNER_HQ.minX && at.getX() <= MOURNER_HQ.maxX
+        && at.getY() >= MOURNER_HQ.minY && at.getY() <= MOURNER_HQ.maxY;
+      if (stage >= STAGE_POISONED_STEW && inside) {
+        return stage >= STAGE_FOUND_DISTILLATOR || held(player, DISTILLATOR_ITEM_ID)
+          ? "infiltrating-the-mourner-hq-talking-to-mourner-inside-mourner-headquarters-after-getting-distillator"
+          : "infiltrating-the-mourner-hq-talking-to-mourner-inside-mourner-headquarters";
+      }
+      if (stage === STAGE_POISONED_STEW && wearingMedicalGown(player)) {
+        return "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown";
+      }
       if (stage === STAGE_POISONED_STEW) {
         return "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-after-poisoning-the-stew";
       }
@@ -587,9 +821,20 @@ module.exports = function registerBiohazardQuest(api) {
       return inventory.isFull();
     }
     if (value.includes("already has bird feed")) return held(player, BIRD_FEED_ITEM_ID);
+    // The pigeon cage's two branches, then the feed's (getting-started-opening-pigeon-cage,
+    // getting-started-throwing-bird-feed).
+    if (value.includes("in the wrong place or has not thrown the bird feed")) {
+      return quest.getStage(player) !== STAGE_USED_BIRD_FEED || !nearWatchtower(player);
+    }
+    if (value.includes("has thrown the bird feed and is near the watchtower fence")) {
+      return quest.getStage(player) === STAGE_USED_BIRD_FEED && nearWatchtower(player);
+    }
+    if (value.includes("is not near the watchtower fence")) return !nearWatchtower(player);
+    if (value.includes("is near the fence")) return nearWatchtower(player);
     if (value.includes("is not wearing a gas mask")) return !wearingGasMask(player);
     if (value.includes("not yet poisoned the stew or already has a medical gown")) {
-      return quest.getStage(player) !== STAGE_POISONED_STEW || held(player, MEDICAL_GOWN_ITEM_ID);
+      // A gown lost after the stew can be found again, or the HQ would stay shut.
+      return quest.getStage(player) < STAGE_POISONED_STEW || held(player, MEDICAL_GOWN_ITEM_ID);
     }
     // The Lost Tribe's chest uses the same "has the key" prose; only answer the
     // key conditions on this quest's own step ids.
@@ -621,9 +866,32 @@ module.exports = function registerBiohazardQuest(api) {
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
-  function handleGuidorLine({ player, npcId, text, pages }) {
-    if (npcId !== GUIDOR_NPC_ID) return;
+  /** Lines the quest acts on: the feed, Julie's request, and the doors a conversation opens. */
+  function handleLine(request) {
+    const { player, text, pages } = request;
     if (!pages?.some(({ page }) => page === "Biohazard")) return;
+    const value = String(text ?? "");
+    if (value === "Mmm, bird feed! Now what could I do with that?") {
+      // The feed arrives with the player's line, after the cupboard's box (tick 80).
+      if (!held(player, BIRD_FEED_ITEM_ID) && freeSlots(player) > 0) player.getInventory().adds(BIRD_FEED_ITEM_ID, 1);
+      return;
+    }
+    if (value === "Thank you, but I just want him to see a priest.") {
+      player.setAttribute(MET_JULIE_ATTRIBUTE, 1);
+      player.getPacketSender().sendVarbit(VARBIT_MET_JULIE, 1);
+      return;
+    }
+    if (value === "You may now pass." || value === "You heard right. Head on in and see what you can do.") {
+      // Only the conversation the door started opens it; the same line elsewhere does not.
+      const pending = pendingDoors.get(player);
+      if (pending?.kind === "line" && playing(pages, pending.variant)) request.after = () => openPendingDoor(player);
+      return;
+    }
+    handleGuidorLine(request);
+  }
+
+  function handleGuidorLine({ player, npcId, text }) {
+    if (npcId !== GUIDOR_NPC_ID) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_SPOKEN_TO_CHEMIST || stage >= STAGE_FOUND_SECRET) return;
     if (!wearingPriestGown(player) || !hasAllItems(player)) return;
@@ -638,34 +906,27 @@ module.exports = function registerBiohazardQuest(api) {
   }
 
   function handleAction(event) {
+    if (!event?.player) return;
+    const message = event.kind === "message" && event.pages?.some(({ page }) => page === "Biohazard");
+    if (!(message && handleMessageStep(event))) handleQuestAction(event);
+    if (!message || event.end || event.handled) return;
+    const box = messageBox(event.stepId, event.text);
+    if (box) event.box = box;
+  }
+
+  function handleQuestAction(event) {
     const { player, npcId, stepId, text } = event;
-    if (!player) return;
+    if (npcId === SICKEST_MOURNER_NPC_ID && SICKEST_MOURNER_ATTACK_IDS.has(stepId)) {
+      event.npc?.getCombat?.()?.attack(player);
+      return;
+    }
     if (stepId === COMPLETE_ACTION_ID && KING_LATHAS_NPC_IDS.has(npcId)) {
       if (quest.getStage(player) >= STAGE_REPORTED_TO_ELENA && !quest.isComplete(player)) {
         quest.complete(player);
       }
       return;
     }
-    if (OMART_NPC_IDS.has(npcId) && (stepId === "v1MvBF" || stepId === "3Xl8ZM")) {
-      const stage = quest.getStage(player);
-      if (stage === STAGE_RELEASED_PIGEONS) quest.setStage(player, STAGE_CLIMBED_LADDER);
-      player.moveTo(WEST_ARDOUGNE_LANDING);
-      return;
-    }
-    if (KILRON_NPC_IDS.has(npcId) && stepId === "PIRzeQ") {
-      player.moveTo(EAST_ARDOUGNE_LANDING);
-      return;
-    }
-    if (ELENA_NPC_IDS.has(npcId) && stepId === "Vpxjql") {
-      // On success leave the canonical message unhandled so NpcDialogues renders
-      // it once. On a capacity failure use Elena's imported capacity refusal and
-      // stop the branch.
-      if (!giveMissingItems(player, [PLAGUE_SAMPLE_ITEM_ID, ETHENEA_ITEM_ID, LIQUID_HONEY_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID], ELENA_CAPACITY_MESSAGE)) {
-        event.handled = true;
-        event.end = true;
-      }
-      return;
-    }
+
     if (ELENA_NPC_IDS.has(npcId) && stepId === "iL_fQb") {
       const missing = elenaMissingItems(player);
       if (!missing.length) {
@@ -740,85 +1001,137 @@ module.exports = function registerBiohazardQuest(api) {
     }
   }
 
+  /**
+   * Message steps the scenes act on; true when the step was one of them. The box each shows
+   * is chosen afterwards (messageBox).
+   */
+  function handleMessageStep(event) {
+    const { player, npc, npcId, stepId } = event;
+    const stage = quest.getStage(player);
+    const stop = () => { event.handled = true; event.end = true; return true; };
+    if (LADDER_THROWS.has(stepId)) {
+      throwRopeLadder(player, LADDER_THROWS.get(stepId));
+      return true;
+    }
+    if (LADDER_CLIMBS.has(stepId)) {
+      climbRopeLadder(player, LADDER_CLIMBS.get(stepId));
+      return true;
+    }
+    if (LADDER_DROPS.has(stepId)) {
+      dropDownFromLadder(player, npc);
+      return true;
+    }
+    switch (stepId) {
+      case "K9XBDO": // the feed lands on the watchtower
+        if (stage !== STAGE_SPOKEN_TO_JERICO || !held(player, BIRD_FEED_ITEM_ID)) return stop();
+        player.getInventory().deleteNumber(BIRD_FEED_ITEM_ID, 1);
+        quest.setStage(player, STAGE_USED_BIRD_FEED);
+        return true;
+      case "NoNFvc": // the pigeons fly
+        if (stage !== STAGE_USED_BIRD_FEED || !held(player, PIGEON_CAGE_ITEM_ID)) return stop();
+        player.getInventory().deleteNumber(PIGEON_CAGE_ITEM_ID, 1);
+        player.getInventory().adds(PIGEON_CAGE_EMPTY_ITEM_ID, 1);
+        quest.setStage(player, STAGE_RELEASED_PIGEONS);
+        launchPigeons(player);
+        return true;
+      case "fCdVDF": // the apple in the stew
+        if (stage !== STAGE_CLIMBED_LADDER || !held(player, ROTTEN_APPLE_ITEM_ID)) return stop();
+        player.getInventory().deleteNumber(ROTTEN_APPLE_ITEM_ID, 1);
+        quest.setStage(player, STAGE_POISONED_STEW);
+        return true;
+      case "sjfA7d": // Nurse Sarah's cupboard
+        if (freeSlots(player) < 1) return stop();
+        player.getInventory().adds(MEDICAL_GOWN_ITEM_ID, 1);
+        return true;
+      case "A6Q5pT": // the distillator crate
+        if (freeSlots(player) < 1) return stop();
+        player.getInventory().adds(DISTILLATOR_ITEM_ID, 1);
+        if (stage === STAGE_POISONED_STEW) quest.setStage(player, STAGE_FOUND_DISTILLATOR);
+        return true;
+      case "Vpxjql": { // Elena takes the distillator and hands out the sample and vials
+        if (!ELENA_NPC_IDS.has(npcId)) return false;
+        // The distillator left the backpack mid-conversation: nothing to test with.
+        if (stage === STAGE_FOUND_DISTILLATOR && !held(player, DISTILLATOR_ITEM_ID)) return stop();
+        const takes = stage === STAGE_FOUND_DISTILLATOR;
+        if (takes) player.getInventory().deleteNumber(DISTILLATOR_ITEM_ID, 1);
+        if (!giveMissingItems(player, [PLAGUE_SAMPLE_ITEM_ID, ETHENEA_ITEM_ID, LIQUID_HONEY_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID], ELENA_CAPACITY_MESSAGE)) {
+          if (takes) player.getInventory().adds(DISTILLATOR_ITEM_ID, 1);
+          return stop();
+        }
+        if (takes) quest.setStage(player, STAGE_GIVEN_DISTILLATOR);
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Both quest cupboards: "You open the cupboard.", the reach and its sound a tick later, the
+   * open loc the tick after (ticks 74-76, 385-387); closing is message, reach and sound at
+   * once and the shut loc a tick later (ticks 88-89, 411-412).
+   */
   function openCupboard(event) {
-    const { objectId, object } = event;
-    if (objectId === JERICO_CUPBOARD_CLOSED_ID) {
-      event.handled = true;
-      replaceObject(object, JERICO_CUPBOARD_OPEN_ID);
-      return true;
-    }
-    if (objectId === SARAH_CUPBOARD_CLOSED_ID) {
-      event.handled = true;
-      replaceObject(object, SARAH_CUPBOARD_OPEN_ID);
-      return true;
-    }
-    return false;
+    const { player, objectId, object } = event;
+    const openId = objectId === JERICO_CUPBOARD_CLOSED_ID ? JERICO_CUPBOARD_OPEN_ID
+      : objectId === SARAH_CUPBOARD_CLOSED_ID ? SARAH_CUPBOARD_OPEN_ID : null;
+    if (openId == null) return false;
+    event.handled = true;
+    player.sendMessage("You open the cupboard.");
+    later(player, 1, () => {
+      animate(player, OPEN_CUPBOARD_ANIMATION);
+      sendSound(player, CUPBOARD_OPEN_SOUND);
+    });
+    later(player, 2, () => {
+      if (api.core.MapObjects.get(objectId, object.getLocation())) replaceObject(object, openId);
+    });
+    return true;
   }
 
   function shutCupboard(event) {
-    const { objectId, object } = event;
-    if (objectId === JERICO_CUPBOARD_OPEN_ID) {
-      event.handled = true;
-      replaceObject(object, JERICO_CUPBOARD_CLOSED_ID);
-      return true;
-    }
-    if (objectId === SARAH_CUPBOARD_OPEN_ID) {
-      event.handled = true;
-      replaceObject(object, SARAH_CUPBOARD_CLOSED_ID);
-      return true;
-    }
-    return false;
+    const { player, objectId, object } = event;
+    const shutId = objectId === JERICO_CUPBOARD_OPEN_ID ? JERICO_CUPBOARD_CLOSED_ID
+      : objectId === SARAH_CUPBOARD_OPEN_ID ? SARAH_CUPBOARD_CLOSED_ID : null;
+    if (shutId == null) return false;
+    event.handled = true;
+    player.sendMessage("You close the cupboard.");
+    animate(player, CLOSE_CUPBOARD_ANIMATION);
+    sendSound(player, shutId === SARAH_CUPBOARD_CLOSED_ID ? NURSE_CUPBOARD_CLOSE_SOUND : CUPBOARD_OPEN_SOUND);
+    later(player, 1, () => {
+      if (api.core.MapObjects.get(objectId, object.getLocation())) replaceObject(object, shutId);
+    });
+    return true;
   }
 
   function searchCupboard(event) {
     const { player, objectId } = event;
     if (objectId === JERICO_CUPBOARD_OPEN_ID) {
       event.handled = true;
-      if (quest.getStage(player) < STAGE_SPOKEN_TO_JERICO) {
-        player.sendMessage("The cupboard is full of bird feed.");
-        return true;
-      }
-      if (held(player, BIRD_FEED_ITEM_ID)) {
-        player.sendMessage("I don't need any more bird feed.");
-        return true;
-      }
-      if (freeSlots(player) < 1) {
-        player.sendMessage("You find some bird feed in the cupboard but you don't have enough room to take it.");
-        return true;
-      }
-      player.getInventory().adds(BIRD_FEED_ITEM_ID, 1);
-      player.sendMessage("The cupboard is full of bird feed.");
+      // Ours: before Jerico has spoken of the pigeons the cupboard only shows its feed.
+      const early = quest.getStage(player) < STAGE_SPOKEN_TO_JERICO;
+      startTranscript(api, player, JERICO_NPC_ID, "Biohazard", "getting-started-searching-the-cupboard",
+        early ? (steps) => steps.slice(0, 1) : undefined);
       return true;
     }
     if (objectId === SARAH_CUPBOARD_OPEN_ID) {
       event.handled = true;
-      if (quest.getStage(player) < STAGE_POISONED_STEW || held(player, MEDICAL_GOWN_ITEM_ID)) {
-        player.sendMessage("You search the cupboard but you find nothing of interest.");
-        return true;
-      }
-      if (freeSlots(player) < 1) {
-        player.sendMessage("You find a medical gown in the cupboard but you don't have enough room to take it.");
-        return true;
-      }
-      player.getInventory().adds(MEDICAL_GOWN_ITEM_ID, 1);
-      player.sendMessage("You find a medical gown in the cupboard.");
+      startTranscript(api, player, NURSE_SARAH_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-searching-cupboard-by-nurse-sarah");
       return true;
     }
     return false;
   }
 
+  /**
+   * Investigate (only at stage 2, the watchtower multiloc's one op) throws the feed, as
+   * live does (tick 180); using the feed on it is the same throw. Ours: Investigate without
+   * feed does nothing, as no source covers it.
+   */
   function investigateWatchtower(event) {
     if (event.objectId !== WATCHTOWER_OBJECT_ID) return false;
     const { player } = event;
     event.handled = true;
-    if (quest.getStage(player) !== STAGE_SPOKEN_TO_JERICO) return true;
-    if (!held(player, BIRD_FEED_ITEM_ID) || !held(player, PIGEON_CAGE_ITEM_ID)) {
-      player.sendMessage("You need bird feed and a pigeon cage to distract the watchtower.");
-      return true;
-    }
-    player.getInventory().deleteNumber(BIRD_FEED_ITEM_ID, 1);
-    quest.setStage(player, STAGE_USED_BIRD_FEED);
-    player.sendMessage("You throw a handful of seeds onto the watchtower. The mourners do not seem to notice.");
+    if (quest.getStage(player) !== STAGE_SPOKEN_TO_JERICO || !held(player, BIRD_FEED_ITEM_ID)) return true;
+    startTranscript(api, player, JERICO_NPC_ID, "Biohazard", "getting-started-throwing-bird-feed");
     return true;
   }
 
@@ -826,19 +1139,11 @@ module.exports = function registerBiohazardQuest(api) {
     const { player, itemId } = event;
     if (itemId !== PIGEON_CAGE_ITEM_ID) return false;
     event.handled = true;
-    if (quest.getStage(player) !== STAGE_USED_BIRD_FEED || !nearWatchtower(player)) {
-      player.sendMessage("The pigeons don't want to leave.");
-      return true;
-    }
-    player.getInventory().deleteNumber(PIGEON_CAGE_ITEM_ID, 1);
-    if (player.getInventory().getAmount(PIGEON_CAGE_EMPTY_ITEM_ID) === 0) {
-      player.getInventory().adds(PIGEON_CAGE_EMPTY_ITEM_ID, 1);
-    }
-    quest.setStage(player, STAGE_RELEASED_PIGEONS);
-    player.sendMessage("The pigeons fly towards the watchtower. The mourners frantically try to scare them away.");
+    startTranscript(api, player, JERICO_NPC_ID, "Biohazard", "getting-started-opening-pigeon-cage");
     return true;
   }
 
+  /** Ticks 304/331: the message, regicide_tightfit and a 76-cycle exact move across the fence. */
   function squeezeFence(event) {
     if (event.objectId !== MOURNER_FENCE_OBJECT_ID || !event.location) return false;
     const x = event.location.getX?.() ?? event.location.x;
@@ -847,44 +1152,112 @@ module.exports = function registerBiohazardQuest(api) {
     if (x !== 2541 || y !== 3331 || z !== 0) return false;
     const { player } = event;
     event.handled = true;
+    if (!obstacleRunnerReady) {
+      ObstacleRunner.init(api);
+      obstacleRunnerReady = true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
     if (quest.getStage(player) < STAGE_CLIMBED_LADDER) {
       player.sendMessage("You have no reason to enter the Mourner HQ yard yet.");
       return true;
     }
     const inside = inMournerYard(player.getLocation?.());
-    player.moveTo(new Location(inside ? 2540 : 2542, 3331, 0));
+    ObstacleRunner.run(event, [
+      { msg: "You squeeze through the fence." },
+      { move: [inside ? 2541 : 2542, 3331, 0], anim: SQUEEZE_ANIMATION, speed: [0, SQUEEZE_CYCLES], ticks: SQUEEZE_TICKS },
+    ]);
+    return true;
+  }
+
+  function inspectCauldron(event) {
+    if (event.objectId !== CAULDRON_OBJECT_ID) return false;
+    const { player } = event;
+    event.handled = true;
+    if (quest.getStage(player) !== STAGE_CLIMBED_LADDER) return true;
+    startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", held(player, ROTTEN_APPLE_ITEM_ID)
+      ? "infiltrating-the-mourner-hq-using-rotten-apple-on-cauldron"
+      : "infiltrating-the-mourner-hq-inspecting-cauldron");
     return true;
   }
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
+    // The Wiki route uses bird feed on the watchtower fence; live Investigates it. Both play
+    // the same throw, so the feed is spent once.
+    if (itemId === BIRD_FEED_ITEM_ID && objectId === WATCHTOWER_OBJECT_ID) {
+      investigateWatchtower(event);
+      return;
+    }
     if (itemId !== ROTTEN_APPLE_ITEM_ID || objectId !== CAULDRON_OBJECT_ID) return;
     event.handled = true;
-    if (quest.getStage(player) !== STAGE_CLIMBED_LADDER) return;
-    if (!held(player, ROTTEN_APPLE_ITEM_ID)) return;
-    player.getInventory().deleteNumber(ROTTEN_APPLE_ITEM_ID, 1);
-    quest.setStage(player, STAGE_POISONED_STEW);
-    player.sendMessage("You place the rotten apple in the pot. It quickly dissolves into the stew.");
+    if (quest.getStage(player) !== STAGE_CLIMBED_LADDER || !held(player, ROTTEN_APPLE_ITEM_ID)) return;
+    startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-using-rotten-apple-on-cauldron");
   }
 
+
+  /** Whether a dialogue event comes from this Biohazard variant. */
+  function playing(pages, variant) {
+    return pages?.some(({ page, variants }) => page === "Biohazard" && variants?.includes(variant)) === true;
+  }
+
+  function openPendingDoor(player) {
+    const object = pendingDoors.get(player)?.object;
+    pendingDoors.delete(player);
+    if (!object || !player.isRegistered?.()) return;
+    passingDoors.add(player);
+    try {
+      api.emitCustomEvent("door:open", { player, object, handled: false });
+    } finally {
+      passingDoors.delete(player);
+    }
+  }
+
+  /**
+   * The headquarters' front door is the mourner behind it (capture ticks 468-485): before the
+   * stew he turns everyone away, after it he talks of food poisoning, and in the medical gown
+   * at stage 6 he lets the "doctor" in once the conversation ends. Later, in the gown, it just
+   * opens (tick 593). Leaving is never stopped.
+   */
   function openMournerDoor(event) {
-    const { player, objectId, location } = event;
+    const { player, objectId, location, object } = event;
     if (objectId !== MOURNER_HQ_DOOR_ID || !location) return false;
+    if (passingDoors.has(player)) return false;
     const z = location.getZ?.() ?? location.z;
     if (z !== 0) return false;
-    if (quest.getStage(player) < STAGE_POISONED_STEW) {
+    const x = location.getX?.() ?? location.x, y = location.getY?.() ?? location.y;
+    if (x === HQ_BACK_DOOR.x && y === HQ_BACK_DOOR.y) {
       event.handled = true;
-      player.sendMessage("The mourner guards will not let you in.");
+      const fromInside = player.getLocation().getY() < HQ_BACK_DOOR.y;
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", fromInside
+        ? "infiltrating-the-mourner-hq-opening-back-door-of-the-mourner-headquarters-from-the-inside"
+        : "infiltrating-the-mourner-hq-opening-back-door-of-the-mourner-headquarters");
       return true;
     }
-    if (!wearingMedicalGown(player)) {
+    if (inMournerHq(player)) return false;
+    if (quest.isComplete(player)) {
+      // After the quest the medical gown no longer works; only mourners pass (Wiki: Mourner
+      // Headquarters). Not captured: the guard's own transcript line.
+      if (wearingMournerOutfit(player)) return false;
       event.handled = true;
-      player.sendMessage("You need to be wearing a medical gown to enter the Mourner Headquarters.");
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Mourner (Biohazard)", "mourner-headquarters-guard");
       return true;
     }
-    return false;
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_FOUND_DISTILLATOR && wearingMedicalGown(player)) return false;
+    event.handled = true;
+    let variant = "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters";
+    if (stage >= STAGE_POISONED_STEW) {
+      variant = wearingMedicalGown(player)
+        ? "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-while-wearing-gown"
+        : "infiltrating-the-mourner-hq-talking-to-mourner-outside-mourner-headquarters-after-poisoning-the-stew";
+    }
+    if (object && wearingMedicalGown(player) && stage >= STAGE_POISONED_STEW) pendingDoors.set(player, { object, kind: "line", variant });
+    else pendingDoors.delete(player);
+    startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard", variant);
+    return true;
   }
 
+  /** The upstairs cage: locked without the key; with it, going in shows its box (tick 557). */
   function openCageGate(event) {
     if (!MOURNER_CAGE_GATE_IDS.has(event.objectId)) return false;
     const { player } = event;
@@ -898,6 +1271,11 @@ module.exports = function registerBiohazardQuest(api) {
       player.sendMessage("The gate is locked. You need a key.");
       return true;
     }
+    // The cage is east of the gate line (x 2551); leaving it opens silently (tick 580).
+    if (player.getLocation().getX() <= 2551) {
+      startTranscript(api, player, SICKEST_MOURNER_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-opening-the-gate-when-entering",
+        (steps) => steps.slice(0, 1));
+    }
     return false;
   }
 
@@ -906,20 +1284,19 @@ module.exports = function registerBiohazardQuest(api) {
     const { player } = event;
     event.handled = true;
     const stage = quest.getStage(player);
-    if (stage < STAGE_POISONED_STEW || stage >= STAGE_GIVEN_DISTILLATOR || held(player, DISTILLATOR_ITEM_ID)) {
+    if (stage < STAGE_POISONED_STEW || stage >= STAGE_GIVEN_DISTILLATOR) {
       player.sendMessage("You search the crate but find nothing of interest.");
       return true;
     }
-    if (freeSlots(player) < 1) {
-      player.sendMessage("You search the crate and find Elena's distillator but you don't have enough room to take it.");
-      return true;
-    }
-    player.getInventory().adds(DISTILLATOR_ITEM_ID, 1);
-    if (stage === STAGE_POISONED_STEW) quest.setStage(player, STAGE_FOUND_DISTILLATOR);
-    player.sendMessage("You search the crate and find Elena's distillator.");
+    startTranscript(api, player, SICKEST_MOURNER_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-searching-the-distillator-crate");
     return true;
   }
 
+  /**
+   * Guidor's door: before the chemist, the player's own refusal; after it Julie asks for a
+   * priest (ticks 1064-1071, which set biohazard_met_julie); in both priest gown pieces it
+   * opens without a word (tick 1077).
+   */
   function openBedroomDoor(event) {
     if (event.objectId !== BEDROOM_DOOR_CLOSED_ID) return false;
     const { player, object } = event;
@@ -930,13 +1307,12 @@ module.exports = function registerBiohazardQuest(api) {
       return true;
     }
     if (!wearingPriestGown(player)) {
-      startTranscript(api, player, JULIE_NPC_ID, "Julie", "opening-bedroom-door-without-priest-gown-equipped");
+      if (stage < STAGE_FOUND_SECRET) {
+        startTranscript(api, player, JULIE_NPC_ID, "Biohazard", "visiting-south-east-varrock-entering-guidor-s-room-after-talking-to-the-chemist");
+      } else {
+        startTranscript(api, player, JULIE_NPC_ID, "Julie", "opening-bedroom-door-without-priest-gown-equipped");
+      }
       return true;
-    }
-    // Guidor's own entry conversation, then the door opens. In the priest gown
-    // Julie accepts the priest; without it she refuses.
-    if (isGuidorBedroomDoor(object)) {
-      startTranscript(api, player, JULIE_NPC_ID, "Biohazard", "visiting-south-east-varrock-talking-to-julie-while-wearing-priest-gown-top-and-bottom");
     }
     // Open leaf swings one quarter turn from the closed wall face; copying the
     // closed face leaves the doorway clipped on its west->east approach.
@@ -944,39 +1320,115 @@ module.exports = function registerBiohazardQuest(api) {
     return true;
   }
 
-  function isGuidorBedroomDoor(object) {
-    const location = object?.getLocation?.();
-    const x = location?.getX?.() ?? location?.x;
-    const y = location?.getY?.() ?? location?.y;
-    return x === GUIDOR_BEDROOM_DOOR.x && y === GUIDOR_BEDROOM_DOOR.y;
-  }
-
-  function handleVarrockEnter({ player }) {
+  function openHqTrapdoor(event) {
+    const { player, objectId, location } = event;
+    const at = location ?? event.object?.getLocation?.();
+    if (objectId !== HQ_TRAPDOOR_ID || !at) return false;
+    const x = at.getX?.() ?? at.x, y = at.getY?.() ?? at.y, z = at.getZ?.() ?? at.z;
+    if (x !== HQ_TRAPDOOR.x || y !== HQ_TRAPDOOR.y || z !== HQ_TRAPDOOR.z) return false;
+    // Only the Biohazard infiltration refuses the basement. Mourning's End Part I (which needs
+    // Biohazard done) and Song of the Elves own this trapdoor afterwards.
     const stage = quest.getStage(player);
-    if (stage < STAGE_SPOKEN_TO_CHEMIST || stage >= STAGE_FOUND_SECRET) return;
-    startTranscript(api, player, GUARD_NPC_ID, "Biohazard", "visiting-south-east-varrock-entering-south-east-varrock");
+    if (stage < STAGE_POISONED_STEW || quest.isComplete(player)) return false;
+    event.handled = true;
+    startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard",
+      "infiltrating-the-mourner-hq-attempting-to-open-trapdoor-inside-mourner-headquarters");
+    return true;
   }
 
-  function handleVarrockExit({ player }) {
+  function atSouthEastVarrockGate(objectId, location) {
+    if (!SOUTH_EAST_VARROCK_GATE_IDS.has(objectId) || !location) return false;
+    const x = location.getX?.() ?? location.x, y = location.getY?.() ?? location.y, z = location.getZ?.() ?? location.z;
+    return x === SOUTH_EAST_VARROCK_GATE_X && SOUTH_EAST_VARROCK_GATE_YS.has(y) && z === 0;
+  }
+
+  /**
+   * South-east Varrock's gate while the vials matter (stages 12-13): going in, the guard
+   * searches the player and opens it after "You may now pass." (ticks 944-959); coming out
+   * with a vial, the player's warning and "Leave anyway?" (Yes opens it). Ours: the way out
+   * is not captured; it uses the transcript at the same gate.
+   */
+  function openSouthEastVarrockGate(event) {
+    const { player, objectId, location, object } = event;
+    if (!atSouthEastVarrockGate(objectId, location) || passingDoors.has(player)) return false;
     const stage = quest.getStage(player);
-    if (stage < STAGE_SPOKEN_TO_CHEMIST || stage >= STAGE_FOUND_SECRET) return;
-    if (![ETHENEA_ITEM_ID, LIQUID_HONEY_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID].some((itemId) => held(player, itemId))) return;
-    // The canonical exit conversation, with its "Leave anyway?" choice.
-    startTranscript(api, player, GUARD_NPC_ID, "Biohazard", "visiting-south-east-varrock-exiting-south-east-varrock-while-holding-the-vials");
+    if (stage < STAGE_SPOKEN_TO_CHEMIST || stage >= STAGE_FOUND_SECRET) return false;
+    const entering = player.getLocation().getX() < SOUTH_EAST_VARROCK_GATE_X;
+    if (!entering && ![ETHENEA_ITEM_ID, LIQUID_HONEY_ITEM_ID, SULPHURIC_BROLINE_ITEM_ID].some((itemId) => held(player, itemId))) return false;
+    event.handled = true;
+    const variant = entering
+      ? "visiting-south-east-varrock-entering-south-east-varrock"
+      : "visiting-south-east-varrock-exiting-south-east-varrock-while-holding-the-vials";
+    pendingDoors.set(player, { object, kind: entering ? "line" : "choice", variant });
+    startTranscript(api, player, GUARD_NPC_ID, "Biohazard", variant);
+    return true;
   }
 
-  /** The sickest mourner upstairs dies and drops the key: the canonical message. */
+  /** "Leave anyway?" at the gate: Yes walks out through it. */
+  function handleChoice({ player, option, pages }) {
+    const pending = pendingDoors.get(player);
+    if (pending?.kind !== "choice" || !playing(pages, pending.variant)) return;
+    if (option === "Yes.") openPendingDoor(player);
+    else if (option === "No.") pendingDoors.delete(player);
+  }
+
+  /**
+   * The sickest mourner's key goes straight into the backpack with its box (tick 543), so
+   * the drop table's key (Mourner (boss): always, during the quest) is the quest's to give.
+   * The Wiki: a full backpack drops it on the ground.
+   */
+  function keepKeyForQuest(event) {
+    const { player, npcId, drops } = event ?? {};
+    if (!player || npcId !== SICKEST_MOURNER_NPC_ID || !Array.isArray(drops)) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_POISONED_STEW || stage >= STAGE_COMPLETE) return;
+    for (let index = drops.length - 1; index >= 0; index--) {
+      if (drops[index]?.itemId === MOURNER_KEY_ITEM_ID) drops.splice(index, 1);
+    }
+  }
+
   function handleNpcDeath(event) {
-    const { killer, npcId } = event ?? {};
+    const { killer, npcId, npc } = event ?? {};
     if (!killer || npcId !== SICKEST_MOURNER_NPC_ID) return;
     const stage = quest.getStage(killer);
     if (stage < STAGE_POISONED_STEW || stage >= STAGE_COMPLETE) return;
+    if (freeSlots(killer) > 0) {
+      killer.getInventory().adds(MOURNER_KEY_ITEM_ID, 1);
+    } else {
+      const at = npc?.getLocation?.() ?? killer.getLocation();
+      api.getItemOnGroundManager().registerLocation(killer, new api.core.Item(MOURNER_KEY_ITEM_ID, 1), at.clone(), killer.getPrivateArea?.() ?? null);
+    }
     startTranscript(api, killer, SICKEST_MOURNER_NPC_ID, "Biohazard", "infiltrating-the-mourner-hq-talking-to-sickest-mourner-upstairs-when-the-sickest-mourner-dies");
+  }
+
+  /** In West Ardougne the gas mask stays on (ticks 270, 275), and in the HQ the medical gown. */
+  function keepQuestGearOn(player, slot) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_CLIMBED_LADDER || stage >= STAGE_COMPLETE) return true;
+    if (slot === Equipment.HEAD_SLOT && wearingGasMask(player) && inWestArdougne(player)) {
+      player.sendMessage(GAS_MASK_MESSAGE);
+      return false;
+    }
+    if (slot === Equipment.BODY_SLOT && stage >= STAGE_POISONED_STEW && wearingMedicalGown(player) && inMournerHq(player)) {
+      startTranscript(api, player, HQ_DOOR_MOURNER_NPC_ID, "Biohazard",
+        "infiltrating-the-mourner-hq-attempting-to-remove-gown-while-inside-mourner-headquarters");
+      return false;
+    }
+    return true;
+  }
+
+  function refuseUnequip(event) {
+    if (!keepQuestGearOn(event.player, event.slot)) event.allow = false;
+  }
+
+  function refuseEquipOver(event) {
+    if (!keepQuestGearOn(event.player, event.slot)) event.allow = false;
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
     player.getPacketSender().sendVarbit(VARBIT_FREE_CLOTHES, Number(player.getAttribute(FREE_GOWN_ATTRIBUTE)) === 1 ? 1 : 0);
+    player.getPacketSender().sendVarbit(VARBIT_MET_JULIE, Number(player.getAttribute(MET_JULIE_ATTRIBUTE)) === 1 ? 1 : 0);
   }
 
   function handleBiohazardDoorToggle(event) {
@@ -994,8 +1446,9 @@ module.exports = function registerBiohazardQuest(api) {
         return true;
       }
     }
-    // Doors.plugin owns the HQ door and cage gates; answer through its toggle
-    // event so the gown/key checks run before it opens them.
+    // Doors.plugin owns the HQ door, the cage gates and south-east Varrock's gate; answer
+    // through its toggle event so the quest's checks and scenes run before it opens them.
+    if (openSouthEastVarrockGate(event)) return true;
     if (openMournerDoor(event)) return true;
     if (openCageGate(event)) return true;
     // The Combat Training Camp gate stays locked until Biohazard is complete.
@@ -1029,26 +1482,32 @@ module.exports = function registerBiohazardQuest(api) {
   });
 
   api.persistAttribute(FREE_GOWN_ATTRIBUTE, 0);
+  api.persistAttribute(MET_JULIE_ATTRIBUTE, 0);
   api.persistAttribute(GIVEN_VIALS_ATTRIBUTE, "");
   api.persistAttribute(CHANCY_REFUND_ATTRIBUTE, "");
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
-  api.onCustomEvent("npc-dialogue:line", handleGuidorLine);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-drops:roll", keepKeyForQuest);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("door:toggle", handleBiohazardDoorToggle);
   api.onNpcDeath(handleNpcDeath);
-  api.onObjectInteraction("Cupboard", { Open: openCupboard, Search: searchCupboard, Shut: shutCupboard });
+  api.onObjectInteraction("Cupboard", { Open: openCupboard, Search: searchCupboard, Close: shutCupboard });
   api.onObjectInteraction("Watchtower", { Investigate: investigateWatchtower });
+  api.onObjectInteraction("Cauldron", { Inspect: inspectCauldron });
   api.onObjectInteraction("Fence", { "Squeeze-through": squeezeFence });
   api.onObjectInteraction("Door", { Open: openMournerDoor });
   api.onObjectInteraction("Gate", { Open: openCageGate });
   api.onObjectInteraction("Crate", { Search: searchMournerCrate });
   api.onObjectInteraction("Bedroom door", { Open: openBedroomDoor });
+  api.onObjectInteraction("Trapdoor", { Open: openHqTrapdoor });
   api.onItemOnObject(handleItemOnObject);
   api.onItemAction("Pigeon cage", { Open: openPigeonCage });
-  api.onZoneEnter(VARROCK_SOUTH_EAST_ZONE, handleVarrockEnter);
-  api.onZoneExit(VARROCK_SOUTH_EAST_ZONE, handleVarrockExit);
+  api.onCanUnequip(refuseUnequip);
+  api.onCanEquip(refuseEquipOver);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(endLadderSceneOnLogout);
 };

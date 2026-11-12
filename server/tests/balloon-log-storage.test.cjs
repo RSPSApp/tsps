@@ -21,14 +21,17 @@ before(async () => {
   Travel = require('../plugins/world/balloontransport/Travel.BalloonTransport');
   Storage = require('../plugins/world/balloontransport/Storage.BalloonTransport');
   Controls = require('../plugins/world/balloontransport/Controls.BalloonTransport');
+  let entranaCheck;
   const api = new Proxy({
     core: {
       ...core,
       TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); } },
       WorldDefinition: { isMembersWorld: () => true },
     },
+    onCustomEvent(name, handler) { if (name === 'entrana:check-items') entranaCheck = handler; },
     emitCustomEvent(name, event) {
       if (name === 'quest:is-complete') event.complete = true;
+      if (name === 'entrana:check-items') entranaCheck(event);
     },
     sendMultiChatboxPrompt(player, title, ...pairs) {
       const options = [];
@@ -36,6 +39,8 @@ before(async () => {
       prompts.push({ player, title, options });
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
+  require('../plugins/npcs/Entrana.plugin').register(api);
+  assert.equal(typeof entranaCheck, 'function');
   Common.init(api);
 });
 
@@ -63,16 +68,17 @@ function fakePlayer({ at = [2938, 3421], items = {} } = {}) {
     setAttribute: (k, v) => { player.attributes[k] = v; },
     sendMessage: (m) => player.messages.push(m),
     setEnteredAmountAction: (action) => { player.amount = action; },
-    getSkillManager: () => ({ getMaxLevel: () => 99, addExperience() {} }),
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperience() {} }),
     getInventory: () => ({
       getAmount: (item) => inventory.get(item) ?? 0,
       delete: (item, n) => inventory.set(item, (inventory.get(item) ?? 0) - n),
       adds: (item, n) => inventory.set(item, (inventory.get(item) ?? 0) + n),
       getItems: () => [...inventory].filter(([, n]) => n > 0).map(([item, n]) => new core.Item(item, n)),
+      getValidItems: () => [...inventory].filter(([, n]) => n > 0).map(([item, n]) => new core.Item(item, n)),
       refreshItems() {},
     }),
     inventory,
-    getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment }),
+    getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment, getValidItems: () => equipment.filter(item => item.getId() > 0 && item.getAmount() > 0) }),
     getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
     getDialogueManager: () => ({
       startDialogues: (chain) => {

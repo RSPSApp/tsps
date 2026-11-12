@@ -27,17 +27,27 @@ class TeleportSpell extends Spell {
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }
 
-    cast(player: Player, name: string, destination: Location = this.data.destination): boolean {
+    /**
+     * A plugin may ask first ("spell:teleport-confirm": the Wilderness teleports' warning). It is asked once the
+     * spell could be cast, and nothing is taken until it says go, when the checks run again.
+     */
+    cast(player: Player, name: string, destination: Location = this.data.destination, option?: string): boolean {
         if (!TeleportHandler.checkReqs(player, destination, 20, name) || !this.canCast(player, false)) {
             return true;
         }
-        if (!this.canCast(player, true)) {
-            return true;
+        const request = { player, name, proceed: () => this.complete(player, name, destination, option), handled: false };
+        PluginManager.emitCustomEvent("spell:teleport-confirm", request);
+        if (!request.handled) request.proceed();
+        return true;
+    }
+
+    private complete(player: Player, name: string, destination: Location, option?: string): void {
+        if (!TeleportHandler.checkReqs(player, destination, 20, name) || !this.canCast(player, false) || !this.canCast(player, true)) {
+            return;
         }
         TeleportHandler.teleport(player, destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false,
-            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name }));
+            () => PluginManager.emitCustomEvent("spell:teleport-arrival", option === undefined ? { player, name } : { player, name, option }));
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
-        return true;
     }
 }
 
@@ -77,10 +87,16 @@ export class SpellTeleports {
         return Array.from(this.SPELLS, ([name, spell]) => ({ name, ...spell.data }));
     }
 
-    /** Casts a teleport; `destination` replaces the spell's own (Varrock's Grand Exchange option). */
-    static handleSelf(player: Player, name: string | undefined, destination?: Location): boolean {
+    /**
+     * Casts a teleport; `destination` replaces the spell's own (Varrock's Grand Exchange option). `option` names
+     * the spellbook option cast, for the arrival event (Teleport to House's "outside").
+     */
+    static handleSelf(player: Player, name: string | undefined, destination?: Location, option?: string): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         const spell = this.SPELLS.get(key);
-        return spell ? spell.cast(player, key, destination) : false;
+        // A spell of another book isn't this one's: the Arceuus Ape Atoll Teleport shares the standard one's name, and
+        // the standard spell took its click (refused for the book, yet handled), so the Arceuus spell never ran.
+        if (!spell || spell.data.spellbook !== player.getSpellbook()) return false;
+        return spell.cast(player, key, destination, option);
     }
 }

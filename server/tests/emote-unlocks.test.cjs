@@ -142,6 +142,13 @@ test('skillcape spam cannot restart its animation and a walk waits for the cape 
     connection.processTurnPackets();
   }
   const emote = slot => ({ type: 'widget_action', widgetId: EMOTE_CONTENTS, groupId: 216, childId: 2, slot, buttonNum: 1, opId: 1, itemId: -1 });
+  p.getMovementQueue().setBlockMovement(true);
+  await send([emote(43)]);
+  assert.deepEqual(played, [], 'the cape cannot interrupt a movement lock');
+  assert.deepEqual(graphics, []);
+  assert.equal(p.getCombat().getAnimationStallTicks(), 0);
+  assert.equal(p.getMovementQueue().isMovementBlocked(), true);
+  p.getMovementQueue().setBlockMovement(false);
   await send([emote(43)]);
   assert.deepEqual(played, [4959]);
   assert.deepEqual(graphics, [823]);
@@ -175,14 +182,18 @@ test('cape stall durations follow the Wiki per cape and refusals do not start a 
   const durations = { ATTACK: 6, STRENGTH: 15, DEFENCE: 8, RANGED: 9, PRAYER: 10, MAGIC: 5,
     RUNECRAFTING: 10, HITPOINTS: 6, AGILITY: 7, HERBLORE: 14, THIEVING: 5, CRAFTING: 13,
     FLETCHING: 13, SLAYER: 5, CONSTRUCTION: 12, MINING: 8, SMITHING: 20, FISHING: 12,
-    COOKING: 25, FIREMAKING: 7, WOODCUTTING: 20, FARMING: 10, HUNTER: 12 };
+    COOKING: 25, FIREMAKING: 7, WOODCUTTING: 20, FARMING: 10, HUNTER: 12, SAILING: 15 };
   for (const cape of require('../plugins/items/data/skillcapes.json').capes) {
-    if (cape.skill === 'SAILING') continue; // Its emote is not implemented by the current resolver.
-    for (const name of [cape.cape, cape.trimmed]) {
+    for (const name of [cape.cape, cape.trimmed, cape.worn, cape.trimmedWorn].filter(Boolean)) {
       const id = core.CacheDefinitions.getObjId(name);
       assert.ok(id != null, `cache names ${name}`);
       p.getEquipment().set(core.Equipment.CAPE_SLOT, new core.Item(id));
-      assert.equal(resolveSkillcapeEmote(p, { core }).stallTicks, durations[cape.skill], name);
+      const emote = resolveSkillcapeEmote(p, { core });
+      assert.equal(emote?.stallTicks, durations[cape.skill], name);
+      if (cape.skill === 'SAILING') {
+        assert.equal(emote.sequence, core.CacheDefinitions.getSeqId('human_skillcape_sailing'));
+        assert.equal(emote.graphic, core.CacheDefinitions.getSpotanimId('skillcape_sailing_emote_spotanim'));
+      }
     }
   }
   for (const [id, ticks] of [[core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE, 32], [core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE_T_, 32], [core.ItemIdentifiers.MAX_CAPE, 8]]) {

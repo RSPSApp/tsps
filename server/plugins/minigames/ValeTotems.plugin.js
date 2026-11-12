@@ -11,6 +11,9 @@ const UNITS = [
   require("./valetotems/State.ValeTotems"),
   require("./valetotems/Totems.ValeTotems"),
   require("./valetotems/Offerings.ValeTotems"),
+  require("./valetotems/Items.ValeTotems"),
+  require("./valetotems/Book.ValeTotems"),
+  require("./valetotems/Shop.ValeTotems"),
   require("./valetotems/Ents.ValeTotems"),
   require("./valetotems/Icons.ValeTotems"),
   require("./valetotems/Commands.ValeTotems"),
@@ -18,6 +21,7 @@ const UNITS = [
 
 module.exports = {
   name: "ValeTotems",
+  description: "Adds the Vale Totems Fletching minigame in the Auburn Valley: building and decorating totems, ent offerings, loot and research points.",
   members: true,
   register(api) {
     for (const unit of UNITS) unit.init?.(api);

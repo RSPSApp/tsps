@@ -14,7 +14,7 @@
  * import can be re-run: `--check` must report shops.json as up to date.
  *
  * Usage:
- *   node scripts/import-osrs-shops.mjs [--docs <osrsreboxed/docs>] [--check]
+ *   node scripts/import-osrs-shops.mjs [--docs <osrsreboxed/docs>] [--existing <shops.json>] [--check]
  *
  * Default docs path: ../../osrsreboxed-db/docs relative to the repo root.
  */
@@ -33,7 +33,6 @@ const CURRENCY_OVERRIDES = {
   "Justine's stuff for the Last Shopper Standing": "LAST MAN STANDING POINTS",
   "Mahogany Homes Reward Shop": "MAHOGANY HOMES POINTS",
   "PvP Arena Rewards": "PVP ARENA POINTS",
-  "Vale Research Exchange": "VALE RESEARCH POINTS",
 };
 
 // Wiki page parse artefacts, not real shops.
@@ -59,24 +58,17 @@ const REPLACED_BY_PLUGIN = {
   // The Friendly Forester's shop is the Forestry plugin's Omnishop, not a shops.json row.
   "Forestry Shop": "the Friendly Forester's Omnishop (Forestry)",
   "Useful Supplies": "The Blood Moon Rises Castle Drakan chest (omnishop row 16873)",
+  // Priced in termites by the cache's omnishop rows; the graceful kit also takes a graceful set.
+  "Worm Tongue's Wares": "Worm Tongue's Omnishop (omnishop row wyrm_agility_rewards_shop, ColossalWyrmAgility)",
+  "Vale Research Exchange": "Ranulph's Omnishop (omnishop row ent_totems_shop, Shop.ValeTotems.js)",
 };
 
-// Karamja gloves variants share their default store's NPC and option; bound
-// as well, the two shops cancel each other out, so only the default is bound.
+// Shop versions a plugin opens from its own NPC options, so they take no binding here: Gabooty's
+// Karamja gloves versions (Tai Bwo Wannai Cleanup). The other Karamja gloves versions share their
+// Default store's NPC option, and the DiaryRewards plugin picks one by the gloves worn.
 const UNBOUND = new Set([
-  "Davon's Amulet Store. (Karamja gloves)",
-  "Fernahei's Fishing Hut. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Cooperative. (Karamja gloves)",
   "Gabooty's Tai Bwo Wannai Drinky Store. (Karamja gloves)",
-  "Jiminua's Jungle Store. (Karamja gloves 3+)",
-  "Karamja General Store (Karamja gloves 3)",
-  "Obli's General Store. (Karamja gloves)",
-  "Tamayu's Spear Stall (Karamja gloves)",
-  "TzHaar-Hur-Lek's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Rin's Ore and Gem Store (Karamja gloves)",
-  "TzHaar-Hur-Tel's Equipment Store (Karamja gloves)",
-  "TzHaar-Hur-Zal's Equipment Store (Karamja gloves)",
-  "TzHaar-Mej-Roh's Rune Store (Karamja gloves)",
 ]);
 
 // NPC bindings that differ from the Wiki's shop owners: { optionSlot: [ids] }
@@ -111,12 +103,7 @@ const EXTRA_STOCK = {
 // Per-item prices for currencies the shop's multipliers cannot price.
 // ITEM_PRICES sets an item row's "price"; SHOP_PRICES writes a shop-level
 // "prices" map, kept in the listed order.
-const ITEM_PRICES = {
-  // The heat-proof vessel row is Pete's one-time capacity unlock.
-  "Petrified Pete's Ore Shop": { 21539: 10000 },
-  // Theatre of Blood escape crystal (Night at the Theatre).
-  "Mysterious Stranger (shop)": { 22517: 75000 },
-};
+const ITEM_PRICES = {};
 const SHOP_PRICES = {
   // Stardust costs (Shooting Stars).
   "Dusuri's Star Shop": [
@@ -127,6 +114,12 @@ const SHOP_PRICES = {
   ],
   // Ornate maul handle, 15 points.
   "Justine's stuff for the Last Shopper Standing": [[24229, 15]],
+  // Wiki (PvP Arena Rewards): a Blighted surge sack (x50) for 10 points, a Scroll of Imbuing for 200. The sack's
+  // 10 points buy 50 of them (Rank.DuelArena.js delivers the 50).
+  "PvP Arena Rewards": [
+    [26705, 10], // Blighted surge sack (x50)
+    [26706, 200], // Scroll of Imbuing
+  ],
   // Perdu's fees (Wiki: Lost Property shop). Most of the stock is worth little or nothing,
   // and the diary rows are display items worth 0, so the multipliers can't price them.
   "Lost Property shop": [
@@ -167,13 +160,16 @@ const INFINITE_STOCK = 2_000_000_000;
 function parseArgs(argv) {
   let docs;
   let check = false;
+  let existing = shopsFile;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--docs") docs = argv[++i];
+    else if (argv[i] === "--existing") existing = path.resolve(argv[++i]);
     else if (argv[i] === "--check") check = true;
   }
   return {
     docs: docs ? path.resolve(docs) : path.resolve(repoRoot, "..", "osrsreboxed-db", "docs"),
     check,
+    existing,
   };
 }
 
@@ -196,16 +192,53 @@ function currencyFor(name, info) {
   return raw.toUpperCase();
 }
 
-function originalStock(name, items) {
+/**
+ * The Wiki's StoreTableHead figures, per mille of the item's value: "Sells at" (sellmultiplier, what a player
+ * pays), "Buys at" (buymultiplier, what a player is paid) and "Change per" (delta, how far either price moves for
+ * each item above or below the shop's normal stock). Every shop keeps the figures its page gives; the server
+ * decides which currencies they price.
+ */
+function salesPolicy(info) {
+  const rate = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : undefined);
+  return { sellsAt: rate(info?.sells_at), buysAt: rate(info?.buys_at), changePer: rate(info?.change_per) };
+}
+
+// These currencies use the item value and stock-sensitive rates in ShopManager;
+// BLOOD_MONEY uses its own item valuation. A StoreLine quote must not freeze either.
+const VALUE_PRICED_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS", "BLOOD_MONEY"]);
+
+function exportedPrice(item, info, currency) {
+  if (VALUE_PRICED_CURRENCIES.has(currency)) return undefined;
+  const shopCurrency = String(info?.currency ?? "coins").trim().toUpperCase();
+  const rowCurrency = String(item.currency ?? info?.currency ?? "coins").trim().toUpperCase();
+  // The runtime cannot charge a second currency for one row.
+  if (rowCurrency !== shopCurrency) return undefined;
+  // Preserve absent, expression, free and malformed values as unresolved. The
+  // runtime ignores zero overrides; emitting one would falsely claim a free row.
+  if (typeof item.sell !== "string" || !/^(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(item.sell)) return undefined;
+  const price = Number(item.sell.replaceAll(",", ""));
+  return Number.isSafeInteger(price) ? price : undefined;
+}
+
+function originalStock(name, items, info, currency) {
   const stock = (EXTRA_STOCK[name] ?? []).map((entry) => ({ ...entry }));
   const prices = ITEM_PRICES[name] ?? {};
+  const seenPrices = new Map();
+  for (const item of items ?? []) {
+    const price = prices[item.id] ?? exportedPrice(item, info, currency);
+    if (seenPrices.has(item.id) && seenPrices.get(item.id) !== price) {
+      throw new Error(`Conflicting exported prices for ${name}, item ${item.id}`);
+    }
+    seenPrices.set(item.id, price);
+  }
   for (const item of items ?? []) {
     const amount = stockAmount(item.stock);
     if (!Number.isInteger(item.id) || item.id <= 0 || amount === null || amount < 0) continue;
     const entry = { id: item.id, amount };
     const restock = Number(item.restock_time);
     if (Number.isFinite(restock) && restock > 0) entry.restockTicks = restock;
-    if (prices[item.id] !== undefined) entry.price = prices[item.id];
+    const price = prices[item.id] ?? exportedPrice(item, info, currency);
+    if (price !== undefined) entry.price = price;
     stock.push(entry);
   }
   const order = STOCK_ORDER[name];
@@ -269,7 +302,7 @@ function serialize(value) {
 }
 
 function main() {
-  const { docs, check } = parseArgs(process.argv.slice(2));
+  const { docs, check, existing: existingFile } = parseArgs(process.argv.slice(2));
   const itemsByShopFile = path.join(docs, "shops-items-by-shop.json");
   const shopsByNpcFile = path.join(docs, "shops-by-npc.json");
   if (!fs.existsSync(itemsByShopFile)) {
@@ -279,7 +312,7 @@ function main() {
 
   const byShop = readJson(itemsByShopFile);
   const shopsByNpc = fs.existsSync(shopsByNpcFile) ? readJson(shopsByNpcFile) : null;
-  const existing = readJson(shopsFile);
+  const existing = readJson(existingFile);
 
   const idByName = new Map();
   for (const shop of existing) {
@@ -300,7 +333,9 @@ function main() {
       id,
       name,
       currency,
-      originalStock: originalStock(name, record.items),
+      ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
+      ...salesPolicy(record.shop_info),
+      originalStock: originalStock(name, record.items, record.shop_info, currency),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
       npcInteractions: npcInteractions(name, record.owners, shopsByNpc),
     });

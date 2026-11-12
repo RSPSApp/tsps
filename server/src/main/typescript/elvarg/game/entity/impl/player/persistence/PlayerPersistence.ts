@@ -1,6 +1,6 @@
 import type { Player } from "../Player";
 import { PlayerSave } from "../persistence/PlayerSave";
-import { MAIN_PROFILE, profileStorageKey, siblingProfile, type PlayerProfile } from "./PlayerProfile";
+import { MAIN_PROFILE, PLAYER_PROFILES, profileStorageKey, type PlayerProfile } from "./PlayerProfile";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../../net/login/LoginTokens";
 const SKIP_PERSISTENCE_ATTRIBUTE = "bot-skip-persistence";
 
@@ -61,24 +61,71 @@ export abstract class PlayerPersistence {
         return true;
     }
 
+    /**
+     * Copies a character's save into another of the account's profiles (a Hardcore character
+     * transferring to the normal game). Never overwrites: false when `to` already has a save or
+     * `from` has none. The account must be offline, as for any offline edit.
+     */
+    public async copyProfile(username: string, from: PlayerProfile, to: PlayerProfile, reason = "profile-copy"): Promise<boolean> {
+        const { World } = require("../../../../World") as typeof import("../../../../World");
+        if (World.getPlayerByName(username)) {
+            throw new Error("Cannot copy an online account's save");
+        }
+        if (from === to || this.exists(username, to)) return false;
+        const save = this.load(username, from);
+        if (!save) return false;
+        this.saveOffline(username, save, reason, to);
+        await this.flush();
+        return true;
+    }
+
+    /** Removes a profile's save; a backend that keeps a history re-keys it so a new character of that name starts clean. */
+    public async delete(_username: string, _profile: PlayerProfile = MAIN_PROFILE): Promise<void> {
+        throw new Error("This persistence backend does not support deleting saves");
+    }
+
     protected saveOffline(_username: string, _save: PlayerSave, _reason: string, _profile: PlayerProfile = MAIN_PROFILE): void {
         throw new Error("This persistence backend does not support offline updates");
     }
 
     /**
      * A new password for the account: the live character takes it (and signs out its remembered
-     * logins), its save is written, and the account's other character's save gets the same hash
-     * with its remembered logins signed out too, so the old password opens neither character.
+     * logins) and its save is written now; then every save of every character of the account, on
+     * both profiles, gets the same hash with its remembered logins signed out, offline. The
+     * credential is the primary's, but an alt's save keeps a copy of the hash: if accounts.json
+     * were lost, an alt with no hash would open with any password (an empty hash is a new account),
+     * so the copy must never be stale. The account's other characters are offline (one character
+     * of an account online at a time). Every save is attempted; the first failure is thrown after.
      */
     public async changePassword(player: Player, passwordHashWithSalt: string): Promise<void> {
         player.setPasswordHashWithSalt(passwordHashWithSalt);
         this.requestSave(player, "password-change");
-        const other = siblingProfile(player.getProfile());
-        if (!this.exists(player.getUsername(), other)) return;
-        await this.updateOffline(player.getUsername(), (save) => {
-            save.setPasswordHashWithSalt(passwordHashWithSalt);
-            save.attributes = { ...(save.attributes ?? {}), [LOGIN_TOKENS_ATTRIBUTE]: [] };
-        }, "password-change", other, { evenIfOnline: true });
+        const { Accounts } = require("../Accounts") as typeof import("../Accounts");
+        const liveKey = Accounts.key(player.getUsername());
+        const account = Accounts.accountOf(player.getUsername());
+        const names = account ? Accounts.charactersOf(account).map((character) => character.name) : [];
+        if (!names.some((name) => Accounts.key(name) === liveKey)) names.push(player.getUsername());
+        let failure: unknown = null;
+        for (const name of names) {
+            const live = Accounts.key(name) === liveKey;
+            for (const profile of PLAYER_PROFILES) {
+                // The live character's own save is the one requestSave writes.
+                if (live && profile === player.getProfile()) continue;
+                try {
+                    if (!this.exists(name, profile)) continue;
+                    await this.updateOffline(name, (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", profile, { evenIfOnline: live });
+                } catch (error) {
+                    console.error(`[persistence] could not write the new password to ${name} (${profile})`, error);
+                    failure ??= error;
+                }
+            }
+        }
+        if (failure) throw failure;
+    }
+
+    private replaceCredentials(save: PlayerSave, passwordHashWithSalt: string): void {
+        save.setPasswordHashWithSalt(passwordHashWithSalt);
+        save.attributes = { ...(save.attributes ?? {}), [LOGIN_TOKENS_ATTRIBUTE]: [] };
     }
 
     /** Snapshot after the current operation finishes; overlapping triggers share one write. */

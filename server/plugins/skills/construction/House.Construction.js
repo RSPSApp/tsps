@@ -37,10 +37,12 @@ const Scrying = require("./Scrying.Construction");
 const CapeHanger = require("./CapeHanger.Construction");
 const Trophies = require("./Trophies.Construction");
 const MahoganyHomes = require("./MahoganyHomes.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const MaxHouse = require("./MaxHouse.Construction");
 const Nexus = require("./Nexus.Construction");
 
 const HAMMER_ID = ItemIdentifiers.HAMMER;
+const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
 const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
@@ -547,6 +549,7 @@ function removeRoomPrompt(player, house, target, onNo = () => {}, onRemoved = ()
     if (currentProblem) return Menu.refuse(player, currentProblem);
     house.removeRoom(target);
     rebuildHouse(player, house);
+    api.emitCustomEvent("construction:room-removed", { player, house, room });
     player.sendMessage("Room deleted!");
     onRemoved();
   }, "No", onNo);
@@ -588,7 +591,6 @@ function exitHouse(player) {
   const house = houseFor(player);
   if (!house) return false;
   standFromChair(player);
-  pendingFurnitureMenus.delete(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   if (house.owner === player) advertisedHouses.delete(house);
@@ -683,10 +685,11 @@ function handleHouseOptions(event) {
   return true;
 }
 
-function houseTeleportArrival({ player, name }) {
+/** Cast follows the house's teleport setting; the spell's "Outside" option (`option`) always stays outside. */
+function houseTeleportArrival({ player, name, option }) {
   if (name !== "teleport to house") return;
   const saved = houseStateFor(player);
-  if (saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
+  if (option === "outside" || saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
   else enterHouse(player, saved.defaultBuildingMode);
 }
 
@@ -870,8 +873,19 @@ function formatBuildable(buildable) {
  * with the missing ones in red ("You don't have the right materials: 2 x Plank, <col=ef1020>2 x Nails</col>").
  */
 function getBuildMaterials(player, house, target, buildable) {
+  if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
   if (constructionLevel(player) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
-  if (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
+  for (const requirement of buildable.secondaryLevels ?? []) {
+    const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+    if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
+    // The cache's second skills: Farming (spirit trees), Cooking (the kitchen barrels), Smithing (the armour displays)
+    // and Runecraft (the rune cases). Boostable, so the current level counts (Wiki: Beer barrel, Cooking 5; Mithril
+    // armour (Construction), Smithing 68; Rune case space, Runecraft 14, 44 and 90).
+    if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
+      return `You need ${skill.getName()} level ${requirement.level} to build that.`;
+  }
+  // Natural teleports use a filled watering can instead (Wiki: Teleport space).
+  if (buildable.tool !== "watering-can" && (!hasHammer(player) || !hasSaw(player))) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;
   const previous = buildable.materials.find(material => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
@@ -913,6 +927,13 @@ function getBuildMaterials(player, house, target, buildable) {
     }).join(", ")}`);
   }
   return requiredItems;
+}
+
+/** Wiki (Imcando hammer): either repaired variant works carried or wielded. */
+function hasHammer(player) {
+  const equipment = player.getEquipment();
+  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
+  return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
 }
 
 /** A saw, the crystal saw or Amy's saw, carried or (Amy's) in the off-hand. */
@@ -996,7 +1017,16 @@ function buildFurniture(player, house, target, buildable) {
 
 function completeFurniture(player, house, target, buildable, materials) {
   useMaterials(player, buildable, materials);
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
+  // Wiki (Spirit tree (Construction), Spirit tree & fairy ring): a planted spirit tree gives Farming experience too.
+  if (buildable.farmingExperience > 0) player.getSkillManager().addExperiences(Skill.FARMING, buildable.farmingExperience);
+  // Wiki (Mithril armour (Construction), Rune case space): 25 experience in the piece's second skill too.
+  if (buildable.secondSkillExperience > 0) {
+    for (const requirement of buildable.secondaryLevels ?? []) {
+      const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+      if (skill) player.getSkillManager().addExperiences(skill, buildable.secondSkillExperience);
+    }
+  }
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
   api.emitCustomEvent("construction:furniture-built", { player, buildable });
@@ -1058,6 +1088,12 @@ function chooseFurniture(player, house, target) {
   pendingFurnitureMenus.set(player, { house, target, choices });
 }
 
+function closeFurnitureMenu({ player, interfaceId }) {
+  if (interfaceId !== FURNITURE_BUILD_INTERFACE || !pendingFurnitureMenus.delete(player)) return;
+  // The furniture list script suspends normal chat input while the number shortcuts are active.
+  Menu.restoreChatInput(player);
+}
+
 function selectFurnitureFromInterface(event) {
   if (event.groupId !== FURNITURE_BUILD_INTERFACE || event.childId !== 2) return false;
   const pending = pendingFurnitureMenus.get(event.player);
@@ -1065,7 +1101,6 @@ function selectFurnitureFromInterface(event) {
   // Script 1405 sends RESUME_PAUSEBUTTON with a one-based child index.
   const choice = Number.isInteger(event.action) && event.action > 0 ? pending.choices[event.action - 1] : undefined;
   if (!choice || houseFor(event.player) !== pending.house || !isBuildingMode(event.player)) return false;
-  pendingFurnitureMenus.delete(event.player);
   event.player.getPacketSender().sendInterfaceRemoval();
   buildFurniture(event.player, pending.house, pending.target, choice);
   return true;
@@ -1093,14 +1128,21 @@ function tryRemoveFurniture(event) {
     return true;
   }
   // rsprox captures ("Remove" on poh_chair1, rev 229): "Really remove it?", and the Yes is silent.
-  api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
+  const confirm = () => api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player)) return;
     const currentProblem = house.canRemoveFurniture(event.location, event.objectId, type);
     if (currentProblem) return Menu.refuse(player, currentProblem);
-    if (!house.removeFurniture(event.location, event.objectId, type)) return;
+    const furniture = house.removeFurniture(event.location, event.objectId, type);
+    if (!furniture) return;
     player.performAnimation(new Animation(REMOVE_ANIMATION));
     rebuildHouse(player, house);
+    api.emitCustomEvent("construction:furniture-removed", { player, house, furniture });
   }, "No", () => {});
+  // A piece whose removal costs the player something warns first (rsprox captures: the portal nexus).
+  const removal = { player, house, furniture: house.getFurnitureAt(event.location, event.objectId, type), warning: null };
+  api.emitCustomEvent("construction:furniture-removing", removal);
+  if (removal.warning) Menu.warn(player, removal.warning, confirm);
+  else confirm();
   return true;
 }
 
@@ -1113,7 +1155,7 @@ function onObject(event) {
 function onItemOnObject(event) {
   if (Altars.offerHouseBones(event) || Storage.storeItemOnFurniture(event)) return true;
   if ((event.itemId === TINDERBOX_ID || event.itemId === ItemIdentifiers.MARRENTILL) && Altars.lightHouseBurner(event)) return true;
-  if (event.itemId !== HAMMER_ID && event.itemId !== SAW_ID) return false;
+  if (!HAMMERS.includes(event.itemId) && event.itemId !== SAW_ID) return false;
   return openBuildMenu(event);
 }
 
@@ -1323,6 +1365,28 @@ function enterBuildingHouse({ player, objectId, location, sourceLocation, object
   const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
   return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
+/**
+ * Wiki, Player-owned house: deaths anywhere in an active house keep items,
+ * restore stats and leave by its portal, including player kills on PvP worlds.
+ * CombatRings' earlier hook retains its separate in-house defeat behavior.
+ */
+function safeHouseDeath(event) {
+  const { player } = event;
+  const house = houseFor(player);
+  if (event.preventDeath || !house || house.isDestroyed() || !house.getPlayers().includes(player)) return;
+  event.preventDeath = true;
+  const combat = player.getCombat();
+  combat.reset();
+  combat.setUnderAttack(null);
+  combat.getHitQueue().clear();
+  combat.clearDamageMap();
+  api.core.CombatFactory.clearHitRollCache(player);
+  World.getPlayers().forEach(other => { if (other !== player) other.getCombat().removeDamager(player); });
+  player.setFollowing(null);
+  player.resetAttributes();
+  exitHouse(player);
+}
+
 function leaveHouse({ player }) { return exitHouse(player); }
 function showAdvertisements({ player, objectId }) { viewAdvertisements(player, nearbyHouseLocation(player, objectId)); return true; }
 function visitLastHouse({ player }) {
@@ -1415,6 +1479,7 @@ function attach(api) {
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);
   MahoganyHomes.attachMahoganyHomes(api);
+  CarpenterOutfit.attachCarpenterOutfit(api);
   Nexus.attachNexus(api);
   api.persistAttribute(HOUSE_ATTRIBUTE, defaultHouse());
   api.onObjectFirstClick(HOUSE_PORTAL_IDS, enterDefaultHouse);
@@ -1447,15 +1512,17 @@ function attach(api) {
   api.onCustomEvent("player:option-route", kickGuest);
   api.onCustomEvent("door:toggle", openHouseDoor);
   api.onCustomEvent("interface:close", closeHouseSettings);
+  api.onCustomEvent("interface:closed", closeFurnitureMenu);
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onSpellDisabled(refuseHouseVengeance);
+  api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);
   api.onPlayerMapSquareChange(recordRegionVisit);
   api.onPlayerDisconnect(logoutHouse);
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

@@ -198,6 +198,7 @@ function initialize(api) {
 
 module.exports = {
   name: "CustomShops",
+  description: "A ::shops interface for browsing this server's custom shops, loaded from custom-shops.json.",
   register(api) {
     api.onServerStartup(initialize.bind(null, api));
     api.persistAttribute(BUY_NOTED_ATTRIBUTE, false);

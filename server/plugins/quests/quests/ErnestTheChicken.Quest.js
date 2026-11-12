@@ -1,5 +1,6 @@
 /** Ernest the Chicken: revision240 Discord capture20260811T152500; cache241 IDs. */
 module.exports = function registerErnestTheChickenQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     GameObject,
     Location,
@@ -576,7 +577,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS, 300);
+    giveReward(player, COINS, 300);
   }
 
   function selectVariant({ npcId, player }) {

@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 /**
  * The looting bag (docs/looting-bag.md), from the Wiki and rsprox captures 448-464 (rev 233),
  * 821 (rev 234) and 1541/1545 (rev 224). Items go in only in the Wilderness (and the Ferox
@@ -10,6 +11,7 @@ const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/defini
 const { MAX_STACK_AMOUNT } = require("../../src/main/typescript/elvarg/game/model/container/StackType");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
+const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const Food = require("./Food.plugin");
 const Potions = require("./Potions.plugin");
 const { isInsideEnclave } = require("../areas/ferox/Bounds.FeroxEnclave");
@@ -18,6 +20,11 @@ const BAG_DATA = "lootingBag";
 /** Settings: store everything used on the bag without asking; keep picked-up supplies out of it. */
 const STORE_ALL_ATTRIBUTE = "looting-bag:store-everything";
 const SKIP_SUPPLIES_ATTRIBUTE = "looting-bag:skip-supplies";
+/** The bag's settings as All Settings rows, with the varbits those rows show. */
+const SETTING_ROWS = new Map([
+  [352, { key: STORE_ALL_ATTRIBUTE, varbit: 6068 }], // lootingbag_useallitems
+  [353, { key: SKIP_SUPPLIES_ATTRIBUTE, varbit: 15310 }], // lootingbag_ignore_food
+]);
 const CLOSED_BAG_ID = 11941;
 const OPEN_BAG_ID = 22586;
 /** inv looting_bag, which the bag's interface and the bank's looting bag view draw. */
@@ -38,9 +45,14 @@ const CHECK_FLAGS = 1 << 10;
 const DEPOSIT_FLAGS = 0b11110 | (1 << 9);
 const STORE_OPS = { 1: 1, 2: 5, 3: Number.MAX_SAFE_INTEGER };
 const STORE_X_OP = 4;
+/** Examine: op 10 on the bag's contents (Check), op 9 on the inventory (Deposit). */
+const CHECK_EXAMINE_OP = 10;
+const DEPOSIT_EXAMINE_OP = 9;
 /** The bank's looting bag view (captured): bank_viewcontainer 1, its items' OP1-OP7 and OP10. */
 const BANK_VIEW = 1;
 const BANK_VIEW_OP = 1;
+const BANK_EMPTY_OP = 9;
+const BANK_EXAMINE_OP = 10;
 const BANK_ITEM_FLAGS = 0b11111110 | (1 << 10);
 const BANK_SIDE = 15;
 const BANK_X_PROMPT_OP = 6;
@@ -246,11 +258,21 @@ function useItemOnBag(event) {
 function clickBagInterface(event) {
   if (event.groupId !== BAG_INTERFACE || event.childId !== 5 || !Number.isInteger(event.slot)) return;
   const { player } = event;
-  if (!depositing.has(player)) return;
-  const item = player.getInventory().getItems()[event.slot];
   const bag = bagFor(player);
-  if (!bag || !item?.isValid?.() || item.getId() !== event.itemId) return;
+  if (!bag) return;
   const op = Number(event.action);
+  if (!depositing.has(player)) {
+    const entry = bagItems(bag)[event.slot];
+    if (op !== CHECK_EXAMINE_OP || !entry || entry.id !== event.itemId) return;
+    event.handled = true;
+    return void examineItem(player, entry.id, entry.amount);
+  }
+  const item = player.getInventory().getItems()[event.slot];
+  if (!item?.isValid?.() || item.getId() !== event.itemId) return;
+  if (op === DEPOSIT_EXAMINE_OP) {
+    event.handled = true;
+    return void examineItem(player, item.getId(), item.getAmount());
+  }
   const key = itemKey(item);
   if (op === STORE_X_OP) {
     event.handled = true;
@@ -294,10 +316,31 @@ function depositOption({ player, item }) {
   return sendBag(player, true);
 }
 
+function setSetting(player, key, value) {
+  player.setAttribute(key, value);
+  for (const row of SETTING_ROWS.values()) {
+    if (row.key === key) player.getPacketSender().sendVarbit(row.varbit, value ? 1 : 0);
+  }
+}
+
 function toggle(player, key, on, off) {
   const value = !setting(player, key);
-  player.setAttribute(key, value);
+  setSetting(player, key, value);
   player.sendMessage(value ? on : off);
+}
+
+/** All Settings rows 352 and 353 flip the same choices as the bag's own settings menu. */
+function settingClicked(request) {
+  const row = SETTING_ROWS.get(request.settingId);
+  if (!row) return;
+  request.handled = true;
+  setSetting(request.player, row.key, !setting(request.player, row.key));
+}
+
+function sendSettings({ player }) {
+  for (const row of SETTING_ROWS.values()) {
+    if (setting(player, row.key)) player.getPacketSender().sendVarbit(row.varbit, 1);
+  }
 }
 
 /** The captured two-line settings menu: each line names the opposite of the current choice. */
@@ -371,7 +414,15 @@ function bankComponents() {
 
 /** The bag's op1 in the bank's inventory panel shows its contents in place of the inventory. */
 function viewInBank(event) {
-  if (!isBag(event.item) || event.op !== BANK_VIEW_OP) return;
+  if (!isBag(event.item) || !core.Bank.isOpen(event.player)) return;
+  if (event.op === BANK_EMPTY_OP) {
+    event.handled = true;
+    bankAll(event.player, event.item);
+    refreshBank(event.player);
+    if (bankViewing(event.player)) sendContents(event.player, event.item);
+    return;
+  }
+  if (event.op !== BANK_VIEW_OP) return;
   event.handled = true;
   const { player, item } = event;
   const { Bank } = core;
@@ -407,18 +458,26 @@ function bankSlot(player, bag, slot, amount) {
     if (left <= 0) break;
     const stored = items[index];
     const moving = Math.min(stored.amount, left);
-    const banked = new Item(stored.id, moving, stored.meta);
-    if (tab.getAddableAmount(banked) < moving) {
-      tab.full();
-      break;
-    }
-    tab.add(banked, false);
-    stored.amount -= moving;
-    left -= moving;
+    const source = new core.Inventory(player);
+    source.setItem(0, new Item(stored.id, moving, stored.meta));
+    if (core.PluginManager.emitCanBankItem(player, source.forSlot(0)) === false) continue;
+    // Use the inventory transfer's note conversion, metadata, capacity and search rules without sending a staged inventory.
+    source.switchItem(tab, source.forSlot(0).clone(), false, 0, false);
+    const moved = moving - source.forSlot(0).getAmount();
+    stored.amount -= moved;
+    left -= moved;
     if (!stored.amount) emptied.add(index);
   }
   setBagItems(bag, items.filter((_, index) => !emptied.has(index)));
   return left < amount;
+}
+
+function emptyContainers({ player }) {
+  if (!core.Bank.isOpen(player)) return;
+  for (const bag of player.getInventory().getValidItems().filter(isBag)) bankAll(player, bag);
+  refreshBank(player);
+  const bag = bagFor(player);
+  if (bag && bankViewing(player)) sendContents(player, bag);
 }
 
 function bankAll(player, bag) {
@@ -443,6 +502,7 @@ function clickBankView(event) {
     const entry = bagItems(bag)[event.slot];
     if (!entry) return;
     const op = Number(event.action);
+    if (op === BANK_EXAMINE_OP) return void examineItem(player, entry.id, entry.amount);
     if (op === BANK_X_PROMPT_OP) {
       const key = entryKey(entry);
       return askAmount(player, (amount) => {
@@ -467,6 +527,11 @@ function clickBankView(event) {
   sendContents(player, bag);
 }
 
+/** The bag never takes a kept slot: its contents go to the killer, and a kept bag would bring them back too. */
+function neverKeepBag(event) {
+  if (isBag(event.item)) event.keep = false;
+}
+
 function dropOnDeath(event) {
   if (!isBag(event.item)) return;
   pendingDeaths.set(event.player, { items: bagItems(event.item), location: event.location });
@@ -477,8 +542,10 @@ function giveToKiller({ killer, victim }) {
   const pending = pendingDeaths.get(victim);
   pendingDeaths.delete(victim);
   if (!pending) return;
+  // An Ironman killer takes none of it: it drops for the victim (PlayerDeathTask.lootOwner).
+  const owner = PlayerDeathTask.lootOwner(victim, killer);
   for (const item of pending.items) {
-    if (!isSupply(item.id)) ItemOnGroundManager.registerLocation(killer ?? victim, new Item(item.id, item.amount, item.meta), pending.location);
+    if (!isSupply(item.id)) ItemOnGroundManager.registerLocation(owner, new Item(item.id, item.amount, item.meta), pending.location);
   }
 }
 
@@ -515,6 +582,7 @@ function answerContents(event) {
 
 module.exports = {
   name: "LootingBag",
+  description: "Adds the looting bag: items go in only in the Wilderness, come out at a bank, and are lost on death, with Deposit, Check and settings.",
   members: true,
   dependsOn: ["Wilderness", "Food", "Potions", "LootKeys"],
   register(pluginApi) {
@@ -522,18 +590,22 @@ module.exports = {
     core = pluginApi.core;
     api.persistAttribute(STORE_ALL_ATTRIBUTE, false);
     api.persistAttribute(SKIP_SUPPLIES_ATTRIBUTE, false);
+    api.onCustomEvent("settings:setting-clicked", settingClicked);
+    api.onPlayerLogin(sendSettings);
     api.onCustomEvent("storage:contents", answerContents);
     api.onCustomEvent("looting-bag:store", storeLoot);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
+    api.onCustomEvent("bank:empty-containers", emptyContainers);
     api.onGroundItemPickup(pickUp);
     api.onItemOnItem(useItemOnBag);
     api.onItemAction("Looting bag", { Open: openBag, Close: closeBag, Check: checkBag, Deposit: depositOption, Settings: settings });
     api.onItemDropPolicy(destroyBag);
     api.onInterfaceActionClick(clickBagInterface);
     api.onInterfaceActionClick(clickBankView);
+    api.onShouldKeepItemOnDeath(neverKeepBag);
     api.onPlayerDeathItemDrop(dropOnDeath);
     api.onPlayerDefeated(giveToKiller);
   },
-  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText },
+  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
 };

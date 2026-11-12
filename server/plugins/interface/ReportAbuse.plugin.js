@@ -10,6 +10,10 @@ const path = require("path");
 
 const REPORT_PLAYER_OPTION_SLOT = 8;
 const REPORT_PLAYER_OPTION = "Report";
+/** All Settings "Player Report options" (row 372): the option is left off while it is 1. */
+const REPORT_OPTION_SETTING = 372;
+const REPORT_OPTION_DISABLED_VARBIT = 1334; // rightclick_report_abuse_disabled
+const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 /** chatbox:reportabuse (162:31): op 2 "Report abuse", op 4 "Report game bug". */
 const CHATBOX_REPORT_BUTTON = (162 << 16) | 31;
 const CHATBOX_REPORT_ABUSE_OP = 2;
@@ -68,8 +72,31 @@ function isStaff(player) {
   return (player.getRights?.()?.getId?.() ?? 0) > 0;
 }
 
+/** The saved setting: the login hooks can run before Settings sends it back. */
+function reportOptionDisabled(player) {
+  const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
+  const key = `varbit:${REPORT_OPTION_DISABLED_VARBIT}`;
+  if (saved && typeof saved === "object" && Number.isInteger(saved[key])) return saved[key] === 1;
+  return player.getPacketSender().getVarbit(REPORT_OPTION_DISABLED_VARBIT) === 1;
+}
+
+/** Live sends the option in slot 8, or an empty slot 8 while the setting turns it off. */
+function sendReportOption(player) {
+  const option = reportOptionDisabled(player) ? "" : REPORT_PLAYER_OPTION;
+  player.getPacketSender().sendPlayerOption(REPORT_PLAYER_OPTION_SLOT, option, false);
+}
+
 function giveReportOption({ player }) {
-  player.getPacketSender().sendPlayerOption(REPORT_PLAYER_OPTION_SLOT, REPORT_PLAYER_OPTION, false);
+  sendReportOption(player);
+}
+
+/** The row clicked: flip the setting through Settings, then add or remove the option. */
+function reportSettingClicked(request) {
+  if (request.settingId !== REPORT_OPTION_SETTING || request.handled) return;
+  request.handled = true;
+  const value = reportOptionDisabled(request.player) ? 0 : 1;
+  pluginApi.emitCustomEvent("settings:set", { player: request.player, settingId: REPORT_OPTION_SETTING, value });
+  sendReportOption(request.player);
 }
 
 /** Opens the form over the chatbox, with the name filled in when the player right-clicked someone. */
@@ -94,7 +121,7 @@ function closeReportForm({ player }) {
 }
 
 function reportFromPlayerOption(event) {
-  if (event.option !== REPORT_PLAYER_OPTION_SLOT) return;
+  if (event.option !== REPORT_PLAYER_OPTION_SLOT || reportOptionDisabled(event.player)) return;
   event.handled = true;
   openReportForm(event.player, event.target?.getUsername?.() ?? "");
 }
@@ -133,11 +160,14 @@ function receiveReport(event) {
 
 module.exports = {
   name: "ReportAbuse",
+  description: "Report option on players and the chatbox Report button open the report form; submitted reports are written to a JSON-lines file.",
   RULES,
+  _test: { giveReportOption, reportSettingClicked, reportFromPlayerOption },
   register(api) {
     pluginApi = api;
     api.onPlayerLogin(giveReportOption);
     api.onPlayerOption(reportFromPlayerOption);
+    api.onCustomEvent("settings:setting-clicked", reportSettingClicked);
     api.onInterfaceActionButton(CHATBOX_REPORT_BUTTON, reportFromChatbox);
     api.onInterfaceActionButton(REPORT_CLOSE_BUTTON, closeReportForm);
     api.onSocialPacket(receiveReport);

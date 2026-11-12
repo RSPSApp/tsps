@@ -313,6 +313,7 @@ function fakePlayer(name = 'Tester') {
         sendSubInterface: (uid, id) => { p.interfaces.push(id); return sender; },
         closeSubInterface: (uid) => { p.interfaces.push(-uid); return sender; },
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
+        sendInterfaceScript: (id, args = []) => { p.scripts.push([id, ...args]); return sender; },
         sendCreationMenu: (menu) => { p.menu = menu; return sender; },
         sendInterface: (id) => { p.interfaces.push(id); return sender; },
         sendString: (text, uid) => { (p.strings ??= new Map()).set(uid, text); return sender; },
@@ -714,6 +715,32 @@ test('an Egniol potion: water-filled vial, grym leaf, 10 shards ground to dust',
     use('Crystal dust', 'Grym potion (unf)', [items.dust, items.grymPotion]);
     assert.ok(player.inventory.contains(items.egniol3), 'an Egniol potion (3)');
     assert.equal(player.inventory.getAmount(items.dust), 0);
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('with a full inventory the bowl and the pestle take nothing they have no room to give back', () => {
+  bindPrep();
+  const { player, run } = startedRun('Packed', { random: seeded(43) });
+  try {
+    const items = Items.itemsFor('regular');
+    player.inventory.adds(items.shards, 100);
+    const filler = items.grymLeaf;
+    while (player.inventory.getFreeSlots() > 0) player.inventory.adds(filler);
+    const before = player.inventory.getAmount(items.shards);
+    const bowl = run.map.getTemplateObjects(run.map.roomTile(run.map.room(run.map.start.x, run.map.start.y), 3, 12))[0];
+    interact('Singing Bowl', 'Sing-crystal', player, bowl);
+    player.menu.execute(items.vial, 5);
+    assert.equal(player.inventory.getAmount(items.shards), before, 'no shards taken for a vial with nowhere to go');
+    assert.equal(player.inventory.getAmount(items.vial), 0);
+    const use = (a, b, ids) => hooks.itemOnItem[`${a}|${b}`]({ player, usedItemId: ids[0], usedWithItemId: ids[1] });
+    use('Pestle and mortar', 'Crystal shards', [items.pestle, items.shards]);
+    assert.equal(player.inventory.getAmount(items.shards), before, 'no shards ground into dust that cannot be held');
+    assert.equal(player.inventory.getAmount(items.dust), 0);
+    player.inventory.delete(filler, 1);
+    use('Pestle and mortar', 'Crystal shards', [items.pestle, items.shards]);
+    assert.equal(player.inventory.getAmount(items.dust), 10, 'with a slot free the dust is made');
   } finally {
     run.end('exit', { fade: false });
   }

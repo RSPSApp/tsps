@@ -238,3 +238,22 @@ test('stopping the animation early releases the hits it was holding', () => {
         CombatFactory.executeHit = executeHit;
     }
 });
+
+// Phoenix necklace: the wiki says it clears the attacks pending on the player. A hit held by an
+// animation stall is one of them, even when the necklace fires from the owner's own poison tick.
+test('clearIncoming during a stalled drain also drops the held hits', () => {
+    const target = buildTarget(100);
+    target.isPlayer = () => true;
+    target.getAsPlayer = () => ({ getHitpoints: () => 0 });
+    target.getCombat = () => ({ getIncomingHitCycle: () => 9 });
+    const other = { isRegistered: () => true };
+    const queue = new HitQueue(target);
+    const own = new HitDamage(5, HitMask.GREEN);
+    const original = target.addTickHit;
+    target.addTickHit = (hit) => { original(hit); queue.clearIncoming(); };
+    queue.addPendingDamage([new HitDamage(30, HitMask.RED).setSource(other), own]);
+    queue.process(5);
+    assert.equal(target.hp, 95, 'only the sourceless poison landed');
+    queue.process(9);
+    assert.equal(target.hp, 95, 'the held hit never lands');
+});

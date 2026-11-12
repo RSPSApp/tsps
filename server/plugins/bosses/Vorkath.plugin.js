@@ -17,6 +17,7 @@ const { initDragonfireProtectionCoreAccess } = require("../combat/DragonfireProt
 
 module.exports = {
   name: "Vorkath",
+  description: "Vorkath after Dragon Slayer II: wake her on Ungael, fight her fireballs and acid, rapid-fire and freeze specials, with Torfinn returning items on death.",
   members: true,
   register(api) {
     initDragonfireProtectionCoreAccess(api);

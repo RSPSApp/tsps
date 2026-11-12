@@ -39,8 +39,15 @@ export function handleServerListClick(host: LoginRendererHost, state: LoginState
         const panelX = Math.floor((host.canvasWidth - panelW) / 2);
         const panelY = Math.floor((host.canvasHeight - panelH) / 2);
 
-        // Refresh button (below panel, left)
         const btnY = panelY + panelH + 30;
+        // The switch confirmation: Cancel (left) or Switch world (right); a click outside cancels.
+        if (state.serverSwitchConfirm) {
+            if (isButtonHit(host, x, y, panelX + panelW / 2 + 80, btnY)) return LoginActions.CONFIRM_SERVER_SWITCH;
+            const inPanel = x >= panelX && x <= panelX + panelW && y >= panelY && y <= panelY + panelH;
+            return inPanel ? undefined : LoginActions.CANCEL_SERVER_SWITCH;
+        }
+
+        // Refresh button (below panel, left)
         if (isButtonHit(host, x, y, panelX + panelW / 2 - 80, btnY)) {
             return LoginActions.REFRESH_SERVER_LIST;
         }
@@ -212,8 +219,17 @@ export function handleMouseClick(
             return handleServerListClick(host, state, x, y);
         }
 
-        // Server list button (bottom left, replaces world select button)
-        if (gameState >= GameState.LOGIN_SCREEN && host.worldSelectButtonSprite) {
+        if (state.extension) {
+            const point = toContentPoint(host, x, y);
+            state.extension.click(host, point.x, point.y);
+            return undefined;
+        }
+
+        // Server list button (bottom left, replaces world select button).
+        if (
+            gameState >= GameState.LOGIN_SCREEN &&
+            host.worldSelectButtonSprite
+        ) {
             const buttonPos = getServerListButtonPosition(host);
             const buttonW = host.worldSelectButtonSprite.subWidth || 100;
             const buttonH = host.worldSelectButtonSprite.subHeight || 35;

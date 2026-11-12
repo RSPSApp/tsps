@@ -16,6 +16,7 @@ module.exports = function registerSongOfTheElves(api) {
   const FRAGMENT_BEAM_HEAL_SPEED = 4;
   const START_HOOK = "quest:song-of-the-elves:start";
   const CHEMICAL_CHOICE = "quest.song_of_the_elves.chemical-choice";
+  const TABARD_PAID = "quest.song_of_the_elves.tabard-paid";
   const FALLS_PILLARS = "quest.song_of_the_elves.falls-pillars";
   const FALLS_ORDER = "quest.song_of_the_elves.falls-order";
   const INCITEMENTS = "quest.song_of_the_elves.incitements";
@@ -697,6 +698,18 @@ module.exports = function registerSongOfTheElves(api) {
     }
   }
 
+  /**
+   * Plague City done but the scroll unread (stage 30 is Plague City's): Edmond's own dialogue first,
+   * a new scroll when none is carried and his thanks when one is (Plague City capture
+   * 20261110T113734-5ab63b4 tick 889, scroll carried).
+   */
+  function needsEdmondScroll(player) {
+    const request = { player, key: PLAGUE_CITY_KEY, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    const READ_SCROLL_STAGE = 30;
+    return Number(request.stage) < READ_SCROLL_STAGE;
+  }
+
   function hasQuest(player, key) {
     const request = { player, key, complete: null };
     api.emitCustomEvent("quest:is-complete", request);
@@ -843,12 +856,24 @@ module.exports = function registerSongOfTheElves(api) {
       inventory.deleteNumber(DISGUISE.STEEL_BODY, 1);
       inventory.deleteNumber(DISGUISE.TABARD, 1);
       inventory.adds(DISGUISE.BODY, 1);
-    } else if (["tNiXqt", "0nVxB-"].includes(event.stepId) && hasItems(player, [DISGUISE.SILK, DISGUISE.PURPLE_DYE])) {
+    } else if (["tNiXqt", "0nVxB-"].includes(event.stepId)) {
+      // A tabard already paid for (the player logged out before it was given) is given now, not paid for again.
+      if (player.getAttribute(TABARD_PAID) === true) return;
+      // Alrena makes the tabard from the silk and purple dye handed over here: without them there is no tabard, and
+      // the conversation ends here (`handled` alone only hides this line; her "Here you go" would still follow).
+      if (!hasItems(player, [DISGUISE.SILK, DISGUISE.PURPLE_DYE])) {
+        event.handled = true;
+        event.end = true;
+        player.sendMessage("You need some silk and some purple dye for Alrena to make the tabard.");
+        return;
+      }
       inventory.deleteNumber(DISGUISE.SILK, 1);
       inventory.deleteNumber(DISGUISE.PURPLE_DYE, 1);
-    } else if (["Y45282", "bGd6H8"].includes(event.stepId) && !hasItems(player, [DISGUISE.TABARD])) {
-      inventory.deleteNumber(DISGUISE.SILK, 1);
-      inventory.deleteNumber(DISGUISE.PURPLE_DYE, 1);
+      player.setAttribute(TABARD_PAID, true);
+    } else if (["Y45282", "bGd6H8"].includes(event.stepId)) {
+      // Only the tabard paid for at the step before; the silk and dye were taken there, not a second set here.
+      if (player.getAttribute(TABARD_PAID) !== true) return;
+      player.setAttribute(TABARD_PAID, false);
       inventory.adds(DISGUISE.TABARD, 1);
     } else if (["QMXa3C", "taCC98"].includes(event.stepId)) {
       if (!CHEMICALS.some(id => inventory.getAmount(id) > 0) && inventory.getFreeSlots() < 1) {
@@ -1431,6 +1456,8 @@ module.exports = function registerSongOfTheElves(api) {
       if (npcName !== "edmond") return false;
       // Edmond starts Plague City too; leave him to that quest until it is complete.
       if (!hasQuest(player, PLAGUE_CITY_KEY)) return false;
+      // ...and while the player still needs his teleport scroll: Plague City's dialogue hands out a new one.
+      if (needsEdmondScroll(player)) return false;
       if (!requirementsMet(player)) { explainRequirements(player); return true; }
       return startTranscript(api, player, event.npcId, PAGE, "starting-out-talking-to-edmond");
     }
@@ -3823,23 +3850,6 @@ module.exports = function registerSongOfTheElves(api) {
     }
   }
 
-  // The castle's two throne staircases are partly blocked by the collision map.
-  // Keep the click at the player's current tile; `ladders:climb` performs the
-  // same paired-floor transition as the cache staircase action. The prison stair
-  // below has a walkable foot, so it keeps the normal walk-to-object route.
-  function routeCastleThroneStairs(event) {
-    const object = event?.object;
-    const tile = object?.getLocation?.();
-    const x = tile?.getX?.();
-    const y = tile?.getY?.();
-    const z = event?.sourceLocation?.z;
-    const up = event?.objectId === 15645 && x === 2571 && y === 3295 && z === 0;
-    const down = event?.objectId === 15648 && x === 2571 && y === 3295 && z === 1;
-    if (!up && !down) return;
-    // There is no walkable interaction tile beside the colliding staircase.
-    event.destination = { ...event.sourceLocation };
-  }
-
   function claimCastleThroneStairs(event) {
     const tile = event?.object?.getLocation?.();
     const x = tile?.getX?.();
@@ -3854,14 +3864,8 @@ module.exports = function registerSongOfTheElves(api) {
       event.handled = true;
       return;
     }
-    if (x !== 2571 || y !== 3295) return;
-    if (event.objectId === 15645 && z === 0) {
-      api.emitCustomEvent("ladders:climbUp", { player: event.player, destination: new Location(2575, 3293, 1) });
-      event.handled = true;
-    } else if (event.objectId === 15648 && z === 1) {
-      api.emitCustomEvent("ladders:climbDown", { player: event.player, destination: new Location(2575, 3293, 0) });
-      event.handled = true;
-    }
+    // The castle's main staircase (15645/15648 at 2571,3295) is the shared climb-links pair:
+    // used from 2571,3298 and landing on 2571,3294 upstairs, as for everyone else.
   }
 
   function handleItemOnItem(event) {
@@ -3927,8 +3931,10 @@ module.exports = function registerSongOfTheElves(api) {
     // on the Cave object's blocked footprint and trapped the player.
     const destination = new Location(2194, 3258, 0);
     if (!api.core.TeleportHandler.checkReqs(event.player, destination)) return;
-    event.player.getInventory().deleteNumber(event.itemId, 1);
-    api.core.TeleportHandler.teleport(event.player, destination, api.core.TeleportType.NORMAL, false);
+    api.core.TeleportHandler.confirm(event.player, destination, () => {
+      event.player.getInventory().deleteNumber(event.itemId, 1);
+      api.core.TeleportHandler.teleport(event.player, destination, api.core.TeleportType.NORMAL, false);
+    }, 20, { item: event.itemId });
   }
 
   function placeFallsPillarItem(event) {
@@ -4101,7 +4107,7 @@ module.exports = function registerSongOfTheElves(api) {
     ],
     buildJournal,
     onReward(player) {
-      for (const [skill] of REWARD_SKILLS) player.getSkillManager().addExperience(skill, 40000, false);
+      for (const [skill] of REWARD_SKILLS) player.getSkillManager().addExperience(skill, 40000, true);
     },
   });
   api.onNpcDialogueVariant(selectVariant);
@@ -4210,6 +4216,8 @@ module.exports = function registerSongOfTheElves(api) {
   api.persistAttribute(YSGAWYN_RETURN_MEETING);
   api.persistAttribute(ELENA_PRE_MEETING_RESPONSE);
   api.persistAttribute(FALLS_PILLARS);
+  // Paid but not yet given: a logout between the two keeps the tabard owed.
+  api.persistAttribute(TABARD_PAID);
   api.persistAttribute(FALLS_ORDER);
   api.persistAttribute(INCITEMENTS);
   api.persistAttribute(RESISTANCE_MEMBERS);
@@ -4267,7 +4275,6 @@ module.exports = function registerSongOfTheElves(api) {
   api.onObjectInteraction("Trapdoor", { Open: enterArdougneBattleBasement, "Climb-down": enterArdougneBattleBasement });
   api.onCustomEvent("ladders:climb", enterArdougneBattleBasement);
   api.onObjectInteraction("Staircase", { "Climb-down": enterPrison });
-  api.onObjectRoute(routeCastleThroneStairs);
   api.onWalkRoute(routeToLadyHefin);
   api.onObjectRoute(routeYsgawynLeafTrap);
   api.onCustomEvent("ladders:climb", claimCastleThroneStairs);

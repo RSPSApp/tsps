@@ -15,6 +15,7 @@
  * In multicombat the remaining hits can cleave adjacent targets in the forward 1x3 arc.
  */
 const { plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+const { withHitVictim } = require("../../src/main/typescript/elvarg/game/content/combat/EquipmentEffects");
 
 const MAX_CHARGES = 20000;
 const CHARGES_PER_VIAL = 100;
@@ -76,6 +77,19 @@ function swapToUncharged(player, item) {
   }
   item.setMetaValue?.(CHARGE_META_KEY, undefined);
   refresh(player);
+}
+
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a scythe ready to use
+ * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+ */
+function fillCharges(event) {
+  const { item } = event;
+  const id = item?.getId?.();
+  if (!chargedIds.has(id) && !chargedByUncharged.has(id)) return;
+  if (chargedByUncharged.has(id)) item.setId(chargedByUncharged.get(id));
+  item.setMetaValue(CHARGE_META_KEY, MAX_CHARGES);
+  event.handled = true;
 }
 
 /** Hits per swing: the target's size, 1 to 3. Players are 1x1. */
@@ -147,14 +161,21 @@ function createMethod() {
   const { MeleeCombatMethod, PendingHit, CombatFactory, DamageFormulas } = core;
   return new (class ScytheCombatMethod extends MeleeCombatMethod {
     hits(character, target) {
-      const maxHit = DamageFormulas.calculateMaxMeleeHit(character);
+      // Each victim's own max (vampyre tiers, salve, slayer gear): a cleave isn't judged by the primary target.
+      const maxHits = new Map();
+      const maxHitOf = (victim) => {
+        if (!maxHits.has(victim)) {
+          maxHits.set(victim, withHitVictim(character, victim, () => DamageFormulas.calculateMaxMeleeHit(character)));
+        }
+        return maxHits.get(victim);
+      };
       const hits = [];
       const budgets = new Map();
       const targets = [...Array(hitCount(target)).fill(target), ...cleaveTargets(character, target)];
       for (const [index, victim] of targets.entries()) {
         if (!budgets.has(victim)) budgets.set(victim, { remaining: victim.getHitpoints() });
         const hit = new PendingHit(character, victim, this, { damageBudget: budgets.get(victim) });
-        if (index > 0) CombatFactory.applyStyleDamage(hit, hitMax(maxHit, index));
+        if (index > 0) CombatFactory.applyStyleDamage(hit, hitMax(maxHitOf(victim), index));
         hits.push(hit);
       }
       if (character?.isPlayer?.()) {
@@ -464,6 +485,7 @@ function initializeIds() {
 
 module.exports = {
   name: "ScytheOfVitur",
+  description: "Adds the Scythe of Vitur's multi-hit sweeps on large targets, charging at the Theatre of Blood vyre well, and reverting to uncharged.",
   members: true,
   register(api) {
     core = api.core;
@@ -475,6 +497,7 @@ module.exports = {
     api.onItemAction("Holy Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Sanguine Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeScythe, { noted: false });
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onItemOnObject(depositScythe);
     api.onObjectInteraction(WELL_OBJECT, {
       "Charge-at": chargeAtWell,

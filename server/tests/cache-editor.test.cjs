@@ -3,6 +3,7 @@
 // Every assertion here reads the real copied cache, so a wrong field name or a link that resolves in
 // theory but not against this revision fails here rather than in the editor.
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const { test, before } = require("node:test");
 const path = require("node:path");
 
@@ -13,6 +14,10 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const Fields = require("../plugins/tools/cache-editor/Fields.CacheEditor");
 const Inspect = require("../plugins/tools/cache-editor/Inspect.CacheEditor");
+const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { encodeContentData } = require("../dist/net/protocol/ClientProtocol");
 
 const core = { CacheDefinitions, ObjectDefinition: require("../dist/game/definition/ObjectDefinition").ObjectDefinition };
 const inspect = (request) => Inspect.describe(core, request);
@@ -345,6 +350,60 @@ test("an overlay row is applied at load, so an authored loc is a real definition
   assert.equal(CacheDefinitions.getObject(start).seqId, -1, "and the id is a cache default again");
 });
 
+test("custom definition sources merge, reject overlapping ids, and clear independently", (t) => {
+  const source = "test-plugin";
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], source);
+  });
+  const base = CacheDefinitions.getBaseCounts();
+  const pet = { kind: "npc", id: Math.max(50000, base.npcs), baseId: 1, fields: { name: "Plugin pet" } };
+  const loc = { kind: "loc", id: Math.max(50000, base.objects), baseId: 1, fields: { name: "Editor loc" } };
+  assert.equal(CacheDefinitions.registerCustomDefinitions([pet], source), 1);
+  assert.equal(CacheDefinitions.registerCustomDefinitions([loc]), 1);
+  const merged = () => CacheDefinitions.getCustomDefinitions().sort((a, b) => a.kind.localeCompare(b.kind));
+  assert.deepEqual(merged(), [loc, pet]);
+  assert.deepEqual(CacheDefinitions.getCounts(), { ...base, npcs: pet.id + 1, objects: loc.id + 1 });
+
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([pet]), /already belongs to test-plugin/);
+  assert.deepEqual(merged(), [loc, pet], "a failed replacement preserves both sources");
+  assert.equal(CacheDefinitions.registerCustomDefinitions([]), 0);
+  assert.deepEqual(CacheDefinitions.getCustomDefinitions(), [pet]);
+  assert.deepEqual(CacheDefinitions.getCounts(), { ...base, npcs: pet.id + 1 });
+});
+
+test("the editor refuses a plugin's id on save and skips only the conflicting row on startup", (t) => {
+  const root = scratchRoot();
+  const source = "test-plugin";
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], source);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const warning = t.mock.method(console, "warn", () => {});
+  const { npcs, objects } = CacheDefinitions.getBaseCounts();
+  const pet = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { name: "Plugin pet" } };
+  const npc = { ...pet, fields: { name: "Editor NPC" } };
+  const loc = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { name: "Editor loc" } };
+  Document.save(core, root, { row: loc });
+  CacheDefinitions.registerCustomDefinitions([pet], source);
+
+  const conflict = new RegExp(`npc ${pet.id}: id already belongs to ${source}`);
+  assert.throws(() => Document.save(core, root, { row: npc }), conflict);
+  assert.deepEqual(Document.read(root).rows, [loc]);
+
+  Document.write(root, { version: 1, rows: [loc, npc] });
+  assert.equal(Document.apply(core, root), 1);
+  assert.equal(CacheDefinitions.getNpc(pet.id).name, pet.fields.name);
+  assert.equal(CacheDefinitions.getObject(loc.id).name, loc.fields.name);
+  assert.deepEqual(Document.read(root).rows, [loc, npc]);
+  assert.equal(warning.mock.callCount(), 1);
+  assert.match(warning.mock.calls[0].arguments[0], conflict);
+  CacheDefinitions.registerCustomDefinitions([], source);
+  assert.doesNotThrow(() => Document.save(core, root, { row: loc }), "the editor can update its own row");
+  assert.equal(Document.apply(core, root), 2, "both saved rows load once the plugin releases the id");
+});
+
 test("the field table is served so a picker can search a target kind by name", () => {
   const endpoints = new Map();
   const api = { core, registerContentEndpoint: (name, handler) => endpoints.set(name, handler), onServerStartup: () => {}, onPlayerLogin: () => {} };
@@ -447,6 +506,66 @@ test("custom definitions keep their IDs, extend counts, preserve stock definitio
   assert.deepEqual(CacheDefinitions.getCounts(), counts);
 });
 
+test("manager NPC recolours and damage stay on the new ID, leaving its cache base unchanged", () => {
+  let base;
+  for (let id = 0; id < CacheDefinitions.getBaseCounts().npcs; id++) {
+    const candidate = CacheDefinitions.getNpc(id);
+    if (candidate?.recolorFrom?.length && candidate.recolorTo?.length === candidate.recolorFrom.length) {
+      base = candidate;
+      break;
+    }
+  }
+  assert.ok(base, "the real cache has an NPC with built-in recolours");
+  const originalFrom = [...base.recolorFrom], originalTo = [...base.recolorTo];
+  const color = base.recolorTo[0];
+  const newColor = (color + 1) & 65535;
+  const composedTo = originalTo.map((value) => value === color ? newColor : value);
+  const document = {
+    version: 1,
+    rows: [{ kind: "npc", id: 50000, baseId: base.id, fields: {
+      name: "Custom colour test", recolorFrom: originalFrom, recolorTo: composedTo,
+    } }],
+  };
+  assert.deepEqual(Document.check(core, document), { ok: true, problems: [] });
+  try {
+    CacheDefinitions.registerCustomDefinitions(document.rows);
+    const custom = CacheDefinitions.getNpc(50000);
+    assert.equal(custom.recolorTo[0], newColor);
+    assert.equal(CacheDefinitions.getNpc(base.id), base);
+    assert.deepEqual(base.recolorFrom, originalFrom);
+    assert.deepEqual(base.recolorTo, originalTo);
+    const baseCombat = NpcDefinition.forId(base.id);
+    const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
+    const customCombat = NpcDefinition.forId(50000);
+    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    assert.equal(customCombat.getMaxHit(), 37);
+    assert.equal(customCombat.getAttackType(), CombatType.MELEE);
+    assert.equal(baseCombat.getMaxHit(), originalMaxHit);
+    assert.equal(baseCombat.getAttackType(), originalStyle);
+  } finally {
+    CacheDefinitions.registerCustomDefinitions([]);
+    NpcDefinition.invalidateCache(50000);
+  }
+});
+
+test("NPC recolour swaps and chains are rejected before the client applies them sequentially", () => {
+  const row = { kind: "npc", id: 50000, baseId: 1, fields: { recolorFrom: [1234, 4321], recolorTo: [4321, 1234] } };
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [1234, 7777];
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [7777, 4321];
+  assert.equal(Document.check(core, { rows: [row] }).ok, true);
+});
+
+test("recolour values outside the client's 16-bit colour range are rejected", () => {
+  for (const kind of ["npc", "item", "loc"]) {
+    const row = { kind, id: 50000, baseId: 1, fields: { recolorFrom: [70000], recolorTo: [-5] } };
+    assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /between 0 and 65535/);
+  }
+});
+
 test("malformed fields are refused before reaching the runtime", () => {
   const row = { kind: "npc", id: 50000, baseId: 1, fields: {} };
   for (const fields of [{ modelIds: "bad" }, { combatLevel: 1.5 }, { actions: [{}] }, { size: 0 }]) assert.ok(Document.audit(core, { ...row, fields }).length);
@@ -467,6 +586,44 @@ test("login sends definitions and resets the client for an empty world", () => {
   CacheDefinitions.registerCustomDefinitions([]);
   login({ player });
   assert.deepEqual(sent[1][1][0].rows, []);
+});
+
+test("login sends editor and plugin definitions even when their combined packet exceeds the limit", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    CacheDefinitions.registerCustomDefinitions([], "test-plugin");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const noise = (prefix, count) => Array.from({ length: count }, (_, index) =>
+    createHash("sha256").update(`${prefix}${index}`).digest("hex")).join("");
+  const { npcs, objects } = CacheDefinitions.getBaseCounts();
+  const editor = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { desc: noise("editor", 1800) } };
+  const plugin = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { desc: noise("plugin", 400) } };
+  let login;
+  Catalog.register({ core, registerContentEndpoint() {}, onServerStartup() {}, onPlayerLogin(handler) { login = handler; } });
+  CacheDefinitions.registerCustomDefinitions([plugin], "test-plugin");
+  Document.save(core, root, { row: editor });
+  assert.equal(Document.apply(core, root), 1);
+  assert.throws(() => encodeContentData("server", [{ key: "customDefinitions", rows: [editor, plugin] }]), /exceeds short length/);
+
+  const sent = [];
+  const player = { getSession: () => ({}), getPacketSender: () => ({
+    sendContentData(source, datasets) {
+      const packet = encodeContentData(source, datasets);
+      assert.equal(packet.readUInt16BE(1), packet.length - 3);
+      sent.push(...datasets);
+    },
+  }) };
+  login({ player });
+  assert.deepEqual(sent, [
+    { key: "customDefinitions", rows: [editor] },
+    { key: "customDefinitionsAppend", rows: [plugin] },
+  ]);
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([
+    { ...plugin, fields: { desc: noise("oversized", 2000) } },
+  ], "test-plugin"), /test-plugin.*exceeds short length/);
+  assert.deepEqual(CacheDefinitions.getCustomDefinitionDatasets(), sent, "oversized replacements preserve registered definitions");
 });
 
 test("model uploads avoid custom item IDs and refuse oversized packets before saving", () => {

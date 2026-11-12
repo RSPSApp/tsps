@@ -254,6 +254,7 @@ function derangedDeath({ npc }) {
 
 module.exports = {
   name: "DerangedArchaeologist",
+  description: "The Deranged archaeologist on Fossil Island: melee up close, ranged books at distance, and the 'Learn to Read!' exploding-book special.",
   members: true,
   register(api) {
     attachCombat(api);

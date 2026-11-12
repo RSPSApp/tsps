@@ -65,8 +65,16 @@ function setSettings(player, settings) {
 }
 
 function isEligibleKill(killer, victim) {
-  if (!(killer && victim && killer !== victim && killer.isPlayer?.() && victim.isPlayer?.() &&
-    !killer.isPlayerBot?.() && hasEnabledLootKeys(killer) && countKeys(killer) < MAX_KEYS)) return false;
+  return isPvpKill(killer, victim) && hasEnabledLootKeys(killer) && countKeys(killer) < MAX_KEYS;
+}
+
+/**
+ * A player-versus-player kill whose victim's loot keys go to the killer. Wiki (Loot key, Death and key transfer):
+ * "the existing loot keys will be transferred to an eligible opponent even if the opponent does not have loot keys
+ * enabled"; past five, "some loot keys will be deleted".
+ */
+function isPvpKill(killer, victim) {
+  if (!(killer && victim && killer !== victim && killer.isPlayer?.() && victim.isPlayer?.() && !killer.isPlayerBot?.())) return false;
   if (Wilderness.isIn(killer) && Wilderness.isIn(victim)) return true;
   const request = { killer, victim, allowed: false };
   pluginApi?.emitCustomEvent("loot-keys:eligible-kill", request);
@@ -136,10 +144,26 @@ function noteId(item) {
   return note?.isNoted?.() && note.getName?.().toLowerCase() === definition.getName?.().toLowerCase() ? id : item.id;
 }
 
+/** Any Ironman mode (Setup.Ironman answers "ironman:mode"; "none" for a normal account). */
+function isIronman(player) {
+  const query = { player, mode: "none" };
+  pluginApi?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none";
+}
+
+// Wiki (Loot key, Ironman Mode): an Ironman can "unlock and receive loot keys, but they may not retrieve the loot
+// themselves"; they "preview the looted items with the Loot Chest with the only option to destroy them". The Wiki
+// gives no message for the refused take, so this one is ours.
+const IRONMAN_REFUSAL = "As an Ironman, you can't take loot from a loot key; you can only destroy it.";
+
 function takeChestItem(player, index, destination, asNotes = false, requestedAmount = Number.MAX_SAFE_INTEGER) {
   const items = chestItems(player);
   const item = items[index];
   if (!item) return false;
+  if (isIronman(player)) {
+    player.sendMessage(IRONMAN_REFUSAL);
+    return true;
+  }
   const amount = Math.max(1, Math.min(item.amount, Math.trunc(Number(requestedAmount) || 0)));
   const moved = { ...item, id: destination === "bank" ? ItemDefinition.forId(item.id).unNote() : asNotes ? noteId(item) : item.id, amount };
   if (destination === "inventory") {
@@ -166,6 +190,10 @@ function takeChestItem(player, index, destination, asNotes = false, requestedAmo
 }
 
 const takeAllChestItems = (player, destination, asNotes) => {
+  if (chestItems(player).length && isIronman(player)) {
+    player.sendMessage(IRONMAN_REFUSAL);
+    return true;
+  }
   for (let index = chestItems(player).length - 1; index >= 0; index--) takeChestItem(player, index, destination, asNotes);
   return true;
 };
@@ -178,7 +206,7 @@ const destroyChestItem = (player, index, amount = Number.MAX_SAFE_INTEGER) => {
   return true;
 };
 
-const LootKeys = { CHEST_ATTRIBUTE, CHEST_TAB_ATTRIBUTE, ENABLED_ATTRIBUTE, KEY_IDS, MAX_KEYS, SETTINGS_ATTRIBUTE, UNLOCK_ATTRIBUTE, chestItems, chestTab, countKeys, createKey, describeKey, destroyChestItem, getSettings, hasEnabledLootKeys, hasUnlockedLootKeys, isEligibleKill, isLootKey, isSupply, keyItems, openKey, reindexKey, setChestItems, setChestTab, setLootKeysEnabled, setSettings, shouldStoreItem, takeAllChestItems, takeChestItem, totalValue };
+const LootKeys = { CHEST_ATTRIBUTE, CHEST_TAB_ATTRIBUTE, ENABLED_ATTRIBUTE, KEY_IDS, MAX_KEYS, SETTINGS_ATTRIBUTE, UNLOCK_ATTRIBUTE, chestItems, chestTab, countKeys, createKey, describeKey, destroyChestItem, getSettings, hasEnabledLootKeys, hasUnlockedLootKeys, isEligibleKill, isLootKey, isPvpKill, isSupply, keyItems, openKey, reindexKey, setChestItems, setChestTab, setLootKeysEnabled, setSettings, shouldStoreItem, takeAllChestItems, takeChestItem, totalValue };
 
 const pendingLoot = new WeakMap();
 const recentlyDefeated = new WeakMap();
@@ -197,6 +225,10 @@ function killerCannotReceiveKey(killer) {
   if (killer?.isDyingReturn?.() === true) return true;
   const defeatedAt = recentlyDefeated.get(killer);
   return defeatedAt !== undefined && World.getProcessCycle() - defeatedAt < RECENT_DEATH_WINDOW_TICKS;
+}
+
+function neverKeepLootKey(event) {
+  if (LootKeys.isLootKey(event.item)) event.keep = false;
 }
 
 function queueDrop(event) {
@@ -227,10 +259,12 @@ function createLootKey({ killer, victim }) {
   const state = pendingLoot.get(victim);
   pendingLoot.delete(victim);
   recentlyDefeated.set(victim, World.getProcessCycle());
-  if (!state || !LootKeys.isEligibleKill(killer, victim) || killerCannotReceiveKey(killer)) return;
+  if (!state || !LootKeys.isPvpKill(killer, victim) || killerCannotReceiveKey(killer)) return;
 
-  // Later hooks can change eligibility, including the bot's selected equipment drops.
-  const drops = state.drops.filter((entry) => entry.dropEligible === true && !entry.handled && entry.item?.isValid?.()).map((entry) => entry.item);
+  // Later hooks can change eligibility, including the bot's selected equipment drops. Only a killer with loot keys
+  // on (and room under five) turns the victim's loot into a key; their keys transfer either way.
+  const drops = !LootKeys.isEligibleKill(killer, victim) ? [] : state.drops
+    .filter((entry) => entry.dropEligible === true && !entry.handled && entry.item?.isValid?.()).map((entry) => entry.item);
   const candidates = drops.length ? [LootKeys.createKey(drops, LootKeys.countKeys(killer))] : [];
   candidates.push(...state.keys.sort((left, right) => LootKeys.describeKey(right).value - LootKeys.describeKey(left).value));
   const available = LootKeys.MAX_KEYS - LootKeys.countKeys(killer);
@@ -488,6 +522,7 @@ function handleChestInterfaceAction(player, event) {
 
 module.exports = {
   name: "LootKeys",
+  description: "Adds Wilderness loot keys dropped by player kills, which hold the victim's loot until opened at the loot chest, with the settings and unlock interface.",
   // Potions is read-only classification data; depending on its lifecycle would
   // defer this named Talk-to handler behind the generic NpcDialogues fallback.
   dependsOn: ["Wilderness", "Food"],
@@ -511,6 +546,8 @@ module.exports = {
       queueDrop(event);
     });
     api.onPlayerDefeated((event) => { warnedAtKeyLimit.delete(event.victim); createLootKey(event); });
+    // A key never takes a kept slot: the death drop hands it over, and a kept copy would come back to the victim too.
+    api.onShouldKeepItemOnDeath(neverKeepLootKey);
     api.onCanBankItem((event) => {
       if (LootKeys.isLootKey(event.item)) {
         event.player.sendMessage("Loot keys cannot be banked.");

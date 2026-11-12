@@ -110,6 +110,31 @@ test('the stash keeps the player\'s own things and levels, and gives them back',
   assert.equal(Stash.stashed(p), null);
 });
 
+test("the player's own antifire is held back for the game and comes back with its tier; the game's stays behind", (t) => {
+  const Dragonfire = require('../plugins/combat/DragonfireProtection');
+  const p = realPlayer(t);
+  Dragonfire.setDragonfireProtection(p, { tier: Dragonfire.DragonfireProtectionTier.ANTIFIRE, seconds: 300, label: 'antifire potion' });
+  Stash.save(p);
+  assert.equal(Dragonfire.getDragonfireProtectionTier(p), Dragonfire.DragonfireProtectionTier.NONE, 'not active during the game');
+  Dragonfire.setDragonfireProtection(p, { tier: Dragonfire.DragonfireProtectionTier.SUPER_ANTIFIRE, seconds: 360, label: 'extended super antifire' });
+  assert.ok(Stash.restore(p));
+  assert.equal(Dragonfire.getDragonfireProtectionTier(p), Dragonfire.DragonfireProtectionTier.ANTIFIRE, 'their own antifire, not the game super antifire');
+});
+
+test("a Tele Block from the game stays in it; the player's own antifire waits outside and comes back", (t) => {
+  const p = realPlayer(t);
+  const combat = p.getCombat();
+  combat.getFireImmunityTimer().start(300); // their own antifire, from before the game
+  Stash.save(p);
+  assert.equal(combat.getFireImmunityTimer().secondsRemaining(), 0, 'the game starts without it');
+  combat.getTeleblockTimer().start(300); // teleblocked in the game
+  combat.getFireImmunityTimer().start(360); // an antifire from the game's supplies
+  assert.ok(Stash.restore(p));
+  assert.equal(combat.getTeleblockTimer().secondsRemaining(), 0, "the game's Tele Block stays behind");
+  const fire = combat.getFireImmunityTimer().secondsRemaining();
+  assert.ok(fire > 290 && fire <= 300, `their own antifire back (${fire}s)`);
+});
+
 test('a build\'s load-out: the captured Max/Med kit with 5,000 bolts', (t) => {
   const p = realPlayer(t);
   Loadouts.equip(p, 0);
@@ -357,6 +382,28 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
   assert.equal(Profile.coffer(p), 4000, 'nothing taken, nothing deducted');
 });
 
+test('a withdrawal answered after a High Stakes fee was paid can take only what is left', (t) => {
+  const Coffer = require('../plugins/minigames/lms/Coffer.LastManStanding');
+  const p = realPlayer(t);
+  const initWith = (extra) => Common.init({
+    core,
+    getPluginConfig: (_key, fallback) => fallback,
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
+    ...extra,
+  });
+  initWith({ sendMultiChatboxPrompt: () => {} });
+  t.after(() => initWith({}));
+  let entered;
+  t.mock.method(p, 'setEnteredAmountAction', (action) => { entered = action; });
+  Profile.setCoffer(p, 500000);
+  Coffer.withdraw(p); // the prompt opens with 500,000 stored
+  assert.equal(Coffer.pay(p, 500000), true, 'meanwhile a High Stakes game takes its fee from the coffer');
+  entered.execute(500000);
+  assert.equal(p.getInventory().getAmount(id('coins')), 0, 'nothing left to withdraw');
+  assert.equal(Profile.coffer(p), 0, 'and the coffer is not overdrawn');
+});
+
 test('Justine explains the win requirement and refuses tradeable purchases before a win', (t) => {
   const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
   const p = realPlayer(t);
@@ -562,4 +609,73 @@ test('in a game Piety\'s slot is Zeal without the unlock, and Augury puts it out
   quick.handleWidgetAction(orb >>> 16, orb & 0xffff, 1);
   assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL], 'the next orb click puts Zeal out');
   game.area.destroy();
+});
+
+test('a forfeit answered Yes after the game has started leaves the player in it, stash untouched', (t) => {
+  const p = realPlayer(t);
+  const casual = Lobby.modeOf('casual');
+  const inside = [casual.waiting[0], casual.waiting[1]]; // the waiting box is [x0, y0, x1, y1]
+  const hooks = {};
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => prompts.push(pairs);
+  t.after(() => { delete Common.api.sendMultiChatboxPrompt; });
+  const fake = new Proxy({}, { get: (_, key) =>
+    (key === 'onObjectFirstClick' ? (ids, fn) => { if (ids.includes(Common.locId(casual.entrance))) hooks.barrier = fn; } : () => {}) });
+  Lobby.attachLobby(fake);
+  p.setLocation(new core.Location(inside[0], inside[1], casual.plane));
+  assert.equal(Lobby.waiting(p, casual), true, 'in the casual waiting room');
+  const entrance = { getId: () => Common.locId(casual.entrance), getLocation: () => p.getLocation() };
+  hooks.barrier({ player: p, object: entrance });
+  assert.equal(prompts.length, 1, 'the forfeit question');
+  // The match fills and starts while the question is open.
+  t.mock.method(Match, 'gameOf', () => ({}));
+  const restore = t.mock.method(Stash, 'restore', () => {});
+  const at = p.getLocation();
+  prompts[0][1]();
+  assert.equal(restore.mock.callCount(), 0, 'no stash handed back mid-game');
+  assert.equal(p.getLocation(), at, 'not moved out of the game');
+});
+
+test("Lisa's mode menu answered after a game has taken the player does nothing, stash untouched", (t) => {
+  const p = realPlayer(t);
+  const casual = Lobby.modeOf('casual');
+  const hooks = {};
+  const fake = new Proxy({}, { get: (_, key) =>
+    (key === 'onNpcThirdClick' ? (ids, fn) => { hooks.joinLisa = fn; } : () => {}) });
+  Lobby.attachLobby(fake);
+  Profile.finishTutorial(p);
+  hooks.joinLisa({ player: p });
+  const manager = p.getDialogueManager();
+  assert.equal(manager.isActive(), true, "Lisa's mode menu is open");
+  // The player is in a game (arena plane, no stash yet) when the answer arrives.
+  t.mock.method(Match, 'gameOf', () => ({}));
+  const save = t.mock.method(Stash, 'save', () => {});
+  const at = p.getLocation();
+  manager.handleResume(core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, 3); // the native resume for "Casual"
+  assert.equal(save.mock.callCount(), 0, 'nothing stashed from inside a game');
+  assert.equal(p.getLocation(), at, 'not moved to the waiting room');
+  assert.equal(Lobby.waiting(p, casual), false);
+});
+
+test("a prayer the game bans, left on from the lobby, goes off as the game starts (Wiki: Smite can't be used in a game)", (t) => {
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const hooks = new Map();
+  Match.attachMatch(new Proxy({}, { get: (_, key) => (key === 'onCustomEvent' ? (name, fn) => hooks.set(name, fn) : () => {}) }));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => hooks.get(name)?.(payload));
+  t.mock.method(Common, 'later', () => {});
+  t.mock.method(Common, 'every', () => {});
+  t.mock.method(require('../plugins/minigames/lms/Lobby.LastManStanding'), 'openOverlay', () => {});
+  const p = realPlayer(t);
+  for (const skill of ['ATTACK', 'STRENGTH', 'DEFENCE', 'PRAYER', 'HITPOINTS']) {
+    p.getSkillManager().setMaxLevel(core.Skill[skill], 99);
+    p.getSkillManager().setCurrentLevel(core.Skill[skill], 99, false);
+  }
+  PrayerHandler.activatePrayerPrayerId(p, PrayerHandler.SMITE);
+  PrayerHandler.activatePrayerPrayerId(p, PrayerHandler.STEEL_SKIN);
+  assert.equal(p.getPrayerActive()[PrayerHandler.SMITE], true, 'on in the lobby');
+  const game = new Match.Game([p]);
+  game.build = 0;
+  game.enter(p, game.area.at([...game.zone.centre, 0]));
+  assert.ok(!p.getPrayerActive()[PrayerHandler.SMITE], 'Smite is off in the game');
+  assert.equal(p.getPrayerActive()[PrayerHandler.STEEL_SKIN], true, 'an allowed prayer stays on');
 });

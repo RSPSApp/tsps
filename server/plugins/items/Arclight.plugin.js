@@ -123,4 +123,4 @@ function attach(api) {
   api.onCombatHitResolved(hitResolved);
 }
 
-module.exports = { name: 'Arclight', members: true, state, register(api) { attach(api); }, _test: { enhance, charge, hitResolved } };
+module.exports = { name: 'Arclight', description: 'Arclight: made at an altar from the Darklight, charged with ancient shards, and infused per sword for extra damage against demons.', members: true, state, register(api) { attach(api); }, _test: { enhance, charge, hitResolved } };

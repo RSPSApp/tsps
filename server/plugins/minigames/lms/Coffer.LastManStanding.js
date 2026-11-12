@@ -49,7 +49,8 @@ function withdraw(player) {
     const inventory = player.getInventory();
     // What the coin stack can still hold, in steps of 1,000; the coffer keeps the rest.
     const room = Math.floor((MAX_STACK - inventory.getAmount(coinId())) / STEP) * STEP;
-    const coins = Math.min(stored, Math.floor(amount / STEP) * STEP, room);
+    // The balance now, not when the prompt opened: a High Stakes fee may have been paid from it since.
+    const coins = Math.min(Profile.coffer(player), Math.floor(amount / STEP) * STEP, room);
     if (coins < STEP) {
       if (room < STEP && amount >= STEP) player.sendMessage(Common.message("noRoom"));
       return;

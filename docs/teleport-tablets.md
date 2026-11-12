@@ -1,6 +1,6 @@
 # Teleport tablets
 
-Breaking a teleport tablet (a spell tablet such as Varrock teleport, Teleport to house, or Teleport to boat) uses the `TELE_TAB` teleport type (`server/src/main/typescript/elvarg/game/model/teleportation/TeleportType.ts`). The tablet plugins are `server/plugins/combat/SpellTeleports.plugin.js` and `server/plugins/skills/sailing/BoatTeleport.plugin.js`.
+Breaking a teleport tablet (a spell tablet such as Varrock teleport, Teleport to house, or Teleport to boat) uses the `TELE_TAB` teleport type (`server/src/main/typescript/elvarg/game/model/teleportation/TeleportType.ts`). The tablet plugins are `server/plugins/combat/SpellTeleports.plugin.js` and `server/plugins/skills/sailing/BoatTeleport.Sailing.js`.
 
 ## What OSRS sends
 
@@ -19,7 +19,7 @@ There is no teleport sound of the player's own: a `sound_area` 200 on tick 1 of 
 
 - `TELE_TAB` plays 4069 (delay 16) on the click with sound 965 (delay 15), then 4071 and spotanim 678 as its middle step, lands with the reset animation and resets again the tick after.
 - `TeleportTypeOptions` carries what only some teleports do: their own sound instead of the spell teleport sound, the `busy` varbit, and the repeated end animation.
-- `TeleportHandler.teleport` takes an `onMiddle` callback; the tablet plugins use it to remove the tablet on tick 2. The usual checks (Wilderness level, teleblock, busy) still run before anything happens, so a refused tablet is never used up.
+- `TeleportHandler.teleport` takes an `onMiddle` callback; the tablet plugins use it to remove the tablet on tick 2. The usual checks (Wilderness level, teleblock, busy) still run before anything happens, so a refused tablet is never used up. The tablet's own Wilderness warning asks next, then `TeleportHandler.confirm` (the boat-at-sea warning, All Settings 471), and the tablet breaks only after both (the order every chosen teleport follows is in `TeleportHandler`'s class comment).
 - `TeleportTask` runs step 0 when the click is handled and step n on the click's tick + n: `World.process` runs the task pass before it handles packets, so the click's own tick has no task pass left. `TELE_TAB`'s start tick is 4 so that it lands on tick 4, with the absorb (start tick - 2) on tick 2; `NORMAL` (3) and `TELE_SCROLL` (3) land on tick 3 as their captures do. Checked on a running server: Break on tick 12, tablet used up on 14, landing on 16. The tests model this order (the click after tick 0's task pass). Other teleport types are unchanged until a capture of them shows their timing.
 - Before this, the tests modelled a click handled before the task pass, which the real loop never does, so tablets were absorbed and landed a tick late: in the client, a tick of nothing between the throw and the absorb (the throw's delay of 16 cycles plus its 880 ms ends exactly on tick 2 in OSRS).
 - Every teleport type frees the player on the landing tick (movement, untargetable, click delay), as the capture's `busy` = 0 on tick 4 shows; it used to hold them two more ticks. The release comes before the arrival callback, so a plugin can still hold the player there (boarding a boat, entering a house).
@@ -65,7 +65,7 @@ Jewellery charge messages are all `7f007f` and spell the count out ("Your ring o
 
 ## Not yet done
 
-- The Ancient, Cemetery, Ice plateau and Wilderness crabs tablets' Configure option (the Wilderness warning).
+- The Ancient, Cemetery, Ice plateau and Wilderness crabs tablets' Configure option (no capture). Their Wilderness warning itself is done, set in All Settings ([settings.md](settings.md#wilderness-teleport-warnings)).
 - Volcanic mine and Guthixian temple teleports: no capture or RuneLite tile for their landing.
 - Quest requirements for using a tablet (Desert Treasure for Ancient tablets, Lunar Diplomacy, Watchtower).
 - The tablets' Toggle message isn't captured; the text is ours. So are Camelot's Configure lines and Watchtower's beyond its menu.
@@ -90,3 +90,10 @@ A standard spellbook teleport lands on a random tile of the 5x5 square around it
 | Yanille | 2 | 2583-2585 | 3097-3099 | 2584, 3098 |
 
 The Varrock tablet's Grand Exchange option lands in the same square. Watchtower and Ape Atoll keep their tiles: their captures are too few to place a centre. The Ancient spellbook's teleports land spread out too (Paddewwa 3097-3098, 9881-9884; Kharyrll 3492-3494, 3471-3474), but on too few landings to place their squares; they stay on one tile.
+
+## The house tablet's Group option
+
+Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house). This server has no Ironman groups, so every
+player gets live's refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`,
+sends the game message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet
+is kept (`plugins/combat/SpellTeleports.plugin.js`).

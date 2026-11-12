@@ -139,6 +139,13 @@ export interface CustomItemDefinition {
 
     /** Server-level properties (affects combat/equipment/trading) */
     itemDef?: CustomItemDefProps;
+
+    /**
+     * A special attack bar in Combat Options (at least one field). `from` uses that item's special
+     * attack; without it a plugin registers the weapon's own (plugins/combat/specials). `energy` is
+     * the cost in percent; without it, `from`'s own cost.
+     */
+    specialAttack?: { from?: number; energy?: number };
 }
 
 /**

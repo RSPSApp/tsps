@@ -16,7 +16,8 @@ import { MenuTargetType } from "../../MenuEntry";
 import { chatHistory } from "../ChatHistory";
 import { getHoverTarget, getInteractionCanvases, minMenuSnapshot, type MinMenuSnapshot } from "../minimenu";
 import { Opcodes } from "../Opcodes";
-import type { HandlerMap } from "./HandlerTypes";
+import type { HandlerContext, HandlerMap } from "./HandlerTypes";
+import { locHighlightKey, type ModelHighlightManager } from "../../../game/highlights/ModelHighlightManager";
 import { menuOptionDisplayText } from "../../../ui/menu/menuOptionDisplayText";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
@@ -628,11 +629,14 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.SETTAPTODROP, (ctx) => {
-        ctx.intStackSize--; // pop enabled
+        const enabled = ctx.intStack[--ctx.intStackSize] === 1;
+        const osrsClient = (ctx.widgetManager as any).osrsClient;
+        if (osrsClient?.settings) osrsClient.settings.tapToDrop = enabled;
     });
 
     handlers.set(Opcodes.GETTAPTODROP, (ctx) => {
-        ctx.pushInt(0);
+        const osrsClient = (ctx.widgetManager as any).osrsClient;
+        ctx.pushInt(osrsClient?.settings?.tapToDrop ? 1 : 0);
     });
 
     handlers.set(Opcodes.SETSHIFTCLICKDROP, (ctx) => {
@@ -818,30 +822,41 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.pushInt(0);
     });
     handlers.set(Opcodes.HIGHLIGHT_NPC_CLEAR, consumeHighlightInt1);
-    handlers.set(Opcodes.HIGHLIGHT_NPCTYPE_SETUP, consumeHighlightSetup);
-    handlers.set(Opcodes.HIGHLIGHT_NPCTYPE_ON, consumeHighlightInt2);
-    handlers.set(Opcodes.HIGHLIGHT_NPCTYPE_OFF, consumeHighlightInt2);
-    handlers.set(Opcodes.HIGHLIGHT_NPCTYPE_GET, (ctx) => {
-        consumeHighlightInt2(ctx);
-        ctx.pushInt(0);
-    });
-    handlers.set(Opcodes.HIGHLIGHT_NPCTYPE_CLEAR, consumeHighlightInt1);
-    handlers.set(Opcodes.HIGHLIGHT_LOC_SETUP, consumeHighlightSetup);
-    handlers.set(Opcodes.HIGHLIGHT_LOC_ON, consumeHighlightInt4);
-    handlers.set(Opcodes.HIGHLIGHT_LOC_OFF, consumeHighlightInt4);
-    handlers.set(Opcodes.HIGHLIGHT_LOC_GET, (ctx) => {
-        consumeHighlightInt4(ctx);
-        ctx.pushInt(0);
-    });
-    handlers.set(Opcodes.HIGHLIGHT_LOC_CLEAR, consumeHighlightInt1);
-    handlers.set(Opcodes.HIGHLIGHT_LOCTYPE_SETUP, consumeHighlightSetup);
-    handlers.set(Opcodes.HIGHLIGHT_LOCTYPE_ON, consumeHighlightInt2);
-    handlers.set(Opcodes.HIGHLIGHT_LOCTYPE_OFF, consumeHighlightInt2);
-    handlers.set(Opcodes.HIGHLIGHT_LOCTYPE_GET, (ctx) => {
-        consumeHighlightInt2(ctx);
-        ctx.pushInt(0);
-    });
-    handlers.set(Opcodes.HIGHLIGHT_LOCTYPE_CLEAR, consumeHighlightInt1);
+    const modelHighlightOps = [
+        ["npcType", Opcodes.HIGHLIGHT_NPCTYPE_SETUP, Opcodes.HIGHLIGHT_NPCTYPE_ON, Opcodes.HIGHLIGHT_NPCTYPE_OFF, Opcodes.HIGHLIGHT_NPCTYPE_GET, Opcodes.HIGHLIGHT_NPCTYPE_CLEAR],
+        ["loc", Opcodes.HIGHLIGHT_LOC_SETUP, Opcodes.HIGHLIGHT_LOC_ON, Opcodes.HIGHLIGHT_LOC_OFF, Opcodes.HIGHLIGHT_LOC_GET, Opcodes.HIGHLIGHT_LOC_CLEAR],
+        ["locType", Opcodes.HIGHLIGHT_LOCTYPE_SETUP, Opcodes.HIGHLIGHT_LOCTYPE_ON, Opcodes.HIGHLIGHT_LOCTYPE_OFF, Opcodes.HIGHLIGHT_LOCTYPE_GET, Opcodes.HIGHLIGHT_LOCTYPE_CLEAR],
+    ] as const;
+    for (const [kind, setup, on, off, get, clear] of modelHighlightOps) {
+        const highlights = (ctx: HandlerContext) =>
+            (ctx.widgetManager?.osrsClient?.modelHighlightManager as ModelHighlightManager | undefined)?.[kind];
+        handlers.set(setup, (ctx) => {
+            const flags = ctx.popInt();
+            const alpha = ctx.popInt();
+            const width = ctx.popInt();
+            const color = ctx.popInt();
+            const slot = ctx.popInt();
+            highlights(ctx)?.configure(slot, color, width, alpha, flags);
+        });
+
+        for (const op of [on, off, get]) {
+            handlers.set(op, (ctx) => {
+                const group = kind === "loc" ? ctx.popInt() : 0;
+                const slot = ctx.popInt();
+                const coord = kind === "loc" ? ctx.popInt() : -1;
+                const id = ctx.popInt();
+                const target = kind === "loc" ? locHighlightKey(id, coord) : id;
+                const store = highlights(ctx);
+                if (op === get) ctx.pushInt(store?.has(slot, target, group) ? 1 : 0);
+                else store?.set(slot, target, group, op === on);
+            });
+        }
+        handlers.set(clear, (ctx) => {
+            const slot = ctx.popInt();
+            highlights(ctx)?.clear(slot);
+        });
+    }
+
     handlers.set(Opcodes.HIGHLIGHT_OBJ_SETUP, consumeHighlightSetup);
     handlers.set(Opcodes.HIGHLIGHT_OBJ_ON, consumeHighlightInt4);
     handlers.set(Opcodes.HIGHLIGHT_OBJ_OFF, consumeHighlightInt4);

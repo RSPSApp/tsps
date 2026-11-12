@@ -43,6 +43,7 @@
  *     Tiffy, who plays the Wiki failure lines on the next conversation.
  */
 module.exports = function registerRecruitmentDriveQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Equipment, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } =
     api.core;
   const { refreshQuestList, registerQuest, startTranscript, loadTranscripts } = require("../QuestRuntime");
@@ -180,13 +181,13 @@ module.exports = function registerRecruitmentDriveQuest(api) {
 
   const KUAM_VICTORY_CONDITION_IDS = ["DBOLHO", "crzBa_", "d7FuHu"];
   const LEYE_WEAPON_ITEM_IDS = [
-    ItemIdentifiers.STEEL_SWORD, // 1281
+    ItemIdentifiers.STEEL_SHORTSWORD, // 1281
     ItemIdentifiers.STEEL_CLAWS, // 3097
     ItemIdentifiers.STEEL_BATTLEAXE, // 1365
     ItemIdentifiers.STEEL_WARHAMMER, // 1339
   ];
   const BLADED_WEAPON_ITEM_IDS = new Set([
-    ItemIdentifiers.STEEL_SWORD,
+    ItemIdentifiers.STEEL_SHORTSWORD,
     ItemIdentifiers.STEEL_CLAWS,
     ItemIdentifiers.STEEL_BATTLEAXE,
   ]);
@@ -402,10 +403,64 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     });
   }
 
-  function beginTests(player) {
+  // Sir Tiffy leads the player to the secret grounds in the dark: after "...the training
+  // grounds location is a secret so..." the screen fades to black, "Mind your head!" and
+  // "Oops, ignore the smell!" are said in the dark, the player arrives, and the screen
+  // fades back in on "And... Here we are!". (Wiki transcript JI9IMB; the fade is the one the
+  // Lady Table room uses.)
+  const TRAVEL_LINES = {
+    secret: "Jolly good show! Now, the training grounds location is a secret so...",
+    smell: "Oops, ignore the smell! Nearly there!",
+    arrive: "And... Here we are! Best of luck!",
+  };
+  /** If the conversation is closed in the dark, the player still arrives after this long. */
+  const TRAVEL_FALLBACK_TICKS = 100;
+  const travelling = new WeakMap();
+
+  function startTravel(player) {
+    if (travelling.has(player)) return;
+    const trip = { arrived: false };
+    travelling.set(player, trip);
     resetAttempt(player);
     quest.setStage(player, STAGE_TESTING);
+    api.core.TaskManager.submit(new api.core.CountdownTask(trip, TRAVEL_FALLBACK_TICKS, () => {
+      if (travelling.get(player) !== trip || player.isRegistered?.() === false) return;
+      arrive(player, trip);
+      endTravel(player, trip);
+    }));
+  }
+
+  function darken(player) {
+    player.getMovementQueue().reset().setBlockMovement(true);
+    tableFade(player, true);
+  }
+
+  function arrive(player, trip) {
+    if (trip.arrived) return;
+    trip.arrived = true;
     teleport(player, ROOM_BY_KEY.get("ren").landing);
+  }
+
+  function endTravel(player, trip) {
+    if (travelling.get(player) !== trip) return;
+    travelling.delete(player);
+    api.core.TaskManager.cancelTasks(trip);
+    player.getPacketSender().closeSubInterface(FADE_UID);
+    player.getMovementQueue().setBlockMovement(false);
+  }
+
+  function handleTravelLine(request) {
+    const { player, npcId, step } = request;
+    if (!player || npcId !== SIR_TIFFY_CASHIEN_NPC_ID) return;
+    const trip = travelling.get(player);
+    if (!trip) return;
+    const text = step?.text;
+    if (text === TRAVEL_LINES.secret) request.after = () => darken(player);
+    else if (text === TRAVEL_LINES.smell) request.after = () => arrive(player, trip);
+    else if (text === TRAVEL_LINES.arrive) {
+      request.before = () => { arrive(player, trip); tableFade(player, false); };
+      request.after = () => endTravel(player, trip);
+    }
   }
 
   function quitTests(player) {
@@ -447,13 +502,13 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   }
 
   function openRenDoorPrompt(player) {
-    if (renClues(player) <= 0) {
+    const answer = renWord(player);
+    if (answer === undefined) {
       player.sendMessage(
         "The door has a four-letter combination lock. Sir Ren Itchood may have a clue for you."
       );
       return;
     }
-    const answer = ensureRenWord(player);
     const options = [REN_WORDS[answer]];
     for (const word of REN_WORDS) {
       if (options.length >= 5) break;
@@ -764,7 +819,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     if (stepId !== "JI9IMB") return;
     const stage = quest.getStage(player);
     if (stage !== STAGE_STARTED && stage !== STAGE_TESTING) return;
-    beginTests(player);
+    startTravel(player);
   }
 
   function handleDialogueAction(event) {
@@ -1001,7 +1056,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     player.getSkillManager().addExperiences(Skill.PRAYER, 1000.5);
     player.getSkillManager().addExperiences(Skill.HERBLORE, 1000.5);
     player.getSkillManager().addExperiences(Skill.AGILITY, 1000.5);
-    player.getInventory().adds(ItemIdentifiers.COINS, 3000);
+    giveReward(player, ItemIdentifiers.COINS, 3000);
   }
 
   api.persistAttribute(TESTS_ATTRIBUTE);
@@ -1039,6 +1094,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);
+  api.onCustomEvent("npc-dialogue:line", handleTravelLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("door:toggle", handleDoorToggle);

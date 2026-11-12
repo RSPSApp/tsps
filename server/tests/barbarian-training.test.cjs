@@ -160,7 +160,7 @@ test("each topic's lines come from the Barbarian Training transcript, its player
 test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish completes it", () => {
   const who = player();
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.rod);
   assert.ok(shown.said.includes("Certainly. Take the rod from under my bed and fish in the lake. When you have caught a few fish, I am sure you will be ready to talk more with me."));
   assert.deepEqual(stages(who), { fishingRod: 1, herblore: 0 });
@@ -185,10 +185,10 @@ test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish c
   assert.deepEqual(who.sent.messages, [T.LEARNED]);
 
   shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
   pick(who, shown, T.TOPIC.rodDone);
   assert.equal(stages(who).fishingRod, 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
 });
 
 test("a full inventory leaves the rod under the bed", () => {
@@ -222,13 +222,13 @@ test("Herblore: Otto asks for an attack mix, takes it, and every mix is learned"
   assert.equal(who.inv.count("brutal_2doserangerspotion"), 0);
 
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.herbloreDone);
   assert.ok(shown.said.includes("I will take that off your hands now. I will say no more than that I am eternally grateful."));
   assert.equal(who.inv.count("brutal_2dose1attack"), 0);
   assert.equal(stages(who).herblore, 3);
   assert.equal(who.sent.varbits.get(T.VARBITS.herblore), 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.farming, T.TOPIC.leave]);
 
   // Learned: the ranging mix at 80 Herblore (Wiki), 54 XP, and "herblore:made" for Sherlock.
   who.level = 79;
@@ -249,7 +249,7 @@ test("the attack mix hand-in needs the mix carried", () => {
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
   const shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   assert.ok(pick(who, shown, T.TOPIC.herblore).said.includes("Do you have my potion?"));
   assert.equal(stages(who).herblore, 2);
 });
@@ -282,10 +282,65 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
   who.inv.getItems()[0].setMetaValue(core.Item.UNTRADEABLE_META, true);
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
-  assert.deepEqual(talk(who).options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   who.inv.addItem(new core.Item(obj("brutal_2dose1attack"), 1));
   pick(who, talk(who), T.TOPIC.herbloreDone);
   assert.equal(stages(who).herblore, 3);
   assert.equal(who.inv.count("brutal_2dose1attack"), 1);
   assert.equal(who.inv.getItems()[0].getMetaValue(core.Item.UNTRADEABLE_META), true, "the restricted copy stays");
+});
+
+test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the Ancient Cavern whirlpool", () => {
+  const who = player();
+  const varbit = (id) => who.sent.varbits.get(id) ?? 0;
+  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
+
+  let shown = pick(who, talk(who), T.TOPIC.firemaking);
+  assert.equal(varbit(T.VARBITS.firemaking), 1);
+
+  // Not an oak-log bow fire: nothing changes.
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.LOGS, bow: true });
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.OAK_LOGS, bow: false });
+  assert.equal(varbit(T.VARBITS.firemaking), 1);
+  api.emitCustomEvent("firemaking:success", { player: who, itemId: core.ItemIdentifiers.OAK_LOGS, bow: true });
+  assert.equal(varbit(T.VARBITS.firemaking), 2);
+
+  shown = talk(who);
+  assert.ok(shown.options.includes(T.TOPIC.firemakingDone));
+  assert.ok(!shown.options.includes(T.TOPIC.pyreShips), "pyre ships come after Otto acknowledges the fire");
+  shown = pick(who, shown, T.TOPIC.firemakingDone);
+  assert.equal(varbit(T.VARBITS.firemaking), 3);
+  assert.equal(varbit(T.VARBITS.pyreShips), 0, "the whirlpool is still shut");
+
+  // "I seek more knowledge." now offers the pyre ship question, whose reply names the whirlpool.
+  shown = pick(who, shown, "I seek more knowledge.");
+  assert.ok(shown.options.includes(T.TOPIC.pyreShips));
+  assert.ok(!shown.options.includes(T.TOPIC.firemakingDone));
+  shown = pick(who, shown, T.TOPIC.pyreShips);
+  assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
+  // It stays on offer and replays the explanation, leaving the varbit at 1.
+  shown = pick(who, talk(who), T.TOPIC.pyreShips);
+  assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
+
+  // The whirlpool's own requirements are exactly these two varbits.
+  const gate = require("fs").readFileSync(require.resolve("../plugins/world/data/loc-teleport-sync.json"), "utf8");
+  assert.match(gate, /"varbit": ?3759, ?"atLeast": ?3/);
+  assert.match(gate, /"varbit": ?3764, ?"atLeast": ?1/);
+});
+
+test("All Settings' Make-X barbarian potions: off mixes one at a time, on offers the Make-X menu", () => {
+  for (const on of [0, 1]) {
+    const who = player(["2doserangerspotion", "brut_caviar", "2doserangerspotion", "brut_caviar"], 99);
+    T.setStage(who, "herblore", 3);
+    const sender = who.getPacketSender();
+    const menus = [];
+    sender.getVarbit = (id) => who.sent.varbits.get(id) ?? 0;
+    sender.sendCreationMenu = (menu) => { menus.push(menu); return sender; };
+    sender.sendVarbit(core.CacheDefinitions.getVarbitId("settings_barbarian_potion_makex"), on);
+    assert.equal(use(who, "brut_caviar", "2doserangerspotion"), true);
+    assert.equal(menus.length, on, on ? "the Make-X menu" : "no menu");
+    assert.equal(who.inv.count("brutal_2doserangerspotion"), on ? 0 : 1, on ? "nothing made until the menu is answered" : "one made at once");
+  }
 });

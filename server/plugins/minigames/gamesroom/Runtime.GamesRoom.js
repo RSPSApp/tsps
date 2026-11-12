@@ -1,14 +1,22 @@
 'use strict';
+const { GAMES } = require('./Games.GamesRoom');
 const Rules = require('./Rules.GamesRoom');
 const Screen = require('./Interface.GamesRoom');
 const Tables = require('./Tables.GamesRoom');
 const Access = require('./Access.GamesRoom');
 const Seating = require('./Seating.GamesRoom');
-const RANK_ATTRIBUTES = { draughts: 'games-room:draughts-rank', runelink: 'games-room:runelink-rank' };
+const RuneSquares = require('./Interface.RuneSquares.GamesRoom');
+const Spectator = require('./Spectator.GamesRoom');
+const RANK_ATTRIBUTES = Object.fromEntries(Object.keys(GAMES).map(game => [game, `games-room:${game}-rank`]));
 const SETTINGS_ATTRIBUTE = 'games-room:settings';
 const SECONDS = [15,30,60,120];
 const PIECES = ['firerune','waterrune','earthrune','airrune','mindrune','bodyrune','naturerune','chaosrune','lawrune','cosmicrune','bloodrune','soulrune'];
 const TIMES = ['15seconds','30seconds','1minute','2minutes'];
+// Current Wiki audio metadata identifies these jingles; all three archives are
+// present in the active rev241 cache (musicJingles index). Symbols are anonymous.
+// /w/Draw_(Burthorpe_Games_Room), /w/Defeat..._(Burthorpe_Games_Room),
+// /w/Victory!_(Burthorpe_Games_Room) on oldschool.runescape.wiki.
+const RESULT_JINGLES = { draw: 108, defeat: 109, victory: 110 };
 const menus = new Map(), matches = new Map(), invitations = new Map(), results = new Map();
 let api, core, area;
 function now() { return core.World.getProcessCycle(); }
@@ -29,11 +37,11 @@ function available(player) {
   if(!inRoom(player)||matches.has(player)||core.CombatFactory.inCombat(player))return false;
   if(player.isNeedsPlacement()||player.isTeleportingReturn()||player.getForceMovement()!=null||player.getStatus()!==core.PlayerStatus.NONE)return false;
   const open=player.getInterfaceId();
-  return open<=0||[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),Screen.optionsGroup('draughts'),Screen.optionsGroup('runelink'),Screen.group('draughts'),Screen.group('runelink')].includes(open);
+  return open<=0||[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),...Object.keys(GAMES).flatMap(game=>[Screen.optionsGroup(game),Screen.group(game)])].includes(open);
 }
 function pairValid(a,b) {
   const aRoom=a&&Access.roomGame(a.getLocation()),bRoom=b&&Access.roomGame(b.getLocation());
-  return a!==b&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
+  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
 }
 function invitation(a,b) { return invitations.get(a)?.get(b); }
 function removeInvitation(inv) {
@@ -52,10 +60,8 @@ function selection(player,target) {
   const room=Access.roomGame(player.getLocation());
   const menu={target,game:room??'draughts',stage:'selection',settings:settings(player)};
   menus.set(player,menu);results.delete(player);
-  if(room)options(player,menu);else Screen.showSelection(player,0,{
-    draughts:[rank(player,'draughts'),rank(target,'draughts')],
-    runelink:[rank(player,'runelink'),rank(target,'runelink')],
-  });
+  if(room)options(player,menu);else Screen.showSelection(player,0,
+    Object.fromEntries(Object.keys(GAMES).map(game=>[game,[rank(player,game),rank(target,game)]])));
 }
 function options(player,menu) { menu.stage='options';Screen.showOptions(player,menu.game,menu.settings); }
 function playerOption(event) {
@@ -76,8 +82,8 @@ function issue(player,menu) {
   const inv={from:player,to:menu.target,game:menu.game,settings:{...menu.settings},created:now()};
   let list=invitations.get(player);if(!list)invitations.set(player,list=new Map());list.set(menu.target,inv);
   menus.delete(player);player.getPacketSender().sendInterfaceRemoval();
-  player.sendMessage(`You challenge ${menu.target.getDisplayName()} to ${menu.game==='draughts'?'Draughts':'Runelink'}.`);
-  menu.target.sendMessage(`${player.getDisplayName()} challenges you to ${menu.game==='draughts'?'Draughts':'Runelink'}. Choose Challenge on that player to accept.`);
+  player.sendMessage(`You challenge ${menu.target.getDisplayName()} to ${GAMES[menu.game].title}.`);
+  menu.target.sendMessage(`${player.getDisplayName()} challenges you to ${GAMES[menu.game].title}. Choose Challenge on that player to accept.`);
   api.sendMultiChatboxPrompt(menu.target,'Accept this game challenge?',
     'Accept',()=>accept(inv),'Decline',()=>decline(inv));
 }
@@ -114,10 +120,13 @@ function start(inv,recipientSettings) {
 function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
   if(match.finished)return;
   match.finished=true;match.state.result={winner,reason};
+  Spectator.refresh(match);
   Seating.release(match);
   match.allocation.release();
   // Four completed turns before ranking comes only from the historical reference.
   // It prevents instant-resign rank transfers; current capture confirmation is absent.
+  // Runeversi reuses this existing rating policy; its formula and four-turn
+  // threshold are not established by a current Runeversi recording.
   if(match.settings.ranked&&winner!=null&&match.turns>=4) {
     const w=match.players[winner],l=match.players[1-winner],wr=rank(w,match.game),lr=rank(l,match.game),delta=Rules.rankChange(wr,lr);
     w.setAttribute(RANK_ATTRIBUTES[match.game],Math.min(60000,wr+delta));l.setAttribute(RANK_ATTRIBUTES[match.game],Math.max(1,lr-delta));
@@ -128,10 +137,13 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
     if(p===departing)continue;
     if(ownScreen(p,Screen.group(match.game))) {results.set(p,match);Screen.showResult(p,match);}
     p.sendMessage(winner==null?'The game is a draw.':p===match.players[winner]?'You win!':'You lose.');
+    p.getPacketSender().sendJingle(winner==null?RESULT_JINGLES.draw:p===match.players[winner]?RESULT_JINGLES.victory:RESULT_JINGLES.defeat,0);
     p.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${match.game}_rank`),rank(p,match.game));
   }
 }
 function leave(player) {
+  RuneSquares.roomOverlay(player,false);
+  Spectator.leave(player, true);
   cancelInvitations(player);menus.delete(player);results.delete(player);
   const match=matches.get(player);if(match)finish(match,1-match.players.indexOf(player),'Opponent left the game.',{departing:player});
 }
@@ -142,19 +154,21 @@ function invalidSides(match) {
   return match.players.flatMap((p,side)=>!inRoom(p)||!p.getLocation().equals(match.seats[side])?[side]:[]);
 }
 function move(player,match,move) {
-  const side=match.players.indexOf(player),previous=match.state.turn;
+  const side=match.players.indexOf(player);
   if(!pairValidForMatch(match)||!Rules.play(match.state,side,move))return false;
   Seating.moved(match,player);
   match.selected.clear();match.drawOffer=null;
-  if(match.state.turn!==previous||match.state.result)match.turns++;
+  if(match.state.forced==null||match.state.result)match.turns++;
   match.deadline=now()+ticks(match.settings.seconds);
   for(const p of match.players)Screen.refreshMatch(p,match);
+  Spectator.refresh(match);
   if(match.state.result)finish(match,match.state.result.winner,match.state.result.reason);
   return true;
 }
 function click(event) {
+  if(Spectator.click(event))return;
   const {player,buttonId}=event,group=buttonId>>>16;
-  const supported=[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),Screen.group('draughts'),Screen.group('runelink'),Screen.optionsGroup('draughts'),Screen.optionsGroup('runelink')];
+  const supported=[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),...Object.keys(GAMES).flatMap(game=>[Screen.group(game),Screen.optionsGroup(game)])];
   if(!supported.includes(group))return;event.handled=true;
   if((event.opId??event.action)!==1||!ownScreen(player,group))return;
   const is=name=>buttonId===Screen.component(name),match=matches.get(player);
@@ -163,10 +177,16 @@ function click(event) {
     if(is(`${prefix}:resign`))return finish(match,1-match.players.indexOf(player),'Resigned.');
     if(is(`${prefix}:offer_draw`)) {
       if(match.drawOffer&&match.drawOffer!==player)return finish(match,null,'Draw agreed.');
-      match.drawOffer=player;for(const p of match.players)Screen.refreshMatch(p,match);return;
+      match.drawOffer=player;for(const p of match.players)Screen.refreshMatch(p,match);
+      Spectator.refresh(match);return;
     }
-    if(match.game==='runelink') {
+    if(match.game==='runesquares') {
+      const edge=RuneSquares.decode(buttonId);
+      if(edge)return move(player,match,edge);
+    } else if(match.game==='runelink') {
       for(let col=0;col<7;col++)if(is(`${prefix}:column${col}`))return move(player,match,{column:col});
+    } else if(match.game==='runeversi') {
+      for(let to=0;to<64;to++)if(is(`${prefix}:square_${to}`))return move(player,match,{to});
     } else if(is(`${prefix}:boardinv`)&&Number.isInteger(event.slot)&&event.slot>=0&&event.slot<64&&match.players[match.state.turn]===player) {
       const from=match.selected.get(player),to=event.slot;
       if(from!==undefined&&move(player,match,{from,to}))return;
@@ -177,11 +197,11 @@ function click(event) {
   if(results.has(player)&&is(`boardgames_${results.get(player).game}:close`)) {results.delete(player);player.getPacketSender().sendInterfaceRemoval();return;}
   const menu=menus.get(player);if(!menu)return;
   if(menu.stage==='selection'&&group===core.CacheDefinitions.getInterfaceId('boardgames_challenge')) {
-    if(is('boardgames_challenge:draughts'))menu.game='draughts';
-    else if(is('boardgames_challenge:runelink'))menu.game='runelink';
+    const chosen=Object.keys(GAMES).find(game=>is(`boardgames_challenge:${game}`));
+    if(chosen)menu.game=chosen;
     else if(is('boardgames_challenge:select'))return options(player,menu);
     else return;
-    player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId('boardgames_game'),menu.game==='runelink'?1:0);return;
+    player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId('boardgames_game'),GAMES[menu.game].id);return;
   }
   if((menu.stage==='options'||menu.stage==='accept')&&group===Screen.optionsGroup(menu.game)) {
     const prefix=`boardgames_${menu.game}_options`,piece=PIECES.findIndex(n=>is(`${prefix}:${n}`)),time=TIMES.findIndex(n=>is(`${prefix}:${n}`));
@@ -194,6 +214,7 @@ function click(event) {
   }
 }
 function closed({player,interfaceId}) {
+  Spectator.closed({player,interfaceId});
   const match=matches.get(player);
   if(match&&interfaceId===Screen.group(match.game))return finish(match,1-match.players.indexOf(player),'Game closed.',{departing:player,returnDeparting:true});
   const menu=menus.get(player);
@@ -201,6 +222,7 @@ function closed({player,interfaceId}) {
   const result=results.get(player);if(result&&interfaceId===Screen.group(result.game))results.delete(player);
 }
 function opened({player,groupId,targetUid}) {
+  Spectator.opened({player,groupId,targetUid});
   if(targetUid!==core.CacheDefinitions.getComponentId('toplevel_osrs_stretch:mainmodal'))return;
   const match=matches.get(player);
   if(match&&groupId!==Screen.group(match.game))finish(match,1-match.players.indexOf(player),'Game replaced.',{departing:player,returnDeparting:true});
@@ -211,26 +233,35 @@ function opened({player,groupId,targetUid}) {
 }
 function logout({player}) {leave(player);}
 function bootstrap({player}) {
-  for(const game of ['draughts','runelink'])player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${game}_rank`),rank(player,game));
+  for(const game of Object.keys(GAMES))player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${game}_rank`),rank(player,game));
 }
 function processPlayer(player) {
+  Spectator.process(player);
   if(!player.isPlayer())return;
+  RuneSquares.roomOverlay(player,Access.roomGame(player.getLocation())==='runesquares'&&!matches.has(player));
   for(const list of invitations.values())for(const inv of [...list.values()])if((inv.from===player||inv.to===player)&&!pairValid(inv.from,inv.to))removeInvitation(inv);
   const match=matches.get(player);if(!match)return;
   const departed=invalidSides(match);
   if(departed.length)return finish(match,departed.length===1?1-departed[0]:null,'Player left the game.');
   Seating.process(match,player,now());
   if(match.players[match.state.turn]===player&&now()>=match.deadline) {
+    // Runeversi uses the existing legal random auto-move policy too. The cache
+    // establishes its clock choices, but its timeout policy is not captured.
     const auto=Rules.chooseAutoMove(match.state);if(auto)move(player,match,auto);
   }
 }
 function shutdown() {
   for(const match of new Set(matches.values()))finish(match,null,'Server shutdown.');
-  invitations.clear();menus.clear();results.clear();
+  Spectator.shutdown();invitations.clear();menus.clear();results.clear();
 }
+function matchAt(object) {
+  return [...new Set(matches.values())].find(match=>GAMES[match.game].spectatable&&!match.finished&&match.allocation.playingTable===object);
+}
+function prepareViewer(player) { cancelInvitations(player);menus.delete(player);results.delete(player); }
 function attach(pluginApi) {
-  api=pluginApi;core=api.core;Screen.configure(core);Tables.configure(core);Seating.configure(core);
+  api=pluginApi;core=api.core;Screen.configure(core);Tables.configure(core);Seating.configure(core);RuneSquares.configure(core);
   Access.attach(api,{rank});
+  Spectator.attach(api,{available,matchAt,prepare:prepareViewer});
   class GamesRoomArea extends core.Area {
     postEnter(p) {if(p.isPlayer()){Access.enforce(p);p.getPacketSender().sendPlayerOption(4,'Challenge',false);}}
     postLeave(p) {if(p.isPlayer()){leave(p);p.getPacketSender().sendPlayerOption(4,'null',false);}}
@@ -238,7 +269,7 @@ function attach(pluginApi) {
   }
   // Reference region34,77, confirmed against the active Games Room map.
   area=new GamesRoomArea([new core.Boundary(2176,2239,4928,4991,0),new core.Boundary(2176,2239,4928,4991,1)]);
-  api.persistAttribute(RANK_ATTRIBUTES.draughts,1000);api.persistAttribute(RANK_ATTRIBUTES.runelink,1000);
+  for(const attribute of Object.values(RANK_ATTRIBUTES))api.persistAttribute(attribute,1000);
   api.persistAttribute(SETTINGS_ATTRIBUTE,{piece:1,seconds:30,ranked:true});
   api.registerArea(area);api.onPlayerOption(playerOption);api.onCustomEvent('player:option-route',route);api.onInterfaceActionClick(click);
   api.onPlayerLogout(logout);api.onCustomEvent('interface:closed',closed);api.onCustomEvent('interface:opened',opened);api.onCustomEvent('player:bootstrap-complete',bootstrap);

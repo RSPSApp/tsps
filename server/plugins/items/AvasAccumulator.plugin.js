@@ -56,6 +56,7 @@ function recoveryFor(player) {
 
 module.exports = {
   name: "AvasAccumulator",
+  description: "Ava's attractor, accumulator and assembler: recover 60% to 80% of fired ammunition, blocked by metal body armour.",
   register(api) {
     pluginApi = api;
     Equipment = api.core.Equipment;

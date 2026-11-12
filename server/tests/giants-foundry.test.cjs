@@ -94,10 +94,40 @@ test('stage tools never repeat back to back, starting after the hammer', () => {
   }
 });
 
+test('the trip hammer works on the room hammer cycle, not from the click', () => {
+  assert.equal(Shared.HAMMER_PERIOD, 5);
+  assert.equal(Tools.TOOLS[Tools.TOOL.HAMMER].cycle, Shared.HAMMER_PERIOD, 'the room and the hammer share the cycle');
+  // recording 101: the hits land on 94, 99, 104, 109, 114, 209, 214, 354, 359, 364, all the same
+  // tick of the cycle, whichever tick the player started swinging on.
+  const hits = [94, 99, 104, 109, 114, 209, 214, 354, 359, 364];
+  assert.equal(new Set(hits.map((tick) => tick % 5)).size, 1, 'one tick of the cycle');
+  // So the hammer is due on the room's ticks and not on the ticks in between, whatever it has done.
+  const hammer = { tool: Tools.TOOL.HAMMER, sinceAction: 0 };
+  for (const now of [0, 5, 10, 95, 100, 1000]) assert.equal(Tools.due(hammer, now), true, `tick ${now}`);
+  for (const now of [1, 2, 3, 4, 94, 99]) assert.equal(Tools.due(hammer, now), false, `tick ${now}`);
+  hammer.sinceAction = 4;
+  assert.equal(Tools.due(hammer, 11), false, 'the count from the click no longer decides');
+  // the grindstone counts from the click instead: recording 101 has it on even ticks in one stretch
+  // and odd ticks in the next.
+  const grind = { tool: Tools.TOOL.GRIND, sinceAction: 0 };
+  assert.equal(Tools.due(grind, 3), false);
+  grind.sinceAction = 2;
+  assert.equal(Tools.due(grind, 3), true);
+});
+
 test('hand-in XP follows the Wiki formula', () => {
   assert.equal(Kovac.swordXp(0), 30);
   assert.equal(Kovac.swordXp(188), 23010); // rsprox recording 101
   assert.equal(Kovac.swordXp(199), 25230);
   assert.equal(Kovac.duration(3130000), '52m 10s');
   assert.equal(Kovac.duration(3723000), '1h 2m 3s');
+});
+
+test('the worn preform is held in the giant two-handed stance', () => {
+  const names = require('../data/definitions/sequence-names.json');
+  assert.deepEqual(
+    [Preform.STANCE[0], Preform.STANCE[2], Preform.STANCE[6]].map((id) => names[id]),
+    ['HUMAN_WEAPON_GIANT01_READY', 'HUMAN_WEAPON_GIANT01_WALK', 'HUMAN_WEAPON_GIANT01_RUN'],
+  );
+  assert.equal(Preform.STANCE.length, 7);
 });

@@ -11,10 +11,10 @@
  *   entering it is immune to rogues for 6 seconds, until they attack someone (1 June 2023).
  *   Bounty Hunter weapons work here.
  *
- * Rogues can attack within five combat levels; assigned targets use the matchmaking range.
+ * Rogues can attack within five combat levels by default; assigned targets use the matchmaking range.
  * https://secure.runescape.com/m=news/bounty-hunter-is-back?oldschool=1
- * Phoenix necklaces (29 January 2025) need nothing: the server has no
- * phoenix necklace effect. Messages are our wording.
+ * Phoenix necklaces (29 January 2025) do nothing in the arena: the PhoenixNecklace plugin
+ * asks "phoenix-necklace:eligible". Messages are our wording.
  */
 
 const Hud = require("./Hud.BountyHunter");
@@ -23,7 +23,7 @@ const Targets = require("./Targets.BountyHunter");
 const LOBBY_ALLOWANCE_TICKS = 200; // 2:00
 const LOBBY_REFUND_TICKS = 25; // 15 seconds
 const ROGUE_IMMUNITY_TICKS = 10; // 6 seconds
-const ROGUE_LEVEL_RANGE = 5;
+const DEFAULT_ROGUE_LEVEL_RANGE = 5;
 const ATTACK_OPTION_SLOT = 1; // the client's first player option, as Castle Wars and Ferox use it
 // Prayer head icons of Protect from Melee, Missiles and Magic.
 const PROTECTION_HEAD_ICONS = [0, 1, 2];
@@ -60,6 +60,7 @@ const XP_DROPS_SKILL_ORDER = [0, 2, 4, 6, 1, 3, 5, 16, 15, 17, 12, 20, 14, 13, 1
 let api;
 let core;
 let bh;
+let rogueLevelRange;
 const refusalSaidAt = new WeakMap();
 
 function isPlayer(mobile) {
@@ -190,7 +191,7 @@ function canAttackInArena(attacker, target) {
   if (!bh.inArena(attacker) || !bh.inArena(target)) return false;
   const assignedTarget = bh.targetOf(attacker) === target;
   const levels = Math.abs(attacker.getSkillManager().getCombatLevel() - target.getSkillManager().getCombatLevel());
-  if (!assignedTarget && levels > ROGUE_LEVEL_RANGE) return refuse(attacker, "Your level difference is too great.");
+  if (!assignedTarget && levels > rogueLevelRange) return refuse(attacker, "Your level difference is too great.");
   if (bh.targetOf(target) !== attacker && cycle() < (bh.immuneUntil.get(target) ?? 0)) {
     return refuse(attacker, "That player has only just entered the arena.");
   }
@@ -200,6 +201,11 @@ function canAttackInArena(attacker, target) {
 /** Attacking a player ends the attacker's rogue immunity; canAttack is only asked. */
 function endImmunity({ attacker, target }) {
   if (isPlayer(target) && bh.inArena(attacker) && bh.immuneUntil.delete(attacker)) Hud.sendImmunity(attacker, 0);
+}
+
+/** Phoenix necklaces cannot be used in the arena (Wiki: Phoenix necklace). */
+function blockPhoenixNecklace(event) {
+  if (isPlayer(event.player) && bh.inArena(event.player)) event.blocked = true;
 }
 
 function createAreas() {
@@ -346,12 +352,15 @@ module.exports = function attachArea(pluginApi, state) {
   api = pluginApi;
   core = pluginApi.core;
   bh = state;
+  const levelDifference = api.getPluginConfig("BountyHunter:levelDifference", DEFAULT_ROGUE_LEVEL_RANGE);
+  rogueLevelRange = Number.isInteger(levelDifference) && levelDifference >= 0 ? levelDifference : DEFAULT_ROGUE_LEVEL_RANGE;
   registerAreas();
   api.onPrayerDisabled(disableProtectionPrayers);
   api.onCanGainExperience(noPvpCombatExperience);
   api.onAttackTiming(noteSpecialAttack);
   api.onCombatHitResolved(endImmunity);
   api.onCustomEvent("bounty-hunter:weapon-area", allowWeapons);
+  api.onCustomEvent("phoenix-necklace:eligible", blockPhoenixNecklace);
   api.onCustomEvent("loot-keys:eligible-kill", allowLootKeys);
   api.onCustomEvent("player:respawn", respawnInLobby);
 };

@@ -163,6 +163,21 @@ function cleanDye(event) {
   event.handled = true;
 }
 
+/**
+ * Death protection from cosmetics: an item made with a tradeable ornament kit, mix or paint is
+ * kept on a non-PvP death outside the Wilderness on top of the kept count, and so is one with the
+ * untradeable Bounty Hunter ornament kit (Wiki: Items Kept on Death, Bounty hunter ornament kit).
+ * Other untradeable modifications (the twisted ancestral colour kit, dark dye) and recolours made
+ * without a kit go to the grave as the item would.
+ */
+function cosmeticOnDeath(query) {
+  const entry = byResult.get(query?.item?.getId?.());
+  if (!entry || entry.kit <= 0) return;
+  if (entry.kit === core.ItemIdentifiers.BOUNTY_HUNTER_ORNAMENT_KIT || new core.Item(entry.kit, 1).isTradeable()) {
+    query.cosmetic = true;
+  }
+}
+
 /** Revert from the item's Revert/Dismantle option, returning the kit for entries that specify it. */
 function revertItem(event) {
   if (event.option !== "Revert" && event.option !== "Dismantle" && event.option !== "Detach") {
@@ -202,6 +217,7 @@ function revertItem(event) {
 
 module.exports = {
   name: "OrnamentKits",
+  description: "Lets ornament kits and colour recolours be applied to their base items and reverted, with refunds where the Wiki says the kit is returned.",
   _test: { loadKits: () => loadKits(), findEntry, applyKit, revertItem },
   register(api) {
     core = api.core;
@@ -254,6 +270,7 @@ module.exports = {
     api.onItemOnItem(applyKit, { noted: false });
     api.onItemOnItem(cleanDye, { noted: false });
     api.onItemAction(revertItem);
+    api.onCustomEvent("player-death:cosmetic", cosmeticOnDeath);
     api.log("registered", { pairs: byKitAndBase.size, variants: byResult.size });
   },
 };

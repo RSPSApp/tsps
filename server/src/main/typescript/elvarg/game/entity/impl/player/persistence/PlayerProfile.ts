@@ -1,17 +1,22 @@
 /**
  * Which of an account's characters a save belongs to. Live OSRS keeps a separate character per
- * account on a Leagues world; here a world that runs a league (its plugin config) logs every
- * account into its league character, which lives in its own save, never as a flag on the main
- * one. Both share the account's name, so only one of them can be online at a time, as on live.
+ * account on a Leagues world and on a Hardcore world; here a world that runs one (its plugin
+ * config) logs every account into that character, which lives in its own save, never as a flag on
+ * the main one. They all share the account's name, so only one of them can be online at a time,
+ * as on live.
  */
-export type PlayerProfile = "main" | "league";
+export type PlayerProfile = "main" | "league" | "hardcore";
 
 export const MAIN_PROFILE: PlayerProfile = "main";
 export const LEAGUE_PROFILE: PlayerProfile = "league";
+export const HARDCORE_PROFILE: PlayerProfile = "hardcore";
 
-/** The account's other character: the one whose save vouches for a login of a character not made yet. */
-export function siblingProfile(profile: PlayerProfile): PlayerProfile {
-    return profile === MAIN_PROFILE ? LEAGUE_PROFILE : MAIN_PROFILE;
+/** Every profile an account can have a character in, the main one first. */
+export const PLAYER_PROFILES: readonly PlayerProfile[] = [MAIN_PROFILE, LEAGUE_PROFILE, HARDCORE_PROFILE];
+
+/** The account's other characters, in PLAYER_PROFILES order: the saves that vouch for a login of a character not made yet. */
+export function otherProfiles(profile: PlayerProfile): PlayerProfile[] {
+    return PLAYER_PROFILES.filter((other) => other !== profile);
 }
 
 

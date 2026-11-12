@@ -327,7 +327,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       // no historical damage. Retain their current damage rather than invent it.
       const lastHit = player.getLastVenomDamage() ?? severity;
       skills.setCurrentLevel(Skill.PRAYER, Math.max(0, prayer - 50), true);
-      player.setPoisonDamage(lastHit * 5);
+      // The same conversion as an antipoison's: 5 x last hit - 4 (rsprox_transcripts/234/03280.txt:69820).
+      player.setPoisonDamage(Math.max(0, lastHit * 5 - 4));
       player.setVenomed(false);
       player.sendMessage("Your venom has been reduced to poison.");
       return;
@@ -1245,7 +1246,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     if (inventory.get(slot) !== item) return null;
     const skills = player.getSkillManager();
     const before = skills.getExperience(skill);
-    skills.addExperience(skill, 5000, false);
+    skills.addExperience(skill, 5000, true);
     if (skills.getExperience(skill) === before) return null;
     inventory.deleteAtSlot(slot, 1);
     return `<col=0000ff>Your wish has been granted!</col> You have been awarded 5,000 ${name ?? skill.getName()} experience!`;

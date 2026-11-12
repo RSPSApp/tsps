@@ -99,6 +99,7 @@ function pintMessage(core, event) {
 
 module.exports = {
   name: "Bartenders",
+  description: "Makes the Blue Moon Inn, Dancing Donkey, Sheared Ram and Dragon Inn bartenders take coins and hand over a beer or Greenman's ale.",
   register(api) {
     api.onNpcDialogueCondition(answerCoins.bind(null, api.core));
     api.onCustomEvent("npc-dialogue:action", buyDrink.bind(null, api.core));

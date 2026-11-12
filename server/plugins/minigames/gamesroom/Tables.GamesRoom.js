@@ -1,3 +1,4 @@
+const { GAMES } = require('./Games.GamesRoom');
 let core;
 const reserved = new Set();
 // Games Room occupies cache map square 34,77 on two planes. Seating comes from
@@ -23,7 +24,7 @@ function replace(original, id) {
 }
 
 function allocate(game, plane) {
-  if (!core || !['draughts', 'runelink'].includes(game) || ![0, 1].includes(plane)) return null;
+  if (!core || !Object.hasOwn(GAMES, game) || ![0, 1].includes(plane)) return null;
   const cache = core.CacheDefinitions;
   const tableId = cache.getLocId('boardgames_table');
   const stoolId = cache.getLocId('boardgames_barstool_white');
@@ -70,7 +71,7 @@ function allocate(game, plane) {
       release();
       throw error;
     }
-    return { table, stools, seats: stools.map(stool => stool.getLocation().clone()), release };
+    return { table, playingTable: replacements[0], stools, seats: stools.map(stool => stool.getLocation().clone()), release };
   }
   return null;
 }

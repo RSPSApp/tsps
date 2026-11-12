@@ -7,7 +7,7 @@
  * mist, earth mud, fire steam; Earth altar: water mud, air dust, fire lava; Fire altar: water steam, air smoke, earth
  * lava), at Runecraft 6 mist, 10 dust, 13 mud, 15 smoke, 19 steam, 23 lava. It takes pure essence and the same
  * number of the elemental runes, and either the used rune's talisman (spent) or an active Magic Imbue (the talisman
- * is then kept). Essence, runes and talisman go whether or not the runes bind; each rune binds on a 50% chance, and a
+ * is then kept); what binds in place of pure essence elsewhere (`runecrafting:essence`) does here too. Essence, runes and talisman go whether or not the runes bind; each rune binds on a 50% chance, and a
  * worn Binding necklace (16 uses, one per altar use) binds them all. A batch is refused before spending anything
  * when the bound runes cannot fit in the inventory.
  * XP an essence is each rune's own Recipe infobox on the Wiki, by altar. The Steam rune page's table says 9.3 on the
@@ -20,7 +20,7 @@
  * capture has them. Preset items (Item.isPresetItem) are not counted or spent, so a loadout's copies never become
  * real runes; the stacks are taken slot by slot.
  *
- * Not done: Daeyalt essence (the Wiki's recipes pay 1.5 times, mist 12), guardian essence and Twisted extract
+ * Not done: guardian essence and Twisted extract
  * recipes; the Binding necklace's Check and Destroy options (the Wiki: Check gives the uses left, Destroy restores
  * the next to 16); runic extracts; the Aether rune.
  */
@@ -29,8 +29,9 @@ const NECKLACE_ATTRIBUTE = "runecrafting:binding-necklace";
 const NECKLACE_USES = 16;
 const IMBUE_ATTRIBUTE = "lunar:magic-imbue-until";
 const SUCCESS_CHANCE = 0.5;
+const DAEYALT_XP_SCALE = 1.5;
 
-let api, core, craftGraphic, craftAnimation;
+let api, core, craftGraphic, craftAnimation, standIns;
 
 /** altar object -> rune used -> { made, level, xp, talisman } (Wiki Recipe infoboxes). */
 function buildTable() {
@@ -42,7 +43,7 @@ function buildTable() {
   const mist = { made: I.MIST_RUNE, name: "mist", level: 6 }, dust = { made: I.DUST_RUNE, name: "dust", level: 10 };
   const mud = { made: I.MUD_RUNE, name: "mud", level: 13 }, smoke = { made: I.SMOKE_RUNE, name: "smoke", level: 15 };
   const steam = { made: I.STEAM_RUNE, name: "steam", level: 19 }, lava = { made: I.LAVA_RUNE, name: "lava", level: 23 };
-  const row = (using, rune, xp) => [using.rune, { ...rune, xp, talisman: using.talisman }];
+  const row = (using, rune, xp) => [using.rune, { ...rune, xp, used: using.rune, talisman: using.talisman }];
   return new Map([
     [O.ALTAR_33, new Map([row(water, mist, 8), row(earth, dust, 8.3), row(fire, smoke, 8.5)])],
     [O.ALTAR_35, new Map([row(air, mist, 8.5), row(earth, mud, 9.3), row(fire, steam, 9.3)])],
@@ -84,6 +85,18 @@ function takeFrom(inventory, slots, amount, refresh = true) {
   }
 }
 
+/** The ids `amount` taken from `slots` (in order) spends. */
+function spent(inventory, slots, amount) {
+  const ids = [];
+  for (const [slot, have] of slots) {
+    if (amount <= 0) break;
+    const id = inventory.getItems()[slot].getId();
+    if (!ids.includes(id)) ids.push(id);
+    amount -= have;
+  }
+  return ids;
+}
+
 function useNecklace(player) {
   const left = (player.getAttribute(NECKLACE_ATTRIBUTE) ?? NECKLACE_USES) - 1;
   if (left > 0) {
@@ -98,17 +111,41 @@ function useNecklace(player) {
   player.sendMessage("Your Binding necklace disintegrates.");
 }
 
+/** FreeToPlay's line for a members item. */
+const MEMBERS_MESSAGE = "To use this item please login to a members' world.";
+
+/**
+ * The recipe for the item used on the altar: the elemental rune, or its talisman. Wiki (Combination
+ * rune): "Enter the altar, and use the talisman (not a tiara) on the runecraft altar."
+ */
+function recipeFor(objectId, itemId) {
+  const altar = TABLE.get(objectId);
+  if (!altar) return null;
+  return altar.get(itemId) ?? [...altar.values()].find((recipe) => recipe.talisman === itemId) ?? null;
+}
+
 function combine(event) {
-  const rune = !event.handled && TABLE.get(event.objectId)?.get(event.itemId);
+  const rune = !event.handled && recipeFor(event.objectId, event.itemId);
   if (!rune) return;
   event.handled = true;
   const { player } = event;
+  // Combination runes are members-only; the four altars stand in free land, and the elemental rune used on them is
+  // the only item the free-world item check sees (FreeToPlay), so the pure essence and the product went unchecked.
+  if (!core.WorldDefinition.isMembersWorld()) {
+    player.sendMessage(MEMBERS_MESSAGE);
+    return;
+  }
   const I = core.ItemIdentifiers, inventory = player.getInventory();
   if (player.getSkillManager().getCurrentLevel(core.Skill.RUNECRAFTING) < rune.level) {
     player.sendMessage(`You need a Runecrafting level of at least ${rune.level} to craft this.`);
     return;
   }
-  const essenceSlots = takeable(inventory, I.PURE_ESSENCE);
+  // Wiki (Daeyalt essence): daeyalt binds first, at 1.5 times the XP; pure essence takes a second use.
+  // What binds in place of pure essence goes with it, after it.
+  const daeyaltSlots = takeable(inventory, I.DAEYALT_ESSENCE);
+  const essenceIds = daeyaltSlots.length > 0 ? [I.DAEYALT_ESSENCE]
+    : [I.PURE_ESSENCE, ...standIns(player).filter((id) => id !== I.PURE_ESSENCE && id !== I.DAEYALT_ESSENCE)];
+  const essenceSlots = daeyaltSlots.length > 0 ? daeyaltSlots : essenceIds.flatMap((id) => takeable(inventory, id));
   const essence = total(essenceSlots);
   if (essence <= 0) {
     player.sendMessage("You do not have any pure essence to bind.");
@@ -120,7 +157,7 @@ function combine(event) {
     player.sendMessage("You need the talisman of the rune you are using, or Magic Imbue, to combine runes.");
     return;
   }
-  const runeSlots = takeable(inventory, event.itemId);
+  const runeSlots = takeable(inventory, rune.used);
   const amount = Math.min(essence, total(runeSlots));
   if (amount <= 0) return;
   const necklace = wornNecklace(player);
@@ -139,6 +176,7 @@ function combine(event) {
     }
   }
 
+  const spentIds = spent(inventory, essenceSlots, amount);
   takeFrom(inventory, essenceSlots, amount);
   takeFrom(inventory, runeSlots, amount);
   if (!useImbue) takeFrom(inventory, talismanSlots, 1);
@@ -150,18 +188,19 @@ function combine(event) {
   if (bound === amount) player.sendMessage(`You succeed in binding the temple's power into ${rune.name} runes.`);
   else if (bound > 0) player.sendMessage(`You partially succeed to bind the temple's power into ${rune.name} runes.`);
   else player.sendMessage(`You fail to bind the temple's power into ${rune.name} runes.`);
-  if (bound > 0) player.getSkillManager().addExperiences(core.Skill.RUNECRAFTING, bound * rune.xp);
+  if (bound > 0) player.getSkillManager().addExperiences(core.Skill.RUNECRAFTING, bound * rune.xp * (daeyaltSlots.length > 0 ? DAEYALT_XP_SCALE : 1));
   if (necklace) useNecklace(player);
   // Nothing here says the Rift guardian or a league relic apply to combination runes: amountPerEssence 0 keeps the
   // relic's extra runes off, and no guardian colour matches. The diary hooks read runeAmount.
   if (bound > 0) api.emitCustomEvent("runecrafting:success", {
     player, skill: core.Skill.RUNECRAFTING, rolls: amount, amountPerEssence: 0, runeId: rune.made, runeAmount: bound,
-    objectId: event.objectId, altarId: event.objectId, essenceIds: [I.PURE_ESSENCE], combination: true,
+    objectId: event.objectId, altarId: event.objectId, essenceIds: spentIds, combination: true,
   });
 }
 
-function attach(pluginApi) {
-  api = pluginApi; core = api.core;
+/** `essence.standIns(player)`: what binds in place of pure essence (Runecrafting's `runecrafting:essence`). */
+function attach(pluginApi, essence) {
+  api = pluginApi; core = api.core; standIns = essence.standIns;
   craftGraphic = new core.Graphic(186, 0, 92);
   craftAnimation = new core.Animation(791);
   TABLE = buildTable();

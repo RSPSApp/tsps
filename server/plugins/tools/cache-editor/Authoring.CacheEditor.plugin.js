@@ -110,6 +110,7 @@ function startup(apiCore) {
 
 module.exports = {
   name: "CacheEditorAuthoring",
+  description: "Opens a loopback-only writable service for the cache editor that saves overlay rows and uploads, and only when explicitly enabled for local development.",
   register(api) {
     api.onServerStartup(startup.bind(null, api.core));
   },

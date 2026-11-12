@@ -84,6 +84,7 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
   const delays = [];
   const attributes = new Map();
   const combat = { getTarget: () => target, getAttacker: () => attacker, delayAttack: ticks => delays.push(ticks) };
+  let runEnergy = 50;
   const player = {
     getSkillManager: () => ({ getCurrentLevel: () => hp, getMaxLevel: () => 60, stopSkillable() {} }),
     getCombat: () => combat,
@@ -101,9 +102,12 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
       refreshItems: () => {},
     }),
     getTimers: () => timers,
-    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {} }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {}, sendRunEnergy() {} }),
     performAnimation: () => {},
     setHitpoints: value => { hp = value; },
+    // Purple sweets also restore run energy (ConsumableEffects.restoreRunEnergy, since 4b1eb224c).
+    getRunEnergy: () => runEnergy,
+    setRunEnergy: value => { runEnergy = value; },
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     isPlayerBot: () => true,
@@ -154,8 +158,8 @@ test('F2P bot only eats once engaged and after HP actually drops', () => {
 
   h.setHp(15);
   assert.equal(h.tick(), 'failure', 'HP drop proceeds to eat (fails here on empty inventory)');
-  assert.equal(h.state.pvp.f2pFoodPending, false);
-  assert.equal(h.state.pvp.f2pFoodPendingHp, null);
+  assert.equal(h.state.pvp.f2pFoodPending, true, 'no bite landed, so the wait stays satisfied');
+  assert.equal(h.state.pvp.f2pFoodPendingHp, 20);
   assert.equal(h.state.virtualFoodChargesRemaining, 0, 'empty inventory zeroes the retreat budget');
 });
 
@@ -591,4 +595,77 @@ test('restore timing follows bot skill and a one-Prayer pure never wastes a dose
   pure.player.getInventory().setItem(0, new core.Item(ItemIdentifiers.SUPER_RESTORE_4_));
   assert.equal(pure.node.drinkPrayerPotion(pure.player, getPvpProfile('elite')), false);
   assert.equal(pure.player.getInventory().getItems()[0].getId(), ItemIdentifiers.SUPER_RESTORE_4_);
+});
+
+test('F2P critical crossing eats immediately at the existing combo threshold', () => {
+  for (const hp of [15, 18]) {
+    const h = buildHarness();
+    h.setItems([ItemIdentifiers.SWORDFISH]);
+    h.setHp(hp);
+    assert.equal(h.tick(), 'success', 'critical HP must not arm a fresh hit wait');
+    assert.equal(h.getHp(), hp + 14);
+    assert.equal(h.state.pvp.f2pFoodPending, false);
+    assert.equal(h.state.pvp.f2pFoodPendingHp, null);
+  }
+});
+
+test('F2P failed eating retries at unchanged HP without another hit', () => {
+  for (const block of ['permission', 'food timer', 'stun']) {
+    const h = buildHarness();
+    h.setItems([ItemIdentifiers.SWORDFISH]);
+    h.setHp(30);
+    assert.equal(h.tick(), 'failure', 'ordinary crossing arms');
+    h.setHp(25);
+    if (block === 'permission') h.player.canEat = false;
+    else h.timers.extendOrRegister(block === 'stun' ? core.TimerKey.STUN : core.TimerKey.FOOD, 3);
+    assert.equal(h.tick(), 'failure', block);
+    assert.equal(h.state.pvp.f2pFoodPending, true, 'failed attempt keeps the original crossing');
+    assert.equal(h.state.pvp.f2pFoodPendingHp, 30);
+    h.player.canEat = true;
+    h.timers.cancel(core.TimerKey.FOOD);
+    h.timers.cancel(core.TimerKey.STUN);
+    assert.equal(h.tick(), 'success', 'retry needs no further HP drop');
+    assert.equal(h.getHp(), 39);
+    assert.equal(h.state.pvp.f2pFoodPending, false);
+    assert.equal(h.state.pvp.f2pFoodPendingHp, null);
+  }
+});
+
+test('F2P pending reaction resets after healing, disengagement and state cleanup', () => {
+  const { setModeRoaming } = localRequire('../../state/State.PlayerBots');
+  for (const reset of ['heal', 'disengage', 'state']) {
+    const h = buildHarness();
+    h.setItems([ItemIdentifiers.SWORDFISH]);
+    h.setHp(30);
+    assert.equal(h.tick(), 'failure');
+    h.state.pvp.f2pComboPending = true;
+    if (reset === 'heal') h.setHp(40);
+    if (reset === 'disengage') h.engage(false);
+    if (reset === 'state') setModeRoaming(null, h.state, { ROAMING: 'roaming' });
+    else h.tick();
+    assert.equal(h.state.pvp.f2pFoodPending, false, reset);
+    assert.equal(h.state.pvp.f2pFoodPendingHp, null, reset);
+    assert.equal(h.state.pvp.f2pComboPending, false, reset);
+    h.state.mode = 'pvp';
+    h.engage(true);
+    h.setHp(30);
+    assert.equal(h.tick(), 'failure', 'a new ordinary crossing still waits');
+    assert.equal(h.state.pvp.f2pFoodPending, true);
+  }
+});
+
+test('ordinary F2P crossings still wait while other modes eat immediately', () => {
+  for (const mode of ['f2p', 'members', 'training']) {
+    const h = buildHarness();
+    h.setItems([ItemIdentifiers.SWORDFISH]);
+    h.setHp(20);
+    if (mode === 'members') h.state.pvp.loadoutId = 'edge_main_melee';
+    if (mode === 'training') h.state.mode = 'training';
+    assert.equal(h.tick(), mode === 'f2p' ? 'failure' : 'success', mode);
+    if (mode === 'f2p') {
+      assert.equal(h.tick(), 'failure', 'unchanged ordinary HP keeps waiting');
+      h.setHp(19);
+      assert.equal(h.tick(), 'success', 'one extra hit satisfies the ordinary wait');
+    }
+  }
 });

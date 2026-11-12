@@ -28,6 +28,7 @@ import {
     subscribeTick,
 } from "../../network/ServerConnection";
 import { sendLogin } from "../../network/ServerConnection";
+import { deleteShaderFxTarget } from "./shaderFx";
 import { flushPackets } from "../../network/packet";
 import { createTextureArray } from "../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../rs/MathConstants";
@@ -193,6 +194,7 @@ import { cleanUpRenderer } from "./handlers";
 
 export function clearSessionCaches(host: WebGLOsrsRendererHost, ): void {
         cancelPendingMapUploads(host);
+        host.setSkybox(-1);
         // Clear NPC type caches (grow with each unique NPC type seen)
         host.npcDefaultHeightCache.clear();
         host.npcNameCache.clear();
@@ -336,6 +338,12 @@ export async function cleanUp(host: WebGLOsrsRendererHost, ): Promise<void> {
 
         host.textureDepthTarget?.delete();
         host.textureDepthTarget = undefined;
+
+        deleteShaderFxTarget(host);
+        host.frameShaderFxDrawCall = undefined;
+        host.frameShaderFxProgram?.delete();
+        host.frameShaderFxProgram = undefined;
+        host.shaderFxProgramState = undefined;
 
         // Textures
         host.textureArray?.delete();

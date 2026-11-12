@@ -67,10 +67,9 @@ function giveTip(player, session) {
   }
   const reward = rollHardReward(session.npcName);
   for (const item of reward.items) {
-    const before = inventory.getAmount(item.id);
-    inventory.adds(item.id, item.amount);
-    const credited = Math.max(0, inventory.getAmount(item.id) - before);
-    if (credited > 0) api.emitCustomEvent("collection-log:obtain", { player, itemId: item.id, amount: credited });
+    // Several rows are unnoted and many (pure essence is 51-97): what has no slot lands under the player.
+    inventory.forceAdd(player, new core.Item(item.id, item.amount));
+    api.emitCustomEvent("collection-log:obtain", { player, itemId: item.id, amount: item.amount });
   }
   player.sendMessage("You are given a tip for your delivery.");
 }
@@ -125,6 +124,7 @@ Object.assign(module.exports, {
     deliver,
     rollEasyTip,
     rollHardReward,
+    giveTip,
     eligibleRewards,
     npcNameOf,
   },

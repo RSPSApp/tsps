@@ -48,10 +48,17 @@ type CombatAnimation = {
     anims?: { spawn?: number | null; attack?: number; block?: number; death?: number };
     sounds?: { death?: number };
     projectile?: number;
+    /** The spotanim the npc plays on its own tick when it fires a ranged shot (an arrow drawn on a bow). */
+    launchGraphic?: number;
     /** Ticks from the death animation to the death itself; 2 when absent. */
     deathTicks?: number;
     /** Ticks from removal to respawn; 25 when absent, 0 to disable. */
     respawn?: number;
+    /** Tiles an aggressive NPC searches for a target from its current south-west tile; 3 when absent. */
+    huntRange?: number;
+    /** Manager-authored combat values, applied only to cloned custom NPC IDs. */
+    maxHit?: number;
+    attackType?: string;
 };
 
 type CombatAnimationRole = "attack" | "block" | "death";
@@ -177,6 +184,21 @@ const normalizeName = (value?: string) => (value ?? "").replace(/\s+/g, " ").tri
 const MELEE_ATTACK_TYPES = new Set(["stab", "slash", "crush", "melee"]);
 
 export class NpcDefinitionLoader extends DefinitionLoader {
+    /** A custom ID may change its own damage and style; its cache base never changes. */
+    public static applyCustomCombat(id: number, definition: NpcDefinition, entry?: CombatAnimation): void {
+        if (!CacheDefinitions.hasCustomDefinition("npc", id) || !entry) return;
+        const target = definition as any;
+        const maxHit = entry.maxHit;
+        if (typeof maxHit === "number" && Number.isSafeInteger(maxHit) && maxHit >= 0 && maxHit <= 10000) {
+            target.maxHit = maxHit;
+        }
+        const style = typeof entry.attackType === "string" ? entry.attackType.trim().toLowerCase() : "";
+        if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
+            target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
+            target.attackStyle = style;
+        }
+    }
+
     /**
      * Translates one osrsreboxed monsters-complete.json entry into the internal
      * stats shape. Undefined (rather than 0) is used wherever the dump has no
@@ -260,6 +282,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         Object.assign(definition, {
             immunePoison: source.immune_poison === true,
             immuneVenom: source.immune_venom === true,
+            // Additive field of the same export: a whole percentage, anything else is no resistance.
+            freezeResistance: Number.isInteger(source.freeze_resistance)
+                ? Math.min(100, Math.max(0, source.freeze_resistance)) : 0,
         });
     }
 
@@ -281,9 +306,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             animations[String(id)] = { anims: { attack, block, death } };
         }
         const projectiles: Record<string, number> = {};
+        const launchGraphics: Record<string, number> = {};
         for (const [id, entry] of Object.entries((animationFile.npcs ?? {}) as Record<string, CombatAnimation>)) {
             if (entry?.anims) animations[id] = entry;
             if (Number.isInteger(entry?.projectile)) projectiles[id] = entry.projectile as number;
+            if (Number.isInteger(entry?.launchGraphic)) launchGraphics[id] = entry.launchGraphic as number;
         }
         // Only hand-made entries stop the guess below; captures leave a role open when they do not settle it.
         const configuredAnimationIds = new Set(Object.keys(animations));
@@ -376,6 +403,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             ...Object.keys(animationFile.npcs ?? {}),
             ...Object.keys(animations), ...Object.keys(observedAnimations),
             ...Object.keys(projectiles),
+            ...Object.keys(launchGraphics),
         ]);
         let applied = 0;
         let mismatched = 0;
@@ -433,9 +461,15 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             if (Number.isInteger(projectiles[key])) {
                 definition.projectileId = projectiles[key];
             }
+            if (Number.isInteger(launchGraphics[key])) {
+                definition.launchGraphicId = launchGraphics[key];
+            }
 
             const respawn = animationFile.npcs?.[key]?.respawn;
             if (Number.isInteger(respawn) && respawn >= 0) definition.setRespawn(respawn);
+
+            const huntRange = animationFile.npcs?.[key]?.huntRange;
+            if (Number.isInteger(huntRange) && huntRange >= 1) definition.setHuntRange(huntRange);
 
             const animation = animations[key];
             if (animation) {
@@ -448,6 +482,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     deathTicks: Number.isInteger(animation.deathTicks) ? animation.deathTicks : definition.getDeathTicks(),
                 });
             }
+            NpcDefinitionLoader.applyCustomCombat(id, definition, animationFile.npcs?.[key]);
         }
         (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +

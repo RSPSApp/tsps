@@ -80,9 +80,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   require("../plugins/world/FairyRings.plugin").register(api);
   require("../plugins/world/SpiritTrees.plugin").register(api);
   require("../plugins/treasuretrails/TreasureTrails.plugin").register(api);
@@ -256,6 +256,29 @@ test("Globetrotter: the spellbooks' teleports and the jewellery box's, no higher
   }
 });
 
+test("Banker's Note: preset copies (PvP presets on a league world) are refused, and only plain copies are noted", () => {
+  const relic = character("notepreset", "league", BANKERS_NOTE_TR, 4);
+  const inventory = relic.getInventory();
+  inventory.add(new Item(I.BANKERS_NOTE, 1), false);
+  const preset = () => {
+    const item = new Item(I.LOGS, 1);
+    for (const meta of [Item.UNTRADEABLE_META, Item.UNBANKABLE_META, Item.PRESET_META]) item.setMetaValue(meta, true);
+    return item;
+  };
+  for (let i = 0; i < 3; i++) inventory.add(preset(), false);
+  const note = inventory.getItems().find((item) => item?.getId() === I.BANKERS_NOTE);
+  const logs = inventory.getItems().find((item) => item?.getId() === I.LOGS);
+  hooks.onItemOnItem({ player: relic, usedItem: logs, usedWithItem: note, handled: false });
+  const notedLogs = core.ItemDefinition.forId(I.LOGS).getNoteId();
+  assert.equal(inventory.getAmount(notedLogs), 0, "no plain notes from preset logs");
+  assert.equal(inventory.getAmount(I.LOGS), 3, "the preset logs stay");
+  assert.equal(relic.messages.at(-1), "Preset items cannot be used for this.");
+  for (let i = 0; i < 2; i++) inventory.add(new Item(I.LOGS, 1), false);
+  hooks.onItemOnItem({ player: relic, usedItem: logs, usedWithItem: note, handled: false });
+  assert.equal(inventory.getAmount(notedLogs), 2, "the two plain logs are noted");
+  assert.equal(inventory.getAmount(I.LOGS), 3, "the three preset logs are left");
+});
+
 test("Banker's Note (both leagues): an item used on it is noted or unnoted; Activate repeats it, Toggle switches, the quantities", () => {
   for (const [picks, league] of [[BANKERS_NOTE_TR, 4], [BANKERS_NOTE_RE, 5]]) {
     const relic = character(`note${league}`, "league", picks, league);
@@ -392,6 +415,24 @@ test("Grimoire: the Mage Arena's god spells cast anywhere without their 100 cast
   };
   assert.equal(disabled(who.relic), false);
   for (const player of others(who)) assert.equal(disabled(player), true, player.getUsername());
+});
+
+test("Grimoire (Demonic Pacts): choosing it re-sends the prayer book's unlock flags (capture 237/01107)", () => {
+  const synced = [];
+  const record = ({ player }) => synced.push(player.getUsername());
+  custom["prayer:sync-unlocks"] = (custom["prayer:sync-unlocks"] ?? []).concat(record);
+  try {
+    const pacts = character("pacts", "league", {}, 6);
+    const echoes = character("echoes", "league", {}, 5);
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: pacts, relic: "grimoire" });
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: pacts, relic: "abundance" });
+    for (const handler of custom["league:relic-unlocked"]) handler({ player: echoes, relic: "grimoire" });
+    assert.deepEqual(synced, ["pacts"], "only Demonic Pacts' Grimoire hands out the prayers");
+    for (const handler of custom["league:relics-reset"]) handler({ player: pacts });
+    assert.deepEqual(synced, ["pacts", "pacts"], "a relic reset takes them back");
+  } finally {
+    custom["prayer:sync-unlocks"] = custom["prayer:sync-unlocks"].filter((handler) => handler !== record);
+  }
 });
 
 test("Reloaded: a second relic of tiers 1 to 3, a different one from the tier's own; its item; only one", () => {

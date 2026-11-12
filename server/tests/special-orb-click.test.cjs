@@ -42,6 +42,9 @@ require("../plugins/combat/specials/DragonAxe.SpecialAttack")({
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const api = PluginManager.createApi("OffhandSpecialRegression");
+  require("../plugins/combat/effects/Rondache.EquipmentEffects")(api);
+  require("../plugins/combat/specials/Rondache.SpecialAttack")(api);
   require("../plugins/items/ItemDefinitionLoader.plugin").register({
     log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
   });
@@ -203,4 +206,96 @@ test("a utility special executes immediately and spends energy once through the 
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING), woodcutting + 3);
   assert.equal(player.getSpecialPercentage(), 0);
   assert.equal(player.isSpecialActivated(), false);
+});
+
+
+const OFFHAND_SPECIAL_BUTTON = (593 << 16) | 67; // Active cache combat_interface offhand bar.
+const rondache = require("../plugins/combat/effects/Rondache.EquipmentEffects");
+
+function equipShield(player) {
+  player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(ItemIdentifiers.RONDACHE));
+  CombatSpecial.assign(player);
+  rondache.setCharges(player, 20);
+}
+
+test("the native offhand bar and orb menus slam independently of the weapon's special", async (t) => {
+  const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const pending = [];
+  t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);
+  t.mock.method(CombatFactory, "addPendingHit", (hit) => pending.push(hit));
+  const buttons = [[OFFHAND_SPECIAL_BUTTON, 1], ...SPECIAL_ORB_COMPONENTS.map(name => [core.CacheDefinitions.getComponentId(name), 2])];
+  for (const [widgetId, op] of buttons) {
+    for (const weapon of [WEAPON_ID, ItemIdentifiers.RUNE_SCIMITAR]) {
+      for (const active of [false, true]) {
+        const { player, connection } = realPlayer(t, weapon);
+        equipShield(player);
+        const assigned = player.getCombatSpecial();
+        player.setSpecialActivated(active);
+        player.setSpecialPercentage(0);
+        player.getCombat().setAttackDelay(9);
+        const target = new NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3200));
+        t.mock.method(player.getCombat(), "getTarget", () => target);
+        t.mock.method(player.getCombat(), "resolveCanReachForCurrentCycle", () => true);
+        const count = pending.length;
+        await connection.dispatch(decodeClientPackets(buttonFrame(widgetId, op)), true);
+        assert.equal(rondache.charges(player), 0, "shield charges spent even with zero special energy");
+        assert.equal(pending.length, count + 1, "one slam queued through the native button");
+        assert.equal(player.getSpecialPercentage(), 0);
+        assert.equal(player.getCombat().getAttackDelay(), 9, "weapon cooldown preserved");
+        assert.equal(player.getCombatSpecial(), assigned, "weapon special assignment preserved");
+        assert.equal(player.isSpecialActivated(), active, "weapon special activation preserved");
+      }
+    }
+  }
+});
+
+test("the offhand button cannot activate the mainhand when no shield special is worn", async (t) => {
+  const { player, connection } = realPlayer(t);
+  for (const active of [false, true]) {
+    player.setSpecialActivated(active);
+    await connection.dispatch(decodeClientPackets(buttonFrame(OFFHAND_SPECIAL_BUTTON)), true);
+    assert.equal(player.isSpecialActivated(), active);
+  }
+});
+
+test("offhand activation keeps charges and weapon state on refusals", async (t) => {
+  const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const pending = [];
+  t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);
+  t.mock.method(CombatFactory, "addPendingHit", (hit) => pending.push(hit));
+  for (const reason of ["duel", "content", "charges", "target", "op2"]) {
+    const { player, connection } = realPlayer(t);
+    equipShield(player);
+    player.setSpecialActivated(true);
+    const assigned = player.getCombatSpecial();
+    if (reason === "duel") {
+      player.getDueling().setState(DuelState.IN_DUEL);
+      player.getDueling().getRules()[DuelRule.NO_SPECIAL_ATTACKS.getButtonId()] = true;
+    }
+    if (reason === "charges") rondache.setCharges(player, 9);
+    const target = new NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3200));
+    t.mock.method(player.getCombat(), "getTarget", () => reason === "target" ? null : target);
+    t.mock.method(player.getCombat(), "resolveCanReachForCurrentCycle", () => true);
+    const hook = {
+      pluginName: "offhand-special-refusal",
+      handler: (event) => {
+        if (event.player === player && reason === "content") {
+          event.disabled = true;
+          event.message = "You cannot use special attacks here.";
+        }
+      },
+    };
+    PluginManager.specialAttackDisabledHooks.push(hook);
+    try {
+      await connection.dispatch(decodeClientPackets(buttonFrame(OFFHAND_SPECIAL_BUTTON, reason === "op2" ? 2 : 1)), true);
+      assert.equal(rondache.charges(player), reason === "charges" ? 9 : 20, reason);
+      assert.equal(player.getCombatSpecial(), assigned, reason);
+      assert.equal(player.isSpecialActivated(), true, reason);
+      assert.equal(pending.length, 0, reason + ": no slam queued");
+    } finally {
+      PluginManager.specialAttackDisabledHooks.splice(PluginManager.specialAttackDisabledHooks.indexOf(hook), 1);
+    }
+  }
 });

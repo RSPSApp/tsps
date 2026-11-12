@@ -41,6 +41,8 @@ const log = [];
 const submitted = [];
 /** Whether content asks for another pickpocket ("thieving:done", a league relic's repeat). */
 let repeatAgain = false;
+/** What content (the Ardougne Diary's rewards) answers "thieving:pickpocket-target" with. */
+let pickpocketTargetAnswer = null;
 const interactions = [];
 const combat = {
     inCombat: () => false,
@@ -59,6 +61,7 @@ Thieving.register({
     emitCustomEvent: (name, request) => {
         if (name === 'thieving:success') log.push(name);
         if (name === 'thieving:done' && repeatAgain) request.again = true;
+        if (name === 'thieving:pickpocket-target') pickpocketTargetAnswer?.(request);
         // The Skillcapes plugin answers this; a worn Thieving cape is all these tests need.
         if (name === 'skillcape:has-perk' && request.skill === 'THIEVING') {
             request.result = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === I.THIEVING_CAPE;
@@ -67,6 +70,27 @@ Thieving.register({
     log: () => {},
 });
 Sounds.sendSound = () => {};
+
+test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 Thieving off (Wiki: Trapdoor (H.A.M. Hideout))', () => {
+    const core = PluginManager.getCoreApi();
+    const typed = [];
+    let level = 16;
+    const player = {
+        getPacketSender: () => ({ sendTypedMessage: (type, text) => typed.push([type, text]) }),
+        getSkillManager: () => ({
+            getCurrentLevel: () => level,
+            setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            updateSkill() {},
+        }),
+    };
+    HamTrapdoor._test.fumbled(player);
+    // rsprox 227/01723.txt:186365-186387: spam line, then Thieving 16 -> 15.
+    assert.deepEqual(typed, [[core.ChatType.SPAM, 'You fail to pick the lock - your fingers get numb from fumbling with the lock.']]);
+    assert.equal(level, 15);
+    level = 1;
+    HamTrapdoor._test.fumbled(player);
+    assert.equal(level, 1, 'never below 1, so picking can go on');
+});
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
     const chance = HamTrapdoor._test.successChance;
@@ -180,6 +204,14 @@ function attempt(t, { name = 'Man', npcId = 0, random = 0, who = player({ level:
     return { click, next: ticks[0], ticks, handled: event.handled, result };
 }
 
+// Wiki (Rocky): "1 in B - (Lvl * 25), where B is the base chance and Lvl is the player's Thieving level"; every common
+// target 257,211, Watchman 134,625, Paladin 127,056, Gnome 108,718, Hero/Elf/Vyre 99,175, TzHaar-Hur 176,743. The
+// base is the table's own: the player's level comes off once, in Pets.
+test("Rocky: each target's petBase is the Wiki's base, with no NPC level taken off it", () => {
+    const special = { watchman: 134625, paladin: 127056, gnome: 108718, hero: 99175, vyre: 99175, elf_lletya: 99175, elf_prifddinas: 99175, tzhaar_hur: 176743 };
+    for (const t of DATA.targets) assert.equal(t.petBase, special[t.key] ?? 257211, t.key);
+});
+
 test('the data file: every target is complete, its rates add up, and no NPC is claimed twice', () => {
     const { rateOf } = Pickpocket._test;
     const claimed = new Set();
@@ -250,10 +282,16 @@ test('the interpolation rounds as the Wiki module does, at a level where the sum
     assert.equal(at('gnome', 99), 141 / 256);
 });
 
-test('a success: the attempt message, then the animation, a coin pouch and the experience a tick later', (t) => {
+test('a success announces the pickpocket before adding loot so RuneLite can snapshot the old inventory', (t) => {
     const { click, ticks } = attempt(t);
     assert.deepEqual(click, ["spam: You attempt to pick the man's pocket."]);
-    assert.deepEqual(ticks, [['anim 881', 'add Coin pouch x1', "spam: You pick the man's pocket.", 'xp 8', 'thieving:success'], [], []]);
+    assert.deepEqual(ticks, [['anim 881', "spam: You pick the man's pocket.", 'add Coin pouch x1', 'xp 8', 'thieving:success'], [], []]);
+});
+
+test('Master Farmer loot also follows the success message', (t) => {
+    const { next } = attempt(t, { name: 'Master Farmer', who: player() });
+    assert.equal(next[1], "spam: You pick the Master Farmer's pocket.");
+    assert.match(next[2], /^add .* seed x[0-9]+$/);
 });
 
 test('a failure, as captured on a hero: the message and line, then the strike and stun, then the stun message and damage', (t) => {
@@ -338,13 +376,60 @@ test('coin pouches: 28 of a kind block pickpocketing; a full inventory only allo
     assert.deepEqual(farmer.click, ['inventory full'], 'a farmer can also give seeds');
 });
 
+test("content's pouch limit lifts the 28-pouch block, and its chance bonus scales the chart like the gloves (Ardougne Diary)", (t) => {
+    pickpocketTargetAnswer = (request) => { request.pouchLimit = 56; request.chanceBonus = 10; };
+    t.after(() => { pickpocketTargetAnswer = null; });
+    const lifted = attempt(t, { who: player({ inventory: { [I.COIN_POUCH]: 28 } }) });
+    assert.deepEqual(lifted.click, ["spam: You attempt to pick the man's pocket."], '28 pouches no longer block at a limit of 56');
+    const full = attempt(t, { who: player({ inventory: { [I.COIN_POUCH]: 56 } }) });
+    assert.deepEqual(full.click, ['You need to empty your coin pouches before you can continue pickpocketing.']);
+    const man = DATA.targets.find((target) => target.key === 'man');
+    const { successChance } = Pickpocket._test;
+    assert.equal(successChance(player({ level: 1 }), { ...man, chanceBonus: 10 }), 199 / 256, 'Man at 1: 180 * 1.1 = 198, +1');
+});
+
 test('opening coin pouches pays their coins', () => {
     const who = player({ inventory: { [I.COIN_POUCH]: 3 } });
     log.length = 0;
-    CoinPouch._test.open(who, I.COIN_POUCH, 3, true);
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 3, true);
+    assert.equal(opened, true, "a completed open says so");
     assert.equal(who.inv.getAmount(I.COIN_POUCH), 0);
     assert.equal(who.inv.getAmount(I.COINS), 9);
     assert.deepEqual(log.slice(-2), ['spam: You open all of the pouches and receive a total of 9 coins.', 'sound 2115']);
+});
+
+test('one pouch opened on its own says it opened, so the item action is handled', () => {
+    // The right-click Open answers the click only when the pouch really opened: a successful single
+    // open must say so, or the item action is left unhandled and the client plays nothing.
+    const who = player({ inventory: { [I.COIN_POUCH]: 3 } });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 1);
+    assert.equal(opened, true, "a completed single open says so");
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 2);
+    assert.equal(who.inv.getAmount(I.COINS), 3);
+    assert.deepEqual(log, ['add Coins x3', 'You open the pouch and find 3 coins.']);
+});
+
+test('a refused open (no room for the coins) opens nothing and says so', () => {
+    // A full pack, twenty-eight pouches still in the stack, and no coin stack: opening one cannot free
+    // the slot, so the coins would vanish and the open is refused (it emits nothing).
+    const who = player({ inventory: { [I.COIN_POUCH]: 28 }, full: true });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 1);
+    assert.equal(opened, false, "a refusal is no open");
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 28, "the stack stays");
+    assert.equal(who.inv.getAmount(I.COINS), 0);
+    assert.ok(log.includes("You don't have enough inventory space."), log.join(' | '));
+    assert.ok(!log.some((line) => line.startsWith('spam:')), "nothing is said to have opened");
+});
+
+test('an Open-all on a full pack opens (its own slot is the one the coins go in)', () => {
+    const who = player({ inventory: { [I.COIN_POUCH]: 28 }, full: true });
+    log.length = 0;
+    const opened = CoinPouch._test.open(who, I.COIN_POUCH, 28, true);
+    assert.equal(opened, true);
+    assert.equal(who.inv.getAmount(I.COIN_POUCH), 0);
+    assert.equal(who.inv.getAmount(I.COINS), 84);
 });
 
 test('the rogue outfit: the full set doubles loot; a doubled coin pouch adds its coins', () => {
@@ -357,7 +442,11 @@ test('the rogue outfit: the full set doubles loot; a doubled coin pouch adds its
     assert.equal(who.inv.getAmount(I.AIR_RUNE), 16);
     giveLoot(who, rogue, [{ id: I.COINS, amount: 30 }], () => 0.999);
     assert.equal(who.inv.getAmount(rogue.coinPouch.id), 1);
-    assert.equal(who.inv.getAmount(I.COINS), 25, "one pouch, plus the pouch's coins");
+    // Wiki (Coin pouch): the other half is the pouch's normal amount, rolled over its 25-40 range like an opened pouch.
+    assert.equal(who.inv.getAmount(I.COINS), 40, "one pouch, plus a pouch's coins (the top of the range at roll 0.999)");
+    const low = player({ worn: rogueSet });
+    giveLoot(low, rogue, [{ id: I.COINS, amount: 30 }], () => 0);
+    assert.equal(low.inv.getAmount(I.COINS), 25, "the bottom of the range at roll 0");
     const noSet = player();
     giveLoot(noSet, rogue, [{ id: I.AIR_RUNE, amount: 8 }], () => 0);
     assert.equal(noSet.inv.getAmount(I.AIR_RUNE), 8);
@@ -534,8 +623,85 @@ test('a workman, as captured: game-channel lines that trail off, and the brush f
     const workman = DATA.targets.find((t) => t.key === 'digsite_workman');
     const brush = workman.table.findIndex((e) => e.id === I.SPECIMEN_BRUSH);
     const before = workman.table.slice(0, brush).reduce((sum, e) => sum + Pickpocket._test.rateOf(e.rate), 0);
-    const { click, next } = attempt(t, { name: 'Digsite workman', random: before + 0.01, who: player() });
+    const { click, ticks } = attempt(t, { name: 'Digsite workman', random: before + 0.01, who: player() });
     assert.deepEqual(click, ["You attempt to pick the workman's pocket..."]);
-    assert.ok(next.includes("You pick the workman's pocket..."), next.join(' | '));
-    assert.ok(next.includes('You find a specimen brush.'), next.join(' | '));
+    assert.deepEqual(ticks.slice(0, 2), [[], []]);
+    assert.ok(ticks[2].includes("You pick the workman's pocket..."), ticks[2].join(' | '));
+    assert.ok(ticks[2].includes('You find a specimen brush.'), ticks[2].join(' | '));
+});
+
+test('a delayed workman success retains its roll and stops if either actor becomes unavailable', (t) => {
+    const original = Math.random;
+    t.after(() => { Math.random = original; });
+    for (const unavailable of ['player', 'dead', 'npc', 'none']) {
+        submitted.length = 0;
+        log.length = 0;
+        const who = player();
+        const target = npc();
+        Math.random = () => 0.5;
+        Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Digsite workman' } });
+        const task = submitted[0];
+        task.execute();
+        if (unavailable === 'player') who.isRegistered = () => false;
+        if (unavailable === 'dead') who.getHitpoints = () => 0;
+        if (unavailable === 'npc') target.isRegistered = () => false;
+        // A later failure roll must not replace the successful first roll.
+        Math.random = () => 0.999999;
+        const skillManager = who.getSkillManager();
+        who.getSkillManager = () => ({ ...skillManager, getCurrentLevel: () => 1 });
+        task.execute();
+        if (task.isRunning()) task.execute();
+        assert.equal(task.isRunning(), false, unavailable);
+        assert.equal(log.includes('xp 10.4'), unavailable === 'none', unavailable);
+    }
+});
+
+test('an older workman completion cannot clear or repeat a newer accepted interaction', (t) => {
+    const original = Math.random;
+    t.after(() => { Math.random = original; repeatAgain = false; });
+    Math.random = () => 0.5;
+    repeatAgain = true;
+    for (const sameTarget of [true, false]) {
+        submitted.length = 0;
+        const who = player();
+        const olderNpc = npc();
+        const newerNpc = sameTarget ? olderNpc : npc();
+        const event = (target) => ({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Digsite workman' } });
+        Thieving._test.pickpocket(event(olderNpc));
+        const older = submitted[0];
+        older.execute();
+        who.interacting = newerNpc;
+        Thieving._test.pickpocket(event(newerNpc));
+        older.execute();
+        older.execute();
+        assert.equal(who.interacting, newerNpc);
+        assert.equal(submitted.length, 2, 'old outcome does not schedule a repeat');
+        repeatAgain = false;
+        const newer = submitted[1];
+        newer.execute(); newer.execute(); newer.execute();
+        assert.equal(who.interacting, null);
+        repeatAgain = true;
+    }
+});
+
+test('a delayed workman repeat respects a changed interaction', (t) => {
+    const original = Math.random;
+    t.after(() => { Math.random = original; repeatAgain = false; });
+    Math.random = () => 0.5;
+    repeatAgain = true;
+    submitted.length = 0;
+    const who = player();
+    const target = npc();
+    who.interacting = target;
+    Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Digsite workman' } });
+    who.interacting = null;
+    const task = submitted[0];
+    task.execute(); task.execute(); task.execute();
+    assert.equal(submitted.length, 1, 'cancelled interaction does not schedule a repeat');
+    submitted.length = 0;
+    who.interacting = target;
+    Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Digsite workman' } });
+    const repeated = submitted[0];
+    repeated.execute(); repeated.execute(); repeated.execute();
+    assert.equal(submitted.length, 2, 'unchanged interaction schedules the requested repeat');
 });

@@ -37,7 +37,7 @@
  *   varbit 537 contact (17-18): 1 met Mistag, 2 told the Duke about the cave goblins
  *   varbit 535 mistag_denial: first (panic) greeting seen
  *   varbit 538 hole_2_dug: deep hole at 3224,9601 squeezed through
- *   varbit 541 bookmark (22-24): goblin symbol book read
+ *   varbit 541 bookmark (22-24): the goblin symbol book's open spread, 0-5 (rsprox_transcripts/232/03222.txt)
  *   varbit 533 returned_brooch: brooch returned to Mistag for a mining helmet
  *   varbits 536 maze_warned, 539 sigmund_accused, 540 sigmund_leaving are unused by
  *   this server's map and left at 0.
@@ -76,8 +76,11 @@ module.exports = function registerLostTribeQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const questRuntime = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = questRuntime;
   const mining = require("../../skills/Mining.plugin.js");
+
+  const treatyScene = require("../losttribe/Treaty.LostTribe")(api, completeTreaty);
 
   const PAGE = "The Lost Tribe";
 
@@ -108,9 +111,10 @@ module.exports = function registerLostTribeQuest(api) {
   const BITS_ATTRIBUTE = "quest.the_lost_tribe.bits";
   const HAM_ATTRIBUTE = "quest.the_lost_tribe.ham"; // 0..2
   const CONTACT_ATTRIBUTE = "quest.the_lost_tribe.contact"; // 0..2
+  const BOOKMARK_ATTRIBUTE = "quest.the_lost_tribe.bookmark"; // the symbol book's spread, 0..5
   const BIT_RETURNED_BROOCH = 1 << 0;
   const BIT_GREETED = 1 << 1;
-  const BIT_BOOKMARK = 1 << 2;
+  const BIT_BOOKMARK = 1 << 2; // the symbol book was given (its page is BOOKMARK_ATTRIBUTE)
   const BIT_HOLE2 = 1 << 3;
 
   const SIGMUND_ID = NpcIdentifiers.SIGMUND_13; // 5322, Lumbridge Castle
@@ -139,7 +143,10 @@ module.exports = function registerLostTribeQuest(api) {
   const HAM_TRAPDOOR_CLOSED = ObjectIdentifiers.TRAPDOOR_35; // 6434, 3118,3244
   const HAM_TRAPDOOR_OPEN = ObjectIdentifiers.TRAPDOOR_36; // 6435, Climb-down
   const HAM_LADDER = ObjectIdentifiers.LADDER_67; // 6436, 3118,9643
-  const SIGMUND_CHEST = ObjectIdentifiers.CHEST_38; // 6910, 3209,3217,1
+  const SIGMUND_CHEST_LOCATIONS = new Set([
+    `${ObjectIdentifiers.CHEST_38}:3209,3217,1`, // legacy location
+    `${ObjectIdentifiers.CHEST_38}:3211,3212,1`, // current post-3 November 2026 location
+  ]);
   const HAM_CRATE = ObjectIdentifiers.CRATE_65; // 6911, 3152,9645
   const LIBRARY_BOOKCASE = ObjectIdentifiers.BOOKCASE_25; // 6916, 3207,3496
 
@@ -147,7 +154,6 @@ module.exports = function registerLostTribeQuest(api) {
   const CELLAR_WALL_TILES = new Set(["3219,9618", "3221,9618"]);
   const DEEP_HOLE_TILE = "3224,9601";
   const LIBRARY_BOOKCASE_TILE = "3207,3496,0";
-  const SIGMUND_CHEST_TILE = "3209,3217,1";
   const HAM_CRATE_TILE = "3152,9645,0";
   const HAM_TRAPDOOR_TILE = "3118,3244,0";
   const HAM_LADDER_TILE = "3118,9643,0";
@@ -181,7 +187,6 @@ module.exports = function registerLostTribeQuest(api) {
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
   const CUTSCENE_START_ACTION_ID = "oIhMoa";
-  const CUTSCENE_COMPLETE_ACTION_ID = "_c-03w";
   const KAZGAR_ESCORT_ACTION_ID = "m471ps";
   const BROOCH_HELMET_ACTION_ID = "a-40GY";
 
@@ -192,6 +197,30 @@ module.exports = function registerLostTribeQuest(api) {
   const DUKE_RELDO_LINE = "librarian in Varrock";
   const RELDO_BOOK_LINE = "book about ancient goblin tribes";
   const DUKE_SILVERWARE_LINE = "Unless it is returned";
+
+  // The goblin symbol book is its own cache interface, lost_tribe_symbol_book (183), with all its
+  // text in the cache (Wiki, Transcript:Goblin symbol book): six spreads, each a layer the server
+  // shows in turn, and two "Turn page" arrows (transmitop) the server answers. rsprox_transcripts/
+  // 232/03222.txt reads it (lines 35971-35990, 36008-36040, 36738-36803, 38279): the spreads go
+  // titles, page 1-3, directions, symbols, and the last spread hides the right arrow. Each arrow
+  // click writes the new spread to varbit 541 (lost_tribe_bookmark, e.g. 5 -> 4 at line 36009), and
+  // the book reopens there (line 35979: bookmark 5, the symbols). Getting the book is a quest bit.
+  const SYMBOL_BOOK = 183;
+  const SYMBOL_BOOK_SPREADS = [
+    33, // lost_tribe_titles: "A History of the Goblin Race" (shown by default)
+    38, // lost_tribe_page_1
+    42, // lost_tribe_page_2
+    46, // lost_tribe_page_3: "In the following pages I present a list of the tribes and their symbols."
+    15, // lost_tribe_directions: Thorobshuun ... Narogoshuun
+    14, // lost_tribe_symbols: Drogokishuun ... Yurkolgokh (the last spread)
+  ];
+  const SYMBOL_BOOK_RIGHT_ARROW = 16;
+  const SYMBOL_BOOK_LEFT_ARROW = 17;
+  const SYMBOL_BOOK_RIGHT_ARROW_LAYER = 18;
+  const SYMBOL_BOOK_LEFT_ARROW_LAYER = 19;
+  const SCRIPT_MAINMODAL_OPEN = 2524;
+  /** The spread each reader has open (never persisted). */
+  const symbolBookSpread = new WeakMap();
 
   let quest;
 
@@ -218,6 +247,16 @@ module.exports = function registerLostTribeQuest(api) {
   function setHam(player, value) {
     player.setAttribute(HAM_ATTRIBUTE, value | 0);
     player.getPacketSender().sendVarbit(VARBIT_HAM, value | 0);
+  }
+
+  function getBookmark(player) {
+    const spread = Number(player.getAttribute(BOOKMARK_ATTRIBUTE)) || 0;
+    return Math.max(0, Math.min(SYMBOL_BOOK_SPREADS.length - 1, spread | 0));
+  }
+
+  function setBookmark(player, spread) {
+    player.setAttribute(BOOKMARK_ATTRIBUTE, spread);
+    player.getPacketSender().sendVarbit(VARBIT_BOOKMARK, spread);
   }
 
   function getContact(player) {
@@ -252,7 +291,7 @@ module.exports = function registerLostTribeQuest(api) {
     packet.sendVarbit(VARBIT_GREETED, hasBit(player, BIT_GREETED) ? 1 : 0);
     packet.sendVarbit(VARBIT_CONTACT, getContact(player));
     packet.sendVarbit(VARBIT_HOLE2, hasBit(player, BIT_HOLE2) ? 1 : 0);
-    packet.sendVarbit(VARBIT_BOOKMARK, hasBit(player, BIT_BOOKMARK) ? 1 : 0);
+    packet.sendVarbit(VARBIT_BOOKMARK, getBookmark(player));
   }
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -609,6 +648,7 @@ module.exports = function registerLostTribeQuest(api) {
   }
 
   function handleDialogueLine(event) {
+    treatyScene.line(event);
     const { player, npcId, text } = event;
     const stage = quest.getStage(player);
     if (npcId === BOB_ID && stage === STAGE_ASK_PEOPLE && text.includes(BOB_RUMOUR_LINE)) {
@@ -639,8 +679,9 @@ module.exports = function registerLostTribeQuest(api) {
       quest.setStage(player, STAGE_MISTAG);
       return;
     }
-    if (stepId === NO_TREATY_CONDITION_ID && quest.getStage(player) === STAGE_TREATY) {
-      giveItem(player, ItemIdentifiers.PEACE_TREATY);
+    if (stepId === NO_TREATY_CONDITION_ID) {
+      const stage = quest.getStage(player);
+      if (stage === STAGE_TREATY || stage === STAGE_ESCORTED) giveItem(player, ItemIdentifiers.PEACE_TREATY);
     }
   }
 
@@ -708,38 +749,64 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {
-      if (quest.getStage(player) < STAGE_TREATY) return;
-      if (held(player, ItemIdentifiers.PEACE_TREATY)) {
-        player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
-      }
+      const stage = quest.getStage(player);
+      if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
       event.handled = true;
       event.end = true;
-      scheduleCutscene(player);
+      treatyScene.start(player);
       return;
     }
-    if (stepId === CUTSCENE_COMPLETE_ACTION_ID) {
-      event.handled = true;
-      event.end = true;
-      if (!quest.isComplete(player)) quest.complete(player);
-      return;
-    }
+    if (treatyScene.action(event)) return;
     if (stepId === BROOCH_HELMET_ACTION_ID) {
       setBit(player, BIT_RETURNED_BROOCH);
     }
   }
 
-  function scheduleCutscene(player) {
-    const { CountdownTask, TaskManager } = api.core;
-    if (!CountdownTask || !TaskManager) {
-      playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      return;
-    }
-    TaskManager.submit(
-      new CountdownTask(player, 1, () => {
-        if (player.isRegistered?.() === false) return;
-        playVariant(player, DUKE_HORACIO_ID, "resolving-tensions-cut-scene-a-meeting-of-leaders");
-      })
-    );
+  function showSymbolBookSpread(player, spread) {
+    const sender = player.getPacketSender();
+    const uid = (child) => (SYMBOL_BOOK << 16) | child;
+    SYMBOL_BOOK_SPREADS.forEach((layer, index) => sender.sendInterfaceDisplayState(uid(layer), index !== spread));
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_LEFT_ARROW_LAYER), spread === 0);
+    sender.sendInterfaceDisplayState(uid(SYMBOL_BOOK_RIGHT_ARROW_LAYER), spread === SYMBOL_BOOK_SPREADS.length - 1);
+  }
+
+  function readSymbolBook({ player }) {
+    const spread = getBookmark(player);
+    symbolBookSpread.set(player, spread);
+    showSymbolBookSpread(player, spread);
+    const sender = player.getPacketSender();
+    sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+    sender.sendInterface(SYMBOL_BOOK);
+  }
+
+  function turnSymbolBookPage(event) {
+    const buttonId = Number(event.buttonId ?? 0);
+    if ((event.groupId ?? (buttonId >>> 16)) !== SYMBOL_BOOK) return;
+    const child = event.childId ?? (buttonId & 0xffff);
+    if (child !== SYMBOL_BOOK_RIGHT_ARROW && child !== SYMBOL_BOOK_LEFT_ARROW) return;
+    const { player } = event;
+    const current = symbolBookSpread.get(player);
+    if (current === undefined) return;
+    event.handled = true;
+    const spread = current + (child === SYMBOL_BOOK_RIGHT_ARROW ? 1 : -1);
+    if (spread < 0 || spread >= SYMBOL_BOOK_SPREADS.length) return;
+    symbolBookSpread.set(player, spread);
+    setBookmark(player, spread);
+    showSymbolBookSpread(player, spread);
+  }
+
+  /** Closing the book after reading it is what moves the quest on, as the old book did. */
+  function closeSymbolBook({ player, interfaceId }) {
+    if (interfaceId !== SYMBOL_BOOK || !symbolBookSpread.has(player)) return;
+    symbolBookSpread.delete(player);
+    if (quest.getStage(player) === STAGE_FIND_BOOK) quest.setStage(player, STAGE_FIND_GENERALS);
+  }
+
+  function completeTreaty(player) {
+    const stage = quest.getStage(player);
+    if ((stage !== STAGE_TREATY && stage !== STAGE_ESCORTED) || !held(player, ItemIdentifiers.PEACE_TREATY)) return;
+    player.getInventory().deleteNumber(ItemIdentifiers.PEACE_TREATY, 1);
+    quest.complete(player);
   }
 
   // ==========================================================================
@@ -837,7 +904,7 @@ module.exports = function registerLostTribeQuest(api) {
       stepThroughY(event.player, location);
       return;
     }
-    if (id === SIGMUND_CHEST && tileKey(location, true) === SIGMUND_CHEST_TILE) {
+    if (SIGMUND_CHEST_LOCATIONS.has(`${id}:${tileKey(location, true)}`)) {
       openSigmundChest(event);
       return;
     }
@@ -1013,6 +1080,7 @@ module.exports = function registerLostTribeQuest(api) {
   api.persistAttribute(BITS_ATTRIBUTE);
   api.persistAttribute(HAM_ATTRIBUTE);
   api.persistAttribute(CONTACT_ATTRIBUTE);
+  api.persistAttribute(BOOKMARK_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "the_lost_tribe",
@@ -1044,6 +1112,9 @@ module.exports = function registerLostTribeQuest(api) {
   api.onNpcInteraction("General Wartface", { "Talk-to": talkGenerals });
   api.onNpcInteraction("Mistag", { "Talk-to": talkMistag });
   api.onItemOnNpc(handleItemOnNpc);
+  api.onItemAction("Goblin symbol book", { Read: readSymbolBook });
+  api.onInterfaceActionClick(turnSymbolBookPage);
+  api.onCustomEvent("interface:closed", closeSymbolBook);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);

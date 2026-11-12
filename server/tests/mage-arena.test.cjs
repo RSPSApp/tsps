@@ -1,10 +1,13 @@
 // Run after `yarn build`: node --test tests/mage-arena.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const path = require("node:path");
+const { before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+before(() => CachePipeline.initialize(path.resolve(__dirname, "..")));
 
 const MageArena = require("../plugins/minigames/MageArena.plugin");
 
@@ -117,23 +120,25 @@ function recordingSender(calls = []) {
 test("register persists one counter per god and the first cape, and wires the hooks", () => {
   const persisted = [];
   const hooks = [];
-  const api = {
+  const named = {
     core,
     persistAttribute: (key) => persisted.push(key),
     getTaskManager: () => ({ submit() {} }),
-    onSpellDisabled: () => hooks.push("onSpellDisabled"),
-    onCombatHitResolved: () => hooks.push("onCombatHitResolved"),
     onObjectInteraction: (name) => hooks.push(`onObjectInteraction:${name}`),
-    onServerStartup: () => hooks.push("onServerStartup"),
-    onPlayerProcess: () => hooks.push("onPlayerProcess"),
+    onItemAction: (name) => hooks.push(`onItemAction:${name}`),
     registerNpcCombatMethodProvider: (ids) => hooks.push(`combatMethod:${ids}`),
     onCustomEvent: (name) => hooks.push(`onCustomEvent:${name}`),
   };
+  // Any other hook (the quest runtime's widgets among them) is recorded by name.
+  const api = new Proxy(named, { get: (target, key) => (key in target ? target[key] : () => hooks.push(String(key))) });
   MageArena.register(api);
 
   assert.deepEqual(
     persisted.sort(),
-    ["mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak"]
+    [
+      "mage-arena-i:staff-received", "mage-arena-ii:components", "mage-arena-ii:location-timer", "mage-arena-ii:locations",
+      "mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak",
+    ].concat(persisted.filter((key) => key.startsWith("quest")).sort()).sort()
   );
   assert.ok(hooks.includes("onSpellDisabled"));
   assert.ok(hooks.includes("onCombatHitResolved"));
@@ -141,6 +146,13 @@ test("register persists one counter per god and the first cape, and wires the ho
   assert.ok(hooks.includes("onObjectInteraction:Sparkling pool"));
   assert.ok(hooks.includes("onObjectInteraction:Statue of Saradomin"));
   assert.ok(hooks.includes("onCustomEvent:mage-arena:cape-received"), "answers whether a god cape was received");
+  assert.ok(hooks.includes("onNpcDialogueVariant"), "picks Kolodion's transcript branch");
+  assert.ok(hooks.includes("onNpcDialogueCondition"), "answers Kolodion's conditions");
+  assert.ok(hooks.includes("onItemOnNpc"), "takes god capes to imbue");
+  assert.ok(hooks.includes("onItemAction:Enchanted symbol"), "activates the symbol");
+  for (const id of [7858, 7859, 7860]) assert.ok(hooks.includes(`combatMethod:${id}`), `fights as follower ${id}`);
+  assert.ok(hooks.includes("onNpcHitModify"), "only god spells hurt the followers");
+  assert.ok(hooks.includes("onCanBankItem") && hooks.includes("onShouldKeepItemOnDeath"), "remains rules");
 });
 
 test("the arena levers play the captured pull and cast, landing on the captured tiles", () => {
@@ -209,6 +221,7 @@ test("the first cape lands on the statue's tile with the full message", () => {
   assert.deepEqual(spawned.map(({ id, x, y }) => [id, x, y]), [[2414, 2516, 4720]], "captured at the statue's own tile");
   assert.equal(spawned[0].owner, caster);
   assert.equal(caster.getAttribute(statues.CAPE_RECEIVED_ATTRIBUTE), true);
+  assert.equal(caster.getAttribute("quest.mage_arena_i.stage"), 7);
   assert.ok(caster.calls.some(([name, graphic]) => name === "sendGraphic" && graphic.getId() === 188));
   assert.ok(caster.calls.some(([name, text]) => name === "sendString"
     && text === "You kneel and chant to Zamorak... You feel a rush of energy charge through your veins. Suddenly a cape appears before you."));

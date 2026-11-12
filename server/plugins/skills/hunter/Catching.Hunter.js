@@ -1,7 +1,7 @@
 "use strict";
 
 const C = require("./Context.Hunter");
-const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, xp, begin, hide, chance } = C;
+const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, catchExchange, xp, begin, hide, chance } = C;
 const tables = require("../data/impling-loot.json");
 const falcons = new Map();
 const caught = new Map();
@@ -16,6 +16,8 @@ const OUTSIDE_RESPAWN_TICKS = 100;
 const JAR_MESSAGE = "You manage to catch the impling and squeeze it into a jar.";
 const LOOT_MESSAGE = "You manage to catch the impling and acquire some loot.";
 const NO_JAR_MESSAGE = "You don't have an empty impling jar in which to keep an impling.";
+// Wiki (Falconry): "Your falcon has left its prey. You see it heading back toward the falconer."
+const LOST_PREY_MESSAGE = "Your falcon has left its prey. You see it heading back toward the falconer.";
 const NO_SPACE_MESSAGE = "You'll need to clear some space in your pack to catch this impling without a jar.";
 // A barehanded butterfly or moth (rsprox captures 95, 1634, 3279, 4051): the grab, the creature's
 // out-of-hands graphic and sound 7870 (45 cycles late) and the spam line on the tick the player
@@ -82,15 +84,30 @@ function catchFalcon(player, npc, def) {
   else gloves(player, I.FALCONERS_GLOVE);
 }
 
+/** Wiki (Falconry): bones and fur always, plus a raw dashing kebbit from the dashing kebbit. */
+function prey(def) {
+  return [H.core.ItemIdentifiers.BONES, def.fur, ...(def.meat === null ? [] : [def.meat])].map(itemId => ({ itemId, amount: 1, noted: false }));
+}
+
+/**
+ * Wiki (Falconry, "Full inventory"): what doesn't fit is discarded, not dropped, and the falcon is
+ * retrieved all the same. A bonecrusher takes the bones through `npc-drops:generated`, as for a kill.
+ */
+function collect(player, npc, def) {
+  const generated = { player, npc, npcId: def.npc, drops: prey(def), handled: false };
+  H.api.emitCustomEvent("npc-drops:generated", generated);
+  if (generated.handled) return;
+  for (const drop of generated.drops) catchExchange(player, [], [[drop.itemId, drop.amount]]);
+}
+
 function retrieve({ player, npc }) {
   const state = caught.get(npc);
   if (!state) return false;
   if (state.player !== player) { player.sendMessage("This isn't your falcon."); return true; }
   if (!nearby(player, npc)) return true;
-  const loot = [[H.core.ItemIdentifiers.BONES, 1], [state.def.fur, 1]];
-  if (!exchange(player, [], loot, false)) { player.getInventory().full(); return true; }
   begin(player, 1, ANIM.PICKUP, () => {
-    if (caught.get(npc) !== state || !exchange(player, [], loot)) return;
+    if (caught.get(npc) !== state) return;
+    collect(player, npc, state.def);
     xp(player, state.def.xp, "falconry", state.def.npc);
     removeFalcon(state);
   });
@@ -140,7 +157,7 @@ function catchNpc({ player, npc, npcId }) {
     if (!exchange(player, inputs, outputs)) return;
     xp(player, def.xp, "butterfly", npcId);
     if (!jarred) freed(player, def);
-    player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature barehanded and release it.");
+    player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
   });
   return true;
 }
@@ -299,7 +316,10 @@ function rewards(player, def) {
     const chance = { player, impling: def.key, tier: tier.toLowerCase(), oneIn: denominator };
     H.api.emitCustomEvent("hunter:impling-clue-chance", chance);
     const oneIn = Number.isInteger(chance.oneIn) && chance.oneIn > 0 ? chance.oneIn : denominator;
-    if (roll(1, oneIn) === 1 && !C.ownsClue(player, tier)) result.push([id, 1]);
+    if (roll(1, oneIn) !== 1) continue;
+    // A hit the player cannot take is lost; the tier's clue scroll warning mentions it.
+    if (C.ownsClue(player, tier)) H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: tier.toLowerCase() });
+    else result.push([id, 1]);
   }
   return result;
 }
@@ -336,7 +356,11 @@ function login({ player }) {
 }
 
 function process() {
-  for (const state of caught.values()) if (H.tick >= state.due || !state.falcon.isRegistered()) removeFalcon(state);
+  for (const state of caught.values()) {
+    if (H.tick < state.due && state.falcon.isRegistered()) continue;
+    if (H.tick >= state.due) state.player.sendMessage(LOST_PREY_MESSAGE);
+    removeFalcon(state);
+  }
   for (const player of gloved) {
     const p = player.getLocation();
     if (!hasFalcon(player)) gloved.delete(player);

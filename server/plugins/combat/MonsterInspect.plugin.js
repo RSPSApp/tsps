@@ -49,6 +49,7 @@ function inspect(core, event) {
 
 module.exports = {
   name: 'Monster Inspect',
+  description: 'The Lunar Monster Inspect spell, which opens a monster\'s stats panel for 30.5 Magic XP.',
   register(api) {
     api.onCustomEvent('magic:resolve-spell', resolveSpell.bind(null, api.core));
     api.onSpellOnNpc(inspect.bind(null, api.core));

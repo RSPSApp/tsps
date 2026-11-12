@@ -16,6 +16,7 @@ import { PrivateArea } from "../../../model/areas/impl/PrivateArea"
 import { Misc } from "../../../../util/Misc"
 import { PathFinder } from "../../../model/movement/path/PathFinder";
 import { CrossFloor } from "../../../CrossFloor";
+import { Animation } from "../../../model/Animation";
 
 export class ItemOnGroundManager {
     private static readonly transfers = new WeakSet<ItemOnGround>();
@@ -24,6 +25,8 @@ export class ItemOnGroundManager {
     // with a 300-tick total lifetime for revealable items.
     public static readonly PUBLIC_REVEAL_DELAY: number = 100
     public static readonly DESPAWN_DELAY: number = 300
+    /** The reach for an item taken from a neighbouring tile (see playReachAnimation). */
+    private static readonly TABLE_TAKE_SEQUENCE = "human_pickuptable_walkmerge";
     // World cycle whose ground-item pass has finished. Until then, an item that has
     // not aged this cycle (e.g. an NPC drop made by a task) still ages once more.
     private static finishedCycle = -1;
@@ -87,7 +90,8 @@ export class ItemOnGroundManager {
         if (item.isPendingRemoval()) {
             type = OperationType.DELETE;
         }
-        if (player?.isPlayerBot?.() === true) {
+        // A bot an administrator drives sees ground items, as a player does; only one no client watches is skipped.
+        if ((player?.isUnwatchedBot?.() ?? player?.isPlayerBot?.()) === true) {
             return;
         }
         // Skip stale/disconnected sessions to avoid write-time crashes while broadcasting ground-item updates.
@@ -115,6 +119,8 @@ export class ItemOnGroundManager {
         }
     }
     public static register(item: ItemOnGround) {
+        const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
+        if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
         // Check for merge with existing stackables..
         if (item.getItem().getDefinition().isStackable()) {
             if (this.merge(item)) {
@@ -159,11 +165,23 @@ export class ItemOnGroundManager {
                 if (JSON.stringify(item_.getItem().getMeta() ?? null) !== JSON.stringify(item.getItem().getMeta() ?? null)) {
                     continue;
                 }
+                // Recurring static supply must not absorb drops or a different respawn lifecycle.
+                const recurring = item_.isStaticSpawn() && item_.respawns();
+                const incomingRecurring = item.isStaticSpawn() && item.respawns();
+                if (recurring || incomingRecurring) {
+                    if (!recurring || !incomingRecurring
+                        || item_.getRespawnTimer() !== item.getRespawnTimer()
+                        || item_.getState() !== item.getState()
+                        || item_.getgoesGlobal() !== item.getgoesGlobal()
+                        || item_.isAgingPaused() !== item.isAgingPaused()
+                        || item_.getRespawnAmount() + item.getRespawnAmount() > MAX_STACK_AMOUNT) continue;
+                }
                 let oldAmount = item_.getItem().getAmount();
                 if (oldAmount + item.getItem().getAmount() > MAX_STACK_AMOUNT) {
                     continue;
                 }
                 item_.getItem().incrementAmountBy(item.getItem().getAmount());
+                if (recurring) item_.mergeRespawnAmount(item);
                 item_.setOldAmount(oldAmount);
                 item_.setTick(0);
                 ItemOnGroundManager.perform(item_, OperationType.ALTER);
@@ -192,7 +210,10 @@ export class ItemOnGroundManager {
             const item = this.getGroundItemById(stackId, player);
             return item && matches(item) ? item : null;
         }
-        return World.getItems().find(matches) ?? null;
+        // Different owners' stacks of one item stay apart: prefer the clicker's own, so an Ironman's drop on a
+        // main's public pile is the one their Take picks up (an Ironman may not take the main's).
+        return World.getItems().find((item) => matches(item) && this.isOwner(player.getUsername(), item))
+            ?? World.getItems().find(matches) ?? null;
     }
 
     public static canOperate(player: Player, groundItem: ItemOnGround, operation: number): boolean {
@@ -226,8 +247,25 @@ export class ItemOnGroundManager {
 
         if (this.transferToInventory(player, groundItem) <= 0) return;
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
+        this.playReachAnimation(player, position);
         player.getLastItemPickup().reset();
     }
+
+    /**
+     * An item taken from a neighbouring tile (one on a table, crate or counter the player stops
+     * beside) plays the table reach on the removal tick; one taken from the player's own tile plays
+     * nothing. Live captures: 202 adjacent takes animate (832 up to rev 238, 9401 from rev 239 on,
+     * e.g. the Witch's diary in capture 20261108T030409 tick 354) and 6,859 of 6,860 own-tile takes
+     * don't. The loc on the tile is not the test. The player turns to face the item first.
+     */
+    private static playReachAnimation(player: Player, position: Location): void {
+        if (player.getLocation().getX() === position.getX() && player.getLocation().getY() === position.getY()) return;
+        // Live turns to the item's tile before reaching (ticks 353 and 890 face the diary and ball).
+        player.setPositionToFace(position);
+        const sequence = CacheDefinitions.getSeqId(ItemOnGroundManager.TABLE_TAKE_SEQUENCE);
+        if (sequence != null && sequence >= 0) player.performAnimation(new Animation(sequence));
+    }
+
 
     /** Quantity this inventory can accept, using the same stack identity as addItem. */
     public static inventoryCapacity(player: Player, item: Item): number {
@@ -265,7 +303,8 @@ export class ItemOnGroundManager {
         const inventory = player.getInventory(), item = groundItem.getItem();
         const groundAmount = item.getAmount();
         if (!Number.isSafeInteger(groundAmount) || groundAmount <= 0) return 0;
-        const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, item));
+        const reward = groundItem.getPickupItem();
+        const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, reward));
         if (pickedUpAmount <= 0) {
             inventory.full();
             return 0;
@@ -284,15 +323,15 @@ export class ItemOnGroundManager {
             || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== groundAmount
             || JSON.stringify(item.getMeta() ?? null) !== metadata || !groundItem.getPosition().equals(position)
             || groundItem.getPrivateArea() !== privateArea || groundItem.getOwner() !== owner || groundItem.getState() !== state) return 0;
-        const amount = Math.min(request.amount, this.inventoryCapacity(player, item));
+        const amount = Math.min(request.amount, this.inventoryCapacity(player, reward));
         if (amount <= 0) {
             inventory.full();
             return 0;
         }
         const matchingAmount = () => inventory.getItems().reduce((total, entry) => total +
-            (entry.getId() === itemId && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
+            (entry.getId() === reward.getId() && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
         const before = matchingAmount();
-        const pickedUpItem = item.clone().setAmount(amount);
+        const pickedUpItem = reward.clone().setAmount(amount);
         inventory.addItem(pickedUpItem);
         const credited = Math.min(amount, Math.max(0, matchingAmount() - before));
         if (credited <= 0) return 0;
@@ -304,7 +343,7 @@ export class ItemOnGroundManager {
             item.decrementAmountBy(removed);
             ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
         }
-        PluginManager.emitCustomEvent("ground-items:taken", {player, groundItem, source, itemId, amount: credited, discarded: request.discard});
+        PluginManager.emitCustomEvent("ground-items:taken", {player, groundItem, source, itemId: reward.getId(), amount: credited, discarded: request.discard});
         return credited;
     }
 
@@ -405,7 +444,7 @@ export class ItemOnGroundManager {
 
     /** Picking up stays same-floor; telegrab may reach visible lower floors within its 10-tile range. */
     public static canInteract(player: Player, item: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): boolean {
-        if (!item) return false;
+        if (!item || (source === "telegrab" && item.pickupReplacement?.telegrabDenial)) return false;
         if (source === "pickup" && (item.getPosition().getZ() !== player.getLocation().getZ()
             || !item.isOperationEnabled(player, this.takeOperation(item.getItem().getId())))) return false;
         const reach = source === "telegrab" && item.getPosition().getZ() !== player.getLocation().getZ() ? 10 : 64;

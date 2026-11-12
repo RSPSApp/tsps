@@ -6,6 +6,7 @@ import { Graphic } from "../../../model/Graphic";
 import { Item } from "../../../model/Item";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
+import { PluginManager } from "../../../../plugins/PluginManager";
 import { Spell } from "./Spell";
 
 type Reanimation = { level: number; experience: number; runes: Item[]; npcId: number };
@@ -42,7 +43,9 @@ export class ArceuusItemSpells {
     ]);
 
     private static reanimation(spellId: number, npcId: number): ReanimationSpell | null {
-        const data = npcId <= 7026 ? BASIC : npcId <= 7031 ? ADEPT : npcId <= 7036 ? EXPERT : MASTER;
+        // Wiki (Ensouled heads): goblin to unicorn are Basic; dog and chaos druid to horror Adept; kalphite to
+        // demon and the hellhound (11463) Expert; aviansie, abyssal and dragon Master.
+        const data = npcId <= 7024 ? BASIC : npcId <= 7031 ? ADEPT : npcId <= 7036 || npcId === 11463 ? EXPERT : MASTER;
         if (spellId === this.BASIC_REANIMATION && data !== BASIC ||
             spellId === this.ADEPT_REANIMATION && data !== ADEPT ||
             spellId === this.EXPERT_REANIMATION && data !== EXPERT ||
@@ -68,7 +71,10 @@ export class ArceuusItemSpells {
         }
         if (!spell.canCast(player, false) || !spell.canCast(player, true)) return true;
 
-        player.getInventory().deleteNumber(itemId, 1);
+        // Zealot's robes may save the head (Wiki: Ensouled head); the cast still happens and still pays.
+        const consumed = { player, saved: false };
+        PluginManager.emitCustomEvent("reanimation:head-consumed", consumed);
+        if (!consumed.saved) player.getInventory().deleteNumber(itemId, 1);
         const npc = NPC.create(npcId, player.getLocation().clone());
         (npc as any).__skipDefaultRespawn = true;
         npc.setOwner(player);

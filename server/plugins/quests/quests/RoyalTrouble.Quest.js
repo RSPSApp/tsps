@@ -61,6 +61,8 @@
  *  - The 20,000 coins are handed over by Queen Sigrid's transcript action
  *    (oTxB6D), matching OSRS; the completion scroll lists them as a reward line.
  */
+const royalTroubleCombat = require("./Combat.RoyalTrouble");
+
 module.exports = function registerRoyalTroubleQuest(api) {
   const {
     DialogueChainBuilder,
@@ -897,14 +899,6 @@ module.exports = function registerRoyalTroubleQuest(api) {
       player.sendMessage("You must complete Throne of Miscellania before you can help with this.");
       return;
     }
-    const skills = player.getSkillManager();
-    const missing = [];
-    if (skills.getMaxLevel(Skill.AGILITY) < 40) missing.push("40 Agility");
-    if (skills.getMaxLevel(Skill.SLAYER) < 40) missing.push("40 Slayer");
-    if (missing.length > 0) {
-      player.sendMessage(`You need ${missing.join(" and ")} to start this quest.`);
-      return;
-    }
     quest.setStage(player, STAGE_STARTED);
     sendSideVarbits(player);
   }
@@ -1178,6 +1172,16 @@ module.exports = function registerRoyalTroubleQuest(api) {
     }
   }
 
+  function canEnterDeeper(player) {
+    if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) >= 40) return true;
+    player.sendMessage("You need an Agility level of 40 to go further into the dungeon.");
+    return false;
+  }
+
+  function awardPassageExperience(player) {
+    player.getSkillManager().addExperiences(Skill.AGILITY, 1);
+  }
+
   function squeezeMiningCrack(player) {
     if (!questActive(player)) return;
     if (!hasAttribute(player, USED_PROP_ATTRIBUTE)) {
@@ -1185,11 +1189,15 @@ module.exports = function registerRoyalTroubleQuest(api) {
       return;
     }
     const location = player.getLocation();
-    const destination = location.getY() <= 10281 ? { x: 2505, y: 10283, z: 0 } : { x: 2505, y: 10280, z: 0 };
+    const entering = location.getY() <= 10281;
+    if (entering && !canEnterDeeper(player)) return;
+    const destination = entering ? { x: 2505, y: 10283, z: 0 } : { x: 2505, y: 10280, z: 0 };
     movePlayer(player, destination);
+    if (entering) awardPassageExperience(player);
   }
 
   function enterTunnelFromPlankRoom(player) {
+    if (!canEnterDeeper(player)) return;
     if ([...PULLEY_ITEMS].some((id) => held(player, id))) {
       for (const id of PULLEY_ITEMS) {
         if (held(player, id)) takeItem(player, id, player.getInventory().getAmount(id));
@@ -1199,6 +1207,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
     player.sendMessage("You squeeze through the small hole in the wall.");
     // Capture 91 tunnels from (2511,10287,1) to the walkable ledge at (2514,10291,0).
     movePlayer(player, { x: 2514, y: 10291, z: 0 });
+    awardPassageExperience(player);
   }
 
   function squeezeFremennikCrack(player, objectId) {
@@ -1212,9 +1221,11 @@ module.exports = function registerRoyalTroubleQuest(api) {
       playVariant(player, ARMOD_NPC_ID, V_CREVICE_LOCKED);
       return;
     }
+    if (!canEnterDeeper(player)) return;
     if (!hasAttribute(player, CUTSCENE_ATTRIBUTE)) {
       setAttributeFlag(player, CUTSCENE_ATTRIBUTE, true);
       movePlayer(player, KIDS_SCENE_TILE);
+      awardPassageExperience(player);
       const sender = player.getPacketSender();
       sender.sendCameraMoveTo(KIDS_CAMERA_MOVE.x, KIDS_CAMERA_MOVE.y, KIDS_CAMERA_MOVE.height,
         { rate: KIDS_CAMERA_MOVE.rate, rate2: 0 });
@@ -1224,12 +1235,15 @@ module.exports = function registerRoyalTroubleQuest(api) {
       return;
     }
     movePlayer(player, KIDS_EXIT_TILE);
+    awardPassageExperience(player);
   }
 
   function squeezeSnakeCrack(player, objectId) {
     if (!questActive(player)) return;
     const entering = objectId === SNAKE_CRACK_IN_OBJECT_ID;
+    if (entering && !canEnterDeeper(player)) return;
     movePlayer(player, entering ? { x: 2617, y: 10275, z: 0 } : { x: 2617, y: 10270, z: 0 });
+    if (entering) awardPassageExperience(player);
   }
 
   function searchFireRemains(player, objectId) {
@@ -1775,6 +1789,8 @@ module.exports = function registerRoyalTroubleQuest(api) {
   api.onItemAction(handleItemAction);
   api.onGroundItemClick([LIFT_MANUAL_ITEM_ID], 3, handleGroundItemClick);
   api.onCustomEvent("ladders:climb", handleClimb);
+  royalTroubleCombat.init(api);
+  royalTroubleCombat.attach(api);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(DUNGEON_ZONE, handleZoneEnter);
   api.onZoneEnter(BOSS_ROOM_ZONE, handleZoneEnter);

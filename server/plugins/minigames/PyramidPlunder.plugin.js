@@ -19,6 +19,7 @@ const Mural = require("./pyramidplunder/Mural.PyramidPlunder");
 
 module.exports = {
   name: "PyramidPlunder",
+  description: "Adds Pyramid Plunder in Sophanem: eight timed rooms of urns and chests, the Pharaoh's sceptre and Simon Templeton buying artefacts.",
   members: true,
   register(api) {
     Entrance(api);

@@ -35,6 +35,7 @@ test("Tumeken's shadow: its own spell, the x3 (x4 in the tombs) passive and char
     registerBonusProvider: (provider) => providers.push(provider),
     getBonusManager: () => ({ update: (player) => updates.push(player) }),
     onItemOnItem: () => {},
+    onCustomEvent: () => {},
     onItemAction: () => {},
     // The Tombs of Amascut plugin's answer (Raid.TombsOfAmascut.js).
     emitCustomEvent: (name, query) => { if (name === 'toa:in-tombs' && Shared.inTombs(query.player.getLocation())) query.inside = true; },

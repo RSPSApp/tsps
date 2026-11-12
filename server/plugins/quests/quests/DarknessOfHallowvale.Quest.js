@@ -78,8 +78,7 @@
  *   sent the player back) is the client's 180 ("return to Meiyerditch") and 300
  *   (the sealed message is in hand) is the client's 310 ("bring the message to
  *   Veliaf to finish").
- * - The post-quest shortcut doors and the tome's three 2,000 XP charges are
- *   not simulated; the tome is handed over as the 3-charge item.
+ * - The post-quest shortcut doors are not simulated.
  */
 module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const {
@@ -338,6 +337,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const VERTIDA_MESSAGE_ITEM_ID = 9633; // "Message" (Vertida -> Veliaf)
   const TOME_ITEM_ID = 9656; // "Tome of Experience (3)"
   const TOME_ITEM_IDS = [9656, 9657, 9658]; // (3)/(2)/(1) charges
+  // Wiki (Tome of Experience (Darkness of Hallowvale)): three chapters of 2,000 XP, each in a skill of level 30 or
+  // more; after the third the book is gone.
+  const TOME_CHAPTER_XP = 2000;
+  const TOME_MIN_LEVEL = 30;
+  /** Chapters read so far (0-3): Veliaf replaces a lost tome at the charge it had, and none after all three. */
+  const TOME_CHAPTERS_ATTRIBUTE = "darkness-of-hallowvale:tome-chapters";
 
   // ---------------------------------------------------------------------------
   // Objects (cache ids, no generated identifiers; names are the cache's own)
@@ -615,12 +620,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   // Cache DB row 22 column 23: Strength 40, Magic 33, Crafting 32, Agility 26,
   // Thieving 22, Mining 20, Construction 5.
   const REQUIRED_SKILLS = [
-    { skill: Skill.CONSTRUCTION, level: 5, label: "Construction" },
+    { skill: Skill.CONSTRUCTION, level: 5, label: "Construction", boostable: true },
     { skill: Skill.MINING, level: 20, label: "Mining" },
     { skill: Skill.THIEVING, level: 22, label: "Thieving" },
-    { skill: Skill.AGILITY, level: 26, label: "Agility" },
+    { skill: Skill.AGILITY, level: 26, label: "Agility", boostable: true },
     { skill: Skill.CRAFTING, level: 32, label: "Crafting" },
-    { skill: Skill.MAGIC, level: 33, label: "Magic" },
+    { skill: Skill.MAGIC, level: 33, label: "Magic", boostable: true },
     { skill: Skill.STRENGTH, level: 40, label: "Strength" },
   ];
 
@@ -632,10 +637,14 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return request.needsRod === true;
   }
 
+  function requiredSkillLevel(skills, entry) {
+    return entry.boostable ? skills.getCurrentLevel(entry.skill) : skills.getMaxLevel(entry.skill);
+  }
+
   function meetsRequirements(player) {
     if (!inAidComplete(player)) return false;
     const skills = player.getSkillManager();
-    return REQUIRED_SKILLS.every((entry) => skills.getMaxLevel(entry.skill) >= entry.level);
+    return REQUIRED_SKILLS.every((entry) => requiredSkillLevel(skills, entry) >= entry.level);
   }
 
   function requirementsMessage(player) {
@@ -644,7 +653,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     }
     const skills = player.getSkillManager();
     for (const entry of REQUIRED_SKILLS) {
-      if (skills.getMaxLevel(entry.skill) < entry.level) {
+      if (requiredSkillLevel(skills, entry) < entry.level) {
         player.sendMessage(`You need ${entry.level} ${entry.label} to start this quest.`);
       }
     }
@@ -1507,7 +1516,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     }
     if (stepId === CONDITION_TOME_LOST) {
       if (!VELIAF_NPC_IDS.has(npcId)) return null;
-      return !TOME_ITEM_IDS.some((itemId) => held(player, itemId));
+      return !TOME_ITEM_IDS.some((itemId) => held(player, itemId)) && tomeChaptersRead(player) < TOME_ITEM_IDS.length;
     }
     if (stepId === CONDITION_RAL_PAPYRUS_SHORT) {
       if (!OLD_MAN_RAL_NPC_IDS.has(npcId)) return null;
@@ -1919,7 +1928,10 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       case ACTION_TOME_GIVEN:
         if (quest.getStage(player) < STAGE_COMPLETE) return;
         event.handled = true;
-        if (!TOME_ITEM_IDS.some((itemId) => held(player, itemId))) give(player, TOME_ITEM_ID, 1);
+        if (!TOME_ITEM_IDS.some((itemId) => held(player, itemId))) {
+          const unread = TOME_ITEM_IDS[tomeChaptersRead(player)];
+          if (unread !== undefined) give(player, unread, 1);
+        }
         return;
       case ACTION_COMPLETE:
         if (!inStage(player, STAGE_SEALED_MESSAGE, STAGE_SEALED_MESSAGE)) return;
@@ -2580,6 +2592,59 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return true;
   }
 
+  function tomeChaptersRead(player) {
+    const chapters = Number(player.getAttribute(TOME_CHAPTERS_ATTRIBUTE));
+    return Number.isInteger(chapters) && chapters > 0 ? Math.min(chapters, TOME_ITEM_IDS.length) : 0;
+  }
+
+  /**
+   * A chapter for 2,000 XP: the (3) becomes the (2), the (2) the (1), and the (1) crumbles. The three chapters are the
+   * account's, not each copy's (Wiki: the tome "cannot be banked", so one exists): any copy reads the account's next
+   * chapter, and once three are read a copy only crumbles. Veliaf's replacement was paying its own three chapters again.
+   */
+  function crumble(player, slot) {
+    player.getInventory().deleteAtSlot(slot, 1);
+    player.sendMessage("The book crumbles into a dust cloud of knowledge.");
+  }
+
+  function readTome(event) {
+    const { player, item, slot } = event;
+    if (TOME_ITEM_IDS.indexOf(event.itemId) < 0) return false;
+    if (tomeChaptersRead(player) >= TOME_ITEM_IDS.length) {
+      if (player.getInventory().get(slot) === item) crumble(player, slot);
+      return true;
+    }
+    api.emitCustomEvent("xpreward:open", {
+      player,
+      minLevel: TOME_MIN_LEVEL,
+      title: "Choose the stat you wish to be advanced!",
+      onConfirm: (skill, name) => {
+        const inventory = player.getInventory();
+        // The tome the chapter was opened from, still in its slot.
+        if (inventory.get(slot) !== item) return null;
+        const read = tomeChaptersRead(player);
+        if (read >= TOME_ITEM_IDS.length) {
+          crumble(player, slot);
+          return null;
+        }
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, TOME_CHAPTER_XP, true);
+        if (skills.getExperience(skill) === before) return null;
+        player.setAttribute(TOME_CHAPTERS_ATTRIBUTE, read + 1);
+        const next = TOME_ITEM_IDS[read + 1];
+        if (next === undefined) {
+          crumble(player, slot);
+        } else {
+          inventory.setItem(slot, new api.core.Item(next, 1));
+          inventory.refreshItems();
+        }
+        return `You read a fascinating chapter and earn experience! You have been awarded 2,000 ${name ?? skill.getName()} experience!`;
+      },
+    });
+    return true;
+  }
+
   function readHaemalchemy(event) {
     const { player, itemId } = event;
     if (!player || itemId !== HAEMALCHEMY_ITEM_ID) return false;
@@ -2603,6 +2668,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   // ---------------------------------------------------------------------------
 
   api.persistAttribute(BITS_ATTRIBUTE);
+  api.persistAttribute(TOME_CHAPTERS_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "darkness_of_hallowvale",
@@ -2663,6 +2729,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   api.onItemAction("Castle sketch 3", { "Look-at": examineQuestItem });
   api.onItemAction("Message", { Inspect: examineQuestItem, Read: readFireplaceMessage });
   api.onItemAction("Haemalchemy volume 1", { Read: readHaemalchemy });
+  api.onItemAction("Tome of Experience (3)", { Read: readTome });
+  api.onItemAction("Tome of Experience (2)", { Read: readTome });
+  api.onItemAction("Tome of Experience (1)", { Read: readTome });
   api.onItemAction("Sealed message", { Read: readSealedMessage });
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onCustomEvent("destroy-item:destroyed", handleItemDestroyed);

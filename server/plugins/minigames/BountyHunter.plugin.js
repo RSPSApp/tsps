@@ -7,7 +7,14 @@
 
 module.exports = {
   name: "BountyHunter",
+  description: "Adds Bounty Hunter in Daimon's Crater, with the shared crater state split into units for each part of the minigame.",
   members: true,
+  config: {
+    "BountyHunter:levelDifference": {
+      type: "number", label: "Rogue combat level difference", default: 5, integer: true, min: 0,
+      help: "Maximum combat level difference for attacks on players who are not your assigned target.",
+    },
+  },
   // Points re-registers the "BOUNTY HUNTER POINTS" shop currency on varp bh_2023_points;
   // the bots are the PlayerBots runtime's PvP bots.
   dependsOn: ["Shopkeepers", "PlayerBots"],

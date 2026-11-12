@@ -15,7 +15,7 @@ const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const Obelisks = require("../plugins/areas/WildernessObelisks.plugin");
 const T = Obelisks._test;
 
-let core, players, locs, diaryDone, handlers;
+let core, players, locs, rewardClaimed, handlers;
 
 before(async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
@@ -35,7 +35,7 @@ before(async () => {
     onPlayerLogin() {},
     onServerShutdown() {},
     emitCustomEvent: (name, request) => {
-      if (name === "diary:is-complete" && request.diary === "wilderness" && request.tier === "hard") request.complete = diaryDone;
+      if (name === "diary:is-reward-claimed" && request.diary === "wilderness" && request.tier === "hard") request.claimed = rewardClaimed;
     },
   });
 });
@@ -43,7 +43,7 @@ before(async () => {
 beforeEach(() => {
   players = [];
   locs = [];
-  diaryDone = true;
+  rewardClaimed = true;
   T.active.clear();
 });
 
@@ -154,13 +154,13 @@ test("Activate may send the players back to the same obelisk (Wiki)", (t) => {
 });
 
 test("Set and Teleport to Destination need the hard Wilderness Diary, and a destination set", () => {
-  diaryDone = false;
+  rewardClaimed = false;
   const player = fakePlayer([3156, 3620]);
   handlers.Obelisk["Set Destination"]({ player, objectId: LEVEL_13 });
   handlers.Obelisk["Teleport to Destination"]({ player, objectId: LEVEL_13 });
   assert.equal(player.log.filter((line) => line.includes("hard Wilderness Diary")).length, 2);
   assert.equal(T.active.size, 0);
-  diaryDone = true;
+  rewardClaimed = true;
   handlers.Obelisk["Teleport to Destination"]({ player, objectId: LEVEL_13 });
   assert.ok(player.log.includes("message You haven't set a destination yet."));
   assert.equal(T.active.size, 0);

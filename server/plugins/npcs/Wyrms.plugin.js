@@ -105,6 +105,7 @@ function methodFor(family) {
 
 module.exports = {
   name: "Wyrms",
+  description: "Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

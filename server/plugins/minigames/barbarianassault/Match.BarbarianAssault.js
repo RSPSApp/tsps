@@ -1359,6 +1359,8 @@ class MatchArea extends (require("../../../src/main/typescript/elvarg/game/model
 
   getName() { return this.match?.arena?.name ?? "Barbarian Assault"; }
   allowSummonPet() { return false; }
+  /** No follower comes in either (Wiki: Barbarian Assault): a following pet waits outside. */
+  barsFollowers() { return true; }
 
   /** Arena supplies must not leave the match through a teammate trade. */
   canTrade() { return false; }

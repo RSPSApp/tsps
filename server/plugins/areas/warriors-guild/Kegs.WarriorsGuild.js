@@ -12,6 +12,8 @@ const KEGS = new Map([[15669, 2253], [15670, 2254], [15671, 2255], [15672, 2256]
 const ROOM = { minX: 2861, maxX: 2878, minY: 3535, maxY: 3543, z: 1 };
 const PICK_UP_ANIMATION = 4180;
 const PICK_UP_TICKS = 2;
+// Wiki (Warriors' Guild): up to five kegs can be balanced at once.
+const MAX_KEGS = 5;
 /** Stand 4179 and walk 4178 while balancing; the turns stay the default ones. */
 const BALANCE_ANIMATIONS = [4179, 823, 4178, 820, 821, 822, 4178];
 /** Graphic of the falling stack, by keg count (one keg 688 ... five 684). */
@@ -56,6 +58,8 @@ function pickUpKeg({ player, objectId }) {
   Guild.later(player, PICK_UP_TICKS, () => {
     if (!inRoom(player)) return;
     const current = balancing.get(player) ?? { kegs: 0, ticks: 0, taken: new Set() };
+    // A second click on the same keg (or a sixth keg) lands here too, two ticks on: it counts once.
+    if (current.taken.has(objectId) || current.kegs >= MAX_KEGS) return;
     current.kegs++;
     current.taken.add(objectId);
     balancing.set(player, current);
@@ -156,3 +160,4 @@ module.exports = function attachKegs(api) {
   api.onNpcDialogueCondition(jimmyCondition);
   api.onCustomEvent("npc-dialogue:action", jimmyWritesLedger);
 };
+module.exports._test = { pickUpKeg, balancing };

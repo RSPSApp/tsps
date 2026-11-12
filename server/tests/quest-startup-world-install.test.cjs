@@ -16,10 +16,12 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
 
 const WORLD_INSTALLER_QUESTS = [
-  'BeneathCursedSands', 'CrabQuest', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
+  'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
   'EaglesPeak', 'EyesOfGlouphrie', 'GrimTales', 'InAidOfTheMyreque', 'Pandemonium',
-  'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong', 'WhatLiesBelow',
+  'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
 ];
+// WhatLiesBelow installs no world object since 475e73669: its Tunnel of Chaos statue is the cache map's own (the
+// installed copy was a duplicate), and it spawns no Surok of its own: the library's npc-spawns.json one is his.
 
 /** The real plugin api, except that hook registrations are captured instead of installed. */
 function capturingApi() {
@@ -71,4 +73,21 @@ test('TempleOfTheEye leaves its earned owner-only portal out of global world ins
   assert.equal(countRegistrations(() => require('../plugins/quests/quests/TempleOfTheEye.Quest')(api)), 0);
   const startup = () => { for (const handler of hooks.onServerStartup ?? []) handler({ timestamp: Date.now() }); };
   assert.equal(countRegistrations(startup), 0, 'the portal is created only for its player after the captured chant');
+});
+
+test('WhatLiesBelow spawns no Surok Magis of its own, since the library already has one (issue 4123)', () => {
+  const { api, hooks } = capturingApi();
+  const target = PluginManager.createApi('Quests');
+  const spawned = [];
+  const spying = new Proxy(api, {
+    get: (_t, property) => property === 'spawnNpc' ? (def) => { spawned.push(def); } : api[property],
+  });
+  require('../plugins/quests/quests/WhatLiesBelow.Quest')(spying);
+  for (const handler of hooks.onServerStartup ?? []) handler({ timestamp: Date.now() });
+  assert.ok(target, 'api available');
+  assert.equal(hooks.onServerStartup?.length ?? 0, 0, 'no startup hook is left to spawn him');
+  assert.deepEqual(spawned, [], 'nothing spawned while registering or at startup');
+  const spawns = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../data/definitions/npc-spawns.json'), 'utf8'));
+  const library = spawns.filter((spawn) => spawn.name === 'Surok Magis' && spawn.level === 0 && spawn.x >= 3200 && spawn.x <= 3215);
+  assert.equal(library.length, 1, "npc-spawns.json places exactly one Surok Magis in the Varrock Palace Library");
 });

@@ -111,6 +111,25 @@ function makeOne(player, recipe, spinning, provenance) {
   return true;
 }
 
+/** The Seers' Village spinning wheel (rsprox_transcripts/235/03467.txt: kr_spinningwheel at 2710, 3471, 1). */
+const SEERS_WHEEL = { x: 2710, y: 3471, z: 1 };
+const SPIN_TICKS = 3;
+const SEERS_DIARY_SPIN_TICKS = 2;
+
+/**
+ * Ticks between spins. Wiki (Bow string, Rope, Golden wool): 3. The Kandarin medium diary "allows players to spin flax
+ * 33% faster at the spinning wheel in Seers' Village": 2 there, for flax (rsprox 235/03467, with that diary done).
+ */
+function spinTicks(player, station, recipe) {
+  const at = station?.getLocation?.();
+  const seers = at && at.getX() === SEERS_WHEEL.x && at.getY() === SEERS_WHEEL.y && at.getZ() === SEERS_WHEEL.z;
+  const flax = recipe.materials.includes(Shared.getCore().ItemIds.FLAX);
+  if (!seers || !flax) return SPIN_TICKS;
+  const request = { player, diary: "kandarin", tier: "medium", complete: false };
+  Shared.getApi().emitCustomEvent("diary:is-complete", request);
+  return request.complete === true ? SEERS_DIARY_SPIN_TICKS : SPIN_TICKS;
+}
+
 function start(player, station, recipe, amount, spinning, provenance = stationContext(player, station)) {
   if (!remainsAtStation(player, provenance)) return;
   if (Shared.craftingLevel(player) < recipe.level) {
@@ -120,7 +139,7 @@ function start(player, station, recipe, amount, spinning, provenance = stationCo
   }
   const tables = data();
   Shared.startMaking(player, spinning ? {
-    amount, startTick: 0, firstTick: 2, interval: 2, animation: tables.spinningAnimation, sound: tables.spinningSound, kind: "spinning",
+    amount, startTick: 0, firstTick: 2, interval: spinTicks(player, station, recipe), animation: tables.spinningAnimation, sound: tables.spinningSound, kind: "spinning",
     onAnimate: () => player.getPacketSender().sendObjectAnimation(station, tables.wheelAnimation),
     has: () => remainsAtStation(player, provenance) && carriedMaterial(player, recipe) !== undefined,
     make: () => makeOne(player, recipe, true, provenance),

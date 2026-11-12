@@ -1,14 +1,14 @@
 [versions]
 kotlin = "2.2.10"
-rsprot = "1.0.0-ALPHA-20261014"
+rsprot = "1.0.0-ALPHA-20261106"
 netty = "4.2.2.Final"
 junit = "5.11.4"
 commons-compress = "1.27.1"
 slf4j = "2.0.16"
 
 [libraries]
-rsprot-api = { module = "net.rsprot:osrs-241-api", version.ref = "rsprot" }
-rsprot-desktop = { module = "net.rsprot:osrs-241-desktop", version.ref = "rsprot" }
+rsprot-api = { module = "net.rsprot:osrs-242-api", version.ref = "rsprot" }
+rsprot-desktop = { module = "net.rsprot:osrs-242-desktop", version.ref = "rsprot" }
 netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }

@@ -24,6 +24,8 @@ export type LoginAction =
     | { type: "close_server_list" }
     | { type: "refresh_server_list" }
     | { type: "select_server"; index: number }
+    | { type: "confirm_server_switch" }
+    | { type: "cancel_server_switch" }
     | { type: "open_world_select" }
     | { type: "close_world_select" }
     | { type: "select_world"; worldId: number }
@@ -32,6 +34,7 @@ export type LoginAction =
     | { type: "world_sort"; column: number }
     | { type: "toggle_music" }
     | { type: "field_click"; field: number };
+
 
 /**
  * Pre-allocated action objects to avoid allocations during input handling.
@@ -57,6 +60,8 @@ export const LoginActions = {
     OPEN_SERVER_LIST: { type: "open_server_list" } as const,
     CLOSE_SERVER_LIST: { type: "close_server_list" } as const,
     REFRESH_SERVER_LIST: { type: "refresh_server_list" } as const,
+    CONFIRM_SERVER_SWITCH: { type: "confirm_server_switch" } as const,
+    CANCEL_SERVER_SWITCH: { type: "cancel_server_switch" } as const,
     OPEN_WORLD_SELECT: { type: "open_world_select" } as const,
     CLOSE_WORLD_SELECT: { type: "close_world_select" } as const,
     WORLD_PAGE_LEFT: { type: "world_page_left" } as const,

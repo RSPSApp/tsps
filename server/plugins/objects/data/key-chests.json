@@ -146,6 +146,56 @@
         ]
       }
     },
+    "grubby": {
+      "name": "Grubby Chest",
+      "loc": "hosdun_grubby_chest_closed",
+      "varbit": "hosdun_chest_status",
+      "key": "hosdun_grubby_key",
+      "locked": "You don't have a key which can open this chest.",
+      "count": { "message": "You have opened the Grubby Chest {count}." },
+      "warnSlots": 11,
+      "itemBox": {
+        "plain": "You find treasure and supplies within the chest.",
+        "bonus": "You find treasure, supplies, and a weirdly coloured egg sac within the chest.",
+        "plainItems": ["shark", "dragonhide_red"],
+        "bonusItems": ["hosdun_orange_egg_sac", "hosdun_blue_egg_sac"]
+      },
+      "loot": {
+        "tables": [
+          { "times": 2, "outOf": 20, "main": [
+            { "weight": 7, "items": [["shark", 4]] },
+            { "weight": 12, "items": [["potato_egg+tomato", 4]] },
+            { "weight": 1, "items": [["2dosepotionofsaradomin", 3], ["2dose2restore", 1]] }
+          ] },
+          { "outOf": 20, "main": [
+            { "weight": 8, "items": [["2dose2attack", 1], ["2dose2strength", 1], ["2dose2defense", 1]] },
+            { "weight": 8, "items": [["2doserangerspotion", 1], ["2dose2defense", 1]] },
+            { "weight": 1, "items": [["3dose2restore", 2]] },
+            { "weight": 3, "items": [["3doseprayerrestore", 2]] }
+          ] },
+          { "outOf": 100, "main": [
+            { "weight": 10, "items": [["lawrune", 200]] },
+            { "weight": 10, "items": [["deathrune", 200]] },
+            { "weight": 10, "items": [["astralrune", 200]] },
+            { "weight": 2, "items": [["dragon_dart_tip", 50]] },
+            { "weight": 2, "items": [["dragon_arrowheads", 100]] },
+            { "weight": 10, "items": [["bloodrune", 200]] },
+            { "weight": 6, "items": [["crystal_key", 1]] },
+            { "weight": 6, "items": [["dragon_bones", 10, "noted"]] },
+            { "weight": 6, "items": [["dragonhide_red", 10, "noted"]] },
+            { "weight": 8, "items": [["unidentified_toadflax", 10, "noted"]] },
+            { "weight": 8, "items": [["unidentified_ranarr", 10, "noted"]] },
+            { "weight": 7, "items": [["unidentified_snapdragon", 10, "noted"]] },
+            { "weight": 7, "items": [["unidentified_torstol", 5, "noted"]] },
+            { "weight": 8, "items": [["coins", 10000]] }
+          ] }
+        ],
+        "tertiary": [
+          { "chance": [1, 25], "item": ["hosdun_orange_egg_sac", 1] },
+          { "chance": [1, 25], "item": ["hosdun_blue_egg_sac", 1] }
+        ]
+      }
+    },
     "elven": {
       "name": "Elven Crystal Chest",
       "loc": "prif_crystal_chest_closed",

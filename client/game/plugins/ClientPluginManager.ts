@@ -25,6 +25,7 @@ import type { LoginStretch } from "../login/renderer/types";
 import type { WebGLOsrsRendererHost } from "../../render/render/hostInterface";
 import type { OverheadTextEntry } from "../../ui/devoverlay/Overlay";
 import type { GpuSettings } from "./gpu/GpuPlugin";
+import type { ShaderFxRuntime } from "./shaderfx/ShaderFxState";
 import type { InteractHighlightPluginConfig } from "./interacthighlight/InteractHighlightConfig";
 import type { FixedStretch } from "./stretchedmode/StretchedModePlugin";
 import { DISABLED_TILE_MARKERS_CONFIG, type TileMarkersPluginConfig } from "./tilemarkers/types";
@@ -253,6 +254,8 @@ export type ScriptCallbackEvent = { eventName: string; vm: Cs2Vm };
 export type WidgetDragEvent = { source: any; target: any };
 
 export interface ClientPlugin {
+    /** Return true to defer an accepted login's handshake to a plugin. */
+    beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
     getPlayerHeadIcons?(serverId: number): readonly IndexedSprite[] | undefined;
     transformSceneProgram?(source: ProgramSource): ProgramSource;
@@ -275,6 +278,15 @@ export interface ClientPlugin {
     updateInteractionPointer?(camera: Camera): void;
     transformCameraRotation?(rotation: CameraRotation): void;
     handleCameraFollow?(context: CameraFollowContext): boolean;
+    /**
+     * The tile roof hiding treats as the camera's (world tiles): roofs on the line from it to
+     * the player hide the planes above. A plugin camera far from the player returns a nearer,
+     * steadier tile so roofs don't flicker as that long line sweeps across buildings.
+     */
+    roofCameraTile?(
+        cameraTile: { x: number; y: number },
+        playerTile: { x: number; y: number },
+    ): { x: number; y: number } | undefined;
     /** A connected standard-mapping controller, each frame; return true to take it over. */
     handleGamepad?(context: GamepadContext): boolean;
     /** A hitsplat arrived from the server (before it is drawn). */
@@ -340,6 +352,8 @@ export interface ClientPlugin {
     ): SimpleMenuEntry[];
     /** Graphics settings overriding the renderer's own (first answer wins). */
     gpuSettings?(): GpuSettings | undefined;
+    /** Screen shader effects for the WebGPU post chain (first answer wins). */
+    shaderFx?(): ShaderFxRuntime | undefined;
     /** Whether HD lighting is on, which widens draw distance and fog. */
     hdEnabled?(): boolean;
     /** How scenery animations are baked when a map square loads (first answer wins). */
@@ -402,6 +416,10 @@ export class ClientPluginManager {
         let plugins = this.implementers.get(hook);
         if (!plugins) this.implementers.set(hook, (plugins = this.plugins.filter((plugin) => plugin[hook] !== undefined)));
         return plugins;
+    }
+
+    beforeLoginHandshake(sendHandshake: () => void): boolean {
+        return this.plugins.some((plugin) => plugin.beforeLoginHandshake?.(sendHandshake) === true);
     }
 
     playerHeadIcons(serverId: number): IndexedSprite[] {
@@ -500,6 +518,18 @@ export class ClientPluginManager {
 
     handleCameraFollow(context: CameraFollowContext): boolean {
         return this.plugins.some((plugin) => plugin.handleCameraFollow?.(context) === true);
+    }
+
+    /** Runs every frame: with no plugin implementing it, it costs a cached empty list. */
+    roofCameraTile(
+        cameraTile: { x: number; y: number },
+        playerTile: { x: number; y: number },
+    ): { x: number; y: number } {
+        for (const plugin of this.implementing("roofCameraTile")) {
+            const tile = plugin.roofCameraTile!(cameraTile, playerTile);
+            if (tile) return tile;
+        }
+        return cameraTile;
     }
 
     handleGamepad(context: GamepadContext): boolean {
@@ -616,6 +646,14 @@ export class ClientPluginManager {
         for (const plugin of this.implementing("gpuSettings")) {
             const settings = plugin.gpuSettings!();
             if (settings) return settings;
+        }
+        return undefined;
+    }
+
+    shaderFx(): ShaderFxRuntime | undefined {
+        for (const plugin of this.implementing("shaderFx")) {
+            const runtime = plugin.shaderFx!();
+            if (runtime) return runtime;
         }
         return undefined;
     }

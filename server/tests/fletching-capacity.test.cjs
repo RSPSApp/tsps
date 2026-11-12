@@ -11,6 +11,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -137,7 +138,8 @@ test("arrows and darts: a batch that fits is made, one past the limit is refused
   for (const c of CASES()) {
     assert.deepEqual((await makeOne(t, c, 50)).result, [50 + c.batch, 0, 0], `${c.name}: control, room`);
     assert.deepEqual((await makeOne(t, c, MAX - c.batch)).result, [MAX, 0, 0], `${c.name}: control, exact fit`);
-    assert.deepEqual((await makeOne(t, c, 50, c.batch, c.batch - 1)).result, [50, c.batch, c.batch - 1], `${c.name}: control, short one input`);
+    // Short of a set: as many as the shorter input allows (live, "You fletch 7 bolts.", rsprox_transcripts/227/01749.txt).
+    assert.deepEqual((await makeOne(t, c, 50, c.batch, c.batch - 1)).result, [50 + c.batch - 1, 1, 0], `${c.name}: control, short one input`);
     const { f, result } = await makeOne(t, c, MAX - 2);
     assert.deepEqual(result, [MAX - 2, c.batch, c.batch], `${c.name}: refused, nothing taken`);
     assert.ok(f.messages.includes(SPACE_TEXT), `${c.name}: says why`);
@@ -309,9 +311,8 @@ test("with preset and plain bolts, only the plain ones are used", async (t) => {
   assert.deepEqual([plainOf(enough, I.RUNITE_BOLTS), presetOf(enough, I.RUNITE_BOLTS)], [0, 10], "the plain bolts went");
 
   const short = await run(5);
-  assert.equal(short.inv.getAmount(I.DRAGONSTONE_BOLTS), 0, "five plain bolts make no set");
-  assert.deepEqual([plainOf(short, I.RUNITE_BOLTS), presetOf(short, I.RUNITE_BOLTS)], [5, 10], "nothing taken");
-  assert.ok(short.messages.includes(PRESET_TEXT), "says why");
+  assert.equal(plainOf(short, I.DRAGONSTONE_BOLTS), 5, "five plain bolts make five: short of a set, as many as held");
+  assert.deepEqual([plainOf(short, I.RUNITE_BOLTS), presetOf(short, I.RUNITE_BOLTS)], [0, 10], "the preset bolts are never used");
 });
 
 // ------------------------------------------------------------------ amethyst

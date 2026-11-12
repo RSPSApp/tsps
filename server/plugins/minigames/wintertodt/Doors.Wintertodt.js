@@ -85,9 +85,18 @@ function logout({ player }) {
   Round.closeHud(player);
 }
 
+/** Wiki: active Wintertodt forbids High Alchemy only inside the prison. */
+function refuseAlchemy(event) {
+  if (event.disabled === true || !Round.isActive() || !Round.inPrison(event.player)) return;
+  if (event.spellId !== Shared.core().EffectSpells.HIGH_ALCHEMY.spellId()) return;
+  event.player.sendMessage("That magic would interfere with the pyromancer\'s and is not permitted here.");
+  event.disabled = true;
+}
+
 module.exports = function registerWintertodtDoors(api) {
   Shared.bind(api);
   api.persistAttribute(Round.ATTR_KILLS);
+  api.persistAttribute(Round.ATTR_BEST);
   api.persistAttribute(Round.ATTR_REWARDS);
   api.onServerStartup(Round.start);
   api.onObjectInteraction(Shared.OBJECT.DOORS, { Enter: enter, Peek: peek });
@@ -97,4 +106,5 @@ module.exports = function registerWintertodtDoors(api) {
   api.onZoneExit(Shared.CAMP_ZONE, syncHud);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
+  api.onSpellDisabled(refuseAlchemy);
 };

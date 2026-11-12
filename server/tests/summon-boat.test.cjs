@@ -19,7 +19,7 @@ let plugin;
 
 before(async () => {
   await CachePipeline.initialize();
-  plugin = require("../plugins/skills/sailing/SummonBoat.plugin");
+  plugin = require("../plugins/skills/sailing/SummonBoat.Sailing");
   plugin.register({
     core: { Animation, Graphic, Task, TaskManager, Sounds: { playAreaSound: (sound) => areaSounds.push(sound) } },
     onItemAction: (name, handlers) => { if (name === "Summon boat") actions = handlers; },
@@ -103,13 +103,13 @@ test("a summon moves the boat, breaks the tablet, then casts two ticks later and
   plugin._test.summon(player, ItemIdentifiers.SUMMON_BOAT, pandemonium, 2);
   assert.deepEqual(summoned.location, { kind: "docked", dock: "the_pandemonium" });
   assert.ok(player.log.includes("seq 4069") && player.log.includes("sound 965"), "the tablet broken at once");
-  assert.equal(player.items.length, 1);
+  // Used up with the move: dropping it before the cast must not keep it (the captures show it leave at the cast).
+  assert.equal(player.items.length, 0, "the tablet is used up with the move");
   player.log.length = 0;
   TaskManager.process();
   TaskManager.process();
   assert.deepEqual(player.log, ["message Your boat has been summoned to the Pandemonium.", "spot 343", "seq 1818"]);
   assert.equal(areaSounds.at(-1).soundId, 199);
-  assert.equal(player.items.length, 0, "the tablet is used up with the cast");
   player.log.length = 0;
   TaskManager.process();
   TaskManager.process();

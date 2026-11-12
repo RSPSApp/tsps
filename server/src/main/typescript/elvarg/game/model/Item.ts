@@ -1,7 +1,8 @@
-// Lazy load to avoid circular container/definition bootstrap.
-const getItemDefinition = () => require('../definition/ItemDefinition').ItemDefinition as typeof import('../definition/ItemDefinition').ItemDefinition;
-
+import { lazyRequire } from "../../util/LazyRequire";
 import { MAX_STACK_AMOUNT } from "./container/StackType";
+
+// Lazy load to avoid circular container/definition bootstrap.
+const getItemDefinition = lazyRequire(() => require('../definition/ItemDefinition').ItemDefinition as typeof import('../definition/ItemDefinition').ItemDefinition);
 
 export class Item {
 

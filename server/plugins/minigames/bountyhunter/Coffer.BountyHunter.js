@@ -51,6 +51,12 @@ function coins(player) {
   return player.getInventory().getAmount(core.ItemIdentifiers.COINS);
 }
 
+/** The bank tab holding the player's coins, or -1 (read as BankSpace does). */
+function bankCoinsTab(player) {
+  const tab = core.Bank.getTabForItem(player, core.ItemIdentifiers.COINS);
+  return Number.isInteger(tab) && tab >= 0 && player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) > 0 ? tab : -1;
+}
+
 function openCoffer({ player }) {
   pluginApi.sendMultiChatboxPrompt(player, `Current coffer: ${balance(player).toLocaleString()}`,
     "Deposit coins.", () => askAmount(player, "Deposit how many coins?", deposit),
@@ -64,9 +70,25 @@ function askAmount(player, title, then) {
 }
 
 function deposit(player, amount) {
-  const count = Math.min(amount, coins(player), MAX_COFFER - balance(player));
+  const held = coins(player);
+  let bank;
+  if (amount > held) {
+    const pin = { player, feature: "bounty-hunter-coffer", resume: () => deposit(player, amount) };
+    pluginApi.emitCustomEvent("bank-pin:guard", pin);
+    if (pin.locked) return;
+    const tab = bankCoinsTab(player);
+    bank = tab >= 0 ? player.getBank(tab) : null;
+    if (amount > held + (bank?.getAmount(core.ItemIdentifiers.COINS) ?? 0)) {
+      player.sendMessage("You don't have enough coins.");
+      return;
+    }
+  }
+  const count = Math.min(amount, MAX_COFFER - balance(player));
   if (!(count > 0)) return;
-  player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, count);
+  // The inventory's coins first, then the bank's.
+  const fromInventory = Math.min(count, held);
+  if (fromInventory > 0) player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, fromInventory);
+  if (count > fromInventory) bank.deleteNumber(core.ItemIdentifiers.COINS, count - fromInventory);
   player.setAttribute(COFFER_ATTRIBUTE, balance(player) + count);
 }
 
@@ -90,6 +112,9 @@ function deathCost(player, skulled) {
 
 function died({ player, killer, skulled }) {
   if (!killer) return;
+  // An Ironman killer takes no other player's loot (PlayerDeathTask.lootOwner, as every other PvP payout asks): the
+  // coins stay in the victim's coffer. This paid the killer directly, so an Ironman got another player's coins.
+  if (core.PlayerDeathTask.lootOwner(player, killer) !== killer) return;
   const cost = deathCost(player, skulled);
   if (cost <= 0) return;
   player.setAttribute(COFFER_ATTRIBUTE, balance(player) - cost);

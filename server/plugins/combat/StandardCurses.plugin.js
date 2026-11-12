@@ -4,6 +4,16 @@ const CURSES = [
   ['VULNERABILITY', 'DEFENCE', 10], ['ENFEEBLE', 'STRENGTH', 10], ['STUN', 'ATTACK', 10],
 ];
 const spells = new Map();
+/**
+ * A curse on a stat that is already lowered. The attack curses' line is recorded
+ * (rsprox_transcripts/228/02224.txt ticks 1158 and 1275, Confuse or Stun on Dusk: the Leagues V
+ * spellbook labels are shifted, but human_castcurse plays); no recording or Wiki page gives the
+ * strength or defence wording, so those keep the older line.
+ */
+function weakenedMessage(curse, npc) {
+  if (curse.skill === core.Skill.ATTACK) return "Your foe's attack has already been weakened.";
+  return `The spell has no effect because the ${npc ? 'NPC' : 'player'} is already weakened.`;
+}
 let core;
 let api;
 
@@ -23,7 +33,7 @@ function disabled(event) {
   const stats = target?.isNpc?.() ? target.getAsNpc()
     : target?.isPlayer?.() ? target.getAsPlayer().getSkillManager() : null;
   if (!stats || stats.getCurrentLevel(curse.skill) >= stats.getMaxLevel(curse.skill)) return;
-  event.player.sendMessage(`The spell has no effect because the ${target.isNpc() ? 'NPC' : 'player'} is already weakened.`);
+  event.player.sendMessage(weakenedMessage(curse, target.isNpc()));
   event.disabled = true;
 }
 
@@ -40,8 +50,7 @@ function applyCurse(event) {
   const current = npc ? npc.getCurrentLevel(curse.skill) : skills.getCurrentLevel(curse.skill);
   const maximum = npc ? npc.getMaxLevel(curse.skill) : skills.getMaxLevel(curse.skill);
   if (current < maximum) {
-    if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage(
-      `The spell has no effect because the ${npc ? 'NPC' : 'player'} is already weakened.`);
+    if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage(weakenedMessage(curse, !!npc));
     return;
   }
   const strength = { attacker, target, spell: event.spell, context: event.context, percent: curse.percent };
@@ -60,6 +69,7 @@ function applyCurse(event) {
 
 module.exports = {
   name: 'Standard Curses',
+  description: 'Standard-spellbook Confuse, Weaken and Curse, Vulnerability, Enfeeble and Stun stat drains.',
   register(api) {
     initialize(api);
     api.onSpellDisabled(disabled);

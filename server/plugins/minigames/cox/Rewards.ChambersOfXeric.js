@@ -35,6 +35,7 @@
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
 const Timeboard = require("./Timeboard.ChambersOfXeric");
+const Storage = require("./Storage.ChambersOfXeric");
 
 const INTERFACE = { REWARDS: 539, ITEMS: 5, BANK_ALL: 6, TAKE_ALL: 8, DISCARD_ALL: 10 };
 const INVENTORY = 581;
@@ -126,14 +127,16 @@ function itemName(id) {
   return Shared.core().ItemDefinition.forId(id)?.getName?.() ?? `Item ${id}`;
 }
 
+/**
+ * Held in the inventory, worn, or in any bank tab but the search tab (as the diary rewards check). This passed a bare id
+ * to Bank.contains, which wants an Item: it threw, the catch said no, and only the inventory ever counted, so a banked
+ * or worn Xeric's cape (or dark journal) was handed out again and again.
+ */
 function owns(player, id) {
-  if (player.getInventory().contains(id)) return true;
-  try {
-    const { Bank } = Shared.core();
-    return Bank.contains?.(player, id) ?? player.getBank?.(Bank.getTabForItem(player, id))?.contains?.(id) ?? false;
-  } catch {
-    return false;
-  }
+  const searchTab = Shared.core().Bank.BANK_SEARCH_TAB_INDEX;
+  return player.getInventory().contains(id)
+    || (player.getEquipment?.().contains?.(id) ?? false)
+    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(id));
 }
 
 /** The noted form of an item, if it has one. */
@@ -436,19 +439,40 @@ function discardAll({ player }) {
   return true;
 }
 
-/** Wiki: unclaimed loot is placed on the ground on leaving (outside the raid). */
+/** The mountain's private storage unit: the most it holds (Storage's own view of it). */
+const MOUNTAIN_STORAGE_SIZE = 120;
+
+/**
+ * Wiki (Chambers of Xeric, 26 January 2017): "If you leave a raid before collecting your reward, they are now sent
+ * to your raids private storage", "providing there is space. If not they are still dropped on the floor". Logging
+ * out leaves the raid too, and the private storage is saved (logout saves after this hook), so nothing is lost when
+ * the raid closes behind the player. Ultimate Ironmen can't use the storage: theirs drop (27 July 2022).
+ */
 function unclaimedLoot(raid, player, logout) {
   if (!raid.rewards) return;
   claimPetLoot(player, raid);
-  if (logout) return;
   const items = raid.rewards.get(player.getUsername()) ?? [];
   if (items.length === 0) return;
   raid.rewards.delete(player.getUsername());
+  const dropped = [];
+  let stored = false;
+  const storage = Storage.isUltimateIronman(player) ? null : Storage.privateItems(player);
+  for (const entry of items) {
+    const kept = storage ? Storage.addTo(storage, MOUNTAIN_STORAGE_SIZE, entry.id, entry.amount) : 0;
+    if (kept > 0) stored = true;
+    if (kept < entry.amount) dropped.push({ id: entry.id, amount: entry.amount - kept });
+  }
+  if (stored) player.sendMessage("Your unclaimed loot from the chest has been placed in your private storage.");
+  if (dropped.length === 0) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  Shared.later(player, 3, () => {
-    for (const entry of items) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), player.getLocation().clone());
+  const drop = (at) => {
+    for (const entry of dropped) ItemOnGroundManager.registerLocation(player, new Item(entry.id, entry.amount), at);
     player.sendMessage("Your unclaimed loot from the chest has been placed on the ground.");
-  });
+  };
+  // A logout cancels the player's tasks and leaves them standing in the raid, which may close behind them: drop it
+  // now, outside, where login puts them. A normal exit drops it three ticks on, once they are out.
+  if (logout) drop(Shared.loc(Shared.OUTSIDE));
+  else Shared.later(player, 3, () => drop(player.getLocation().clone()));
 }
 
 // ---------------------------------------------------------------- Captain Rimor's capes
@@ -491,4 +515,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, claimCape, UNIQUES, COMMONS });

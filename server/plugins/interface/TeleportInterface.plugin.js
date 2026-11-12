@@ -132,9 +132,21 @@ function rememberTeleport(player, entry) {
   player.setAttribute(RECENT_ATTRIBUTE, keys.slice(0, RECENT_LIMIT));
 }
 
+/** Messages for a destination's admission check ("entrana:check-items": the monks' and the balloon's rule). */
+const ADMISSION_REFUSED = { "entrana:check-items": "You cannot take weapons, armour or other forbidden items to Entrana." };
+
 function go(player, entry, tile) {
   const destination = Destinations.location(tile);
   if (!core.TeleportHandler.checkReqs(player, destination)) return;
+  // A destination with its own entry rule asks it first: Entrana takes no weapons or armour by any route.
+  if (entry.admission) {
+    const request = { player, allowed: false, reason: null, handled: false };
+    pluginApi.emitCustomEvent(entry.admission, request);
+    if (request.handled && request.allowed === false) {
+      player.getPacketSender().sendMessage(ADMISSION_REFUSED[entry.admission] ?? "You can't go there right now.");
+      return;
+    }
+  }
   // A destination's own plugin can prepare the arrival (Count Draynor's crypt instance).
   if (entry.arrival) pluginApi.emitCustomEvent(entry.arrival, { player });
   rememberTeleport(player, entry);
@@ -235,6 +247,7 @@ function clickFavouriteButton({ player }) {
 
 module.exports = {
   name: "TeleportInterface",
+  description: "Adds the ::teleports command, a searchable teleport list with tabs, favourites, recent teleports and a Wilderness warning.",
   register(api) {
     pluginApi = api;
     core = api.core;

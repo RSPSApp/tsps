@@ -124,9 +124,9 @@ export class PlayerSave {
     /**
      * Valid color index ranges per palette, derived from the real OSRS client
      * palettes (see client/rs/config/player/PlayerDesignColors.ts
-     * PLAYER_BODY_RECOLOR_TO_1 lengths: 30/29/29/6/13). Skin is clamped to 0-7
-     * because the client's makeup interface only offers the first 8 skin
-     * colors (PlayerDesignController restricts skin to < 8). Clamping these to
+     * PLAYER_BODY_RECOLOR_TO_1 lengths: 30/29/29/6/13). Skin keeps all 13,
+     * the unlockable green/black/white/blue/purple included, since the
+     * designer offers them all. Clamping these to
      * narrower ranges silently rewrote players' shirt/pants colors on save,
      * so they came back wrong after relogging.
      */
@@ -135,7 +135,7 @@ export class PlayerSave {
         [0, 28], // torso
         [0, 28], // legs
         [0, 5],  // feet
-        [0, 7],  // skin
+        [0, 12], // skin
     ];
     /** The name as the player first typed it, capitals included; later logins keep it. */
     private displayName: string;
@@ -183,6 +183,35 @@ export class PlayerSave {
     private banks: Map<number, Item[]>;
     private flags: string[];
     public sailing?: SailingState;
+
+    /**
+     * Set on a save that only vouches for its account: its name, password, rights and remembered
+     * logins. Its character is made at the next login, as a new one (a Hardcore World's Reset), so
+     * the account never goes without a save that holds its credentials.
+     */
+    private unmade?: boolean;
+
+    public isUnmade(): boolean {
+        return this.unmade === true;
+    }
+
+    /**
+     * Empties this save down to its account: the inventory, worn items, bank and levels go (back
+     * to a new character's, so a character list shows no old life), and every attribute but the
+     * remembered logins. The fields a save must have stay in shape (the SQLite
+     * writer validates them); a login ignores them for an unmade save.
+     */
+    public unmake(): void {
+        this.unmade = true;
+        const tokens = this.attributes?.[LOGIN_TOKENS_ATTRIBUTE];
+        this.attributes = tokens === undefined ? {} : { [LOGIN_TOKENS_ATTRIBUTE]: tokens };
+        this.inventory = (this.inventory ?? []).map(() => new Item(-1, 0));
+        this.equipment = (this.equipment ?? []).map(() => new Item(-1, 0));
+        this.banks = new Map();
+        const skills = new Skills();
+        skills.level = [...skills.maxLevel];
+        this.skills = skills;
+    }
 
     public getDisplayName(): string {
         return this.displayName;
@@ -592,7 +621,9 @@ export class PlayerSave {
         colorIndices.forEach((colorIndex, idx) => {
             const [min, max] = PlayerSave.COLOR_RANGES[idx];
             const candidate = PlayerSave.toFiniteInt(raw[colorIndex], defaults[colorIndex]);
-            sanitized[colorIndex] = PlayerSave.clamp(candidate, min, max);
+            // An unknown skin (a native client's red, 13) is no nearby colour: it goes back to the default.
+            const unknownSkin = colorIndex === Appearance.SKIN_COLOUR && (candidate < min || candidate > max);
+            sanitized[colorIndex] = unknownSkin ? defaults[colorIndex] : PlayerSave.clamp(candidate, min, max);
         });
 
         sanitized[Appearance.GENDER] = gender;
@@ -813,6 +844,13 @@ export class PlayerSave {
             }
         }
         playerSave.banks = banks;
+
+        // "persistence:snapshot" { player, save }: content that lends the player a temporary
+        // character (the PvP Arena's fights) writes their own one into the save instead, so a
+        // save never holds the lent one. Handlers change `save` (inventory, equipment, skills,
+        // spellBook, position, attributes ...), never the live player.
+        const { PluginManager } = require("../../../../../plugins/PluginManager") as typeof import("../../../../../plugins/PluginManager");
+        PluginManager.emitCustomEvent("persistence:snapshot", { player, save: playerSave });
 
         return playerSave;
     }

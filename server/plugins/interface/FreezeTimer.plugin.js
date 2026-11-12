@@ -29,6 +29,7 @@ function sync(player, force = false) {
 
 module.exports = {
   name: "Freeze Timer",
+  description: "Sends the remaining freeze time and spell for the client's freeze-timer overlay.",
   register(api) {
     // Resolved once: a require() here ran per player per tick, and in a built server it
     // missed the resolve cache (the .ts path throws, then is rewritten to dist) at ~15us a call.

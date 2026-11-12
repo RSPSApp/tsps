@@ -194,7 +194,7 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
         getRegionManager: () => RegionManager, getTaskManager: () => ({ submit() {} }),
         getWorld: () => World,
         registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
-        onCustomEvent() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, emitCustomEvent() {},
+        onCustomEvent() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, emitCustomEvent() {},
         onItemAction(_name: string, actions: any) { setUp = actions['Set-up']; },
         onNpcDeath() {}, onNpcInteraction() {}, onItemOnNpc() {},
     };

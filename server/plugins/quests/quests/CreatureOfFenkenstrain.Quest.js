@@ -22,10 +22,10 @@
  * memorial is the only cave entrance); the Gardener Ghost does not physically
  * follow the player, but digging his grave in the Haunted Woods still yields
  * the head; the costume-needle branch and the letter's readable text are not
- * reproduced; the ground pickled brain is not removed after purchase; and
- * because npc-spawns.json still carries the stale 2013-2017 Fenkenstrain ids,
- * the plugin spawns Dr Fenkenstrain, the Gardener Ghost and the monster
- * owner-only.
+ * reproduced; and the ground pickled brain is not removed after purchase.
+ * Dr Fenkenstrain and the Gardener Ghost are the world's multi-NPC spawns (2014
+ * and 2013), which resolve to 1269 and 1272 for interactions (NPC.getContentId);
+ * only the loose monster is spawned owner-only.
  */
 module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   const {
@@ -910,16 +910,11 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   function handleSilverOnFurnace(event) {
     if (event.itemId !== ItemIdentifiers.SILVER_BAR) return;
     const { player } = event;
-    // Only the conductor step of this quest owns silver on a furnace; leave the
-    // action to other silver recipes (e.g. Nature Spirit's sickle) otherwise.
-    // Returning false (not undefined) lets the next handler run.
-    if (!quest.isStarted(player) || quest.isComplete(player)) return false;
-    if (!held(player, ItemIdentifiers.CONDUCTOR_MOULD) && held(player, ItemIdentifiers.SICKLE_MOULD)) return false;
+    // Only the conductor step of this quest owns silver on a furnace, and only with the conductor
+    // mould: without it the bar goes on to the other silver recipes (tiaras, holy symbols, jewellery,
+    // Nature Spirit's sickle) for the whole quest. Returning false (not undefined) lets the next handler run.
+    if (!quest.isStarted(player) || quest.isComplete(player) || !held(player, ItemIdentifiers.CONDUCTOR_MOULD)) return false;
     event.handled = true;
-    if (!held(player, ItemIdentifiers.CONDUCTOR_MOULD)) {
-      player.sendMessage("You need a conductor mould to cast anything useful.");
-      return;
-    }
     if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 20) {
       player.sendMessage("You need level 20 Crafting to cast the conductor.");
       return;
@@ -1059,12 +1054,6 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     npcsByPlayer.set(player, entry);
   }
 
-  function ensureQuestNpcs(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
-    spawnTracked(player, "doctor", { id: DR_FENKENSTRAIN_NPC_ID, x: 3551, y: 3550, z: 0, wanderRadius: 0 });
-    spawnTracked(player, "gardener", { id: GARDENER_GHOST_NPC_ID, x: 3551, y: 3561, z: 0, wanderRadius: 0 });
-  }
-
   function ensureMonster(player) {
     if (!player || quest.getStage(player) !== STAGE_CREATURE_LOOSE) return;
     spawnTracked(player, "monster", { id: MONSTER_NPC_ID, x: 3547, y: 3555, z: 2, wanderRadius: 0 });
@@ -1085,7 +1074,6 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   }
 
   function handleZoneEnter({ player }) {
-    ensureQuestNpcs(player);
     ensureMonster(player);
   }
 
@@ -1094,7 +1082,6 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   }
 
   function handleLogin({ player }) {
-    ensureQuestNpcs(player);
     ensureMonster(player);
     refreshQuestList(player);
   }
@@ -1114,6 +1101,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [{ skillId: Skill.THIEVING.getIndex(), amount: 1000, label: "Thieving" }],
+    // The runtime only shows xpRewards on the scroll; the experience itself is paid here.
+    onReward: (player) => player.getSkillManager().addExperiences(Skill.THIEVING, 1000),
     rewardItemId: ItemIdentifiers.RING_OF_CHAROS,
     rewardItemLabel: "Ring of Charos",
     otherRewards: ["Access to the Werewolf Agility Course"],

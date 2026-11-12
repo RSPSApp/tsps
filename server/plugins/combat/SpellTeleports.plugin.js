@@ -5,6 +5,13 @@ let pluginApi;
 
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
+/**
+ * The house tablet's Group option goes to a Group Ironman teammate's house (Wiki). This server has
+ * no Ironman groups, so every player gets live's refusal: the line on the click tick, the tablet
+ * kept and no teleport (rsprox.net capture 2919, tick 2179).
+ */
+const HOUSE_TABLET_GROUP = "group";
+const NOT_IN_GROUP = "You are not in an Ironman Group.";
 /** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
 const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
 const POLLNIVNEACH_REDIRECT_TASK = "teleport-to-pollnivneach-with-a-redirected-telep";
@@ -13,18 +20,45 @@ const ALTERNATES_ATTRIBUTE = "spell-teleports:alternates";
 // The spell's own options (client script 2615 names op1/op3 "Cast").
 const SPELL_ALTERNATE_OP = 2;
 const SPELL_CONFIGURE_OP = 10;
+// Teleport to House's op2 (interface magic_spellbook:teleport_to_your_house): "Outside", whatever the house's setting.
+const HOUSE_OUTSIDE_OP = 2;
 const ALTERNATES = new Map(Object.entries(TABLETS.alternates).map(([name, data], index) => [name, { ...data, name, bit: 1 << index }]));
-// The Wilderness teleports' op10 (client script magic_spellbook_modifyops): "Disable warning" while
-// the spell's varbit is 1, "Enable warning" while it is 0. It toggles the varbit and never casts.
-// One bit per spell, set while its warning is on.
-const WILDERNESS_WARNINGS_ATTRIBUTE = "spell-teleports:wilderness-warnings";
-const WILDERNESS_WARNINGS = new Map([
-  ["dareeyak teleport", "dareeyak_teleport_warning"],
-  ["carrallanger teleport", "carrallagar_teleport_warning"],
-  ["annakarl teleport", "annakarl_teleport_warning"],
-  ["ghorrock teleport", "ghorrock_teleport_warning"],
-  ["teleport to target", "bounty_teleport_warning"],
-].map(([name, varbit], index) => [name, { varbit, bit: 1 << index }]));
+/**
+ * Wilderness teleport warnings: each is an All Settings row (setting id) over its varbit, saved by the Settings
+ * plugin, so the row and the spellbook's op10 change the same value. A spell warns while its varbit is 1 (op10 then
+ * reads "Disable warning", client script magic_spellbook_modifyops), and is on by default. A tablet warns while its
+ * varbit is 0 (its row's struct reads it inverted), so it is on by default too.
+ */
+const SPELL_WARNINGS = new Map([
+  ["teleport to target", { setting: 60, varbit: "bounty_teleport_warning" }],
+  ["dareeyak teleport", { setting: 61, varbit: "dareeyak_teleport_warning" }],
+  ["carrallanger teleport", { setting: 62, varbit: "carrallagar_teleport_warning" }],
+  ["annakarl teleport", { setting: 63, varbit: "annakarl_teleport_warning" }],
+  ["ghorrock teleport", { setting: 64, varbit: "ghorrock_teleport_warning" }],
+].map(([name, warning]) => [name, { ...warning, warns: 1 }]));
+// `deep` picks the warning's line. Ours: the Ice Plateau, Cemetery and Wilderness crabs tablets, which land past
+// level 30, use the deep line, and Carrallanger (level 19) the other.
+const TABLET_WARNINGS = new Map([
+  ["ice plateau teleport", { setting: 67, varbit: "teletab_ice_plateau_warning", deep: true }],
+  ["cemetery teleport", { setting: 68, varbit: "teletab_cemetery_warning", deep: true }],
+  ["wilderness crabs teleport", { setting: 69, varbit: "teletab_wildycrabs_warning", deep: true }],
+  ["dareeyak teleport", { setting: 70, varbit: "teletab_dareeyak_warning", deep: false }],
+  ["carrallanger teleport", { setting: 71, varbit: "teletab_carrallangar_warning", deep: false }],
+  ["annakarl teleport", { setting: 72, varbit: "teletab_annakarl_warning", deep: true }],
+  ["ghorrock teleport", { setting: 73, varbit: "teletab_ghorrock_warning", deep: true }],
+].map(([name, warning]) => [name, { ...warning, warns: 0 }]));
+// All Settings' buttons: Enable/Disable Wilderness teleport warnings (77/76) and tablet warnings (75/74).
+const WARNING_BUTTONS = new Map([
+  [77, { warnings: SPELL_WARNINGS, on: true }],
+  [76, { warnings: SPELL_WARNINGS, on: false }],
+  [75, { warnings: TABLET_WARNINGS, on: true }],
+  [74, { warnings: TABLET_WARNINGS, on: false }],
+]);
+const SPELL_WARNING = ["Are you sure you wish to teleport to the Wilderness?", "Yes, teleport me now.", "No, I want to stay here."];
+const tabletWarning = (warning) => [warning.deep ? "Teleport into the DEEP wilderness?" : "Teleport into the wilderness?", "Yes", "No"];
+// The spells' warnings were kept here before All Settings had them (one bit per spell, off by default). Its "on"
+// bits match the new default and "off" was only the old default, so it is cleared at login.
+const LEGACY_WARNINGS_ATTRIBUTE = "spell-teleports:wilderness-warnings";
 
 function spellName(event) {
   const itemId = event.itemId ?? -1;
@@ -65,6 +99,9 @@ const tile = (coordinates) => coordinates && new core.Location(...coordinates);
  */
 function landing(centre) {
   if (!centre) return centre;
+  // The Watchtower's tower top and Ape Atoll's landing keep their one tile (docs/teleport-tablets.md): around them the
+  // square holds tiles the player can't walk out of (outside the tower's walls; a sealed pocket on Ape Atoll).
+  if (FIXED_LANDINGS.some((name) => standardCentre(name)?.equals(centre))) return centre;
   const tiles = [];
   for (let dx = -LANDING_RADIUS; dx <= LANDING_RADIUS; dx++) {
     for (let dy = -LANDING_RADIUS; dy <= LANDING_RADIUS; dy++) {
@@ -74,6 +111,9 @@ function landing(centre) {
   }
   return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : centre;
 }
+
+/** Standard teleports that land on their own tile, not the 5x5 square (and their tablets, Break included). */
+const FIXED_LANDINGS = ["watchtower teleport", "ape atoll teleport"];
 
 /** Where a standard spellbook teleport lands around, by spell name (not the house). */
 function standardCentre(name) {
@@ -144,9 +184,16 @@ function toggleDestination(event, alternate) {
 function revertTablet(event) {
   const { player } = event;
   event.handled = true;
-  if (!player.getInventory().contains(event.itemId)) return;
-  player.getInventory().deleteNumber(event.itemId, 1);
-  player.getInventory().adds(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1);
+  const inventory = player.getInventory();
+  if (!inventory.contains(event.itemId)) return;
+  // Tablets stack, so reverting one of several frees no slot: the house tablet needs room, or it was lost.
+  const last = inventory.getAmount(event.itemId) === 1;
+  if (!last && inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1)) < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return;
+  }
+  inventory.deleteNumber(event.itemId, 1);
+  inventory.adds(core.ItemIdentifiers.TELEPORT_TO_HOUSE, 1);
 }
 
 function houseDestination(event, option) {
@@ -187,6 +234,7 @@ function useTablet(event) {
     return;
   }
   if (option === "revert" && TABLETS.redirects[name]) return revertTablet(event);
+  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return refuseGroupHouse(event);
   const alternate = ALTERNATES.get(name);
   if (alternate && option === "toggle") return toggleDestination(event, alternate);
   const target = tabletDestination(event, name, option);
@@ -199,10 +247,22 @@ function useTablet(event) {
       arrival?.();
     };
   }
-  if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, target.destination)) return;
+  const usable = () => player.getInventory().contains(event.itemId) && core.TeleportHandler.checkReqs(player, target.destination);
+  if (!usable()) return;
   // OSRS uses the tablet up two ticks in, as it is absorbed (docs/teleport-tablets.md).
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);
-  core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp);
+  // The Wilderness warning asks first, then any other (the boat-at-sea warning).
+  const breakTablet = () => core.TeleportHandler.confirm(player, target.destination,
+    () => core.TeleportHandler.teleport(player, target.destination, core.TeleportType.TELE_TAB, false, target.onArrival, useUp), 20, { item: event.itemId });
+  const warning = TABLET_WARNINGS.get(name);
+  if (!warning || !warningOn(player, warning)) return breakTablet();
+  const [title, yes, no] = tabletWarning(warning);
+  pluginApi.sendMultiChatboxPrompt(player, title, yes, () => usable() && breakTablet(), no, () => {});
+}
+
+function refuseGroupHouse(event) {
+  event.handled = true;
+  event.player.sendMessage(NOT_IN_GROUP);
 }
 
 /** A teleport scroll is used up on the click (docs/teleport-tablets.md). */
@@ -210,36 +270,55 @@ function readScroll(event, destination) {
   const { player } = event;
   event.handled = true;
   if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, destination)) return;
-  player.getInventory().deleteNumber(event.itemId, 1);
-  core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  core.TeleportHandler.confirm(player, destination, () => {
+    player.getInventory().deleteNumber(event.itemId, 1);
+    core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
+  }, 20, { item: event.itemId });
 }
 
 function syncAlternates({ player }) {
   for (const alternate of ALTERNATES.values()) {
     if (alternateChosen(player, alternate)) sendAlternate(player, alternate);
   }
-  for (const warning of WILDERNESS_WARNINGS.values()) {
-    if (warningOn(player, warning)) sendWarning(player, warning);
-  }
+}
+
+function clearLegacyWarnings({ player }) {
+  if (player.getAttribute(LEGACY_WARNINGS_ATTRIBUTE)) player.setAttribute(LEGACY_WARNINGS_ATTRIBUTE, 0);
 }
 
 function warningOn(player, warning) {
-  return ((Number(player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0) & warning.bit) !== 0;
+  const varbit = core.CacheDefinitions.getVarbitId(warning.varbit);
+  return varbit != null && player.getPacketSender().getVarbit(varbit) === warning.warns;
 }
 
-function sendWarning(player, warning) {
-  const varbit = core.CacheDefinitions.getVarbitId(warning.varbit);
-  if (varbit != null) player.getPacketSender().sendVarbit(varbit, warningOn(player, warning) ? 1 : 0);
+/** Through the Settings plugin, which sends and saves the row's varbit. */
+function setWarning(player, warning, on) {
+  pluginApi.emitCustomEvent("settings:set", { player, settingId: warning.setting, value: on ? warning.warns : 1 - warning.warns });
 }
 
 /** op10 on a Wilderness teleport: flip its warning (the client relabels the op from the varbit). */
 function toggleWarning(event) {
-  const warning = event.opId === SPELL_CONFIGURE_OP && WILDERNESS_WARNINGS.get(event.spellName?.trim().toLowerCase());
+  const warning = event.opId === SPELL_CONFIGURE_OP && SPELL_WARNINGS.get(event.spellName?.trim().toLowerCase());
   if (!warning) return;
   event.handled = true;
-  const bits = Number(event.player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0;
-  event.player.setAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, bits ^ warning.bit);
-  sendWarning(event.player, warning);
+  setWarning(event.player, warning, !warningOn(event.player, warning));
+}
+
+/** A Wilderness teleport spell about to be cast (nothing used yet): with its warning on, it waits for a yes. */
+function confirmSpell(request) {
+  const warning = SPELL_WARNINGS.get(request.name);
+  if (request.handled || !warning || !warningOn(request.player, warning)) return;
+  request.handled = true;
+  const [title, yes, no] = SPELL_WARNING;
+  pluginApi.sendMultiChatboxPrompt(request.player, title, yes, () => request.proceed(), no, () => {});
+}
+
+/** All Settings' enable/disable-all buttons set every spell's, or every tablet's, warning. */
+function setAllWarnings(request) {
+  const button = WARNING_BUTTONS.get(request.settingId);
+  if (request.handled || !button) return;
+  request.handled = true;
+  for (const warning of button.warnings.values()) setWarning(request.player, warning, button.on);
 }
 
 /**
@@ -284,14 +363,104 @@ function castAlternate(event) {
   }
 }
 
+/**
+ * Wiki (Standard spellbook): these teleports each require a quest's completion. The spells only; the tablets are
+ * separate. TSPS wording for the refusal: the retail line has not been established.
+ */
+const QUEST_LOCKED_SPELLS = new Map([
+  ["kourend castle teleport", { key: "client_of_kourend", name: "Client of Kourend" }],
+  // Wiki (Ardougne teleport scroll): the spell is learned by reading Edmond's scroll, Plague City's stage 30.
+  ["ardougne teleport", { key: "plague_city", name: "Plague City", stage: 30, unread: "You need to read Edmond's magic scroll to cast this spell." }],
+  ["civitas illa fortis teleport", { key: "twilights_promise", name: "Twilight's Promise" }],
+  ["trollheim teleport", { key: "eadgars_ruse", name: "Eadgar's Ruse" }],
+]);
+
+/**
+ * The refusal for a quest-locked standard teleport the player hasn't unlocked, or null. `action` ends the line
+ * ("cast this spell", or "direct this teleport" for the house portals).
+ */
+function questLockRefusal(player, name, action) {
+  const locked = QUEST_LOCKED_SPELLS.get(name);
+  if (!locked) return null;
+  const quest = { player, key: locked.key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", quest);
+  if (!quest.complete) return `You need to complete ${locked.name} to ${action}.`;
+  if (locked.stage === undefined) return null;
+  const stage = { player, key: locked.key, stage: null };
+  pluginApi.emitCustomEvent("quest:get-stage", stage);
+  if (Number(stage.stage) >= locked.stage) return null;
+  return locked.unread.replace("cast this spell", action);
+}
+
+/**
+ * Wiki (Portal chamber, Portal nexus): directing a portal "requires the same Magic level and quest requirements as
+ * casting the spell". The house portals ask here so the two share one list; sets `event.refusal`.
+ */
+function teleportQuestLock(event) {
+  // Other answerers (a quest's own lock, as Watchtower) may refuse too: the first refusal stands.
+  event.refusal ??= questLockRefusal(event.player, event.name?.trim().toLowerCase(), event.action ?? "cast this spell");
+}
+
+/**
+ * Teleport to House without a house went to Rimmington and spent its runes. It is refused first, with the house
+ * tablet's line (Construction answers "construction:owns-house"), so nothing is spent.
+ */
+function hasHouse(player) {
+  const request = { player, owns: true };
+  pluginApi.emitCustomEvent("construction:owns-house", request);
+  return request.owns !== false;
+}
+
+/** The standard spell requires the Awowogei rescue; the Arceuus spell and tablet are separate. */
+function mayCastApeAtoll(player, name) {
+  if (name === HOUSE_TABLET && player.getSpellbook() === core.MagicSpellbook.NORMAL && !hasHouse(player)) {
+    player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
+    return false;
+  }
+  if (QUEST_LOCKED_SPELLS.has(name) && player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    const refusal = questLockRefusal(player, name, "cast this spell");
+    if (refusal) player.sendMessage(refusal);
+    return !refusal;
+  }
+  if (name !== "ape atoll teleport" || player.getSpellbook() !== core.MagicSpellbook.NORMAL) return true;
+  const rescue = { player, rescue: "king-awowogei", complete: false };
+  pluginApi.emitCustomEvent("recipe-for-disaster:rescue-status", rescue);
+  if (rescue.complete) return true;
+  // Older completed RFD saves may not have each individual rescue bit.
+  const quest = { player, key: "recipe_for_disaster", complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", quest);
+  if (quest.complete) return true;
+  // TSPS fallback wording: the exact retail refusal has not been established.
+  player.sendMessage("You must free King Awowogei before casting this spell.");
+  return false;
+}
+
+/**
+ * Teleport to House's "Outside" lands at the house portal in the house's town (Construction says where), and tells
+ * Construction on arrival not to take the player in. Cast is left to the usual cast: it follows the house's setting.
+ */
+function castHouseOutside(event, name) {
+  const request = { player: event.player, option: "outside", destination: null, onArrival: null };
+  pluginApi.emitCustomEvent("construction:house-tablet", request);
+  if (!request.destination || core.SpellTeleports.handleSelf(event.player, name, request.destination, "outside")) {
+    event.handled = true;
+  }
+}
+
 /** A standard spellbook teleport, on a tile of its landing square; anything else is left to the usual cast. */
 function castStandard(event, name) {
+  if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
+  if (name === HOUSE_TABLET && event.opId === HOUSE_OUTSIDE_OP && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    castHouseOutside(event, name);
+    return;
+  }
   const centre = standardCentre(name);
   if (centre && core.SpellTeleports.handleSelf(event.player, name, landing(centre))) event.handled = true;
 }
 
 function castSpell(event) {
   const name = spellName(event)?.trim().toLowerCase();
+  if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
   const destination = landing(standardCentre(name));
   if (core.SpellTeleports.handleSelf(event.player, name, destination)) {
     event.handled = true;
@@ -300,15 +469,20 @@ function castSpell(event) {
 
 module.exports = {
   name: "SpellTeleports",
+  description: "Teleport tablets and spell teleports, including house tablets and redirected scrolls, from the teleport-tablets data file.",
   register(api) {
     core = api.core;
     pluginApi = api;
     api.persistAttribute(ALTERNATES_ATTRIBUTE, 0);
-    api.persistAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, 0);
+    api.persistAttribute(LEGACY_WARNINGS_ATTRIBUTE, 0);
     api.onItemAction(useTablet);
     api.onPlayerLogin(syncAlternates);
+    api.onPlayerLogin(clearLegacyWarnings);
     api.onSpellCast(toggleWarning);
     api.onSpellCast(castAlternate);
     api.onInterfaceActionClick(castSpell);
+    api.onCustomEvent("magic:teleport-quest-lock", teleportQuestLock);
+    api.onCustomEvent("spell:teleport-confirm", confirmSpell);
+    api.onCustomEvent("settings:setting-clicked", setAllWarnings);
   },
 };

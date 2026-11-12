@@ -16,8 +16,8 @@
  *   active modifier's Glory, and a time bonus of 500 x wave less wave points a tick, rounded
  *   down to even. Only the best run counts, and dying keeps a run's Glory; teleporting out doesn't.
  * - Wave 12's pet roll (Smol Heredit, 1/200).
- * Offline_Scape: the chest's and Minimus's tiles, and the chest interface's buttons
- * (246: 5 Bank-all, 7 Take-all, 9 Discard-all, 11 the items).
+ * rsprox 1227 and 4117: the rewards modal, item withdrawal, banking and discard confirmation.
+ * Offline_Scape: the chest's and Minimus's tiles.
  * RuneLite (gameval): the chest's appearing animation 10825.
  */
 
@@ -32,12 +32,18 @@ const CHEST = { id: 50741, x: 1829, y: 3105, rotation: 1, appear: 10825 };
 const MINIMUS_BY_CHEST = { x: 1830, y: 3103 };
 const VARP_CURRENT_GLORY = 4132;
 
-const CHEST_INTERFACE = 246;
-const COMPONENT = { VALUE: 3, BANK_ALL: 5, TAKE_ALL: 7, DISCARD_ALL: 9, ITEMS: 11 };
+const CHEST_INTERFACE = 864;
+const LEGACY_INTERFACE = 246;
+const COMPONENT = { MODIFIERS: 11, DISCARD_ALL: 13, TAKE_ALL: 14, BANK_ALL: 15, ITEMS: 17 };
+const LEGACY_COMPONENT = { VALUE: 3, ITEMS: 11 };
 const ITEMS_UID = (CHEST_INTERFACE << 16) | COMPONENT.ITEMS;
+const LEGACY_ITEMS_UID = (LEGACY_INTERFACE << 16) | LEGACY_COMPONENT.ITEMS;
+const VALUE_UID = (LEGACY_INTERFACE << 16) | LEGACY_COMPONENT.VALUE;
+const SCRIPT_CHEST_INIT = 4923;
+const SCRIPT_CHEST_VALUE = 4929;
+const VARBIT_LOOT_OPENED = 9802;
 const SCRIPT_ITEM_OPS = 149;
 const OP1 = 1 << 1;
-const OP10 = 1 << 10;
 
 const GLORY = { completion: 100, noDamage: 100, timeStart: 500 };
 
@@ -113,6 +119,8 @@ function waveCompleted(run) {
   }
   run.glory += gloryFor(run, wave);
   run.player.getPacketSender().sendConfig(VARP_CURRENT_GLORY, run.glory);
+  // "colosseum:glory" { player, glory }: the run's Glory so far, for a league's "Obtain 40,000/58,000 Glory".
+  Shared.api().emitCustomEvent("colosseum:glory", { player: run.player, glory: run.glory });
 }
 
 /** Only the best run's Glory counts. */
@@ -129,7 +137,7 @@ function keepGlory(run) {
 function lost(run) {
   run.loot = { rewards: [], future: [], previous: [] };
   sendInventories(run);
-  run.player.getPacketSender().sendString("Total Value: 0", (CHEST_INTERFACE << 16) | COMPONENT.VALUE);
+  run.player.getPacketSender().sendString("Total Value: 0", VALUE_UID);
 }
 
 /** The run is over with loot to claim: the chest comes out, with Minimus beside it. */
@@ -146,6 +154,7 @@ function removeChest(run) {
   if (!run.chest) return;
   Shared.core().ObjectManager.deregister(run.chest, true);
   run.chest = null;
+  run.player.getPacketSender().sendVarbit(VARBIT_LOOT_OPENED, 0);
 }
 
 // ---------------------------------------------------------------- the chest
@@ -155,10 +164,18 @@ function rewardsOf(player) {
   return run?.chest ? run.loot.rewards : null;
 }
 
-function refreshChest(player, rewards) {
+function sendChestValue(player, rewards) {
   const sender = player.getPacketSender();
-  sender.sendInventory(INVENTORY.REWARDS, INVENTORY_SIZE, rewards);
-  sender.sendString(`Total Value: ${valueOf(rewards).toLocaleString("en-US")}`, (CHEST_INTERFACE << 16) | COMPONENT.VALUE);
+  const { ItemDefinition } = Shared.core();
+  const total = rewards.reduce((sum, { id, amount }) => sum + BigInt(ItemDefinition.forId(id)?.getValue?.() ?? 0) * BigInt(amount), 0n);
+  const value = total > 9223372036854775807n ? 9223372036854775807n : total;
+  sender.sendString(`Total Value: ${value.toLocaleString("en-US")}`, VALUE_UID);
+  sender.sendInterfaceScript(SCRIPT_CHEST_VALUE, [value]);
+}
+
+function refreshChest(player, rewards) {
+  player.getPacketSender().sendInventory(INVENTORY.REWARDS, INVENTORY_SIZE, rewards);
+  sendChestValue(player, rewards);
 }
 
 function openChest(event) {
@@ -166,14 +183,18 @@ function openChest(event) {
   const rewards = rewardsOf(player);
   if (!rewards) return false;
   if (rewards.length === 0) {
-    player.sendMessage("Your reward chest is empty.");
+    player.sendMessage("The chest appears to be empty.");
     return true;
   }
   const sender = player.getPacketSender();
-  refreshChest(player, rewards);
+  sender.sendVarbit(VARBIT_LOOT_OPENED, 1);
+  sender.sendInventory(INVENTORY.REWARDS, INVENTORY_SIZE, rewards);
   sender.sendInterface(CHEST_INTERFACE);
-  sender.sendClientScript(SCRIPT_ITEM_OPS, ITEMS_UID, INVENTORY.REWARDS, 3, 5, 0, -1, "Take", "", "", "", "");
-  sender.sendInterfaceFlagsRange(ITEMS_UID, 0, INVENTORY_SIZE - 1, OP1 | OP10);
+  sender.sendClientScript(SCRIPT_CHEST_INIT, 1, 16);
+  sendChestValue(player, rewards);
+  sender.sendInterfaceFlagsRange((CHEST_INTERFACE << 16) | COMPONENT.MODIFIERS, 0, 26, OP1);
+  sender.sendInterfaceFlagsRange(ITEMS_UID, 0, 30, OP1 | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5));
+  sender.sendClientScript(SCRIPT_ITEM_OPS, LEGACY_ITEMS_UID, INVENTORY.REWARDS, 4, 4, 0, -1, "Take", "Take-5", "Take-All", "Take-X", "");
   return true;
 }
 
@@ -219,6 +240,7 @@ function take(player, entry, amount, destination) {
 }
 
 function takeAll(player, destination) {
+  if (player.getInterfaceId() !== CHEST_INTERFACE) return;
   const rewards = rewardsOf(player);
   if (!rewards) return;
   for (const entry of [...rewards]) {
@@ -237,24 +259,45 @@ function clickTakeAll({ player }) {
 }
 
 function clickDiscardAll({ player }) {
+  if (player.getInterfaceId() !== CHEST_INTERFACE) return;
   const rewards = rewardsOf(player);
   if (!rewards?.length) return;
-  Shared.options(player, "Are you sure you want to destroy the items?",
-    "Yes.", () => {
+  player.getPacketSender().sendInterfaceRemoval();
+  Shared.options(player, "Are you sure? You can't get your discarded rewards back!",
+    "Yes, discard my rewards.", () => {
+      if (rewardsOf(player) !== rewards) return;
       rewards.length = 0;
+      player.sendMessage("The chest empties before your eyes...");
       refreshChest(player, rewards);
     },
-    "Cancel.", () => {});
+    "No, keep my rewards.", () => openChest({ player }));
 }
 
 function clickItem(event) {
   const { player } = event;
+  if (player.getInterfaceId() !== CHEST_INTERFACE) return;
   const rewards = rewardsOf(player);
   const entry = rewards?.[Number.isInteger(event.slot) ? event.slot : -1];
-  if (!entry) return;
-  entry.amount -= take(player, entry, 1, "inventory");
-  if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
-  refreshChest(player, rewards);
+  if (!entry || (event.itemId != null && event.itemId !== entry.id)) return;
+  const op = event.opId ?? event.action;
+  const withdraw = (amount) => {
+    if (player.getInterfaceId() !== CHEST_INTERFACE || rewardsOf(player) !== rewards || !rewards.includes(entry) || !Number.isSafeInteger(amount) || amount <= 0) return;
+    entry.amount -= take(player, entry, amount, "inventory");
+    if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
+    refreshChest(player, rewards);
+  };
+  if (op === 1) withdraw(1);
+  else if (op === 2) withdraw(5);
+  else if (op === 3) withdraw(entry.amount);
+  else if (op === 4) {
+    const action = { acceptsZero: false, execute(amount) {
+      if (player.getEnteredAmountAction() !== action) return;
+      player.setEnteredAmountAction(null);
+      withdraw(amount);
+    } };
+    player.setEnteredAmountAction(action);
+    player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  }
 }
 
 module.exports = function registerColosseumRewards(api) {

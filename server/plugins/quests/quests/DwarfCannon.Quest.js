@@ -110,12 +110,17 @@ module.exports = function registerDwarfCannonQuest(api) {
     if (stage >= STAGE_RETURN_TO_LAWGOF) return ["I found Lollk alive in the goblin cave.", "I should return to <col=800000>Captain Lawgof</col>."];
     if (stage >= STAGE_FIND_LOLLK) return ["The goblins took Lollk.", "I should search the <col=800000>crates</col> inside their cave."];
     if (stage >= STAGE_FIND_CAVE) return ["The remains belonged to Gilob, but Lollk may live.", "I should find the <col=800000>goblin cave</col> to the south-east."];
-    if (stage >= STAGE_CHECK_WATCHTOWER) return ["I should climb the southern watchtower", "and investigate why it has gone quiet."];
+    if (stage >= STAGE_CHECK_WATCHTOWER) return ["I've fixed all the broken railings.", "I should report back to <col=800000>Captain Lawgof</col>."];
     if (stage >= STAGE_REPAIR_RAILINGS) return ["Captain Lawgof gave me replacement rails and a hammer.", "I should repair the broken railings."];
     return ["I can start this quest by talking to <col=800000>Captain Lawgof</col> south of the <col=800000>Coal Trucks</col>, north-west of the <col=800000>Fishing Guild</col>."];
   }
 
   function nativeProgress(stage) {
+    // The railings are done but not yet reported: the game stays on 1 until the
+    // conversation with Lawgof, and the remains multiloc only renders at 3
+    // (transforms [-1,-1,-1,15596,-1]). Writing 2 here makes Quest Helper skip
+    // its own "talk to Captain Lawgof" step and send the player to an empty tower.
+    if (stage === STAGE_CHECK_WATCHTOWER) return 1;
     if (stage === STAGE_RETURN_TO_LAWGOF) return 6;
     if (stage === STAGE_REPAIR_CANNON) return 7;
     return stage;

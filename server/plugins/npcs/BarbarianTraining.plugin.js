@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Barbarian Training's rod fishing and Herblore sections (Wiki: Barbarian Training).
+ * Barbarian Training's bow-firemaking, rod fishing and Herblore sections (Wiki: Barbarian Training).
  *
  * Otto Godblessed teaches rod fishing first: the rod is under his bed, and a leaping fish caught
  * with it completes the section once Otto hears of it. Herblore comes after rod fishing. Otto
@@ -15,13 +15,22 @@
  * brut_fishing_r and brut_herb_potion (Quest Helper: 1 tasked, 2 done, 3 told Otto).
  *
  * Otto's agricultural topic stays Farming's: choosing it hands the Talk-to over to
- * skills/farming/Services.Farming's own Otto menu. The other sections (firemaking, harpoon
+ * skills/farming/Services.Farming's own Otto menu. The other sections (harpoon
  * fishing, spears and hastae) have no topic here yet.
+ * Bow firemaking uses its existing instruction and return transcript, with saved lesson
+ * progress: taught, an oak-log bow fire, then acknowledgement (cache varbit brut_fire, same
+ * 1/2/3 stages). It does not change Logs' lighting permissions. Once Otto is told, he also
+ * explains pyre ships ("I have completed firemaking with a bow. What follows this?", cache
+ * varbit brut_craft_ship = 1): with both, the whirlpool into the Ancient Cavern opens
+ * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern).
  */
 
 const STATE_ATTRIBUTE = "barbarian-training";
-/** Cache varbits (osrs-dumps varbit.sym): brut_fishing_r 3758, brut_herb_potion 3761. */
-const VARBITS = { fishingRod: 3758, herblore: 3761 };
+/**
+ * Cache varbits (osrs-dumps varbit.sym): brut_fishing_r 3758, brut_fire 3759,
+ * brut_herb_potion 3761, brut_craft_ship 3764.
+ */
+const VARBITS = { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 };
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
@@ -32,11 +41,15 @@ const TRANSCRIPT = {
   first: "starting-off-after-speaking-to-him-once",
   again: "starting-off-after-speaking-to-him-once-talking-to-otto-again-without-doing-as-he-asks",
   fishing: "fishing",
+  firemaking: "firemaking",
   herblore: "herblore",
   herbloreAgain: "herblore-speaking-to-otto-again-without-an-attack-mix",
   herbloreDone: "herblore-speaking-to-otto-with-an-attack-mix",
 };
 const TOPIC = {
+  firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
+  firemakingDone: "I've set fire to logs with a bow!",
+  pyreShips: "I have completed firemaking with a bow. What follows this?",
   rod: "What can I learn about the use of a fishing rod?",
   rodDone: "I've fished with a barbarian rod!",
   herblore: "What was that secret knowledge of herblore we talked of?",
@@ -64,6 +77,8 @@ function state(player) {
   const current = saved && typeof saved === "object" ? saved : {};
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
+  current.firemaking = stage(current.firemaking);
+  current.pyreShips = current.pyreShips === 1 ? 1 : 0;
   if (saved !== current) player.setAttribute(STATE_ATTRIBUTE, current);
   return current;
 }
@@ -169,6 +184,9 @@ function holdsAttackMix(player) {
 function topics(player, talk) {
   const current = state(player);
   const list = [];
+  if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
+  else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
+  else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
   if (current.fishingRod === TOLD && current.herblore < TOLD) {
@@ -198,20 +216,57 @@ function afterTopic(player, talk) {
 }
 
 /**
- * The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. False, with
+ * The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. `onFinished`
+ * runs after the actual spoken transcript and requires it to exist. False, with
  * the chatbox closed, when Otto has wandered off.
  */
-function lesson(player, talk, variant, option, onReply = null) {
+function lesson(player, talk, variant, option, onReply = null, onFinished = null) {
   if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return false; }
   const found = topicLines(player, talk.npc, talk.npcId, variant, option);
+  if (onFinished && !found.length) { player.getPacketSender().sendInterfaceRemoval(); return false; }
   const lines = found.length ? found : [{ player: option }];
-  const after = () => afterTopic(player, talk);
+  const after = () => {
+    if (onFinished) {
+      if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+      onFinished();
+    }
+    afterTopic(player, talk);
+  };
   if (!onReply) { play(player, talk.npcId, lines, after); return true; }
   play(player, talk.npcId, lines.slice(0, 1), () => {
     onReply();
     play(player, talk.npcId, lines.slice(1), after);
   });
   return true;
+}
+
+/** Complete the spoken instruction before recording that this player has heard it. */
+function firemakingLesson(player, talk) {
+  lesson(player, talk, TRANSCRIPT.first, TOPIC.firemaking, null, () => {
+    if (state(player).firemaking < TASKED) setStage(player, "firemaking", TASKED);
+  });
+}
+
+function firemakingDone(player, talk) {
+  if (state(player).firemaking !== DONE) return;
+  lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.firemakingDone, null, () => {
+    if (state(player).firemaking === DONE) setStage(player, "firemaking", TOLD);
+  });
+}
+
+/** Otto's pyre ship explanation, which also says how to reach the whirlpool into the caverns. It stays on offer, replaying the same words. */
+function pyreShipsLesson(player, talk) {
+  if (state(player).firemaking !== TOLD) return;
+  lesson(player, talk, TRANSCRIPT.firemaking, TOPIC.pyreShips, null, () => {
+    const current = state(player);
+    if (current.firemaking === TOLD && !current.pyreShips) setStage(player, "pyreShips", 1);
+  });
+}
+
+/** Observe the existing successful skill action, not a request or another training section. */
+function madeBowFire({ player, itemId, bow } = {}) {
+  if (!player || bow !== true || itemId !== core.ItemIdentifiers.OAK_LOGS) return;
+  if (state(player).firemaking === TASKED) setStage(player, "firemaking", DONE);
 }
 
 function rodLesson(player, talk) {
@@ -297,6 +352,7 @@ function attach(pluginApi) {
   api.persistAttribute(STATE_ATTRIBUTE, {});
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
+  api.onCustomEvent("firemaking:success", madeBowFire);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("herblore:made", madePotion);
@@ -305,6 +361,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "BarbarianTraining",
+  description: "Adds Barbarian Training's rod fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches and the barbarian mixes.",
   members: true,
   // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
   // medium anagram and hard cipher), which this Talk-to must not take over.

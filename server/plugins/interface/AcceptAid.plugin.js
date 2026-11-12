@@ -10,6 +10,8 @@ const ACCEPT_AID_ATTRIBUTE = "accept-aid";
 const ACCEPT_AID_BUTTON = "settings_side:acceptaid";
 const ACCEPT_AID_VARBIT = "option_acceptaid";
 const IRONMEN_REFUSED = "Ironmen do not accept aid.";
+/** All Settings > Controls: "Accept aid", the same setting as the side panel's button. */
+const ACCEPT_AID_SETTING = 59;
 
 let pluginApi;
 
@@ -40,6 +42,13 @@ function toggleAcceptAid({ player }) {
   return true;
 }
 
+/** The All Settings row: the side panel's toggle, Ironman refusal included. */
+function acceptAidSettingClicked(request) {
+  if (request.settingId !== ACCEPT_AID_SETTING) return;
+  request.handled = true;
+  toggleAcceptAid(request);
+}
+
 /** Login, and an account that becomes an Ironman: Ironmen never accept aid. */
 function syncAcceptAid({ player }) {
   setAcceptAid(player, !isIron(player) && acceptsAid(player));
@@ -53,6 +62,7 @@ function acceptAidButton(api) {
 
 module.exports = {
   name: "AcceptAid",
+  description: "The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen.",
   ACCEPT_AID_ATTRIBUTE,
   register(api) {
     pluginApi = api;
@@ -60,5 +70,7 @@ module.exports = {
     api.onPlayerLogin(syncAcceptAid);
     api.onCustomEvent("ironman:mode-changed", syncAcceptAid);
     api.onInterfaceActionButton(acceptAidButton(api), toggleAcceptAid);
+    api.onCustomEvent("settings:setting-clicked", acceptAidSettingClicked);
   },
+  _test: { acceptAidSettingClicked, toggleAcceptAid, acceptsAid },
 };

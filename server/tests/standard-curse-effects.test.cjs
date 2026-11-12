@@ -65,7 +65,9 @@ test('all six curses refuse lowered NPC/player stats before rune payment, until 
     assert.equal(f.method.canAttack(f.p,target),false,name+' paid cast');
     assert.equal(JSON.stringify(f.p.getInventory().getItems()),inventory,name+' preserves runes');
     assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()],xp,name+' preserves XP');
-    assert.ok(f.p.messages.some(message=>message.includes('already weakened.')));
+    // Attack curses: the recorded line (rsprox_transcripts/228/02224.txt); the others keep the older one.
+    const weakened=stat==='ATTACK'?"Your foe's attack has already been weakened.":'already weakened.';
+    assert.ok(f.p.messages.some(message=>message.includes(weakened)),name);
     if(pvp)levels.setCurrentLevels(skill,maximum-1,false);else levels.setCurrentLevels(skill,maximum-1);
     f.select();assert.equal(f.spell.canCast(f.p,false),false,'partial recovery is not enough');
     if(pvp)levels.setCurrentLevels(skill,maximum,false);else levels.setCurrentLevels(skill,maximum);
@@ -139,7 +141,7 @@ test('non-damaging curse spells explicitly declare zero direct magic damage',t=>
   for(const [name] of cases) assert.equal(core.DamageFormulas.getMagicMaxhit(attacker,core.CombatSpells[name]),0,name);
 });
 
-test('Count Draynor garlic cannot turn any nondamaging curse into a damaging impact', t => {
+test('Count Draynor garlic cannot turn a zero-damage spell into a damaging impact', t => {
   new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
   const attacker = player(t), tasks = [], spawned = [];
   attacker.getInventory().setItem(0, new core.Item(core.ItemIdentifiers.GARLIC));
@@ -169,7 +171,7 @@ test('Count Draynor garlic cannot turn any nondamaging curse into a damaging imp
   t.mock.method(Math, 'random', () => 0.999);
   const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
   const { MagicCombatMethod } = require('../dist/game/content/combat/method/impl/MagicCombatMethod');
-  for (const [name] of [...cases, ['BIND']]) {
+  for (const [name] of [...cases, ['BIND'], ['TELEBLOCK']]) {
     const spell = core.CombatSpells[name];
     attacker.getCombat().setCastSpell(spell);
     assert.deepEqual(core.DamageFormulas.getMagicHitBounds(attacker, spell, target), { minimum: 0, maximum: 0 }, name);
@@ -180,7 +182,7 @@ test('Count Draynor garlic cannot turn any nondamaging curse into a damaging imp
   }
   assert.equal(core.DamageFormulas.getMagicMaxhit(attacker, core.CombatSpells.FIRE_STRIKE), 9,
     'garlic still adds one to damaging spells');
-  assert.equal(core.DamageFormulas.getMagicMaxhit(attacker, core.CombatSpells.TELEBLOCK), 2,
+  assert.equal(core.DamageFormulas.getMagicMaxhit(attacker, core.CombatSpells.DARK_LURE), 2,
     'unspecified negative utility maximum retains its existing fallback');
 });
 

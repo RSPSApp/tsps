@@ -322,6 +322,7 @@ function equipmentChanged({ player }) {
 
 module.exports = {
   name: "EyeOfAyak",
+  description: "Eye of Ayak: powered staff charged with demon tears or runes, with Check, Uncharge and Dismantle, casting every 3 ticks.",
   members: true,
   _test: {
     CHARGES_KEY, MATERIAL_KEY, MAX_CHARGES, CHARGES_VARBIT,
@@ -333,6 +334,7 @@ module.exports = {
     core = pluginApi.core;
     staff = defineEye();
     pluginApi.registerCombatMethodResolver(staff.resolver);
+    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.onCustomEvent("powered-staff:spell", staff.answerSpell);
     pluginApi.onItemAction("Eye of Ayak", { Check: checkCharges, Uncharge: uncharge });
     pluginApi.onItemAction("Eye of Ayak (uncharged)", { Charge: chargeOption, Dismantle: dismantle });

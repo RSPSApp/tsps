@@ -8,7 +8,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Item } = require("../dist/game/model/Item");
-const plugin = require("../plugins/achievements/diaries/KandarinDiaryFinish.plugin");
+const plugin = require("../plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries");
 const core = PluginManager.getCoreApi();
 const T = plugin._test;
 
@@ -16,8 +16,11 @@ before(async () => {
   await CachePipeline.initialize(process.cwd());
 });
 
+let fixtures = 0;
 function fixture(t) {
   const player = new Player(null);
+  // Each fixture is its own account: the Hemenster chest relock is kept per username.
+  player.setUsername(`kandarin-fixture-${++fixtures}`);
   player.setRegistered(true);
   t.mock.method(player, "getSession", () => ({ sendClientPacket: () => true, write: () => true }));
   player.setLocation(new core.Location(2700, 3460, 0));

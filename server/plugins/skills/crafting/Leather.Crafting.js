@@ -1,5 +1,6 @@
 /**
- * Sewing leather, snakeskin, Xerician fabric and hides with a needle, and the armour made by
+ * Sewing leather, snakeskin, Xerician fabric and hides with a needle, the Hunters' Guild meat and fur
+ * pouches from fur, and the armour made by
  * adding something to a finished piece: studs, kebbit claws, and hides nailed onto a shield.
  *
  * Wiki (Leather, Thread, Crafting#Armour) and rsprox captures (recordings 1854, 1857, 1858,
@@ -10,6 +11,9 @@
  * above the player's level stay in the menu and answer with a message box when chosen.
  */
 const Shared = require("./Shared.Crafting");
+// A combine takes its pieces by id and gives a fresh product: only plain copies count, so a preset piece (PvP
+// presets) can't come out as a plain, tradeable one.
+const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 
 const THREAD_USES_ATTRIBUTE = "crafting:thread-uses";
 const CRAFTS_PER_THREAD = 5;
@@ -63,7 +67,8 @@ function useThread(player, needleId) {
   }
   player.setAttribute(THREAD_USES_ATTRIBUTE, 0);
   inventory.deleteNumber(I.THREAD, 1);
-  player.sendMessage("You use up one of your reels of thread.");
+  // rsprox captures: the craft and thread lines are spam (163 thread lines, e.g. rsprox_transcripts/227/01857.txt).
+  Shared.spam(player, "You use up one of your reels of thread.");
 }
 
 function craftLeatherItem(player, materialId, recipe, needleId) {
@@ -72,7 +77,7 @@ function craftLeatherItem(player, materialId, recipe, needleId) {
   inventory.deleteNumber(materialId, recipe.leather);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
-  player.sendMessage(`You make ${recipe.made}.`);
+  Shared.spam(player, `You make ${recipe.made}.`);
   useThread(player, needleId);
   Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: recipe.itemId });
   Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[materialId, recipe.leather]]);
@@ -127,6 +132,112 @@ function handleNeedleOnLeather(event) {
   });
 }
 
+// ------------------------------------------------------------------ Hunters' Guild pouches
+
+let pouchTable = null;
+
+/** crafting.json `huntersPouches`, with cache ids, built on first use. */
+function pouchRecipes() {
+  pouchTable ??= Shared.DATA.huntersPouches.recipes.map((recipe) => ({
+    ...recipe,
+    furId: Shared.itemId(recipe.fur),
+    itemId: Shared.itemId(recipe.item),
+    fromId: recipe.from ? Shared.itemId(recipe.from) : null,
+  }));
+  return pouchTable;
+}
+
+function pouchName(id) {
+  return Shared.itemName(id).toLowerCase();
+}
+
+/** The messagebox the captures show ("You'll need a needle and some thread to craft a small meat pouch."). */
+function pouchStatement(player, text) {
+  const { DialogueChainBuilder, StatementDialogue } = Shared.getCore();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+}
+
+/** The objectbox, with the pouch it asks for (captured on the large meat pouch). */
+function pouchItemStatement(player, itemId, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue } = Shared.getCore();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+}
+
+function hasPouchParts(player, recipe, needleId) {
+  const I = Shared.getCore().ItemIds;
+  const inventory = player.getInventory();
+  return inventory.contains(needleId) && (needleId === I.COSTUME_NEEDLE || inventory.contains(I.THREAD)) &&
+    inventory.getAmount(recipe.furId) >= recipe.amount && (recipe.fromId === null || inventory.contains(recipe.fromId));
+}
+
+/**
+ * The inputs go, then the pouch takes the first free slot (captured: a new pouch went to slot 0, freed
+ * earlier, not to the fur's). Its contents, kept on the player by StorageItems, stay on an upgrade.
+ */
+function sewPouch(player, recipe, needleId) {
+  if (!hasPouchParts(player, recipe, needleId)) return false;
+  const inventory = player.getInventory();
+  inventory.deleteNumber(recipe.furId, recipe.amount);
+  if (recipe.fromId !== null) inventory.deleteNumber(recipe.fromId, 1);
+  inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
+  Shared.addCraftingXp(player, recipe.xp);
+  Shared.spam(player, `You make ${Shared.withArticle(pouchName(recipe.itemId))}.`);
+  useThread(player, needleId);
+  Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: recipe.itemId });
+  const used = [[recipe.furId, recipe.amount], ...(recipe.fromId !== null ? [[recipe.fromId, 1]] : [])];
+  Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", used);
+  return true;
+}
+
+/**
+ * A needle on the fur, or the fur on the needle, makes one pouch with no menu (rsprox captures
+ * pyre-fur-and-smallpouch-1/-2/-3, rev 242): human_leather_crafting at once, then 2 ticks later
+ * "You make a small meat pouch." (spam), the pouch and the XP. Captured refusals: a needle without
+ * thread gets a messagebox, "You'll need a needle and some thread to craft a small meat pouch.";
+ * an upgrade without the closed pouch below (an open one doesn't count) an objectbox with that
+ * pouch, "You need a small meat pouch to upgrade into a large pouch.". The fur pouches' lines
+ * follow the meat pouches'; the level and too-little-fur lines are ours.
+ */
+function handleNeedleOnFur(event) {
+  const { player, usedItemId, usedWithItemId } = event;
+  const { needles } = data();
+  const needleId = needles.has(usedItemId) ? usedItemId : usedWithItemId;
+  const furId = needleId === usedItemId ? usedWithItemId : usedItemId;
+  if (!needles.has(needleId)) return;
+  const recipe = Shared.available(pouchRecipes()).find((entry) => entry.furId === furId);
+  if (!recipe) return;
+  event.handled = true;
+  const I = Shared.getCore().ItemIds;
+  const inventory = player.getInventory();
+  const made = pouchName(recipe.itemId);
+  if (needleId !== I.COSTUME_NEEDLE && !inventory.contains(I.THREAD)) {
+    pouchStatement(player, `You'll need a needle and some thread to craft ${Shared.withArticle(made)}.`);
+    return;
+  }
+  if (recipe.fromId !== null && !inventory.contains(recipe.fromId)) {
+    const size = made.split(" ")[0];
+    pouchItemStatement(player, recipe.fromId, `You need ${Shared.withArticle(pouchName(recipe.fromId))} to upgrade into ${Shared.withArticle(size)} pouch.`);
+    return;
+  }
+  if (Shared.craftingLevel(player) < recipe.level) {
+    tooLowStatement(player, recipe.level, Shared.withArticle(made));
+    return;
+  }
+  if (inventory.getAmount(furId) < recipe.amount) {
+    // Ours: not captured.
+    player.sendMessage(`You need ${recipe.amount} ${pouchName(furId)} to make ${Shared.withArticle(made)}.`);
+    return;
+  }
+  Shared.stopCrafting(player);
+  // The animation plays once, at the click; the pouch comes with its reset (captured).
+  Shared.startMaking(player, {
+    amount: 1, startTick: 0, firstTick: 2, interval: 3, animation: null, resetAnimation: true, kind: "leather",
+    has: () => hasPouchParts(player, recipe, needleId),
+    make: () => sewPouch(player, recipe, needleId),
+  });
+  player.performAnimation(data().animation);
+}
+
 function combineAmounts(recipe) {
   return recipe.pairAmounts ?? [1, 1];
 }
@@ -146,8 +257,8 @@ function hasCombineTool(player, toolId) {
 function hasCombineMaterials(player, recipe) {
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
-  return inventory.getAmount(recipe.pair[0]) >= first && inventory.getAmount(recipe.pair[1]) >= second &&
-    (recipe.materials ?? []).every(([id, amount]) => inventory.getAmount(id) >= amount) &&
+  return plainAmount(inventory, recipe.pair[0]) >= first && plainAmount(inventory, recipe.pair[1]) >= second &&
+    (recipe.materials ?? []).every(([id, amount]) => plainAmount(inventory, id) >= amount) &&
     (recipe.tools ?? []).every((id) => hasCombineTool(player, id));
 }
 
@@ -155,9 +266,9 @@ function combine(player, recipe) {
   if (!hasCombineMaterials(player, recipe)) return false;
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
-  inventory.deleteNumber(recipe.pair[0], first);
-  inventory.deleteNumber(recipe.pair[1], second);
-  for (const [id, amount] of recipe.materials ?? []) inventory.deleteNumber(id, amount);
+  takePlain(inventory, recipe.pair[0], first);
+  takePlain(inventory, recipe.pair[1], second);
+  for (const [id, amount] of recipe.materials ?? []) takePlain(inventory, id, amount);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[recipe.pair[0], first], [recipe.pair[1], second], ...(recipe.materials ?? [])]);
@@ -173,13 +284,21 @@ function missingCombineItem(player, recipe) {
   return needs.find(([id, amount]) => inventory.getAmount(id) < amount);
 }
 
+/** Every piece is held, but enough of one only counting its preset copies. */
+function heldOnlyAsPreset(player, recipe) {
+  const inventory = player.getInventory();
+  const [first, second] = combineAmounts(recipe);
+  const needs = [[recipe.pair[0], first], [recipe.pair[1], second], ...(recipe.materials ?? [])];
+  return needs.every(([id, amount]) => inventory.getAmount(id) >= amount) && needs.some(([id, amount]) => plainAmount(inventory, id) < amount);
+}
+
 function maxCombines(player, recipe) {
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
   return Math.min(
-    Math.floor(inventory.getAmount(recipe.pair[0]) / first),
-    Math.floor(inventory.getAmount(recipe.pair[1]) / second),
-    ...(recipe.materials ?? []).map(([id, amount]) => Math.floor(inventory.getAmount(id) / amount))
+    Math.floor(plainAmount(inventory, recipe.pair[0]) / first),
+    Math.floor(plainAmount(inventory, recipe.pair[1]) / second),
+    ...(recipe.materials ?? []).map(([id, amount]) => Math.floor(plainAmount(inventory, id) / amount))
   );
 }
 
@@ -204,6 +323,10 @@ function handleCombine(event) {
     (pair[0] === usedItemId && pair[1] === usedWithItemId) || (pair[1] === usedItemId && pair[0] === usedWithItemId));
   if (!recipe) return;
   event.handled = true;
+  if (!hasCombineMaterials(player, recipe) && heldOnlyAsPreset(player, recipe)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!hasCombineMaterials(player, recipe)) {
     // ponytail: not captured; names what is missing, and how many when more than one is needed.
     const [id, amount] = missingCombineItem(player, recipe);
@@ -222,6 +345,8 @@ function handleCombine(event) {
 }
 
 module.exports = function attach(api) {
+  api.persistAttribute(THREAD_USES_ATTRIBUTE, 0);
   api.onItemOnItem(handleNeedleOnLeather, { noted: false });
+  api.onItemOnItem(handleNeedleOnFur, { noted: false });
   api.onItemOnItem(handleCombine, { noted: false });
 };

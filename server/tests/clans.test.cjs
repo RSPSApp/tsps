@@ -100,6 +100,7 @@ function player(name) {
     sendMessage: (text) => self.messages.push(text),
     getSession: () => ({ sendClientPacket: (packet) => self.packets.push(packet) }),
     getPacketSender: () => ({
+      getVarbit: (id) => self.varbits.get(id) ?? 0,
       sendVarbit(id, value) {
         self.varbits.set(id, value);
         return this;
@@ -302,7 +303,7 @@ beforeEach(() => {
       RegionManager: { blocked: () => false },
       ItemOnGround: class {
         constructor(state, owner, location, item) {
-          Object.assign(this, { location, item });
+          Object.assign(this, { state, owner, location, item });
         }
       },
       GroundItemState: { SEEN_BY_EVERYONE: 1 },
@@ -1183,6 +1184,17 @@ test('logging in sends last seen and today, as 3886 tick 664', () => {
   ]));
 });
 
+test("logging in with 'last seen' updates off keeps the old last seen day", () => {
+  const { member, clan } = clanOfThree();
+  hooks.logout({ player: member });
+  clan.members[1].lastSeenDay = 6880 + 5;
+  const before = sent(member, CLAN_SETTINGS_DELTA).length;
+  member.varbits.set(16118, 1);
+  login(member);
+  assert.equal(clan.members[1].lastSeenDay, 6880 + 5);
+  assert.equal(sent(member, CLAN_SETTINGS_DELTA).length, before, 'no last seen delta');
+});
+
 // ---------------------------------------------------------------- phase 4: guests
 
 function seek(self, name) {
@@ -1610,6 +1622,30 @@ test('an application accepted while away adds the member when they are offline',
   pause(owner, 699, 11, 0);
   pause(owner, 699, 1, 3);
   assert.equal(CoreClans().memberOf(clan, 'away').rank, 0);
+});
+
+test('an applicant banned after applying is not accepted, online or offline', () => {
+  const { owner, clan } = clanOfThree();
+  const Management = require('../plugins/interface/clans/Management.Clans');
+  const Guests = require('../plugins/interface/clans/Guests.Clans');
+  clan.inviting = true;
+  const hopeful = player('Hopeful');
+  seek(hopeful, 'Blur');
+  Guests.toggleApplication(hopeful, clan);
+  assert.equal(clan.applicants.length, 1);
+  Management.addBan(owner, clan, 'Hopeful');
+  clickGroup(owner, 690, 21);
+  pause(owner, 699, 11, 0);
+  pause(owner, 699, 1, 3);
+  assert.equal(CoreClans().clanOf(hopeful) ?? null, null);
+  assert.deepEqual(clan.applicants, []);
+  assert.match(owner.messages.at(-1), /banned/);
+  clan.applicants = [{ account: 'away', name: 'Away', stats: 'Away|3|32' }];
+  Management.addBan(owner, clan, 'Away');
+  clickGroup(owner, 690, 21);
+  pause(owner, 699, 11, 0);
+  pause(owner, 699, 1, 3);
+  assert.equal(CoreClans().memberOf(clan, 'away'), undefined);
 });
 
 test('minimums block applying, and the board lists clans that are inviting (2778)', () => {
@@ -2476,6 +2512,7 @@ test('the lever costs 1,000 and needs its rank; balloons drop a stack and leave 
     member.ironman = 'none';
     burst({ player: member, location: at(hooks.placed[0]) });
     assert.equal(hooks.ground[0].item.id, 4151);
+    assert.equal(hooks.ground[0].owner, member.getUsername(), "owned by who popped it, so no Ironman can take it");
     assert.equal(owner.area.chest.length, 0);
   } finally {
     Math.random = random;

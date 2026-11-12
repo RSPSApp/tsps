@@ -13,6 +13,7 @@ const Scoreboard = require("./amoxliatl/Scoreboard.Amoxliatl");
 
 module.exports = {
   name: "Amoxliatl",
+  description: "Amoxliatl beneath the Ruins of Tapoyauik: her door after The Heart of Darkness, a private chamber, the fight with unstable ice, and the kill.",
   members: true,
   register(api) {
     Common.init(api);

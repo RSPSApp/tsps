@@ -52,7 +52,9 @@ import {
   encodeCameraUnlock,
   encodeCameraRotateBy,
   encodeCameraMoveArc,
+  encodeCameraRotateToCoordinate,
   encodeCameraTranslate,
+  encodeCameraSkybox,
   CameraMovementOptions,
   CameraEasing,
   encodeWidgetSetColour, encodeAttackTimer,
@@ -108,6 +110,7 @@ import {
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
 import { applyRunEnergyStatusModifiers } from "../../game/content/combat/EquipmentEffects";
 const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
+const CHATMODAL_UNCLAMP_VARBIT = 10670;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 /** The gameframe's side button click: selects the tab and runs its setup. */
 const TAB_SWITCH_SCRIPT = 915; // toplevel_sidebutton_switch
@@ -156,7 +159,6 @@ const SPELL_UNLOCK_VARBITS: ReadonlyArray<readonly [number, number]> = [
 export const CREATION_MENU_GROUP_ID = 270;
 export const CREATION_MENU_FIRST_ITEM_COMPONENT = 15;
 export const CREATION_MENU_MAX_QUANTITY = 28;
-export const CREATION_MENU_CHATMODAL_UNCLAMP_VARBIT = 10670;
 // The menu's script gives the space key to the item at this varp's position: the one chosen
 // last (clientscript 2046 reads it for every menu whose enum 3623 entry is 1, the default).
 export const CREATION_MENU_LAST_ITEM_VARP = 2673;
@@ -207,6 +209,7 @@ export class PacketSender {
   /** Last interface owning each transmitted client container; never authoritative contents. */
   private inventoryOwners = new Map<number, number>();
   private chatboxGroupId = -1;
+  private chatboxUnclamped = false;
   private chatboxOwner: object | undefined;
   private presentingChatboxOwner: object | undefined;
   private player: any;
@@ -249,7 +252,9 @@ export class PacketSender {
   }
 
   sendSong(id: number, fades?: SongFades): this {
-    if (this.player.getSession().sendClientPacket(encodePlaySong(id, fades))) {
+    const session = this.player.getSession();
+    if (session.sendClientPacket(encodePlaySong(id, fades))) {
+      session.noteSongSent?.(id);
       const { PluginManager } = require("../../plugins/PluginManager") as typeof import("../../plugins/PluginManager");
       PluginManager.emitCustomEvent("audio:play-song", { player: this.player, trackId: id });
     }
@@ -310,6 +315,10 @@ export class PacketSender {
       this.player.getSession().sendClientPacket(packet);
     }
     return this;
+  }
+
+  public replayVarps(): void {
+    for (const [id, value] of this.varps) this.player.getSession().sendClientPacket(encodeVarp(id, value));
   }
 
   getVarp(id: number): number {
@@ -382,7 +391,7 @@ export class PacketSender {
 
   sendInterface(id: number): this {
     this.player.setInterfaceId(id);
-    if (this.player.isPlayerBot()) {
+    if ((this.player.isUnwatchedBot?.() ?? this.player.isPlayerBot?.())) {
       return this;
     }
 
@@ -438,11 +447,13 @@ export class PacketSender {
    * would resume a count prompt with 0.
    */
   public abortInputPrompt(): this {
+    const amountAction = this.player.getEnteredAmountAction?.();
     if (this.hasInputPrompt()) {
       this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
     }
     this.player.setEnteredAmountAction?.(null);
     this.player.setEnteredSyntaxAction?.(null);
+    amountAction?.cancel?.();
     return this;
   }
 
@@ -568,13 +579,13 @@ export class PacketSender {
     return this.sendClientScript(TAB_SWITCH_SCRIPT, id);
   }
 
-  public sendChatboxInterface(id: number): PacketSender {
+  public sendChatboxInterface(id: number, unclamp = false): PacketSender {
     // 161:96 is the whole chatbox panel (519x165) and is permanently occupied
     // by group 162 itself via the gameframe bootstrap - targeting it directly
     // replaces the entire chat frame (tabs, scrollback, report button), not
     // just the content area. Modal chatbox content (dialogues, this
     // smelting/crafting interface, etc.) actually mounts one level deeper,
-    // into group 162's own child 567 (479x96, the "CHATMODAL" container that
+    // into group 162's own child 568 (479x96, the "CHATMODAL" container that
     // chat_onsubchange/script 113 resizes to fit dialogs) - confirmed by
     // decoding group 162 directly from the cache. Child 9 of 161 is an
     // unrelated 0x0 icon-cluster anchor nested under the sidebar tree.
@@ -586,6 +597,7 @@ export class PacketSender {
     // client also rewrites some itself (a dialogue's "Click here to continue" becomes "Please
     // wait..." when clicked), which this per-player cache never sees.
     this.player.getFrameUpdater().clearGroup(id);
+    this.setChatboxUnclamped(unclamp);
     this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, false));
     this.rememberSubInterface(CHATBOX_MODAL_TARGET_UID, id, 0);
     this.player.getSession().sendClientPacket(encodeWidgetOpenSub(CHATBOX_MODAL_TARGET_UID, id, 0));
@@ -802,6 +814,15 @@ export class PacketSender {
     return this;
   }
 
+  /**
+   * A request line from another player (101 tradereq, 103 chalreq_trade ...): the client keeps
+   * the sender's name and index, so clicking the line answers that player.
+   */
+  sendRequestMessage(chatType: number, message: string, from: string, fromIndex: number): this {
+    this.player.getSession().sendClientPacket(encodeChatMessage("trade", message ?? "", from, "", fromIndex, chatType));
+    return this;
+  }
+
   /** `chatType` overrides the public type 2: ChatType.AUTOTYPER / MODAUTOTYPER for autochat. */
   sendPublicChat(message: string, from: string, playerId: number, chatType?: number, style?: ChatStyle): this {
     this.player.getSession().sendClientPacket(
@@ -964,9 +985,7 @@ export class PacketSender {
     }
     const target = this.subInterfaceTargets.get(groupId);
     if (target) {
-      this.subInterfaceTargets.delete(groupId);
-      this.releaseInterfaceInventories(groupId);
-      this.player.getSession().sendClientPacket(encodeWidgetCloseSub(target.targetUid));
+      this.closeSubInterface(target.targetUid);
       // A sub-interface closed by name (an overlay such as a floater) closes "by any route" too.
       this.emitInterfaceClosed(groupId);
     }
@@ -1093,6 +1112,11 @@ export class PacketSender {
     return this;
   }
 
+  sendCameraRotateToCoordinate(x: number, y: number, height: number, cycles: number, easing: CameraEasing = "linear"): this {
+    this.player.getSession().sendClientPacket(encodeCameraRotateToCoordinate(x, y, height, cycles, easing));
+    return this;
+  }
+
   /** cam_moveto_arc: swings the camera to (x, y) around (centreX, centreY) over client cycles. */
   sendCameraMoveArc(centreX: number, centreY: number, x: number, y: number, height: number, cycles: number,
     easing: CameraEasing = "linear", ignoreTerrain = false): this {
@@ -1102,6 +1126,12 @@ export class PacketSender {
 
   sendCameraUnlock(unlock: boolean): this {
     this.player.getSession().sendClientPacket(encodeCameraUnlock(unlock));
+    return this;
+  }
+
+  /** Shows a cache model as the sky (cam_skybox); -1 clears it. cam_reset leaves it in place. */
+  sendCameraSkybox(model: number): this {
+    this.player.getSession().sendClientPacket(encodeCameraSkybox(model));
     return this;
   }
 
@@ -1336,7 +1366,7 @@ export class PacketSender {
     while (paddedIds.length < 18) paddedIds.push(-1);
 
     this.sendInterfaceScript(2379)
-      .sendVarbit(CREATION_MENU_CHATMODAL_UNCLAMP_VARBIT, 1)
+      .setChatboxUnclamped(true)
       .sendInterfaceDisplayState(CHATBOX_MODAL_TARGET_UID, false)
       .sendSubInterface(CHATBOX_MODAL_TARGET_UID, CREATION_MENU_GROUP_ID, 0);
     for (let i = 0; i < items.length; i++) {
@@ -1605,7 +1635,16 @@ export class PacketSender {
     return this;
   }
 
+  private setChatboxUnclamped(unclamped: boolean): this {
+    if (unclamped || this.chatboxUnclamped) {
+      this.sendVarbit(CHATMODAL_UNCLAMP_VARBIT, unclamped ? 1 : 0);
+      this.chatboxUnclamped = unclamped;
+    }
+    return this;
+  }
+
   closeSubInterface(targetUid: number): this {
+    if (targetUid === CHATBOX_MODAL_TARGET_UID) this.setChatboxUnclamped(false);
     for (const [groupId, entry] of this.subInterfaceTargets) {
       if (entry.targetUid === targetUid) {
         this.subInterfaceTargets.delete(groupId);

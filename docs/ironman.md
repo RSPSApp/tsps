@@ -14,7 +14,7 @@ Group Ironman comes later.
 - **The bank PIN:** OSRS also asks for a new bank PIN at this point ("…and your new PIN is now in effect."). This server has no bank PIN, so the confirmation leaves it out. The captured popup text is kept in `ironman.json`.
 - **Already chosen:** "Your mode is already Hardcore Ironman." (captured). Group Ironman answers "Group Ironman isn't available yet." *(ours)*.
 - **Adam in Lumbridge** (311): his transcript's setup only allows downgrades, as the tutor explains (Hardcore or Ultimate to Ironman, Ironman to none). His "Armour" option hands out the mode's helm, platebody and platelegs: "There you go. Wear it with pride." (captured), or "You're not an Ironman. This armour is only for them." (captured).
-- **Other plugins** ask a player's mode with the custom event `ironman:mode` `{ player }`, which fills in `mode` and `label`. They open the setup with `ironman:open-setup` `{ player, upgrades }`, set a mode with `ironman:set-mode` `{ player, mode }` (a league character is always an Ironman, `server/docs/leagues.md`), and may refuse a setup choice: it asks `ironman:change-mode` `{ player, from, to, allowed, reason }` first, and `allowed: false` stops it with the reason.
+- **Other plugins** ask a player's mode with the custom event `ironman:mode` `{ player }`, which fills in `mode` and `label`. They open the setup with `ironman:open-setup` `{ player, upgrades }`, set a mode with `ironman:set-mode` `{ player, mode }` (a league character is always an Ironman, `server/docs/leagues.md`), and may refuse a setup choice: it asks `ironman:change-mode` `{ player, from, to, allowed, reason }` first, and `allowed: false` stops it with the reason. Opening the setup at all first asks `ironman:can-open-setup` `{ player, allowed, reason }`: refused, it stays shut (Hardcore Worlds have no Ironmen) and a setup the player asked for says the reason.
 
 **Admin command** (administrator and up):
 
@@ -80,7 +80,10 @@ Existing hooks:
 Generic additions for these rules:
 - **The npc death event** carries `damagers`: every player who damaged the npc, recorded before the killer is chosen. NpcDrops passes them into `npc-drops:roll`.
 - **The player death event** carries `itemsLost`: whether the death was dangerous.
-- **Presets** ask `presets:can-use` `{ player, allow, message }` before opening or applying one.
+- **Presets** ask `presets:account-barred` `{ player, barred, message }` (the account may never use
+  presets: an Ironman answers here), then `presets:can-use` `{ player, allow, message }` (not where
+  the player stands), before opening or applying one. PvP mode hands out its preset prayers only to
+  an account that is not barred, so an Ironman (every league character) earns them.
 - **`ShopManager`** asks `shop:buy-limit` `{ player, shopId, itemId, available, original, limit, message }` before a purchase.
 - **The Grand Exchange** emits `ge:offer-confirmed` `{ player, itemId, sell, quantity, accepted }` before escrow; Ironman restrictions can veto the offer. Collecting to a bank checks `onCanBank` first, including locked PIN, duel and Nightmare Zone restrictions. The collection box does not open a PIN keypad; enter the PIN elsewhere before banking a collection.
 - **The Duel Arena** asks `duelarena:can-stake` `{ player, session, allow, message }` before an

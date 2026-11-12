@@ -11,6 +11,8 @@
  * cycles each, chained onto the arrow's landing, at height 31, angle 127 and progress 0; synth 6672
  * plays with one bounce, 6672 and 6735 with two.
  */
+const { withHitVictim } = require("../../src/main/typescript/elvarg/game/content/combat/EquipmentEffects");
+
 const MAX_CHARGES = 50000;
 const CHARGE_META_KEY = "venator-bow:charges";
 const SHARDS_PER_BOW = 5;
@@ -179,7 +181,8 @@ function bounceTargets(player, primary) {
 function arrowEndCycle(player, target) {
   const { RangedCombatMethod, WeaponProfiles } = core;
   const projectile = WeaponProfiles.ranged(player).projectiles?.[0];
-  const distance = core.CombatPosition.projectileDistance(player, target);
+  // Edge distance, as RangedCombatMethod sends the arrow: a large target's south-west tile isn't where it lands.
+  const distance = core.CombatPosition.edgeDistance(player, target);
   return projectile ? RangedCombatMethod.projectileEnd(projectile, distance) : 0;
 }
 
@@ -187,7 +190,9 @@ function ricochet(player, primary, method, primaryDelay) {
   const { CombatFactory, DamageFormulas, PendingHit, Projectile } = core;
   const targets = bounceTargets(player, primary);
   if (targets.length === 0) return [];
-  const bounceMax = Math.floor((DamageFormulas.calculateMaxRangedHit(player) * 2) / 3);
+  // Each bounce target's own max (vampyre tiers, salve, slayer gear), not the primary target's.
+  const bounceMax = (target) =>
+    Math.floor((withHitVictim(player, target, () => DamageFormulas.calculateMaxRangedHit(player)) * 2) / 3);
   const landed = arrowEndCycle(player, primary);
   const hits = [];
   let origin = primary;
@@ -200,7 +205,7 @@ function ricochet(player, primary, method, primaryDelay) {
       .sendProjectile();
     const delay = primaryDelay + BOUNCE_HIT_TICKS[index];
     const hit = new PendingHit(player, target, method, delay);
-    CombatFactory.applyStyleDamage(hit, bounceMax);
+    CombatFactory.applyStyleDamage(hit, bounceMax(target));
     hits.push(hit);
     origin = target;
   });
@@ -213,9 +218,13 @@ function spendCharge(player) {
   const item = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
   if (!item || ![bowId, echoBowId].includes(item.getId())) return;
   // Content may spare the charge (a league relic): the question every charged weapon asks.
-  const consume = { player, itemId: item.getId(), skip: false };
+  // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to the bow's most.
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   pluginApi.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
+  if (consume.skip) {
+    if (consume.extra > 0) setCharges(item, charges(item) + consume.extra);
+    return;
+  }
   const left = charges(item) - 1;
   setCharges(item, left);
   if (left <= 0) {
@@ -402,6 +411,7 @@ function combineShards({ player }) {
 
 module.exports = {
   name: "VenatorBow",
+  description: "Adds the venator bow and its echo version: charging with ancient essence and shots that ricochet to extra targets in multicombat.",
   members: true,
   register(api) {
     core = api.core;
@@ -432,6 +442,7 @@ module.exports = {
     MAX_CHARGES,
     CHARGE_META_KEY,
     bounceDistance,
+    arrowEndCycle,
     charges,
   },
 };

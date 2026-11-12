@@ -44,7 +44,7 @@ before(async () => {
   tasks = require('../plugins/achievements/AchievementDiaries.plugin')._test.onTask;
   api.onCustomEvent('diary:task', tasks);
   Progress(api);
-  require('../plugins/achievements/diaries/ArdougneBalloonDiary.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneBalloonDiary.AchievementDiaries').register(api);
 });
 
 const station = (key) => Common.data.stations.find((entry) => entry.key === key);
@@ -93,7 +93,7 @@ function playerFixture(t, { at = [2939, 3421], registered = true, privateArea = 
     getAttribute: (key) => player.attributes[key],
     setAttribute: (key, value) => { player.attributes[key] = value; },
     sendMessage() {},
-    getSkillManager: () => ({ getMaxLevel: () => 99, addExperience() {} }),
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperience() {} }),
     getInventory: () => ({
       getItems: () => carriedLogs > 0 ? [new core.Item(1515, carriedLogs)] : [],
       getAmount: (id) => id === 1515 ? carriedLogs : 0,
@@ -139,7 +139,7 @@ test('a Taverley passenger trip to Castle Wars credits Ardougne medium after lan
 
 test('opening Castle Wars does not credit, and wrong stations or invalid players do not credit', (t) => {
   const { player } = playerFixture(t, { at: [2808, 3354], logs: 10, openedCastle: false });
-  const plugin = require('../plugins/achievements/diaries/ArdougneBalloonDiary.plugin');
+  const plugin = require('../plugins/achievements/diaries/ArdougneBalloonDiary.AchievementDiaries');
   const handler = plugin._test;
   assert.equal(Progress.tierCount(player, diary, 'medium'), 0);
 

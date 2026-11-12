@@ -13,6 +13,7 @@ export class HitQueue {
     private readonly pendingDamage: HitDamage[] = [];
     private lastProcessedCycle = -1;
     private lastAppliedHit: HitDamage | null = null;
+    private incomingGeneration = 0;
 
     constructor(private readonly character: Mobile) {}
 
@@ -43,6 +44,10 @@ export class HitQueue {
             HitQueue.active.delete(this);
             return;
         }
+
+        // NPC attacks queued before this turn read the protection prayer now, after this tick's
+        // clicks (CombatFactory.addPendingHit), whenever they land; held or not.
+        for (const { hit } of this.pendingHits) CombatFactory.applyProtectionPrayer(hit);
 
         // Wiki: Animation stall. A full stall queues hits up on the player and delivers them only
         // once the action completes. The hold is read here, at impact, rather than when the hit was
@@ -84,6 +89,7 @@ export class HitQueue {
         // tick of self-damage every time a proc queued up behind a delayed special. The held
         // entries are put back as a block, so the chain keeps the order the client shows it in.
         const held: HitDamage[] = [];
+        const generation = this.incomingGeneration;
         while (this.pendingDamage.length > 0) {
             const damage = this.pendingDamage.shift()!;
             if (stalled && HitQueue.incomingFromOther(damage, character)) {
@@ -92,7 +98,9 @@ export class HitQueue {
             }
             character.addTickHit(this.applyDamage(damage));
         }
-        if (held.length > 0) {
+        // clearIncoming ran while the drain was going (a phoenix necklace fired): the held hits were
+        // incoming too, so they go with it.
+        if (held.length > 0 && generation === this.incomingGeneration) {
             this.pendingDamage.unshift(...held);
         }
         if (!this.hasPendingWork()) HitQueue.active.delete(this);
@@ -102,6 +110,11 @@ export class HitQueue {
     private static incomingFromOther(damage: HitDamage, owner: Mobile): boolean {
         const source = damage.getSource();
         return source != null && source !== owner;
+    }
+
+    /** Whether the owner's queue has already been drained this cycle (its turn has passed). */
+    hasProcessed(cycle: number): boolean {
+        return this.lastProcessedCycle === cycle;
     }
 
     /** Takes a hit off the owner's hitpoints, then runs effects that react to the result. */
@@ -136,6 +149,24 @@ export class HitQueue {
         this.pendingHits.length = 0;
         this.pendingDamage.length = 0;
         HitQueue.active.delete(this);
+    }
+
+    /**
+     * Drops what is still on its way in from other combatants - delayed hits, the rest of a
+     * multi-hit special - and keeps the owner's own pending damage (poison, recoil).
+     */
+    clearIncoming(): void {
+        this.incomingGeneration++;
+        this.pendingHits.length = 0;
+        for (let i = this.pendingDamage.length - 1; i >= 0; i--) {
+            if (HitQueue.incomingFromOther(this.pendingDamage[i], this.character)) this.pendingDamage.splice(i, 1);
+        }
+        if (!this.hasPendingWork()) HitQueue.active.delete(this);
+    }
+
+    /** Changes every time clearIncoming runs; deferred hits compare it to know they were cancelled. */
+    getIncomingGeneration(): number {
+        return this.incomingGeneration;
     }
 
     hasPendingWork(): boolean {

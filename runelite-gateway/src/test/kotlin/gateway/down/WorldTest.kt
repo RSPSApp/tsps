@@ -12,6 +12,8 @@ import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.NopStreamCipher
 import net.rsprot.protocol.game.outgoing.codec.specific.ObjEnabledOpsSpecificEncoder
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
+import net.rsprot.protocol.game.outgoing.camera.CamRotateToCoordinateV3
+import net.rsprot.protocol.game.outgoing.camera.CamSkybox
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
 import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
@@ -24,12 +26,13 @@ import net.rsprot.protocol.game.outgoing.specific.ObjAddSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjCountSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjDelSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjEnabledOpsSpecific
+import net.rsprot.protocol.game.outgoing.zone.header.UpdateZoneFullFollows
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.OutgoingGameMessage
 import net.rsprox.cache.api.CacheProvider
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import net.rsprox.protocol.game.outgoing.model.specific.ObjEnabledOpsSpecific as DecodedObjEnabledOpsSpecific
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -54,6 +57,56 @@ class WorldTest {
         assertEquals((x - sceneX) and 7.inv(), zone.zoneX)
         assertEquals((z - sceneZ) and 7.inv(), zone.zoneZ)
         assertTrue(zone.payload.readableBytes() > 0)
+    }
+
+    @Test
+    fun `an instance rebuild resets the zones loc changes went to, so tsps's replay is all that stays`() {
+        // A POH chair (shape 10) then its removal: tsps rebuilds the house in place and no longer sends the chair.
+        val x = 3222
+        val z = 3218
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(x).u16(z).u8(1).u8(10 shl 2)))
+        world.handle(packet(TspsServerPacket.LOC_DEL, TspsWriter().u16(x + 8).u16(z).u8(0).u8(10 shl 2)))
+        world.flushZones()
+        sent.clear()
+
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        val sceneX = (LUMBRIDGE_ZONE_X - 6) shl 3
+        val sceneZ = (LUMBRIDGE_ZONE_Z - 6) shl 3
+        val resets = sent.map { it as UpdateZoneFullFollows }.map { Triple(it.zoneX, it.zoneZ, it.level) }.toSet()
+        assertEquals(
+            setOf(
+                Triple((x - sceneX) and 7.inv(), (z - sceneZ) and 7.inv(), 1),
+                Triple((x + 8 - sceneX) and 7.inv(), (z - sceneZ) and 7.inv(), 0),
+            ),
+            resets,
+        )
+
+        // Reset once: the next rebuild only resets what was sent since.
+        sent.clear()
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `loc changes a second rebuild in the tick dropped before they went out need no reset`() {
+        // Entering a house and ::maxhouse rebuild it twice in one tick; the first replay never reaches the client.
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(3222).u16(3218).u8(1).u8(10 shl 2)))
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        world.flushZones()
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `a static rebuild resets nothing, and zones the new scene drops are forgotten`() {
+        world.handle(packet(TspsServerPacket.LOC_ADD_CHANGE, TspsWriter().u16(DOOR).u16(3222).u16(3218).u8(0).u8(10 shl 2)))
+        world.flushZones()
+        sent.clear()
+        world.rebuild(LUMBRIDGE_ZONE_X + 1, LUMBRIDGE_ZONE_Z)
+        assertTrue(sent.isEmpty(), "REBUILD_NORMAL: tsps doesn't replay, the client's own locs stay")
+        // Far away: the client discarded the loc change, so there is nothing to reset on the way back.
+        world.rebuild(LUMBRIDGE_ZONE_X + 40, LUMBRIDGE_ZONE_Z)
+        world.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z, replayed = true)
+        assertTrue(sent.isEmpty())
     }
 
     @Test
@@ -116,7 +169,7 @@ class WorldTest {
         world.handle(packet(TspsServerPacket.SOUND, TspsWriter().u16(SOUND).u8(1).u16(3222).u16(3218).u8(0).u8(1).u16(0).u8(5).u8(0)))
         world.handle(packet(TspsServerPacket.SOUND, TspsWriter().u16(SOUND).u8(0).u8(1).u16(0).u8(0).u8(0)))
         assertEquals(SOUND, (sent.single() as SynthSound).id)
-        // Revision 241 only takes SOUND_AREA inside an enclosed zone update.
+        // Revisions 241 and 242 only take SOUND_AREA inside an enclosed zone update.
         world.flushZones()
         assertTrue(sent.last() is UpdateZonePartialEnclosed)
     }
@@ -129,6 +182,25 @@ class WorldTest {
         assertEquals(CameraEaseFunction.EASE_OUT_CUBIC, camera.easing)
         world.handle(packet(TspsServerPacket.HINT_ARROW, TspsWriter().u8(1).u16(NPC_INDEX).u16(0).u8(0).u8(0)))
         assertEquals(NPC_INDEX, ((sent.last() as HintArrow).type as HintArrow.NpcHintArrow).index)
+    }
+
+    @Test
+    fun `cam_skybox carries the model and its explicit clear`() {
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(14).i32(61359)))
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(14).i32(-1)))
+        assertEquals(listOf(61359, -1), sent.map { (it as CamSkybox).model })
+    }
+
+    @Test
+    fun `coordinate rotations retain their distinct native angle tween contract`() {
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(13).u16(3356).u16(2208).u16(1023).u16(150).u8(3).u8(0)))
+        val rotation = sent.single() as CamRotateToCoordinateV3
+        assertEquals(3356 to 2208, rotation.x to rotation.z)
+        assertEquals(1023, rotation.height)
+        assertEquals(150, rotation.cycles)
+        assertEquals(CameraEaseFunction.EASE_OUT_SINE, rotation.easing)
+        assertEquals(false, rotation.heightRelative)
+        assertEquals(false, rotation.trackTarget)
     }
 
     @Test
@@ -207,11 +279,11 @@ class WorldTest {
         assertEquals(listOf(ObjCountSpecific::class, ObjEnabledOpsSpecific::class), sent.map { it::class })
         assertEquals(0b01010.toByte(), (sent.last() as ObjEnabledOpsSpecific).opFlags)
         val encoder = ObjEnabledOpsSpecificEncoder()
-        assertEquals(56, encoder.prot.opcode, "revision 241 obj_enabled_ops_specific")
+        assertEquals(42, encoder.prot.opcode, "revision 242 obj_enabled_ops_specific")
         val wire = Unpooled.buffer().toJagByteBuf()
         try {
             encoder.encode(NopStreamCipher, wire, sent.last() as ObjEnabledOpsSpecific)
-            val decoder = ServerPacketDecoderServiceV241(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
+            val decoder = ServerPacketDecoderServiceV242(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
             val decoded = decoder.decode(encoder.prot.opcode, wire, Session(0, AttributeMap())) as DecodedObjEnabledOpsSpecific
             assertEquals(0b01010, decoded.opFlags.value)
             assertEquals(PLANK, decoded.id)

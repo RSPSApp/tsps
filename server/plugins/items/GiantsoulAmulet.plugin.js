@@ -135,9 +135,12 @@ function teleport(player, amulet, lair) {
   const { Location, TeleportHandler, TeleportType } = core;
   const target = new Location(...lair.tile);
   if (!TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return;
-  // Equipping during the animation clones the item, so pay before it can move.
-  useCharge(player, amulet);
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  TeleportHandler.confirm(player, target, (carried) => {
+    if (charges(carried) <= 0) return;
+    // Equipping during the animation clones the item, so pay before it can move.
+    useCharge(player, carried);
+    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  }, WILDERNESS_LEVEL, { item: amulet });
 }
 
 function useCharge(player, amulet) {
@@ -181,6 +184,7 @@ function itemAction(event) {
 
 module.exports = {
   name: "GiantsoulAmulet",
+  description: "Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

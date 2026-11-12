@@ -18,7 +18,11 @@ const spells = new WeakMap();
 const lastCureMeCycle = new WeakMap();
 
 function cure(player) {
-  const severity = player.isVenomed() ? player.getPoisonDamage() * POISON_SEVERITY_PER_DAMAGE : 0;
+  // Venom becomes poison of its last hit dealt at the lowest severity giving it, 5 x hit - 4, as an antipoison
+  // does (rsprox_transcripts/234/03280.txt:69820: next 12, last 10, becomes 46; 223/00014.txt tick 3125: venom
+  // yet to hit converts from its first, 6 becomes 26). Read before setVenomed(false) clears the last hit.
+  const lastHit = player.getLastVenomDamage?.() ?? player.getPoisonDamage();
+  const severity = player.isVenomed() ? Math.max(0, lastHit * POISON_SEVERITY_PER_DAMAGE - 4) : 0;
   player.setVenomed(false);
   player.setPoisonDamage(severity);
 }
@@ -66,6 +70,14 @@ function sameInstance(player, target) {
   return (player.getPrivateArea() ?? null) === (target.getPrivateArea() ?? null);
 }
 
+/**
+ * A duel is the two duelists' alone, as for the other Lunar aid spells (LunarSpells): no one else's cure reaches a
+ * duelist, a duelist's Cure Other reaches no one, and a duelist's Cure Group cures themself and non-duelists only.
+ */
+function inDuel(player) {
+  return player?.getDueling?.()?.inDuel?.() === true;
+}
+
 function castSelf(core, event) {
   if (event.handled) return;
   const name = event.spellName?.trim().toLowerCase();
@@ -77,6 +89,7 @@ function castSelf(core, event) {
     if (name === 'cure me') { cure(player); return; }
     core.World.getPlayers().forEach(target => {
       if (target && target.getHitpoints() > 0 && acceptsAid(target) && sameInstance(player, target) &&
+          (target === player || !inDuel(target)) &&
           player.getLocation().isWithinDistance(target.getLocation(), GROUP_RADIUS)) cure(target);
     });
   });
@@ -86,13 +99,15 @@ function castOther(core, event) {
   if (event.handled || event.spellName?.trim().toLowerCase() !== 'cure other') return;
   event.handled = true;
   const { player, target } = event;
-  if (!target || target === player || !acceptsAid(target) || !sameInstance(player, target) || target.getHitpoints() <= 0 ||
+  if (!target || target === player || !acceptsAid(target) || inDuel(player) || inDuel(target) ||
+      !sameInstance(player, target) || target.getHitpoints() <= 0 ||
       !player.getLocation().isWithinDistance(target.getLocation(), TARGET_RANGE)) return;
   cast(core, player, 'cure other', () => cure(target));
 }
 
 module.exports = {
   name: 'LunarCures',
+  description: 'The Lunar spells Cure Me, Cure Other and Cure Group, which remove poison and weaken venom.',
   members: true,
   register(api) {
     api.onSpellCast(castSelf.bind(null, api.core));

@@ -96,9 +96,13 @@ function award(player, itemId, bone, scale) {
   restorePrayer(player, itemId, bone);
 }
 
-/** "prayer:bury": a bone buried without the spade (the bonecrusher), or ashes scattered (a league fragment). */
+/**
+ * "prayer:bury": a bone buried without the spade (the bonecrusher), or ashes scattered (a league
+ * fragment). `ashes: true` takes only ashes (the ash sanctifier).
+ */
 function buryRequest(request) {
-  const bone = boneFor(request?.itemId) ?? (request?.crushed ? null : ashFor(request?.itemId));
+  const bone = request?.ashes ? ashFor(request.itemId)
+    : boneFor(request?.itemId) ?? (request?.crushed ? null : ashFor(request?.itemId));
   if (!bone || !request.player) return;
   if (request.crushed && bone.crush === false) return;
   award(request.player, request.itemId, bone, request.scale ?? 1);
@@ -321,6 +325,13 @@ function scatterAshes({ player, itemId, slot }) {
 
 module.exports = {
   name: "Prayer",
+  description: "Burying bones and scattering demonic ashes for Prayer XP, with events other plugins use to bury, offer or restore prayer.",
+  config: {
+    "Prayer:sequentialBurying": {
+      type: "boolean", label: "Bury all bones with one click", default: false,
+      help: "By default Bury buries one bone per click, as in OSRS. On, one click continues through the eligible unnoted bones in the inventory.",
+    },
+  },
   register(pluginApi) {
     api = pluginApi;
     api.onItemFirstAction(buryBone);

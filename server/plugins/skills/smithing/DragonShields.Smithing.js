@@ -22,7 +22,7 @@
 const Core = require("./Core.Smithing");
 const Data = require("./Data.Smithing");
 const Sessions = require("./Sessions.Smithing");
-const { messageBox, itemBox, hasHammer, smithingLevel, obj, hammering } = require("./Common.Smithing");
+const { messageBox, itemBox, hasHammer, smithingLevel, obj, hammering, restricted, PRESET_TEXT } = require("./Common.Smithing");
 
 const DRAGON_FORGE = "ds2_ac_forge_anvil";
 const SHIELD_MACHINE = "fossil_lab_shield_maker";
@@ -65,12 +65,16 @@ function forgeRecipes() {
 }
 
 const animate = (player) => player.performAnimation(hammering());
-const carries = (player, ids) => ids.every((id) => player.getInventory().contains(id));
+/** The slot of a plain copy of `id`: a preset (untradeable, unbankable) part never goes into a fresh, tradeable product. */
+const plainSlot = (player, id) => player.getInventory().getItems().findIndex((item) => item?.getId() === id && !restricted(item));
+const carries = (player, ids) => ids.every((id) => plainSlot(player, id) >= 0);
+/** Every part is held, but some only as preset copies. */
+const presetOnly = (player, ids) => !carries(player, ids) && ids.every((id) => player.getInventory().contains(id));
 
 function give(player, used, result, xp, source) {
   if (!carries(player, used)) return false;
   const inventory = player.getInventory();
-  for (const id of used) inventory.deleteNumber(id, 1);
+  for (const id of used) inventory.deleteAtSlot(plainSlot(player, id), 1);
   inventory.addItem(new Core.Item(result, 1));
   player.getSkillManager().addExperiences(Core.Skill.SMITHING, xp);
   Core.api.emitCustomEvent("smithing:success", {
@@ -119,14 +123,18 @@ function attachVisage(player, shield) {
 
 function forgeAtDragonForge(event) {
   const { player, itemId } = event;
-  const recipe = forgeRecipes().find((candidate) => candidate.parts.includes(itemId));
+  const candidates = forgeRecipes().filter((candidate) => candidate.parts.includes(itemId));
+  const heldParts = (candidate) => candidate.parts.filter((id) => player.getInventory().contains(id)).length;
+  const recipe = candidates.find((candidate) => carries(player, candidate.parts))
+    ?? candidates.reduce((best, candidate) => !best || heldParts(candidate) > heldParts(best) ? candidate : best, null);
   if (!recipe) return false;
   event.handled = true;
   if (!Core.questComplete(player, "dragon_slayer_ii")) {
     player.sendMessage(`You need to complete ${Data.questName("dragon_slayer_ii")} to use the dragon forge.`);
     return true;
   }
-  const problem = !carries(player, recipe.parts) ? recipe.missing
+  const problem = presetOnly(player, recipe.parts) ? PRESET_TEXT
+    : !carries(player, recipe.parts) ? recipe.missing
     : !hasHammer(player) ? "You need a hammer to work the dragon metal."
     : smithingLevel(player) < recipe.level ? `You need a Smithing level of ${recipe.level} to make that.`
     : null;
@@ -185,6 +193,10 @@ function useOnAnvil(event) {
     ?? (itemId === Core.ItemIdentifiers.ANTI_DRAGON_SHIELD ? visageShieldFor(player) : null);
   if (!shield) return false;
   event.handled = true;
+  if (presetOnly(player, [shield.visage, Core.ItemIdentifiers.ANTI_DRAGON_SHIELD])) {
+    messageBox(player, PRESET_TEXT);
+    return true;
+  }
   if (!carries(player, [shield.visage, Core.ItemIdentifiers.ANTI_DRAGON_SHIELD])) {
     messageBox(player, `You need an anti-dragon shield and a ${Core.ItemDefinition.forId(shield.visage).getName().toLowerCase()} to do that.`);
     return true;

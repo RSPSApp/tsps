@@ -86,6 +86,11 @@ Recording ids refer to the capture database at https://rsprox.net/database.
 
 ## Wiki-only (no capture)
 
+- **Pre-nature amulet**: magic string used on an unstrung emerald amulet makes a pre-nature
+  amulet for 4 Crafting XP. Wool on the same amulet makes an ordinary emerald amulet. The selected
+  material determines the result; the existing one-item stringing path is reused, with no separate
+  timing capture for magic string.
+
 - Amethyst cutting (15 bolt tips, 15 arrowtips, 5 javelin tips, 8 dart tips; 60 XP, 2 ticks).
 - Battlestaves: first staff 3 ticks after the choice, then every 2.
 - Charge Water/Earth/Fire/Air Orb on the obelisks: repeats every 6 ticks (the Wiki's autocast speed).

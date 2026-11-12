@@ -1,4 +1,6 @@
+import { sceneTileHeight } from "../game/scene/SceneGeometry";
 import { LocAnimated } from "./loc/LocAnimated";
+import type { MultiLocReloadGroup } from "./loc/MultiLocVarps";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -31,6 +33,7 @@ import { sendLogin } from "../network/ServerConnection";
 import { baseNpcTypeId } from "../custom/npcs/NpcModelOverrideRegistry";
 import { flushPackets } from "../network/packet";
 import { createTextureArray } from "../picogl/PicoTexture";
+import { createShaderFxUniforms } from "./render/shaderFx";
 import { RS_TO_RADIANS } from "../rs/MathConstants";
 import { CollisionFlag } from "../common/CollisionFlag";
 import {
@@ -54,6 +57,7 @@ import { ModelData } from "../rs/model/ModelData";
 import { Scene } from "../rs/scene/Scene";
 import { getUiScale } from "../ui/UiScale";
 import { ClickCrossOverlay } from "../ui/devoverlay/ClickCrossOverlay";
+import { SkyboxRenderer } from "./SkyboxRenderer";
 import { GroundItemOverlay } from "../ui/devoverlay/GroundItemOverlay";
 import { HealthBarOverlay } from "../ui/devoverlay/HealthBarOverlay";
 import { HitsplatOverlay } from "../ui/devoverlay/HitsplatOverlay";
@@ -377,6 +381,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     playerProgramOpaque?: Program; // multi-draw variant (no alpha discard)
     frameProgram?: Program;
     frameFxaaProgram?: Program;
+    /** The Shader Effects plugin's present-time program (render/render/shaderFx.ts). */
+    frameShaderFxProgram?: Program;
     // Hover devoverlay program
     hoverLineProgram?: Program;
 
@@ -499,6 +505,17 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
 
     frameDrawCall?: DrawCall;
     frameFxaaDrawCall?: DrawCall;
+    frameShaderFxDrawCall?: DrawCall;
+    readonly shaderFxUniforms = createShaderFxUniforms();
+    /** Views onto shaderFxUniforms, one per vec4, made on first use. */
+    shaderFxViews?: Float32Array[];
+    /** The effects program is compiled when the plugin is first on. */
+    shaderFxProgramState?: "loading" | "ready" | "failed";
+    /** The effects' output when FXAA reads it next; made on demand at the canvas size. */
+    shaderFxFramebuffer?: Framebuffer;
+    shaderFxColorTarget?: Texture;
+    shaderFxWidth = 0;
+    shaderFxHeight = 0;
     // UI overlays
     public overlayManager?: OverlayManager;
     public gfxManager?: GfxManager;
@@ -512,6 +529,18 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public hitsplatOverlay?: HitsplatOverlay;
     public healthBarOverlay?: HealthBarOverlay;
     public clickCrossOverlay?: ClickCrossOverlay;
+    private skyboxRenderer?: SkyboxRenderer;
+
+    /** Draws the cam_skybox model, if any, into the freshly cleared scene framebuffer. */
+    public drawSkybox(camera: { viewProjMatrix: unknown; getPosX(): number; getPosY(): number; getPosZ(): number }): void {
+        if (this.skyboxModel < 0) return;
+        this.skyboxRenderer ??= new SkyboxRenderer(this.app, () => ({
+            modelLoader: this.osrsClient.modelLoader,
+            textureLoader: this.osrsClient.textureLoader,
+        }));
+        this.skyboxRenderer.setModel(this.skyboxModel);
+        this.skyboxRenderer.draw(camera.viewProjMatrix as Float32Array, camera.getPosX(), camera.getPosY(), camera.getPosZ());
+    }
     public tileTextOverlay?: TileTextOverlay;
     public tileMarkerOverlay?: TileMarkerOverlay;
     public groundItemOverlay?: GroundItemOverlay;
@@ -829,7 +858,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
                 plane: 0,
             });
         this.osrsClient.sceneGeometry = {
-            tileHeight: (x, y, plane) => this.getTileHeightAtPlane(x, y, plane),
+            tileHeight: (x, y, plane, anchorX, anchorY) => sceneTileHeight(this, x, y, plane, anchorX, anchorY),
             worldToScreen: (x, height, y) => {
                 const p = this.worldToScreen(x, height, y);
                 return p ? [p[0], p[1]] : undefined;
@@ -2537,9 +2566,9 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.onLocChange(this, oldId, newId, tile, level, opts);
     }
 
-    protected override reloadMultiLocSquare(mapX: number, mapY: number): void {
+    protected override reloadMultiLocSquare(mapX: number, mapY: number, group: MultiLocReloadGroup): void {
         if (this.instanceActive) this.scheduleInstanceLocRebuild();
-        else this.scheduleLocGeometryUpdate(mapX, mapY, "full");
+        else this.scheduleLocGeometryUpdate(mapX, mapY, group);
     }
 
     onRegionReplacement(payload: {

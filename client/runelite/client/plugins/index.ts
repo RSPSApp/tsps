@@ -1,3 +1,4 @@
+import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
@@ -17,12 +18,15 @@ import { TickCounterPlugin } from "../../../game/plugins/tickcounter/TickCounter
 import { WikiPlugin } from "../../../game/plugins/wiki/WikiPlugin";
 import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
+import { IsometricCameraPlugin } from "../../../game/plugins/isometric/IsometricCameraPlugin";
+import { WasdCameraPlugin } from "../../../game/plugins/wasdcamera/WasdCameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
 import { GameFrame317Plugin } from "../../../game/plugins/gameframe317/GameFrame317Plugin";
 import { PortraitModePlugin } from "../../../game/plugins/portraitmode/PortraitModePlugin";
 import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
+import { ShaderFxPlugin } from "../../../game/plugins/shaderfx/ShaderFxPlugin";
 import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
 import { GroundMarkerPlugin } from "../../../game/plugins/groundmarkers/GroundMarkerPlugin";
@@ -44,12 +48,12 @@ import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
 import { NotesPlugin } from "../../../game/plugins/notes/NotesPlugin";
-import { SplitPrivateChatPlugin } from "../../../game/plugins/splitprivatechat/SplitPrivateChatPlugin";
 import { StatusBarsPlugin } from "../../../game/plugins/statusbars/StatusBarsPlugin";
 import { StretchedModePlugin } from "../../../game/plugins/stretchedmode/StretchedModePlugin";
 import { OpponentInfoPlugin } from "../../../game/plugins/opponentinfo/OpponentInfoPlugin";
 import { PrayerPlugin } from "../../../game/plugins/tabreorder/PrayerPlugin";
 import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin";
+import { PuzzleSolverPlugin } from "../../../game/plugins/puzzlesolver/PuzzleSolverPlugin";
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
 import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
@@ -59,6 +63,7 @@ import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin
 import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
+import { CustomXpDropsPlugin } from "../../../game/plugins/customxpdrops/CustomXpDropsPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
 import { AgilityTrackerPlugin } from "../../../game/plugins/agilitytracker/AgilityTrackerPlugin";
@@ -105,7 +110,6 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     NpcIndicatorsPlugin,
     ImplingsPlugin,
     ObjectIndicatorsPlugin,
-    SplitPrivateChatPlugin,
     ChatNotificationsPlugin,
     ChatPastePlugin,
     TimestampPlugin,
@@ -124,14 +128,20 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     SpellbookPlugin,
     PrayerPlugin,
     PestControlPlugin,
+    CharactersPlugin,
     FairyRingPlugin,
+    PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    ShaderFxPlugin,
     LowEndDevicePlugin,
     CameraPlugin,
+    IsometricCameraPlugin,
+    WasdCameraPlugin,
     QuestHelperPlugin,
     XpTrackerPlugin,
     XpGlobesPlugin,
+    CustomXpDropsPlugin,
     AgilityTrackerPlugin,
     GatheringTrackerPlugin,
     SlayerTrackerPlugin,

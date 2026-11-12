@@ -153,3 +153,60 @@ test('a shop-wide stockAmount of 0 keeps rows that omit their own amount', () =>
     'the inherited zero stays listed, an explicit amount wins and an invalid amount is still dropped'
   );
 });
+
+test("Death sells escape crystals from his Shop option (Death's Office, rev 242)", () => {
+  const death = shops.find((shop) => shop.name === 'Death (shop)');
+  assert.ok(death, 'imported from osrsreboxed-db');
+  assert.deepEqual(death.npcInteractions, [{ npcIds: [9855], optionSlot: 4 }], 'op4 Shop, not op3 Collect');
+  assert.deepEqual(death.originalStock, [{ id: 22517, amount: 9500, restockTicks: 1 }]);
+  assert.equal(death.originalStock[0].price, undefined, 'priced at the crystal\'s 10,000 cache value');
+});
+
+
+test('shop importer preserves formula currencies and consumes explicit fixed-currency prices', (t) => {
+  const os = require('node:os');
+  const { spawnSync } = require('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shop-price-import-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const scripts = path.join(root, 'server/scripts');
+  const definitions = path.join(root, 'server/data/definitions');
+  const docs = path.join(root, 'docs');
+  fs.mkdirSync(scripts, { recursive: true }); fs.mkdirSync(definitions, { recursive: true }); fs.mkdirSync(docs);
+  fs.copyFileSync(path.join(__dirname, '../scripts/import-osrs-shops.mjs'), path.join(scripts, 'import-osrs-shops.mjs'));
+  const output = path.join(definitions, 'shops.json');
+  const existing = path.join(root, 'existing.json');
+  fs.writeFileSync(existing, '[]');
+  const record = (currency, items) => ({ shop_info: { currency, sells_at: 1000, change_per: 20 }, owners: [], items });
+  const row = (id, sell, extra = {}) => ({ id, stock: 10, restock_time: null, sell, ...extra });
+  const input = {
+    'Reward A': record('Volcanic Mine points', [row(21539, '10000'), row(12013, '26,000')]),
+    'Reward B': record('Zeal Tokens', [row(1, '50'), row(2, '0'), row(3, 'N/A'), row(4, '{{Coins|10}}'),
+      row(5, '9007199254740992'), row(6, '10.5'), row(7, '-1'), row(8, '010'), row(9, ' 10 '),
+      row(10, '100', { currency: 'coins' }), row(11, undefined)]),
+    'Coin shop': record('coins', [row(12, '100')]),
+    'Tokkul shop': record('Tokkul', [row(13, '100')]),
+    'Sticks shop': record('Trading sticks', [row(14, '100')]),
+    'Blood shop': record('BLOOD_MONEY', [row(15, '100')]),
+    "Dusuri's Star Shop": record('Stardust', [row(25539, '999')]),
+    'Slayer Rewards': record('Points', [row(16, '30', { currency: 'points' })]),
+  };
+  const run = () => spawnSync(process.execPath, [path.join(scripts, 'import-osrs-shops.mjs'), '--docs', docs, '--existing', existing], { encoding: 'utf8' });
+  fs.writeFileSync(path.join(docs, 'shops-items-by-shop.json'), JSON.stringify(input));
+  fs.writeFileSync(output, 'conflicted generated output');
+  let result = run(); assert.equal(result.status, 0, result.stderr);
+  const first = fs.readFileSync(output, 'utf8');
+  const shops = JSON.parse(first);
+  const stock = name => shops.find(shop => shop.name === name).originalStock;
+  assert.deepEqual(stock('Reward A').map(item => item.price), [10000, 26000]);
+  assert.equal(stock('Reward B')[0].price, 50);
+  assert.ok(stock('Reward B').slice(1).every(item => !Object.hasOwn(item, 'price')));
+  for (const name of ['Coin shop', 'Tokkul shop', 'Sticks shop', 'Blood shop']) assert.equal(stock(name)[0].price, undefined, name);
+  assert.equal(shops.find(shop => shop.name === "Dusuri's Star Shop").prices['25539'], 2000, 'explicit shop prices retain precedence');
+  // Slayer Rewards is replaced by a plugin; use another currency alias instead.
+  assert.equal(shops.some(shop => shop.name === 'Slayer Rewards'), false);
+  result = run(); assert.equal(result.status, 0, result.stderr); assert.equal(fs.readFileSync(output, 'utf8'), first);
+  input['Reward A'].items.push(row(21539, '10001'));
+  fs.writeFileSync(path.join(docs, 'shops-items-by-shop.json'), JSON.stringify(input));
+  result = run(); assert.notEqual(result.status, 0); assert.match(result.stderr, /Conflicting exported prices/);
+  assert.equal(fs.readFileSync(output, 'utf8'), first, 'ambiguous input cannot partially replace the output');
+});

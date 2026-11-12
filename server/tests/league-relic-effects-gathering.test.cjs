@@ -65,9 +65,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   // The real Smelting and Fletching answers, over the plugins' own data.
   require("../plugins/skills/smithing/Data.Smithing").load(core);
   require("../plugins/skills/fletching/Shared.Fletching").init({ core, emitCustomEvent() {} });
@@ -180,14 +180,16 @@ test("Endless Harvest: twice the ore, log or fish, banked, with the second resou
   const bagged = gather(who.relic, I.COAL, 2, Skill.MINING, 50, 1);
   assert.deepEqual([bagged.stored, banked(who.relic, I.COAL)], [2, 3], "a coal bag kept one; the other and the two extra are banked");
   assert.equal(gather(who.relic, I.IRON_ORE, 1, undefined, 0).stored, 0, "a stall's take is not a harvest");
-  assert.equal(emit("storage:room", { player: who.relic, itemId: I.IRON_ORE, room: false }).room, true, "the bank's room counts");
+  assert.equal(emit("storage:room", { player: who.relic, itemId: I.IRON_ORE, skill: Skill.MINING, room: false }).room, true, "the bank's room counts");
+  // Not for another skill's catch: Hunter's catchExchange then still asks the inventory.
+  assert.equal(emit("storage:room", { player: who.relic, itemId: I.RAW_PYRE_FOX, skill: Skill.HUNTER, room: false }).room, false);
   for (const player of others(who)) {
     assert.equal(gather(player, I.LOGS, 1, Skill.WOODCUTTING, 25).stored, 0, `${player.getUsername()} keeps the log`);
     assert.equal(banked(player, I.LOGS), 0);
   }
   for (const player of [who.without, who.main]) {
     assert.equal(gather(player, I.IRON_ORE, 1, Skill.MINING, 35).stored, 0, `${player.getUsername()} keeps the ore`);
-    assert.equal(emit("storage:room", { player, itemId: I.IRON_ORE, room: false }).room, false);
+    assert.equal(emit("storage:room", { player, itemId: I.IRON_ORE, skill: Skill.MINING, room: false }).room, false);
   }
 });
 
@@ -286,6 +288,14 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   assert.ok(xp(who.relic, Skill.CRAFTING) > crafting);
   assert.equal(gather(who.relic, I.COAL, 1, Skill.MINING, 50).stored, 1);
   assert.deepEqual([banked(who.relic, I.COAL), banked(who.relic, I.STEEL_BAR)], [1, 1], "coal is banked as coal");
+  // Two ores, one already taken by another store: only the banked one is smelted, and only it pays Smithing XP.
+  const before = xp(who.relic, Skill.SMITHING);
+  gather(who.relic, I.IRON_ORE, 1, Skill.MINING, 35);
+  const one = xp(who.relic, Skill.SMITHING) - before;
+  const split = xp(who.relic, Skill.SMITHING);
+  assert.equal(gather(who.relic, I.IRON_ORE, 2, Skill.MINING, 35, 1).stored, 2);
+  // Steel's 17.5 rounds to 18 or 17 in the stored total; two bars' would be about 35.
+  assert.ok(Math.abs(xp(who.relic, Skill.SMITHING) - split - one) <= 1, "one bar's XP for one bar");
   assert.equal(gather(who.relic, I.LOGS, 1, Skill.WOODCUTTING, 25).stored, 0, "not another skill's take");
 
   const toggle = itemActions.get("Echo pickaxe").Toggle;

@@ -196,6 +196,7 @@ class Fight {
     this.player.sendMessage(Common.message("stunned"));
     Common.areaSound(this.watchers(), { id: sounds.stun, radius: 10 }, this.sire.getLocation());
     this.player.getPacketSender().sendSoundEffect(sounds.stun, 1, 0);
+    Common.api.emitCustomEvent("abyssal-sire:stunned", { player: this.player });
     if (restun) return;
     this.sire.setNpcTransformationId(npcs.stunned);
     this.sire.performAnimation(new Animation(-1));

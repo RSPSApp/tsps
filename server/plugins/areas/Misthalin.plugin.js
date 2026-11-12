@@ -207,6 +207,7 @@ function climbDownDarkHole(event) {
 
 module.exports = {
   name: "Misthalin",
+  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the Wizards' Tower basement.",
   register(api) {
     initialize(api);
     // Edgeville

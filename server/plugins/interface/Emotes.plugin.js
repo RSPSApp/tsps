@@ -72,6 +72,11 @@ const EMOTES = [
     { sequence: 10051, loop: 10052, loopFirst: true },
 ];
 
+const AGILITY_CAPE_IDS = [9771, 9772, 13340, 13341]; // Inventory and worn variants
+const SAILING_CAPE_IDS = [31288, 31290];
+const SAILING_CAPE_SEQUENCE = 13077; // human_skillcape_sailing
+const SAILING_CAPE_GRAPHIC = 3560; // skillcape_sailing_emote_spotanim
+
 // Gameplay stalls, not sequence lengths: https://oldschool.runescape.wiki/w/Skill_Cape_(emote)#Emote_durations
 const SKILLCAPE_ROWS = [
     [[9747, 9748], 4959, 823, 6],
@@ -82,7 +87,7 @@ const SKILLCAPE_ROWS = [
     [[9762, 9763], 4939, 813, 5],
     [[9765, 9766], 4947, 817, 10],
     [[9768, 9769], 4971, 833, 6],
-    [[9771, 9772], 4977, 830, 7],
+    [AGILITY_CAPE_IDS, 4977, 830, 7],
     [[9774, 9775], 4969, 835, 14],
     [[9777, 9778], 4965, 826, 5],
     [[9780, 9781], 4949, 818, 13],
@@ -97,6 +102,7 @@ const SKILLCAPE_ROWS = [
     [[9807, 9808], 4957, 822, 20],
     [[9810, 9811], 4963, 825, 10],
     [[9948, 9949], 5158, 907, 12],
+    [SAILING_CAPE_IDS, SAILING_CAPE_SEQUENCE, SAILING_CAPE_GRAPHIC, 15],
     [[13069, 19476], 2709, undefined, 32],
     [[13221, 13222, 14204, 14205], 4751],
     [[13280, 13342, 13329, 21186, 13331, 13333, 13335, 13337, 20760, 21284,
@@ -217,7 +223,8 @@ function performEmote({ player, slot, action }) {
         return false;
     }
 
-    if (player.getCombat().isAnimationStalled() || player.busy() || CombatFactory.inCombat(player)) {
+    if (player.getCombat().isAnimationStalled() || player.busy() || CombatFactory.inCombat(player)
+        || (EMOTES[slot].skillcape && player.getMovementQueue().isMovementBlocked())) {
         player.sendMessage("You cannot do this right now.");
         return true;
     }
@@ -265,6 +272,7 @@ function performEmote({ player, slot, action }) {
 
 module.exports = {
     name: "Emotes",
+    description: "Emotes tab: plays the emote animations, locks emotes until earned, and restores unlocked emotes at login.",
     _test: { questCapeReady, resolveSkillcapeEmote, resolveEmote },
     register(pluginApi) {
         api = pluginApi;

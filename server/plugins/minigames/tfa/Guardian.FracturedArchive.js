@@ -40,6 +40,7 @@
  * shake's length.
  */
 
+const CameraShake = require("../../interface/CameraShake.plugin");
 const Shared = require("./Shared.FracturedArchive");
 const Raid = require("./RaidState.FracturedArchive");
 const Hub = require("./Hub.FracturedArchive");
@@ -363,7 +364,8 @@ class GuardianRoom extends Raid.Room {
     Shared.areaSound(this.area, mushroom.tile, SOUND.MUSHROOM_POP);
     const { CombatFactory } = Shared.core();
     for (const player of players) {
-      CombatFactory.poisonEntity(player, DAMAGE.POISON);
+      // Severity, hit x 5, for the burst's poison 10 (no recording of the poison varp here).
+      CombatFactory.poisonEntity(player, DAMAGE.POISON * 5);
       Shared.damage(player, DAMAGE.POISON, "GREEN");
     }
     const object = mushroom.object;
@@ -586,7 +588,7 @@ class GuardianRoom extends Raid.Room {
       const shaken = this.roomPlayers();
       for (const player of shaken) {
         Shared.sound(player, SOUND.BATTERY_EXPLODE);
-        for (const [axis, amplitude] of CAMERA_SHAKE) player.getPacketSender().sendCameraShake(axis, amplitude);
+        for (const [axis, amplitude] of CAMERA_SHAKE) CameraShake.send(player.getPacketSender(), "combat", axis, amplitude);
       }
       this.later(CAMERA_SHAKE_TICKS, () => {
         for (const player of shaken) player.getPacketSender().sendCameraReset();

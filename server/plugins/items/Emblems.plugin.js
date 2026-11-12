@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
@@ -39,6 +40,7 @@ let ItemOnGroundManager;
 
 module.exports = {
   name: "Emblems",
+  description: "Mysterious emblems: they downgrade a tier when you die to a player and are dropped on the ground instead of kept.",
   register(api) {
     ItemOnGroundManager = api.getItemOnGroundManager();
     api.onShouldKeepItemOnDeath((event) => {
@@ -76,7 +78,7 @@ module.exports = {
       }
 
       ItemOnGroundManager.registerNonGlobals(
-        event.killer,
+        PlayerDeathTask.lootOwner(event.player, event.killer),
         new Item(downgradedEmblemId),
         dropLocation
       );

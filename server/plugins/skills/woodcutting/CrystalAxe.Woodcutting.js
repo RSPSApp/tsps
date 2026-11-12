@@ -2,7 +2,9 @@
  * Crystal axe charges (OSRS Wiki): created with 10,000 charges, one consumed per
  * log chopped, recharged with crystal shards (100 each, up to 20,000). An empty
  * axe turns inactive and chops like a dragon axe. Wearing an elven signet gives
- * a 10% chance to save the charge.
+ * a 10% chance to save the charge. The crystal felling axe is the same (Wiki: Crystal felling axe: 10,000 charges,
+ * "one charge being depleted for each item that is chopped using it", and empty it "will act like a dragon felling
+ * axe").
  */
 const START_CHARGES = 10000;
 const MAX_CHARGES = 20000;
@@ -23,13 +25,14 @@ function charges(item) {
   return chargedIds.has(item?.getId?.()) ? START_CHARGES : 0;
 }
 
-/** The charged crystal axe the player is wielding or carrying, wielded first. */
-function findCharged(player) {
+/** The charged crystal axe (of `axeId`, when given) the player is wielding or carrying, wielded first. */
+function findCharged(player, axeId = null) {
+  const matches = (item) => item && chargedIds.has(item.getId()) && (axeId == null || item.getId() === axeId);
   const weapon = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
-  if (weapon && chargedIds.has(weapon.getId())) {
+  if (matches(weapon)) {
     return weapon;
   }
-  return player.getInventory().getItems().find((item) => item && chargedIds.has(item.getId())) ?? null;
+  return player.getInventory().getItems().find(matches) ?? null;
 }
 
 function refresh(player) {
@@ -50,13 +53,14 @@ function useCharge(player, item) {
 }
 
 function wearingSignet(player) {
-  const { ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3 } = core.ItemIdentifiers;
-  return [ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3].some((id) => player.getEquipment().contains(id));
+  const { ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3, CELESTIAL_SIGNET, CELESTIAL_SIGNET_UNCHARGED_ } = core.ItemIdentifiers;
+  return [ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3, CELESTIAL_SIGNET, CELESTIAL_SIGNET_UNCHARGED_]
+    .some((id) => player.getEquipment().contains(id));
 }
 
-/** Spends one charge for a chopped log; returns false when the signet saved it. */
-function tryUseCharge(player, random = Math.random) {
-  const item = findCharged(player);
+/** Spends one charge of the chopping axe (`axeId`) for a chopped log; returns false when the signet saved it. */
+function tryUseCharge(player, random = Math.random, axeId = null) {
+  const item = findCharged(player, axeId);
   if (!item) {
     return false;
   }
@@ -108,16 +112,21 @@ function attach(pluginApi) {
   unchargedByCharged = new Map([
     [I.CRYSTAL_AXE, I.CRYSTAL_AXE_INACTIVE_],
     [I.CRYSTAL_AXE_3, I.CRYSTAL_AXE_INACTIVE_],
+    [I.CRYSTAL_FELLING_AXE, I.CRYSTAL_FELLING_AXE_INACTIVE_],
   ]);
   chargedByUncharged = new Map([
     [I.CRYSTAL_AXE_INACTIVE_, I.CRYSTAL_AXE],
     [I.CRYSTAL_AXE_INACTIVE__2, I.CRYSTAL_AXE],
+    [I.CRYSTAL_FELLING_AXE_INACTIVE_, I.CRYSTAL_FELLING_AXE],
   ]);
   chargedIds = new Set(unchargedByCharged.keys());
 
   api.onItemAction("Crystal axe", { Check: checkCharges });
   api.onItemOnItem("Crystal shard", "Crystal axe", addShardCharges, { noted: false });
   api.onItemOnItem("Crystal shard", "Crystal axe (inactive)", addShardCharges, { noted: false });
+  api.onItemAction("Crystal felling axe", { Check: checkCharges });
+  api.onItemOnItem("Crystal shard", "Crystal felling axe", addShardCharges, { noted: false });
+  api.onItemOnItem("Crystal shard", "Crystal felling axe (inactive)", addShardCharges, { noted: false });
 }
 
 module.exports = { attach, tryUseCharge, charges, MAX_CHARGES, START_CHARGES };

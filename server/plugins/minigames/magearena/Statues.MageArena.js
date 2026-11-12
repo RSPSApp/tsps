@@ -7,14 +7,15 @@
  *
  * - the first cape an account gets lands on the floor at the statue's own tile, with a large
  *   smoke puff (188, height 60) and sound 1930 there, and a tick later the full message
- *   "...Suddenly a cape appears before you." (OSRS moves the Mage Arena varp from 6 to 7 here;
- *   tsps has no Kolodion fight, so a persisted attribute stands in for it);
+ *   "...Suddenly a cape appears before you." The Mage Arena I varp advances from 6 to 7;
  * - every later prayer asks "How many would you like to take?" (skillmulti mode 23, opening on
  *   1, at most the free inventory slots) and puts the capes straight in the pack with
  *   "...Suddenly a cape appears in your pack.", the puff one tile south of the statue.
  *
  * Cape ids: 2412 Saradomin, 2413 Guthix, 2414 Zamorak.
  */
+const MageArenaI = require("./MageArenaI.MageArena");
+
 const CAPE_RECEIVED_ATTRIBUTE = "mage-arena:cape-received";
 
 const STATUES = Object.freeze({
@@ -72,6 +73,7 @@ function capeOnFloor(player, statue) {
       new core.Location(statue.x, statue.y, 0)
     );
     player.setAttribute(CAPE_RECEIVED_ATTRIBUTE, true);
+    MageArenaI.recordCapeChoice(player);
     core.StatementDialogue.send(player, floorLine(statue));
   });
 }
@@ -103,6 +105,10 @@ function prayAt(event) {
   const statue = statueFor(event.objectId);
   if (!statue) return;
   const { player } = event;
+  if (!MageArenaI.canUseRewardChamber(player)) {
+    player.sendMessage("You need to defeat Kolodion before claiming a god cape.");
+    return;
+  }
   core.StatementDialogue.send(player, chantLine(statue), false);
   later(1, () => {
     player.performAnimation(new core.Animation(PRAY_ANIMATION, 10));
@@ -121,10 +127,16 @@ function capeReceived(query) {
   if (query?.player) query.received = query.player.getAttribute(CAPE_RECEIVED_ATTRIBUTE) === true;
 }
 
+/** Players who received a cape before the duel was implemented already unlocked the arena. */
+function restoreCapeProgress({ player }) {
+  if (player.getAttribute(CAPE_RECEIVED_ATTRIBUTE) === true) MageArenaI.recordCapeChoice(player);
+}
+
 module.exports = function registerStatues(pluginApi) {
   api = pluginApi;
   core = api.core;
-  api.persistAttribute(CAPE_RECEIVED_ATTRIBUTE);
+  api.persistAttribute(CAPE_RECEIVED_ATTRIBUTE, false);
+  api.onPlayerLogin(restoreCapeProgress);
   api.onObjectInteraction("Statue of Saradomin", { "Pray-at": prayAt });
   api.onObjectInteraction("Statue of Zamorak", { "Pray-at": prayAt });
   api.onObjectInteraction("Statue of Guthix", { "Pray-at": prayAt });
@@ -132,6 +144,7 @@ module.exports = function registerStatues(pluginApi) {
 };
 
 Object.assign(module.exports, {
+  CAPE_RECEIVED_ATTRIBUTE,
   _test: {
     STATUES,
     CAPE_RECEIVED_ATTRIBUTE,

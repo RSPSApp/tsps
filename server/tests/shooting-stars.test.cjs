@@ -279,6 +279,26 @@ test("mining: swing message, dust each success, 32 xp (16 on free-to-play), bonu
   assert.equal(success.payload.petBase, 521550);
 });
 
+test("the full prospector kit raises a stardust's 32 Mining XP to 32.8 (Wiki Shooting_Stars)", () => {
+  require("../plugins/skills/mining/ProspectorOutfit.Mining").attach(fakeApi);
+  const star = landedStar(9);
+  star.discoveredBy = "someone";
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  const worn = p.getEquipment().getItems();
+  worn[core.Equipment.HEAD_SLOT] = new core.Item(I.PROSPECTOR_HELMET, 1);
+  worn[core.Equipment.BODY_SLOT] = new core.Item(I.PROSPECTOR_JACKET, 1);
+  worn[core.Equipment.LEG_SLOT] = new core.Item(I.PROSPECTOR_LEGS, 1);
+  worn[core.Equipment.FEET_SLOT] = new core.Item(I.PROSPECTOR_BOOTS, 1);
+  const gains = [];
+  const skills = p.getSkillManager();
+  const addExperiences = skills.addExperiences.bind(skills);
+  skills.addExperiences = (skill, xp) => (gains.push(xp), addExperiences(skill, xp));
+  click(p, star, "Mine");
+  runTicks(4, () => 0.1);
+  assert.ok(gains.length > 0 && gains.every((xp) => Math.abs(xp - 32.8) < 1e-9), JSON.stringify(gains));
+});
+
 test("the swing is the pickaxe's noreachforward sequence; Mine and Prospect send the size and time since landing", () => {
   const star = landedStar(9);
   star.discoveredBy = "someone";
@@ -418,13 +438,11 @@ test("Dusuri: introduction until met, the Trade action sets star_trader_met, tra
 test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all four rewards", (t) => {
   const data = require("../data/definitions/shops.json").find((shop) => shop.name === "Dusuri's Star Shop");
   ShopDefinition.replace([new ShopDefinition(data.id, data.name, data.currency,
-    data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test")]);
+    data.originalStock.map((stock) => ({ ...stock, price: data.prices[stock.id] })), 1, 1, 1, "test",
+    { generalStore: data.generalStore, buysAt: data.buysAt, changePer: data.changePer })]);
   ShopManager.initialize();
   ShopManager.registerItemCurrency(core.ItemIdentifiers.STARDUST);
-  t.mock.method(PluginManager, "emitCustomEvent", (name, request) => {
-    if (name === "shop:sell-price") Dusuri.sellPrice(request);
-    if (name === "shop:can-sell") Dusuri.canSell(request);
-  });
+  t.mock.method(PluginManager, "emitCustomEvent", () => {});
   const p = miner();
   const packets = [];
   p.getSession = () => ({ sendClientPacket: (packet) => packets.push(packet) });
@@ -461,12 +479,6 @@ test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.STARDUST), before, "metadata-locked items remain unsellable");
   assert.equal(p.getInventory().getAmount(data.originalStock[0].id), 1);
   ShopManager.close(p);
-  const otherShop = { shopName: "Another shop", buyPrice: 2000, price: 1700 };
-  Dusuri.sellPrice(otherShop);
-  assert.equal(otherShop.price, 1700);
-  const otherSale = { shopName: "Another shop", sellable: false };
-  Dusuri.canSell(otherSale);
-  assert.equal(otherSale.sellable, false);
 });
 
 test("celestial ring: charge with stardust, extra ores up to adamantite spend charges, uncharge returns it", () => {
@@ -494,4 +506,121 @@ test("celestial ring: charge with stardust, extra ores up to adamantite spend ch
   Ring.uncharge({ player: p, item: ring });
   assert.equal(ring.getId(), I.CELESTIAL_RING_UNCHARGED_);
   assert.equal(p.getInventory().getAmount(I.STARDUST), 20);
+});
+
+test("celestial signet: charge with stardust, extra ores spend charges, run out, uncharge returns it", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 20);
+  p.getInventory().adds(I.CELESTIAL_SIGNET_UNCHARGED_, 1);
+  const signet = p.getInventory().getItems().find((item) => item?.getId() === I.CELESTIAL_SIGNET_UNCHARGED_);
+  Ring.addCharges(p, signet, 15);
+  assert.equal(signet.getId(), I.CELESTIAL_SIGNET);
+  assert.equal(Ring.charges(signet), 15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 5);
+  const worn = new core.Item(I.CELESTIAL_SIGNET, 1);
+  worn.setMetaValue(Ring.CHARGES_META_KEY, 2);
+  const wearer = miner();
+  wearer.getEquipment().setItem(core.Equipment.RING_SLOT, worn);
+  const coal = { player: wearer, rockLevel: 30, bonuses: [] };
+  Ring.extraOre(coal, () => 0.05);
+  assert.equal(coal.bonuses.length, 1, "a charged signet gives the extra ore like the ring");
+  assert.equal(Ring.charges(worn), 1);
+  Ring.extraOre({ player: wearer, rockLevel: 30, bonuses: [] }, () => 0.5);
+  assert.equal(worn.getId(), I.CELESTIAL_SIGNET_UNCHARGED_, "the last charge turns it back into the uncharged signet");
+  Ring.uncharge({ player: p, item: signet });
+  assert.equal(signet.getId(), I.CELESTIAL_SIGNET_UNCHARGED_);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 20);
+});
+
+test("celestial signet: a celestial ring, elven signet, 1,000 stardust and 100 shards sing into one at 70 Smithing and Crafting", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  const stock = () => {
+    p.getInventory().adds(I.STARDUST, 1000);
+    p.getInventory().adds(I.CRYSTAL_SHARD, 100);
+    p.getInventory().adds(I.ELVEN_SIGNET, 1);
+    p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  };
+  stock();
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 69);
+  p.getSkillManager().setLevel(core.Skill.CRAFTING, 99);
+  assert.match(Ring.signetProblem(p), /level 70 Smithing and Crafting/);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 0, "nothing is made below 70");
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 1000);
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 70);
+  const smithing = p.getSkillManager().getExperience(core.Skill.SMITHING);
+  const crafting = p.getSkillManager().getExperience(core.Skill.CRAFTING);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 1);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_RING_UNCHARGED_), 0);
+  assert.equal(p.getInventory().getAmount(I.ELVEN_SIGNET), 0);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 0);
+  assert.equal(p.getInventory().getAmount(I.CRYSTAL_SHARD), 0);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - smithing, 5000);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING) - crafting, 5000);
+  assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+});
+
+test("celestial signet: a noted elven signet (cert_elven_signet) is not one to sing", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 1000);
+  p.getInventory().adds(I.CRYSTAL_SHARD, 100);
+  p.getInventory().adds(I.ELVEN_SIGNET_2, 1); // 23944, cert_elven_signet
+  p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 99);
+  p.getSkillManager().setLevel(core.Skill.CRAFTING, 99);
+  assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.ELVEN_SIGNET_2), 1, "the noted signet is not used up");
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 0);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 1000);
+});
+
+test("celestial ring: equipping the ring while the stardust prompt is open spends no stardust", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 20);
+  p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === I.CELESTIAL_RING_UNCHARGED_);
+  const ring = p.getInventory().getItems()[slot];
+  Ring.charge({ player: p, item: ring });
+  // What EquipPacketListener does: the worn ring is a clone, and the inventory slot empties.
+  p.getEquipment().setItem(core.Equipment.RING_SLOT, ring.clone());
+  p.getInventory().setItem(slot, new core.Item(-1, 0));
+  p.getEnteredAmountAction().execute(15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 20, "no stardust spent on the ring left behind");
+  // Charging the worn ring itself still works.
+  const worn = p.getEquipment().getItems()[core.Equipment.RING_SLOT];
+  Ring.charge({ player: p, item: worn });
+  p.getEnteredAmountAction().execute(15);
+  assert.equal(Ring.charges(worn), 15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 5);
+});
+
+test("a reward-currency shop buys nothing back; a tokkul shop still does", (t) => {
+  const { ShopDefinition: Definition } = require("../dist/game/definition/ShopDefinition");
+  const COAL = core.ItemIdentifiers.COAL;
+  const shopFor = (id, currency) => new Definition(id, `Test ${currency}`, currency, [{ id: COAL, amount: 100, restockTicks: null, price: null }], 1, 1, 1, "test");
+  ShopDefinition.replace([shopFor(90001, "MARK OF GRACE"), shopFor(90002, "TOKKUL")]);
+  ShopManager.initialize();
+  ShopManager.registerItemCurrency(core.ItemIdentifiers.MARK_OF_GRACE);
+  ShopManager.registerItemCurrency(core.ItemIdentifiers.TOKKUL);
+  // Coal sells as any sellable item does (the item gameplay data isn't loaded here).
+  t.mock.method(PluginManager, "emitCustomEvent", (name, request) => { if (name === "shop:can-sell") request.sellable = true; });
+  const sellCoal = (shopId, currencyId) => {
+    const p = miner();
+    p.getSession = () => ({ sendClientPacket: () => true });
+    p.getInventory().adds(COAL, 1);
+    ShopManager.open(p, shopId);
+    const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === COAL);
+    ShopManager.handleWidgetAction(p, { groupId: ShopManager.SIDE_INTERFACE_ID, childId: 0, buttonNum: 0, slot, itemId: COAL, option: "Sell 1" });
+    return { coal: p.getInventory().getAmount(COAL), paid: p.getInventory().getAmount(currencyId) };
+  };
+  assert.deepEqual(sellCoal(90001, core.ItemIdentifiers.MARK_OF_GRACE), { coal: 1, paid: 0 }, "the reward shop refuses it");
+  const tokkul = sellCoal(90002, core.ItemIdentifiers.TOKKUL);
+  assert.equal(tokkul.coal, 0, "the tokkul shop buys it");
+  assert.ok(tokkul.paid > 0, "for tokkul");
 });

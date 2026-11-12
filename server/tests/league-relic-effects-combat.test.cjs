@@ -73,9 +73,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   pluginApi = api;
 });
 
@@ -496,6 +496,28 @@ test("Specialist: specials cost a fifth with double accuracy, a miss refunds 10%
   }
 });
 
+test("Last Stand: logging out mid-stand settles the boosts at base + 15 before the save", () => {
+  const who = cases(LAST_STAND, 5);
+  const tasks = [];
+  const submit = core.TaskManager.submit;
+  core.TaskManager.submit = (task) => tasks.push(task);
+  try {
+    const skills = who.relic.getSkillManager();
+    skills.setMaxLevels(Skill.HITPOINTS, 99, false);
+    skills.setMaxLevels(Skill.ATTACK, 70, false);
+    skills.setCurrentLevels(Skill.ATTACK, 70, false);
+    cycle = 300;
+    who.relic.setAttribute("league:last-stand-ready-at", 0);
+    skills.setCurrentLevel(Skill.HITPOINTS, 0, false);
+    hooks.onPlayerBeforeDeath({ player: who.relic, preventDeath: false });
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 255);
+    hooks.onPlayerLogout({ player: who.relic });
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 85, "base 70 + 15, as the drain would leave it");
+  } finally {
+    core.TaskManager.submit = submit;
+  }
+});
+
 test("Last Stand: a lethal hit leaves 1 hitpoint, boosts to 255 draining to base + 15, shields for 16 ticks, then heals the damage dealt", () => {
   const who = cases(LAST_STAND, 5);
   const preview = character("preview", "league", LAST_STAND_PREVIEW, 5);
@@ -637,17 +659,49 @@ test("Equilibrium: every gain brings 10% of the total level in that skill, 20% i
     emit("skills:experience-gained", { player, skill, experience: 10, multiplied: true });
     return skills.getExperience(skill) - before;
   };
+  // Sailing came after both leagues: it is neither part of the total nor the least-experienced skill.
+  const leagueSkills = Skill.values().filter((skill) => skill !== Skill.SAILING);
+  const leagueTotal = (player) => leagueSkills.reduce((sum, skill) => sum + player.getSkillManager().getMaxLevel(skill), 0);
   for (const who of [trailblazer, echoes]) {
-    const total = who.relic.getSkillManager().getTotalLevel();
+    const total = leagueTotal(who.relic);
     assert.equal(gain(who.relic, Skill.COOKING), shown(total * 0.1), `${who.relic.getAttribute("league:type")}: a tenth of ${total}`);
-    const least = Skill.values().reduce((low, skill) => (
+    const least = leagueSkills.reduce((low, skill) => (
       who.relic.getSkillManager().getExperience(skill) < who.relic.getSkillManager().getExperience(low) ? skill : low
     ));
     assert.notEqual(least, Skill.COOKING);
-    assert.equal(gain(who.relic, least), shown(who.relic.getSkillManager().getTotalLevel() * 0.2), "a fifth in the least-experienced skill");
+    assert.equal(gain(who.relic, least), shown(leagueTotal(who.relic) * 0.2), "a fifth in the least-experienced skill");
     for (const player of others(who)) assert.equal(gain(player, Skill.COOKING), 0, `${player.getUsername()} gets nothing`);
   }
   assert.notEqual(GameConstants.EXPERIENCE_MULTIPLIER, 0);
+});
+
+test("Equilibrium on the real addExperience path: an untrained Sailing is not the least-experienced skill (#1354 review)", (t) => {
+  // The real SkillManager emits skills:experience-gained through the PluginManager; carry it to this harness's relics.
+  const bridge = PluginManager.createApi("EquilibriumBridge");
+  let forward = true;
+  bridge.onCustomEvent("skills:experience-gained", (event) => { if (forward) emit("skills:experience-gained", event); });
+  t.after(() => { forward = false; });
+  const { relic } = cases(EQUILIBRIUM_TRAILBLAZER, 4);
+  const skills = relic.getSkillManager();
+  for (const skill of Skill.values()) {
+    const untrained = skill === Skill.ATTACK || skill === Skill.SAILING;
+    skills.skills.experience[skill.getIndex()] = untrained ? 0 : 13034431;
+    skills.skills.maxLevel[skill.getIndex()] = untrained ? 1 : 99;
+    skills.skills.level[skill.getIndex()] = untrained ? 1 : 99;
+  }
+  const bonuses = [];
+  const add = skills.addExperience.bind(skills);
+  t.mock.method(skills, "addExperience", (skill, experience, multipliers = true) => {
+    if (multipliers === false) bonuses.push([skill, experience]);
+    return add(skill, experience, multipliers);
+  });
+  skills.addExperience(Skill.ATTACK, 4);
+  // 22 league skills at 99 and Attack at 1: a total of 2,179, a fifth of it for the least-experienced Attack.
+  const total = Skill.values().filter((skill) => skill !== Skill.SAILING).length * 99 - 98;
+  assert.equal(total, 2179);
+  assert.equal(bonuses.length, 1);
+  assert.equal(bonuses[0][0], Skill.ATTACK);
+  assert.ok(Math.abs(bonuses[0][1] - total * 0.2) < 1e-9, `the bonus is a fifth of ${total}: ${bonuses[0][1]}`);
 });
 
 test.after(() => {

@@ -11,6 +11,7 @@
  * hook (stage + starter pickaxe) and the hand-in action.
  */
 module.exports = function registerDoricsQuestQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
@@ -45,7 +46,7 @@ module.exports = function registerDoricsQuestQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(ItemIdentifiers.COINS, 180);
+    giveReward(player, ItemIdentifiers.COINS, 180);
     player.getSkillManager().addExperiences(Skill.MINING, 1300);
   }
 

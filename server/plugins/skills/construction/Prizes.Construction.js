@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, DialogueChainBuilder, ItemIdentifiers, StatementDialogue } = require("./Core.Construction");
+const { api, DialogueChainBuilder, Item, ItemIdentifiers, StatementDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -61,7 +61,9 @@ function open(event) {
     return true;
   }
   if (prize <= 0) return say(player, "The chest is empty."), true;
-  if (!player.getInventory().contains(COINS) && player.getInventory().getFreeSlots() === 0) {
+  // The whole prize or none (a key is spent per take): a coin stack near the cap, or one with other metadata and no
+  // free slot, passed the old slot check and the add kept only part, or none, of the zeroed prize.
+  if (player.getInventory().getAddableAmount(new Item(COINS, prize)) < prize) {
     return player.sendMessage("You don't have enough inventory space."), true;
   }
   if (keyed) player.getInventory().delete(PRIZE_KEY, 1);
@@ -94,11 +96,12 @@ function deposit(event) {
  * A game is starting: when its starter is the owner and the chest holds an unclaimed prize, ask
  * "Offer the prize for this game?" first. `start` runs either way.
  */
-function offer(player, house, game, start) {
-  if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return start();
+function offer(player, house, game, start, valid = null) {
+  const canStart = () => !valid || valid();
+  if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return canStart() && start();
   api.sendMultiChatboxPrompt(player, "Offer the prize for this game?",
-    "Yes", () => { offeredTo.set(house, game); start(); },
-    "No", () => start());
+    "Yes", () => { if (canStart()) { if (!valid || (!offeredTo.has(house) && prizeOf(house) > 0 && chestIn(house))) offeredTo.set(house, game); start(); } },
+    "No", () => { if (canStart()) start(); });
 }
 
 /** The game is over: its winner gets the key when the prize was on it. */
@@ -120,4 +123,4 @@ function attachPrizes(api) {
   api.onItemOnObject(deposit);
 }
 
-Object.assign(module.exports, { attachPrizes, offer, award, withdraw });
+Object.assign(module.exports, { attachPrizes, offer, award, withdraw, open });

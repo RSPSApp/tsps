@@ -1,6 +1,7 @@
 /** A Porcine of Interest. Capture 1693 and remaining limits: docs/p2p-skilling-parity.md. */
 module.exports = function registerPorcineOfInterestQuest(api) {
   const {
+    ChatType,
     CombatMethod,
     CombatType,
     PendingHit,
@@ -13,6 +14,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     TaskManager,
     Graphic,
     Equipment,
+    Flag,
     GameObject,
     Item,
     ItemDefinition,
@@ -24,6 +26,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const Scenes = require("../QuestScenes").createQuestScenes(api);
 
   const SARAH_NPC_ID = NpcIdentifiers.SARAH; // 501, South Falador Farm
   const SPRIA_NPC_IDS = new Set([
@@ -36,6 +39,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   const PIG_THING_NPC_ID = NpcIdentifiers.PIG_THING; // 10437, cutscene speaker
 
   const SOURHOG_ATTACK = { melee: 8769, spit: 8770, projectile: 1817, impact: 1818, meleeSound: 2314, spitSound: 2313, impactSound: 3308 };
+  const UNCONSCIOUS_RENDER = [6280, 6280, -1, -1, -1, -1, -1]; // RSProx 1693, tick 340.
 
   const NOTICE_BOARD_OBJECT_ID = ObjectIdentifiers.NOTICE_BOARD_6; // 40307 (in the map)
   const STRANGE_HOLE_OBJECT_ID = ObjectIdentifiers.STRANGE_HOLE_2; // 40308
@@ -274,10 +278,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     player.getPacketSender().sendVarbit(6719, active ? 2 : 0).sendVarbit(12393, active ? 1 : 0);
   }
 
-  function fade(player, out) {
-    player.getPacketSender().sendSubInterface((161 << 16) | 1, 174, 1)
-      .sendString("", (174 << 16) | 4).sendClientScript(948, [0, out ? 255 : 0, 0, out ? 0 : 255, 50]);
-  }
+  const fade = Scenes.fade;
 
   class SourhogCave extends PrivateArea {
     constructor(player) { super([new Boundary(CAVE_ZONE.minX, CAVE_ZONE.maxX, CAVE_ZONE.minY, CAVE_ZONE.maxY, 0)]); this.owner = player; this.scene = false; }
@@ -287,7 +288,11 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       if (mobile === this.owner) {
         caves.delete(mobile); notes.delete(mobile); TaskManager.cancelTasks(this);
         removeSourhog(mobile); corpseByPlayer.delete(mobile);
-        controls(mobile, false); mobile.getPacketSender().sendCameraReset();
+        controls(mobile, false); Scenes.closeFade(mobile); mobile.getPacketSender().sendCameraReset();
+        if (this.previousRender !== undefined) {
+          mobile.setRenderAnimations(this.previousRender);
+          mobile.getUpdateFlag().flag(Flag.APPEARANCE);
+        }
         mobile.performAnimation(new Animation(-1));
       }
       super.postLeave(mobile, logout);
@@ -345,6 +350,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
 
   function pigAttack(player) {
     const cave = enterCave(player); player.getDialogueManager().reset();
+    player.forcePositionToFace(new Location(3167, 9676, 0));
     camera(player, [3166, 9681, 500, 10, 10], [3166, 9676, 100, 10, 10]);
     later(cave, 1, () => {
       cave.pig?.performAnimation(new Animation(8770, 20));
@@ -355,7 +361,14 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     later(cave, 5, () => player.performAnimation(new Animation(836)));
     later(cave, 7, () => fade(player, true));
     later(cave, 15, () => player.getPacketSender().sendString("Some time passes...", (229 << 16) | 1));
-    later(cave, 20, () => { if (cave.pig) api.removeNpc(cave.pig); player.moveTo(new Location(3163, 9699, 0)); player.performAnimation(new Animation(-1)); });
+    later(cave, 20, () => {
+      if (cave.pig) api.removeNpc(cave.pig);
+      player.moveTo(new Location(3163, 9699, 0));
+      player.performAnimation(new Animation(-1));
+      cave.previousRender = player.getRenderAnimations();
+      player.setRenderAnimations(UNCONSCIOUS_RENDER);
+      player.getUpdateFlag().flag(Flag.APPEARANCE);
+    });
     later(cave, 21, () => { camera(player, [3162, 9698, 300, 232, 232], [3163, 9699, 0, 232, 232]); fade(player, false); camera(player, [3162, 9698, 700, 1, 1]); });
     later(cave, 29, () => fade(player, true));
     later(cave, 31, () => { cave.pig = actor(player, PIG_THING_NPC_ID, 3169, 9702); camera(player, [3158, 9705, 800, 232, 232], [3166, 9700, 50, 232, 232]); fade(player, false); });
@@ -390,7 +403,6 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     later(cave, 4, () => {
       advanceStage(player, STAGE_ATTACKED); if (cave) cave.leave(player, false);
       player.moveTo(new Location(SPRIA_HOUSE_TILE.x, SPRIA_HOUSE_TILE.y, 0)); fade(player, false);
-      later(player, 2, () => player.getPacketSender().closeSubInterface((161 << 16) | 1));
       continueSkeleton(player, "EaeUfj");
     });
   }
@@ -731,11 +743,10 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     ensureSourhog(player);
   }
 
-  /** "The player climbs over the blockage." on the warning transcript's Yes. */
-  function handleBlockageClimb(player, text) {
+  /** The warning transcript's Yes. Its "The player climbs over the blockage." is a wiki stage direction: capture 1693 sends no chat line for it. */
+  function handleBlockageClimb(player) {
     const destination = blockageDestination.get(player);
     blockageDestination.delete(player);
-    if (text) player.sendMessage(text);
     if (destination) climbBlockage(player, destination);
   }
 
@@ -776,7 +787,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       case "EaeUfj": event.handled = true; wakeInHouse(player); return;
       case "f8rW5G":
         event.handled = true;
-        handleBlockageClimb(player, event.text);
+        handleBlockageClimb(player);
         return;
       case "LFxcPW":
         event.handled = true;
@@ -840,6 +851,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       return;
     }
     if (stage < STAGE_COMPLETE) enterCave(player);
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb down the rope.");
     player.moveTo(new Location(CAVE_LANDING_TILE.x, CAVE_LANDING_TILE.y, 0));
     ensureScimitar(player); ensureSourhog(player);
     restoreCorpse(player);
@@ -964,6 +976,17 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       default:
         return;
     }
+  }
+
+  /**
+   * LocTeleports plays the captured climb (animation, fade, message) for the cave rope, and it
+   * answers before this plugin's own hook. Only the Sourhog-dead, foot-uncut warning has to come
+   * first, so the climb is left alone otherwise.
+   */
+  function gateCaveRope(event) {
+    if (event.objectId !== CAVE_ROPE_OBJECT_ID || event.clickType !== 1) return;
+    if (quest.getStage(event.player) !== STAGE_SOURHOG_DEAD) return;
+    handleObjectInteraction(event);
   }
 
   /** Rope on either hole form, or any item on the dead sourhog. */
@@ -1104,6 +1127,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("interface:closed", noteClosed);
+  api.onBeforeObjectInteraction(gateCaveRope);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.registerNpcCombatMethodProvider([QUEST_SOURHOG_NPC_ID], QuestSourhogCombat, { singleton: false });

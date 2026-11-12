@@ -1,8 +1,8 @@
 /**
  * Hands the plugin api to the shared Herblore module and answers what other plugins ask
  * ("herblore:herbs" { herbs } -> every herb, for a league relic that finds them):
- *   api.emitCustomEvent("herblore:unfinished", { herbId, potion: null })
- *     -> sets `potion` to the unfinished potion a clean herb makes with a vial of water (Zahur).
+ *   api.emitCustomEvent("herblore:unfinished", { herbId, baseId, potion: null })
+ *     -> sets `potion` to the unfinished potion a clean herb makes with `baseId` (default a vial of water; Zahur).
  *   api.emitCustomEvent("herblore:clean", { grimyId, clean: null })
  *     -> sets `clean` to the herb a grimy herb cleans into (Zahur).
  */

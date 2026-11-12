@@ -12,9 +12,9 @@ export const lerp = (start: number, end: number, progress: number) => {
 };
 
 /**
- * Circular lerp looping around after its range
- * A range of [0, 100] can jump between 100 and 0, so the shortest path will go through through 100
- * EX: 10, 2, .5, 10 will return `1`, as `10` is equal to `0`
+ * Interpolates along the shortest displacement around a circular range.
+ * The result is unwrapped: slerp(10, 2, 0.5, 10) returns 11, equivalent to 1 modulo 10.
+ * Progress <= 0 returns the original start; progress >= 1 returns the original end.
  */
 export const slerp = (start: number, end: number, progress: number, range: number) => {
     if (progress <= 0) {

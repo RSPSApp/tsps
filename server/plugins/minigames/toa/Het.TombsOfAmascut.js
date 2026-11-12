@@ -637,8 +637,11 @@ class HetPuzzleRoom extends Raid.Room {
     player.performAnimation(new Animation(ANIMATION.PICK_UP));
     const rotation = stepRotation(this.lastStep.get(player));
     this.later(1, () => {
-      if (!player.getInventory().contains(MIRROR_ITEM) || this.layout.has(key(tile.x, tile.y))) return;
-      player.getInventory().deleteAtSlot(slot, 1);
+      const inventory = player.getInventory();
+      // The mirror may have been moved in the pack since the click: take the mirror, not what is in its old slot.
+      const at = inventory.getItems()[slot]?.getId() === MIRROR_ITEM ? slot : inventory.getSlotForItemId(MIRROR_ITEM);
+      if (at < 0 || this.layout.has(key(tile.x, tile.y))) return;
+      inventory.deleteAtSlot(at, 1);
       this.placeLayout(tile, MIRROR, MIRROR_SHAPE, rotation);
     });
   }
@@ -655,6 +658,8 @@ class HetPuzzleRoom extends Raid.Room {
     this.later(wallBreakTicks(pickaxe), () => {
       const entry = this.layout.get(key(location.getX(), location.getY()));
       if (!entry || (entry.id !== BREAKABLE_RISING - 1 && entry.id !== BREAKABLE_END_RISING - 1)) return;
+      // A pickaxe dropped or banked during the swing breaks nothing, as Mining stops without one.
+      if (!Mining.findBestPickaxe(player)) return;
       player.performAnimation(new (Shared.core().Animation)(-1));
       player.sendMessage("The barrier crumbles apart.");
       entry.id = BROKEN_WALL;
@@ -690,7 +695,13 @@ class HetPuzzleRoom extends Raid.Room {
         this.miners.delete(player);
         return false;
       }
-      this.swingAtSeal(player, pickaxe);
+      // As Mining does each tick: a pickaxe dropped or banked ends it; a better one picked up is used.
+      const held = Mining.findBestPickaxe(player);
+      if (!held) {
+        this.miners.delete(player);
+        return false;
+      }
+      this.swingAtSeal(player, held);
       return true;
     };
     this.later(SEAL_FIRST_SWING, () => {
@@ -956,3 +967,4 @@ function withOption(event) {
   event.option = event.definition?.getInteractions?.()?.[event.clickType - 1] ?? event.object?.getDefinition?.()?.getInteractions?.()?.[event.clickType - 1] ?? "";
   return event;
 }
+module.exports._test = { HetPuzzleRoom, MIRROR_ITEM };

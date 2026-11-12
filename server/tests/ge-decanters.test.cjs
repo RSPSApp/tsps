@@ -55,6 +55,25 @@ const bob = (p, doses) => {
   click({ player: p, groupId: 582, childId: doses + 2, handled: false });
 };
 
+test('Bob replaces an expanded options prompt with a centered chatbox', (t) => {
+  const p = player(t);
+  const sender = p.getPacketSender();
+  const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  OptionDialogue.send(p, 'A choice', ['Yes', 'No']);
+  assert.equal(sender.getVarbit(10670), 1);
+  npcs['Bob Barter (herbs)'].Decant({ player: p });
+  assert.ok(sender.isChatboxInterface(582));
+  assert.equal(sender.getVarbit(10670), 0);
+});
+
+test('closing a creation menu clears the expanded chatbox layout', (t) => {
+  const sender = player(t).getPacketSender();
+  sender.sendCreationMenu({ getItems: () => [obj('vial_empty')], getTitle: () => 'Make' });
+  assert.equal(sender.getVarbit(10670), 1);
+  sender.closeCreationMenu();
+  assert.equal(sender.getVarbit(10670), 0);
+});
+
 test('Bob, unnoted (226/01637): 4 x 2-dose and 11 x 1-dose staminas into 4 x 4-dose and a 3-dose, with 10 vials', (t) => {
   const p = player(t);
   give(p, obj('2dosestamina'), 4);
@@ -150,12 +169,10 @@ test('families come from the cache: two Attack mix(1)s make an Attack mix(2), th
   assert.equal(has(p, obj('vial_empty')), 1);
 });
 
-test('only vial potions: Guthix rest (a cup) and Egniol (no vessel) are left as they are', (t) => {
+test('a potion that empties into nothing (Egniol) is left as it is', (t) => {
   const p = player(t);
-  give(p, I().GUTHIX_REST_1_, 4);
   give(p, I().EGNIOL_POTION_2_, 2);
   bob(p, 4);
-  assert.equal(has(p, I().GUTHIX_REST_1_), 4);
   assert.equal(has(p, I().EGNIOL_POTION_2_), 2);
   assert.equal(has(p, obj('vial_empty')), 0, 'no vial out of nowhere');
   assert.deepEqual(p.lines, ["I don't think you've got anything that I can decant."]);
@@ -296,4 +313,52 @@ test("Bob's cost doesn't depend on slot order: spare vials from one family go to
     assert.equal(has(p, 995), 5, `${order.join(' then ')}: nothing bought`);
     assert.equal(has(p, obj('vial_empty')), 0, 'the spare vial was used');
   }
+});
+
+test("Zahur's Decant (230/00333): the same interface, free, and he speaks the result", (t) => {
+  const p = player(t);
+  const speakers = [];
+  t.mock.method(p, 'getDialogueManager', () => ({ startDialogues: (b) => { for (const d of b.getDialogues().values()) { p.lines.push(d.getText()); speakers.push(d.getNpcId()); } } }));
+  give(p, obj('3doseprayerrestore'), 2);
+  assert.ok(npcs.Zahur?.Decant, 'Zahur has Decant');
+  npcs.Zahur.Decant({ player: p, npcId: core.CacheDefinitions.getNpcId('elid_herbalist') });
+  assert.ok(p.getPacketSender().isChatboxInterface(582), 'the decant interface');
+  click({ player: p, groupId: 582, childId: 6, handled: false });
+  assert.equal(has(p, obj('4doseprayerrestore')), 1);
+  assert.equal(has(p, obj('2doseprayerrestore')), 1);
+  assert.deepEqual(p.lines, ['There, all done.']);
+  assert.deepEqual(speakers, [core.CacheDefinitions.getNpcId('elid_herbalist')]);
+});
+
+test('Guthix rest (Wiki: Bob Barter (herbs), Guthix rest): two (3)s give a (4) and a (2); emptied ones give cups', (t) => {
+  const I = core.ItemIdentifiers;
+  const p = player(t);
+  give(p, I.GUTHIX_REST_3_, 2);
+  bob(p, 4);
+  assert.equal(has(p, I.GUTHIX_REST_4_), 1);
+  assert.equal(has(p, I.GUTHIX_REST_2_), 1);
+  assert.deepEqual(p.lines, ['There, all done.']);
+
+  const ones = player(t);
+  give(ones, I.GUTHIX_REST_1_, 3);
+  bob(ones, 4);
+  assert.equal(has(ones, I.GUTHIX_REST_3_), 1);
+  assert.equal(has(ones, I.EMPTY_CUP), 2, 'empty cups back, not vials');
+  assert.equal(has(ones, obj('vial_empty')), 0);
+});
+
+test('Guthix rest split: cups he supplies cost 5 each (GE 3 + 2, Wiki), and with no coins he asks for coins for the cups', (t) => {
+  const I = core.ItemIdentifiers;
+  const p = player(t);
+  give(p, I.GUTHIX_REST_4_, 1);
+  give(p, 995, 15);
+  bob(p, 1);
+  assert.equal(has(p, I.GUTHIX_REST_1_), 4);
+  assert.equal(has(p, 995), 0, '3 cups at 5 coins');
+
+  const poor = player(t);
+  give(poor, I.GUTHIX_REST_4_, 1);
+  bob(poor, 1);
+  assert.equal(has(poor, I.GUTHIX_REST_4_), 1);
+  assert.deepEqual(poor.lines, ["You'll need some coins for the cups I'd have to give you."]);
 });

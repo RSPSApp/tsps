@@ -10,9 +10,11 @@ The diary framework lives in `server/plugins/achievements/diaries/`, and its dat
 Gameplay integrations are added per action through `diary:task`. `Actions.AchievementDiaries.js`
 handles successful Varrock tea thefts, Lumbridge pickpockets and Draynor sewer Zombie kills;
 Runecrafting credits Sedridor's essence-mine teleport on its final travel tick.
-`WesternProvincesDiary.plugin.js` credits the Western Provinces tasks from the successful
+`WesternProvincesDiary.AchievementDiaries.js` credits the Western Provinces tasks from the successful
 actions other plugins emit. Other content plugins also emit task completions directly; the
 catalogue alone does not wire an action.
+
+The `AchievementDiaries` plugin switch controls the diary framework and its task modules.
 
 The Western tasks' Chocolate bomb uses Cooking's ordinary gnome-bowl recipe chain, and Prissy
 Scilla's protection credits from Farming's successful `farming:protected` event.
@@ -108,6 +110,22 @@ Script 56 reads started and complete; script 2200 reads count, the total and rew
 - **Which tier:** the lowest finished, unclaimed tier, as long as every lower tier is finished. Otherwise Talk-to plays the NPC's transcript as before.
 - **Skill requirement:** Ardougne's elite reward needs 91 Smithing, per its transcript.
 - **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item only while the player owns none of it in the inventory, worn or bank. Otherwise the NPC says "You don't need another … right now."
+
+## Fremennik noted drops
+
+From the Wiki ([Dagannoth bones](https://oldschool.runescape.wiki/w/Dagannoth_bones), [Aviansie](https://oldschool.runescape.wiki/w/Aviansie), [Thorodin](https://oldschool.runescape.wiki/w/Thorodin)); no capture covers them. `server/plugins/achievements/diaries/NotedDrops.FremennikDiary.js` marks the rolled drops on `npc-drops:roll`:
+- **Elite:** the bones of Dagannoth Rex, Prime and Supreme drop as bank notes. Regular dagannoth are not affected.
+- **Hard:** the adamantite bars of God Wars Dungeon aviansie drop noted. Wilderness aviansie always drop them noted, diary or not.
+- **Not done:** Thorodin's option to switch the bones' noting off. His dialogue is generated and the Wiki gives no wording.
+
+## Other noted drops
+
+From the Wiki ([Desert Diary](https://oldschool.runescape.wiki/w/Desert_Diary), [Goat](https://oldschool.runescape.wiki/w/Goat), [Falador Diary](https://oldschool.runescape.wiki/w/Falador_Diary), [Giant Mole](https://oldschool.runescape.wiki/w/Giant_Mole), [Karamja Diary](https://oldschool.runescape.wiki/w/Karamja_Diary), [Wilderness Diary](https://oldschool.runescape.wiki/w/Wilderness_Diary), [Dragon bones](https://oldschool.runescape.wiki/w/Dragon_bones)); no capture covers them. `server/plugins/achievements/diaries/NotedDrops.AchievementDiaries.js` marks the rolled drops on `npc-drops:roll`, one rule per reward:
+- **Desert, easy:** a goat's horn drops noted.
+- **Falador, hard:** the Giant Mole's mole skin and mole claw drop noted.
+- **Karamja, elite:** red dragonhide from red dragons, and the bronze, iron and steel bars of the metal dragons, drop noted in the Brimhaven Dungeon only.
+- **Wilderness, elite:** dragon bones dropped in the Wilderness are noted, except the King Black Dragon's.
+- **Not done:** Pirate Jackie the Fruit's switch for the bars, and the Lesser Fanatic's option for the Wilderness bones (the Wiki's drop notes also tie the lava dragon bones to it). Their dialogue is generated and the Wiki gives no wording, so the rewards are always on and the lava dragon bones are not noted.
 
 ## Achievement diary cape
 

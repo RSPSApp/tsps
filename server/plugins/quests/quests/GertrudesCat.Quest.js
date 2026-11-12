@@ -12,13 +12,12 @@
  * Stages (varp 180): 1 started, 2 paid the boy, 3 gave milk, 4 gave sardine,
  * 5 rescued the kitten, 6 complete.
  *
- * Gaps (no dump support): the crate search does not honour the reference's
- * kitten-crate varp (181); every Lumber Yard mewing crate can find the kitten
- * at stage 4. At completion Gertrude plays her generic "Gertrude" page dialogue
- * (the cat page has no post-quest variant).
+ * The Wiki keeps the kitten in one random crate while the mews move between
+ * crates. The target is private and persisted; ambient mews do not reveal it.
+ * At completion Gertrude plays her generic "Gertrude" page dialogue.
  */
 module.exports = function registerGertrudesCatQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, Task, TaskManager } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Task, TaskManager, Area, Boundary, Sounds, Misc } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Gertrude's Cat";
@@ -82,11 +81,28 @@ module.exports = function registerGertrudesCatQuest(api) {
 
   // The helper marks the mewing "Crate" NPCs in the Lumber Yard.
   const LUMBERYARD_CRATE_BOUNDS = { minX: 3298, maxX: 3315, minY: 3499, maxY: 3515, z: 0 };
+  const KITTEN_CRATE_ATTRIBUTE = "gertrudes-cat:kitten-crate";
+  const crateTiles = require("../../../data/definitions/npc-spawns.json")
+    .filter((spawn) => isLumberyardCrate({ npcId: spawn.id, location: { x: spawn.x, y: spawn.y, z: spawn.level } }))
+    .map((spawn) => `${spawn.x},${spawn.y}`);
+  const mewCountdowns = new WeakMap();
+  // shortcut: rsprox 3221/3222/3225 gives 25–49 tick gaps, refine uniform sampling when the retail distribution is known.
+  const MEW_MIN_TICKS = 25;
+  const MEW_MAX_TICKS = 49;
+  const MEW_SOUND_ID = 339;
 
   const START_HOOK = "quest:gertrude-s-cat:start";
   const COINS_ACTION_ID = "YQId7G";
   const COMPLETE_ACTION_ID = "Rf4BAK";
   const REPLACEMENT_KITTEN_ACTION_ID = "Q44J0B";
+  /** The statement step each Fluffs hint becomes (never a dump id). */
+  const HINT_BOX_PREFIX = "fluffs-hint-box:";
+  const FLUFFS_HINT_STAGES = {
+    "0lp0da": STAGE_PAID_BOY,
+    "hvqx21": STAGE_PAID_BOY, // Stroke at stage 2; stroke at 3/4 replays the pick-up variants
+    "019G3T": STAGE_GAVE_MILK,
+    "nPc5q9": STAGE_GAVE_SARDINE,
+  };
 
   let quest;
 
@@ -222,6 +238,21 @@ module.exports = function registerGertrudesCatQuest(api) {
     if (QUEST_NPC_IDS.has(event.npcId) && (event.step?.type === "unavailable" || event.step?.type === "reference")) {
       event.handled = true;
       event.end = false;
+      return;
+    }
+    // Fluffs' hints are a message box (messagebox, 229) with its chat line: rsprox 232/03222.txt
+    // tick 12370, Stroke at stage 2, "Perhaps the cat wants something?" as type=mesbox and the box on
+    // the same tick. The dump has them as action steps, so each one is handed back as a statement step.
+    if (event.npcId === FLUFFS_NPC_ID && FLUFFS_HINT_STAGES[stepId] === stage) {
+      event.steps = [{ type: "message", id: HINT_BOX_PREFIX + stepId, text: String(event.text ?? "") }];
+      event.handled = true;
+      return;
+    }
+    if (event.kind === "message" && String(stepId ?? "").startsWith(HINT_BOX_PREFIX)) {
+      // The mesbox chat line goes with the box, as the repo's other message boxes (Barrows, Mining Guild).
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, String(event.text ?? ""));
+      event.box = { statement: true };
+      event.handled = true;
       return;
     }
     if (stepId === COINS_ACTION_ID) {
@@ -442,13 +473,54 @@ module.exports = function registerGertrudesCatQuest(api) {
     return z === bounds.z && x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
   }
 
-  /** Searching the lumber-yard crates finds the kitten once Fluffs is fed. */
+  function kittenCrate(player) {
+    let tile = player.getAttribute(KITTEN_CRATE_ATTRIBUTE);
+    if (!crateTiles.includes(tile)) {
+      // Lazy selection also covers saves already at stage 4 when this fix is installed.
+      tile = crateTiles[Misc.randomInclusive(0, crateTiles.length - 1)];
+      player.setAttribute(KITTEN_CRATE_ATTRIBUTE, tile);
+    }
+    return tile;
+  }
+
+  function resetKittenCrate({ player, key, stage }) {
+    if (key === "gertrudes_cat" && stage === 0) player.setAttribute(KITTEN_CRATE_ATTRIBUTE, null);
+  }
+
+  function createCrateArea() {
+    class CrateArea extends Area {
+      process(mobile) {
+        if (!mobile.isNpc?.() || !isLumberyardCrate({ npc: mobile })) return;
+        let remaining = mewCountdowns.get(mobile);
+        if (remaining === undefined) remaining = Misc.randomInclusive(MEW_MIN_TICKS, MEW_MAX_TICKS);
+        if (remaining > 1) {
+          mewCountdowns.set(mobile, remaining - 1);
+          return;
+        }
+        mobile.forceChat("Mew!");
+        const at = mobile.getLocation();
+        Sounds.playAreaSound({ soundId: MEW_SOUND_ID, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10, source: mobile });
+        mewCountdowns.delete(mobile);
+      }
+    }
+    const { minX, maxX, minY, maxY, z } = LUMBERYARD_CRATE_BOUNDS;
+    return new CrateArea([new Boundary(minX, maxX, minY, maxY, z)]);
+  }
+
+  /** Only the player's fixed crate contains the kitten; mews are independent ambient cues. */
   function handleCrateSearch(event) {
     if (!isLumberyardCrate(event)) return false;
     const action = event.definition?.getActions?.()[event.clickType - 1] ?? event.option;
     if (String(action ?? "").toLowerCase() !== "search") return false;
     const { player } = event;
     if (quest.getStage(player) !== STAGE_GAVE_SARDINE || hasItem(player, FLUFFS_KITTEN_ITEM_ID)) {
+      player.sendMessage("You search the crate but find nothing.");
+      event.handled = true;
+      return true;
+    }
+    const at = event.npc?.getLocation?.() ?? event.location;
+    const tile = `${at.x ?? at.getX()},${at.y ?? at.getY()}`;
+    if (tile !== kittenCrate(player)) {
       player.sendMessage("You search the crate but find nothing.");
       event.handled = true;
       return true;
@@ -479,6 +551,9 @@ module.exports = function registerGertrudesCatQuest(api) {
     onReward: grantReward,
   });
 
+  api.persistAttribute(KITTEN_CRATE_ATTRIBUTE, null);
+  api.registerArea(createCrateArea());
+  api.onCustomEvent("quest:stage-changed", resetKittenCrate);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcInteraction("Gertrude", { "Talk-to": handleGertrudeInteraction });
   api.onNpcDialogueCondition(answerCondition);

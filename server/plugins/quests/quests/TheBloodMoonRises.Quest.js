@@ -5,6 +5,12 @@
  */
 module.exports = function registerTheBloodMoonRises(api) {
   const { Animation, Boundary, Equipment, Graphic, HitDamage, HitMask, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectDefinition, ObjectIdentifiers, PrayerHandler, PrivateArea, Skill, World } = api.core;
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const { handleDrakanDodgeRoll } = require("../bmr/DrakanDodgeRoll.TheBloodMoonRises");
@@ -3583,18 +3589,16 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (!player.getInventory().contains(event.itemId)) return;
     const placements = { ...(story.bookPlacements ?? {}) };
     const key = `${plinth.x},${plinth.y}`;
+    if (placements[key] === book.id) {
+      player.sendMessage("That book is already on this plinth.");
+      return;
+    }
+    // The held book goes onto the plinth first: its slot then takes the plinth's book, even in a full inventory.
+    player.getInventory().deleteNumber(event.itemId, 1);
     if (placements[key]) {
-      if (placements[key] === book.id) {
-        player.sendMessage("That book is already on this plinth.");
-        return;
-      }
-      if (!player.getInventory().adds(placements[key], 1)) {
-        player.sendMessage("Make room in your inventory before changing the book on this plinth.");
-        return;
-      }
+      player.getInventory().adds(placements[key], 1);
       player.sendMessage(`You take ${SLEPE_BOOKS.find(({ id }) => id === placements[key])?.name ?? "the misplaced book"} from the plinth.`);
     }
-    player.getInventory().deleteNumber(event.itemId, 1);
     placements[key] = book.id;
     const complete = SLEPE_PLINTHS.every((spot) =>
       placements[`${spot.x},${spot.y}`] === spot.itemId);
@@ -6131,12 +6135,13 @@ module.exports = function registerTheBloodMoonRises(api) {
       (player.getAttribute(DRAKAN_ENCOUNTER_COMPLETE) || player.getAttribute(DRAKAN_DEATH_CONFIRMED) ||
         finalDrakanFight?.deathConfirmed)) {
       const inventory = player.getInventory();
-      if (!hasItem(player, ItemIdentifiers.SUNSPEAR) && !inventory.adds(ItemIdentifiers.SUNSPEAR, 1)) {
+      if (!hasItem(player, ItemIdentifiers.SUNSPEAR) && !hasRoom(inventory, ItemIdentifiers.SUNSPEAR)) {
         event.handled = true;
         player.sendMessage("Make room in your inventory to take the Sunspear from Lowerniel's body.");
         event.end = true;
         return;
       }
+      if (!hasItem(player, ItemIdentifiers.SUNSPEAR)) inventory.adds(ItemIdentifiers.SUNSPEAR, 1);
       event.handled = true;
       event.box = { items: [ItemIdentifiers.SUNSPEAR] };
     }
@@ -7061,10 +7066,14 @@ module.exports = function registerTheBloodMoonRises(api) {
       title: "Choose the stat you wish to be advanced!",
       onConfirm: (skill, name) => {
         if (player.getInventory().get(slot) !== item) return null;
+        // A chapter is only spent when its XP lands (an XP lock or an area's gate keeps the tome as it was).
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, 30000, true);
+        if (skills.getExperience(skill) === before) return null;
         const used = (Number(player.getAttribute(ATTRIBUTE)) || 0) + 1;
         player.setAttribute(ATTRIBUTE, used);
         if (used >= 6) player.getInventory().deleteAtSlot(slot, 1);
-        player.getSkillManager().addExperience(skill, 30000, false);
         return `You have been awarded 30,000 ${name} XP!`;
       },
     });
@@ -8441,10 +8450,11 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.sendMessage("You already have all you need from these shelves.");
       return;
     }
-    if (!inventory.adds(itemId, 1)) {
+    if (!hasRoom(inventory, itemId)) {
       player.sendMessage("Make room in your inventory before taking anything from the shelves.");
       return;
     }
+    inventory.adds(itemId, 1);
     player.sendMessage(message);
   }
 
@@ -8504,10 +8514,10 @@ module.exports = function registerTheBloodMoonRises(api) {
     let variant = null;
     let changed = false;
     if (name === "amitire plant" && prepObjectAt(event, 2982, 7679, 0) && !hasItem(player, PREP.leaves)) {
-      changed = inventory.adds(PREP.leaves, 1);
+      changed = takeOne(player, PREP.leaves);
       variant = "hallowed-preparations-picking-the-amitire-plant";
     } else if (name === "shelves" && prepObjectAt(event, 3159, 7824, 1) && !hasItem(player, PREP.bowl)) {
-      changed = inventory.adds(PREP.bowl, 1);
+      changed = takeOne(player, PREP.bowl);
       variant = "hallowed-preparations-searching-the-shelves";
     } else if (name === "cupboard" && prepObjectAt(event, 3155, 7832, 1)) {
       event.handled = true;
@@ -8525,18 +8535,18 @@ module.exports = function registerTheBloodMoonRises(api) {
         "Nothing.", () => {});
       return;
     } else if ((name.includes("crate") || name.includes("blisterwood")) && prepObjectAt(event, 3177, 7843, 1) && !hasItem(player, PREP.logs)) {
-      changed = inventory.adds(PREP.logs, 1);
+      changed = takeOne(player, PREP.logs);
       variant = "hallowed-preparations-searching-the-blisterwood-crate";
     } else if ((name.includes("crate") || name.includes("sickle")) && prepObjectAt(event, 3181, 7841, 1) && !hasItem(player, PREP.blessedSickle)) {
-      changed = inventory.adds(PREP.blessedSickle, 1);
+      changed = takeOne(player, PREP.blessedSickle);
       variant = "hallowed-preparations-searching-the-sickle-crate";
     } else if (name === "chest" && !hasItem(player, PREP.diamond) && hasItem(player, PREP.blessedSickle) &&
       prepObjectAt(event, 3181, 7835, 1)) {
-      changed = inventory.adds(PREP.diamond, 1);
+      changed = takeOne(player, PREP.diamond);
       variant = "hallowed-preparations-searching-the-workshop-s-eastern-chest";
     } else if (name === "chest" && !hasItem(player, PREP.diamondTablet) && hasItem(player, PREP.diamondSickle) &&
       prepObjectAt(event, 3175, 7836, 1)) {
-      changed = inventory.adds(PREP.diamondTablet, 1);
+      changed = takeOne(player, PREP.diamondTablet);
       variant = "hallowed-preparations-searching-the-workshop-s-western-chest";
     } else if (name.includes("range") && prepObjectAt(event, 3160, 7826, 1) && inventory.contains(PREP.rawMeat)) {
       changed = replaceItems(player, [PREP.rawMeat], [PREP.rawMeat], [[PREP.cookedMeat, 1]]);
@@ -8555,6 +8565,10 @@ module.exports = function registerTheBloodMoonRises(api) {
           player.sendMessage("You upgrade your flail by swapping out the sickle and shortening the shaft before enhancing it with pure silvthrill.");
         }
       }, "No.", () => {});
+      return;
+    }
+    if (changed === null) {
+      event.handled = true;
       return;
     }
     if (!changed) return;
@@ -8617,7 +8631,18 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   function takePrepItem(player, id, message) {
     if (stage(player) !== STAGE.PREPARATIONS || hasItem(player, id)) return;
-    if (player.getInventory().adds(id, 1)) player.sendMessage(message);
+    if (takeOne(player, id)) player.sendMessage(message);
+  }
+
+  /** One of `id`, or null (with the inventory's own full message) when there is no room: `adds` never says. */
+  function takeOne(player, id) {
+    const inventory = player.getInventory();
+    if (!hasRoom(inventory, id)) {
+      inventory.full?.();
+      return null;
+    }
+    inventory.adds(id, 1);
+    return true;
   }
 
   function craftPrepRecipe(player, recipe, pair) {

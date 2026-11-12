@@ -1,8 +1,8 @@
 /**
  * Graceful outfit (Wiki): each piece gives its own run-energy restoration bonus
  * (hood 3%, top/legs 4%, gloves/boots/cape 3% - 20% total) and wearing all six
- * pieces adds another 10%, for 30%. The Agility cape (or a max cape) substitutes
- * for the graceful cape for the set effect.
+ * pieces adds another 10%, for 30%. The Agility cape (or a max cape) is a graceful
+ * cape: its 3% worn alone, and the sixth piece of the set.
  */
 // The Wiki's weight for every colour variant (the cache's base ids carry the
 // physical weight instead), so the stats panel shows the same -25 kg for all.
@@ -45,11 +45,18 @@ function gracefulRestoreBonusFromSlots(nameBySlot, capeIsSubstitute) {
       pieces++;
     }
   }
+  // An Agility (or max) cape is a graceful cape (Wiki: Agility cape): its own 3%, alone too, and the
+  // sixth piece of the set.
+  const cape = PIECES.find((piece) => piece.prefix === "Graceful cape");
+  const capeName = nameBySlot[cape.slot];
+  if (capeIsSubstitute && !(capeName && String(capeName).startsWith(cape.prefix))) {
+    bonus += cape.percent;
+    pieces++;
+  }
   if (pieces === 0) {
     return 0;
   }
-  // Six graceful pieces, or five plus an Agility/max cape at the cape slot.
-  if (pieces === PIECES.length || (pieces === PIECES.length - 1 && capeIsSubstitute)) {
+  if (pieces === PIECES.length) {
     bonus += SET_BONUS;
   }
   return bonus;
@@ -113,6 +120,7 @@ function addGracefulEffects(request) {
 
 module.exports = {
   name: "GracefulOutfit",
+  description: "Gives each graceful piece its run-energy restoration bonus, plus the full-set bonus, and counts an Agility or max cape as the graceful cape.",
   members: true,
   _test: { gracefulRestoreBonusFromSlots, energyRestoreBonus, addGracefulEffects, addGracefulWeights },
   register(api) {

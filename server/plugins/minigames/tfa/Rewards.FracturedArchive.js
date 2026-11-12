@@ -122,13 +122,13 @@ function readFolio({ player, item }) {
   }
   const target = new core.Location(LOBBY.x, LOBBY.y, LOBBY.z);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LIMIT)) return;
-  core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
-    const slot = slotOf(player, item);
+  core.TeleportHandler.confirm(player, target, (carried) => core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
+    const slot = slotOf(player, carried);
     if (slot < 0) return;
     const left = itemCharges(player.getInventory().getItems()[slot]) - 1;
     setCharges(player, slot, left);
     player.sendMessage(`Your folio has ${plural(Math.max(0, left))} left.`);
-  });
+  }), WILDERNESS_LIMIT, { item });
 }
 
 function chargeFolio({ player, item }) {

@@ -136,9 +136,9 @@ function gather(request) {
   if (change?.burnt) for (let piece = 0; piece < pieces; piece++) Common.api.emitCustomEvent("league:log-burnt", { player, itemId });
 }
 
-/** `storage:room`: with every resource banked, a full inventory keeps gathering. */
+/** `storage:room`: with every resource of Personal Banker's skills banked, a full inventory keeps gathering. */
 function room(request) {
-  if (!request.room && alwaysBanks(request.player) && Common.bankHasRoom(request.player, request.itemId)) request.room = true;
+  if (!request.room && covers("personalBanker", request.skill) && alwaysBanks(request.player) && Common.bankHasRoom(request.player, request.itemId)) request.room = true;
 }
 
 // ---- Farming: Certified Farmer, Seedy Business and the sets ----

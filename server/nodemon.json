@@ -1,5 +1,8 @@
 {
+  "env": { "TSPS_RESTARTER": "nodemon" },
   "ignore": [
+    "plugins/imported/**",
+    ".plugin-upload-*/**",
     "data/saves/**",
     "plugins/world/data/**",
     "plugins/bots/data/**",

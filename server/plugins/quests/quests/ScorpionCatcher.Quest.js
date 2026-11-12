@@ -88,6 +88,18 @@ module.exports = function registerScorpionCatcherQuest(api) {
     [ItemIdentifiers.SMOKE_BATTLESTAFF, ItemIdentifiers.MYSTIC_SMOKE_STAFF],
     [ItemIdentifiers.MIST_BATTLESTAFF, ItemIdentifiers.MYSTIC_MIST_STAFF],
     [ItemIdentifiers.DUST_BATTLESTAFF, ItemIdentifiers.MYSTIC_DUST_STAFF],
+    // Wiki (Thormac): the ornamented steam and lava battlestaves become the ornamented mystic staves.
+    [ItemIdentifiers.STEAM_BATTLESTAFF_3, ItemIdentifiers.MYSTIC_STEAM_STAFF_3],
+    [ItemIdentifiers.LAVA_BATTLESTAFF_3, ItemIdentifiers.MYSTIC_LAVA_STAFF_3],
+  ]);
+  /**
+   * The steam and lava buttons also show the ornamented staff (cache script 330, thormac_setup: steam_battlestaff_pretty,
+   * lava_battlestaff_pretty) and take whichever is held, the plain one first. The cache's highlight (proc 332) counts
+   * only the ornamented steam staff; the Wiki lists both, so both are taken.
+   */
+  const ORNAMENTED_BY_BATTLESTAFF = new Map([
+    [ItemIdentifiers.STEAM_BATTLESTAFF, ItemIdentifiers.STEAM_BATTLESTAFF_3],
+    [ItemIdentifiers.LAVA_BATTLESTAFF, ItemIdentifiers.LAVA_BATTLESTAFF_3],
   ]);
 
   /** cage item -> which scorpions it holds (bit 1 first, 2 second, 4 third). */
@@ -306,12 +318,14 @@ module.exports = function registerScorpionCatcherQuest(api) {
     const { player } = event;
     if (event.groupId !== ENCHANT_INTERFACE) return;
     if (!enchanting.has(player)) return;
-    const staff = MYSTIC_STAFF_BY_BATTLESTAFF.has(event.itemId)
+    const button = MYSTIC_STAFF_BY_BATTLESTAFF.has(event.itemId)
       ? event.itemId
       : ENCHANT_STAFF_BY_BUTTON.get(event.childId);
-    if (staff === undefined) return;
+    if (button === undefined) return;
     event.handled = true;
     const inventory = player.getInventory();
+    const ornamented = ORNAMENTED_BY_BATTLESTAFF.get(button);
+    const staff = !inventory.getAmount(button) && ornamented !== undefined && inventory.getAmount(ornamented) ? ornamented : button;
     if (!inventory.getAmount(staff)) {
       player.sendMessage("You do not have that battlestaff.");
       return;

@@ -16,6 +16,7 @@ const Fields = require("./Fields.CacheEditor");
 const Inspect = require("./Inspect.CacheEditor");
 
 const DOCUMENT = "custom-definitions.json";
+const SOURCE = "cache-editor";
 // Overlay ids start above the cache's own count per kind, so a cache revision that grows never
 // collides with something this project authored.
 const OVERLAY_ID_START = 50000;
@@ -67,6 +68,11 @@ function cacheCount(core, kind) {
   }
 }
 
+function sourceConflict(core, row) {
+  const owner = core.CacheDefinitions.getCustomDefinitionOwner(row?.kind, row?.id);
+  if (owner !== undefined && owner !== SOURCE) return `${row.kind} ${row.id}: id already belongs to ${owner}`;
+}
+
 /** Everything wrong with one row, as sentences, so a save can refuse with a reason. */
 function auditRow(core, row, seen, known = new Set()) {
   const problems = [];
@@ -83,6 +89,8 @@ function auditRow(core, row, seen, known = new Set()) {
     problems.push(`${kind} ${row.id}: overlay ids start at ${Math.max(OVERLAY_ID_START, total)} (cache has ${total})`);
   }
   if (kind === "item" && core.CacheDefinitions.getCustomItems?.().some(item => item.id === row.id)) problems.push(`item ${row.id}: id already belongs to custom-items`);
+  const conflict = sourceConflict(core, row);
+  if (conflict) problems.push(conflict);
   if (seen.has(`${kind}:${row.id}`)) problems.push(`${kind} ${row.id}: duplicate overlay id`);
   seen.add(`${kind}:${row.id}`);
   if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
@@ -141,9 +149,52 @@ function check(core, document) {
       const [from, to] = pair.map(key => row.fields?.[key]);
       if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
     }
+    const from = row.fields?.recolorFrom;
+    const to = row.fields?.recolorTo;
+    if (Array.isArray(from) && Array.isArray(to)) {
+      for (const value of [...from, ...to]) {
+        if (!Number.isInteger(value) || value < 0 || value > 65535) {
+          problems.push(`${row.kind} ${row.id}: recolour values must be between 0 and 65535`);
+          break;
+        }
+      }
+      if (row.kind === "npc" && from.length === to.length) {
+        const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, "npc")
+          ? core.CacheDefinitions.getNpc(row.baseId) : null;
+        const baseFrom = base?.recolorFrom ?? [];
+        const baseTo = base?.recolorTo ?? [];
+        let newlyChained = false;
+        for (let i = 0; i < from.length; i++) {
+          for (let earlier = 0; earlier < i; earlier++) {
+            if (from[earlier] === to[earlier] || to[earlier] !== from[i]) continue;
+            const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
+              && baseFrom[i] === from[i] && baseTo[i] === to[i];
+            if (!inherited) {
+              problems.push(`npc ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
+              newlyChained = true;
+              break;
+            }
+          }
+          if (newlyChained) break;
+        }
+      }
+    }
     if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
   }
   return { ok: problems.length === 0, problems };
+}
+
+/** Keeps saved rows on disk when a newly installed plugin claims an id. */
+function apply(core, root) {
+  const document = read(root);
+  const rows = document.rows.filter(row => {
+    const conflict = sourceConflict(core, row);
+    if (conflict) console.warn(`[cache-editor] skipped overlay: ${conflict}`);
+    return !conflict;
+  });
+  const verdict = check(core, { ...document, rows });
+  if (!verdict.ok) throw new Error(verdict.problems.join("; "));
+  return core.CacheDefinitions.registerCustomDefinitions(rows, SOURCE);
 }
 
 function snapshot(root) {
@@ -194,4 +245,4 @@ function save(core, root, payload) {
   return snapshot(root);
 }
 
-module.exports = { DOCUMENT, OVERLAY_ID_START, documentPath, read, write, snapshot, check, audit, upsert, save, revision };
+module.exports = { DOCUMENT, OVERLAY_ID_START, documentPath, read, write, snapshot, check, audit, apply, upsert, save, revision };

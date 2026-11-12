@@ -197,6 +197,18 @@ test('the trip comes back after five minutes, and the share follows the HUD mete
   assert.equal(voyage.shareFor(player), 30);
   voyage.contribution.set(player, 178);
   assert.equal(voyage.shareFor(player), 25);
+
+  // Wiki (Fishing Trawler): "Completing the elite Ardougne Diary yields 50% more fish".
+  const api = Shared.api();
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => { if (name === 'diary:is-complete' && event.diary === 'ardougne' && event.tier === 'elite') event.complete = true; } });
+  try {
+    voyage.contribution.set(player, 80);
+    assert.equal(voyage.shareFor(player), 30, '20 fish, half as many again');
+    voyage.contribution.set(player, 255);
+    assert.equal(voyage.shareFor(player), 45, 'with a full meter too');
+  } finally {
+    Shared.bind(api);
+  }
 });
 
 test('a bigger crew catches less each, down to the floor', () => {
@@ -383,7 +395,10 @@ test('a full bank keeps the rest of the catch in the net', () => {
 
 test('real capped stacks retain the catch and only delivered fish earn XP', t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
-  const p = new Player(null), xp = [];
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel)), xp = [];
+  p.setUsername('trawlercatch');
   t.mock.method(p, 'sendMessage', () => {});
   t.mock.method(p.getSkillManager(), 'addExperiences', (_skill, amount) => xp.push(amount));
   const fish = Shared.ids().fish.find(fish => fish.id === 317), bank = p.getBank(0);
@@ -404,6 +419,7 @@ test('real capped stacks retain the catch and only delivered fish earn XP', t =>
   assert.equal(xp.reduce((sum, amount) => sum + amount, 0), 3 * fish.xp);
   Rewards.inspectNet({ player: p });
   assert.equal(xp.length, 2, 'collected XP cannot be earned twice');
+  assert.ok(p.getDialogueManager().getCurrent() instanceof core.PlayerDialogue);
 });
 
 test('the catch is banked while the bank has space, however full its tab', t => {
@@ -466,4 +482,34 @@ test('an angler piece is credited to the collection log when it reaches the bank
   Rewards.inspectNet({ player });
   assert.deepEqual(obtains.map((event) => [event.itemId, event.amount]), [[ids.items.anglerHat, 1]]);
   Shared.bind({ core, emitCustomEvent: () => {} });
+});
+
+test('the shore a sunk crew swims to is land, not open sea', () => {
+  const [x, y, z] = Shared.DATA.shore;
+  assert.deepEqual([x, y, z], [2658, 3210, 0]);
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(x, y);
+  assert.equal(core.RegionManager.isWater(new core.Location(2672, 3209, 0)), true, 'the old landing was open sea');
+  assert.equal(core.RegionManager.isWater(new core.Location(x, y, z)), false, 'the landing is not a water tile');
+  assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, 'the landing is walkable');
+});
+
+test("Murphy at sea answers with his take-me-back talk, and its wreck action sinks the trip", () => {
+  const Murphy = require('../plugins/minigames/fishingtrawler/Murphy.FishingTrawler');
+  const aboard = fakePlayer({ location: [1887, 4825, 1] });
+  const ashore = fakePlayer({ location: [2668, 3162, 0] });
+  const voyage = new Voyage([aboard], sequence([], 0.99));
+  Sea.sea.voyage = voyage;
+  try {
+    const seaMurphy = core.NpcIdentifiers.MURPHY_2;
+    assert.deepEqual(Murphy.selectVariant({ npcId: seaMurphy, player: aboard }), { page: 'Murphy', variant: 'standard-dialogue-when-at-sea' });
+    assert.equal(Murphy.selectVariant({ npcId: seaMurphy, player: ashore }), null, 'only for the crew aboard');
+    assert.equal(Murphy.selectVariant({ npcId: core.NpcIdentifiers.MURPHY, player: aboard }), null, 'the port Murphy keeps his own talk');
+    Murphy.wreck({ player: aboard, npcId: seaMurphy, stepId: 'nqzBKN' });
+    assert.equal(voyage.ended, true);
+    assert.equal(voyage.result, 'sunk');
+  } finally {
+    Sea.sea.voyage = null;
+  }
 });

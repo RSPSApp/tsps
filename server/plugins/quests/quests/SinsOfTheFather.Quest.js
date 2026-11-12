@@ -663,8 +663,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const CRACK_MEIYERDITCH = { x: 3627, y: 3328, z: 0 };
   const CASTLE_ARENA = { x: 3565, y: 3362, z: 0 };
   const BURGH_HIDEOUT = { x: 3494, y: 9628, z: 0 };
-  const VER_SINHAZA = { x: 3663, y: 3220, z: 0 };
-  const DARKMEYER = { x: 3597, y: 3360, z: 0 };
+  // Where the medallion lands (rsprox recordings 396, 411, 1636, 1637: op4 lands at 3592,3337).
+  const DARKMEYER_MEDALLION_TILE = { x: 3592, y: 3337, z: 0 };
   const SLEPE_DOCK = { x: 3666, y: 3279, z: 0 }; // walkable shore beside the cache rowboat
 
   // ---------------------------------------------------------------------------
@@ -3676,12 +3676,23 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       title: "Choose the stat you wish to be advanced!",
       onConfirm: (skill, name) => {
         if (player.getInventory().get(slot) !== item) return null;
+        // A chapter is only spent when its XP lands (an XP lock or an area's gate keeps the tome as it was).
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, 15000, true);
+        if (skills.getExperience(skill) === before) return null;
         const used = (Number(player.getAttribute(TOME_USES_ATTRIBUTE)) || 0) + 1;
         player.setAttribute(TOME_USES_ATTRIBUTE, used);
         if (used >= TOME_MAX_CHAPTERS) player.getInventory().deleteAtSlot(slot, 1);
         sendTomeVarbits(player);
-        player.getSkillManager().addExperience(skill, 15000, false);
-        return `You have been awarded 15,000 ${name} XP!`;
+        // rsprox 226/01637.txt:137520-137521 and 138011-138012 (ticks 7398, 7424): the award line in chat,
+        // the box's mesbox line (its <br> a space), then the box; the last chapter adds the crumble to all three.
+        const award = `You have been awarded 15,000 ${name} experience!`;
+        const crumbles = used >= TOME_MAX_CHAPTERS ? "<br>The book crumbles into a dust cloud of knowledge." : "";
+        const box = `You read a fascinating chapter and earn some experience!<br>${award}${crumbles}`;
+        player.sendMessage(award + crumbles);
+        player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, box.replace(/<br>/g, " "));
+        return box;
       },
     });
     return true;
@@ -3695,28 +3706,10 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     return true;
   }
 
-  function teleportMedallion(event) {
-    const { player, itemId } = event;
-    if (itemId !== DRAKANS_MEDALLION_ITEM_ID) return false;
-    if (!quest.isComplete(player)) return false;
-    const destinations = [
-      { label: "Ver Sinhaza.", tile: VER_SINHAZA },
-      { label: "Slepe.", tile: SLEPE_DOCK },
-      { label: "Darkmeyer.", tile: DARKMEYER },
-    ];
-    // Later Myreque chapters can add a destination unlocked by their own
-    // world interaction without replacing this shared medallion menu.
-    api.emitCustomEvent("drakan-medallion:destinations", { player, destinations });
-    const options = destinations.flatMap(({ label, tile, onTeleport }) => [label, () => {
-      teleport(player, tile);
-      onTeleport?.();
-    }]);
-    api.sendMultiChatboxPrompt(
-      player,
-      "Where would you like to teleport?",
-      ...options
-    );
-    return true;
+  /** Darkmeyer joins the medallion's destinations once the quest is done (Wiki: Drakan's medallion). */
+  function addDarkmeyerMedallionDestination(event) {
+    if (!event?.player || !Array.isArray(event.destinations) || !quest.isComplete(event.player)) return;
+    event.destinations.push({ label: "Darkmeyer", tile: DARKMEYER_MEDALLION_TILE });
   }
 
   // ---------------------------------------------------------------------------
@@ -3855,7 +3848,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Tome of Experience", { Read: readTome });
   api.onItemAction("Old note", { Read: readOldNote });
-  api.onItemAction("Drakan's medallion", { Teleport: teleportMedallion });
+  api.onCustomEvent("drakan-medallion:destinations", addDarkmeyerMedallionDestination);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleVanstromBeforeDeath);
   api.registerArea(new CarlFollowArea());

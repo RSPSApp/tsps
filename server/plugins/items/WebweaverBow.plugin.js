@@ -1,4 +1,5 @@
 "use strict";
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 
 // OSRS Wiki: Webweaver bow / Webweaver bow (u). 1,000 activation ether plus 16,000
 // usable charges; one ether per shot, including the whole Swarm special (30 August 2023).
@@ -136,13 +137,25 @@ function boost(attacker, target, value) {
   return passiveApplies(attacker, target) ? Math.floor(value * 1.5) : value;
 }
 
+/** Wiki DPS 701b2dac: with an imbued Slayer helmet on task, damage adds 10/20 to its 23/20 instead. */
+function damageBoost(attacker, target, value) {
+  if (!passiveApplies(attacker, target)) return value;
+  const query = { player: attacker.getAsPlayer(), style: "ranged", active: false };
+  api.emitCustomEvent("slayer:imbued-active", query);
+  return query.active === true ? value : Math.floor(value * 1.5);
+}
+
+function addToSlayerBonus(payload) {
+  if (passiveApplies(payload?.player, payload?.player?.getCombat?.()?.getTarget?.())) payload.numerator += 10;
+}
+
 function deathItemDrop(event) {
   const { player, killer, item, location } = event;
   if (!event.shouldDropItems || !killer || killer === player || !activated(item) || restricted(item)
       || !core.Wilderness.isInLocation(location)) return;
   const lost = depositOf(item) + chargesOf(item);
   // Wiki: in Wilderness PvP all ether is lost, even when the bow is protected.
-  if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
+  if (lost > 0) core.ItemOnGroundManager.registerLocation(PlayerDeathTask.lootOwner(player, killer), new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
   emptyBow(item);
   paidOn.delete(item);
   // Core already returns kept items; report the ether drop without dropping the bow as well.
@@ -151,15 +164,17 @@ function deathItemDrop(event) {
 
 module.exports = {
   name: "WebweaverBow",
+  description: "Adds the webweaver bow: activation and charging with revenant ether, and its damage bonus including an imbued Slayer helmet on task.",
   members: true,
-  _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, chargesOf, addEther, chargeWithEther, uncharge, checkAmmo, decrementAmmo, boost, deathItemDrop },
+  _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, chargesOf, addEther, chargeWithEther, uncharge, checkAmmo, decrementAmmo, boost, damageBoost, addToSlayerBonus, deathItemDrop },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     pluginApi.onItemOnItem(chargeWithEther, { noted: false });
     pluginApi.onItemAction("Webweaver bow", { Check: check, Uncharge: uncharge });
     pluginApi.registerRangedAmmoHandler({ checkAmmo, decrementAmmo });
-    pluginApi.registerRangedCombatModifier({ modifyMaxHit: boost, modifyAttackRoll: boost });
+    pluginApi.onCustomEvent("slayer:imbued-ranged-bonus", addToSlayerBonus);
+    pluginApi.registerRangedCombatModifier({ modifyMaxHit: damageBoost, modifyAttackRoll: boost });
     pluginApi.onPlayerDeathItemDrop(deathItemDrop);
   },
 };

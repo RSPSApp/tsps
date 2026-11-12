@@ -29,7 +29,7 @@ export function computeTitleStateHash(
             state.password.length
         }|${state.otp.length}|${state.currentLoginField}|${state.onMobile}|${
             state.virtualKeyboardVisible
-        }|${state.serverListOpen}|${state.hoveredServerIndex}|${state.serverName}|${host.probing}|${
+        }|${state.serverListOpen}|${state.hoveredServerIndex}|${state.serverSwitchConfirm?.name ?? ""}|${state.serverName}|${state.serverWorldFlags}|${host.probing}|${
             host.probed
         }|${host.serverList.map((s) => s.playerCount).join(",")}|${state.worldSelectOpen}|${
             state.worldSelectPage
@@ -39,7 +39,9 @@ export function computeTitleStateHash(
             state.worldId
         }|${width}|${height}|${layoutWidth}|${layoutHeight}|${skipFire}|${host.worldSortOption}|${
             host.worldSortDirection
-        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}`;
+        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}|${
+            state.extension?.hash() ?? ""
+        }`;
     
 }
 
@@ -149,7 +151,7 @@ export function drawTitle(host: LoginRendererHost, state: LoginState, gameState:
 
                     if (!state.serverListOpen) {
                         // Logo
-                        drawLogoToCtx(host, cacheCtx);
+                        drawLogoToCtx(host, cacheCtx, state.serverWorldFlags);
 
                         // Mute button (only when gameState >= 10)
                         if (gameState >= GameState.LOGIN_SCREEN) {

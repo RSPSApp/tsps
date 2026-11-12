@@ -67,6 +67,7 @@
  *    branch; answered via quest:is-complete when that quest is loaded.
  */
 module.exports = function registerTheFeudQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Equipment,
     GameObject,
@@ -425,7 +426,8 @@ module.exports = function registerTheFeudQuest(api) {
       skills?.getCurrentLevel?.(Skill.THIEVING) ??
       skills?.getMaxLevel?.(Skill.THIEVING) ??
       99;
-    return Number(level) >= 30;
+    const base = skills?.getMaxLevel?.(Skill.THIEVING) ?? level;
+    return Number(level) >= 30 && Number(base) >= 30;
   }
 
   function damageAndStun(player) {
@@ -1730,7 +1732,8 @@ module.exports = function registerTheFeudQuest(api) {
       const reward = held(player, WILLOW_BLACKJACK_ITEM_ID)
         ? ADAMANT_SCIMITAR_ITEM_ID
         : WILLOW_BLACKJACK_ITEM_ID;
-      player.getInventory().adds(reward, 1);
+      // The drop table leaves these to this handler, so a full inventory must not lose it: it lands under the player.
+      giveReward(player, reward, 1);
       if (stage(player) === STAGE_CHAMPION) {
         quest.setStage(player, STAGE_MAYOR);
         syncVarbits(player);
@@ -1910,7 +1913,7 @@ module.exports = function registerTheFeudQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 15000);
-    player.getInventory().adds(COINS_ITEM_ID, 499);
+    giveReward(player, COINS_ITEM_ID, 499);
     // The disguise is one of the quest's rewards; a player who entered with a
     // Karidian disguise (or lost it) still receives their own.
     if (!hasDesertDisguise(player)) {

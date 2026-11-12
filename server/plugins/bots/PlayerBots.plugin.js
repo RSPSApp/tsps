@@ -49,6 +49,7 @@ const BOT_CONFIG = Object.freeze({
   // targets only the true active core for regional wilderness bots.
   wildernessRoamerBotCount: PVP_BOT_SETTINGS.botPool,
   wildernessActiveRegionBotsPerRegion: PVP_BOT_SETTINGS.activeRegionBotsPerRegion,
+  wildernessActiveRegionBotsByRegion: PVP_BOT_SETTINGS.activeRegionBotsByRegion,
   wildernessActiveRegionInset: PVP_BOT_SETTINGS.activeRegionInset,
   botWalkRadius: 10,
   objectIndexCachePath: path.join(__dirname, "data", "object-index.json"),
@@ -208,6 +209,21 @@ function registerDuelBotAcceptance(api) {
 
 module.exports = {
   name: "PlayerBots",
+  description: "Populates the world with player bots: PvP-loadout fighters and optional AI chat bots, with admin commands to manage them.",
+  config: {
+    "PlayerBots:ai": {
+      type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",
+      help: "Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { \"enabled\": true, \"count\": 3, \"places\": [\"lumbridge\"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here.",
+    },
+    "PlayerBots:sites": {
+      type: "json", label: "Bot site overrides", defaultText: "No overrides: the shipped bot-sites.json applies",
+      help: "Maps a bot site id to the properties to change for it, e.g. { \"some_site\": { \"enabled\": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole.",
+    },
+    "PlayerBots:activeRegionBotsByRegion": {
+      type: "json", label: "Wilderness bots per map square", defaultText: "Shipped value in bot-sites.json",
+      help: "Target number of bots in individual 64x64 map squares, keyed plane:regionX:regionY with whole-number counts. Replaces pvp.activeRegionBotsByRegion in bot-sites.json.",
+    },
+  },
   register(api) {
     registerPvpChatter(api);
     initPvpTierLoadouts(api);

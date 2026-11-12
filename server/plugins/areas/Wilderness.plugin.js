@@ -85,7 +85,9 @@ function mapFlags(player) {
   pluginApi?.emitCustomEvent("world:map-flags", request);
   return request.flags | 0;
 }
+const PVP_WORLD_LEVEL_DIFFERENCE_CONFIG = "Wilderness:pvpWorldLevelDifference";
 const PVP_WORLD_ATTACK_RANGE = 15;
+let unlevelledPvpRange = PVP_WORLD_ATTACK_RANGE;
 const VARBIT_IN_WILDERNESS = 5963;
 const PVP_LAYOUT_SCRIPT = 386;
 const PVP_LEVEL_SCRIPT = 388;
@@ -110,9 +112,9 @@ const combatLevels = new WeakMap();
 // nearby candidate, so denial messages are throttled per player rather than per check.
 const DENY_MESSAGE_INTERVAL_TICKS = 2;
 const denyMessageBlockedUntil = new WeakMap();
+// One game message on live, its two lines split by <br> (rsprox_transcripts/229/02787.txt ticks 805, 807).
 const LEVEL_DIFFERENCE_MESSAGES = [
-  "Your level difference is too great.",
-  "You need to move deeper into the Wilderness.",
+  "Your level difference is too great!<br>You need to move deeper into the Wilderness.",
 ];
 
 function combatLevelOf(player) {
@@ -146,17 +148,19 @@ function wildernessLevelOf(player) {
  * it. On a normal world, 0 means neither player has a levelled constraint, and whether
  * they may fight at all is decided elsewhere. Both players must
  * be within range of each other, so the usable range is the shallower of their two
- * Wilderness levels; standing deeper alone does not widen it. On a PvP world the flat
- * +15 applies everywhere, and the shallower side still caps the total.
+ * Wilderness levels; standing deeper alone does not widen it. On a PvP world, each
+ * levelled tile keeps its +15 bonus and each unlevelled tile uses the configured range.
  */
 function wildernessAttackRange(attacker, target) {
-  const base = hasGlobalWorldTag("pvp") ? PVP_WORLD_ATTACK_RANGE : 0;
   const attackerLevel = wildernessLevelOf(attacker);
   const targetLevel = wildernessLevelOf(target);
-  const sharedLevel = Math.min(attackerLevel, targetLevel);
-  // Normal-world unlevelled PvP ground must not erase the other side's cap via the 0 sentinel.
-  // On a PvP world, that side has a real +/-15 range, so the minimum still applies.
-  return base + (base === 0 && sharedLevel === 0 ? Math.max(attackerLevel, targetLevel) : sharedLevel);
+  if (hasGlobalWorldTag("pvp")) {
+    const attackerRange = attackerLevel > 0 ? attackerLevel + PVP_WORLD_ATTACK_RANGE : unlevelledPvpRange;
+    const targetRange = targetLevel > 0 ? targetLevel + PVP_WORLD_ATTACK_RANGE : unlevelledPvpRange;
+    return Math.min(attackerRange, targetRange);
+  }
+  // On a normal world, an unlevelled tile leaves the other tile's cap in force.
+  return Math.min(attackerLevel, targetLevel) || Math.max(attackerLevel, targetLevel);
 }
 
 /**
@@ -165,7 +169,7 @@ function wildernessAttackRange(attacker, target) {
  */
 function canAttackByWildernessLevel(attacker, target) {
   const range = wildernessAttackRange(attacker, target);
-  if (range <= 0) {
+  if (range === 0 && !hasGlobalWorldTag("pvp")) {
     return true;
   }
   return Math.abs(combatLevelOf(attacker) - combatLevelOf(target)) <= range;
@@ -329,7 +333,7 @@ function refreshWildernessUi(player, facts, inWilderness) {
   if (inWilderness) {
     // The varbit is the client's "you may attack players here" switch, so it follows the
     // PvP ground rather than the level: only the original Wilderness is levelled, and
-    // elsewhere the level row stays empty while PvP worlds still enforce +/-15.
+    // elsewhere the level row stays empty while PvP worlds enforce the unlevelled range.
     syncWildernessState(player, true);
     player.getPacketSender().sendInteractionOption("Attack", 2, true);
 
@@ -691,6 +695,13 @@ function slashWeb(api, event, usedItem) {
 
 module.exports = {
   name: "Wilderness",
+  description: "The Wilderness: PvP attack rules, the overlay, teleport limits and web slashing.",
+  config: {
+    [PVP_WORLD_LEVEL_DIFFERENCE_CONFIG]: {
+      type: "number", label: "Unlevelled PvP combat level difference", default: PVP_WORLD_ATTACK_RANGE, integer: true, min: 0,
+      help: "Maximum combat level difference on unlevelled PvP ground on PvP worlds. Levelled Wilderness tiles keep their usual range.",
+    },
+  },
   _test: { canAttack, webCutChance, webTool, webSlashAnimation, slashWeb, websBeingSlashed },
   register(api) {
     require("./wilderness/Statistics.Wilderness")(api, isInWilderness);
@@ -698,6 +709,8 @@ module.exports = {
     require("./wilderness/FountainOfRune.Wilderness")(api);
     require("./wilderness/DemonicRuins.Wilderness")(api);
     pluginApi = api;
+    const levelDifference = api.getPluginConfig(PVP_WORLD_LEVEL_DIFFERENCE_CONFIG, PVP_WORLD_ATTACK_RANGE);
+    unlevelledPvpRange = Number.isInteger(levelDifference) && levelDifference >= 0 ? levelDifference : PVP_WORLD_ATTACK_RANGE;
     const state = createState();
 
     api.onServerStartup(() => registerWildernessArea(api, state));

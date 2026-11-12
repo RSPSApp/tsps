@@ -355,6 +355,23 @@ test('all evidence: registered guard hand-in completes, takes the canonical evid
   }
 });
 
+test('dropping the silver item, dagger and pot does not block the all-evidence hand-in', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    const player = playerFixture();
+    quest.setStage(player, 1);
+    player.attributes.set(MURDERER, 1);
+    player.attributes.set(EV, THREAD_EVIDENCE | FINGERPRINT_EVIDENCE);
+    player.attributes.set(POISON, 3);
+    setItems(player, [[I.CRIMINALS_THREAD_2, 1], [I.KILLERS_PRINT, 1]]);
+    assert.equal(variant(player, 6194), 'presenting-the-evidence-talking-to-the-guard-with-all-evidence');
+    action(player, 6194, 'uvOs6C');
+    assert.equal(stage(quest, player), 2, 'thread and killer print are enough to finish');
+  } finally {
+    cleanup();
+  }
+});
+
 test('banked or dropped evidence cannot claim the all-evidence hand-in', () => {
   const { quest, cleanup } = registerMurderMystery();
   try {

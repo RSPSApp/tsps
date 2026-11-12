@@ -35,7 +35,7 @@ Firemaking cape's light, the Slayer cape's repeat chance).
 | Prayer: holy wrench, worn or carried | `items/Potions.plugin.js` |
 | Ranged: accumulator (72%), assembler/upgraded max capes (80%), metal gathering | `items/AvasAccumulator.plugin.js` via `skillcape:ammo-recovery`; `skillcapes/MetalAttraction.SkillCapes.js` |
 | Runecraft: every altar without talisman or tiara (varbits `rc_no_tally_required_*`) | `skills/Runecrafting.plugin.js` |
-| Sailing: teleport a boat to the Pandemonium and rename a boat | `skills/sailing/BoatTeleport.plugin.js` via `sailing:cape-teleport` / `sailing:cape-rename-boat` |
+| Sailing: teleport a boat to the Pandemonium and rename a boat | `skills/sailing/BoatTeleport.Sailing.js` via `sailing:cape-teleport` / `sailing:cape-rename-boat` |
 | Slayer: no combat requirement (worn); 10% previous task (carried) | `skills/slayer/Tasks.Slayer.js` |
 | Smithing: gold bar XP; coal bag holds 36 | `skills/Smithing.plugin.js`, `items/storage/CoalBag.StorageItems.js` |
 | Thieving: +10% pickpocket | `skills/thieving/Pickpocket.Thieving.js` |
@@ -66,7 +66,7 @@ Firemaking cape's light, the Slayer cape's repeat chance).
   upgrade (his transcript's `upgrading-a-skillcape`). Construction's Teleport opens the menu
   interface "House portal teleports". Sailing and the max cape's Pandemonium, boat and
   "Teleport Boat (Pandemonium)" entries go to `sailing:cape-teleport`; "Rename Boat" goes to
-  `sailing:cape-rename-boat` (BoatTeleport.plugin.js).
+  `sailing:cape-rename-boat` (BoatTeleport.Sailing.js).
 - **Options**: Stamina Boost (once a day, "You feel reinvigorated."), Search (pestle and mortar,
   `searchcape_pestle`; grapple and crossbow three times a day, `searchcape_grapple`, varbit
   `free_grapple`), Spellbook ("Choose spellbook: (5/5 left)", "Arceuus spellbook activated.",

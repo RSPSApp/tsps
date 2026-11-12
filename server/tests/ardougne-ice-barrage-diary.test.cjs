@@ -18,7 +18,7 @@ const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFo
 const { MagicCombatMethod } = require("../dist/game/content/combat/method/impl/MagicCombatMethod");
 const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const IceBarrageDiary = require("../plugins/achievements/diaries/ArdougneIceBarrageDiary.plugin");
+const IceBarrageDiary = require("../plugins/achievements/diaries/ArdougneIceBarrageDiary.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 
 let core;
@@ -55,7 +55,7 @@ before(async () => {
     core,
     registerArea: (area) => registered.push(area),
     onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
-    onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerDeath() {},
+    onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, game);
   AreaManager.areas.push(...registered);
   pendingAreaRemovals.push(...registered);
@@ -259,4 +259,23 @@ test("a canceled queued cast does not grant progress and a lethal impact does", 
   processImpact(lethalHit);
   assert.equal(lethal.target.getHitpoints(), 0);
   assert.ok(tasks(lethal.caster).has(IceBarrageDiary._test.TASK));
+});
+
+test("an Ice Barrage splashes when the target stands in multicombat, whatever the caster's tile (Wiki)", (t) => {
+  const { caster, target } = opposingPair(t);
+  const bystander = player(t, { location: new Location(2401, 3104, 0), team: game.data.TEAM.ZAMORAK });
+  const splashed = () => buildCastHits(caster, target, { localPlayers: [bystander] }).map((hit) => hit.getTarget());
+  const multi = new Set([caster, target, bystander]);
+  t.mock.method(AreaManager, "inMulti", (mobile) => multi.has(mobile));
+  assert.deepEqual(splashed(), [target, bystander], "all in multi: the bystander is splashed");
+  // Wiki (Multicombat area): the target's zone decides, so a caster on a single-way tile splashes opponents in multi.
+  multi.delete(caster);
+  assert.deepEqual(splashed(), [target, bystander], "a single-way caster, the target and bystander in multi: splashed");
+  multi.delete(target);
+  assert.deepEqual(splashed(), [target], "the target in single-way, the bystander on a multi tile: no splash");
+  multi.add(caster);
+  assert.deepEqual(splashed(), [target], "a multi caster, the target alone in single-way: no splash");
+  multi.add(target);
+  multi.delete(bystander);
+  assert.deepEqual(splashed(), [target], "the bystander itself in single-way is never splashed");
 });

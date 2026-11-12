@@ -19,6 +19,7 @@
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const ATTR_STORED = "toa:retrieval";
 /** gravestone_retrieval is shared (Vorkath's, the Theatre of Blood's): whichever opened it answers its clicks. */
@@ -56,11 +57,13 @@ function feeFor(player, items) {
 
 /**
  * What a death wouldn't keep moves to the chest, replacing anything already there. Returns how many
- * stacks it holds now.
+ * stacks it holds now. A raid death is a PvM death, so items Death protection from cosmetics
+ * protects (All Settings row 386) stay with the player as they would on any other.
  */
 function storeLost(player) {
   const { Item, Flag, PlayerDeathTask } = Shared.core();
-  const kept = PlayerDeathTask.getItemsToKeep(player);
+  const kept = PlayerDeathTask.getItemsToKeep(player, PlayerDeathTask.getAmountToKeep(player),
+    PlayerDeathTask.protectsCosmetics(player, null));
   const stored = [];
   for (const container of [player.getInventory(), player.getEquipment()]) {
     const items = container.getItems();
@@ -171,7 +174,7 @@ function clickItem(event) {
   if (!entry) return;
   const op = event.opId ?? event.action;
   if (op === EXAMINE_OP) {
-    player.sendMessage(Shared.core().ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (op !== TAKE_OP) return;

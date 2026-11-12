@@ -4,8 +4,8 @@
  * - Fly on Auguste or an assistant, Use on a station's basket, or "Yes." to an assistant's
  *   "Do you want to use the balloon?" opens the balloon map (zep_balloon_map);
  * - a trip to an opened station costs one log of its type ("You need 1 [type] logs to make this
- *   trip.") and needs its Firemaking level; to Entrana the player is searched first, and no
- *   weapons or armour may be worn;
+ *   trip.") and needs its Firemaking level; Entrana searches carried and worn items using its
+ *   shared admission policy;
  * - from Entrana a station not yet opened is opened by flying the balloon controls there with
  *   10 of its logs (3 magic), for 2,000 Firemaking XP (Controls.BalloonTransport.js; rsprox
  *   226/01702 boards with "You board the balloon."); from anywhere else it is refused;
@@ -26,7 +26,6 @@ const OPEN_MAP_TARGET = "Balloon transport system";
 const BALLOONISTS = ["Auguste", "Assistant Stan", "Assistant Brock", "Assistant Serf", "Assistant Marrow", "Assistant Le Smith", "Assistant Lori"];
 const BASKET = "Basket";
 const ENTRANA = "entrana";
-const WORN_CONTRABAND = ["HEAD_SLOT", "WEAPON_SLOT", "BODY_SLOT", "SHIELD_SLOT", "LEG_SLOT"];
 const GRAMS_PER_KG = 1000;
 /** The Pets plugin's follower, readable by other plugins. */
 const PET_ATTRIBUTE = "pets:current";
@@ -58,8 +57,9 @@ function fill(text, values) {
   return text.replace(/\[(\w+)\]/g, (whole, key) => (values[key] !== undefined ? String(values[key]) : whole));
 }
 
+/** Wiki (Balloon transport system): each route's Firemaking level is boostable. */
 function firemaking(player) {
-  return player.getSkillManager().getMaxLevel(Common.core.Skill.FIREMAKING);
+  return player.getSkillManager().getCurrentLevel(Common.core.Skill.FIREMAKING);
 }
 
 /** Carried and worn weight in kg, one log of the fare aside. */
@@ -78,10 +78,10 @@ function hasPet(player) {
   return player.getAttribute?.(PET_ATTRIBUTE)?.isRegistered?.() === true;
 }
 
-function wearsContraband(player) {
-  const { Equipment } = Common.core;
-  const equipment = player.getEquipment();
-  return WORN_CONTRABAND.some((slot) => (equipment.get(Equipment[slot])?.getId?.() ?? -1) > 0);
+function carriesEntranaContraband(player) {
+  const request = { player, allowed: false, reason: null, handled: false };
+  Common.api.emitCustomEvent("entrana:check-items", request);
+  return !request.allowed;
 }
 
 /** The balloon map, from the station the player is at - one that is open to them. */
@@ -166,7 +166,7 @@ function travel(player, from, to, npcId = null) {
   }
   const arrived = opening ? () => {
     Common.openRoute(player, to);
-    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, false);
+    player.getSkillManager().addExperience(Common.core.Skill.FIREMAKING, unlockXp, true);
     player.sendMessage(fill(messages.unlocked, { place: to.label }));
   } : null;
   // The logs' source may be asked for: the trip is checked again once it's chosen, and the
@@ -176,6 +176,7 @@ function travel(player, from, to, npcId = null) {
   const controls = opening && Controls.hasRoute(to);
   const go = () => Storage.chooseSource(player, to, cost, (source) => {
     if (Common.stationAt(player.getLocation()) !== startedAt) return;
+    if (to.key === ENTRANA && carriesEntranaContraband(player)) return say(player, npcId, messages.entranaRefused);
     const after = refusal();
     if (after) return say(player, npcId, after);
     const started = controls ? Controls.takeOff(player, to, cost, source) : fly(player, to, cost, arrived, source);
@@ -186,7 +187,7 @@ function travel(player, from, to, npcId = null) {
   // Entrana: searched first (the assistants' transcript); the trip is checked again after it.
   say(player, npcId, messages.entranaSearch, () => {
     player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, messages.searched);
-    if (wearsContraband(player)) return say(player, npcId, messages.entranaRefused);
+    if (carriesEntranaContraband(player)) return say(player, npcId, messages.entranaRefused);
     const after = refusal();
     if (after) return say(player, npcId, after);
     go();
@@ -245,7 +246,7 @@ function fly(player, to, logs, arrived = null, source = Storage.INVENTORY) {
     const at = player.getLocation();
     const moved = at.getX() !== departed.x || at.getY() !== departed.y || at.getZ() !== departed.z;
     return player.isDyingReturn?.() !== true && player.getHitpoints?.() > 0 && !moved
-      && !(to.key === ENTRANA && wearsContraband(player));
+      && !(to.key === ENTRANA && carriesEntranaContraband(player));
   };
   flight.land = (logout = false) => {
     if (flight.done) return;

@@ -8,6 +8,7 @@ function attachExplicitSummary(api) {
 
 module.exports = {
   name: "CustomCharacterSummary",
+  description: "Our own Character Summary tab for the side journal. Off unless the world turns it on; needs SideJournalDefaults.",
   enabled: false,
   dependsOn: ["SideJournalDefaults"],
   register(api) {

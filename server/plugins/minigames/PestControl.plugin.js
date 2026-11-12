@@ -375,6 +375,9 @@ function resetStructures(structures, replace) {
   }
 }
 
+/** Players whose death began inside a match (onPlayerBeforeDeath), until the death completes. */
+const dyingInMatch = new WeakSet();
+
 class PestControlMatchArea extends PrivateArea {
   constructor(match) {
     super([GAME_BOUNDS]);
@@ -1074,6 +1077,7 @@ function createPestControl(api) {
   api.onNpcInteraction("Void Knight", { Exchange: exchangeRewards });
   api.onInterfaceActionButton(Rewards.CONFIRM_UID, Rewards.confirmReward);
   api.onNpcInteraction("Squire", { "Talk-to": talkToMatchSquire, Leave: leaveMatch });
+  api.onCustomEvent("escape-crystal:escape", escapeCrystal);
 
   api.onCanAttack((event) => {
     const player = event.attacker?.getAsPlayer?.();
@@ -1103,16 +1107,32 @@ function createPestControl(api) {
     if (area instanceof PestControlMatchArea) area.match.handleNpcDeath(npc);
   });
 
+  // Players whose death began in a match. A game that ends during the death animation moves them to the outpost and
+  // clears the match, and the death then dropped their items there: Pest Control is a safe minigame (as LMS guards).
+  api.onPlayerBeforeDeath((event) => {
+    if (event.player.getAttribute?.("pest-control:match") instanceof PestControlMatch) dyingInMatch.add(event.player);
+  });
+
   api.onPlayerDeath((event) => {
     const match = event.player.getAttribute?.("pest-control:match");
-    if (!(match instanceof PestControlMatch)) return;
+    const diedInMatch = dyingInMatch.delete(event.player);
+    if (!(match instanceof PestControlMatch)) {
+      // The game ended while they were dying: they are at the outpost already, and stay there.
+      if (diedInMatch) {
+        restorePlayer(event.player);
+        event.handled = true;
+      }
+      return;
+    }
     restorePlayer(event.player);
     event.player.moveTo(GAME_START.clone());
     event.handled = true;
   });
 
   api.onShouldDropItemsOnDeath((event) => {
-    if (event.player.getAttribute?.("pest-control:match") instanceof PestControlMatch) event.shouldDrop = false;
+    if (event.player.getAttribute?.("pest-control:match") instanceof PestControlMatch || dyingInMatch.has(event.player)) {
+      event.shouldDrop = false;
+    }
   });
 
   api.onCanTeleport((event) => {
@@ -1150,8 +1170,23 @@ function leaveMatch({ player, npc }) {
   player.moveTo(OUTPOST_RETURN.clone());
 }
 
+/**
+ * The escape crystal in a match (Wiki: Escape crystal, "Where it works"): off the island as the
+ * Squire's Leave takes the player, back to the outpost. The shared EscapeCrystal plugin decides
+ * when it fires and uses it up (`escape-crystal:escape`).
+ */
+function escapeCrystal(request) {
+  const match = request.handled ? null : request.player.getAttribute?.("pest-control:match");
+  if (!(match instanceof PestControlMatch)) return;
+  request.handled = true;
+  match.area.leave(request.player, false);
+  request.player.moveTo(OUTPOST_RETURN.clone());
+  request.escaped = true;
+}
+
 module.exports = {
   name: "PestControl",
+  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points and the Squire's shop.",
   members: true,
   register(api) {
     AreaManager = api.getAreaManager();
@@ -1179,6 +1214,7 @@ module.exports = {
     Bots,
     PestControlMatch,
     gateGroupKey,
+    escapeCrystal,
     releaseMatchPlayer,
     cleanupMatchNpcs,
     resetStructures,

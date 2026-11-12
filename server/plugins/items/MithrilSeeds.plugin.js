@@ -141,6 +141,7 @@ function plant({ player, item, itemId, slot }) {
 
 module.exports = {
   name: "MithrilSeeds",
+  description: "Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time.",
   members: true,
   register(api) {
     core = api.core;

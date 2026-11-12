@@ -1,3 +1,4 @@
+import type { LoginProtocolExtension } from "./types/login";
 import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../game/sync/PlayerUpdateDecoder";
@@ -5,7 +6,7 @@ import type { PlayerSyncFrame } from "../../game/sync/PlayerSyncTypes";
 import type { ProjectileLaunch } from "../../common/projectiles/ProjectileLaunch";
 import { CombatStateStore } from "../combat/CombatStateStore";
 import type { GameSocket, WebRtcConnectionConfig } from "./connection/GameSocket";
-import { DEFAULT_URL } from "./constants";
+import { DEFAULT_URL, RECONNECT_DELAY_INITIAL_MS } from "./constants";
 import {
     createDefaultShopState,
     createDefaultSmithingState,
@@ -73,16 +74,19 @@ export const state = {
     webRtcConfig: undefined as WebRtcConnectionConfig | undefined,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
     lastKeepaliveAt: 0,
-    reconnectDelayMs: 250,
+    reconnectDelayMs: RECONNECT_DELAY_INITIAL_MS,
     reconnectAttempts: 0,
     isReconnecting: false,
     loginConnectRetryTimer: null as ReturnType<typeof setTimeout> | null,
     loginConnectAttemptId: 0,
+    /** True from a successful login until logout or a failed reconnect; sendLogin stores credentials before it. */
+    hasLoggedIn: false,
     sessionUsername: null as string | null,
     sessionPassword: null as string | null,
     sessionRevision: 0,
     /** LOGIN_FLAG_* for the session's credentials (a token after "Stay logged in"). */
     sessionLoginFlags: 0,
+    /** The character picked on the select screen; the re-login after a drop selects it again. */
     currentTick: 0,
     serverTickMs: 600,
     serverClockOffsetMs: 0,
@@ -95,6 +99,8 @@ export const state = {
     autoSendHandshake: true,
     playerSyncContext: null as PlayerSyncContext | null,
     playerUpdateDecoder: null as PlayerUpdateDecoder | null,
+    loginExtension: undefined as LoginProtocolExtension | undefined,
+    loginOnWelcome: null as (() => void) | null,
     lastWelcome: undefined as { tickMs: number; serverTime: number } | undefined,
     lastAnim: undefined as PlayerAnimPayload | undefined,
     lastHandshake: undefined as

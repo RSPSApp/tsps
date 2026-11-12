@@ -76,7 +76,28 @@ Hotspot locs are shared between some rooms (the hall and dungeon stair spaces), 
 resolved to a hotspot through its room (`Data.hotspotIn`). Building on a hotspot furnishes every
 placement of it in the room (all tiles of a rug, every window's curtains); Remove takes them all.
 
+Some furniture draws nothing on part of its hotspot. A hall's rug and stair spaces are one hotspot
+(the cache's `poh_hotspot` row `stair_hotspot`; the Wiki's Oak staircase and Opulent rug pages
+list both under "Rug space, stair space"), so a staircase takes the rug tiles and a hall rug takes
+the stair tile. Tool stores, combat rings and oubliette floors do the same. In building mode such
+a placement's Build ghost is removed with the rest of the scene's built furniture: the space is
+taken, and the server offers no build there (issue #4189).
+
 ## Furniture with behaviour
+
+### Chat input
+
+The menu (interface 187, script 217 with numbers shown), the nexus Teleport Menu
+(`telenexus_teleport`), the jewellery box (590) and the furniture list (`poh_furniture_creation`)
+run `chatdefault_stopinput` as they open, so typing goes to their number keys and not the chat.
+Live sends `chatdefault_restoreinput` (2158) with their `if_closesub` whenever they close: after
+it when the player closes them or walks away, just before it on a pick, in the same tick (rsprox
+captures, rev 224-239: menu in recordings 312 and 2909, the Teleport Menu in 2890, 2900 and 2966,
+the jewellery box closed in 2913, 3198 and 3209, and after a pick in 57 of 57 recordings). The
+nexus configuration (`telenexus`) doesn't stop input, and live sends nothing when it closes.
+`Menu.restoreChatInput` sends it on `interface:closed` (so always after the `if_closesub`; the
+client sees both in the same tick), for these menus only: other content opens interface 187 too
+and restores input itself.
 
 ### Teleports
 
@@ -121,6 +142,14 @@ give each destination's name, runes, Magic level and alternate). The player's sl
   captured: new destinations cost 1,000x the spell's runes from the inventory on Done and need
   its Magic level, removing refunds nothing, and a nexus holds 4, 8 or 41 (Wiki).
 - Older saves' destination lists on the nexus become the player's slots.
+- **Remove** (building mode) first opens a message box, "Warning: If you remove this nexus you
+  will have to pay for your upgrades and teleports to be used again." (rsprox recording 2904 on
+  the crystalline nexus; Leagues recording 4308 shows the same text on the marble one), then the
+  usual "Really remove it?". The recordings end at the warning, so that order is the generic
+  remove flow's, not captured. Confirming Remove, or removing the room the nexus stands in,
+  clears the player's slots and left-click destination, so the runes are paid again when a nexus
+  is rebuilt (Wiki, Portal Nexus). Upgrading a tier keeps them (Wiki). Room removal has no
+  capture of a warning, so none is shown.
 
 ### Floors
 
@@ -148,6 +177,18 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 - **Larders, shelves:** "Select an option", four at a time with More... (captures; contents
   from the Wiki). The shelves' cup is from captures (the Wiki's table leaves it out).
 - **Barrels:** a beer glass on a barrel fills it, with the barrel's pour animation.
+- **Spice rack** (the kitchen's wall space, `poh_kitchen_8`): 60 Construction, 374 experience
+  (Wiki), materials from the cache. It keeps the owner's red, brown, yellow and orange doses in
+  saved attributes, so they outlast the rack and the kitchen (Wiki). From rsprox captures (rev 229
+  recordings 271 and 272) and the Wiki's Transcript:Spice rack:
+  - Store: "Which Spice would you like to store?" (Red./Brown./Yellow./Orange./All.) takes every
+    shaker of the colour; a spice used on the rack does the same for its colour. Other items:
+    "You can't store this in the spice rack."
+  - Take: "Which Spice would you like to take?", then "How much spice would you like to take?:".
+    It gives full (4) shakers and one smaller shaker with the rest, one per free slot. A full
+    inventory gets nothing, with no message.
+  - Check: "N x Red Spice.<br>N x Brown Spice.<br>N x Yellow Spice.<br>N x Orange Spice."
+  - Visitors get "You can only use this in your own house." on every option.
 - **Stoves:** the firepits cook as fires, the ovens and ranges as ranges (Cooking). Kettles
   fill at sinks (WaterSources).
 - **Tea:** a full kettle on any stove but the plain firepit shows the stove's kettle loc ("You
@@ -257,8 +298,8 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 Amy (Falador), then Marlo, Ellie and Angelo give contracts at the Wiki's tiers for a random
 client's home. Each home's hotspots show, per player, broken (Repair: a plank, or a steel bar
 for a sink, range or bath), old (Remove), empty (Build: the Wiki's planks) or the new piece.
-The client pays the tier's experience and Carpenter points and restores run energy; the full
-Carpenter's outfit adds 2.5%. Last-tier contract repeats the last tier; Rewards opens the shop
+The client pays the tier's experience and Carpenter points and restores run energy (the Carpenter's
+outfit adds to the experience, see below). Last-tier contract repeats the last tier; Rewards opens the shop
 (673) with the Wiki's prices; the supply crate rolls the Wiki's table. One Leagues capture
 (recording 1863, rev 227) gives the tier menu ("Select an option": "Beginner Contract", "Novice
 Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
@@ -363,6 +404,8 @@ the estate agent also accepts either varbit if a quest ever sets it.
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).
 - Hosidius blueprints from the reward shop do nothing yet; Amy's saw works as a saw only.
+- The spice rack's build menu text: live shows "Spice rack|Teak plank: 3<br>Soft clay: 6<br>4 dose
+  spice shaker<br>of each colour" (captures). Ours lists the cache name and its first four materials.
 - Fish trophy experience the Wiki doesn't list (haddock and orangefin on teak use the
   mahogany values), and the Alchemical Hydra head's.
 
@@ -390,3 +433,17 @@ furniture can be built with the agent MCP: `object_option` Build on the hotspot,
 `send_packet` `dialogue_continue` on 458:2 with the menu choice (1-based) once 458 is open. Rooms
 are picked from a door hotspot the same way with 212:4 and the room id, then built with
 `dialogue_choose` "Build" (or "Rotate clockwise" first).
+
+## Carpenter's outfit
+
+`construction/CarpenterOutfit.Construction.js`. OSRS Wiki (Carpenter's outfit): helmet +0.4%, shirt
++0.8%, trousers +0.6%, boots +0.2% Construction experience, and +0.5% more with all four worn
+(2.5% in all). The Wiki describes it as a boost to the experience received when training
+Construction, names the Mahogany Homes contract experience (since 19 June 2024) and the
+shipwrights' workbench (since 26 November 2025), and excludes the experience Barlak pays for long
+and curved bones. Each piece counts on its own. Here it applies to the Construction experience of
+furniture built in the player-owned house, workbench flatpacks, staircases, Mahogany Homes and the
+shipwrights' workbench; a piece's second skill (Smithing, Runecraft, Farming) is not boosted. Plugins
+outside Construction ask for the multiplier with the `construction:outfit-multiplier` custom event
+(`{ player, multiplier }`); the shipwrights' workbench does. Tested in `tests/carpenter-outfit.test.cjs`
+and `tests/shipwrights-workbench.test.cjs`.

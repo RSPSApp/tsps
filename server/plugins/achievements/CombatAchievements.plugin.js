@@ -20,6 +20,9 @@
  *                                       the account summary's row; a collection log boss's button
  *   answer "combat-achievements:summary" { player }  -> completed (tasks done), speed (speed tasks
  *                                       done), monsters (names of the monsters with every task done)
+ *   api.emitCustomEvent("combat-achievements:failed", { player, task: "Perfect Zebak", reason })
+ *                                       "You have failed <task>: <reason>", as the player's
+ *                                       failure settings allow
  * and it emits "combat-achievements:completed" { player, silent, task: { id, name, tier } }.
  *
  *   ::ca complete <task name|id>   finish a task through the real path
@@ -45,6 +48,10 @@ function restore({ player }) {
 function onHasTask(request) {
   const task = Data.taskNamed(request?.task);
   if (request?.player && task) request.done = Progress.isComplete(request.player, task.id);
+}
+
+function onFailed(request) {
+  if (request?.player && request.task !== undefined) Progress.announceFailure(request.player, request.task, request.reason ?? "");
 }
 
 function onComplete(request) {
@@ -118,6 +125,7 @@ function caCommand({ player, parts }) {
 
 module.exports = {
   name: "CombatAchievements",
+  description: "Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts.",
   register(api) {
     Data(api);
     Progress(api);
@@ -133,9 +141,11 @@ module.exports = {
     require("./combatachievements/tasks/DagannothKings.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Vorkath.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Sarachnis.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/Scorpia.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:has-task", onHasTask);
+    api.onCustomEvent("combat-achievements:failed", onFailed);
     api.onCustomEvent("combat-achievements:open", onOpen);
     api.onCustomEvent("combat-achievements:tier", onTier);
     api.onCustomEvent("combat-achievements:summary", onSummary);

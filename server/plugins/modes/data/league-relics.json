@@ -167,14 +167,14 @@
     "productionProdigy": {
       "league": 4, "key": "production-prodigy", "skills": ["CRAFTING", "SMITHING", "HERBLORE", "FLETCHING", "COOKING"], "levelBoost": 12, "extraChance": 0.25, "maxActions": 28,
       "batch": {
-        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
+        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
         "CRAFTING": ["leather", "jewellery", "battlestaves", "pottery", "gems", "glassblowing", "spinning"]
       }
     },
     "productionMaster": {
       "league": 5, "key": "production-master", "maxActions": 28,
       "batch": {
-        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
+        "SMITHING": ["smelt", "smith", "cannonballs"], "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips", "arrows", "bolts", "tipped", "darts"], "HERBLORE": ["clean", "mix"], "COOKING": ["cook"],
         "CRAFTING": ["leather", "jewellery", "battlestaves", "pottery", "gems", "amethyst", "glassblowing", "spinning"]
       },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 }
@@ -283,7 +283,7 @@
     },
     "woodsman": {
       "league": 6, "key": "woodsman", "maxActions": 28,
-      "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"] },
+      "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips", "arrows", "bolts", "tipped", "darts"] },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 },
       "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: the trap's 5-tick look for prey every 2 ticks.",
       "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank",
@@ -313,7 +313,19 @@
     "cullingSpree": {
       "league": 6, "key": "culling-spree", "freeKinds": ["unlock", "extend", "cancel", "block"], "freeItems": ["RUNE_POUCH", "HERB_SACK", "LOOTING_BAG"],
       "superiorClues": [1, 3], "superiorClue": "SCROLL_BOX_ELITE_", "_superiorClue": "The elite clues come as scroll boxes, as the tier-1 passive drops every clue (ours).",
-      "superiorAgainChance": 0.5, "helmet": "imbued"
+      "superiorAgainChance": 0.5, "helmet": "imbued",
+      "_taskOffer": "Wiki (Culling_Spree_(Demonic_Pacts_League); Demonic_Pacts_League/Guide/Slayer, Boss Slayer): a task is picked from 3, one a boss task with Like a Boss (each boss in an unlocked area equally likely), and its kill count chosen from 5 to 200. `bossAreas`: the guide's boss table, by the cache's boss task name (slayer_task name_uppercase) to its league area's key (league-areas.json); a boss not listed (the Shellbane Gryphon and the Maggot King, released after the league) is never offered.",
+      "taskChoices": 3, "taskAmount": [5, 200],
+      "bossAreas": {
+        "The Abyssal Sire": "wilderness", "The Alchemical Hydra": "kourend", "Araxxor": "morytania", "Barrows brothers": "morytania",
+        "Callisto": "wilderness", "Cerberus": "asgarnia", "The Chaos Elemental": "wilderness", "The Chaos Fanatic": "wilderness",
+        "Commander Zilyana": "asgarnia", "Crazy Archaeologists": "wilderness", "Dagannoth Kings": "fremennik", "Duke Sucellus": "fremennik",
+        "General Graardor": "asgarnia", "The Giant Mole": "asgarnia", "The Grotesque Guardians": "morytania", "K'ril Tsutsaroth": "asgarnia",
+        "The Kalphite Queen": "kharidian_desert", "The King Black Dragon": "wilderness", "The Cave Kraken boss": "kandarin", "Kree'arra": "asgarnia",
+        "The Leviathan": "kharidian_desert", "The Phantom Muspah": "fremennik", "Sarachnis": "kourend", "Scorpia": "wilderness",
+        "The Thermonuclear Smoke Devil": "kandarin", "Vardorvis": "varlamore", "Venenatis": "wilderness", "Vet'ion": "wilderness",
+        "Vorkath": "fremennik", "The Whisperer": "asgarnia", "Zulrah": "tirannwn"
+      }
     },
     "flowState": {
       "league": 6, "key": "flow-state", "ticks": 2,

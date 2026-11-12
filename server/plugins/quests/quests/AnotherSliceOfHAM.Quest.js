@@ -1205,11 +1205,16 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     const { player } = event;
     if (stageOf(player) !== STAGE_SCRIBE) return false;
     if (!hasItem(player, GOBLIN_VILLAGE_SPHERE_ITEM_ID)) return false;
-    player.getInventory().deleteNumber(GOBLIN_VILLAGE_SPHERE_ITEM_ID, 1);
-    setZanikAtDig(player, false);
-    player.moveTo(VILLAGE_LANDING);
-    setStage(player, STAGE_VILLAGE);
-    player.sendMessage("The sphere shatters, carrying you and Zanik to the Goblin Village.");
+    // Wiki (Goblin village sphere): it "does not work beyond level 20 Wilderness"; checked before it is used up.
+    const { TeleportHandler, TeleportType } = api.core;
+    if (!TeleportHandler.checkReqs(player, VILLAGE_LANDING, 20)) return true;
+    TeleportHandler.confirm(player, VILLAGE_LANDING, () => {
+      player.getInventory().deleteNumber(GOBLIN_VILLAGE_SPHERE_ITEM_ID, 1);
+      setZanikAtDig(player, false);
+      setStage(player, STAGE_VILLAGE);
+      TeleportHandler.teleport(player, VILLAGE_LANDING.clone(), TeleportType.NORMAL, false,
+        () => player.sendMessage("The sphere shatters, carrying you and Zanik to the Goblin Village."));
+    }, 20, { item: GOBLIN_VILLAGE_SPHERE_ITEM_ID });
     return true;
   }
 

@@ -14,6 +14,7 @@ const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/ri
 
 module.exports = {
   name: "Inferno",
+  description: "Adds the Inferno: entry through the cave, the wave run, Zuk and the supports, saved progress, and a developer ::infernowave command.",
   members: true,
   register(api) {
     const { ObjectIdentifiers: Objects } = api.core;
@@ -36,6 +37,7 @@ module.exports = {
     api.onPlayerLogout(run.runLogout);
     api.onPlayerProcess(run.processRun);
     require("./inferno/CombatAchievements.Inferno")(api);
+    require("./inferno/EscapeCrystal.Inferno")(api);
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);

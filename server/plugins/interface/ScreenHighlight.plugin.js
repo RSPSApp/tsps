@@ -133,6 +133,7 @@ function bind(api) {
 
 module.exports = {
   name: "ScreenHighlight",
+  description: "Step-by-step highlight walkthrough overlay with text and Continue button that other content, such as the league tutorial, can trigger.",
   register(api) {
     bind(api);
     api.onCustomEvent("screen-highlight:show", show);

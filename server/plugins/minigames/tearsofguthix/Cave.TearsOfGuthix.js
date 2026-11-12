@@ -17,6 +17,11 @@
  * tog_ready/walk/run_bowl (2040-2042), tog_lean_forward/back_bowl (2043/2044),
  * tog_drink_bowl (2045), tog_snake_openclose (2055). The entry/exit tiles, the tabs hidden while
  * collecting and the sound ids follow Offline_Scape's port; the Wiki does not record them.
+ *
+ * Death to the Dorgeshuun sends the player in for twenty tears (`enter(player, { goal, onGoal })`):
+ * no time limit, nothing drunk, and the week's visit is not used ("I will not count this against
+ * the next time you can collect the tears"). Reaching the goal walks the player out and calls
+ * `onGoal`; leaving early (asking Juna, death, logout) drinks nothing and keeps nothing.
  */
 
 const Streams = require("./Streams.TearsOfGuthix");
@@ -108,13 +113,14 @@ const SKILL_MESSAGES = {
 const SKILL_UNLOCKS = {
   RUNECRAFTING: { quest: "rune_mysteries", stage: 6 },
   HERBLORE: { quest: "druidic_ritual", stage: 4 },
-  SAILING: { quest: "pandemonium", stage: 1 },
+  // Wiki (Tears of Guthix): "Sailing requires completing the Pandemonium quest" (its stage 50).
+  SAILING: { quest: "pandemonium", stage: 50 },
 };
 
 let api;
 let core;
 let streams;
-/** player -> { tears, ticksLeft, leaving, wall, collectTile, entry: { questPoints, totalXp } } */
+/** player -> { tears, ticksLeft, leaving, wall, collectTile, entry: { questPoints, totalXp }, goal?, onGoal?, reached? } */
 const games = new Map();
 
 const today = () => Math.floor(Date.now() / 86400000);
@@ -129,6 +135,11 @@ function inCave(player) {
 
 function isPlaying(player) {
   return games.has(player);
+}
+
+/** Collecting for a quest goal (Death to the Dorgeshuun) rather than the weekly minigame. */
+function isQuestRun(player) {
+  return games.get(player)?.goal > 0;
 }
 
 function questStage(player, key) {
@@ -269,18 +280,22 @@ function walkPast(player, ...tiles) {
 }
 
 /** Juna lets the player in (the "enters the Tears of Guthix cave" stage direction). */
-function enter(player) {
+function enter(player, options = {}) {
   if (games.has(player)) return;
   player.getPacketSender().sendInterfaceRemoval();
   const area = createCave();
+  const goal = Number(options.goal) > 0 ? Number(options.goal) : 0;
   games.set(player, {
     area,
     tears: 0,
-    ticksLeft: questPoints(player),
+    ticksLeft: goal ? Infinity : questPoints(player),
     leaving: false,
     wall: -1,
     collectTile: null,
     entry: { questPoints: questPoints(player), totalXp: totalXp(player) },
+    goal,
+    onGoal: typeof options.onGoal === "function" ? options.onGoal : null,
+    reached: false,
   });
   area.enter(player);
   Streams.WALLS.forEach((_, index) => Streams.drawWall(core, index, streams.colourAt(index), area));
@@ -288,7 +303,7 @@ function enter(player) {
   const sender = player.getPacketSender();
   sender.sendVarbit(TEARS_VARBIT, 0);
   sender.sendVarbit(COLLECTING_VARBIT, 1);
-  sender.sendVarbit(COUNTDOWN_VARBIT, questPoints(player));
+  sender.sendVarbit(COUNTDOWN_VARBIT, goal ? 0 : questPoints(player));
   showPanel(player);
   openJuna(player);
   walkPast(player, OUTSIDE, INSIDE, CENTRE);
@@ -350,6 +365,13 @@ function createCave() {
       }
       if (inCave(player)) player.removeFlag(IGNORE_CLIPPING_FLAG);
       if (game.wall >= 0) collectTick(player, game);
+      if (game.goal) {
+        if (game.tears >= game.goal) {
+          game.reached = true;
+          finish(player);
+        }
+        return;
+      }
       game.ticksLeft--;
       player.getPacketSender().sendVarbit(COUNTDOWN_VARBIT, Math.max(0, game.ticksLeft));
       if (game.ticksLeft <= 0) finish(player);
@@ -360,7 +382,12 @@ function createCave() {
       const game = player && games.get(player);
       super.postLeave(mobile, logout);
       if (!game) return;
-      if (game.leaving && !logout && player.getHitpoints() > 0 && player.getLocation().equals(tile(OUTSIDE))) drink(player, game);
+      const walkedOut = game.leaving && !logout && player.getHitpoints() > 0 && player.getLocation().equals(tile(OUTSIDE));
+      if (game.goal) {
+        // A quest run drinks nothing and leaves the weekly visit untouched.
+        cleanUp(player);
+        if (walkedOut && game.reached) game.onGoal?.(player);
+      } else if (walkedOut) drink(player, game);
       else cleanUp(player);
     }
 
@@ -425,6 +452,7 @@ Object.assign(module.exports, {
   enter,
   finish,
   isPlaying,
+  isQuestRun,
   questPoints,
   totalXp,
   today,

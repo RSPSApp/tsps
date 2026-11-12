@@ -106,6 +106,8 @@ module.exports = function registerJunglePotionQuest(api) {
   const LOC_TO_HERB = new Map(HERBS.map((herb) => [herb.locId, herb]));
   const HAND_IN_STEPS = new Map(HERBS.map((herb) => [herb.handInStepId, herb]));
   const GRIMY_TO_CLEAN = new Map(HERBS.map((herb) => [herb.grimy, herb]));
+  /** The Herblore plugin's four herb cleaning sounds (Cleaning.Herblore.js). */
+  const CLEAN_SOUNDS = [3920, 3921, 3922, 3923];
 
   let quest;
 
@@ -286,21 +288,29 @@ module.exports = function registerJunglePotionQuest(api) {
     event.handled = true;
   }
 
-  /** Cleaning a grimy jungle herb (the Herblore plugin does not list these). */
+  /**
+   * Cleaning a grimy jungle herb (the Herblore plugin does not list these), as the Herblore plugin cleans a herb.
+   * rsprox_transcripts/227/01875.txt: Clean on grimy snake weed in slot 9 -> "You clean the Grimy snake weed."
+   * (spam), snake weed in slot 9, and one of the cleaning sounds (3920-3922 there).
+   */
   function handleItemAction(event) {
     const herb = GRIMY_TO_CLEAN.get(event.itemId);
     if (!herb) return;
     if (event.option && !/clean/i.test(event.option)) return;
     event.handled = true;
-    if (event.player.getInventory().getItems()[event.slot]?.getId() !== event.itemId) return;
-    if (event.player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 3) {
-      event.player.sendMessage("You need a Herblore level of 3 to clean this herb.");
+    const { player } = event;
+    const inventory = player.getInventory();
+    if (inventory.getItems()[event.slot]?.getId() !== event.itemId) return;
+    const grimyName = api.core.ItemDefinition.forId(event.itemId).getName();
+    if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 3) {
+      player.sendMessage(`You need level 3 Herblore to clean the ${grimyName}.`);
       return;
     }
-    event.player.getInventory().deleteAtSlot(event.slot, 1);
-    event.player.getInventory().adds(herb.clean, 1);
-    event.player.getSkillManager().addExperiences(Skill.HERBLORE, 2.5);
-    event.player.sendMessage(`You clean the ${herb.name.toLowerCase()}.`);
+    inventory.setItem(event.slot, new api.core.Item(herb.clean, 1));
+    inventory.refreshItems();
+    player.getSkillManager().addExperiences(Skill.HERBLORE, 2.5);
+    player.getPacketSender().sendSound(CLEAN_SOUNDS[Math.floor(Math.random() * CLEAN_SOUNDS.length)], 1, 0);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, `You clean the ${grimyName}.`);
   }
 
   function handleLogin({ player }) {

@@ -5,9 +5,6 @@ const FIRST_OPTION_FLAG = 1 << 1;
 const MOTW_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 6;
 /** world.json pluginConfig: the scroll's text; league worlds replace it with their own. */
 const MOTW_CONFIG = "WelcomeScreen:messageOfTheWeek";
-const DEFAULT_MOTW = "Welcome to Old School RuneScape!";
-/** The chatbox line live sends on every login, whatever the welcome screen does. */
-const WELCOME_MESSAGE = "Welcome to Old School RuneScape.";
 const pending = new WeakSet();
 const visible = new WeakSet();
 let api;
@@ -16,8 +13,22 @@ function inWilderness(player) {
   return api.core.Wilderness.isInLocation(player?.getLocation?.());
 }
 
+/**
+ * The chatbox greeting, sent as the welcome chat type as live does (rsprox `type=108`). A game mode
+ * with worlds of its own rewrites it through `welcome-screen:greeting` { player, worldName, text }
+ * (a Hardcore world: "Welcome to Hardcore Old School RuneScape.").
+ */
+function greet(player) {
+  const worldName = api.core.WorldDefinition.getWorldDefinition().name;
+  const greeting = { player, worldName, text: `Welcome to ${worldName}.` };
+  api.emitCustomEvent("welcome-screen:greeting", greeting);
+  player.getPacketSender().sendTypedMessage(api.core.ChatType.WELCOME, String(greeting.text));
+  // Live's next line is the "Did you know?" tip (LoginTips).
+  api.emitCustomEvent("welcome-screen:greeted", { player });
+}
+
 function login({ player, isNewAccount }) {
-  player.sendMessage(WELCOME_MESSAGE);
+  greet(player);
   // Mobile, new accounts and Wilderness logins enter the world directly.
   if (isNewAccount || player.isPlayerBot?.() === true || inWilderness(player)
       || player.getAttribute(api.core.MOBILE_CLIENT_ATTRIBUTE) === true) return;
@@ -32,7 +43,7 @@ function showWelcomeScreen(player) {
   const sender = player.getPacketSender();
   sender.sendRootInterface(WELCOME_SCREEN_GROUP_ID);
   sender.sendInterfaceFlags(PLAY_BUTTON_UID, FIRST_OPTION_FLAG);
-  sender.sendString(String(api.getPluginConfig(MOTW_CONFIG, DEFAULT_MOTW)), MOTW_UID);
+  sender.sendString(String(api.getPluginConfig(MOTW_CONFIG, `Welcome to ${api.core.WorldDefinition.getWorldDefinition().name}!`)), MOTW_UID);
   api.emitCustomEvent("welcome-screen:shown", { player });
 }
 
@@ -40,7 +51,8 @@ function play({ player }) {
   if (!visible.delete(player)) return false;
   const root = api.core.resolveGameframeRoot(player);
   for (const packet of api.core.encodeGameframeBootstrap(player.getUsername(), root,
-      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true)) {
+      player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true, api.core.GameConstants.WORLD_TYPE.label,
+      !api.core.dataOrbsHidden(player), api.core.World.getProcessCycle())) {
     player.getSession().sendClientPacket(packet);
   }
   // The saved spellbook selector and quest varps were sent at login and survive a root swap.
@@ -55,6 +67,13 @@ function clear({ player }) {
 
 module.exports = {
   name: "WelcomeScreen",
+  description: "Welcome screen at login with the message of the week and a Play button, with the text set by the world's plugin config.",
+  config: {
+    "WelcomeScreen:messageOfTheWeek": {
+      type: "string", label: "Message of the week", defaultText: "Welcome to <world name>!",
+      help: "Text on the scroll at the bottom of the welcome screen. Takes <col=rrggbb> and <br> tags. League worlds show their own message instead.",
+    },
+  },
   dependsOn: ["Wilderness"],
   register(pluginApi) {
     api = pluginApi;

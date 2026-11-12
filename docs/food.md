@@ -1,9 +1,10 @@
 # Food
 
 Eating is `server/plugins/items/Food.plugin.js`. What each food does is
-`server/plugins/items/data/food.json`, one food per line, keyed by the item's cache name: every
-id with that name eats the same way, so variants (a minigame's shark, the noted-and-unnoted pairs)
-need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-delay.test.cjs`.
+`server/plugins/items/data/food.json`, one food per line, normally keyed by the item's cache name.
+An `itemId` row selects an exact same-name item when its effects differ; notes and placeholders
+are still excluded. Other same-name foods continue to use the name entry. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-delay.test.cjs`.
+The full-plugin decoded Eat tests for same-name cabbage variants, energy restoration from gout tubers and purple sweets, and Prayer restoration from bluefin are in `server/tests/potions-preset.test.cjs`.
 
 ## Sources
 
@@ -15,6 +16,12 @@ need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-de
   about 90 foods, "It heals some health." after a heal, and the `tracking_food_eaten` varp (4518)
   that counts every bite. The animation (`human_eat`) and sound (2393) match them.
 - **The cache:** which items can be eaten (an Eat option), their names, and their ids.
+
+- **Haddock and yellowfin:** [Haddock](https://oldschool.runescape.wiki/w/Haddock) heals 18 and may
+  lift Hitpoints above the base level by 20% of it or 10, whichever is lower, and not in combat in
+  a PvP area; [Yellowfin](https://oldschool.runescape.wiki/w/Yellowfin) heals 19 and restores 20%
+  run energy. rsprox recording 4103 shows the yellowfin's "You eat the yellowfin." line, animation,
+  sound and bite count; it records no run-energy change.
 
 ## How eating works
 
@@ -37,14 +44,16 @@ need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-de
 | Field | Meaning |
 | --- | --- |
 | `name` | The item's cache name. |
+| `itemId` | Optional exact cache id for a single-bite food whose effects differ from the same-name entry. |
 | `bites` | The bite names, first to last (`["Cake", "2/3 cake", "Slice of cake"]`), or a number when every bite has the same name: that name's ids, lowest first, are the bites (giant crab meat). |
 | `heal` | A number, `{ "min", "max" }` (a roll), `{ "flat", "percent" }` of the Hitpoints level (strawberry, sweetcorn, watermelon slice), or `{ "lowestOf": { skill: divisor }, "round"? }`: the lowest of those base levels divided by their numbers, rounded down or `"nearest"` (the Neypotzli foods: cooked bream the lower of Cooking/3 and Fishing/3, to the nearest, as the Wiki's 7 at 20 Fishing shows; cooked moss lizard the lower of Cooking/3 and Hunter/2, down). |
 | `eatDelay` | Ticks until the next bite, per bite or for all (default 3). |
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
-| `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Restore amounts may be `{ "flat", "percent" }` of the base level. |
+| `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
 | `runEnergy`, `curePoison`, `cureVenom`, `poisonImmunity` | Run energy restored; ordinary poison cured/venom converted to poison; explicit full poison-and-venom cure; seconds of poison immunity. |
+| `poisonDose`, `venomDamage` | Seconds started on the shared poison clock unless a longer dose is running (the venom immunity ends on the clock's next 18-second step, with the "venom resistance has worn off" message); damage dealt to the eater once. |
 | `then` | A second heal `ticks` later, with its own effects (hunter meats, 7 ticks). A newer one replaces a pending one. |
 
 ## Poison treatments
@@ -64,6 +73,13 @@ and [Venom](https://oldschool.runescape.wiki/w/Venom):
 - Strange fruit explicitly requests the full venom cure and retains its existing
   short protection and energy restoration.
 
+- Araxyte venom sac ([Wiki](https://oldschool.runescape.wiki/w/Araxyte_venom_sack), rsprox 1094, 2508, 2510): Eat cures venom and poison, deals 4 damage once and starts
+  poison immunity for 11.7 minutes (702 seconds, 39 steps; rsprox 2510 shows the `poison` varp at -39).
+  The first step is venom immunity too, so the message "Your venom resistance has worn off, but you
+  are still resistant to poison." (colour 7f007f in the captured text) arrives 0 to 18 seconds later, whenever the shared
+  clock next steps (15 ticks in rsprox 1094). The message follows the sac's dose; a potion drunk
+  afterwards is not tracked by it.
+
 The shared `ConsumableEffects.curePoison(player, damageReduction)` defaults to
 removing ordinary poison, with an optional reduction in displayed hit damage.
 The server represents poison as five severity points per starting damage and
@@ -77,9 +93,11 @@ replacement, death, overheal boundaries and existing immunity. Potion intake,
 quest unlocks, broader antidote/anti-venom tiers and orb remedy selection remain
 separate audits; this correction does not establish complete food/potion parity.
 | `outcomes` | A table of results by `weight`, each with its heal, boosts, drains, `drainRandom` (a random skill but Hitpoints) and messages (kebabs). |
+| `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `wildernessOnly` | Can only be eaten in the Wilderness (blighted food). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
+| `say` | A line the player says overhead as they eat it. With it, the eat line is sent as a spam message (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -96,6 +114,32 @@ separate audits; this correction does not establish complete food/potion parity.
   foods ("a bowl of ...") leave one the same way.
 - Mackerel's "You eat the cod." is live's own text (recorded).
 
+## Drinks eaten as food
+
+Some drinks use the food rules (`"option": "Drink"`): they heal, share the food timers and
+leave their vessel. Checked 7 November 2026 against the Wiki pages
+[Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine),
+[Half full wine jug](https://oldschool.runescape.wiki/w/Half_full_wine_jug),
+[Cup of tea](https://oldschool.runescape.wiki/w/Cup_of_tea),
+[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast) and
+[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch):
+
+- A jug of wine heals 11 and lowers Attack by 2; a half full wine jug heals 7 and lowers Attack
+  by 2. Both leave a jug (the Wiki states the leftover only for the cocktails and the tea, so the
+  half full jug's follows the full one's). The Wiki gives no messages; "You drink the wine." is
+  ours.
+- A standard cup of tea (the two ids with only Drink and Drop; the ones with an Empty option are
+  other teas) heals 3, boosts Attack by 2 + 2% of the level and leaves an empty cup. Drinking it
+  sends "You drink the tea." as a spam message and the player says "Aaah, nothing like a nice
+  cuppa tea!" overhead, on the same tick (rsprox 237/01104.txt tick 1286, 237/04101.txt:114871;
+  the Wiki quotes the exclamation).
+- Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
+  cocktail. It tastes great.".
+
+Not covered, because the Wiki gives only formulas for their stat changes or no figures: the dizzy cocktails (wizard blizzard, short green guy, drunk dragon,
+choc saturday, blurberry special), chocolatey milk, the other teas and the tea flask, and
+the other spirits and quest drinks, which still do nothing.
+
 ## Not food here
 
 Items with an Eat option that aren't in the data, each listed with its reason in the test:
@@ -103,6 +147,27 @@ handled by another plugin (Poisoned cheese, White pearl, ToA's Honey locust, Cas
 use Heal); quest, event and minigame items with their own effects (rock cakes, poison karambwan,
 nightshade, Servery food); event sweets and candy; food only eaten in one
 area (Vampyrium); unobtainable items; and the whole watermelon, which is sliced first.
+
+## Dwarven rock cake
+
+`plugins/items/RockCake.plugin.js` (members). The cake from Recipe for Disaster's Freeing the
+Mountain Dwarf heals nothing and is never used up; it takes no eat delay, so it can be clicked
+every tick (rsprox recording 3250, rev 233). Both versions (hot 7509, cooled 7510) hit through
+the eating animation (`human_eat`) on the click tick.
+
+- **Eat, cooled:** 1 Hitpoint, only above 2 Hitpoints (Wiki, Dwarven rock cake). Sound 1018 and
+  the messages "Ow! You nearly broke a tooth!" and "The rock cake resists all attempts to eat
+  it." Both are sent at 2 Hitpoints or less too, but then the recordings show no animation and
+  no hit.
+- **Guzzle, cooled:** 10% of the current Hitpoints rounded down, plus 1, never the last point
+  (a 0 hit at 1 Hitpoint). Sound 1018; "You bite hard into the rock cake to guzzle it down."
+  and "OW! A terrible shock jars through your skull." (recording 3250 shows hits falling from 10
+  to 1 as Hitpoints drop, then a 0 at 1; the formula is the Wiki's.)
+- **Eat, hot:** 1 Hitpoint under the same rule, with "Ow! Ow! That's hot!" and "You burn your
+  mouth on the hot rock cake." The recording shows no 1018 sound for it.
+- **Not done:** Guzzle on a hot cake (nothing recorded; the Wiki gives the same damage but no
+  messages) and the ogre Rock cake (2379), which has no recording and whose Wiki page does not
+  give a damage fraction for Eat.
 
 ## Guthix rest recipe permission
 
@@ -170,3 +235,79 @@ and sound retain the existing drink path.
 Regression coverage in `server/tests/consumable-edge-cases.test.cjs` dispatches the
 registered drink handler, checks both messages and the returned glass, and checks
 that a second beer during the cooldown produces no success feedback or consumption.
+
+## Ale and spirits
+
+The bar's ales and spirits drink through the same potion path as Beer (`Potions.plugin.js`).
+Potions answers a registered drink's first op, and also any later op the cache names "Drink".
+Karamjan rum's Drink is its fourth op (`inventory:items` op6 on the wire), which the first-op
+hook alone missed.
+
+From [rsprox captures](https://rsprox.net/database). Rec `20261111T225402-5ab63b4` (rev 242, "225402" below) is one
+player with base Attack 64, Defence 61, Strength 58, Magic 70, Cooking 60 and Herblore 50 drinking
+each in turn:
+
+| Drink | Recording (tick) | Lines (spam) | Slot after | Levels sent |
+| --- | --- | --- | --- | --- |
+| Asgarnian ale | 3455 | "You drink the ale. You feel slightly reinvigorated..." / "...and slightly dizzy too." | beer glass | |
+| Karamjan rum | 4287, 1863 (Leagues) | "You drink the rum. You feel slightly reinvigorated..." / "...and slightly dizzy too." | empty | at 99/99: Attack 95, Strength 104 |
+| Rum (28896) | 4101, 4291 | the rum's lines | empty | |
+| Wizard's mind bomb | 225402 (9) | "You drink the Wizard's Mind Bomb." / "You feel very strange." | beer glass | Magic 70→73, Attack 64→60, Defence 61→57, Strength 58→55 |
+| Greenman's ale | 225402 (48) | "You drink the Greenman's Ale." / "It has a strange taste." | beer glass | Attack 57→53, Defence 57→53, Strength 55→51, Herblore 50→51 |
+| Dragon bitter | 225402 (59) | "You drink the Dragon Bitter. You feel slightly reinvigorated..." / "...and slightly dizzy too." | beer glass | Attack 54→50, Strength 52→54 |
+| Grog | 225402 (69) | "You drink the grog. ..." / "...and slightly dizzy too." | beer glass | Attack 50→45, Strength 54→57 |
+| Chef's delight | 225402 (81) | "You drink the ale. ..." / "...and slightly dizzy too." | beer glass | Attack 45→41, Strength 57→53, Cooking 60→64 |
+| Vodka | 225402 (94) | "You drink the vodka. ..." / "...and slightly dizzy too." | empty | Attack 41→38, Strength 53→56 |
+| Brandy | 225402 (111) | "You drink the brandy. ..." / "...and slightly dizzy too." | empty | Attack 38→35, Strength 56→59 |
+| Whisky | 225402 (121) | "You drink the whisky. ..." / "...and slightly dizzy too." | empty | Attack 35→32, Strength 59→61 |
+| Gin | 225402 (129) | "You drink the gin. ..." / "...and slightly dizzy too." | empty | Attack 32→29, Strength 61 (already at the cap) |
+| Keg of beer | 225402 (139) | "You chug the keg. You feel reinvigorated...<br>... but extremely drunk too." (one line) | empty | Attack 29→10, Strength 61→65 |
+
+All send sound 2401 (twice for the keg). The keg also sends a camera shake (3, 0, 20, 2), and a
+camera reset follows 50 ticks later (tick 189); another keg first restarts the sway. The animation is `human_eat` (829), except the keg's
+`viking_keg_drink_full` (1330). The house Greenman's ale and Dragon bitter (`poh_*`,
+`rsprox_transcripts/229/00264.txt`) send their stock ale's lines, leave `poh_beer_glass`, and
+take 99→94 (Greenman's) and Attack 96→90 (Dragon bitter). The house cider in the same recording
+sends "You drink the cider.  You feel slightly reinvigorated..." with two spaces. The five stock
+beer captures have one, and the stock Cider isn't captured.
+
+Effects are the Wiki's, and the levels above agree:
+- **Ales:** Asgarnian ale and Dragon bitter: Strength +2, Attack -(2 + 5% of current).
+- **Chef's delight:** Cooking +(1 + 5%), Attack and Strength -(2 + 5%).
+- **Grog:** heals 3, Strength +(1 + 4% of base), Attack -(3 + 5%).
+- **Spirits:** heal 5, Strength +(1 + 5% of base), Attack -(3 + 2% of current).
+- **Keg of beer:** heals 15, Strength +(2 + 10% of base), Attack -(5 + 50% of current).
+
+Greenman's ale is the exception. The Wiki gives a flat 3, but both captures fit 2 + 4% of current.
+
+Ours:
+- The house Beer, Asgarnian ale and Chef's delight are taken to send their stock lines, as the
+  captured house Greenman's ale and Dragon bitter do.
+- Dwarven stout's lines are the Wiki's.
+- The keg's camera sway is filed under the atmospheric camera shake setting.
+
+### Bottle of wine
+
+`food.json`, rec 225402 tick 26:
+- two game messages, "You drink the wine." and "It makes you feel a bit dizzy.";
+- `human_eat` and sound 2401;
+- the slot becomes an empty wine bottle;
+- Attack 60→57. The Wiki gives heal 14 and Attack -3.
+
+Foods whose option is Drink now send sound 2401, as the wine and the Fruit blast did. Others
+keep the eating sound.
+
+Coverage: `server/tests/alcohol-drinks.test.cjs`.
+
+## Draynor cabbage
+
+The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Draynor_Manor%29)
+uses a different item id from regular cabbage despite sharing its cache name. It heals one
+Hitpoint and boosts Defence by one plus 2% of its base level, rounded down. Its two eat
+messages come from the Wiki item page; their live timing has not been captured here.
+
+## Food and run energy
+
+[Gout tuber](https://oldschool.runescape.wiki/w/Gout_tuber) restores 50 run energy
+points, and [Purple sweets](https://oldschool.runescape.wiki/w/Purple_sweets) restore 10.
+Both use the existing food energy-restoration path, which caps energy at its maximum.

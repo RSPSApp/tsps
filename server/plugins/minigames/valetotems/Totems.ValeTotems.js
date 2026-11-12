@@ -27,6 +27,7 @@ const CARVE_MENU_TITLE = "What animal would you like to carve?";
 const CARVE_MENU_MODE = 34;
 const MAX_DECORATIONS = 4;
 const BUILD_DELAY = 1;
+const CARVE_REOPEN_TICKS = 2;
 const KNIVES = ["knife", "fletching_knife"];
 
 // The miniquest (quests/quests/ValeTotems.Quest.js) writes these same varbits. The site is
@@ -35,7 +36,12 @@ const QUEST_STAGE_VARBIT = 17227; // ent_totems_intro
 const QUEST_CARVE_CHAT_VARBIT = 17229; // ent_totems_carve_chat
 const QUEST_DECORATE_CHAT_VARBIT = 17230; // ent_totems_decorate_chat
 const QUEST_SITE = 1;
+/** A site the quest only opens once it is complete. */
+const OTHER_SITE = 2;
 const QUEST_FIRST_STAGE = 10;
+const QUEST_BROKEN_STAGE = 30;
+const QUEST_DECORATED_STAGE = 40;
+// The client's ent_totems_intro reads 100 once the miniquest is complete.
 const QUEST_COMPLETE_STAGE = 70;
 
 function questStage(player) {
@@ -57,16 +63,62 @@ function questChat(player, varbit) {
  */
 function questAllows(player, site) {
   const request = { player, site, allowed: true };
-  Shared.api().emitCustomEvent("vale-totems:access", request);
+  Shared.api().emitCustomEvent?.("vale-totems:access", request);
   return request.allowed !== false;
 }
 
+/**
+ * A site the quest keeps closed. RSProx 20261109T224258-5ab63b4 tick 452: before the miniquest,
+ * the site 1 totem says "You're not really sure what to do with that, but maybe there's someone
+ * in the valley who does." (mesbox). Ours: the same refusal at the other sites before it.
+ */
 function blocked(player) {
   if (questActive(player)) {
     Shared.statement(player, "You should probably talk to Ranulph and Isadora before doing that.");
     return;
   }
-  player.sendMessage("You need to complete the Vale Totems miniquest before you can help the ents here.");
+  Shared.statement(player, "You're not really sure what to do with that, but maybe there's someone in the valley who does.");
+}
+
+/**
+ * The quest's own totem until the intro breaks it (stage 30): the old, intact totem, which
+ * ents leave alone and which can't be carved or decorated.
+ */
+function questKeeps(player, site) {
+  if (site !== QUEST_SITE || questStage(player) >= QUEST_BROKEN_STAGE) return false;
+  return questStage(player) > 0 || !questAllows(player, site);
+}
+
+/**
+ * Whether ents pass this site by: the quest's totem until the miniquest is complete. RSProx
+ * 20261109T224258-5ab63b4: site 1 keeps its spirits, its durability (4) and an empty pile from
+ * the carving (tick 621) to the scripted visit (tick 710), and the old totem is never visited.
+ */
+function questHolds(player, site) {
+  return site === QUEST_SITE && questStage(player) < QUEST_COMPLETE_STAGE && !questAllows(player, OTHER_SITE);
+}
+
+/** The miniquest's totem while the miniquest runs. */
+function questTotem(player, site) {
+  return site === QUEST_SITE && questActive(player);
+}
+
+/** Whether Build may start here; a closed site says why. */
+function open(player, site) {
+  if (questAllows(player, site)) return true;
+  blocked(player);
+  return false;
+}
+
+/**
+ * Carve and Decorate only stay closed on the quest's own totem before the miniquest (the
+ * intact totem live shows there until the intro breaks it). A totem built at sites 2-8 before
+ * the gate existed keeps its options.
+ */
+function untouchable(player, site) {
+  if (!questKeeps(player, site)) return false;
+  blocked(player);
+  return true;
 }
 
 function article(word) {
@@ -109,10 +161,7 @@ function build(event) {
   const { player } = event;
   const site = siteOf(event);
   if (site == null) return false;
-  if (!questAllows(player, site)) {
-    blocked(player);
-    return true;
-  }
+  if (!open(player, site)) return true;
   State.join(player);
   if (State.totem(player, site).points >= DATA.offeringsLimit) {
     Shared.statement(player, "You should take some of the offerings already here before building a new totem.");
@@ -135,6 +184,7 @@ function erect(player, site, { wood, index }) {
   Shared.animate(player, Shared.SEQ.BUILD);
   Shared.sound(player, Shared.SOUND.BUILD);
   State.erect(player, site, index);
+  State.count(player, "totems-built");
   Shared.addXp(player, "FLETCHING", wood.carveXp);
   if (Shared.ownsHouse(player)) Shared.addXp(player, "CONSTRUCTION", player.getSkillManager().getMaxLevel(Shared.core().Skill.CONSTRUCTION));
   player.setRunEnergy(player.getRunEnergy() + DATA.runEnergyRestore);
@@ -151,6 +201,7 @@ function carve(event) {
   const { player } = event;
   const site = siteOf(event);
   if (site == null) return false;
+  if (untouchable(player, site)) return true;
   if (questActive(player) && site === QUEST_SITE && !questChat(player, QUEST_CARVE_CHAT_VARBIT)) {
     Shared.statement(player, "You're not quite sure how to carve the totem. Ranulph and Isadora might be able to help.");
     return true;
@@ -187,17 +238,44 @@ function carveAnimal(player, site, animal) {
   Shared.sound(player, Shared.SOUND.CARVE, Shared.SOUND_DELAY.CARVE);
   const last = State.carve(player, site, animal, wood.durability);
   Shared.addXp(player, "FLETCHING", wood.carveXp);
-  player.sendMessage(`You carve ${article(DATA.animals[animal - 1].name)} into the totem.`);
-  if (questActive(player) && site === QUEST_SITE) {
-    // The third carving's finish mesbox would replace the warning dialogue, so only warn on
-    // the carvings that leave room for it.
-    if (!last && !State.animals(player, site).includes(animal)) {
-      Shared.api().emitCustomEvent("vale-totems:wrong-carve", { player, site, animal });
+  const quest = questActive(player) && site === QUEST_SITE;
+  const carved = `You carve ${article(DATA.animals[animal - 1].name)} into the totem.`;
+  if (last) {
+    // RSProx 20261109T224258-5ab63b4: during the miniquest the third carving still says what
+    // was carved, and the finish mesbox follows a tick later (ticks 620-621); after it, the
+    // third carving's only message is "You finish carving the totem." (ticks 1103, 1317).
+    if (quest) {
+      player.sendMessage(carved);
+      Shared.later(1, () => Shared.statement(player, "You finish carving the totem, but it still seems to be missing something. Ranulph and Isadora might know what to do next."));
+    } else {
+      player.sendMessage("You finish carving the totem.");
     }
-    if (last) {
-      Shared.statement(player, "You finish carving the totem, but it still seems to be missing something. Ranulph and Isadora might know what to do next.");
-    }
+    return;
   }
+  player.sendMessage(carved);
+  // The quest's warning dialogue takes the chatbox instead of the menu.
+  if (quest && !State.animals(player, site).includes(animal)) {
+    Shared.api().emitCustomEvent("vale-totems:wrong-carve", { player, site, animal });
+    return;
+  }
+  reopenCarveMenu(player, site);
+}
+
+/**
+ * The same recording: the menu comes back by itself two ticks after each carving that leaves
+ * the totem unfinished (ticks 613-615, 617-619, 1094-1096, 1099-1101), with the carved animals'
+ * icons disabled. Walking away, or anything else taking the chatbox or screen, stops it.
+ */
+function reopenCarveMenu(player, site) {
+  const at = player.getLocation().clone();
+  Shared.later(CARVE_REOPEN_TICKS, () => {
+    if (player.isRegistered?.() === false || !player.getLocation().equals(at)) return;
+    if (player.getInterfaceId?.() > 0 || player.getDialogueManager?.().getCurrent?.()) return;
+    if (player.getMovementQueue?.().isMovings?.() === true) return;
+    const totem = State.totem(player, site);
+    if (totem.wood === 0 || totem.carved) return;
+    openCarveMenu(player, site);
+  });
 }
 
 /** The first decoration of the totem's wood in the inventory, or null. */
@@ -216,6 +294,7 @@ function decorate(event) {
   const { player } = event;
   const site = siteOf(event);
   if (site == null) return false;
+  if (untouchable(player, site)) return true;
   if (questActive(player) && site === QUEST_SITE && !questChat(player, QUEST_DECORATE_CHAT_VARBIT)) {
     Shared.statement(player, "You're not quite sure how to decorate the totem. Ranulph and Isadora might be able to help.");
     return true;
@@ -225,9 +304,13 @@ function decorate(event) {
   if (!totem.carved) return carve(event);
   Shared.face(player, State.tileOf(site));
   if (totem.decorations >= MAX_DECORATIONS) {
-    Shared.statement(player, questActive(player) && site === QUEST_SITE
-      ? "You have already fully decorated the totem. Ranulph and Isadora might know what to do next."
-      : "You have already added as many decorations as possible to the<br>totem.");
+    // RSProx 20261109T224258-5ab63b4 tick 685 (stage 30) and tick 733 (stage 50).
+    const quest = questActive(player) && site === QUEST_SITE;
+    Shared.statement(player, !quest
+      ? "You have already added as many decorations as possible to the<br>totem."
+      : questStage(player) >= QUEST_DECORATED_STAGE
+        ? "You have already fully carved and decorated the totem. Ranulph and Isadora might know what to do next."
+        : "You have already fully decorated the totem. Ranulph and Isadora might know what to do next.");
     return true;
   }
   const wood = woodOf(totem.wood);
@@ -281,4 +364,4 @@ function attach(api) {
   }
 }
 
-module.exports = { attach, wrongAnimals, woodOf };
+module.exports = { attach, wrongAnimals, woodOf, questKeeps, questHolds, questTotem };

@@ -54,6 +54,8 @@
  * Source: https://oldschool.runescape.wiki/w/Contact! and
  * https://oldschool.runescape.wiki/w/Transcript:Contact!
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerContactQuest(api) {
   const {
     CountdownTask,
@@ -336,7 +338,7 @@ module.exports = function registerContactQuest(api) {
     if (shot.shake) {
       for (let i = 0; i < 5; i++) {
         Scenes.later(player, 38 + i * 4, () => {
-          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(0, 5, 0, 0);
+          if (cameraWatch.get(player) === token) CameraShake.send(player.getPacketSender(), "atmospheric", 0, 5, 0, 0);
         });
       }
     }
@@ -990,7 +992,7 @@ module.exports = function registerContactQuest(api) {
     }
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
+    manager.addExperience(skill, LAMP_XP, true);
     if (manager.getExperience(skill) === before) {
       lampSessions.delete(player);
       player.getPacketSender().sendInterfaceRemoval();

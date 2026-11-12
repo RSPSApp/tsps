@@ -21,7 +21,10 @@ before(async () => {
 /** A player on 99s whose `levels` are set as given; `gear` answers "stats:hitpoints-regen". */
 function fixture(t, levels = {}, gear = () => {}) {
   const player = new Player(null);
-  const sender = new Proxy({}, { get: () => () => sender });
+  const scripts = [];
+  const sender = new Proxy({}, {
+    get: (_, name) => (name === 'sendClientScript' ? (...args) => { scripts.push(args); return sender; } : () => sender),
+  });
   t.mock.method(player, 'getPacketSender', () => sender);
   const skills = player.getSkillManager();
   for (const skill of Skill.values()) {
@@ -33,6 +36,7 @@ function fixture(t, levels = {}, gear = () => {}) {
   t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => (name === 'stats:hitpoints-regen' ? gear(payload) : emit(name, payload)));
   return {
     player,
+    scripts,
     level: (name) => skills.getCurrentLevel(Skill[name]),
     /** Runs the restoration for each cycle from `from` to `to`, inclusive. */
     run(from, to) {
@@ -151,4 +155,31 @@ test('the regen bracelet counts while worn when the Hitpoints regen lands', (t) 
   equipment.setItem(Equipment.HANDS_SLOT, new (require('../dist/game/model/Item').Item)(ItemIdentifiers.REGEN_BRACELET, 1)).refreshItems();
   f.run(151, 200);
   assert.equal(f.level('HITPOINTS'), 53, 'worn before the regen: 2 Hitpoints');
+});
+
+test('the modified stats overlay gets the restore timer every 25 ticks of its cycle', (t) => {
+  const f = fixture(t);
+  const sent = [];
+  const emit = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => {
+    if (name === 'stats:restore-timer-sent') sent.push(payload.player);
+    return emit(name, payload);
+  });
+  f.run(10, 135);
+  assert.deepEqual(f.scripts, [
+    [4517, 0, 100, 100], [4517, 0, 100, 75], [4517, 0, 100, 50], [4517, 0, 100, 25],
+    [4517, 0, 100, 100], [4517, 0, 100, 75],
+  ], 'at the first process, then each quarter: 35, 60, 85, the restore at 110, and 135');
+  assert.deepEqual(sent, Array(6).fill(f.player), 'each one asks for the boost drain timer too');
+});
+
+test("Rapid Restore's own overlay timer starts, restarts on its restore and stops", (t) => {
+  const f = fixture(t);
+  f.run(0, 0);
+  f.player.setPrayerActive(PrayerHandler.RAPID_RESTORE, true);
+  f.run(1, 101);
+  f.player.setPrayerActive(PrayerHandler.RAPID_RESTORE, false);
+  f.run(102, 102);
+  assert.deepEqual(f.scripts.filter((args) => args[1] === 1), [[4517, 1, 100, 100], [4517, 1, 100, 100], [4517, 1, 0, 0]],
+    'switched on at 1, its restore at 101, switched off at 102');
 });

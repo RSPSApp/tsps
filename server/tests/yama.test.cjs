@@ -12,8 +12,10 @@ let aKingdomDividedComplete = false;
 const fakeApi = {
   core: {
     ItemDefinition: { forId: (id) => ({ getGrandExchangeValue: () => VALUES[id] ?? 0, isStackable: () => id === 995 }) },
-    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
     ItemIdentifiers: { FORGOTTEN_LOCKBOX: 30763 },
+    DialogueChainBuilder: class { constructor() { this.dialogues = []; } add(...d) { this.dialogues.push(...d); return this; } },
+    ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
   },
   persistAttribute() {},
   onPlayerLogin(handler) { hooks.login.push(handler); },
@@ -158,12 +160,87 @@ test("a death in the domain leaves the items with the Voice, who hands them back
   } finally {
     Domain.sessionOf = original;
   }
-  assert.deepEqual(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).items, [[4151, 1]]);
+  assert.deepEqual(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).items, [[4151, 1, null]]);
   // 10,000 for the 1.5m item, 75% off: 2,500 of the 5,000 coins.
   assert.equal(hooks.npc["Voice of Yama"]["Talk-to"]({ player }), true);
   assert.equal(inventory.get(995), 2_500);
   assert.equal(inventory.get(4151), 1);
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
+});
+
+test("a death while the Voice still holds a paid-for remainder is charged again, as a gravestone's merge is", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const inventory = new Map([[995, 20_000]]);
+  const player = fakePlayer({ [Common.HELD_ITEMS_ATTRIBUTE]: { items: [[385, 5]], paid: true } });
+  player.messages = [];
+  player.sendMessage = (text) => player.messages.push(text);
+  player.getInventory = () => ({
+    getAmount: (id) => inventory.get(id) ?? 0,
+    delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+    contains: (id) => inventory.has(id),
+    getFreeSlots: () => 20,
+    getAddableAmount: (item) => Math.min(item.amount, 2147483647 - (inventory.get(item.id) ?? 0)),
+    add: (item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
+    refreshItems() {},
+  });
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  try {
+    hooks.drop({ player, item: { getId: () => 4151, getAmount: () => 1 }, dropEligible: true, shouldDropItems: true, handled: false });
+  } finally {
+    Domain.sessionOf = original;
+  }
+  assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false, "the new death's items are not already paid for");
+  hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+  assert.equal(inventory.get(4151), 1);
+  assert.ok(inventory.get(995) < 20_000, "the fee is taken for the merged lot");
+});
+
+test("the Voice hands an item back with its meta (charges), as it was when the player died", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const inventory = new Map([[995, 20_000]]);
+  const added = [];
+  const player = fakePlayer();
+  player.sendMessage = () => {};
+  player.getInventory = () => ({
+    getAmount: (id) => inventory.get(id) ?? 0,
+    delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+    contains: (id) => inventory.has(id),
+    getFreeSlots: () => 20,
+    getAddableAmount: (item) => item.amount,
+    add: (item) => added.push(item),
+    refreshItems() {},
+  });
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  try {
+    hooks.drop({ player, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, shouldDropItems: true, handled: false });
+  } finally {
+    Domain.sessionOf = original;
+  }
+  hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+  assert.equal(added.length, 1);
+  assert.equal(added[0].id, 6585);
+  assert.deepEqual(added[0].meta, { charges: 30000 });
+});
+
+test("a domain death's grave (for what the Voice doesn't hold) is by the Voice, with Yama's discount", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const player = fakePlayer();
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  const request = { player, location: null, tile: null, feeMultiplier: 1 };
+  try {
+    fakeApi.emitCustomEvent("gravestones:grave-location", request);
+  } finally {
+    Domain.sessionOf = original;
+  }
+  const [x, y, z = 0] = Common.data.voice.respawn;
+  assert.deepEqual(request.tile, { x, y, z });
+  assert.equal(request.feeMultiplier, Common.data.retrieval.discountFactor);
+  const outside = { player, location: null, tile: null, feeMultiplier: 1 };
+  fakeApi.emitCustomEvent("gravestones:grave-location", outside);
+  assert.equal(outside.tile, null, "a death elsewhere is left alone");
 });
 
 test("an unsafe death elsewhere loses what the Voice holds", () => {
@@ -237,6 +314,7 @@ test("opening a Forgotten lockbox consumes it and gives its reward", () => {
       refreshItems() {},
     }),
     sendMessage(text) { this.message = text; },
+    getDialogueManager: () => ({ startDialogues(builder) { player.box = builder.dialogues[0]; } }),
   };
   const open = hooks.item["Forgotten lockbox"].Open;
   assert.equal(open({ player, itemId: 30763 }), true);
@@ -246,7 +324,9 @@ test("opening a Forgotten lockbox consumes it and gives its reward", () => {
   const [itemId, amount] = rewards[0];
   const entry = Common.data.lockbox.entries.find((row) => row.itemId === itemId && row.amount === amount);
   assert.ok(entry, `${itemId}x${amount} is on the Wiki table`);
-  assert.equal(player.message, entry.message);
+  // Wiki Transcript:Forgotten lockbox: an item box with the reward, not a chat line.
+  assert.equal(player.message, null);
+  assert.deepEqual([player.box.itemId, player.box.text], [entry.itemId, entry.message]);
   assert.equal(open({ player, itemId: 30764 }), false, "only the lockbox's own Open is handled");
 });
 
@@ -259,4 +339,9 @@ test("Yama's specials use the Wiki's damage numbers", () => {
   assert.deepEqual(flares.damage["1"], [42, 45]);
   assert.deepEqual(flares.damage["3"], [23, 25]);
   assert.equal(judge.surge.maxHit, 30);
+});
+
+test("the oathplate legs line is the transcript's, 1 with no x (Wiki Transcript:Forgotten lockbox)", () => {
+  const legs = Common.data.lockbox.entries.find((row) => row.itemId === 30756);
+  assert.equal(legs.message, "You open the forgotten lockbox and find 1 oathplate legs inside!");
 });

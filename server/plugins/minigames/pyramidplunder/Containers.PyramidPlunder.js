@@ -13,7 +13,8 @@
  *   artefact and the sceptre roll happen either way.
  * - **Sarcophagus** (ntk_sarcophagus_multi; ntk_sarcophagus_state: 0 closed, 1 open,
  *   2 opening): a Strength roll every few ticks until the lid moves. Strength XP, an artefact,
- *   the sceptre roll and a (room/9) chance of a mummy that attacks only the opener.
+ *   the sceptre roll and a (room/9) chance of a mummy that attacks only the opener. A push that
+ *   fails rolls the sceptre as well (Wiki, since 2023).
  *
  * Each container opens once per room visit, guarded on the server as well as by its varbit,
  * so a repeated click or a reconnect can't loot it again. A search takes a few ticks, and a
@@ -43,7 +44,6 @@ const PUSH_TICKS = 1;
 const MAX_PUSHES = 20;
 /** The captured sarcophagus: busy a tick after the click, the first push a tick later, the loot five ticks after the lid. */
 const LID = { busyAt: 1, firstPushAt: 2, lootAfter: 5 };
-const SWARM_DAMAGE = 3;
 /** Ticks a snake check or a chest search takes. */
 const SEARCH_TICKS = 3;
 /** The captured urn search, in ticks after the click. */
@@ -191,17 +191,27 @@ function searchChest(event, random = Math.random) {
   return true;
 }
 
+/**
+ * Rocky from a room's Grand Gold Chest (Wiki, Rocky): bases 41,355 / 29,540 / 25,847 / 20,678 / 20,678 / 20,678 /
+ * 10,339 / 6,893 for rooms 1-8, "rolled upon opening the Grand Gold Chest in the room, even if a scarab swarm appears".
+ * Recorded: rsprox_transcripts/227/01857.txt (ntk_golden_chest_multi, then the pet's lines).
+ */
+const ROCKY_CHEST_BASES = [41355, 29540, 25847, 20678, 20678, 20678, 10339, 6893];
+
 function openChest(player, run, random) {
   const v = Common.ids().varbit;
   animate(player, Common.ids().anim.chest);
   Common.sound(player, Common.ids().sound.chest);
   Common.send(player, v.chest, 1);
   Mural.chestPillaged(player, run.room);
+  const petBase = ROCKY_CHEST_BASES[run.room - 1];
+  const api = Common.getApi();
+  if (petBase && api) api.emitCustomEvent("pets:skilling-roll", { player, skill: api.core.Skill.THIEVING, petBase, handled: false });
   const room = Common.roomData(run.room);
   const swarm = !Common.roll(Common.chanceOf("chestNoSwarm", Common.thievingLevel(player), run.room), random);
   if (swarm) {
     Common.spam(player, Common.MESSAGES.swarm);
-    Common.hit(player, SWARM_DAMAGE);
+    Common.hit(player, Common.rollHit(random)); // the trap deals 1-4 (Wiki)
     spawnHostile(player, Common.ids().npc.scarabs);
   } else {
     Common.addXp(player, "THIEVING", room.chestXp);
@@ -272,9 +282,17 @@ function push(player, run, tile, lid, attempt, random) {
     stopPushing(player, run);
     return;
   }
-  if (attempt > 0 && Common.roll(Common.sarcophagusChance(Common.strengthLevel(player), run.room), random)) {
-    lidOff(player, run, lid, random);
-    return;
+  if (attempt > 0) {
+    if (Common.roll(Common.sarcophagusChance(Common.strengthLevel(player), run.room), random)) {
+      lidOff(player, run, lid, random);
+      return;
+    }
+    if (Common.rollSceptre(run.room, random)) {
+      // A failed push rolls the sceptre too (Wiki, since 2023); finding it ends the run.
+      stopPushing(player, run);
+      Common.awardSceptre(player);
+      return;
+    }
   }
   if (attempt >= MAX_PUSHES) {
     stopPushing(player, run);

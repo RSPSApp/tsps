@@ -1,3 +1,4 @@
+import { lazyRequire } from "../../../util/LazyRequire";
 import { Entity } from "../Entity";
 import { getSequenceForcedPriority } from "../../cache/NpcAnimationScanner";
 import { Sound } from "../../Sound";
@@ -22,20 +23,21 @@ import { TimerRepository } from "../../../util/timers/TimerRepository";
 import { Misc } from "../../../util/Misc";
 import type { Boundary } from "../../model/Boundary";
 
-const getPlayerCtor = () =>
-  require("./player/Player").Player as typeof import("./player/Player").Player;
-const getNpcCtor = () =>
-  require("./npc/NPC").NPC as typeof import("./npc/NPC").NPC;
-const getCombatCtor = () =>
-  require("../../content/combat/Combat").Combat as typeof import("../../content/combat/Combat").Combat;
-const getMovementQueueCtor = () =>
-  require("../../model/movement/MovementQueue").MovementQueue as typeof import("../../model/movement/MovementQueue").MovementQueue;
-const getRegionManager = () =>
-  require("../../collision/RegionManager").RegionManager as typeof import("../../collision/RegionManager").RegionManager;
-const getWorld = () =>
-  require("../../World").World as typeof import("../../World").World;
-const getPlayerRights = () =>
-  require("../../model/rights/PlayerRights").PlayerRights as typeof import("../../model/rights/PlayerRights").PlayerRights;
+const getPlayerCtor = lazyRequire(() =>
+  require("./player/Player").Player as typeof import("./player/Player").Player);
+const getNpcCtor = lazyRequire(() =>
+  require("./npc/NPC").NPC as typeof import("./npc/NPC").NPC);
+const getCombatCtor = lazyRequire(() =>
+  require("../../content/combat/Combat").Combat as typeof import("../../content/combat/Combat").Combat);
+const getMovementQueueCtor = lazyRequire(() =>
+  require("../../model/movement/MovementQueue").MovementQueue as typeof import("../../model/movement/MovementQueue").MovementQueue);
+const getRegionManager = lazyRequire(() =>
+  require("../../collision/RegionManager").RegionManager as typeof import("../../collision/RegionManager").RegionManager);
+const getWorld = lazyRequire(() =>
+  require("../../World").World as typeof import("../../World").World);
+const getPlayerRights = lazyRequire(() =>
+  require("../../model/rights/PlayerRights").PlayerRights as typeof import("../../model/rights/PlayerRights").PlayerRights);
+// Not cached: tests reload PluginManager through require.cache, and this runs once per hit, not per check.
 const getPluginManager = () =>
   require("../../../plugins/PluginManager").PluginManager as typeof import("../../../plugins/PluginManager").PluginManager;
 
@@ -768,9 +770,20 @@ export abstract class Mobile extends Entity {
                 if (sourceLive && (attacker == null || attacker === source)) combat.setUnderAttack(source);
                 else if (attacker == null) combat.getLastAttack().reset();
             }
-            if (this.isPlayer() && source.isPlayer()) this.getCombat().addDamage(source, hit.getHealthLost());
+            // A reflection credits its source against another player (PvP kill credit). Against
+            // an NPC it credits nobody unless the hit says it counts — a monster killed by a
+            // ring of recoil alone drops nothing (Wiki: Ring of recoil), while a League's Thorns
+            // damage does count as the wearer's damage. Without that, a thorns kill left the
+            // NPC with no damage-map entry and went to nobody: no kill, no Slayer count or XP,
+            // no loot. `addDamage` ignores a non-player source, so an NPC's reflection credits
+            // nothing either way.
+            if (source.isPlayer() && (this.isPlayer() || hit.creditsItsSource()))
+                this.getCombat().addDamage(source, hit.getHealthLost());
         }
         this.setHitpoints(outcome);
+        if (hit.getHealthLost() > 0) {
+            getPluginManager().emitCustomEvent("combat:damage-applied", { target: this, hit });
+        }
         return hit;
     }
     /**
@@ -984,7 +997,8 @@ export abstract class Mobile extends Entity {
     }
 
     sendMessage(message: string): void {
-        if (!this.isPlayer() || this.isPlayerBot()) {
+        // A bot an administrator drives (::botcontrol) has their client, so it is told what a player is told.
+        if (!this.isPlayer() || (this.getAsPlayer()?.isUnwatchedBot?.() ?? this.isPlayerBot())) {
             return;
         }
 

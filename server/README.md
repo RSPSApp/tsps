@@ -12,6 +12,21 @@ Then, run
  
 ```yarn dev```
 
+## Contributing bug fixes
+
+After setup, open the repository in your coding agent and use the
+[repo-owned bugfix skill](../.agents/skills/tsps-bugfix-loop/SKILL.md). Sample prompt:
+
+```text
+Read .agents/skills/tsps-bugfix-loop/SKILL.md and follow it.
+Pick a quick, unclaimed bug, fix and verify it in your own worktree,
+and open a PR ready for review. Stop after that issue.
+```
+
+Use your own tools and GitHub account; without push access, return a verified patch.
+For continuous work, replace the last sentence with “Keep fixing quick, unclaimed
+bugs until I ask you to stop.”
+
 ## Player persistence
 
 Player saves are stored in `data/saves/players.sqlite`. On startup, JSON character
@@ -194,11 +209,56 @@ The server now performs explicit cleanup when a WebSocket closes:
 
 This prevents stale "ghost" players from remaining visible after disconnects/refreshes.
 
+## World config page
+
+The local panel edits world settings and plugin options, lists players and their saves,
+and lets you browse and upload plugins. Settings are saved in
+`data/definitions/world.local.json`. When launched with the root `yarn start`, the
+panel also provides Start, Stop and Restart controls and stays available while the
+game server is stopped. The panel bundle is built from `rsps-website/host-local`
+and ships in `plugins/tools/worldadmin/panel/`. At startup the server prints the URL and where the token is, never the token
+itself (logs end up in `server.log` and journald):
+
+```
+[world-admin] world config page: http://localhost:49600/?token=<token from data/definitions/world-admin.token>
+```
+
+Open `http://localhost:<port>/?token=<token from that file>` in a browser. The token is
+generated once and kept in the gitignored `data/definitions/world-admin.token`, so the link
+(and the page's cookie) stays valid across restarts until that file is deleted: treat the link
+and the file like a password, and delete the file to get a new token. `WORLD_ADMIN_TOKEN` in
+`.env` wins over the file; the log then names it instead of the file. The link sets a cookie
+and the page then works without it. The page listens on `WORLD_ADMIN_PORT` (default 49600;
+each `scripts/wt` worktree gets 49600 + its slot), bound to 127.0.0.1, so on a VPS reach it
+through an SSH tunnel and open that URL locally:
+
+```bash
+ssh -L 49600:127.0.0.1:49600 <host>
+```
+
+`WORLD_ADMIN_BIND` (for example `0.0.0.0`) opens the listener to other machines only when
+`WORLD_ADMIN_TOKEN` is set to at least 24 characters of `A-Z a-z 0-9 _ -`; otherwise the server
+logs why and stays on 127.0.0.1.
+
+Saving shows a preview of the change first. Under nodemon (`yarn dev`, `yarn start`,
+`dev:stress`, or nodemon run by hand in `server/`, which reads `nodemon.json` and its
+`TSPS_RESTARTER=nodemon`) the server saves players, writes the file and restarts (nodemon brings
+it back); with players online the normal
+world-update countdown runs first and can be cancelled from the page. Under a supervisor set
+`TSPS_SUPERVISED=1` (the server exits with code 75 so on-failure restart policies restart it).
+Otherwise the page only writes the file and you restart by hand. The page is not started when
+`BROWSER_HOST=1`.
+
 ## Plugins
 
-Runtime plugins are loaded from:
-
-`./plugins`
+Runtime plugins are loaded from `./plugins`. In the local panel, **Plugins → Browse plugins**
+lists releases from the TSPS Plugins catalogue. Select **Install** to fetch a release
+directly, or use the download icon and **Upload plugin ZIP** for manual installation.
+The panel stores the package under
+`plugins/imported/` and the server loads it on restart. Use the **×** beside an
+uploaded plugin to delete its package files. Restart the server to unload any running
+plugin code. Plugin ZIPs contain server-side JavaScript, so only upload packages from
+authors you trust.
 
 The native OSRS Character Summary is shown by default. To enable the custom summary,
 merge this into `data/definitions/world.local.json` (or `world.json`) and restart:

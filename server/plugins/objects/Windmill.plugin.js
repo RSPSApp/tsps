@@ -8,6 +8,10 @@
  * The bin amount (0-30) and the hopper contents are per-player and shared
  * between windmills. The bin's empty/full appearance is the object transform on
  * the varbit the cache uses (5325), so we set it and re-send the resolved bin.
+ * The amount itself belongs on the cache's own count varbits (`mill_flour` 4920
+ * and `mill_cornflour` 4923, 5 bits each on varps 203/694): the client reads
+ * those, not an attribute, and the Cook's Assistant Quest Helper step is a plain
+ * `VarbitRequirement(MILL_FLOUR, 1)` that never advances without them.
  */
 const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/impl/object/GameObject");
@@ -18,6 +22,9 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const MAX_FLOUR = 30;
 /** Varbit on the flour bin loc that selects its empty/full ("has flour") model. */
 const FLOUR_STATE_VARBIT = 5325;
+/** The bin's wheat and cornflour counts (`mill_flour`, `mill_cornflour`), 5 bits each. */
+const FLOUR_COUNT_VARBIT = 4920;
+const CORNFLOUR_COUNT_VARBIT = 4923;
 
 const HOPPER_ATTRIBUTE = "windmill:hopper";
 const FLOUR_ATTRIBUTE = "windmill:flour";
@@ -31,8 +38,21 @@ function flourAmount(player) {
 function setFlourAmount(player, amount) {
   const value = Math.max(0, Math.min(MAX_FLOUR, amount | 0));
   player.setAttribute(FLOUR_ATTRIBUTE, value);
+  // The client reads the count from the cache's varbit, so mirror it before the flag:
+  // the bin's model and the Quest Helper both key off these, and the kind is still set
+  // here in both callers (emptyFlourBin clears it only after this returns).
+  const isCornflour = player.getAttribute(FLOUR_KIND_ATTRIBUTE) === "sweetcorn";
+  player.getPacketSender().sendVarbit(isCornflour ? CORNFLOUR_COUNT_VARBIT : FLOUR_COUNT_VARBIT, value);
   player.getPacketSender().sendVarbit(FLOUR_STATE_VARBIT, value > 0 ? 1 : 0);
   return value;
+}
+
+/**
+ * The saved bin count goes back on its varbits at login, as live sends it (capture 237/01099: mill_flour 0 -> 4):
+ * otherwise the client reads 0 after a relog, the bin looks empty and Quest Helper's Cook's Assistant step regresses.
+ */
+function syncFlourOnLogin({ player }) {
+  setFlourAmount(player, flourAmount(player));
 }
 
 function hopperContents(player) {
@@ -168,7 +188,7 @@ function operateHopperControls(event) {
   if (bin) refreshBinObject(player, bin);
 }
 
-function emptyFlourBin(event) {
+function emptyFlourBin(api, event) {
   const { player } = event;
   if (flourAmount(player) <= 0) {
     player.sendMessage(
@@ -190,18 +210,21 @@ function emptyFlourBin(event) {
       ? "You fill a pot with the last of the flour in the bin."
       : "You fill a pot with flour from the bin."
   );
+  if (!isCornflour) api.emitCustomEvent("windmill:flour-collected", { player });
   refreshBinObject(player, event.object);
 }
 
 module.exports = {
   name: "Windmill",
+  description: "Windmill milling: fill the hopper with grain, operate the controls and empty the flour bin into a pot, as in Cook's Assistant.",
   register(api) {
     api.persistAttribute(HOPPER_ATTRIBUTE);
     api.persistAttribute(FLOUR_ATTRIBUTE);
     api.persistAttribute(FLOUR_KIND_ATTRIBUTE);
+    api.onPlayerLogin(syncFlourOnLogin);
     api.onObjectInteraction("Hopper", { Fill: fillHopper });
     api.onObjectInteraction("Hopper controls", { Operate: operateHopperControls });
-    api.onObjectInteraction("Flour bin", { Empty: emptyFlourBin });
+    api.onObjectInteraction("Flour bin", { Empty: emptyFlourBin.bind(null, api) });
     api.onItemOnObject("Grain", "Hopper", useGrainOnHopper, { noted: false });
     api.onItemOnObject((event) => fillSweetcornHopper(event, api), { noted: false });
   },

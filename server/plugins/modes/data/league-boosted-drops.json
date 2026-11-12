@@ -97,7 +97,7 @@
     { "name": "Elder chaos druid", "npcs": ["Elder Chaos druid"], "items": ["/^Elder chaos /"], "leagues": [5, 6] },
     { "name": "Chambers of Xeric", "items": ["*"] },
     { "name": "Wintertodt", "items": ["Warm gloves", "Bruma torch", "/^Pyromancer /", "/^Tome of fire/", "Dragon axe", "Burnt page"] },
-    { "name": "Wyrm", "npcs": ["Wyrm", "Wyrmling"], "items": ["Dragon sword", "Dragon harpoon", "Dragon knife", "Dragon thrownaxe"] },
+    { "name": "Wyrm", "npcs": ["Wyrm", "Wyrmling"], "items": ["/^Dragon (short)?sword$/", "Dragon harpoon", "Dragon knife", "Dragon thrownaxe"] },
     { "name": "Drake", "npcs": ["Drake"], "items": ["Dragon knife", "Dragon thrownaxe", "Drake's claw", "Drake's tooth"] },
     { "name": "Alchemical Hydra", "npcs": ["Alchemical Hydra"], "items": ["Hydra's eye", "Hydra's fang", "Hydra's heart", "Hydra tail", "Hydra leather", "Hydra's claw", "Dragon thrownaxe", "Dragon knife"] },
     { "name": "Hydra", "npcs": ["Hydra"], "items": ["Hydra's eye", "Hydra's fang", "Hydra's heart"] },

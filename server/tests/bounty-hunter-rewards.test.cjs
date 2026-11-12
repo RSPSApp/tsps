@@ -41,12 +41,28 @@ const core = {
   ObjectIdentifiers: identifiers("ObjectIdentifiers.ts").ids,
   ItemDefinition: { forId: (id) => ({ getName: () => items.names.get(id), getNoteId: () => id + 1 }) },
   Misc: { getTicks: (seconds) => seconds / 0.6 },
+  Bank: {
+    TOTAL_BANK_TABS: 11,
+    getTabForItem: (player, id) => {
+      for (let tab = 0; tab < 11; tab++) if (player.getBank(tab).contains(id)) return tab;
+      return -1;
+    },
+  },
   SkullType: { WHITE_SKULL: "white" },
   Flag: { APPEARANCE: "appearance" },
   DialogueChainBuilder: class { add() { return this; } },
   ItemStatementDialogue: class {},
   NpcDialogue: class {},
   CacheDefinitions: { getVarbitId: (name) => name, getVarpId: (name) => name },
+  // The real contract: the killer, unless "player-death:loot-owner" says otherwise (Loot.Ironman for an Ironman killer).
+  PlayerDeathTask: {
+    lootOwner(player, killer) {
+      if (!killer || killer === player) return player;
+      const query = { player, killer, owner: killer };
+      api.emitCustomEvent("player-death:loot-owner", query);
+      return query.owner ?? player;
+    },
+  },
 };
 
 const handlers = new Map();
@@ -61,8 +77,14 @@ const emit = (name, payload) => api.emitCustomEvent(name, payload);
 let ironman = false;
 api.onCustomEvent("ironman:mode", (query) => { query.mode = ironman ? "standard" : "none"; });
 
-function player({ combat = 100, skulled = false, inventory = {} } = {}) {
+function player({ combat = 100, skulled = false, inventory = {}, bank = {} } = {}) {
   const attributes = new Map();
+  // Coins live in the first bank tab only; the mock bank has no other tab contents.
+  const bankTab = (tab) => ({
+    getAmount: (id) => (tab === 0 ? bank[id] ?? 0 : 0),
+    contains: (id) => tab === 0 && (bank[id] ?? 0) > 0,
+    deleteNumber: (id, amount) => { bank[id] -= amount; },
+  });
   const slots = Array.from({ length: 28 }, () => new Item(-1, 0));
   Object.entries(inventory).forEach(([id, amount], slot) => { slots[slot] = new Item(Number(id), amount); });
   const container = {
@@ -88,6 +110,7 @@ function player({ combat = 100, skulled = false, inventory = {} } = {}) {
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => container,
     getBanks: () => [],
+    getBank: bankTab,
     getSkillManager: () => ({ getCombatLevel: () => combat }),
     isSkulled: () => p.skullTimer > 0,
     getSkullTimer: () => p.skullTimer,
@@ -215,6 +238,26 @@ test("bounty crates roll coins, noted restores and food, and a 1/10 artefact", (
   assert.equal(BountyCrates.rollCrate(5, () => relic.shift()).at(-1)[0], "ANCIENT_RELIC");
 });
 
+test("the coffer deposit takes the inventory's coins first, then the bank's; a total short of the amount is refused", () => {
+  const bankOnly = player({ combat: 70, bank: { [I.COINS]: 500_000 } });
+  Coffer.deposit(bankOnly, 300_000);
+  assert.equal(Coffer.balance(bankOnly), 300_000);
+  assert.equal(bankOnly.getBank(0).getAmount(I.COINS), 200_000);
+
+  const both = player({ combat: 70, inventory: { [I.COINS]: 100_000 }, bank: { [I.COINS]: 500_000 } });
+  Coffer.deposit(both, 250_000);
+  assert.equal(Coffer.balance(both), 250_000);
+  assert.equal(both.getInventory().getAmount(I.COINS), 0);
+  assert.equal(both.getBank(0).getAmount(I.COINS), 350_000);
+
+  const short = player({ combat: 70, inventory: { [I.COINS]: 100_000 }, bank: { [I.COINS]: 50_000 } });
+  Coffer.deposit(short, 200_000);
+  assert.equal(Coffer.balance(short), 0);
+  assert.equal(short.getInventory().getAmount(I.COINS), 100_000);
+  assert.equal(short.getBank(0).getAmount(I.COINS), 50_000);
+  assert.deepEqual(short.messages, ["You don't have enough coins."]);
+});
+
 test("the coffer: minimum deposits by combat level, a 2m cap, and death costs to the killer", () => {
   assert.deepEqual([3, 32, 60, 61, 88, 89, 110, 111, 126].map(Coffer.minimumDeposit),
     [30000, 30000, 30000, 50000, 50000, 100000, 100000, 150000, 150000]);
@@ -240,6 +283,14 @@ test("the coffer: minimum deposits by combat level, a 2m cap, and death costs to
   emit("bounty-hunter:died", { player: victim, killer: null, skulled: true });
   assert.equal(Coffer.balance(victim), 40_000);
   assert.equal(killer.getInventory().getAmount(I.COINS), 60_000);
+
+  // An Ironman killer takes no other player's loot: the coins stay in the victim's coffer.
+  const ironKiller = player();
+  const answer = (query) => { if (query.killer === ironKiller) query.owner = query.player; };
+  api.onCustomEvent("player-death:loot-owner", answer);
+  emit("bounty-hunter:died", { player: victim, killer: ironKiller, skulled: true });
+  assert.equal(Coffer.balance(victim), 40_000, "the victim keeps it");
+  assert.equal(ironKiller.getInventory().getAmount(I.COINS), 0, "the Ironman gets nothing");
 });
 
 test("Corrupted Warriors swap (bh) armour both ways; the Emblem Trader answers skull conditions", () => {

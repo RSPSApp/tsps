@@ -136,12 +136,12 @@ export function registerWidgetEventOps(handlers: HandlerMap): void {
         ctx.setEventHandler(getTargetWidget(ctx, intOp), "onClanChannelTransmit");
     });
 
-    handlers.set(Opcodes.CC_SETONITEMONITEM, (ctx, intOp) => {
-        ctx.setEventHandler(getTargetWidget(ctx, intOp), "onItemOnItem");
+    handlers.set(Opcodes.CC_SETONKEYDOWN, (ctx, intOp) => {
+        ctx.setEventHandler(getTargetWidget(ctx, intOp), "onKeyDown");
     });
 
-    handlers.set(Opcodes.CC_SETONCLANSETTINGS, (ctx, intOp) => {
-        ctx.setEventHandler(getTargetWidget(ctx, intOp), "onClanSettings");
+    handlers.set(Opcodes.CC_SETONKEYUP, (ctx, intOp) => {
+        ctx.setEventHandler(getTargetWidget(ctx, intOp), "onKeyUp");
     });
 
     handlers.set(Opcodes.CC_SETONMAPPOST, (ctx, intOp) => {
@@ -280,12 +280,12 @@ export function registerWidgetEventOps(handlers: HandlerMap): void {
         ctx.setEventHandlerByUid("onClanChannelTransmit");
     });
 
-    handlers.set(Opcodes.IF_SETONITEMONITEM, (ctx) => {
-        ctx.setEventHandlerByUid("onItemOnItem");
+    handlers.set(Opcodes.IF_SETONKEYDOWN, (ctx) => {
+        ctx.setEventHandlerByUid("onKeyDown");
     });
 
-    handlers.set(Opcodes.IF_SETONCLANSETTINGS, (ctx) => {
-        ctx.setEventHandlerByUid("onClanSettings");
+    handlers.set(Opcodes.IF_SETONKEYUP, (ctx) => {
+        ctx.setEventHandlerByUid("onKeyUp");
     });
 
     handlers.set(Opcodes.IF_SETONMAPPOST, (ctx) => {

@@ -236,7 +236,7 @@ test('winning with no follower leaves the last slot for the ore and saves only o
 });
 test('a duplicate family roll cannot consume the last resource slot or roll again on success',async t=>{
  const f=actor(t),other=await otherFollower(f);f.p.setAttribute('pets.owned',[core.ItemIdentifiers.OLMLET,item('skillpetmining')]);pickaxeAndSpace(f);const messages=[];const sender=f.p.getPacketSender(),original=sender.sendMessage.bind(sender);t.mock.method(sender,'sendMessage',m=>{messages.push(m);return original(m)});
- const snapshots=await mineOnce(t,f);assert.equal(f.p.getAttribute('pets:current'),other);assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.COPPER_ORE),1);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),0);assert.equal(messages.filter(m=>m==='You have a funny feeling like you would have been followed...').length,1);assert.deepEqual(snapshots,[{petRolled:true,ore:1,pets:0}]);
+ const snapshots=await mineOnce(t,f);assert.equal(f.p.getAttribute('pets:current'),other);assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.COPPER_ORE),1);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),0);assert.equal(messages.filter(m=>m==='<col=ef1020>You have a funny feeling like you would have been followed...</col>').length,1);assert.deepEqual(snapshots,[{petRolled:true,ore:1,pets:0}]);
 });
 test('an actual open coal bag retains storage priority with a full pack and another follower',async t=>{
  const f=actor(t),other=await otherFollower(f),bag=new core.Item(core.ItemIdentifiers.OPEN_COAL_BAG);f.p.getInventory().add(bag,true);pickaxeAndSpace(f,0);f.p.getSkillManager().setCurrentLevel(core.Skill.MINING,99);f.p.getSkillManager().setMaxLevel(core.Skill.MINING,99);await mineOnce(t,f,0,'coalrock1');const contents={player:f.p,item:bag,contents:[],handled:false};PM.emitCustomEvent('storage:contents',contents);assert.equal(contents.handled,true);assert.ok(contents.contents.some(x=>x.id===core.ItemIdentifiers.COAL&&x.amount>=1));assert.equal(f.p.getAttribute('pets:current'),other);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),0);assert.ok(f.p.getAttribute('pets.owned').includes(item('skillpetmining')));assert.equal(groundOre(f).length,0);
@@ -249,7 +249,7 @@ test('winning last-slot pet and displaced ore survive real save, Bank deposit an
  assert.equal(g.p.getBank(0).getAmount(item('skillpetmining')),1);assert.equal(g.p.getInventory().getAmount(core.ItemIdentifiers.COPPER_ORE),1);assert.equal(g.p.getInventory().getAmount(item('skillpetmining')),0);core.ItemOnGroundManager.process();assert.equal(core.World.getItems().includes(logs[0]),false);
 });
 
-for(const [name,meta,combust]of [['INFERNAL_PICKAXE','infernal-pickaxe',true],['CRYSTAL_PICKAXE','crystal-pickaxe',false]])test('actual '+name+' charge and XP survive winning last-slot pet priority',async t=>{const f=actor(t);await otherFollower(f);f.p.getSkillManager().setCurrentLevel(core.Skill.MINING,99);f.p.getSkillManager().setMaxLevel(core.Skill.MINING,99);const pickaxe=new core.Item(core.ItemIdentifiers[name]);pickaxe.setMetaValue(meta,{charges:2});f.p.getInventory().add(pickaxe,true);while(f.p.getInventory().getFreeSlots()>1)f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);const xp=f.p.getSkillManager().getExperience(core.Skill.MINING),smith=f.p.getSkillManager().getExperience(core.Skill.SMITHING);await mineOnce(t,f);assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers[name]).getMetaValue(meta).charges,1);assert.ok(f.p.getSkillManager().getExperience(core.Skill.MINING)>xp);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),1);assert.equal(groundOre(f).reduce((n,g)=>n+g.getItem().getAmount(),0),combust?0:1);if(combust)assert.ok(f.p.getSkillManager().getExperience(core.Skill.SMITHING)>smith);});
+for(const [name,meta,combust]of [['INFERNAL_PICKAXE','infernal-pickaxe',true],['CRYSTAL_PICKAXE','crystal-pickaxe',false]])test('actual '+name+' charge and XP survive winning last-slot pet priority',async t=>{const f=actor(t);await otherFollower(f);f.p.getSkillManager().setCurrentLevel(core.Skill.MINING,99);f.p.getSkillManager().setMaxLevel(core.Skill.MINING,99);f.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY,50);/* a crystal pickaxe needs 50 Agility (Wiki) */const pickaxe=new core.Item(core.ItemIdentifiers[name]);pickaxe.setMetaValue(meta,{charges:2});f.p.getInventory().add(pickaxe,true);while(f.p.getInventory().getFreeSlots()>1)f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);const xp=f.p.getSkillManager().getExperience(core.Skill.MINING),smith=f.p.getSkillManager().getExperience(core.Skill.SMITHING);await mineOnce(t,f);assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers[name]).getMetaValue(meta).charges,1);assert.ok(f.p.getSkillManager().getExperience(core.Skill.MINING)>xp);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),1);assert.equal(groundOre(f).reduce((n,g)=>n+g.getItem().getAmount(),0),combust?0:1);if(combust)assert.ok(f.p.getSkillManager().getExperience(core.Skill.SMITHING)>smith);});
 
 // Selected native phases: observe a turn's updates before the next real reset.
 function miningCancellationTurn(f) {
@@ -385,4 +385,97 @@ test('native plain mining: an outside-range approach settles before starting and
   assert.deepEqual(gains,[17.5],'ordinary approach must retain the literal copper XP: '+state());
   assert.equal(oreTotal(),1,'ordinary approach must retain one owned copper ore: '+state());
   assert.equal(f.p.getInventory().getAmount(ids.BRONZE_PICKAXE),1);
+});
+
+test('below 50 Agility a carried crystal pickaxe keeps its charges while the rune pickaxe mines',async t=>{
+  const f=actor(t);const skills=f.p.getSkillManager();
+  skills.setCurrentLevel(core.Skill.MINING,99);skills.setMaxLevel(core.Skill.MINING,99);skills.setCurrentLevel(core.Skill.AGILITY,49);
+  const crystal=new core.Item(core.ItemIdentifiers.CRYSTAL_PICKAXE);crystal.setMetaValue('crystal-pickaxe',{charges:100});
+  f.p.getInventory().add(crystal,true);f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RUNE_PICKAXE),true);
+  const xp=skills.getExperience(core.Skill.MINING);
+  await mineOnce(t,f);
+  assert.ok(skills.getExperience(core.Skill.MINING)>xp,'the rune pickaxe mined');
+  assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers.CRYSTAL_PICKAXE).getMetaValue('crystal-pickaxe').charges,100,'no crystal charge spent');
+});
+
+// Inventory item actions interrupt mining; the equipment tab is exempt.
+// Engine rule: https://osrs-docs.com/docs/mechanics/entity-interactions/#interruptions
+// Supplied actors, adjacent rock and Mining-only RNG; real packet dispatch and task turns.
+for (const route of ['legacy', 'widget', 'equipment']) test('native iron mining: inventory interruption and equipment exception via ' + route, async t => {
+  const f = actor(t), ids = core.ItemIdentifiers, skills = f.p.getSkillManager();
+  skills.setMaxLevel(core.Skill.MINING, 99);
+  skills.setExperience(core.Skill.MINING, core.SkillManager.getExperienceForLevel(99));
+  skills.setCurrentLevel(core.Skill.MINING, 99);
+  f.p.setHitpoints(3);
+  if (route === 'equipment') {
+    skills.setExperience(core.Skill.ATTACK, core.SkillManager.getExperienceForLevel(40));
+    skills.setMaxLevel(core.Skill.ATTACK, 40);
+    skills.setCurrentLevel(core.Skill.ATTACK, 40);
+    assert.ok(skills.getCurrentLevel(core.Skill.ATTACK) >= core.ItemDefinition.forId(ids.RUNE_PICKAXE).getRequirements()[core.Skill.ATTACK.getIndex()],
+      'the supplied worn pickaxe must be legal to wield');
+    f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(ids.RUNE_PICKAXE));
+  } else f.p.getInventory().add(new core.Item(ids.RUNE_PICKAXE), true);
+  f.p.getInventory().add(new core.Item(ids.TROUT), true);
+  const rockId = core.CacheDefinitions.getLocId('ironrock2'), emptyId = core.CacheDefinitions.getLocId('rocks2');
+  const at = new core.Location(3223, 3218, 0), rock = new core.GameObject(rockId, at, 10, 0, null);
+  core.ObjectManager.register(rock, true);
+  t.after(() => {
+    for (const task of [...core.TaskManager.activeTasks, ...core.TaskManager.pendingTasks.toArray()])
+      if (task.originalRockObject === rock) task.stop();
+    for (const id of [rockId, emptyId]) { const o = core.MapObjects.get(id, at, null); if (o) core.ObjectManager.deregister(o, true); }
+  });
+  assert.equal(core.ObjectDefinition.forPlayer(rockId, f.p).getName(), 'Iron rocks');
+  assert.ok(core.ObjectDefinition.forPlayer(rockId, f.p).getActions().includes('Mine'));
+  assert.equal(core.CacheDefinitions.getItem(ids.TROUT).inventoryActions[0], 'Eat');
+  const errors = [], originalError = console.error.bind(console);
+  t.mock.method(console, 'error', (...args) => { errors.push(args); originalError(...args); });
+  t.after(() => assert.deepEqual(errors, [], 'engine and hook errors must not be swallowed'));
+  const gains = [], addXp = skills.addExperiences.bind(skills);
+  t.mock.method(skills, 'addExperiences', (skill, amount) => { if (skill === core.Skill.MINING) gains.push(amount); return addXp(skill, amount); });
+  const task = [...core.TaskManager.activeTasks, ...core.TaskManager.pendingTasks.toArray()].find(t => t.constructor.name === 'MiningTask');
+  assert.ok(task);
+  miningCancellationTurn(f);
+  assert.equal(task.activeSessions.size, 0, 'previous disposed actors must have drained');
+  const execute = task.execute.bind(task);
+  t.mock.method(task, 'execute', () => { const random = Math.random; try { Math.random = () => 0.01; return execute(); } finally { Math.random = random; } });
+  const click = () => f.c.dispatch([{type:'object_option', id:rockId, x:3223, y:3218, action:'Mine'}]);
+  const ore = () => f.p.getInventory().getAmount(ids.IRON_ORE);
+  const animations = [], animate = f.p.performAnimation.bind(f.p);
+  t.mock.method(f.p, 'performAnimation', (...args) => { animations.push(args[0]?.getId()); return animate(...args); });
+  await click(); miningCancellationTurn(f);
+  assert.deepEqual(gains, []); assert.equal(ore(), 0); assert.equal(task.activeSessions.has(f.p), true);
+  const slot = f.p.getInventory().getSlotForItemId(ids.TROUT);
+  // Next turn: the first swing precedes the input; the ore roll is on the following turn.
+  const inventoryWidget = core.CacheDefinitions.getComponentId('inventory:items');
+  assert.ok(inventoryWidget > 0);
+  const weaponWidget = core.CacheDefinitions.getComponentId('wornitems:slot3');
+  assert.ok(weaponWidget > 0);
+  await f.c.dispatch([route === 'equipment'
+    ? {type:'widget_action', widgetId:weaponWidget, groupId:weaponWidget >>> 16, childId:weaponWidget & 0xffff, buttonNum:1, opId:1}
+    : route === 'legacy'
+    ? {type:'inventory_action', widgetId:149<<16, slot, itemId:ids.TROUT, option:'Eat', optionIndex:1}
+    : {type:'widget_action', widgetId:inventoryWidget, groupId:inventoryWidget >>> 16, childId:inventoryWidget & 0xffff, slot, itemId:ids.TROUT, buttonNum:2, opId:2}]);
+  miningCancellationTurn(f);
+  assert.ok(animations.includes(624), 'a legal rune pickaxe must actually swing before Eat');
+  assert.deepEqual(gains, []); assert.equal(ore(), 0);
+  if (route === 'equipment') {
+    assert.equal(f.p.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId() ?? -1, -1, 'Remove must reach the equipment consumer');
+    assert.equal(f.p.getInventory().getAmount(ids.RUNE_PICKAXE), 1);
+    for (let i=0; i<8; i++) miningCancellationTurn(f);
+    assert.deepEqual(gains, [35], 'equipment-tab interaction must leave Mining active');
+    assert.equal(ore(), 1); assert.ok(core.MapObjects.get(emptyId, at, null));
+    return;
+  }
+  assert.equal(f.p.getInventory().getAmount(ids.TROUT), 0, 'Eat must consume the real food before the target assertion');
+  assert.equal(f.p.getHitpoints(), 10, 'Eat must heal the actor');
+  assert.equal(f.p.getAnimation()?.getId(), 829);
+  for (let i=0; i<8; i++) miningCancellationTurn(f);
+  assert.deepEqual(gains, [], 'accepted inventory Eat must prevent later Mining XP');
+  assert.equal(ore(), 0, 'accepted inventory Eat must prevent later iron');
+  assert.equal(core.MapObjects.get(rockId, at, null), rock, 'interruption preserves the standing rock');
+  assert.equal(f.p.getInventory().getAmount(ids.RUNE_PICKAXE), 1);
+  await click();
+  for (let i=0; i<8 && ore()===0; i++) miningCancellationTurn(f);
+  assert.deepEqual(gains, [35], 'a fresh Mine must complete normally');
+  assert.equal(ore(), 1); assert.ok(core.MapObjects.get(emptyId, at, null));
 });

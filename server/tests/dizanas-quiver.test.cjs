@@ -15,7 +15,7 @@ const core = PluginManager.getCoreApi();
 const { Equipment, Item, ItemIdentifiers: I } = core;
 const SLOT = { group: 387, child: 28 };
 
-function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = null } = {}) {
+function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = null, ranged = 99 } = {}) {
   const worn = Array.from({ length: 14 }, () => new Item(-1, 0));
   if (cape) worn[Equipment.CAPE_SLOT] = new Item(cape, 1);
   if (weapon) worn[Equipment.WEAPON_SLOT] = new Item(weapon, 1);
@@ -59,6 +59,8 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
     getEquipment: () => equipment,
     getInventory: () => inventory,
     getBonusManager: () => bonuses,
+    // Base levels, as equip checks read them: Ranged as given, the rest 99.
+    getSkillManager: () => ({ getMaxLevel: (skill) => (skill === core.Skill.RANGED ? ranged : 99), getCombatLevel: () => 126 }),
     getPacketSender() {
       const sender = {
         sendConfig: (id, value) => { varps.set(id, value); return sender; },
@@ -129,6 +131,17 @@ test('Fill moves the worn arrows into the quiver; with none worn, the Wiki messa
   const empty = fakePlayer();
   click(empty, 2);
   assert.equal(empty.messages.at(-1), 'You have nothing in your worn quiver to fill your Dizana\'s Quiver with.');
+});
+
+test('Swap wears the stored ammo only at its Ranged level: no dragon arrows at 50 Ranged', () => {
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const archer = fakePlayer({ ammo: [I.DRAGON_ARROW, 10] });
+  click(archer, 2); // Fill: the dragon arrows into the quiver
+  const low = fakePlayer({ ammo: [I.RUNE_ARROW, 10], ranged: 50 });
+  low.setAttribute('dizanas-quiver', archer.getAttribute('dizanas-quiver'));
+  click(low, 2); // Swap
+  assert.equal(low.worn[Equipment.AMMUNITION_SLOT].getId(), I.RUNE_ARROW, 'the rune arrows stay worn');
+  assert.deepEqual(Quiver.stored(low), { id: I.DRAGON_ARROW, amount: 10 }, 'the dragon arrows stay stored');
 });
 
 test('only arrows and bolts go in, and only of the type already there', () => {
@@ -223,7 +236,8 @@ test('shots use up the quiver: 20% break, the rest drop, and it runs out', () =>
     PluginManager.decrementRangedAmmo(player, { getX: () => 0 }, 2);
     assert.deepEqual(drops, [2]);
     assert.equal(Quiver.stored(player), null);
-    assert.equal(player.messages.at(-1), 'You have run out of ammunition!');
+    // No line as it empties (rsprox 227/00096:101682); the next attempt names it.
+    assert.ok(!player.messages.includes('You have run out of ammunition!'));
     assert.equal(player.varps.get(Quiver.VARP.ITEM), -1);
   } finally {
     Misc.getRandom = getRandom;

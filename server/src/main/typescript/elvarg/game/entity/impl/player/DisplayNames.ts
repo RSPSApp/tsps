@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Misc } from "../../../../util/Misc";
-import { LEAGUE_PROFILE, MAIN_PROFILE } from "./persistence/PlayerProfile";
+import { PLAYER_PROFILES } from "./persistence/PlayerProfile";
 
 /** A name an account gave up, kept for it until `until` so nobody else can take it straight away. */
 export interface HeldDisplayName {
@@ -132,19 +132,42 @@ export class DisplayNames {
         if (owner && owner !== account) return "That name is not available.";
         if (owner === account) return null;
         if (this.loginNameInUse(key)) return "That name is not available.";
+        if (this.shownByAnother(key, account)) return "That name is not available.";
         return null;
     }
 
-    /** Whether any account logs in with this name: saved on either profile, online, or logging in now. */
-    private static loginNameInUse(key: string): boolean {
+    /**
+     * Whether a player online or logging in now shows this name for another account. Bots show generated names that are
+     * never saved here, so without this a player could take a live bot's name and two would show the same one.
+     */
+    public static shownByAnother(name: string, account: string): boolean {
+        const { World } = require("../../../World") as typeof import("../../../World");
+        const key = this.key(name);
+        const self = this.key(account);
+        for (const player of [...World.getPlayers(), ...World.getAddPlayerQueue()]) {
+            if (!player) continue;
+            const shown = player.getDisplayName?.();
+            if (shown && this.key(shown) === key && this.key(player.getUsername()) !== self) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether any account logs in with this name: saved on either profile, online, logging in now,
+     * an account's character, or a deleted character's (reserved, see Accounts). A name deleted by
+     * `exceptDeletedBy` (an account key) doesn't count: that account may create it again.
+     */
+    public static loginNameInUse(key: string, exceptDeletedBy?: string): boolean {
         const { GameConstants } = require("../../../GameConstants") as typeof import("../../../GameConstants");
         const { World } = require("../../../World") as typeof import("../../../World");
         const { ClientConnection } = require("../../../../net/NetworkBuilder") as typeof import("../../../../net/NetworkBuilder");
+        const { Accounts } = require("./Accounts") as typeof import("./Accounts");
         const persistence = GameConstants.PLAYER_PERSISTENCE;
-        return !!World.getPlayerByName(key) ||
+        return Accounts.accountOf(key) !== undefined ||
+            (Accounts.isDeleted(key) && !(exceptDeletedBy !== undefined && Accounts.deletedBy(key, exceptDeletedBy))) ||
+            !!World.getPlayerByName(key) ||
             ClientConnection.isLoginPending(key) ||
-            persistence.exists(key, MAIN_PROFILE) ||
-            persistence.exists(key, LEAGUE_PROFILE);
+            PLAYER_PROFILES.some((profile) => persistence.exists(key, profile));
     }
 
     /**

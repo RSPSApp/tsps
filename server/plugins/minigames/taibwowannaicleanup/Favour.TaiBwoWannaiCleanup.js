@@ -100,6 +100,8 @@ function sendOnLogin({ player }) {
 function showAfterWelcome({ player }) {
   player.setAttribute(ATTR.OVERLAY, false);
   showOverlay(player);
+  // Play also restores other plugins' post-login interfaces.
+  return false;
 }
 
 function answerFavour(request) {

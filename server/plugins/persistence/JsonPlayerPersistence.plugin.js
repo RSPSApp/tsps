@@ -143,6 +143,15 @@ class JsonPlayerPersistence extends PlayerPersistence {
     return this.pendingSerializedSaves.has(filePath) || fs.existsSync(filePath);
   }
 
+  async delete(username, profile = MAIN_PROFILE) {
+    const filePath = this.resolveFilePath(username, profile);
+    this.pendingSerializedSaves.delete(filePath);
+    this.failedWrites.delete(filePath);
+    await this.pendingWriteChain.catch(() => undefined);
+    this.failedWrites.delete(filePath);
+    fs.rmSync(filePath, { force: true });
+  }
+
   async flush() {
     await super.flush();
     await this.pendingWriteChain.catch(() => undefined);
@@ -174,6 +183,8 @@ class JsonPlayerPersistence extends PlayerPersistence {
     this.pendingWriteChain = this.pendingWriteChain
       .catch(() => undefined)
       .then(async () => {
+        // Deleted (or replaced by a newer write) while queued: don't put the file back.
+        if (this.pendingSerializedSaves.get(filePath)?.sequence !== sequence) return;
         try {
           await fsp.mkdir(path.dirname(filePath), { recursive: true });
           await writeFileAtomicallyAsync(filePath, serialized);
@@ -631,6 +642,7 @@ let SkillManager;
 
 module.exports = {
   name: "JsonPlayerPersistence",
+  description: "Saves each character as a JSON file under data/saves/characters. Skipped when the server runs inside a browser host.",
   register(api) {
     SkillManager = api.getSkillManager();
     if (isBrowserHost()) {

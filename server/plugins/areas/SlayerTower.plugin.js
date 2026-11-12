@@ -117,6 +117,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "SlayerTower",
+  description: "Slayer Tower's double-door entrance with its gargoyle statues, and the basement ladder with its dark overlay.",
   members: true,
   BASEMENT,
   _test: { attach, swing, openEntrance, closeEntrance, claimBasementLadder, showDarkness, basementArea, leaves, isOpen: () => entranceOpen, BASEMENT },

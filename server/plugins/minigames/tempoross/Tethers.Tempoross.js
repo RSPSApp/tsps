@@ -59,7 +59,7 @@ class Tethers {
   tether(player, site) {
     const sender = player.getPacketSender();
     Shared.stopAction(player);
-    player.getMovementQueue().reset();
+    player.getMovementQueue().setBlockMovement(true).reset();
     player.setPositionToFace(site.loc.getLocation());
     Shared.animate(player, ANIM.TETHER);
     Shared.graphic(player, GFX.TETHER, TETHER_HEIGHT);
@@ -84,6 +84,7 @@ class Tethers {
     const entry = this.tethered.get(player);
     if (!entry) return false;
     this.tethered.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
     entry.task?.stop();
     if (!player.isRegistered()) return true;
     const sender = player.getPacketSender();
@@ -183,13 +184,54 @@ function repairSite(event) {
   return true;
 }
 
+/** Player -> the cycle a walk was refused on, while tethered. */
+const refusedWalkAt = new WeakMap();
+
 /** Walking off while tethered is refused; clicking something else untethers instead. */
 function walkWhileTethered(event) {
   const { player } = event;
   if (!coveOf(player)?.fight?.tethers.siteOf(player)) return;
   event.handled = true;
   player.getMovementQueue().reset();
+  refusedWalkAt.set(player, Shared.core().World.getProcessCycle());
   player.sendMessage("You must untether yourself to move away.");
+}
+
+/**
+ * The clicks kept from untethering after a refused walk: an NPC, or an object that isn't a mast or totem (whose own
+ * Untether/Repair/Tether answer it). Inventory actions and everything else still let go.
+ */
+function refusedAfterWalk(player, packet) {
+  if (packet.type === "npc_option") return true;
+  if (packet.type !== "object_option") return false;
+  const tethers = coveOf(player)?.fight?.tethers;
+  const { Location } = Shared.core();
+  return !tethers?.siteAt(new Location(packet.x, packet.y, player.getLocation().getZ()));
+}
+
+/**
+ * Reject walks before routing; other actions let go before their route can move the player
+ * (rsprox 227/00552.txt tick 16915: a crate click untethers, then "You untether yourself from the
+ * mast."). An NPC or non-mast object clicked in the same tick as a refused walk keeps the tether and
+ * can't reach (227/01858.txt tick 4744: move_gameclick, the crate NPC, "You must untether yourself to
+ * move away.", "I can't reach that!").
+ *
+ * This is only the same-tick case. The recordings refuse more clicks than this: 01858 ticks 4749 and
+ * 4756 (the fire NPC, no walk that tick) and 00552 tick 16618 (a fire shrine). Every refused click is
+ * from (3037,2977) or (3044,2996), while the untethering crate clicks are from (3036,2978). That looks
+ * like reachability from the tethered tile, which isn't modelled here.
+ */
+function inputWhileTethered(event) {
+  const { player } = event;
+  if (!coveOf(player)?.fight?.tethers.siteOf(player)) return;
+  if (event.packet.type === "move" || event.packet.type === "world_map_click") {
+    walkWhileTethered(event);
+  } else if (refusedWalkAt.get(player) === Shared.core().World.getProcessCycle() && refusedAfterWalk(player, event.packet)) {
+    event.handled = true;
+    player.sendMessage("I can't reach that!");
+  } else {
+    untetherFor(player);
+  }
 }
 
 function attachTethers(api) {
@@ -198,6 +240,7 @@ function attachTethers(api) {
   api.onObjectInteraction("Damaged mast", { Repair: repairSite });
   api.onObjectInteraction("Damaged totem pole", { Repair: repairSite });
   api.onWalkRoute(walkWhileTethered);
+  api.onCustomEvent("player:world-input", inputWhileTethered);
 }
 
 module.exports = { Tethers, attachTethers, untetherFor, hasRope };

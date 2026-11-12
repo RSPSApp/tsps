@@ -37,6 +37,7 @@ function searchHay(event) {
 
 module.exports = {
   name: "ScenerySearch",
+  description: "Searching haystacks and hay bales, which can hide a needle or prick you, and plain crates and boxes, which hold nothing.",
   dependsOn: ["Quests"],
   register(api) {
     core = api.core;

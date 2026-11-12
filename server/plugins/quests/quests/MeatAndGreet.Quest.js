@@ -20,6 +20,8 @@
  * Saves from the old 0-7 stage model are mapped onto the captured values once.
  * Rewards per the capture: 1 Quest point, 8,000 Cooking XP and access to Emelio's Kebab Shop.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerMeatAndGreetQuest(api) {
   const {
     ActionDialogue,
@@ -897,7 +899,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
         npc.performAnimation(new Animation(MINOTAUR.shout));
         npc.forceChat("Moooooo!");
         const sender = target.getPacketSender?.();
-        for (let axis = 0; axis < 3; axis++) sender?.sendCameraShake(axis, 5, 0, 0);
+        if (sender) for (let axis = 0; axis < 3; axis++) CameraShake.send(sender, "combat", axis, 5, 0, 0);
         later(npc, 2, () => target.getPacketSender?.().sendCameraReset());
         return;
       }

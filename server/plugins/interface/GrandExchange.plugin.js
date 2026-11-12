@@ -24,6 +24,8 @@ const SIDE_ITEMS = SIDE << 16;
 const SELECTED_SLOT = 4439;
 const SELL = 4397;
 const QUANTITY = 4396;
+// Cache script 779 scales this rate by 1,000 (20 means 2%).
+const TAX_RATE = 13139;
 // The new offer's price: a long varp from rev 241 (it was varbit 4398).
 const PRICE_LONG = 5753;
 const SELECTED_ITEM = 1151;
@@ -31,6 +33,20 @@ const SELECTED_ITEM = 1151;
 const SETUP_DESC = uid(27);
 // ge_offers:details_desc, the same text on an existing offer's details screen.
 const DETAILS_DESC = uid(16);
+const SETUP_FEE_INFO = uid(29);
+const DETAILS_FEE_INFO = uid(18);
+const SET_DESCRIPTION_SCRIPT = 5730;
+const FEE_POPUP = uid(32);
+const POPUP_INTERFACE = 289;
+const POPUP_TEXT_SCRIPT = 4212;
+// Verbatim OSRS fee information from the screenshots in issue #2983.
+const FEE_INFORMATION =
+  "Convenience Fees|" +
+  "The Grand Exchange charges a fee for selling most items. This is typically 2% of the amount paid for each item, or 5,000,000 coins, whichever is lower.<br><br>" +
+  "For very cheap items, a 2% fee rounds down to zero, so you don't pay any fee on them.<br><br>" +
+  "When you offer items for sale, the menu shows how much money you'll receive once the fee is paid, and how this was calculated. However, you may receive more money than expected, if the buyer is offering a higher price; when this happens, the fee is calculated off the amount they paid.<br><br>" +
+  "A few items are completely exempt from fees, such as bonds or various basic tools - no fee is charged when they are sold.|" +
+  "Close";
 // Cache script 5733 reads pending client requests here, not accepted offers.
 // Keep them separate from the stockmarket opcode data.
 const OFFER_ITEMS = [3204, 3206, 3208, 3210, 3212, 3214, 3216, 3218];
@@ -58,9 +74,9 @@ const PRESET_TEXT = "Preset items cannot be used for this.";
 const COINS = ItemIdentifiers.COINS;
 const PLATINUM_TOKEN = ItemIdentifiers.PLATINUM_TOKEN;
 // OSRS Wiki Update:GE_Improvements:_Beyond_Max_Cash: payment mixes coins and platinum tokens,
-// coins first, with change in coins. Only the inventory is used (the client reads it with
-// inv_total of 995/13204 in script 9915). Cache script 779 rejects a total (varbit 4396 quantity
-// x long varp 5753 price) above lconst 500:2147482647 = 2,149,631,130,647 ("Too much money!"),
+// coins first, with change in coins. The inventory pays first (the client reads it with
+// inv_total of 995/13204 in script 9915), then the bank (see bankPayment). Cache script 779
+// rejects a total (varbit 4396 quantity x long varp 5753 price) above lconst 500:2147482647 = 2,149,631,130,647 ("Too much money!"),
 // i.e. a full stack of coins plus a full stack of tokens. The price entry (script 108) is still
 // an int prompt, so a unit price stays within MAX; only quantity x price can exceed it.
 const COINS_PER_TOKEN = 1000;
@@ -119,6 +135,11 @@ const TAX_EXEMPT_NAMES = new Set([
 // Dose and charge counts make these names vary, but the whole item is exempt.
 const TAX_EXEMPT_PREFIXES = ["Energy potion", "Watering can"];
 const MARKET_DATA_FILE = path.join(__dirname, "data", "grand-exchange.json");
+const ValueWarning = require("./ValueWarning");
+// All Settings 297/298: set to 1, the price warning is off.
+const BUY_WARNING_DISABLED_VARBIT = 14700;
+const SELL_WARNING_DISABLED_VARBIT = 14701;
+const PRICE_WARNING_FACTOR = 10;
 // OSRS: members get all 8 offer slots, free-to-play worlds the first 3.
 const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 : 3);
 const offers = new WeakMap();
@@ -178,6 +199,29 @@ function guidePrice(offer) {
 /** The price stored on the offer, or the guide for offers saved before prices were adjustable. */
 function offerPrice(offer) {
   return Number.isInteger(offer?.price) && offer.price > 0 ? Math.min(MAX, offer.price) : guidePrice(offer);
+}
+
+/**
+ * The unit price an offer trades at (Wiki: Grand Exchange): a buy pays the market price when its bid is higher and
+ * gets the difference back, and a sell receives the market price when that is higher than its ask.
+ */
+function fillUnitPrice(offer) {
+  const own = offerPrice(offer);
+  const market = guidePrice(offer);
+  return offer.sell ? Math.max(own, market) : Math.min(own, market);
+}
+
+/** The coins a finished trade moved; saves from before fill prices have only the offer's own total. */
+function tradedTotal(offer) {
+  return Number.isSafeInteger(offer?.traded) ? offer.traded : Number(offer?.total) || 0;
+}
+
+/** Coins as stacks: a full stack and over is paid as platinum tokens plus the remaining coins. */
+function coinStacks(total) {
+  if (total <= 0) return [];
+  if (total <= MAX) return [{ itemId: COINS, amount: total }];
+  const tokens = Math.min(MAX, Math.floor(total / COINS_PER_TOKEN));
+  return [{ itemId: PLATINUM_TOKEN, amount: tokens }, { itemId: COINS, amount: total - tokens * COINS_PER_TOKEN }];
 }
 
 /** Scripts 773/779 price controls: -1, +1, -5%, guide, +5% (custom entry is handled separately). */
@@ -243,6 +287,14 @@ function recordLimit(player, itemId, amount, now = Date.now()) {
   else limits[key] = { start: now, amount };
 }
 
+/** An aborted buy bought nothing (offers fill whole), so its quantity no longer counts against the limit (Wiki). */
+function releaseLimit(player, offer, now = Date.now()) {
+  const entry = limitEntry(player, offer.itemId, now);
+  // Only the window the offer was counted in; a later window never held it. Older saves have no placedAt.
+  if (!entry || !(Number(offer.placedAt) >= entry.start)) return;
+  entry.amount = Math.max(0, entry.amount - offer.quantity);
+}
+
 let quotedPrices;
 
 /**
@@ -286,7 +338,7 @@ function recordHistory(player, offer) {
   if (!offer || offer.historyRecorded || !offer.finished || offer.aborted) return false;
   const itemId = Number(offer.itemId);
   const quantity = Number(offer.quantity);
-  const total = Number(offer.total);
+  const total = tradedTotal(offer);
   if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(quantity) || quantity <= 0 ||
       !Number.isSafeInteger(total) || total < 0) return false;
 
@@ -313,6 +365,7 @@ function scheduleCompletion(player, offer) {
     if (offer.finished) return;
     offer.finished = true;
     offer.completedAt = Date.now();
+    offer.traded = Math.min(offer.sell ? MAX_TRADE : offer.total, offer.quantity * fillUnitPrice(offer));
     recordHistory(player, offer);
     saveOffers(player);
     refreshCollectionBox(player);
@@ -345,7 +398,7 @@ function marketVarps(slot, offer) {
     [base + 1]: offer?.quantity ?? 0,
     // An aborted offer traded nothing (the client draws its bar red).
     [base + 2]: offer?.finished && !offer.aborted ? offer.quantity : 0,
-    [base + 3]: offer?.finished && !offer.aborted ? Math.min(MAX, offer.total) : 0,
+    [base + 3]: offer?.finished && !offer.aborted ? Math.min(MAX, tradedTotal(offer)) : 0,
     [base + 4]: offer?.sell ? 1 : 0,
     [base + 5]: offer ? (offer.finished ? FINISHED : 2) : 0,
     [OFFER_ITEMS[slot] + 1]: 0,
@@ -373,11 +426,13 @@ function tax(offer) {
   if (!offer?.sell || offer.aborted || taxExempt(offer.itemId)) return 0;
   const quantity = Math.max(0, Number(offer.quantity) || 0);
   if (!quantity) return 0;
-  // Saved offers from before adjustable prices have no price. Use the unit price they
-  // actually sold at rather than today's guide, which may have moved since the sale.
-  const unitPrice = Number.isInteger(offer.price) && offer.price > 0
-    ? Math.min(MAX, offer.price)
-    : Math.floor((Number(offer.total) || 0) / quantity);
+  // The fee is on the price the item sold for (FEE_INFORMATION). Saved offers from before fill prices, or
+  // before adjustable prices, use their own price, or the unit price they sold at, not today's guide.
+  const unitPrice = Number.isSafeInteger(offer.traded)
+    ? Math.min(MAX, Math.floor(offer.traded / quantity))
+    : Number.isInteger(offer.price) && offer.price > 0
+      ? Math.min(MAX, offer.price)
+      : Math.floor((Number(offer.total) || 0) / quantity);
   const perItem = Math.min(TAX_CAP, Math.floor(unitPrice / TAX_DIVISOR));
   return perItem * quantity;
 }
@@ -388,18 +443,25 @@ function tax(offer) {
  * stack are paid as platinum tokens plus the remaining coins.
  */
 function payout(offer) {
-  const coins = offer.sell !== Boolean(offer.aborted);
-  if (!coins) return [{ itemId: offer.itemId, amount: offer.quantity }];
-  const total = Math.max(0, offer.total - tax(offer));
-  if (total <= MAX) return [{ itemId: COINS, amount: total }];
-  const tokens = Math.min(MAX, Math.floor(total / COINS_PER_TOKEN));
-  return [{ itemId: PLATINUM_TOKEN, amount: tokens }, { itemId: COINS, amount: total - tokens * COINS_PER_TOKEN }];
+  if (offer.aborted) return offer.sell ? [{ itemId: offer.itemId, amount: offer.quantity }] : coinStacks(offer.total);
+  // A bought item comes with the coins bid over the price it traded at.
+  if (!offer.sell) return [{ itemId: offer.itemId, amount: offer.quantity }, ...coinStacks(offer.total - tradedTotal(offer))];
+  const paid = coinStacks(Math.max(0, tradedTotal(offer) - tax(offer)));
+  return paid.length ? paid : [{ itemId: COINS, amount: 0 }];
+}
+
+/** Parts of a finished offer already taken one at a time from its two collection slots (saved with the offer). */
+function collectedParts(offer) {
+  return Array.isArray(offer?.collected) ? offer.collected : [];
 }
 
 function collection(offer) {
+  const taken = collectedParts(offer);
   return {
     capacity: 2,
-    slots: offer?.finished ? payout(offer).map(({ itemId, amount }, slot) => ({ slot, itemId, quantity: amount })) : [],
+    slots: offer?.finished
+      ? payout(offer).map(({ itemId, amount }, slot) => ({ slot, itemId, quantity: amount })).filter(({ slot }) => !taken.includes(slot))
+      : [],
   };
 }
 
@@ -420,11 +482,16 @@ function refreshCollectionBox(player) {
 function refresh(player, offer) {
   player.getPacketSender()
     .sendConfig(SELECTED_ITEM, offer.itemId)
+    .sendVarbit(TAX_RATE, taxExempt(offer.itemId) ? 0 : 1000 / TAX_DIVISOR)
     .sendVarbit(SELL, offer.sell ? 1 : 0)
     .sendVarbit(QUANTITY, offer.quantity)
     .sendVarpLong(PRICE_LONG, offer.itemId > 0 ? offerPrice(offer) : 1)
     .sendVarbit(SELECTED_SLOT, offer.slot + 1)
-    .sendString(examine(offer.itemId), SETUP_DESC);
+    .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(offer.itemId), feeLabel(offer), SETUP_DESC, SETUP_FEE_INFO]);
+}
+
+function feeLabel(offer) {
+  return offer.sell && offer.itemId > 0 ? `Convenience fee: ${taxExempt(offer.itemId) ? "None" : "2%"}` : "";
 }
 
 function examine(itemId) {
@@ -474,10 +541,12 @@ function showCompleted(player, slot) {
   viewing.set(player, slot);
   player.getPacketSender()
     .abortInputPrompt()
+    .sendVarbit(TAX_RATE, taxExempt(completedOffers(player)[slot].itemId) ? 0 : 1000 / TAX_DIVISOR)
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELECTED_SLOT, 0)
     .sendVarbit(SELECTED_SLOT, slot + 1)
-    .sendString(examine(completedOffers(player)[slot].itemId), DETAILS_DESC);
+    .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(completedOffers(player)[slot].itemId),
+      feeLabel(completedOffers(player)[slot]), DETAILS_DESC, DETAILS_FEE_INFO]);
 }
 
 function chooseItem(player, offer) {
@@ -535,8 +604,140 @@ function tokensNeeded(inventory, total) {
   return tokens <= inventory.getAmount(PLATINUM_TOKEN) ? tokens : null;
 }
 
-function confirm(player, offer) {
+/** Plain (not preset, untradeable or unbankable) stacks of `id`, as [slot, amount]. */
+function plainStacks(container, id) {
+  return container.getItems().flatMap((item, slot) =>
+    item?.getId() === id && item.getAmount() > 0 && !restricted(item) ? [[slot, item.getAmount()]] : []);
+}
+
+const realBankTabs = (player) => Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => tab)
+  .filter((tab) => tab !== Bank.BANK_SEARCH_TAB_INDEX);
+
+/**
+ * Wiki: Grand_Exchange (Changes, 14 June 2023): "Buy offers can now use the coins from the player's
+ * bank as payment; coins in the player's inventory take precedence". Update:GE_Improvements:_Beyond_Max_Cash
+ * adds platinum tokens to the mix, taken "in whichever inventory it's taking from", with change in coins.
+ * So a buy the inventory cannot cover takes its plain coins and tokens, then the bank's coins, then
+ * the bank's tokens (change into the bank). Everything runs on copies; `{ inventory, banks }` is
+ * committed only once the offer goes through. Returns `{ message }` when it cannot be paid.
+ */
+function bankPayment(player, inventory, total) {
+  const result = new Inventory(player);
+  result.setItems(inventory.getCopiedItems());
+  let left = total;
+  let restrictedValue = 0;
+  for (const [id, value] of [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]]) {
+    for (const [slot, amount] of plainStacks(inventory, id)) {
+      result.deleteAtSlot(slot, amount, false);
+      left -= amount * value;
+    }
+    restrictedValue += (inventory.getAmount(id) - plainStacks(inventory, id).reduce((sum, [, a]) => sum + a, 0)) * value;
+  }
+  const banks = new Map();
+  const copy = (tab) => {
+    if (!banks.has(tab)) {
+      const bank = new Bank(player);
+      bank.setItems(player.getBank(tab).getCopiedItems());
+      banks.set(tab, bank);
+    }
+    return banks.get(tab);
+  };
+  const coinStacks = realBankTabs(player).flatMap((tab) =>
+    plainStacks(player.getBank(tab), COINS).map(([slot, amount]) => ({ tab, slot, amount })));
+  const bankCoins = coinStacks.reduce((sum, stack) => sum + stack.amount, 0);
+  if (left <= bankCoins) {
+    for (const { tab, slot, amount } of coinStacks) {
+      if (left <= 0) break;
+      const taken = Math.min(left, amount);
+      copy(tab).deleteAtSlot(slot, taken, false);
+      left -= taken;
+    }
+  } else {
+    // Whole tokens pay what the bank's coins cannot; the change (under 1,000) is what the bank's
+    // plain coins come to afterwards.
+    let short = left - bankCoins;
+    let freed = 0;
+    for (const tab of realBankTabs(player)) {
+      for (const [slot, amount] of plainStacks(player.getBank(tab), PLATINUM_TOKEN)) {
+        if (short <= 0) break;
+        const taken = Math.min(Math.ceil(short / COINS_PER_TOKEN), amount);
+        copy(tab).deleteAtSlot(slot, taken, false);
+        if (taken === amount) freed++;
+        short -= taken * COINS_PER_TOKEN;
+      }
+    }
+    if (short > 0) {
+      // Preset or other restricted copies are never spent; say so when they are what is missing.
+      const restrictedBank = realBankTabs(player).reduce((sum, tab) => {
+        const bank = player.getBank(tab);
+        return sum + [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]].reduce((s, [id, value]) =>
+          s + (bank.getAmount(id) - plainStacks(bank, id).reduce((n, [, a]) => n + a, 0)) * value, 0);
+      }, 0);
+      return { message: restrictedValue + restrictedBank >= short ? PRESET_TEXT : "You do not have enough coins." };
+    }
+    const change = -short;
+    // Change goes where the bank keeps its coins, as collect picks it. Only the copies have
+    // changed so far, so this reads the live tabs.
+    const coinTab = Bank.getTabForItem(player, COINS);
+    if (bankCoins > 0) {
+      // One coin stack is left holding the change, so it needs no new slot.
+      const keep = coinStacks.find((stack) => stack.tab === coinTab) ?? coinStacks[0];
+      for (const { tab, slot, amount } of coinStacks) {
+        if (tab === keep.tab && slot === keep.slot && change > 0) copy(tab).getItems()[slot].setAmount(change);
+        else copy(tab).deleteAtSlot(slot, amount, false);
+      }
+    } else if (change > 0) {
+      const bank = copy(coinTab >= 0 ? coinTab : 0);
+      const items = bank.getItems();
+      // A coins placeholder takes the change in place; otherwise it needs a free slot, counting
+      // the token stacks this payment empties.
+      const held = items.findIndex((item) => item?.getAmount() === 0 && item.getId() >= 0 &&
+        (item.getId() === COINS || Bank.sharesPlaceholder(item.getId(), COINS)));
+      const slot = held >= 0 ? held : (Bank.freeSlots(player) + freed > 0 ? bank.freeSlot() : -1);
+      if (slot < 0) return { message: "You don't have enough bank space for your change." };
+      bank.setItem(slot, new Item(COINS, change));
+    }
+    left = 0;
+  }
+  for (const bank of banks.values()) bank.sortItems();
+  return { inventory: result, banks };
+}
+
+/**
+ * Wiki (Grand Exchange): "free players may only purchase free-to-play items, and not members' items"; selling has
+ * no restriction. Every buy offer reaches confirm, however the item was picked. TSPS wording for the line.
+ */
+function freeWorldBuyRefused(player, offer) {
+  if (offer.sell || pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  const item = CacheDefinitions.getItem(ItemDefinition.forId(offer.itemId).unNote());
+  if (item?.isMembers !== true) return false;
+  player.getPacketSender().sendMessage("You can only buy free-to-play items on a free world.");
+  return true;
+}
+
+/**
+ * All Settings 297 and 298 (the rows' own text): a buy offer more than 10 times the guide price, or
+ * a sell offer under 10% of it, asks first. Ours: the warning's wording.
+ */
+function priceWarning(player, offer, unitPrice) {
+  const guide = guidePrice(offer);
+  const sender = player.getPacketSender();
+  if (!offer.sell && !sender.getVarbit(BUY_WARNING_DISABLED_VARBIT) && unitPrice > guide * PRICE_WARNING_FACTOR) {
+    return `Your offer is more than ${PRICE_WARNING_FACTOR} times the guide price.`;
+  }
+  if (offer.sell && !sender.getVarbit(SELL_WARNING_DISABLED_VARBIT) && unitPrice * PRICE_WARNING_FACTOR < guide) {
+    return `Your offer is less than ${100 / PRICE_WARNING_FACTOR}% of the guide price.`;
+  }
+  return null;
+}
+
+/**
+ * `warned`: the offer as the player accepted its price warning ({ itemId, price, quantity }). The
+ * Exchange stays open behind the warning, so an offer edited since is checked again.
+ */
+function confirm(player, offer, warned = null) {
   if (!active(player, offer) || !exchangeable(offer.itemId)) return;
+  if (freeWorldBuyRefused(player, offer)) return;
   const amount = offer.quantity;
   const unitPrice = offerPrice(offer);
   offer.price = unitPrice;
@@ -556,9 +757,33 @@ function confirm(player, offer) {
   const inventory = player.getInventory();
   const inputId = offer.sell ? offer.itemId : COINS;
   const inputAmount = offer.sell ? amount : total;
+  const matchesInput = (item) => item.getId() === inputId ||
+    (offer.sell && item.getId() > 0 && ItemDefinition.forId(item.getId()).unNote() === inputId);
+  const heldAmount = inventory.getItems().filter(matchesInput).reduce((sum, item) => sum + item.getAmount(), 0);
   const tokens = offer.sell ? 0 : tokensNeeded(inventory, total);
-  if (tokens === null || (offer.sell && inventory.getAmount(inputId) < inputAmount)) {
-    sender.sendMessage(offer.sell ? "You do not have enough of that item." : "You do not have enough coins.");
+  if (offer.sell && heldAmount < inputAmount) {
+    sender.sendMessage("You do not have enough of that item.");
+    return;
+  }
+  // The inventory is short: the rest comes from the bank, under the bank's own access rules
+  // (an unentered Bank PIN, an Ultimate Ironman, a duel) as collecting to the bank uses.
+  const fromBank = tokens === null ? bankPayment(player, inventory, total) : null;
+  if (fromBank?.message) {
+    sender.sendMessage(fromBank.message);
+    return;
+  }
+  if (fromBank && pluginApi.emitCanBank(player, "grand-exchange-buy") === false) return;
+  const accepted = warned?.itemId === offer.itemId && warned.price === unitPrice && warned.quantity === amount;
+  const warning = accepted ? null : priceWarning(player, offer, unitPrice);
+  if (warning) {
+    ValueWarning.confirm(pluginApi.core, player, {
+      itemId: offer.itemId,
+      text: `${warning}<br>Are you sure you want to place this offer?`,
+      title: "Place this offer?",
+      yes: "Yes, place the offer.",
+      no: "No, don't place the offer.",
+      proceed: () => confirm(player, offer, { itemId: offer.itemId, price: unitPrice, quantity: amount }),
+    });
     return;
   }
   // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
@@ -569,9 +794,11 @@ function confirm(player, offer) {
   }
 
   // Use the normal container rules on a copy: failed/full trades never remove live items.
-  const result = new Inventory(player);
-  result.setItems(inventory.getCopiedItems());
-  if (tokens > 0) {
+  const result = fromBank?.inventory ?? new Inventory(player);
+  if (!fromBank) result.setItems(inventory.getCopiedItems());
+  if (fromBank) {
+    // Already worked out on copies by bankPayment; committed with the inventory below.
+  } else if (tokens > 0) {
     const shortfall = total - inventory.getAmount(COINS);
     result.deleted(COINS, inventory.getAmount(COINS), false);
     result.deleted(PLATINUM_TOKEN, tokens, false);
@@ -585,38 +812,52 @@ function confirm(player, offer) {
     }
   } else {
     // An offer's input comes from one stack; a delete by id would run on into the next.
-    const plain = (item) => item.getId() === inputId && item.getAmount() > 0 && !restricted(item);
+    const plain = (item) => matchesInput(item) && item.getAmount() > 0 && !restricted(item);
     const firstStack = inventory.getItems().find(plain);
     const plainTotal = inventory.getItems().filter(plain).reduce((sum, item) => sum + item.getAmount(), 0);
     if (!firstStack || plainTotal < inputAmount && !ItemDefinition.forId(inputId).isStackable()) {
       sender.sendMessage(PRESET_TEXT);
       return;
     }
-    if (ItemDefinition.forId(inputId).isStackable() && firstStack.getAmount() < inputAmount) {
+    // Keep the one-stack restriction for each stackable form, while accepting notes and items together.
+    const seen = new Set();
+    const inputSlots = new Set();
+    const usableTotal = inventory.getItems().reduce((sum, item, slot) => {
+      if (!plain(item)) return sum;
+      const id = item.getId();
+      if (ItemDefinition.forId(id).isStackable() && seen.has(id)) return sum;
+      seen.add(id);
+      inputSlots.add(slot);
+      return sum + item.getAmount();
+    }, 0);
+    if (usableTotal < inputAmount) {
       sender.sendMessage("Trade one item stack at a time.");
       return;
     }
     let left = inputAmount;
     result.getItems().forEach((item, slot) => {
-      if (left <= 0 || !plain(item)) return;
+      if (left <= 0 || !inputSlots.has(slot)) return;
       const taken = Math.min(left, item.getAmount());
       result.deleteAtSlot(slot, taken, false);
       left -= taken;
     });
   }
   inventory.setItems(result.getItems()).refreshItems();
+  for (const [tab, bank] of fromBank?.banks ?? []) player.getBank(tab).setItems(bank.getItems());
   const delay = fillDelayMs(offer);
-  const finished = { ...offer, total, finished: false, completesAt: delay === null ? null : Date.now() + delay };
+  // One clock reading: releaseLimit matches placedAt against the window recordLimit opens here.
+  const now = Date.now();
+  const finished = { ...offer, total, finished: false, placedAt: now, completesAt: delay === null ? null : now + delay };
   completedOffers(player)[offer.slot] = finished;
-  if (!offer.sell) recordLimit(player, offer.itemId, amount);
+  if (!offer.sell) recordLimit(player, offer.itemId, amount, now);
   saveOffers(player);
   offers.delete(player);
   viewing.set(player, offer.slot);
   player.getPacketSender().abortInputPrompt();
   sender.sendInterfaceScript(786, [], { [SELECTED_ITEM]: -1, ...marketVarps(offer.slot, finished) },
-      { [SELECTED_SLOT]: offer.slot + 1 },
+      { [SELECTED_SLOT]: offer.slot + 1, [TAX_RATE]: taxExempt(offer.itemId) ? 0 : 1000 / TAX_DIVISOR },
       { [COLLECTIONS[offer.slot]]: collection(finished) })
-    .sendString(examine(offer.itemId), DETAILS_DESC)
+    .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(offer.itemId), feeLabel(offer), DETAILS_DESC, DETAILS_FEE_INFO])
     .sendMessage("Offer placed. It will fill when the market meets your price.");
   scheduleCompletion(player, finished);
 
@@ -638,16 +879,25 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
   return baseId;
 }
 
-function collect(player, action, slot = viewing.get(player), forceNotes = false) {
+/**
+ * Collects a finished offer: every part not yet taken, or with `part` only that collection slot
+ * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
+ */
+function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
+  const taken = collectedParts(offer);
+  const all = payout(offer);
+  const wanted = all.map((paid, index) => ({ paid, index }))
+    .filter(({ index }) => !taken.includes(index) && (part === null || index === part));
+  if (!wanted.length) return;
   // A bank collection must obey the same account restrictions as bank access.
   if (action === 3 && pluginApi.emitCanBank(player, "grand-exchange-collect") === false) return false;
   const inventory = player.getInventory();
   const parts = [];
   // Each part lands on a copy first, so a collection that does not fit hands over nothing.
   const results = new Map();
-  for (const paid of payout(offer)) {
+  for (const { paid } of wanted) {
     const baseId = paid.itemId === COINS || paid.itemId === PLATINUM_TOKEN ? paid.itemId : ItemDefinition.forId(paid.itemId).unNote();
     const outputId = collectionOutputId(baseId, paid.amount, action, forceNotes);
     const destination = action === 3 ? player.getBank(Bank.getTabForItem(player, baseId)) : inventory;
@@ -680,9 +930,20 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false)
       returned: Boolean(offer.sell && offer.aborted),
     });
   }
-  delete completedOffers(player)[slot];
+  const remaining = all.length - taken.length - wanted.length;
+  if (remaining > 0) offer.collected = [...taken, ...wanted.map(({ index }) => index)];
+  else delete completedOffers(player)[slot];
   saveOffers(player);
   const sender = player.getPacketSender();
+  if (remaining > 0) {
+    sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
+      { [COLLECTIONS[slot]]: collection(offer) });
+    refreshCollectionBox(player);
+    for (const { outputId, amount } of parts) {
+      sender.sendMessage(`Collected ${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(outputId).getName()}.`);
+    }
+    return;
+  }
   sender.sendInterfaceScript(786, [], marketVarps(slot), undefined,
     { [COLLECTIONS[slot]]: collection() });
   if (player.getInterfaceId() === GE) home(player);
@@ -701,6 +962,7 @@ function abort(player, slot = viewing.get(player)) {
   }
   offer.finished = true;
   offer.aborted = true;
+  if (!offer.sell) releaseLimit(player, offer);
   saveOffers(player);
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
@@ -743,7 +1005,7 @@ function openGrandExchange({ player }) {
   home(player);
   const sender = player.getPacketSender();
   player.setInterfaceId(GE);
-  sender.sendVarbit(13139, 0)
+  sender.sendVarbit(TAX_RATE, 1000 / TAX_DIVISOR)
     .sendVarpLong(PRICE_LONG, 1)
     // The GE on-load script reads these before it creates offer widgets.
     // Varp 1151=0 is a real item (Dwarf remains), so clearing it later is
@@ -765,6 +1027,8 @@ function openGrandExchange({ player }) {
   sender.sendInterfaceFlagsRange(uid(26), 0, 16, 2)
     .sendInterfaceFlags(uid(30), 2)
     .sendInterfaceFlags(uid(4), 2)
+    .sendInterfaceFlags(SETUP_FEE_INFO, 2)
+    .sendInterfaceFlags(DETAILS_FEE_INFO, 2)
     // Script 816 creates backgrounds at 0/1 and collection items at 2/3.
     // Bits 1-3 enable Collect-notes, Collect-items, and Bank.
     .sendInterfaceFlagsRange(uid(24), 2, 3, 14)
@@ -833,7 +1097,7 @@ function handleInventoryItem(event) {
       event.player.sendMessage(PRESET_TEXT);
       return true;
     }
-    start(event.player, true, offers.get(event.player)?.slot ?? 0, event.itemId);
+    start(event.player, true, offers.get(event.player)?.slot ?? 0, ItemDefinition.forId(event.itemId).unNote());
     return true;
   }
   return false;
@@ -842,7 +1106,11 @@ function handleInventoryItem(event) {
 function handleExchangeButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE) return true;
   if (historyOpen.has(player)) return true;
-  if (buttonId === uid(24) && action >= 1 && action <= 3) { collect(player, action); return true; }
+  // Sub 2 and 3 are the offer's two collection slots; each click takes only its own.
+  if (buttonId === uid(24) && action >= 1 && action <= 3) {
+    collect(player, action, viewing.get(player), false, slot === 2 || slot === 3 ? slot - 2 : null);
+    return true;
+  }
   // Child 1 of 465:6 is Repeat Offer (script 793), not handled here.
   if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
   if (buttonId === uid(23) && action === 1) {
@@ -851,6 +1119,17 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
     return true;
   }
   if (action !== 1) return true;
+  if (buttonId === SETUP_FEE_INFO || buttonId === DETAILS_FEE_INFO) {
+    const offer = offers.get(player) ?? completedOffers(player)[viewing.get(player)];
+    if (offer?.sell && offer.itemId > 0) {
+      const sender = player.getPacketSender();
+      sender.abortInputPrompt();
+      player.setEnteredAmountAction({ acceptsZero: true, execute: () => sender.closeSubInterface(FEE_POPUP) });
+      sender.sendSubInterface(FEE_POPUP, POPUP_INTERFACE, 1)
+        .sendInterfaceScript(POPUP_TEXT_SCRIPT, [FEE_INFORMATION, FEE_POPUP]);
+    }
+    return true;
+  }
   if (buttonId === uid(3)) { showHistory(player); return true; }
   if (buttonId === uid(4)) { home(player); return true; }
   const child = buttonId & 0xffff;
@@ -870,7 +1149,9 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
   // Script 773: quantity -1/+1/+1/+10/+100/All-or-1K/custom.
   if (slot >= 1 && slot <= 6) {
     const delta = [-1, 1, 1, 10, 100, 1000][slot - 1];
-    offer.quantity = slot === 6 && offer.sell ? player.getInventory().getAmount(offer.itemId)
+    offer.quantity = slot === 6 && offer.sell ? player.getInventory().getItems()
+      .filter((item) => item.getId() > 0 && ItemDefinition.forId(item.getId()).unNote() === offer.itemId)
+      .reduce((sum, item) => sum + item.getAmount(), 0)
       : offer.quantity + delta - (delta > 1 && offer.quantity === 1 ? 1 : 0);
     offer.quantity = Math.max(1, Math.min(MAX, offer.quantity));
   } else if (slot === 7) {
@@ -919,13 +1200,24 @@ function handleHistoryButton({ player, buttonId, slot, action }) {
 
 const COLLECTION_BUTTONS = Array.from({ length: 10 }, (_, i) => collectUid(i + 3));
 // Child 34 is the offer setup panel; its quantity and price controls are dynamic children (slot 1-13).
-const EXCHANGE_BUTTONS = [uid(3), uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const EXCHANGE_BUTTONS = [SETUP_FEE_INFO, DETAILS_FEE_INFO, uid(3), uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
 const historyUid = (child) => (GE_HISTORY << 16) | child;
 const HISTORY_BUTTONS = [historyUid(2), historyUid(3)];
 
 module.exports = {
   name: "GrandExchange",
+  description: "The Grand Exchange: offers, offer collection and the item-price resource it uses.",
+  config: {
+    "GrandExchange:maxTradeDelay": {
+      type: "number", label: "Longest offer wait (ms)", default: 3600000, integer: true, min: 5000, max: 2147483647,
+      help: "Upper limit, in milliseconds, on how long an offer takes to complete. Applies to newly placed offers.",
+    },
+  },
   _test: {
+    priceWarning,
+    confirm,
+    setApi: (api) => { pluginApi = api; },
+    setOffer: (player, offer) => offers.set(player, offer),
     price,
     sellPrice,
     changePrice,
@@ -939,6 +1231,8 @@ module.exports = {
     fillDelayMs,
     remainingLimit,
     recordLimit,
+    fillUnitPrice,
+    releaseLimit,
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
     HISTORY_LIMIT,

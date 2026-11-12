@@ -34,7 +34,6 @@ are set:
 ```dotenv
 WEBRTC_SIGNAL_URL=wss://relay.example.com
 WEBRTC_WORLD_ID=toby
-WEBRTC_WORLD_NAME=TobyScape
 WEBRTC_WORLD_TOKEN=dev-token
 WEBRTC_ICE_SERVERS=[{"urls":"stun:relay.example.com:3478"}]
 ```
@@ -89,3 +88,5 @@ corepack yarn --cwd client test:webrtc-world-list
 The home server derives an address only from the selected ICE candidate. Browsers can conceal host addresses with mDNS and relayed candidates identify the relay, so an unavailable address is recorded as unknown and never replaced with client-supplied IP data. Any IP-based account policy therefore remains limited for WebRTC sessions until an independently trustworthy identity mechanism is added.
 
 The server uses `node-datachannel` 0.32.1. It is a small N-API wrapper around libdatachannel with Node 22 prebuilds, but remains a native dependency; unsupported CPU/OS combinations need a C++ toolchain and a source build. Version 0.32.1 is pinned because the current 0.33.1 package's optional prebuild set does not resolve cleanly through this repository's Yarn setup.
+
+The world display name comes from `name` in `world.json` / `world.local.json` (default `Old School RuneScape`), rather than `WEBRTC_WORLD_NAME`.

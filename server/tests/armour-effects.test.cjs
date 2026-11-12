@@ -72,6 +72,7 @@ function buildApi(overrides = {}) {
     onItemDropPolicy: noop,
     onPlayerDeathItemDrop: noop,
     onNpcInteraction: noop,
+    onItemAction: noop,
     onInterfaceActionButton: noop,
     onPlayerProcess: noop,
     getBonusManager: () => ({ update: noop }),
@@ -125,7 +126,10 @@ test("graceful pieces give 3-4% each and the full set another 10%", () => {
   assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(names, false) - 0.30) < 1e-9);
   const noCape = { ...names, 1: "Spottier cape" };
   assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, false) - 0.17) < 1e-9);
-  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, true) - 0.27) < 1e-9, "agility cape substitutes for the set");
+  // Wiki (Agility cape): it is a graceful cape - its own 3%, and the set's sixth piece.
+  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(noCape, true) - 0.30) < 1e-9, "five pieces and the agility cape are the full set");
+  assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Agility cape" }, true), 0.03, "the agility cape alone restores 3%");
+  assert.ok(Math.abs(Graceful._test.gracefulRestoreBonusFromSlots(names, true) - 0.30) < 1e-9, "a worn graceful cape is not counted twice");
   assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Graceful cape (Arceuus)" }, false), 0.03);
   assert.equal(Graceful._test.gracefulRestoreBonusFromSlots({ 1: "Spottier cape", 0: "Rune full helm" }, false), 0);
 });
@@ -343,16 +347,31 @@ test("barrows degradation reports each stage, breaks at 0 and refreshes the pane
   const { player, items, messages, flags, counts } = barrowsPlayer({ equipmentIds: { 0: 4716 } });
 
   for (let i = 0; i < 250; i++) BarrowsEquipment._test.degradeEquipment(player);
-  assert.deepEqual(messages, ["Your Dharok's helm has degraded to 75%."]);
+  // rsprox 227/00086:294617-294622: red "<Brother>'s <part> has degraded slightly.", on first use (pristine -> 100) too.
+  assert.deepEqual(messages, ["<col=ef1020>Dharok's helmet has degraded slightly.</col>", "<col=ef1020>Dharok's helmet has degraded slightly.</col>"]);
   assert.equal(counts.equipment, 250);
   assert.equal(counts.inventory, 250);
   assert.equal(flags.length, 250, "the appearance flag redraws the worn model");
 
   for (let i = 0; i < 750; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(messages.at(-1), "Your Dharok's helm has fully degraded and can no longer be used.");
-  assert.equal(Math.round(messages.filter((message) => message.includes("degraded to")).length), 3);
+  assert.equal(messages.filter((message) => message.includes("degraded slightly")).length, 4, "pristine -> 100, 75, 50, 25");
   assert.ok(Barrows.isBroken(items[0].getId()));
   assert.equal(BarrowsEquipment._test.durability(items[0]), 0);
+});
+
+test("the degrade line names the part as recorded: helmet, hood, body, legs (have), skirt", () => {
+  const { api } = buildApi();
+  BarrowsEquipment.register(api);
+  const expected = [
+    [0, 4716, "Dharok's helmet has"], [0, 4708, "Ahrim's hood has"], [4, 4720, "Dharok's body has"],
+    [7, 4722, "Dharok's legs have"], [7, 4759, "Verac's skirt has"], [7, 4738, "Karil's skirt has"],
+  ];
+  for (const [slot, id, text] of expected) {
+    const { player, messages } = barrowsPlayer({ equipmentIds: { [slot]: id } });
+    BarrowsEquipment._test.degradeEquipment(player);
+    assert.deepEqual(messages, [`<col=ef1020>${text} degraded slightly.</col>`], `${id}`);
+  }
 });
 
 test("an Echo Ahrim's piece degrades through its own staged ids", () => {
@@ -369,7 +388,7 @@ test("an Echo Ahrim's piece degrades through its own staged ids", () => {
   for (let i = 0; i < 250; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(items[0].getId(), 30525, "Echo ahrim's hood 75");
   assert.equal(Barrows.baseItemId(items[0].getId()), 4708);
-  assert.deepEqual(messages, ["Your Echo ahrim's hood has degraded to 75%."]);
+  assert.deepEqual(messages, ["<col=ef1020>Echo ahrim's hood has degraded slightly.</col>", "<col=ef1020>Echo ahrim's hood has degraded slightly.</col>"]);
 
   for (let i = 0; i < 750; i++) BarrowsEquipment._test.degradeEquipment(player);
   assert.equal(items[0].getId(), 30543, "Echo ahrim's hood 0");
@@ -544,4 +563,127 @@ test("Skillcape.forId resolves every cape variant", () => {
   assert.equal(Skillcape.forId(9771), Skillcape.AGILITY);
   assert.equal(Skillcape.forId(9813), Skillcape.QUEST_POINT);
   assert.equal(Skillcape.forId(123456), undefined);
+});
+
+test("all six Barrows families Check pristine and each used quarter in inventory and equipment", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  let action;
+  const { api } = buildApi({ onItemAction: (handler) => { action = handler; } });
+  api.core.CacheDefinitions = CacheDefinitions;
+  BarrowsEquipment.register(api);
+  const bases = [4708, 4710, 4712, 4714, 4716, 4718, 4720, 4722, 4724, 4726, 4728, 4730,
+    4732, 4734, 4736, 4738, 4745, 4747, 4749, 4751, 4753, 4755, 4757, 4759];
+  for (const base of bases) {
+    const item = new Item(base);
+    const { player, messages } = barrowsPlayer();
+    const invoke = (worn, option) => {
+      const definition = CacheDefinitions.getItem(item.getId());
+      const event = { player, item, itemId: item.getId(), slot: 0, handled: false,
+        interfaceId: worn ? Equipment.INVENTORY_INTERFACE_ID : 3214,
+        clickType: worn ? 2 : definition.inventoryActions.indexOf(option ?? "Check") + 1 };
+      if (option) event.option = option;
+      action(event);
+      return event.handled;
+    };
+    for (const worn of [false, true]) {
+      assert.equal(invoke(worn), true, base);
+      assert.match(messages.at(-1), /: This item is pristine\.$/);
+    }
+    for (const remaining of [999, 751, 750, 501, 500, 251, 250, 1]) {
+      BarrowsEquipment._test.setDurability(item, remaining);
+      const expected = Math.ceil(((remaining - 1) % 250 + 1) * 100 / 250);
+      for (const worn of [false, true]) {
+        assert.equal(invoke(worn), true, `${base}/${remaining}`);
+        assert.ok(messages.at(-1).endsWith(`: ${expected}% remaining until the next degradation.`));
+        assert.equal(BarrowsEquipment._test.durability(item), remaining, "Check consumes no charge");
+      }
+    }
+    assert.equal(invoke(true, "Remove"), false, "Remove remains available");
+    BarrowsEquipment._test.setDurability(item, 0);
+    assert.equal(invoke(true), false, "broken equipment has no Check");
+  }
+});
+
+test("Barrows login task uses eligible combat ticks only, preserves stages and repairs exact costs", () => {
+  const assign = WeaponInterfaceManager.assign;
+  WeaponInterfaceManager.assign = () => {};
+  try {
+    let login, logout, task, combat = false;
+    const { api } = buildApi({
+      onPlayerLogin: (handler) => { login = handler; },
+      onPlayerLogout: (handler) => { logout = handler; },
+      getTaskManager: () => ({ submit: (submitted) => { task = submitted; } }),
+      getCombatFactory: () => ({ inCombat: () => combat }),
+    });
+    BarrowsEquipment.register(api);
+    const { Barrows } = require("../dist/game/content/combat/Barrows");
+    for (const base of [4708, 4716, 4724, 4732, 4745, 4753]) {
+      const fixture = barrowsPlayer({ equipmentIds: { 0: base } });
+      const { player, items, inventory, counts } = fixture;
+      inventory.push(new Item(base));
+      login({ player });
+      const tick = (count) => { for (let i = 0; i < count; i++) task.execute(); };
+      combat = false;
+      tick(1000);
+      assert.equal(items[0].getId(), base, "idle does not degrade");
+      combat = true;
+      tick(1);
+      assert.equal(BarrowsEquipment._test.durability(items[0]), 999, "combat entry spends one point");
+      assert.equal(Barrows.stageOf(items[0].getId()), 0);
+      tick(89);
+      assert.equal(BarrowsEquipment._test.durability(items[0]), 999);
+      tick(1);
+      assert.equal(BarrowsEquipment._test.durability(items[0]), 998, "one further point per 90 ticks");
+      assert.equal(inventory[0].getId(), base, "inventory gear does not wear");
+      for (const remaining of [750, 500, 250, 0]) {
+        tick((BarrowsEquipment._test.durability(items[0]) - remaining) * 90);
+        assert.equal(items[0].getId(), Barrows.stageItemId(base, [750, 500, 250, 0].indexOf(remaining) + 1));
+        const saved = JSON.parse(JSON.stringify(items[0]));
+        items[0] = new Item(saved.id, saved.amount, saved.meta);
+        logout({ player }); login({ player });
+        combat = false; tick(100);
+        assert.equal(BarrowsEquipment._test.durability(items[0]), remaining, "serialized item survives relog and idle");
+        combat = true;
+        // Re-entry consumes a point; do it before the next accelerated interval.
+        if (remaining) tick(1);
+      }
+      BarrowsEquipment._test.repairAll(player);
+      assert.equal(counts.paid, 60000);
+      assert.equal(items[0].getId(), base);
+      assert.equal(items[0].getMetaValue("barrows"), undefined);
+      assert.equal(fixture.coins, 940000);
+    }
+  } finally { WeaponInterfaceManager.assign = assign; }
+});
+
+test("Check distinguishes every pristine Echo Ahrim piece from its used 100% variant", () => {
+  const { Barrows } = require("../dist/game/content/combat/Barrows");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  let action;
+  const { api } = buildApi({ onItemAction: (handler) => { action = handler; } });
+  api.core.CacheDefinitions = CacheDefinitions;
+  BarrowsEquipment.register(api);
+  for (const part of ["HOOD", "STAFF", "ROBETOP", "ROBESKIRT"]) {
+    const plain = ItemIdentifiers[`AHRIMS_${part}`];
+    const pristine = ItemIdentifiers[`ECHO_AHRIMS_${part}`];
+    const stages = [100, 75, 50, 25, 0].map((stage) => ItemIdentifiers[`ECHO_AHRIMS_${part}_${stage}`]);
+    Barrows.registerVariantStages(plain, stages, pristine);
+    assert.equal(Barrows.isPristine(plain), true);
+    for (const [id, expected] of [[pristine, ": This item is pristine."],
+      [stages[0], ": 100% remaining until the next degradation."]]) {
+      assert.equal(Barrows.isPristine(id), id === pristine);
+      const item = new Item(id);
+      const { player, messages } = barrowsPlayer();
+      for (const worn of [false, true]) {
+        const event = { player, item, itemId: id, slot: 0, handled: false,
+          interfaceId: worn ? Equipment.INVENTORY_INTERFACE_ID : 3214,
+          clickType: worn ? 2 : CacheDefinitions.getItem(id).inventoryActions.indexOf("Check") + 1 };
+        action(event);
+        assert.equal(event.handled, true, `${part} ${id}`);
+        assert.ok(messages.at(-1).endsWith(expected), messages.at(-1));
+        assert.equal(item.getId(), id);
+        assert.equal(item.getMetaValue("barrows"), undefined, "Check leaves metadata untouched");
+      }
+    }
+  }
 });

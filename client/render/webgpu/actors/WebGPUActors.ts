@@ -21,6 +21,7 @@ import type { WorldResources } from "../WorldResources";
 import {
     ACTOR_DEPTH_FRAGMENT_ENTRY,
     ACTOR_FRAGMENT_ENTRY,
+    ACTOR_MASK_FRAGMENT_ENTRY,
     actorVertexEntry,
     createActorShaderModule,
     type ActorKind,
@@ -52,6 +53,7 @@ import { PlayerPoseGeometry, type PosedActorGeometry } from "./actorPlayers";
 import { NpcPoseGeometry } from "./actorNpcs";
 import { DynamicNpcAnimLoader } from "../../npc/DynamicNpcAnimLoader";
 import { AsyncNpcPoseCache } from "../../npc/AsyncNpcPoseCache";
+import { getNpcPriorityGeometry, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
 import { TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
 import type { GfxCache } from "../../gfx/GfxCache";
 
@@ -75,6 +77,9 @@ interface ActorDrawItem {
     pipeline: GPURenderPipeline;
     geometry: GpuGeometry;
     entry: number;
+    priorityPass?: boolean;
+    /** A player's ECS index, for the Shader Effects silhouette. */
+    playerPid?: number;
 }
 
 interface MapActorState {
@@ -114,6 +119,7 @@ export class WebGPUActors {
     private textureIdIndexMap = new Map<number, number>();
     private actorData?: ActorDataTexture;
     private geometry?: ActorGeometryCache;
+    private priorityGeometry?: ActorGeometryCache;
     private gfx?: ActorGfxRuntime;
     private playerPose?: PlayerPoseGeometry;
     private dynamicNpcLoader?: DynamicNpcAnimLoader;
@@ -138,6 +144,16 @@ export class WebGPUActors {
         { extended: GPURenderPipeline; depth?: GPURenderPipeline }
     >();
     private posePipelines = new Set<GPURenderPipeline>();
+    /** Base player pipeline -> the same vertex stage writing a coverage mask (Shader Effects aura). */
+    private readonly maskPipelines = new Map<GPURenderPipeline, GPURenderPipeline>();
+    private maskPipelineLayout?: GPUPipelineLayout;
+    /** The base actor shader modules ([opaque, alpha]); they already hold the mask fragment entry. */
+    private readonly baseModules: (GPUShaderModule | undefined)[] = [undefined, undefined];
+    private maskPipelinesPending = false;
+    private priorityPasses?: {
+        base: [GPURenderPipeline, GPURenderPipeline];
+        extended?: [GPURenderPipeline, GPURenderPipeline];
+    };
     /** This frame's GPU actor poses: pose key -> pose texture row, packed into poseUpload. */
     private readonly poseRows = new Map<string, ActorPose>();
     private readonly poseUpload = new Float32Array(POSE_ROWS * POSE_WIDTH * 4);
@@ -189,6 +205,7 @@ export class WebGPUActors {
         });
         this.actorData = new ActorDataTexture(device, this.actorDataLayout, "webgpu actor data");
         this.geometry = new ActorGeometryCache(device, ACTOR_GEOMETRY_CACHE_ENTRIES);
+        this.priorityGeometry = new ActorGeometryCache(device, 16);
 
         // GPUBindGroup has no getLayout(); build group-equivalent layouts for the renderer's
         // existing scene and world-texture bind groups instead.
@@ -276,15 +293,17 @@ export class WebGPUActors {
             { kind: "projectile", stride: ACTOR_VERTEX_STRIDE, cullMode: "none" },
             { kind: "player", stride: ACTOR_VERTEX_STRIDE, cullMode: "back" },
         ];
-        const createPipelines = (alpha: boolean, mode: Mode): Map<ActorKind, GPURenderPipeline> => {
+        const createPipelines = (alpha: boolean, mode: Mode, priorityPass?: "color" | "depth") => {
             const depth = mode === "depth";
             const module = createActorShaderModule(device, {
                 alpha,
                 ext: mode === "base" ? undefined : extension!.shaders,
                 depth,
             });
+            if (mode === "base" && !priorityPass) this.baseModules[alpha ? 1 : 0] = module;
             const out = new Map<ActorKind, GPURenderPipeline>();
             for (const { kind, stride, cullMode } of KINDS) {
+                if (priorityPass && kind !== "npc") continue;
                 const buffers: GPUVertexBufferLayout[] = [
                     {
                         arrayStride: stride,
@@ -301,7 +320,7 @@ export class WebGPUActors {
                     });
                 }
                 out.set(kind, createScenePipeline(device, {
-                    label: `webgpu actor ${kind}${alpha ? " alpha" : ""}${mode === "base" ? "" : ` ${mode}`}`,
+                    label: `webgpu actor ${kind}${alpha ? " alpha" : ""} ${mode}${priorityPass ? ` priority ${priorityPass}` : ""}`,
                     layout: mode === "base" ? pipelineLayout : extendedPipelineLayout!,
                     vertex: { module, entryPoint: actorVertexEntry(kind, depth), buffers },
                     fragment: depth
@@ -316,13 +335,19 @@ export class WebGPUActors {
                                               ? extension!.sceneColorFormat ?? renderer.format
                                               : renderer.format,
                                       blend: alpha ? blend : undefined,
+                                      writeMask: priorityPass === "depth" ? 0 : undefined,
                                   },
                               ],
                           },
-                    primitive: { topology: "triangle-list", cullMode, frontFace: "ccw" },
+                    primitive: {
+                        topology: "triangle-list",
+                        // Cull opaque projectile backfaces while keeping translucent glow shells two-sided.
+                        cullMode: kind === "projectile" && !alpha ? "back" : cullMode,
+                        frontFace: "ccw",
+                    },
                     depthStencil: {
                         format: depth ? extension!.depthFormat ?? SCENE_DEPTH_FORMAT : SCENE_DEPTH_FORMAT,
-                        depthWriteEnabled: true,
+                        depthWriteEnabled: priorityPass !== "color",
                         depthCompare: "less-equal",
                     },
                 }));
@@ -346,6 +371,19 @@ export class WebGPUActors {
                 }
             }
         }
+
+        // The prayer aura's silhouette pipelines are built on first use (createMaskPipelines), so a
+        // player who never uses the aura pays nothing for them.
+        this.maskPipelineLayout = pipelineLayout;
+
+        const createPriorityPasses = (mode: "base" | "extended"): [GPURenderPipeline, GPURenderPipeline] => [
+            createPipelines(false, mode, "color").get("npc")!,
+            createPipelines(false, mode, "depth").get("npc")!,
+        ];
+        this.priorityPasses = {
+            base: createPriorityPasses("base"),
+            extended: extendedPipelineLayout ? createPriorityPasses("extended") : undefined,
+        };
 
         const loader = new DynamicNpcAnimLoader(
             client.npcTypeLoader,
@@ -413,6 +451,7 @@ export class WebGPUActors {
         this.gfx?.projectiles.update(deltaSec * 1000);
         this.gfx?.manager.update();
         this.geometry?.beginFrame();
+        this.priorityGeometry?.beginFrame();
         this.stepNpcClientAnimations();
         // One winner per occupied tile for this frame, built before any actor is packed.
         this.tileSelection.ensureForFrame(
@@ -495,6 +534,90 @@ export class WebGPUActors {
         this.draw(pass, true, true);
     }
 
+    /**
+     * Draws one player's posed geometry as a coverage mask with the scene's camera, for the
+     * Shader Effects prayer aura. Returns whether anything was drawn.
+     */
+    drawPlayerMask(pass: GPURenderPassEncoder, playerPid: number): boolean {
+        const world = this.world;
+        if (!world || !this.actorData || this.maskPipelines.size === 0) return false;
+        pass.setBindGroup(0, world.sceneBindGroup);
+        pass.setBindGroup(1, world.worldTextureBindGroup);
+        pass.setBindGroup(3, this.actorData.bindGroup);
+        let drew = false;
+        for (const state of this.frameMaps) {
+            if (!state.playerByPid.has(playerPid)) continue;
+            const bindGroup = state.uniforms.bindGroupFor();
+            if (!bindGroup) continue;
+            pass.setBindGroup(2, bindGroup);
+            for (const items of [state.opaque, state.alpha]) {
+                for (const item of items) {
+                    if (item.playerPid !== playerPid) continue;
+                    const pipeline = this.maskPipelines.get(item.pipeline);
+                    if (!pipeline) continue;
+                    pass.setPipeline(pipeline);
+                    pass.setVertexBuffer(0, item.geometry.vertices);
+                    pass.setVertexBuffer(1, item.geometry.labels ?? item.geometry.vertices);
+                    pass.setIndexBuffer(item.geometry.indices, "uint32");
+                    pass.drawIndexed(item.geometry.indexCount, 1, 0, 0, item.entry);
+                    drew = true;
+                }
+            }
+        }
+        return drew;
+    }
+
+    /**
+     * Whether the player silhouette can be drawn yet. The first call starts building the mask
+     * pipelines (the player pipelines' twins: the same vertex stage as the scene draw, writing
+     * coverage into a single-sampled r8 target) off the frame, so showing the aura for the first time
+     * does not hitch; until they are ready the aura uses its generic figure.
+     */
+    playerMaskReady(): boolean {
+        if (this.maskPipelines.size > 0) return true;
+        const device = this.renderer.device;
+        const playerPipelines = this.pipelines.get("player");
+        if (this.maskPipelinesPending || !device || !playerPipelines || !this.maskPipelineLayout) return false;
+        this.maskPipelinesPending = true;
+        const layout = this.maskPipelineLayout;
+        const builds = [false, true].map((alpha) => {
+            const maskModule = this.baseModules[alpha ? 1 : 0];
+            if (!maskModule) return Promise.resolve(undefined);
+            return device.createRenderPipelineAsync({
+                label: `webgpu actor player mask${alpha ? " alpha" : ""}`,
+                layout,
+                vertex: {
+                    module: maskModule,
+                    entryPoint: actorVertexEntry("player"),
+                    buffers: [
+                        {
+                            arrayStride: ACTOR_VERTEX_STRIDE,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: "uint32x4" },
+                                { shaderLocation: 3, offset: 16, format: "uint32" },
+                            ],
+                        },
+                        { arrayStride: 4, attributes: [{ shaderLocation: 1, offset: 0, format: "uint32" }] },
+                    ],
+                },
+                fragment: { module: maskModule, entryPoint: ACTOR_MASK_FRAGMENT_ENTRY, targets: [{ format: "r8unorm" }] },
+                primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+            });
+        });
+        void Promise.all(builds)
+            .then(([opaque, alpha]) => {
+                // Dropped if the actors were torn down while the pipelines compiled.
+                if (!this.maskPipelineLayout || !opaque || !alpha) return;
+                this.maskPipelines.set(playerPipelines[0], opaque);
+                this.maskPipelines.set(playerPipelines[1], alpha);
+            })
+            .catch((error) => console.warn("[webgpu] player mask pipelines unavailable", error))
+            .finally(() => {
+                this.maskPipelinesPending = false;
+            });
+        return false;
+    }
+
     private draw(pass: GPURenderPassEncoder, alpha: boolean, depth: boolean): void {
         const world = this.world;
         if (!world || !this.actorData) return;
@@ -522,16 +645,19 @@ export class WebGPUActors {
                 if (!pipeline) continue;
                 let instances = 1;
                 // Keep draw order: only adjacent opaque actors with consecutive records merge.
-                if (!alpha) {
+                if (!alpha && !item.priorityPass) {
                     while (i + 1 < items.length) {
                         const next = items[i + 1];
-                        if (next.pipeline !== item.pipeline || next.geometry !== item.geometry ||
+                        if (next.priorityPass || next.pipeline !== item.pipeline || next.geometry !== item.geometry ||
                             next.entry !== item.entry + instances) break;
                         instances++;
                         i++;
                     }
                 }
-                const selected = withSampleCount(pipeline, depth ? 1 : world.sampleCount);
+                const priorityPasses = !depth && item.priorityPass
+                    ? (extended ? this.priorityPasses?.extended : this.priorityPasses?.base)
+                    : undefined;
+                const selected = withSampleCount(priorityPasses?.[0] ?? pipeline, depth ? 1 : world.sampleCount);
                 if (selected !== boundPipeline) {
                     pass.setPipeline(selected);
                     boundPipeline = selected;
@@ -549,6 +675,12 @@ export class WebGPUActors {
                     }
                 }
                 pass.drawIndexed(item.geometry.indexCount, instances, 0, 0, item.entry);
+                if (priorityPasses) {
+                    // The first draw tests against scene depth. This draw updates depth only.
+                    boundPipeline = withSampleCount(priorityPasses[1], world.sampleCount);
+                    pass.setPipeline(boundPipeline);
+                    pass.drawIndexed(item.geometry.indexCount, 1, 0, 0, item.entry);
+                }
             }
         }
     }
@@ -678,6 +810,7 @@ export class WebGPUActors {
         // This cache remains usable after releasing its buffers. Player entries
         // are rebuilt too, so no draw can keep a retired shared buffer reference.
         this.geometry?.destroy();
+        this.priorityGeometry?.destroy();
     }
 
     dispose(): void {
@@ -691,10 +824,15 @@ export class WebGPUActors {
         this.frameMaps.length = 0;
         this.gfx?.projectiles.clear();
         this.gfx = undefined;
+        this.maskPipelines.clear();
+        this.maskPipelineLayout = undefined;
+        this.baseModules.fill(undefined);
         this.playerPose?.clear();
         this.playerPose = undefined;
         this.geometry?.destroy();
         this.geometry = undefined;
+        this.priorityGeometry?.destroy();
+        this.priorityGeometry = undefined;
         this.actorData?.destroy();
         this.actorData = undefined;
         this.npcBounds.clear();
@@ -774,14 +912,25 @@ export class WebGPUActors {
         let opaque: GpuGeometry | null | undefined;
         let alpha: GpuGeometry | null | undefined;
         let poseRow = -1;
+        let priorityPass = false;
         try {
             request = getNpcGeometryRequest(client, ecsId);
-            const posed = this.npcPose?.resolve(request, !!this.world?.extensionActive);
+            if (usesNpcPriorityPass(request[0]) && client.npcEcs.getWorldViewId(ecsId) < 0) {
+                const geometry = loader.getFrameGeometry(...request);
+                if (geometry) {
+                    const sorted = getNpcPriorityGeometry(geometry, client.camera.viewMatrix,
+                        client.npcEcs.getRotation(ecsId));
+                    opaque = this.priorityGeometry?.getOrCreate(sorted.key, sorted.opaqueVertices, sorted.opaqueIndices) ?? null;
+                    alpha = this.geometry?.getOrCreate(`${geometry.key}|a`, geometry.alphaVertices, geometry.alphaIndices) ?? null;
+                    priorityPass = !!opaque;
+                }
+            }
+            const posed = priorityPass ? undefined : this.npcPose?.resolve(request, !!this.world?.extensionActive);
             if (posed?.matrices) poseRow = this.poseRowFor(posed.poseKey!, posed.matrices);
             if (posed && poseRow >= 0) {
                 opaque = this.geometry?.getOrCreate(posed.key + "|o", posed.opaqueVertices, posed.opaqueIndices, posed.opaqueLabels) ?? null;
                 alpha = this.geometry?.getOrCreate(posed.key + "|a", posed.alphaVertices, posed.alphaIndices, posed.alphaLabels) ?? null;
-            } else {
+            } else if (!priorityPass) {
                 const key = this.asyncNpcPoses?.getKey(request, ecsId);
                 if (key) {
                     const bounds = this.npcBounds.get(key);
@@ -826,6 +975,7 @@ export class WebGPUActors {
             state.opaque.push({
                 pipeline: this.pipelines.get("npc")![0],
                 geometry: opaque,
+                priorityPass,
                 entry: entry ??= this.actorEntry(
                     state,
                     map,
@@ -922,6 +1072,7 @@ export class WebGPUActors {
                     pipeline,
                     geometry,
                     entry: entry ??= this.actorEntry(state, map, timeLoaded, modelYOffset, dataIndex, 0, 0, 0, poseRow),
+                    playerPid: pid,
                 });
             }
         }

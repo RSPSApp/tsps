@@ -214,14 +214,15 @@ test("as captured: the brass key door is locked without the key; with it, the pl
   BrassKeyDoor.open({ player, ...object(door.door, 3115, 3450) });
   assert.deepEqual(player.log, ["You unlock the door.", "sendSound 2402 1"]);
   runTicks();
-  assert.deepEqual(placed.slice(0, 2), [
+  assert.deepEqual(placed.slice(0, 3), [
+    { removed: 1804 },
     { id: 38848, x: 3115, y: 3450, face: 3 },
     { id: 1539, x: 3115, y: 3449, face: 0 },
   ]);
   assert.ok(player.log.includes("sendSound 62 1"));
   runTicks(3);
   assert.equal(player.getLocation().getY(), 3450, "through the door");
-  assert.deepEqual(placed.slice(-2), [{ removed: 1539 }, { id: 1804, x: 3115, y: 3450, face: 3 }]);
+  assert.deepEqual(placed.slice(-3), [{ removed: 1539 }, { removed: 38848 }, { id: 1804, x: 3115, y: 3450, face: 3 }]);
   assert.deepEqual(player.inventory, [door.key], "the key is kept");
 });
 

@@ -718,7 +718,9 @@ export class EditModePlugin {
             this.removeEdits(this.npcReplacementIndicesAt(selection));
         } else {
             this.undoGroup(() => {
-                this.removeEdits(this.npcEditIndicesAt(selection));
+                // Keep the removal markers already at this tile: each hides one of its stacked spawns, so
+                // this one is added beside them (the server drops one spawn per marker).
+                this.removeEdits(this.npcReplacementIndicesAt(selection));
                 const spawn = selection.npcSpawn ?? {
                     id: selection.locId,
                     tileX: selection.tileX,
@@ -763,6 +765,11 @@ export class EditModePlugin {
             );
             this.undoGroup(() => {
                 this.removeEdits(indices);
+                // Before the tile's removal markers: the server's loader reads [override, remove] as this spawn's
+                // wander plus one stacked spawn removed, but [remove, override] as a moved-back spawn filling the
+                // removed one's slot, which would load two spawns.
+                const firstMarker = this.npcEditIndicesAt(selection).find((index) =>
+                    this.config.edits[index].kind === "npcDelete");
                 this.commitEdits([{
                     kind: "npcWander",
                     locId: selection.locId,
@@ -775,7 +782,7 @@ export class EditModePlugin {
                     ...(selection.npcSpawn?.direction === undefined
                         ? {}
                         : { direction: selection.npcSpawn.direction }),
-                }]);
+                }], true, firstMarker);
             });
         }
         this.selection = { ...selection, npcWanderRadius: wanderRadius };
@@ -1285,13 +1292,11 @@ export class EditModePlugin {
             this.selection = undefined;
             host.clearSelectionHighlight?.();
             const customIndex = this.customNpcEditIndex(moving);
-            // Moving a replacement away leaves the canonical spawn's removal
-            // marker in place, exactly as deleting it does; otherwise the
-            // original returns beside the moved copy.
+            // Moving a spawn away leaves the tile's removal markers in place, exactly as deleting it does: a
+            // replacement's marker suppresses the canonical spawn (otherwise the original returns beside the
+            // moved copy), and a stacked sibling's marker keeps that one deleted.
             this.undoGroup(() => {
-                this.removeEdits(customIndex >= 0
-                    ? this.npcReplacementIndicesAt(moving)
-                    : this.npcEditIndicesAt(moving));
+                this.removeEdits(this.npcReplacementIndicesAt(moving));
                 if (moving.npcWanderRadius !== undefined) edit.wanderRadius = moving.npcWanderRadius;
                 if (moving.npcSpawn?.direction !== undefined) edit.direction = moving.npcSpawn.direction;
                 const edits: EditModeEdit[] = [];
@@ -1491,14 +1496,15 @@ export class EditModePlugin {
         return [...vertices.values()];
     }
 
-    private commitEdits(edits: EditModeEdit[], applyImmediately = true): void {
+    /** `index`: where the edits go in the list (and so in the saved patch); the end by default. */
+    private commitEdits(edits: EditModeEdit[], applyImmediately = true, index = this.config.edits.length): void {
         if (edits.length === 0) return;
         if (applyImmediately) {
             for (const edit of edits) {
                 this.dispatch(edit);
             }
         }
-        const next = [...this.config.edits, ...edits];
+        const next = [...this.config.edits.slice(0, index), ...edits, ...this.config.edits.slice(index)];
         this.setConfig({ edits: next });
         if (!applyImmediately && this.undoGroupBase === undefined) {
             const entry = this.undoStack.at(-1);

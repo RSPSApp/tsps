@@ -27,6 +27,9 @@ lists: rings, necklaces, bracelets and amulets, sapphire to zenyte plus opal (Lv
   enchant is clicked. A level-up pop-up pauses it, as it does other
   skilling.
 - **A cast clicked during the 3-tick delay waits for it** and then goes off (and repeats).
+- **Free worlds.** Lvl-1 through Lvl-4 can enchant only their sapphire, emerald, ruby and
+  diamond amulets respectively. Other jewellery is refused before runes or XP are spent,
+  including the ruby ring even though both it and the ring of forging are free items.
 - **Look.** Gold amulets play the spell's own sequence, graphic and sound. Rings, necklaces
   and bracelets play `human_cast_enchantring` (931) with `enchant_ring` (238) at height 92.
   Their sound is 147 for Lvl-1, 142 for Lvl-2, 140 for Lvl-5 and 144 for Lvl-6 and Lvl-7; Lvl-3
@@ -60,9 +63,7 @@ Evidence:
 
 Not done:
 
-- Free-to-play worlds: the Wiki says free-to-play players can only enchant the sapphire
-  amulet among the Lvl-1 recipes, but no capture or page gives what a free world says when
-  refused, and the members gating lives in `plugins/modes/FreeToPlay.plugin.js`.
+- The free-world refusal message is inferred; its exact live wording has not been captured.
 - Opal and topaz amulets are assumed to look like the captured jade amulet.
 
 ## Evidence
@@ -136,3 +137,10 @@ noted stacks, both mapped fountains, the guild totem and unrelated totems. Eleve
 checks fail against the previous charging code. Live interaction checks also verified the
 mapped Rune fountain, mixed and noted charging, and both guild charging sites. Quest
 completion and supplies were test setup; the quests themselves were not replayed.
+
+## Ring of wealth teleports
+
+Source: the OSRS Wiki's Ring of wealth page (Teleportation section). The destination tiles are the
+Wiki's: Grand Exchange (3163, 3478), Falador Park (2995, 3375), Miscellania (2534, 3862) and
+Dondakan (2824, 10168). Miscellania and Dondakan are quest-locked and share the jewellery's refusal
+line (`LOCKED_DESTINATION_MESSAGE`); the charge is kept when refused.

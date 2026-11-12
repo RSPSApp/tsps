@@ -87,6 +87,18 @@ export const VARP_OPTION_ATTACK_PRIORITY_NPC = 1306;
 export const VARBIT_KEYBINDING_ESC_TO_CLOSE = 4681;
 export const VARP_KEYBINDING_ESC_TO_CLOSE = 1224;
 
+// All Settings rows the browser client applies itself (Controls and Warnings tabs).
+/** "Single mouse button mode": while 1, a left click opens the menu (row 48). */
+export const VARP_MOUSE_BUTTONS = 170;
+/** "Middle mouse button controls the camera": %mousecam_disabled, 1 turns it off (row 49). */
+export const VARBIT_MOUSECAM_DISABLED = 4134;
+/** "Move follower options lower down": %followerops_deprioritised (row 50). */
+export const VARBIT_FOLLOWEROPS_DEPRIORITISED = 5599;
+/** "Side panel can be closed by the hotkeys": %hotkey_cannot_close_sidepanel, 1 keeps it open (row 54). */
+export const VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL = 4611;
+/** "World Switcher confirmation": %worldswitcher_disable_confirmation, 1 skips it (row 347). */
+export const VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION = 4100;
+
 /**
  * Active follower NPC server index.
  * Cache-verified from local rev 236 varp definitions: varp 447 has client option type 17.
@@ -151,6 +163,9 @@ export const VARBIT_COMBATLEVEL_TRANSMIT = 13027;
 
 /** Wilderness indicator - 1 when player is in the wilderness, 0 otherwise */
 export const VARBIT_IN_WILDERNESS = 5963;
+
+/** tradeoption_disabled: All Settings "Player Trade options" off, so players have no Trade with. */
+export const VARBIT_TRADE_OPTION_DISABLED = 6580;
 
 /** Multi-combat zone indicator - 1 when player is in a multi-combat zone, 0 otherwise */
 export const VARBIT_MULTICOMBAT_AREA = 4605;
@@ -346,10 +361,17 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     // Volume sliders persist through script triggers; mute buttons toggle on the server.
     // Transmitting their local varp changes first would make the server toggle them back.
     VARP_MUSICPLAY, // Music play mode (0=Area, 1=Shuffle, 2=Single)
+    19, // musicloop: the music settings (loop, unlock message, area type, playlist, login mode ...)
     // Attack option settings - transmit so server can persist them
     VARP_OPTION_ATTACK_PRIORITY_PLAYER, // Player attack options (0-4)
     VARP_OPTION_ATTACK_PRIORITY_NPC, // NPC attack options (0-3)
     2856, // option_collection_new_item (varbit 11959) shares this varp with other settings
+    // buff_league_relics_hidden (varbit 12383): the buff bar's relic op flips it here, and the
+    // settings rows on this varp (the buff bar's) are flipped here before their click is sent.
+    1734,
+    // The Minimenu settings (varbits 71, 11520-11533): the cache's scripts flip the rows and the
+    // spacing slider here, so the server saves them from the transmitted varp.
+    4503,
 ]);
 
 // ========== VARC (Client variables - not persisted) ==========

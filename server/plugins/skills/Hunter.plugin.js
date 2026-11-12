@@ -19,12 +19,14 @@ const Broavs = require("./hunter/Broavs.Hunter");
 const Overworld = require("./hunter/Overworld.Hunter");
 const Ceto = require("./hunter/Ceto.Hunter");
 const Annette = require("./hunter/Annette.Hunter");
+const ImplingTracker = require("./hunter/ImplingTracker.Hunter");
 
 // Ground traps are "Take" (op3) and "Lay"/"Activate" (op4) in the cache.
 const LAY_GROUND_OPTION = 4;
 
 module.exports = {
   name: "Hunter",
+  description: "Hunter: traps, birdhouses, crabs, drift nets, implings, rumours, tracking, aerial fishing and herbiboar.",
   members: true,
   register(api) {
     api.onServerStartup(Runtime.start.bind(null, api));
@@ -36,8 +38,10 @@ module.exports = {
     api.persistAttribute(Tracking.ATTRIBUTE);
     api.persistAttribute(Aerial.ATTRIBUTE);
     api.persistAttribute("hunter.herbiboars");
+    api.persistAttribute(ImplingTracker.TOTALS_ATTRIBUTE, {});
     api.onCustomEvent("hunter:success", Rumours.success);
     api.onCustomEvent("hunter:impling-caught", Overworld.caught);
+    api.onCustomEvent("hunter:impling-caught", ImplingTracker.caught);
     api.onCustomEvent("hunter:rumours-completed", Rumours.completedCount);
     api.onPlayerLogin(Runtime.login);
     api.onCustomEvent("agent:advance-time", Birdhouses.advanceTime);
@@ -55,6 +59,8 @@ module.exports = {
     api.onItemAction("Rabbit snare", { Lay: Traps.activate });
     api.onObjectInteraction("Rabbit snare", { Check: Traps.check, Dismantle: Traps.dismantle, Reset: Traps.reset });
     api.onObjectInteraction("Rabbit hole", { Flush: Rabbits.flush });
+    for (const name of ["Butterfly net", "Magic butterfly net"])
+      api.onItemAction(name, { "Check totals": ImplingTracker.checkTotals, "Check Totals": ImplingTracker.checkTotals });
     api.onItemAction("Ring of pursuit", { Check: Tracking.checkRing, Break: Tracking.breakRing });
     api.onNpcInteraction("Herbiboar", { Harvest: Herbiboar.harvest });
     api.onObjectInteraction("Rock", { Trap: Dungeon.rock });
@@ -80,7 +86,7 @@ module.exports = {
     for (const name of ["Ferret", "Swamp lizard", "Orange salamander", "Red salamander", "Black salamander", "Tecu salamander", "Immature tecu salamander"])
       api.onItemAction(name, { Release: Runtime.release });
     for (const name of ["Imp-in-a-box(2)", "Imp-in-a-box(1)"])
-      api.onItemAction(name, { "Bank-all": MagicBoxes.explain, Bank: MagicBoxes.explain, "Talk-to": MagicBoxes.explain, Release: MagicBoxes.release });
+      api.onItemAction(name, { "Bank-all": MagicBoxes.explain, Bank: MagicBoxes.open, "Talk-to": MagicBoxes.explain, Release: MagicBoxes.release });
     api.onObjectInteraction("Hole", { "Build-trap": Crabs.build });
     api.onObjectInteraction("Crab trap (empty)", { Bait: Crabs.bait });
     for (const name of ["Crab trap (baited)", "Crab trap (full)"]) api.onObjectInteraction(name, { Empty: Crabs.empty });
@@ -99,12 +105,13 @@ module.exports = {
     api.onObjectInteraction("Plant door", { Navigate: DriftNets.exit });
     for (const name of ["Huntmaster Gilman (Novice)", "Guild Hunter Cervus (Adept)", "Guild Hunter Ornus (Adept)",
       "Guild Hunter Aco (Expert)", "Guild Hunter Teco (Expert)", "Guild Hunter Wolf (Master)"])
-      api.onNpcInteraction(name, { "Talk-to": Rumours.interact, Rumour: Rumours.interact });
+      api.onNpcInteraction(name, { "Talk-to": Rumours.interact, Rumour: Rumours.rumour });
     api.onNpcInteraction("Guild Scribe Verity", { "Talk-to": Rumours.verity, "Rumour-settings": Rumours.verity });
     for (const name of ["Hunters' loot sack (basic)", "Hunters' loot sack (adept)", "Hunters' loot sack (expert)", "Hunters' loot sack (master)"])
       api.onItemAction(name, { Open: Rumours.open });
     for (const name of ["Basic quetzal whistle", "Enhanced quetzal whistle", "Perfected quetzal whistle", "Perfected quetzal whistle(i)"])
       api.onItemAction(name, { Rumour: Rumours.check });
+    api.onInterfaceActionButton(MagicBoxes.FORM_INVENTORY_UID, MagicBoxes.formClick);
     api.onItemOnObject(Runtime.objectUse, { noted: false });
     api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", Annette.use, { noted: true });
     api.onItemOnItem(Runtime.itemUse, { noted: false });

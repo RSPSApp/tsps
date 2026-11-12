@@ -7,8 +7,9 @@ const { test } = require('node:test');
 
 const modulePath = require.resolve('../dist/game/definition/WorldDefinition');
 // Load runtime dependencies before the fixture switches to a minimal data directory.
-const { PluginManager } = require('../dist/plugins/PluginManager');
+const { PluginManager, resolvePluginEnabled } = require('../dist/plugins/PluginManager');
 const { CrossFloor } = require('../dist/game/CrossFloor');
+const crossFloorPlugin = require('../plugins/world/CrossFloor.plugin.js');
 const shipped = {
   spawn: { x: 3222, y: 3219, z: 0 },
   zones: [{ tags: [] }],
@@ -18,12 +19,13 @@ const shipped = {
 };
 
 /** Loads WorldDefinition from a directory holding world.json (and world.local.json, if given). */
-function loadWorld(local) {
+function loadWorld(local, shippedWorld = shipped) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-world-local-'));
   const cwd = process.cwd();
+  const policy = CrossFloor.policy;
   try {
     fs.mkdirSync(path.join(directory, 'data/definitions'), { recursive: true });
-    fs.writeFileSync(path.join(directory, 'data/definitions/world.json'), JSON.stringify(shipped));
+    fs.writeFileSync(path.join(directory, 'data/definitions/world.json'), JSON.stringify(shippedWorld));
     if (local) {
       fs.writeFileSync(path.join(directory, 'data/definitions/world.local.json'), JSON.stringify(local));
     }
@@ -31,9 +33,16 @@ function loadWorld(local) {
     delete require.cache[modulePath];
     const world = require(modulePath);
     PluginManager.pluginConfigCache = undefined;
-    return { config: world.readWorldConfig(), definition: world.getWorldDefinition(),
+    const config = world.readWorldConfig();
+    const { switches, defaultEnabled } = PluginManager.parsePluginSwitches(config);
+    CrossFloor.policy = undefined;
+    if (resolvePluginEnabled(switches, defaultEnabled, 'CrossFloor', 'CrossFloor', crossFloorPlugin.enabled)) {
+      crossFloorPlugin.register({ core: { CrossFloor }, getPluginConfig: key => PluginManager.getPluginConfig(key) });
+    }
+    return { config, definition: world.getWorldDefinition(),
       crossFloor: [CrossFloor.enabled(), CrossFloor.combatEnabled()] };
   } finally {
+    CrossFloor.policy = policy;
     process.chdir(cwd);
     PluginManager.pluginConfigCache = undefined;
     delete require.cache[modulePath];
@@ -63,4 +72,28 @@ test('cross-floor options are read from the real layered world configuration', (
   assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': true } }).crossFloor, [true, true]);
   assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': false } }).crossFloor, [true, false]);
   assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': false, 'CrossFloor:combat': true } }).crossFloor, [false, false]);
+});
+
+test('CrossFloor switch wins within a layer and world.local.json can use either format', () => {
+  assert.deepEqual(loadWorld({
+    plugins: { CrossFloor: { enabled: false, combat: true } },
+    pluginConfig: { 'CrossFloor:visibility': true },
+  }).crossFloor, [false, false]);
+  assert.deepEqual(loadWorld({
+    plugins: { CrossFloor: { enabled: true, combat: true } },
+  }, { ...shipped, plugins: { 'cross-floor': false } }).crossFloor, [true, true]);
+  assert.deepEqual(loadWorld({
+    pluginConfig: { 'CrossFloor:visibility': false },
+  }, { ...shipped, plugins: { CrossFloor: { enabled: true, combat: true } } }).crossFloor, [false, false]);
+  assert.deepEqual(loadWorld({
+    pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': true },
+  }, { ...shipped, disabledPlugins: [] }).crossFloor, [true, true]);
+});
+
+test('world names default to OSRS and local overrides are trimmed', () => {
+  assert.equal(loadWorld().definition.name, 'Old School RuneScape');
+  assert.equal(loadWorld({ name: '  Solaris RSPS  ' }).definition.name, 'Solaris RSPS');
+});
+test('world names reject invalid types, markup, controls and excessive length', () => {
+  for (const name of [null, 1, '', '   ', 'x'.repeat(65), 'Solaris\nRSPS', '<col=ff0000>World']) assert.throws(() => loadWorld({ name }), /name must be plain text/);
 });

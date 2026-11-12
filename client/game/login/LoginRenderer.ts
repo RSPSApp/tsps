@@ -64,6 +64,7 @@ export class LoginRenderer implements LoginRendererHost {
     titleBackgroundImage: ImageBitmap | undefined;
     titleBackgroundFromCache = false;
     logoSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
+    hardcoreLogoSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
     logoImage: HTMLImageElement | undefined;
     logoImageLoaded = false;
     titleboxSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
@@ -187,6 +188,10 @@ export class LoginRenderer implements LoginRendererHost {
     }
     computeHoveredServerIndex(state: LoginState): number {
         return hover.computeHoveredServerIndex(this, state);
+    }
+
+    updateExtensionHover(state: LoginState): void {
+        hover.updateExtensionHover(this, state);
     }
     setMousePosition(x: number, y: number): void {
         hover.setMousePosition(this, x, y);

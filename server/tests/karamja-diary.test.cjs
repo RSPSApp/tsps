@@ -9,8 +9,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.plugin");
-const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
+const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.AchievementDiaries");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.AchievementDiaries");
 
 let core;
 let emit;
@@ -113,6 +113,18 @@ test("five Karamja seaweed pickups count; another item or island does not", () =
     emit("ground-items:taken", { player: entrana, groundItem: entranaPile, source: "pickup", itemId: core.ItemIdentifiers.SEAWEED, amount: 1 });
   }
   assert.equal(done(entrana).has(T.SEAWEED_TASK), false);
+
+  // Wiki: "from anywhere on Karamja". Port Sarim, Rimmington and East Ardougne are not (the old box took them in).
+  for (const [x, y] of [[3040, 3240], [2955, 3215], [2660, 3300]]) {
+    const mainland = playerAt(x, y);
+    const mainlandPile = { getPosition: () => new core.Location(x, y, 0) };
+    for (let i = 0; i < 5; i++) {
+      emit("ground-items:taken", { player: mainland, groundItem: mainlandPile, source: "pickup", itemId: core.ItemIdentifiers.SEAWEED, amount: 1 });
+    }
+    assert.equal(done(mainland).has(T.SEAWEED_TASK), false, `${x},${y} is not Karamja`);
+  }
+  // Brimhaven, Musa Point, Shilo Village and Cairn Isle are.
+  for (const [x, y] of [[2760, 3178], [2920, 3170], [2850, 2955], [2765, 2975]]) assert.ok(T.onKaramja(new core.Location(x, y, 0)), `${x},${y}`);
 });
 
 test("gold only in the north-west mine; red topaz from any gem rock", () => {
@@ -169,6 +181,10 @@ test("teak, mahogany, karambwan, oomlie wrap and nature runes", () => {
   emit("runecrafting:success", { player: small, runeId: core.ItemIdentifiers.NATURE_RUNE, rolls: 27, amountPerEssence: 2 });
   assert.ok(done(small).has("craft-some-nature-runes-from-essence"));
   assert.equal(done(small).has("craft-56-nature-runes-simultaneously-from-essenc"), false);
+
+  // The Raiments of the Eye's bonus runes count toward the total (Wiki: Raiments of the Eye).
+  emit("runecrafting:success", { player: small, runeId: core.ItemIdentifiers.NATURE_RUNE, rolls: 27, amountPerEssence: 2, bonusRunes: 2 });
+  assert.ok(done(small).has("craft-56-nature-runes-simultaneously-from-essenc"));
 });
 
 test("Horseshoe mine antivenom, Mor Ul Rek cape, graahk and Shilo Slayer master", () => {

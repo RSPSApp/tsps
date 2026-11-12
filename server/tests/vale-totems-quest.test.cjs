@@ -12,6 +12,22 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const runtime = require("../plugins/quests/QuestRuntime");
+
+// The cutscenes need a real instance and ticks (tests/vale-totems-scenes.test.cjs covers them):
+// here a scene runs its checkpoints and its end at once, and records its name.
+const scenesPlayed = [];
+require.cache[require.resolve("../plugins/quests/valetotems/Scenes.ValeTotems")] = {
+  exports: () => ({
+    active: () => false,
+    end() {},
+    play(player, name, { actions = {}, done } = {}) {
+      scenesPlayed.push({ player, name });
+      for (const action of Object.values(actions)) action(player);
+      done?.(player);
+      return true;
+    },
+  }),
+};
 const ValeTotems = require("../plugins/minigames/ValeTotems.plugin");
 const Shared = require("../plugins/minigames/valetotems/Shared.ValeTotems");
 const State = require("../plugins/minigames/valetotems/State.ValeTotems");
@@ -82,7 +98,7 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
   const dialogues = [];
   let creationMenu = null;
   let energy = 50;
-  const location = { getX: () => 1366, getY: () => 3367, getZ: () => 0, equals: () => true };
+  const location = { getX: () => 1366, getY: () => 3367, getZ: () => 0, equals: () => true, clone: () => location };
 
   const sender = new Proxy({
     getVarp: (id) => varps.get(id) ?? 0,
@@ -130,6 +146,7 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
 
   const player = {
     inventory, messages, attributes, dialogues, isPlayerBot: () => false,
+    getDisplayName: () => "Tester", getUsername: () => "tester",
     get creationMenu() { return creationMenu; },
     getLocation: () => location,
     getAttribute: (key) => attributes.get(key),
@@ -151,7 +168,8 @@ function createPlayer({ fletching = 20, items = [] } = {}) {
       startDialogues: (builder) => {
         const entries = [...builder.getDialogues().values()];
         dialogues.push(entries);
-        for (const entry of entries) if (entry.constructor.name === "ActionDialogue") entry.send(player);
+        // Clicks straight through: each line is sent in turn, so its actions run in order.
+        for (const entry of entries) entry.send(player);
       },
     }),
   };
@@ -219,50 +237,64 @@ test("Ranulph refuses the start without Children of the Sun and level 20 Fletchi
   }
 });
 
-test("Quest Helper's stage 10 and 20 checkpoints both continue to the build step", () => {
-  for (const stage of [10, 20]) {
+test("a stage 10 or 20 checkpoint replays the intro from there, to the build step", () => {
+  for (const [stage, scenes] of [[10, ["worship", "break"]], [20, ["break"]]]) {
     const player = createPlayer();
     quest.setStage(player, stage);
     talk(player);
+    assert.deepEqual(scenesPlayed.filter((scene) => scene.player === player).map((scene) => scene.name), scenes);
     assert.equal(quest.getStage(player), 30, `stage ${stage} continues the intro`);
+    assert.equal(player.getPacketSender().getVarbit(varbit("ent_totems_broken_chat")), 1);
   }
 });
 
-test("Ranulph starts the miniquest, and the quest reaches the build step", () => {
+test("as captured: Ranulph starts the miniquest; the ent's scene, the break and Isadora's talk reach the build step", () => {
   const player = createPlayer();
   const complete = (payload) => { if (payload.key === "children_of_the_sun") payload.complete = true; };
   hooks.custom.get("quest:is-complete").unshift(complete);
   try {
     assert.equal(talk(player), true);
+    const opening = player.dialogues.at(-1);
+    assert.deepEqual(opening.slice(0, 2).map((entry) => entry.getText()), ["Hello.", "Oh, sorry! I was lost in thought. You gave me quite the start!"]);
+    assert.equal(hooks.prompts.at(-1).title, "Start the Vale Totems miniquest?");
     chooseYes(player);
+    assert.deepEqual(scenesPlayed.filter((scene) => scene.player === player).map((scene) => scene.name), ["worship", "break"]);
     assert.equal(quest.getStage(player), 30, "the intro ends ready to build");
     assert.equal(player.getPacketSender().getVarbit(varbit("ent_totems_broken_chat")), 1);
-    const firstIntro = player.dialogues.find((entries) =>
-      entries.some((entry) => entry.getText?.() === "Uh oh! The funny man broke the totem!"));
-    assert.ok(firstIntro, "the first intro chain");
-    assert.equal(firstIntro.some((entry) => entry.getText?.() === "Oh... There's a child."), false,
-      "the first chain ends at the break action");
-    assert.ok(player.dialogues.some((entries) => entries[0]?.getText?.() === "Oh... There's a child."),
-      "the second chain starts after the break action");
+    assert.equal(player.messages.length, 0, "live sends no 'new miniquest' line");
+    const talkAfter = player.dialogues.find((entries) => entries[0]?.getText?.() === "Uh oh! The funny man broke the totem!");
+    assert.ok(talkAfter, "Isadora opens the talk after the break");
+    const last = talkAfter.at(-1);
+    assert.equal(last.constructor.name, "PlayerDialogue", "live gives the last line to the player");
+    assert.match(last.getText(), /^Well, I guess you can consult with Isadora/);
   } finally {
     hooks.custom.get("quest:is-complete").shift();
   }
 });
 
-test("accepting the quest clears a site 1 totem left from earlier minigame play", () => {
+test("before the miniquest site 1 shows the old totem; Ranulph's break clears it", () => {
   const player = createPlayer();
-  State.erect(player, SITE, 1);
-  State.set(player, SITE, { points: 5 });
+  for (const handler of hooks.login) handler({ player });
+  assert.deepEqual(State.totem(player, SITE), { wood: 1, carvings: [1, 2, 3], carved: true, decorations: 0, decay: 2, points: 0 });
+  assert.deepEqual(State.animals(player, SITE), [1, 2, 3]);
   const complete = (payload) => { if (payload.key === "children_of_the_sun") payload.complete = true; };
   hooks.custom.get("quest:is-complete").unshift(complete);
   try {
     talk(player);
     chooseYes(player);
     assert.equal(State.totem(player, SITE).wood, 0);
-    assert.equal(State.totem(player, SITE).points, 0);
+    assert.equal(State.totem(player, SITE).carved, false);
   } finally {
     hooks.custom.get("quest:is-complete").shift();
   }
+});
+
+test("as captured: before the miniquest the old totem can't be decorated", () => {
+  const player = createPlayer({ items: [item("oak_shield")] });
+  for (const handler of hooks.login) handler({ player });
+  hooks.objects["Oak totem"].Decorate({ player, objectId: SITE_BASE });
+  assert.equal(player.dialogues.at(-1)[0].getText(), "You're not really sure what to do with that, but maybe there's someone in the valley who does.");
+  assert.equal(State.totem(player, SITE).decorations, 0);
 });
 
 test("a wrong carving during the quest gets the captured warning", () => {
@@ -290,6 +322,7 @@ test("the minigame snapshot leaves the quest's ent_totems bits alone", () => {
 test("the minigame withholds carving and decorating until each lesson, then advances the quest", () => {
   const player = createPlayer({ items: [item("oak_logs"), item("knife")] });
   quest.setStage(player, 30);
+  player.setAttribute("quest.vale_totems.broken-chat", 1);
   State.set(player, SITE, { animal_1: 1, animal_2: 2, animal_3: 3 });
 
   hooks.objects["Totem site"].Build({ player, objectId: SITE_BASE });
@@ -318,6 +351,7 @@ test("the minigame withholds carving and decorating until each lesson, then adva
     creation.execute(obj(`ent_totems_animal_icon_${animal}`));
   }
   assert.equal(State.totem(player, SITE).carved, true);
+  tick();
   assert.equal(player.dialogues.at(-1)[0].getText(), "You finish carving the totem, but it still seems to be missing something. Ranulph and Isadora might know what to do next.");
 
   // Talk again to learn decorating, then add four oak decorations.
@@ -334,8 +368,10 @@ test("the minigame withholds carving and decorating until each lesson, then adva
 
   // Talking to either NPC is what moves 30 to 40, then the scene sets the 100-offering pile.
   hooks.npcs.Isadora["Talk-to"]({ player, npcId: isadora });
+  assert.equal(scenesPlayed.at(-1).name, "offering");
   assert.equal(quest.getStage(player), 50);
   assert.equal(State.totem(player, SITE).points, 100);
+  assert.equal(State.totem(player, SITE).decay, 1, "the scene's visit takes a point of durability");
 });
 
 test("the offering is 100, claiming it advances the quest, and the final talk completes it", () => {
@@ -353,7 +389,47 @@ test("the offering is 100, claiming it advances the quest, and the final talk co
   tick();
   assert.equal(quest.getStage(player), 60);
 
+  assert.equal(player.dialogues.at(-1)[0].getText(), "You collect 100 offerings.", "the quest's claim is an objectbox");
+
   hooks.npcs.Isadora["Talk-to"]({ player, npcId: PluginManager.getCoreApi().NpcIdentifiers.ISADORA });
   assert.equal(quest.getStage(player), 70);
+  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 100, "the client reads 100");
   assert.equal(player.getInventory().contains(PluginManager.getCoreApi().ItemIdentifiers.SACRAMENTS_OF_ENT_FOLK), true);
+  const ending = player.dialogues.at(-1);
+  const notebook = ending.find((entry) => entry.constructor.name === "ItemStatementDialogue");
+  assert.match(ending[ending.indexOf(notebook) - 1].getText(), /^Speaking of which, here, take a notebook/);
+  assert.equal(notebook.getText(), "Ranulph gives you a notebook.");
+  assert.equal(player.messages.some((text) => /Congratulations/.test(text)), false, "no completion line for this miniquest");
+});
+
+test("as captured: ents pass the quest's totem by until the miniquest is complete", () => {
+  const Ents = require("../plugins/minigames/valetotems/Ents.ValeTotems");
+  const player = createPlayer();
+  for (const handler of hooks.login) handler({ player });
+  Ents.visitAll(player);
+  assert.equal(State.totem(player, SITE).decay, 2, "the old totem is never visited");
+  quest.setStage(player, 30);
+  State.set(player, SITE, { base: 0, base_carved: 0, base_multiloc: 0, low: 0, mid: 0, top: 0, decay: 0 });
+  State.erect(player, SITE, 3);
+  for (const animal of [1, 2, 3]) State.carve(player, SITE, animal, 4);
+  State.set(player, SITE, { decorations: 4 });
+  Ents.visitAll(player);
+  assert.deepEqual([State.totem(player, SITE).decay, State.totem(player, SITE).points], [4, 0], "the rebuilt one waits for the scripted visit");
+  quest.setStage(player, 70);
+  Ents.visitAll(player);
+  assert.equal(State.totem(player, SITE).decay, 3, "after the miniquest it is an ordinary site");
+});
+
+test("a stage-0 save's own site 1 totem and unclaimed pile survive login", () => {
+  const player = createPlayer();
+  State.erect(player, SITE, 3);
+  State.set(player, SITE, { points: 12 });
+  for (const handler of hooks.login) handler({ player });
+  assert.equal(State.totem(player, SITE).wood, 3, "the player's maple totem stays");
+  assert.equal(State.totem(player, SITE).points, 12, "and so does the pile");
+
+  const piled = createPlayer();
+  State.set(piled, SITE, { points: 7 });
+  for (const handler of hooks.login) handler({ player: piled });
+  assert.deepEqual([State.totem(piled, SITE).wood, State.totem(piled, SITE).points], [0, 7], "a pile alone isn't covered by the old totem");
 });

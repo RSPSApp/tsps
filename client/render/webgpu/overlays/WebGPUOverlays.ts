@@ -186,7 +186,7 @@ export class WebGPUOverlays {
 
             this.clickCross?.setTime(timeMs);
             this.clickCross?.update(timeMs);
-            this.groundMeshes?.update(host.osrsClient.groundItems.getAllStacks());
+            this.groundMeshes?.update(host.osrsClient.getGroundItemMeshStacks());
             this.tileMarker?.update(this.resolveTileMarkerConfig());
             this.interactHighlight?.update();
         } catch (error) {

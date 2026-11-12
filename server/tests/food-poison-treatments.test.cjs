@@ -60,11 +60,12 @@ test('Guthix rest overheals at full HP without reducing a higher existing boost'
 test('moonlight antelope waits exactly seven task ticks to cure poison or downgrade venom', t => {
   for (const venom of [false, true]) {
     const f = fixture(t, 10); f.player.setPoisonDamage(venom ? 12 : 30); f.player.setVenomed(venom);
+    if (venom) f.player.setLastVenomDamage(10);
     f.eat('COOKED_MOONLIGHT_ANTELOPE'); assert.equal(f.hp, 24);
     f.ticks(6); assert.equal(f.hp, 24); assert.equal(f.player.getPoisonDamage(), venom ? 12 : 30);
     assert.equal(f.player.isVenomed(), venom);
     f.ticks(1); assert.equal(f.hp, 36); assert.equal(f.player.isVenomed(), false);
-    assert.equal(f.player.getPoisonDamage(), venom ? 60 : 0);
+    assert.equal(f.player.getPoisonDamage(), venom ? 46 : 0, 'next 12, last 10: poison 5 x 10 - 4 (234/03280.txt:69820)');
     assert.equal(f.player.getCombat().getPoisonImmunityTimer().secondsRemaining(), 0);
     f.ticks(5); assert.equal(f.hp, 36);
   }
@@ -112,4 +113,30 @@ test('fresh unpoisoned actors never acquire an invalid severity from a treatment
     assert.equal(f.player.getPoisonDamage(), 0, treatment);
     assert.equal(f.player.isPoisoned(), false); assert.equal(f.player.isVenomed(), false);
   }
+});
+
+test('an Araxyte venom sac cures venom, deals 4 once and starts the 39-step poison dose', t => {
+  const f = fixture(t); const hits = [], said = [];
+  t.mock.method(f.player.getCombat().getHitQueue(), 'addPendingDamage', list => hits.push(...list.map(hit => hit.getDamage())));
+  t.mock.method(f.player, 'sendMessage', text => said.push(text));
+  f.player.setPoisonDamage(12); f.player.setVenomed(true);
+  f.eat('ARAXYTE_VENOM_SAC');
+  assert.equal(f.player.isVenomed(), false); assert.equal(f.player.getPoisonDamage(), 0);
+  assert.deepEqual(hits, [4]);
+  const clock = f.player.getCombat().getPoisonClock();
+  assert.equal(clock.getCounter(), 39, '11.7 minutes: 39 steps of 18 seconds (Wiki)');
+  assert.equal(clock.isVenomImmune(), true);
+  f.ticks(29); assert.deepEqual(said, []);
+  f.ticks(1);
+  assert.equal(clock.getCounter(), 38); assert.equal(clock.isVenomImmune(), false);
+  assert.equal(clock.finished(), false, 'still immune to poison');
+  assert.deepEqual(said, ['<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>']);
+  f.ticks(60); assert.equal(said.length, 1);
+});
+
+test('an Araxyte venom sac keeps a stronger poison dose already running', t => {
+  const f = fixture(t); t.mock.method(f.player.getCombat().getHitQueue(), 'addPendingDamage', () => {});
+  f.player.getCombat().getPoisonImmunityTimer().start(1000);
+  f.eat('ARAXYTE_VENOM_SAC');
+  assert.equal(f.player.getCombat().getPoisonClock().getCounter(), Math.ceil(1000 / 18));
 });

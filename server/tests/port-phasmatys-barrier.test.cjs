@@ -156,6 +156,21 @@ test("Pass before the quest is the guard's toll talk; its pay step takes the tol
   assert.equal(p.getLocation().getY(), 3507);
 });
 
+test("the amulet taken off after the guard's question: the pay step takes nothing and nobody crosses", (t) => {
+  const p = realPlayer(t, 3660, 3509);
+  wear(p, I().GHOSTSPEAK_AMULET, core.Equipment.AMULET_SLOT);
+  p.getInventory().add(new core.Item(I().ECTO_TOKEN, 3));
+  click(p, 'Pass');
+  const guard = core.NpcIdentifiers.GHOST_GUARD;
+  assert.equal(hooks.condition({ player: p, npcId: guard, text: 'If the player wears either a ghostspeak amulet or the Morytania legs 2 or above:' }), true);
+  p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(-1, 0)); // the equipment tab leaves the dialogue open
+  const step = { player: p, npcId: guard, stepId: Barrier.PAY_STEP, handled: false };
+  for (const handler of hooks.custom['npc-dialogue:action']) handler(step);
+  assert.equal(tokens(p), 3, "no toll taken");
+  ticks(4);
+  assert.equal(p.getLocation().getY(), 3509, "still outside");
+});
+
 test('the guard picks his after-quest talk once Ghosts Ahoy is done; other NPCs are left alone', (t) => {
   const p = realPlayer(t, 3660, 3509);
   assert.equal(hooks.variant({ player: p, npcId: core.NpcIdentifiers.GHOST_GUARD }), 'standard-dialogue-before-or-during-ghosts-ahoy');

@@ -12,6 +12,9 @@
  * terrain and the other group: SdMapLoaderInput.doorOnly/locOnly); anything else, or a mix of
  * groups changed before a build is applied, rebuilds the whole square.
  */
+import { getClientCycle } from "../../network/ServerConnection";
+import { preparedLocSequence } from "../../rs/scene/LocPacketAnimation";
+import { LocAnimated } from "../loc/LocAnimated";
 import type { WebGLOsrsRendererHost } from "../render/hostInterface";
 import { getLocAnimationDurationMs } from "../render/locs2";
 import { applyGamemodeWorldLocs } from "../render/streaming";
@@ -233,6 +236,8 @@ export class LocUpdates {
         const wasAdded = added !== undefined && (added.rotation & 0x3) === (rotation & 0x3);
         this.r.addedLocs.delete(key);
         if (wasAdded) {
+            // A replay can arrive before the cache index; its static copy must stay hidden too.
+            this.suppressLocAt(tile, level, added.locId);
             // Deleting a replay of the cache loc removes that loc; only scenery replaced
             // by a different added id comes back.
             for (const id of added.replacedIds ?? []) {
@@ -256,6 +261,13 @@ export class LocUpdates {
 
     onLocAnim(locId: number, tile: Tile, level: number, shape: number, rotation: number, animId: number): void {
         if ((shape | 0) < 0) return;
+        if (preparedLocSequence(locId, shape) === animId && !this.r.instanceActive &&
+            this.deckViewAt(tile) === undefined) {
+            const map = this.r.mapManager.getMap(tile.x >> 6, tile.y >> 6);
+            if (LocAnimated.playPrepared(map?.locsAnimated, tile, locId, level, shape, rotation, animId, getClientCycle())) {
+                return;
+            }
+        }
         const exactKey = `${tile.x | 0},${tile.y | 0},${level | 0},${locId | 0}`;
         const matchKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
         // A loc the server added is found by its own id; the tile-wide key there holds the

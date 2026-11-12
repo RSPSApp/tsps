@@ -203,8 +203,20 @@ function chain(player, npc, lines, then) {
   player.getDialogueManager().startDialogues(builder);
 }
 
-function inventoryCoins(player) {
-  return player.getInventory().getAmount(core.ItemIdentifiers.COINS);
+/** The bank tab holding the player's coins, or -1. */
+function bankCoinsTab(player) {
+  const tab = core.Bank.getTabForItem(player, core.ItemIdentifiers.COINS);
+  return Number.isInteger(tab) && tab >= 0 && player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) > 0 ? tab : -1;
+}
+
+/**
+ * The coins that pay: the inventory's and the bank's. Wiki (Transcript:Banker): the Banker only refuses when the coins
+ * are in neither. (The recording behind docs/bank.md showed 10M banked coins refused; the Wiki is followed.)
+ */
+function availableCoins(player) {
+  const tab = bankCoinsTab(player);
+  const banked = tab >= 0 ? player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) : 0;
+  return player.getInventory().getAmount(core.ItemIdentifiers.COINS) + banked;
 }
 
 function choose(player, npc, slots, cost) {
@@ -214,7 +226,7 @@ function choose(player, npc, slots, cost) {
     [player, fill(dialogue.choose, values), expressions.choose],
     [npc, fill(dialogue.cost, values), expressions.cost],
   ], () => {
-    if (inventoryCoins(player) < cost) {
+    if (availableCoins(player) < cost) {
       say(player, npc, [player, dialogue.tooPoor, expressions.tooPoor]);
       return;
     }
@@ -234,7 +246,7 @@ function accept(player, npc, slots, cost) {
   const { dialogue, expressions } = DATA;
   chain(player, npc, [[player, dialogue.accept, expressions.accept]], () => {
     // The coins are checked again: the purchase happens on continuing past the answer.
-    if (inventoryCoins(player) < cost || costOf(player, slots / DATA.slotsPerBlock) !== cost) {
+    if (availableCoins(player) < cost || costOf(player, slots / DATA.slotsPerBlock) !== cost) {
       say(player, npc, [player, dialogue.tooPoor, expressions.tooPoor]);
       return;
     }
@@ -244,8 +256,17 @@ function accept(player, npc, slots, cost) {
 }
 
 function purchase(player, count, cost) {
-  player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, cost);
+  // The inventory's coins first, then the bank's.
+  const COINS = core.ItemIdentifiers.COINS;
+  const fromInventory = Math.min(cost, player.getInventory().getAmount(COINS));
+  if (fromInventory > 0) player.getInventory().deleteNumber(COINS, fromInventory);
   player.getInventory().refreshItems();
+  const fromBank = cost - fromInventory;
+  if (fromBank > 0) {
+    const tab = bankCoinsTab(player);
+    player.getBank(tab).deleteNumber(COINS, fromBank);
+    if (core.Bank.isOpen?.(player)) player.getBank(player.getCurrentBankTab?.() ?? tab).refreshItems();
+  }
   const bought = blocks(player) + count;
   player.setAttribute(BLOCKS_ATTRIBUTE, bought);
   player.getPacketSender().sendVarbit(BLOCKS_VARBIT, bought).sendSound(DATA.purchaseSound, 0, 0);
@@ -270,6 +291,7 @@ function init(pluginApi) {
 
 module.exports = {
   name: "BankSpace",
+  description: "Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins.",
   register(pluginApi) {
     init(pluginApi);
     pluginApi.onCustomEvent("bank:capacity", capacity);

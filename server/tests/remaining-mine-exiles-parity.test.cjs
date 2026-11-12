@@ -424,15 +424,13 @@ test('Haunted crystal shortcut cannot complete before the crystal-key stage', ()
   assert.equal(h.inventory.get(I.SALVE_SHARD), 1);
 });
 
-test('Fremennik Exiles requirements follow Quest Helper (no Trials, Mining 60)', () => {
+test('Fremennik Exiles start does not require Mining 60', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   const N = NPCS(h), S = h.core.Skill;
   h.inventory.set(ITEMS(h).SEAL_OF_PASSAGE, 1);
   h.setSkill(S.CRAFTING, 65); h.setSkill(S.SLAYER, 60); h.setSkill(S.SMITHING, 60);
   h.setSkill(S.FISHING, 60); h.setSkill(S.RUNECRAFTING, 55); h.setSkill(S.MINING, 59);
   h.api.emitCustomEvent('quest:is-complete', { player: h.player, key: 'fremennik_trials', complete: true });
-  assert.equal(h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_6 }), false);
-  h.setSkill(S.MINING, 60);
   assert.equal(h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_6 }), true);
   h.choice(N.BRUNDT_THE_CHIEFTAIN_6, 'Yes.');
   assert.equal(h.quest.getStage(h.player), 5);
@@ -1455,7 +1453,7 @@ test('Fremennik Trials: Peer accepts the Wiki water, disks, mural, sealed vase a
   h.object(O.DOOR_119);
   assert.equal(h.player.syntaxAction, undefined, 'inventory must be banked');
   h.inventory.clear();
-  h.setWeapon(I.BRONZE_SWORD);
+  h.setWeapon(I.BRONZE_SHORTSWORD);
   h.object(O.DOOR_119);
   assert.equal(h.player.syntaxAction, undefined, 'equipment must be banked');
   h.setWeapon(-1);
@@ -1575,7 +1573,7 @@ test('Fremennik Trials: Peer offers and performs his bank spell when talked to a
   const HAS = 'If the player has items in their inventory and/or wearing any armour:';
   const EMPTY = 'If the player does not have any items in their inventory or in their worn slots:';
   assert.deepEqual([answer(HAS), answer(EMPTY)], [false, true], 'nothing carried: no bank offer');
-  h.setWeapon(I.BRONZE_SWORD);
+  h.setWeapon(I.BRONZE_SHORTSWORD);
   assert.deepEqual([answer(HAS), answer(EMPTY)], [true, false], 'worn items count');
   h.setWeapon(-1);
   h.inventory.set(I.COINS, 5);

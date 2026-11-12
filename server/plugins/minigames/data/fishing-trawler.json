@@ -110,9 +110,10 @@
       0
     ]
   },
+  "_shore": "2672,3209 is open sea in the cache (overlay 442); 2658,3210 is the nearest coast tile, on the shore north of Port Khazard below the DJP fairy ring.",
   "shore": [
-    2672,
-    3209,
+    2658,
+    3210,
     0
   ],
   "port": [
@@ -291,7 +292,6 @@
     "swim": "You climb onto the barrel and drift back to shore.",
     "tooLittle": "You didn't help enough to earn a share of the catch.",
     "lowLevel": "You need a Fishing level of 15 to receive a share of the catch.",
-    "nothingInNet": "There is nothing in the net for you.",
     "collected": "You collect your catch from the net. It is sent to your bank.",
     "bankFull": "Your bank is too full to hold all of your catch. The rest stays in the net.",
     "rewardWaiting": "<col=ef1020>You have a catch waiting in the trawler net. It will be thrown back if you sail again.</col>",

@@ -213,6 +213,7 @@ function itemOnGrinder(event) {
 
 module.exports = {
   name: "DesertQuarry",
+  description: "Desert Quarry's grinder and Drew: ground sandstone becomes buckets of sand that Drew sells for 50 coins each.",
   members: true,
   DATA,
   BUCKETS_ATTRIBUTE,

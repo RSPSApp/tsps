@@ -209,8 +209,10 @@ test('fresh stage 0 start and the complete synthetic stage graph to the canonica
   assert.equal(p.items.get(I.PRISON_KEY) ?? 0, 0, 'the key is on the floor, not handed over');
   p.items.set(I.PRISON_KEY, 1);
 
-  action(h, p, K.TWIG_2, 'UsQIS6');
-  assert.equal(p.items.get(I.CELL_KEY_1), 1, 'Twig transcript key');
+  // The pickpocket message now belongs to a real pending attempt; the native
+  // entrypoint test covers that route. This synthetic graph uses the kill route.
+  kill(h, p, K.TWIG_2);
+  assert.equal(p.items.get(I.CELL_KEY_1), 1, 'Twig kill-route key');
   assert.equal(h.quest.getStage(p), 30);
 
   kill(h, p, K.BERRY);

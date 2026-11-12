@@ -6,12 +6,14 @@
  */
 module.exports = {
   name: "Herblore",
+  description: "Herblore: cleaning grimy herbs, mixing potions, grinding secondaries with a pestle and mortar, and Guthix balance.",
   members: true,
   register(api) {
     require("./herblore/Events.Herblore")(api);
     require("./herblore/Cleaning.Herblore")(api);
     require("./herblore/Mixing.Herblore")(api);
     require("./herblore/Grinding.Herblore")(api);
+    require("./herblore/Coconut.Herblore")(api);
     require("./herblore/GuthixBalance.Herblore")(api);
   },
 };

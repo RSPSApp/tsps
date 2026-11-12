@@ -310,6 +310,7 @@ function attach(pluginApiInstance) {
 
 module.exports = {
   name: "CrystalArmour",
+  description: "Crystal armour: sung from seeds at a singing bowl, boosts crystal bow and Faerdhinen accuracy and damage, loses charges when hit, and takes shards.",
   members: true,
   register(api) {
     attach(api);

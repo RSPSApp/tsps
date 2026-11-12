@@ -173,7 +173,16 @@ export function updateFollowCamera(
     ) {
         // Leaving the plugin view must not swoop the HD camera from stale smoothed angles.
         renderer.followCamCameraFeelInitialized = false;
-        renderer.followCamDistance = Math.hypot(camera.getPosX() - playerX, camera.getPosZ() - playerZ);
+        // Depth of field compares this with view depth: measure to the player's focus height in
+        // 3D, not along the ground, or a raised camera focuses short of the player.
+        const focusY = playerHeightSample.valid
+            ? playerHeightSample.height - (osrsClient.camFollowHeight | 0) / 128
+            : camera.getPosY();
+        renderer.followCamDistance = Math.hypot(
+            camera.getPosX() - playerX,
+            camera.getPosY() - focusY,
+            camera.getPosZ() - playerZ,
+        );
         return;
     }
     // 117 HD camera feel. Without the plugin (and in first person, whose view pitch override

@@ -33,6 +33,10 @@ before(async () => {
     onInterfaceActionClick: handler => { crafting.button = handler; },
     getTaskManager: () => ({ submit: task => tasks.push(task) }),
   });
+  // Legacy fake actors opt in explicitly; native diary behavior is covered separately.
+  api.onCustomEvent('diary:is-complete', event => {
+    if (event.diary === 'fremennik' && event.tier === 'hard' && event.player.fremennikHardComplete === true) event.complete = true;
+  });
   api.onCanUseItem(event => { if (event.player.blockItem) event.allow = false; });
   api.onSpellDisabled(event => { if (event.player.blockSpell) event.disabled = true; });
   api.registerSpellRuneSource({
@@ -369,6 +373,7 @@ test('Spin Flax spins at most five flax with the Wiki runes and 15 Crafting XP e
 test('Tan Leather tans five hides, cowhide and snake hide included', () => {
   const I = ItemIdentifiers;
   const player = spellPlayer([[I.COWHIDE, 3], [I.SNAKE_HIDE, 3], [I.ASTRAL_RUNE, 2], [I.NATURE_RUNE, 1], [I.FIRE_RUNE, 5]]);
+  player.fremennikHardComplete = true;
   castSelf(player, 'Tan Leather');
   assert.equal(player.count(I.LEATHER) + player.count(I.SNAKESKIN), 5);
   assert.equal(player.count(I.COWHIDE) + player.count(I.SNAKE_HIDE), 1);

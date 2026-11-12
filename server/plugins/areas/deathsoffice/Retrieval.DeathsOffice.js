@@ -17,6 +17,7 @@
  * at once, and the messages when nothing fits or nothing covers the fee.
  */
 const Common = require("./Common.DeathsOffice");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const OFFICE_INV = 636;
 const OFFICE_SLOTS = 120;
@@ -32,7 +33,7 @@ function isOpen(player) {
 }
 
 function sendOffice(player, office) {
-  player.getPacketSender().sendInventory(OFFICE_INV, OFFICE_SLOTS, office.map((entry) => (entry ? { id: entry.id, amount: entry.amount } : null)));
+  player.getPacketSender().sendInventory(OFFICE_INV, OFFICE_SLOTS, office.map((entry) => (entry ? { id: entry.id, amount: entry.amount } : null)), Common.ID.officeInterface);
 }
 
 function select(player, slot, fee) {
@@ -109,7 +110,7 @@ function clickItem(event) {
   const entry = Common.state(player).office[slot];
   if (!entry) return;
   if ((event.opId ?? event.action) === EXAMINE_OP) {
-    player.sendMessage(Common.core().ItemDefinition.forId(entry.id).getExamine());
+    examineItem(player, entry.id, entry.amount);
     return;
   }
   if (entry.fee > 0) {

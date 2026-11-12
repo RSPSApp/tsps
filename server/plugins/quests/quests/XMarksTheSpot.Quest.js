@@ -1,5 +1,6 @@
 /** X Marks the Spot. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerXMarksTheSpotQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Animation, ItemIdentifiers, NpcIdentifiers, WorldDefinition, ItemStatementDialogue, DialogueChainBuilder } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
 
@@ -474,7 +475,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     if (inventory.get(slot) !== item) return null;
     const manager = player.getSkillManager();
     const before = manager.getExperience(skill);
-    manager.addExperience(skill, LAMP_XP, false);
+    manager.addExperience(skill, LAMP_XP, true);
     if (manager.getExperience(skill) === before) return null;
     inventory.deleteAtSlot(slot, 1);
     player.setAttribute(LAMP_USED_ATTRIBUTE, 1);
@@ -578,8 +579,8 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function grantReward(player) {
     player.getPacketSender().sendVarbit(COIN_REWARD_VARBIT, 1);
-    player.getInventory().adds(COINS, 200);
-    if (!ownsItem(player, ANTIQUE_LAMP)) player.getInventory().adds(ANTIQUE_LAMP, 1);
+    giveReward(player, COINS, 200);
+    if (!ownsItem(player, ANTIQUE_LAMP)) giveReward(player, ANTIQUE_LAMP, 1);
     settleClueBox(player);
   }
 

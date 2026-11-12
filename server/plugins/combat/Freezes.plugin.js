@@ -77,6 +77,7 @@ function frozen({ target, source, kind }) {
 
 module.exports = {
   name: "Freezes",
+  description: "Freeze aftermath: red messages for ice spells, expiry warnings, and releasing a player-applied freeze when the two stray over 10 tiles apart.",
   register(api) {
     initialize(api);
     api.onCustomEvent("combat:frozen", frozen);

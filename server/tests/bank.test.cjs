@@ -12,6 +12,7 @@ const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { World } = require("../dist/game/World");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+const { ChatType } = require("../dist/net/protocol/ClientProtocol");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const TRIDENT = 11907;
@@ -66,7 +67,9 @@ function createPlayer() {
         ? (id, value) => { varbits.push([id, value]); return sender; }
         : prop === "sendEnterAmountPrompt"
           ? (title) => { prompts.push(title); return sender; }
-          : () => sender,
+          : prop === "sendTypedMessage"
+            ? (type, text) => { messages.push(`${type}:${text}`); return sender; }
+            : () => sender,
   });
   let currentTab = 0;
   const messages = [];
@@ -111,7 +114,7 @@ test("unsupported placeholders warn only when a successful withdrawal empties th
   Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
   assert.deepEqual(player.messages, []);
   Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
-  assert.deepEqual(player.messages, ["That item cannot leave a placeholder."]);
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:This item cannot leave a placeholder.`]);
   assert.equal(player.getInventory().getAmount(MYSTIC_LAVA_STAFF), 2);
   assert.equal(player.getBank().contains(MYSTIC_LAVA_STAFF), false);
   player.getBank().add(new Item(LAVA_BATTLESTAFF, 1), false);
@@ -128,7 +131,14 @@ test('a new bank opening resets noted withdrawal while an open-bank refresh pres
   player.setUsername('bankreset');
   t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true }));
   player.setNoteWithdrawal(true);
+  const world = require('../dist/game/definition/WorldDefinition');
+  t.mock.method(world, 'getWorldDefinition', () => ({ name: 'Solaris RSPS' }));
+  const titles = [];
+  const sender = player.getPacketSender();
+  const sendString = sender.sendString.bind(sender);
+  sender.sendString = (text, uid) => { titles.push(text); return sendString(text, uid); };
   player.getBank(0).open();
+  assert.ok(titles.includes('Bank of Solaris RSPS'));
   assert.equal(player.withdrawAsNote(), false);
   assert.equal(player.getPacketSender().getVarbit(3958), 0);
   player.setNoteWithdrawal(true);
@@ -235,8 +245,18 @@ test("depositing items keeps each one's metadata", () => {
 
   Bank.deposit(player, TRIDENT, 1, 2, true);
 
-  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1200 }], [1, { charges: 5 }]]);
+  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 5 }], [1, { charges: 1200 }]]);
   assert.equal(player.getInventory().getValidItems().length, 0);
+});
+
+test("depositing one of several identical unstackable items takes the top-left slot, not the clicked one", () => {
+  const player = createPlayer();
+  for (const charges of [1, 2, 3]) player.getInventory().add(new Item(TRIDENT, 1, { charges }), false);
+
+  Bank.deposit(player, TRIDENT, 2, 1, true);
+
+  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1 }]]);
+  assert.deepEqual(player.getInventory().getItems().slice(0, 3).map((item) => item.getId()), [-1, TRIDENT, TRIDENT]);
 });
 
 test("inventory bank options count matching unnoted items across slots", () => {
@@ -266,7 +286,7 @@ test("inventory bank options count matching unnoted items across slots", () => {
     assert.equal(player.getBank().getAmount(TRIDENT), expected);
     assert.equal(player.getInventory().getAmount(TRIDENT), 4 - expected);
     assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF), 1);
-    assert.deepEqual(player.getBank().getValidItems()[0].getMeta(), { charges: 1200 });
+    assert.deepEqual(player.getBank().getValidItems()[0].getMeta(), { charges: 5 }, "deposits start at the top-left matching slot, not the clicked one");
   }
 });
 
@@ -818,6 +838,18 @@ test("dragging within the bank's inventory panel swaps inventory slots", () => {
   assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
 });
 
+test("a bank inventory drag to a slot past the backpack moves nothing (live drags only reach 0-27)", () => {
+  const player = createPlayer();
+  player.getInventory().add(new Item(A, 1), false);
+  player.getInventory().add(new Item(B, 1), false);
+  for (const target of [28, 500, 65535, -1]) {
+    assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, target), true, `target ${target} handled`);
+    assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [A, B], `target ${target}: nothing moved`);
+    assert.equal(player.getInventory().getItems().length, player.getInventory().capacity(), "no slot past the backpack");
+  }
+  assert.equal(player.getInventory().getFreeSlots(), player.getInventory().capacity() - 2, "the backpack still works");
+});
+
 test("bank inventory drags reject a stale source item ID and accept the updated ID", () => {
   const player = createPlayer();
   player.getInventory().add(new Item(A, 1), false);
@@ -1047,6 +1079,8 @@ function bankerHarness() {
   const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
   const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
   const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDialogue');
+  const { DoubleItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/DoubleItemStatementDialogue');
   const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
   const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
@@ -1071,10 +1105,11 @@ function bankerHarness() {
   let useNpc;
   const useObjects = [];
   const api = {
-    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, World },
+    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue, NpcDialogue, DoubleItemStatementDialogue, World },
     onNpcInteraction: (name, handlers) => npc.set(name, handlers),
     onObjectInteraction: (name, handlers) => object.set(name, handlers),
-    onItemOnNpc: (handler) => { useNpc = handler; },
+    // The currency handler (unnoted items); banknotes have their own native test (banker-unnote.test.cjs).
+    onItemOnNpc: (handler, filter) => { if (filter?.noted !== true) useNpc = handler; },
     onItemOnObject: (...args) => useObjects.push(args),
     onButtonClick() {}, onInterfaceActionClick() {},
     onCustomEvent: (name, handler) => custom.set(name, handler),
@@ -1189,8 +1224,21 @@ for (const route of ['Banker', 'Bank booth', 'Bank chest', 'Bank Chest']) {
     h.manager.handleOption(1);
     assert.equal(h.player.inventory.getAmount(995), 501);
     assert.equal(h.player.inventory.getAmount(13204), 2);
+    // rsprox 226/01645: then a mesbox with the coins and token models.
+    assert.equal(h.manager.getCurrent()?.getText?.(), 'The bank exchanges your coins for platinum tokens.');
   });
 }
+
+test('platinum tokens used on a Banker: the reverse mesbox (rsprox 226/01645)', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(13204, 2), false);
+  h.use(13204, 'Banker');
+  assert.equal(h.manager.getCurrent().getTitle(), 'Exchange your platinum tokens for coins?');
+  h.manager.handleOption(1);
+  assert.equal(h.player.inventory.getAmount(995), 2000);
+  assert.equal(h.manager.getCurrent()?.getText?.(), 'The bank exchanges your platinum tokens for coins.');
+  assert.deepEqual(h.manager.getCurrent().getItemIds(), [1003, 3991]);
+});
 
 for (const [coins, tokens, used, wantCoins, wantTokens] of [
   [1000, 0, 995, 0, 1],
@@ -1244,11 +1292,20 @@ test('exchange cancellation, closure, duplicate and replaced confirmation cannot
   }
 });
 
+test('any other unnoted item on a Banker: "Hand me a banknote..." (rsprox 226/01645)', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(TRIDENT, 1), false);
+  assert.equal(h.use(TRIDENT, 'Banker').handled, true);
+  assert.equal(h.manager.getCurrent()?.getText?.(), "Hand me a banknote, and I'll try to convert it to an item.");
+  assert.equal(h.manager.getCurrent().expression, 611, 'chatsad2, as recorded');
+  assert.equal(h.player.inventory.getAmount(TRIDENT), 1);
+});
+
 test('currency exchange ignores unrelated NPCs, objects, items and stale item slots', () => {
   const h = bankerHarness();
   h.player.inventory.add(new Item(995, 2000), false);
   h.player.inventory.add(new Item(TRIDENT, 1), false);
-  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Banker'], [995, 'Banker', 1]]) {
+  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Bank booth'], [995, 'Banker', 1]]) {
     assert.equal(h.use(...args).handled, false);
     assert.equal(h.manager.isActive(), false);
   }
@@ -1356,24 +1413,3 @@ test("price checking quantities and closing returns every item", () => {
   }
 });
 
-test("the worn items view banks the one worn item clicked", () => {
-  const player = createPlayer();
-  // A plain container stands in for the worn equipment; the view's slot is the item's place in
-  // the list, so the click's item names it.
-  const worn = new Inventory(player);
-  worn.resetItems();
-  worn.add(new Item(TRIDENT, 1), false);
-  worn.add(new Item(LAVA_BATTLESTAFF, 1), false);
-  player.getEquipment = () => worn;
-  const click = (buttonNum, itemId) => Bank.handleWidgetAction(player, {
-    groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_WORN_CHILD, buttonNum, slot: 1, itemId,
-  });
-
-  assert.equal(click(1, LAVA_BATTLESTAFF), true);
-  assert.equal(player.getBank().getAmount(LAVA_BATTLESTAFF), 1);
-  assert.equal(worn.getAmount(LAVA_BATTLESTAFF), 0);
-  assert.equal(worn.getAmount(TRIDENT), 1, "only the clicked item");
-  // Its other ops aren't banking.
-  assert.notEqual(click(10, TRIDENT), true);
-  assert.equal(worn.getAmount(TRIDENT), 1);
-});

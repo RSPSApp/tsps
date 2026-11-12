@@ -1,6 +1,12 @@
 /** Desert Treasure II - The Fallen Empire. */
 module.exports = function registerDesertTreasureII(api) {
   const { Skill, Item, MagicSpellbook, ItemIdentifiers: I, NpcIdentifiers: N, ObjectIdentifiers: O } = api.core;
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const { registerQuest, startTranscript } = require("../QuestRuntime");
   const PAGE = "Desert Treasure II - The Fallen Empire";
   const { findBestPickaxe } = require("../../skills/Mining.plugin");
@@ -131,6 +137,13 @@ module.exports = function registerDesertTreasureII(api) {
   };
   // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
   // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
+  /** "desert-treasure-ii:boss-defeated" { player, boss: chapter key }: whether the quest's fight is won. */
+  function answerBossDefeated(request) {
+    const chapter = CHAPTERS[request?.boss];
+    if (!request?.player || !chapter) return;
+    if (chapterValue(request.player, request.boss) >= chapter.killed) request.defeated = true;
+  }
+
   function chapterValue(player, key) {
     const s = stage(player);
     const chapter = CHAPTERS[key];
@@ -3643,10 +3656,11 @@ module.exports = function registerDesertTreasureII(api) {
     const mazeThree = owned?.scarMazeThreeLightLeeches?.includes(npc);
     if (!owned?.scarLightLeeches?.includes(npc) && !mazeThree) return false;
     if (Math.random() < 0.5) {
-      if (p.getInventory().adds(I.ILLUMINATING_LURE, 1) === false) {
+      if (!hasRoom(p.getInventory(), I.ILLUMINATING_LURE)) {
         p.sendMessage("You need inventory space to take the illuminating lure.");
         return true;
       }
+      p.getInventory().adds(I.ILLUMINATING_LURE, 1);
       const area = mazeThree ? p.getAttribute(ATTR_SCAR_MAZE_THREE) : p.getAttribute(ATTR_SCAR_MAZE_ONE);
       area?.remove?.(npc);
       if (npc.isRegistered?.() && !api.core.World.getRemoveNPCQueue().includes(npc)) api.core.World.getRemoveNPCQueue().push(npc);
@@ -3735,10 +3749,11 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("That nerve ending is still regrowing.");
       return true;
     }
-    if (p.getInventory().adds(itemId, 1) === false) {
+    if (!hasRoom(p.getInventory(), itemId)) {
       p.sendMessage("You need inventory space to take the rune nerve.");
       return true;
     }
+    p.getInventory().adds(itemId, 1);
     // shortcut: the Wiki says endings regrow shortly; calibrate these four ticks against a live capture.
     p.setAttribute(attribute, { ...regrowAt, [tileKey]: now + 4 });
     p.sendMessage("You break the nerve ending and take its rune nerve.");
@@ -5485,7 +5500,7 @@ module.exports = function registerDesertTreasureII(api) {
           const manager = p.getSkillManager();
           if (manager.getMaxLevel(skill) < 60) return null;
           const before = manager.getExperience(skill);
-          manager.addExperience(skill, 100000, false);
+          manager.addExperience(skill, 100000, true);
           if (manager.getExperience(skill) === before) return null;
           inventory.deleteAtSlot(slot, 1);
           // dt2_reward_lamp is set by the first lamp used (rsprox 1703).
@@ -5812,8 +5827,10 @@ module.exports = function registerDesertTreasureII(api) {
       setLassar(p, { ...state, medallion: true });
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
-      // Rsprox 1703 t16262, there in an item box.
-      p.sendMessage("You find a medallion amongst the entrails.");
+      // Rsprox 1703 t16262 (341501-341515): the mesbox chat line, then an item box (objectbox 193) with the medallion.
+      p.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, "You find a medallion amongst the entrails.");
+      p.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+        new api.core.ItemStatementDialogue(0, I.WHISPERERS_MEDALLION, "You find a medallion amongst the entrails.")));
       return true;
     }
     if (inChapter(p, "whisperer") && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
@@ -5959,7 +5976,8 @@ module.exports = function registerDesertTreasureII(api) {
             return p.sendMessage("You don't have enough inventory space for any more mushrooms.");
           }
           p.getInventory().adds(mushroom, 1);
-          p.sendMessage("You pick a mushroom.");
+          // A spam line, as captured (226/01703.txt:221125, 227/00091.txt:257527).
+          p.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You pick a mushroom.");
           return true;
         }
         if ([O.SALT_DEPOSIT, O.SALT_DEPOSIT_2].includes(visibleId)) {
@@ -9015,6 +9033,7 @@ module.exports = function registerDesertTreasureII(api) {
   api.onCanBankItem(preventBankingMedallions);
   api.onCustomEvent("player:widget-action", onWidgetAction);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("desert-treasure-ii:boss-defeated", answerBossDefeated);
   api.onCustomEvent("interface:closed", closeGolemRecord);
   api.onNpcDialogueCondition(resolveGolemSearchCondition);
   api.onNpcDialogueCondition(resolveSerumSpaceCondition);

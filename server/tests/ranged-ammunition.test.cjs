@@ -109,7 +109,11 @@ require('../plugins/items/AvasAccumulator.plugin').register({
 PluginManager.rangedAmmoRecovery = (player) => avaRecovery.recovery(player) ?? 0;
 
 const drops = [];
-ItemOnGroundManager.registerLocation = (player, item, position) => drops.push({ id: item.getId(), amount: item.getAmount(), position });
+const droppedItems = [];
+ItemOnGroundManager.registerLocation = (player, item, position) => {
+  droppedItems.push(item);
+  drops.push({ id: item.getId(), amount: item.getAmount(), position });
+};
 
 const POS = { x: 3000, y: 3000, z: 0 };
 
@@ -199,6 +203,53 @@ test('fired ammo breaks 20% of the time and otherwise lands where the target sto
   shot(landed, 0.50); // roll 50: drop
   assert.equal(landed.ammo().getAmount(), 4);
   assert.deepEqual(drops, [{ id: Items.BRONZE_ARROW, amount: 1, position: POS }]);
+});
+
+test('preset ammo lands as preset ammo, not a plain stack; plain ammo lands plain', () => {
+  droppedItems.length = 0;
+  const preset = ammoHarness({ itemId: Items.DRAGON_ARROW, amount: 100 });
+  for (const meta of [GroundItem.UNTRADEABLE_META, GroundItem.UNBANKABLE_META, GroundItem.PRESET_META]) preset.ammo().setMetaValue(meta, true);
+  shot(preset, 0.50); // roll 50: drop
+  assert.equal(droppedItems.length, 1);
+  assert.equal(droppedItems[0].isPresetItem(), true, "the dropped arrow is still a preset copy");
+  assert.equal(droppedItems[0].isUntradeable(), true, "so it stays owner-only on the floor");
+  shot(ammoHarness({ itemId: Items.DRAGON_ARROW, amount: 100 }), 0.50);
+  assert.equal(droppedItems[1].isPresetItem(), false, "plain ammo lands plain");
+});
+
+test('unequipping or re-equipping ammo mid-flight still pays the shot; a different stack swapped in is left alone', () => {
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  drops.length = 0;
+  const pack = [];
+  const withPack = (harness) => Object.assign(harness.player, { getInventory: () => ({
+    getItems: () => pack,
+    deleteAtSlot: (slot, n) => { pack[slot].decrementAmountBy(n); if (pack[slot].getAmount() <= 0) pack[slot] = new GroundItem(-1, 0); },
+  }) });
+  // Unequipped (EquipPacketListener moves the same object to the pack) before the shot lands.
+  const unequipped = ammoHarness({ itemId: Items.RUNE_ARROW, amount: 50 });
+  withPack(unequipped);
+  roll(0.50, () => Factory.decrementAmmo(unequipped.player, POS, 1, 2));
+  pack.push(unequipped.ammo());
+  unequipped.player.getEquipment().set(Slots.AMMUNITION_SLOT, new GroundItem(-1, 0));
+  for (let i = 0; i < 3; i++) TaskManager.process();
+  assert.equal(pack[0].getAmount(), 49, "the shot is paid from the stack in the pack");
+  assert.deepEqual(drops.at(-1), { id: Items.RUNE_ARROW, amount: 1, position: POS }, "and still lands");
+
+  // Re-equipped (a copy is worn) before the shot lands.
+  const reequipped = ammoHarness({ itemId: Items.RUNE_ARROW, amount: 50 });
+  roll(0.10, () => Factory.decrementAmmo(reequipped.player, POS, 1, 2));
+  reequipped.player.getEquipment().set(Slots.AMMUNITION_SLOT, reequipped.ammo().clone());
+  for (let i = 0; i < 3; i++) TaskManager.process();
+  assert.equal(reequipped.ammo().getAmount(), 49, "the shot is paid from the worn copy");
+
+  // A different stack swapped in, the old one gone from the pack too: nothing is touched.
+  pack.length = 0;
+  const swapped = ammoHarness({ itemId: Items.RUNE_ARROW, amount: 50 });
+  withPack(swapped);
+  roll(0.10, () => Factory.decrementAmmo(swapped.player, POS, 1, 2));
+  swapped.player.getEquipment().set(Slots.AMMUNITION_SLOT, new GroundItem(Items.ADAMANT_ARROW, 30));
+  for (let i = 0; i < 3; i++) TaskManager.process();
+  assert.equal(swapped.ammo().getAmount(), 30, "the adamant arrows are untouched");
 });
 
 test("Ava's attractor recovers 60% and Ava's accumulator 72%", () => {
@@ -842,4 +893,40 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
     step(p,npc,5); assert.ok(npc.getHitpoints()<hp);
   });
+});
+
+test('mithril crossbow fires mithril-shaft gem bolts while preserving other ammo exclusions', () => {
+  const accepted = [
+    Ammunition.BRONZE_BOLT, Ammunition.STEEL_BOLT, Ammunition.MITHRIL_BOLT,
+    Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT,
+    Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT,
+  ];
+  const rejected = [
+    Ammunition.ADAMANT_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT,
+    Ammunition.RUNITE_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT,
+    Ammunition.DRAGON_BOLTS, Ammunition.EMERALD_DRAGON_BOLT, Ammunition.ENCHANTED_EMERALD_DRAGON_BOLT,
+    Ammunition.BRONZE_ARROW, Ammunition.BONE_BOLT,
+  ];
+  for (const ammunition of [...accepted, ...rejected]) {
+    const items = Array.from({ length: 14 }, () => new GroundItem(-1, 0));
+    items[Slots.WEAPON_SLOT] = new GroundItem(Items.MITHRIL_CROSSBOW, 1);
+    items[Slots.AMMUNITION_SLOT] = new GroundItem(ammunition.getItemId(), 2);
+    const messages = [];
+    const player = {
+      getEquipment: () => ({ getItems: () => items }),
+      getCombat: () => ({
+        getRangedWeapon: () => RangedWeapon.getFor(player),
+        getAmmunition: () => Ammunition.getFor(player),
+      }),
+      sendMessage: message => messages.push(message),
+    };
+    const allowed = accepted.includes(ammunition);
+    assert.equal(Factory.checkAmmo(player, 1, true), allowed, 'ammo ' + ammunition.getItemId());
+    assert.equal(messages.length, allowed ? 0 : 1);
+  }
+  for (const crossbow of [RangedWeapon.BRONZE_CROSSBOW, RangedWeapon.IRON_CROSSBOW, RangedWeapon.STEEL_CROSSBOW]) {
+    for (const ammunition of accepted.slice(3)) {
+      assert.ok(!crossbow.getAmmunitionData().includes(ammunition), 'lower crossbows still refuse mithril gem bolts');
+    }
+  }
 });

@@ -16,6 +16,8 @@ const HEAL_FRACTION = 0.2;
 const HEAL_FLAT = 2;
 
 let core;
+let pluginApi;
+const PVP_ARENA_WORLD = "DuelArena:pvpArenaWorld";
 
 function nurseName(event) {
   return event.definition?.getName?.() ?? null;
@@ -65,18 +67,21 @@ function answerCondition(event) {
   const name = nurseName(event);
   if (!NURSE_NAMES.has(name)) return null;
   const text = String(event.text ?? "");
-  if (/pvp (?:arena )?world|deadman world/i.test(text)) return false;
+  // A PvP Arena world is the world config's (docs/world-configuration.md); no PvP or Deadman worlds here.
+  if (/pvp arena world/i.test(text)) return pluginApi.getPluginConfig(PVP_ARENA_WORLD, false) === true;
+  if (/pvp world|deadman world/i.test(text)) return false;
   const full = event.player.getHitpoints() >= event.player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
   if (/does not have full hitpoints/i.test(text)) return !full;
   if (/has full hitpoints/i.test(text)) return full;
   return null;
 }
 
-function attach(pluginApi) {
-  core = pluginApi.core;
-  pluginApi.onNpcsInteraction([...NURSE_NAMES], { Heal: healOption });
-  pluginApi.onCustomEvent("npc-dialogue:action", healAction);
-  pluginApi.onNpcDialogueCondition(answerCondition);
+function attach(api) {
+  pluginApi = api;
+  core = api.core;
+  api.onNpcsInteraction([...NURSE_NAMES], { Heal: healOption });
+  api.onCustomEvent("npc-dialogue:action", healAction);
+  api.onNpcDialogueCondition(answerCondition);
 }
 
 module.exports = { attach, heal, healOption, healAction, answerCondition, healAmount, NURSE_NAMES };

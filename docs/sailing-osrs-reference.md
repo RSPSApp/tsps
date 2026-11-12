@@ -247,6 +247,18 @@ The player stays aboard and the boat stays where it is. At sea, the `port` varbi
 
 The boat stays where it was docked.
 
+## Boarding somebody else's boat
+
+From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind of boat would you like to board?" with "Board my own boat." and "Board somebody else's boat."; the release cache has Board-friend as the gangplank's third op instead, and script 8624 adds "Board friend's boat" to the boat list at 934:8 in Board mode once script 9022 passes).
+
+- The choice is answered with `runclientscript` 109 "Enter name:"; the client replies `resume_p_namedialog`.
+- Refusals, on the reply's tick or the next:
+  - "That player is offline, or has privacy mode enabled." as a game message (type 4), no box;
+  - "The player is not on their own boat, so you cannot join them.", "There's no space for you on that boat." and "That player does not have a boat for you to board right now." as a message box (229), each also a game message (type 115).
+- Success: the fade (174 on 164:1, minimap state 2) on the reply's tick, and the boat's varps, camera target and world entity on the next. No game message.
+- 698 opens with "You find yourself back on shore." (type 0) at login, after a session on another player's boat.
+- 698 ends with the guest hopping worlds, which is what sends a player to Limbo (Wiki).
+
 ## Recovery (Junior Jim)
 
 - **The fee is taken from the bank**, with the message "Payment has been taken from your bank." Recovery also brings back boats docked at other ports, not only sunk ones.
@@ -276,12 +288,14 @@ The boat stays where it was docked.
 **Boat schematics (59718) "Modify":**
 1. Varp 5190 is set to the boat type's row (8110-8112), and varbit 19525 to the boat's slot + 1.
 2. Script 2524 `[-1, -3]`, then interface **939** opens as the main modal. Script 8809 initialises it.
-3. 939:17 gets slots 0-50 with op 1 and script triggers.
+3. 939:17 gets slots 0-50 with op 1 and script triggers (`IF_SCRIPT_TRIGGER`, bit 23). The official client needs that event: without it, Build shows its spinner and never sends the trigger (see Build).
 4. Each option's preview is the part's **loc**. Script 8825 takes the loc id from the option's db row (script 9075, default 59660), its animation (9077) and its angle (9076), and passes the loc id to opcode 1214 (`cc_setmodel_loc`, model type 8). The client draws that loc's centrepiece model (shape 10) and never treats the id as a model id.
    - The angles come from table 188: the part's angles row (column 4 of its hull/keel/… row) holds `[boat size, offsetX, offsetY, xan, yan, zan, zoom]` tuples, and 9076 picks the one for the boat type's size (table 166 column 0). The skiff's hull is (-10, 0, 130, 1950, 0, 5000).
    - 9076 reads those tuples one value at a time: a packed db field's low 4 bits select one tuple element (1-based; 0 is the whole tuple).
 
-**Build:** script 8834 calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+**Build:** script 8834 shows the loading spinner (939:23, script 7137), then calls `if_triggeroplocal` on 939:17 with the option row as one int argument.
+- Only script 8811 (939's init and refresh) hides the spinner again, so the server closes or refreshes 939 after every Build.
+- The official client (RuneLite) sends the trigger (`IF_SCRIPT_TRIGGER`) only if the option has the script-trigger event. With op 1 alone, the spinner stayed up and nothing reached the server. The tsps browser client sends the trigger without checking the event.
 - The live packet carried `A6 81 01 00`: a zigzag varint of row **8275**, the skiff's camphor hull.
 - The server:
   1. takes the materials from the inventory;
@@ -391,7 +405,7 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 ## Shipwrights' workbench
 
 Locs 59723 (`shipwright_workbench`) and 59724 (`shipwright_workbench_small`) beside the shipwrights:
-Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.plugin.js`,
+Craft, Craft-hull-parts, Craft-repair-kits. Plugin: `plugins/skills/sailing/ShipwrightsWorkbench.Sailing.js`,
 recipes in `plugins/skills/sailing/data/shipwrights-workbench.json`. The cache has no recipe table (only the
 part tables' materials name the products), so recipes, levels, XP and ticks are the OSRS Wiki's item pages.
 
@@ -427,7 +441,7 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - 1 gives 60581, whose first op is Deposit-held (when carrying cargo).
 
 **What it holds** (OSRS Wiki, Cargo hold):
-- **Capacity:** by boat and hold tier. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240.
+- **Capacity:** by boat and hold tier, from the cache: the hold's facility row (table 176, column 20) names a stats row (table 164) whose column 28 is its slots. A basic hold has 20 slots on the raft, 30 on the skiff and 40 on the sloop; a rosewood hold has 120, 180 and 240. Live's hold shows the same (rsprox, 943:5): raft basic 20; skiff basic, oak and teak 30, 45 and 60; sloop mahogany, camphor, ironwood and rosewood 120, 160, 210 and 240.
 - **Slots:** every item takes a slot, except that a stackable item's whole stack takes one.
 - **Which items:** only the wiki's "Storable items": sailing capes and tools, salvage, courier crates, bounty items, repair kits, cannonballs, ship drinks, fish, fish offcuts and crates, and fishing gear. Noted items aren't accepted.
 - **Recovery losses:** courier crates, bounty items, salvage, fish and full fish crates are lost when a shipwright recovers the boat.
@@ -536,7 +550,7 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 - **Shipyard:**
   - The shown boat, and the owner while aboard it, are shown only to the owner. Other players in the shipyard see neither.
   - "Shipwright assistance" (paying to build without the Construction level) isn't built yet.
-  - Facilities are built, removed and replaced there, but only placed: none of them can be used yet (cooking on the range, firing cannons and so on). A cargo hold's tier doesn't change its capacity yet.
+  - Facilities are built, removed and replaced there. At sea the cargo hold, salvaging hooks and station, wind and gale catchers, cannons, range, anchor and crystal extractor work (docs/sailing.md); the inoculation station, chum stations, nets, fathom stone, bosun's workbench and eternal brazier are only placed.
   - Guessed rather than captured for facilities:
     - "Replace it." opens the hotspot's options, and building over a facility replaces it without a refund;
     - a hotspot's Build and a facility's Modify do nothing away from the shipyard;
@@ -544,7 +558,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
     - the raft's placeholder id (59661).
   - Guessed rather than captured:
     - the part names in the swap message ("mast and sails");
-    - the level, materials and "already has that" messages.
+    - the level, materials and "already has that" messages;
+    - after a refused Build (parts or a facility), the init (8809) runs again so Build's spinner goes, and 939 stays open. No capture has a refused Build;
+    - a Build that arrives after 939 has closed builds nothing.
   - Materials come from the inventory only.
 - **Ports**, guessed rather than captured:
   - Disembarking at a port's gangplank docks the boat there if it wasn't (the capture docked at the buoy first). It needs the port's level unless the boat is already docked there.

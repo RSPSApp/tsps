@@ -1,5 +1,6 @@
 const Common = require("./Common.DiaryRewards");
 const Daily = require("./DailyRing.DiaryRewards");
+const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const SELECTION_ATTRIBUTE = "diary-rewards:alchemy-high";
 const SESSIONS = new WeakMap();
 const GENERATIONS = new WeakMap();
@@ -66,8 +67,13 @@ function click(event) {
   if (event.buttonId >>> 16 !== group()) return;
   event.handled = true;
   const {player, buttonId, action, slot, itemId} = event, session = SESSIONS.get(player);
+  // Close always closes, even once the ring that opened the panel has gone (banked, or banked and withdrawn as a
+  // new object): otherwise the panel stays in the inventory's place with nothing to take it down.
+  if (buttonId === uid("close")) {
+    if (action === 1) close(player);
+    return;
+  }
   if (!session || !valid(player, session)) return;
-  if (buttonId === uid("close") && action === 1) return close(player);
   if (buttonId === uid("low") || buttonId === uid("high")) {
     if (action !== 1) return;
     const high = buttonId === uid("high");
@@ -82,7 +88,7 @@ function click(event) {
     if (action === 1) cast(player, session, slot, itemId);
     else if (action === 10 && Number.isInteger(slot) && slot >= 0 && slot < 28) {
       const item = player.getInventory().forSlot(slot);
-      if (item?.getId() === itemId) player.sendMessage(item.getDefinition().getExamine());
+      if (item?.getId() === itemId) examineItem(player, itemId, item.getAmount());
     }
   }
 }

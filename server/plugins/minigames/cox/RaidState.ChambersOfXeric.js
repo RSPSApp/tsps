@@ -636,6 +636,8 @@ class Raid {
     player.setAttribute(ATTR_RAID, null);
     // Kept through a logout: the player is saved inside, and login puts them back out.
     if (!logout) player.setAttribute(Shared.ATTR.INSIDE, null);
+    // Out of the raid: stats go back to base. Not on a logout: the raider may rejoin, and login resets them if not.
+    if (!logout) Shared.restoreStats(player);
     this.dropRaidItems(player, player.getLocation().clone());
     if (logout) this.hideRaidHud(player);
     for (const hook of leaveHooks) hook(this, player, logout);
@@ -661,6 +663,9 @@ class Raid {
   destroy(reason) {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Nobody can rejoin a raid that's gone: drop its entries, or a raider who never came back kept this raid (its map,
+    // rooms and party) in memory until a restart.
+    for (const [username, raid] of rejoining) if (raid === this) rejoining.delete(username);
     this.timer?.stop?.();
     raids.delete(this);
     if (this.party.raid === this) this.party.raid = null;
@@ -691,4 +696,4 @@ function takeRejoin(username) {
   return raid && !raid.destroyed && raid.original.has(username) ? raid : null;
 }
 
-module.exports = { ATTR_RAID, STAGE, DEATH, POINTS_PER_DAMAGE, Room, EntranceRoom, Raid, registerRoom, onTick, onComplete, onLeave, onRaidArea: CoxMap.onRaidArea, raidOf, all, takeRejoin, roomTypes };
+module.exports = { ATTR_RAID, STAGE, DEATH, POINTS_PER_DAMAGE, Room, EntranceRoom, Raid, registerRoom, onTick, onComplete, onLeave, onRaidArea: CoxMap.onRaidArea, raidOf, all, takeRejoin, roomTypes, _test: { rejoining } };

@@ -20,6 +20,8 @@ From rsprox captures (Varrock 339 and 3154, main game; the other courses' League
   the extra laps counted (0, or 1 when a lap counts twice).
 - The client works out laps an hour from the clock's differences, so the clock counts game ticks
   from 2024 rather than the server's own tick.
+- The varbit is not course-only: enum 3507 also lists the Brimhaven Agility Arena (id 2), and the
+  arena plugin holds it at 2 while the player is inside (see [Brimhaven Agility Arena](#brimhaven-agility-arena)).
 
 ## Rooftop timing
 
@@ -204,14 +206,24 @@ course's `marks` block:
 - **Progress varbits** (1106): `varlamore_wyrm_agility_basic_progress` / `_advanced_progress`
   (11292/11293) follow the obstacle index and go to 0 with the lap; the shared ladder and
   tightrope set both.
-- **Termites** (1106, 1108, pre-rework): a lap's end may set `varlamore_wyrm_agility_termite_obstacle`
-  (11412) to a marker (1-5, 8-10); finishing the obstacle that ends there scoops them ("You managed
-  to scoop up N termites!", sound 2581), sometimes with bone shards ("You also find N piles of bone
-  shards they chipped off!"). The Wiki gives per-scoop amounts but no spawn rate, so none are given.
+- **Termites** (1106, 1108, pre-rework; `plugins/areas/ColossalWyrmAgility.plugin.js`): a lap's end
+  may set `varlamore_wyrm_agility_termite_obstacle` (11412) to one of that course's markers (basic
+  1-5, advanced 1, 2 and 8-10); a new spawn replaces one not collected, a lap without one leaves
+  it, and it is kept across logins. Finishing the obstacle that ends there scoops them ("You
+  managed to scoop up N termites!", sound 2581), with an 80% chance of 22-38 bone shards ("You also
+  find N piles of bone shards they chipped off!"). Scoops (Wiki): 11-14 on basic and shared
+  markers, 16-21 on the advanced ones. The Wiki has no spawn rate, only 5.6 termites an advanced
+  lap on average; the spawn chance (about 35%) is worked out from that. Where one obstacle here
+  plays two live ones (the first tightrope and its edges, the basic rope and its jumps, the
+  advanced tightrope and its rope), termites on the first marker are scooped as it ends.
+- **Worm Tongue's Wares** is the cache's omnishop `wyrm_agility_rewards_shop` (Shop option, 1106;
+  Talk-to's "Would you like to trade?" too): 100/40/650/900 termites. The graceful crafting kit
+  also takes one of each plain graceful piece from the inventory and gives the Varlamore set for
+  them, logged in the collection log.
 - **Worm Tongue** (1106): the start ladder before a talk with him gives his "You there! Over here!
   Let's have a little chat before you head up there!" (varbit 11354 records the talk). Not done.
-- **Not given yet:** termites, blessed bone shards and Worm Tongue's rewards; the giant squirrel
-  rate is unknown on the Wiki since its 2026 change, so these courses don't roll it.
+- **Not given yet:** the lap loot tracker; the giant squirrel rate is unknown on the Wiki since
+  its 2026 change, so these courses don't roll it.
 
 ## Werewolf Agility Course
 
@@ -333,12 +345,16 @@ course's `marks` block:
 - **Gnome Stronghold:** XP since 2024 is 10/10/6.5/10/6.5/10/7.5 and a 50 bonus (110.5); the pipe's
   own page says 10, which the course table doesn't add up to. The second climb-down branch and the
   rope's middle tiles are clickable too. OSRS has no advanced section (that is RuneScape's).
-  Capture 3225 only shows other players in the pipes. The gnome trainers' lines aren't done.
+  Capture 3225 shows other players' pipe merges on cycles 30–126. The second squeeze finishes
+  at the existing exit tile, matching the continuous emergence in [live footage](https://www.youtube.com/watch?v=L-yCRcCFgkk&t=58s).
+  The gnome trainers' lines aren't done.
 - **Barbarian Outpost:** the lap is 153.3 Agility (the obstacles' 107 and 46.3) and 41.3 Strength
   (Wiki). The log follows 2875 (spam start line, the creak on the 2nd and 7th tiles). The ropeswing,
   log and ledge can fail until 93 (the Wiki's charts), but no damage, landing or line is known,
-  so they don't. The entry pipe's 10 XP and Barcrawl requirement and the ladder's level 35 are in
-  `agility-shortcuts.json` and aren't done.
+  so they don't. The entry pipe uses sequence 749 delayed to cycle 30 and exact movement from
+  cycles 30–126 in both directions, as recorded in RSProx 1060, 1061 and 2875. The 10 XP, level
+  requirement and ladder route are in `agility-shortcuts.json`. The pipe's Barcrawl requirement
+  isn't done.
 
 ## Wilderness Agility Course
 
@@ -394,6 +410,15 @@ course's `marks` block:
   lap count line, with the ticket's item box and jingle 71. The first tag is the Karamja medium
   task; the elite Karamja diary doubles a tag 1 time in 10. Karamja gloves 2-4 add 10% to obstacle
   XP (Wiki).
+- **Helper highlights:** the arena is a course to the cache's helper too — enum 3507's id 2,
+  "Brimhaven Agility Arena", whose obstacle loc types are enum 3997's entry 4000 (3610, 3551, 3553,
+  3555, 3557, 3559, 3561, 3564, 3565, 3566, 3570-3572, 3578 and 3583). The Area sets
+  `helper_agility_highlighted_course` (varbit 13140) to 2 on entering and back to 0 on leaving
+  (rsprox 1735 337/404, 1738, 1863 1969/2771, 4308 1579/1777), so the client runs script 5167 with
+  the arena and outlines its obstacles when **Highlight Agility obstacles** is on. The captures also
+  re-send 2 as each obstacle starts, and a teleport inside the arena clears it until the next
+  obstacle; neither is modelled because the varbit stays 2 for the whole visit. The arena's lap
+  clock (`helper_agility_start_lap`/`_end_lap`, sent per tag in 1735 and 1863) is not done.
 - **Pirate Jackie:** Trade and "I'd like to trade in my tickets" open the cache's Agility Arena
   Store (omnishop `agilityarena_rewards_newshop`, interface 819 in 75, 1102, 1738, 1863, 4308):
   345 Agility XP a ticket (379.5 with Karamja gloves 2+), Buy N spending N tickets; herbs noted;

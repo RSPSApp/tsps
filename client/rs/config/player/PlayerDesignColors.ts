@@ -42,3 +42,33 @@ export const PLAYER_BODY_RECOLOR_TO_2: readonly (readonly number[])[] = [
     [],
     [],
 ] as const;
+
+/** Skin colour index -> the varbit that unlocks it (cache [proc,makeover_unlockedcolour]). */
+const VARBIT_HW07_SKINCOLS = 4803; // green (8)
+const VARBIT_HW15_SKINCOLS = 4804; // black (9), white (10)
+const VARBIT_HW17_SKINCOLS = 6007; // blue (11)
+const SKIN_COLOUR_UNLOCK_VARBITS: ReadonlyMap<number, number> = new Map([
+    [8, VARBIT_HW07_SKINCOLS],
+    [9, VARBIT_HW15_SKINCOLS],
+    [10, VARBIT_HW15_SKINCOLS],
+    [11, VARBIT_HW17_SKINCOLS],
+]);
+
+/** Whether the designer offers a skin colour: 0-7 and 12 always, the Halloween ones once unlocked. */
+function isSkinColourUnlocked(colour: number, getVarbit: (id: number) => number): boolean {
+    const count = PLAYER_BODY_RECOLOR_TO_1[4].length;
+    if (!Number.isInteger(colour) || colour < 0 || colour >= count) return false;
+    const varbit = SKIN_COLOUR_UNLOCK_VARBITS.get(colour);
+    return varbit === undefined || (getVarbit(varbit) | 0) === 1;
+}
+
+/** The next unlocked skin colour from `current` in `dir`, wrapping; a locked current one steps off too. */
+export function stepSkinColour(current: number, dir: -1 | 1, getVarbit: (id: number) => number): number {
+    const count = PLAYER_BODY_RECOLOR_TO_1[4].length;
+    let colour = Number.isInteger(current) && current >= 0 && current < count ? current : dir === 1 ? -1 : count;
+    for (let i = 0; i < count; i++) {
+        colour = (colour + dir + count) % count;
+        if (isSkinColourUnlocked(colour, getVarbit)) return colour;
+    }
+    return 0;
+}

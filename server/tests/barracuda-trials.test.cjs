@@ -40,9 +40,9 @@ before(() => {
   const real = PluginManager.createApi("BarracudaTrialsTest");
   api = { ...real, persistAttribute() {}, sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; return true; } };
   scoreboard.setFile(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "bt-")), "barracuda-trials.json"));
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require("../plugins/skills/sailing/BarracudaTrials.plugin").register(api);
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/BarracudaTrials.Sailing").register(api);
 });
 
 let nextIndex = 700;
@@ -136,7 +136,7 @@ function atTheHelm(player, parts = {}) {
   return boat;
 }
 
-const helm = require("../plugins/skills/sailing/Helm.plugin");
+const helm = require("../plugins/skills/sailing/Helm.Sailing");
 
 /** A run under way: started, the HUD up (T+2), and the sails set by the player, which starts the timer. */
 function begin(player, trial, rank) {
@@ -204,6 +204,25 @@ test("starting: the rank, supplies, messages and the boat at the start, then the
     assert.ok(player.varps.get(varp("sailing_bt_time_start")) > 0, "the timer starts with the sails (rsprox)");
     const hud = player.sent.filter(([key, id]) => key === "sendClientScript" && id === 8605).at(-1);
     assert.deepEqual(hud.slice(2, 11), [7243, 0, 0, 0, 0, 1, 180, 1, 14], "trial, rum, crates, rank, target, needs");
+  } finally {
+    leave(player);
+  }
+});
+
+test("a trial started from full sail stays put at the start until the sails go up (review #1438)", (t) => {
+  // Open water around the start, so a boat with way on it can move (this harness loads no map).
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  t.mock.method(RegionManager, "isWater", () => true);
+  t.mock.method(RegionManager, "getClipping", () => 0);
+  const player = captain();
+  const boat = atTheHelm(player);
+  try {
+    helm.setSailMode(player, boat, "full");
+    boat.velocity = 128; // a tile a tick, as under full sail
+    run.start(player, TEMPOR(), 1);
+    tick(6);
+    assert.equal(player.varps.get(varp("sailing_bt_time_start")) ?? 0, 0, "the timer has not started");
+    assert.deepEqual([boat.fineX / 128, boat.fineY / 128], [3035.5, 2920.5], "moored at the start, no drift");
   } finally {
     leave(player);
   }
@@ -768,5 +787,21 @@ test("Collect-rum clicked on the rum boat's deck goes through the object listene
     assert.equal(player.messages().at(-1), "<col=3366ff>You collect the rum shipment. Now you need to deliver it to Rum-dashed Ralph!</col>");
   } finally {
     leave(player);
+  }
+});
+
+test("All Settings' Barracuda trials hint arrow off: the trial's boat gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_barracuda_trials_hintarrow_disabled"), off);
+      run.start(player, TEMPOR(), 1);
+      tick();
+      assert.equal(player.sent.some(([key]) => key === "sendWorldEntityHint"), off === 0);
+      assert.equal(player.varbits.get(varbit("current_hint_arrow")) ?? 0, off ? 0 : 6);
+    } finally {
+      leave(player);
+    }
   }
 });

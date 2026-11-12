@@ -117,6 +117,9 @@ function resolveRecipe(entry) {
     amountMax: recipe.amountMax ?? recipe.amount ?? 1,
     level: recipe.level,
     xp: recipe.xp,
+    // Random-yield recipes pay per item made (Wiki: Ogre arrow shaft "1.6 ... per shaft made", Wolfbone arrowtips 2.5
+    // each); `xp` is the Wiki table's figure for a 4-item yield.
+    xpEach: recipe.xpEach ?? null,
     ticks,
     firstTick: recipe.firstTick ?? 1,
     startTick: recipe.startTick === undefined ? 0 : recipe.startTick,
@@ -259,12 +262,34 @@ function heldAmount(player, material, amountOf = plainAmount) {
   return total;
 }
 
-function batchesAvailable(player, recipe) {
+function fullBatches(player, recipe) {
   let batches = Number.MAX_SAFE_INTEGER;
   for (const material of recipe.materials) {
     batches = Math.min(batches, Math.floor(heldAmount(player, material) / material.amount));
   }
   return batches === Number.MAX_SAFE_INTEGER ? 0 : batches;
+}
+
+/**
+ * Fewer than a set of a one-for-one recipe (feathers on 7 unfinished bolts): as many as are held, live's "You fletch 7
+ * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). 0 when a full set is held or the recipe
+ * isn't one-for-one.
+ */
+function partialSize(player, recipe) {
+  if (!(recipe.amount > 1) || recipe.amountMax !== recipe.amount || !recipe.materials.every((material) => material.amount === recipe.amount)) return 0;
+  const held = Math.min(...recipe.materials.map((material) => heldAmount(player, material)));
+  return held > 0 && held < recipe.amount ? held : 0;
+}
+
+function scaledRecipe(recipe, made) {
+  return { ...recipe, amount: made, amountMax: made, xp: (recipe.xp * made) / recipe.amount,
+    materials: recipe.materials.map((material) => ({ ...material, amount: made })) };
+}
+
+/** Batches the player can make: full sets, and a last partial one. */
+function batchesAvailable(player, recipe) {
+  const full = fullBatches(player, recipe);
+  return full > 0 ? full : partialSize(player, recipe) > 0 ? 1 : 0;
 }
 
 function hasTools(player, recipe) {
@@ -362,12 +387,13 @@ function formatMessage(message, amount) {
 }
 
 /** One batch: checks, materials out, product in, XP, animation, sound and message. */
-function makeBatch(player, recipe, via, provenance = null) {
-  if (fletchingLevel(player) < recipe.level) {
-    player.sendMessage(`You need a Fletching level of at least ${recipe.level} to do this.`);
+function makeBatch(player, wholeRecipe, via, provenance = null) {
+  if (fletchingLevel(player) < wholeRecipe.level) {
+    player.sendMessage(`You need a Fletching level of at least ${wholeRecipe.level} to do this.`);
     return false;
   }
-  if (!hasTools(player, recipe) || batchesAvailable(player, recipe) <= 0) return false;
+  if (!hasTools(player, wholeRecipe) || batchesAvailable(player, wholeRecipe) <= 0) return false;
+  const recipe = fullBatches(player, wholeRecipe) > 0 ? wholeRecipe : scaledRecipe(wholeRecipe, partialSize(player, wholeRecipe));
   const plan = materialPlan(player, recipe, via);
   if (!plan.complete) return false;
   const amount = recipe.amountMax > recipe.amount
@@ -384,7 +410,8 @@ function makeBatch(player, recipe, via, provenance = null) {
   player.performAnimation(animationOf(recipe));
   if (recipe.sound) core.Sounds.sendSound(player, recipe.sound);
   if (recipe.message) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, formatMessage(recipe.message, amount));
-  if (recipe.xp > 0) player.getSkillManager().addExperiences(core.Skill.FLETCHING, recipe.xp);
+  const xp = recipe.xpEach != null ? recipe.xpEach * amount : recipe.xp;
+  if (xp > 0) player.getSkillManager().addExperiences(core.Skill.FLETCHING, xp);
   const action = {
     inputItemIds: [...new Set(inputs.map((input) => input.itemId))],
     inputs,
@@ -394,7 +421,7 @@ function makeBatch(player, recipe, via, provenance = null) {
     ...(provenance?.startLocation ? { startLocation: provenance.startLocation } : {}),
   };
   api.emitCustomEvent("fletching:made", { player, itemId: recipe.outputId, amount, ...action });
-  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp: recipe.xp, kind: recipe.group, ...action });
+  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp, kind: recipe.group, ...action });
   return true;
 }
 
@@ -403,8 +430,8 @@ function makeBatch(player, recipe, via, provenance = null) {
  * ("skills:action-interval", a league relic's 2-tick pace), and a fletching knife's tick comes off
  * after that, so the two stack.
  */
-function interval(player, recipe) {
-  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe), knifeSaving(player, recipe));
+function interval(player, recipe, delayKnifeSaving = false) {
+  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe), delayKnifeSaving ? 0 : knifeSaving(player, recipe));
 }
 
 function toolInterval(player, recipe) {
@@ -465,7 +492,9 @@ function createTask(player, recipe, batches, via, provenance) {
       if (this.levelUpPaused) return;
       if (++this.ticks === recipe.startTick) playOpening(player, recipe);
       if (this.ticks < this.nextTick) return;
-      this.nextTick = this.ticks + interval(player, recipe);
+      // The first two arrow-shaft logs use the normal pace even with a fletching knife.
+      const delayKnifeSaving = this.remaining === batches && recipe.outputId === core.ItemIdentifiers.ARROW_SHAFT;
+      this.nextTick = this.ticks + interval(player, recipe, delayKnifeSaving);
       const actions = actionsPerCycle(player, recipe);
       for (let done = 0; done < actions; done++) {
         if (!makeBatch(player, recipe, via, provenance)) {

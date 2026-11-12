@@ -106,6 +106,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
       addExperiences() {},
     }),
     getInventory: () => fakeInventory(p.inventory),
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
@@ -114,8 +116,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendTypedMessage: (type, text) => { p.messages.push(text); (p.typed ??= []).push([type, text]); return sender; },
         sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
         sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
-        sendInterfaceSet: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
+        sendInterfaceSet: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendInterfaceDisplayState: () => sender,
         sendString: () => sender,
         sendInterfaceRemoval: () => sender,
@@ -129,6 +131,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendEnterAmountPrompt: () => sender,
         sendObjectAnimation: () => sender,
         sendGlobalGraphic: () => sender,
+        sendCameraShake: (...shake) => { (p.camera ??= []).push(shake); return sender; },
+        sendCameraReset: () => { (p.camera ??= []).push('reset'); return sender; },
       };
       return sender;
     },
@@ -402,6 +406,19 @@ test('a death with few points costs the team 5% instead', () => {
   assert.equal(raid.pointsOf(poor), 100, 'kept: under 5% of the total');
   assert.equal(raid.totalPoints, 10100 - Math.floor(10100 * 0.05));
   raid.destroyed = true;
+});
+
+test('a destroyed raid keeps no rejoin entries for raiders who never came back', () => {
+  const party = new Parties.Party(fakePlayer('Gone'), { key: 'Gone' });
+  const raid = new RaidModule.Raid(party);
+  const { rejoining } = RaidModule._test;
+  rejoining.set('Gone', raid);
+  rejoining.set('Elsewhere', { destroyed: false });
+  raid.destroy('empty');
+  assert.equal(rejoining.has('Gone'), false, 'this raid is no longer held');
+  assert.equal(rejoining.has('Elsewhere'), true, 'another raid entry stays');
+  rejoining.delete('Elsewhere');
+  Parties.clear();
 });
 
 // ------------------------------------------------------------------ phase 2: supplies
@@ -712,6 +729,97 @@ test('the Great Olm rises when the barrier is passed: head, claws and a power', 
   Parties.clear();
 });
 
+// rsprox 234/00820 and 234/03282: every volley of falling crystals, between sides and in the final
+// stand, sends cam_shake on slots 0-2 with random 2-5 each; the camera resets as the Olm rises.
+test('the falling crystals shake the Olm chamber every volley, and the rise stills it', () => {
+  Parties.clear();
+  spawned.length = 0;
+  const leader = fakePlayer('Shaken');
+  channelWith('Shaken', leader);
+  Lobby.makeParty(leader);
+  leader.setAttribute(Shared.ATTR.WARNED, true);
+  Lobby.enterChambers({ player: leader });
+  const raid = Parties.partyOf(leader).raid;
+  ticks(5);
+  RaidUnit.startRaid({ player: leader });
+  leader.prompts.at(-1).args[1]();
+  const olm = raid.olmRoom;
+  leader.location = raid.map.olmTile(3232, 5740);
+  leader.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage() {} }) });
+  olm.transitionCrystals(28, false);
+  ticks(32);
+  const camera = leader.camera ?? [];
+  const shakes = camera.filter((entry) => entry !== 'reset');
+  assert.equal(shakes.length, 15 * 3, '15 volleys, three slots each');
+  for (const [i, [slot, random, sine, frequency]] of shakes.entries()) {
+    assert.equal(slot, i % 3);
+    assert.ok(random >= 2 && random <= 5, `random ${random}`);
+    assert.deepEqual([sine, frequency], [0, 0]);
+  }
+  assert.equal(camera.at(-1), 'reset', 'stilled after the last volley');
+  assert.equal(camera.indexOf('reset'), camera.length - 1);
+
+  leader.camera = [];
+  leader.varbits.set(16108, 1); // option_camera_effect_olm_disabled
+  olm.transitionCrystals(4, false);
+  ticks(6);
+  assert.deepEqual(leader.camera, ['reset'], 'no shake with the row off');
+
+  leader.varbits.set(16108, 0);
+  const inside = leader.location;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
+  leader.location = new Location(1234, 3566, 0);
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raider who leaves the chamber mid-volley is stilled');
+  leader.location = inside;
+  leader.camera = [];
+  olm.transitionCrystals(28, false);
+  ticks(1);
+  raid.destroy();
+  ticks(2);
+  assert.equal(leader.camera.at(-1), 'reset', 'a raid ended mid-volley stills its raiders');
+  Parties.clear();
+});
+
+// rsprox 234/03276 (the Molch shamans): a jump landing on the player shakes their camera the tick
+// after (cam_shake slot 0, random 10, sine 5); one landing beside them does not.
+test('a shaman jump shakes the camera of the raiders it lands on, a tick later', () => {
+  const { ShamansRoom } = require('../plugins/minigames/cox/Shamans.ChambersOfXeric');
+  const blocked = RegionManager.blocked;
+  RegionManager.blocked = () => false;
+  try {
+    const target = fakePlayer('Crushed', new Location(3300, 5260, 0));
+    const beside = fakePlayer('Beside', new Location(3302, 5260, 0));
+    const off = fakePlayer('Off', new Location(3301, 5261, 0));
+    off.varbits.set(16107, 1); // option_camera_effect_shamans_disabled
+    const room = Object.create(ShamansRoom.prototype);
+    Object.assign(room, { raid: { map: {} }, hurt: new Set() });
+    room.raiders = () => [target, beside, off];
+    room.hurtBy = () => {};
+    room.engage = () => {};
+    const npc = {
+      location: new Location(3295, 5265, 0),
+      getLocation() { return this.location; },
+      moveTo(location) { this.location = location; },
+      isRegistered: () => true,
+      performAnimation() {},
+      getCombat: () => ({ reset() {}, attack() {} }),
+    };
+    assert.equal(room.jump(npc, target), true);
+    ticks(6);
+    assert.equal(target.camera, undefined, 'nothing on the landing tick');
+    ticks(1);
+    assert.deepEqual(target.camera, [[0, 10, 5, 0]]);
+    assert.equal(beside.camera, undefined, 'two tiles off the landing');
+    assert.equal(off.camera, undefined, 'the row off');
+    ticks(2);
+  } finally {
+    RegionManager.blocked = blocked;
+  }
+});
+
 // ------------------------------------------------------------------ phase 7: rewards
 
 test('rewards follow the Wiki: unique odds, common amounts, target times', () => {
@@ -858,6 +966,60 @@ test("the chest's reward book varbit clears as the rewards close, not when loot 
   raid.destroy();
 });
 
+test('loot left in the chest goes to the private storage when its raider logs out, and the closed raid keeps it', () => {
+  // Wiki (Chambers of Xeric, 26 January 2017): leaving before collecting sends the rewards to the private storage.
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const party = new Parties.Party(fakePlayer('Soloer'), { key: 'Soloer' });
+  const raid = new RaidModule.Raid(party);
+  const soloer = fakePlayer('Soloer');
+  raid.players.add(soloer);
+  raid.original.add('Soloer');
+  soloer.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.rewards = new Map([['Soloer', [{ id: 20997, amount: 1 }, { id: 560, amount: 500 }]]]); // a twisted bow, death runes
+  // A logout at the chest: the leave hook (Rewards registers it on the raid) runs, then the solo raid closes.
+  Rewards.unclaimedLoot(raid, soloer, true);
+  raid.playerLeftArea(soloer, true);
+  assert.equal(raid.destroyed, true);
+  const stored = soloer.getAttribute('cox:private-storage') ?? [];
+  assert.deepEqual(stored.map((entry) => [entry.id, entry.amount]), [[20997, 1], [560, 500]], 'both in the private storage');
+});
+
+test('a logout at the chest drops what the private storage cannot take outside the raid, as for an Ultimate Ironman', (t) => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const Storage = require('../plugins/minigames/cox/Storage.ChambersOfXeric');
+  const { ItemOnGroundManager } = PluginManager.getCoreApi();
+  const drops = [];
+  t.mock.method(ItemOnGroundManager, 'registerLocation', (_p, item, at) => { drops.push([item.getId(), item.getAmount(), at.getX(), at.getY(), at.getZ()]); });
+  const outside = [Shared.OUTSIDE.x, Shared.OUTSIDE.y, Shared.OUTSIDE.z ?? 0];
+  const raider = (name) => {
+    const party = new Parties.Party(fakePlayer(name), { key: name });
+    const raid = new RaidModule.Raid(party);
+    const p = fakePlayer(name);
+    p.location = new Location(3300, 5200, 1); // inside the raid
+    raid.players.add(p);
+    raid.original.add(name);
+    p.setAttribute(RaidModule.ATTR_RAID, raid);
+    raid.rewards = new Map([[name, [{ id: 20997, amount: 1 }, { id: 21003, amount: 1 }, { id: 560, amount: 500 }]]]);
+    return { raid, p };
+  };
+
+  // 119 of the 120 slots taken: the bow goes in, the other two drop.
+  const full = raider('Hoarder');
+  full.p.setAttribute('cox:private-storage', Array.from({ length: 119 }, () => ({ id: 1511, amount: 1 })));
+  Rewards.unclaimedLoot(full.raid, full.p, true);
+  full.raid.playerLeftArea(full.p, true);
+  assert.equal(full.p.getAttribute('cox:private-storage').filter((entry) => entry.id === 20997).length, 1, 'the bow is stored');
+  assert.deepEqual(drops, [[21003, 1, ...outside], [560, 500, ...outside]], 'the rest drops outside, not in the closing raid');
+
+  // An Ultimate Ironman can't use the storage: all of it drops outside.
+  drops.length = 0;
+  t.mock.method(Storage, 'isUltimateIronman', () => true);
+  const uim = raider('Uimer');
+  Rewards.unclaimedLoot(uim.raid, uim.p, true);
+  uim.raid.playerLeftArea(uim.p, true);
+  assert.deepEqual(drops.map(([id, , ...at]) => [id, ...at]), [[20997, ...outside], [21003, ...outside], [560, ...outside]]);
+});
+
 test('the Challenge Timeboard keeps the five fastest Challenge Mode times and says so', (t) => {
   const fs = require('node:fs');
   const os = require('node:os');
@@ -954,7 +1116,10 @@ test("the Olm's lightning tells a blocked raider its own line, and only in its c
   raid.destroy();
 });
 
-test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', () => {  const player = fakePlayer('Dragger');
+test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', (t) => {
+  // At a unit inside the raid: the storage works only there, with its interface open.
+  t.mock.method(RaidModule, 'raidOf', () => ({}));
+  const player = fakePlayer('Dragger');
   Storage.openPrivate(player, 30);
   const items = Storage.privateItems(player);
   for (const id of [560, 565, 566]) items.push({ id, amount: 1 });

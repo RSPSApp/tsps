@@ -1,5 +1,20 @@
 export type ShopCurrency = "COINS" | "BLOOD_MONEY" | "POINTS" | string;
 
+/**
+ * A shop's prices as the Wiki's StoreTableHead gives them, each per mille of the item's value
+ * (https://oldschool.runescape.wiki/w/Shop#Pricing). The names are the shop's side of the trade:
+ * `sellsAt` is what a player pays, `buysAt` what a player is paid.
+ */
+export interface ShopSalesPolicy {
+    generalStore?: boolean;
+    /** "Sells at": the price of buying one from the shop at its normal stock. */
+    sellsAt?: number;
+    /** "Buys at": the price of selling one to the shop at its normal stock. */
+    buysAt?: number;
+    /** "Change per": how far either price moves for each item above or below the normal stock. */
+    changePer?: number;
+}
+
 export interface ShopStockDefinition {
     id: number;
     amount: number;
@@ -18,7 +33,8 @@ export class ShopDefinition {
         private readonly defaultRestockTicks: number,
         private readonly defaultDestockTicks: number,
         private readonly soldItemDestockTicks: number,
-        private readonly source: string
+        private readonly source: string,
+        private readonly salesPolicy: ShopSalesPolicy = {}
     ) {}
 
     public static replace(definitions: ShopDefinition[]): void {
@@ -75,5 +91,9 @@ export class ShopDefinition {
 
     public getSource(): string {
         return this.source;
+    }
+
+    public getSalesPolicy(): Readonly<ShopSalesPolicy> {
+        return this.salesPolicy;
     }
 }

@@ -109,6 +109,11 @@ function addShardCharges(event) {
   if (!halberd) {
     return;
   }
+  // Only crystal shards charge it: any other item used on the halberd spent the shards carried.
+  const other = halberd === event.usedItem ? event.usedWithItem : event.usedItem;
+  if (other?.getId?.() !== core.ItemIdentifiers.CRYSTAL_SHARD) {
+    return;
+  }
   const shardCount = player.getInventory().getAmount(core.ItemIdentifiers.CRYSTAL_SHARD);
   if (shardCount <= 0) {
     return;
@@ -150,6 +155,7 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "CrystalHalberd",
+  description: "Crystal halberd: starts with 2,500 charges, loses one per hit, takes crystal shards up to 20,000 and goes inactive at zero.",
   members: true,
   attach,
   register(api) {

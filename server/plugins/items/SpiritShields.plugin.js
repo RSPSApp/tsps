@@ -1,47 +1,21 @@
 /**
  * Spirit shield upgrades (https://oldschool.runescape.wiki/w/Spirit_shield).
  *
- * A holy elixir on a spirit shield makes the blessed spirit shield at 85 Prayer.
- * A spirit sigil on the blessed shield (90 Prayer + 85 Smithing, hammer in the
- * inventory) makes the arcane/spectral/elysian shield, with the smithing
- * animation/sound and 1,800 Smithing XP. The Spectral prayer-drain passive is in
- * combat/effects/SpiritShields.EquipmentEffects.js.
+ * A holy elixir on a spirit shield makes the blessed spirit shield at 85 Prayer, which "cannot be boosted" (Wiki,
+ * Blessed spirit shield). Sigils go on "using a hammer at an anvil" (Wiki, Arcane spirit shield): that is the Corporeal
+ * Beast's unit (bosses/corporealbeast/SpiritShields.CorporealBeast.js); sigil-on-shield in the inventory is not a
+ * recipe. The Spectral prayer-drain passive is in combat/effects/SpiritShields.EquipmentEffects.js.
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
 const BLESS_PRAYER = 85;
-const SIGIL_PRAYER = 90;
-const SIGIL_SMITHING = 85;
-const ATTACH_XP = 1800;
-
-const SIGIL_RESULTS = new Map([
-  [ItemIdentifiers.ELYSIAN_SIGIL, ItemIdentifiers.ELYSIAN_SPIRIT_SHIELD],
-  [ItemIdentifiers.SPECTRAL_SIGIL, ItemIdentifiers.SPECTRAL_SPIRIT_SHIELD],
-  [ItemIdentifiers.ARCANE_SIGIL, ItemIdentifiers.ARCANE_SPIRIT_SHIELD],
-]);
 
 let core = null;
 let pluginApi = null;
 
-function inventoryContains(player, itemId) {
-  return player.getInventory().contains(itemId);
-}
-
 function prayerLevel(player) {
-  return player.getSkillManager().getCurrentLevel(core.Skill.PRAYER);
-}
-
-function smithingLevel(player) {
-  return player.getSkillManager().getCurrentLevel(core.Skill.SMITHING);
-}
-
-/** The anvil action the Wiki's creation table shows: human_smithing and its sound. */
-function playAttachFeedback(player) {
-  const sequence = core.CacheDefinitions?.getSeqId?.("human_smithing");
-  if (sequence != null && core.Animation) player.performAnimation?.(new core.Animation(sequence));
-  const sound = core.Sound?.SMITHING;
-  if (sound) core.Sounds?.sendSound?.(player, sound);
-  player.getSkillManager?.().addExperience?.(core.Skill.SMITHING, ATTACH_XP);
+  // The base level: "this level cannot be boosted" (Wiki, Blessed spirit shield).
+  return player.getSkillManager().getMaxLevel(core.Skill.PRAYER);
 }
 
 function bless(event) {
@@ -63,43 +37,15 @@ function bless(event) {
   player.sendMessage("The spirit shield glows an eerie holy glow.");
 }
 
-function attachSigil(event) {
-  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
-  const sigilOnLeft = SIGIL_RESULTS.has(Number(usedItemId));
-  const sigilId = sigilOnLeft ? Number(usedItemId) : Number(usedWithItemId);
-  const shieldId = sigilOnLeft ? Number(usedWithItemId) : Number(usedItemId);
-  const result = SIGIL_RESULTS.get(sigilId);
-  if (!result || shieldId !== ItemIdentifiers.BLESSED_SPIRIT_SHIELD) {
-    return;
-  }
-  event.handled = true;
-  if (prayerLevel(player) < SIGIL_PRAYER || smithingLevel(player) < SIGIL_SMITHING) {
-    player.sendMessage(
-      `You need level ${SIGIL_PRAYER} Prayer and ${SIGIL_SMITHING} Smithing to attach the sigil.`
-    );
-    return;
-  }
-  if (!inventoryContains(player, ItemIdentifiers.HAMMER)) {
-    player.sendMessage("You need a hammer to attach the sigil.");
-    return;
-  }
-  const shieldItem = sigilOnLeft ? usedWithItem : usedItem;
-  player.getInventory().deleteNumber(sigilId, 1);
-  shieldItem.setId(result);
-  player.getInventory().refreshItems();
-  playAttachFeedback(player);
-  pluginApi?.emitCustomEvent?.("equipment:changed", { player });
-  player.sendMessage("You attach the sigil to the blessed spirit shield.");
-}
 
 module.exports = {
   name: "SpiritShields",
+  description: "Lets a holy elixir turn a spirit shield into a blessed spirit shield at 85 Prayer.",
   members: true,
-  _test: { bless, attachSigil, SIGIL_RESULTS },
+  _test: { bless },
   register(api) {
     core = api.core;
     pluginApi = api;
     api.onItemOnItem(bless, { noted: false });
-    api.onItemOnItem(attachSigil, { noted: false });
   },
 };

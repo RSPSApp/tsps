@@ -7,6 +7,13 @@
 
 module.exports = {
   name: "CastleWars",
+  description: "Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game.",
+  config: {
+    "CastleWars:seedBots": {
+      type: "boolean", label: "Seed Castle Wars with bots", default: false,
+      help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",
+    },
+  },
   dependsOn: ["Food", "Mining", "Ladders", "Potions", "Omnishop"],
   register(api) {
     const game = require("./castlewars/Game.CastleWars")(api);

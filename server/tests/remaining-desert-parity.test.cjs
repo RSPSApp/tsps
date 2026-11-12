@@ -37,6 +37,9 @@ function harness(questFile) {
       ObjectManager: { register: object => objects.push(object), deregister: noop },
     },
     persistAttribute: noop,
+    onItemAction: (name, actions) => (hooks.onItemAction ??= []).push(typeof name === "function" ? name : event => {
+      if (core.CacheDefinitions.getItem(event.itemId)?.name === name) actions[event.option]?.(event);
+    }),
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
     emitCustomEvent: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
     onInterfaceActionButton: (ids, handler) => (hooks.onInterfaceActionButton ??= []).push(handler),
@@ -111,6 +114,7 @@ function player() {
     setAttribute: (key, value) => attributes.set(key, value),
     setEnteredAmountAction: action => { p.amountAction = action; },
     getInventory: () => inventory,
+    getBanks: () => [],
     getPacketSender: () => packet,
     getDialogueManager: () => ({ startDialogues: builder => { lastBuilder = builder; }, reset: noop, isActive: () => false }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.movementBlocked = value === true; return this; } }),
@@ -123,6 +127,8 @@ function player() {
     getHitpoints: () => 100,
     isRegistered: () => true,
     getCombat: () => ({ reset: noop }),
+    setForceMovement: (move) => { p.forceMovement = move; },
+    getForceMovement: () => p.forceMovement ?? null,
     sendMessage: text => messages.push(text),
     getSkillManager: () => ({
       getMaxLevel: () => 99,
@@ -1249,4 +1255,52 @@ test('Beneath Cursed Sands: real Inventory full bag preserves the urn on Remove'
   h.action(p, 11474, 'T-XWqk');
   assert.equal(p.attributes.get('beneath-cursed-sands:urns'), 4 << 8);
   assert.equal(inv.getAmount(I.SCARAB_EMBLEM), 0);
+});
+
+
+test('Beneath Cursed Sands: completion and relog unlock the native ToA entry, unfinished stages stay blocked', () => {
+  const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
+  const p = player();
+  const entry = core.CacheDefinitions.getObject(44596);
+  assert.equal(entry.transformVarbit, 13837);
+  assert.deepEqual(entry.transforms, [44008, 44010]);
+  for (const stage of [0, 14, 94, 106]) {
+    h.quest.setStage(p, stage);
+    h.hooks.onPlayerLogin[0]({ player: p });
+    assert.equal(p.varbits.get(13837), 0, `stage ${stage} is still blocked`);
+  }
+  h.action(p, 11474, 'am2Oh5');
+  assert.equal(h.quest.getStage(p), 108);
+  assert.equal(p.varbits.get(13837), 1, 'opens on the actual completion action');
+  assert.equal(core.CacheDefinitions.getObject(entry.transforms[p.varbits.get(13837)]).name, 'Entry');
+  p.varbits.delete(13837);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(13837), 1, 'restored for existing completed saves');
+});
+
+test('Beneath Cursed Sands: rubble uses both captured east-west landings and preserves completed stage', () => {
+  const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
+  const p = player();
+  const rubble = core.CacheDefinitions.getObject(44595);
+  assert.equal(rubble.transformVarbit, 13841);
+  assert.equal(rubble.transforms.at(-1), 44003);
+  h.quest.setStage(p, 108);
+  // A two-tick exact-move, busy (12393) 1 on the start tick and 0 when it ends (227/00101.txt [9141]/[9143]).
+  for (const [startX, landingX] of [[3349, 3347], [3347, 3349]]) {
+    p.moveTo(new core.Location(startX, 2759, 0));
+    const event = h.object(p, 44003);
+    assert.equal(event.handled, true);
+    assert.ok(p.getForceMovement(), 'the crossing is a queued exact-move');
+    assert.equal(p.varbits.get(12393), 1, 'busy while crossing');
+    assert.equal(p.getLocation().getX(), startX, 'not landed on the click tick');
+    h.tick(2);
+    assert.ok(core.Location.isSameTile(p.getLocation(), new core.Location(landingX, 2759, 0)));
+    assert.equal(p.getForceMovement(), null);
+    assert.equal(p.varbits.get(12393), 0, 'free again when the move ends');
+    assert.equal(h.quest.getStage(p), 108);
+  }
+  h.quest.setStage(p, 0);
+  p.moveTo(new core.Location(3349, 2759, 0));
+  h.object(p, 44003);
+  assert.equal(p.getLocation().getX(), 3349, 'pre-quest rubble cannot be crossed');
 });

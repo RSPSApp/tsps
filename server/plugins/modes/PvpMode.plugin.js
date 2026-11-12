@@ -46,13 +46,17 @@ function openPresetsAfterDeath({ victim }) {
   TaskManager.submit(new OpenPresetsAfterDeath(victim));
 }
 
-/** Presets assume the unlocked prayers, so PvP mode keeps handing them out without the quests. */
+/**
+ * Presets assume the unlocked prayers, so PvP mode hands them out without the quests and scrolls,
+ * but only to an account that may load presets: an Ironman (every league character) earns them.
+ */
 function bypassPrayerUnlocks(event) {
-  event.bypass = true;
+  if (Presets.accountMayUsePresets(event.player)) event.bypass = true;
 }
 
 module.exports = {
   name: "PvpMode",
+  description: "Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests.",
   register(api) {
     TaskManager = api.getTaskManager();
     Presets.register(api);

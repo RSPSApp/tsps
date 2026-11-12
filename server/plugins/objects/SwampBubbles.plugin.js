@@ -86,6 +86,7 @@ function bind(registry) {
 
 module.exports = {
   name: "SwampBubbles",
+  description: "Lets players Suck on swamp bubbles to fill their ogre bellows with swamp gas, as in Big Chompy Bird Hunting.",
   members: true,
   register(registry) {
     bind(registry);

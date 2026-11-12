@@ -1,5 +1,6 @@
 /** Shield of Arrav. Capture evidence and remaining presentation gaps: docs/shield-of-arrav.md. */
 module.exports = function registerShieldOfArravQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Location, Item, Area, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ItemStatementDialogue, DialogueChainBuilder, Animation, GameObject, TaskManager, CountdownTask } = api.core;
   const { registerQuest, startTranscript, openBook } = require("../QuestRuntime");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
@@ -27,6 +28,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   const CERTIFICATE_ID = ItemIdentifiers.CERTIFICATE;
   const PHOENIX_CERT_ID = ItemIdentifiers.HALF_CERTIFICATE;
   const BLACKARM_CERT_ID = ItemIdentifiers.HALF_CERTIFICATE_2;
+  const HANDOVER_ITEM_IDS = new Set([KEY_ID, CROSSBOW_ID, PHOENIX_CERT_ID, BLACKARM_CERT_ID]);
   const COINS_ID = ItemIdentifiers.COINS;
 
   // Reference cache ids the generated NpcIdentifiers enum has no member for
@@ -306,7 +308,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS_ID, 600);
+    giveReward(player, COINS_ID, 600);
   }
 
   function selectDialogueVariant({ npcId, player }) {
@@ -811,10 +813,15 @@ module.exports = function registerShieldOfArravQuest(api) {
     event.handled = true;
   }
 
-  // OSRS offers a deliberate hand-over prompt for all three tradeable quest items.
+  // These quest items can be traded between players despite their cache exchange flag.
+  function allowTradeItem(event) {
+    if (HANDOVER_ITEM_IDS.has(event.item.getDefinition().unNote())) event.allowed = true;
+  }
+
+  // Players restricted from trading can still use the quest items on each other.
   function handleItemOnPlayer(event) {
     const { player, target, itemId } = event;
-    if (![KEY_ID, CROSSBOW_ID, PHOENIX_CERT_ID, BLACKARM_CERT_ID].includes(itemId)) return;
+    if (!HANDOVER_ITEM_IDS.has(itemId)) return;
     if (!target?.getInventory || !hasItem(player, itemId)) return;
     const label = itemId === KEY_ID ? "key" : itemId === CROSSBOW_ID ? "crossbow" : "certificate";
     event.handled = true;
@@ -1024,6 +1031,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   api.onItemOnNpc(handReportToStraven);
   api.onItemOnObject(useKeyOnDoor);
   api.onItemOnPlayer(handleItemOnPlayer);
+  api.onCustomEvent("trade:item-eligibility", allowTradeItem);
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("door:toggle", handleGangDoor);
   api.onNpcDeath(handleNpcDeath);

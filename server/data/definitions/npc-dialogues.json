@@ -47759,8 +47759,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Agelus's Farm Shop",
+                "action": "open_shop",
+                "target": "Agelus' Farm Shop",
                 "id": "7fXH5U"
               }
             ]
@@ -130925,6 +130925,24 @@
           "id": "4g3EY1"
         }
       ],
+      "getting-started-talking-to-elena-again": [
+        {
+          "player": "Hello Elena."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Hello friend. Any luck finding my distillator?"
+        },
+        {
+          "player": "No, I'm afraid not."
+        },
+        {
+          "type": "line",
+          "speaker": "Elena",
+          "text": "Speak to Jerico, he might be able to help you cross the wall. He lives in a house south east of here, north of the chapel."
+        }
+      ],
       "getting-started-talking-to-jerico": [
         {
           "player": "Hello Jerico."
@@ -130957,6 +130975,9 @@
         }
       ],
       "getting-started-talking-to-jerico-again": [
+        {
+          "player": "Hello Jerico."
+        },
         {
           "type": "line",
           "speaker": "Jerico",
@@ -132957,7 +132978,7 @@
           "text": "Now you look like someone who goes to a lot of fancy dress parties."
         },
         {
-          "player": "Errr...what are you saying exactly?"
+          "player": "Errr... what are you saying exactly?"
         },
         {
           "type": "line",
@@ -145367,7 +145388,7 @@
                           "player": "Ok, I'll see what I can do."
                         },
                         {
-                          "npc": "Thanks mister!"
+                          "npc": "Thanks, mister!"
                         }
                       ],
                       "hook": "quest:witch-s-house:start",
@@ -188253,8 +188274,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -190721,8 +190742,8 @@
                 },
                 {
                   "type": "action",
-                  "action": "open_interface",
-                  "target": "Jennifer's General Field Supplies",
+                  "action": "open_shop",
+                  "target": "Jennifer's General Supplies",
                   "id": "5CeRPR"
                 }
               ]
@@ -206364,6 +206385,11 @@
         {
           "type": "line",
           "speaker": "Crab",
+          "text": "We can make a great tune with this!"
+        },
+        {
+          "type": "line",
+          "speaker": "Crab",
           "text": "Oh no... I can't easily play 13 different shells on my own, but if I only play one... I won't stand out enough for her to see me!"
         },
         {
@@ -208485,7 +208511,7 @@
       ],
       "crab-hunting-after-finding-all-six-leaders-to-join-practise": [
         {
-          "player": "Unless I really like talking to crabs, I've probably found enough leaders. I could go back to see how the practise is going."
+          "player": "Unless I really like talking to crabs, I've probably found enough leaders. I could go back to see how the practice is going."
         }
       ],
       "crab-hunting-after-finding-all-six-leaders-to-join-practise-talking-to-the-main-crab": [
@@ -208851,7 +208877,7 @@
         {
           "type": "line",
           "speaker": "Crab",
-          "text": "Somehow, yes. But anyways, we are done here. Thank you for coming to my demonstration."
+          "text": "Somehow, yes. But anyway, we are done here. Thank you for coming to my demonstration."
         },
         {
           "type": "line",
@@ -294018,7 +294044,7 @@
                         {
                           "type": "line",
                           "speaker": "Guildmaster",
-                          "text": "However, the three apparently split the map into three pieces, which each of them taking one piece."
+                          "text": "However, the three apparently split the map into three pieces, with each of them taking one piece."
                         },
                         {
                           "type": "choice",
@@ -294043,6 +294069,23 @@
                                   "type": "line",
                                   "speaker": "Guildmaster",
                                   "text": "Adventurers sometimes go in there to prove themselves, so I can give you this key to Melzar's Maze."
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player does not have enough free inventory space:",
+                                  "steps": [
+                                    {
+                                      "type": "line",
+                                      "speaker": "Guildmaster",
+                                      "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
+                                    },
+                                    {
+                                      "type": "jump",
+                                      "reference": "other",
+                                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
+                                    }
+                                  ],
+                                  "id": "dragon-slayer-i:melzar-key-no-space"
                                 },
                                 {
                                   "type": "message",
@@ -294880,12 +294923,7 @@
                 {
                   "type": "line",
                   "speaker": "Klarense",
-                  "text": "Of course! I'm sure the work needed to do on it wouldn't be too expensive."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Klarense",
-                  "text": "How does 2,000 gold sound? I'll even throw in my cabin boy, Jenkins, for free! He'll swab the decks and splice the mainsails for you!"
+                  "text": "Of course! How does 2,000 coins sound? I'll even throw in my cabin boy, Jenkins, for free! He'll swab the decks and splice the mainsails for you!"
                 },
                 {
                   "type": "choice",
@@ -296293,7 +296331,7 @@
                                 {
                                   "type": "line",
                                   "speaker": "Duke Horacio",
-                                  "text": "Well, you're a braver man than I!"
+                                  "text": "Well, you're braver than I!"
                                 },
                                 {
                                   "player": "Why is everyone so scared of this dragon?"
@@ -297115,7 +297153,7 @@
         {
           "type": "line",
           "speaker": "Guildmaster",
-          "text": "However, the three apparently split the map into three pieces, which each of them taking one piece."
+          "text": "However, the three apparently split the map into three pieces, with each of them taking one piece."
         },
         {
           "type": "choice",
@@ -297140,6 +297178,23 @@
                   "type": "line",
                   "speaker": "Guildmaster",
                   "text": "Adventurers sometimes go in there to prove themselves, so I can give you this key to Melzar's Maze."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have enough free inventory space:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guildmaster",
+                      "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "other",
+                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
+                    }
+                  ],
+                  "id": "dragon-slayer-i:melzar-key-no-space"
                 },
                 {
                   "type": "message",
@@ -311223,9 +311278,16 @@
                           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-                          "id": "G3MbVq"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 10:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+                              "id": "jO5-Q2"
+                            }
+                          ],
+                          "id": "Jp6ea2"
                         },
                         {
                           "type": "choice",
@@ -311322,9 +311384,16 @@
                   "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-                  "id": "qjnirf"
+                  "type": "condition",
+                  "text": "If the player's combat level is lower than 10:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+                      "id": "iGpF4E"
+                    }
+                  ],
+                  "id": "5AYfRB"
                 },
                 {
                   "type": "choice",
@@ -311393,7 +311462,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-897c2bbb1545184e"
+                              "branch": "jump-1575fd5b9b3480d1"
                             }
                           ]
                         }
@@ -311408,7 +311477,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-523f0add06d19ea3"
+                              "branch": "jump-8c912db9efd06f6e"
                             }
                           ]
                         }
@@ -311754,7 +311823,7 @@
       ]
     },
     "branches": {
-      "jump-897c2bbb1545184e": [
+      "jump-1575fd5b9b3480d1": [
         {
           "player": "What about the stone circle full of dark wizards?"
         },
@@ -311769,9 +311838,16 @@
           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-          "id": "G3MbVq"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 10:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+              "id": "jO5-Q2"
+            }
+          ],
+          "id": "Jp6ea2"
         },
         {
           "type": "choice",
@@ -311802,7 +311878,7 @@
           ]
         }
       ],
-      "jump-523f0add06d19ea3": [
+      "jump-8c912db9efd06f6e": [
         {
           "type": "line",
           "speaker": "Kaqemeex",
@@ -311819,9 +311895,16 @@
           "text": "When they cursed the rocks for their rituals they made them useless to us and our magics. We require a brave adventurer to go on a quest for us to help purify the circle of Varrock."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
-          "id": "qjnirf"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 10:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.",
+              "id": "iGpF4E"
+            }
+          ],
+          "id": "5AYfRB"
         },
         {
           "type": "choice",
@@ -361416,9 +361499,16 @@
                           "id": "qeSx96"
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
-                          "id": "YlG6-4"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 50:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
+                              "id": "i_bts5"
+                            }
+                          ],
+                          "id": "5OInfd"
                         },
                         {
                           "type": "choice",
@@ -361522,7 +361612,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-074a841585585eeb"
+                                      "branch": "jump-bce03843f3d115cc"
                                     }
                                   ]
                                 }
@@ -362957,7 +363047,7 @@
       ]
     },
     "branches": {
-      "jump-074a841585585eeb": [
+      "jump-bce03843f3d115cc": [
         {
           "type": "line",
           "speaker": "Martin the Master Gardener",
@@ -363029,9 +363119,16 @@
           "id": "qeSx96"
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
-          "id": "YlG6-4"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 50:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50. One or more of your skill levels are also lower than recommended.",
+              "id": "i_bts5"
+            }
+          ],
+          "id": "5OInfd"
         },
         {
           "type": "choice",
@@ -380047,9 +380144,16 @@
           "text": "The cart? That's the least of my problems. I've got to find my family..."
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50.",
-          "id": "IP6tLX"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 50:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 50.",
+              "id": "hDvfCc"
+            }
+          ],
+          "id": "resAbW"
         },
         {
           "type": "choice",
@@ -494057,7 +494161,7 @@
               "npc": "We have gangs?"
             },
             {
-              "player": "Erm, yes...anyway, I managed to get half the shield back."
+              "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
             },
             {
               "npc": "Only half?"
@@ -494066,7 +494170,7 @@
               "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
             },
             {
-              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+              "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
             },
             {
               "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494078,8 +494182,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "BVuQV2"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "APqx78"
             }
           ],
           "id": "QqHvp-"
@@ -494154,8 +494259,9 @@
               "npc": "You're welcome!"
             },
             {
-              "type": "unavailable",
-              "id": "3b-0_w"
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "Mf6ptc"
             }
           ],
           "id": "RaNFxc"
@@ -494190,16 +494296,16 @@
           "text": "If the player has Priest in Peril completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+              "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
             },
             {
-              "npc": "Ahh, the Temple Knights...little is known of them."
+              "npc": "Oh?"
             },
             {
-              "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+              "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "3q8-VQ"
@@ -494209,16 +494315,16 @@
           "text": "If the player has In Aid of the Myreque completed:",
           "steps": [
             {
-              "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+              "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
             },
             {
-              "npc": "Oh?"
+              "npc": "What is it?"
             },
             {
-              "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+              "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
             },
             {
-              "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+              "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
             }
           ],
           "id": "dHMXRQ"
@@ -494278,6 +494384,20 @@
             },
             {
               "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
+            },
+            {
+              "type": "message",
+              "text": "You receive an old lamp.",
+              "id": "WIZR3H"
             }
           ],
           "id": "4Ij9Rt"
@@ -494343,6 +494463,15 @@
             },
             {
               "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+            },
+            {
+              "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+            },
+            {
+              "player": "Oh, random bits of tat, thank you very much."
+            },
+            {
+              "npc": "You're welcome!"
             }
           ],
           "id": "0sSqOl"
@@ -494364,11 +494493,12 @@
               "npc": "And?"
             },
             {
-              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+              "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
             },
             {
-              "type": "unavailable",
-              "id": "z2xH5U"
+              "type": "message",
+              "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+              "id": "A6tdo0"
             },
             {
               "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -494387,7 +494517,7 @@
               "npc": "Oh! Whatever can we do!"
             },
             {
-              "player": "Calm down, I have arrested the ringleader."
+              "player": "Don't worry. I put a stop to their plots."
             },
             {
               "npc": "Oh, thank Saradomin for that. So, tell me the story!"
@@ -494767,7 +494897,7 @@
                     "npc": "We have gangs?"
                   },
                   {
-                    "player": "Erm, yes...anyway, I managed to get half the shield back."
+                    "player": "Erm, yes... Anyway, I managed to get half the Shield of Arrav back."
                   },
                   {
                     "npc": "Only half?"
@@ -494776,7 +494906,7 @@
                     "player": "Yes. The gangs had a bit of a tiff, you see. A friend helped me get the other half and I returned it here to get my reward."
                   },
                   {
-                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 5th Age, year 700-800."
+                    "npc": "Yes, yes, we were most pleased to have the shield returned - as was the King, I imagine. This is wonderful news, I shall make sure the display is updated at once! Display number 24, 4th Age, year 700-800."
                   },
                   {
                     "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
@@ -494788,8 +494918,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "BVuQV2"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "APqx78"
                   }
                 ],
                 "id": "QqHvp-"
@@ -494864,8 +494995,9 @@
                     "npc": "You're welcome!"
                   },
                   {
-                    "type": "unavailable",
-                    "id": "3b-0_w"
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "Mf6ptc"
                   }
                 ],
                 "id": "RaNFxc"
@@ -494900,16 +495032,16 @@
                 "text": "If the player has Priest in Peril completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania, concerning the River Salve and the Temple Knights."
+                    "player": "I discovered some disturbing yet heroic information about the vampyres of Morytania."
                   },
                   {
-                    "npc": "Ahh, the Temple Knights...little is known of them."
+                    "npc": "Oh?"
                   },
                   {
-                    "player": "Yes, it seems that these seven knights drove back the nasty things coming out of Morytania, and Saradomin blessed the Salve to stop them getting back."
+                    "player": "Yes, the vampyres once tried to invade Misthalin, but seven priestly warriors drove them back. They then blessed the Salve to stop the vampyres from ever invading again."
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information. I'll get a display put up. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "3q8-VQ"
@@ -494919,16 +495051,16 @@
                 "text": "If the player has In Aid of the Myreque completed:",
                 "steps": [
                   {
-                    "player": "Some disturbing and heroic news from Morytania concerning the River Salve and the seven priests."
+                    "player": "I found out more about Ivandis Seergaze, one of the priestly warriors who drove back the vampyres of Morytania."
                   },
                   {
-                    "npc": "Oh?"
+                    "npc": "What is it?"
                   },
                   {
-                    "player": "Yes, it seems that these seven priests were also warriors and drove back the nasty things coming out of Morytania. Then Saradomin blessed the Salve to stop them getting back."
+                    "player": "It seems that he wasn't buried at Paterdomus with the others. His tomb is actually deep within Morytania!"
                   },
                   {
-                    "npc": "Quite worrying that it's just a bit of water keeping them there, but Saradomin will protect us, I've no doubt. Thank you for the information, I'll get a display put up. Display number 23, 4th Age, year 1100-1200."
+                    "npc": "How fascinating. I'll have the display updated. Number 23, 4th Age, year 1100-1200."
                   }
                 ],
                 "id": "dHMXRQ"
@@ -494988,6 +495120,20 @@
                   },
                   {
                     "npc": "Ahh yes, we've been meaning to make a display on that for some time. They sent us some information, too; I'm glad you reminded me, I'll get that done now. Display number 46, 5th Age, year 98."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
+                  },
+                  {
+                    "type": "message",
+                    "text": "You receive an old lamp.",
+                    "id": "WIZR3H"
                   }
                 ],
                 "id": "4Ij9Rt"
@@ -495053,6 +495199,15 @@
                   },
                   {
                     "npc": "This is wonderful, I shall have a display made immediately to go with the staff model. Display number 28, end of the 2nd Age."
+                  },
+                  {
+                    "npc": "Oh, and before I forget, we found this old lamp lying around...and since you've done such a sterling job, we'd like you to have it."
+                  },
+                  {
+                    "player": "Oh, random bits of tat, thank you very much."
+                  },
+                  {
+                    "npc": "You're welcome!"
                   }
                 ],
                 "id": "0sSqOl"
@@ -495074,11 +495229,12 @@
                     "npc": "And?"
                   },
                   {
-                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorkian lord."
+                    "player": "I found a secret cult in Ardougne and found that the Carnillean family started building the city of Ardougne from a house they'd captured from a Zamorakian lord."
                   },
                   {
-                    "type": "unavailable",
-                    "id": "z2xH5U"
+                    "type": "message",
+                    "text": "The historian pulls out his writing implements and listens while you explain the whole story....",
+                    "id": "A6tdo0"
                   },
                   {
                     "npc": "How exciting, I'll get a display put up immediately. Display number 7, 5th Age, year 7."
@@ -495097,7 +495253,7 @@
                     "npc": "Oh! Whatever can we do!"
                   },
                   {
-                    "player": "Calm down, I have arrested the ringleader."
+                    "player": "Don't worry. I put a stop to their plots."
                   },
                   {
                     "npc": "Oh, thank Saradomin for that. So, tell me the story!"
@@ -531552,8 +531708,8 @@
               },
               {
                 "type": "action",
-                "action": "open_interface",
-                "target": "Jennifer's General Field Supplies",
+                "action": "open_shop",
+                "target": "Jennifer's General Supplies",
                 "id": "5CeRPR"
               }
             ]
@@ -536143,6 +536299,9 @@
                       "player": "Tell me more."
                     },
                     {
+                      "npc": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "QNbrzb"
@@ -536155,7 +536314,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -536222,13 +536381,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "9fHaCZ",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-7cd35e89205a4500"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "9fHaCZ"
                                     }
                                   ]
                                 },
@@ -536255,13 +536409,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "CySmbo",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-5a526e163aa93237"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "CySmbo"
                                     }
                                   ]
                                 },
@@ -536477,60 +536626,6 @@
         },
         {
           "npc": "That strange device will guide you in the same way the key did. Feel it, but be careful as it is very powerful. Good luck."
-        }
-      ]
-    },
-    "branches": {
-      "jump-7cd35e89205a4500": [
-        {
-          "npc": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "npc": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "npc": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "CySmbo",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-5a526e163aa93237"
-            }
-          ]
-        }
-      ],
-      "jump-5a526e163aa93237": [
-        {
-          "npc": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "npc": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "npc": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "l9j7rY"
         }
       ]
     }
@@ -647728,6 +647823,11 @@
                       "player": "Tell me more."
                     },
                     {
+                      "type": "line",
+                      "speaker": "Jorral",
+                      "text": "That's what I like to hear. Let me tell you about the outpost..."
+                    },
+                    {
                       "type": "action",
                       "text": "A cutscene appears.",
                       "id": "kXluF_"
@@ -647740,7 +647840,7 @@
                     {
                       "type": "line",
                       "speaker": "Narration",
-                      "text": "...the building has seen much action."
+                      "text": "... the building has seen much action."
                     },
                     {
                       "type": "line",
@@ -647812,13 +647912,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "iZayEM",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-79bf75cd79a02093"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "iZayEM"
                                     }
                                   ]
                                 },
@@ -647851,13 +647946,8 @@
                                     },
                                     {
                                       "type": "jump",
-                                      "id": "BzGWef",
-                                      "steps": [
-                                        {
-                                          "type": "call",
-                                          "branch": "jump-df1ff5d3385709dd"
-                                        }
-                                      ]
+                                      "reference": "below",
+                                      "id": "BzGWef"
                                     }
                                   ]
                                 },
@@ -650086,70 +650176,6 @@
       ]
     },
     "branches": {
-      "jump-79bf75cd79a02093": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "I've been told that there's a ghost far off in Port Phasmatys that moans of losing his life to this place."
-        },
-        {
-          "player": "Sounds ominous. Does he have a name?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He does indeed. It's Droalak."
-        },
-        {
-          "player": "I'll track him down."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "It might not be so simple! You'll need an amulet of ghostspeak to talk to him!"
-        },
-        {
-          "player": "I've conversed with the dead before, that shouldn't be too much of a problem."
-        },
-        {
-          "type": "jump",
-          "id": "BzGWef",
-          "steps": [
-            {
-              "type": "call",
-              "branch": "jump-df1ff5d3385709dd"
-            }
-          ]
-        }
-      ],
-      "jump-df1ff5d3385709dd": [
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "Up near the mountains, in Rellekka is a warrior called Dron whom I have spoken to in the past. He is always on the lookout for information that can improve his fighting and commanding skills."
-        },
-        {
-          "player": "And how's he related to this outpost?"
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't directly, but he's studied many wars, and as this used to be an outpost it should have been involved in some war."
-        },
-        {
-          "player": "That sounds simple enough."
-        },
-        {
-          "type": "line",
-          "speaker": "Jorral",
-          "text": "He isn't the easiest person to talk to, so you may need to speak to his brother, Blanin, first."
-        },
-        {
-          "type": "jump",
-          "reference": "below",
-          "id": "ZkS_lE"
-        }
-      ],
       "jump-e0c8ede1de79cc3c": [
         {
           "player": "I don't care about some dusty building."
@@ -733511,8 +733537,8 @@
       "inspecting-the-goblin-stove": [
         {
           "type": "message",
-          "text": "Just a plain stove. Nothing here.",
-          "id": "1J3qkz"
+          "text": "Just a plain stove. Nothing there.",
+          "id": "kxDt7S"
         }
       ],
       "starting-off": [
@@ -735453,14 +735479,6 @@
                 {
                   "type": "line",
                   "speaker": "Observatory professor",
-                  "text": "How are you getting on finding me some molten glass?"
-                },
-                {
-                  "player": "Here it is."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Observatory professor",
                   "text": "Did you bring me the mould?"
                 },
                 {
@@ -735794,54 +735812,56 @@
           "type": "choice",
           "options": [
             {
-              "text": "Talk about the Observatory quest."
-            }
-          ]
-        },
-        {
-          "player": "Yes, here it is. You may as well take this mould too.",
-          "steps": [
-            {
-              "type": "action",
-              "text": "The player hands the observatory professor the observatory lens.",
-              "id": "p1dzXH"
-            }
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Wonderful, at last I can fix the telescope."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
-        },
-        {
-          "player": "Sounds interesting. Count me in."
-        },
-        {
-          "type": "line",
-          "speaker": "Observatory professor",
-          "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
-        },
-        {
-          "player": "Okay. See you there."
-        },
-        {
-          "type": "message",
-          "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
-          "steps": [
-            {
-              "type": "end"
-            }
-          ],
-          "id": "57NA_7"
-        },
-        {
-          "type": "choice",
-          "options": [
+              "text": "Talk about the Observatory quest.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Is the lens finished?"
+                },
+                {
+                  "player": "Yes, here it is. You may as well take this mould too.",
+                  "steps": [
+                    {
+                      "type": "action",
+                      "text": "The player hands the observatory professor the observatory lens.",
+                      "id": "HgpGGr"
+                    }
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Wonderful, at last I can fix the telescope."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Would you accompany me to the Observatory? You simply must see the telescope in operation."
+                },
+                {
+                  "player": "Sounds interesting. Count me in."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Observatory professor",
+                  "text": "Superb. You'll have to go via the dungeon under the goblin settlement, seeing as the bridge is broken. You'll find stairs up to the Observatory from there."
+                },
+                {
+                  "player": "Okay. See you there."
+                },
+                {
+                  "type": "message",
+                  "text": "The professor has gone ahead to the Observatory dome. Best you follow him to see the finished telescope.",
+                  "steps": [
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "vj7Nry"
+                }
+              ]
+            },
             {
               "text": "Talk about Treasure Trails."
             }
@@ -784330,6 +784350,50 @@
               "type": "line",
               "speaker": "Jethick",
               "text": "Hello, I don't recognise you. We don't get many newcomers around here."
+            },
+            {
+              "player": "How come?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague of course. Not many people want to come to a place like this and the few that do normally get stopped by the mourners."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "All you'll find here now are the dead and the dying. Even our own king has abandoned us."
+            },
+            {
+              "player": "Your king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Yes, King Tyras of West Ardougne. He's the brother of King Lathas, the ruler of East Ardougne."
+            },
+            {
+              "player": "So where is the king?"
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Well he's always been a bit of an explorer. He's led multiple expeditions into the uncharted lands to the west."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The plague first started when he came back from one of these expeditions. More than a few suspect that some of his men caught it out there and brought it back with them."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "The king didn't care though. He just left on another expedition to the west. He hasn't been seen since. He left the city warder Bravek in charge but he's no better."
+            },
+            {
+              "type": "line",
+              "speaker": "Jethick",
+              "text": "Anyway, you clearly didn't come here to talk about kings. So tell me, what brings you to West Ardougne?"
             }
           ],
           "id": "gYdBsh"
@@ -784434,6 +784498,52 @@
           "type": "line",
           "speaker": "Jethick",
           "text": "They live in the small timbered building at the far north side of town. I've not seen her around here in a while, mind."
+        },
+        {
+          "type": "line",
+          "speaker": "Jethick",
+          "text": "I don't suppose you could run me a little errand while you're over there? I borrowed this book from them, can you return it?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, I'll return it for you.",
+              "steps": [
+                {
+                  "player": "Yes, I'll return it for you."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Jethick shows you the book, but you don't have room to take it.",
+                      "id": "iU5foK"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "w5QLTg"
+                },
+                {
+                  "type": "message",
+                  "text": "Jethick gives you a book.",
+                  "id": "j0IeQT"
+                }
+              ]
+            },
+            {
+              "text": "No, I don't have time for that.",
+              "steps": [
+                {
+                  "player": "No, I don't have time for that."
+                }
+              ]
+            }
+          ]
         }
       ],
       "finding-elena-returning-the-book-to-ted-rehnison": [
@@ -784937,6 +785047,21 @@
                                   ]
                                 }
                               ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "This is urgent though! Someone's been kidnapped!",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "C6ctb6",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-a431ec56a3a4bb0c"
                             }
                           ]
                         }
@@ -788901,9 +789026,16 @@
                           "text": "Very good. Well, it has been some days since last I heard from Drezel, the priest who lives there. Be a sport and go check in on the silly old codger for me, would you?"
                         },
                         {
-                          "type": "message",
-                          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
-                          "id": "0cBLcT"
+                          "type": "condition",
+                          "text": "If the player's combat level is lower than 15:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
+                              "id": "gtY6Dq"
+                            }
+                          ],
+                          "id": "2c4iPI"
                         },
                         {
                           "type": "choice",
@@ -794136,6 +794268,26 @@
           "text": "Yes, he sent word ahead that you'd be coming. Are you aware of the plan?"
         },
         {
+          "type": "condition",
+          "text": "If the player has the disguise, the key and a rope:",
+          "steps": [
+            {
+              "player": "Yes. In fact, I already have everything we need."
+            },
+            {
+              "type": "line",
+              "speaker": "Leela",
+              "text": "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard. He's talkative, so try to find a weakness. Remember, we don't want any unneeded violence."
+            },
+            {
+              "player": "Alright. I'll go have a chat to this guard."
+            },
+            {
+              "type": "end"
+            }
+          ]
+        },
+        {
           "player": "I need to obtain a copy of the key to the Prince's cell, create a disguise for him that makes him look like Keli and then break him out of the jail."
         },
         {
@@ -795174,7 +795326,7 @@
                     {
                       "type": "line",
                       "speaker": "Aggie",
-                      "text": "Yes I can. I see you already have the ingredients. Would you like me to mix some for you now?"
+                      "text": "Yes, I can. I see you already have the ingredients - the water, flour, ashes and redberries. Would you like me to mix some for you now?"
                     },
                     {
                       "type": "choice",
@@ -796127,12 +796279,12 @@
                   "text": "That was perfect! I can't thank you enough."
                 },
                 {
-                  "player": "How are you? Still okay? Not too drunk?"
-                },
-                {
                   "type": "condition",
                   "text": "If the player has less than three beers:",
                   "steps": [
+                    {
+                      "player": "How are you? Still okay? Not too drunk?"
+                    },
                     {
                       "type": "line",
                       "speaker": "Joe",
@@ -798061,12 +798213,12 @@
           "text": "That was perfect! I can't thank you enough."
         },
         {
-          "player": "How are you? Still okay? Not too drunk?"
-        },
-        {
           "type": "condition",
           "text": "If the player has less than three beers:",
           "steps": [
+            {
+              "player": "How are you? Still okay? Not too drunk?"
+            },
             {
               "type": "line",
               "speaker": "Joe",
@@ -819866,7 +820018,7 @@
                 {
                   "type": "action",
                   "action": "open_shop",
-                  "target": "Armour Shop (Jatizso)",
+                  "target": "Armour Shop",
                   "id": "ElIUsG"
                 }
               ]
@@ -882977,6 +883129,11 @@
           "text": "If the player has one free space in their in their inventory:",
           "steps": [
             {
+              "type": "message",
+              "text": "Bailey gives you a torch.",
+              "id": "05RBJj"
+            },
+            {
               "type": "action",
               "action": "receive",
               "text": "an unlit torch",
@@ -883381,17 +883538,6 @@
               "player": "Not one."
             },
             {
-              "player": "Kennith, I've made an opening in the wall. You can come out through there."
-            },
-            {
-              "type": "line",
-              "speaker": "Kennith",
-              "text": "Are there any sea slugs on the other side?"
-            },
-            {
-              "player": "Not one."
-            },
-            {
               "type": "line",
               "speaker": "Kennith",
               "text": "How will I get downstairs?"
@@ -883422,8 +883568,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "I need to get closer to that.",
-              "id": "j1zwz0"
+              "text": "I need to get closer to use that.",
+              "id": "b2e13Y"
             },
             {
               "type": "end"
@@ -1026211,9 +1026357,16 @@
                   "text": "They have set up a magical barrier which even my power cannot overcome!"
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it. Your combat level is also lower than the recommended level of 45.",
-                  "id": "QBaako"
+                  "type": "condition",
+                  "text": "If the player's skill levels are lower than the quest requirements:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it. Your combat level is also lower than the recommended level of 45.",
+                      "id": "HHJ-zD"
+                    }
+                  ],
+                  "id": "xFlk36"
                 },
                 {
                   "type": "choice",
@@ -1055133,9 +1055286,16 @@
                   "text": "Are you sure you want to? Our exams are serious business."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it.",
-                  "id": "h7ioYg"
+                  "type": "condition",
+                  "text": "If the player's skill levels are lower than the quest requirements:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it.",
+                      "id": "49Kzb7"
+                    }
+                  ],
+                  "id": "VMELHC"
                 },
                 {
                   "type": "choice",
@@ -1121907,9 +1122067,16 @@
           "text": "Would you like to think more about it?"
         },
         {
-          "type": "message",
-          "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
-          "id": "bkgpn5"
+          "type": "condition",
+          "text": "If the player's combat level is lower than 15:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.",
+              "id": "kbEA-p"
+            }
+          ],
+          "id": "YhMoM2"
         },
         {
           "type": "choice",
@@ -1182679,9 +1182846,16 @@
                   "text": "You would be a huge benefit on the battlefield. If you would go there and try to retrieve the orb, my people and I will be forever grateful."
                 },
                 {
-                  "type": "message",
-                  "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 45.",
-                  "id": "X4O1Wa"
+                  "type": "condition",
+                  "text": "If the player's combat level is lower than 45:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Before starting this quest, be aware that your combat level is lower than the recommended level of 45.",
+                      "id": "HAv86P"
+                    }
+                  ],
+                  "id": "f9cm-w"
                 },
                 {
                   "type": "choice",
@@ -1193781,7 +1193955,7 @@
               "text": "Yes.",
               "steps": [
                 {
-                  "player": "Hey I recognise you two! You were part of the delegation to Varrock!"
+                  "player": "Hey, I recognise you two! You were part of the delegation to Varrock!"
                 },
                 {
                   "type": "line",
@@ -1193851,7 +1194025,7 @@
       ],
       "with-friends-like-these-talking-to-either-ennius-or-furia-tullus-talking-to-either-again-after-starting-the-quest": [
         {
-          "player": "Hey I recognise you two! You were part of the delegation to Varrock!"
+          "player": "Hey, I recognise you two! You were part of the delegation to Varrock!"
         },
         {
           "type": "jump",
@@ -1193904,7 +1194078,7 @@
           "text": "You jest, as your kind often do. Is that how you drown out their screams, I wonder? Is that how you hide your pain?"
         },
         {
-          "player": "Well things got deep very quickly. Is this how you normally introduce yourself to someone?"
+          "player": "Well, things got deep very quickly. Is this how you normally introduce yourself to someone?"
         },
         {
           "type": "line",
@@ -1194212,7 +1194386,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well let's not start celebrating just yet. There's a reason why we're lurking in this crypt."
+          "text": "Well, let's not start celebrating just yet. There's a reason why we're lurking in this crypt."
         },
         {
           "type": "line",
@@ -1194317,7 +1194491,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
+          "text": "Well, this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
         },
         {
           "type": "line",
@@ -1194366,7 +1194540,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-73fc2918fba02c65"
+              "branch": "jump-be117e4f5e13e03d"
             }
           ]
         }
@@ -1194413,7 +1194587,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Oh... Well let's get to it then. What does the Prince need now?"
+          "text": "Oh... Well, let's get to it then. What does the Prince need now?"
         },
         {
           "player": "He's asked me to investigate the knights who were part of the delegation to Varrock. He suspects one of them may have been involved in the plot to kill the Teokan."
@@ -1194444,7 +1194618,7 @@
         {
           "type": "line",
           "speaker": "Furia Tullus",
-          "text": "Arrun and Claudia should be at the bazaar. Nel will be at the cothon. Velam and Azali are somewhere in Outer Fortis, likely at the pub. Mezan will be at the colosseum."
+          "text": "Arrun and Claudia should be at the bazaar. Nel will be at the cothon. Velam and Azali are somewhere in Outer Fortis, likely at the pub. Mezan will be at the Colosseum."
         },
         {
           "player": "What if any refuse to come?"
@@ -1194542,10 +1194716,10 @@
               ]
             },
             {
-              "text": "Where can I find the colosseum?",
+              "text": "Where can I find the Colosseum?",
               "steps": [
                 {
-                  "player": "Where can I find the colosseum?"
+                  "player": "Where can I find the Colosseum?"
                 },
                 {
                   "type": "line",
@@ -1194560,7 +1194734,7 @@
                 {
                   "type": "jump",
                   "reference": "previous",
-                  "id": "4LiWgB"
+                  "id": "-K4De_"
                 }
               ]
             },
@@ -1194687,12 +1194861,12 @@
               ]
             },
             {
-              "text": "Where can I find the colosseum?",
+              "text": "Where can I find the Colosseum?",
               "steps": [
                 {
                   "type": "jump",
                   "reference": "above",
-                  "id": "Jne-GR"
+                  "id": "q8xRV9"
                 }
               ]
             },
@@ -1194749,7 +1194923,7 @@
           "text": "If the player has the Varlamore crest:",
           "steps": [
             {
-              "player": "Well it just so happens I have this."
+              "player": "Well, it just so happens I have this."
             },
             {
               "type": "message",
@@ -1194759,7 +1194933,7 @@
             {
               "type": "line",
               "speaker": "Knight of Varlamore",
-              "text": "Hmm... Well we're not going anywhere until our work here is done. If you want us back at the palace, you'd best help."
+              "text": "Hmm... Well, we're not going anywhere until our work here is done. If you want us back at the palace, you'd best help."
             },
             {
               "player": "I can do that. What do you need?"
@@ -1194783,7 +1194957,7 @@
               "text": "Beat them at their own game. Go looking through a few pockets."
             },
             {
-              "player": "Well this doesn't sound totally orthodox, but fair enough. I'll be back soon."
+              "player": "Well, this doesn't sound totally orthodox, but fair enough. I'll be back soon."
             }
           ],
           "id": "dzUYzM"
@@ -1194847,7 +1195021,7 @@
           "text": "We'll be there once the thieves are dealt with. It won't take us long."
         },
         {
-          "player": "Well good luck then."
+          "player": "Well, good luck then."
         },
         {
           "type": "message",
@@ -1195007,7 +1195181,7 @@
           "text": "If the player found the weapons crate:",
           "steps": [
             {
-              "player": "Yes, I found it. The ship it's from is called The Fortis Spark."
+              "player": "Yes, I found it. The ship it's from is called the Fortis Spark."
             },
             {
               "type": "line",
@@ -1195055,7 +1195229,7 @@
           "text": "Sorry, but I'm waiting for someone."
         },
         {
-          "player": "Well you might need to meet with them some other time. You're needed back at the palace."
+          "player": "Well, you might need to meet with them some other time. You're needed back at the palace."
         },
         {
           "type": "line",
@@ -1195121,7 +1195295,7 @@
             {
               "type": "line",
               "speaker": "Knight of Varlamore",
-              "text": "Yes! Join me in the colosseum for some training. Once we're done, I'll return to the palace."
+              "text": "Yes! Join me in the Colosseum for some training. Once we're done, I'll return to the palace."
             },
             {
               "type": "line",
@@ -1195273,7 +1195447,7 @@
         {
           "type": "line",
           "speaker": "Knight of Varlamore",
-          "text": "Well look who it is!"
+          "text": "Well, look who it is!"
         },
         {
           "player": "Er... I don't know you."
@@ -1195353,7 +1195527,7 @@
               "text": "There's one outside the gates just to the east of here... But how does a fountain help?"
             },
             {
-              "player": "Well there's nothing like a little dunk to sober you up a bit. Azali, come with me."
+              "player": "Well, there's nothing like a little dunk to sober you up a bit. Azali, come with me."
             },
             {
               "type": "condition",
@@ -1195521,7 +1195695,7 @@
           "text": "Not exactly."
         },
         {
-          "player": "Well it will have to do. You're needed over at the palace."
+          "player": "Well, it will have to do. You're needed over at the palace."
         },
         {
           "type": "line",
@@ -1195569,7 +1195743,7 @@
           "text": "Six knights, but likely only one traitor. How do you intend to work out who it is?"
         },
         {
-          "player": "Well I'm going to guess asking nicely won't work."
+          "player": "Well, I'm going to guess asking nicely won't work."
         },
         {
           "type": "line",
@@ -1195763,7 +1195937,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Well it's done now, so little point dwelling on it."
+          "text": "Well, it's done now, so little point dwelling on it."
         },
         {
           "player": "Little point..."
@@ -1195820,7 +1195994,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-eed2b695ab6bff72"
+              "branch": "jump-59e31952bb5e2b97"
             }
           ]
         }
@@ -1195862,7 +1196036,7 @@
                 {
                   "type": "line",
                   "speaker": "Regulus Cento",
-                  "text": "Ah, kuani! Well you'll be pleased to know that Prince Itzla has already granted me permission to give you your very own quetzal, free of charge!"
+                  "text": "Ah, kuani! Well, you'll be pleased to know that Prince Itzla has already granted me permission to give you your very own quetzal, free of charge!"
                 },
                 {
                   "player": "My own quetzal?"
@@ -1196166,7 +1196340,7 @@
           "text": "Tetamo! One of my own knights! I will need to swiftly deal with this."
         },
         {
-          "player": "Well there's actually no need. Ennius killed him as soon as we found out."
+          "player": "Well, there's actually no need. Ennius killed him as soon as we found out."
         },
         {
           "type": "line",
@@ -1196345,7 +1196519,7 @@
           "text": "Think of all that we believe to know. All those words we have read. How many were the truth, I wonder."
         },
         {
-          "player": "Okay, well before we go down another rabbit hole, I'm looking for information on the Final Dawn."
+          "player": "Okay, well, before we go down another rabbit hole, I'm looking for information on the Final Dawn."
         },
         {
           "type": "line",
@@ -1196513,57 +1196687,92 @@
           "player": "What do we do now?"
         },
         {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
-        },
-        {
-          "type": "action",
-          "text": "Congratulations! Quest complete!",
-          "id": "NyygQH"
-        },
-        {
-          "player": "So what's this plan you mentioned?"
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
-        },
-        {
-          "type": "choice",
-          "prompt": "Start The Heart of Darkness quest?",
-          "options": [
+          "type": "condition",
+          "text": "If the player does not meet all of the requirements to start The Heart of Darkness:",
+          "steps": [
             {
-              "text": "Yes.",
-              "steps": [
-                {
-                  "type": "missing",
-                  "id": "IWaxPM"
-                }
-              ],
-              "hook": "quest:the-heart-of-darkness:start",
-              "quest": "The Heart of Darkness"
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "I'm not sure... yet. No doubt mother will quickly learn about what happened here. While we wait to hear from her, I'll get thinking about what our next move should be."
             },
             {
-              "text": "No.",
-              "steps": [
+              "player": "In that case, I'll make sure to keep checking in."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Thank you, iknami. Timoiva for now, and may the sun light your way."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "eBNzWh"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Yuos3g"
+        },
+        {
+          "type": "condition",
+          "text": "If the player meets all of the requirements to start The Heart of Darkness:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "cTofpK"
+            },
+            {
+              "player": "So what's this plan you mentioned?"
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
+            },
+            {
+              "type": "choice",
+              "prompt": "Start The Heart of Darkness quest?",
+              "options": [
                 {
-                  "player": "Fair point. I'll be back once I'm ready."
+                  "text": "Yes.",
+                  "steps": [
+                    {
+                      "type": "missing",
+                      "id": "8rD5En"
+                    }
+                  ],
+                  "hook": "quest:the-heart-of-darkness:start",
+                  "quest": "The Heart of Darkness"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Prince Itzla Arkan",
-                  "text": "I'll be here, [player name]."
+                  "text": "No.",
+                  "steps": [
+                    {
+                      "player": "Fair point. I'll be back once I'm ready."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Prince Itzla Arkan",
+                      "text": "I'll be here, [player name]."
+                    }
+                  ]
                 }
               ]
             }
-          ]
+          ],
+          "id": "Qrc8Tz"
         }
       ],
       "the-twilight-emissaries-talking-to-prince-itzla-arkan-after-the-guard-leaves": [
@@ -1196578,7 +1196787,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-3963cb85f3fc02d6"
+              "branch": "jump-0eb5de3f05bb7cd2"
             }
           ]
         }
@@ -1196801,7 +1197010,7 @@
           "type": "end"
         }
       ],
-      "jump-73fc2918fba02c65": [
+      "jump-be117e4f5e13e03d": [
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
@@ -1196871,7 +1197080,7 @@
         {
           "type": "line",
           "speaker": "Prince Itzla Arkan",
-          "text": "Well this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
+          "text": "Well, this is a terrible idea that's definitely going to blow up in all our faces later, but it seems you have made your decision. However, I insist that you let me personally accompany you."
         },
         {
           "type": "line",
@@ -1196931,7 +1197140,7 @@
           "type": "end"
         }
       ],
-      "jump-eed2b695ab6bff72": [
+      "jump-59e31952bb5e2b97": [
         {
           "type": "line",
           "speaker": "Ennius Tullus",
@@ -1196943,7 +1197152,7 @@
         {
           "type": "line",
           "speaker": "Ennius Tullus",
-          "text": "Well it's done now, so little point dwelling on it."
+          "text": "Well, it's done now, so little point dwelling on it."
         },
         {
           "player": "Little point..."
@@ -1196981,62 +1197190,97 @@
           "type": "end"
         }
       ],
-      "jump-3963cb85f3fc02d6": [
+      "jump-0eb5de3f05bb7cd2": [
         {
           "player": "What do we do now?"
         },
         {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
-        },
-        {
-          "type": "action",
-          "text": "Congratulations! Quest complete!",
-          "id": "NyygQH"
-        },
-        {
-          "player": "So what's this plan you mentioned?"
-        },
-        {
-          "type": "line",
-          "speaker": "Prince Itzla Arkan",
-          "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
-        },
-        {
-          "type": "choice",
-          "prompt": "Start The Heart of Darkness quest?",
-          "options": [
+          "type": "condition",
+          "text": "If the player does not meet all of the requirements to start The Heart of Darkness:",
+          "steps": [
             {
-              "text": "Yes.",
-              "steps": [
-                {
-                  "type": "missing",
-                  "id": "IWaxPM"
-                }
-              ],
-              "hook": "quest:the-heart-of-darkness:start",
-              "quest": "The Heart of Darkness"
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "I'm not sure... yet. No doubt mother will quickly learn about what happened here. While we wait to hear from her, I'll get thinking about what our next move should be."
             },
             {
-              "text": "No.",
-              "steps": [
+              "player": "In that case, I'll make sure to keep checking in."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Thank you, iknami. Timoiva for now, and may the sun light your way."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "eBNzWh"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Yuos3g"
+        },
+        {
+          "type": "condition",
+          "text": "If the player meets all of the requirements to start The Heart of Darkness:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "Word has been sent to mother about what happened here. While we wait to hear back from her, I've already been thinking about a potential plan for how we might go about dealing with our cultist problem."
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "However, let's not worry about that just now. Instead, I wanted to thank you for all that you've done. You may be an outsider, but you've already proven yourself to be a true friend to Varlamore. Thank you, iknami."
+            },
+            {
+              "type": "action",
+              "text": "Congratulations! Quest complete!",
+              "id": "cTofpK"
+            },
+            {
+              "player": "So what's this plan you mentioned?"
+            },
+            {
+              "type": "line",
+              "speaker": "Prince Itzla Arkan",
+              "text": "You want to hear it already? I'd have thought you might have wanted a bit of a break from all the excitement, iknami."
+            },
+            {
+              "type": "choice",
+              "prompt": "Start The Heart of Darkness quest?",
+              "options": [
                 {
-                  "player": "Fair point. I'll be back once I'm ready."
+                  "text": "Yes.",
+                  "steps": [
+                    {
+                      "type": "missing",
+                      "id": "8rD5En"
+                    }
+                  ],
+                  "hook": "quest:the-heart-of-darkness:start",
+                  "quest": "The Heart of Darkness"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Prince Itzla Arkan",
-                  "text": "I'll be here, [player name]."
+                  "text": "No.",
+                  "steps": [
+                    {
+                      "player": "Fair point. I'll be back once I'm ready."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Prince Itzla Arkan",
+                      "text": "I'll be here, [player name]."
+                    }
+                  ]
                 }
               ]
             }
-          ]
+          ],
+          "id": "Qrc8Tz"
         }
       ],
       "e5GbYF": [
@@ -1268038,7 +1268282,7 @@
                         {
                           "type": "line",
                           "speaker": "Boy",
-                          "text": "Thanks mister!"
+                          "text": "Thanks, mister!"
                         }
                       ],
                       "hook": "quest:witch-s-house:start",
@@ -1268127,18 +1268371,13 @@
       ],
       "the-witch-s-house-attempting-to-open-the-garden-door-without-unlocking-it": [
         {
-          "type": "message",
-          "text": "This door is locked.",
-          "id": "EWTf9d"
-        },
-        {
-          "player": "Strange... I can't see any kind of lock or handle to open this door..."
+          "player": "It's locked. That's strange - I can't see any kind of lock or handle to open it..."
         }
       ],
       "the-witch-s-house-attempting-to-open-the-gate-without-correct-gloves": [
         {
           "type": "message",
-          "text": "As your bare hands touch the gate you feel a shock.",
+          "text": "As your hands touch the gate you feel a shock.",
           "id": "kGCF5e"
         }
       ],
@@ -1268248,7 +1268487,7 @@
       "the-ball-killing-the-first-form": [
         {
           "type": "message",
-          "text": "the shapeshifters' body begins to deform!",
+          "text": "The shapeshifters' body begins to deform!",
           "id": "EAUyRf"
         },
         {

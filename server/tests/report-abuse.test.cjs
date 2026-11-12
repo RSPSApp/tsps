@@ -27,7 +27,7 @@ test('REPORT_ABUSE (199) decodes name, rule id and mute flag', () => {
 /** The plugin registered on a fake api: its hooks, and the custom events it emitted. */
 function registered() {
   const buttons = new Map();
-  const hooks = { logins: [], playerOptions: [], social: [] };
+  const hooks = { logins: [], playerOptions: [], social: [], events: new Map() };
   const emitted = [];
   const ids = (id) => (Array.isArray(id) ? id : [id]);
   const api = {
@@ -35,24 +35,30 @@ function registered() {
     onPlayerOption: (handler) => hooks.playerOptions.push(handler),
     onSocialPacket: (handler) => hooks.social.push(handler),
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
-    emitCustomEvent: (name, payload) => emitted.push([name, payload]),
+    onCustomEvent: (name, handler) => hooks.events.set(name, handler),
+    emitCustomEvent: (name, payload) => { emitted.push([name, payload]); hooks.events.get(name)?.(payload); },
     log: () => {},
   };
   ReportAbuse.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
   return { buttons, hooks, emitted };
 }
 
-function recordingPlayer(name, rights = PlayerRights.NONE) {
+function recordingPlayer(name, rights = PlayerRights.NONE, attributes = new Map()) {
   const sent = [];
+  const varbits = new Map();
   const sender = {
     sendPlayerOption: (slot, option, priority) => { sent.push(`playerOption ${slot} ${option}${priority ? ' priority' : ''}`); return sender; },
-    sendVarbit: (id, value) => { sent.push(`varbit ${id}=${value}`); return sender; },
+    sendVarbit: (id, value) => { varbits.set(id, value); sent.push(`varbit ${id}=${value}`); return sender; },
+    getVarbit: (id) => varbits.get(id) ?? 0,
     sendSubInterface: (uid, group, type) => { sent.push(`open ${uid}:${group}:${type}`); return sender; },
     closeSubInterface: (uid) => { sent.push(`close ${uid}`); return sender; },
     sendClientScript: (id, ...args) => { sent.push(`script ${id}${args.length ? ' ' + args.join(',') : ''}`); return sender; },
     sendMessage: (text) => { sent.push(`message ${text}`); return sender; },
   };
-  return { sent, getUsername: () => name, getRights: () => rights, busy: () => false, getPacketSender: () => sender };
+  return {
+    sent, getUsername: () => name, getRights: () => rights, busy: () => false, getPacketSender: () => sender,
+    getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+  };
 }
 
 test('login gives every player the Report option in slot 8', () => {
@@ -60,6 +66,42 @@ test('login gives every player the Report option in slot 8', () => {
   const player = recordingPlayer('Alice');
   hooks.logins.forEach((login) => login({ player, username: 'Alice' }));
   assert.deepEqual(player.sent, ['playerOption 8 Report']);
+});
+
+const REPORT_SETTING = 372;
+const REPORT_DISABLED_VARBIT = 1334; // rightclick_report_abuse_disabled
+
+test('as captured: with Player Report options off, login sends an empty slot 8', () => {
+  const { hooks } = registered();
+  const player = recordingPlayer('Alice', PlayerRights.NONE, new Map([['settings:values', { [`varbit:${REPORT_DISABLED_VARBIT}`]: 1 }]]));
+  hooks.logins.forEach((login) => login({ player, username: 'Alice' }));
+  assert.deepEqual(player.sent, ['playerOption 8 ']);
+});
+
+test('the Player Report options row flips its varbit through Settings and adds or removes the option', () => {
+  const { hooks, emitted } = registered();
+  const player = recordingPlayer('Alice');
+  const clicked = hooks.events.get('settings:setting-clicked');
+  const click = (settingId) => { const request = { player, settingId, handled: false }; clicked(request); return request; };
+  assert.equal(click(371).handled, false, 'other rows are not ours');
+  // Settings sends the varbit on settings:set; this stands in for it.
+  hooks.events.set('settings:set', ({ value }) => player.getPacketSender().sendVarbit(REPORT_DISABLED_VARBIT, value));
+  for (const [expectedValue, option] of [[1, ''], [0, 'Report']]) {
+    player.sent.length = emitted.length = 0;
+    const request = click(REPORT_SETTING);
+    assert.equal(request.handled, true);
+    assert.deepEqual(emitted.map(([name, payload]) => [name, payload.settingId, payload.value]), [['settings:set', REPORT_SETTING, expectedValue]]);
+    assert.deepEqual(player.sent, [`varbit ${REPORT_DISABLED_VARBIT}=${expectedValue}`, `playerOption 8 ${option}`]);
+  }
+});
+
+test('with Player Report options off, a slot 8 click is not taken as Report', () => {
+  const { hooks } = registered();
+  const player = recordingPlayer('Alice');
+  player.getPacketSender().sendVarbit(REPORT_DISABLED_VARBIT, 1);
+  const event = { player, target: recordingPlayer('Z-Kris'), option: 8, handled: false };
+  hooks.playerOptions.forEach((hook) => hook(event));
+  assert.equal(event.handled, false);
 });
 
 test('as captured: right-click Report opens the form over the chatbox with the name filled in', () => {

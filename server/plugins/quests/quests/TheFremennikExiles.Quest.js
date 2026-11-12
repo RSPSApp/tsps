@@ -54,6 +54,8 @@
  *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
  *    to the NeitiznotFaceguard plugin, not to this quest.
  */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerTheFremennikExilesQuest(api) {
   const {
     Bank,
@@ -599,7 +601,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       skills.getMaxLevel(Skill.SLAYER) >= 60 &&
       skills.getMaxLevel(Skill.SMITHING) >= 60 &&
       skills.getMaxLevel(Skill.FISHING) >= 60 &&
-      skills.getMaxLevel(Skill.MINING) >= 60 &&
       skills.getMaxLevel(Skill.RUNECRAFTING) >= 55
     );
   }
@@ -1639,6 +1640,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
           if (option === "Yes.") {
             if (!meetsRequirements(player)) {
               player.sendMessage("You don't meet the requirements for this quest.");
+              event.end = true;
             } else if (quest.getStage(player) === 0) {
               setStage(player, STAGE_STARTED);
             }
@@ -1986,7 +1988,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
     player.moveTo(ISLAND_LANDING);
-    player.getPacketSender().sendCameraShake(1, 10, 0, 25); // captured Island of Stone arrival
+    CameraShake.send(player.getPacketSender(), "atmospheric", 1, 10, 0, 25); // captured Island of Stone arrival
   }
 
   function enterIslandCave(player) {

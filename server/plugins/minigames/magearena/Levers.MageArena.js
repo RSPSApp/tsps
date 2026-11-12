@@ -18,6 +18,7 @@
  *   Pools are not a teleport, so teleblock does not bar them.
  */
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+const MageArenaI = require("./MageArenaI.MageArena");
 
 const ARENA_LEVER_TO_INSIDE = 9706;
 const ARENA_LEVER_TO_OUTSIDE = 9707;
@@ -65,6 +66,10 @@ function pullLever(event) {
   if (!lever) return false;
   const { player, object } = event;
   if (ObstacleRunner.isBusy(player)) return true;
+  if (event.objectId === ARENA_LEVER_TO_INSIDE && !MageArenaI.canUseArena(player)) {
+    MageArenaI.refuseArena(player);
+    return true;
+  }
   if (!core.TeleportHandler.checkReqs(player, new core.Location(lever.to[0], lever.to[1], 0), Infinity)) return true;
   ObstacleRunner.run({ player, object }, leverSteps(lever, [event.location.x, event.location.y]));
   return true;
@@ -89,6 +94,10 @@ function stepIntoPool(event) {
   const { player, objectId, object } = event;
   if (!POOL_DESTINATIONS[objectId]) return false;
   if (ObstacleRunner.isBusy(player)) return true;
+  if (objectId === BANK_POOL && !MageArenaI.canUseRewardChamber(player)) {
+    player.sendMessage("You need to defeat Kolodion before entering the chamber.");
+    return true;
+  }
   const poolTile = [event.location.x, event.location.y];
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(

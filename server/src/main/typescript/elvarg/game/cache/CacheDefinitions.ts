@@ -27,8 +27,25 @@ import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
 import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
 import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
+import { encodeContentData } from "../../net/protocol/ClientProtocol";
 
 const STRUCT_PARAMS_OPCODE = 249;
+const CACHE_EDITOR_SOURCE = "cache-editor";
+type CustomDefinitionFields = { baseId: number; fields: Record<string, unknown> };
+
+function customDefinitionRows(definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return [...definitions].map(([key, row]) => {
+        const [kind, id] = key.split(":");
+        return { kind, id: Number(id), baseId: row.baseId, fields: structuredClone(row.fields) };
+    });
+}
+
+function customDefinitionDataset(source: string, definitions: ReadonlyMap<string, CustomDefinitionFields>) {
+    return {
+        key: source === CACHE_EDITOR_SOURCE ? "customDefinitions" : "customDefinitionsAppend",
+        rows: customDefinitionRows(definitions),
+    };
+}
 
 export interface ServerCustomItem {
     id: number;
@@ -36,6 +53,8 @@ export interface ServerCustomItem {
     objType: Record<string, unknown>;
     itemDef?: Record<string, unknown>;
     models?: Record<string, string>;
+    /** A special attack bar: `from`, another item whose special it uses; `energy`, its cost in percent. */
+    specialAttack?: { from?: number; energy?: number };
 }
 
 export class CacheDefinitions {
@@ -66,7 +85,9 @@ export class CacheDefinitions {
      * overrides. Kept apart from `customItems`, which is the item loader's own JSON pipeline, so a
      * loc or npc overlay needs no encoder and no cache repack.
      */
-    private static customDefinitions = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    private static customDefinitions = new Map<string, CustomDefinitionFields>();
+    /** Each source's rows (the cache editor's document, the custom pets); customDefinitions is all of them. */
+    private static customDefinitionSources = new Map<string, Map<string, CustomDefinitionFields>>();
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
@@ -600,6 +621,10 @@ export class CacheDefinitions {
                 itemDef: raw.itemDef && typeof raw.itemDef === "object" ? raw.itemDef as Record<string, unknown> : undefined,
                 models: raw.models && typeof raw.models === "object" ? raw.models as Record<string, string> : undefined,
             };
+            // Validated by the item loader; kept so the server and the client (sent this row) see it.
+            if (raw.specialAttack && typeof raw.specialAttack === "object") {
+                item.specialAttack = raw.specialAttack as ServerCustomItem["specialAttack"];
+            }
             for (const rawModelId of Object.keys(item.models ?? {})) {
                 const modelId = Number(rawModelId);
                 if (!Number.isInteger(modelId) || modelId < 1000000 || modelId > 0x7fffffff || modelIds.has(modelId)) {
@@ -661,29 +686,64 @@ export class CacheDefinitions {
         return this.customModels ?? [];
     }
 
-    /** Registers overlay rows (`{ kind, id, baseId, fields }`); replaces any previous set. */
-    static registerCustomDefinitions(rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[]): number {
-        const next = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    /**
+     * Registers overlay rows (`{ kind, id, baseId, fields }`) for one source, replacing that
+     * source's previous rows only: the cache editor's document (the default) and generated rows
+     * such as the custom pets' followers live side by side. An id another source already has is
+     * refused.
+     */
+    static registerCustomDefinitions(
+        rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[],
+        source = CACHE_EDITOR_SOURCE,
+    ): number {
+        const next = new Map<string, CustomDefinitionFields>();
         const counts = this.getBaseCounts();
         for (const row of rows) {
             const count = row?.kind === "loc" ? counts.objects : row?.kind === "npc" ? counts.npcs : counts.items;
             if (!row || !["loc", "npc", "item"].includes(row.kind) || !Number.isInteger(row.id) || row.id < Math.max(50000, count) || row.id >= 65535 ||
                 !Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= count || next.has(`${row.kind}:${row.id}`)) throw new Error("Invalid custom definition identity");
             if (row.kind === "item" && this.customItems.has(row.id)) throw new Error("Item ID already belongs to custom-items");
+            const owner = this.getCustomDefinitionOwner(row.kind, row.id);
+            if (owner !== undefined && owner !== source) throw new Error(`Custom ${row.kind} ${row.id} already belongs to ${owner}`);
             const fields = structuredClone(row.fields ?? {});
             if (Object.keys(fields).some(key => ["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"].includes(key))) throw new Error("Invalid custom definition field");
             next.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields });
         }
-        this.customDefinitions = next;
+        if (next.size) {
+            try {
+                encodeContentData("server", [customDefinitionDataset(source, next)]);
+            } catch (error) {
+                throw new Error(`Cannot encode custom definitions from ${source}: ${(error as Error).message}`);
+            }
+        }
+        this.customDefinitionSources.set(source, next);
+        this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
         this.customDefinitionCache = new Map();
-        return this.customDefinitions.size;
+        return next.size;
+    }
+
+    static getCustomDefinitionOwner(kind: string, id: number): string | undefined {
+        const key = `${kind}:${id}`;
+        for (const [source, rows] of this.customDefinitionSources) {
+            if (rows.has(key)) return source;
+        }
+        return undefined;
     }
 
     static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {
-        return [...this.customDefinitions.entries()].map(([key, row]) => {
-            const [kind, id] = key.split(":");
-            return { kind, id: Number(id), baseId: row.baseId, fields: { ...row.fields } };
-        });
+        return customDefinitionRows(this.customDefinitions);
+    }
+
+    static getCustomDefinitionDatasets() {
+        // Start with a replacement, even on an empty world. Subsequent packets add plugin rows.
+        const editor = this.customDefinitionSources.get(CACHE_EDITOR_SOURCE);
+        const datasets = [customDefinitionDataset(CACHE_EDITOR_SOURCE, editor ?? new Map())];
+        for (const [source, definitions] of this.customDefinitionSources) {
+            if (source !== CACHE_EDITOR_SOURCE && definitions.size) {
+                datasets.push(customDefinitionDataset(source, definitions));
+            }
+        }
+        return datasets;
     }
 
     /** True when this id is authored here rather than read from the cache. */
@@ -788,6 +848,12 @@ export class CacheDefinitions {
     static getSpellByName(name: string): { widgetId: number; itemId: number } | undefined {
         this.ensureSpellMetadata();
         return this.spellsByName!.get(name.trim().toLowerCase());
+    }
+
+    /** Every spell name the cache's spell objs carry (lower case). */
+    static getSpellNames(): string[] {
+        this.ensureSpellMetadata();
+        return [...this.spellsByName!.keys()];
     }
 
     /** The Magic level and runes the cache's spell obj lists for the spell with this name. */

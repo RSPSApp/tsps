@@ -203,6 +203,11 @@ function crewMaxHit(captain, stats, ball, privateering) {
   return Math.floor(base * (privateering + 13) / 20);
 }
 
+/** A keg of perildance bitter on the captain's boat raises every cannon's max hit by one. */
+function kegBonus(captain) {
+  return require("../Kegs.Sailing").cannonMaxHitBonus(captain);
+}
+
 function hitChance(attackRoll, defenceRoll) {
   return attackRoll > defenceRoll
     ? 1 - (defenceRoll + 2) / (2 * (attackRoll + 1))
@@ -216,13 +221,13 @@ function rollDamage(gunner, ball, npc, random = Math.random) {
     const sailing = gunner.captain.getSkillManager().getCurrentLevel(Skill.SAILING);
     const attack = (sailing + 8) * (gunner.stats.accuracy + ball.accuracy + 64);
     const defence = npc ? AccuracyFormulasDpsCalc.defenseRangedRoll(npc, "heavy") : 0;
-    const max = crewMaxHit(gunner.captain, gunner.stats, ball, gunner.crew.crew.stats[STAT.PRIVATEERING] ?? 1);
+    const max = crewMaxHit(gunner.captain, gunner.stats, ball, gunner.crew.crew.stats[STAT.PRIVATEERING] ?? 1) + kegBonus(gunner.captain);
     return random() < hitChance(attack, defence) ? Math.floor(random() * (max + 1)) : 0;
   }
   const gear = countedGear(gunner.captain);
   const attack = AccuracyFormulasDpsCalc.rangedAttackRollWithBonus(gunner.captain, gunner.stats.accuracy + ball.accuracy + gear.accuracy);
   const defence = npc ? AccuracyFormulasDpsCalc.defenseRangedRoll(npc, "heavy") : 0;
-  const max = playerMaxHit(gunner.captain, gunner.stats, ball);
+  const max = playerMaxHit(gunner.captain, gunner.stats, ball) + kegBonus(gunner.captain);
   return random() < hitChance(attack, defence) ? Math.floor(random() * (max + 1)) : 0;
 }
 

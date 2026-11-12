@@ -284,6 +284,7 @@ function confirmPlugins() {
   const customEvents = new Map();
   const dropPolicies = [];
   let actions = null;
+  let itemOnItem = null;
   const api = new Proxy({}, {
     get: (_, name) => {
       if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
@@ -296,6 +297,7 @@ function confirmPlugins() {
         for (const handler of customEvents.get(event) ?? []) handler(payload);
       };
       if (name === "onItemDropPolicy") return (handler) => dropPolicies.push(handler);
+      if (name === "onItemOnItem") return (handler) => { itemOnItem = handler; };
       return () => {};
     },
   });
@@ -303,6 +305,7 @@ function confirmPlugins() {
   ToxicBlowpipe.register(api);
   return {
     actions: () => actions,
+    itemOnItem: (event) => itemOnItem(event),
     drop: (event) => {
       for (const policy of dropPolicies) {
         policy(event);
@@ -410,6 +413,20 @@ for (const action of ["Unload", "Uncharge"]) {
 function presetDarts(amount) {
   return new Item(DRAGON_DART, amount, { untradeable: true, unbankable: true, preset: true });
 }
+
+test("loading another kind of dart gives the old darts back and keeps every scale", () => {
+  const hooks = confirmPlugins();
+  const pipe = loadedPipe(5000, DRAGON_DART, 120);
+  const rune = new Item(ItemIdentifiers.RUNE_DART, 50);
+  const player = confirmPlayer(pipe, [rune]);
+  hooks.itemOnItem({ player, usedItem: rune, usedItemId: rune.getId(), usedItemSlot: 1, usedWithItem: pipe,
+    usedWithItemId: pipe.getId(), usedWithItemSlot: 0, handled: false });
+  assert.deepEqual(pipe.state(), { scales: 5000, dartId: ItemIdentifiers.RUNE_DART, dartAmount: 50 }, "the scales stay");
+  const idOf = (entry) => entry?.getId?.() ?? entry?.id;
+  const darts = player.inventory.getItems().filter((entry) => idOf(entry) === DRAGON_DART)
+    .reduce((n, entry) => n + (entry.getAmount?.() ?? entry.amount), 0);
+  assert.equal(darts, 120, "the old darts come back");
+});
 
 test("Uncharge refuses with preset darts and one free slot, because the two returns cannot merge", () => {
   const hooks = confirmPlugins();
@@ -543,4 +560,36 @@ test("blowpipe confirmation never redirects to another same-id pipe after invent
       }
     }
   }
+});
+
+test("scales given back on top of a kept shot (ranged:ammo-saving extra) go back in the blowpipe, up to 16,383", () => {
+  let handler = null;
+  let extra = 0;
+  const api = new Proxy({}, {
+    get: (_, name) => {
+      if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+      if (name === "registerRangedAmmoHandler") return (entry) => { handler = entry; };
+      if (name === "emitCustomEvent") return (event, payload) => {
+        if (event === "ranged:ammo-saving") { payload.saved = payload.amount; payload.extra = extra; }
+      };
+      if (name === "getBonusManager" || name === "getCombatFactory") return () => ({});
+      return () => {};
+    },
+  });
+  ToxicBlowpipe.register(api);
+  const { BlowpipeState } = ToxicBlowpipe._test;
+  const pipe = new Item(TOXIC_BLOWPIPE_ID, 1);
+  BlowpipeState.write(pipe, { scales: 100, dartId: DRAGON_DART, dartAmount: 50 });
+  const core = require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+  const player = {
+    getEquipment: () => ({ get: (slot) => (slot === Equipment.WEAPON_SLOT ? pipe : null) }),
+    getCombat: () => ({ getRangedWeapon: () => core.RangedWeapon.TOXIC_BLOWPIPE, reset() {} }),
+    sendMessage() {},
+  };
+  extra = 2;
+  assert.equal(handler.decrementAmmo(player, null, 1), true);
+  assert.equal(BlowpipeState.read(pipe).scales, 102, "the shot's scale kept, and two more");
+  BlowpipeState.write(pipe, { scales: 16382, dartId: DRAGON_DART, dartAmount: 50 });
+  handler.decrementAmmo(player, null, 1);
+  assert.equal(BlowpipeState.read(pipe).scales, 16383);
 });

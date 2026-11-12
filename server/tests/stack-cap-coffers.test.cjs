@@ -190,6 +190,37 @@ test("Blast Furnace coffer: no room at all refuses with the existing message", a
 
 // ------------------------------------------------------------------ Bounty Hunter coffer
 
+test("Bounty Hunter coffer: bank funding waits for the PIN and uses the balances at confirmation", async (t) => {
+  const pin = require("../plugins/interface/bankpin/Common.BankPin");
+  const f = actor(t);
+  const id = core.ObjectIdentifiers.COFFER_4;
+  const bank = f.p.getBank(0);
+  pin.set(f.p, "hash", pin.hash(f.p, "2468"));
+  f.inv.setItem(0, plain(I.COINS, 150));
+  bank.add(plain(I.COINS, 500), false);
+
+  await coffer(f, id, DEPOSIT, 50);
+  assert.equal(f.p.getAttribute(BH_COFFER), 50, "inventory-only deposits don't ask for the PIN");
+  assert.equal(pin.isUnlocked(f.p), false);
+
+  await coffer(f, id, DEPOSIT, 250);
+  assert.equal(f.p.getInterfaceId(), pin.ids.groups.keypad);
+  await send(f, { type: "dialogue_amount", amount: 1357 });
+  assert.equal(f.messages.at(-1), pin.data.messages.wrong);
+  assert.equal(f.p.getAttribute(BH_COFFER), 50);
+  assert.equal(f.inv.getAmount(I.COINS), 100);
+  assert.equal(bank.getAmount(I.COINS), 500);
+
+  await coffer(f, id, DEPOSIT, 250);
+  await send(f, { type: "dialogue_amount", amount: 2468 });
+  assert.equal(pin.isUnlocked(f.p), true);
+  f.inv.setItem(0, plain(I.COINS, 125));
+  core.TaskManager.process();
+  assert.equal(f.p.getAttribute(BH_COFFER), 300);
+  assert.equal(f.inv.getAmount(I.COINS), 0);
+  assert.equal(bank.getAmount(I.COINS), 375);
+});
+
 test("Bounty Hunter coffer: only what the coin stack can hold leaves the coffer", async (t) => {
   const id = () => core.ObjectIdentifiers.COFFER_4;
   const control = actor(t);

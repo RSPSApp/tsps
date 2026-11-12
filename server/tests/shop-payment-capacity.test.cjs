@@ -160,11 +160,11 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
     const vesselSlot=player.getInventory().getItems().indexOf(vessel); assert.ok(vesselSlot>=0);
     const throwWater = () => PM.emitItemAction({player,item:vessel,itemId:21539,slot:vesselSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Throw-water',clickType:1,handled:false});
     for(let n=0;n<count;n++) {
-      const before=game.points.get(player); throwWater();
+      const before=game.points.get(player), messageStart=messages.length; throwWater();
       assert.equal(game.points.get(player),before+1,`successful throw ${n+1}`);
       if(n===0 || n===5) {
         const remaining=`${count-n-1} more throws`;
-        assert.ok(messages.some(text=>text.includes(remaining)),'automatic cadence reports remaining uses');
+        assert.ok(messages.slice(messageStart).some(text=>text.includes(remaining)),'automatic cadence reports remaining uses');
         const prior=messages.length;
         PM.emitItemAction({player,item:vessel,itemId:21539,slot:vesselSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Check-level',clickType:4,handled:false});
         assert.ok(messages.slice(prior).some(text=>text.includes(remaining)),'the registered Check-level action reports the same uses');
@@ -196,7 +196,7 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   const saleMessages=[]; const originalSellerMessage=seller.p.sendMessage.bind(seller.p);
   t.mock.method(seller.p,'sendMessage',text=>{saleMessages.push(text); return originalSellerMessage(text);});
   await sale(seller,dummy);
-  assert.ok(saleMessages.some(text=>String(text).includes('This item cannot be sold.')),'the real sale route refuses the vessel');
+  assert.ok(saleMessages.some(text=>String(text).includes('You cannot sell to this shop.')),'the real sale route refuses the vessel');
   assert.equal(seller.p.getAttribute(currency),500); assert.equal(remainingStock(seller),initialStock);
   assert.equal(seller.p.getInventory().getValidItems().find(item=>item.getId()===dummy),saleItem);
   assert.notEqual(seller.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(seller.p),0);
@@ -226,6 +226,7 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.equal(serialized.attributes['volcanic-mine:larger-vessel'],true);
   assert.equal(serialized.attributes[currency]??0,0);
   f.p.setAttribute(currency,10000); await buy();
+  assert.ok(shopMessages.includes("You have already unlocked the larger water container."));
   assert.equal(f.p.getAttribute(currency),10000,'a second purchase cannot debit again');
   assert.equal(f.p.getInventory().getAmount(dummy),1);
   assert.equal(logCount(f.p),1,'a repeat does not add another log entry');
@@ -240,6 +241,15 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.equal(later.p.getUsername(),account,'the loaded actor is the same account');
   assert.equal(later.p.getAttribute('volcanic-mine:larger-vessel'),true);
   assert.equal(logCount(later.p),1,'the same account reloads its recorded reward');
+  const messages=[]; const laterSend=later.p.sendMessage.bind(later.p);
+  t.mock.method(later.p,'sendMessage',text=>{ messages.push(text); return laterSend(text); });
+  openPete(later.p);
+  assert.equal(messages.some(text=>String(text).includes('permanent 10,000-point upgrade')),false,'an unlocked account does not receive the purchase explanation');
+  const balanceAfterReload=later.p.getAttribute(currency);
+  await buyOther(later);
+  assert.ok(messages.includes('You have already unlocked the larger water container.'));
+  assert.equal(later.p.getAttribute(currency),balanceAfterReload,'repeat after reload does not debit');
+  core.ShopManager.close(later.p);
   const legacySlot=later.p.getInventory().getItems().findIndex(item=>item.getId()===dummy && item.getMeta()?.origin==='pre-existing');
   assert.ok(legacySlot>=0,'the earlier vessel survives save and reload');
   later.p.getInventory().deleteAtSlot(legacySlot,1); // Remove the test setup item before the entry producer grants its vessel.
@@ -299,14 +309,83 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.equal(bulk.p.getInventory().getAmount(dummy),0); assert.equal(logCount(bulk.p),1);
   await buyFive();
   assert.equal(bulk.p.getAttribute(currency),40000); assert.equal(remainingStock(bulk),bulkStock-1); assert.equal(logCount(bulk.p),1);
-  const messages=[]; t.mock.method(later.p,'sendMessage',text=>{ messages.push(text); });
-  const upgradedGame=enterMine(later.p); exhaust(later.p,upgradedGame,70,messages);
+  const upgradedGame=enterMine(later.p); exhaust(later.p,upgradedGame,72,messages);
 });
 async function sale(f,itemId,buttonNum=2){
   const slot=f.p.getInventory().getSlotForItemId(itemId);assert.ok(slot>=0);
   await input(f,{type:'widget_action',widgetId:301<<16,groupId:301,childId:0,buttonNum,slot,itemId});
 }
 const stock=(f,id)=>core.ShopManager.getOpenShop(f.p).stock.find(s=>s.itemId===id)?.amount;
+for (const [shopName, delta] of [["Martin Thwait's Lost and Found.", 20], ['Bandit Duty Free', 30]]) {
+  test(`${shopName} accepts an off-stock item at high alchemy value then depreciates each sale`, async t => {
+    const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.RUNE_KITESHIELD;
+    const shop = core.ShopDefinition.all().find(s => s.getName() === shopName);
+    assert.ok(shop);
+    inv.add(new core.Item(id, 2), false);
+    open(f, shop.getId());
+    const value = core.ItemDefinition.forId(id).getValue();
+    await sale(f, id);
+    assert.equal(inv.getAmount(id), 1, f.messages.join('\n'));
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), Math.floor(value * 600 / 1000));
+    await sale(f, id);
+    assert.equal(inv.getAmount(id), 0);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), Math.floor(value * 600 / 1000) + Math.floor(value * (600 - delta) / 1000));
+    assert.equal(stock(f, id), 2);
+  });
+}
+// Wiki (Bandit Duty Free, Lumbridge General Store): a stocked pot is "bought at" 0 coins. The stock formula rounds a
+// low-value item down to 0; the sale still goes through (and the Value check says 0) rather than "This item has no value."
+for (const [shopName, ids] of [['Bandit Duty Free', ['POT']], ['Lumbridge General Store', ['POT', 'ASHES']]]) {
+  test(`${shopName} buys ${ids.join(' and ').toLowerCase()} for 0 coins instead of refusing it`, async t => {
+    const f = actor(t), inv = f.p.getInventory();
+    const shop = core.ShopDefinition.all().find(s => s.getName() === shopName);
+    assert.ok(shop, shopName);
+    open(f, shop.getId());
+    for (const name of ids) {
+      const id = core.ItemIdentifiers[name];
+      inv.add(new core.Item(id, 1), false);
+      const before = stock(f, id) ?? 0;
+      await sale(f, id, 1);
+      assert.ok(f.messages.some(m => /shop will buy for 0 /.test(m)), `${name} value: ${f.messages.join(' | ')}`);
+      await sale(f, id);
+      assert.ok(!f.messages.includes('This item has no value.'), `${name}: ${f.messages.join(' | ')}`);
+      assert.equal(inv.getAmount(id), 0, `${name} sold`);
+      assert.equal(stock(f, id), before + 1, `${name} stock up by 1`);
+    }
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), 0, 'for 0 coins');
+  });
+}
+// The shop's own currency isn't bought for 0 of itself: coins keep main's refusal at a stock-priced general store.
+test('Lumbridge General Store refuses coins with "This item has no value."', async t => {
+  const f = actor(t), inv = f.p.getInventory(), coins = core.ItemIdentifiers.COINS;
+  const shop = core.ShopDefinition.all().find(s => s.getName() === 'Lumbridge General Store');
+  inv.add(new core.Item(coins, 10), false);
+  open(f, shop.getId());
+  await sale(f, coins, 1);
+  await sale(f, coins, 3);
+  assert.deepEqual(f.messages, ['This item has no value.', 'This item has no value.'], 'Value and Sell 5 refused');
+  assert.equal(inv.getAmount(coins), 10, 'no coins taken');
+  assert.equal(stock(f, coins), undefined, 'coins not listed in the shop');
+});
+test('returning original stock has the same payment in bulk and single sales', async t => {
+  const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.ROPE, coins = core.ItemIdentifiers.COINS;
+  const shop = core.ShopDefinition.all().find(s => s.getName() === "Martin Thwait's Lost and Found.");
+  inv.add(new core.Item(coins, 1000), false);
+  open(f, shop.getId());
+  const buyFive = async () => {
+    const slot = core.ShopManager.getOpenShop(f.p).stock.findIndex(s => s.itemId === id);
+    await input(f, {type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:3,slot:slot+1,itemId:id});
+    assert.equal(inv.getAmount(id), 5);
+  };
+  await buyFive();
+  let start = inv.getAmount(coins);
+  await sale(f, id, 3);
+  const bulk = inv.getAmount(coins) - start;
+  await buyFive();
+  start = inv.getAmount(coins);
+  for (let i = 0; i < 5; i++) await sale(f, id);
+  assert.equal(bulk, inv.getAmount(coins) - start);
+});
 async function refund(f,itemId){
   await sale(f,itemId,1);
   const line=f.messages.findLast(m=>/shop will buy for [\d,]+/.test(m));assert.ok(line,f.messages.join('\n'));

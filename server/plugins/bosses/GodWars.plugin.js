@@ -13,9 +13,11 @@ const { attachBandos } = require("./godwars/Bandos.GodWars");
 const { attachArmadyl } = require("./godwars/Armadyl.GodWars");
 const { attachSaradomin } = require("./godwars/Saradomin.GodWars");
 const { attachZamorak } = require("./godwars/Zamorak.GodWars");
+const { attachKeys } = require("./godwars/Keys.GodWars");
 
 module.exports = {
   name: "GodWars",
+  description: "God Wars Dungeon: the dungeon and its essence, camp crossings, the generals' shared or private chambers, and the generals' and bodyguards' fights.",
   members: true,
   register(api) {
     Common.init(api);
@@ -26,5 +28,6 @@ module.exports = {
     attachArmadyl(api);
     attachSaradomin(api);
     attachZamorak(api);
+    attachKeys(api);
   },
 };

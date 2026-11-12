@@ -37,7 +37,7 @@ test("every chest, key and loot item is in the cache, and each main table fits i
     assert.ok(entry.locId != null, entry.name);
     assert.equal(CacheDefinitions.getObject(entry.locId).name, entry.name === "Crystal chest" ? "Closed chest" : entry.name);
     const total = entry.loot.main.reduce((sum, row) => sum + row.weight, 0);
-    assert.ok(total <= entry.loot.outOf, `${entry.name}: ${total} > ${entry.loot.outOf}`);
+    if (entry.loot.outOf != null) assert.ok(total <= entry.loot.outOf, `${entry.name}: ${total} > ${entry.loot.outOf}`);
     for (const name of ["Unlock", "Open"]) {
       const options = CacheDefinitions.getObject(entry.locId).actions;
       if (options.includes(name)) assert.ok(objects.get(CacheDefinitions.getObject(entry.locId).name)?.[name], `${entry.name} ${name}`);
@@ -135,4 +135,38 @@ test("the Prifddinas singing bowl sings enhanced crystal keys at 80 Smithing and
   assert.equal(player.inventory.get(obj("prif_crystal_shard")), 5);
   assert.equal(player.inventory.get(obj("crystal_key")), 0);
   assert.deepEqual(player.xp, [[Skill.SMITHING, 1000], [Skill.CRAFTING, 1000]]);
+});
+
+test("the Grubby Chest: two food rolls, a potion roll, a main roll and 1/25 egg sacs; Open and Check are hooked", () => {
+  const grubby = chest("grubby");
+  assert.ok(objects.get("Grubby Chest")?.Open && objects.get("Grubby Chest")?.Check);
+  assert.equal(grubby.keyId, 23499);
+  assert.deepEqual(grubby.loot.tables.map((table) => table.main.reduce((sum, row) => sum + row.weight, 0) === table.outOf), [true, true, true]);
+  // food 0 (4 sharks) twice, potion 0 (the super set), main 0 (law runes), no egg sac.
+  const drops = Loot.roll(grubby, 99, randoms(0, 0, 0, 0, 0.99, 0.99));
+  assert.deepEqual(drops.map((drop) => [drop.itemId, drop.amount]), [
+    [obj("shark"), 4], [obj("shark"), 4],
+    [obj("2dose2attack"), 1], [obj("2dose2strength"), 1], [obj("2dose2defense"), 1],
+    [obj("lawrune"), 200],
+  ]);
+  assert.ok(!drops.some((drop) => drop.bonus));
+  const sac = Loot.roll(grubby, 99, randoms(0, 0, 0, 0, 0, 0.99));
+  assert.deepEqual(sac.at(-1), { itemId: obj("hosdun_orange_egg_sac"), amount: 1, noted: false, bonus: true });
+  const noted = Loot.roll(grubby, 99, randoms(0, 0, 0, 0.7, 0.99, 0.99));
+  assert.equal(noted.at(-1).noted, true, "dragon bones come noted");
+});
+
+test("the Grubby Chest's box shows the transcript's two pictures (Wiki Transcript:Grubby Chest)", () => {
+  const Chests = require("../plugins/objects/keychests/Chests.KeyChests");
+  const grubby = chest("grubby");
+  const box = (drops) => {
+    const player = createPlayer();
+    Chests.showItemBox(grubby, player, drops);
+    const first = player.statements[0].getDialogues().get(0);
+    return [first.getItemIds(), first.getText()];
+  };
+  assert.deepEqual(box([{ itemId: obj("coins"), amount: 1 }]),
+    [[obj("shark"), obj("dragonhide_red")], "You find treasure and supplies within the chest."]);
+  assert.deepEqual(box([{ itemId: obj("coins"), amount: 1 }, { itemId: obj("hosdun_blue_egg_sac"), amount: 1, bonus: true }]),
+    [[obj("hosdun_orange_egg_sac"), obj("hosdun_blue_egg_sac")], "You find treasure, supplies, and a weirdly coloured egg sac within the chest."]);
 });

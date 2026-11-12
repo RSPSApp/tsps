@@ -3,6 +3,7 @@
 const core = require("./Core.Farming");
 const Data = require("./Data.Farming");
 const Patches = require("./Patches.Farming");
+const SeedBox = require("./SeedBox.Farming");
 const Vault = require("./Vault.Farming");
 // Native bank-side item op labelled by cache param 595, shared with StorageItems.
 const BANK_STORAGE_OP = 9;
@@ -134,6 +135,7 @@ const HERB_SACKS = ["herb sack", "open herb sack", "silklined herb sack", "open 
 const HERB_SACK_CAPACITY = 30;
 const SILKLINED_CAPACITY = 100;
 const nameOf = (item) => core.CacheDefinitions.getItem(item.getId()).name.toLowerCase();
+const isSeed = id => [...Data.CROPS.values()].some(crop => crop.seed === id);
 const isSilklined = (item) => nameOf(item).includes("silklined");
 function containerKind(item) {
     const name = nameOf(item);
@@ -145,7 +147,9 @@ function bankStorageOp(event) {
     const inventory = player.getInventory(), container = inventory.forSlot(event.slot);
     if (container !== event.item || !containerKind(container)) return;
     event.handled = true;
-    const stored = container.getMetaValue("farming:stored") ?? {};
+    const stored = container.getMetaValue("farming:stored") ?? {}, seeds = containerKind(container) === "seed";
+    const initial = Object.keys(stored).length;
+    if (seeds && !initial) player.sendMessage("Your seed box is already empty.");
     for (const [key, count] of Object.entries(stored)) {
         const id = Number(key);
         if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
@@ -157,8 +161,31 @@ function bankStorageOp(event) {
         if (!stored[key]) delete stored[key];
     }
     container.setMetaValue("farming:stored", stored);
+    if (seeds && Object.keys(stored).length === 0 && initial) Patches.spam(player, "Your seed box is now empty."); // spam, as recorded
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
+}
+/**
+ * A death that empties the herb sack or seed box (the storage items' death hook decides when)
+ * takes what it stores out of it. A PvP death moves a seed box's seeds to the bank where there is
+ * room (Wiki: Seed box, 7 March 2019).
+ */
+function emptyStored(player, container) {
+    const stored = container.getMetaValue("farming:stored") ?? {}, contents = [];
+    for (const [key, count] of Object.entries(stored)) {
+        const id = Number(key);
+        if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
+        contents.push({ id, amount: count });
+    }
+    if (Object.keys(stored).length) container.setMetaValue("farming:stored", {});
+    return contents;
+}
+const DEATH_CONTAINERS = [
+    { holds: item => containerKind(item) === "herb", empty: emptyStored, varbit: "emptyondeath_herbsack" },
+    { holds: item => containerKind(item) === "seed", empty: emptyStored, varbit: "emptyondeath_seedbox", toBankInPvp: true },
+];
+function deathContainers(query) {
+    query.containers.push(...DEATH_CONTAINERS);
 }
 /** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 function storeRoom(player, container, id) {
@@ -227,7 +254,9 @@ function pickup(event) {
         if (storeCrop(player, sack, itemId, 1) !== 1) return;
         manager.deregister(groundItem);
         core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
-        // Mirror this server's ordinary ground pickup; live sack audio is not established.
+        // rsprox 227/00560.txt:228486, 237/01102.txt:366961: the pickup tick's spam line, with the
+        // ordinary pickup sound (synth 2582).
+        Patches.spam(player, `You put the ${core.CacheDefinitions.getItem(itemId).name} herb into your herb sack.`);
         core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
         player.getLastItemPickup().reset();
         player.getInventory().refreshItems();
@@ -266,8 +295,15 @@ function storagePair(event) {
     const id = (container === a ? b : a).getId();
     const stored = storeCrop(event.player, container, id, inventory.getAmount(id));
     if (stored) inventory.deleteNumber(id, stored);
-    else event.player.sendMessage("There is no room for that in this container.");
+    if (stored && containerKind(container) === "seed") Patches.spam(event.player, storedLine(id, stored));
+    else if (!stored) event.player.sendMessage(containerKind(container) === "seed" && isSeed(id) ? NO_SEED_ROOM : "There is no room for that in this container.");
 }
+// Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines. The
+// Stored, Emptied and "now empty" lines are spam (every recorded one); the refusals are game messages.
+const NO_SEED_ROOM = "You don't have space in your seed box for that.";
+const NO_SEEDS = "You have no seeds that will fit in the seed box.";
+const displayName = id => core.CacheDefinitions.getItem(id).name;
+const storedLine = (id, amount) => `Stored ${amount} x ${displayName(id)} in your seed box.`;
 function storageAction(event) {
     const inventory = event.player.getInventory(), container = inventory.forSlot(event.slot);
     if (!container || container.getId() !== event.itemId || !containerKind(container)) return;
@@ -278,16 +314,28 @@ function storageAction(event) {
     if (action === "open" || action === "close") {
         container.setId(Data.itemId((action === "open" ? "Open " : "") + (kind === "seed" ? "seed box" : isSilklined(container) ? "silklined herb sack" : "herb sack")));
     } else if (action === "fill") {
+        let refused = false, any = false;
         for (const item of [...inventory.getValidItems()]) {
-            const amount = storeCrop(event.player, container, item.getId(), item.getAmount());
-            if (amount) inventory.deleteNumber(item.getId(), amount);
+            const id = item.getId(), amount = storeCrop(event.player, container, id, item.getAmount());
+            refused ||= !amount && kind === "seed" && isSeed(id);
+            if (!amount) continue;
+            inventory.deleteNumber(id, amount);
+            any = true;
+            if (kind === "seed") Patches.spam(event.player, storedLine(id, amount));
         }
+        if (kind === "seed" && !any) event.player.sendMessage(refused ? NO_SEED_ROOM : NO_SEEDS);
+    } else if (kind === "seed" && action === "check") {
+        SeedBox.open(event.player, container);
     } else {
         const stored = (container.getMetaValue("farming:stored") ?? {});
         if (action === "check") event.player.sendMessage(Object.entries(stored).map(([id, amount]) => `${amount} ${core.CacheDefinitions.getItem(+id).name}`).join(", ") || "The container is empty.");
         else for (const [id, count] of withdrawalEntries(stored, kind)) {
             const amount = Math.min(count, kind === "seed" ? inventory.contains(+id) || !inventory.isFull() ? count : 0 : inventory.getFreeSlots());
-            if (amount && Patches.give(event.player, +id, amount)) { stored[id] -= amount; if (!stored[id]) delete stored[id]; }
+            if (amount && Patches.give(event.player, +id, amount)) {
+                stored[id] -= amount;
+                if (!stored[id]) delete stored[id];
+                if (kind === "seed") Patches.spam(event.player, `Emptied ${amount} x ${displayName(+id)} to your inventory.`);
+            }
         }
     }
     inventory.refreshItems();
@@ -366,6 +414,23 @@ function withdrawalEntries(stored, kind) {
     }));
     return entries.sort(([a], [b]) => levels.get(a) - levels.get(b) || +a - +b);
 }
+/**
+ * Wiki (Farming Guild): "To enter the guild, a minimum Farming level of 45 is required", and "boosts may be used
+ * for all tiers". The entrance (kebos_farming_guild_door_left/right_closed) is a pass-through door in Doors.plugin;
+ * this refuses it to anyone below 45 coming in from the south. Leaving is never stopped. No capture shows the
+ * refusal, so the line is TSPS wording.
+ */
+const GUILD_ENTRY_LEVEL = 45;
+const GUILD_DOORWAY_Y = 3723;
+function guardGuildDoor(event) {
+    const O = core.ObjectIdentifiers;
+    if (event.handled || (event.objectId !== O.DOOR_578 && event.objectId !== O.DOOR_579)) return;
+    const { player } = event;
+    if (player.getLocation().getY() >= GUILD_DOORWAY_Y) return;
+    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= GUILD_ENTRY_LEVEL) return;
+    event.handled = true;
+    player.sendMessage(`You need a Farming level of ${GUILD_ENTRY_LEVEL} to enter the Farming Guild.`);
+}
 function guildObject(event) {
     if (event.definition?.getName()?.toLowerCase() !== "seed vault") return;
     event.handled = true;
@@ -378,4 +443,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

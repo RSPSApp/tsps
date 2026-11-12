@@ -1,8 +1,10 @@
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { MagicSpellbook } = require("../../src/main/typescript/elvarg/game/model/MagicSpellbook");
+const { spellbookLockedRefusal } = require("../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
+const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
@@ -34,7 +36,15 @@ const OCCULT_ALTAR_SPELLBOOKS = new Map([
   [ObjectIds.ALTAR_OF_THE_OCCULT_4, MagicSpellbook.ARCEUUS],
 ]);
 
+/** A switch to `spellbook` the player hasn't unlocked (core SpellbookLocks): refused with the line, and true (handled). */
+function refuseLocked(player, spellbook) {
+  const refusal = spellbookLockedRefusal(player, spellbook);
+  if (refusal) player.sendMessage(refusal);
+  return refusal !== null;
+}
+
 function handleAncientAltar(player) {
+  if (player.getSpellbook() !== MagicSpellbook.ANCIENT && refuseLocked(player, MagicSpellbook.ANCIENT)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   MagicSpellbook.changeSpellbook(
@@ -59,11 +69,18 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   skillManager.setCurrentLevels(Skill.PRAYER, maxPrayer);
   skillManager.updateSkill(Skill.PRAYER);
-  player.sendMessage("You recharge your Prayer points.");
+  // Wiki: Prayer (5 April 2023) - praying at an altar resets the timer on Prayer point draining effects.
+  player.setPrayerPointDrain(0);
+  // Spam (filtered) chat: all 56 recorded recharges, revisions 227 to 237 (rsprox_transcripts/233/03242.txt:5471, a
+  // normal world, after oploc1 on chaosaltar). "You already have full Prayer points." stays a game message (230/02850).
+  player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You recharge your Prayer points.");
   return true;
 }
 
 function handleJaldraochtAltar(player) {
+  // As the Ancient altar: the switch to the Ancients needs Desert Treasure I (core SpellbookLocks); refused first,
+  // so the Prayer drain doesn't happen either.
+  if (player.getSpellbook() !== MagicSpellbook.ANCIENT && refuseLocked(player, MagicSpellbook.ANCIENT)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   const skillManager = player.getSkillManager();
@@ -85,6 +102,8 @@ function handleJaldraochtAltar(player) {
 }
 
 function handleOccultAltar(player, spellbook) {
+  // Choosing the book already in use needs no unlock check, as the Ancient altar's own toggle.
+  if (player.getSpellbook() !== spellbook && refuseLocked(player, spellbook)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   MagicSpellbook.changeSpellbook(player, spellbook);
@@ -99,7 +118,11 @@ function lunarAltar({ player }) {
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.LUNAR ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR);
 }
 
-function darkAltar({ player }) {
+function darkAltar({ player, objectId }) {
+  if (Number.isInteger(objectId) && objectId === core.ObjectIdentifiers?.DARK_ALTAR) {
+    api.emitCustomEvent("runecrafting:dark-altar-venerate", { player });
+    return true;
+  }
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 
@@ -226,6 +249,7 @@ function arceuusSpellbook({ player }) {
 
 module.exports = {
   name: "Altars",
+  description: "Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars.",
   register: (pluginApi) => {
     api = pluginApi;
     core = pluginApi.core;
@@ -247,3 +271,4 @@ module.exports = {
     });
   },
 };
+module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook, handleJaldraochtAltar };

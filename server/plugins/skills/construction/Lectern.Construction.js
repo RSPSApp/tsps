@@ -2,11 +2,12 @@
 
 const {
   Animation, CacheDefinitions, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue, MagicSpellbook,
-  PluginManager, Skill, Sound, Sounds, Spell, StatementDialogue, Task, TaskManager, api,
+  PluginManager, Skill, Sound, Sounds, StatementDialogue, Task, TaskManager, api,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const LECTERN_DATA = require("./data/lectern.json");
+const { plainAmount, takePlain } = require("../../items/PoweredStaff");
 
 // rsprox captures: Study opens teletabs_craft_if after setting teletab_enum (the lectern's tablet
 // list) and makexcrafting (the quantity). A tab click sets tablet_to_make (the tab's 1-based
@@ -80,15 +81,30 @@ function runesNeeded(player, lectern, tablet, count) {
     .map(([id, amount]) => ({ id, amount: amount * count }));
 }
 
+/**
+ * What the inventory's plain runes leave short, for a rune pouch to pay. Only plain runes pay for a tradeable tablet,
+ * as the study's staff sphere does: a preset rune (untradeable, unbankable) would come back as a plain teletab.
+ */
+function plainShortfall(player, needed) {
+  const shortfall = [];
+  for (const { id, amount } of needed) {
+    const short = amount - plainAmount(player.getInventory(), id);
+    if (short > 0) shortfall.push(new Item(id, short));
+  }
+  return shortfall;
+}
+
 function hasRunes(player, lectern, tablet, count) {
-  const shortfall = Spell.inventoryShortfall(player, runesNeeded(player, lectern, tablet, count).map(({ id, amount }) => new Item(id, amount)));
+  const shortfall = plainShortfall(player, runesNeeded(player, lectern, tablet, count));
   return shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall);
 }
 
 function takeRunes(player, lectern, tablet) {
-  const runes = runesNeeded(player, lectern, tablet, 1).map(({ id, amount }) => new Item(id, amount));
-  const shortfall = Spell.inventoryShortfall(player, runes);
-  for (const rune of runes) player.getInventory().delete(rune.getId(), Math.min(rune.getAmount(), player.getInventory().getAmount(rune.getId())));
+  const needed = runesNeeded(player, lectern, tablet, 1);
+  const shortfall = plainShortfall(player, needed);
+  for (const { id, amount } of needed) {
+    takePlain(player.getInventory(), id, Math.min(amount, plainAmount(player.getInventory(), id)));
+  }
   if (shortfall.length) PluginManager.consumeSpellRuneSource(player, shortfall);
 }
 
@@ -162,7 +178,7 @@ function refused(player, lectern) {
 
 /** The first rune neither the inventory nor a rune pouch covers, or null when there is none. */
 function missingRune(player, lectern, tablet) {
-  const shortfall = Spell.inventoryShortfall(player, runesNeeded(player, lectern, tablet, 1).map(({ id, amount }) => new Item(id, amount)));
+  const shortfall = plainShortfall(player, runesNeeded(player, lectern, tablet, 1));
   if (shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall)) return null;
   return shortfall.find(rune => !PluginManager.checkSpellRuneSource(player, [rune])) ?? shortfall[0];
 }
@@ -229,7 +245,9 @@ class TabletTask extends Task {
     }
     const missing = missingRune(player, lectern, tablet);
     if (missing) {
-      player.sendMessage(lectern.world ? missingRuneMessage(missing.getId()) : "You do not have enough runes to make that tablet.");
+      // rsprox_transcripts/229/02801.txt: a house lectern's confirm without nature runes says "You do not have enough
+      // Nature Runes to cast this spell.", as the world lecterns do.
+      player.sendMessage(missingRuneMessage(missing.getId()));
       return false;
     }
     return true;

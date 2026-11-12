@@ -9,6 +9,7 @@ const Common = require("./Common.HallowedSepulchre");
 const Obstacles = require("./Obstacles.HallowedSepulchre");
 
 const TIERS = ["low", "mid", "high"];
+const GRAND_AGILITY_REQUIREMENT = 92;
 
 function successChance(player) {
   const { base, max, lockpick, strangeLockpick } = Common.data.thieving;
@@ -88,7 +89,11 @@ function open(event) {
     return true;
   }
   const required = grand ? Common.data.requirements.grandThieving : Common.data.requirements.thieving;
-  if (Common.level(player, "THIEVING") < required) {
+  const thieving = Common.level(player, "THIEVING");
+  // Wiki (Grand Hallowed Coffin): "Thieving 84, or Thieving 66 with Agility 92", all boostable.
+  const agilityAlternative = grand && Common.level(player, "AGILITY") >= GRAND_AGILITY_REQUIREMENT
+    && thieving >= Common.data.requirements.thieving;
+  if (thieving < required && !agilityAlternative) {
     player.sendMessage(Common.message("skillLevel", { skill: "Thieving", level: required }));
     return true;
   }

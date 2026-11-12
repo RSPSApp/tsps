@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "TombsOfAmascut",
+  description: "Adds the Tombs of Amascut raid: the Jaltevas lobby and party board, the Nexus, four paths with their puzzles and bosses, the Wardens and rewards.",
   members: true,
   register(api) {
     require("./toa/Lobby.TombsOfAmascut")(api);

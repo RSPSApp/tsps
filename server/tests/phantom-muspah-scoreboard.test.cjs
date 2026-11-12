@@ -22,6 +22,9 @@ const Lair = require('../plugins/bosses/phantommuspah/Lair.PhantomMuspah');
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'muspah-scoreboard-'));
 const hooks = { objects: {}, npcDeaths: [], routes: [], defeated: [], deaths: [], persisted: new Map() };
+/** What the lair moves to the exit: [owner, itemId] per stack registered. */
+const moved = [];
+const groundManager = { deregister() {}, registerLocation: (owner, item) => moved.push([owner, item.getId()]) };
 let INTERFACE, BOARD_MULTI, BOARD;
 let index = 1;
 
@@ -39,6 +42,7 @@ before(() => {
     onPlayerLogin() {},
     onItemAction() {},
     emitCustomEvent() {},
+    getItemOnGroundManager: () => groundManager,
   };
   Common.init(api);
   Loot.attachLoot(api);
@@ -62,9 +66,17 @@ function realPlayer(t) {
   p.setRegistered(true);
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   const sender = p.getPacketSender();
-  p.sent = { interfaces: [], texts: new Map(), messages: [] };
-  const original = { sendInterface: sender.sendInterface, sendString: sender.sendString };
-  t.mock.method(sender, 'sendInterface', function (id) { p.sent.interfaces.push(id); return original.sendInterface.apply(this, arguments); });
+  p.sent = { interfaces: [], texts: new Map(), messages: [], order: [] };
+  const original = { sendInterface: sender.sendInterface, sendString: sender.sendString, sendInterfaceScript: sender.sendInterfaceScript };
+  t.mock.method(sender, 'sendInterface', function (id) {
+    p.sent.interfaces.push(id);
+    p.sent.order.push(['interface', id]);
+    return original.sendInterface.apply(this, arguments);
+  });
+  t.mock.method(sender, 'sendInterfaceScript', function (id, args) {
+    p.sent.order.push(['script', id, args]);
+    return original.sendInterfaceScript.apply(this, arguments);
+  });
   t.mock.method(sender, 'sendString', function (text, uid) { p.sent.texts.set(uid, text); return original.sendString.apply(this, arguments); });
   t.mock.method(p, 'sendMessage', (text) => p.sent.messages.push(text));
   return p;
@@ -95,6 +107,16 @@ test('a new reader sees zeros and "-" under the cache title', (t) => {
   for (const component of [9, 11, 15, 17]) assert.equal(text(p, component), '0');
   assert.equal(text(p, 13), '-');
   assert.equal(text(p, 19), '-');
+});
+
+// Issue 3814: the board's background sits at a fixed spot in a layer as big as the main modal, so a
+// main modal left stretched by an earlier modal (the bank runs toplevel_mainmodal_background -1, -2)
+// drew it at the top. Live runs toplevel_mainmodal_open (2524) -1, -1 before every board
+// (rsprox_transcripts/224/01453.txt for Araxxor's, the same layout).
+test('reading resets the main modal to its standard size before the board opens, as live does', (t) => {
+  const p = realPlayer(t);
+  assert.equal(click(p, 'Read', BOARD), true);
+  assert.deepEqual(p.sent.order, [['script', 2524, [-1, -1]], ['interface', INTERFACE]]);
 });
 
 test('kills through the Muspah death hook fill the personal and world rows, the faster time winning', (t) => {
@@ -210,4 +232,17 @@ test('a death outside the lair (in the fade in, or with no lair) is not counted'
   click(p, 'Read', BOARD_MULTI);
   assert.equal(text(p, 11), '0');
   assert.equal(text(p, 17), '0');
+});
+
+test("a lair death moves its floor loot to the exit, but not a stack already picked up this tick", (t) => {
+  const { World } = PluginManager.getCoreApi();
+  const p = realPlayer(t);
+  const area = {};
+  Lair._setSession(p, area);
+  const stack = (id, pending) => ({ getPrivateArea: () => area, isPendingRemoval: () => pending, getItem: () => ({ getId: () => id }) });
+  const items = [stack(4151, false), stack(11802, true)];
+  t.mock.method(World, "getItems", () => items);
+  moved.length = 0;
+  for (const handler of hooks.deaths) handler({ player: p, handled: false });
+  assert.deepEqual(moved.map(([, id]) => id), [4151], "the picked-up stack is in the inventory already");
 });

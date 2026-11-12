@@ -48,8 +48,8 @@ const BEAM_ENDS = [Ids.loc("poh_balancebeam_endl"), Ids.loc("poh_balancebeam_end
 const BEAM_MIDDLE = Ids.loc("poh_balancebeam_middle");
 const RACKS = {
   GLOVE_RACK: [["Red boxing gloves", RED_GLOVES], ["Blue boxing gloves", BLUE_GLOVES]],
-  WEAPONS_RACK: [["Red boxing gloves", RED_GLOVES], ["Blue boxing gloves", BLUE_GLOVES], ["Wooden sword", WOODEN_SWORD], ["Wooden shield", WOODEN_SHIELD]],
-  EXTRA_WEAPONS_RACK: [["Red boxing gloves", RED_GLOVES], ["Blue boxing gloves", BLUE_GLOVES], ["Wooden sword", WOODEN_SWORD], ["Wooden shield", WOODEN_SHIELD], ["Pugel stick", PUGEL]],
+  WEAPONS_RACK: [["Red boxing gloves", RED_GLOVES], ["Blue boxing gloves", BLUE_GLOVES], ["Wooden shortsword", WOODEN_SWORD], ["Wooden shield", WOODEN_SHIELD]],
+  EXTRA_WEAPONS_RACK: [["Red boxing gloves", RED_GLOVES], ["Blue boxing gloves", BLUE_GLOVES], ["Wooden shortsword", WOODEN_SWORD], ["Wooden shield", WOODEN_SHIELD], ["Pugel stick", PUGEL]],
 };
 
 const tileKey = (x, y, z) => `${x},${y},${z}`;
@@ -118,6 +118,8 @@ function climbOver(event) {
   const gloves = player.getEquipment().getItems()[Equipment.HANDS_SLOT]?.getId?.();
   player.performAnimation(new Animation(CLIMB[gloves] ?? CLIMB.none));
   player.moveTo(to);
+  // Wiki (Burn): leaving a POH combat ring removes burns.
+  if (inside) api.emitCustomEvent("combat:clear-burn", { target: player });
   return true;
 }
 
@@ -139,6 +141,7 @@ function beatenInRing(event) {
   player.getCombat().reset();
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, player.getSkillManager().getMaxLevel(Skill.HITPOINTS), true);
   player.moveTo(outsideOf(house, player.getLocation()));
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   player.sendMessage("You have been defeated. Better luck next time!");
 }
 

@@ -68,20 +68,7 @@ function fish({ player, npc, npcId }) {
     if (!exchange(player, [], [[fish, amount]]) && fish === I.GOLDEN_TENCH) require("./Context.Hunter").drop(player, [[fish, amount]], player.getLocation());
     const denominator = Math.max(1, 100 - (combined - 40) * 25 / 59);
     if (Math.random() < 1.5 / denominator && !exchange(player, [], [[I.MOLCH_PEARL, 1]])) require("./Context.Hunter").drop(player, [[I.MOLCH_PEARL, 1]], player.getLocation());
-    for (const [tier, modifier] of [["BEGINNER",0.2],["EASY",1.7],["MEDIUM",2],["HARD",3.3],["ELITE",10]]) {
-      if (require("./Context.Hunter").ownsClue(player,tier)) continue;
-      // Content may make clue bottles commoner ("treasure-trails:vessel-chance", a league relic).
-      const boost = { player, vessel: "bottle", tier: tier.toLowerCase(), multiplier: 1 };
-      H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
-      if (boost.allowed === false) continue;
-      const achievement = { player, tier: tier.toLowerCase(), currentThresholdMet: false };
-      if (tier !== "BEGINNER") H.api.emitCustomEvent("combat-achievements:tier", achievement);
-      const base = achievement.currentThresholdMet === true ? Math.floor(636833 * 95 / 100) : 636833;
-      const denominator = Math.max(1, Math.floor(base / (100 + level(player,H.core.Skill.FISHING)) * modifier / (boost.multiplier > 1 ? boost.multiplier : 1)));
-      if (roll(1,denominator) !== 1) continue;
-      const id = I[`${require("./Context.Hunter").questComplete(player,"x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_BOTTLE"}_${tier}_`];
-      if (!exchange(player,[],[[id,1]])) require("./Context.Hunter").drop(player,[[id,1]],player.getLocation());
-    }
+    rollClues(player);
     xp(player, def.hunterXp, "aerial-fishing", npcId);
     player.getSkillManager().addExperiences(H.core.Skill.FISHING, def.fishingXp);
     H.api.emitCustomEvent("fishing:success", { player, skill: H.core.Skill.FISHING, petBase: 636833, itemId: fish });
@@ -93,6 +80,28 @@ function fish({ player, npc, npcId }) {
   return true;
 }
 
+/** Each tier rolls its clue bottle on a catch, then checks the player can take it. */
+function rollClues(player) {
+  const I = H.core.ItemIdentifiers;
+  for (const [tier, modifier] of [["BEGINNER",0.2],["EASY",1.7],["MEDIUM",2],["HARD",3.3],["ELITE",10]]) {
+    // Content may make clue bottles commoner ("treasure-trails:vessel-chance", a league relic).
+    const boost = { player, vessel: "bottle", tier: tier.toLowerCase(), multiplier: 1 };
+    H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
+    if (boost.allowed === false) continue;
+    const achievement = { player, tier: tier.toLowerCase(), currentThresholdMet: false };
+    if (tier !== "BEGINNER") H.api.emitCustomEvent("combat-achievements:tier", achievement);
+    const base = achievement.currentThresholdMet === true ? Math.floor(636833 * 95 / 100) : 636833;
+    const denominator = Math.max(1, Math.floor(base / (100 + level(player,H.core.Skill.FISHING)) * modifier / (boost.multiplier > 1 ? boost.multiplier : 1)));
+    if (roll(1,denominator) !== 1) continue;
+    // A hit the player cannot take is lost; the tier's clue scroll warning mentions it.
+    if (require("./Context.Hunter").ownsClue(player,tier)) {
+      H.api.emitCustomEvent("treasure-trails:missed-clue", { player, tier: tier.toLowerCase() });
+      continue;
+    }
+    const id = I[`${require("./Context.Hunter").questComplete(player,"x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_BOTTLE"}_${tier}_`];
+    if (!exchange(player,[],[[id,1]])) require("./Context.Hunter").drop(player,[[id,1]],player.getLocation());
+  }
+}
 
 function cut(event) {
   const pair = [event.usedItemId, event.usedWithItemId];
@@ -129,4 +138,4 @@ function cleanup({ player }) {
   if ([I.CORMORANTS_GLOVE, I.CORMORANTS_GLOVE_2].includes(player.getEquipment().get(H.core.Equipment.WEAPON_SLOT).getId())) glove(player, -1);
 }
 
-module.exports = { ATTRIBUTE, talk, borrow, fish, cut, tench, equipment, process, cleanup };
+module.exports = { ATTRIBUTE, talk, borrow, fish, rollClues, cut, tench, equipment, process, cleanup };

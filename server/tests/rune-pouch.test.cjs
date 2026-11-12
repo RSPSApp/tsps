@@ -45,6 +45,7 @@ function createContainer(capacity, initial = []) {
       else if (container.getFreeSlots() > 0) items.push(item.clone());
       return container;
     },
+    adds: (id, amount) => container.add(new Item(id, amount)),
     deleteNumber(id, amount) {
       let left = amount;
       for (const item of [...items]) {
@@ -348,7 +349,8 @@ test("op1 on the pouch in the bank shows it, and op9 empties it into the bank", 
   assert.equal(sender.getVarbit(Bank.VIEW_CONTAINER_VARBIT), 3);
   assert.equal(sender.getVarp(Bank.VIEW_CONTAINER_OBJ_VARP), Items.RUNE_POUCH);
   assert.ok(player.log.some((line) => line.startsWith("flags 15:26 1-3")));
-  assert.ok(player.log.some((line) => line.startsWith("flags 15:95 112-223")));
+  // Rev 242: the loadout-name list (enum 5864) has 113 rows (112 before).
+  assert.ok(player.log.some((line) => line.startsWith("flags 15:95 113-225")));
 
   const deposit = { player, item: pouch, slot: 0, op: 2, handled: false };
   PluginManager.emitCustomEvent(Bank.INVENTORY_OP_EVENT, deposit);
@@ -489,14 +491,15 @@ test("a loadout name is picked from the cache's list", () => {
 
   clickComponent(player, "bankside:runepouch_name_a", 1);
   assert.equal(sender.getVarbit(varbit("rune_pouch_loadout_name_selected")), 1);
-  // Captured: list rows 132, 130 and 135 named The Fight Caves (18), Duke Sucellus (17) and Giant Mole (21).
-  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 132 });
+  // Captured (rev 241): list rows 132, 130 and 135 named The Fight Caves (18), Duke Sucellus (17) and Giant
+  // Mole (21). Rev 242's list has 113 rows, so the same names sit at 133, 131 and 136.
+  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 133 });
   assert.equal(sender.getVarbit(varbit("rune_pouch_loadout_name_a")), 18);
   clickComponent(player, "bankside:runepouch_name_b", 1);
-  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 130 });
+  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 131 });
   assert.equal(sender.getVarbit(varbit("rune_pouch_loadout_name_b")), 17);
   clickComponent(player, "bankside:runepouch_name_a", 1);
-  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 135 });
+  clickComponent(player, "bankside:runepouch_name_select_list", 1, { slot: 136 });
   assert.equal(sender.getVarbit(varbit("rune_pouch_loadout_name_a")), 21);
 });
 
@@ -516,6 +519,25 @@ test("spells take only the shortfall from the pouch", () => {
   const noPouch = createPlayer([]);
   pouchWith(noPouch, [[Items.AIR_RUNE, 10], [Items.MIND_RUNE, 10]]);
   assert.equal(CombatSpells.WIND_STRIKE.canCast(noPouch, false), false, "the runes need the pouch carried");
+});
+
+test("runes a spell gives back go to the pouch slot holding that rune while it has room, never an empty one", () => {
+  const refund = (player, runeId, amount) => {
+    const event = { player, runeId, amount, stored: 0 };
+    PluginManager.emitCustomEvent("magic:rune-refund", event);
+    return event.stored;
+  };
+  const player = createPlayer([new Item(Items.RUNE_POUCH, 1)]);
+  pouchWith(player, [[Items.EARTH_RUNE, 14928], [Items.DEATH_RUNE, 16000]]);
+  assert.equal(refund(player, Items.EARTH_RUNE, 10), 10, "the pouch's earth slot takes it");
+  assert.equal(refund(player, Items.EARTH_RUNE, 2000), 16000 - 14938, "up to 16,000; the rest is the caller's");
+  assert.equal(refund(player, Items.DEATH_RUNE, 2), 0, "a full slot takes none");
+  assert.equal(refund(player, Items.ASTRAL_RUNE, 4), 0, "an empty slot is never filled");
+  assert.deepEqual(varbitSlots(player), [[Items.EARTH_RUNE, 16000], [Items.DEATH_RUNE, 16000]]);
+
+  const noPouch = createPlayer([]);
+  pouchWith(noPouch, [[Items.EARTH_RUNE, 10]]);
+  assert.equal(refund(noPouch, Items.EARTH_RUNE, 10), 0, "only a carried pouch");
 });
 
 test("login sends saved player pouch slots without opening bank tabs", () => {
@@ -584,6 +606,30 @@ test("Vengeance on yourself pays its runes from the carried pouch", () => {
   assert.deepEqual(varbitSlots(player), [[Items.ASTRAL_RUNE, 96], [Items.EARTH_RUNE, 90], [Items.DEATH_RUNE, 98]]);
 });
 
+
+test("Bones to Bananas pays its runes from the carried pouch, not for free", () => {
+  const { EffectSpells } = require("../dist/game/content/combat/magic/EffectSpells");
+  const bones = Array.from({ length: 5 }, () => new Item(526, 1));
+  const player = createPlayer([new Item(Items.RUNE_POUCH, 1), ...bones]);
+  const experience = [];
+  player.getSpellbook = () => MagicSpellbook.NORMAL;
+  player.getSkillManager = () => ({
+    getCurrentLevel: () => 99,
+    getMaxLevel: () => 99,
+    addExperiences: (skill, amount) => experience.push(amount),
+  });
+  player.getClickDelay = () => ({ elapsedTime: () => true, reset() {} });
+  player.performAnimation = () => {};
+  player.performGraphic = () => {};
+  player.getPacketSender().sendSoundEffect = () => player.getPacketSender();
+  pouchWith(player, [[Items.NATURE_RUNE, 100], [Items.EARTH_RUNE, 100], [Items.WATER_RUNE, 100]]);
+  const spell = EffectSpells.BONES_TO_BANANAS;
+  assert.equal(EffectSpells.handleSpell(player, spell.spellId()), true);
+  assert.equal(player.getInventory().getAmount(1963), 5, "five bananas");
+  const paid = spell.itemsRequired(player).map((rune) => [rune.getId(), 100 - rune.getAmount()]);
+  const left = new Map(varbitSlots(player));
+  for (const [id, expected] of paid) assert.equal(left.get(id), expected, "the pouch paid the spell's runes");
+});
 
 // These use real lazy banks, item identities, placeholders and native packet dispatch.
 function nativePouchActor(t, pouchId = Items.RUNE_POUCH) {

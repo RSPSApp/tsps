@@ -33,11 +33,18 @@ function load() {
     }
     tab.categories.sort((a, b) => a.key - b.key);
     tab.maxKey = Math.max(...tab.categories.map((category) => category.key));
-    tab.items = new Set(tab.categories.flatMap((category) => category.items));
     offset += tab.maxKey + 1;
     tabs.push(tab);
   }
   tabs.sort((a, b) => a.index - b.index);
+  // The log counts an item once however many categories list it, and a tab's count takes only the
+  // items no earlier tab has: an Abyssal dagger (Abyssal Sire and Slayer) moves Bosses, not Other.
+  // As captured, the five tab maximums always add up to collection_count_max.
+  const counted = new Set();
+  for (const tab of tabs) {
+    tab.items = new Set(tab.categories.flatMap((category) => category.items).filter((item) => !counted.has(item)));
+    tab.items.forEach((item) => counted.add(item));
+  }
   const maxCategorySize = Math.max(...tabs.flatMap((tab) => tab.categories.map((category) => category.items.length)));
   data = { tabs, categoriesByStruct, categoriesByItem, categoryTotal: offset, itemTotal: categoriesByItem.size, maxCategorySize };
   return data;

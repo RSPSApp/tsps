@@ -56,9 +56,15 @@ const FLOWERS = {
   blue: new Set(["3806,2999,0", "3806,3000,0", "3806,3001,0"]),
 };
 
+/**
+ * The spawn is INSIDE the room, north of its door: talking to San Fan / Fancy Dan / Honest Jimmy
+ * is what enters the waiting room (Wiki), and the door is the way out. Landing on the tile south
+ * of the door put the player outside, where the only visible way in was the door - and opening it
+ * leaves the queue, so the player bounced between the room and the lobby.
+ */
 const WAITING = {
-  red: { spawn: [3801, 3016, 0], bounds: { minX: 3796, maxX: 3808, minY: 3010, maxY: 3022 }, door: "3802,3015,0" },
-  blue: { spawn: [3824, 3016, 0], bounds: { minX: 3818, maxX: 3830, minY: 3010, maxY: 3022 }, door: "3823,3015,0" },
+  red: { spawn: [3802, 3013, 0], bounds: { minX: 3796, maxX: 3808, minY: 3010, maxY: 3022 }, door: "3802,3015,0" },
+  blue: { spawn: [3824, 3013, 0], bounds: { minX: 3818, maxX: 3830, minY: 3010, maxY: 3022 }, door: "3823,3015,0" },
 };
 const LOBBY_RETURN = [3812, 3027, 0];
 const ARENA = { minX: 3772, maxX: 3844, minY: 2940, maxY: 3012, z: 0 };

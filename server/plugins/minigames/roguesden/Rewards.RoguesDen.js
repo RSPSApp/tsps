@@ -83,7 +83,11 @@ function buildKit(event) {
   api.sendMultiChatboxPrompt(player, "What do you want to make?",
     ...KITS.flatMap((kit) => [kit.label, () => {
       player.getPacketSender().sendInterfaceRemoval();
-      if (Common.freeSlots(player) <= 0) {
+      const inventory = player.getInventory();
+      const kits = inventory.getAmount(Common.itemIds.rogueKit);
+      if (kits < 1) return;
+      // Consuming the last kit frees its slot for the new item.
+      if (Common.freeSlots(player) <= 0 && kits > 1) {
         player.sendMessage(Common.message("full"));
         return;
       }

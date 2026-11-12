@@ -16,8 +16,13 @@
  * The watchtower trapdoor (2444) is a multi-loc keyed on the same varp, so it
  * only gains its Climb-down option once stage 130 is set.
  */
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+
 module.exports = function registerGrandTreeQuest(api) {
-  const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const {
+    Skill, Location, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
+    ItemOnGround, ItemOnGroundManager, GroundItemState,
+  } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "The Grand Tree";
@@ -42,12 +47,17 @@ module.exports = function registerGrandTreeQuest(api) {
   const STAGE_COMPLETE = 160;
 
   const START_HOOK = "quest:the-grand-tree:start";
+  const FOUNDATIONS_VARIANT = "the-dying-tree-foundations-cutscene";
+  const FOUNDATIONS_ENTER_ACTION_ID = "WguHnH";
+  const FOUNDATIONS_RETURN_ACTION_IDS = new Set(["4N-LXD", "Ad8Cjj"]);
   /** Transcript action that ends the "Daconia delivered" branch. */
   const COMPLETE_ACTION_ID = "PJWrB9";
   /** Transcript action that hands over Hazelmere's scroll. */
   const HAZELMERE_SCROLL_ACTION_ID = "2lKQYT";
   /** Transcript action that hands over the shipyard foreman's lumber order. */
   const LUMBER_ORDER_ACTION_ID = "TXgXt3";
+  const FOREMAN_OFFICE_ACTION_ID = "eQHe7h";
+  const FOREMAN_QUIZ = "treachery-revealed-the-shipyard-foreman";
   /** Transcript action that hands over the four twigs. */
   const TWIGS_ACTION_ID = "QV47Iy";
   const TWIGS_REPLACEMENT_ACTION_ID = "xC2-c6";
@@ -63,6 +73,8 @@ module.exports = function registerGrandTreeQuest(api) {
   const SCROLL_REPLACEMENT_MESSAGE_ID = "r6XvDD";
   /** Transcript action: the guards escort the player into Charlie's cell. */
   const ARREST_ACTION_ID = "pkr5F6";
+  const PRISON_VARIANT = "searching-glough-s-cupboard-imprisoned";
+  const PRISON_KING_ACTION_ID = "cAaPZv";
   /** Transcript action: the king releases the player from the cell. */
   const RELEASE_ACTION_ID = "GdAMEV";
   /** Transcript message: the glider flight to Karamja. */
@@ -127,21 +139,28 @@ module.exports = function registerGrandTreeQuest(api) {
     [ObjectIdentifiers.PILLAR_5, ItemIdentifiers.TWIGS_4],
   ]);
   const ALL_PILLARS_PLACED = (1 << PILLAR_TWIGS.size) - 1;
+  const FIRST_PILLAR_TILE = { x: 2485, y: 3467, z: 2 };
 
   /** Climbing the watchtower tree lands on its east side, beside the twig pillars. */
   const WATCHTOWER_DESTINATION = { x: 2485, y: 3465, z: 2 };
-  const CAVE_DESTINATION = { x: 2491, y: 9861, z: 0 };
-  const CELL_DESTINATION = { x: 2464, y: 3495, z: 3 };
-  /** The cell's door has no cached Open option, so release moves the player out. */
-  const RELEASE_DESTINATION = { x: 2467, y: 3500, z: 3 };
+  /** The cave's entrance ladder is at 2492, 9864. Land on the open tile directly south. */
+  const CAVE_DESTINATION = { x: 2492, y: 9863, z: 0 };
+  const BROKEN_CAVE_LADDER_ID = ObjectIdentifiers.LADDER_206;
+  // Walkable tile just east of the surface trapdoor (2446).
+  const FOUNDATIONS_RETURN = { x: 2464, y: 3497, z: 0 };
+  const FOUNDATIONS_LANDING = { x: 2464, y: 9896, z: 0 };
+  const CELL_DESTINATION = { x: 2464, y: 3496, z: 3 };
+  const RELEASE_DESTINATION = { x: 2465, y: 3496, z: 3 };
+  const PRISON_KING_TILE = { x: 2466, y: 3496, z: 3 };
+  const SHIPYARD_GATES = new Map([[3041, ObjectIdentifiers.GATE_55], [3042, ObjectIdentifiers.GATE_56]]);
+  const SHIPYARD_GATE_X = 2945;
+  const SHIPYARD_OFFICE = { x: 2954, y: 3025, z: 0 };
+  const OFFICE_FOREMAN = { x: 2954, y: 3024, z: 0 };
   const SHIPYARD_CRASH_DESTINATION = { x: 2924, y: 3055, z: 0 };
-  /** The far side of the shipyard gate the worker opens. */
-  const SHIPYARD_INSIDE_DESTINATION = { x: 2947, y: 3042, z: 0 };
   /** Femi drops the player back inside the stronghold gate. */
   const STRONGHOLD_INSIDE_DESTINATION = { x: 2466, y: 3495, z: 0 };
   const FEMI_FARE = 1000;
   const BLACK_DEMON_ID = NpcIdentifiers.BLACK_DEMON_2; // 1432, the quest demon
-  const DEMON_SPAWN = { x: 2488, y: 9866, z: 0 };
 
   const PILLARS_ATTRIBUTE = "grand-tree:pillars-placed";
   const PASSWORD_ATTRIBUTE = "grand-tree:shipyard-password";
@@ -170,7 +189,10 @@ module.exports = function registerGrandTreeQuest(api) {
   const at = (tile) => new Location(tile.x, tile.y, tile.z);
 
   let quest;
-  const demonEncounters = new Map();
+  const demonEncounter = require("../grandtree/Demon.GrandTree")(api);
+  const officeForemen = new Map();
+  const prisonKings = new WeakMap();
+  const pillarDisplays = new WeakMap();
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -254,7 +276,7 @@ module.exports = function registerGrandTreeQuest(api) {
     if (stage >= STAGE_RELAYED_MESSAGE) return "a-deadly-plot-when-speaking-to-king-narnode-shareen-again";
     if (stage >= STAGE_HAZELMERE) return "a-deadly-plot-bring-back-the-news";
     if (stage >= STAGE_STARTED) return "the-dying-tree-when-speaking-to-king-narnode-shareen-again";
-    return "the-dying-tree-foundations-cutscene";
+    return player.getLocation().isWithinDistance(at(FOUNDATIONS_LANDING), 3) ? FOUNDATIONS_VARIANT : "the-dying-tree";
   }
 
   function gloughVariant(stage) {
@@ -271,7 +293,7 @@ module.exports = function registerGrandTreeQuest(api) {
     if (stage >= STAGE_INVASION_PLANS) return "treachery-revealed-glough-s-plans-talking-to-charlie";
     if (stage >= STAGE_LUMBER_ORDER) return "treachery-revealed-charlie";
     if (stage >= STAGE_RELEASED) return "searching-glough-s-cupboard-imprisoned-when-speaking-to-charlie-again";
-    if (stage >= STAGE_FOUND_JOURNAL) return "searching-glough-s-cupboard-imprisoned";
+    if (stage >= STAGE_FOUND_JOURNAL) return PRISON_VARIANT;
     if (stage >= STAGE_SPOKEN_PRISONER) return "human-sabotage-interrogating-the-prisoner-when-talking-to-charlie-again";
     return "human-sabotage-interrogating-the-prisoner";
   }
@@ -326,7 +348,7 @@ module.exports = function registerGrandTreeQuest(api) {
       if (stage < STAGE_RELEASED || stage >= STAGE_INVASION_PLANS) return null;
       return page(stage >= STAGE_LUMBER_ORDER
         ? "treachery-revealed-the-shipyard-talking-to-foreman-after-obtaining-the-lumber-order"
-        : "treachery-revealed-the-shipyard-foreman");
+        : FOREMAN_QUIZ);
     }
     if (npcId === SHIPYARD_WORKER_ID) {
       if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
@@ -363,6 +385,29 @@ module.exports = function registerGrandTreeQuest(api) {
     return null;
   }
 
+  function ensureOfficeForeman(player) {
+    if (officeForemen.get(player)?.isRegistered()) return;
+    const npc = api.spawnNpc({
+      id: NpcIdentifiers.FOREMAN, ...OFFICE_FOREMAN, wanderRadius: 0, owner: player, ownerOnly: true,
+    });
+    if (npc) officeForemen.set(player, npc);
+  }
+
+  function removeOfficeForeman(player) {
+    const npc = officeForemen.get(player);
+    if (!npc) return;
+    officeForemen.delete(player);
+    api.removeNpc(npc);
+  }
+
+  function resumeOfficeQuiz({ player, npc, npcId }) {
+    if (npc !== officeForemen.get(player) || quest.getStage(player) !== STAGE_RELEASED) return false;
+    return startTranscript(api, player, npcId, PAGE, FOREMAN_QUIZ, (steps) => {
+      const entry = steps.findIndex((step) => step.id === FOREMAN_OFFICE_ACTION_ID);
+      return entry < 0 ? [] : steps.slice(entry + 1);
+    }, npc);
+  }
+
   /** Answer the page's prose conditions. */
   function answerCondition({ player, npcId, text }) {
     if (![NARNODE_IDS, HAZELMERE_IDS, GLOUGH_IDS, CHARLIE_IDS, ANITA_IDS, CAPTAIN_ERRDO_IDS, GNOME_GUARD_IDS, JOGRE_IDS].some(ids => ids.has(npcId)) && ![NpcIdentifiers.FOREMAN, SHIPYARD_WORKER_ID, NpcIdentifiers.FEMI].includes(npcId)) return null;
@@ -393,10 +438,6 @@ module.exports = function registerGrandTreeQuest(api) {
   function handleStartHook({ player, npcId, hook }) {
     if (!NARNODE_IDS.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
-    if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < 25) {
-      player.sendMessage("You need 25 Agility to start The Grand Tree.");
-      return;
-    }
     quest.setStage(player, STAGE_STARTED);
     if (!has(player, BARK_SAMPLE_ITEM_ID)) player.getInventory().adds(BARK_SAMPLE_ITEM_ID, 1);
     if (!has(player, TRANSLATION_BOOK_ITEM_ID)) player.getInventory().adds(TRANSLATION_BOOK_ITEM_ID, 1);
@@ -419,11 +460,8 @@ module.exports = function registerGrandTreeQuest(api) {
       return;
     }
     const stage = quest.getStage(player);
-    // The King's closing line is typed on Charlie's cell transcript, so the
-    // clicked NPC id is Charlie even though the speaker is Narnode.
-    if (text.startsWith("I'm sorry again Traveller!")) {
-      if (stage >= STAGE_FOUND_JOURNAL && stage < STAGE_RELEASED) advance(player, STAGE_RELEASED);
-      return;
+    if (event.npc && event.npc === prisonKings.get(player) && text === "I'm sorry again Traveller!") {
+      event.after = () => removePrisonKing(player);
     }
     // Each line only advances the stage window its conversation belongs to, so a
     // shared NPC talked to before that leg cannot skip the route.
@@ -476,6 +514,101 @@ module.exports = function registerGrandTreeQuest(api) {
     }
   }
 
+  function startFoundations(event) {
+    const { player, npcId } = event;
+    event.handled = event.end = true;
+    player.getMovementQueue().walkToTile(at(FOUNDATIONS_RETURN), () => {
+      teleport(player, FOUNDATIONS_LANDING);
+      const king = findNearbyNpc(player, npcId);
+      startTranscript(api, player, npcId, PAGE, FOUNDATIONS_VARIANT, null, king);
+    });
+  }
+
+  function findNearbyNpc(player, npcId) {
+    return api.getWorld().getNpcsNear(player.getLocation(), 5, player.getPrivateArea()).find(npc => npc.getContentId(player) === npcId);
+  }
+
+  function showPrisonKing(player) {
+    if (prisonKings.get(player)?.isRegistered()) return;
+    const npc = api.spawnNpc({
+      id: NpcIdentifiers.KING_NARNODE_SHAREEN, ...PRISON_KING_TILE, wanderRadius: 0, owner: player, ownerOnly: true,
+    });
+    if (npc) prisonKings.set(player, npc);
+  }
+
+  function removePrisonKing(player) {
+    const king = prisonKings.get(player);
+    if (!king) return;
+    prisonKings.delete(player);
+    api.removeNpc(king);
+  }
+
+  function openDoor(player, objectId, location) {
+    const object = api.core.MapObjects.get(objectId, location, player.getPrivateArea());
+    const request = { player, object, handled: false };
+    if (object) api.emitCustomEvent("door:open", request);
+    return request.handled;
+  }
+
+  function releasePrisoner(event) {
+    const { player } = event;
+    const here = player.getLocation();
+    if (here.getX() !== CELL_DESTINATION.x || here.getZ() !== CELL_DESTINATION.z
+      || (here.getY() !== CELL_DESTINATION.y && here.getY() !== CELL_DESTINATION.y - 1)) return;
+    event.handled = event.end = true;
+    if (!here.equals(at(CELL_DESTINATION))) {
+      ObstacleRunner.run({ player }, [{ walk: [[CELL_DESTINATION.x, CELL_DESTINATION.y]] }], {
+        onFinish(completed) {
+          if (completed) walkOutOfPrison(player);
+        },
+      });
+      return;
+    }
+    walkOutOfPrison(player);
+  }
+
+  function walkOutOfPrison(player) {
+    if (!openDoor(player, ObjectIdentifiers.PRISON_DOOR_8, at(RELEASE_DESTINATION))) return;
+    let ticks = 4;
+    const task = new api.core.Task(1, player);
+    task.execute = () => {
+      if (!player.getLocation().equals(at(RELEASE_DESTINATION))) {
+        if (--ticks === 0) task.stop();
+        return;
+      }
+      task.stop();
+      advance(player, STAGE_RELEASED);
+      startTranscript(api, player, NpcIdentifiers.KING_NARNODE_SHAREEN, PAGE, PRISON_VARIANT,
+        steps => steps.slice(steps.findIndex(step => step.id === RELEASE_ACTION_ID) + 1), prisonKings.get(player));
+    };
+    api.core.TaskManager.submit(task);
+  }
+
+  function askShipyardPassword(event) {
+    const { player, objectId, option } = event;
+    const where = player.getLocation();
+    const { x, y, z } = event.location;
+    if (option.toLowerCase() !== "open" || x !== SHIPYARD_GATE_X || z !== 0 || where.getX() >= SHIPYARD_GATE_X
+      || SHIPYARD_GATES.get(y) !== objectId || quest.getStage(player) !== STAGE_RELEASED) return;
+    const worker = findNearbyNpc(player, SHIPYARD_WORKER_ID);
+    event.handled = startTranscript(api, player, SHIPYARD_WORKER_ID, PAGE, "treachery-revealed-the-shipyard-password", null, worker);
+  }
+
+  function crossShipyardGate(event) {
+    const { player } = event;
+    const here = player.getLocation();
+    if (here.getX() >= SHIPYARD_GATE_X || here.getZ() !== 0) return;
+    const y = here.getY() >= 3042 ? 3042 : 3041;
+    const gate = new Location(SHIPYARD_GATE_X, y, 0);
+    if (!here.isWithinDistance(gate, 3)) return;
+    event.handled = event.end = true;
+    ObstacleRunner.run({ player }, [{ walk: [[SHIPYARD_GATE_X - 1, y]] }], {
+      onFinish(completed) {
+        if (completed) openDoor(player, SHIPYARD_GATES.get(y), gate);
+      },
+    });
+  }
+
   /** The transcript's item hand-ins and stage directions. */
   function handleAction(event) {
     const { player, npcId, stepId } = event;
@@ -508,6 +641,16 @@ module.exports = function registerGrandTreeQuest(api) {
     }
 
     const stage = quest.getStage(player);
+    if (NARNODE_IDS.has(npcId)) {
+      if (stepId === FOUNDATIONS_ENTER_ACTION_ID && stage === STAGE_NOT_STARTED) {
+        startFoundations(event);
+        return;
+      }
+      if (FOUNDATIONS_RETURN_ACTION_IDS.has(stepId) && player.getLocation().isWithinDistance(at(FOUNDATIONS_LANDING), 3)) {
+        teleport(player, FOUNDATIONS_RETURN);
+        return;
+      }
+    }
     if (stepId === COMPLETE_ACTION_ID) {
       if (!NARNODE_IDS.has(npcId) || quest.isComplete(player)) return;
       if (stage < STAGE_SEARCHING_DACONIA || !has(player, DACONIA_ROCK_ITEM_ID)) return;
@@ -532,6 +675,17 @@ module.exports = function registerGrandTreeQuest(api) {
       grant(player, GLOUGHS_KEY_ITEM_ID);
       return;
     }
+    if (npcId === NpcIdentifiers.FOREMAN && stage === STAGE_RELEASED) {
+      if (stepId === FOREMAN_OFFICE_ACTION_ID) {
+        ensureOfficeForeman(player);
+        teleport(player, SHIPYARD_OFFICE);
+        return;
+      }
+      if (event.text === "The player is attacked by the Foreman.") {
+        officeForemen.get(player)?.getCombat().attack(player);
+        return;
+      }
+    }
     if (stepId === LUMBER_ORDER_ACTION_ID) {
       if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return;
       if (!has(player, LUMBER_ORDER_ITEM_ID)) {
@@ -542,6 +696,7 @@ module.exports = function registerGrandTreeQuest(api) {
         player.getInventory().adds(LUMBER_ORDER_ITEM_ID, 1);
       }
       advance(player, STAGE_LUMBER_ORDER);
+      removeOfficeForeman(player);
       return;
     }
     if (stepId === TWIGS_ACTION_ID || stepId === TWIGS_REPLACEMENT_ACTION_ID) {
@@ -565,10 +720,10 @@ module.exports = function registerGrandTreeQuest(api) {
       teleport(player, CELL_DESTINATION);
       return;
     }
-    if (stepId === RELEASE_ACTION_ID) {
-      if (stage < STAGE_FOUND_JOURNAL || stage >= STAGE_RELEASED) return;
-      teleport(player, RELEASE_DESTINATION);
-      advance(player, STAGE_RELEASED);
+    if (stepId === PRISON_KING_ACTION_ID || stepId === RELEASE_ACTION_ID) {
+      if (stage !== STAGE_FOUND_JOURNAL || !CHARLIE_IDS.has(npcId)) return;
+      if (stepId === PRISON_KING_ACTION_ID && player.getLocation().isWithinDistance(at(CELL_DESTINATION), 1)) showPrisonKing(player);
+      if (stepId === RELEASE_ACTION_ID) releasePrisoner(event);
       return;
     }
     if (stepId === FEMI_SNEAK_ACTION_ID || stepId === FEMI_PAID_SNEAK_ACTION_ID) {
@@ -588,8 +743,7 @@ module.exports = function registerGrandTreeQuest(api) {
       if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return;
       const correct = String(player.getAttribute(PASSWORD_ATTRIBUTE) ?? "") === CORRECT_PASSWORD;
       if (stepId === PASSWORD_CORRECT_ACTION_ID && correct) {
-        // The worker lets the player through the now-open gate.
-        teleport(player, SHIPYARD_INSIDE_DESTINATION);
+        crossShipyardGate(event);
       } else if (event.npc) {
         // 1430 is a talk-only NPC; the angry worker is the combat variant.
         const where = event.npc.getLocation();
@@ -665,13 +819,50 @@ module.exports = function registerGrandTreeQuest(api) {
     openChest(event);
   }
 
+  // Wiki (The Grand Tree): the watchtower tree "requires 25 Agility to climb", boostable (the current level counts).
+  const WATCHTOWER_AGILITY = 25;
+
   function climbWatchtower(event) {
     if (event.objectId !== WATCHTOWER_TREE_ID) return false;
+    if (event.player.getSkillManager().getCurrentLevel(Skill.AGILITY) < WATCHTOWER_AGILITY) {
+      event.player.sendMessage(`You need an Agility level of ${WATCHTOWER_AGILITY} to climb this tree.`);
+      return true;
+    }
     api.emitCustomEvent("ladders:climbUp", {
       player: event.player,
       destination: at(WATCHTOWER_DESTINATION),
     });
     return true;
+  }
+
+  function clearPillarDisplays(player) {
+    for (const display of pillarDisplays.get(player)?.values() ?? []) ItemOnGroundManager.deregister(display);
+    pillarDisplays.delete(player);
+  }
+
+  function syncPillarDisplays({ player }) {
+    const placed = Number(player.getAttribute(PILLARS_ATTRIBUTE)) || 0;
+    const here = player.getLocation();
+    if (!placed || quest.getStage(player) < STAGE_GIVEN_TWIGS || here.getZ() !== FIRST_PILLAR_TILE.z ||
+      player.getPrivateArea() ||
+      (here.getX() >> 6) !== (FIRST_PILLAR_TILE.x >> 6) ||
+      (here.getY() >> 6) !== (FIRST_PILLAR_TILE.y >> 6)) {
+      clearPillarDisplays(player);
+      return;
+    }
+    const displays = pillarDisplays.get(player) ?? new Map();
+    pillarDisplays.set(player, displays);
+    [...PILLAR_TWIGS.values()].forEach((twig, index) => {
+      if (!(placed & (1 << index)) || displays.has(twig)) return;
+      // The pillar supports ground items, so the client puts the letter on its top.
+      const tile = new Location(FIRST_PILLAR_TILE.x + index, FIRST_PILLAR_TILE.y, FIRST_PILLAR_TILE.z);
+      const display = new ItemOnGround(
+        GroundItemState.SEEN_BY_PLAYER, player.getUsername(), tile, new Item(twig, 1), false, -1, null, true,
+        { id: twig, telegrabDenial: "The twig is fixed to the pillar." },
+      ).setEnabledOps(0);
+      displays.set(twig, display);
+      ItemOnGroundManager.register(display);
+    });
   }
 
   function placeTwig(event) {
@@ -691,9 +882,11 @@ module.exports = function registerGrandTreeQuest(api) {
       player.sendMessage("You cannot put that on the pillar.");
       return;
     }
-    if (has(player, twig)) player.getInventory().deleteNumber(twig, 1);
+    if (!has(player, twig)) return;
+    player.getInventory().deleteNumber(twig, 1);
     const next = placed | bit;
     player.setAttribute(PILLARS_ATTRIBUTE, next);
+    syncPillarDisplays(event);
     player.sendMessage("You place the twig on the pillar.");
     if (next === ALL_PILLARS_PLACED) {
       player.sendMessage("With a grinding of machinery, a trapdoor snaps open!");
@@ -701,26 +894,18 @@ module.exports = function registerGrandTreeQuest(api) {
     }
   }
 
-  function ensureDemon(player) {
-    const tracked = demonEncounters.get(player);
-    if (tracked?.isRegistered?.()) return;
-    const npc = api.spawnNpc({
-      id: BLACK_DEMON_ID,
-      x: DEMON_SPAWN.x,
-      y: DEMON_SPAWN.y,
-      z: DEMON_SPAWN.z,
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) demonEncounters.set(player, npc);
+  function blockBrokenCaveLadder(event) {
+    const { x, y, z } = event.location;
+    if (event.objectId !== BROKEN_CAVE_LADDER_ID || x !== 2492 || y !== 9864 || z !== 0 || event.option !== "climb-up") return;
+    event.handled = true;
+    event.player.sendMessage("The ladder is broken. You can't climb it.");
   }
 
   function climbDownTrapdoor(event) {
     if (event.objectId !== GLOUGHS_TRAPDOOR_ID) return false;
     if (quest.getStage(event.player) < STAGE_TRAPDOOR) return false;
-    teleport(event.player, CAVE_DESTINATION);
-    ensureDemon(event.player);
+    if (quest.getStage(event.player) === STAGE_TRAPDOOR) demonEncounter.start(event.player);
+    else teleport(event.player, CAVE_DESTINATION);
     return true;
   }
 
@@ -749,16 +934,14 @@ module.exports = function registerGrandTreeQuest(api) {
   function handleNpcDeath(event) {
     const { killer, npc, npcId } = event;
     if (npcId === BLACK_DEMON_ID) {
-      for (const [player, tracked] of demonEncounters) {
-        if (tracked === npc) demonEncounters.delete(player);
-      }
-      if (killer && quest.getStage(killer) === STAGE_TRAPDOOR) {
+      if (killer && quest.getStage(killer) === STAGE_TRAPDOOR && demonEncounter.defeat(killer, npc)) {
         quest.setStage(killer, STAGE_DEMON_DEFEATED);
       }
       return;
     }
     // The foreman can be killed for the lumber order instead of quizzed.
     if (npcId === NpcIdentifiers.FOREMAN && killer) {
+      if (officeForemen.get(killer) === npc) officeForemen.delete(killer);
       const stage = quest.getStage(killer);
       if (stage >= STAGE_RELEASED && stage < STAGE_LUMBER_ORDER) {
         if (!has(killer, LUMBER_ORDER_ITEM_ID) && freeSlots(killer) < 1) {
@@ -772,15 +955,18 @@ module.exports = function registerGrandTreeQuest(api) {
   }
 
   function handleLogout({ player }) {
-    const npc = demonEncounters.get(player);
-    if (npc) {
-      api.removeNpc(npc);
-      demonEncounters.delete(player);
-    }
+    removePrisonKing(player);
+    clearPillarDisplays(player);
+    removeOfficeForeman(player);
   }
 
   function handleLogin({ player }) {
+    syncPillarDisplays({ player });
     refreshQuestList(player);
+    if (quest.getStage(player) === STAGE_TRAPDOOR) demonEncounter.resume(player);
+    if (quest.getStage(player) === STAGE_RELEASED && player.getLocation().isWithinDistance(at(SHIPYARD_OFFICE), 3)) {
+      ensureOfficeForeman(player);
+    }
   }
 
   quest = registerQuest(api, {
@@ -802,17 +988,21 @@ module.exports = function registerGrandTreeQuest(api) {
     onReward: grantReward,
   });
 
+  ObstacleRunner.init(api);
   api.persistAttribute(PILLARS_ATTRIBUTE);
   api.persistAttribute(PASSWORD_ATTRIBUTE);
   api.persistAttribute(ROOT_SEARCH_ATTRIBUTE);
   api.persistAttribute(FEMI_HELPED_ATTRIBUTE, false);
 
+  api.onNpcInteraction("Foreman", { "Talk-to": resumeOfficeQuiz });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("npc-dialogue:line", demonEncounter.handleLine);
+  api.onCustomEvent("npc-dialogue:action", demonEncounter.handleAction);
   api.onCustomEvent("gnome-gliders:glider", fleeOnGlider);
   api.onObjectInteraction("Cupboard", { Open: searchCupboard, Search: searchCupboard });
   api.onObjectInteraction("Closed chest", { Open: openChest });
@@ -820,8 +1010,11 @@ module.exports = function registerGrandTreeQuest(api) {
   api.onItemOnObject(placeTwig);
   api.onObjectInteraction("Tree", { "Climb-up": climbWatchtower });
   api.onObjectInteraction("Trapdoor", { "Climb-down": climbDownTrapdoor });
+  api.onBeforeObjectInteraction(blockBrokenCaveLadder);
+  api.onBeforeObjectInteraction(askShipyardPassword);
   api.onObjectInteraction("Root", { Search: searchRoot });
   api.onNpcDeath(handleNpcDeath);
+  api.onPlayerMapSquareChange(syncPillarDisplays);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

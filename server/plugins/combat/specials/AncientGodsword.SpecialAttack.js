@@ -61,8 +61,11 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
           const baseHitpoints = player
             ? target.getAsPlayer().getSkillManager().getMaxLevel(Skill.HITPOINTS)
             : target.getAsNpc().getMaxHitpoints();
+          // Wiki: the heal is limited to the damage the sacrifice actually does, so a target with fewer
+          // Hitpoints left than the 25 heals only what it had.
           const heal = Math.min(
             BLOOD_SACRIFICE_DAMAGE,
+            target.getHitpoints(),
             player ? BLOOD_SACRIFICE_PLAYER_HEAL_CAP : BLOOD_SACRIFICE_NPC_HEAL_CAP,
             Math.floor(baseHitpoints * BLOOD_SACRIFICE_HEAL_FRACTION)
           );

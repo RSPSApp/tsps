@@ -34,6 +34,8 @@ export class NpcDefinition {
     private venomous: boolean = false;
     private immunePoison: boolean = false;
     private immuneVenom: boolean = false;
+    /** Percentage a freeze is shortened by; 100 is never frozen (Wiki: Freeze). */
+    private freezeResistance: number = 0;
     private demon: boolean = false;
     /** The Wiki's monster attributes: undead, demon, dragon, kalphite, ... */
     private attributes: readonly string[] = [];
@@ -43,6 +45,7 @@ export class NpcDefinition {
     private attackType: CombatType = CombatType.MELEE;
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
     private projectileId: number = -1;
+    private launchGraphicId: number = -1;
     private fightsBack: boolean = true;
     private respawn: number = 25;
     private maxHit: number = 1;
@@ -269,6 +272,10 @@ export class NpcDefinition {
         return this.immuneVenom;
     }
 
+    public getFreezeResistance(): number {
+        return this.freezeResistance;
+    }
+
     public isDemon(): boolean {
         return this.demon;
     }
@@ -300,6 +307,11 @@ export class NpcDefinition {
 
     public getProjectileId(): number {
         return this.projectileId;
+    }
+
+    /** The spotanim played on the npc with its ranged shot (npc-combat-defs.json `launchGraphic`), -1 for none. */
+    public getLaunchGraphicId(): number {
+        return this.launchGraphicId;
     }
 
     public getSlayerLevel(): number {

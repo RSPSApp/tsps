@@ -95,11 +95,14 @@ export class PlayerRelations {
             (this.publicChatMode === 1 && this.hasFriend(other.getLongUsername()));
     }
 
+    /** Presence is controlled by private chat, independently of the ignore list. */
+    public isVisibleTo(other: Player): boolean {
+        return !!other && this.status !== PrivateChatStatus.OFF &&
+            (this.status === PrivateChatStatus.ON || this.hasFriend(other.getLongUsername()));
+    }
+
     public canReceivePrivateMessageFrom(other: Player): boolean {
-        if (!other || this.hasIgnore(other.getLongUsername()) || this.status === PrivateChatStatus.OFF) {
-            return false;
-        }
-        return this.status === PrivateChatStatus.ON || this.hasFriend(other.getLongUsername());
+        return this.isVisibleTo(other) && !this.hasIgnore(other.getLongUsername());
     }
 
     public getFriendRank(username: bigint): number {
@@ -191,12 +194,7 @@ export class PlayerRelations {
 
             let temporaryOnlineStatus = online;
             if (other.getRelations().hasFriend(this.player.getLongUsername())) {
-                if (
-                    (this.status === PrivateChatStatus.FRIENDS_ONLY &&
-                        !this.hasFriend(other.getLongUsername())) ||
-                    this.status === PrivateChatStatus.OFF ||
-                    this.hasIgnore(other.getLongUsername())
-                ) {
+                if (!this.isVisibleTo(other)) {
                     temporaryOnlineStatus = false;
                 }
                 other.getPacketSender().sendFriend(
@@ -207,12 +205,7 @@ export class PlayerRelations {
 
             let otherVisibleToPlayer = true;
             if (this.hasFriend(other.getLongUsername())) {
-                if (
-                    (other.getRelations().status === PrivateChatStatus.FRIENDS_ONLY &&
-                        !other.getRelations().hasFriend(this.player.getLongUsername())) ||
-                    other.getRelations().status === PrivateChatStatus.OFF ||
-                    other.getRelations().hasIgnore(this.player.getLongUsername())
-                ) {
+                if (!other.getRelations().isVisibleTo(this.player)) {
                     otherVisibleToPlayer = false;
                 }
                 this.player.getPacketSender().sendFriend(
@@ -345,7 +338,7 @@ export class PlayerRelations {
             this.updateLists(true);
             const ignored = World.getPlayerByName(name);
             if (ignored) {
-                ignored.getRelations().updateLists(false);
+                ignored.getRelations().updateLists(true);
             }
         }
     }

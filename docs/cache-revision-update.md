@@ -1,6 +1,6 @@
 # Updating the cache revision
 
-How the OSRS cache was moved from revision 237 to 241, written as a playbook for the next update.
+How the OSRS cache was moved from revision 237 to 241 and then 242, written as a playbook for the next update.
 The first half is the procedure and its tools; the second half records what 241 changed, what
 broke, and how each problem was found, because the same kinds of change come back.
 
@@ -61,6 +61,36 @@ The client test `cache-config-decode` decodes every config entry (items, NPCs, l
 spot animations, enums, structs, varcs, ...) and fails on an unknown opcode or an entry that does
 not end where its bytes do. The normal decoder treats a dat2 overflow as the end of an entry, so a
 new opcode with a payload otherwise misreads silently. Add the opcode from zwyz/RuneLite.
+
+"Decodes" is not "decodes right". For each changed opcode, pick real entries that use it and check
+the decoded fields against zwyz/RuneLite: for multilocs, every transform is a loc id or -1, never
+`undefined`.
+
+#### In the browser
+
+The tests run the TypeScript sources through tsx, the browser runs what webpack bundles, and the
+client type loader keeps going when a type throws: it logs `Failed loading type <id>` and keeps
+the half-decoded type. A decoder that breaks only in the browser shows up as missing locs, NPCs or
+items, not as a crash. After 242, `ByteBuffer.readSignedMedium` existed only in `ByteBuffer.ts`, the
+browser bundled a stale `ByteBuffer.js` beside it, and every multiloc lost its model and options
+while every test passed (#4007). The `no-shadowed-js` test now keeps a `.js` from sitting beside a
+`.ts`.
+
+So load the client on the new cache, walk a few regions, and read the console: about two seconds
+after the last failure the loader logs one line, `type decode failures: locs=120, objs=3`: how many
+distinct types failed, by config archive. The vision tools report the same counts as `typeDecodeFailures` in their
+summary (`server/docs/agents/testing.md`). That count is the page's: the map-building workers keep
+their own and log their own line in the same console.
+
+The workers also store built map squares in IndexedDB (`game/worker/MapSquareCache.ts`). The key
+covers the cache and the build inputs, not the client code, so a square built while a decoder
+was broken keeps serving its missing locs after the fix. #4240 was this: WebGPU players who had
+visited Edgeville before #4135 still saw no poll booth or loot chest. Picking resolved them through
+the page's fixed loader, so they could still be hovered. Two guards cover it now:
+
+- A worker stores no squares once any type has failed to decode there (`shouldStore`).
+- A fix that changes what the loader builds bumps `CACHE_FORMAT`, so squares stored before the
+  fix are built again.
 
 ### 6. Client scripts
 
@@ -136,6 +166,17 @@ in game: the login screen (its art is the cache's `title.jpg`), world map (switc
 (all buttons, tags), GE (buy, sell, collect, abort), shops, a skill menu, settings, sailing, and an
 NPC whose name moved into a transform (see below).
 
+A changed config opcode can break content whose ids, models and placements did not change. Check
+a few entries that use each changed opcode in game. For locs that transform (242's opcodes 97/98):
+
+| What to see | Locs |
+|---|---|
+| The model draws | Falador's Statue of Saradomin 9250 |
+| Its options | Edgeville poll booth 8720, PvP loot chest 43486 |
+| Its state changes when used | H.A.M. trapdoor 5492, Draynor Manor basement doors 137–145 |
+| A quest picks the variant | Recruitment Drive statues 7290+ |
+| A farming state picks the variant | Draynor Manor belladonna patch 7572 |
+
 ### 11. Publish the client cache
 
 The production Deploy workflow runs `ensure-cache --publish /var/www/flarum/play/caches`
@@ -182,6 +223,50 @@ Reinstall it on the VPS whenever that script changes.
 | Display names moved into NPC transforms (Morgan 3479, Dr Harlow 3480: name `null`, a varbit picks the named variant) | none: hooks resolve the variant | — |
 | 431 object and 23 item names gone or reused | compile errors | identifiers regenerated; plugins renamed (e.g. "Scythe of Vitur") |
 | Eight items renamed outright: 9487–9490 "Wizard blizzard" → "Cocktail glass", 9735/9738 "Desert goat horn" → "Goat horn", 23595/23596 "Berserker ring" → "Berserker ring (i)" | Their `item-gameplay.json` entries were skipped (23595 lost its bonuses) | names updated; 23595 takes the imbued +8 its cache params give |
+
+## What revision 242 changed
+
+`osrs-241_2026-10-20` → `osrs-242_2026-11-03` (Mudfoot's Big Adventure, The Writing's on the Wall,
+the Lumbridge tutors replaced). The user's live 242 RSProx captures (2026-11-03 on) settled the
+NPC questions; transcribe them with an RSProx build that has `protocol/osrs-242`.
+
+### Cache formats and scripts
+
+| Change | Symptom | Fix |
+|---|---|---|
+| Loc opcodes 97/98: multiloc with 24-bit signed ids (98 adds the default). Every transforming loc (4,750) moved off 77/92 | Our decoders read 97/98 as the old payload-less flags: 120 locs fail, the rest misread silently | `LocType` (client and server), `ByteBuffer.readSignedMedium`; all but one of 4,725 transforms equal 241's (loc 5003 points at new ids). Shipped in `ByteBuffer.ts` only: the browser bundled a stale `ByteBuffer.js` without it, so every transforming loc lost its model and options (statues, doors, chests, the H.A.M. trapdoor) until #4007. The `.js` is gone (see step 5) |
+| Client script commands 5100–5108 `displaynames_*` | — | `UnsupportedOps`; `CommandSignatures` regenerated |
+| Gameval kinds 16–19 (sfx, midi, jingle, ambientsound) | — | none (we don't read them) |
+| No loc id above 63,333 yet | — | the protocol's three-byte loc ids (below) are headroom; our own packets stay u16 |
+
+### Names, tables and interfaces
+
+| Change | Symptom | Fix |
+|---|---|---|
+| Every "X sword" is "X shortsword" (bronze to dragon, white, wooden, training, (cr)); Training bow → Training shortbow | Constants gone; `item-gameplay.json` entries skipped by name (swords lose their stats); constants named in JSON data (`quest-equipment.json`, `bot-combat-gear.json`, `phantom-muspah.json`) | references renamed; the 23 gameplay names fixed |
+| Quest table (0): column 17 `questpoints` → `questpoints_override` (same values); `starter_order` inserted at 37 | The quest list's maximum QP reads 0 (by name) | `QuestRuntime` reads either name |
+| Daddy's Home became a quest (type 0, 1 QP); new quests Mudfoot's Big Adventure and The Writing's on the Wall | — | Daddy's Home awards 1 QP (credited once to earlier completions); the two new quests are not implemented, so the quest cape (all cache quests) cannot be bought |
+| `bond_main` (861) components +1/+2 | "View Your Bonds" unhandled | `Bonds.plugin.js` 861:7 → 8 |
+| `didyouknow` (90) lost two columns | — | unused |
+| Settings 218/219 "Hide quests in progress"/"Hide completed quests" became 3-way dropdowns "Show quests in progress"/"Show completed quests" (enums 3338/3339: 0 always first/last, 1 use sorting setting, 2 hide); varp 3408 re-laid out (13775 bits 7-8, 13776 bit 9, 13777 bits 18-19) | A saved 241 "hide" (1) would read as "use sorting setting" | `Settings.plugin.js` clears saved 13775/13777 once (live 242 logins show 0 for an account that hid completed quests on 241) |
+| Native counts grew (16,876 NPCs) | Every seasonal archive (Christmas, Easter, Halloween, anniversary) targets the old cache and is refused (`ArchivedDefinitionRegistry`), and its appended private ids collide with new native ids | Re-run the four importers against reference directories rebuilt from the hashes the archives record (OpenRS2 groups / `disk.zip`, osrs-dumps `config/dump.*`); only `targetCache`, the private ids and recorded live CRCs change |
+| Map edits (16 squares, Lumbridge `50_50` among them; new paving north-west of the Grand Exchange) | Shortest Path routes on old collision | `node scripts/export-collision-map.cjs` |
+| Enum 5864 (rune pouch loadout names) gained a row; the Interfaces settings list gained one and reordered 217 | Test expectations only (the code reads both from the cache) | rune-pouch, settings-keybinds tests |
+| Easy clue item 3499 (param 623) points at row 1328 (the Duke's bedroom chest, as item 2677) instead of row 1327 ("Search the boxes in a shop in Taverley."); that text moved to row 17195, which no clue item names | The easy catalogue has 165 steps (70 cryptic locs), not 166; a saved trail on row 1327 fails `Runtime.validState` and is re-rolled the next time the scroll is read | `treasure-trails-easy` expectations |
+| Lumbridge tutors, Hatius (5523), Arthur the Clue Hunter (8665) and Floatsam (16475–7) have no name: new NPCs replace them (same models). Ranged, Magic, Cooking, Prayer and Banker tutors have none; Arthur moved to (3158, 3469); Mikasi took Hatius's Lumbridge diary role; Adam (311) shows only to iron accounts (`ironman` varbit 1777) | Spawns of blank NPCs; the tutors', diary's, Arthur's and Crab Quest's id checks miss | spawns moved to the successors, `plugins/npcs/data/retired-npcs.json` gives a successor its predecessor's transcript until the transcripts are regenerated, plugins key on the new ids |
+
+A JavaScript plugin that names a removed constant gets `undefined` rather than a compile error:
+after regenerating identifiers, list the removed names and search `.js`, `.cjs` and `.json` for
+them as well (step 3).
+
+### RuneLite gateway
+
+rsprot `osrs-242` renamed `OpLoc6`/`OpLocT` to V1/V2 classes and added `OpLocV3`; the live client
+sends `OPLOC*_V3`, `OPLOC6_V2` and `OPLOCT_V2`. rsprot has no 242 layout for `LOC_MERGE`, and the
+242 client discards its bytes, so the gateway drops it. Client opcodes and field orders all
+moved: the headless test client takes its opcodes from rsprot's `GameClientProt` and its layouts
+from RSProx's 242 decoders. The jav_config's revision comes from the active cache; live 242 also
+sends params 30 and 31 (display names), which we don't.
 
 ## Weekly builds within a revision
 

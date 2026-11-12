@@ -237,6 +237,13 @@ function onADiet(event) {
   noteConsumed(raid, event);
 }
 
+/** The phoenix necklace asks without eating: ghosts and On a Diet stop it, with no message or tally. */
+function necklaceEligible(event) {
+  const raid = Raid.raidOf(event.player);
+  if (!raid || !Shared.inTombs(event.player.getLocation())) return;
+  if (isGhost(event.player) || raid.settings.isActive("ON_A_DIET")) event.blocked = true;
+}
+
 /** Combat achievements: any food or potion fails one of the two supply tasks (captured). */
 function noteConsumed(raid, event) {
   if (Supplies.doses(event.itemId)) CombatAchievements.suppliesFromSpirit(raid, event.player);
@@ -331,6 +338,7 @@ module.exports = function registerTombsRaid(api) {
   Raid.onRaidArea("canAttack", blockGhostAttacks);
   api.onSpellCast(standardUtilitySpells);
   api.onCanEat(onADiet);
+  api.onCustomEvent("phoenix-necklace:eligible", necklaceEligible);
   api.onCanDrink(dehydration);
   Raid.onRaidArea("canTeleport", ghostsCantTeleport);
   api.onCanEquip(ghostsCantEquip);

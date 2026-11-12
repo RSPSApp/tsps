@@ -283,6 +283,7 @@ function pray({ player, objectId }) {
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   skills.setCurrentLevels(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER) + Common.godItemCount(player, faction));
   skills.updateSkill(Skill.PRAYER);
+  player.setPrayerPointDrain(0);
   player.setAttribute(Common.ALTAR_ATTRIBUTE, Date.now());
   player.sendMessage("You recharge your Prayer points.");
   return true;

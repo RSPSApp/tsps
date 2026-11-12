@@ -22,6 +22,7 @@
  * shattering when dropped.
  */
 
+const Herblore = require("../../skills/herblore/Common.Herblore");
 const Shared = require("./Shared.Wintertodt");
 const Round = require("./Round.Wintertodt");
 const Warmth = require("./Warmth.Wintertodt");
@@ -69,7 +70,8 @@ function chopChance(player, axe) {
 function chop(event) {
   const { player } = event;
   if (!Round.isActive()) {
-    player.sendMessage("There's no use for bruma roots at this time.");
+    // rsprox_transcripts/233/03262: spam.
+    Shared.spam(player, "There's no use for bruma roots at this time.");
     return true;
   }
   const axe = Woodcutting.findBestUsableAxe(player);
@@ -216,15 +218,15 @@ const crateActions = {
 
 // ------------------------------------------------------------------ potions
 
-function mixOne(player) {
+function mixOne(player, awardExperience = true, quiet = false) {
   const unf = slotOf(player, Shared.ITEM.REJUVENATION_UNF);
   const herb = slotOf(player, Shared.ITEM.BRUMA_HERB);
   if (unf < 0 || herb < 0) return false;
   player.getInventory().setItem(unf, newItem(Shared.ITEM.REJUVENATION_4));
   player.getInventory().setItem(herb, newItem(-1, 0));
   player.getInventory().refreshItems();
-  Shared.spam(player, "You combine the bruma herb into the unfinished potion.");
-  Shared.addXp(player, "HERBLORE", XP.POTION * Shared.level(player, "HERBLORE"));
+  if (!quiet) Shared.spam(player, "You combine the bruma herb into the unfinished potion.");
+  if (awardExperience) Shared.addXp(player, "HERBLORE", XP.POTION * Shared.level(player, "HERBLORE"));
   return true;
 }
 
@@ -234,6 +236,7 @@ function mix(event) {
     player.sendMessage("You can only do that within the influence of the Bruma tree.");
     return true;
   }
+  if (!Herblore.canUseHerblore(player)) return true;
   if (!mixOne(player)) return true;
   Shared.startAction(player, "mix", (ticks) => ticks < MIX_SECOND_TICK
     || (ticks - MIX_SECOND_TICK) % MIX_TICKS !== 0 || mixOne(player));
@@ -251,8 +254,21 @@ function brewma(event) {
   if (event.itemId !== Shared.ITEM.BRUMA_HERB && event.itemId !== Shared.ITEM.REJUVENATION_UNF) return;
   event.handled = true;
   let made = 0;
-  while (mixOne(event.player)) made++;
-  if (made === 0) event.player.sendMessage("You need both a bruma herb and an unfinished potion.");
+  while (mixOne(event.player, false, true)) made++;
+  if (made === 0) {
+    event.player.sendMessage("You need both a bruma herb and an unfinished potion.");
+    return;
+  }
+  // rsprox_transcripts/233/03262.txt:35549-35569: the mesbox chat line, then objectbox_double with both potions; no
+  // per-potion "You combine..." line. One potion's wording is not recorded (ours: "a Rejuvenation potion").
+  const words = ["", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
+  const text = made === 1 ? "Brew'ma quickly mixes a Rejuvenation potion."
+    : `Brew'ma quickly mixes ${words[made] ?? made} Rejuvenation potions.`;
+  const { ChatType, DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
+  const potion = Shared.ITEM.REJUVENATION_4;
+  event.player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(made === 1
+    ? new ItemStatementDialogue(0, potion, text) : new DoubleItemStatementDialogue(0, potion, potion, text)));
 }
 
 function nextDose(id) {
@@ -295,8 +311,8 @@ function useDose(player) {
 }
 
 /** Wiki: food healing 4 or more restores 35% warmth in the prison. */
-function ateFood({ player, itemId, heal }) {
-  if (Round.inPrison(player)) Warmth.ateFood(player, itemId, heal);
+function ateFood({ player, itemId, restores }) {
+  if (Round.inPrison(player)) Warmth.ateFood(player, itemId, restores);
 }
 
 // ------------------------------------------------------------------ torch
@@ -346,6 +362,7 @@ module.exports = function registerWintertodtSupplies(api) {
   api.onItemOnNpc(brewma);
   api.onItemDropPolicy(shatter);
   api.onCustomEvent("food:eaten", ateFood);
+  api.onCustomEvent("food:delayed-heal", ateFood);
 };
 
 module.exports.useDose = useDose;

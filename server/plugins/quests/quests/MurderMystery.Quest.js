@@ -188,10 +188,13 @@ module.exports = function registerMurderMysteryQuest(api) {
     player.getPacketSender().sendConfig(VARP_MURDERER_SUSPECT, id >= 1 && id <= MURDERERS.length ? id : 0);
   }
 
-  /** The physical evidence the all-evidence hand-in needs, not just the durable flags. */
+  /**
+   * The physical evidence the all-evidence hand-in needs, not just the durable flags.
+   * The wiki says the silver belonging, dagger and pot can be dropped once the prints
+   * match, so only the thread and the killer's print are shown to the guard.
+   */
   function handInEvidenceIds(player) {
-    const suspect = murderer(player);
-    return [suspect.thread, suspect.original, ITEM.CRIMINALS_DAGGER, ITEM.KILLERS_PRINT, ITEM.PUNGENT_POT];
+    return [murderer(player).thread, ITEM.KILLERS_PRINT];
   }
 
   function hasHandInEvidence(player) {

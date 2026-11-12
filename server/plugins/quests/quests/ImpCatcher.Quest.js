@@ -1,7 +1,9 @@
 /** Imp Catcher: dialogue branches and the captured bead ritual. See docs/f2p-varrock-parity.md. */
 module.exports = function registerImpCatcherQuest(api) {
-  const { Skill, Animation, Graphic, Location, World, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { giveReward } = require("../QuestRuntime");
+  const { Skill, Animation, Graphic, Location, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   // Wizard Mizgog spawns as transformed NPC 5005 (-> 7746/7747); handle all forms.
   // 5005 has no NpcIdentifiers member, so it stays a local constant.
@@ -49,15 +51,20 @@ module.exports = function registerImpCatcherQuest(api) {
 
   const PENDING_ATTRIBUTE = "imp-catcher:ritual-pending";
   const REWARDED_ATTRIBUTE = "imp-catcher:amulet-issued";
-  const rituals = new Map(), casters = new WeakMap();
+  const rituals = new Map();
+  const Scenes = createQuestScenes(api, { onEnd: releaseRitual });
   let quest;
   function later(key, ticks, fn) { TaskManager.submit(new CountdownTask(key, ticks, fn)); }
   function fade(player, out) { player.getPacketSender().sendSubInterface((161 << 16) | 1, 174, 1, { postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 15] : [0, 0, 0, 255, 50] }] }); }
-  function unlock(player) {
+  function releaseRitual(player) {
     const ritual=rituals.get(player); if (ritual) TaskManager.cancelTasks(ritual);
     rituals.delete(player);
     player.getMovementQueue().setBlockMovement(false); player.setUntargetable(false);
     player.getPacketSender().sendVarbit(12393, 0).sendVarbit(6719, 0).sendCameraReset().closeSubInterface((161 << 16) | 1);
+  }
+  function unlock(player, logout = false) {
+    if (Scenes.get(player)) Scenes.end(player, logout);
+    else releaseRitual(player);
   }
   function beginRitual(event) {
     const { player } = event;
@@ -67,11 +74,17 @@ module.exports = function registerImpCatcherQuest(api) {
     player.getPacketSender().sendVarbit(12393,1);
     fade(player,true);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ActionDialogue(0, { execute: () => StatementDialogue.send(player,"You give four coloured beads to Wizard Mizgog.",false) })));
-    later(ritual,1,()=> player.getPacketSender().sendJingle(133,0).sendCameraLookAt(3103,3162,350,{rate:232,rate2:100,heightRelative:false}).sendCameraMoveTo(3103,3161,775,{rate:232,rate2:100,heightRelative:false}));
+    later(ritual,1,()=> {
+      const scene=Scenes.open(player,"bead-ritual",[[3096,3112,3152,3176,2]]);
+      ritual.npc=Scenes.actor(scene,MIZGOG_TRANSFORMED_NPC_ID,[3103,3163,2]);
+      ritual.npc?.getMovementQueue().reset().setBlockMovement(true);
+      player.getPacketSender().sendJingle(133,0).sendCameraLookAt(3103,3162,350,{rate:232,rate2:100,heightRelative:false}).sendCameraMoveTo(3103,3161,775,{rate:232,rate2:100,heightRelative:false});
+    });
     later(ritual,2,()=>fade(player,false));
+    // Capture t3827 faces the table; the placing sequence follows at t3828.
+    later(ritual,4,()=> { ritual.npc?.setMobileInteraction(null); ritual.npc?.faceTile(new Location(3102,3163,2)); });
     later(ritual,5,()=> {
-      const npc=casters.get(player) ?? World.getNpcsNear(player.getLocation(),16,player.getPrivateArea?.()??null).find(npc=>npc && isMizgog(npc.getId()));
-      npc?.performAnimation(new Animation(4285)); player.getPacketSender().sendSoundEffect(1632,1,0);
+      ritual.npc?.performAnimation(new Animation(4285)); player.getPacketSender().sendSoundEffect(1632,1,0);
     });
     later(ritual,7,()=> {
       if (!hasAllBeads(player)) { unlock(player); return; }
@@ -155,7 +168,7 @@ module.exports = function registerImpCatcherQuest(api) {
   function reward(player) {
     if (player.getAttribute(REWARDED_ATTRIBUTE)) return;
     player.setAttribute(REWARDED_ATTRIBUTE,1);
-    player.getInventory().adds(ItemIdentifiers.AMULET_OF_ACCURACY,1);
+    giveReward(player, ItemIdentifiers.AMULET_OF_ACCURACY, 1);
     player.sendMessage("The wizard hands you an amulet.");
     player.getSkillManager().addExperiences(Skill.MAGIC, 875);
   }
@@ -196,7 +209,6 @@ module.exports = function registerImpCatcherQuest(api) {
     if (!isMizgog(event.npcId)) return;
     if (HAND_IN_ACTION_IDS.has(event.stepId)) {
       if (!hasAllBeads(event.player) || quest.getStage(event.player) !== STAGE_STARTED) return;
-      if (event.npc) casters.set(event.player,event.npc);
       startTranscript(api,event.player,event.npcId,PAGE_IMP_CATCHER,"finishing-up-quest-complete");
       event.handled=true; return;
     }
@@ -231,7 +243,7 @@ module.exports = function registerImpCatcherQuest(api) {
   api.persistAttribute(PENDING_ATTRIBUTE,0);
   api.persistAttribute(REWARDED_ATTRIBUTE,0);
   api.onPlayerLogin(restoreRitual);
-  api.onPlayerLogout(({player})=>unlock(player));
+  api.onPlayerLogout(({player})=>unlock(player,true));
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);

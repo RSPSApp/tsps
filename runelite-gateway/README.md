@@ -1,6 +1,6 @@
 # RuneLite gateway
 
-Lets the official OSRS client (revision 241, launched through [RSProx](https://github.com/blurite/rsprox))
+Lets the official OSRS client (revision 242, launched through [RSProx](https://github.com/blurite/rsprox))
 play on tsps. The gateway speaks the OSRS protocol to the client with
 [rsprot](https://github.com/blurite/rsprot) and opens one tsps WebSocket session per player, the
 same way the browser client does, translating both ways.
@@ -39,7 +39,7 @@ Existing `gateway/keys/rsa.txt` keys are still used when the new path has no key
 to `runelite-gateway/keys/rsa.txt` to finish migrating without changing the modulus.
 
 Gradle runs on any JDK 11+ and builds with a JDK 17 toolchain. The test client builds RSProx's
-revision-241 protocol module from a pinned commit into `runelite-gateway/build/rsprox` on first run.
+revision-242 protocol module from a pinned commit into `runelite-gateway/build/rsprox` on first run.
 
 ## Playing with RuneLite
 
@@ -55,7 +55,7 @@ serves the jav_config and world list RSProx needs on its own port.
    config:
      - name: tsps
        jav_config_url: http://127.0.0.1:<WEBSOCKET_PORT>/gateway/jav_config.ws
-       revision: 241.1
+       revision: 242.1
        game_server_port: <GATEWAY_PORT>
        modulus: <printed by yarn gateway>
    ```
@@ -85,7 +85,7 @@ which logs everyone out.
   interfaces (group 30000 and up) aren't in the official cache
 - browser-only features: the quest helper, voice chat, plugin HUDs and custom items (shown as
   their base item)
-- camera target tracking and glides, which have no revision-241 form
+- camera target tracking and glides, which have no revision-241 or -242 form
 - two players on one boat
 
 ### Reporting a problem
@@ -106,7 +106,7 @@ What helped most in fixing the gateway, roughly in order:
 | `config` | `.env` and `server/target.txt` |
 | `crypto` | the login RSA key |
 | `cache` | dat2/idx reader, containers, reference tables, the JS5 master index |
-| `net` | rsprot's network service: JS5 from the cache, login, the 241 codecs |
+| `net` | rsprot's network service: JS5 from the cache, login, the 242 codecs |
 | `tsps` | the tsps WebSocket and its wire format |
 | `session` | per-player state; `GatewaySession` bridges one client to tsps; `EntityWorld` is its rsprot player/NPC/world-entity world |
 | `down` | tsps → client translation, one file per domain (interfaces, items, world, social, trade, sync) |
@@ -115,7 +115,7 @@ What helped most in fixing the gateway, roughly in order:
 
 ## How it maps tsps to OSRS
 
-[COVERAGE.md](COVERAGE.md) lists every tsps message and client opcode, the revision-241 packet it
+[COVERAGE.md](COVERAGE.md) lists every tsps message and client opcode, the revision-242 packet it
 becomes, and whether it is mapped, dropped (with a reason) or still to do.
 
 Each official client gets its own rsprot entity world. tsps decides who a player sees, so the

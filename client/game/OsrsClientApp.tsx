@@ -381,11 +381,12 @@ function OsrsClientApp() {
 
             const unsubLogin = subscribeLoginResponse((response) => {
                 if (response.success) {
-                    console.log("[OsrsClientApp] Login successful, sending handshake");
+                    console.log("[OsrsClientApp] Login successful");
                     client.onLoginAccepted(response.loginToken, response.displayName);
                     const username =
                         client.loginState?.username || response.displayName || "Player";
-                    sendHandshake(username);
+                    const handshake = () => sendHandshake(username);
+                    if (!client.clientPlugins.beforeLoginHandshake(handshake)) handshake();
                 } else {
                     console.log(
                         "[OsrsClientApp] Login failed:",

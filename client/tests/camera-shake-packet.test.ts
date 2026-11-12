@@ -11,7 +11,16 @@ import {
     encodeCameraTranslate,
     encodeCameraRotateBy,
     encodeCameraMoveArc,
+    encodeCameraRotateToCoordinate,
+    encodeCameraSkybox,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+
+// A coordinate rotation freezes command-time angles; it is not CAM_LOOKAT_CYCLES.
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraRotateToCoordinate(3356, 2208, 1023, 150, "ease_out_sine"))), {
+    type: "camera", payload: { mode: "rotate_coordinate", x: 3356, y: 2208, height: 1023, cycles: 150, easing: "ease_out_sine" },
+});
+assert.throws(() => encodeCameraRotateToCoordinate(3356, 2208, 1023, 0, "linear"), RangeError);
+assert.throws(() => encodeCameraRotateToCoordinate(3356, 2208, 32768, 150, "linear"), RangeError);
 
 // The server's camera shake and reset reach the client's CAMERA_CONTROL decoder intact.
 const shake = decodeServerPacket(new Uint8Array(encodeCameraShake(1, 7, 0, 0))) as any;
@@ -19,6 +28,11 @@ assert.deepEqual(shake, {
     type: "camera",
     payload: { mode: "shake", slot: 1, randomAmplitude: 7, sineAmplitude: 0, sineFrequency: 0 },
 });
+
+// cam_skybox: a model id, and -1 to clear it (Crab Quest's dance sends 61359, then -1).
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraSkybox(61359))), { type: "camera", payload: { mode: "skybox", model: 61359 } });
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraSkybox(-1))), { type: "camera", payload: { mode: "skybox", model: -1 } });
+assert.throws(() => encodeCameraSkybox(-2), RangeError);
 
 const reset = decodeServerPacket(new Uint8Array(encodeCameraReset())) as any;
 assert.deepEqual(reset, { type: "camera", payload: { mode: "reset" } });

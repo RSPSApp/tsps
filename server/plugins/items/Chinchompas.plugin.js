@@ -68,6 +68,13 @@ function fuseAccuracy(attacker, target, attackRoll) {
   return fuse ? Math.floor((attackRoll * FUSE_ACCURACY[fuse][band]) / 100) : null;
 }
 
+/** Chinchompas given back while the stack is not wielded: to the pack, or the floor when it is full. */
+function giveBack(player, item) {
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(item) >= item.getAmount()) inventory.add(item, true);
+  else core.ItemOnGroundManager.registers(player, item);
+}
+
 /** One chinchompa per throw, gone for good: no floor drop, no Ava's recovery. */
 function consumeChinchompa(player, pos, amount, delayTicks = 0) {
   const { Equipment, Flag, Item, Task, TaskManager, WeaponInterfaceManager } = core;
@@ -76,19 +83,32 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
     return false;
   }
   // Content may keep some throws from costing a chinchompa (a league relic), as core asks for quiver ammunition.
-  const saving = { player, itemId: weapon.getId(), amount, saved: 0 };
+  // `extra`: throws given back on top (Demonic Pacts' Regenerate above 100%), added to the same stack.
+  const saving = { player, itemId: weapon.getId(), amount, saved: 0, extra: 0 };
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const thrown = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  const extra = Math.max(0, saving.extra | 0);
+  // Fixed at the throw: paying from the pack can empty this very object in place (an unwield moves it there).
+  const weaponId = weapon.getId();
+  const meta = JSON.stringify(weapon.getMeta() ?? null);
+  const same = (item) => item?.getId() === weaponId && JSON.stringify(item.getMeta() ?? null) === meta;
   const apply = () => {
-    // A swap mid-flight moved this stack out of the slot; leave the new one alone.
-    if (player.getEquipment().get(Equipment.WEAPON_SLOT) !== weapon) {
+    if (thrown <= 0 && extra <= 0) {
       return;
     }
-    if (thrown <= 0) {
+    const worn = player.getEquipment().get(Equipment.WEAPON_SLOT);
+    // Re-wielding mid-flight wields a copy, and unwielding puts the stack in the pack: the throw is paid from the
+    // same chinchompas wherever they are now. Another weapon swapped in is left alone.
+    if (worn !== weapon && !same(worn)) {
+      const inventory = player.getInventory();
+      const slot = inventory.getItems().findIndex(same);
+      if (slot >= 0 && thrown > 0) inventory.deleteAtSlot(slot, Math.min(thrown, inventory.getItems()[slot].getAmount()));
+      if (extra > 0) giveBack(player, new Item(weaponId, extra, weapon.getMeta()));
       return;
     }
-    weapon.decrementAmountBy(thrown);
-    if (weapon.getAmount() <= 0) {
+    if (thrown > 0) worn.decrementAmountBy(thrown);
+    if (extra > 0) worn.incrementAmountBy(extra);
+    if (worn.getAmount() <= 0) {
       player.sendMessage("You have run out of ammunition!");
       player.getEquipment().set(Equipment.WEAPON_SLOT, new Item(-1));
       WeaponInterfaceManager.assign(player);
@@ -115,6 +135,8 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
 
 module.exports = {
   name: "Chinchompas",
+  description: "Chinchompa weapons: fuse-based accuracy by distance, area explosion hitting nearby targets in multicombat, and one chinchompa used per throw.",
+  _test: { consumeChinchompa },
   members: true,
   register(api) {
     core = api.core;

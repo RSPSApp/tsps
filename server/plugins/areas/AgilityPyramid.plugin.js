@@ -97,6 +97,7 @@ function startSliding() {
 
 module.exports = {
   name: "AgilityPyramid",
+  description: "Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin.",
   members: true,
   _test: { BLOCKS, offsetAt },
   register(api) {

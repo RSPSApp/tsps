@@ -47,8 +47,10 @@ function handleDriverAgreement(stageOf, advance, driverId, coinsId, event) {
 }
 
 module.exports = function registerTouristTrapQuest(api) {
-  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+  const CAPTAIN_KEY_LINE = "The mercenary captain drops a metal key on the floor. You quickly grab the key and add it to your inventory.";
+  const CAPTAIN_KEY_BOX = "The mercenary captain drops a metal key on the floor.<br>You quickly grab the key and add it to your inventory.";
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const IRENA_NPC_IDS = new Set([
     NpcIdentifiers.IRENA,
@@ -78,6 +80,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const FEMALE_SLAVE_SPOKEN_VARIANT = "overhead-dialogue-when-spoken-to";
   const MINE_GUARD_NPC_IDS = new Set([4660, 4661, 4662, 4663, 4664, 4665, 4666, 4667, 4668, 4669, 4678]);
   const MERCENARY_CAPTAIN_NPC_ID = NpcIdentifiers.MERCENARY_CAPTAIN;
+  const CAPTAIN_ATTACK_ACTION_ID = "elFnbt";
   const MERCENARY_GUARD_NPC_IDS = new Set([4656, 4657, 4658, 4659]);
   const CAPTAIN_SIAD_NPC_ID = NpcIdentifiers.CAPTAIN_SIAD;
   const AL_SHABIM_NPC_ID = NpcIdentifiers.AL_SHABIM;
@@ -90,7 +93,7 @@ module.exports = function registerTouristTrapQuest(api) {
    * itself uses (CacheDefinitions.resolveNpc / ObjectDefinition.forPlayer).
    */
   const VARBIT_MINE_SLAVE = 2803;        // 0 male slave, 1 escaping slave
-  const VARBIT_ANA_ON_LIFT = 2805;       // Ana rides the mine cart of the lift
+  const VARBIT_ANA_STATE = 2805;         // 0 underground Ana, 1 hidden after barrelling
   const VARBIT_IRENA_STATE = 2807;       // 0 sad Irena, 1 happy Irena
   const VARBIT_ANA_WINCH_BARREL = 2808;  // Ana in the barrel west of the winch
   const VARBIT_CART_ANA = 2809;          // 0 empty cart, 1 Ana on it, 2 cart gone
@@ -125,6 +128,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const SEARCHED_BOOKCASE_ATTRIBUTE = "the-tourist-trap:searched-bookcase";
   const DISTRACTED_SIAD_ATTRIBUTE = "the-tourist-trap:distracted-siad";
   const XP_CHOICES_ATTRIBUTE = "the-tourist-trap:xp-choices";
+  const CART_ANA_RETRIEVED_ATTRIBUTE = "the-tourist-trap:cart-ana-retrieved";
   /** The escaping slave has been caught and turned back into a male slave. */
   const ESCAPING_SLAVE_ATTRIBUTE = "the-tourist-trap:escaping-slave-turned-back";
 
@@ -158,6 +162,11 @@ module.exports = function registerTouristTrapQuest(api) {
   const CHEST_OBJECT_ID = 2677;
   const ANVIL_OBJECT_ID = 2672;
   const MINE_BARREL_OBJECT_IDS = new Set([2680, 2681]);
+  // Configured QuestHelper target; the transcript heading calls this a full barrel.
+  const CART_ANA_BARREL_OBJECT_ID = 2681;
+  const CART_ANA_BARREL_LOCATION = { x: 3303, y: 9418, z: 0 };
+  const CART_ANA_PICKUP_MESSAGE_ID = "8u_7h_";
+  const CART_ANA_SEARCH_VARIANT = "the-deeper-mine-searching-the-full-barrel-by-the-mining-cart-after-sending-ana";
   /**
    * The barrel the winch hauls up, west of the camp winch. The map places the
    * transform parent 18963; the cache turns it into the searchable barrel 18962
@@ -178,6 +187,7 @@ module.exports = function registerTouristTrapQuest(api) {
   const MINING_CAMP_EXIT_TILE = { x: 3272, y: 3029, z: 0 };
   /** The camp itself (Quest Helper's camp zone), used to tell entering from leaving. */
   const MINING_CAMP_BOUNDS = { minX: 3274, maxX: 3305, minY: 3014, maxY: 3037 };
+  const MINE_SURFACE_TILE = { x: 3301, y: 3036, z: 0 };
   /**
    * Ours, inferred from clipping: north of the inner door is the side that walks
    * to the guards and the cave. No capture or source gives the landing tile.
@@ -208,6 +218,9 @@ module.exports = function registerTouristTrapQuest(api) {
   const SIAD_DISTRACTED_MESSAGE_ID = "HorYZZ";
   /** Feathers attached to the prototype dart tip. */
   const FEATHERS_ATTACHED_MESSAGE_ID = "XnpHhn";
+  /** Canonical handover message shared by Talk-to and item use. */
+  const PINEAPPLE_HANDOVER_MESSAGE_ID = "A30Q5M";
+  const PINEAPPLE_HANDOVER_VARIANT = "the-quest-for-tenti-s-using-the-tenti-pineapple-on-the-guard-in-the-cave";
   /** First line of the deeper-mine guard conversation. */
   const GUARD_TALKED_MESSAGE_ID = "jZJCvV";
   /** The two skill choice menus offer the same four skills. */
@@ -262,7 +275,7 @@ module.exports = function registerTouristTrapQuest(api) {
     const escaping = stage >= STAGE_SLAVE_CLOTHES && !player.getAttribute(ESCAPING_SLAVE_ATTRIBUTE);
     const anaInBarrel = held(player, ANA_IN_A_BARREL_ITEM_ID);
     setVarbit(sender, VARBIT_MINE_SLAVE, escaping ? 1 : 0);
-    setVarbit(sender, VARBIT_ANA_ON_LIFT, stage >= STAGE_ANA_ON_CART && stage < STAGE_ANA_ON_CAMP_CART ? 1 : 0);
+    setVarbit(sender, VARBIT_ANA_STATE, stage >= STAGE_ANA_IN_BARREL ? 1 : 0);
     setVarbit(sender, VARBIT_IRENA_STATE, stage >= STAGE_RETURNED ? 1 : 0);
     setVarbit(sender, VARBIT_ANA_WINCH_BARREL,
       stage >= STAGE_ANA_SURFACE && stage < STAGE_ANA_ON_CAMP_CART && !anaInBarrel ? 1 : 0);
@@ -419,10 +432,11 @@ module.exports = function registerTouristTrapQuest(api) {
       return "inside-the-camp-talking-to-male-slave-by-the-mine-door-entrance";
     }
     if (MINE_GUARD_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_HAS_PINEAPPLE) {
-        return held(player, TENTI_PINEAPPLE_ITEM_ID)
-          ? "getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening"
-          : "the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple";
+      if (stage >= STAGE_GUARD_DISTRACTED) {
+        return "the-quest-for-tenti-s-talking-to-the-guard-in-the-cave-after-giving-him-the-tenti-pineapple";
+      }
+      if (stage === STAGE_HAS_PINEAPPLE && held(player, TENTI_PINEAPPLE_ITEM_ID)) {
+        return PINEAPPLE_HANDOVER_VARIANT;
       }
       return "getting-a-tenti-pineapple-talking-to-the-guard-by-the-cave-opening";
     }
@@ -517,6 +531,15 @@ module.exports = function registerTouristTrapQuest(api) {
 
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    if (stepId === CAPTAIN_ATTACK_ACTION_ID) {
+      if (npcId !== MERCENARY_CAPTAIN_NPC_ID || stageOf(player) < STAGE_STARTED
+        || !event.npc?.isRegistered?.()) return;
+      event.handled = true;
+      event.end = true;
+      player.getPacketSender().sendInterfaceRemoval();
+      event.npc.getCombat().attack(player);
+      return;
+    }
     if (stepId === GIVE_KEY_MESSAGE_ID) {
       if (!IRENA_NPC_IDS.has(npcId)) return;
       if (held(player, WROUGHT_IRON_KEY_ITEM_ID)) return;
@@ -570,6 +593,23 @@ module.exports = function registerTouristTrapQuest(api) {
       if (stageOf(player) >= STAGE_SLAVE_CLOTHES) advance(player, STAGE_GUARD_TALKED);
       return;
     }
+    if (stepId === PINEAPPLE_HANDOVER_MESSAGE_ID) {
+      if (!MINE_GUARD_NPC_IDS.has(npcId) || stageOf(player) !== STAGE_HAS_PINEAPPLE) return;
+      if (!held(player, TENTI_PINEAPPLE_ITEM_ID)) return;
+      player.getInventory().deleteNumber(TENTI_PINEAPPLE_ITEM_ID, 1);
+      advance(player, STAGE_GUARD_DISTRACTED);
+      return;
+    }
+    if (stepId === CART_ANA_PICKUP_MESSAGE_ID) {
+      if (npcId !== NpcIdentifiers.ANA || stageOf(player) !== STAGE_ANA_SENT_UP
+        || held(player, ANA_IN_A_BARREL_ITEM_ID) || player.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE)
+        || !giveItem(player, ANA_IN_A_BARREL_ITEM_ID)) {
+        event.handled = true;
+        return;
+      }
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, true);
+      return;
+    }
     if (stepId === FEATHERS_ATTACHED_MESSAGE_ID) {
       if (!player.getInventory().contains(PROTOTYPE_DART_TIP_ITEM_ID)) return;
       player.getInventory().deleteNumber(PROTOTYPE_DART_TIP_ITEM_ID, 1);
@@ -614,6 +654,22 @@ module.exports = function registerTouristTrapQuest(api) {
     return true;
   }
 
+  // Own the automatic reward so its shared drop-table row cannot also leave a ground key.
+  function handleDropContext({ player, npcId, context }) {
+    if (npcId !== MERCENARY_CAPTAIN_NPC_ID || !player || stageOf(player) < STAGE_STARTED
+      || !context?.handledItemIds) return;
+    if (held(player, METAL_KEY_ITEM_ID)) {
+      context.handledItemIds.add(METAL_KEY_ITEM_ID);
+    } else if (giveItem(player, METAL_KEY_ITEM_ID)) {
+      context.handledItemIds.add(METAL_KEY_ITEM_ID);
+      // rsprox 235/03792.txt tick 14948 (and the Wiki's Mercenary Captain): the line in chat, then
+      // the same line in an item box (objectbox, 193) showing the key.
+      player.sendMessage(CAPTAIN_KEY_LINE);
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, METAL_KEY_ITEM_ID, CAPTAIN_KEY_BOX)));
+    }
+  }
+
   function handleNpcDeath(event) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!killer) return;
@@ -628,13 +684,6 @@ module.exports = function registerTouristTrapQuest(api) {
     }
     if (event.npcId !== MERCENARY_CAPTAIN_NPC_ID) return;
     if (stageOf(killer) < STAGE_STARTED) return;
-    if (!held(killer, METAL_KEY_ITEM_ID)) {
-      if (!giveItem(killer, METAL_KEY_ITEM_ID)) {
-        killer.sendMessage("The mercenary captain drops a metal key, but you have no space to pick it up.");
-        return;
-      }
-      killer.sendMessage("The mercenary captain drops a metal key. You pick it up.");
-    }
     advance(killer, STAGE_METAL_KEY);
   }
 
@@ -690,7 +739,7 @@ module.exports = function registerTouristTrapQuest(api) {
     if (objectId === 2690 || objectId === 2691) {
       player.sendMessage("You return to the surface.");
       if (stageOf(player) >= STAGE_GUARD_TALKED && stageOf(player) < STAGE_HAS_PLANS) advance(player, STAGE_LEFT_CAMP);
-      moveTo(player, MINING_CAMP_INSIDE_TILE);
+      moveTo(player, MINE_SURFACE_TILE);
       return;
     }
     if (!wearingSlaveClothes(player)) {
@@ -787,6 +836,19 @@ module.exports = function registerTouristTrapQuest(api) {
 
   function searchBarrel(event) {
     const { player, objectId } = event;
+    if (objectId === CART_ANA_BARREL_OBJECT_ID
+      && Location.isSameTile(event.object?.getLocation?.(), CART_ANA_BARREL_LOCATION)
+      && stageOf(player) === STAGE_ANA_SENT_UP) {
+      event.handled = true;
+      if (held(player, ANA_IN_A_BARREL_ITEM_ID) || player.getAttribute(CART_ANA_RETRIEVED_ATTRIBUTE)) {
+        player.sendMessage("The barrel is empty.");
+        return;
+      }
+      // Old stage23 saves cannot distinguish blocked retrieval from prior loading.
+      // Permit one recovery; successful credit and bucket consumption persist it.
+      startTranscript(api, player, NpcIdentifiers.ANA, "The Tourist Trap", CART_ANA_SEARCH_VARIANT);
+      return;
+    }
     if (ANA_BARREL_OBJECT_IDS.has(objectId)) {
       event.handled = true;
       if (stageOf(player) < STAGE_ANA_SURFACE || stageOf(player) >= STAGE_ANA_ON_CAMP_CART) {
@@ -838,7 +900,13 @@ module.exports = function registerTouristTrapQuest(api) {
     if (objectId !== WINCH_BUCKET_OBJECT_ID) return false;
     if (stageOf(player) < STAGE_ANA_SENT_UP) return;
     event.handled = true;
-    if (held(player, ANA_IN_A_BARREL_ITEM_ID)) player.getInventory().deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+    if (held(player, ANA_IN_A_BARREL_ITEM_ID)) {
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID);
+      inventory.deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      if (inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID) !== before - 1) return;
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, true);
+    }
     player.sendMessage("You place Ana in the winch bucket and send her to the surface.");
     advance(player, STAGE_ANA_SENT_UP);
   }
@@ -887,11 +955,12 @@ module.exports = function registerTouristTrapQuest(api) {
       advance(player, STAGE_ANA_IN_BARREL);
       return;
     }
-    if (itemId === TENTI_PINEAPPLE_ITEM_ID && MINE_GUARD_NPC_IDS.has(npcId) && stageOf(player) >= STAGE_HAS_PINEAPPLE) {
+    if (itemId === TENTI_PINEAPPLE_ITEM_ID && MINE_GUARD_NPC_IDS.has(npcId)
+      && stageOf(player) >= STAGE_HAS_PINEAPPLE && held(player, TENTI_PINEAPPLE_ITEM_ID)) {
       event.handled = true;
-      player.getInventory().deleteNumber(TENTI_PINEAPPLE_ITEM_ID, 1);
-      player.sendMessage("You show the Tenti pineapple to the guard. He is delighted and distracted.");
-      advance(player, STAGE_GUARD_DISTRACTED);
+      startTranscript(api, player, npcId, "The Tourist Trap", stageOf(player) >= STAGE_GUARD_DISTRACTED
+        ? "the-quest-for-tenti-s-using-a-second-tenti-pineapple-on-the-guard-in-the-cave"
+        : PINEAPPLE_HANDOVER_VARIANT, undefined, event.npc);
     }
   }
 
@@ -908,7 +977,12 @@ module.exports = function registerTouristTrapQuest(api) {
     if (itemId === ANA_IN_A_BARREL_ITEM_ID && MINE_CART_OBJECT_IDS.has(objectId)
       && stageOf(player) >= STAGE_EAST_MINE && stageOf(player) < STAGE_ANA_ON_CART) {
       event.handled = true;
-      player.getInventory().deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID);
+      if (before < 1) return;
+      inventory.deleteNumber(ANA_IN_A_BARREL_ITEM_ID, 1);
+      if (inventory.getAmount(ANA_IN_A_BARREL_ITEM_ID) !== before - 1) return;
+      player.setAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, false);
       player.sendMessage("You place Ana in the barrel into the mine cart.");
       advance(player, STAGE_ANA_ON_CART);
       moveTo(player, WEST_MINE_CART_TILE);
@@ -977,6 +1051,7 @@ module.exports = function registerTouristTrapQuest(api) {
   api.persistAttribute(SEARCHED_BOOKCASE_ATTRIBUTE, false);
   api.persistAttribute(DISTRACTED_SIAD_ATTRIBUTE, false);
   api.persistAttribute(XP_CHOICES_ATTRIBUTE, 0);
+  api.persistAttribute(CART_ANA_RETRIEVED_ATTRIBUTE, false);
   api.persistAttribute(ESCAPING_SLAVE_ATTRIBUTE, false);
 
   api.onNpcDialogueVariant(selectVariant);
@@ -986,6 +1061,7 @@ module.exports = function registerTouristTrapQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleDriverAgreement.bind(null, stageOf, advance, MINE_CART_DRIVER_NPC_ID, COINS_ITEM_ID));
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", handleDropContext);
   api.onObjectInteraction("Gate", { Open: openCampGate });
   api.onObjectInteraction("Mine door entrance", { Open: openMineDoor });
   api.onObjectInteraction("Mine cave", { "Walk through": enterDeepMine });

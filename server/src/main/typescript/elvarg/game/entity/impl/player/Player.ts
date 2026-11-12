@@ -63,10 +63,13 @@ import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import type { GameObject } from "../object/GameObject";
 import { type LocMergeBounds, validateLocMerge } from "../../../../net/protocol/LocMerge";
+import { Music } from "../../../Music";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
     18: 0,
+    // The music settings the client sets: only their bits of varp 19 (Music.SETTINGS_MASK).
+    [Music.SETTINGS_VARP]: Music.DEFAULT_SETTINGS,
     168: 100,
     169: 100,
     872: 100,
@@ -93,6 +96,10 @@ export class Player extends Mobile {
     public static readonly STAT_RESTORE_TICKS = 100;
     /** Wiki (Rapid Heal): Rapid Heal or a Hitpoints cape heal a point every 30 seconds. */
     public static readonly FAST_HITPOINTS_REGEN_TICKS = 50;
+    /** `stat_boosts_hud_update_restore_up_timer`: (0 restore | 1 Rapid Restore, period, ticks left). */
+    private static readonly RESTORE_UP_TIMER_SCRIPT = 4517;
+    /** The overlay's timers are resent every quarter of the restore cycle. */
+    private static readonly RESTORE_TIMER_SEND_TICKS = 25;
     /** Cycle the next drained-stat restore is due on (-1: not started). */
     private statRestoreDue = -1;
     /** Cycle Rapid Restore's own restore is due on; it starts when the prayer is switched on. */
@@ -151,6 +158,27 @@ export class Player extends Mobile {
     private multiIcon: number;
     private isRunning = true;
     private playerBot = false;
+    /**
+     * Whether the player's tile blocks NPC movement. Live (LostCity's PLAYER_OCC): a player who
+     * has not moved or teleported since logging in does not block NPCs yet - they walk through -
+     * so a login defers it until the first move. Only NPC movement reads it.
+     */
+    private occupiesTile = true;
+
+    public deferTileOccupancy(): void {
+        this.occupiesTile = false;
+    }
+
+    /** Called when the player first moves: from then on the tile they stand on is occupied. */
+    public claimTileOccupancy(): boolean {
+        const deferred = !this.occupiesTile;
+        this.occupiesTile = true;
+        return deferred;
+    }
+
+    public isOccupyingTile(): boolean {
+        return this.occupiesTile;
+    }
     private botAreaProcessTick = 0;
     /** Run energy in OSRS units (0-10,000; 100 units = 1%). */
     private runEnergy = GameConstants.RUN_ENERGY_MAX_UNITS;
@@ -229,7 +257,11 @@ export class Player extends Mobile {
         this.setSpecialActivated(false);
         CombatSpecial.updateBar(this);
         this.setHasVengeance(false);
-        this.getCombat().getFireImmunityTimer().stop();
+        // Antifire is left running, timer and protection both: in every recorded death with one active (rsprox
+        // 227/01857, 227/00543, 227/00555, 234/03279...) its varbits count on through the death and respawn and the
+        // "about to expire" messages follow, while poison and prayers reset; the Wiki says nothing either way.
+        // Stopping only the timer left the protection on, a save wrote fireImmunityTimer 0 and enchanted bolts' fire
+        // check disagreed with dragonfire. The one reset the Wiki gives (a "no potions" duel) is the duel's own.
         this.getCombat().getPoisonImmunityTimer().stop();
         this.getCombat().getPoisonClock().resetPhase();
         this.getCombat().getTeleblockTimer().stop();
@@ -383,6 +415,10 @@ export class Player extends Mobile {
         return true;
     }
 
+    public isNpc(): boolean {
+        return false;
+    }
+
     public equals(o: Object): boolean {
         if (!(o instanceof Player)) {
             return false;
@@ -448,7 +484,9 @@ export class Player extends Mobile {
         timed("client_input", () => this.getSession()?.processPackets());
         // The tick count, every tick, as live sends it (varp map_clock): the client's timers
         // (buff bar cooldowns, script4678 and script5940) count against it.
-        if (!isBot) this.sendMapClock();
+        // Client-only packets: a bot an administrator drives has their client, so it gets them as a player does.
+        const unwatched = this.isUnwatchedBot();
+        if (!unwatched) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -456,7 +494,7 @@ export class Player extends Mobile {
 
         // Timers
         timed("timers", () => this.getTimers().process());
-        if (!isBot) this.syncPoisonOrb();
+        if (!unwatched) this.syncPoisonOrb();
 
         const movement = this.getMovementQueue();
         const combat = this.getCombat();
@@ -487,6 +525,10 @@ export class Player extends Mobile {
         // Reach checks for walk-to interactions run here, after this cycle's steps,
         // so arriving at an object/npc/ground item resolves on the same cycle.
         timed("walk_to_interaction", () => TaskManager.processWalkTo(this.getIndex()));
+        // A click this turn that started no walk leaves the run mode as it was, and a Ctrl-clicked
+        // interaction's run choice ends once the player is idle.
+        movement.dropPendingClickRunOverride();
+        movement.endClickRunOverrideWhenIdle();
 
         // Process aggression
         if (!isBot) {
@@ -545,10 +587,12 @@ export class Player extends Mobile {
         if (restoreDue) this.statRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
 
         const rapidRestore = PrayerHandler.isActivated(this, PrayerHandler.RAPID_RESTORE);
+        const rapidRestoreWasOn = this.rapidRestoreDue >= 0;
         if (!rapidRestore) this.rapidRestoreDue = -1;
         else if (this.rapidRestoreDue < 0) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
         const rapidRestoreDue = rapidRestore && cycle >= this.rapidRestoreDue;
         if (rapidRestoreDue) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
+        if (!this.isPlayerBot()) this.sendRestoreTimers(cycle, rapidRestore && (!rapidRestoreWasOn || rapidRestoreDue), rapidRestoreWasOn && !rapidRestore);
 
         if (restoreDue || rapidRestoreDue) {
             // An area can pause non-Hitpoints restoration (Rogues' Den holds a drained Agility/
@@ -588,6 +632,25 @@ export class Player extends Mobile {
             skills.decreaseCurrentLevel(Skill.HITPOINTS, 1, max);
         }
         this.restartHitpointsTimer(cycle);
+    }
+
+    /**
+     * The modified stats overlay's tooltip timers ("Stats restoring", "Boosts draining") count
+     * down on the client from what these scripts last set: the restore timer goes out every 25
+     * ticks of its cycle (with "stats:restore-timer-sent", for the boost drain timer), and Rapid
+     * Restore's own timer when it starts, restores and stops.
+     */
+    private sendRestoreTimers(cycle: number, rapidRestoreRestarted: boolean, rapidRestoreStopped: boolean): void {
+        const remaining = this.statRestoreDue - cycle;
+        if (remaining % Player.RESTORE_TIMER_SEND_TICKS === 0) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 0, Player.STAT_RESTORE_TICKS, remaining);
+            PluginManager.emitCustomEvent("stats:restore-timer-sent", { player: this });
+        }
+        if (rapidRestoreRestarted) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, Player.STAT_RESTORE_TICKS, Player.STAT_RESTORE_TICKS);
+        } else if (rapidRestoreStopped) {
+            this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, 0, 0);
+        }
     }
 
     /** Worn items changed: the next Hitpoints regen asks gear again, keeping the countdown. */
@@ -670,9 +733,14 @@ export class Player extends Mobile {
             .Sailing.onLogout(this);
         this.getPacketSender().sendInterfaceRemoval();
 
-        // Leave area
+        // Leave area. An area's leave code that throws must not stop the rest of the logout: the logout hooks, the
+        // task cancel and the save below (a plugin's postLeave error left the player's tasks running and unsaved).
         if (this.getArea() != null) {
-            this.getArea().leave(this, true);
+            try {
+                this.getArea().leave(this, true);
+            } catch (err) {
+                console.error(`[World] area leave failed on logout (${this.getUsername()})`, err);
+            }
         }
 
         // Do stuff...
@@ -727,7 +795,12 @@ export class Player extends Mobile {
         }
         CombatPoisonEffect.resume(this);
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
-            this.getPacketSender().sendConfig(Number(varpId), value);
+            const id = Number(varpId);
+            // The music settings share varp 19 with bits the server owns.
+            const sent = id === Music.SETTINGS_VARP
+                ? (this.getPacketSender().getVarp(id) & ~Music.SETTINGS_MASK) | value
+                : value;
+            this.getPacketSender().sendConfig(id, sent);
         }
     }
 
@@ -766,9 +839,13 @@ export class Player extends Mobile {
      * interaction (combat target or walk-to callback) but leaves the walk queue intact,
      * so the player keeps walking to the clicked destination without completing the
      * action. osrs-docs: Entity Interactions - Interruptions.
+     *
+     * `keepCombatTarget` leaves an attack running: a weapon or armour switch from the inventory
+     * does not end the fight on live, so the next swing comes off the old weapon's cooldown with
+     * no new click (rsprox captures, docs/weapon-switching.md).
      */
-    clearPendingAction(): void {
-        this.getCombat().clearInteraction();
+    clearPendingAction(keepCombatTarget = false): void {
+        if (!keepCombatTarget) this.getCombat().clearInteraction();
         TaskManager.cancelWalkToTasks(this.getIndex());
         // Following is an interaction too, so an inventory item action ends it.
         const following = this.getFollowing();
@@ -777,6 +854,7 @@ export class Player extends Mobile {
             if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
             if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
         }
+        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this });
     }
 
     isStaff(): boolean {
@@ -814,6 +892,10 @@ export class Player extends Mobile {
 
     public setAudioSetting(varpId: number, value: number): boolean {
         if (!(varpId in DEFAULT_AUDIO_SETTINGS) || !Number.isFinite(value)) return false;
+        if (varpId === Music.SETTINGS_VARP) {
+            this.audioSettings[varpId] = Math.trunc(value) & Music.SETTINGS_MASK;
+            return true;
+        }
         const maximum = varpId === 18 ? 2 : PACKED_AUDIO_VARPS.has(varpId) ? 0x7fffffff : 100;
         this.audioSettings[varpId] = Math.max(0, Math.min(maximum, Math.trunc(value)));
         return true;
@@ -832,6 +914,10 @@ export class Player extends Mobile {
             PluginManager.emitCustomEvent("audio:setting-changed", { player: this, varpId, previous, value: next });
         }
         return true;
+    }
+
+    public setSession(session: PlayerSession): void {
+        this.session = session;
     }
 
     public getSession(): PlayerSession {
@@ -1143,7 +1229,9 @@ export class Player extends Mobile {
     }
 
     public setRunEnergy(runEnergyPercent: number) {
-        this.setRunEnergyUnits(runEnergyPercent * 100);
+        // A percent read back from units (getRunEnergy, a save, a stash) isn't exact in floating point: 0.29 * 100 is
+        // 28.999..., which flooring lost a unit of on every relog. A hair over keeps floor semantics for real fractions.
+        this.setRunEnergyUnits(runEnergyPercent * 100 + 1e-6);
     }
 
     /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */
@@ -1260,9 +1348,19 @@ export class Player extends Mobile {
         return this.skullTimer > 0;
     }
 
-    /** Counts the skull down a tick; the appearance drops the skull icon on the tick it runs out. */
+    /**
+     * Counts the skull down a tick; the appearance drops the skull icon on the tick it runs out. It stands still
+     * while dying: the items a death keeps follow the skull at the killing blow, not four ticks on.
+     */
     public processSkullTimer(): void {
-        if (!this.isSkulled()) {
+        if (!this.isSkulled() || this.isDying) {
+            return;
+        }
+        // Wiki (Skull (status), 9 December 2021): a skull "cannot disappear during PvP combat". Its last tick waits
+        // while a player is this player's target or attacker (the attacker clears six seconds after the last hit).
+        const combat = this.getCombat();
+        const inPvpCombat = combat.getTarget?.()?.isPlayer?.() === true || combat.getAttacker?.()?.isPlayer?.() === true;
+        if (this.skullTimer <= 1 && inPvpCombat) {
             return;
         }
         if (--this.skullTimer === 0) {
@@ -1399,6 +1497,14 @@ export class Player extends Mobile {
 
     public isPlayerBot(): boolean {
         return this.playerBot;
+    }
+
+    /**
+     * A bot no client is watching: it needs no client packets and wakes no regions. A bot an administrator drives
+     * (::botcontrol) has the admin's connection, so it gets both, as a player does.
+     */
+    public isUnwatchedBot(): boolean {
+        return this.playerBot && this.getSession?.()?.hasNetworkClient?.() !== true;
     }
 
     public setPlayerBot(playerBot: boolean): void {

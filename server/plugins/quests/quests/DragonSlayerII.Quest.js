@@ -1116,7 +1116,7 @@ module.exports = function registerDragonSlayerII(api) {
       onConfirm: (skill, name) => {
         const manager = player.getSkillManager();
         const before = manager.getExperience(skill);
-        manager.addExperience(skill, 25000, false);
+        manager.addExperience(skill, 25000, true);
         if (manager.getExperience(skill) === before) return null;
         const claimed = Number(player.getAttribute(ATTR_TRAINING_REWARDS)) || 0;
         player.setAttribute(ATTR_TRAINING_REWARDS, Math.min(4, claimed + 1));

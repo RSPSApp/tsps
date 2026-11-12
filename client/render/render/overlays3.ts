@@ -187,7 +187,7 @@ import {
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
-import { RENDER_CONSTANTS, DEFAULT_OVERHEAD_CHAT_COLOR, OVERHEAD_CHAT_COLOR_TABLE, DEFAULT_NPC_HEALTH, MAX_ESTIMATED_HEALTH } from "./constants";
+import { RENDER_CONSTANTS, DEFAULT_OVERHEAD_CHAT_COLOR, DEFAULT_OVERHEAD_CHAT_COLOR_ID, OVERHEAD_CHAT_COLOR_TABLE, DEFAULT_NPC_HEALTH, MAX_ESTIMATED_HEALTH } from "./constants";
 import { projectDeckToWorld } from "./worldEntityMotion";
 
 export function trimActorHealthBars(host: WebGLOsrsRendererHost, 
@@ -279,14 +279,22 @@ export function appendPlayerOverheadText(host: WebGLOsrsRendererHost,
         overhead.footprintRadius = RENDER_CONSTANTS.PLAYER_FOOTPRINT_RADIUS;
         overhead.groupKey = host.makeActorGroupKey(false, pe.getServerIdForIndex?.(index) ?? 0);
         overhead.text = text;
-        overhead.color = host.mapOverheadColor(chatState.color);
-        overhead.colorId =
-            typeof chatState.color === "number" && chatState.color >= 0 && chatState.color < 0x100
-                ? chatState.color | 0
-                : undefined;
-        overhead.effect = chatState.effect ?? 0;
+        if (chatEffectsShown(host)) {
+            overhead.color = host.mapOverheadColor(chatState.color);
+            overhead.colorId =
+                typeof chatState.color === "number" && chatState.color >= 0 && chatState.color < 0x100
+                    ? chatState.color | 0
+                    : undefined;
+            overhead.effect = chatState.effect ?? 0;
+            overhead.pattern = chatState.pattern;
+        } else {
+            // "Show chat effects" off: every player's overhead chat is plain yellow and static.
+            overhead.color = host.mapOverheadColor(DEFAULT_OVERHEAD_CHAT_COLOR_ID);
+            overhead.colorId = DEFAULT_OVERHEAD_CHAT_COLOR_ID;
+            overhead.effect = 0;
+            overhead.pattern = undefined;
+        }
         overhead.modIcon = host.resolveModIcon(chatState.modIcon);
-        overhead.pattern = chatState.pattern;
         const duration = chatState.duration && chatState.duration > 0 ? chatState.duration : 1;
         const remaining = Math.max(0, Math.min(duration, chatState.remaining ?? duration));
         overhead.duration = duration;
@@ -298,6 +306,13 @@ export function appendPlayerOverheadText(host: WebGLOsrsRendererHost,
         );
         output.push(overhead);
     
+}
+
+/** Varp 171 `option_chat`, the "Show chat effects" row: 1 turns chat colours and effects off. */
+const OPTION_CHAT_VARP = 171;
+
+export function chatEffectsShown(host: WebGLOsrsRendererHost): boolean {
+    return ((host.osrsClient?.varManager?.getVarp(OPTION_CHAT_VARP) ?? 0) | 0) === 0;
 }
 
 export function appendActorHealthBars(host: WebGLOsrsRendererHost, 

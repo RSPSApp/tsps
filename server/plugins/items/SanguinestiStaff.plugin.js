@@ -215,6 +215,7 @@ function uncharge({ player, item }) {
 
 module.exports = {
   name: "SanguinestiStaff",
+  description: "Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -226,6 +227,7 @@ module.exports = {
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCombatHitResolved(onHitResolved);
     api.registerCombatMethodResolver(staff.resolver);
+    api.onCustomEvent("item:fill-charges", staff.fillCharges);
   },
   _test: {
     chargesOf,

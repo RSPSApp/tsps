@@ -19,6 +19,7 @@ function blockSkullAttack(event) {
 
 module.exports = {
   name: "SkullPrevention",
+  description: "The PK Skull Prevention setting, which refuses attacks that would skull the player.",
   _test: { blockSkullAttack },
   register(api) {
     pluginApi = api;

@@ -156,7 +156,20 @@ function isNotedQuantity(raw) {
 function applyOverrides(dump, subtables, overrides) {
   for (const id of Object.keys(overrides.removeNpcs ?? {})) delete dump.npcs[id];
   for (const [id, npc] of Object.entries(overrides.addNpcs ?? {})) {
-    if (id !== "$comment" && !dump.npcs[id]) dump.npcs[id] = npc;
+    if (id === "$comment") continue;
+    const existing = dump.npcs[id];
+    if (!existing) {
+      dump.npcs[id] = npc;
+      continue;
+    }
+    // The dump maps this NPC but not every table the override names: the dumper exports each
+    // dropversion table of a page and maps only one of them (the zombie pirates' Medium
+    // Wilderness Diary table). Append the missing ones; the dump's own order stays first, so
+    // the default table is unchanged.
+    existing.tables ??= [];
+    for (const table of npc.tables ?? []) {
+      if (!existing.tables.includes(table)) existing.tables.push(table);
+    }
   }
   for (const [tableId, change] of Object.entries(overrides.tables ?? {})) {
     const table = dump.tables[tableId];
@@ -325,6 +338,7 @@ function applyWikiCorrections(tableById) {
   correctMadAngel(tableById.mad_angel);
   correctSkotizo(tableById.skotizo);
   correctAmoxliatl(tableById.amoxliatl);
+  correctAlchemicalHydra(tableById.alchemical_hydra);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -396,6 +410,15 @@ function correctAmoxliatl(table) {
   table.rolls = 2;
   for (const entry of table.entries || []) {
     if (entry.section === "Frozen tears") Object.assign(entry, { roll_group: "amoxliatl_tears", once_per_kill: true });
+  }
+}
+
+/** Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard table (Wiki, Drops). */
+function correctAlchemicalHydra(table) {
+  if (!table) return;
+  table.rolls = 2;
+  for (const entry of table.entries || []) {
+    if (entry.pre_roll) entry.once_per_kill = true;
   }
 }
 
@@ -564,7 +587,8 @@ function hits(entry, multiplier = 1) {
   if (!Number.isInteger(outOf) || outOf <= 0) {
     return false;
   }
-  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
+  // Fractional weights are allowed (npc-drops-custom.json, #1749): a 2.5/400 row is 2.5, not 1.
+  const weight = Number.isFinite(entry.weight) && entry.weight > 0 ? entry.weight : 1;
   return Math.random() * outOf < Math.min(outOf, weight * multiplier);
 }
 
@@ -599,7 +623,8 @@ function isUniqueItem(entry) {
 /** Rarity alone does not make supplies, equipment or a shared drop table a boss unique. */
 function isUniqueEntry(entry) {
   const outOf = Number(entry.out_of);
-  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
+  // Fractional weights are allowed (npc-drops-custom.json, #1749): a 2.5/400 row is 2.5, not 1.
+  const weight = Number.isFinite(entry.weight) && entry.weight > 0 ? entry.weight : 1;
   const chance = outOf > 0 ? weight / outOf : 0;
   if (!(chance > 0 && chance < SPECIAL_MAX_CHANCE)) return false;
   // An ordered access may contain a pool of uniques; never boost a pool with ordinary supplies.
@@ -678,7 +703,30 @@ function rulesMultiplier(entry, rules) {
   return Math.max(multiplier, floor);
 }
 
-function rollSharedTable(name, player, depth = 0) {
+/**
+ * Wiki (Gem drop table, note 4): "The Mega-rare drop table is replaced by a talisman if Legends' Quest is not
+ * completed" (Rare drop table: Legends' Quest "IS required to access it via the gem drop table"; the rare drop table's
+ * own mega-rare slot needs nothing). The talisman is the gem table's own: "a nature talisman will drop above ground
+ * level and a chaos talisman will drop underground" (underground: the map's y + 6400 band).
+ */
+const GEM_TABLE = "gem";
+const MEGA_RARE_TABLE = "megaRare";
+const UNDERGROUND_Y = 6400;
+
+function legendsQuestComplete(player) {
+  const query = { player, key: "legends_quest", complete: false };
+  pluginApi?.emitCustomEvent?.("quest:is-complete", query);
+  return query.complete === true;
+}
+
+function locationTalisman(player) {
+  const { ItemIdentifiers } = pluginApi.core;
+  const y = player?.getLocation?.()?.getY?.() ?? 0;
+  return y >= UNDERGROUND_Y ? ItemIdentifiers.CHAOS_TALISMAN : ItemIdentifiers.NATURE_TALISMAN;
+}
+
+/** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
+function rollSharedTable(name, player, depth = 0, { ringOfWealth = true } = {}) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
@@ -687,7 +735,7 @@ function rollSharedTable(name, player, depth = 0) {
   if (!entries || entries.length === 0) {
     return [];
   }
-  const pool = isWearingRingOfWealth(player) && RING_OF_WEALTH_TABLES.has(name)
+  const pool = ringOfWealth && isWearingRingOfWealth(player) && RING_OF_WEALTH_TABLES.has(name)
     ? entries.filter((entry) => !entry.nothing)
     : entries;
   // Published as per-item n/outOf slots sharing one pool, so roll the pool once and walk
@@ -703,7 +751,10 @@ function rollSharedTable(name, player, depth = 0) {
         return [];
       }
       if (entry.ref) {
-        return rollSharedTable(entry.ref, player, depth + 1);
+        if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
+          return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
+        }
+        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth });
       }
       const [min, max] = entry.quantity;
       return [{
@@ -758,9 +809,9 @@ function rollWeighted(entries, outOf, rules) {
 }
 
 /**
- * One roll on a table: its pre-roll, main roll and separate rolls. Separate rolls marked
- * `once_per_kill` are made on the first of a table's `rolls` only. `rules` are the kill's chance
- * rules (chanceRules), applied to every entry.
+ * One roll on a table: its pre-roll, main roll and separate rolls. Pre-roll and separate rolls
+ * marked `once_per_kill` are made on the first of a table's `rolls` only. `rules` are the kill's
+ * chance rules (chanceRules), applied to every entry.
  */
 function rollOnce(table, entries, player, first = true, context = null, rules = []) {
   const drops = [];
@@ -774,6 +825,7 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
     if (entry.always) {
       continue;
     } else if (entry.pre_roll) {
+      if (entry.once_per_kill && !first) continue;
       if (entry.roll_group) {
         const group = preRollGroups.get(entry.roll_group) || [];
         group.push(entry);
@@ -968,18 +1020,41 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
  */
 function extraRolls(event) {
   ensureDropsLoaded?.();
-  const table = tableForNpc(event.npcId);
+  const table = tableForNpc(event.npcId, event.player, event.npc);
   if (!table || !Array.isArray(event.drops)) return;
   const rolling = { ...table, entries: (table.entries || []).filter((entry) => !entry.always), tertiary: [] };
   for (let i = 0; i < (event.rolls ?? 0); i++) event.drops.push(...rollTable(rolling, event.player, event.npc));
 }
 
+/**
+ * Answers npc-drops:roll-shared { player, table, drops, ringOfWealth }: one roll of a shared table
+ * by name ("gem", "rareSeed", "usefulHerb" ...), pushed onto `drops`; an empty slot pushes nothing.
+ * For content outside NPC kills that rolls the same tables (sorting salvage). `ringOfWealth: false`
+ * keeps the empty slots when a ring of wealth is worn.
+ */
+function rollSharedRequest(event) {
+  ensureDropsLoaded?.();
+  if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
+  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false }));
+}
+
 let ensureDropsLoaded = null;
 
-function tableForNpc(npcId) {
+/**
+ * The table an NPC's kill rolls. A plugin may answer npc-drops:table { player, npc, npcId, tables,
+ * table } to pick a different one for this player: the Wiki lists NPCs with a second table for a
+ * condition the data cannot express on its own (the Medium Wilderness Diary's zombie pirates).
+ * Without an answer the first table is used, as before.
+ */
+function tableForNpc(npcId, player = null, npc = null) {
   const tables = tablesByNpc.get(npcId);
   if (!tables || tables.length === 0) {
     return null;
+  }
+  if (tables.length > 1 && player && pluginApi) {
+    const request = { player, npc, npcId, tables, table: null };
+    pluginApi.emitCustomEvent("npc-drops:table", request);
+    if (request.table) return request.table;
   }
   // ponytail: ID variants are resolved by the exporter; context-dependent tables still
   // use the first entry until encounter/quest conditions have an executable contract.
@@ -987,7 +1062,7 @@ function tableForNpc(npcId) {
 }
 
 function dropFor(player, npc, npcId, location, damagers = []) {
-  const table = tableForNpc(npcId);
+  const table = tableForNpc(npcId, player, npc);
   if (!itemOnGroundManager) {
     return 0;
   }
@@ -1042,22 +1117,26 @@ function placeDrops(player, drops, location, options = {}) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
     }
+    let amount = drop.amount;
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
+      // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.
       const inventory = player.getInventory();
-      if (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0) {
-        inventory.adds(drop.itemId, drop.amount);
-        continue;
-      }
+      const collected = typeof inventory.getAddableAmount === "function"
+        ? inventory.getAddableAmount(new Item(drop.itemId, amount))
+        : (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0 ? amount : 0);
+      if (collected > 0) inventory.adds(drop.itemId, collected);
+      amount -= collected;
+      if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
-    const item = new Item(itemId, drop.amount);
+    const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
       itemOnGroundManager.registerLocation(player, item, location, undefined, options);
     } else {
-      for (let i = 0; i < drop.amount; i++) {
+      for (let i = 0; i < amount; i++) {
         itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
       }
     }
@@ -1066,6 +1145,13 @@ function placeDrops(player, drops, location, options = {}) {
 
 module.exports = {
   name: "NpcDrops",
+  description: "Rolls NPC drop tables from the Wiki-derived drop data, with subtables, tertiary drops and hand-edited overrides.",
+  config: {
+    "NpcDrops:bossRareMultiplier": {
+      type: "number", label: "Boss unique drop multiplier", default: 1, min: 1,
+      help: "Makes bosses' unique drops this many times likelier. 1 is the normal rate; values of 1 or less change nothing.",
+    },
+  },
   register(api) {
     pluginApi = api;
     itemOnGroundManager = api.getItemOnGroundManager();
@@ -1079,6 +1165,7 @@ module.exports = {
     };
     ensureDropsLoaded = ensureDrops;
     api.onCustomEvent("npc-drops:extra-rolls", extraRolls);
+    api.onCustomEvent("npc-drops:roll-shared", rollSharedRequest);
 
     // "npc-drops:roll-table" { player, table, drops }: a table outside an NPC's own (a boss's
     // chest) rolled with the same roller and shared tables; the drops are pushed onto `drops`.
@@ -1089,7 +1176,7 @@ module.exports = {
     api.onCustomEvent("npc-drops:roll-table", (request) => {
       ensureDrops();
       const npcId = Number.isInteger(request.npcId) ? request.npcId : request.npc?.getId?.() ?? null;
-      let table = request.table ?? tableForNpc(npcId);
+      let table = request.table ?? tableForNpc(npcId, request.player, request.npc);
       if (table && typeof request.entryFilter === "function") {
         table = {
           ...table,
@@ -1147,8 +1234,8 @@ module.exports = {
 
     api.log("registered", { lazy: true });
   },
-  _test: { loadDrops, tablesByNpc, sharedTables },
+  _test: { loadDrops, tablesByNpc, sharedTables, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
+  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

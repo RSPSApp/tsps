@@ -102,7 +102,11 @@ function makePlayer({ freeSlots = 28, levels = new Map(), clientOfKourend = true
         }
         items.set(id, (items.get(id) ?? 0) + amount);
       },
-      forceAdd: (item) => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),
+      // The real signature: forceAdd(player, item).
+      forceAdd: (player, item) => {
+        const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1;
+        items.set(id, (items.get(id) ?? 0) + amount);
+      },
       deleteNumber: (id, amount = 1) => {
         const before = items.get(id) ?? 0;
         const after = Math.max(0, before - amount);

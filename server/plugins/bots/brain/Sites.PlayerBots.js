@@ -59,6 +59,10 @@ function applySiteOverrides(sitesFile, overrides) {
 /** Reads bot-sites.json (or `file`) with the world config's "PlayerBots:sites" applied. */
 function readBotSites(file, raw) {
   const sitesFile = JSON.parse(fs.readFileSync(file, "utf8"));
+  const regionDensity = PluginManager.getPluginConfig("PlayerBots:activeRegionBotsByRegion");
+  if (regionDensity !== undefined) {
+    (sitesFile.pvp ??= {}).activeRegionBotsByRegion = regionDensity;
+  }
   return applySiteOverrides(sitesFile, siteOverrides(raw));
 }
 

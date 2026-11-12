@@ -153,3 +153,26 @@ test('A sapphire lantern is assembled, fuelled at its still, lit and extinguishe
  attrs.set('oil-lights:distilled-oil','2937,3210,0');hooks.login({player});assert.equal(bits.get(281),1);attrs.set('oil-lights:distilled-oil',0);hooks.login({player});assert.equal(bits.get(281),0);
  maxCraft=49;pair(I.LANTERN_LENS,I.SAPPHIRE_LANTERN_2);assert(inv.contains(I.BULLSEYE_LANTERN));assert(inv.contains(I.SAPPHIRE));
 });
+
+test('Rimmington still turns one butterfly jar into an impling jar for each repellent', () => {
+ const {PluginManager}=require('../dist/plugins/PluginManager'),core=PluginManager.getCoreApi(),I=core.ItemIdentifiers;
+ const hooks={},slots=Array(28).fill(null),attrs=new Map(),messages=[];
+ const inv={getItems:()=>slots,contains:id=>slots.some(i=>i?.getId()===id),deleteAtSlot:(slot,n)=>{assert.equal(n,1);slots[slot]=null;},deleteNumber:(id,n)=>{const slot=slots.findIndex(i=>i?.getId()===id);assert(slot>=0);inv.deleteAtSlot(slot,n);},refreshItems(){}};
+ const sender={sendVarbit(){return sender;}};
+ const player={getInventory:()=>inv,getPacketSender:()=>sender,getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),sendMessage:m=>messages.push(m)};
+ const api={core:{...core,ObjectDefinition:{forPlayer:()=>({getName:()=> 'Lamp oil still'})}},persistAttribute(){},onPlayerLogin(){},onItemOnItem(){},onItemOnObject:h=>hooks.fuel=h,onItemAction(){}};
+ require('../plugins/items/OilLights.plugin').register(api);
+ const use=(slot,x=2937,y=3210)=>{const item=slots[slot],event={player,item,itemId:item.getId(),itemSlot:slot,object:{getId:()=>5908,getLocation:()=>new core.Location(x,y,0)}};hooks.fuel(event);return event;};
+ slots[0]=new core.Item(I.IMP_REPELLENT,1);slots[1]=new core.Item(I.BUTTERFLY_JAR,1);slots[2]=new core.Item(I.BUTTERFLY_JAR,1);
+ assert.equal(use(0,2800,5000).handled,undefined);assert.equal(slots[0].getId(),I.IMP_REPELLENT);
+ assert.equal(use(1).handled,true);assert.equal(slots[1].getId(),I.BUTTERFLY_JAR);
+ use(0);assert.equal(slots[0],null);
+ use(1);assert.equal(slots[1].getId(),I.IMPLING_JAR);
+ use(2);assert.equal(slots[2].getId(),I.BUTTERFLY_JAR,'one dose treats only one jar');
+ assert.ok(messages.length>=2);
+ // Existing oil and repellent must not silently overwrite each other (server policy).
+ attrs.set('oil-lights:distilled-oil','2937,3210,0');slots[3]=new core.Item(I.IMP_REPELLENT,1);
+ use(3);assert.equal(slots[3].getId(),I.IMP_REPELLENT);assert.equal(attrs.get('oil-lights:distilled-oil'),'2937,3210,0');
+ attrs.set('oil-lights:distilled-oil',0);use(3);slots[4]=new core.Item(I.SWAMP_TAR,1);
+ use(4,2800,5000);assert.equal(slots[4].getId(),I.SWAMP_TAR);assert.equal(attrs.get('oil-lights:distilled-oil'),'2937,3210,0:repellent');
+});

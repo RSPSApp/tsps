@@ -10,7 +10,8 @@
  *   as much warmth (6 -> 60 at 99 Firemaking with four warm items).
  * - Food healing at least 4 restores 35% (not triangle sandwiches or wine), a dose of
  *   rejuvenation potion 30%, and the meter regenerates 8% a minute plus 1% per warm item.
- * - At 0% the cold kills you outright.
+ * - At 0% the cold kills you outright. A ring of life (or Defence cape) activates when warmth
+ *   drops below 10% ("Wintertodt": "A ring of life will activate if warmth drops below 10%").
  * Captures: the hitsplat is 75 (76 to others) with health bar 79; regeneration came every 100
  * ticks; at 0 "<col=ef1020>The cold of the Wintertodt has overcome you!" and a hit for all
  * your hitpoints.
@@ -27,6 +28,8 @@ const FOOD_RESTORE = 350;
 const FOOD_MIN_HEAL = 4;
 const POTION_RESTORE = 300;
 const MAX_WARM_ITEMS = 4;
+/** A ring of life activates below this much warmth (10%). */
+const RING_OF_LIFE_WARMTH = Shared.MAX_WARMTH / 10;
 const NOT_WARMING_FOODS = new Set(["triangle sandwich", "bottle of wine"]);
 
 /** Wiki "Warmth": every item that counts as warm clothing, by cache name. */
@@ -131,13 +134,20 @@ function damageFor(player, kind) {
 }
 
 /** Takes warmth for one of the Wintertodt's attacks; at 0 the cold kills. */
-function hurt(player, kind, message) {
+function hurt(player, kind, message, { spam = false } = {}) {
   const damage = damageFor(player, kind);
-  if (message) player.sendMessage(message);
+  if (message && spam) Shared.spam(player, message);
+  else if (message) player.sendMessage(message);
   const warmth = setWarmth(player, warmthOf(player) - damage * 10);
   player.showHitsplat?.(damage, Shared.COLD_SPLAT, { current: warmth, max: Shared.MAX_WARMTH, bar: Shared.WARMTH_BAR });
+  if (warmth > 0 && warmth < RING_OF_LIFE_WARMTH) saveFromCold(player);
   if (warmth <= 0) overcome(player);
   return damage;
+}
+
+/** The RingOfLife plugin answers: it teleports the player out when a ring or cape saves them. */
+function saveFromCold(player) {
+  Shared.api().emitCustomEvent("ring-of-life:activate", { player, activated: false });
 }
 
 function overcome(player) {
@@ -172,8 +182,8 @@ function leave(player) {
   player.getPacketSender().sendVarbit(Shared.VARBIT.WARMTH, Shared.MAX_WARMTH);
 }
 
-function ateFood(player, itemId, heal) {
-  if (!(heal >= FOOD_MIN_HEAL)) return;
+function ateFood(player, itemId, restores) {
+  if (!(restores >= FOOD_MIN_HEAL)) return;
   const { ItemDefinition } = Shared.core();
   const name = String(ItemDefinition.forId(itemId)?.getName?.() ?? "").toLowerCase();
   if (NOT_WARMING_FOODS.has(name)) return;

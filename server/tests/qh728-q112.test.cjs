@@ -134,7 +134,16 @@ function makePlayer(options = {}) {
       const slots = Array.from({ length: 28 }, () => new core.Item(-1, 0));
       let slot = 0;
       for (const [id, amount] of items) {
-        if (amount > 0) slots[slot++] = new core.Item(id, amount);
+        if (amount <= 0) continue;
+        // A converted item (setId in place, as the real container's item would be) moves its stack in the map.
+        const item = new core.Item(id, amount);
+        const setId = item.setId.bind(item);
+        item.setId = (next) => {
+          items.set(id, Math.max(0, (items.get(id) ?? 0) - item.getAmount()));
+          items.set(next, (items.get(next) ?? 0) + item.getAmount());
+          return setId(next);
+        };
+        slots[slot++] = item;
       }
       return slots;
     },
@@ -422,6 +431,10 @@ test('an enchant emerald tablet enchants the sickle without runes', () => {
 test('the registered Lvl-2 Enchant spell hook consumes runes and checks the equipped staff source', () => {
   const h = harness();
   const p = makePlayer({ weapon: ITEM.AIR_STAFF });
+  const policies = [];
+  h.api.onCustomEvent('magic:enchant-item-policy', recipe => {
+    if (recipe.player === p) policies.push({ itemId: recipe.itemId, resultId: recipe.resultId });
+  });
   h.player = p;
   h.quest.setStage(p, 125);
   p.items.set(ITEM.EMERALD_SICKLE, 1);
@@ -430,6 +443,8 @@ test('the registered Lvl-2 Enchant spell hook consumes runes and checks the equi
   assert.equal(staffCast.handled, true);
   assert.equal(p.items.get(ITEM.ENCHANTED_SICKLE), 1, 'the actual spell path accepts a wielded air staff');
   assert.equal(p.items.get(ITEM.COSMIC_RUNE), 0, 'the actual spell path consumes the cosmic rune');
+  assert.ok(policies.some(recipe => recipe.itemId === ITEM.EMERALD_SICKLE && recipe.resultId === ITEM.ENCHANTED_SICKLE),
+    'the quest recipe is resolved before the world policy sees it');
 
   const carried = makePlayer();
   h.player = carried;
@@ -486,6 +501,10 @@ test('the sickle recipe uses standard spell level, rune, cooldown and XP checks'
 test('the sickle recipe is unavailable before the quest has a reason to enchant it', () => {
   const h = harness();
   const p = makePlayer();
+  const policies = [];
+  h.api.onCustomEvent('magic:enchant-item-policy', recipe => {
+    if (recipe.player === p) policies.push({ declined: recipe.declined, message: recipe.message });
+  });
   h.player = p;
   h.quest.setStage(p, 0);
   p.items.set(ITEM.EMERALD_SICKLE, 1);
@@ -498,6 +517,10 @@ test('the sickle recipe is unavailable before the quest has a reason to enchant 
   assert.equal(p.items.get(ITEM.COSMIC_RUNE), 1);
   assert.equal(p.items.get(ITEM.AIR_RUNE), 3);
   assert.ok(p.messages.includes('You have no reason to enchant this yet.'));
+  assert.ok(policies.some(recipe => recipe.declined && recipe.message === 'You have no reason to enchant this yet.'),
+    'the policy receives the quest refusal after the recipe hook');
+  assert.equal(h.quest.getStage(p), 0, 'the refused cast does not advance the quest');
+  assert.equal(p.log.filter(([operation]) => operation === 'xp').length, 0, 'the refused cast grants no XP');
 });
 
 test('fresh stage 0 reaches completion through every mandatory quest-local handler, paying each reward once', () => {

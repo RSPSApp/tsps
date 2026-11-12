@@ -50,12 +50,12 @@ before(() => {
     },
   };
   // Boats as built (their facilities' locs) and the boarded varbits, as in game.
-  require("../plugins/skills/sailing/Sailing.plugin").register(api);
-  crewPlugin = require("../plugins/skills/sailing/Crew.plugin");
+  require("../plugins/skills/sailing/Panel.Sailing").register(api);
+  crewPlugin = require("../plugins/skills/sailing/Crew.Sailing");
   crewPlugin.register(api);
   // The helm plugin's crew handover event and the trim's crew share come through custom events.
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  require("../plugins/skills/sailing/Salvaging.plugin").register({ ...api, onObjectInteraction() {}, onServerStartup() {} });
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Salvaging.Sailing").register({ ...api, onObjectInteraction() {}, onServerStartup() {} });
 });
 
 let nextIndex = 300;
@@ -467,7 +467,7 @@ test("the trimming lines come from the transcripts: Jim's own, Jenkins's at-sea 
 
 test("a crewmate on a salvaging hook casts at a wreck in range and fills the cargo hold (rsprox)", () => {
   const shipwrecks = require("../plugins/skills/sailing/Shipwrecks.Salvaging");
-  const salvaging = require("../plugins/skills/sailing/Salvaging.plugin");
+  const salvaging = require("../plugins/skills/sailing/Salvaging.Sailing");
   const player = captain({ level: 99 });
   recruited(player, JIM);
   common.update(player, (crew) => { crew.slots[0] = JIM; });
@@ -573,7 +573,7 @@ test("the crew tab's radio buttons show the players (0) or the crew (2) (rsprox)
 
 test("a crewmate on a hook won't salvage a wreck above the captain's level, and says so once", () => {
   const shipwrecks = require("../plugins/skills/sailing/Shipwrecks.Salvaging");
-  const salvaging = require("../plugins/skills/sailing/Salvaging.plugin");
+  const salvaging = require("../plugins/skills/sailing/Salvaging.Sailing");
   const player = captain({ level: 99 });
   recruited(player, JIM);
   common.update(player, (crew) => { crew.slots[0] = JIM; });
@@ -622,24 +622,104 @@ test("Bank-cargo moves what fits from the hold to the bank, keeping the rest in 
   try {
     const bank = bankOf({}, 10);
     const boat = { cargo: [{ id: 2, amount: 50 }, null, { id: 385, amount: 1 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => bank }, boat), true);
+    assert.deepEqual(bankCargo.moveToBank({ getBank: () => bank }, boat), { fitted: true, kept: 0 });
     assert.deepEqual([...bank.held], [[2, 50], [385, 1]]);
     assert.deepEqual(boat.cargo, [null, null, null], "the hold is empty");
 
     const crowded = { cargo: [{ id: 2, amount: 5 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => bankOf({}, 0) }, crowded), false, "no room: it stays in the hold");
+    assert.equal(bankCargo.moveToBank({ getBank: () => bankOf({}, 0) }, crowded).fitted, false, "no room: it stays in the hold");
     assert.deepEqual(crowded.cargo, [{ id: 2, amount: 5 }]);
 
     // Review: a stack one short of the maximum takes 1 of 10 fishing bait; 9 stay in the hold.
     const nearlyFull = bankOf({ 313: MAX - 1 }, 10);
     const bait = { cargo: [{ id: 313, amount: 10 }] };
-    assert.equal(bankCargo.moveToBank({ getBank: () => nearlyFull }, bait), false, "not all of it went");
+    assert.equal(bankCargo.moveToBank({ getBank: () => nearlyFull }, bait).fitted, false, "not all of it went");
     assert.equal(nearlyFull.held.get(313), MAX);
     assert.deepEqual(bait.cargo, [{ id: 313, amount: 9 }], "the rest stays in the hold");
   } finally {
     core.Bank.isOpen = isOpen;
     core.Bank.getTabForItem = tabFor;
   }
+});
+
+test("Bank-cargo leaves what the bank refuses (a courier crate) in the hold (review #1430)", (t) => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const portTasks = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
+  const crate = [...Array(40000).keys()].find((id) => portTasks.isCrate(id));
+  assert.ok(crate, "a courier crate id");
+  // The bank policy Port Tasks registers (Cargo.PortTasks.js canBankCargo): crates can't be banked.
+  t.mock.method(PluginManager, "emitCanBankItem", (_player, item) => (portTasks.isCrate(item.getId()) ? false : null));
+  const core = PluginManager.getCoreApi();
+  t.mock.method(core.Bank, "isOpen", () => false);
+  t.mock.method(core.Bank, "getTabForItem", () => 0);
+  const added = [];
+  const bank = { getAddableAmount: (item) => item.getAmount(), add: (item) => { added.push([item.getId(), item.getAmount()]); return bank; } };
+  const boat = { cargo: [{ id: crate, amount: 2 }, { id: 2, amount: 5 }] };
+  assert.deepEqual(bankCargo.moveToBank({ getBank: () => bank }, boat), { fitted: true, kept: 1 },
+    "what the bank accepts all went; the crates were refused");
+  assert.deepEqual(added, [[2, 5]], "only the cannonballs are banked");
+  assert.deepEqual(boat.cargo, [{ id: crate, amount: 2 }, null], "the crates stay in the hold");
+});
+
+test("Bank-cargo asks the crate policy quietly: no hand-cargo refusal per crate slot", (t) => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const portTasks = require("../plugins/skills/sailing/porttasks/Common.PortTasks");
+  const crate = [...Array(40000).keys()].find((id) => portTasks.isCrate(id));
+  // Port Tasks' own canBankCargo hook (Cargo.PortTasks.js), run as PluginManager runs bank hooks.
+  const { canBankCargo } = require("../plugins/skills/sailing/porttasks/Cargo.PortTasks")._test;
+  t.mock.method(PluginManager, "emitCanBankItem", (player, item, options) => {
+    const event = { player, item, allow: null, quiet: options?.quiet === true };
+    canBankCargo(event);
+    return event.allow;
+  });
+  const core = PluginManager.getCoreApi();
+  t.mock.method(core.Bank, "isOpen", () => false);
+  t.mock.method(core.Bank, "getTabForItem", () => 0);
+  const messages = [];
+  const added = [];
+  const bank = { getAddableAmount: (item) => item.getAmount(), add: (item) => { added.push([item.getId(), item.getAmount()]); return bank; } };
+  const player = { getBank: () => bank, sendMessage: (message) => messages.push(message) };
+  const boat = { cargo: [{ id: crate, amount: 1 }, { id: crate, amount: 1 }, { id: 2, amount: 5 }, { id: 995, amount: 3 }] };
+  assert.deepEqual(bankCargo.moveToBank(player, boat), { fitted: true, kept: 2 });
+  assert.deepEqual(added, [[2, 5], [995, 3]]);
+  assert.ok(!messages.some((message) => /You can't remove the cargo/.test(message)), "no hand-cargo refusal");
+  // The same hook still tells a player banking a crate by hand.
+  const event = { player, item: new core.Item(crate, 1), allow: null };
+  canBankCargo(event);
+  assert.equal(event.allow, false);
+  assert.match(messages.at(-1), /You can't remove the cargo/);
+});
+
+test("the crew's delivery credits only the crates taken out of the hold (review #1430)", () => {
+  // Two crates the crew were to carry were banked meanwhile: the hold has none to take.
+  const request = { player: captain(), index: 0, crate: 4242, amount: 2, owned: { cargo: [null, null] }, taken: 2 };
+  PluginManager.emitCustomEvent("port-tasks:crew-delivered", request);
+  assert.equal(request.taken, 0);
+});
+
+test("Bank-cargo needs a recruited crewmate with Deckhandiness 2 (Wiki: Crew Management)", () => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const player = captain({ level: 99 });
+  recruited(player, ADA);
+  assert.ok(common.byId(ADA).stats[common.STAT.DECKHANDINESS] < 2, "Ada has Deckhandiness 1");
+  bankCargo.startBanking(player, { getId: () => 0 }, common.byId(ADA));
+  assert.equal(player.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.");
+  const other = captain({ level: 99 });
+  recruited(other, ADA, JENKINS);
+  bankCargo.startBanking(other, { getId: () => 0 }, common.byId(JENKINS));
+  assert.notEqual(other.messages().at(-1), "None of your crew is a good enough deckhand to bank your cargo.", "Jenkins has 4");
+});
+
+test("Bank-cargo counts a keg of whirlpool surprise lifting a Deckhandiness 1 crewmate (Wiki: Crew Management)", () => {
+  const bankCargo = require("../plugins/skills/sailing/crew/BankCargo.Crew");
+  const { ALES } = require("../plugins/skills/sailing/Kegs.Sailing");
+  const whirlpool = ALES.find((ale) => ale.key === "whirlpool_surprise");
+  const player = captain({ level: 99 });
+  recruited(player, ADA);
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [] }]), false, "Ada alone has Deckhandiness 1");
+  assert.equal(bankCargo.hasDeckhand(player, [{ hotspotData: [0, whirlpool.data] }]), true,
+    "\"can be used to boost any level 1 Deckhandiness crewmates to level 2\"");
+  assert.equal(bankCargo.hasDeckhand(player, []), false, "with no boat docked, her own level stands");
 });
 
 test("crewmates run to a job and walk when they wander (rsprox)", () => {

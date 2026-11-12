@@ -8,7 +8,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { AreaManager } = require("../dist/game/model/areas/AreaManager");
-const diary = require("../plugins/achievements/diaries/ArdougneMagicGuildDiary.plugin");
+const diary = require("../plugins/achievements/diaries/ArdougneMagicGuildDiary.AchievementDiaries");
 const core = PluginManager.getCoreApi();
 
 const savedAreas = [...AreaManager.areas];

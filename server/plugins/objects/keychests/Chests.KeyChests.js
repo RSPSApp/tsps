@@ -23,7 +23,10 @@ const OPENED_ATTRIBUTES = {
   larranSmall: "key-chests:larran-small-opened",
   larranBig: "key-chests:larran-big-opened",
   elven: "key-chests:elven-opened",
+  grubby: "key-chests:grubby-opened",
 };
+/** The Grubby Chest's "Open anyway (do not show this again)" choice. */
+const GRUBBY_WARNING_OFF_ATTRIBUTE = "key-chests:grubby-warning-off";
 const OPEN_CHEST_SOUND = 2402;
 const SLAYER_CHEST_SOUNDS = { start: 1227, unlock: 52, loot: 51 };
 const SLAYER_CHEST_START_DELAY = 5;
@@ -62,9 +65,9 @@ function setOpen(chest, player, object, open) {
   core.ObjectManager.register(new core.GameObject(id, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
 }
 
-/** Takes the key and gives the loot; false when the key is gone. */
+/** Takes the key and gives the loot; null when the key is gone. */
 function unlock(chest, player) {
-  if (!player.getInventory().contains(chest.keyId)) return false;
+  if (!player.getInventory().contains(chest.keyId)) return null;
   player.getInventory().deleteNumber(chest.keyId, 1);
   const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING));
   Loot.give(player, drops);
@@ -73,7 +76,22 @@ function unlock(chest, player) {
   if (chest.diaryTask) api.emitCustomEvent("diary:task", { player, ...chest.diaryTask });
   // "chests:opened" { player, chest }: a key chest opened, by its name (a league's "Open the Crystal Chest").
   api.emitCustomEvent("chests:opened", { player, chest: chest.name });
-  return true;
+  return drops;
+}
+
+/**
+ * The Grubby Chest's picture box. Wiki Transcript:Grubby Chest: a shark and red dragonhide,
+ * or the orange and blue egg sacs when an egg sac came up (the data's two pictures each).
+ */
+function showItemBox(chest, player, drops) {
+  const bonus = drops.find((entry) => entry.bonus);
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, EndDialogue } = core;
+  const text = bonus ? chest.itemBox.bonus : chest.itemBox.plain;
+  const pictures = (bonus ? chest.itemBox.bonusItems : chest.itemBox.plainItems)?.map((name) => core.CacheDefinitions.getObjId(name));
+  const box = pictures?.length === 2 && pictures.every((id) => id != null)
+    ? new DoubleItemStatementDialogue(0, pictures[0], pictures[1], text)
+    : new ItemStatementDialogue(0, (bonus ?? drops[0]).itemId, text);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box, new EndDialogue(1)));
 }
 
 function finish(player) {
@@ -87,18 +105,43 @@ function openChest(chest, player, object) {
     player.sendMessage(chest.locked);
     return;
   }
+  const warn = chest.warnSlots != null && player.getInventory().getFreeSlots() < chest.warnSlots && !player.getAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE);
+  if (warn) return warnLowSpace(chest, player, object);
+  beginOpening(chest, player, object);
+}
+
+function beginOpening(chest, player, object) {
+  if (player.getAttribute(OPENING_ATTRIBUTE)) return;
   player.setAttribute(OPENING_ATTRIBUTE, true);
   if (chest.slayerChest) openSlayerChest(chest, player, object);
   else openTreasureChest(chest, player, object);
 }
 
+/** Wiki Transcript:Grubby Chest: under 11 free slots, a choice; what won't fit drops to the floor. */
+function warnLowSpace(chest, player, object) {
+  const open = () => beginOpening(chest, player, object);
+  const openAndSilence = () => {
+    player.setAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE, true);
+    open();
+  };
+  api.sendMultiChatboxPrompt(
+    player,
+    `You do require at least ${chest.warnSlots} spaces in your inventory to loot this chest.<br><col=ff0000>Any items you cannot hold will be dropped to the floor.</col>`,
+    "Open anyway", open,
+    "Open anyway (do not show this again)", openAndSilence,
+    "Do not open", () => {},
+  );
+}
+
 function openTreasureChest(chest, player, object) {
   animate(player, "human_openchest");
   player.getPacketSender().sendSound(OPEN_CHEST_SOUND, 1, 0);
-  player.sendMessage("You unlock the chest with your key.");
+  if (!chest.itemBox) player.sendMessage("You unlock the chest with your key.");
   later(1, () => {
-    if (!unlock(chest, player)) return finish(player);
-    player.sendMessage("You find some treasure in the chest!");
+    const drops = unlock(chest, player);
+    if (!drops) return finish(player);
+    if (chest.itemBox) showItemBox(chest, player, drops);
+    else player.sendMessage("You find some treasure in the chest!");
     if (chest.count && chest.countWithLoot) player.sendMessage(countMessage(chest, player));
     setOpen(chest, player, object, true);
     later(1, () => {
@@ -157,6 +200,7 @@ const CHEST_OPTIONS = [
   ["Larran's small chest", "Unlock"],
   ["Larran's big chest", "Unlock"],
   ["Elven Crystal Chest", "Open"],
+  ["Grubby Chest", "Open"],
 ];
 const KEYS = [
   ["Crystal key", "Closed chest"],
@@ -164,12 +208,14 @@ const KEYS = [
   ["Larran's key", "Larran's small chest"],
   ["Larran's key", "Larran's big chest"],
   ["Enhanced crystal key", "Elven Crystal Chest"],
+  ["Grubby key", "Grubby Chest"],
 ];
 
 function attach(pluginApi) {
   for (const [name, option] of CHEST_OPTIONS) pluginApi.onObjectInteraction(name, { [option]: open, Check: check });
   for (const [key, chest] of KEYS) pluginApi.onItemOnObject(key, chest, useKey);
   for (const attribute of Object.values(OPENED_ATTRIBUTES)) pluginApi.persistAttribute(attribute, 0);
+  pluginApi.persistAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE, false);
 }
 
-module.exports = { init, attach, openChest, countMessage, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };
+module.exports = { init, attach, openChest, countMessage, showItemBox, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };

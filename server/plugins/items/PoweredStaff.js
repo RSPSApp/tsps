@@ -25,7 +25,8 @@
  * - `canAttack(player, target)`: false refuses (after sending its own message).
  * - `useChargeAt`: "canAttack" (default) or "start".
  * - `noChargesMessage`, `ranOutMessage`, `chargeUsed(player, staff, left)`, `emptied(player)`.
- * - `methodFlags`: properties copied onto the combat method for other content to read.
+ * - `methodFlags`: properties copied onto the combat method for other content to read. Every
+ *   staff's method carries `poweredStaff: true` (the dwarf multicannon's accuracy reads it).
  * - `swapWhenEmpty`: false keeps an emptied staff charged (a revenant weapon keeps its deposit).
  */
 
@@ -66,6 +67,16 @@ function definePoweredStaff(api, config) {
     return charges;
   }
 
+  /**
+   * "item:fill-charges" { player, item, handled }: content that hands out a staff ready to use
+   * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+   */
+  function fillCharges(event) {
+    if (!isStaff(event.item?.getId?.())) return;
+    setCharges(event.item, config.maxCharges);
+    event.handled = true;
+  }
+
   function spellFor(player) {
     let spell = spells.get(player);
     if (spell) return spell;
@@ -94,9 +105,13 @@ function definePoweredStaff(api, config) {
     const staff = weaponOf(player);
     if (!staff) return;
     // Content may spare the charge (a league relic): the question every powered staff asks.
-    const consume = { player, itemId: staff.getId(), skip: false };
+    // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to the staff's most.
+    const consume = { player, itemId: staff.getId(), skip: false, extra: 0 };
     api.emitCustomEvent("combat:consume-charge", consume);
-    if (consume.skip) return;
+    if (consume.skip) {
+      if (consume.extra > 0) setCharges(staff, chargesOf(staff) + consume.extra);
+      return;
+    }
     const left = setCharges(staff, chargesOf(staff) - 1);
     config.chargeUsed?.(player, staff, left);
     if (left > 0 || config.swapWhenEmpty === false) return;
@@ -192,7 +207,7 @@ function definePoweredStaff(api, config) {
 
   function getMethod() {
     // Flags other content reads off the method (the Wilderness plugin's warpedSceptreBuiltInSpell).
-    return method ?? (method = Object.assign(buildMethod(), config.methodFlags ?? {}));
+    return method ?? (method = Object.assign(buildMethod(), { poweredStaff: true }, config.methodFlags ?? {}));
   }
 
   function resolve(attacker) {
@@ -232,6 +247,7 @@ function definePoweredStaff(api, config) {
     useCharge,
     chargesOf,
     setCharges,
+    fillCharges,
     weaponOf,
     wields,
     isStaff,
@@ -283,12 +299,18 @@ function restricted(item) {
 
 /** How many of `id` can pay for a charge: the unrestricted copies. */
 function plainAmount(inventory, id) {
+  // A container without slots (a test stand-in) holds no restricted copies.
+  if (typeof inventory.getItems !== "function") return inventory.getAmount(id);
   return inventory.getItems().reduce((total, item) =>
     (item?.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
 }
 
 /** Takes `amount` of `id` from its unrestricted copies, leaving any restricted one alone. */
 function takePlain(inventory, id, amount) {
+  if (typeof inventory.getItems !== "function") {
+    inventory.deleteNumber(id, amount);
+    return;
+  }
   let left = amount;
   inventory.getItems().forEach((item, slot) => {
     if (left <= 0 || item?.getId() !== id || restricted(item)) return;

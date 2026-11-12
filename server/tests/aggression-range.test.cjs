@@ -15,6 +15,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
 const { CoordinateState } = require("../dist/game/entity/impl/npc/NPCMovementCoordinator");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 const GodWarsCommon = require("../plugins/bosses/godwars/Common.GodWars");
 const GodWarsCombat = require("../plugins/bosses/godwars/Combat.GodWars");
 const ScurriusCommon = require("../plugins/bosses/scurrius/Common.Scurrius");
@@ -38,6 +39,7 @@ function scene(t, {
   npcAt = spawn.clone(),
   playerAt = new core.Location(FIELD.x, FIELD.y, 0),
   providedNpc = null,
+  ordinaryAggression = false,
 } = {}) {
   let cycle = 1000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
@@ -46,7 +48,8 @@ function scene(t, {
 
   const player = new Player(null);
   player.setUsername("aggression-range");
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({ getVarbit: () => 0, getVarp: () => 0 },
+    { get: (object, key) => object[key] ?? (() => sender) });
   player.getPacketSender = () => sender;
   player.getSession = () => ({ sendClientPacket: () => true, processPackets: () => {} });
   player.setLocation(playerAt.clone());
@@ -65,7 +68,7 @@ function scene(t, {
   npc.setNeedsPlacement(false);
   npc.setHitpoints(500);
   // The combat-level rule is not what this suite is about; every test hunts.
-  npc.isAggressiveTo = () => true;
+  if (!ordinaryAggression) npc.isAggressiveTo = () => true;
 
   function tick() {
     cycle++;
@@ -161,6 +164,40 @@ test("a player inside the aggression range is hunted", (t) => {
   assert.equal(s.npc.getCombat().getTarget(), s.player);
 });
 
+// Per-monster hunt ranges from npc-combat-defs.json `huntRange` (#3890): the first unprovoked
+// engagement in the rsprox recordings, with the default 3 kept for everything else.
+test("hunt ranges load per NPC from npc-combat-defs.json, defaulting to 3", () => {
+  const range = (id) => core.NpcDefinition.forId(id).getHuntRange();
+  assert.equal(range(core.NpcIdentifiers.JUNGLE_HORROR_3), 5);
+  assert.equal(range(core.NpcIdentifiers.CAVE_HORROR), 5);
+  assert.equal(range(core.NpcIdentifiers.ICE_WOLF_4), 6);
+  assert.equal(range(core.NpcIdentifiers.ELITE_DARK_WARRIOR), 5);
+  assert.equal(range(core.NpcIdentifiers.SKELETON_56), 6);
+  assert.equal(range(MUGGER), 3, "an NPC without an entry keeps the default");
+  assert.equal(range(core.NpcIdentifiers.DAGANNOTH_16), 3, "one recorded sample is not enough to set one");
+});
+
+test("a jungle horror hunts a player five tiles away but not six", (t) => {
+  const x = FIELD.x, y = FIELD.y;
+  const horror = scene(t, {
+    npcId: core.NpcIdentifiers.JUNGLE_HORROR_3,
+    spawn: new core.Location(x, y, 0),
+    playerAt: new core.Location(x, y - 6, 0),
+  });
+  NpcAggression.runAggression(horror.player, [horror.npc]);
+  assert.equal(horror.npc.getCombat().getTarget(), null, "six tiles is beyond its hunt range");
+  horror.player.setLocation(new core.Location(x + 3, y - 5, 0));
+  NpcAggression.runAggression(horror.player, [horror.npc]);
+  assert.equal(horror.npc.getCombat().getTarget(), horror.player, "five tiles (Chebyshev) is inside it");
+
+  const mugger = scene(t, { spawn: new core.Location(x + 20, y, 0), playerAt: new core.Location(x + 20, y - 4, 0) });
+  NpcAggression.runAggression(mugger.player, [mugger.npc]);
+  assert.equal(mugger.npc.getCombat().getTarget(), null, "a default NPC does not hunt at four tiles");
+  mugger.player.setLocation(new core.Location(x + 20, y - 3, 0));
+  NpcAggression.runAggression(mugger.player, [mugger.npc]);
+  assert.equal(mugger.npc.getCombat().getTarget(), mugger.player, "but does at three");
+});
+
 test("a hunter loses interest outside the aggression range and walks home", (t) => {
   const s = scene(t);
   s.npc.getCombat().attack(s.player);
@@ -184,10 +221,10 @@ test("a hunter loses interest outside the aggression range and walks home", (t) 
 });
 
 test("an engaged ranged NPC does not retreat from a reachable player on another floor", (t) => {
-  const previous = Object.fromEntries(["CROSS_FLOOR_VISIBILITY", "CROSS_FLOOR_COMBAT"].map(key => [key, process.env[key]]));
-  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-  process.env.CROSS_FLOOR_VISIBILITY = "1";
-  process.env.CROSS_FLOOR_COMBAT = "1";
+  const { CrossFloor } = require('../dist/game/CrossFloor');
+  t.mock.method(CrossFloor, "includesOtherPlanes", () => true);
+  let crossFloorCombat = true;
+  t.mock.method(CrossFloor, "combatEnabled", () => crossFloorCombat);
   const s = scene(t, {
     spawn: new core.Location(FIELD.x, FIELD.y, 0),
     npcAt: new core.Location(FIELD.x, FIELD.y, 0),
@@ -202,9 +239,9 @@ test("an engaged ranged NPC does not retreat from a reachable player on another 
   assert.equal(core.CombatRange.footprintDistance(s.spawn, 1, s.player.getLocation(), true), 2,
     "the ranged retreat check uses horizontal footprint distance");
 
-  process.env.CROSS_FLOOR_COMBAT = "0";
+  crossFloorCombat = false;
   assert.equal(combat.shouldRetreat(ranged), true, "disabling cross-floor combat restores the old leash behavior");
-  process.env.CROSS_FLOOR_COMBAT = "1";
+  crossFloorCombat = true;
   const melee = { type: () => core.CombatType.MELEE, attackDistance: () => 1 };
   assert.equal(combat.shouldRetreat(melee), true, "melee cannot use the cross-floor range exception");
 });
@@ -368,4 +405,193 @@ test("leaving the lair still ends a public Scurrius fight", (t) => {
   s.player.setRegistered(false);
   s.tick();
   assert.equal(boss.getCombat().getTarget(), null, "a player who leaves stops being a target");
+});
+
+
+// Adjacent restoration only: four ticks is the single rsprox 3153 pair at 5410/5414.
+test("undead trees use native stationary melee, level-independent hunts and standard tolerance", t => {
+  core.RegionManager.init();
+  require("../plugins/quests/quests/AnimalMagnetism.Quest")(PluginManager.createApi("Tree attack regression"));
+  const s = scene(t, { npcId: 4418, spawn: new core.Location(3111, 3348),
+    playerAt: new core.Location(3112, 3348), ordinaryAggression: true });
+  s.npc.onAdd();
+  const { npc, player } = s;
+  player.autoRetaliateReturn = () => true;
+  for (const id of [4416, 4417, 4418]) {
+    const def = core.NpcDefinition.forId(id);
+    assert.deepEqual(def.getStats().slice(0, 3), [20, 20, 40]);
+    assert.equal(def.getHitpoints(), 250);
+    assert.equal(def.isAttackable(), false);
+    assert.equal(def.buildsAggressionTolerance(), true);
+    assert.equal(def.getMaxHit(), 3);
+  }
+  assert.equal(core.NpcDefinition.forId(MUGGER).getHuntRange(), 3, "other NPC definitions are untouched");
+  assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), true);
+  assert.equal(npc.getMovementQueue().getMobility().canMove(), false);
+  assert.equal(player.getSkillManager().getCombatLevel(), 126);
+  assert.equal(npc.isAggressiveTo(player), true);
+  const attackTicks = [];
+  const performAnimation = npc.performAnimation.bind(npc);
+  const anim = t.mock.method(npc, "performAnimation", animation => {
+    if (animation.getId() === 73) attackTicks.push(core.World.getProcessCycle());
+    performAnimation(animation);
+  });
+  const start = npc.getLocation().clone();
+  NpcAggression.runAggression(player, [npc]);
+  assert.equal(npc.getCombat().getTarget(), player);
+  const treeHitpoints = npc.getHitpoints();
+  s.ticks(16);
+  assert.equal(npc.getHitpoints(), treeHitpoints, "enabled auto-retaliate cannot damage an unattackable tree");
+  assert.equal(player.getCombat().getTarget(), null);
+  const attacks = anim.mock.calls.filter(call => call.arguments[0].getId() === 73);
+  assert.ok(attacks.length >= 3, "the real combat lifecycle attacks repeatedly");
+  assert.ok(attackTicks.slice(1).every((tick, index) => tick - attackTicks[index] === 4));
+  assert.ok(npc.getLocation().equals(start));
+  assert.ok(player.getHitpoints() >= 99 - attacks.length * 3, "ordinary melee stays under its cap");
+  player.setLocation(start.transform(2, 0));
+  const before = anim.mock.callCount();
+  s.ticks(12);
+  assert.equal(anim.mock.callCount(), before, "no attacks two tiles away");
+  assert.equal(npc.getCombat().getTarget(), null);
+  assert.equal(npc.getMovementCoordinator().getCoordinateState(), CoordinateState.HOME);
+  assert.ok(npc.getLocation().equals(start), "no chasing");
+  NpcAggression.runAggression(player, [npc]);
+  assert.equal(npc.getCombat().getTarget(), null, "no acquisition two tiles away");
+  player.setLocation(start.transform(1, 0));
+  player.getCombat().reset();
+  NpcAggression.runAggression(player, [npc]);
+  assert.equal(npc.getCombat().getTarget(), player, "exit does not leave retreat stuck");
+  npc.getCombat().reset(); player.getCombat().reset();
+  for (let i = 0; i <= 1000; i++) player.getAggressionTolerance().update(player.getLocation());
+  NpcAggression.runAggression(player, [npc]);
+  assert.equal(npc.getCombat().getTarget(), null, "standard ten-minute tolerance stops acquisition");
+  player.getAggressionTolerance().update(start.transform(30, 0));
+  player.getAggressionTolerance().update(start.transform(60, 0));
+  player.getAggressionTolerance().update(player.getLocation());
+  NpcAggression.runAggression(player, [npc]);
+  assert.equal(npc.getCombat().getTarget(), player, "leaving tolerance regions restores attacks");
+  for (const reason of ["logout", "distant exit", "death"]) {
+    if (reason === "logout") player.setRegistered(false);
+    if (reason === "death") player.setHitpoints(0);
+    if (reason === "distant exit") player.setLocation(start.transform(30, 0));
+    s.ticks(2);
+    assert.equal(npc.getCombat().getTarget(), null, reason);
+    assert.ok(npc.getLocation().equals(start), reason);
+    if (reason === "death") break;
+    player.setRegistered(true); player.setHitpoints(99); player.setLocation(start.transform(1, 0));
+    player.getCombat().reset();
+    NpcAggression.runAggression(player, [npc]);
+    assert.equal(npc.getCombat().getTarget(), player, reason + " permits a fresh adjacent hunt");
+  }
+});
+
+test("rooted NPCs finish retreat only when already home", t => {
+  const s = scene(t);
+  s.npc.getMovementCoordinator().setRadius(2);
+  s.npc.getMovementQueue().setBlockMovement(true);
+  for (const state of [CoordinateState.RETREATING, CoordinateState.AWAY]) {
+    s.npc.setLocation(s.spawn.transform(1, 0));
+    s.npc.getMovementCoordinator().setCoordinateState(state);
+    s.npc.getMovementCoordinator().process();
+    assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), state, "away NPCs retain their return state");
+    assert.ok(s.npc.getLocation().equals(s.spawn.transform(1, 0)));
+    s.npc.setLocation(s.spawn.clone());
+    s.npc.getMovementCoordinator().process();
+    assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.HOME, "already home needs no step");
+    assert.equal(s.npc.getCombat().getTarget(), null, "normalization does not initiate combat");
+  }
+});
+
+
+test("player retaliation uses viewer morph attackability, including a change before its queued turn", t => {
+  const s = scene(t);
+  s.player.autoRetaliateReturn = () => true;
+  const definition = s.npc.getCurrentDefinition();
+  let attackable = false;
+  t.mock.method(s.npc, "getCurrentDefinition", viewer => {
+    if (!viewer) return definition;
+    assert.equal(viewer, s.player);
+    return { isAttackable: () => attackable };
+  });
+  core.CombatFactory.handleRetaliation(s.npc, s.player);
+  s.tick();
+  assert.equal(s.player.getCombat().getTarget(), null);
+  attackable = true;
+  core.CombatFactory.handleRetaliation(s.npc, s.player);
+  s.tick();
+  assert.equal(s.player.getCombat().getTarget(), s.npc, "normal attackable NPCs still receive retaliation");
+  s.player.getCombat().reset();
+  core.CombatFactory.handleRetaliation(s.npc, s.player);
+  attackable = false;
+  s.tick();
+  assert.equal(s.player.getCombat().getTarget(), null, "a hidden/nonattackable morph cancels the queued retaliation");
+});
+
+/** A second hunter beside the scene's, set up the same way. */
+function secondHunter(t, npcId, at) {
+  const npc = core.NPC.create(npcId, at.clone());
+  npc.setSpawnPosition(at.clone());
+  npc.isRegistered = () => true;
+  npc.setNeedsPlacement(false);
+  npc.setHitpoints(500);
+  npc.isAggressiveTo = () => true;
+  t.after(() => core.World.unregisterNpcPosition(npc));
+  return npc;
+}
+
+// Catacombs of Kourend dagannoth pen, multi-combat (the area in #3667). Live OSRS recordings show
+// several monsters picking up one player in the same tick in multi areas, e.g. three dagannoths
+// on one tick in the deeper dagannoth dungeon (rsprox_transcripts/227/00086.txt, tick 21706).
+const DAGANNOTH_PEN = { x: 1665, y: 9998 };
+
+test("in multi-combat, every hunter in range engages the player on the same tick", (t) => {
+  const at = (dx, dy) => new core.Location(DAGANNOTH_PEN.x + dx, DAGANNOTH_PEN.y + dy, 0);
+  const s = scene(t, { npcId: core.NpcIdentifiers.DAGANNOTH_17, spawn: at(2, 0), playerAt: at(0, 0) });
+  const second = secondHunter(t, core.NpcIdentifiers.DAGANNOTH_16, at(-2, 0));
+  const third = secondHunter(t, core.NpcIdentifiers.DAGANNOTH_17, at(0, 2));
+  assert.ok(AreaManager.inMulti(s.player), "the pen is multi-combat");
+
+  NpcAggression.runAggression(s.player, [s.npc, second, third]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "the second hunter does not wait a tick");
+  assert.equal(third.getCombat().getTarget(), s.player, "nor does the third");
+});
+
+test("in single-combat, only one hunter engages the player", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const second = secondHunter(t, MUGGER, at(2, 0));
+  assert.equal(AreaManager.inMulti(s.player), false, "the field is single-combat");
+
+  NpcAggression.runAggression(s.player, [s.npc, second]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(second.getCombat().getTarget(), null, "the second hunter leaves the player to the first");
+});
+
+test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const minion = secondHunter(t, MUGGER, at(2, 0));
+  minion.isMultiCombat = () => true;
+  const third = secondHunter(t, MUGGER, at(-2, 0));
+
+  NpcAggression.runAggression(s.player, [s.npc, minion, third]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(minion.getCombat().getTarget(), s.player, "the always-multi hunter is not cut off by list order");
+  assert.equal(third.getCombat().getTarget(), null, "a second single-combat hunter still waits");
+});
+
+test("a hunter on a single tile does not join one that engaged under multi rules", (t) => {
+  // Review of #3861: a mugger on a multi tile engages, and one on the single tile beside the
+  // multi boundary must still leave the player to it.
+  const multiAt = new core.Location(3305, 3160, 0), singleAt = new core.Location(3309, 3158, 0);
+  const s = scene(t, { spawn: multiAt, playerAt: new core.Location(3306, 3158, 0) });
+  const single = secondHunter(t, MUGGER, singleAt);
+  assert.ok(AreaManager.inMulti(s.player), "the player stands in multi");
+  assert.ok(AreaManager.inMulti(s.npc), "the first hunter stands in multi");
+  assert.equal(AreaManager.inMulti(single), false, "the second hunter stands in single");
+
+  NpcAggression.runAggression(s.player, [s.npc, single]);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(single.getCombat().getTarget(), null, "the single-tile hunter waits");
 });

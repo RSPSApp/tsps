@@ -11,10 +11,13 @@ const Entry = require("./impetuousimpulses/Entry.ImpetuousImpulses");
 const Elnock = require("./impetuousimpulses/Elnock.ImpetuousImpulses");
 const Wheat = require("./impetuousimpulses/Wheat.ImpetuousImpulses");
 const Roaming = require("./impetuousimpulses/Roaming.ImpetuousImpulses");
+const JarGenerator = require("./impetuousimpulses/JarGenerator.ImpetuousImpulses");
 const Area = require("./impetuousimpulses/Area.ImpetuousImpulses");
+const Supplies = require("./impetuousimpulses/Supplies.ImpetuousImpulses");
 
 module.exports = {
   name: "ImpetuousImpulses",
+  description: "Adds Puro-Puro: the Zanaris crop circle entry, the exit portal, Elnock's equipment and jar exchanges, the magical wheat and roaming spawns.",
   members: true,
   _test: {
     init(api) {
@@ -50,6 +53,8 @@ module.exports = {
   register(api) {
     Entry(api);
     Elnock(api);
+    Supplies(api);
+    JarGenerator(api);
     Wheat(api);
     Roaming(api);
     Area(api);

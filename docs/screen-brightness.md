@@ -14,20 +14,19 @@ The Settings "Screen brightness" slider, from the rev 241 cache.
 
 `client/ui/ScreenBrightness.ts`:
 - **The value:** device option 6, 0–100 in steps of 5, kept in `localStorage` (`osrs.screenBrightness`), like the interface scaling. The client's device options start with it, so the slider shows it.
-- **The renderer's brightness** is OSRS's gamma exponent: colours are `pow(rgb, gamma)`, and the four classic levels were 0.9 (darkest) to 0.6 (brightest). The slider maps 0–100 linearly onto that range: `gamma = 0.9 − 0.3 × value / 100`.
-- **The default** is 35 (gamma 0.795), so the scene looks as it always has (the renderer's 0.8).
+- **The renderer's brightness** is OSRS's gamma exponent: colours are `pow(rgb, gamma)`. Like native `DefaultsGroup.setBrightness`, the slider maps 0–100 linearly from 1.0 (darkest) to 0.5 (brightest): `gamma = 0.5 + (100 − value) / 200`.
+- **The default** is 50 (gamma 0.75).
 - **Applying it:** `OsrsClient.setDeviceOption` sends option 6 to `applyScreenBrightness`, which saves it and sets the renderer's gamma. The debug panel's Brightness control uses the same scale and path.
 
 ### Textures
 
-Flat colours get the gamma in `hslToRgb`. Textured surfaces used to multiply by the brightness instead, which would have made them darker as the setting got brighter. `render/shaders/includes/brightness.glsl` gives them the same gamma change relative to the 0.8 the scene was tuned at, so the default look is unchanged and both brighten together.
+Flat colours get the gamma in `hslToRgb` and pass through unchanged (they sample a white texel). Textures are uploaded at gamma 1.0, so `render/shaders/includes/brightness.glsl` (and its WGSL copies in `main.frag.wgsl.ts` and `actor.wgsl.ts`) applies `pow(texel, gamma)` once, then multiplies the vertex lighting, like native `Texture.loadPixels`.
 
 ## Not verified
 
-- **The exact curve:** whether OSRS's slider covers exactly the classic 0.9–0.6 range, linearly.
 - **OSRS's default position.**
 - **The interface and minimap:** whether brightness affects them in OSRS. Here only the 3D scene changes.
 
 ## Testing
 
-`client/tests/screen-brightness.test.ts`: the mapping, the default, and saving (including blocked storage).
+`client/tests/screen-brightness.test.ts`: the mapping, the default, and saving (including blocked storage). `client/tests/brightness-shader-equations.test.ts`: the shader helpers against native texture bytes and flat-palette passthrough.

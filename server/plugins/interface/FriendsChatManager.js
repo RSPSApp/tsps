@@ -32,6 +32,8 @@ const SETUP_CHANGE_TICKS = 100;
 const JOIN_DELAY_TICKS = 1;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const SOCIAL_TAB_TARGET_UID = (161 << 16) | 85;
+// Cache241 toplevel_redraw907 reads friends_panel to select the social tab icon.
+const FRIENDS_PANEL_VARBIT = 6516;
 const RANK_OPTIONS = [
     "Anyone",
     "Any friends",
@@ -136,6 +138,8 @@ class FriendsChatManager {
     /** Owner key -> the setup the channel takes when its delay ends. */
     static pendingSetups = new Map();
     static onLogin(player) {
+        // encodeGameframeBootstrap mounts Friends429 on every login.
+        player.getPacketSender().sendVarbit(FRIENDS_PANEL_VARBIT, 0);
         this.offlinePlayerIds.delete(player.getIndex());
         const filters = player.getAttribute(CHAT_FILTERS_ATTRIBUTE);
         if (Array.isArray(filters) && filters.length === 3)
@@ -252,11 +256,15 @@ class FriendsChatManager {
             optionFromWidget(groupId, componentId, Math.trunc(rawOpId)) || "";
         const normalized = option.toLowerCase();
         if (groupId === 429 && normalized === "view ignore list") {
-            player.getPacketSender().sendSubInterface(SOCIAL_TAB_TARGET_UID, 432, 1);
+            player.getPacketSender()
+                .sendVarbit(FRIENDS_PANEL_VARBIT, 1)
+                .sendSubInterface(SOCIAL_TAB_TARGET_UID, 432, 1);
             return true;
         }
         if (groupId === 432 && normalized === "view friends list") {
-            player.getPacketSender().sendSubInterface(SOCIAL_TAB_TARGET_UID, 429, 1);
+            player.getPacketSender()
+                .sendVarbit(FRIENDS_PANEL_VARBIT, 0)
+                .sendSubInterface(SOCIAL_TAB_TARGET_UID, 429, 1);
             return true;
         }
         if (groupId === 7) {
@@ -319,7 +327,7 @@ class FriendsChatManager {
                 display,
                 encoded,
             });
-            const visible = online?.getRelations().canReceivePrivateMessageFrom(player) === true;
+            const visible = online?.getRelations().isVisibleTo(player) === true;
             return {
                 name: online?.getDisplayName() ?? shownName(display, display),
                 previousName: DisplayNames.previousNameOf(display),
@@ -362,6 +370,7 @@ class FriendsChatManager {
             return;
         }
         const relations = player.getRelations();
+        const wasIgnored = relations.hasIgnore(target.encoded);
         if (action.action === "add_friend")
             relations.addFriend(target.encoded);
         else if (action.action === "remove_friend")
@@ -381,7 +390,7 @@ class FriendsChatManager {
         const ownerKey = accountName(player.getUsername())?.key;
         if (ownerKey) {
             this.refreshOwnedChannel(player);
-            if (action.action === "add_ignore") {
+            if (action.action === "add_ignore" && !wasIgnored && relations.hasIgnore(target.encoded)) {
                 const channel = this.channels.get(ownerKey);
                 const member = channel && Array.from(channel.members.values()).find((candidate) => candidate.getLongUsername() === target.encoded);
                 if (member) {

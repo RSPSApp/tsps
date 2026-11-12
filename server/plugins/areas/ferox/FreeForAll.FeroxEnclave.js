@@ -191,6 +191,13 @@ function sendXpSetting({ player }) {
   if (player.getAttribute(XP_DISABLE_ATTRIBUTE) === true) player.getPacketSender().sendVarbit(XP_DISABLE_VARBIT, 1);
 }
 
+/** Shared purple/white-portal preference; callers do not own or duplicate its saved key. */
+function xpSetting(event) {
+  if (!event?.player) return;
+  if (event.toggle === true) toggleXp(event);
+  event.disabled = event.player.getAttribute(XP_DISABLE_ATTRIBUTE) === true;
+}
+
 // ---------------------------------------------------------------- meteors
 
 const between = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -225,6 +232,7 @@ module.exports = function attachFreeForAll(api) {
   api.onShouldDropItemsOnDeath(keepItems);
   api.onPlayerDeath(respawn);
   api.onPlayerLogin(sendXpSetting);
+  api.onCustomEvent("clan-wars:xp-setting", xpSetting);
 };
 
 Object.assign(module.exports, {

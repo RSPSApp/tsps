@@ -462,3 +462,79 @@ test('q018 rapid follow stop/restart keeps one pending watcher for the same NPC'
   h.tick(1);
   assert.equal(pending().length,0,'logout terminates its observer');
 });
+
+test('q018 the cellar Zanik (npc 4507 via varbit 2264) shows only until she joins as the follower', () => {
+  const { h, p } = dttd(0);
+  h.emit('npc-dialogue:hook', { player: p, hook: START_HOOK, npcId: N.MISTAG_4 });
+  assert.equal(h.quest.getStage(p), 1);
+  assert.equal(p.varbits.get(2264), 1, 'she waits in the cellar once the quest starts');
+  giveHamSet(p, 2);
+  h.action(p, N.ZANIK, 'ottYm8');
+  assert.equal(h.quest.getStage(p), 2);
+  assert.equal(p.varbits.get(2264), 0, 'no second, cellar Zanik beside the follower');
+  for (const stage of [3, 4, 10, 14]) {
+    const later = dttd(stage);
+    later.h.login(later.p);
+    assert.equal(later.p.varbits.get(2264), 0, `stage ${stage} hides the cellar Zanik on login`);
+  }
+});
+
+test('q018 store-room cracks and lock-pick doors cross their own wall edge', () => {
+  const { h, p } = dttd(5);
+  const at = (x, y) => p.moveTo(new core.Location(x, y, 0));
+  const where = () => [p.getLocation().getX(), p.getLocation().getY()];
+  const use = (objectId, x, y, option) => {
+    const event = { player: p, objectId, definition: { id: objectId }, location: { x, y, z: 0 }, option, handled: false };
+    (h.hooks.onObjectInteraction ?? []).forEach(fn => fn(event));
+    return event;
+  };
+  // Crack on the south edge of 2569,5190: from the corridor (5189) into 5190, and back.
+  at(2569, 5189); use(O.CRACK_8, 2569, 5190, 'squeeze-through');
+  assert.deepEqual(where(), [2569, 5190]);
+  use(O.CRACK_8, 2569, 5190, 'squeeze-through');
+  assert.deepEqual(where(), [2569, 5189]);
+  // Crack on the north edge of 2569,5194: 5194 <-> 5195.
+  at(2569, 5194); use(O.CRACK_8, 2569, 5194, 'squeeze-through');
+  assert.deepEqual(where(), [2569, 5195]);
+  // Door on the west edge of 2567,5192: Open is locked, Pick-lock crosses 2566 <-> 2567.
+  at(2566, 5192);
+  const open = use(O.DOOR_362, 2567, 5192, 'open');
+  assert.equal(open.handled, true); assert.deepEqual(where(), [2566, 5192]);
+  assert.ok(p.messages.includes('The door is locked.'));
+  use(O.DOOR_362, 2567, 5192, 'pick-lock');
+  assert.deepEqual(where(), [2567, 5192]);
+  // Door on the east edge of 2576,5198: 2576 <-> 2577.
+  at(2577, 5198); use(O.DOOR_362, 2576, 5198, 'pick-lock');
+  assert.deepEqual(where(), [2576, 5198]);
+});
+
+test('q018 all declared cracks and lock-pick doors cross in both directions and enforce skill checks', () => {
+  const { h, p } = dttd(5);
+  const cases = [
+    [O.CRACK_8,2569,5190,2569,5189,'squeeze-through'],
+    [O.CRACK_8,2569,5194,2569,5195,'squeeze-through'],
+    [O.DOOR_362,2567,5192,2566,5192,'pick-lock'],
+    [O.DOOR_362,2567,5198,2566,5198,'pick-lock'],
+    [O.DOOR_362,2576,5192,2577,5192,'pick-lock'],
+    [O.DOOR_362,2576,5198,2577,5198,'pick-lock'],
+  ];
+  const use = (objectId,x,y,option) => {
+    const event = { player:p,objectId,definition:{id:objectId},location:{x,y,z:0},option,handled:false };
+    (h.hooks.onObjectInteraction ?? []).forEach(fn => fn(event)); return event;
+  };
+  for (const [id,x,y,ox,oy,option] of cases) {
+    p.moveTo(new core.Location(x,y,0)); use(id,x,y,option);
+    assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[ox,oy]);
+    use(id,x,y,option);
+    assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[x,y]);
+  }
+  const skills = p.getSkillManager;
+  p.getSkillManager = () => ({ ...skills(), getCurrentLevel: () => 22 });
+  p.moveTo(new core.Location(2566,5192,0)); use(O.DOOR_362,2567,5192,'pick-lock');
+  assert.equal(p.getLocation().getX(),2566);
+  p.moveTo(new core.Location(2569,5189,0)); use(O.CRACK_8,2569,5190,'squeeze-through');
+  assert.equal(p.getLocation().getY(),5189);
+  p.moveTo(new core.Location(2566,5192,0));
+  const open = {player:p,objectId:O.DOOR_362,location:{x:2567,y:5192,z:0},handled:false};
+  h.emit('door:toggle',open); assert.equal(open.handled,true); assert.equal(p.getLocation().getX(),2566);
+});

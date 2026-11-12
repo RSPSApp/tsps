@@ -24,7 +24,7 @@ const ships = require("./Ships.BarracudaTrials");
 const { fade, MOVE_MODE, VARBIT } = require("../SailingContent.Sailing");
 const { BoatMoveMode } = require("../../../../src/main/typescript/elvarg/game/content/sailing/Boat");
 const OVERLAY_ATMOSPHERE = (161 << 16) | 1;
-const helm = require("../Helm.plugin");
+const helm = require("../Helm.Sailing");
 
 const HUD_GROUP = 931;
 const HUD_RESET = 7;
@@ -63,11 +63,14 @@ function message(player, text) {
   player.sendMessage(text);
 }
 
-/** The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide). */
+/**
+ * The trial's arrow over its boat (the rum or toad boat), or none (the Gwenith Glide, or with All
+ * Settings' "Barracuda trials hint arrow" off).
+ */
 function sendHint(player, run) {
   const hint = run.trial.hint;
   const index = hint && ships.entityIndex(hint.ship);
-  if (index === undefined) return;
+  if (index === undefined || sender(player).getVarbit(common.varbit("sailing_barracuda_trials_hintarrow_disabled")) === 1) return;
   sender(player).sendVarbit(common.varbit("current_hint_arrow"), HINT_SLOT);
   sender(player).sendWorldEntityHint(index, hint.height);
 }
@@ -108,6 +111,8 @@ function placeBoat(player, run) {
   // The catcher's motes go at the start (rsprox 907 11701).
   require("../WindCatcher.Helm").empty(player);
   common.core().BoatManager.teleport(boat, run.trial.start);
+  // Moored at the start: the way it had under full sail is lost, or it drifts before the timer starts.
+  boat.velocity = 0;
   common.clearSpeed(boat);
 }
 
@@ -126,7 +131,7 @@ function stopBoat(player) {
 function areaSong(player) {
   const { BoatManager, Music } = common.core();
   const at = BoatManager.rootLocation(player);
-  const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+  const track = Music.areaTrackAt(at.getX(), at.getY(), at.getZ());
   if (track !== undefined) sender(player).sendSong(track);
 }
 
@@ -311,6 +316,7 @@ function complete(player, run, ticks) {
     out.sendVarbit(VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
     out.sendVarbit(VARBIT.SIDEPANEL_SAIL_BUTTON_TOGGLED, 0);
     common.core().BoatManager.teleport(boat, { fineX: trial.start.fineX, fineY: trial.start.fineY });
+    boat.velocity = 0;
   }
   for (const sound of SOUND_COMPLETE) out.sendSoundEffect(sound, 1, 0);
   out.sendSong(SONG_TRIALS);

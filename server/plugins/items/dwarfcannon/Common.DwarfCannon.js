@@ -111,7 +111,7 @@ function sendVars(cannon) {
   const values = [
     ["varp", Data.VARP.OWNED, at],
     ["varp", Data.VARP.OWNED_TEMP, at],
-    ["varbit", Data.VARBIT.WORLD, 1],
+    ["varbit", Data.VARBIT.WORLD, Data.WORLD],
     ["varbit", Data.VARBIT.SETUP_TIME, cannon.setupTime],
     ["varp", Data.VARP.STAGE, cannon.stage],
     ["varp", Data.VARP.BALLS, balls(cannon)],

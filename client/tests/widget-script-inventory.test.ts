@@ -73,7 +73,7 @@ inventory.setSlot(0, 960, 1);
 inventory.setSlot(1, 2347, 1);
 const interaction = new WidgetInteractionController({ getWidgetManager: () => manager,
     getInputManager: () => undefined, getRendererCanvas: () => undefined,
-    getTradeRequestTargetsByName: () => new Map() });
+    getChatRequestsByName: () => new Map() });
 const events: string[] = [];
 const deps: any = {
     getInventory: () => inventory,
@@ -162,7 +162,7 @@ console.log("inventory drag identity, ordering and release tests passed");
         getWidgetFlags: (widget: any) => widget === slot ? MAIN_INVENTORY_SLOT_FLAGS : 0, getWidgetOpMask: () => 0 };
     const interaction = new WidgetInteractionController({ getWidgetManager: () => wm,
         getInputManager: () => undefined, getRendererCanvas: () => undefined,
-        getTradeRequestTargetsByName: () => new Map() });
+        getChatRequestsByName: () => new Map() });
     assert.equal(interaction.isWidgetDraggable(slot), true, "the real slot flags make it draggable");
     let router: any;
     const clientDeps: any = new Proxy({

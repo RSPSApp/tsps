@@ -32,9 +32,16 @@ class PendingHit {
 class Animation { constructor(id) { this.id = id; } }
 let resolvers = [];
 const registered = {};
+// Everything standing in the world, as the thrust sees it; tests fill it and clear it.
+let world = [];
+let secondaryAllowed = () => true;
+let multiBetween = () => true;
 const core = {
+    World: { getNpcs: () => ({ forEach: (f) => world.filter((m) => m.isNpc?.()).forEach(f) }), getPlayers: () => ({ forEach: (f) => world.filter((m) => !m.isNpc?.()).forEach(f) }) },
+    CombatFactory: { multiCombatBetween: () => multiBetween(), canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
     Equipment, ItemIdentifiers, WeaponInterfaces, RangedCombatMethod, MeleeCombatMethod, PendingHit, Animation,
     Graphic: class { constructor(id) { this.id = id; } },
+    PrayerHandler: require("../dist/game/content/PrayerHandler").PrayerHandler,
     Flag: { APPEARANCE: 1 },
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } getId() { return this.id; } getAmount() { return this.amount; } getMeta() { return null; } },
 };
@@ -86,8 +93,17 @@ function player(worn, extra = {}) {
     return entity;
 }
 const npc = (size, defence = [0, 0, 0]) => ({
+    getPrayerActive: () => [],
     isNpc: () => true,
     getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
+});
+
+const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0, getDistance: (o) => Math.max(Math.abs(x - o.getX()), Math.abs(y - o.getY())) });
+const placed = (x, y, size = 1, npcMob = true, defence = [0, 0, 0], prayers = []) => ({
+    isNpc: () => npcMob,
+    getPrayerActive: () => prayers,
+    getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
+    getLocation: () => at(x, y),
 });
 
 test('ascension crossbows fire only ascension bolts, and nothing else fires them', () => {
@@ -159,20 +175,101 @@ test('a charged thrust is one PendingHit that rolls best-of-N with the size bonu
     assert.equal(method.attackSpeed(smashing), 3);
 });
 
-test('charging takes a shard, 20 nature and 20 death runes per 10 charges; uncharging gives them back', () => {
+test('a thrust reaches up to two more targets on or behind the main one, charged or not; a smash reaches none', () => {
+    const thrust = WeaponInterfaces.EXTENDING_CHAINMACE.getFightType()[0];
+    const smash = WeaponInterfaces.EXTENDING_CHAINMACE.getFightType()[2];
+    const charged = weapon(ItemIdentifiers.OBLIGATOR, { [Obligator._test.CHARGES_META_KEY]: 5 });
+    const user = player(charged, { fightType: thrust });
+    user.getLocation = () => at(10, 10);
+    const method = obligatorResolver.resolve(user);
+    const main = placed(10, 12);
+    const onTop = placed(10, 12);
+    const behind1 = placed(10, 13), behind2 = placed(10, 14), behind3 = placed(10, 15);
+    const beside = placed(11, 12), inFront = placed(10, 11), diagonal = placed(11, 13);
+    world = [main, onTop, behind1, behind2, behind3, beside, inFront, diagonal, user];
+    try {
+        const reached = Obligator._test.reachedTargets(user, main);
+        assert.deepEqual(reached, [onTop, behind1], 'the target tile first, then nearer tiles; two at most');
+        world = [main, behind2, behind3, beside, inFront];
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), [behind2], 'two tiles behind is in reach, three is not, the sides and the front are not');
+        // West-east and diagonal directions follow the attacker.
+        const east = placed(14, 10);
+        world = [east, placed(15, 10), placed(16, 10), placed(17, 10)];
+        assert.equal(Obligator._test.reachedTargets(user, east).length, 2);
+        const diag = placed(12, 12);
+        world = [diag, placed(13, 13), placed(14, 14), placed(14, 13)];
+        assert.deepEqual(Obligator._test.reachedTargets(user, diag).map((m) => m.getLocation().getX()), [13, 14]);
+        // A large target covers its whole footprint: 3x3 at 10..12, the player south of it.
+        const boss = placed(10, 12, 3);
+        const behindBoss = placed(11, 15), farBehind = placed(11, 17), onBoss = placed(12, 14, 1);
+        world = [boss, behindBoss, farBehind, onBoss];
+        assert.deepEqual(Obligator._test.reachedTargets(user, boss), [onBoss, behindBoss].sort((a, b) => a.getLocation().getDistance(boss.getLocation()) - b.getLocation().getDistance(boss.getLocation())));
+        // Wiki (Obligator): no extra reach while the main target prays Protect from Melee.
+        const { PrayerHandler } = core;
+        const praying = []; praying[PrayerHandler.PROTECT_FROM_MELEE] = true;
+        const shielded = placed(10, 12, 1, false, [0, 0, 0], praying);
+        world = [shielded, behind1, behind2];
+        assert.deepEqual(Obligator._test.reachedTargets(user, shielded), [], 'Protect from Melee on the main target stops the pierce');
+        // Secondary-target rules (multicombat, attackable) still decide who is hit.
+        world = [main, behind1];
+        secondaryAllowed = () => false;
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), []);
+        secondaryAllowed = () => true;
+        // The attacker and main target must both be in multicombat; behind targets alone are not enough.
+        multiBetween = () => false;
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), []);
+        multiBetween = () => true;
+
+        world = [main, behind1, behind2];
+        pendingHits.length = 0;
+        const hits = method.hits(user, main);
+        assert.equal(hits.length, 3, 'charged thrust: main target and two more');
+        assert.ok(pendingHits.every((h) => h.config.bestOf === 2), 'each takes the passive rolls');
+        assert.equal(Obligator._test.charges(charged), 4, 'one charge for the whole thrust');
+
+        const bare = player(weapon(ItemIdentifiers.OBLIGATOR_UNCHARGED_), { fightType: thrust });
+        bare.getLocation = () => at(10, 10);
+        pendingHits.length = 0;
+        const bareHits = obligatorResolver.resolve(bare).hits(bare, main);
+        assert.equal(bareHits.length, 3, 'uncharged keeps the reach');
+        assert.equal(bareHits[0], 'plain');
+        assert.ok(pendingHits.every((h) => h.config === undefined), 'but not the rolls');
+
+        const smashing = player(weapon(ItemIdentifiers.OBLIGATOR, { [Obligator._test.CHARGES_META_KEY]: 5 }), { fightType: smash });
+        smashing.getLocation = () => at(10, 10);
+        assert.deepEqual(obligatorResolver.resolve(smashing).hits(smashing, main), ['plain'], 'smash hits one target');
+    } finally {
+        world = [];
+        secondaryAllowed = () => true;
+        multiBetween = () => true;
+    }
+});
+
+test('the boss defences in the monster data give the Wiki roll counts (Phosani 4, Graardor 2)', () => {
+    const monsters = require('../data/definitions/monsters-complete.json');
+    const list = Array.isArray(monsters) ? monsters : Object.values(monsters);
+    const rolls = (name) => {
+        const m = list.find((e) => e.name === name);
+        return Obligator._test.rollCount(npc(m.size, [m.defence_stab, m.defence_slash, m.defence_crush]));
+    };
+    assert.equal(rolls("Phosani's Nightmare"), 4);
+    assert.equal(rolls('General Graardor'), 2);
+});
+
+test('charging takes a shard, 60 nature and 60 death runes per 30 charges (Wiki, 11 Nov 2026); uncharging gives them back', () => {
     const { ASCENSION_SHARDS, NATURE_RUNE, DEATH_RUNE } = ItemIdentifiers;
     const mace = weapon(ItemIdentifiers.OBLIGATOR_UNCHARGED_);
-    const user = player(mace, { stacks: { [ASCENSION_SHARDS]: 3, [NATURE_RUNE]: 100, [DEATH_RUNE]: 50 } });
+    const user = player(mace, { stacks: { [ASCENSION_SHARDS]: 3, [NATURE_RUNE]: 300, [DEATH_RUNE]: 150 } });
     const event = { player: user, usedItem: mace, usedWithItem: {}, usedItemId: mace.getId(), usedWithItemId: ASCENSION_SHARDS };
     Obligator._test.chargeObligator(event);
     assert.equal(event.handled, true);
-    assert.equal(Obligator._test.charges(mace), 20, 'death runes allow two batches');
+    assert.equal(Obligator._test.charges(mace), 60, 'death runes allow two batches');
     assert.equal(mace.getId(), ItemIdentifiers.OBLIGATOR, 'charging makes it the charged item');
-    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [1, 60, 10]);
+    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [1, 180, 30]);
     Obligator._test.uncharge({ player: user, item: mace });
     assert.equal(Obligator._test.charges(mace), 0);
     assert.equal(mace.getId(), ItemIdentifiers.OBLIGATOR_UNCHARGED_);
-    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [3, 100, 50]);
+    assert.deepEqual([user.stacks[ASCENSION_SHARDS], user.stacks[NATURE_RUNE], user.stacks[DEATH_RUNE]], [3, 300, 150]);
     assert.ok(registered.Obligator.Check && registered.Obligator.Uncharge && registered['Obligator (uncharged)'].Charge);
 });
 
@@ -331,12 +428,12 @@ test("real cache-backed inventory refuses capped refunds and accepts exact headr
     function fill(player, headroom) {
         const inv = player.getInventory();
         const mace = new Item(ItemIdentifiers.OBLIGATOR, 1);
-        mace.setMetaValue(Obligator._test.CHARGES_META_KEY, 10);
+        mace.setMetaValue(Obligator._test.CHARGES_META_KEY, 30);
         inv.setItem(0, mace);
         const refunds = [
             [ItemIdentifiers.ASCENSION_SHARDS, 1],
-            [ItemIdentifiers.NATURE_RUNE, 20],
-            [ItemIdentifiers.DEATH_RUNE, 20],
+            [ItemIdentifiers.NATURE_RUNE, 60],
+            [ItemIdentifiers.DEATH_RUNE, 60],
         ];
         refunds.forEach(([id, amount], index) => inv.setItem(index + 1,
             new Item(id, headroom ? MAX_STACK_AMOUNT - amount : MAX_STACK_AMOUNT)));
@@ -347,7 +444,7 @@ test("real cache-backed inventory refuses capped refunds and accepts exact headr
     const capped = fill(blocked, false);
     const before = JSON.stringify(capped.inv.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]));
     Obligator._test.uncharge({ player: blocked, item: capped.mace });
-    assert.equal(Obligator._test.charges(capped.mace), 10);
+    assert.equal(Obligator._test.charges(capped.mace), 30);
     assert.equal(capped.mace.getId(), ItemIdentifiers.OBLIGATOR);
     assert.equal(JSON.stringify(capped.inv.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()])), before);
 

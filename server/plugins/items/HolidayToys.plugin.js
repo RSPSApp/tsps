@@ -187,6 +187,7 @@ function lookAtSnowGlobe(api, { player, itemId }) {
 
 module.exports = {
   name: "HolidayToys",
+  description: "Plays the animations and chat lines of permanent holiday toys such as Santa's list, the Zombie head and other event reward items.",
   register(api) {
     core = api.core;
     Dialogue.init(api, swap);

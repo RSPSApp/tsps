@@ -10,7 +10,7 @@ const { Skill } = require("../dist/game/model/Skill");
 const { Sounds } = require("../dist/game/Sounds");
 const XpReward = require("../plugins/interface/XpReward.plugin");
 
-function createPlayer(levels = {}) {
+function createPlayer(levels = {}, attributes = {}) {
   const log = [];
   const sender = {
     sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
@@ -25,6 +25,8 @@ function createPlayer(levels = {}) {
     getPacketSender: () => sender,
     getSkillManager: () => ({ getMaxLevel: (skill) => levels[skill.getName()] ?? 99 }),
     getDialogueManager: () => ({ startDialogues: () => log.push("mesbox") }),
+    getAttribute: (key) => attributes[key],
+    sendMessage: (text) => log.push(`message ${text}`),
   };
 }
 
@@ -49,11 +51,24 @@ test("as captured: busy, the xpreward modal, its 24 skill slots as pause buttons
   assert.equal(XpReward._test.availableMask(), 0x1fffffe);
 });
 
+test("a locked skill's slot is refused with script 3809's message, and the choice stays open", () => {
+  const player = createPlayer();
+  let chosen = null;
+  XpReward._test.open({ player, onConfirm: (skill) => { chosen = skill; return "granted"; } });
+  player.log.length = 0;
+  XpReward._test.confirm({ player, buttonId: (240 << 16) | 0, action: 11 });
+  assert.equal(chosen, null);
+  assert.deepEqual(player.log, ["message You need to complete the Rune Mysteries quest to choose that option."]);
+  XpReward._test.confirm({ player, buttonId: (240 << 16) | 0, action: 0 });
+  assert.equal(chosen, Skill.ATTACK, "another skill can still be chosen");
+});
+
 test("as captured: the confirmed slot is enum 681's key less one (slot 11 -> Runecraft), named from enum 680", () => {
   assert.equal(XpReward._test.skillForSlot(11), Skill.RUNECRAFTING);
   assert.equal(XpReward._test.skillForSlot(0), Skill.ATTACK);
   assert.equal(XpReward._test.statName(Skill.RUNECRAFTING), "Runecraft");
-  const player = createPlayer();
+  // The captured account had finished Rune Mysteries, which Runecraft needs here (script 3809).
+  const player = createPlayer({}, { "quest.rune_mysteries.stage": 6 });
   const sounds = [];
   Sounds.sendSound = (_player, sound) => sounds.push(sound.getId?.() ?? sound.id);
   let chosen = null;

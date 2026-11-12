@@ -92,6 +92,20 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   assert.equal(findTool(player({ inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 120);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON).bonus, 135);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON_INACTIVE_] }), TOOLS.HARPOON).bonus, 120);
+  // Wiki (Crystal harpoon): 50 Agility to wield; below it the crystal harpoon isn't a tool, and a plain one is.
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON), null, "crystal harpoon at 49 Agility");
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON_INACTIVE_, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
+  // Free worlds: the members harpoons are no tool there (dragon 120, crystal 135); the plain harpoon still fishes.
+  const World = require("../dist/game/definition/WorldDefinition");
+  const members = World.isMembersWorld;
+  World.isMembersWorld = () => false;
+  try {
+    assert.equal(findTool(player({ inventory: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null, "dragon harpoon alone on a free world");
+    assert.equal(findTool(player({ inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100, "falls back to the free harpoon");
+    assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
+  } finally {
+    World.isMembersWorld = members;
+  }
   assert.equal(findTool(player({ fishing: 60, inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null);
   assert.equal(findTool(player({ inventory: [I.PEARL_FISHING_ROD] }), TOOLS.FISHING_ROD).bonus, 100, "pearl rod");
@@ -219,7 +233,9 @@ test("the infernal harpoon cooks a third of its catch, runs on 5,000 charges and
   // A cooked catch still gives Fishing XP and the pet roll, but no fish.
   const random = Math.random;
   try {
-    Math.random = () => 0;
+    // The first roll is the 1/5,000 big shark (missed here); every later one cooks.
+    let rolls = 0;
+    Math.random = () => (rolls++ === 0 ? 0.5 : 0);
     const landing = player({ weapon: I.INFERNAL_HARPOON });
     landCatch(landing, TOOLS.SHARK_HARPOON, findTool(landing, TOOLS.SHARK_HARPOON), [FISH.SHARK]);
     assert.equal(landing.items.length, 0);
@@ -515,6 +531,8 @@ test("minnow fishing: Wiki catch rates, rotating spots, flying fish and Kylie's 
       }),
       getInventory: () => ({
         contains: (id) => items.some((item) => item.getId() === id),
+        // This stub covers the ordinary exchange below, not capacity limits.
+        getAddableAmount: (item) => item.getAmount(),
         getAmount: (id) => items.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
         getFreeSlots: () => free,
         isFull: () => free === 0,
@@ -611,7 +629,10 @@ async function fishingLoop() {
   const task = tasks.find((submitted) => submitted.constructor.name === "FishingTask");
 
   function fisher({ level = 99, items = [] } = {}) {
-    const slots = items.map(([id, amount = 1]) => new Item(id, amount));
+    const slots = Array.from({ length: 28 }, (_, index) => {
+      const entry = items[index];
+      return entry ? new Item(entry[0], entry[1] ?? 1) : null;
+    });
     const stackable = (id) => core.ItemDefinition.forId(id).isStackable();
     const p = {
       slots, messages: [], statements: [], animations: [], xp: 0, at: new Location(2900, 3119, 0),
@@ -631,23 +652,27 @@ async function fishingLoop() {
         addExperiences: (skill, amount) => { if (skill === Skill.FISHING) p.xp += amount; },
       }),
       getInventory: () => ({
-        contains: (id) => slots.some((item) => item.getId() === id && item.getAmount() > 0),
-        getAmount: (id) => slots.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
-        getFreeSlots: () => 28 - slots.length,
-        isFull: () => slots.length >= 28,
+        contains: (id) => slots.some((item) => item?.getId() === id && item.getAmount() > 0),
+        getAmount: (id) => slots.filter((item) => item?.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
+        getFreeSlots: () => slots.filter((item) => !item).length,
+        isFull: () => slots.every(Boolean),
         full() {},
         refreshItems() {},
-        getSlotForItemId: (id) => slots.findIndex((item) => item.getId() === id),
+        getSlotForItemId: (id) => slots.findIndex((item) => item?.getId() === id),
         setItem: (slot, item) => { slots[slot] = item; },
         addItem: (item) => {
-          const stack = stackable(item.getId()) && slots.find((held) => held.getId() === item.getId());
+          const stack = stackable(item.getId()) && slots.find((held) => held?.getId() === item.getId());
           if (stack) stack.setAmount(stack.getAmount() + item.getAmount());
-          else if (slots.length < 28) slots.push(item);
+          else {
+            const free = slots.findIndex((held) => !held);
+            if (free >= 0) slots[free] = item;
+          }
         },
         deleteNumber: (id, amount) => {
-          const index = slots.findIndex((held) => held.getId() === id);
+          const index = slots.findIndex((held) => held?.getId() === id);
+          if (index < 0) return;
           const left = slots[index].getAmount() - amount;
-          if (left > 0 && stackable(id)) slots[index].setAmount(left); else slots.splice(index, 1);
+          if (left > 0 && stackable(id)) slots[index].setAmount(left); else slots[index] = null;
         },
       }),
     };
@@ -767,6 +792,54 @@ test("a one-step walk stops fishing even after the route has drained", async () 
   });
 });
 
+test("a used karambwan vessel refills even when another vessel is baited", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const p = fisher({ level: 70, items: [[I.KARAMBWAN_VESSEL_3], [I.KARAMBWAN_VESSEL_3], [I.RAW_KARAMBWANJI, 3]] });
+  await withRandom(0.99, async (setRandom) => {
+    start(p, spot(N.FISHING_SPOT_60, 71), "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the used vessel refills on a miss");
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 0);
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 2);
+    setRandom(0);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 1, "the session continues to a catch");
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the used vessel refills on a catch");
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 1);
+  });
+});
+
+test("karambwan vessels keep their slots as the last bait is used and fishing stops", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Item } = core;
+  const p = fisher({ level: 70, items: [[I.RAW_KARAMBWANJI, 1], [I.LOGS], [I.KARAMBWAN_VESSEL_3], [I.KARAMBWAN_VESSEL_3]] });
+  const vessel = spot(N.FISHING_SPOT_60, 72);
+  await withRandom(0.99, async (setRandom) => {
+    start(p, vessel, "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWANJI), 0);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 2, "the last loose bait refills the used vessel");
+    assert.equal(p.slots[1]?.getId(), I.LOGS, "deleting bait does not shift or replace another item");
+    setRandom(0);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 1);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 1);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 1);
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 2);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL_3), 0);
+    assert.equal(amount(p, I.KARAMBWAN_VESSEL), 2);
+    ticks(8);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 2, "fishing stops once both vessels are empty");
+    p.getInventory().addItem(new Item(I.RAW_KARAMBWANJI, 2));
+    start(p, vessel, "Fish");
+    ticks(4);
+    assert.equal(amount(p, I.RAW_KARAMBWAN), 3, "fishing can restart with new bait");
+    assert.equal(p.slots[1]?.getId(), I.LOGS);
+  });
+});
+
 test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanji", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
@@ -834,6 +907,93 @@ test("barehand shark plays the cache start, ready and shark-finish sequences", a
     assert.equal(amount(p, I.RAW_SHARK), 1);
     assert.deepEqual(p.animations, [6703, 6704, 6706], "the catch plays the ready loop then the finish");
   });
+});
+
+test("a big shark, swordfish or bass sometimes lands in place of the raw fish (Wiki: Big shark, Big swordfish, Big bass)", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const { FISH } = Fishing;
+  assert.equal(FISH.SHARK.big.chance, 5000);
+  assert.equal(FISH.SWORDFISH.big.chance, 2500);
+  assert.equal(FISH.BASS.big.chance, 1000);
+  assert.equal(FISH.SHARK_BAREHAND.big.id, I.BIG_SHARK, "barehanded sharks too");
+  await withRandom(0.0001, async () => {
+    const lucky = fisher({ items: [[I.HARPOON]] });
+    start(lucky, spot(N.FISHING_SPOT_20, 51), "Harpoon");
+    ticks(4);
+    assert.equal(amount(lucky, I.BIG_SHARK), 1);
+    assert.equal(amount(lucky, I.RAW_SHARK), 0, "in place of the raw shark");
+    assert.equal(lucky.messages.at(-1), "You catch an enormous shark!");
+    assert.equal(lucky.xp, 110, "the shark's own XP");
+  });
+  await withRandom(0.02, async () => {
+    const usual = fisher({ items: [[I.HARPOON]] });
+    start(usual, spot(N.FISHING_SPOT_20, 52), "Harpoon");
+    ticks(4);
+    assert.equal(amount(usual, I.RAW_SHARK), 1);
+    assert.equal(amount(usual, I.BIG_SHARK), 0);
+  });
+  // Wiki (Big swordfish): "(or 70 Fishing and 50 Strength for barehanded fishing)".
+  assert.equal(FISH.SWORDFISH_BAREHAND.big.id, I.BIG_SWORDFISH, "barehanded swordfish too");
+  assert.equal(FISH.SWORDFISH_BAREHAND.big.chance, 2500);
+  await withRandom(0.0001, async () => {
+    const bare = fisher();
+    bare.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === core.Skill.STRENGTH ? 50 : 70),
+      getMaxLevel: () => 99,
+      addExperiences: (skill, xp) => { if (skill === core.Skill.FISHING) bare.xp += xp; },
+    });
+    start(bare, spot(N.FISHING_SPOT_10, 53), "Harpoon");
+    ticks(4);
+    assert.equal(amount(bare, I.BIG_SWORDFISH), 1);
+    assert.equal(amount(bare, I.RAW_SWORDFISH), 0);
+    assert.equal(bare.messages.at(-1), "You catch an enormous swordfish!");
+    assert.equal(bare.xp, 100);
+  });
+});
+
+test("barehand tuna and swordfish: the Harpoon option without a harpoon (Wiki: Barbarian Training; rsprox 237/01149)", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Skill } = core;
+  const levelled = (fishing, strength) => {
+    const p = fisher();
+    p.strengthXp = 0;
+    p.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === Skill.STRENGTH ? strength : fishing),
+      getMaxLevel: () => 99,
+      addExperiences: (skill, xp) => { if (skill === Skill.FISHING) p.xp += xp; if (skill === Skill.STRENGTH) p.strengthXp += xp; },
+    });
+    return p;
+  };
+  await withRandom(0.02, async () => {
+    const tuna = levelled(60, 40);
+    start(tuna, spot(N.FISHING_SPOT_10, 41), "Harpoon");
+    assert.equal(tuna.messages[0], "You start to lure the fish.", "the captured barehand start line");
+    assert.deepEqual(tuna.animations, [6703]);
+    ticks(4);
+    assert.equal(amount(tuna, I.RAW_TUNA), 1, "below 70 Fishing only tuna");
+    assert.equal(tuna.xp, 80);
+    assert.equal(tuna.strengthXp, 8);
+    assert.equal(tuna.animations.at(-1), 6711, "the captured brut_player_hand_fishing_end_tuna_2");
+
+    const sword = levelled(70, 50);
+    start(sword, spot(N.FISHING_SPOT_10, 42), "Harpoon");
+    ticks(4);
+    assert.equal(amount(sword, I.RAW_SWORDFISH), 1, "swordfish first in the cascade");
+    assert.equal(sword.strengthXp, 10);
+    assert.equal(sword.animations.at(-1), 6707);
+
+    const weak = levelled(70, 49);
+    start(weak, spot(N.FISHING_SPOT_10, 43), "Harpoon");
+    ticks(4);
+    assert.equal(amount(weak, I.RAW_SWORDFISH), 0, "swordfish needs 50 Strength");
+    assert.equal(amount(weak, I.RAW_TUNA), 1);
+  });
+  const low = levelled(54, 99);
+  start(low, spot(N.FISHING_SPOT_10, 44), "Harpoon");
+  assert.equal(amount(low, I.RAW_TUNA), 0);
+  const cage = core.NpcDefinition.forId(N.FISHING_SPOT_10);
+  assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, cage.getActions().indexOf("Harpoon") + 1, low), Fishing.TOOLS.BAREHAND_HARPOON);
 });
 
 test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with room", async () => {
@@ -927,8 +1087,15 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
     const counts = new Map(items);
     const attributes = new Map([[Angler._test.PAID_ATTRIBUTE, paid]]);
     const messages = [];
+    const boxes = [];
     return {
       messages,
+      boxes,
+      // Transcript:Gita_Prymes's {{tbox}} item boxes: [pictures, text].
+      getDialogueManager: () => ({ startDialogues: (chain) => {
+        const entry = chain.getDialogues().get(0);
+        boxes.push([entry.getItemIds?.() ?? [entry.getItemId()], entry.getText()]);
+      } }),
       getInventory: () => ({
         getAmount: (id) => counts.get(id) ?? 0,
         deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
@@ -952,14 +1119,15 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 0);
   assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
   assert.equal(first.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
-  assert.deepEqual(first.messages, ["Gita Prymes exchanges your Angler hat for Spirit Angler kit."]);
+  assert.deepEqual(first.messages, [], "the exchange is an item box, not chat");
+  assert.deepEqual(first.boxes, [[[I.SPIRIT_ANGLER_HEADBAND, I.ANGLER_HAT], "Gita Prymes exchanges your Angler hat for Spirit Angler kit."]]);
   assert.ok(emitted.some((event) => event.name === "collection-log:obtain"
     && event.payload.itemId === I.SPIRIT_ANGLER_HEADBAND && event.payload.player === first));
 
   // Converting back is free; upgrading again is free because that piece's fee is paid.
   exchange(first, I.SPIRIT_ANGLER_HEADBAND);
   assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 1);
-  assert.equal(first.messages.at(-1), "Gita Prymes exchanges your Spirit angler headband for regular Angler kit.");
+  assert.deepEqual(first.boxes.at(-1), [[I.SPIRIT_ANGLER_HEADBAND, I.ANGLER_HAT], "Gita Prymes exchanges your Spirit Angler kit for regular Angler kit."]);
   emitted.length = 0;
   exchange(first, I.ANGLER_HAT);
   assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
@@ -970,7 +1138,7 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   exchange(short, I.ANGLER_TOP);
   assert.equal(short.getInventory().getAmount(I.ANGLER_TOP), 1);
   assert.equal(short.getInventory().getAmount(I.SPIRIT_FLAKES), 1199);
-  assert.equal(short.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler top. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+  assert.deepEqual(short.boxes.at(-1), [[I.ANGLER_TOP], "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler top. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back."]);
 
   emitted.length = 0;
   const wrong = player([[I.LOGS, 1]]);
@@ -999,17 +1167,24 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   assert.equal(talker.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
   const message = { npcId: N.GITA_PRYMES, player: talker, kind: "message", stepId: "3sMFrS", step: { text: "Gita Prymes exchanges your [outfit piece] for Spirit Angler kit." } };
   handlers["npc-dialogue:action"](message);
-  assert.equal(talker.messages.at(-1), "Gita Prymes exchanges your Angler top for Spirit Angler kit.");
+  assert.deepEqual([message.box, message.text], [{ items: [I.SPIRIT_ANGLER_TOP, I.ANGLER_TOP] }, "Gita Prymes exchanges your Angler top for Spirit Angler kit."]);
 
   // The warning messages before Proceed name the piece that will be converted.
   const warned = player([[I.ANGLER_WADERS, 1]]);
   const warning = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "biLPTa", step: { text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back." } };
   handlers["npc-dialogue:action"](warning);
-  assert.equal(warned.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+  assert.deepEqual([warning.box, warning.text], [{ items: [I.ANGLER_WADERS] }, "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back."]);
   const paidWarning = player([[I.ANGLER_WADERS, 1]], { waders: true });
   const paidMessage = { npcId: N.GITA_PRYMES, player: paidWarning, kind: "message", stepId: "y9-UMa", step: { text: "Gita Prymes will upgrade your [outfit piece] for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit." } };
   handlers["npc-dialogue:action"](paidMessage);
-  assert.equal(paidWarning.messages.at(-1), "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit.");
+  assert.deepEqual([paidMessage.box, paidMessage.text], [{ items: [I.ANGLER_WADERS] }, "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit."]);
+  // The outfit line shows the headband and top; the exchange-back warning is a plain box.
+  const outfit = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "XVkgAH", step: { text: "The Spirit Angler outfit gives the same Fishing XP bonus as the standard Angler kit." } };
+  handlers["npc-dialogue:action"](outfit);
+  assert.deepEqual(outfit.box, { items: [I.SPIRIT_ANGLER_HEADBAND, I.SPIRIT_ANGLER_TOP] });
+  const back = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "3jVjCF", step: { text: "Gita Prymes can exchange your Spirit Angler kit for regular Angler kit." } };
+  handlers["npc-dialogue:action"](back);
+  assert.deepEqual(back.box, { statement: true });
 
   const talkerShort = player([[I.ANGLER_WADERS, 1], [I.SPIRIT_FLAKES, 1199]]);
   handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talkerShort, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
@@ -1018,16 +1193,15 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   assert.equal(shortChoice.end, true, "the branch ends without exchanging when the flakes are short");
   assert.equal(talkerShort.getInventory().getAmount(I.ANGLER_WADERS), 1);
   // NpcDialogues reuses message leaves from the cached transcript between players.
-  const sharedStep = { type: "message", text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]." };
-  const messageFor = p => ({ npcId: N.GITA_PRYMES, player: p, kind: "message", step: sharedStep, text: sharedStep.text });
+  const sharedStep = { type: "message", id: "biLPTa", text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]." };
+  const messageFor = p => ({ npcId: N.GITA_PRYMES, player: p, kind: "message", step: sharedStep, stepId: sharedStep.id, text: sharedStep.text });
   const firstWarning = messageFor(player([[I.ANGLER_HAT, 1]]));
   handlers["npc-dialogue:action"](firstWarning);
   assert.equal(sharedStep.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece].", "cached transcript is never personalized");
-  assert.equal(firstWarning.handled, true);
-  assert.equal(firstWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler hat.");
+  assert.deepEqual([firstWarning.box, firstWarning.text], [{ items: [I.ANGLER_HAT] }, "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler hat."]);
   const nextWarning = messageFor(player([[I.ANGLER_BOOTS, 1]]));
   handlers["npc-dialogue:action"](nextWarning);
-  assert.equal(nextWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler boots.");
+  assert.equal(nextWarning.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler boots.");
 
 });
 
@@ -1142,13 +1316,15 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   function fishOnce({catchRandom = 0.02, bottleRandom = 0, fishId = I.RAW_TROUT,
     baitId = I.FEATHER, npc = spot, action = "Lure", ticks = 4, forceRada = false} = {}) {
     let catchCount = 0, clueCount = 0, radaCount = 0;
+    // Every tier rolls before its capacity is checked: force the first tier the player can still take.
+    const forcedTier = ["beginner", "easy", "medium", "hard", "elite"].findIndex((tier) => capacity(tier) === true);
     Math.random = () => {
       const stack = new Error().stack;
       if (stack.includes("rollCatch")) {
         const position = catchCount++;
         return typeof catchRandom === "function" ? catchRandom(position) : catchRandom;
       }
-      if (stack.includes("rollClueBottles")) return clueCount++ === 0 ? bottleRandom : 0.999999;
+      if (stack.includes("rollClueBottles")) return clueCount++ === forcedTier ? bottleRandom : 0.999999;
       if (stack.includes("rollExtraFish") && forceRada) { radaCount++; return 0; }
       return priorRandom();
     };
@@ -1409,7 +1585,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   assert.equal(radaCatch.fish, 2);
   assert.equal(radaCatch.xp, 50);
   assert.equal(radaCatch.feathers, 1);
-  assert.equal(radaCatch.clueCount, 1);
+  assert.equal(radaCatch.clueCount, 5, "each tier rolls once");
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
   player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new Item(-1, 0));
 
@@ -1518,7 +1694,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   core.RegionManager.loadMapFiles(3228, 3236);
   player.setLocation(new Location(3228, 3236, 0));
   player.needsPlacement = false;
-  const arthur = NPC.create(N.ARTHUR_THE_CLUE_HUNTER, new Location(3229, 3236, 0));
+  const arthur = NPC.create(N.ARTHUR_2, new Location(3158, 3469, 0)); // Arthur, 8665 before rev 242
   arthur.setScriptedMovement(true);
   assert.equal(World.getNpcs().add(arthur), true);
   arthur.needsPlacement = false;
@@ -1778,9 +1954,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
         if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") policyQueries++;
         return emit.apply(this, arguments);
       };
-      const draws = enabled
-        ? [0.5, 0, ...Array.from({length: 9}, () => [0.5, 0, 0]).flat()]
-        : Array.from({length: 10}, () => [0.5, 0]).flat();
+      const draws = Array.from({length: 10}, () => [0.5, 0]).flat();
       Math.random = () => {
         const stack = new Error().stack;
         if (stack.includes("rewards") && stack.includes("DriftNets.Hunter")) return draws[randomCalls++] ?? 0.5;
@@ -1801,7 +1975,8 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
       }
       assert.equal(policyQueries, 1);
       assert.equal(inventory.getAmount(I.SCROLL_BOX_MEDIUM_), enabled ? 1 : 0);
-      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 9 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 0 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.PUFFERFISH), enabled ? 9 : 0, "repeated clue wins become pufferfish");
       assert.equal(DriftNets.state(player).nets[anchorId], undefined, "the real take action completes");
     } finally {
       Date.now = originalNow;
@@ -1880,7 +2055,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
     assert.equal(capacity("beginner"), false);
     const freeCapped = fishOnce();
     caughtTrout(freeCapped);
-    assert.equal(freeCapped.clueCount, 0);
+    assert.equal(freeCapped.clueCount, 1, "the beginner tier still rolls; only members tiers are skipped");
     assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
   } finally {
     core.WorldDefinition.isMembersWorld = originalMembersWorld;
@@ -1915,7 +2090,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
   assert.equal(inventory.getAmount(I.RAW_COD), 1);
   assert.equal(inventory.getAmount(I.RAW_BASS), 1);
   assert.ok(bigCatch.xp > 0);
-  assert.equal(bigCatch.clueCount, 1);
+  assert.equal(bigCatch.clueCount, 5);
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
 
   // An ordinary big-net junk-only batch remains outside this documented-fish
@@ -1945,7 +2120,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
     fishId: I.BROKEN_GLASS_2, baitId: I.BIG_FISHING_NET});
   assert.equal(parkCatch.fish, 1);
   assert.ok(parkCatch.xp > 0);
-  assert.equal(parkCatch.clueCount, 1);
+  assert.equal(parkCatch.clueCount, 5);
   assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
 
   // Tutorial Island's separate pond remains outside this change's supported

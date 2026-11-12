@@ -49,7 +49,7 @@
  *    variants are not played, and the arena's one static Inadequacy
  *    (1823,5149,2) is removed on entry and respawned on leaving.
  *  - "Our lives" has no Read text, the vial/potion handovers use plain game
- *    messages, and the dreamy lamp cannot be rubbed.
+ *    messages.
  */
 module.exports = function registerDreamMentorQuest(api) {
   const {
@@ -1094,8 +1094,14 @@ module.exports = function registerDreamMentorQuest(api) {
     if (pair.has(HAMMER_ITEM_ID) && pair.has(ASTRAL_RUNE_ITEM_ID)) {
       event.handled = true;
       if (!held(player, ASTRAL_RUNE_ITEM_ID)) return true;
-      player.getInventory().deleteNumber(ASTRAL_RUNE_ITEM_ID, 1);
-      player.getInventory().adds(ASTRAL_SHARDS_ITEM_ID, 1);
+      // A rune taken from a larger stack frees no slot, and `adds` drops what has no room.
+      const inventory = player.getInventory();
+      if (inventory.getAddableAmount(new api.core.Item(ASTRAL_SHARDS_ITEM_ID, 1)) < 1 && inventory.getAmount(ASTRAL_RUNE_ITEM_ID) > 1) {
+        inventory.full();
+        return true;
+      }
+      inventory.deleteNumber(ASTRAL_RUNE_ITEM_ID, 1);
+      inventory.adds(ASTRAL_SHARDS_ITEM_ID, 1);
       player.sendMessage("You hammer the astral rune into shards.");
       return true;
     }
@@ -1137,6 +1143,37 @@ module.exports = function registerDreamMentorQuest(api) {
     player.setAttribute(BRAZIER_ATTRIBUTE, true);
     player.getPacketSender().sendVarbit(VARBIT_BRAZIER_LIT, 1);
     player.sendMessage("You light the ceremonial brazier.");
+  }
+
+  // Wiki (Dreamy lamp): one wish of 15,000 XP in Strength, Ranged, Magic, Hitpoints or Defence.
+  const DREAMY_LAMP_XP = 15000;
+  const DREAMY_LAMP_SKILLS = [Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.HITPOINTS, Skill.DEFENCE];
+
+  function rubDreamyLamp(event) {
+    const { player, slot } = event;
+    if (event.itemId !== DREAMY_LAMP_ITEM_ID) return false;
+    event.handled = true;
+    api.emitCustomEvent("xpreward:open", {
+      player,
+      skills: DREAMY_LAMP_SKILLS,
+      title: "Choose the stat you wish to be advanced!",
+      onConfirm: (skill, name) => {
+        const inventory = player.getInventory();
+        // The lamp the wish was opened with, still in its slot (not dropped or moved meanwhile).
+        if (inventory.get(slot)?.getId() !== DREAMY_LAMP_ITEM_ID) return null;
+        // XP can be refused (an XP lock, a minigame, max XP): the lamp is kept, as A Kingdom Divided's lamps do.
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, DREAMY_LAMP_XP, true);
+        if (skills.getExperience(skill) === before) {
+          player.sendMessage("You cannot gain experience in that skill right now.");
+          return null;
+        }
+        inventory.deleteAtSlot(slot, 1);
+        return `Your wish has been granted! You have been awarded 15,000 ${name} experience!`;
+      },
+    });
+    return true;
   }
 
   function lookInChest(event) {
@@ -1312,6 +1349,7 @@ module.exports = function registerDreamMentorQuest(api) {
   api.onItemOnItem(handleItemOnItem, { noted: false });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemAction("Cyrisus's chest", { "Look-in": lookInChest });
+  api.onItemAction("Dreamy lamp", { Rub: rubDreamyLamp });
   api.onObjectInteraction("Our lives", { Leave: leaveLectern });
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);

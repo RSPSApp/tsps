@@ -34,7 +34,7 @@ import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { CollisionFlag } from "../../../common/CollisionFlag";
-import { VARBIT_IN_WILDERNESS } from "../../../common/vars";
+import { VARBIT_IN_WILDERNESS, VARBIT_TRADE_OPTION_DISABLED } from "../../../common/vars";
 import {
     getWorldLocChanges,
     getWorldLocSpawns,
@@ -197,6 +197,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS, formatPlayerCombatLabel } from "../constants";
+import { chatLineMenuEntriesAt } from "../../../game/widgets/interaction/chatLineMenu";
 
 /** What the last world interaction pass saw, per renderer host. */
 type InteractionPassInputs = {
@@ -632,6 +633,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 menuEntries.push(...buildPlayerActionEntries({
                     sid, playerLabel, targetCombatLevel, localCombatLevel, targetTeam, localTeam,
                     targetIsClanMember, canAttackPlayers, localX, localY,
+                    showTradeOption: (host.osrsClient.varManager?.getVarbit(VARBIT_TRADE_OPTION_DISABLED) ?? 0) === 0,
                     actions: {
                         option: sendPlayerOption,
                         follow: (serverId) => {
@@ -1573,6 +1575,19 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             if (!pickOverUi) {
                 host.osrsClient.menuOpen = true;
                 host.osrsClient.menuOpenedFrame = frameCount;
+                // Over a click-through chatbox, the chat line's own options join this menu.
+                host.osrsClient.menuChatLineEntries = host.osrsClient.isChatboxClickThrough()
+                    ? {
+                          frame: frameCount,
+                          entries: chatLineMenuEntriesAt(
+                              host.osrsClient.widgetManager,
+                              (host.app.gl.canvas as any).__ui,
+                              pickX,
+                              pickY,
+                              !!host.osrsClient.debugId,
+                          ),
+                      }
+                    : undefined;
             }
         }
         // If a pick event happened, anchor menu to the true click position and compute exact tile at click
@@ -1683,9 +1698,14 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             ) {
                 return;
             }
-            const simpleList = host.osrsClient.menuActiveSimpleEntries.length
+            const worldList = host.osrsClient.menuActiveSimpleEntries.length
                 ? host.osrsClient.menuActiveSimpleEntries
                 : simpleEntries;
+            const chatLine = host.osrsClient.menuChatLineEntries;
+            const simpleList =
+                chatLine && chatLine.frame === host.osrsClient.menuOpenedFrame && chatLine.entries.length
+                    ? [...chatLine.entries, ...worldList]
+                    : worldList;
             // menuX/menuY are already in canvas coordinates from InputManager
             const mx = (host.osrsClient.menuX | 0) as number;
             const my = (host.osrsClient.menuY | 0) as number;

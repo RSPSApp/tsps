@@ -138,7 +138,7 @@ async function lowAlchemy(f) {
   assert.ok(spell, "Low Level Alchemy is in the cache");
   await f.c.dispatch([{
     type: "widget_target", sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId,
-    targetItemId: f.inv.getItems()[0].getId(), targetSlot: 0, targetWidgetId: 0,
+    targetItemId: f.inv.getItems()[0].getId(), targetSlot: 0, targetWidgetId: 149 << 16, // the inventory
   }]);
   f.c.processTurnPackets();
   for (let i = 0; i < 6; i++) core.TaskManager.process();
@@ -169,13 +169,17 @@ test("Low Level Alchemy away from the Fountain takes its runes, pays XP and cred
 });
 
 test("Charge beside the Fountain costs no runes and gives no Magic XP; away it does", async (t) => {
+  // Charge needs Mage Arena I (Wiki): both casters have the statues' god cape.
   const near = actor(t, standAt);
+  near.p.setAttribute("mage-arena:cape-received", true);
   give(near, [FIRE, 3], [BLOOD, 3], [AIR, 3]);
   const before = xp(near);
   CombatSpells.handleSelf(near.p, "Charge");
+  assert.ok(near.p.getAttribute("charge:until") > 0, "the charge was cast, for free");
   assert.deepEqual([held(near, FIRE), held(near, BLOOD), held(near, AIR)], [3, 3, 3], "no runes taken");
   assert.equal(xp(near), before, "no XP");
   const away = actor(t, AWAY);
+  away.p.setAttribute("mage-arena:cape-received", true);
   give(away, [FIRE, 3], [BLOOD, 3], [AIR, 3]);
   CombatSpells.handleSelf(away.p, "Charge");
   assert.deepEqual([held(away, FIRE), held(away, BLOOD), held(away, AIR)], [0, 0, 0], "away: the runes went");

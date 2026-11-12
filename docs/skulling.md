@@ -15,7 +15,9 @@ From the Wiki: [Skull (status)](https://oldschool.runescape.wiki/w/Skull_(status
   attacked player can fight back without being skulled.
 - **Already skulled:** attacking a player again restarts the 30 minutes ("If a player ...
   initiates combat with another player, the skull timer will reset"; since 9 December 2021 the
-  skull "cannot disappear during PvP combat"). The skull keeps its colour. **Ours:** a skull
+  skull "cannot disappear during PvP combat"). The skull keeps its colour. Only initiating does:
+  hitting back at a player who attacked them leaves a skulled player's timer as it is (the hold in
+  `Player.processSkullTimer` keeps it from running out mid-fight). **Ours:** a skull
   with longer left is never shortened by this, or by the items below.
 - **Running out:** the skull icon goes from over the player's head on the tick the timer reaches
   zero.

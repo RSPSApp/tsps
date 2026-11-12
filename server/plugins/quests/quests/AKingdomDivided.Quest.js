@@ -2236,7 +2236,7 @@ module.exports = function registerAKingdomDividedQuest(api) {
         onConfirm: (skill, name) => {
           if (countAttribute(player, LAMPS_ATTRIBUTE) >= LAMP_CLAIMS) return null;
           const before = player.getSkillManager().getExperience(skill);
-          player.getSkillManager().addExperience(skill, LAMP_XP, false);
+          player.getSkillManager().addExperience(skill, LAMP_XP, true);
           if (player.getSkillManager().getExperience(skill) === before) {
             player.sendMessage("You cannot gain experience in that skill right now.");
             return null;

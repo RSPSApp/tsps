@@ -10,6 +10,17 @@ const Common = require("./shootingstars/Common.ShootingStars");
 
 module.exports = {
   name: "ShootingStars",
+  description: "Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement.",
+  config: {
+    "ShootingStars:intervalMinutes": {
+      type: "number", label: "Minutes between shooting stars", defaultText: "90", exclusiveMin: true, min: 0,
+      help: "Time between stars; a random 15 minutes either way is added on top.",
+    },
+    "ShootingStars:announce": {
+      type: "boolean", label: "Announce landings", default: false,
+      help: "Tells everyone online where a star landed. Useful on small worlds; OSRS has no such message.",
+    },
+  },
   register(api) {
     Common.bind(api);
     Common.persistAttributes(api);

@@ -9,8 +9,8 @@
  * Trade-Drinks before it play his conversation instead (not recorded). The generated data binds
  * both shops to op 3, which Shopkeepers drops as a conflict, so the ops are bound here.
  *
- * Data gap: the generated shops lack the Wiki's 0-stock gem and gout tuber lines and its
- * 120%/60% (100%/80% with gloves) prices; selling gems to Gabooty waits on the shop import.
+ * Data gap: the generated shops lack the Wiki's 0-stock gem and gout tuber lines, so Gabooty
+ * buys only what he lists; selling gems to him waits on the shop import.
  */
 const Common = require("./Common.TaiBwoWannaiCleanup");
 

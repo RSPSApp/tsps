@@ -13,6 +13,7 @@ const Gate = require("./gnomeball/Gate.GnomeBall");
 
 module.exports = {
   name: "GnomeBall",
+  description: "Adds Gnome Ball at the Tree Gnome Stronghold pitch: sessions, ball mechanics, the referee's hand-outs and the pitch gate.",
   members: true,
   register(api) {
     Pitch.attach(api);

@@ -29,7 +29,14 @@ export class DropItemPacketListener {
       .sendInterfaceFlags(DESTROY_ITEM_NO_COMPONENT, FIRST_OPTION_FLAG);
   }
 
-  public static drop(player: any, id: number, interfaceId: number, itemSlot: number): void {
+  /**
+   * `confirmed`: true once the player answered every drop warning for this item, or the names of
+   * the warnings answered so far. Before an item lands on the floor, "item:drop-warning"
+   * { player, item, itemId, slot, answered, warned, proceed } lets a plugin ask first: unless its
+   * warning is in `answered` or another plugin already `warned`, it sets `warned` and calls
+   * `proceed(name)` on the player's yes, which drops again so the next warning can ask.
+   */
+  public static drop(player: any, id: number, interfaceId: number, itemSlot: number, confirmed: boolean | readonly string[] = false): void {
     if (player == null || player.getHitpoints() <= 0) {
       return;
     }
@@ -82,6 +89,16 @@ export class DropItemPacketListener {
     }
 
     if (item.isDropable()) {
+      if (confirmed !== true && dropEvent.dropToGround !== false) {
+        const answered: readonly string[] = Array.isArray(confirmed) ? confirmed : [];
+        const warning = { player, item, itemId: id, slot: itemSlot, answered, warned: false,
+          proceed: (name?: string) => {
+            if (player.getInventory().getItems()[itemSlot] !== item) return;
+            DropItemPacketListener.drop(player, id, interfaceId, itemSlot, name ? [...answered, name] : true);
+          } };
+        PluginManager.emitCustomEvent("item:drop-warning", warning);
+        if (warning.warned) return;
+      }
       if (dropEvent.dropToGround !== false) {
         const toFloor = item.clone();
         if (Wilderness.isIn(player)) {

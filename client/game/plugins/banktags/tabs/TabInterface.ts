@@ -710,7 +710,8 @@ export class TabInterface {
             .openTextInput(`Enter new tag name for tag "${oldTag}":`)
             .addCharValidator(charValidator)
             .onDone((newTag: string) => {
-                if (!newTag || newTag.toLowerCase() === oldTag.toLowerCase()) return;
+                newTag = standardize(newTag);
+                if (!newTag || newTag === oldTag) return;
                 if (this.tabManager.find(newTag) === undefined) {
                     const tagTab = this.tabManager.find(oldTag);
                     if (!tagTab) return;

@@ -69,10 +69,18 @@ function colours(player) {
   return Number(player.getAttribute(SANTA_COLOURS_ATTRIBUTE)) || 0;
 }
 
-/** Wiki (Haunted wine bottle): the spirit talks to a player wearing a ghostspeak amulet. */
+/**
+ * Wiki (Haunted wine bottle): the spirit talks to a player wearing a ghostspeak amulet. Wiki
+ * (Ghostspeak amulet): Morytania legs 2 or better, from the medium Morytania diary, stand in for
+ * it anywhere it is required (its only exceptions are two quests).
+ */
 function wearsGhostspeak(player) {
-  const amulet = player.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId?.();
-  return toys.hauntedBottle.amuletIds.has(amulet);
+  const { Equipment, ItemIdentifiers: I } = core;
+  const equipment = player.getEquipment();
+  const amulet = equipment.get(Equipment.AMULET_SLOT)?.getId?.();
+  const legs = equipment.get(Equipment.LEG_SLOT)?.getId?.();
+  return toys.hauntedBottle.amuletIds.has(amulet)
+    || [I.MORYTANIA_LEGS_2, I.MORYTANIA_LEGS_3, I.MORYTANIA_LEGS_4].includes(legs);
 }
 
 /** The transcript section the player's state calls for, and anything it counts. */

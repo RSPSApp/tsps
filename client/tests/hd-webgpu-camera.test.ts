@@ -116,3 +116,71 @@ for (const backend of ["WebGL", "WebGPU"]) {
         assert.deepEqual([...camera.pos, camera.getYaw(), camera.getScenePitchAngle()], before);
     });
 }
+
+test("WebGPU plugin camera focus distance is measured in 3D to the player", () => {
+    const camera = new Camera(1625.5, -10, 4827.5, 256, 512);
+    const map = {
+        mapX: 25, mapY: 75, heightMapSize: 66, borderSize: 0,
+        heightMapData: new Int16Array(4 * 66 * 66),
+    };
+    const renderer: any = {
+        osrsClient: {
+            camera, followPlayerCamera: true, controlledPlayerServerId: 7,
+            getCameraTargetPosition: () => undefined,
+            zoomWidth: 256, zoomHeight: 256,
+            playerEcs: {
+                getIndexForServerId: () => 0, size: () => 1,
+                getX: () => 1625 * 128 + 64, getY: () => 4827 * 128 + 64,
+                getLevel: () => 0, getWorldViewId: () => -1,
+            },
+            clientPlugins: {
+                // A raised plugin camera: 10 tiles behind and 10 tiles above the player.
+                handleCameraFollow: ({ camera, playerX, playerZ }: any) => {
+                    camera.snapToPosition(playerX, -10, playerZ + 10);
+                    return true;
+                },
+            },
+        },
+        playerPosUni: new Float32Array(2), mapDataLoadedNotified: true, stats: { frameCount: 1 },
+        mapManager: { getMapForWorldTile: () => map, isSceneReady: () => true },
+        getControlledPlayerEcsIndex: () => 0, getControlledPlayerWorldViewId: () => -1,
+        updateCameraTerrainPitchPressure() {}, cameraTerrainPitchPressure: 32768,
+        cameraShakeEnabled: Array(5).fill(false),
+    };
+    updateFollowCamera(renderer, 0, 16);
+    assert.ok(Math.abs(renderer.followCamDistance - Math.hypot(10, 10)) < 0.05,
+        `focus distance ${renderer.followCamDistance} must reach the player, not stop at the ground distance`);
+});
+
+test("WebGPU stock follow camera focus distance is its 3D distance to the player's focus point", () => {
+    const camera = new Camera(1625.5, -10, 4827.5, 300, 512);
+    const map = {
+        mapX: 25, mapY: 75, heightMapSize: 66, borderSize: 0,
+        heightMapData: new Int16Array(4 * 66 * 66),
+    };
+    const renderer: any = {
+        osrsClient: {
+            camera, followPlayerCamera: true, controlledPlayerServerId: 7,
+            getCameraTargetPosition: () => undefined,
+            zoomWidth: 256, zoomHeight: 256, camFollowHeight: 0,
+            playerEcs: {
+                getIndexForServerId: () => 0, size: () => 1,
+                getX: () => 1625 * 128 + 64, getY: () => 4827 * 128 + 64,
+                getLevel: () => 0, getWorldViewId: () => -1,
+            },
+            clientPlugins: { handleCameraFollow: () => false, hdEnabled: () => false, isStretchingResizable: () => false },
+        },
+        playerPosUni: new Float32Array(2), mapDataLoadedNotified: true, stats: { frameCount: 1 },
+        mapManager: { getMapForWorldTile: () => map, isSceneReady: () => true },
+        getControlledPlayerEcsIndex: () => 0, getControlledPlayerWorldViewId: () => -1,
+        updateCameraTerrainPitchPressure() {}, cameraTerrainPitchPressure: 32768,
+        cameraShakeEnabled: Array(5).fill(false),
+        followCamRot: mat4.create(), followCamForwardAxis: vec3.fromValues(0, 0, -1), followCamForward: vec3.create(),
+        getSceneViewportWidgetRect: () => ({ x: 0, y: 0, width: 800, height: 600 }),
+    };
+    updateFollowCamera(renderer, 0, 16);
+    const distance = Math.hypot(camera.getPosX() - 1625.5, camera.getPosY(), camera.getPosZ() - 4827.5);
+    assert.ok(renderer.followCamDistance > 1, "the stock camera sits away from the player");
+    assert.ok(Math.abs(renderer.followCamDistance - distance) < 0.05,
+        `stock focus ${renderer.followCamDistance} must equal the camera-to-focus distance ${distance}`);
+});

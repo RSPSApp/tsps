@@ -46,7 +46,8 @@ function dressedForIt(player) {
 }
 
 function refusal(player) {
-  const level = player.getSkillManager().getMaxLevel(core.Skill.COOKING) >= REQUIRED_LEVEL;
+  const skills = player.getSkillManager();
+  const level = Math.max(skills.getMaxLevel(core.Skill.COOKING), skills.getCurrentLevel(core.Skill.COOKING)) >= REQUIRED_LEVEL;
   const dressed = dressedForIt(player);
   if (level && dressed) return null;
   if (level) return NO_HAT_VARIANT;
@@ -101,6 +102,7 @@ function openDoor(event) {
 
 module.exports = {
   name: "CooksGuild",
+  description: "Guards the Cooks' Guild door in Varrock: 32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals.",
   _test: { refusal, openDoor },
   register(pluginApi) {
     api = pluginApi;

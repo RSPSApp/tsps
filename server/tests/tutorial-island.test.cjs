@@ -52,6 +52,8 @@ function tutorialPlayer(progress, x = 3102, y = 3095) {
   const sent = { messages: [], varps: new Map(), varbits: new Map(), scripts: [] };
   const sender = new Proxy({}, {
     get: (_, key) => (...args) => {
+      // Unset vars read 0: Adam (311) resolves his name through a varbit transform from rev 242.
+      if (key === "getVarbit" || key === "getVarp") return 0;
       if (key === "sendMessage") sent.messages.push(args[0]);
       if (key === "sendConfig") sent.varps.set(args[0], args[1]);
       if (key === "sendVarbit") sent.varbits.set(args[0], args[1]);
@@ -497,4 +499,25 @@ test("the setup's None button leaves Ironman mode, after its own confirmation", 
   const query = { player };
   PluginManager.emitCustomEvent("ironman:mode", query);
   assert.equal(query.mode, "none");
+});
+
+// The booth topped the first bank tab back up to 25 coins on every click (and the starter kit again), so coins moved
+// to another tab or withdrawn came back. The tutorial's 25 coins are given once.
+test("the tutorial bank booth gives its 25 coins once, however often it is clicked", () => {
+  const { player } = tutorialPlayer(510, 3122, 3123);
+  const at = new core.Location(3122, 3124, 0);
+  const booth = () => {
+    const object = new core.GameObject(core.ObjectIdentifiers.BANK_BOOTH_7, at, 10, 0, null);
+    PluginManager.emitObjectInteraction({ player, object, objectId: core.ObjectIdentifiers.BANK_BOOTH_7, clickType: 1, location: at, handled: false });
+  };
+  const coinsEverywhere = () => [...Array(10).keys()].reduce((sum, tab) => sum + (player.getBank(tab)?.getAmount(core.ItemIdentifiers.COINS) ?? 0), 0)
+    + amount(player, core.ItemIdentifiers.COINS);
+  booth();
+  assert.equal(player.getBank(0).getAmount(core.ItemIdentifiers.COINS), 25, "the tutorial's 25 coins");
+  // Moved out of the first tab (withdrawn), then the booth again.
+  player.getBank(0).delete(core.ItemIdentifiers.COINS, 25);
+  player.getInventory().adds(core.ItemIdentifiers.COINS, 25);
+  booth();
+  booth();
+  assert.equal(coinsEverywhere(), 25, "no more coins from clicking again");
 });

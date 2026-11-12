@@ -165,12 +165,20 @@ module.exports = function registerNatureSpiritQuest(api) {
   const POUCH_DELAY_TICKS = 1; // the cache effect lasts 18 client cycles
 
   const GROTTO_INTERIOR = { x: 3441, y: 9736, z: 0 };
-  const GROTTO_SURFACE = { x: 3443, y: 3338, z: 0 };
+  // rsprox 227/01846.txt tick 4478 (also 226/01638, 226/01695, 227/00101): the exit lands here.
+  const GROTTO_SURFACE = { x: 3440, y: 3337, z: 0 };
   const FILLIMAN_CAMP = { x: 3440, y: 3336, z: 0 };
   const NATURE_SPIRIT_CAMP = { x: 3441, y: 9738, z: 0 };
   const WASHING_BOWL_TILE = { x: 3437, y: 3337, z: 0 };
-  /** Mort Myre swamp: the ghasts the pouch can reveal all live inside. */
-  const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3480, 0);
+  /**
+   * Mort Myre swamp: the ghasts the pouch can reveal all live inside. Its north edge is the Gate's
+   * fence (the gate leaves are on y 3458, SWAMP_GATE_PASSAGE): y 3480 took in Canifis's south half,
+   * its bank included (booths at 3513, 3478-3483).
+   */
+  const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3457, 0);
+  /** North of the fence: the gate leaves' row and the two rows a walk or run through them starts from. */
+  const SWAMP_GATE_APPROACH_BOUNDS = new Boundary(SWAMP_GATE_PASSAGE.minX - 2, SWAMP_GATE_PASSAGE.maxX + 2,
+    SWAMP_GATE_PASSAGE.y, SWAMP_GATE_PASSAGE.y + 2, 0);
 
   let quest;
 
@@ -420,6 +428,14 @@ module.exports = function registerNatureSpiritQuest(api) {
     return (definition.inventoryActions ?? []).some((action) => String(action).toLowerCase() === "eat");
   }
 
+  function hasFood(player) {
+    return (player.getInventory().getItems?.() ?? []).some((item) => item && isFoodItem(item.getId()));
+  }
+
+  function wearsMorytaniaLegs4(player) {
+    return player.getEquipment?.()?.get?.(Equipment.LEG_SLOT)?.getId?.() === ItemIdentifiers.MORYTANIA_LEGS_4;
+  }
+
   /** The first edible item in the pack becomes rotten food; false with nothing to rot. */
   function rotFood(player) {
     const inventory = player.getInventory();
@@ -460,6 +476,8 @@ module.exports = function registerNatureSpiritQuest(api) {
       visibleGhastFor(player, ghast)?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
       return;
     }
+    // Wiki (Morytania legs 4): worn, they completely block the attack that turns food rotten.
+    if (wearsMorytaniaLegs4(player) && hasFood(player)) return;
     if (!rotFood(player)) {
       player.getCombat().getHitQueue().addPendingDamage([
         new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),
@@ -870,14 +888,21 @@ module.exports = function registerNatureSpiritQuest(api) {
     event.handled = true;
   }
 
-  /** The blessed sickle's Bloom grows the swamp produce used to fill the pouch. */
+  /**
+   * Every sickle and flail whose cache menu carries Bloom: "Cast Bloom" on the blessed silver
+   * sickle and its gem and Blisterwood upgrades, "Bloom" on the Ivandis, Blisterwood and
+   * Hallowed flails (Wiki: Bloom).
+   */
+  function hasBloomOption(itemId) {
+    return (CacheDefinitions.getItem(itemId)?.inventoryActions ?? []).some(action => /bloom/i.test(action ?? ""));
+  }
+
+  /** A blessed sickle or flail's Bloom grows the swamp produce used to fill the pouch. */
   function handleSickleAction(event) {
-    if (event.itemId !== SILVER_SICKLE_BLESSED_ITEM_ID) return;
+    if (!hasBloomOption(event.itemId)) return;
     if (!String(event.option ?? "").toLowerCase().includes("bloom")) return;
     const { player } = event;
     if (quest.getStage(player) < STAGE_BLESSED_SICKLE) return;
-    if (!held(player, SILVER_SICKLE_BLESSED_ITEM_ID)
-      && player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() !== SILVER_SICKLE_BLESSED_ITEM_ID) return;
     event.handled = true;
     if (World.getProcessCycle() < (nextBloom.get(player) ?? 0)) return;
     const skills = player.getSkillManager();
@@ -900,6 +925,12 @@ module.exports = function registerNatureSpiritQuest(api) {
     event.handled = true;
   }
 
+  function morytaniaHardDone(player) {
+    const request = { player, diary: "morytania", tier: "hard", complete: false };
+    api.emitCustomEvent("diary:is-complete", request);
+    return request.complete === true;
+  }
+
   /** Picking the Bloom's produce; the first fungus picked completes the step. */
   function handleBloomPick(event) {
     const harvest = PLANT_HARVEST.get(event.objectId);
@@ -913,6 +944,10 @@ module.exports = function registerNatureSpiritQuest(api) {
       return;
     }
     player.getInventory().adds(harvest, 1);
+    // Morytania hard diary: Bloom yields double Mort myre fungi (Wiki: Morytania Diary).
+    if (event.objectId === FUNGI_ON_LOG_ID && player.getInventory().getFreeSlots() > 0 && morytaniaHardDone(player)) {
+      player.getInventory().adds(harvest, 1);
+    }
     const source = [...BLOOMED_PLANT.entries()].find(([, bloomed]) => bloomed === event.objectId)?.[0];
     if (source !== undefined) replaceObject(event.object, source);
     if (event.objectId === FUNGI_ON_LOG_ID) {
@@ -1086,19 +1121,47 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
+   * The tiles just north of the Gate are outside the swamp, so its process can't see them. This strip only
+   * records the approach for checkSwampGateCrossing (2 rows deep, for a running step); no diary entry, no ghasts.
+   */
+  function createSwampGateApproachArea() {
+    class MortMyreGateApproachArea extends Area {
+      process(mobile) {
+        if (!mobile?.isPlayer?.()) return;
+        const player = mobile.getAsPlayer();
+        if (player.getPrivateArea?.()) return;
+        checkSwampGateCrossing(player);
+      }
+    }
+    return new MortMyreGateApproachArea([SWAMP_GATE_APPROACH_BOUNDS]);
+  }
+
+  /**
    * The swamp gate is the only legitimate way into Mort Myre ("or Filliman will
    * not appear"): passing through it writes stage 10. Doors still swings the gate.
    */
   function handleSwampGate(request) {
-    if (SWAMP_GATE_IDS.has(request.objectId)) recordSwampEntry(request.player);
+    if (!SWAMP_GATE_IDS.has(request.objectId)) return;
+    const { player } = request;
+    // rsprox 226/01638.txt:21691 (leaving, tick 1005) and :21802 (entering, tick 1014), also
+    // 237/01134.txt:300241/301999: every crossing has its line, whatever the quest stage.
+    if (player.getLocation().getY() < SWAMP_GATE_PASSAGE.y) {
+      player.sendMessage("You skip gladly out of murky Mort Myre.");
+      return;
+    }
+    if (!recordSwampEntry(player)) player.sendMessage(ENTER_SWAMP_MESSAGE);
   }
 
+  const ENTER_SWAMP_MESSAGE = "You walk into the gloomy atmosphere of Mort Myre.";
+
+  /** True when the quest step was recorded (and its line sent). */
   function recordSwampEntry(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return;
+    if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return false;
     quest.setStage(player, STAGE_ENTERED_SWAMP);
-    player.sendMessage("You walk into the gloomy atmosphere of Mort Myre.");
+    player.sendMessage(ENTER_SWAMP_MESSAGE);
     ensureWashingBowl(player);
+    return true;
   }
 
   /** Opening credits its actor; walking through another player's open gate must credit the walker. */
@@ -1127,9 +1190,17 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (objectId === GROTTO_ID && option.includes("enter")) {
       event.handled = true;
       // Before the ritual, trying the entrance summons Filliman outside instead.
-      if (quest.getStage(player) < STAGE_PERFORMED_RITUAL) {
-        player.sendMessage("You prepare to enter the Druid's grotto.");
+      const stage = quest.getStage(player);
+      if (stage < STAGE_PERFORMED_RITUAL) {
         ensureQuestNpcs(player, true);
+        // Wiki Transcript:Nature Spirit, "If the player attempts to enter the Grotto" (finding Filliman):
+        // the line, "A shifting apparition appears in front of you.", then Filliman, by the amulet.
+        if (stage >= STAGE_ENTERED_SWAMP && stage < STAGE_SPOKEN_FILLIMAN) {
+          // As Talk-to: the conversation records the attempt (15) or, with the amulet, speaking (20).
+          startTranscript(api, player, FILLIMAN_NPC_ID, "Nature Spirit", fillimanVariant(stage, player));
+          return;
+        }
+        player.sendMessage("You prepare to enter the Druid's grotto.");
         return;
       }
       player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, quest.isComplete(player) ? 1 : GROTTO_INTERIOR.z));
@@ -1141,7 +1212,13 @@ module.exports = function registerNatureSpiritQuest(api) {
     }
     if ((objectId === GROTTO_EXIT_ID || objectId === ObjectIdentifiers.GROTTO_4) && (option.includes("exit") || option.includes("leave"))) {
       event.handled = true;
-      player.moveTo(new Location(GROTTO_SURFACE.x, GROTTO_SURFACE.y, GROTTO_SURFACE.z));
+      // rsprox 227/01846.txt ticks 4477-4478: the prepare line, then a tick later the crawl line and the move.
+      player.sendMessage("You prepare to exit the Druid's grotto.");
+      const { TaskManager, CountdownTask } = api.core;
+      TaskManager.submit(new CountdownTask(player, 1, () => {
+        player.sendMessage("You crawl back out of the grotto.");
+        player.moveTo(new Location(GROTTO_SURFACE.x, GROTTO_SURFACE.y, GROTTO_SURFACE.z));
+      }));
       return;
     }
     if (objectId === ObjectIdentifiers.GROTTO_2 && option.includes("search")) {
@@ -1180,8 +1257,9 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.performAnimation(new Animation(645));
     skills.setCurrentLevels(Skill.PRAYER, maximum);
     skills.updateSkill(Skill.PRAYER);
+    player.setPrayerPointDrain(0);
     player.getPacketSender().sendSoundEffect(api.core.Sound.PRAYER_RECHARGE.getId(), 1, 0, 0);
-    player.sendMessage("You recharge your Prayer points.");
+    player.sendMessage("You recharge your prayer points at the altar of nature."); // rsprox 227/01846.txt tick 4473
     return true;
   }
 
@@ -1263,4 +1341,5 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.registerArea(createSwampArea());
+  api.registerArea(createSwampGateApproachArea());
 };

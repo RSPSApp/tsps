@@ -18,6 +18,7 @@ const Scoreboard = require("./araxxor/Scoreboard.Araxxor");
 
 module.exports = {
   name: "Araxxor",
+  description: "Araxxor in the Morytania spider lair: a solo instance with eggs, acid specials, the 25% enrage, a harvestable corpse and Combat Achievements.",
   members: true,
   register(api) {
     Combat.attach(api);

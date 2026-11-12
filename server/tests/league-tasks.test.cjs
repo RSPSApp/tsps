@@ -76,9 +76,9 @@ before(async () => {
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
   // Stands in for QuestRuntime's answer.
   custom["quest:is-complete"] = [(request) => { request.complete = completedQuests.has(request.name); }];
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueTasks.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Tasks.LeagueMode").register(api);
 });
 
 /** A real player whose packets are recorded in order; logged in as a new character of `profile`. */
@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "equip-each", "equip-count", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "prayer-restore", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "object-op", "item-op", "shortcut", "deed", "kill-any-with", "kill-any-one", "ca-complete", "obtain", "obtain-all", "haircut", "agility-tickets", "agility-ticket-streak", "coin-pouch", "archery-target", "miscellania", "colosseum-glory", "motherlode-nuggets", "nest-seed"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -183,6 +183,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
           for (const npc of task.trigger.npcs) (task.trigger.credited ? creditedNames : npcNames).add(npc);
         }
         if (task.trigger.kind === "kill-each") for (const npc of Object.keys(task.trigger.npcs)) npcNames.add(npc);
+        if (task.trigger.kind === "kill-any-one") for (const npc of task.trigger.npcs) npcNames.add(npc);
         if (task.trigger.kind === "level") assert.ok(Skill[task.trigger.skill] instanceof Skill, task.id);
         // A named place: the catalog's own bounds, boxes of tiles.
         if (task.trigger.place !== undefined) assert.ok(catalog.places[task.trigger.place]?.rects.every((rect) => rect.length === 4 && rect[0] <= rect[2] && rect[1] <= rect[3]), `${task.id}: place ${task.trigger.place}`);
@@ -236,8 +237,20 @@ test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's 
   const giant = catalog.leagues["6"].tasks.find((task) => task.id === "defeat-a-hill-giant");
   const last = catalog.leagues["6"].tasks.at(-1);
   assert.deepEqual([last.position, catalog.leagues["6"].tasks.length], [1592, 1592], "past the one row the cache leaves out of the league, a task keeps its cache position");
+  kill(pacts, "TzTok-Jad");
+  kill(pacts, "TzHaar-Ket-Rak");
+  assert.deepEqual(completed(pacts), [], "a Fight Cave monster and Ket-Rak are not the city's TzHaar");
+  kill(pacts, "TzHaar-Xil");
+  assert.deepEqual(completed(pacts), ["defeat-a-tzhaar"]);
+  assert.equal(emitted.filter(([name, payload]) => name === "league:task-completed" && payload.id === "defeat-a-tzhaar").at(-1)[1].pactTask, true);
   kill(pacts, "Hill Giant");
-  assert.deepEqual(completed(pacts), ["defeat-a-hill-giant"]);
+  assert.deepEqual(completed(pacts), ["defeat-a-tzhaar", "defeat-a-hill-giant"]);
+  const gwdBosses = ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"];
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-100-times").trigger, { kind: "kill-any-one", npcs: gwdBosses, count: 100 }, "one of them 100 times, not the group's total");
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-250-times").trigger, { kind: "kill-any-one", npcs: gwdBosses, count: 250 });
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "defeat-any-god-wars-dungeon-boss-500-times").trigger, { kind: "kill", npcs: gwdBosses, count: 500 });
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "equip-all-zenyte-jewelry").trigger, { kind: "equip-each", items: [["Amulet of torture", "Amulet of torture (or)"], ["Necklace of anguish", "Necklace of anguish (or)"], ["Tormented bracelet", "Tormented bracelet (or)"], ["Ring of suffering", "Ring of suffering (i)", "Ring of suffering (r)", "Ring of suffering (ri)"]] }, "the amulet and the necklace share the neck slot, so the four are gathered over time");
+  assert.deepEqual(catalog.leagues["6"].tasks.find((task) => task.id === "restore-75-prayer-points-at-an-altar").trigger, { kind: "prayer-restore", amount: 75, count: 1 });
   assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
   assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
 });
@@ -370,6 +383,24 @@ test("a kill with a league area counts only there: Defeat a Snake in Karamja", (
   }
 });
 
+test("Defeat a Troll in Asgarnia credits a Mountain troll at Death Plateau", () => {
+  worldLeague = 6;
+  const hunter = character("trollhunter");
+  worldLeague = 4;
+  const taskId = "defeat-a-troll-in-asgarnia";
+  const areaAt = custom["league:area-at"];
+  custom["league:area-at"] = [(query) => { query.area = query.x === 2852 ? 3 : 21; }];
+  try {
+    const mountainTroll = npc(CacheDefinitions.getNpc(936).name);
+    hooks.onNpcDeath({ killer: hunter, npc: mountainTroll, npcId: 936, location: { x: 1219, y: 3490, z: 0 } });
+    assert.ok(!completed(hunter).includes(taskId));
+    hooks.onNpcDeath({ killer: hunter, npc: mountainTroll, npcId: 936, location: { x: 2852, y: 3591, z: 0 } });
+    assert.ok(completed(hunter).includes(taskId));
+  } finally {
+    if (areaAt) custom["league:area-at"] = areaAt; else delete custom["league:area-at"];
+  }
+});
+
 test("experience tasks: 25 million in a skill, and in 5 non-combat skills", () => {
   worldLeague = 6;
   const grinder = character("xpgrinder");
@@ -482,12 +513,13 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
   assert.deepEqual(trigger("use-the-bank-chest-inside-fortis-colosseum"), { kind: "bank", place: "fortis-colosseum-lobby", count: 1 });
   // A subject the cache spells otherwise: the item or NPC its linked page's infobox names, every cache
-  // entry of that name one of the page's ids (the Chompy bird hats, every rank's one name, are none).
+  // entry of that name one of the page's ids (a Chompy bird hat rank, every rank sharing the one name,
+  // is the id whose examine names the rank).
   assert.deepEqual(trigger("catch-150-red-chinchompas-in-kandarin"), { kind: "hunt", npcs: ["Carnivorous chinchompa"], count: 150, area: 4 });
   assert.deepEqual(trigger("mine-30-chunks-of-granite"), { kind: "produce", items: ["Granite (500g)", "Granite (2kg)", "Granite (5kg)"], count: 30, area: 6 });
   assert.deepEqual(trigger("equip-the-webweaver"), { kind: "equip", items: ["Webweaver bow (u)", "Webweaver bow"] });
   assert.deepEqual(trigger("equip-an-enchanted-slayer-staff"), { kind: "equip", items: ["Slayer's staff (e)"] });
-  assert.equal(trigger("equip-a-marksman-chompy-hat"), undefined);
+  assert.deepEqual(trigger("equip-a-marksman-chompy-hat"), { kind: "equip", items: [2983] });
   assert.equal(trigger("create-a-mithril-grapple"), undefined, "the unfinished grapple is a Mith grapple too");
   assert.deepEqual(trigger("chop-down-an-arctic-pine-tree"), { kind: "produce", items: ["Arctic pine logs"], count: 1 });
   assert.deepEqual(trigger("worship-the-ectofuntus"), { kind: "deed", event: "ectofuntus:worshipped", count: 1 });
@@ -496,6 +528,31 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("fill-a-giant-pouch"), { kind: "deed", event: "runecrafting:pouch-filled", count: 1, items: ["Giant pouch"] });
   assert.deepEqual(trigger("cross-a-pillar-shortcut-in-the-revenant-caves"), { kind: "shortcut", shortcuts: ["Pillar (Revenant Caves, easy)", "Pillar (Revenant Caves, medium)", "Pillar (Revenant Caves, hard)"], count: 1 });
   assert.deepEqual(trigger("take-a-shortcut-across-the-shilo-village-river"), { kind: "shortcut", shortcuts: ["Stepping stone (Shilo Village)"], count: 1 });
+  // An object's or item's own option (object-op / item-op): the loc ids and/or names and the option
+  // lower-cased, an item action's amount the stack one Open-all covered.
+  // A chest or the Civitas oven is credited by the content's own success event (`event`), never the click,
+  // so a locked chest or an empty oven is no deed.
+  assert.deepEqual(trigger("open-a-bronze-chest"), { kind: "object-op", objects: ["Bronze Chest"], option: "open", event: "chest:opened", count: 1 });
+  assert.deepEqual(trigger("open-a-black-chest").objects, ["Black Chest"]);
+  assert.deepEqual(trigger("open-a-black-chest").event, "chest:opened");
+  assert.deepEqual(trigger("open-a-gold-chest").objects, ["Gold Chest"]);
+  assert.deepEqual(trigger("open-a-gold-chest").event, "chest:opened");
+  assert.deepEqual(trigger("open-1-muddy-chest"), { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: 1 });
+  assert.deepEqual(trigger("open-10-muddy-chests"), { kind: "object-op", objectIds: [170], option: "open", event: "chest:opened", count: 10 });
+  assert.deepEqual(trigger("fill-a-crate-with-bananas"), { kind: "object-op", objectIds: [2072], option: "fill", count: 1 });
+  assert.deepEqual(trigger("use-the-mine-cart-transportation-system"), { kind: "object-op", objects: ["Minecart", "Train cart"], count: 1 });
+  assert.deepEqual(trigger("use-the-abyss").objects, ["Air rift", "Mind rift", "Water rift", "Earth rift", "Fire rift", "Body rift", "Cosmic rift", "Chaos rift", "Nature rift", "Law rift", "Death rift", "Blood rift"]);
+  assert.deepEqual(trigger("use-the-pottery-oven-in-civitas"), { kind: "object-op", objectIds: [58655], option: "fire", event: "pottery:fired", count: 1 });
+  // The successful open's own event, with the pouches actually opened (a refused Open-all emits nothing).
+  assert.deepEqual(trigger("open-28-coin-pouches-at-once"), { kind: "coin-pouch", pouches: 28, count: 1 });
+  assert.deepEqual(trigger("open-the-mystery-box"), { kind: "item-op", items: ["Mystery box"], option: "open", count: 1 });
+  assert.deepEqual(trigger("open-a-frozen-cache"), { kind: "item-op", items: ["Frozen cache"], option: "open", count: 1 });
+  assert.deepEqual(trigger("use-the-bank-at-the-mage-arena"), { kind: "bank", place: "mage-arena-bank", count: 1 });
+  assert.deepEqual(trigger("use-a-prayer-altar-to-restore-90-prayer-in-prifddinas"), { kind: "prayer-restore", amount: 90, place: "prifddinas", count: 1 });
+  assert.deepEqual(trigger("fill-a-medium-stash-unit"), { kind: "deed", event: "stash:filled", count: 1, where: { tier: "medium" } });
+  assert.deepEqual(trigger("fill-a-hard-stash-unit"), { kind: "deed", event: "stash:filled", count: 1, where: { tier: "hard" } });
+  assert.deepEqual(trigger("fill-something-up-from-a-water-pump"), { kind: "deed", event: "water-source:filled", count: 1, where: { name: ["water pump", "waterpump"] } });
+  assert.deepEqual(trigger("use-your-portal-nexus-to-teleport-to-weiss"), { kind: "deed", event: "construction:portal", count: 1, where: { destination: "weiss teleport" } });
   assert.deepEqual(trigger("talk-to-a-gladiator"), { kind: "npc-op", npcs: ["Gladiator"], option: "talk-to", count: 1 });
   assert.deepEqual(trigger("talk-to-ilfeen-in-tirannwn"), { kind: "npc-op", npcs: ["Ilfeen"], option: "talk-to", count: 1, area: 7 });
   assert.deepEqual(trigger("talk-to-the-mysterious-old-man-in-falador"), { kind: "npc-op", npcs: ["Mysterious Old Man"], option: "talk-to", count: 1, place: "falador" });
@@ -575,7 +632,14 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // A set the cache has no item set for: its Wiki page's table of pieces.
   assert.deepEqual(trigger("equip-a-full-armadyl-armour-set"), { kind: "equip-all", items: ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"] });
   assert.equal(trigger("equip-a-full-void-knight-set").sets.length, 3, "one table per helm, sharing the rest");
-  assert.equal(trigger("equip-a-full-crystal-armour-set"), undefined, "weapons, armour and tools are three things");
+  assert.deepEqual(trigger("equip-a-full-crystal-armour-set"), {
+    kind: "equip-all",
+    items: [
+      ["Crystal helm", "Crystal helm (attuned)", "Crystal helm (basic)", "Crystal helm (beta)", "Crystal helm (inactive)", "Crystal helm (perfected)"],
+      ["Crystal body", "Crystal body (attuned)", "Crystal body (basic)", "Crystal body (beta)", "Crystal body (inactive)", "Crystal body (perfected)"],
+      ["Crystal legs", "Crystal legs (attuned)", "Crystal legs (basic)", "Crystal legs (beta)", "Crystal legs (inactive)", "Crystal legs (perfected)"],
+    ],
+  }, "the armour section, not the page's weapons and tools");
 
   // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
   assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });
@@ -611,10 +675,17 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("100-collection-log-slots"), { kind: "collection-log", count: 100 }, "the whole log's slots");
   assert.deepEqual(trigger("gain-a-unique-item-from-a-master-clue"), { kind: "collection-log", category: "Master Treasure Trails", count: 1 });
 
-  // Health checks: the crop type, a cactus by its crop; a place other than its only one is left out.
+  // Health checks: the crop type, a cactus by its crop; a place after the task, the crop itself.
   assert.deepEqual(trigger("check-a-grown-fruit-tree"), { kind: "check-health", types: ["FRUIT_TREE"], count: 1 });
   assert.deepEqual(trigger("check-a-grown-cactus"), { kind: "check-health", crops: ["CACTUS"], count: 1 });
   assert.deepEqual(trigger("check-the-health-of-5-crystal-trees"), { kind: "check-health", types: ["CRYSTAL_TREE"], count: 5 });
+  // A crop the type table has no name for, or a place after the crop: the crop itself and the place.
+  assert.deepEqual(trigger("check-a-grown-papaya-tree-in-lletya"), { kind: "check-health", crops: ["PAPAYA"], count: 1, place: "lletya" });
+  assert.deepEqual(trigger("check-a-grown-crystal-tree"), { kind: "check-health", types: ["CRYSTAL_TREE"], count: 1, place: "prifddinas" });
+  assert.deepEqual(trigger("check-a-grown-papaya-tree-in-the-gnome-stronghold"), { kind: "check-health", crops: ["PAPAYA"], count: 1, place: "tree-gnome-stronghold" });
+  assert.deepEqual(trigger("check-the-health-of-mahogany-tree-in-marcellus-s-patch"), { kind: "check-health", crops: ["MAHOGANY"], count: 1, place: "marcellus" });
+  assert.deepEqual(trigger("check-a-grown-dragonfruit-tree-in-catherby"), { kind: "check-health", crops: ["DRAGONFRUIT"], count: 1, place: "catherby" });
+  assert.deepEqual(trigger("check-a-grown-redwood-tree"), { kind: "check-health", types: ["REDWOOD"], count: 1 }, "a redwood is only grown in the Farming Guild, so the place says nothing");
 
   // Sets: every piece at once, a slot taking either; names as the cache spells them.
   assert.deepEqual(trigger("equip-a-full-rune-set"), { kind: "equip-all", items: ["Rune platebody", "Rune full helm", ["Rune platelegs", "Rune plateskirt"]] });
@@ -757,6 +828,32 @@ test("a kill reported both by the death and by the credited-kill event counts on
   }
   assert.equal(league.getAttribute("league:task-kills")["defeat-callisto-50-times"], 25, "25 kills, not 50");
   assert.ok(!completed(league).includes("defeat-callisto-50-times"));
+});
+
+test("a kill reported as \"Hueycoatl, The\" credits the tasks named \"The Hueycoatl\"", () => {
+  worldLeague = 6;
+  const league = character("hueycoatl");
+  worldLeague = 4;
+  creditedKill(league, "Hueycoatl, The"); // Kills.Hueycoatl's report
+  assert.equal(league.getAttribute("league:task-kills")["defeat-hueycoatl-50-times"], 1);
+});
+
+test("a kill reported a few ticks after its death (Araxxor's corpse) still counts once; two deaths still count twice", (t) => {
+  let cycle = 50000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  const league = character("latereport");
+  for (let i = 0; i < 10; i++) {
+    killReal(league, core.NpcIdentifiers.ARTIO);
+    cycle += 5; // the plugin's report lands later than the death
+    creditedKill(league, "Callisto");
+    cycle += 30;
+  }
+  assert.equal(league.getAttribute("league:task-kills")["defeat-callisto-50-times"], 10, "10 kills, not 20");
+  const quick = character("quickkills");
+  killReal(quick, core.NpcIdentifiers.ARTIO);
+  cycle += 2;
+  killReal(quick, core.NpcIdentifiers.ARTIO);
+  assert.equal(quick.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two deaths close together are two kills");
 });
 
 test("the Nightmare's real ending, which kills no NPC, credits her kill tasks for each rewarded player", () => {

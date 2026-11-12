@@ -269,7 +269,8 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
 
   if (currentAmount > 0 && currentId !== dartId) {
     player.getInventory().add(new core.Item(currentId, currentAmount), true);
-    BlowpipeState.clear(blowpipeItem);
+    // Only the darts come out: clearing the whole state also emptied the scales (up to 16,383), lost for good.
+    BlowpipeState.swapDarts(blowpipeItem, -1, 0);
   }
 
   const add = Math.min(dartItem.getAmount(), TOXIC_BLOWPIPE_MAX_DARTS - BlowpipeState.read(blowpipeItem).dartAmount);
@@ -615,9 +616,12 @@ function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
     return true;
   }
   // Content may keep some shots from costing a scale (a league relic), as core asks for quiver ammunition.
-  const saving = { player, itemId: blowpipeItem.getId(), amount, saved: 0 };
+  // `extra`: scales given back on top (Demonic Pacts' Regenerate above 100%), up to the blowpipe's 16,383.
+  const saving = { player, itemId: blowpipeItem.getId(), amount, saved: 0, extra: 0 };
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const scales = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  const extra = Math.max(0, saving.extra | 0);
+  if (extra > 0) BlowpipeState.addScales(blowpipeItem, extra);
   let depleted = false;
   for (let i = 0; i < scales; i++) {
     if (BlowpipeState.consumeScale(blowpipeItem) <= 0) {
@@ -700,8 +704,25 @@ function rememberDamage({ attacker, hit, damage }) {
   }
 }
 
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a blowpipe ready to use
+ * (the PvP Arena's load-outs) asks for a full one: every scale and dart it holds, dragon darts
+ * (the arena's load-outs name no dart; inferred).
+ */
+function fillCharges(event) {
+  const { item } = event;
+  if (!item || !isToxicBlowpipeItemId(item.getId())) return;
+  BlowpipeState.write(item, {
+    scales: TOXIC_BLOWPIPE_MAX_SCALES,
+    dartId: core.ItemIdentifiers.DRAGON_DART,
+    dartAmount: TOXIC_BLOWPIPE_MAX_DARTS,
+  });
+  event.handled = true;
+}
+
 module.exports = {
   name: "ToxicBlowpipe",
+  description: "Adds the toxic blowpipe: loading Zulrah's scales and darts, dart-based ranged strength, checking, unloading and uncharging.",
   members: true,
   register(api) {
     core = api.core;
@@ -716,6 +737,7 @@ module.exports = {
     api.registerBonusProvider({ apply: bonusProviderApply });
     api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
     api.onItemOnItem(itemOnItem);
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onItemAction("Toxic blowpipe", {
       Check: checkBlowpipe,
       Unload: unloadBlowpipe,
@@ -739,5 +761,5 @@ module.exports = {
     api.onInterfaceActionButton(CONFIRM_BUTTON, confirmPrompt);
     api.onCustomEvent("destroy-item:prompt", forgetPrompt);
   },
-  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, CONFIRM_GROUP_ID },
+  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, fillCharges, CONFIRM_GROUP_ID },
 };

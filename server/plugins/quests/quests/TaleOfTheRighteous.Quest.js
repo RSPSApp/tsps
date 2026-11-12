@@ -653,6 +653,8 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
     const inventory = player.getInventory();
     if (inventory.isFull()) inventory.forceAdd(player, new Item(COINS_ITEM_ID, 8000));
     else inventory.adds(COINS_ITEM_ID, 8000);
+    // Wiki (Tale of the Righteous, Rewards): 1,500 Mining experience.
+    player.getSkillManager().addExperiences(Skill.MINING, 1500);
     sendRewardVarbit(player);
   }
 
@@ -682,7 +684,7 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
-    xpRewards: [],
+    xpRewards: [{ skillId: Skill.MINING.getIndex(), amount: 1500, label: "Mining" }],
     rewardItemId: HISTORY_AND_HEARSAY_ITEM_ID,
     rewardItemLabel: "History and Hearsay (Kharedst's memoirs page)",
     otherRewards: ["8,000 Coins", "Shayzien graceful outfit recolour", "Nightmare Zone: Corrupt Lizardman"],

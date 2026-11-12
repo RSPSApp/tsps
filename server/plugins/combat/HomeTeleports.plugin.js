@@ -100,10 +100,16 @@ function castHomeTeleport(event) {
     player.sendMessage("You can't use this spell during combat.");
     return;
   }
-  startHomeTeleport(core, player, destination, () => {
-    const minute = dateMinutes();
-    player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
-    player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
+  core.TeleportHandler.confirm(player, destination, () => {
+    if (core.CombatFactory.inCombat(player)) {
+      player.sendMessage("You can't use this spell during combat.");
+      return;
+    }
+    startHomeTeleport(core, player, destination, () => {
+      const minute = dateMinutes();
+      player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
+      player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
+    });
   });
 }
 
@@ -165,6 +171,7 @@ function sendLastHomeTeleport({ player }) {
 
 module.exports = {
   name: "HomeTeleports",
+  description: "The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown.",
   register(api) {
     core = api.core;
     api.persistAttribute(LAST_HOME_TELEPORT_ATTRIBUTE);

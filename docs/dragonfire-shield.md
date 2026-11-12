@@ -1,4 +1,4 @@
-# Dragonfire shield and abyssal tentacle worn options
+# Dragonfire shield, ward, wyvern shield and abyssal tentacle worn options
 
 Issue [#2165](https://github.com/RSPSApp/tsps/issues/2165): a worn Dragonfire shield's Check and
 Activate, and a worn Abyssal tentacle's Check, took the item off.
@@ -40,8 +40,50 @@ attacker's Defence against the target's Magic defence, Protect from Magic does n
 including misses, and becomes the kraken tentacle at none; the
 [(or) tentacle](https://oldschool.runescape.wiki/w/Abyssal_tentacle_(or)) also gives back its kit.
 
+## Dragonfire ward and Ancient wyvern shield
+
+The plugin also covers the [Dragonfire ward](https://oldschool.runescape.wiki/w/Dragonfire_ward)
+and the [Ancient wyvern shield](https://oldschool.runescape.wiki/w/Ancient_wyvern_shield). Before,
+neither had any handler: their worn Check / Activate / Operate answered "Nothing interesting
+happens." and nothing could charge them.
+
+| Behaviour | Source |
+| --- | --- |
+| Ward: Inspect, Check, Empty, Activate, 50 charges, charged by dragonfire and by Bottled dragonbreath, blast up to 25 | Wiki, Dragonfire ward |
+| Wyvern shield: Inspect, Check, Empty (same vent message), Operate, blast up to 15, cooldown as the shield's | Wiki, Ancient wyvern shield |
+| Wyvern shield is charged by fossils and numulites, not by dragonfire or Bottled dragonbreath | Wiki, Ancient wyvern shield |
+| Fossil used on the wyvern shield (small, large and plant fossils, unidentified small): spam message `Your ancient wyvern shield glows more brightly.`, synth_sound 3740, fossil used up | rsprox recording 198 (rev 227, a Leagues world; the only recording of it) |
+| Fossil charges: small 1, medium and plant 2, large 3, any unidentified 1, identified rare none; 500 numulites for 1 charge; the worn Recharge uses what the inventory holds | Wiki, Ancient wyvern shield (the Recharge flow and numulite use are read from this one page, not captured) |
+| Each charge adds 1 to stab, slash, crush and ranged defence (magic and attack bonuses unchanged); each blast, so each spent charge, takes it off again | Wiki, Dragonfire shield, Dragonfire ward, Ancient wyvern shield |
+
+The item data (from the cache dump) holds the **uncharged** defence bonuses for both the charged
+and the uncharged ids of all three shields (a full Dragonfire shield showed stab +20 where the
+Wiki has +70 at 50 charges), so a charged shield gave no defence for its charges. The bonus now
+comes from a bonus provider: item data plus the saved charges.
+
+## Buff bar cooldown
+
+The buff bar shows each shield's special cooldown (All Settings 132), from the cache's buff structs.
+The Dragonfire shield's (struct 3082) reads varbit 6539 and the ward's (839) varbit 6540, both in steps
+of 8 ticks, so a blast sends the varbit of the shield that fired. The wyvern shield's (840) has no
+varbit: the bar counts it against `map_clock` from the tick it ends on, which only `buff_bar_start`
+(script 5931) sets. A wyvern blast sends that with the end tick, and 0 when the recharge ends. A
+recharge running at logout comes back on the same shield's cooldown at login. Not recorded: no
+capture has a ward or wyvern shield blast.
+
 ## Not covered (no source)
 
+- The ward's and the wyvern shield's blast graphics are unrecorded. The ward reuses the Dragonfire
+  shield's cast, projectile and impact; the wyvern shield uses the same with its cache cast
+  graphic `fossil_wyvern_shield_attack_spotanim` (1402). Their Empty animations are the cache's
+  `dragonfire_ward_releasing_charge` (7873) and `fossil_wyvern_shield_release_charge` (7700) with
+  the matching release graphic (1168 for the ward, 1401 for the wyvern shield).
+- A fossil or numulites used on a full wyvern shield, or fewer than 500 numulites, fall through to
+  the default response; the live message is unknown.
+- Targets the blast does not work on (the Wiki lists chromatic and metal dragons, wyverns, frost
+  dragons and "some bosses", and the pages disagree on metal dragons) and the brace-behind-the-shield
+  stall are not implemented.
+- The ward absorbing wyvern icy breath (Wiki: it adds a charge) is not wired.
 - The blast's exact accuracy formula is unpublished; `(Defence + 9) * 64` against the target's
   magic defence roll stands in.
 - Flight time beyond one tile: the recording only has a 1-tile blast. Each extra tile adds 5
@@ -53,8 +95,5 @@ including misses, and becomes the kraken tentacle at none; the
 - Absorbing is wired to the shared dragonfire helper (`combat:dragonfire-breath` from
   `DragonfireProtection.js`, used by chromatic and metallic dragons) and Elvarg. Vorkath, the
   King Black Dragon and wyvern icy breath have their own breath code and do not send it yet.
-- The per-charge defence bonuses and the targets the blast does not work on (dragons,
-  wyverns, some bosses) are not implemented. Both shields' item data carry the full
-  50-charge bonuses today.
 - A tentacle's Check with 1,000+ charges: thousands separators assumed.
 - The tentacle's degrade message, if any.

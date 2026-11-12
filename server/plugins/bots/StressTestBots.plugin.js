@@ -82,6 +82,7 @@ function findWalkableTile(RegionManager, bounds) {
 
 module.exports = {
   name: "StressTestBots",
+  description: "Spawns many equipped bots that walk, chat and emote to load-test player updates. Only runs with the --stressTest server flag.",
   register(api) {
     initPvpTierLoadouts(api);
     const requestedCount = parseStressBotCount();

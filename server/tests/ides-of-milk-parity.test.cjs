@@ -13,7 +13,7 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers, O = core.ObjectIdentifiers;
 const noop = () => {};
 
-function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null } = {}) {
+function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null, pendingHit = null } = {}) {
   const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [], prompts = [];
   const groundDrops = [];
   class PrivateArea {
@@ -30,7 +30,7 @@ function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null } = {
     getBoundaries() { return this.boundaries; }
   }
   const api = new Proxy({
-    core: { ...core, PrivateArea, TaskManager: {
+    core: { ...core, PrivateArea, ...(pendingHit ? { PendingHit: pendingHit } : {}), TaskManager: {
       submit: task => { task.setRunning(true); tasks.push(task); },
       cancelTasks: key => tasks.filter(task => task.key === key).forEach(task => task.stop()),
     }, ObjectManager: { register: object => objects.push(object) },
@@ -59,7 +59,7 @@ function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null } = {
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; }, exactMove: value => { at = value; },
         setFlag: noop, removeFlag: noop, setMobileInteraction: noop, setNeedsPlacement: noop,
         getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
-        setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
+        setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setStatDrainImmune: value => { npc.statDrainImmune = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
     },
     getItemOnGroundManager: () => ({ registerLocation: (player, item) => groundDrops.push({ player, item }) }),
@@ -119,7 +119,7 @@ test('the low-combat recommendation is a start-menu warning, not a transcript bo
   const lowMenu = { player: low, prompt: 'Start The Ides of Milk quest?', warning: null };
   h.emit('npc-dialogue:menu', lowMenu);
   assert.equal(lowMenu.warning, 'Before starting this quest, be aware that your combat level is lower than the recommended level of 15.');
-  assert.equal(h.action(low, N.CASSIUS_2, 'bkgpn5').handled, true);
+  assert.equal(h.action(low, N.CASSIUS_2, 'kbEA-p').handled, true);
 
   const high = player();
   const highMenu = { player: high, prompt: 'Start The Ides of Milk quest?', warning: null };
@@ -525,7 +525,7 @@ function nativeFight(stage = 22) {
   Object.assign(session, {
     hasReplayedScene: true, replayedSceneBaseX: (at.getX() - 48) & ~7,
     replayedSceneBaseY: (at.getY() - 48) & ~7, replayedSceneLevel: 0,
-    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicRegion: region, lastMusicMode: 1,
+    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicArea: require('../dist/game/Music').Music.tracksAt(at.getX(), at.getY(), 0), lastMusicMode: 1,
   });
   const packets = []; let tick = 0;
   session.sendClientPacket = packet => { packets.push(packet); return true; };
@@ -681,4 +681,80 @@ test('Brutus counts once through Combat Achievements and answers the stored best
     h.hooks.onPlayerLogout[0]({ player: p });
     core.World.getProcessCycle = originalCycle;
   }
+});
+
+// Demonic Brutus's Wiki numbers on the existing quest-plugin fight (docs/ides-of-milk.md): his specials hit for 45-56 (the
+// quest's 30-40% of Hitpoints scaling is Brutus'), his basic melee ignores Protect from Melee and the quest's cap of 3, and
+// he is immune to stat drains. His ghosts, orbs and faster specials are not modelled; the Wiki gives no tick counts for them.
+function demonicFight() {
+  const f = nativeFight(22);
+  f.h.api.onCustomEvent('quest:is-complete', request => { if (request.key === 'desert_treasure_ii') request.complete = true; });
+  f.p.items.set(I.ABYSSAL_POTATO, 1);
+  f.h.itemOnNpc(f.p, f.npc, I.ABYSSAL_POTATO);
+  f.h.prompts.at(-1)[3]();
+  const demonic = f.h.npcs.at(-1);
+  assert.equal(demonic.getId(), N.DEMONIC_BRUTUS);
+  return { ...f, demonic };
+}
+
+test('Demonic Brutus is immune to stat drains, which the regular Brutus is not', () => {
+  const f = demonicFight();
+  try {
+    assert.equal(f.npc.statDrainImmune ?? false, false);
+    assert.equal(f.demonic.statDrainImmune, true, 'setStatDrainImmune(true) on the upgrade');
+  } finally { f.close(); }
+});
+
+function stompRolls(f, bull, count = 60) {
+  const rolls = new Set();
+  for (let i = 0; i < count; i++) {
+    f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'stomp'; f.arena.stompsRemaining = 0;
+    bull.moveTo(new core.Location(3260, 3286, 0));
+    f.p.moveTo(new core.Location(3260, 3289, 0));
+    f.p.damage.length = 0;
+    f.method.start(bull, f.p); f.h.tick(4);
+    for (const hit of f.p.damage) rolls.add(hit.getDamage());
+  }
+  return rolls;
+}
+
+test('each bull of a Demonic Brutus special deals 45-56, where the regular specials stay at 19 or less', () => {
+  const regular = nativeFight(22);
+  try {
+    const rolls = stompRolls(regular, regular.npc);
+    assert.ok(rolls.size > 0, 'a regular stomp landed');
+    for (const value of rolls) assert.ok(value <= 19, `regular damage ${value}`);
+  } finally { regular.close(); }
+  const f = demonicFight();
+  try {
+    const rolls = stompRolls(f, f.demonic);
+    assert.ok(rolls.size > 0, 'a stomp landed');
+    for (const value of rolls) assert.ok(value >= 45 && value <= 56, `damage ${value}`);
+    assert.ok(Math.max(...rolls) > 45, 'the range is rolled, not fixed');
+  } finally { f.close(); }
+});
+
+test("Demonic Brutus's basic melee ignores Protect from Melee and the quest's cap of 3; the regular Brutus' hit keeps the cap", () => {
+  const built = [];
+  class RecordedHit {
+    constructor(attacker, target, method, config) { built.push({ attacker, config }); this.damage = 9; }
+    getTotalDamage() { return this.damage; }
+    setTotalDamage(value) { this.damage = value; }
+  }
+  // The arena and the quest plugin are the real ones; only the hit constructor is recorded.
+  const h = harness({ nativeNpc: true, pendingHit: RecordedHit }), p = player(); h.quest.setStage(p, 22);
+  h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+  h.api.onCustomEvent('quest:is-complete', request => { if (request.key === 'desert_treasure_ii') request.complete = true; });
+  const regularNpc = h.npcs[0], arena = p.getArea(), method = new h.api.combat();
+  arena.special = null;
+  const regular = method.hits(regularNpc, p);
+  assert.equal(built.at(-1).config, undefined, 'the regular hit is an ordinary one');
+  assert.equal(regular[0].getTotalDamage(), 3, 'capped at 3 after the quest');
+  p.items.set(I.ABYSSAL_POTATO, 1);
+  h.itemOnNpc(p, regularNpc, I.ABYSSAL_POTATO);
+  h.prompts.at(-1)[3]();
+  const demonicNpc = h.npcs.at(-1);
+  const demonic = method.hits(demonicNpc, p);
+  assert.deepEqual(built.at(-1).config, { bypassProtectionPrayer: true });
+  assert.equal(demonic[0].getTotalDamage(), 9, 'not held to the quest cap of 3');
 });

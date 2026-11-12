@@ -1,26 +1,30 @@
 import type { LocTypeLoader } from "../../rs/config/loctype/LocTypeLoader";
 import type { VarBitTypeLoader } from "../../rs/config/vartype/bit/VarBitTypeLoader";
 import type { VarManager } from "../../rs/config/vartype/VarManager";
+import { isDoorLocType } from "./SceneLocs";
 
 /** The loaded square's loc ids per level, as both renderers keep them for picking. */
 export type TileLocIds = Int32Array[] | undefined;
 
-const varpsBySquare = new WeakMap<Int32Array[], Set<number>>();
+export type MultiLocReloadGroup = "loc" | "full";
+
+const varpsBySquare = new WeakMap<Int32Array[], Map<number, MultiLocReloadGroup>>();
 
 /**
  * The varps a map square's multilocs read: each one's transform varp, or its varbit's base varp.
- * A build bakes the variant those vars chose, so a change to one of them needs the square rebuilt.
+ * Ordinary variants only need the loc mesh rebuilt. A varp with a possible door variant
+ * can affect both meshes, so it needs a full build.
  * Cached per build (a rebuild hands the square new arrays).
  */
 export function multiLocVarps(
     tileLocIds: TileLocIds,
     locTypeLoader: LocTypeLoader,
     varbitLoader: VarBitTypeLoader,
-): Set<number> {
-    if (!tileLocIds) return new Set();
+): Map<number, MultiLocReloadGroup> {
+    if (!tileLocIds) return new Map();
     const cached = varpsBySquare.get(tileLocIds);
     if (cached) return cached;
-    const varps = new Set<number>();
+    const varps = new Map<number, MultiLocReloadGroup>();
     const seen = new Set<number>();
     for (const ids of tileLocIds) {
         if (!ids) continue;
@@ -30,12 +34,16 @@ export function multiLocVarps(
             seen.add(id);
             const type = locTypeLoader.load(id);
             if (!type?.transforms) continue;
-            if (type.transformVarbit !== -1) {
-                const baseVar = varbitLoader.load(type.transformVarbit)?.baseVar;
-                if (baseVar !== undefined) varps.add(baseVar);
-            } else if (type.transformVarp !== -1) {
-                varps.add(type.transformVarp);
-            }
+            const varp = type.transformVarbit !== -1
+                ? varbitLoader.load(type.transformVarbit)?.baseVar
+                : type.transformVarp;
+            if (varp === undefined || varp === -1 || varps.get(varp) === "full") continue;
+            const hasDoorVariant = type.transforms.some((variantId) => {
+                if (variantId < 0) return false;
+                const variant = locTypeLoader.load(variantId);
+                return variant && isDoorLocType(variant);
+            });
+            varps.set(varp, hasDoorVariant ? "full" : "loc");
         }
     }
     varpsBySquare.set(tileLocIds, varps);

@@ -33,6 +33,11 @@ before(async () => {
   removeNpc: (npc) => { npc.removed = true; },
   emitCustomEvent(name, request) {
     if (name === "quest:is-started") request.started = giantDwarfStarted;
+    // The Skillcapes plugin's answer (Common.SkillCapes.js): the Smithing cape's perk, which the max cape has too.
+    if (name === "skillcape:has-perk" && request.skill === "SMITHING") {
+      const cape = request.player.getEquipment().getItems()[Equipment.CAPE_SLOT]?.getId?.();
+      request.result = [ItemIds.SMITHING_CAPE, ItemIds.SMITHING_CAPE_T_, ItemIds.MAX_CAPE].includes(cape);
+    }
   },
   getTaskManager: () => ({ submit: (task) => task.setRunning(true) }),
   sendMultiChatboxPrompt: (player, title, ...choices) => prompts.push({ player, title, choices }),
@@ -42,11 +47,12 @@ before(async () => {
 
 const DISPENSER = 936;
 
-function player({ smithing = 99, items = {}, hands = -1 } = {}) {
+function player({ smithing = 99, items = {}, hands = -1, cape = -1 } = {}) {
   const attributes = new Map();
   const inventory = new Map(Object.entries(items).map(([id, amount]) => [Number(id), amount]));
   const equipment = new Array(14).fill(null);
   if (hands !== -1) equipment[Equipment.HANDS_SLOT] = { getId: () => hands };
+  if (cape !== -1) equipment[Equipment.CAPE_SLOT] = { getId: () => cape };
   const p = {
     messages: [], spam: [], xp: 0, varbits: new Map(), dialogues: 0, statement: null, sounds: [], menu: null, inventory,
     index: ++playerIndex, location: new Location(1940, 4960, 0), runEnergy: 10000, moving: false,
@@ -74,6 +80,15 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
       addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       refreshItems() {},
+      // Slots, one unit each (as getFreeSlots counts them), in map order: the bucket swaps replace by slot.
+      getItems: () => [...inventory].flatMap(([id, n]) => Array.from({ length: Math.max(0, n) }, () => new (PluginManager.getCoreApi().Item)(id, 1))),
+      getSlotForItemId(id) { return this.getItems().findIndex((item) => item.getId() === id); },
+      setItem(slot, item) {
+        const old = this.getItems()[slot];
+        if (old) inventory.set(old.getId(), inventory.get(old.getId()) - 1);
+        inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount());
+        return this;
+      },
     }),
     getEquipment: () => ({ getItems: () => equipment }),
     getSkillManager: () => ({ getCurrentLevel: () => smithing, getMaxLevel: () => smithing, addExperiences: (_, xp) => { p.xp += xp; } }),
@@ -462,6 +477,16 @@ test("goldsmith gauntlets add 33.7 XP a gold bar", () => {
   putOre(p);
   ticks(4);
   assert.ok(Math.abs(p.xp - 2 * 56.2) < 1e-9);
+});
+
+test("a max cape gives the goldsmith gauntlets' gold XP too (Wiki: Smithing cape)", () => {
+  for (const cape of [ItemIds.MAX_CAPE, ItemIds.SMITHING_CAPE]) {
+    const p = player({ cape, items: { [ItemIds.GOLD_ORE]: 2 } });
+    stateOf(p).coffer = 1000;
+    putOre(p);
+    ticks(4);
+    assert.ok(Math.abs(p.xp - 2 * 56.2) < 1e-9, `cape ${cape}: ${p.xp}`);
+  }
 });
 
 test("molten bars need ice gloves or water; cooled bars are taken into free slots", () => {

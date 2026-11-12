@@ -18,6 +18,7 @@ const Scoreboard = require("./nightmare/Scoreboard.Nightmare");
 
 module.exports = {
   name: "Nightmare",
+  description: "The Nightmare and Phosani's Nightmare in the Sisterhood Sanctuary: dreams, phases, totems, sleepwalkers, loot and Shura's and Senga's item keeping.",
   members: true,
   register(api) {
     Common.init(api);
@@ -31,6 +32,7 @@ module.exports = {
     Retrieval.attachRetrieval(api);
     Scoreboard.attachScoreboard(api);
     require("./nightmare/CombatAchievements.Nightmare")(api);
+    api.onCustomEvent("ironman:shared-kill-keeps", require("./nightmare/Loot.Nightmare").ironmanKeeps);
     require("./nightmare/Commands.Nightmare")(api);
   },
 };

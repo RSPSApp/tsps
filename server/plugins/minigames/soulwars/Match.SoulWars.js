@@ -21,6 +21,11 @@ const ARENA_PLANES = 4;
 const tickHooks = [];
 const startHooks = [];
 const endHooks = [];
+/**
+ * Saved while the player is in a game, so a save made mid-game (shutdown, `saveall`, a tick error, any requested
+ * save) is recovered at login: the game's items go and the player is put in the lobby, as leaving does.
+ */
+const IN_GAME_ATTRIBUTE = "soul-wars-in-game";
 /** The match in play (one a world, as live). */
 let current = null;
 
@@ -56,6 +61,11 @@ function areaClass() {
 
     allowSummonPet() {
       return false;
+    }
+
+    /** No follower comes in either (Wiki: Soul Wars): a following pet waits outside. */
+    barsFollowers() {
+      return true;
     }
 
     /** The instance's copy of a template tile. */
@@ -170,6 +180,7 @@ class Game {
     Common.addVarp(player, "total_games", 1);
     const equipment = player.getEquipment();
     const capeSlot = CAPE_SLOT;
+    player.setAttribute(IN_GAME_ATTRIBUTE, true);
     equipment.setItem?.(capeSlot, new Common.core.Item(data.items.capes[team], 1));
     equipment.refreshItems?.();
     player.getUpdateFlag?.().flag?.(Common.core.Flag?.APPEARANCE);
@@ -333,6 +344,7 @@ class Game {
 
 /** Every Soul Wars item goes when a game ends or is left (Wiki: bandages vanish; recorded: cleared slots). */
 function clearGameItems(player) {
+  player.setAttribute(IN_GAME_ATTRIBUTE, false);
   const { items } = Common.data;
   const ids = [items.fragment, items.bones, items.bandages, ...items.potions, items.capes.blue, items.capes.red];
   const inventory = player.getInventory();
@@ -348,6 +360,18 @@ function clearGameItems(player) {
     equipment.refreshItems?.();
   }
   inventory.refreshItems?.();
+}
+
+/** Logged in from a mid-game save with no game to return to: the game's items go and the lobby, as leaving does. */
+function recoverOnLogin({ player }) {
+  if (player.getAttribute(IN_GAME_ATTRIBUTE) !== true || current?.teams.has(player)) return;
+  clearGameItems(player);
+  player.moveTo(Common.toLocation(Common.data.lobby.afterGame));
+}
+
+function attachMatch(api) {
+  api.persistAttribute(IN_GAME_ATTRIBUTE, false);
+  api.onPlayerLogin(recoverOnLogin);
 }
 
 const attackRules = [];
@@ -371,4 +395,6 @@ module.exports = {
   onAttackRule: (hook) => attackRules.push(hook),
   onAggressionRule: (hook) => aggressionRules.push(hook),
   clearGameItems,
+  attachMatch,
+  IN_GAME_ATTRIBUTE,
 };

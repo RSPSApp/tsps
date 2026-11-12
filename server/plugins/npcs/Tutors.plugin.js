@@ -13,6 +13,7 @@
  * Skill-level menus ("If the player has level 1-28 Fishing:") are answered for every tutor.
  */
 const { getRegisteredQuests } = require("../quests/QuestRuntime");
+const { takeInto } = require("../items/TakeInto");
 
 const CLAIM_ATTRIBUTE = "tutors.combat_claim_at";
 // The pre-Settings save of the ammo toggle; migrated into the Setting at login.
@@ -20,6 +21,9 @@ const AUTO_EQUIP_ATTRIBUTE = "ranged:equip-ammo-on-pickup";
 // The same switch as Settings > Gameplay > "Ammo-picking behaviour" (setting id 305).
 const AMMO_PICKUP_SETTING_ID = 305;
 const AMMO_PICKUP_VARBIT = 5697;
+// Settings > Gameplay > "Rune-picking behaviour" (setting id 306); the rune pouch applies it.
+const RUNE_PICKUP_SETTING_ID = 306;
+const MAX_STACK = 2147483647;
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 const TRAINING_ARROW_COUNT = 25;
@@ -40,11 +44,13 @@ function init(api) {
   pluginApi = api;
   core = api.core;
   const { NpcIdentifiers: N, ItemIdentifiers: I, Skill } = core;
+  // Rev 242 retired the tutor ids for named successors in the same places (data/retired-npcs.json).
+  // Ranged, Magic, Cooking and Prayer have none; their retired ids are no longer spawned.
   NPC = {
-    MELEE: N.MELEE_COMBAT_TUTOR, RANGED: N.RANGED_COMBAT_TUTOR, MAGIC: N.MAGIC_COMBAT_TUTOR,
-    COOKING: N.COOKING_TUTOR, CRAFTING: N.CRAFTING_TUTOR, FISHING: N.FISHING_TUTOR,
-    MINING: N.MINING_TUTOR, PRAYER: N.PRAYER_TUTOR, SMITHING_APPRENTICE: N.SMITHING_APPRENTICE,
-    MASTER_SMITHING: N.MASTER_SMITHING_TUTOR, WOODSMAN: N.WOODSMAN_TUTOR,
+    MELEE: N.CAPTAIN_HARLAN, RANGED: N.RANGED_COMBAT_TUTOR, MAGIC: N.MAGIC_COMBAT_TUTOR,
+    COOKING: N.COOKING_TUTOR, CRAFTING: N.CADMUS, FISHING: N.FINLAY,
+    MINING: N.MONLUM, PRAYER: N.PRAYER_TUTOR, SMITHING_APPRENTICE: N.FEORAS,
+    MASTER_SMITHING: N.SANI, WOODSMAN: N.WILFRED,
   };
   ITEM = I;
   TUTOR_SKILLS = new Map([
@@ -127,7 +133,7 @@ function claimed(player) {
 
 /** Free slots the ranged claim needs: one each for whichever of bow/arrows is missing. */
 function rangedSlotsNeeded(player) {
-  return Number(!owns(player, ITEM.TRAINING_BOW)) + Number(!owns(player, ITEM.TRAINING_ARROWS));
+  return Number(!owns(player, ITEM.TRAINING_SHORTBOW)) + Number(!owns(player, ITEM.TRAINING_ARROWS));
 }
 
 // --- Generic conditions.
@@ -174,7 +180,7 @@ function genericCondition(player, npcId, text) {
 // --- Per-tutor conditions (null falls through to the generic answer).
 
 function meleeCondition(player, text) {
-  const sword = owns(player, ITEM.TRAINING_SWORD);
+  const sword = owns(player, ITEM.TRAINING_SHORTSWORD);
   const shield = owns(player, ITEM.TRAINING_SHIELD);
   if (/already has a training sword and shield/i.test(text)) return sword && shield;
   if (/training sword .*but not a shield/i.test(text)) return sword && !shield;
@@ -184,7 +190,7 @@ function meleeCondition(player, text) {
 }
 
 function rangedCondition(player, text) {
-  const bow = owns(player, ITEM.TRAINING_BOW);
+  const bow = owns(player, ITEM.TRAINING_SHORTBOW);
   const arrows = owns(player, ITEM.TRAINING_ARROWS);
   if (/past 30 minutes/i.test(text)) return onClaimCooldown(player);
   if (/does not have a training bow or arrows/i.test(text)) return !bow && !arrows;
@@ -277,25 +283,25 @@ function handleAction(event) {
 
   if (npcId === NPC.MELEE) {
     if (/training sword and shield/i.test(text)) {
-      give(player, ITEM.TRAINING_SWORD);
+      give(player, ITEM.TRAINING_SHORTSWORD);
       give(player, ITEM.TRAINING_SHIELD);
     } else if (/gives you a training shield/i.test(text)) give(player, ITEM.TRAINING_SHIELD);
-    else if (/gives you a training sword/i.test(text)) give(player, ITEM.TRAINING_SWORD);
+    else if (/gives you a training sword/i.test(text)) give(player, ITEM.TRAINING_SHORTSWORD);
     else if (/give back you training (sword|shield)/i.test(text)) {
-      const itemId = /sword/i.test(text) ? ITEM.TRAINING_SWORD : ITEM.TRAINING_SHIELD;
+      const itemId = /sword/i.test(text) ? ITEM.TRAINING_SHORTSWORD : ITEM.TRAINING_SHIELD;
       player.getInventory().deleteNumber(itemId, 1);
     }
   } else if (npcId === NPC.RANGED) {
     if (/training shortbow and 25 arrows/i.test(text)) {
-      const bow = give(player, ITEM.TRAINING_BOW);
+      const bow = give(player, ITEM.TRAINING_SHORTBOW);
       const arrows = give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
       if (bow > 0 && arrows >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/gives you a training shortbow/i.test(text)) {
-      if (give(player, ITEM.TRAINING_BOW) > 0) claimed(player);
+      if (give(player, ITEM.TRAINING_SHORTBOW) > 0) claimed(player);
     } else if (/gives you 25 training arrows/i.test(text)) {
       if (give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT) >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/give back you training (bow|arrows)/i.test(text)) {
-      const itemId = /bow/i.test(text) ? ITEM.TRAINING_BOW : ITEM.TRAINING_ARROWS;
+      const itemId = /bow/i.test(text) ? ITEM.TRAINING_SHORTBOW : ITEM.TRAINING_ARROWS;
       player.getInventory().deleteNumber(itemId, player.getInventory().getAmount(itemId));
     }
   } else if (npcId === NPC.MAGIC) {
@@ -357,7 +363,7 @@ function npcSays(player, npcId, text) {
 }
 
 function claimArrows({ player, npc, npcId }) {
-  if (!onClaimCooldown(player) && owns(player, ITEM.TRAINING_BOW) && owns(player, ITEM.TRAINING_ARROWS)) {
+  if (!onClaimCooldown(player) && owns(player, ITEM.TRAINING_SHORTBOW) && owns(player, ITEM.TRAINING_ARROWS)) {
     // ponytail: the transcript has no line for owning both; this one is unverified against live.
     npcSays(player, npcId, "You already have a training bow and training arrows. Save some for the other adventurers.");
     return true;
@@ -401,6 +407,15 @@ function handleAmmoToggleChoice({ player, npcId, option }) {
   });
 }
 
+/** "Let's discuss how my runes act when I pick them up." on the Magic combat tutor. */
+function handleRuneToggleChoice({ player, npcId, option }) {
+  if (npcId !== NPC.MAGIC) return;
+  if (option !== "Automatically send to rune pouch." && option !== "Place them in my inventory.") return;
+  pluginApi?.emitCustomEvent("settings:set", {
+    player, settingId: RUNE_PICKUP_SETTING_ID, value: option === "Automatically send to rune pouch." ? 1 : 0,
+  });
+}
+
 /** A pre-Settings tutor choice becomes the saved Setting once, unless one is already saved. */
 function migrateLegacyAmmoToggle({ player }) {
   if (player?.getAttribute?.(AUTO_EQUIP_ATTRIBUTE) !== true) return;
@@ -418,14 +433,16 @@ function autoEquipPickedUpAmmo(event) {
   const equipment = player.getEquipment();
   const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
   if (!worn || worn.getId() !== event.groundItemId) return;
-  const item = event.groundItem?.getItem?.();
-  if (!item || item.getAmount() <= 0) return;
-  core.ItemOnGroundManager.deregister(event.groundItem);
-  worn.incrementAmountBy(item.getAmount());
-  equipment.refreshItems();
-  core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
-  player.getLastItemPickup?.().reset?.();
-  event.handled = true;
+  // The worn stack's meta (preset ammo) must match, so a pickup never changes what it is.
+  takeInto(pluginApi, event, {
+    meta: worn.getMeta?.() ?? null,
+    room: () => (equipment.get(core.Equipment.AMMUNITION_SLOT) === worn ? MAX_STACK - worn.getAmount() : 0),
+    store: (amount) => {
+      worn.incrementAmountBy(amount);
+      equipment.refreshItems();
+      return amount;
+    },
+  });
 }
 
 // --- Using items on the tutors.
@@ -434,12 +451,12 @@ function handleItemOnNpc(event) {
   const npcId = event.npcId ?? event.target.getId?.();
   const giveBack = {
     [NPC.MELEE]: {
-      [ITEM.TRAINING_SWORD]: "using-items-on-melee-combat-tutor-training-sword",
+      [ITEM.TRAINING_SHORTSWORD]: "using-items-on-melee-combat-tutor-training-sword",
       [ITEM.TRAINING_SHIELD]: "using-items-on-melee-combat-tutor-training-shield",
       other: "using-items-on-melee-combat-tutor-any-other-item",
     },
     [NPC.RANGED]: {
-      [ITEM.TRAINING_BOW]: "using-items-on-ranged-combat-tutor-training-bow",
+      [ITEM.TRAINING_SHORTBOW]: "using-items-on-ranged-combat-tutor-training-bow",
       [ITEM.TRAINING_ARROWS]: "using-items-on-ranged-combat-tutor-training-arrows",
       other: "using-items-on-ranged-combat-tutor-any-other-item",
     },
@@ -451,6 +468,7 @@ function handleItemOnNpc(event) {
 
 module.exports = {
   name: "Tutors",
+  description: "Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic.",
   register(api) {
     init(api);
     api.persistAttribute(CLAIM_ATTRIBUTE);
@@ -462,6 +480,7 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
     api.onCustomEvent("npc-dialogue:line", handleLine);
     api.onCustomEvent("npc-dialogue:choice", handleAmmoToggleChoice);
+    api.onCustomEvent("npc-dialogue:choice", handleRuneToggleChoice);
     api.onGroundItemPickup(autoEquipPickedUpAmmo);
     api.onNpcInteraction("Ranged combat tutor", { Claim: claimArrows });
     api.onNpcInteraction("Magic combat tutor", { Claim: claimRunes });

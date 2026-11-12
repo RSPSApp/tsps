@@ -44,8 +44,8 @@
  *    cache: the pressure render (clientscript 2763) draws a hole at level 2 for the first
  *    two balls and level 3 for the last two, and every pipe piece's model family is in
  *    the cache next to the ids Quest Helper checks.
- *  - The tower door is not in Doors.plugin.js's door catalog ("Tower door" is not one of its
- *    names), so opening it moves the checked player through instead of swapping door models.
+ *  - The tower door (21814, open leaf 21815) is a pass-through gate in Doors.plugin.js; the outfit
+ *    and stage checks run on its door:toggle, then it lets only that player through and shuts.
  *  - The trapdoor to the dungeon opens only once the Homunculus has been freed ("The trapdoor
  *    won't budge." otherwise); its climb-down and the dungeon ladder's climb-up are routed
  *    through the Ladders plugin with explicit destinations ((3038,4376) dungeon landing).
@@ -65,6 +65,8 @@
  *    is four bits: 8 is neutral, 0 fully magical and 15 fully logical, so the mind is fixed
  *    once eight answers push it to either end.
  */
+const { createWidgetGroup, TYPE_MODEL } = require("../../interface/widgetGroup");
+
 module.exports = function registerTowerOfLifeQuest(api) {
   const {
     Equipment,
@@ -135,6 +137,11 @@ module.exports = function registerTowerOfLifeQuest(api) {
     ObjectIdentifiers.TRAPDOOR_87, // 21922
   ]);
   const TOWER_DOOR_OBJECT_ID = ObjectIdentifiers.TOWER_DOOR; // 21814
+  // tol_stairs01 (Climb-up) and tol_gapfill01 (Climb-down), by the Ladders event that moves them.
+  const TOWER_STAIRS_EVENTS = new Map([
+    [ObjectIdentifiers.STAIRS_90, "ladders:climbUp"],
+    [ObjectIdentifiers.STAIRS_91, "ladders:climbDown"],
+  ]);
   const DUNGEON_LADDER_OBJECT_ID = 17974; // Ladder, dungeon exit (also the tower z2/z3 ladder)
   const TOWER_DOOR_TILE = { x: 2649, y: 3225, z: 0 };
   const TRAPDOOR_TILE = { x: 2648, y: 3212, z: 0 };
@@ -317,6 +324,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
   // Cache puzzle interfaces (Quest Helper PuzzleSolver widget groups).
   const PRESSURE_PUZZLE_GROUP = 510;
   const PIPE_PUZZLE_GROUP = 511;
+  const PIPE_PREVIEW_GROUP = 30016;
+  const SIDE_MODAL_UID = (161 << 16) | 74;
   const CAGE_PUZZLE_GROUP = 509;
   const MIND_BAR_GROUP = 508; // TOL_HOMONCULUS_OVERLAY
   /** Gameframe HUD overlay target used by the client's overlay interfaces. */
@@ -572,29 +581,58 @@ module.exports = function registerTowerOfLifeQuest(api) {
 
   // Pipe machine ---------------------------------------------------------------------
   // The pipe pieces are the model components of the cache's pipe interface (group 511,
-  // children 9-13). Each piece owns a family of pipe-piece models in the cache; the
-  // "correct orientation" model of each family is the id Quest Helper's PuzzleSolver
-  // compares the widget model against (22547/22531/22555/22562/22539). The remaining
-  // three ids of a family are that piece's other rotations and are taken from the same
-  // cache model family, so the client renders a real pipe piece for every rotation.
-  // The starting layout follows the wiki's quick guide: every piece starts correctly
-  // oriented except the big bend, which starts one rotation off (the wiki's "the largest
-  // piece needs one rotation"). The targets are Quest Helper's solved coordinates.
+  // children 9-13). Each piece has four cache models: two orientations, each in a green
+  // (selected) and a grey (not selected) colour, e.g. the 5-piece's 22547 green / 22538 grey
+  // and 22549 green / 22544 grey (matched by identical bounding boxes and face colours). The
+  // solved orientation is Quest Helper's PuzzleSolver model (22547/22531/22555/22562/22539,
+  // all green: it only compares the piece in hand). Rotate flips between the two.
+  // The cache lays the pieces out on the right of the machine, all grey, every piece already
+  // in the solved orientation except the 5-piece (22544), the wiki's "largest piece" that
+  // "needs one rotation"; the starting layout below is that cache layout. The targets are
+  // Quest Helper's solved coordinates; a move is PIPE_STEP pixels and a piece within half a
+  // step of its target (with the right orientation) locks in place there.
+  const PIPE_STEP = 16;
+  const PIPE_SNAP = PIPE_STEP / 2;
+  const PIPE_LAYOUT_VERSION = 2;
   const PIPE_PIECES = [
-    { child: 9, startX: 47, startY: 165, targetX: 159, targetY: 69, targetRotation: 0, activeVarbit: 3343, models: [22547, 22544, 22538, 22549] },
-    { child: 10, startX: 35, startY: 160, targetX: 83, targetY: 80, targetRotation: 0, activeVarbit: 3341, models: [22531, 22526, 22528, 22533] },
-    { child: 11, startX: 48, startY: 172, targetX: 256, targetY: 60, targetRotation: 0, activeVarbit: 3344, models: [22555, 22546, 22552, 22557] },
-    { child: 12, startX: 45, startY: 171, targetX: 237, targetY: 155, targetRotation: 1, activeVarbit: 3345, models: [22554, 22562, 22560, 22564] },
-    { child: 13, startX: 46, startY: 160, targetX: 126, targetY: 64, targetRotation: 0, activeVarbit: 3342, models: [22539, 22530, 22536, 22540] },
+    { child: 9, width: 65, height: 161, startX: 410, startY: 153, startRotation: 1, targetX: 159, targetY: 69, activeVarbit: 3343, green: [22547, 22549], grey: [22538, 22544] },
+    { child: 10, width: 35, height: 89, startX: 356, startY: 30, startRotation: 0, targetX: 83, targetY: 80, activeVarbit: 3341, green: [22531, 22533], grey: [22526, 22528] },
+    { child: 11, width: 44, height: 95, startX: 323, startY: 230, startRotation: 0, targetX: 256, targetY: 60, activeVarbit: 3344, green: [22555, 22557], grey: [22546, 22552] },
+    { child: 12, width: 58, height: 63, startX: 449, startY: 62, startRotation: 0, targetX: 237, targetY: 155, activeVarbit: 3345, green: [22562, 22564], grey: [22554, 22560] },
+    { child: 13, width: 53, height: 60, zoom: 1042, startX: 327, startY: 171, startRotation: 0, targetX: 126, targetY: 64, activeVarbit: 3342, green: [22539, 22540], grey: [22530, 22536] },
   ];
   const PIPE_PIECE_BY_CHILD = new Map(PIPE_PIECES.map((piece, index) => [piece.child, index]));
 
+  function pipePreview() {
+    const { widgets, add } = createWidgetGroup(PIPE_PREVIEW_GROUP);
+    const root = add(0, -1, { rawWidth: 190, rawHeight: 261 });
+    // The solved board in the guide is scaled to the side modal's width.
+    const scale = 0.59;
+    const layout = [
+      // Board and five connectors from the cache's pipe interface.
+      [22337, 173, 156, 32, 32],
+      [22351, 84, 35, 32, 32], [22352, 146, 35, 32, 32],
+      [22351, 206, 35, 32, 32], [22352, 267, 35, 32, 32],
+      [22353, 171, 230, 32, 32],
+      // Solved models at the same positions used by the playable puzzle.
+      ...PIPE_PIECES.map(({ grey, targetX, targetY, width, height, zoom }) =>
+        [grey[0], targetX, targetY, width, height, zoom]),
+    ];
+    layout.forEach(([modelId, x, y, width, height, zoom = 1050], i) => add(i + 1, root, {
+      type: TYPE_MODEL, modelType: 1, modelId, modelZoom: Math.round(zoom / scale),
+      rawX: Math.round((x - 38) * scale) + 3, rawY: Math.round(y * scale) + 18,
+      rawWidth: Math.round(width * scale), rawHeight: Math.round(height * scale),
+    }));
+    return { groupId: PIPE_PREVIEW_GROUP, widgets };
+  }
+
   function freshPipePuzzle() {
     return {
+      layoutVersion: PIPE_LAYOUT_VERSION,
       pieces: PIPE_PIECES.map((piece) => ({
         x: piece.startX,
         y: piece.startY,
-        rotation: 0,
+        rotation: piece.startRotation,
         placed: false,
       })),
       active: null,
@@ -603,10 +641,15 @@ module.exports = function registerTowerOfLifeQuest(api) {
 
   function pipePuzzle(player, create = false) {
     let state = readPuzzle(player, PIPE_PUZZLE_ATTRIBUTE);
-    if (!state && create) {
-      state = freshPipePuzzle();
-      player.setAttribute(PIPE_PUZZLE_ATTRIBUTE, state);
-    }
+    if (!state && create) state = freshPipePuzzle();
+    else if (state && state.layoutVersion !== PIPE_LAYOUT_VERSION) {
+      // The old bend models grouped both colours before changing orientation.
+      state.pieces.forEach((piece, index) => {
+        piece.rotation = index === 3 ? piece.rotation >> 1 : piece.rotation & 1;
+      });
+      state.layoutVersion = PIPE_LAYOUT_VERSION;
+    } else return state;
+    player.setAttribute(PIPE_PUZZLE_ATTRIBUTE, state);
     return state;
   }
 
@@ -617,8 +660,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
       const target = PIPE_PIECES[index];
       // The piece varbits mark the piece that is currently in hand (Quest Helper reads
       // them to find out which piece to rotate or move); every other piece reads 0.
-      sendVarbit(player, target.activeVarbit, state.active === index && !piece.placed ? 1 : 0);
-      sender.sendInterfaceRawModel((PIPE_PUZZLE_GROUP << 16) | target.child, target.models[piece.rotation]);
+      const inHand = state.active === index && !piece.placed;
+      sendVarbit(player, target.activeVarbit, inHand ? 1 : 0);
+      sender.sendInterfaceRawModel((PIPE_PUZZLE_GROUP << 16) | target.child, (inHand ? target.green : target.grey)[piece.rotation]);
       sender.sendInterfacePosition((PIPE_PUZZLE_GROUP << 16) | target.child, piece.x, piece.y);
     });
     // The cache's only pipe rotation varbit (tol_pipe5_rot, varp 977 bits 16-17) mirrors
@@ -631,12 +675,14 @@ module.exports = function registerTowerOfLifeQuest(api) {
     const target = PIPE_PIECES[index];
     const piece = state.pieces[index];
     if (piece.placed) return false;
-    if (Math.abs(piece.x - target.targetX) > 4 || Math.abs(piece.y - target.targetY) > 4) return false;
-    if (piece.rotation !== target.targetRotation) {
+    if (Math.abs(piece.x - target.targetX) > PIPE_SNAP || Math.abs(piece.y - target.targetY) > PIPE_SNAP) return false;
+    if (piece.rotation !== 0) {
       player.sendMessage(PIECE_DOES_NOT_FIT);
       return false;
     }
     piece.placed = true;
+    piece.x = target.targetX;
+    piece.y = target.targetY;
     state.active = null;
     player.setAttribute(PIPE_PUZZLE_ATTRIBUTE, state);
     sendPipePuzzle(player, state);
@@ -646,8 +692,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
 
   function openPipePuzzle(player) {
     const state = pipePuzzle(player, true);
+    player.getPacketSender().sendInterface(PIPE_PUZZLE_GROUP)
+      .sendSubInterface(SIDE_MODAL_UID, PIPE_PREVIEW_GROUP, 3);
     sendPipePuzzle(player, state);
-    player.getPacketSender().sendInterface(PIPE_PUZZLE_GROUP);
     openPuzzle.set(player, "pipe");
   }
 
@@ -672,13 +719,11 @@ module.exports = function registerTowerOfLifeQuest(api) {
     const piece = state.pieces[state.active];
     if (piece.placed) return;
     if (child === 15) {
-      piece.rotation = (piece.rotation + 1) % 4;
-      // The cache's only pipe rotation varbit (tol_pipe5_rot, varp 977 bits 16-17).
-      sendVarbit(player, VARBIT_PIPE_ROTATION, piece.rotation);
-    } else if (child === 17) piece.x -= 16;
-    else if (child === 19) piece.x += 16;
-    else if (child === 21) piece.y -= 16;
-    else if (child === 23) piece.y += 16;
+      piece.rotation = 1 - piece.rotation;
+    } else if (child === 17) piece.x -= PIPE_STEP;
+    else if (child === 19) piece.x += PIPE_STEP;
+    else if (child === 21) piece.y -= PIPE_STEP;
+    else if (child === 23) piece.y += PIPE_STEP;
     else return;
     player.setAttribute(PIPE_PUZZLE_ATTRIBUTE, state);
     if (!tryPlacePipe(player, state, state.active)) sendPipePuzzle(player, state);
@@ -734,8 +779,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
 
   function openCagePuzzle(player) {
     const state = cagePuzzle(player, true);
-    renderCagePuzzle(player, state);
     player.getPacketSender().sendInterface(CAGE_PUZZLE_GROUP);
+    renderCagePuzzle(player, state);
     openPuzzle.set(player, "cage");
   }
 
@@ -1401,40 +1446,25 @@ module.exports = function registerTowerOfLifeQuest(api) {
     return true;
   }
 
-  /**
-   * The core walks the player onto the door tile before dispatch, so the destination is
-   * decided from the side of the wall the player ended on, not by mirroring the click
-   * offset: a player inside the wall (y <= 3224) lands outside, a player on or beyond the
-   * wall line (y >= 3225) lands inside.
-   */
-  function crossTowerDoor(player) {
-    const inside = player.getLocation().getY() <= TOWER_DOOR_TILE.y - 1;
-    player.moveTo(new Location(
-      TOWER_DOOR_TILE.x,
-      TOWER_DOOR_TILE.y + (inside ? 1 : -1),
-      TOWER_DOOR_TILE.z
-    ));
-  }
-
-  function handleTowerDoorOpen(event) {
-    if (event.objectId !== TOWER_DOOR_OBJECT_ID || !atTile(event.location, TOWER_DOOR_TILE)) return false;
-    event.handled = true;
+  /** The Doors plugin asks door:toggle first; on a pass it lets this player through and shuts. */
+  function handleTowerDoorToggle(event) {
+    if (event.handled || event.objectId !== TOWER_DOOR_OBJECT_ID || !atTile(event.location, TOWER_DOOR_TILE)) return;
     const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_ADMITTED) {
+      event.handled = true;
       player.sendMessage("Only builders are allowed in there, like. You don't look like much ov a builder to me.");
-      return true;
+      return;
     }
     if (stage < STAGE_COMPLETE && !wearingBuilderOutfit(player)) {
+      event.handled = true;
       player.sendMessage("Come back to me wearin' a hard hat, some scruffy trousers, a good top and some hard boots. Yow shud fand some around 'ere.");
-      return true;
+      return;
     }
-    crossTowerDoor(player);
     if (stage === STAGE_ADMITTED && !hasFlag(player, FLAG_ENTERED)) {
       setFlag(player, FLAG_ENTERED);
       startTranscript(api, player, EFFIGY_NPC_ID, PAGE, "unfinished-work-entering-the-tower-of-life");
     }
-    return true;
   }
 
   function handleTrapdoorOpen(event) {
@@ -1459,7 +1489,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
     return true;
   }
 
-  /** The trapdoor and the dungeon ladder are outside the generic climb-link map. */
+  /** Route the dungeon endpoints and walk the tower stairs without a ladder animation. */
   function handleClimbClaim(request) {
     const { player } = request;
     const location = request.object?.getLocation?.();
@@ -1474,6 +1504,14 @@ module.exports = function registerTowerOfLifeQuest(api) {
         player,
         object: request.object,
         destination: new Location(TRAPDOOR_TILE.x, TRAPDOOR_TILE.y, TRAPDOOR_TILE.z),
+      });
+      return;
+    }
+    const stairsEvent = TOWER_STAIRS_EVENTS.get(request.objectId);
+    if (stairsEvent) {
+      request.handled = true;
+      api.emitCustomEvent(stairsEvent, {
+        player, object: request.object, animate: false,
       });
       return;
     }
@@ -1592,8 +1630,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onObjectInteraction("Cage", { Fix: handleMachineFix });
   api.onObjectInteraction("Crate", { Search: handleCrateSearch });
   api.onObjectInteraction("Plant", { Search: handlePlantSearch });
-  api.onObjectInteraction("Tower door", { Open: handleTowerDoorOpen });
+  api.onCustomEvent("door:toggle", handleTowerDoorToggle);
   api.onObjectInteraction("Trapdoor", { Open: handleTrapdoorOpen, Close: handleTrapdoorClose });
+  api.registerCustomInterface(pipePreview());
   api.onInterfaceActionButton(PUZZLE_BUTTONS, handlePuzzleButton);
   api.onCustomEvent("interface:closed", handlePuzzleClosed);
   api.onCustomEvent("ladders:climb", handleClimbClaim);

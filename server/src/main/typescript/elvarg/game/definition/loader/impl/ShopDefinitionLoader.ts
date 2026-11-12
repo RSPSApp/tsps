@@ -18,6 +18,10 @@ interface RawShopStockDefinition {
 }
 
 interface RawShopDefinition {
+    generalStore?: unknown;
+    sellsAt?: unknown;
+    buysAt?: unknown;
+    changePer?: unknown;
     id?: unknown;
     name?: unknown;
     currency?: unknown;
@@ -196,8 +200,19 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             defaultRestockTicks,
             defaultDestockTicks,
             soldItemDestockTicks,
-            source
+            source,
+            {
+                generalStore: typeof raw.generalStore === "boolean" ? raw.generalStore : undefined,
+                sellsAt: this.perMille(raw.sellsAt),
+                buysAt: this.perMille(raw.buysAt),
+                changePer: this.perMille(raw.changePer),
+            }
         );
+    }
+
+    /** A StoreTableHead rate (per mille of the item's value), or undefined when the shop has none. */
+    private perMille(value: unknown): number | undefined {
+        return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : undefined;
     }
 
     private normalizeAmount(value: unknown): number {

@@ -10,9 +10,11 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Gamevals } = require("../dist/game/cache/Gamevals");
 const SkillGuide = require("../plugins/interface/SkillGuide.plugin");
 
-const { GUIDE_SKILL_BY_STAT, SKILL_GUIDE_V2_INIT } = SkillGuide._test;
+const { GUIDE_SKILL_BY_STAT, SKILL_GUIDE_V2_INIT, SKILL_GUIDE_CONTENT_INIT } = SkillGuide._test;
 const FLOATER_UID = (161 << 16) | 18;
 const GUIDE = 860;
+const OLD_GUIDE = 214;
+const NEW_STYLE_VARBIT = 15321;
 
 let clickHandler;
 let claim = () => {};
@@ -31,9 +33,14 @@ before(async () => {
   interfaces = new Gamevals().allInterfaces();
 });
 
-function player() {
+/** A player whose sent packets are recorded; the new-style guide row is on unless `newStyle` is 0. */
+function player(newStyle = 1) {
   const sent = [];
-  const sender = new Proxy({}, { get: (_, method) => (...args) => sent.push([method, ...args]) });
+  const sender = new Proxy({}, {
+    get: (_, method) => method === "getVarbit"
+      ? (id) => (id === NEW_STYLE_VARBIT ? newStyle : 0)
+      : (...args) => sent.push([method, ...args]),
+  });
   return { sent, getPacketSender: () => sender };
 }
 
@@ -78,6 +85,26 @@ test("View guide opens skill_guide_v2 in the floater with the skill's number, as
       ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [skill, 0, 0, 0]],
     ]);
   }
+});
+
+test("with the new-style guide row off, View guide opens the old skill_guide with the same skill number, as captured", () => {
+  const old = interfaces.get(OLD_GUIDE);
+  assert.equal(old.name, "skill_guide");
+  assert.deepEqual([30, 32].map((child) => old.components.get(child)), ["close", "icons"]);
+  const account = player(0);
+  // Captured: Farming 21, Magic 4, Construction 22.
+  for (const [child, skill] of [[23, 21], [6, 4], [8, 22]]) {
+    account.sent.length = 0;
+    assert.equal(click(account, 320, child).handled, true);
+    assert.deepEqual(account.sent, [
+      ["sendSubInterface", FLOATER_UID, OLD_GUIDE, 1],
+      ["sendInterfaceScript", SKILL_GUIDE_CONTENT_INIT, [skill, 0, 0, 0]],
+      ["sendInterfaceFlagsRange", (OLD_GUIDE << 16) | 32, -1, -1, 0],
+    ]);
+  }
+  account.sent.length = 0;
+  assert.equal(click(account, OLD_GUIDE, 30, { action: 1 }).handled, true);
+  assert.deepEqual(account.sent, [["closeInterface", OLD_GUIDE]]);
 });
 
 test("a click another plugin claims (the PvP level prompt) opens no guide; other options are left alone", (t) => {

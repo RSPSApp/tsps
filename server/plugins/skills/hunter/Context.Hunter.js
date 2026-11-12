@@ -60,30 +60,70 @@ function rewardItems(loot) {
 // Preflight the complete exchange, including stacks and slots freed by inputs.
 // ItemContainer.addItems itself can partially add; Hunter must never consume a
 // trap/jar/clockwork and then lose the reward because a later item does not fit.
-function exchange(player, remove, add, commit = true) {
+/** The inventory slots the exchange leaves used, or null when it can't happen (a missing input, a bad item). */
+function slotsAfter(player, remove, add) {
   const inv = player.getInventory();
   const counts = new Map();
   for (const item of inv.getItems()) {
     if (item && item.getId() > 0 && item.getAmount() > 0) counts.set(item.getId(), (counts.get(item.getId()) ?? 0) + item.getAmount());
   }
   for (const [id, amount] of remove) {
-    if (!Number.isInteger(id) || !Number.isInteger(amount) || amount <= 0 || (counts.get(id) ?? 0) < amount) return false;
+    if (!Number.isInteger(id) || !Number.isInteger(amount) || amount <= 0 || (counts.get(id) ?? 0) < amount) return null;
     counts.set(id, counts.get(id) - amount);
   }
   for (const [id, amount] of add) {
-    if (!Number.isInteger(id) || !Number.isInteger(amount) || id <= 0 || amount <= 0) return false;
+    if (!Number.isInteger(id) || !Number.isInteger(amount) || id <= 0 || amount <= 0) return null;
     const total = (counts.get(id) ?? 0) + amount;
-    if (total > 2147483647) return false;
+    if (total > 2147483647) return null;
     counts.set(id, total);
   }
   let slots = 0;
   for (const [id, amount] of counts) {
     if (amount > 0) slots += H.core.ItemDefinition.forId(id).isStackable() ? 1 : amount;
   }
-  if (slots > inv.capacity()) return false;
+  return slots;
+}
+
+function exchange(player, remove, add, commit = true) {
+  const slots = slotsAfter(player, remove, add);
+  if (slots === null || slots > player.getInventory().capacity()) return false;
   if (commit) {
+    const inv = player.getInventory();
     for (const [id, amount] of remove) inv.deleteNumber(id, amount);
     for (const [id, amount] of add) inv.adds(id, amount);
+  }
+  return true;
+}
+
+/**
+ * rsprox captures (pyre-fur-and-smallpouch-3/-4, rev 242): a deadfall catch on a full inventory says
+ * "You don't have enough inventory space. You need 3 more free slots." for its bones, fur and meat,
+ * also with an open meat pouch that had room. The rsprox.net archive has it on bird snares and net
+ * traps too, singular for one ("You need 1 more free slot.", rev 237 recordings 01102, 01108, 01115),
+ * N being what the inventory is short of.
+ */
+function catchRefusal(player, remove, add) {
+  const short = (slotsAfter(player, remove, add) ?? 0) - player.getInventory().capacity();
+  if (short <= 0) { player.getInventory().full(); return; }
+  player.sendMessage(`You don't have enough inventory space. You need ${short} more free slot${short === 1 ? "" : "s"}.`);
+}
+
+/**
+ * `exchange` for a catch's loot. As live (rsprox captures pyre-fur-and-smallpouch-1/-4): the catch
+ * needs inventory room for all of it, meat and fur included, whatever an open pouch holds; once it
+ * fits, an open meat or fur pouch takes what it has room for (`storage:gather`, skill Hunter) and
+ * the rest goes to the inventory.
+ */
+function catchExchange(player, remove, add, commit = true) {
+  if (!exchange(player, remove, add, false)) return false;
+  if (!commit) return true;
+  const inv = player.getInventory();
+  for (const [id, amount] of remove) inv.deleteNumber(id, amount);
+  for (const [id, amount] of add) {
+    const request = { player, itemId: id, amount, stored: 0, skill: H.core.Skill.HUNTER };
+    H.api.emitCustomEvent("storage:gather", request);
+    const left = amount - request.stored;
+    if (left > 0) inv.adds(id, left);
   }
   return true;
 }
@@ -123,11 +163,22 @@ function outfit(player) {
     .every(id => player.getEquipment().getItems().some(item => item?.getId() === id));
 }
 
+/**
+ * Wiki (Guild hunter outfit): each worn piece raises the catch rate, headwear 0.2%, top 0.8%, legs 0.6%, boots 0.4%,
+ * and the whole set worn another 0.5% (2.5% in all).
+ */
+function outfitCatchBonus(player) {
+  const I = H.core.ItemIdentifiers;
+  const worn = (id) => player.getEquipment().getItems().some(item => item?.getId() === id);
+  const pieces = [[I.GUILD_HUNTER_HEADWEAR, 0.002], [I.GUILD_HUNTER_TOP, 0.008], [I.GUILD_HUNTER_LEGS, 0.006], [I.GUILD_HUNTER_BOOTS, 0.004]];
+  return pieces.reduce((sum, [id, bonus]) => sum + (worn(id) ? bonus : 0), 0) + (outfit(player) ? 0.005 : 0);
+}
+
 /** The catch roll, as content may raise it ("hunter:catch-chance", a league relic that never fails). */
 function chance(player, creature, bonus = 0, required = creature.level) {
   const l = level(player);
   if (l < required) return false;
-  const request = { player, npcId: creature.npc, chance: Math.min(1, probability(creature.low, creature.high, l) + bonus + (outfit(player) ? 0.025 : 0)) };
+  const request = { player, npcId: creature.npc, chance: Math.min(1, probability(creature.low, creature.high, l) + bonus + outfitCatchBonus(player)) };
   H.api.emitCustomEvent("hunter:catch-chance", request);
   return Math.random() < request.chance;
 }
@@ -150,11 +201,16 @@ function cancel(player) {
   player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
 }
 
-function begin(player, ticks, animation, finish, onCancel) {
+/**
+ * A timed Hunter action. It resets the player's animation when it finishes, unless `reset` is false:
+ * live leaves the deadfall's setting-up, dismantling and baiting animation to play out (rsprox
+ * captures pyre-fur-and-smallpouch-1, rev 242; rsprox.net 1105, 1108, 1757: no reset after 5212).
+ */
+function begin(player, ticks, animation, finish, onCancel, { reset = true } = {}) {
   if (!active(player) || player.busy() || H.actions.has(player)) return false;
   player.getSkillManager().stopSkillable();
   H.players.add(player);
-  H.actions.set(player, { due: H.tick + ticks, location: player.getLocation().clone(), area: player.getPrivateArea(), finish, cancel: onCancel });
+  H.actions.set(player, { due: H.tick + ticks, location: player.getLocation().clone(), area: player.getPrivateArea(), finish, cancel: onCancel, reset });
   if (animation != null) player.performAnimation(new H.core.Animation(animation));
   return true;
 }
@@ -166,7 +222,7 @@ function processActions() {
       cancel(player);
     } else if (H.tick >= action.due) {
       H.actions.delete(player);
-      player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
+      if (action.reset !== false) player.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION);
       action.finish();
     }
   }
@@ -232,4 +288,4 @@ function questStage(player, key) {
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  footprintDistance, exchange, drop, xp, probability, outfit, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };
+  footprintDistance, exchange, catchExchange, catchRefusal, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

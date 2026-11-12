@@ -28,7 +28,7 @@ import net.rsprox.cache.api.CacheProvider
 import net.rsprox.protocol.game.outgoing.model.specific.NpcHeadIconSpecific as DecodedIcon
 import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
-import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -65,7 +65,7 @@ class NpcHeadIconSpecificTest {
             val wire = buffer.toJagByteBuf()
             encoder.encode(NopStreamCipher, wire, icon)
             assertEquals(9, buffer.readableBytes())
-            val decoder = ServerPacketDecoderServiceV241(
+            val decoder = ServerPacketDecoderServiceV242(
                 HuffmanCodec.create(Unpooled.wrappedBuffer(ByteArray(256) { 8 })),
                 CacheProvider { HeadlessClient.NoCache },
             )

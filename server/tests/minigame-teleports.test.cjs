@@ -178,7 +178,7 @@ function attachPlugins(prompts, quests = [], zones = [], customHooks = [], inter
     onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
     emitCustomEvent: (name, request) => {
       if (name === 'quest:is-complete') {
-        const quest = quests.find((entry) => entry.key === request.key);
+        const quest = quests.find((entry) => (request.key !== undefined ? entry.key === request.key : entry.name === request.name));
         if (quest) request.complete = quest.isComplete(request.player);
         return;
       }
@@ -233,7 +233,7 @@ test("Sorceress Garden Minigame Teleport also requires Osman's unlock", async (t
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   let questComplete = true;
   const customHooks = [];
-  const api = attachPlugins([], [{ key: 'prince_ali_rescue', isComplete: () => questComplete }], [], customHooks);
+  const api = attachPlugins([], [{ key: 'prince_ali_rescue', name: 'Prince Ali Rescue', isComplete: () => questComplete }], [], customHooks);
   require('../plugins/minigames/sorceressgarden/Apprentice.SorceresssGarden')(api);
   const garden = require('../plugins/interface/data/minigame-teleports.json').minigames["Sorceress's Garden"];
   const { refusal } = MinigameTeleports._test;
@@ -308,7 +308,7 @@ test('the spell opens the minigame list with busy set; Rat Pits asks which pit',
     stubWorld(t)(() => {});
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
     const prompts = [];
-    attachPlugins(prompts, [{ key: 'ratcatchers', isComplete: () => true }]);
+    attachPlugins(prompts, [{ name: 'Ratcatchers', isComplete: () => true }]);
     const { player, ticks } = recordingPlayer();
     const spell = CacheDefinitions.getSpellByName('Minigame Teleport');
     MinigameTeleports._test.castMinigameTeleport({ player, buttonId: spell.widgetId, itemId: spell.itemId, handled: false });
@@ -381,7 +381,7 @@ test('native Grouping selections use the existing teleport, cooldown and refusal
     assert.equal(busy.player.getInterfaceId(), 12, 'the grouping click cannot close a busy interface to bypass its gate');
     const blocked = who(); blocked.player.setLocation(new Location(3200, 3600, 0));
     blocked.player.getCombat().getTeleblockTimer().start(300); await click(blocked, slotFor('Castle Wars'));
-    assert.match(blocked.messages.at(-1), /blocking you from teleporting/);
+    assert.match(blocked.messages.at(-1), /A teleport block has been cast on you\. It should wear off in/);
     assert.deepEqual(position(blocked), [3200, 3600, 0]);
     const vetoed = who();
     const { Area } = require('../dist/game/model/areas/Area');
@@ -448,8 +448,8 @@ test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instan
     const lobby = soulWarsData.lobby;
     const soulWars = destinations['Soul Wars'];
     assert.ok(soulWars, 'the Soul Wars teleport exists');
-    assert.deepEqual([soulWars.x, soulWars.y], [lobby.arrive[0], lobby.arrive[1]],
-        'the destination is the Soul Wars portal arrival the plugin itself uses');
+    // Wiki, Minigame Teleport: the Soul Wars row's map is 2210,2857 (the portal arrival, 2206,2858, is not it).
+    assert.deepEqual([soulWars.x, soulWars.y], [2210, 2857], "the Wiki's Soul Wars teleport tile");
     const [x0, y0, x1, y1] = lobby.bounds;
     assert.ok(soulWars.x >= x0 && soulWars.x <= x1 && soulWars.y >= y0 && soulWars.y <= y1,
         'the destination is inside the registered Soul Wars lobby Area');
@@ -460,4 +460,68 @@ test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instan
     const inTemplate = soulWars.x >= templateChunkX * 8 && soulWars.x < (templateChunkX + templateChunksX) * 8
         && soulWars.y >= templateChunkY * 8 && soulWars.y < (templateChunkY + templateChunksY) * 8;
     assert.ok(!inTemplate, 'never the tutorial instance template');
+});
+
+// Wiki, Minigame Teleport: Barbarian Assault's map is 2531,3577 and Trouble Brewing's 3816,3024. The recorded
+// arrivals (aide_player_teleporting) land within a tile of them: 2530-2532,3576-3577 (rsprox 224/01434,
+// 230/00346) and 3816-3817,3023-3024 (226/01638, 227/00075). The old BA tile, 2521,3570, sat beside the games
+// necklace's Barbarian Outpost landing (224/01533).
+test("Barbarian Assault and Trouble Brewing land on the Wiki's tiles, walkable, at their minigames", async () => {
+    const destinations = require('../plugins/interface/data/minigame-teleports.json').minigames;
+    const ba = destinations['Barbarian Assault'];
+    const tb = destinations['Trouble Brewing'];
+    assert.deepEqual([ba.x, ba.y], [2531, 3577], "the Wiki's Barbarian Assault teleport tile");
+    assert.deepEqual([tb.x, tb.y], [3816, 3024], "the Wiki's Trouble Brewing teleport tile");
+    const { LOBBY_BOUNDS } = require('../plugins/minigames/barbarianassault/Data.BarbarianAssault');
+    assert.ok(ba.x >= LOBBY_BOUNDS.minX && ba.x <= LOBBY_BOUNDS.maxX && ba.y >= LOBBY_BOUNDS.minY && ba.y <= LOBBY_BOUNDS.maxY,
+        'inside the Barbarian Assault lobby bounds');
+    const { ARENA } = require('../plugins/minigames/troublebrewing/Common.TroubleBrewing');
+    assert.ok(!(tb.x >= ARENA.minX && tb.x <= ARENA.maxX && tb.y >= ARENA.minY && tb.y <= ARENA.maxY),
+        "at the Trouble Brewing entrance on Mos Le'Harmless, not inside a game");
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    const { RegionManager } = require('../dist/game/collision/RegionManager');
+    RegionManager.init();
+    for (const [name, tile] of [['Barbarian Assault', ba], ['Trouble Brewing', tb]]) {
+        RegionManager.loadMapFiles(tile.x, tile.y, true);
+        assert.equal(RegionManager.blocked(new Location(tile.x, tile.y, 0), null), false, `${name}'s landing is walkable`);
+    }
+});
+
+test('every quest gate reads the real quest runtime: completing Shades of Mort\'ton unlocks its teleport (#4294)', async (t) => {
+  stubWorld(t)(() => {});
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const custom = {};
+  const api = new Proxy({
+    core: PluginManager.getCoreApi(),
+    getTaskManager: () => TaskManager,
+    persistAttribute: (key, value) => PlayerSave.persistAttribute(key, value),
+    getPluginConfig: (key, fallback) => fallback,
+    onCustomEvent: (name, handler) => { (custom[name] ??= []).push(handler); },
+    emitCustomEvent: (name, payload) => { for (const handler of custom[name] ?? []) handler(payload); },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require('../plugins/quests/Quests.plugin').register(api);
+  MinigameTeleports.register(api);
+  const QuestRuntime = require('../plugins/quests/QuestRuntime');
+  const { refusal } = MinigameTeleports._test;
+  const data = require('../plugins/interface/data/minigame-teleports.json').minigames;
+
+  const player = new Player(null);
+  player.setUsername('minigames');
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(player, 'isRegistered', () => true);
+  for (const [label, minigame] of Object.entries(data)) {
+    for (const questName of minigame.quests ?? []) {
+      const quest = QuestRuntime.questNamed(questName);
+      assert.ok(quest, `${label}: "${questName}" names a registered quest`);
+      const gate = { quests: [questName] };
+      assert.equal(refusal(player, gate), `You need to complete ${questName} to go there.`, `${label} before the quest`);
+      quest.setStage(player, quest.completionValue ?? 2);
+      assert.equal(quest.isComplete(player), true, `${questName} completes`);
+      assert.equal(refusal(player, gate), null, `${label} after ${questName}`);
+    }
+  }
+  assert.equal(refusal(player, data["Shades of Mort'ton"]), null, "the Shades of Mort'ton teleport is unlocked");
 });

@@ -48,11 +48,7 @@ const QUEST_POINTS_VARP = 101;
 const LUMBRIDGE_ELITE_VARBIT = 4538;
 
 /** Unlocks whose confirm, once bought, turns a toggle instead of locking them (script 414). */
-const TOGGLES = new Map([
-  [35, "slayer_toggleoff_superiormobs"],
-  [43, "slayer_toggleoff_fossilwyvernblock"],
-  [53, "slayer_toggleoff_longerrevenants"],
-]);
+const TOGGLES = Tasks.TOGGLES;
 
 /** Buy tab enums: items, amounts per purchase, prices. */
 const BUY_ITEMS_ENUM = 840;
@@ -210,6 +206,13 @@ function block(player) {
 }
 
 function blockNow(player, master, task) {
+  // The confirm's Yes can come after the task changed (finished, cancelled, a new one): block only the one still held.
+  const held = Tasks.current(player);
+  if (!held || held.taskId !== task.taskId) return;
+  if (BLOCK_SLOTS.some((candidate) => hasVarbit(blockVarbit(master, candidate)) && State.varbit(player, blockVarbit(master, candidate)) === task.taskId)) {
+    player.sendMessage("You have already blocked this task with this master.");
+    return;
+  }
   const slot = BLOCK_SLOTS.find((candidate) => hasVarbit(blockVarbit(master, candidate))
     && slotOpen(player, candidate) && State.varbit(player, blockVarbit(master, candidate)) === 0);
   if (!slot) {
@@ -243,6 +246,17 @@ function confirm(player, text, onYes) {
 }
 
 // --- Clicks
+
+/**
+ * The rewards' buttons answer only while the rewards are open (a master's Rewards option): a click on them with the
+ * interface closed bought, unlocked, cancelled and blocked tasks anywhere, with no master there.
+ */
+function whileOpen(handler) {
+  return function openRewardsOnly(event) {
+    if (event?.player?.getInterfaceId?.() !== REWARDS) return true;
+    return handler(event);
+  };
+}
 
 function confirmClick({ player, slot }) {
   if (!Number.isInteger(slot)) return true;
@@ -290,9 +304,9 @@ function buy({ player, slot, opId, action }) {
 function attach(pluginApi) {
   pluginApi.onCustomEvent("slayer:open-rewards", open);
   pluginApi.onCustomEvent("slayer:cancel-task", cancelEvent);
-  pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, confirmClick);
-  pluginApi.onInterfaceActionButton(VIEW_TASKS, viewTasks);
-  pluginApi.onInterfaceActionButton(BUY_ITEMS, buy);
+  pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, whileOpen(confirmClick));
+  pluginApi.onInterfaceActionButton(VIEW_TASKS, whileOpen(viewTasks));
+  pluginApi.onInterfaceActionButton(BUY_ITEMS, whileOpen(buy));
 }
 
 module.exports = {

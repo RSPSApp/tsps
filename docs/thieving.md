@@ -122,7 +122,17 @@ Every line below is a spam message (rsprox captures 335, 338, 339, 691, 2601, 30
 - **Rogue equipment:** 15% double loot per piece; the full set of 5 always doubles. A doubled coin pouch gives one pouch plus that pouch's coins (the lowest of a range). Clue scrolls are never doubled.
 - **Shadow Veil:** a 15% chance to avoid the stun, rolled first.
 - **Dodgy necklace:** a 25% chance to avoid the stun and damage. It has 10 charges, stored on the player; the last one crumbles it.
-- **Coin pouches:** Open-all says "You open all of the pouches and receive a total of N coins." as a spam message with synth 2115, even for a single pouch (2601, 3059 and others). Open (one pouch) isn't captured and keeps "You open the pouch and find N coins.". A stack of 28 of one kind blocks pickpocketing until the pouches are opened. With a full inventory, a coins-only target can still be pickpocketed while its pouch stack has room.
+- **Coin pouches:** Open-all says "You open all of the pouches and receive a total of N coins." as a spam message with synth 2115, even for a single pouch (2601, 3059 and others). Open (one pouch) isn't captured and keeps "You open the pouch and find N coins.". A stack of 28 of one kind blocks pickpocketing until the pouches are opened; the Ardougne Diary raises that to 56 (Medium), 84 (Hard) and 140 (Elite), see [diary-rewards.md](diary-rewards.md#ardougne-pickpocketing). With a full inventory, a coins-only target can still be pickpocketed while its pouch stack has room.
+
+## Digsite workman success timing
+
+Rsprox recording **3228**, decoded against revision **232**, shows the workman attempt at tick **1988** and its successful outcome at **1991**, three tick intervals later. Success animation 881 and the specimen-brush line accompany the outcome. The decoder emitted ByteBuf leak diagnostics. This observation covers a successful attempt; it does not establish failure timing, the minimum repeat cadence or relic-specific repeats.
+
+Successful workman rewards now resolve on the third task tick. Other targets retain their ordinary outcome delay. A delayed completion only clears or repeats the interaction it owns, so an older workman task cannot clear a newer accepted interaction. The existing click cooldown and failure timing are unchanged.
+
+At revision `679a09dac94fc863c620be90657e479e0424c730` with cache `osrs-242_2026-11-03`, the native build/cache run passed **35/35** `thieving-pickpocket.test.cjs` tests and **1/1** `thieving-workman-timing-native.test.cjs` test. From a built server with that cache installed, run `node --test --test-concurrency=1 tests/thieving-pickpocket.test.cjs` and `node --test --test-concurrency=1 tests/thieving-workman-timing-native.test.cjs`. The native fixture uses registered NPC handlers, seeded adjacent actors, deterministic randomness and manual task ticks. It checks no reward on ticks one/two, one reward and 10.4 XP on tick three, no duplicate reward, level refusal and the next ordinary Man pickpocket. It does not test natural walking, a rendered client, workman message-versus-inventory order, failure timing or relic repeat cadence. Overlapping-interaction and unavailable-actor controls are mocked unit tests.
+
+The earlier cache-241 comparison used the same native fixture: baseline `42bdbf131bb5f5321cfed8a5414cfbd2e1c3ba17` failed at the first-tick no-XP assertion; later assertions were unreached. Fixed `22f0c8a3e67ed5a6b21255948fea4f13cae684d5` passed the then-current 30 unit tests and one native test. That comparison is causal timing evidence on cache 241; the later 679a run establishes the scoped cache-242 integration result.
 
 ## Requirements
 
@@ -155,7 +165,6 @@ Sources: [Blackjack](https://oldschool.runescape.wiki/w/Blackjack?action=raw), [
 - **Wealthy citizen:** the street urchin distraction, which lets them be pickpocketed repeatedly with one click.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
-- **The Digsite workman** being twice as slow to pickpocket as other NPCs.
 - **The H.A.M. camp's failures:** "You feel slightly concussed from the blow.", "Your agility helps you partially avoid the blow." and "You're beaten unconscious and bundled out of the HAM Camp." (1723, Leagues V, and the Wiki). A failure here is the ordinary stun.
 - **The in-game loot tracker:** OSRS adds each pickpocket's loot to it (client script 7192, `loottracker_lootadd`).
 

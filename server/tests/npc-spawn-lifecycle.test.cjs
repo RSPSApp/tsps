@@ -37,6 +37,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   RegionManager.init();
   new NpcDefinitionLoader().load();
+  require("../plugins/quests/quests/AnimalMagnetism.Quest")(PluginManager.createApi("Undead tree collision regression"));
 });
 
 /** The world's own add/remove queue pass, without the rest of its tick. */
@@ -501,5 +502,74 @@ test("requeue hands a live spawn back to its pending list once, and never a dead
     assert.equal(live(MAN).length, 1, "only its own respawn comes back");
   } finally {
     NpcSpawnDefinition.replace([]);
+  }
+});
+
+
+// The cache's nasty_tree (4418) has a one-tile Tree/Undead tree footprint.
+// The nearby tree at 3108,3346 also has map clipping; 3111,3348 does not,
+// so use the latter to exercise actor collision rather than an incidental loc.
+test("undead trunks block player steps after deferred creation and spawn reload", () => {
+  const row = { id: 4418, x: 3111, y: 3348, wanderRadius: 0 };
+  const tile = new Location(row.x, row.y, 0);
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null, tile.transform(-1, 0));
+  const movement = player.getMovementQueue();
+  assert.equal(CacheDefinitions.getNpc(row.id).size, 1);
+  assert.equal(movement.isDynamicallyOccupied(tile), false);
+
+  spawnFile([row], false);
+  assert.equal(live(row.id).length, 0, "the tree is deferred, not covered by a startup scan");
+  NpcSpawnDefinitionLoader.activateNear(tile);
+  flushNpcQueues();
+  const first = live(row.id)[0];
+  assert.ok(first.hasFlag(NPC.BLOCKS_PLAYERS_FLAG));
+  assert.equal(movement.isDynamicallyOccupied(tile), true, "the normal movement consumer blocks the trunk");
+  assert.equal(movement.isDynamicallyOccupied(tile.transform(-1, 0)), false, "adjacent tiles stay open");
+
+  spawnFile([row]);
+  flushNpcQueues();
+  const replacement = live(row.id)[0];
+  assert.notEqual(first, replacement);
+  assert.ok(replacement.hasFlag(NPC.BLOCKS_PLAYERS_FLAG), "the replacement receives the same collision");
+  assert.equal(movement.isDynamicallyOccupied(tile), true);
+
+  World.getNpcs().remove(replacement);
+  assert.equal(movement.isDynamicallyOccupied(tile), false, "removal clears actor collision");
+
+  const man = new NPC(MAN, tile);
+  World.getNpcs().add(man);
+  assert.equal(man.hasFlag(NPC.BLOCKS_PLAYERS_FLAG), false, "ordinary NPCs remain walk-through");
+  assert.equal(movement.isDynamicallyOccupied(tile), false);
+});
+
+test("a player who has not moved since logging in does not block NPCs until their first move", () => {
+  // Live (chickens walking through a freshly logged-in player who has not moved) and LostCity:
+  // PLAYER_OCC is only set once the player takes a step or teleports. Only NPC movement reads it:
+  // other occupancy checks (an Agility Pyramid block, arena placement) still see the player.
+  spawnFile([], false);
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const origin = new Location(3236, 3231, 0);
+  const next = new Location(3237, 3231, 0);
+  const player = {
+    getLocation: () => origin,
+    getNpcViewDistance: () => 15,
+    getPrivateArea: () => null,
+    occupiesTile: true,
+    deferTileOccupancy: Player.prototype.deferTileOccupancy,
+    claimTileOccupancy: Player.prototype.claimTileOccupancy,
+    isOccupyingTile: Player.prototype.isOccupyingTile,
+  };
+  player.deferTileOccupancy();
+  World.registerPlayerPosition(player);
+  try {
+    assert.equal(World.isPlayerOccupyingTile(origin, null, 1, undefined, true), false, "NPCs walk through straight after login");
+    assert.equal(World.isPlayerOccupyingTile(origin), true, "still standing there for everything else");
+    World.onPlayerMoved(player, origin, next);
+    assert.equal(World.isPlayerOccupyingTile(next, null, 1, undefined, true), true, "the first step claims the tile");
+    assert.equal(World.isPlayerOccupyingTile(origin), false);
+  } finally {
+    World.unregisterPlayerPosition(player, next);
+    World.unregisterPlayerPosition(player, origin);
   }
 });

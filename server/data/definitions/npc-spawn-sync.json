@@ -4,9 +4,15 @@
     "2353": {"label": "Sailing sea creature", "skip": false, "why": "Sea encounters for Sailing (sharks, rays, krakens, seabirds) in open water; reachable only by boat."}
   },
   "ids": {
+    "5369": {"label": "Spawned by a plugin", "skip": true, "why": "Observatory Quest's goblin guard exists only once the sleeping guard (5368) is prodded: live deletes the sleeper and adds the goblin guard in his place (RSProx 20261110T110141-5ab63b4 tick 808); ObservatoryQuest.Quest.js spawns him. The Wiki maps him on the sleeper's tile."},
+    "16817": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
+    "16818": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
+    "16819": {"label": "Spawned by a plugin", "skip": true, "why": "Crab Quest's flotsam exists only in the quest's dream instance (Dream.CrabQuest.js); the live capture (RSProx 20261103T014803-ee79c12) shows none on the real Dognose Island beach. The Wiki maps the instance's spots."},
+    "2592": {"label": "Spawned by a plugin", "skip": true, "why": "Mogres come only from a fishing explosive thrown at an Ominous Fishing Spot (Mogre.plugin.js, docs/mogre.md); there are no standing ones."},
     "6609": {"label": "Wilderness boss", "skip": true, "why": "Callisto spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6610": {"label": "Wilderness boss", "skip": true, "why": "Venenatis spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "6611": {"label": "Wilderness boss", "skip": true, "why": "Vet'ion spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
+    "11467": {"label": "Spawned by a plugin", "skip": true, "why": "Kovac disguised as a Hill Giant on the Giants' Plateau: SleepingGiants.Quest.js spawns him per player while the quest is unstarted, then the intro takes him into the foundry with the player (issue 4270)."},
     "11992": {"label": "Wilderness boss", "skip": true, "why": "Artio spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "11993": {"label": "Wilderness boss", "skip": true, "why": "Calvar'ion spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},
     "11998": {"label": "Wilderness boss", "skip": true, "why": "Spindel spawns in its lair (docs/wilderness-bosses.md); the Wiki pins it on the surface entrance."},

@@ -93,6 +93,7 @@ function pet(core, { player, npc }) {
 
 module.exports = {
   name: "Caique",
+  description: "Lets players pet the sitting caiques of Kastori and the Tlati Rainforest, which peck back for 1 damage with the captured animations.",
   members: true,
   _test: { pet, PECKED, OUCH },
   register(api) {

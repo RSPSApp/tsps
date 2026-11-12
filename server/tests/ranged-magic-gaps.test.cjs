@@ -271,7 +271,7 @@ test("sceptre effects preserve later quest vetoes, misses, non-ancient effects a
   assert.equal(healed, 1);
 });
 
-test("ancient sceptre's Shadow supplement drains NPC Attack once after the base effect", (t) => {
+test("the sceptre-scaled Shadow drain of an NPC's Attack happens once, in the base effect", (t) => {
   sceptreEffects(t);
   let level = 100, baseCalls = 0;
   const target = { isPlayer: () => false, getAsNpc: () => target, getMaxLevel: () => 100,
@@ -286,6 +286,18 @@ test("ancient sceptre's Shadow supplement drains NPC Attack once after the base 
   spell.onHitCalc(hit);
   assert.equal(level, 84, "shadow drain does not stack");
   assert.equal(baseCalls, 2, "base callback is never suppressed");
+});
+
+// Wiki (Shadow spells): every target loses 10% (rush, burst) or 15% (blitz, barrage) Attack; no sceptre needed.
+test("Shadow spells drain an NPC's Attack with an ordinary Ancient staff", (t) => {
+  sceptreEffects(t);
+  for (const [tier, expected] of [["RUSH", 90], ["BURST", 90], ["BLITZ", 85], ["BARRAGE", 85]]) {
+    let level = 100;
+    const target = { isPlayer: () => false, getAsNpc: () => target, getMaxLevel: () => 100,
+      getCurrentLevel: () => level, setCurrentLevels: (_skill, value) => { level = value; } };
+    core.CombatSpells[`SHADOW_${tier}`].onHitCalc(ancientHit(playerWith(I.ANCIENT_STAFF), target));
+    assert.equal(level, expected, tier);
+  }
 });
 
 test("sceptre ice durations use whole real timer ticks and retain freeze immunity", (t) => {

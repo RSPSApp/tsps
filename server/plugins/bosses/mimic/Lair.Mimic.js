@@ -131,8 +131,10 @@ function enterArena(player) {
     player.sendMessage(casket.defeated ? "You have already defeated the Mimic in this casket. Open it outside the arena." : "This Mimic has no attempts remaining.");
     return false;
   }
+  // One private arena per fight, entered directly and never registered: registered arenas were never unregistered,
+  // so from the second fight the first, destroyed one won AreaManager's lookup for the same tiles and ended the
+  // new fight on its first tick. A private area keeps processing for the actors it holds (as Sarachnis' lair).
   const area = new (areaClass())(player);
-  pluginApi.registerArea(area);
   area.enter(player);
   const [x, y, z] = Shared.ENTRANCE_TILE;
   player.moveTo(new Location(x, y, z));

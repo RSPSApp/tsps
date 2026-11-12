@@ -21,11 +21,15 @@ function emitCustomEvent(name, payload) {
   for (const listener of listeners.get(name) ?? []) listener(payload);
 }
 
+/** The specials' onCombatHitDamage hooks: PendingHit calls them with the roll before it caps it to the target's HP. */
+const hitDamageHooks = [];
+
 function load(file, overrides) {
   require(`../plugins/combat/specials/${file}.SpecialAttack`)({
     core: overrides ? { ...core, ...overrides } : core,
     registerCombatSpecial: CombatSpecial.register,
     emitCustomEvent,
+    onCombatHitDamage: (handler) => hitDamageHooks.push(handler),
   });
 }
 
@@ -441,10 +445,11 @@ test("Warstrike drains Defence, Strength, Prayer, Attack, Magic then Ranged by t
   });
   bandos.handleAfterHitEffects(hit(target, 100));
   const levels = target.skillManager;
-  assert.equal(levels.level("DEFENCE"), 1, "stats floor at 1");
-  assert.equal(levels.level("STRENGTH"), 1);
+  // Wiki (Bandos godsword): "the current stat that is being drained must hit 0".
+  assert.equal(levels.level("DEFENCE"), 0, "stats drain to 0");
+  assert.equal(levels.level("STRENGTH"), 0);
   assert.equal(levels.level("PRAYER"), 0, "prayer can reach 0");
-  assert.equal(levels.level("ATTACK"), 38, "100 - 19 - 49 - 20 = 12 left for Attack");
+  assert.equal(levels.level("ATTACK"), 40, "100 - 20 - 50 - 20 = 10 left for Attack");
   assert.equal(levels.level("MAGIC"), 50);
 
   const npc = npcTarget(60);
@@ -522,7 +527,7 @@ test("Ice Cleave plays the red slash on the attacker, not the target", () => {
 
 test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on NPCs and 15 on players", () => {
   const ags = special("ancient_godsword").getCombatMethod();
-  const run = (target) => {
+  const run = (target, hitpoints = 100) => {
     tasks.length = 0;
     const healed = [];
     const pending = [];
@@ -535,7 +540,7 @@ test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on N
     };
     Object.assign(target, {
       isRegistered: () => true,
-      getHitpoints: () => 100,
+      getHitpoints: () => hitpoints,
       sendMessage() {},
       performGraphic() {},
       getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => pending.push(hits) }) }),
@@ -558,4 +563,46 @@ test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on N
     getSkillManager: () => ({ getMaxLevel: () => 99 }),
   };
   assert.deepEqual(run(player).healed, [14], "floor(99 * 0.15)");
+});
+
+test("Blood Sacrifice heals only the damage it does to a target with fewer than 25 Hitpoints left (Wiki)", () => {
+  const ags = special("ancient_godsword").getCombatMethod();
+  tasks.length = 0;
+  const healed = [];
+  const attacker = {
+    isPlayer: () => true,
+    isRegistered: () => true,
+    getHitpoints: () => 99,
+    calculateDistance: () => 1,
+    heal: (amount) => healed.push(amount),
+  };
+  const target = {
+    isPlayer: () => false,
+    isNpc: () => true,
+    getAsNpc() { return this; },
+    getMaxHitpoints: () => 500,
+    isRegistered: () => true,
+    getHitpoints: () => 6,
+    sendMessage() {},
+    performGraphic() {},
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
+  };
+  ags.handleAfterHitEffects(hit(target, 30, true, attacker));
+  tasks[0].execute();
+  assert.deepEqual(healed, [6], "the sacrifice can only take the 6 Hitpoints left");
+});
+
+test("Healing Blade heals from the swing's potential damage, not what a low target had left (Wiki)", () => {
+  const sgs = special("saradomin_godsword").getCombatMethod();
+  const attacker = fakePlayer({ weaponId: ItemIdentifiers.SARADOMIN_GODSWORD, levels: { HITPOINTS: 99, PRAYER: 99 } });
+  attacker.skillManager.setLevel("HITPOINTS", 50);
+  attacker.skillManager.setLevel("PRAYER", 50);
+  attacker.isSpecialActivated = () => true;
+  attacker.getCombatSpecial = () => special("saradomin_godsword");
+  // Wiki: a 60 rolled on a target with only 2 Hitpoints heals 30 and restores 15.
+  const kill = hit({}, 2, true, attacker);
+  for (const hook of hitDamageHooks) hook({ attacker, hit: kill, damage: { getDamage: () => 60 } });
+  sgs.handleAfterHitEffects(kill);
+  assert.equal(attacker.skillManager.level("HITPOINTS"), 80, "30 from the 60 rolled");
+  assert.equal(attacker.skillManager.level("PRAYER"), 65, "15 from the 60 rolled");
 });

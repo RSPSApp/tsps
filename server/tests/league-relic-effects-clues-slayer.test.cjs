@@ -78,9 +78,9 @@ before(async () => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
-  require("../plugins/modes/LeagueMode.plugin").register(api);
-  require("../plugins/modes/LeaguePoints.plugin").register(api);
-  require("../plugins/modes/LeagueRelics.plugin").register(api);
+  require("../plugins/modes/Base.LeagueMode").register(api);
+  require("../plugins/modes/Points.LeagueMode").register(api);
+  require("../plugins/modes/Relics.LeagueMode").register(api);
   // The drop table's own roller, without its kill hook (these kills are Slayer's).
   require("../plugins/npcs/NpcDrops.plugin").register(new Proxy(api, { get: (target, key) => (key === "onNpcDeath" ? () => {} : target[key]) }));
   require("../plugins/skills/Slayer.plugin").register(api);
@@ -348,6 +348,20 @@ test("Bloodthirsty: superiors 1 in 25, a quarter bloodthirsty; points and six (n
     assert.equal(braced(player, 0.3), false, `${player.getUsername()}'s bracelet works 25% of the time`);
     assert.equal(braced(player, 0.2), true);
     assert.equal(player.getAttribute(Bracelet.CHARGES_ATTRIBUTE), 29, `${player.getUsername()} uses a charge`);
+  }
+
+  // The expeditious bracelet: 35% and no charge.
+  const Expeditious = require("../plugins/skills/slayer/ExpeditiousBracelet.Slayer");
+  const expedited = (player, roll) => {
+    player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new Item(I.EXPEDITIOUS_BRACELET));
+    return Expeditious.extraKills(player, npcOf("Nechryael"), () => roll);
+  };
+  assert.equal(expedited(who.relic, 0.3), 1, "a 30 works (35%)");
+  assert.equal(who.relic.getAttribute(Expeditious.CHARGES_ATTRIBUTE), undefined, "no charge used");
+  for (const player of others(who)) {
+    assert.equal(expedited(player, 0.3), 0, `${player.getUsername()}'s expeditious bracelet works 25% of the time`);
+    assert.equal(expedited(player, 0.2), 1);
+    assert.equal(player.getAttribute(Expeditious.CHARGES_ATTRIBUTE), 29, `${player.getUsername()} uses a charge`);
   }
 
   // The gem's check offers a task from anywhere.

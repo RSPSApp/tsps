@@ -11,6 +11,7 @@ const { Location } = require("../dist/game/model/Location");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 
 const events = new Map();
 const broadcasts = [];
@@ -37,7 +38,7 @@ npcApi[Symbol.iterator] = function* () {
 
 const Pets = require("../plugins/npcs/Pets.plugin");
 Pets.register({
-  core: { ItemIdentifiers, NpcIdentifiers, ItemDefinition },
+  core: { ItemIdentifiers, NpcIdentifiers, ItemDefinition, CacheDefinitions },
   getWorld: () => world,
   getRegionManager: () => ({ blocked: () => true }),
   getItemOnGroundManager: () => ({ registerNonGlobal() {}, registerLocation() {} }),
@@ -47,12 +48,17 @@ Pets.register({
     events.set(name, previous ? event => { previous(event); handler(event); } : handler);
   },
   emitCustomEvent: (name, request) => {
-    if (name === "collection-log:obtain") collectionLogObtains.push(request);
+    if (name === "collection-log:obtain") {
+      collectionLogObtains.push(request);
+      request.player.messages?.push?.(`[log ${request.itemId}${request.silent ? " silent" : ""}]`);
+    }
     // Stub the public diary query here; real service coverage is in chompy-pet-acquisition.
     if (name === "diary:is-reward-claimed") request.claimed = request.player.getAttribute("achievement-diaries:rewards")?.western?.includes("elite") === true;
   },
   onItemDropPolicy() {},
   onItemOnNpc() {},
+  onItemOnItem() {},
+  onItemAction() {},
   onAnyNpcInteraction() {},
   onInterfaceActionClick() {},
   onNpcClick() {},
@@ -173,11 +179,13 @@ test("agility rolls the giant squirrel at 1 in (base - level * 25)", () => {
   events.get("agility:success")({ player, skill: Skill.AGILITY, petBase: 35609 });
   assert.ok(seen);
   assert.deepEqual(player.inventory, [GIANT_SQUIRREL]);
-  assert.match(broadcasts[0], /Giant Squirrel while agility/i);
+  // Live has no world message for it, only the player's own lines (227/01857:421576-421590).
+  assert.deepEqual(broadcasts, [], "no world broadcast");
 
+  const miss = createPlayer();
   Math.random = () => 1 / (35609 - 99 * 25);
-  events.get("agility:success")({ player: createPlayer(), skill: Skill.AGILITY, petBase: 35609 });
-  assert.equal(broadcasts.length, 1);
+  events.get("agility:success")({ player: miss, skill: Skill.AGILITY, petBase: 35609 });
+  assert.deepEqual(miss.inventory, [], "a roll at 1 / chance misses");
 });
 
 test("an action without a rate never rolls", () => {
@@ -209,7 +217,7 @@ test("a second pet of the same skill is a would-have-been-followed miss", () => 
   events.get("runecrafting:success")({ player, skill: Skill.RUNECRAFTING, petBase: 804984, runeId: ItemIdentifiers.BLOOD_RUNE });
   assert.deepEqual(player.inventory, [AIR_RIFT_GUARDIAN]);
   assert.ok(!player.inventory.includes(BLOOD_RIFT_GUARDIAN));
-  assert.equal(player.messages.at(-1), "You have a funny feeling like you would have been followed...");
+  assert.equal(player.messages.at(-1), "<col=ef1020>You have a funny feeling like you would have been followed...</col>");
 });
 
 test("a boss pet drop goes to the killer, not the floor", () => {
@@ -219,6 +227,21 @@ test("a boss pet drop goes to the killer, not the floor", () => {
   assert.deepEqual(drops.map((drop) => drop.itemId), [ItemIdentifiers.BONES]);
   assert.deepEqual(player.inventory, [HELLPUPPY]);
   assert.deepEqual(player.getAttribute("pets.owned"), [HELLPUPPY]);
+});
+
+// rsprox_transcripts/234/03285.txt:287458-287462 (and 227/00101, 227/01857): the red follow line, then the purple
+// "automatically insured" line, then the collection log's.
+test("a new pet: the follow line, the insurance line, then the collection log, as recorded", () => {
+  const player = createPlayer();
+  player.setAttribute("pets:current", undefined);
+  events.get("npc-drops:roll")({ player, drops: [{ itemId: HELLPUPPY, amount: 1 }] });
+  const logAt = player.messages.findIndex((m) => m.startsWith("[log "));
+  const insuredAt = player.messages.indexOf("<col=800080>Your new pet has been automatically insured. If lost, it can be reclaimed from Probita in Ardougne.</col>");
+  assert.ok(insuredAt >= 0, player.messages.join(" | "));
+  assert.ok(logAt > insuredAt, `the log comes last: ${player.messages.join(" | ")}`);
+  assert.equal(player.messages[insuredAt - 1], "<col=ef1020>You have a funny feeling like you're being followed.</col>");
+  const before = player.messages.slice(0, insuredAt);
+  assert.ok(!before.some((m) => m.startsWith("[log ")), "no log line before the pet's");
 });
 
 test("every owned pet reaches the collection log; only the new one announces itself", () => {
@@ -317,6 +340,13 @@ test("a normal logout and login rebuilds exactly one follower from the item", ()
   assert.equal(loggedIn, undefined);
   assert.deepEqual(player.inventory, []);
   assert.equal(player.getAttribute("pets:last"), SNAKELING_ITEM);
+});
+
+test("dropping a pet while another follows: 'You already have a follower.' (232/03153:10326)", () => {
+  const player = createPlayer();
+  player.setAttribute("pets:current", createPetNpc(player, 2130));
+  assert.equal(Pets.__internals.drop(player, HELLPUPPY), true);
+  assert.equal(player.messages.at(-1), "You already have a follower.");
 });
 
 test("pickup keeps the follower when the backpack is full", () => {

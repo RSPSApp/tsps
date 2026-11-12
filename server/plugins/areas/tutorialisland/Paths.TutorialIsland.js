@@ -148,9 +148,7 @@ function openBank(player, event) {
     event.handled = true;
     return;
   }
-  const bank = player.getBank(0);
-  const coins = bank.getAmount(core.ItemIdentifiers.COINS);
-  if (coins < 25) bank.adds(core.ItemIdentifiers.COINS, 25 - coins);
+  T.giveBankCoins(player);
   T.advance(player, STEP.POLL_BOOTH);
   // The bank booth plugin opens the bank.
 }

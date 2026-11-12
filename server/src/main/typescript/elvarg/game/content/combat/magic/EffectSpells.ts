@@ -13,6 +13,11 @@ import { Spell } from "./Spell";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
 export class EffectSpells extends Spell {
+    /**
+     * The bones Bones to Bananas and Bones to Peaches turn into fruit (Wiki): bones 526, burnt 528, bat 530, big 532,
+     * wolf 2859, jogre 3125, monkey 3183, bleached 25422 and Alan's 30973. Unnoted only: a note is another id.
+     */
+    public static readonly FRUIT_BONES: ReadonlySet<number> = new Set([526, 528, 530, 532, 2859, 3125, 3183, 25422, 30973]);
 
 
 
@@ -34,18 +39,25 @@ export class EffectSpells extends Spell {
                 if (!player.getClickDelay().elapsedTime(500)) {
                     return true;
                 }
-                if (!player.getInventory().contains(526)) {
-                    player.sendMessage("You do not have any bones in your inventory.");
+                // Wiki (Bones to Bananas/Peaches): normal, burnt, bat, bleached, jogre, wolf, monkey, Alan's and big bones
+                // (the animals' bones are the Mage Training Arena's own, converted in its graveyard). The refusal is
+                // rsprox_transcripts/229/02804.txt's.
+                if (!player.getInventory().getValidItems().some(item => EffectSpells.FRUIT_BONES.has(item.getId()))) {
+                    player.sendMessage("You aren't holding any bones!");
                     return true;
                 }
-                player.getInventory().deleteItemSet(spell.itemsToConsume(player));
+                // Pays the runes as they were counted: the inventory and any rune source (rune pouch), as Vengeance.
+                if (!spell.canCast(player, true)) {
+                    return true;
+                }
                 let i = 0;
                 player.getInventory().getValidItems().forEach(invItem => {
-                    if (invItem.getId() == 526) {
+                    if (EffectSpells.FRUIT_BONES.has(invItem.getId())) {
+                        const boneId = invItem.getId();
                         if (spell === EffectSpells.BONES_TO_PEACHES) {
-                            player.getInventory().deleteNumber(526, 1).adds(6883, 1);
+                            player.getInventory().deleteNumber(boneId, 1).adds(6883, 1);
                         } else {
-                            player.getInventory().deleteNumber(526, 1).adds(1963, 1);
+                            player.getInventory().deleteNumber(boneId, 1).adds(1963, 1);
                         }
 
                         i++;
@@ -55,7 +67,7 @@ export class EffectSpells extends Spell {
                 player.performAnimation(new Animation(722));
                 // Wiki, List of sound IDs: 114, bones_to_bananas_all, used for both spells.
                 player.getPacketSender().sendSoundEffect(114, 1, 0, 255);
-                player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience() * i);
+                player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
                 player.getClickDelay().reset();
                 if (i > 0 && spell === EffectSpells.BONES_TO_PEACHES) {
                     PluginManager.emitCustomEvent("magic:spell-effect-succeeded", {
@@ -130,7 +142,7 @@ export class EffectSpells extends Spell {
     public static readonly BONES_TO_BANANAS = new EffectSpells(
         () => { return 1159; },
         () => { return 15; },
-        () => { return 650; },
+        () => { return 25; },
         () => { return [new Item(561), new Item(555, 2), new Item(557, 2)]; },
         () => { return null; },
         () => { }
@@ -172,7 +184,7 @@ export class EffectSpells extends Spell {
     public static BONES_TO_PEACHES = new EffectSpells(
         () => { return 15877; },
         () => { return 60; },
-        () => { return 4121; },
+        () => { return 35.5; },
         () => { return [new Item(561, 2), new Item(555, 4), new Item(557, 4)]; },
         () => { return null; },
         () => { }

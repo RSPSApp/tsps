@@ -113,6 +113,16 @@ for (const [altar, used, made, level, xp] of TABLE) {
   });
 }
 
+// Wiki (Combination rune): "Enter the altar, and use the talisman (not a tiara) on the runecraft altar."
+test('using the talisman on the altar crafts the same way as using the rune', async (t) => {
+  const f = actor(t, 13); chance(t, [0.1]);
+  give(f, I.PURE_ESSENCE, 4); give(f, I.EARTH_RUNE, 4); give(f, I.EARTH_TALISMAN, 1);
+  await use(f, WATER, I.EARTH_TALISMAN);
+  assert.equal(count(f, I.MUD_RUNE), 4, 'mud runes from the earth talisman on the water altar');
+  assert.equal(count(f, I.EARTH_RUNE), 0);
+  assert.equal(count(f, I.EARTH_TALISMAN), 0, 'the talisman is spent');
+});
+
 test('the captured case: 6 essence, earth runes, water altar, 2 of 6 bind -> "partially succeed" message (1757 tick 18626)', async (t) => {
   const f = actor(t); chance(t, [0.1, 0.9, 0.9, 0.1, 0.9, 0.9]);
   give(f, I.PURE_ESSENCE, 6); give(f, I.EARTH_RUNE, 6); give(f, I.EARTH_TALISMAN, 1);
@@ -310,3 +320,31 @@ for (const [rolls, headroom, expected] of [[[0.1, 0.9], 1, 1], [[0.9, 0.9], 0, 0
     assert.ok(Math.abs(xpOf(f) - before - expected * 9.3) < 0.01);
   });
 }
+
+// Combination runes are members-only. The altars stand in free land and the elemental rune used is a free item, so
+// on a free world the pure essence and the product went unchecked. Now refused, spending nothing.
+test('a free world refuses combination runes and spends nothing', async (t) => {
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+  const f = actor(t); chance(t, [0.1]);
+  give(f, I.PURE_ESSENCE, 4); give(f, I.EARTH_RUNE, 4); give(f, I.EARTH_TALISMAN, 1);
+  await use(f, WATER, I.EARTH_RUNE);
+  assert.equal(count(f, I.MUD_RUNE), 0);
+  assert.equal(count(f, I.PURE_ESSENCE), 4, 'the essence is kept');
+  assert.equal(count(f, I.EARTH_RUNE), 4);
+  assert.ok(f.all().includes("To use this item please login to a members' world."), f.all().join(' | '));
+});
+
+test('daeyalt essence binds first at 1.5 times the XP; the pure essence waits for a second use (Wiki: Daeyalt essence)', async (t) => {
+  const f = actor(t); chance(t, [0.1]);
+  give(f, I.DAEYALT_ESSENCE, 2); give(f, I.PURE_ESSENCE, 3); give(f, I.WATER_RUNE, 5); give(f, I.WATER_TALISMAN, 2);
+  const before = xpOf(f);
+  await use(f, AIR, I.WATER_RUNE);
+  assert.equal(count(f, I.MIST_RUNE), 2);
+  assert.equal(count(f, I.DAEYALT_ESSENCE), 0);
+  assert.equal(count(f, I.PURE_ESSENCE), 3, 'the pure essence is left for the next use');
+  assert.ok(Math.abs(xpOf(f) - before - 2 * 12) < 0.01, 'mist on the air altar: 12 XP a daeyalt essence');
+  await use(f, AIR, I.WATER_RUNE);
+  assert.equal(count(f, I.MIST_RUNE), 5);
+  assert.equal(count(f, I.PURE_ESSENCE), 0);
+  assert.ok(Math.abs(xpOf(f) - before - 2 * 12 - 3 * 8) < 0.01);
+});

@@ -5,7 +5,7 @@ const { test } = require("node:test");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
-const { PrayerData } = require("../dist/game/content/PrayerHandler");
+const { PrayerData, PrayerHandler } = require("../dist/game/content/PrayerHandler");
 const { ItemIds } = require("../dist/util/IdEnums");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
@@ -21,7 +21,7 @@ let prompt = null;
 let bypassHook = null;
 
 plugin.register({
-  core: { PrayerData, ItemIdentifiers: ItemIds },
+  core: { PrayerData, PrayerHandler, ItemIdentifiers: ItemIds },
   persistAttribute(key, value) { defaultAttributes.push([key, value]); },
   onPlayerLogin(handler) { loginHook = handler; },
   onPrayerDisabled(handler) { prayerDisabledHook = handler; },
@@ -191,6 +191,10 @@ function registerPvpMode() {
     registerCustomInterface() {},
     onCanBankItem() {},
     onInterfaceActionButton() {},
+    // Presets asks through this API; it stands in for the Ironman plugin's barring.
+    emitCustomEvent(name, event) {
+      if (name === "presets:account-barred" && event.player.iron) event.barred = true;
+    },
   });
   assert.ok(bypass, "PvP mode listens for prayer:unlocks-bypass");
   return bypass;
@@ -201,6 +205,41 @@ test("PvP mode answers the unlock bypass, so presets keep their prayers", () => 
   const event = { player: player(), prayer: PrayerData.PIETY, bypass: false };
   bypass(event);
   assert.equal(event.bypass, true);
+});
+
+test("PvP mode's bypass skips an account barred from presets, so an Ironman or league character earns them (#3703)", (t) => {
+  bypassHook = registerPvpMode();
+  try {
+    const iron = player();
+    iron.iron = true;
+    for (const prayer of ["CHIVALRY", "PIETY", "RIGOUR", "AUGURY", "PRESERVE"]) {
+      assert.equal(denied(prayer, iron).disabled, true, prayer);
+    }
+    customEventHooks.get("ironman:mode-changed")({ player: iron });
+    assert.deepEqual(iron.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]],
+      "the prayer book is told they are locked when the account becomes an Ironman");
+
+    const main = player();
+    assert.notEqual(denied("RIGOUR", main).disabled, true, "a normal account keeps the preset prayers");
+  } finally {
+    bypassHook = null;
+  }
+});
+
+test("a prayer whose unlock goes away is turned off when the unlocks re-sync", (t) => {
+  bypassHook = (event) => { event.bypass = true; };
+  try {
+    const { player: p } = nativePlayer(t);
+    PrayerHandler.activatePrayerPrayerId(p, PrayerHandler.RIGOUR);
+    assert.equal(p.getPrayerActive()[PrayerHandler.RIGOUR], true, "on while the bypass applies");
+    customEventHooks.get("prayer:sync-unlocks")({ player: p });
+    assert.equal(p.getPrayerActive()[PrayerHandler.RIGOUR], true, "still unlocked: left on");
+    bypassHook = null;
+    customEventHooks.get("prayer:sync-unlocks")({ player: p });
+    assert.equal(p.getPrayerActive()[PrayerHandler.RIGOUR], false, "locked again: turned off");
+  } finally {
+    bypassHook = null;
+  }
 });
 
 test("a PvP-mode login shows the preset prayers unlocked without persisting the bypass", (t) => {

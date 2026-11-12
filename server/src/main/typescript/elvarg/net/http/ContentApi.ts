@@ -1,3 +1,5 @@
+import { getWorldDefinition } from "../../game/definition/WorldDefinition";
+import { GameConstants } from "../../game/GameConstants";
 import { createHash } from "crypto";
 
 /**
@@ -58,7 +60,9 @@ export class ContentApi {
         const path = parsed.pathname.slice(this.PREFIX.length);
         const segments = path.split("/").filter((segment) => segment.length > 0);
         const name = (segments.shift() ?? "").toLowerCase();
-        const handler = this.handlers.get(name);
+        const handler: ContentApiHandler | undefined = name === "world-info"
+            ? (_query, segments) => segments.length ? undefined : { name: getWorldDefinition().name, flags: GameConstants.WORLD_TYPE.flags }
+            : this.handlers.get(name);
         if (!handler) {
             return this.json(404, { error: "unknown resource" });
         }

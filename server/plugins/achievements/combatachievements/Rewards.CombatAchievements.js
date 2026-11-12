@@ -234,7 +234,7 @@ function grantLamp(player, request, skill, name = skill.getName()) {
   const manager = player.getSkillManager();
   if (manager.getMaxLevel(skill) < request.minLevel) return null;
   const before = manager.getExperience(skill);
-  manager.addExperience(skill, request.experience, false);
+  manager.addExperience(skill, request.experience, true);
   if (manager.getExperience(skill) === before) {
     player.sendMessage("You cannot gain experience in that skill right now.");
     return null;

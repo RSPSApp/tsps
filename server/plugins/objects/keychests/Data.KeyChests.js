@@ -25,17 +25,24 @@ function item([name, amount, extra]) {
   return { itemId: objId(name), min, max, noted: extra === "noted", weight: typeof extra === "number" ? extra : 1 };
 }
 
+function mains(list) {
+  return list.map((entry) => ({
+    weight: entry.weight,
+    items: (entry.items ?? []).map(item),
+    oneOf: entry.oneOf ? entry.oneOf.map(item) : null,
+    fish: entry.fish ?? null,
+  }));
+}
+
+/** A chest's loot: preRolls, always, one main table, or `tables` (each rolled `times`) and tertiary rolls. */
 function loot(table) {
   return {
     preRolls: (table.preRolls ?? []).map((roll) => ({ chance: roll.chance, oneOf: roll.oneOf.map(item) })),
     always: (table.always ?? []).map(item),
     outOf: table.outOf,
-    main: table.main.map((entry) => ({
-      weight: entry.weight,
-      items: (entry.items ?? []).map(item),
-      oneOf: entry.oneOf ? entry.oneOf.map(item) : null,
-      fish: entry.fish ?? null,
-    })),
+    main: mains(table.main ?? []),
+    tables: (table.tables ?? []).map((entry) => ({ times: entry.times ?? 1, outOf: entry.outOf, main: mains(entry.main) })),
+    tertiary: (table.tertiary ?? []).map((roll) => ({ chance: roll.chance, item: item(roll.item) })),
   };
 }
 

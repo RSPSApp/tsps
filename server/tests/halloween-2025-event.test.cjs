@@ -198,10 +198,13 @@ test("the whole Spook-a-thon runs through native dialogue, once per account", as
   // Holding the lantern in the inventory is not enough for the judging.
   await talk(f, fred, [1]);
   assert.equal(stage(f), STAGE.LANTERN);
+  const skinUnlocks = () => core.Appearance.SKIN_UNLOCKS.map(unlock => f.player.getAttribute(unlock.attribute) === true);
+  assert.deepEqual(skinUnlocks(), [false, false, false]);
   f.player.getInventory().delete(new core.Item(lantern, 1));
   f.player.getEquipment().setItem(3, new core.Item(lantern, 1));
   await talk(f, fred, [1]);
   assert.equal(stage(f), STAGE.COMPLETE);
+  assert.deepEqual(skinUnlocks(), [true, true, true], "the Makeover Mage's Halloween skin colours (Wiki, Makeover)");
   for (const symbol of ["hw25_grim_reaper_top", "hw25_grim_reaper_bottoms", "hw25_grim_reaper_gloves", "hw25_chair_obj_reward"]) {
     assert.equal(f.player.getInventory().getAmount(core.CacheDefinitions.getObjId(symbol)), 1, symbol);
   }

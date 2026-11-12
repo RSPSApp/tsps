@@ -36,6 +36,7 @@ function guardMainGate(request) {
 
 module.exports = {
   name: "McGruborsWood",
+  description: "Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring.",
   _test: { guardMainGate },
   register(pluginApi) {
     api = pluginApi;

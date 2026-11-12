@@ -71,7 +71,11 @@ function input(core, { player, packet }) {
   const mobility = queue.getMobility();
   state.blocked = player.getHitpoints() <= 0 || !mobility.canMove() ||
     player.getForceMovement() != null || player.isNeedsPlacement();
-  if (!state.active && !state.blocked) {
+  if (state.blocked) {
+    cancel(core, player, state, location, true);
+    return;
+  }
+  if (!state.active) {
     queue.reset();
     queue.walkToReset();
     player.getCombat().reset();
@@ -158,6 +162,7 @@ function logout({ player }) { states.delete(player); }
 
 module.exports = {
   name: "Free movement",
+  description: "Continuous free movement: moves players by client input at walk and run speed with server-checked timing, and sends fine positions to observers.",
   register(api) {
     api.onCustomEvent("player:movement-input", input.bind(null, api.core));
     api.onCustomEvent("player:world-input", worldInput.bind(null, api.core));

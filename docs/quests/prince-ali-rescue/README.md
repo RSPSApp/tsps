@@ -2,12 +2,12 @@
 quest: Prince Ali Rescue
 key: prince_ali_rescue
 status: passed-with-issues
-tested: 2026-10-29
+tested: 2026-11-07
 tester: agent
-model: grok-4.7
-commit: 3aa2ed9d2f68
+model: claude-opus-5-5
+commit: 756db7e10 + fix/prince-ali-live-capture
 cache: osrs-241_2026-10-20
-start: fresh
+start: checkpoint
 travel: travel_to
 ---
 
@@ -24,7 +24,47 @@ ways across the river and went around it on the next call.
   3180, returned blocked with "You can't reach that!". The next call routed around the raft.
   The Al Kharid toll gate still worked: 10 coins at stage 20, free passage at stage 100.
 
+## Live capture
+
+A full live run recorded with RSProx (revision 242.1, 2026-11-06, file sha256
+`63491fb1fe6f160446a0e7a811c706cf3154f478ffbcb825177757f5023e08d1`; the raw log stays out of Git)
+sets varp 273 0, 10, 20, 30, 31, 40, 50, 100, 110. Facts the plugin relies on:
+
+- **Key.** Smelt on the Lumbridge furnace 24009 (3226, 3256) with the key print and a bronze bar
+  plays anim 899 and gives Bronze key 2418 and 2 Crafting XP, with no prompt or message. Osman is
+  never visited for the key and the stage stays 20.
+- **Leela.** Met for the first time with the disguise, key and rope: "You must be Leela...", "Yes,
+  he sent word ahead...", "Yes. In fact, I already have everything we need.", then "Good work..."
+  (stage 30).
+- **Joe.** Three beers in one talk: one beer (stage 31), "That was perfect!", then straight to
+  "Would you care for another beer, my friend?" and the other two (stage 40).
+- **Keli and Prince Ali.** Rope on Keli and the Prince's escape each update the stage and
+  inventory 3 ticks after their message box.
+- **Hassan.** The completion update adds the 700 coins and removes the bronze key.
+
 ## Runs
+
+### 2026-11-07 · agent · claude-opus-5-5
+
+- **Start:** checkpoint. A new account set to stage 20 with `::quest prince ali rescue 20` at the
+  Lumbridge furnace. Declared setup: 2 key prints and 2 bronze bars, then a blonde wig, pink
+  skirt, skin paste, rope, 3 beers and 100 coins.
+- **Route:** Smelt on furnace 24009 made the key at the next tick with +2 Crafting XP and no
+  prompt; using the second print on the furnace did the same. Smelt with only iron ore still
+  opened the make-x menu (270). `travel_to` Leela: the captured first-visit lines, stage 30. Joe,
+  three beers: the captured lines with no "Not too drunk?" question, stage 40. The server
+  restarted here (dialogue import); the relogged account kept stage 40 and its items. Rope on
+  Lady Keli: stage 50 and the rope gone 3 ticks later. Prison Gate 2881 opened; Prince Ali took
+  the disguise and left the keys, stage 100 3 ticks after the box.
+- **Result:** Hassan completed the quest: stage 110, quest points 0 to 3, coins 100 to 800, and
+  one bronze key taken (2 to 1). After relog: stage 110, varp 101 = 3, 800 coins.
+- **Also checked:** with one beer, Joe asks "How are you? Still okay? Not too drunk?" and answers
+  "No, I don't get drunk from only one drink..." (stage 31). Aggie's skin paste offer reads the
+  captured "Yes, I can. I see you already have the ingredients - the water, flour, ashes and
+  redberries...".
+- **Not checked:** a fresh start from stage 0, Osman making the key, Leela's replacement key, the
+  return visit to Leela, and the Quest Helper overlay.
+
 
 ### 2026-10-29 · agent · grok-4.7
 

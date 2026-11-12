@@ -141,6 +141,10 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   const FLAG_WALL_SWORD = 1 << 11;
   const FLAG_WALL_ARROW = 1 << 12;
   const FLAG_BOOK_CLAIMED = 1 << 13;
+  /** Every step's flag; the post-quest god-book claim is not a step. */
+  const COMPLETED_FLAGS = FLAG_BRIDGE_LEFT | FLAG_BRIDGE_RIGHT | FLAG_KEY_GIVEN | FLAG_DOOR_UNLOCKED
+    | FLAG_TAR | FLAG_GLASS | FLAG_LIGHT | FLAG_WALL_AIR | FLAG_WALL_WATER | FLAG_WALL_EARTH
+    | FLAG_WALL_FIRE | FLAG_WALL_SWORD | FLAG_WALL_ARROW;
   const WALL_BITS = [
     FLAG_WALL_AIR,
     FLAG_WALL_WATER,
@@ -198,7 +202,11 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   const bossesByPlayer = new Map();
   const motherPhasesByPlayer = new Map();
 
-  const getFlags = (player) => Number(player.getAttribute(ATTR_FLAGS)) || 0;
+  // A completed account has every step's flag (its login sends varbits 35-48 all as 1,
+  // rsprox_transcripts/224/01512.txt), however the quest was completed: a Leagues quest pack or
+  // start quest completes it through the runtime without the steps ever being played (#3851).
+  const getFlags = (player) => (Number(player.getAttribute(ATTR_FLAGS)) || 0)
+    | (quest?.isComplete(player) ? COMPLETED_FLAGS : 0);
   const hasFlag = (player, bit) => (getFlags(player) & bit) !== 0;
   const hasItem = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -221,8 +229,14 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     syncAuxiliaryState(player);
   }
 
+  // Completion (played through or not) shows the completed flags at once, not at the next login.
+  function handleStageChanged({ player, key }) {
+    if (key === "horror_from_the_deep" && player) syncAuxiliaryState(player);
+  }
+
   function setFlag(player, bit, value = true) {
-    const flags = getFlags(player);
+    // The saved flags only: the completed flags getFlags derives are never written back.
+    const flags = Number(player.getAttribute(ATTR_FLAGS)) || 0;
     player.setAttribute(ATTR_FLAGS, value ? (flags | bit) : (flags & ~bit));
     syncAuxiliaryState(player);
   }
@@ -867,6 +881,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   });
 
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Gunnjorn", { "Talk-to": talkToGunnjorn });

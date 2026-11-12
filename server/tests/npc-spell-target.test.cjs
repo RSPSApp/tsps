@@ -114,7 +114,13 @@ for (const symbol of ['HANS', 'BANKER']) {
 }
 
 for (const [options, message] of [
-  [{ runes: false }, 'You do not have the required items to cast this spell.'],
+  // rsprox captures (regular worlds): the refusal names the first missing rune in the cache spell's own rune order
+  // (Wind Strike's obj lists mind, then air).
+  [{ runes: false }, 'You do not have enough Mind Runes to cast this spell.'],
+  // rsprox_transcripts/226/01696.txt: Fire Surge with no runes names the wrath runes.
+  [{ name: 'Fire Surge', runes: false }, 'You do not have enough Wrath Runes to cast this spell.'],
+  // Fire Bolt's cache obj lists chaos first (it ties with Ghostly Grasp at level 35 on the rune set alone).
+  [{ name: 'Fire Bolt', runes: false }, 'You do not have enough Chaos Runes to cast this spell.'],
   [{ name: 'Fire Strike', level: 1 }, 'You need a Magic level of 13 to cast this spell.'],
 ]) {
   test(`native rejected targeting preserves the specific spell requirement: ${message}`, async t => {
@@ -200,3 +206,43 @@ test('unknown NPC target packets cannot supply a utility name outside server cac
   assert.equal(JSON.stringify(f.player.getInventory().getItems()), before);
   assert.equal(f.player.getCombat().getCastSpell(), null);
 });
+
+// Wiki (Crumble Undead): it can only be cast on undead enemies; on anything else the chatbox reads
+// "This spell only affects skeletons, zombies, ghosts and shades." No recording casts it on a living NPC.
+test('native Crumble Undead on a living NPC is refused before runes are spent', async t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.GOBLIN });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), false);
+  await f.cast();
+  assert.deepEqual(f.messages, ['This spell only affects skeletons, zombies, ghosts and shades.']);
+});
+
+test('native Crumble Undead on an undead NPC starts the cast', async t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.ZOMBIE });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), true);
+  await f.connection.dispatch([{ type: 'spell_on_npc', targetIndex: f.npc.getIndex(), spellWidget: f.widget.widgetId, spellChild: -1, spellItemId: f.widget.itemId }]);
+  f.connection.processTurnPackets();
+  assert.deepEqual(f.messages, []);
+  assert.equal(f.player.getCombat().getCastSpell(), f.spell);
+});
+
+test("Crumble Undead still reaches Enakhra's Lament's scripted boneguard", t => {
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.BONEGUARD });
+  assert.equal(f.npc.getCurrentDefinition(f.player).isAttackable(), false);
+  assert.equal(f.spell.canCastOnTarget(f.player, f.npc), true);
+  assert.deepEqual(f.messages, []);
+});
+
+// rsprox_transcripts/235/03344.txt ticks 4503 and 5691: a god spell without its staff names the staves
+// (the spell's own cast check, which combat runs before the runes are taken).
+for (const [name, message] of [
+  ['Saradomin Strike', 'You must be wielding the Staff of Saradomin or the Staff of Light to cast this spell.'],
+  ['Flames of Zamorak', "You must be wielding the Staff of Zamorak, Staff of the Dead, Thammaron's Sceptre, or the Accursed Sceptre to cast this spell."],
+]) {
+  test(`${name} without its staff is refused with the recorded line, costing nothing`, t => {
+    const f = nativeCast(t, { name, npcId: core.NpcIdentifiers.GOBLIN });
+    const before = JSON.stringify(f.player.getInventory().getItems());
+    assert.equal(f.spell.canCast(f.player, true), false);
+    assert.deepEqual(f.messages, [message]);
+    assert.equal(JSON.stringify(f.player.getInventory().getItems()), before);
+  });
+}

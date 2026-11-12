@@ -35,6 +35,7 @@ import {
 } from "../../../network/ServerConnection";
 import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
+import { drawShaderFx, drawShaderFxToTarget, prepareShaderFx } from "../shaderFx";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { CollisionFlag } from "../../../common/CollisionFlag";
 import {
@@ -395,10 +396,11 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         inputManager.saveClickY,
                         inputManager.clickMode3,
                     );
+                    const clickedLoginState = host.osrsClient.loginState;
                     const shouldRefocusMobileLoginInput =
                         isMobileMode &&
-                        host.osrsClient.loginState.loginIndex === LoginIndex.LOGIN_FORM &&
-                        host.osrsClient.loginState.virtualKeyboardVisible &&
+                        (clickedLoginState.extension ? clickedLoginState.extension.textInput?.() !== undefined :
+                            clickedLoginState.loginIndex === LoginIndex.LOGIN_FORM && clickedLoginState.virtualKeyboardVisible) &&
                         inputManager.isTouch;
                     if (shouldRefocusMobileLoginInput) {
                         host.syncMobileLoginInput(true);
@@ -510,6 +512,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
         profiler.startPhase("input");
         host.handleInput(deltaTime);
+        host.osrsClient.updateGroundItemMeshHandoffs();
 
         // Tick mouse cross animation (OSRS-style visual feedback)
         ClientState.tickMouseCross();
@@ -745,6 +748,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         if (!holdScene) {
             let passStartIndices = host._frameIndices;
             let passStartBatches = host._frameBatches;
+            host.drawSkybox(camera);
             host.app.disable(PicoGL.BLEND);
             profiler.startPhase("opaque");
             passStartIndices = host._frameIndices;
@@ -1438,16 +1442,26 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         host.app.disable(PicoGL.BLEND);
 
         profiler.startPhase("present");
+        // The Shader Effects plugin: with FXAA on, the effects draw into their own target first
+        // and FXAA reads that; otherwise they draw straight to the screen in place of the copy.
+        const fxaaOn = !!host.frameFxaaDrawCall
+            && (host.osrsClient.clientPlugins.gpuSettings()?.fxaa ?? host.fxaaEnabled);
+        const shaderFxOn = prepareShaderFx(host);
+        let frameTexture = host.textureFramebuffer.colorAttachments[0];
+        if (shaderFxOn && fxaaOn) frameTexture = drawShaderFxToTarget(host, frameTexture);
+
         host.app.clearMask(PicoGL.COLOR_BUFFER_BIT | PicoGL.DEPTH_BUFFER_BIT);
         host.app.clearColor(host.skyColor[0], host.skyColor[1], host.skyColor[2], host.skyColor[3]);
         host.app.defaultDrawFramebuffer().clear();
 
-        if (host.frameFxaaDrawCall && (host.osrsClient.clientPlugins.gpuSettings()?.fxaa ?? host.fxaaEnabled)) {
-            host.frameFxaaDrawCall.uniform("u_resolution", host.resolutionUni);
-            host.frameFxaaDrawCall.texture("u_frame", host.textureFramebuffer.colorAttachments[0]);
-            host.frameFxaaDrawCall.draw();
+        if (fxaaOn) {
+            host.frameFxaaDrawCall!.uniform("u_resolution", host.resolutionUni);
+            host.frameFxaaDrawCall!.texture("u_frame", frameTexture);
+            host.frameFxaaDrawCall!.draw();
+        } else if (shaderFxOn) {
+            drawShaderFx(host, frameTexture);
         } else {
-            host.frameDrawCall.texture("u_frame", host.textureFramebuffer.colorAttachments[0]);
+            host.frameDrawCall.texture("u_frame", frameTexture);
             host.frameDrawCall.draw();
         }
         profiler.endPhase();
@@ -1731,7 +1745,14 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
                     // Single source of truth: all interaction/height queries
                     // on this overlay map use the deck plane.
-                    overlayMap.interactionPlane = basePlane;
+                    if (overlayMap.interactionPlane !== basePlane) {
+                        overlayMap.interactionPlane = basePlane;
+                        // Its ground items were built with the square, before the deck plane
+                        // was known: lay them on the deck.
+                        if (host.rebuildGroundItemsForMap(overlayMap, host.groundItemStacks.get(overlayMapId))) {
+                            host.groundItemStackHashes.delete(overlayMapId);
+                        }
+                    }
 
                     if (overlay.deckHeight !== undefined && overlay.deckHeight !== 0) continue;
                     if (basePlane === 0) {

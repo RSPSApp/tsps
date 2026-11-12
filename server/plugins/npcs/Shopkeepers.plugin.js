@@ -53,7 +53,6 @@ const POINT_CURRENCIES = [
   "PvP Arena Points",
   "Speedrun Points",
   "Tithe",
-  "Vale Research Points",
   "Volcanic Mine points",
   "Zeal Tokens",
 ];
@@ -208,6 +207,7 @@ function attachShopkeepers(api) {
 
 module.exports = {
   name: "Shopkeepers",
+  description: "Opens shops from NPC Trade options using the shop data, with default and custom NPC-to-shop bindings.",
   register(api) {
     pluginApi = api;
     for (const itemId of ITEM_CURRENCIES) {

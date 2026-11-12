@@ -25,6 +25,9 @@ interface CameraTween {
     ignoreTerrain?: boolean;
     packetHeight?: number;
     startHeight?: number;
+    endpointHeightResolved?: boolean;
+    pendingStart?: ScriptedCameraShot;
+    pendingLook?: ScriptedCameraShot;
     trackTarget?: boolean;
     angles?: { pitch: number; yaw: number; targetPitch: number; targetYaw: number };
     /** cam_moveto_arc: the tile centre the move swings around. */
@@ -202,8 +205,11 @@ export class Camera {
 
     setScriptedPositionCycles(x: number, z: number, cycles: number, easing: CameraEasing, ignoreTerrain: boolean,
         heightAt: (x: number, z: number) => number | undefined, packetHeight: number): void {
+        const pendingStart = this.scriptedMove?.snapPending ? this.scriptedMove : this.scriptedMove?.tween?.pendingStart;
         this.setScriptedPosition(x, this.pos[1], z, 0, 0, heightAt);
-        this.scriptedMove!.tween = { cycles, elapsed: 0, easing, start: vec3.clone(this.pos), ignoreTerrain, packetHeight };
+        this.scriptedMove!.tween = { cycles, elapsed: 0, easing, start: vec3.clone(this.pos), ignoreTerrain, packetHeight, pendingStart };
+        this.resolveScriptedMoveStart();
+        this.refreshScriptedHeight(this.scriptedMove);
     }
 
     /** cam_moveto_arc: a timed move along the circle about (cx, cz), radius and height eased with it. */
@@ -215,10 +221,34 @@ export class Camera {
 
     setScriptedLookCycles(x: number, z: number, cycles: number, easing: CameraEasing, trackTarget: boolean,
         heightAt: (x: number, z: number) => number | undefined): void {
+        const pendingLook = this.scriptedLook?.snapPending ? this.scriptedLook : this.scriptedLook?.tween?.pendingLook;
         this.setScriptedLook(x, this.pos[1], z, 0, 0, heightAt);
         const shot = this.scriptedLook!;
-        shot.tween = { cycles, elapsed: 0, easing, start: vec3.clone(this.pos), trackTarget };
-        if (this.refreshScriptedHeight(shot)) this.advanceScriptedLook();
+        shot.tween = { cycles, elapsed: 0, easing, start: vec3.clone(this.pos), trackTarget, pendingLook };
+        // A cold scene's pending move snap must resolve before freezing angular
+        // endpoints, just as the untimed look waits for that snap's elevation.
+        if (this.resolveScriptedMoveStart() && this.refreshScriptedHeight(shot) && this.refreshScriptedHeight(this.scriptedMove) && !this.scriptedMove?.snapPending && this.resolveScriptedLookStart()) this.advanceScriptedLook();
+    }
+
+    private resolveScriptedLookStart(): boolean {
+        const tween = this.scriptedLook?.tween;
+        const pending = tween?.pendingLook;
+        if (!pending) return true;
+        if (!this.refreshScriptedHeight(pending)) return false;
+        this.advanceScriptedLook(pending);
+        tween!.pendingLook = undefined;
+        return true;
+    }
+
+    private resolveScriptedMoveStart(): boolean {
+        const tween = this.scriptedMove?.tween;
+        const pending = tween?.pendingStart;
+        if (!pending) return true;
+        if (!this.refreshScriptedHeight(pending)) return false;
+        this.snapToPosition(pending.target[0], pending.target[1], pending.target[2]);
+        vec3.copy(tween!.start, this.pos);
+        tween!.pendingStart = undefined;
+        return true;
     }
 
     /**
@@ -252,9 +282,14 @@ export class Camera {
 
     private refreshScriptedHeight(shot: ScriptedCameraShot | undefined): boolean {
         if (!shot?.heightAt) return true;
+        // Fixed angular endpoints no longer depend on the look target's terrain.
+        if (shot.tween?.angles && !shot.tween.trackTarget) return true;
+        // ignoreTerrain interpolates absolute endpoint elevations resolved once.
+        if (shot.tween?.ignoreTerrain && shot.tween.endpointHeightResolved) return true;
         const height = shot.heightAt(shot.target[0], shot.target[2]);
         if (height === undefined || !Number.isFinite(height)) return false;
         shot.target[1] = height;
+        if (shot.tween?.ignoreTerrain) shot.tween.endpointHeightResolved = true;
         return true;
     }
 
@@ -267,9 +302,37 @@ export class Camera {
         for (const shot of [this.scriptedMove, this.scriptedLook]) {
             if (shot) {
                 shot.target[0] += dx; shot.target[2] += dz;
-                if (shot.tween) { shot.tween.start[0] += dx; shot.tween.start[2] += dz; }
+                if (shot.tween) {
+                    shot.tween.start[0] += dx; shot.tween.start[2] += dz;
+                    const pending = shot.tween.pendingStart;
+                    if (pending) { pending.target[0] += dx; pending.target[2] += dz; }
+                    const pendingLook = shot.tween.pendingLook;
+                    if (pendingLook) { pendingLook.target[0] += dx; pendingLook.target[2] += dz; }
+                }
             }
         }
+    }
+
+    /**
+     * The field of view as the engine holds it, not in script units: those round when they
+     * convert, so saving and restoring through them would drift a little each time. Pass `out`
+     * to fill an existing object (no allocation, for per-frame callers).
+     */
+    getViewportFovScale(out: { low: number; high: number } = { low: 0, high: 0 }): { low: number; high: number } {
+        out.low = this.viewportFovLow;
+        out.high = this.viewportFovHigh;
+        return out;
+    }
+
+    setViewportFovScale(low: number, high: number): void {
+        this.viewportFovLow = low;
+        this.viewportFovHigh = high;
+        this.updated = true;
+    }
+
+    /** Whether a server camera shot (cam_moveto, cam_lookat, ...) holds the camera until cam_reset. */
+    isScripted(): boolean {
+        return this.scriptedMove !== undefined || this.scriptedLook !== undefined;
     }
 
     clearScriptedCamera(): void {
@@ -289,8 +352,7 @@ export class Camera {
         return current + Math.sign(target - current) * Math.min(distance, Math.trunc(distance * rate2 / 1000) + rate);
     }
 
-    private advanceScriptedLook(): void {
-        const look = this.scriptedLook;
+    private advanceScriptedLook(look = this.scriptedLook): void {
         if (!look) return;
         const dx = Math.trunc((look.target[0] - this.pos[0]) * 128);
         const dy = Math.trunc((look.target[1] - this.pos[1]) * 128);
@@ -323,13 +385,15 @@ export class Camera {
 
     private advanceScriptedCamera(deltaTimeMs: number): void {
         const move = this.scriptedMove, look = this.scriptedLook;
+        if (!this.resolveScriptedMoveStart()) { this.scriptedCycleMs = 0; return; }
         const moveReady = this.refreshScriptedHeight(move), lookReady = this.refreshScriptedHeight(look);
         if (!moveReady || !lookReady) { this.scriptedCycleMs = 0; return; }
         if (move?.snapPending) {
             this.snapToPosition(move.target[0], move.target[1], move.target[2]);
             move.snapPending = false;
         }
-        if (look?.snapPending) this.advanceScriptedLook();
+        if (!this.resolveScriptedLookStart()) { this.scriptedCycleMs = 0; return; }
+        if (look?.snapPending || (look?.tween && !look.tween.angles)) this.advanceScriptedLook();
         // OSRS applies the constant + proportional rates in integer fine units every 20ms.
         this.scriptedCycleMs += Math.max(0, deltaTimeMs);
         while (this.scriptedCycleMs >= 20) {

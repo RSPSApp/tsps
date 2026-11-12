@@ -386,8 +386,14 @@ function answerSpell(request) {
   for (const staff of staves) staff.answerSpell(request);
 }
 
+/** "item:fill-charges": a trident handed out ready to use (PvP Arena load-outs) comes full. */
+function fillCharges(event) {
+  recipeForTridentId(event.item?.getId?.())?.staff.fillCharges(event);
+}
+
 module.exports = {
   name: "Trident",
+  description: "Adds the tridents of the seas and the swamp, with charging, uncharging, powered-staff casting and the swamp trident's chance to venom.",
   members: true,
   _test: {
     get RECIPES() { return RECIPES; },
@@ -431,5 +437,6 @@ module.exports = {
     }
     pluginApi.registerCombatMethodResolver({ resolve: resolveTrident });
     pluginApi.onCustomEvent("powered-staff:spell", answerSpell);
+    pluginApi.onCustomEvent("item:fill-charges", fillCharges);
   },
 };

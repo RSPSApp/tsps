@@ -10,6 +10,7 @@ const {
 } = require("./RecruitConstants.PlayerBots");
 const { PvpProfileId } = require("../behaviours/pvp/PvpProfileRegistry.PlayerBots");
 const LootKeys = require("../../items/LootKeys.plugin");
+const Presets = require("../../modes/pvp/Presets.PvpMode");
 
 let World = null;
 let ItemOnGroundManager = null;
@@ -101,6 +102,11 @@ function resolveBloodMoneyRecipient(killer) {
 }
 
 function rewardBloodMoney(killer, victim, amount) {
+  // Blood money is the PvP world's currency (PvpMode turns on the PK shops' prices in it); OSRS only has it
+  // in Deadman Mode, so a regular world's bot kills pay none.
+  if (Presets.isEnabled() !== true) {
+    return;
+  }
   const payout = resolveBloodMoneyRecipient(killer);
   if (!payout?.recipient || amount <= 0) {
     return;

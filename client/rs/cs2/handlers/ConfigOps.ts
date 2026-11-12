@@ -14,12 +14,14 @@ import {
 import { isNpcSearch, isNpcSearchResult, setNpcSearchResults } from "../spawnSearch";
 import { createTypedArrayFromCode } from "../Cs2ArrayObject";
 import { Opcodes } from "../Opcodes";
+import { SPECIAL_ATTACK_ENUM, customSpecialAttackCost } from "../../../custom/items/CustomSpecialAttacks";
 import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import type { HandlerContext, HandlerMap, ItemNameIndexEntry } from "./HandlerTypes";
 import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL } from "../../../common/ui/gameframeLayout";
 
 /** Item ids 0-65535 cover every standard item. */
 const ITEM_SEARCH_MAX_ID = 65535;
+const ITEM_SEARCH_MAX_RESULTS = 250;
 
 /**
  * The names every oc_find searches, read from the definitions once. The Grand Exchange and
@@ -169,35 +171,40 @@ export function registerConfigOps(handlers: HandlerMap): void {
         ctx.itemSearchQuery = query;
         ctx.itemSearchTradableOnly = tradableOnly;
         // RuneLite plugins may supply the result array/count before vanilla search runs.
-        if (!isNpcSearch() && ctx.beforeItemSearch?.()) {
-            ctx.pushInt(ctx.itemSearchCount);
-            return;
-        }
+        const supplied = !isNpcSearch() && ctx.beforeItemSearch?.();
+        if (!supplied) {
+            // Clear previous search results
+            ctx.itemSearchResults = [];
+            ctx.itemSearchIndex = 0;
 
-        // Clear previous search results
-        ctx.itemSearchResults = [];
-        ctx.itemSearchIndex = 0;
-
-        if (query.length > 0 && isNpcSearch() && ctx.npcTypeLoader) {
-            const count = ctx.npcTypeLoader.getCount();
-            for (let id = 0; id < count; id++) {
-                const npc = ctx.npcTypeLoader.load(id);
-                if (npc?.name && npc.name !== "null" && npc.name.toLowerCase().includes(query)) {
-                    ctx.itemSearchResults.push(id);
+            if (query.length > 0 && isNpcSearch() && ctx.npcTypeLoader) {
+                const count = ctx.npcTypeLoader.getCount();
+                for (let id = 0; id < count; id++) {
+                    const npc = ctx.npcTypeLoader.load(id);
+                    if (npc?.name && npc.name !== "null" && npc.name.toLowerCase().includes(query)) {
+                        ctx.itemSearchResults.push(id);
+                    }
+                }
+                setNpcSearchResults(ctx.itemSearchResults);
+            } else if (query.length > 0 && ctx.objTypeLoader) {
+                // A tradable-only search (the Grand Exchange) also drops the untradeable variants
+                // that share a real item's name (Abyssal whip 4178, 20405).
+                for (const entry of itemNameIndex(ctx)) {
+                    if ((!tradableOnly || entry.tradable) && entry.name.includes(query)) {
+                        ctx.itemSearchResults.push(entry.id);
+                    }
                 }
             }
-            setNpcSearchResults(ctx.itemSearchResults);
-        } else if (query.length > 0 && ctx.objTypeLoader) {
-            // A tradable-only search (the Grand Exchange) also drops the untradeable variants
-            // that share a real item's name (Abyssal whip 4178, 20405).
-            for (const entry of itemNameIndex(ctx)) {
-                if ((!tradableOnly || entry.tradable) && entry.name.includes(query)) {
-                    ctx.itemSearchResults.push(entry.id);
-                }
-            }
-        }
 
-        ctx.itemSearchCount = ctx.itemSearchResults.length;
+            ctx.itemSearchCount = ctx.itemSearchResults.length;
+        }
+        // Every producer feeds script 752, whose negative count shows the refine prompt.
+        if (ctx.itemSearchCount > ITEM_SEARCH_MAX_RESULTS) {
+            ctx.itemSearchResults = [];
+            ctx.itemSearchIndex = 0;
+            ctx.itemSearchCount = -1;
+            if (isNpcSearch()) setNpcSearchResults([]);
+        }
         ctx.pushInt(ctx.itemSearchCount);
     });
 
@@ -210,11 +217,7 @@ export function registerConfigOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.OC_FINDRESET, (ctx) => {
-        // Reset search state
-        ctx.itemSearchCount = 0;
-        ctx.itemSearchResults = [];
         ctx.itemSearchIndex = 0;
-        setNpcSearchResults([]);
     });
 
     handlers.set(Opcodes.OC_SHIFTCLICKIOP, (ctx) => {
@@ -435,6 +438,18 @@ export function registerConfigOps(handlers: HandlerMap): void {
 
         const enumType = loadEnum(ctx, enumId);
         const baseCount = enumType?.outputCount ?? 0;
+
+        // A custom weapon with a special attack gets a special-weapons entry, so its bar shows.
+        if (enumId === SPECIAL_ATTACK_ENUM && !wantsString) {
+            const cost = customSpecialAttackCost(key, (from) => {
+                const idx = enumType?.keys?.indexOf(from) ?? -1;
+                return idx >= 0 ? enumType?.intValues?.[idx] : undefined;
+            });
+            if (cost !== undefined) {
+                ctx.pushInt(cost);
+                return;
+            }
+        }
 
         // Check for custom content enum override
         // - Tasks are prepended (inserted at beginning)

@@ -40,10 +40,10 @@ before(() => {
     onObjectInteraction: (handler) => { if (typeof handler === "function") objectHandlers.push(handler); },
     onBeforeObjectInteraction: (handler) => beforeObjectHandlers.push(handler),
   };
-  require("../plugins/skills/sailing/Sailing.plugin").register(real);
-  require("../plugins/skills/sailing/Helm.plugin").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
+  require("../plugins/skills/sailing/Panel.Sailing").register(real);
+  require("../plugins/skills/sailing/Helm.Sailing").register({ ...real, onObjectInteraction() {}, onObjectRoute() {} });
   require("../plugins/interface/Notifications.plugin").register(real);
-  require("../plugins/skills/sailing/Charting.plugin").register(api);
+  require("../plugins/skills/sailing/Charting.Sailing").register(api);
 });
 
 let nextIndex = 900;
@@ -741,6 +741,7 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
 
 test("Chartin' Charles pays the owed ocean bonuses at once (rsprox 948)", () => {
   const player = captain();
+  player.getInventory().add(new (require("../dist/game/model/Item").Item)(31985, 1), false); // the captain's log
   const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
   for (const spot of common.oceanSpots(ocean)) common.complete(player, spot);
   assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "jBl-4T" }), true);
@@ -756,6 +757,21 @@ test("Chartin' Charles pays the owed ocean bonuses at once (rsprox 948)", () => 
   assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "dx41Cr" }), true, "nothing owed now");
   tutor.pay(player);
   assert.deepEqual(player.xp, [2000]);
+});
+
+test("Chartin' Charles pays no bonus without the captain's log in the inventory (Wiki)", () => {
+  // Wiki (Chartin' Charles, Training): "You must have the captain's log in your inventory to receive the bonus XP."
+  const player = captain();
+  const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
+  for (const spot of common.oceanSpots(ocean)) common.complete(player, spot);
+  player.xp.length = 0;
+  assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "dx41Cr" }), true, "his nothing-owed answer");
+  assert.equal(tutor.answerCondition({ player, npcId: 15151, stepId: "jBl-4T" }), false);
+  tutor.pay(player);
+  assert.deepEqual(player.xp, [], "no XP");
+  player.getInventory().add(new (require("../dist/game/model/Item").Item)(31985, 1), false);
+  tutor.pay(player);
+  assert.deepEqual(player.xp, [2000], "the ocean is still owed, and paid once the log is carried");
 });
 
 test("a full inventory leaves the crab statue uncharted until its fragment fits (review #1472)", () => {
@@ -782,5 +798,38 @@ test("a full inventory leaves the crab statue uncharted until its fragment fits 
     assert.equal(player.getInventory().getAmount(32395), 1, "the fragment, once there's room");
   } finally {
     leave(player);
+  }
+});
+
+test("All Settings' Charting popups off (settings_sailing_charting_popup): the charting is told in chat only", () => {
+  for (const off of [0, 1]) {
+    const player = captain();
+    atTheHelm(player);
+    try {
+      player.getPacketSender().sendVarbit(varbit("settings_sailing_charting_popup"), off);
+      chart(player, "generic_rock_bay_of_sarim");
+      tick();
+      assert.ok(player.messages().includes(`Charting complete: ${blue("Find a treacherous rock formation near Draynor Village.")}`));
+      const popup = player.sent.some(([key, script]) => key === "sendInterfaceScript" && script === 3343);
+      assert.equal(popup, off === 0, off ? "no popup" : "the popup, as by default");
+    } finally {
+      leave(player);
+    }
+  }
+});
+
+test("All Settings' Current duck hint arrow off: the released duck gets no arrow", () => {
+  for (const off of [0, 1]) {
+    const player = duckCaptain();
+    try {
+      player.getPacketSender().sendVarbit(varbit("sailing_current_duck_hintarrow_disabled"), off);
+      currentDuck.trackCurrent({ player });
+      tick(2);
+      assert.ok(currentDuck.ducks.get(player), "the duck is out either way");
+      assert.equal(player.sent.some(([key]) => key === "sendEntityHint"), off === 0);
+      assert.equal(player.varbits.get(14192), off ? undefined : 5, "current_hint_arrow");
+    } finally {
+      leave(player);
+    }
   }
 });

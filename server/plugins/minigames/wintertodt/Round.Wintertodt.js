@@ -17,6 +17,7 @@ const Warmth = require("./Warmth.Wintertodt");
 const CombatAchievements = require("./CombatAchievements.Wintertodt");
 
 const ATTR_KILLS = "wintertodt:kills";
+const ATTR_BEST = "wintertodt:best-points";
 const ATTR_REWARDS = "wintertodt:rewards-owed";
 
 const round = {
@@ -175,12 +176,21 @@ function reward(player, points) {
   const experience = Shared.firemakingLevel(player) * 100;
   player.getSkillManager().addExperiences(Skill.FIREMAKING, experience);
   const gained = Math.floor(experience * (GameConstants.EXPERIENCE_MULTIPLIER ?? 1));
-  player.sendMessage(`You have gained ${gained.toLocaleString("en-US")} Firemaking XP.`);
+  // rsprox_transcripts/233/03254.txt:15102: "You have gained 9900 Firemaking XP." (no separator).
+  player.sendMessage(`You have gained ${gained} Firemaking XP.`);
 
   const kills = killsOf(player) + 1;
   player.setAttribute(ATTR_KILLS, kills);
   player.sendMessage(`Your subdued Wintertodt count is: <col=ff0000>${kills}</col>.`);
   CombatAchievements.subdued(player, points, kills);
+
+  // rsprox_transcripts/233/03262.txt (tick 2580): after the count, before the cart line, "You have a new high score!
+  // 8530" (the number plain) when the round's points beat the player's best.
+  const best = Math.max(0, Math.trunc(Number(player.getAttribute(ATTR_BEST)) || 0));
+  if (points > best) {
+    player.setAttribute(ATTR_BEST, points);
+    player.sendMessage(`You have a new high score! ${points}`);
+  }
 
   const earned = rewardsFor(points);
   const owed = Math.min(Shared.MAX_REWARDS, rewardsOwed(player) + earned);
@@ -272,7 +282,7 @@ function setEnergy(value) {
 }
 
 module.exports = {
-  ATTR_KILLS, ATTR_REWARDS,
+  ATTR_KILLS, ATTR_BEST, ATTR_REWARDS,
   isActive, energy, energyPercent, corner, inPrison, playersInPrison,
   pointsOf, addPoints, forgetPlayer,
   openHud, closeHud, sendHud, broadcast,

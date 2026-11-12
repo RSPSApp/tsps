@@ -312,3 +312,131 @@ test('challenge, decline messages and board names show display names, never logi
     assert.ok(!text.includes(a.getUsername()) && !text.includes(b.getUsername()), `no login name in "${text}"`);
   }
 });
+
+test('Runeversi native challenge/options choose independent rank and fixed offered settings', async () => {
+  const a=actor(), b=actor();
+  a.setAttribute('games-room:runeversi-rank',1200); b.setAttribute('games-room:runeversi-rank',1600);
+  await challenge(a,b);
+  assert.equal(textValue(received(a),core.CacheDefinitions.getComponentId('boardgames_challenge:runeversi_rank')),'1200 vs 1600');
+  await click(a,'boardgames_challenge:runeversi');await click(a,'boardgames_challenge:select');
+  assert.equal(a.getInterfaceId(),core.CacheDefinitions.getInterfaceId('boardgames_runeversi_options'));
+  assertRuneRows(received(a),'runeversi');
+  await click(a,'boardgames_runeversi_options:bloodrune');await click(a,'boardgames_runeversi_options:15seconds');
+  await click(a,'boardgames_runeversi_options:ranked');await click(a,'boardgames_runeversi_options:challenge');
+  assert.deepEqual(Room.invitation(a,b).settings,{piece:11,seconds:15,ranked:false});
+  await choice(b,1);const options=received(b);
+  assert.ok(hasButtonLabel(options,core.CacheDefinitions.getComponentId('boardgames_runeversi_options:challenge'),'Accept'));
+  for (const name of ['15seconds','30seconds','1minute','2minutes','ranked']) assert.equal(flagValue(options,core.CacheDefinitions.getComponentId(`boardgames_runeversi_options:${name}`)),0);
+  await click(b,'boardgames_runeversi_options:2minutes');await click(b,'boardgames_runeversi_options:ranked');
+  await click(b,'boardgames_runeversi_options:soulrune');await click(b,'boardgames_runeversi_options:challenge');
+  assert.deepEqual(Room.matchOf(a).settings,{seconds:15,ranked:false,pieces:[11,12]});
+});
+
+test('Runeversi static native squares flip bracketed runes and reject forged/stale controls', async () => {
+  const a=actor(),b=actor(),m=await match(a,b,'runeversi');
+  const side=m.state.turn,active=m.players[side],waiting=m.players[1-side],move=Rules.legalMoves(m.state)[0];
+  const snapshot=m.state.board.slice();
+  const packets=received(active),waitPackets=received(waiting);
+  const legal=new Set(Rules.legalMoves(m.state).map(x=>x.to));
+  for(let to=0;to<64;to++) {
+    const uid=core.CacheDefinitions.getComponentId(`boardgames_runeversi:square_${to}`);
+    assert.equal(flagValue(packets,uid),legal.has(to)?2:0);assert.equal(flagValue(waitPackets,uid),0);
+  }
+  await click(waiting,`boardgames_runeversi:square_${move.to}`);
+  await click(active,'boardgames_runeversi:square_27');await click(active,'boardgames_runeversi:square_0');
+  await click(active,'boardgames_runeversi:boardinv',move.to);
+  assert.deepEqual(m.state.board,snapshot);
+  await click(active,`boardgames_runeversi:square_${move.to}`);
+  assert.equal(m.state.board.filter(Boolean).length,5);
+  assert.equal(m.state.board.filter(x=>x===(side===0?1:-1)).length,4);
+  assert.equal(m.turns,1);assert.equal(m.state.turn,1-side);
+  const after=m.state.board.slice();await click(active,`boardgames_runeversi:square_${move.to}`);
+  assert.deepEqual(m.state.board,after);
+});
+
+test('Runeversi mandatory pass counts a completed move, resets clock and auto-moves legally', async () => {
+  const a=actor(),b=actor(),m=await match(a,b,'runeversi');
+  // Controlled near-end fixture, played through the actual native square packet.
+  m.state.board.fill(1);m.state.board[0]=m.state.board[56]=0;m.state.board[1]=m.state.board[57]=-1;m.state.turn=0;
+  const Screen=require('../plugins/minigames/gamesroom/Interface.GamesRoom');
+  for(const p of m.players)Screen.refreshMatch(p,m);
+  const cycle=core.World.processCycle;
+  try {
+    core.World.processCycle=m.deadline-1;
+    await click(a,'boardgames_runeversi:square_0');
+    assert.equal(m.state.turn,0);assert.equal(m.state.passed,1);assert.equal(m.turns,1);
+    const passStatus=core.CacheDefinitions.getComponentId('boardgames_runeversi:status2');
+    assert.equal(textValue(received(a),passStatus),'Opponent has no legal move.');
+    assert.equal(textValue(received(b),passStatus),'You have no legal move.');
+    assert.ok(m.deadline>core.World.getProcessCycle());
+    core.World.processCycle=m.deadline-1;Room.areaOf().process(a);assert.equal(m.state.board[56],0);
+    core.World.processCycle=m.deadline;Room.areaOf().process(a);assert.equal(m.state.board[56],1);
+    assert.equal(m.state.result.winner,0);assert.equal(m.turns,2);assert.equal(Room.matchOf(a),undefined);
+  } finally {core.World.processCycle=cycle;}
+});
+
+test('Runeversi complete native game updates only its independent persisted rank', async () => {
+  const a=actor(),b=actor(),m=await match(a,b,'runeversi');
+  for(let n=0;n<61&&!m.finished;n++) {
+    const move=Rules.legalMoves(m.state)[0];assert.ok(move);
+    await click(m.players[m.state.turn],`boardgames_runeversi:square_${move.to}`);
+  }
+  assert.equal(m.finished,true);assert.ok(m.turns>=4);
+  const balance=m.state.board.reduce((sum,x)=>sum+x,0);
+  assert.equal(m.state.result.winner,balance===0?null:balance>0?0:1);
+  const {PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  for(const [side,p] of m.players.entries()) {
+    const save=PlayerSave.fromPlayer(p);
+    assert.equal(save.attributes['games-room:runeversi-rank'],m.state.result.winner==null?undefined:side===m.state.result.winner?1050:950);
+    assert.equal(save.attributes['games-room:draughts-rank'],undefined);assert.equal(save.attributes['games-room:runelink-rank'],undefined);
+    const ended=received(p);
+    assert.equal(textValue(ended,core.CacheDefinitions.getComponentId('boardgames_runeversi:status2')),
+      `${m.state.board.filter(p=>p>0).length} vs ${m.state.board.filter(p=>p<0).length}`);
+    assert.equal(hiddenValue(ended,core.CacheDefinitions.getComponentId('boardgames_runeversi:close')),0);
+    for(let to=0;to<64;to++)assert.equal(flagValue(ended,core.CacheDefinitions.getComponentId(`boardgames_runeversi:square_${to}`)),0);
+  }
+});
+
+test('Runeversi draw, rematch, resign, modal replacement and logout clean up exactly once', async () => {
+  const a=actor(),b=actor();let m=await match(a,b,'runeversi');
+  await click(a,'boardgames_runeversi:offer_draw');await click(b,'boardgames_runeversi:offer_draw');
+  assert.equal(m.state.result.winner,null);
+  for(const p of [a,b]) {assert.equal(p.getAttribute('games-room:runeversi-rank'),undefined);await click(p,'boardgames_runeversi:close');}
+  m=await match(a,b,'runeversi');assert.equal(m.state.board.filter(Boolean).length,4);
+  await click(a,'boardgames_runeversi:resign');assert.equal(m.state.result.winner,1);
+  const next=await match(a,b,'runeversi');
+  PM.emitCustomEvent('interface:closed',{player:a,interfaceId:12});assert.equal(Room.matchOf(a),next);
+  a.getPacketSender().sendInterface(12);assert.equal(next.state.result.winner,1);a.getPacketSender().sendInterfaceRemoval();
+  m=await match(a,b,'runeversi');PM.emitPlayerLogout({player:b,username:b.getUsername()});assert.equal(m.state.result.winner,0);
+  assert.equal(Room.matchOf(a),undefined);assert.equal(Room.matchOf(b),undefined);
+});
+
+for (const game of ['runelink','runeversi']) test(`native ${game} occupied-table View-game is read-only and viewer Close cannot forfeit either player`, async () => {
+  const a=actor(), b=actor(), v=actor();
+  a.setDisplayName('Board One'); b.setDisplayName('Board Two');
+  const m=await match(a,b,game);
+  const table=m.allocation.playingTable, at=table.getLocation();
+  v.moveTo(at.clone().transform(0,-1));placementTick();received(v);
+  const frame=Buffer.alloc(8);frame[0]=96;
+  frame[1]=(at.getX()+128)&255;frame[2]=at.getX()>>>8;
+  frame.writeUInt16LE(at.getY(),3);frame[5]=0;
+  frame[6]=table.getId()>>>8;frame[7]=(table.getId()+128)&255;
+  await wire(v,frame);
+  const Viewer=require('../plugins/minigames/gamesroom/Spectator.GamesRoom');
+  assert.ok(Viewer.viewOf(v)===m, JSON.stringify({position:v.getLocation(),interface:v.getInterfaceId(),table:table.getId(),decoded:require('../dist/net/protocol/ClientProtocol').decodeClientPackets(frame)}));
+  const packets=received(v), uid=name=>core.CacheDefinitions.getComponentId(`boardgames_${game}:${name}`);
+  for(const name of ['resign','offer_draw','turn','turn_name','sandtimer'])assert.equal(hiddenValue(packets,uid(name)),1,name);
+  assert.equal(hiddenValue(packets,uid('close')),0);
+  if (game === 'runelink') for(let column=0;column<7;column++)assert.equal(flagValue(packets,uid(`column${column}`)),0);
+  else for(let to=0;to<64;to++)assert.equal(flagValue(packets,uid(`square_${to}`)),0);
+  assert.equal(textValue(packets,uid('p1_name')),'Board One');
+  assert.equal(textValue(packets,uid('p2_name')),'Board Two');
+  const count=m.state.board.filter(Boolean).length, move=Rules.legalMoves(m.state)[0];
+  const control=`boardgames_${game}:${game === 'runelink' ? `column${move.column}` : `square_${move.to}`}`;
+  await click(v,control);await click(v,`boardgames_${game}:resign`);await click(v,`boardgames_${game}:offer_draw`);
+  assert.equal(m.state.board.filter(Boolean).length,count);assert.equal(m.finished,undefined);assert.equal(m.drawOffer,null);
+  await click(m.players[m.state.turn],control);
+  assert.equal(m.state.board.filter(Boolean).length,count+1);assert.ok(received(v).some(p=>p.id===110));
+  await click(v,`boardgames_${game}:close`);
+  assert.equal(Viewer.viewOf(v),undefined);assert.equal(Room.matchOf(a),m);assert.equal(Room.matchOf(b),m);
+});

@@ -16,6 +16,8 @@ const DEFENDER_CHANCE = 50;
 const DRAGON_DEFENDER_CHANCE = 100;
 const EARNED_ATTRIBUTE = "warriors-guild:defender";
 const LORELAI_ATTRIBUTE = "warriors-guild:basement-unlocked";
+/** The room a player is inside and its clock, kept current so any save (autosave, shutdown, logout) can resume it ({} when outside). */
+const ROOM_ATTRIBUTE = "warriors-guild:room";
 
 /** Kamfreena's double door on the top floor (west edge of x 2847) and her lobby beside it. */
 const TOP_DOORS = { x: 2847, ys: [3540, 3541], z: 2 };
@@ -95,11 +97,24 @@ function tokens(player) {
   return player.getInventory().getAmount(Guild.ITEMS.TOKEN);
 }
 
+/** Mirrors the room and its clock into the persisted attribute (an in-memory write until a save reads it). */
+function writeRoom(player, state) {
+  const { room, tier, ticks, graceTicks } = state;
+  player.setAttribute(ROOM_ATTRIBUTE, { room, tier, ticks, graceTicks });
+}
+
+function clearRoom(player) {
+  inside.delete(player);
+  player.setAttribute(ROOM_ATTRIBUTE, {});
+}
+
 function enter(player, room, door, to, tier) {
   const free = Guild.wearsAttackCape(player);
   if (!free) player.getInventory().deleteNumber(Guild.ITEMS.TOKEN, TOKENS_PER_MINUTE);
   // `arriving` covers the walk through the door before the room checks start.
-  inside.set(player, { room, tier, ticks: 0, graceTicks: -1, free, arriving: 3 });
+  const state = { room, tier, ticks: 0, graceTicks: -1, free, arriving: 3 };
+  inside.set(player, state);
+  writeRoom(player, state);
   Guild.crossDoor(player, door, to);
 }
 
@@ -245,25 +260,30 @@ function spendTime({ player }) {
   }
   const location = player.getLocation();
   if (!(state.room === "top" ? inTopRoom(location) : inBasementRoom(location))) {
-    inside.delete(player);
+    clearRoom(player);
     return;
   }
   if (state.free) return;
   if (state.graceTicks >= 0) {
     if (--state.graceTicks < 0) {
-      inside.delete(player);
+      clearRoom(player);
       player.moveTo(exitTile(state.room));
       Guild.playTranscript(api, player, host(state.room), "after-running-out-of-tokens-in-the-room-if-the-player-does-not-leave-the-room-after-100-ticks");
+    } else {
+      writeRoom(player, state);
     }
     return;
   }
-  if (++state.ticks % MINUTE_TICKS !== 0) return;
+  ++state.ticks;
+  writeRoom(player, state);
+  if (state.ticks % MINUTE_TICKS !== 0) return;
   if (tokens(player) >= TOKENS_PER_MINUTE) {
     player.getInventory().deleteNumber(Guild.ITEMS.TOKEN, TOKENS_PER_MINUTE);
     player.sendMessage(`${TOKENS_PER_MINUTE} of your tokens crumble away.`);
   }
   if (tokens(player) < TOKENS_PER_MINUTE) {
     state.graceTicks = MINUTE_TICKS;
+    writeRoom(player, state);
     Guild.playTranscript(api, player, host(state.room), "after-running-out-of-tokens-in-the-room");
   }
 }
@@ -276,8 +296,32 @@ function keepCapeOn(event) {
   Guild.playTranscript(api, event.player, host(state.room), "attempting-to-take-off-the-attack-cape-or-max-cape-while-in-the-room");
 }
 
+/** Logging out inside a room keeps its clock and the defender it drops; nothing is charged or reset. */
 function leaveRooms({ player }) {
+  const state = inside.get(player);
   inside.delete(player);
+  player.setAttribute(ROOM_ATTRIBUTE, state ? { room: state.room, tier: state.tier, ticks: state.ticks, graceTicks: state.graceTicks } : {});
+}
+
+function validRoomState(saved, room) {
+  return saved?.room === room && Number.isInteger(saved.tier) && saved.tier >= 0 && saved.tier <= DRAGON_TIER
+    && Number.isInteger(saved.ticks) && saved.ticks >= 0 && Number.isInteger(saved.graceTicks) && saved.graceTicks >= -1;
+}
+
+/** Back in a room they were saved in: the same clock and defender, no entry fee. Inside one with no usable state: shown out. */
+function resumeRoom({ player }) {
+  const saved = player.getAttribute(ROOM_ATTRIBUTE);
+  player.setAttribute(ROOM_ATTRIBUTE, {});
+  const location = player.getLocation();
+  const room = inTopRoom(location) ? "top" : inBasementRoom(location) ? "basement" : null;
+  if (!room) return;
+  if (!validRoomState(saved, room)) {
+    player.moveTo(exitTile(room));
+    return;
+  }
+  const state = { room, tier: saved.tier, ticks: saved.ticks, graceTicks: saved.graceTicks, free: Guild.wearsAttackCape(player), arriving: 0 };
+  inside.set(player, state);
+  writeRoom(player, state);
 }
 
 // --- Defender drops.
@@ -306,6 +350,7 @@ module.exports = function attachCyclopes(pluginApi) {
   buildIds();
   api.persistAttribute(EARNED_ATTRIBUTE);
   api.persistAttribute(LORELAI_ATTRIBUTE);
+  api.persistAttribute(ROOM_ATTRIBUTE, {});
   api.onObjectInteraction("Door", { Open: useTopDoor });
   api.onObjectInteraction("Door", { Open: useBasementDoor });
   api.onObjectInteraction("Ladder", { "Climb-down": climbLadder, "Climb-up": climbLadder });
@@ -316,6 +361,7 @@ module.exports = function attachCyclopes(pluginApi) {
   api.onPlayerProcess(spendTime);
   api.onCanUnequip(keepCapeOn);
   api.onPlayerLogout(leaveRooms);
+  api.onPlayerLogin(resumeRoom);
   api.onCustomEvent("npc-drops:roll", dropDefenders);
   api.onNpcHitModify(meleeOnly);
 };

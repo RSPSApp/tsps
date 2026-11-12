@@ -53,9 +53,20 @@ export abstract class PrivateArea extends Area {
         if (this.destroyed) {
             return;
         }
-        for (let npc of this.getNpcs()) {
-            if (npc.isRegistered()) {
-                World.getRemoveNPCQueue().push(npc);
+        // NPCs that entered the area, and those attached with add() (a boss or minions spawned for the instance, which
+        // never pass through enter() while the area is unregistered): none outlives the instance, a pending spawn included.
+        const removeQueue = World.getRemoveNPCQueue();
+        const addQueue = World.getAddNPCQueue();
+        const npcs = new Set(this.getNpcs());
+        for (const entity of this.entities as any[]) {
+            if (entity?.isNpc?.() === true) npcs.add(entity.getAsNpc());
+        }
+        for (const npc of npcs) {
+            for (let index = addQueue.indexOf(npc); index !== -1; index = addQueue.indexOf(npc)) {
+                addQueue.splice(index, 1);
+            }
+            if (npc.isRegistered() && !removeQueue.includes(npc)) {
+                removeQueue.push(npc);
             }
         }
         for (let object of this.getObjects()) {
@@ -91,6 +102,11 @@ export abstract class PrivateArea extends Area {
      */
     public countsAsMainWorld(): boolean {
         return false;
+    }
+
+    /** Optional default lifetime for floor items in this instance, in game ticks. */
+    public groundItemDespawnDelay(): number | null {
+        return null;
     }
 
     /** Whether this area's scene is copied from cache template chunks instead of the normal map. */

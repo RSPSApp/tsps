@@ -68,7 +68,7 @@ function SetupDetails({
     const currentEquipment = plugin.getCurrentEquipment();
     const inventoryCounts = counts(currentInventory);
     const currentOwnedCounts = new Map(inventoryCounts);
-    for (const slot of currentEquipment) if (slot.itemId >= 0) currentOwnedCounts.set(slot.itemId, (currentOwnedCounts.get(slot.itemId) ?? 0) + Math.max(1, slot.quantity));
+    for (const slot of currentEquipment) if (slot.itemId >= 0 && slot.quantity > 0) currentOwnedCounts.set(slot.itemId, (currentOwnedCounts.get(slot.itemId) ?? 0) + slot.quantity);
 
     return (
         <div>

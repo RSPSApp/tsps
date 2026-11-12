@@ -106,7 +106,7 @@ test('native blade hazards use the shared clock, real clipping, movement and ses
     const perform=p.performAnimation.bind(p);
     test.mock.method(p,'performAnimation',animation=>{events.push([Shared.cycle.tick,'performAnimation',animation]);return perform(animation);});
     const sender=p.getPacketSender();
-    for(const name of ['sendObject','sendObjectRemoval','sendObjectAnimation','sendTypedMessage','sendSoundEffect']) {
+    for(const name of ['sendObject','sendObjectRemoval','sendObjectAnimation','sendTypedMessage','sendSoundEffect','sendGraphic','sendProjectile']) {
       const original=sender[name].bind(sender);
       test.mock.method(sender,name,(...args)=>{events.push([Shared.cycle.tick,name,...args]);return original(...args);});
     }
@@ -217,6 +217,97 @@ test('native blade hazards use the shared clock, real clipping, movement and ses
     assert.ok(f.p.getSkillManager().getExperience(core.Skill.AGILITY)>f.xp);
     assert.equal(f.events.filter(([,name])=>name==='performAnimation').at(-1)[2].getId(),resetAnimation,
       'the existing default runner completion still resets other obstacle animations');
+  });
+
+  await t.test('successful floor spikes activate the physical entry tile at jump+1 and land/award at jump+2', async test => {
+    // Every cache3582 placement, both directions across each of the three spans.
+    const cases = [
+      [2761,9573,3,2761,9572,2761,9575], [2761,9574,1,2761,9575,2761,9572],
+      [2772,9551,3,2772,9550,2772,9553], [2772,9552,1,2772,9553,2772,9550],
+      [2799,9568,0,2798,9568,2801,9568], [2800,9568,2,2801,9568,2798,9568],
+    ];
+    for (const [x,y,face,sx,sy,lx,ly] of cases) await test.test(`${x},${y} face${face}`, sub => {
+      const f=actor(sub,sx,sy), observer=actor(sub,x+2,y+2); Shared.setRandom(()=>0);
+      const object=MapObjects.get(3582,at(x,y),null);
+      assert.ok(object); assert.equal(object.getType(),10); assert.equal(object.getFace(),face);
+      const awards=[], addXp=Shared.addObstacleXp;
+      sub.mock.method(Shared,'addObstacleXp',(p,kind)=>{if(p===f.p)awards.push([Shared.cycle.tick,kind]);return addXp(p,kind);});
+      f.p.getMovementQueue().requestWalk(at(x,y)); turn(); turn(); const started=Shared.cycle.tick;
+      assert.deepEqual(position(f.p),[x,y,3]);
+      const force=f.p.getForceMovement(); assert.ok(force);
+      assert.deepEqual([force.getSpeed(),force.getReverseSpeed()],[30,49]);
+      assert.ok(f.events.some(([tick,name,a])=>tick===started&&name==='performAnimation'&&a.getId()===1115&&a.getDelay()===20));
+      assert.equal(f.events.filter(([,name,,a])=>name==='sendObjectAnimation'&&a.getId()===1111).length,0);
+      assert.equal(f.p.getSkillManager().getExperience(core.Skill.AGILITY),f.xp);
+      turn();
+      for(const a of [f,observer]) {
+        const events=a.events.filter(([,name,,animation])=>name==='sendObjectAnimation'&&animation.getId()===1111);
+        assert.equal(events.length,1,'entry activation reaches jumper and nearby observer exactly once');
+        const [tick,,target,animation]=events[0]; assert.equal(tick,started+1);
+        assert.equal(target,object); assert.deepEqual([target.getId(),target.getType(),target.getFace()],[3582,10,face]);
+        assert.deepEqual([target.getLocation().getX(),target.getLocation().getY(),target.getLocation().getZ()],[x,y,3]);
+      }
+      assert.deepEqual(position(f.p),[x,y,3],'activation must not land the player one tick early');
+      assert.ok(f.p.getForceMovement()); assert.deepEqual(awards,[]);
+      turn(); assert.deepEqual(position(f.p),[lx,ly,3]); assert.equal(f.p.getForceMovement(),null);
+      assert.deepEqual(awards,[[started+2,'FLOOR_SPIKES']]);
+      const xp=f.p.getSkillManager().getExperience(core.Skill.AGILITY); assert.ok(xp>f.xp);
+      const hp=f.p.getHitpoints(); for(let i=0;i<4;i++)turn();
+      assert.equal(f.p.getSkillManager().getExperience(core.Skill.AGILITY),xp); assert.equal(f.p.getHitpoints(),hp);
+      assert.equal(f.events.filter(([,name,,a])=>name==='sendObjectAnimation'&&a.getId()===1111).length,1);
+    });
+  });
+
+  await t.test('pressure pads send the captured falling-rock tile graphic',test=>{
+    phase(0); const f=actor(test,2798,9557), observer=actor(test,2801,9557); Shared.setRandom(()=>0);
+    f.p.getMovementQueue().requestWalk(at(2799,9557)); turn(); turn(); const started=Shared.cycle.tick;
+    turn(); turn(); turn();
+    for(const a of [f,observer]) {
+      const effects=a.events.filter(([,name,graphic])=>name==='sendGraphic'&&graphic.getId()===271);
+      assert.deepEqual(effects.map(([tick,,graphic,tile])=>
+        [tick,graphic.getDelay(),tile.getX(),tile.getY(),tile.getZ()]),
+      [[started,20,2799,9557,3],[started+2,0,2799,9557,3]]);
+    }
+  });
+
+  await t.test('dart projectiles match the captured visual in both successful and failed crossings',async test=>{
+    for(const outcome of ['pass','fail']) await test.test(outcome, sub => {
+      const f=actor(sub,2776,9568); Shared.setRandom(()=>outcome==='pass'?0:0.99999);
+      if (outcome==='fail') f.p.getSkillManager().setMaxLevels(core.Skill.AGILITY,40,false).setCurrentLevel(core.Skill.AGILITY,40,false);
+      f.p.getMovementQueue().requestWalk(at(2777,9568)); turn(); turn();
+      for(let i=0;i<4;i++)turn();
+      const event=f.events.find(([,name])=>name==='sendProjectile');
+      assert.ok(event,`${outcome} crossing sends the dart`);
+      const [, ,start,end,offset,speed,id,startHeight,endHeight,target,delay,angle,distanceOffset]=event;
+      const hit=outcome==='fail';
+      assert.deepEqual([start.getX(),start.getY(),start.getZ()],[2783,9568,3]);
+      assert.deepEqual([end.getX(),end.getY(),end.getZ()],[hit?2777:2775,9568,3]);
+      assert.deepEqual([offset,speed,id,startHeight,endHeight,delay,angle,distanceOffset],[0,hit?25:150,270,0,10,0,2,40]);
+      assert.equal(target,hit?-(f.p.getIndex()+1):0);
+    });
+  });
+
+  await t.test('floor activation does not replace missing/wrong-layer objects or alter the crossing', async test => {
+    for(const wrong of [null,{getType:()=>22}]) await test.test(wrong?'wrong layer':'missing entry',sub=>{
+      const f=actor(sub,2798,9568), get=MapObjects.get.bind(MapObjects);
+      sub.mock.method(MapObjects,'get',(id,loc,area)=>id===3582?wrong:get(id,loc,area));
+      f.p.getMovementQueue().requestWalk(at(2799,9568)); turn();turn(); const started=Shared.cycle.tick;
+      turn();turn(); assert.deepEqual(position(f.p),[2801,9568,3]);
+      assert.equal(f.events.filter(([,name,,a])=>name==='sendObjectAnimation'&&a.getId()===1111).length,0);
+      assert.ok(f.p.getSkillManager().getExperience(core.Skill.AGILITY)>f.xp);
+    });
+  });
+
+  await t.test('floor activation is absent below the level, on failure, and after cancelling the pending jump',async test=>{
+    for(const kind of ['below level','failure','cancel']) await test.test(kind,sub=>{
+      const f=actor(sub,2798,9568);
+      f.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY,kind==='below level'?19:kind==='failure'?30:99,false);
+      Shared.setRandom(()=>0.99999); f.p.getMovementQueue().requestWalk(at(2799,9568)); turn();turn();
+      if(kind==='cancel'){core.TaskManager.cancelTasks(f.p);f.p.moveTo(at(2808,3193,0));}
+      for(let i=0;i<4;i++)turn();
+      assert.equal(f.events.filter(([,name,,a])=>name==='sendObjectAnimation'&&a.getId()===1111).length,0);
+      assert.equal(f.p.getSkillManager().getExperience(core.Skill.AGILITY),f.xp);
+    });
   });
 
   await t.test('shutdown restores all cache decorations/clipping and stops the shared clock',()=>{

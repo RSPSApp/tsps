@@ -35,7 +35,7 @@ let cycle = 0;
 
 function start(site) {
   const poachers = F();
-  const tiles = Common.freeTiles(site.location, poachers.range, site.size);
+  const tiles = Common.freeTiles(site, site.location, poachers.range, site.size);
   if (tiles.length < 4) return null;
   const event = {
     site,

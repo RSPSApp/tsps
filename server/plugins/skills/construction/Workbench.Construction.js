@@ -1,9 +1,10 @@
 "use strict";
 
-const { api, Animation, Item, ItemIdentifiers, Skill } = require("./Core.Construction");
+const { api, Animation, Item, Skill } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const Menu = require("./Menu.Construction");
 const WORKBENCH = require("./data/workbench.json");
 
@@ -62,7 +63,7 @@ function makeFlatpack(player, bench, buildable) {
   player.performAnimation(new Animation(BUILD_ANIMATION));
   // Kept materials (a league fragment's planks) may leave no slot free: the flatpack then falls to the floor.
   player.getInventory().forceAdd(player, new Item(FLATPACK_OF.get(buildable.key), 1));
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
 }
 
 function interfaceClick(event) {
@@ -93,14 +94,25 @@ function installFlatpack(event) {
   const player = event.player;
   event.handled = true;
   if (!House.isBuildingMode(player)) return player.sendMessage("You must be in building mode to try installing furniture.");
-  const target = house.getFurnitureTarget(event.location, event.objectId);
+  // On built furniture (an oak cape rack to upgrade) the spot is the saved piece's, as the Upgrade option finds it.
+  const built = house.getFurnitureTarget(event.location, event.objectId) ? null
+    : house.getFurnitureAt(event.location, event.objectId, event.object?.getType?.() ?? 10);
+  const builtAt = built && house.getRoomPositionAt(event.location);
+  const target = house.getFurnitureTarget(event.location, event.objectId) ?? (builtAt ? { ...built, position: builtAt } : null);
   const buildable = Data.BUILDABLE_BY_KEY.get(key);
   if (!target || !House.hotspotChoices(target.hotspotKey).includes(buildable)) return player.sendMessage("You can't place that there.");
-  if (house.getFurnitureAtTarget(target)) {
+  // A flatpack installs on an empty hotspot, an upgrade tier included (captured: a mahogany treasure chest and a marble
+  // magic wardrobe flatpack on their empty spaces, rsprox_transcripts/229/02812.txt ticks 1315 and 1464). An upgrade tier
+  // (a teak cape rack) may also go straight onto its previous tier, which it replaces with the stored items kept. On any
+  // other built furniture it is refused (captured: an armchair flatpack on a built workbench,
+  // rsprox_transcripts/229/02605.txt tick 5416).
+  const existing = house.getFurnitureAtTarget(target)?.buildableKey;
+  const previous = buildable.materials.find((material) => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
+  if (existing && existing !== previous) {
     return player.sendMessage("This furniture cannot be upgraded. Remove the previous furniture if you wish to install a flatpack here.");
   }
   if (House.constructionLevel(player) < buildable.level) return player.sendMessage(`You need Construction level ${buildable.level} to build that.`);
-  if (!player.getInventory().contains(ItemIdentifiers.HAMMER)) return player.sendMessage("You need a hammer in order to install flatpack furniture.");
+  if (!House.hasHammer(player)) return player.sendMessage("You need a hammer in order to install flatpack furniture.");
   player.getInventory().delete(event.itemId, 1);
   House.hammer(player);
   house.setFurniture(target, buildable);

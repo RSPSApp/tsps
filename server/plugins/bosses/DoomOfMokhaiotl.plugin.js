@@ -6,6 +6,7 @@
  */
 module.exports = {
   name: "DoomOfMokhaiotl",
+  description: "The Doom of Mokhaiotl: the ruins' entrance, the lobby and the delves.",
   register(api) {
     require("./doom/Lobby.DoomOfMokhaiotl")(api);
     require("./doom/Delve.DoomOfMokhaiotl")(api);

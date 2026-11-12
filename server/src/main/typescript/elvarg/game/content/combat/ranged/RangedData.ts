@@ -240,7 +240,7 @@ export class Ammunition {
     public static readonly MARRENTILL_TAR = new Ammunition(ItemIdentifiers.MARRENTILL_TAR, null, 33, 22)
     public static readonly TARROMIN_TAR = new Ammunition(ItemIdentifiers.TARROMIN_TAR, null, 33, 31)
     public static readonly HARRALANDER_TAR = new Ammunition(ItemIdentifiers.HARRALANDER_TAR, null, 33, 49)
-    public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 36)
+    public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 60)
     public static readonly TONALZTICS_OF_RALOS_UNCHARGED = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
     public static readonly TONALZTICS_OF_RALOS = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
 
@@ -437,7 +437,7 @@ export class RangedWeapon {
 
     public static readonly LONGBOW = new RangedWeapon([839], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW], RangedWeaponType.LONGBOW)
     public static readonly SHORTBOW = new RangedWeapon([841], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW], RangedWeaponType.SHORTBOW)
-    public static readonly TRAINING_BOW = new RangedWeapon([ItemIdentifiers.TRAINING_BOW], [Ammunition.TRAINING_ARROWS], RangedWeaponType.SHORTBOW)
+    public static readonly TRAINING_BOW = new RangedWeapon([ItemIdentifiers.TRAINING_SHORTBOW], [Ammunition.TRAINING_ARROWS], RangedWeaponType.SHORTBOW)
     public static readonly OAK_LONGBOW = new RangedWeapon([845], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW], RangedWeaponType.LONGBOW)
     public static readonly OAK_SHORTBOW = new RangedWeapon([843], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly WILLOW_LONGBOW = new RangedWeapon([847], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW], RangedWeaponType.LONGBOW)
@@ -448,6 +448,9 @@ export class RangedWeapon {
     public static readonly YEW_SHORTBOW = new RangedWeapon([857], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly MAGIC_LONGBOW = new RangedWeapon([859], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW], RangedWeaponType.LONGBOW)
     public static readonly MAGIC_SHORTBOW = new RangedWeapon([861, ItemIdentifiers.MAGIC_SHORTBOW_I_, ItemIdentifiers.MAGIC_SHORTBOW_3], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW], RangedWeaponType.SHORTBOW)
+    // Wiki (Bone shortbow): magic shortbow offensive stats, shortbow speed and range, "can fire up to
+    // amethyst arrows". Without an entry here the bow fell back to melee: melee experience, no arrows.
+    public static readonly BONE_SHORTBOW = new RangedWeapon([ItemIdentifiers.BONE_SHORTBOW], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW], RangedWeaponType.SHORTBOW)
     // Wiki: 3rd Age bow shoots at shortbow speed with a 9-tile range and can fire dragon arrows.
     public static readonly THIRD_AGE_BOW = new RangedWeapon([ItemIdentifiers._3RD_AGE_BOW], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly CRYSTAL_BOW = new RangedWeapon(CRYSTAL_BOW_ALL_WEAPON_IDS, [Ammunition.CRYSTAL_BOW], RangedWeaponType.CRYSTAL_BOW)
@@ -462,7 +465,9 @@ export class RangedWeapon {
         (arrows) => new RangedWeapon([arrows.getItemId()], [arrows], RangedWeaponType.CRYSTAL_BOW)
     );
     public static readonly CRAWS_BOW = new RangedWeapon([ItemIdentifiers.CRAWS_BOW, ItemIdentifiers.CRAWS_BOW_2], [Ammunition.CRAWS_BOW], RangedWeaponType.SHORTBOW)
-    public static readonly SEERCULL = new RangedWeapon([ItemIdentifiers.SEERCULL], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.SHORTBOW)
+    // Wiki (Seercull): arrows "up to Amethyst"; Dragon arrow: "only usable with the dark bow, twisted bow, venator bow,
+    // scorching bow, and the 3rd Age bow".
+    public static readonly SEERCULL = new RangedWeapon([ItemIdentifiers.SEERCULL], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly TWISTED_BOW = new RangedWeapon([ItemIdentifiers.TWISTED_BOW], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.TWISTED_BOW)
 
     /** Wiki: fires any arrow, charged or not. */
@@ -480,7 +485,7 @@ export class RangedWeapon {
     public static readonly BRONZE_CROSSBOW = new RangedWeapon([9174], [Ammunition.BRONZE_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly IRON_CROSSBOW = new RangedWeapon([9177], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly STEEL_CROSSBOW = new RangedWeapon([9179], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly MITHRIL_CROSSBOW = new RangedWeapon([9181], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly MITHRIL_CROSSBOW = new RangedWeapon([9181], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly ADAMANT_CROSSBOW = new RangedWeapon([9183], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly RUNE_CROSSBOW = new RangedWeapon([9185, ItemIdentifiers.RUNE_CROSSBOW_OR_], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly DRAGON_CROSSBOW = new RangedWeapon([
@@ -551,6 +556,7 @@ export class RangedWeapon {
     public static readonly ORANGE_SALAMANDER = new RangedWeapon([10146], [Ammunition.MARRENTILL_TAR], RangedWeaponType.SALAMANDER)
     public static readonly RED_SALAMANDER = new RangedWeapon([10147], [Ammunition.TARROMIN_TAR], RangedWeaponType.SALAMANDER)
     public static readonly BLACK_SALAMANDER = new RangedWeapon([10148], [Ammunition.HARRALANDER_TAR], RangedWeaponType.SALAMANDER)
+    public static readonly TECU_SALAMANDER = new RangedWeapon([ItemIdentifiers.TECU_SALAMANDER], [Ammunition.IRIT_TAR], RangedWeaponType.SALAMANDER)
     public static readonly DRAGON_THROWNAXE = new RangedWeapon([ItemIdentifiers.DRAGON_THROWNAXE, ItemIdentifiers.DRAGON_THROWNAXE_2, ItemIdentifiers.DRAGON_THROWNAXE_3], [Ammunition.DRAGON_THROWNAXE], RangedWeaponType.THROWNAXE)
     public static readonly MORRIGANS_THROWING_AXE = new RangedWeapon([ItemIdentifiers.MORRIGANS_THROWING_AXE, ItemIdentifiers.MORRIGANS_THROWING_AXE_2, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH_, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH__2], [Ammunition.MORRIGANS_THROWING_AXE], RangedWeaponType.THROWNAXE)
     // The league's Sage's axe: a dart-interface thrown weapon (item-gameplay.json), 3 ticks, 2 on Rapid (Wiki).

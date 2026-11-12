@@ -3,10 +3,11 @@ import { clearHintArrow, setHintArrowNpc, setHintArrowPlayer,
     setHintArrowWorldEntity, setHintArrowTile } from "../../../game/HintArrow";
 import { clearAttackTimer, setAttackTimer } from "../../../game/plugins/attacktimer/attackTimerState";
 import { loadItemPrices } from "../domain/itemPrices";
-import { LOGIN_FLAG_TOKEN } from "../constants";
+import { LOGIN_FLAG_REMEMBER, LOGIN_FLAG_TOKEN } from "../constants";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
+    if (state.loginExtension?.handleMessage(msg)) return true;
     if (msg.type === "welcome") {
         console.log(
             `[ws] welcome tickMs=${msg.payload.tickMs} serverTime=${msg.payload.serverTime}`,
@@ -18,6 +19,9 @@ export function handleAuthTickMessage(msg: any): boolean {
             const serverNow = Number(msg.payload.serverTime) || 0;
             if (serverNow > 0) state.serverClockOffsetMs = now - serverNow;
         } catch {}
+        const login = state.loginOnWelcome;
+        state.loginOnWelcome = null;
+        login?.();
         for (const cb of state.welcomeListeners) cb(msg.payload);
         return true;
     }
@@ -26,8 +30,13 @@ export function handleAuthTickMessage(msg: any): boolean {
         if (msg.payload.success && msg.payload.loginToken) {
             // The token just used (or the password) is spent; a resumed session logs in with this.
             state.sessionPassword = msg.payload.loginToken;
-            state.sessionLoginFlags = LOGIN_FLAG_TOKEN;
+            // Preserve negotiated extension flags when replacing the credential with a token.
+            state.sessionLoginFlags =
+                LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & ~(LOGIN_FLAG_REMEMBER | LOGIN_FLAG_TOKEN));
         }
+        // A refused login (a first one, or an automatic relogin refused with e.g. ALREADY_LOGGED_IN) is back on the
+        // login screen, so its next WebRTC 4000 ends the attempt instead of reconnecting.
+        state.hasLoggedIn = msg.payload.success === true;
         if (msg.payload.success) {
             clearHintArrow();
             clearAttackTimer();

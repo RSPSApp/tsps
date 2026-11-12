@@ -24,8 +24,8 @@ function normalizeUiScale(scale: number): number {
 }
 
 function loadOverride(): number | null {
-    if (typeof localStorage === "undefined") return null;
     try {
+        if (typeof localStorage === "undefined") return null;
         const raw = localStorage.getItem(SCALE_STORAGE_KEY);
         if (raw === null) return null;
         const parsed = Number(raw);
@@ -117,21 +117,21 @@ export function setUiScale(scale: number | null): void {
     overrideLoaded = true;
     if (scale === null) {
         manualScaleOverride = null;
-        if (typeof localStorage !== "undefined") {
-            try {
+        try {
+            if (typeof localStorage !== "undefined") {
                 localStorage.removeItem(SCALE_STORAGE_KEY);
-            } catch {}
-        }
+            }
+        } catch {}
         return;
     }
 
     const clamped = normalizeUiScale(scale);
     manualScaleOverride = clamped;
-    if (typeof localStorage !== "undefined") {
-        try {
+    try {
+        if (typeof localStorage !== "undefined") {
             localStorage.setItem(SCALE_STORAGE_KEY, String(clamped));
-        } catch {}
-    }
+        }
+    } catch {}
 }
 
 export function setRuneliteInterfaceScalingEnabled(enabled: boolean): void {

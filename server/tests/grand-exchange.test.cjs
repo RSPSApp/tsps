@@ -10,6 +10,7 @@ const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { GameConstants } = require('../dist/game/GameConstants');
 const { Item } = require('../dist/game/model/Item');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+const { Bank } = require('../dist/game/model/container/impl/Bank');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
@@ -348,7 +349,7 @@ test('an unlimited item never runs out', () => {
   assert.equal(remainingLimit(p, UNLIMITED, 0), Infinity);
 });
 
-function exchange(t, config = {}, realSender = null) {
+function exchange(t, config = {}, realSender = null, { members = true, membersItems = [] } = {}) {
   const hooks = {};
   const buttons = [];
   const calls = [];
@@ -379,15 +380,18 @@ function exchange(t, config = {}, realSender = null) {
   };
   const inventory = new Inventory(p);
   p.getInventory = () => inventory;
+  // An empty bank: a buy the inventory cannot cover looks there next.
+  const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => new Bank(p));
+  p.getBank = tab => banks[tab];
   t.mock.method(CacheDefinitions, 'hasItem', id => definitions.has(id));
-  t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}` }));
+  t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}`, isMembers: membersItems.includes(id) }));
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'save', () => {});
   t.mock.method(global, 'setTimeout', (callback, delay) => {
     timers.push({ callback, delay });
     return timers.length;
   });
   plugin.register(new Proxy({
-    core: { WorldDefinition: { isMembersWorld: () => true } },
+    core: { WorldDefinition: { isMembersWorld: () => members } },
     getPluginConfig: (key, defaultValue) => Object.hasOwn(config, key) ? config[key] : defaultValue,
     emitCustomEvent: emitEvent,
     onCustomEvent: (eventName, handler) => {
@@ -476,6 +480,42 @@ test('buying enforces and consumes the remaining four-hour allowance', t => {
   assert.equal(place(false, LIMITED, 50).quantity, 50);
   assert.equal(inventory.getAmount(995), 950);
   assert.equal(remainingLimit(p, LIMITED), 0);
+});
+
+test('aborting a buy that bought nothing gives its quantity back to the buy limit (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  const { p, inventory, place, click } = exchange(t);
+  recordLimit(p, LIMITED, 100);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 50, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(inventory.getAmount(995), 1_000, 'every coin back');
+  assert.equal(remainingLimit(p, LIMITED), 50, 'the earlier 100 still count, the aborted 50 do not');
+  assert.equal(place(false, LIMITED, 50, 1).quantity, 50, 'the item can be bid on again');
+});
+
+test('aborting the first buy of a window gives back the full limit even when the clock ticks between reads', t => {
+  t.mock.method(Math, 'random', () => 0.99);
+  let clock = Date.now();
+  t.mock.method(Date, 'now', () => clock++);
+  const { p, inventory, place, click } = exchange(t);
+  inventory.add(new Item(995, 1_000), false);
+  assert.equal(place(false, LIMITED, 150, 1).finished, false, 'the bid has not filled yet');
+  assert.equal(remainingLimit(p, LIMITED), 0);
+  click(23);
+  click(24);
+  assert.equal(remainingLimit(p, LIMITED), 150, 'the offer was counted in the window it opened');
+});
+
+test('an abort never frees a later buy-limit window that did not count the offer', t => {
+  const { p } = exchange(t);
+  const start = Date.now();
+  recordLimit(p, LIMITED, 30, start);
+  const old = { itemId: LIMITED, quantity: 50, placedAt: start - 1 };
+  plugin._test.releaseLimit(p, old, start);
+  assert.equal(remainingLimit(p, LIMITED, start), 120);
 });
 
 test('unfillable offers survive saving and relogging, and abort refunds their input', t => {
@@ -674,6 +714,41 @@ test('a completed sale collects its total less the tax', t => {
   assert.equal(inventory.getAmount(995), 9_800);
 });
 
+test('a buy bid over the market trades at the market price and refunds the difference (Wiki, capture)', t => {
+  // rsprox_transcripts/236/03950.txt: a 65,000,000 bid completes for 61,947,693 with 3,052,307 coins to collect.
+  t.mock.method(Math, 'random', () => 0.01);
+  const { p, inventory, place, click, timers } = exchange(t);
+  inventory.add(new Item(995, 1_500), false);
+  const offer = place(false, PRICED, 10, 150);
+  assert.equal(offer.total, 1_500);
+  assert.equal(inventory.getAmount(995), 0);
+  timers[0].callback();
+  assert.equal(offer.traded, 1_000, 'ten at the 100 guide');
+  assert.deepEqual(payout(offer), [{ itemId: PRICED, amount: 10 }, { itemId: 995, amount: 500 }]);
+  assert.equal(tradeHistory(p)[0].total, 1_000);
+  click(24);
+  assert.equal(inventory.getAmount(995), 500);
+});
+
+test('a sell asking under the market receives the market price, taxed on it (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.01);
+  const { p, inventory, place, click, timers } = exchange(t);
+  inventory.add(new Item(PRICED, 10), false);
+  const offer = place(true, PRICED, 10, 50);
+  timers[0].callback();
+  assert.equal(offer.traded, 900, 'ten at the 90 sell guide');
+  assert.equal(tax(offer), 10, '2% of 90, rounded down, per item');
+  assert.equal(tradeHistory(p)[0].total, 900);
+  click(24);
+  assert.equal(inventory.getAmount(995), 890);
+});
+
+test('a bid under the market or an ask over it still trades at its own price', () => {
+  const { fillUnitPrice } = plugin._test;
+  assert.equal(fillUnitPrice({ itemId: PRICED, sell: false, price: 80 }), 80);
+  assert.equal(fillUnitPrice({ itemId: PRICED, sell: true, price: 120 }), 120);
+});
+
 test('a saved sale without a price is taxed at its historical unit price', t => {
   const { p, inventory, hooks, click, timers } = exchange(t);
   // A 10-whip sale at 700,000 each, saved before prices were adjustable; the current
@@ -865,4 +940,66 @@ test('walking with no prompt and nothing open sends nothing', () => {
   const { player, frames } = promptWithNoInterface(() => {});
   Player.prototype.closeInterruptibleInterfaces.call(player);
   assert.equal(frames.length, 0);
+});
+
+test('fee descriptions and native rate follow the selected item on setup and details', t => {
+  const { p, inventory, place, click, calls, hooks } = exchange(t);
+  const taxed = 19001;
+  const exempt = 19002;
+  define(taxed, { getName: () => 'Steel platelegs', getGrandExchangeValue: () => 309 });
+  define(exempt, { getName: () => 'Teleport to house' });
+  inventory.add(new Item(taxed, 1), false);
+  inventory.add(new Item(exempt, 2), false);
+  place(true, taxed, 1, 309);
+  const description = (component) => calls.findLast(c => c.name === 'sendInterfaceScript' &&
+    c.args[0] === 5730 && c.args[1][2] === ((465 << 16) | component));
+  assert.equal(description(27).args[1][1], 'Convenience fee: 2%');
+  assert.equal(description(16).args[1][1], 'Convenience fee: 2%');
+  assert.equal(calls.findLast(c => c.name === 'sendInterfaceScript' && c.args[0] === 786).args[3][13139], 20);
+  click(4);
+  hooks.onItemFirstAction({ player: p, itemId: exempt, slot: inventory.getSlotForItemId(exempt) });
+  assert.equal(description(27).args[1][1], 'Convenience fee: None');
+  assert.equal(calls.findLast(c => c.name === 'sendVarbit' && c.args[0] === 13139).args[1], 0);
+  click(4);
+  click(7);
+  assert.equal(description(16).args[1][1], 'Convenience fee: 2%');
+  assert.equal(calls.findLast(c => c.name === 'sendVarbit' && c.args[0] === 13139).args[1], 20);
+  click(4);
+  click(8, 3);
+  p.syntaxAction.execute(String(taxed));
+  assert.equal(description(27).args[1][1], '', 'buying has no seller fee label');
+});
+
+test('fee Info uses the native overlay and closes without changing the offer', t => {
+  const { p, inventory, click, calls, hooks } = exchange(t);
+  inventory.add(new Item(PRICED, 1), false);
+  hooks.onItemFirstAction({ player: p, itemId: PRICED, slot: 0 });
+  click(29);
+  const popup = calls.findLast(c => c.name === 'sendSubInterface');
+  assert.deepEqual(popup.args, [(465 << 16) | 32, 289, 1]);
+  const text = calls.findLast(c => c.name === 'sendInterfaceScript' && c.args[0] === 4212);
+  assert.ok(text.args[1][0].startsWith('Convenience Fees|The Grand Exchange charges'));
+  assert.ok(text.args[1][0].endsWith('|Close'));
+  assert.equal(p.amountAction.acceptsZero, true);
+  p.amountAction.execute(0);
+  assert.deepEqual(calls.at(-1), { name: 'closeSubInterface', args: [(465 << 16) | 32] });
+  click(30);
+  click(18);
+  assert.equal(calls.at(-1).args[0], 4212, 'existing offer has the same information');
+});
+
+// Wiki (Grand Exchange): "free players may only purchase free-to-play items, and not members' items"; "No restriction
+// exists on selling items, regardless of membership status."
+test('a free world refuses a buy offer for a members item, and still sells one', t => {
+  const buyer = exchange(t, {}, null, { members: false, membersItems: [PRICED] });
+  buyer.inventory.add(new Item(995, 1000), false);
+  const offer = buyer.place(false, PRICED, 1, 50);
+  assert.equal(offer?.itemId === PRICED && offer?.confirmed === true, false, 'no buy offer placed');
+  assert.equal(buyer.inventory.getAmount(995), 1000, 'no coins taken');
+  assert.ok(buyer.messages.includes('You can only buy free-to-play items on a free world.'), buyer.messages.join(' | '));
+
+  const seller = exchange(t, {}, null, { members: false, membersItems: [PRICED] });
+  seller.inventory.add(new Item(PRICED, 1), false);
+  seller.place(true, PRICED, 1, 180);
+  assert.equal(seller.inventory.getAmount(PRICED), 0, 'the members item is listed for sale');
 });

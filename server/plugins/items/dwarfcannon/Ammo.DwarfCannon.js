@@ -144,9 +144,19 @@ function setLoadX(player, entered) {
   player.sendMessage(`You will now load ${amount} cannonballs when using Load-x.`);
 }
 
+/** All Settings > Gameplay: "Load-x value when using the Dwarf multicannon" asks as the cannon's own Load X does. */
+const LOAD_X_SETTING = 450;
+
+function loadXSettingClicked(request) {
+  if (request.settingId !== LOAD_X_SETTING) return;
+  request.handled = true;
+  askLoadX(request.player);
+}
+
 module.exports = function attachAmmo(api) {
   api.persistAttribute(Cannon.LOAD_X_ATTRIBUTE);
   api.onObjectInteraction("Dwarf multicannon", { Fire: fire, Empty: empty, "Load X": loadX });
+  api.onCustomEvent("settings:setting-clicked", loadXSettingClicked);
 };
 
-Object.assign(module.exports, { loadFromInventory, fire, empty, loadX, setLoadX, stopFiring, giveBalls, ownCannon, MESSAGE });
+Object.assign(module.exports, { loadFromInventory, fire, empty, loadX, setLoadX, loadXSettingClicked, stopFiring, giveBalls, ownCannon, MESSAGE });

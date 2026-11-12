@@ -307,6 +307,7 @@ export function buildSimpleMenuEntries(host: WebGLOsrsRendererHost,
             menuState,
             registerWithState: true,
             resetMenuState: false,
+            blockModes: client.minimenuBlockModes,
         });
         client.menuActiveSimpleEntries = simple;
         if (opts.shouldFreeze) {

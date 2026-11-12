@@ -15,7 +15,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Travel = require("../plugins/items/KourendTravelItems.plugin");
 const Tyss = require("../plugins/npcs/Tyss.plugin");
-const Finish = require("../plugins/achievements/diaries/KourendDiaryTravelFinish.plugin");
+const Finish = require("../plugins/achievements/diaries/KourendDiaryTravelFinish.AchievementDiaries");
 
 let core = null;
 let api = null;
@@ -254,4 +254,28 @@ test("uncharging during a talisman teleport cannot duplicate fangs on landing", 
   land();
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LIZARDMAN_FANG)
     + Travel._test.xericCharges(item), 9);
+});
+
+test("the Book of the Dead teleports like the memoirs and holds up to 250 charges (Wiki)", async (t) => {
+  await setup();
+  const player = actor();
+  t.mock.method(core.TeleportHandler, "checkReqs", () => true);
+  const landed = [];
+  t.mock.method(core.TeleportHandler, "teleport", (_player, target, _type, _warn, onArrival) => {
+    landed.push([target.getX(), target.getY()]);
+    onArrival?.();
+  });
+  const book = new core.Item(Travel._test.BOOK_OF_THE_DEAD_ID, 1);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, book);
+  for (const page of Travel._test.MEMOIRS_PAGES) setPage(player, page.varbit);
+  Travel._test.setMemoirCharges(player, book, 300);
+  assert.equal(Travel._test.memoirCharges(player, book), 250, "the book's capacity, not the memoirs' 100");
+  const event = {
+    player, interfaceId: core.Equipment.INVENTORY_INTERFACE_ID, item: book, itemId: book.getId(),
+    slot: core.Equipment.WEAPON_SLOT, clickType: 2, option: "Lunch by the Lancalliums", handled: false,
+  };
+  PluginManager.emitItemAction(event);
+  assert.equal(event.handled, true, "the worn page option is answered");
+  assert.deepEqual(landed, [[1713, 3612]], "to Hosidius");
+  assert.equal(Travel._test.memoirCharges(player, book), 249, "one charge per teleport");
 });

@@ -174,9 +174,9 @@ function resetActive() {
 }
 
 function hardDiary(player) {
-  const request = { player, diary: "wilderness", tier: "hard", complete: false };
-  api.emitCustomEvent("diary:is-complete", request);
-  return request.complete === true;
+  const request = { player, diary: "wilderness", tier: "hard", claimed: false };
+  api.emitCustomEvent("diary:is-reward-claimed", request);
+  return request.claimed === true;
 }
 
 /** The saved choice, 1-6, or 0. */
@@ -253,6 +253,7 @@ function login({ player }) {
 
 module.exports = {
   name: "WildernessObelisks",
+  description: "The six Wilderness obelisks: activating one teleports everyone on its pad to a random or chosen obelisk, with Set Destination after the hard diary.",
   members: true,
   _test: { activate, activateOption, teleportToDestination, setDestination, chooseDestination, resetActive, padTiles, stones, active, get data() { return data; } },
   register(pluginApi) {

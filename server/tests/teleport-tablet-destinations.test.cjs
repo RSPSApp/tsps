@@ -44,6 +44,7 @@ before(async () => {
         onPlayerLogin: () => {},
         onSpellCast: (handler) => { castAlternate = handler; },
         onInterfaceActionClick: () => {},
+        onCustomEvent: () => {},
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);
@@ -76,9 +77,14 @@ function playerWith(itemId) {
         sendMessage: (message) => messages.push(message),
         getAttribute: (key) => attributes.get(key),
         setAttribute: (key, value) => attributes.set(key, value),
-        getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]) }),
+        // Every varbit 1: the Wilderness tablets' warnings off, so they break at once
+        // (wilderness-teleport-warnings.test.cjs covers the warnings).
+        getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]), getVarbit: () => 1 }),
         getInventory: () => ({
             contains: (id) => (inventory.get(id) ?? 0) > 0,
+            getAmount: (id) => inventory.get(id) ?? 0,
+            // Room enough for one more of anything (the fixture models no full inventory).
+            getAddableAmount: (item) => item.getAmount(),
             deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
             adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
         }),
@@ -158,6 +164,15 @@ test('Revert turns a redirected tablet back into a Teleport to house tablet', ()
     assert.equal(event.handled, true);
     assert.equal(player.inventory.get(tabletIds.get('yanille teleport').id), 0);
     assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
+});
+
+test('the house tablet Group option refuses as live does, and keeps the tablet (rsprox 2919 tick 2179)', () => {
+    const { event, player, teleport } = use('teleport to house', 'group');
+    assert.equal(event.handled, true);
+    assert.equal(teleport, undefined);
+    assert.deepEqual(player.messages, ['You are not in an Ironman Group.']);
+    assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
+    assert.deepEqual(CacheDefinitions.getItem(Items.TELEPORT_TO_HOUSE).inventoryActions.slice(0, 4), ['Break', 'Inside', 'Outside', 'Group']);
 });
 
 /** Clicks an option on a spell, as NetworkBuilder emits it; unhandled means the usual cast. */

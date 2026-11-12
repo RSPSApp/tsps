@@ -118,11 +118,12 @@ test('spell-on-NPC validates target and spell, consumes once, and preserves comb
   const point = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z, isWithinDistance(other, range) { return Math.max(Math.abs(x - other.getX()), Math.abs(y - other.getY())) <= range && z === other.getZ(); } });
   const loc = point(100, 100);
   let targetLoc = point(101, 100);
+  const approaches = [];
   const player = {
     sendMessage: message => messages.push(message),
     getHitpoints: () => 10, busy: () => false,
     getLocation: () => loc, getPrivateArea: () => null, getArea: () => null,
-    getMovementQueue: () => ({ reset() {} }), setPositionToFace() {},
+    getMovementQueue: () => ({ reset() {}, walkToEntity: (...args) => approaches.push(args) }), setPositionToFace() {},
     getEquipment: () => ({ getItems: () => [] }),
     getSkillManager: () => ({ addExperiences(skill, amount) { assert.equal(skill, Skill.MAGIC); xp += amount; } }),
     getCombat: () => ({ castSpellOn() { combatCasts++; } }),
@@ -187,11 +188,21 @@ test('spell-on-NPC validates target and spell, consumes once, and preserves comb
     assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'an area veto blocks scripted casting');
     areaVeto = false;
     assert.equal(hookCalls, before.hooks, 'area veto is checked before hook dispatch');
+    // Out of sight or out of 10 tiles is an approach, not a refusal (LostCity apnpct; live Wind
+    // Strike on the Draynor tree): the cast waits for the walk, then resolves where it ends.
+    const hooksBeforeApproach = hookCalls;
     visible = false;
-    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'blocked line of sight rejects');
+    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'blocked line of sight approaches first');
+    assert.equal(approaches.length, 1);
+    assert.equal(approaches[0][0], npc);
+    assert.equal(approaches[0][2], 10, 'walks into approach distance');
+    approaches[0][1]();
+    assert.equal(approaches.length, 1, 'still out of sight on arrival: no second walk');
     visible = true;
     targetLoc = point(111, 100);
-    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'out of scripted range rejects');
+    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'out of scripted range approaches first');
+    assert.equal(approaches.length, 2);
+    assert.equal(hookCalls, hooksBeforeApproach, 'nothing resolves before the player is in approach distance');
     targetLoc = point(101, 100, 1);
     assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'different plane rejects');
     targetLoc = point(101, 100);
@@ -255,7 +266,8 @@ test('native Standard Monster Inspect pays once, displays its stats and closes t
     { label: 'world-click selection', raw: '4b00e7c600da0000c67fff80' },
     { label: 'drained target reports current Defence', raw: '4b00e7c600da00ffff7fff80', defence: 0 },
     { label: 'level refusal', level: 41, message: 'You need a Magic level of 42 to cast this spell.' },
-    { label: 'rune refusal', runes: false, message: 'You do not have the required items to cast this spell.' },
+    // rsprox captures: the refusal names the first missing rune (Monster Inspect: 2 body, 2 mind).
+    { label: 'rune refusal', runes: false, message: 'You do not have enough Body Runes to cast this spell.' },
     { label: 'wrong book', book: MagicSpellbook.LUNAR },
   ];
   for (const entry of cases) await t.test(entry.label, async t => {

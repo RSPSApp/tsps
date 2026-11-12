@@ -451,3 +451,85 @@ test('Felkrash trains an overgrown cat at completion and afterwards, as the Pets
   assert.equal(early.stage(), 22);
   assert.equal(earlyTrained.length, 1, 'completion trains the overgrown cat');
 });
+
+// Ali took the coins before handing over the charm and scroll with no space check, so a full inventory paid and lost
+// them. With no room he keeps them and the coins stay; with room he hands both over.
+test("Ali needs room for the snake charm and music scroll before taking the coins", () => {
+  const h = setup();
+  const I = core.ItemIdentifiers, N = core.NpcIdentifiers;
+  h.quest.setStage(h.player, 19);
+  h.inventory.set(I.COINS, 150);
+  h.setFreeSlots(1);
+  h.line("It's not that difficult. Here, take these.", N.ALI_THE_SNAKE_CHARMER);
+  assert.equal(h.inventory.get(I.COINS), 150, "not paid");
+  assert.equal(h.inventory.get(I.SNAKE_CHARM) ?? 0, 0);
+  assert.equal(h.stage(), 19, "the quest waits");
+  assert.ok(h.messages.includes("You don't have enough inventory space."), h.messages.join(" | "));
+  h.setFreeSlots(2);
+  h.line("It's not that difficult. Here, take these.", N.ALI_THE_SNAKE_CHARMER);
+  assert.equal(h.inventory.get(I.SNAKE_CHARM), 1);
+  assert.equal(h.inventory.get(I.MUSIC_SCROLL), 1);
+  assert.equal(h.stage(), 20);
+});
+
+test("the Port Sarim manhole: The Face turns the player away until Smokin' Joe sends them (17); then the real climb reaches the pit", () => {
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  RegionManager.init();
+  RegionManager.loadMapFiles(3018, 3232);
+  const manhole = (MapObjects.mapObjects.get(MapObjects.getHash(3018, 3232, 0)) ?? []).find((o) => o.getId() === 10321);
+  assert.ok(manhole, 'the cache manhole at 3018,3232');
+
+  /** The real Ladders plugin, its "ladders:climb" claim delivered to this harness's Ratcatchers handlers. */
+  function ladders(h) {
+    const options = new Map();
+    const noop = () => {};
+    require('../plugins/objects/Ladders.plugin').register(new Proxy({
+      core,
+      getTaskManager: () => TaskManager,
+      onObjectInteraction: (name, actions) => options.set(name, actions),
+      emitCustomEvent: (name, event) => { event.handled = h.fire(name, event).handled || event.handled; },
+    }, { get: (target, key) => target[key] ?? noop }));
+    return options;
+  }
+  function climbDown(stage, from = [3018, 3231]) {
+    const h = setup();
+    h.quest.setStage(h.player, stage);
+    h.setLocation(...from);
+    let blocked = false;
+    const movement = { isMovementBlocked: () => blocked, setBlockMovement(v) { blocked = v; return movement; }, reset: () => movement,
+      didMovePreviousCycle: () => false };
+    Object.assign(h.player, { getMovementQueue: () => movement, getPrivateArea: () => null, getHitpoints: () => 10, performAnimation() {} });
+    const handled = ladders(h).get('Manhole')['Climb-down']({
+      player: h.player, object: manhole, objectId: 10321, clickType: 1, option: 'Climb-down', definition: manhole.getDefinition(),
+      handled: false, location: { x: 3018, y: 3232, z: 0 }, sourceLocation: { x: from[0], y: from[1], z: 0 },
+    });
+    for (let ticks = 0; ticks < 5; ticks++) TaskManager.process();
+    const at = h.player.getLocation();
+    return { handled, tile: [at.getX(), at.getY(), at.getZ()], transcripts: h.transcripts.slice() };
+  }
+
+  const refusal = { npcId: core.NpcIdentifiers.THE_FACE, page: 'The Face',
+    variant: 'historical-dialogue-attempting-to-enter-the-manhole-before-smokin-joe-tells-the-player-about-the-face-in-ratcatchers' };
+  for (const stage of [0, 1, 14, 16]) {
+    const down = climbDown(stage);
+    assert.equal(down.handled, true, `stage ${stage}: the click is answered`);
+    assert.deepEqual(down.tile, [3018, 3231, 0], `stage ${stage}: the player stays on the street`);
+    assert.deepEqual(down.transcripts.map(({ npcId, page, variant }) => ({ npcId, page, variant })), [refusal],
+      `stage ${stage}: The Face's "Step away from that manhole" line`);
+  }
+  assert.deepEqual(dialogueData['The Face'].variants[refusal.variant], [{ npc: "Step away from that manhole, you've no business down there." }]);
+  for (const stage of [17, 18, 21, 22]) {
+    const down = climbDown(stage);
+    assert.notEqual(down.handled, false);
+    assert.deepEqual(down.tile, [2962, 9650, 0], `stage ${stage}: down to the pit ladder`);
+    assert.deepEqual(down.transcripts, [], `stage ${stage}: no refusal`);
+  }
+
+  // Varrock's pit has the same manhole loc; this gate is Port Sarim's tile only.
+  const h = setup();
+  const varrock = { getLocation: () => new core.Location(3267, 3400, 0) };
+  assert.equal(h.fire('ladders:climb', { object: varrock, objectId: 10321, clickType: 1 }).handled, false);
+  assert.deepEqual(h.transcripts, []);
+});

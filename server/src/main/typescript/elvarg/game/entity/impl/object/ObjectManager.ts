@@ -27,6 +27,9 @@ export class ObjectManager {
     private static readonly shownObjects = new WeakMap<Player, Map<string, GameObject>>();
     private static readonly missedRemovals = new WeakMap<Player, Map<string, GameObject>>();
 
+    /** Map objects a quest hides from one player only; the loc stays in the world for everyone else. */
+    private static readonly hiddenFor = new WeakMap<Player, Map<string, GameObject>>();
+
     private static tileKey(location: Location): string {
         return `${location.getX()},${location.getY()},${location.getZ()}`;
     }
@@ -50,6 +53,28 @@ export class ObjectManager {
         const key = ObjectManager.shownKey(object);
         ObjectManager.playerMap(ObjectManager.shownObjects, player).set(key, object);
         ObjectManager.missedRemovals.get(player)?.delete(key);
+    }
+
+    /** Hide the map object `id` at `location` for this player alone (idempotent). */
+    public static hideMapObjectFor(player: Player, id: number, location: Location): boolean {
+        const base = MapObjects.get(id, location.clone(), null);
+        if (!base) return false;
+        const hidden = ObjectManager.playerMap(ObjectManager.hiddenFor, player);
+        const key = ObjectManager.shownKey(base);
+        hidden.set(key, base);
+        player.getPacketSender().sendObjectRemoval(base);
+        return true;
+    }
+
+    /** Undo hideMapObjectFor: the player sees the map object again. */
+    public static showMapObjectFor(player: Player, id: number, location: Location): void {
+        const hidden = ObjectManager.hiddenFor.get(player);
+        if (!hidden) return;
+        const base = MapObjects.get(id, location.clone(), null);
+        if (!base) return;
+        if (hidden.delete(ObjectManager.shownKey(base))) {
+            player.getPacketSender().sendObject(base);
+        }
     }
 
     /** Removals of objects this player was shown that happened while they were away, in the new scene. */
@@ -183,6 +208,15 @@ export class ObjectManager {
             player.getPacketSender().sendObjectRemoval(object);
         }
 
+        for (const object of ObjectManager.hiddenFor.get(player)?.values() ?? []) {
+            const location = object.getLocation();
+            if (location.getX() < baseX || location.getX() >= baseX + this.SCENE_SIZE
+                || location.getY() < baseY || location.getY() >= baseY + this.SCENE_SIZE) {
+                continue;
+            }
+            player.getPacketSender().sendObjectRemoval(object);
+        }
+
         // Only the regions the scene covers, not every runtime object in the world.
         for (let regionX = baseX >> 6; regionX <= (baseX + this.SCENE_SIZE - 1) >> 6; regionX++) {
             for (let regionY = baseY >> 6; regionY <= (baseY + this.SCENE_SIZE - 1) >> 6; regionY++) {
@@ -251,6 +285,28 @@ export class ObjectManager {
             ObjectManager.perform(object, OperationType.SPAWN);
         }
     }
+    /**
+     * Swaps one loc for another in the same tile and shape slot (a lever pulled down and back up),
+     * as live sends it: one loc_add_change to the players who see the tile, no removal first. The
+     * outgoing loc leaves MapObjects (its clipping and later lookups) as a despawn would, and a
+     * player it was shown to who is away now gets it put right when they come back.
+     */
+    public static replaceInPlace(outgoing: GameObject, incoming: GameObject): void {
+        ObjectManager.deregister(outgoing, false);
+        MapObjects.remove(outgoing);
+        if (!outgoing.getPrivateArea()) {
+            const location = outgoing.getLocation();
+            World.forEachNetworkPlayer((player) => {
+                if (outgoing.getOwner() && outgoing.getOwner() !== player) return;
+                if (this.viewedArea(player) != null) return;
+                if (!player.getSession().isTileInScene(location.getX(), location.getY(), location.getZ())) {
+                    this.recordMissedRemoval(player, outgoing);
+                }
+            });
+        }
+        ObjectManager.register(incoming, true);
+    }
+
     /** True for a map object, or a copy of one (Doors rebuild theirs from a snapshot). */
     private static standsForMapObject(object: GameObject): boolean {
         if (object.isBaseMap()) {

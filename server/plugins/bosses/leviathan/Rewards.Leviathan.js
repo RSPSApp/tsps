@@ -1,6 +1,7 @@
 const Common = require('./Common.Leviathan');
 const { own } = require('./Fight.Leviathan');
 const Records = require('./Records.Leviathan');
+const { sendBossKillCount } = require('../../interface/BossKillCount.plugin');
 const MONSTER = Common.MONSTER;
 const BOSS_NAME = 'Leviathan';
 function current(npc, player = null) {
@@ -23,7 +24,7 @@ function died({ npc, killer }) {
   const { player, session, awakened } = fight;
   const key = awakened ? Common.AWAKENED_KILLS_ATTRIBUTE : Common.KILLS_ATTRIBUTE;
   const kills = awakened ? Common.count(player, key) + 1 : Math.max(fight.normalKillsAtStart + 1, Common.normalKills(player));
-  const announce = count => player.sendMessage(`Your ${awakened ? 'awakened ' : ''}Leviathan kill count is: <col=ff0000>${count}</col>.`);
+  const announce = count => sendBossKillCount(player, `Your ${awakened ? 'awakened ' : ''}Leviathan kill count is: <col=ff0000>${count}</col>.`);
   // The generic combat-achievement NPC-death hook owns kill-count achievements.
   announce(kills);
   player.setAttribute(key, kills);

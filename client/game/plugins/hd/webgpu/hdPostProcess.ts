@@ -16,6 +16,7 @@ import type { WebGPURenderer } from "../../../../render/webgpu/WebGPURenderer";
 import type { HdOptions } from "../HdConfig";
 import { HdBloomPass } from "./hd-bloom";
 import { HdDepthOfFieldPass } from "./hd-dof";
+import { ShaderFxPass } from "../../../../render/webgpu/shaderFxPass";
 import { HdSsaoPass } from "./hd-ssao";
 import { HdTonemapPass } from "./hd-tonemap";
 
@@ -32,6 +33,8 @@ export class HdPostProcess {
     private readonly ssao: HdSsaoPass;
     private readonly bloom: HdBloomPass;
     private readonly dof: HdDepthOfFieldPass;
+    /** The Shader Effects plugin's pass: made when the plugin turns on, freed when it turns off. */
+    private shaderFx?: ShaderFxPass;
     private readonly tonemap: HdTonemapPass;
     private fxaa?: FxaaPass;
     private readonly inverseProjection = mat4.create() as Float32Array;
@@ -53,6 +56,15 @@ export class HdPostProcess {
         this.ssao.ensure(width, height, options.depthAwareAo);
         this.bloom.ensure(width, height);
         this.dof.ensure(width, height);
+        // Shader Effects: nothing is allocated while the plugin is off.
+        const fxRuntime = renderer.osrsClient.clientPlugins.shaderFx();
+        if (fxRuntime) {
+            this.shaderFx ??= new ShaderFxPass(this.device, "rgba16float", false);
+            this.shaderFx.ensure(width, height);
+        } else if (this.shaderFx) {
+            this.shaderFx.dispose();
+            this.shaderFx = undefined;
+        }
 
         // Depth is non-reverse [0,1] NDC z; the GL-style inverse projection turns it into view space.
         mat4.invert(this.inverseProjection, renderer.osrsClient.camera.projectionMatrix);
@@ -73,7 +85,7 @@ export class HdPostProcess {
             : 0;
         const focusDistance =
             renderer.followCamDistance > 0.5 ? renderer.followCamDistance : DOF_FALLBACK_FOCUS_TILES;
-        const sceneView = this.dof.encode(
+        const dofView = this.dof.encode(
             encoder,
             frame.colorView,
             frame.depthView,
@@ -81,6 +93,11 @@ export class HdPostProcess {
             focusDistance,
             strength,
         );
+        // The Shader Effects plugin's screen shaders; hands the DOF/scene view straight back when off or idle.
+        // The player's silhouette for the prayer aura is only drawn while an aura is showing.
+        const playerMask = this.shaderFx && fxRuntime?.wantsPlayerMask?.() === true
+            ? renderer.encodePlayerMask(encoder, width, height) : undefined;
+        const sceneView = this.shaderFx?.encode(encoder, dofView, fxRuntime, playerMask) ?? dofView;
         const fxaa = options.antiAliasing ? (this.fxaa ??= new FxaaPass(this.device, this.canvasFormat)) : undefined;
         this.tonemap.encode(encoder, fxaa?.ensure(width, height) ?? frame.canvasView,
             sceneView, bloomView, aoView, width, height, options.hdr);
@@ -93,6 +110,7 @@ export class HdPostProcess {
         this.ssao.dispose();
         this.bloom.dispose();
         this.dof.dispose();
+        this.shaderFx?.dispose();
         this.tonemap.dispose();
         this.fxaa?.dispose();
     }

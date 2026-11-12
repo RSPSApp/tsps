@@ -15,6 +15,17 @@ export interface SpellCastContext {
 }
 
 export abstract class Spell {
+    /**
+     * Spellbook Swap (Wiki): one spell from the other book, then back to Lunar. Every cast that pays (or is spared) its
+     * runes ends it: combat and utility spells here, alchemy and Telekinetic Grab in MagicOnItemPacketListener.
+     */
+    public static endSpellbookSwap(player: any): void {
+        if (player?.getAttribute?.("lunar:spellbook-swap")) {
+            player.setAttribute("lunar:spellbook-swap", null);
+            MagicSpellbook.changeSpellbook(player, MagicSpellbook.LUNAR, true);
+        }
+    }
+
     private static readonly castContexts = new WeakMap<Mobile, SpellCastContext>();
     private static readonly calculationContexts = new WeakMap<Mobile, SpellCastContext>();
     public static getCastContext(caster: Mobile, spell: Spell | null): SpellCastContext | null {
@@ -54,6 +65,11 @@ export abstract class Spell {
         return true;
     }
 
+    /** The line for a cast without the required equipment; the god spells name their own staves. */
+    public missingEquipmentMessage(player: Player): string {
+        return "You do not have the required equipment to cast this spell.";
+    }
+
     /** The sound played on an accepted scripted cast; combat spells override it. */
     public castSound(): any {
         return null;
@@ -86,11 +102,74 @@ export abstract class Spell {
         ) === true) {
             return [];
         }
-        const cost = { player, spell: this, items: items.filter((item) => item != null && PluginManager.emitSpellRuneBypass(
-            player, this.getSpellbook(), this.spellId(), item.id
-        ) !== true) };
+        // `covered`: the runes a staff or tome supplies (the per-rune bypass), which the cast never spends.
+        const paid: Item[] = [];
+        const covered: Item[] = [];
+        for (const item of items) {
+            if (item == null) continue;
+            const bypassed = PluginManager.emitSpellRuneBypass(player, this.getSpellbook(), this.spellId(), item.id) === true;
+            (bypassed ? covered : paid).push(item);
+        }
+        const cost = { player, spell: this, items: paid, covered };
         PluginManager.emitCustomEvent("magic:spell-cost", cost);
         return cost.items;
+    }
+
+    /**
+     * The refusal for a cast short of `shortfall` (rsprox captures, regular worlds: "You do not have enough Law Runes to
+     * cast this spell.", "...Cosmic Runes...", "...bananas..."): the first item no rune source covers, a rune by its
+     * name in title case and plural, anything else in lower case and plural. "First" is in `order`, the cache spell's
+     * own rune list when given (live names Fire Surge's wrath runes, rsprox 226/01696, Water Blast's death runes,
+     * 227/01710), with anything it doesn't list (the Ape Atoll banana) last.
+     */
+    public static missingItemsMessage(player: Player, shortfall: Item[], order: number[] | null = null): string {
+        const rank = (item: Item) => {
+            const at = order ? order.indexOf(item.getId()) : -1;
+            return at >= 0 ? at : Number.MAX_SAFE_INTEGER;
+        };
+        const sorted = order ? [...shortfall].sort((a, b) => rank(a) - rank(b)) : shortfall;
+        const first = sorted.find((item) => !PluginManager.checkSpellRuneSource(player, [item])) ?? sorted[0];
+        const name = first ? String(first.getDefinition?.()?.getName?.() ?? "") : "";
+        if (!name) return "You do not have the required items to cast this spell.";
+        const plural = /rune$/i.test(name) ? name.replace(/\b\w/g, (letter) => letter.toUpperCase()) + "s" : name.toLowerCase() + "s";
+        return `You do not have enough ${plural} to cast this spell.`;
+    }
+
+    private cachedRuneOrder?: number[] | null;
+
+    /**
+     * The rune ids in the order the cache's spell obj lists them (params 365/367/369/371), or null when the cache has
+     * no such spell. Found by the spell's obj id, its widget, or (for spells keyed by an old button id, Wind Strike's
+     * 1152) the cache spells of this spell's level whose runes are all among this spell's: the fullest, if they agree.
+     */
+    public cacheRuneOrder(): number[] | null {
+        if (this.cachedRuneOrder !== undefined) return this.cachedRuneOrder;
+        const { CacheDefinitions } = require("../../../cache/CacheDefinitions");
+        const id = this.spellId();
+        const { ItemDefinition } = require("../../../definition/ItemDefinition");
+        // The cache's own list, runes only: its staff requirements (god, Iban and Slayer staves) are no part of the order.
+        const runesOf = (spellName: string): number[] => (CacheDefinitions.getSpellRequirements(spellName)?.runes ?? [])
+            .map((rune: { id: number }) => rune.id)
+            .filter((runeId: number) => /rune$/i.test(String(ItemDefinition.forId(runeId)?.getName?.() ?? "")));
+        const name: string | undefined = CacheDefinitions.getSpellName(-1, id) ?? CacheDefinitions.getSpellName(id, -1);
+        if (name) {
+            const order = runesOf(name);
+            return this.cachedRuneOrder = order.length ? order : null;
+        }
+        let listed: Item[] = [];
+        try { listed = this.itemsRequired(null as any) ?? []; } catch { listed = []; }
+        const own = new Set(listed.filter(Boolean).map((item: Item) => item.getId()));
+        const candidates = (CacheDefinitions.getSpellNames() as string[])
+            .filter((candidate) => CacheDefinitions.getSpellRequirements(candidate)?.level === this.levelRequired())
+            .map((candidate) => runesOf(candidate))
+            // Every rune the cache lists is this spell's (the cache may list fewer: Smoke Rush's obj has no fire rune).
+            .filter((order) => order.length > 0 && order.every((runeId) => own.has(runeId)));
+        // Ties (Fire Bolt and Ghostly Grasp at 35, Shadow Burst and Lesser Corruption at 64): the fullest lists, used when
+        // they agree.
+        const most = Math.max(0, ...candidates.map((order) => order.length));
+        const fullest = candidates.filter((order) => order.length === most);
+        const agree = fullest.length > 0 && fullest.every((order) => order.join(",") === fullest[0].join(","));
+        return this.cachedRuneOrder = agree ? fullest[0] : null;
     }
 
     /** The part of `items` the inventory cannot fully supply, aggregated per item. */
@@ -149,7 +228,7 @@ export abstract class Spell {
 
             // A rune source (rune pouch) may cover what the inventory cannot.
             if (runeShortfall.length > 0 && !PluginManager.checkSpellRuneSource(player, runeShortfall)) {
-                player.sendMessage("You do not have the required items to cast this spell.");
+                player.sendMessage(Spell.missingItemsMessage(player, runeShortfall, this.cacheRuneOrder()));
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
                 return false;
@@ -157,7 +236,7 @@ export abstract class Spell {
 
             const equipment = this.equipmentRequired(player);
             if (Array.isArray(equipment) && equipment.length > 0 && !player.getEquipment().containsAllItem(equipment)) {
-                player.sendMessage("You do not have the required equipment to cast this spell.");
+                player.sendMessage(this.missingEquipmentMessage(player));
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
                 return false;
@@ -190,12 +269,9 @@ export abstract class Spell {
             if (runeShortfall.length > 0) {
                 PluginManager.consumeSpellRuneSource(player, runeShortfall);
             }
-
-            if (player.getAttribute?.("lunar:spellbook-swap")) {
-                player.setAttribute("lunar:spellbook-swap", null);
-                MagicSpellbook.changeSpellbook(player, MagicSpellbook.LUNAR, true);
-            }
         }
+        // A cast whose runes a weapon saved is still the swap's one spell.
+        Spell.endSpellbookSwap(player);
 
         if (this.usesSharedCastDelay()) {
             player.setAttribute(Spell.NEXT_CAST_AT, now + Spell.CAST_DELAY_TICKS);

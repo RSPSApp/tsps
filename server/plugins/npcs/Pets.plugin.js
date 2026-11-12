@@ -24,6 +24,8 @@ const CatchUp = require("./pets/CatchUp.Pets");
 const Dialogue = require("./pets/Dialogue.Pets");
 const RiftGuardian = require("./pets/RiftGuardian.Pets");
 const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
+const Beaver = require("./pets/Beaver.Pets");
+const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -51,6 +53,8 @@ const MAX_XP = 200000000;
 const SANGUINE_DUST_UNLOCK = {permanent: true, name: "sanguine dust",
   message: "You need to earn sanguine dust from the Theatre of Blood Challenge Mode to do that."};
 let pluginApi = null;
+/** world.json pluginConfig: how many times likelier every skilling pet roll is (1, the default, is OSRS). */
+const SKILLING_PET_MULTIPLIER_CONFIG = "Pets:skillingPetMultiplier";
 let TaskClass = null;
 let TaskManagerRef = null;
 let NPCRespawnTaskRef = null;
@@ -245,8 +249,10 @@ const PETS = [
     enumName: "BEAVER",
     petId: NpcIdentifiers.BEAVER_11,
     dialogueVariant: "standard-dialogue-normal-variant",
+    // Each recolour, the pheasant and the fox are their own item (pets/Beaver.Pets.js adds them).
     morphId: 0,
     itemId: 13322,
+    familyItemId: 13322,
     dialogue: -1,
     skill: Skill.WOODCUTTING,
     chance: 5000,
@@ -323,6 +329,8 @@ const PETS = [
   {
     enumName: "ROCKY",
     petId: 7336,
+    // Transcript:Rocky also has tanuki (Ziggy) and red panda (Red) sections; this follower is Rocky.
+    dialogueVariant: "standard-dialogue",
     morphId: 0,
     itemId: 20663,
     dialogue: -1,
@@ -609,7 +617,8 @@ function ownsPetFamily(player, pet) {
   });
 }
 
-function recordOwnership(player, pet) {
+/** `announce`: false records the pet without the collection log sync (awardPet sends its lines first). */
+function recordOwnership(player, pet, { announce = true } = {}) {
   if (pet?.reclaimable === false) return;
   const family = petFamily(pet);
   const owned = getOwnedPetItems(player);
@@ -622,8 +631,17 @@ function recordOwnership(player, pet) {
   if (others.length === owned.length && owned.includes(pet.itemId)) return;
   player.setAttribute(OWNED_ATTRIBUTE, [...others, pet.itemId]);
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "pet-insurance" });
-  syncCollectionLog(player, { silent: false });
+  if (announce) syncCollectionLog(player, { silent: false });
 }
+
+/**
+ * A new pet's lines, as recorded (rsprox_transcripts/234/03285.txt:287458-287462, 227/00101.txt:602776-602778,
+ * 227/01857.txt:421583-421585): the red follow line, the purple insurance line (Wiki, Probita: "One-off pets are now
+ * automatically insured upon receiving one"), then the collection log's.
+ */
+const FOLLOWED = "<col=ef1020>You have a funny feeling like you're being followed.</col>";
+const WOULD_HAVE_BEEN_FOLLOWED = "<col=ef1020>You have a funny feeling like you would have been followed...</col>";
+const INSURED = "<col=800080>Your new pet has been automatically insured. If lost, it can be reclaimed from Probita in Ardougne.</col>";
 
 /** The collection log lists one item per pet: a skilling pet's base colour, never a morph. */
 function collectionLogItemId(pet) {
@@ -674,24 +692,33 @@ function awardPet(player, itemId) {
       deliverPetItem(player, pet.itemId);
       return true;
     }
-    player.sendMessage("You have a funny feeling like you would have been followed...");
+    // rsprox_transcripts/227/01751.txt:97166: red, as the follow line.
+    player.sendMessage(WOULD_HAVE_BEEN_FOLLOWED);
     return false;
   }
-  recordOwnership(player, pet);
+  recordOwnership(player, pet, { announce: false });
+  const announce = () => {
+    if (pet.reclaimable !== false) player.sendMessage(INSURED);
+    syncCollectionLog(player, { silent: false });
+  };
   // "pets:obtained" { player, itemId, skill }: a new pet (a league's "Obtain any Skilling Pet"); `skill` a skilling pet's.
   pluginApi?.emitCustomEvent?.("pets:obtained", { player, itemId: pet.itemId, skill: pet.skill?.getName?.() ?? null });
   const following = player.getAttribute?.(CURRENT_PET_ATTRIBUTE)?.isRegistered?.() === true;
   if (following && player.getInventory().isFull()) {
     // OSRS then loses the pet to Probita; the owned record lets her return it.
     player.sendMessage("You have a funny feeling like you would have been followed... Probita can help.");
+    announce();
     return true;
   }
   if (following) {
     player.getInventory().adds(pet.itemId, 1);
     player.sendMessage("You feel something weird sneaking into your backpack.");
+    announce();
     return true;
   }
-  return drop(player, pet.itemId, true);
+  const dropped = drop(player, pet.itemId, true);
+  announce();
+  return dropped;
 }
 
 /**
@@ -759,14 +786,60 @@ function reclaimPets(event) {
   Recovery.open(event);
 }
 
-/** Boss pets come straight to the killer instead of landing on the floor. */
-function awardDroppedPets({ player, drops }) {
+/**
+ * Boss pets come straight to the killer instead of landing on the floor. A boss whose loot waits for a claim (the Royal
+ * Titans' corpses) holds its death roll back ("pets:hold-for-claim" { player, npc, npcId, claim, hold }): its pet then
+ * comes with the claim's own roll (marked `claim` on npc-drops:roll), to whoever claims, not to the last hitter.
+ */
+function awardDroppedPets({ player, npc, npcId, drops, claim }) {
   if (!player || !Array.isArray(drops)) return;
+  const hold = { player, npc, npcId, claim: claim === true, hold: false };
+  pluginApi?.emitCustomEvent?.("pets:hold-for-claim", hold);
+  if (hold.hold === true) return;
   for (let index = drops.length - 1; index >= 0; index--) {
     const itemId = drops[index]?.itemId ?? drops[index]?.id;
     if (!getPetForItemId(itemId)) continue;
     drops.splice(index, 1);
     awardPet(player, itemId);
+  }
+}
+
+/**
+ * "pets:extensions" { pets, services }: asked once as this plugin registers, before it hooks its
+ * pets' NPC ids, so another plugin can add pets of its own (Plugin Hub plugins load first, from
+ * plugins/imported/). A listener pushes rows like this table's onto `pets`:
+ *   { petId, itemId, enumName?, morphId?, dialogue?, reclaimable?, ... }
+ * petId is the follower's NPC id and itemId the item it is summoned from; any other fields stay
+ * on the row, for the adding plugin to read back (its "pets:interact" handler gets the row as
+ * `pet`). `services` lends the ownership helpers such a plugin needs: getOwnedPetItems(player),
+ * holdsPetItem(player, itemId), getPetForItemId(itemId) and getPetByNpcId(npcId). A second
+ * register (tests) replaces the previous extension pets.
+ */
+function addExtensionPets(api) {
+  for (let index = PETS.length - 1; index >= 0; index--) {
+    const pet = PETS[index];
+    if (!pet.extension) continue;
+    PETS.splice(index, 1);
+    PET_BY_ID.delete(pet.petId);
+    PET_BY_NAME.delete(pet.enumName);
+    if (PET_BY_ITEM_ID.get(pet.itemId) === pet) PET_BY_ITEM_ID.delete(pet.itemId);
+  }
+  const request = { pets: [], services: { getOwnedPetItems, holdsPetItem, getPetForItemId, getPetByNpcId } };
+  api.emitCustomEvent?.("pets:extensions", request);
+  for (const row of Array.isArray(request.pets) ? request.pets : []) {
+    if (!row || !Number.isInteger(row.petId) || !Number.isInteger(row.itemId)) {
+      console.error("[pets] an extension pet needs whole-number petId and itemId; skipped", row);
+      continue;
+    }
+    if (PET_BY_ID.has(row.petId) || PET_BY_ITEM_ID.has(row.itemId)) {
+      console.error(`[pets] extension pet NPC ${row.petId} or item ${row.itemId} is already a pet's; skipped`);
+      continue;
+    }
+    const pet = { morphId: 0, dialogue: -1, ...row, enumName: row.enumName ?? `EXTENSION_${row.petId}`, extension: true };
+    PETS.push(pet);
+    PET_BY_ID.set(pet.petId, pet);
+    PET_BY_NAME.set(pet.enumName, pet);
+    PET_BY_ITEM_ID.set(pet.itemId, pet);
   }
 }
 
@@ -1741,10 +1814,11 @@ function drop(player, itemId, reward, { silent = false } = {}) {
       }
     }, 1200);
 
-    recordOwnership(player, getPetByNpcId(npc.getId()) ?? pet);
+    // A reward's lines are awardPet's to send (the log after the follow and insurance lines).
+    recordOwnership(player, getPetByNpcId(npc.getId()) ?? pet, { announce: !reward });
     trackCatFollower(player, npc, pet);
     if (reward) {
-      if (!silent) player.sendMessage("You have a funny feeling like you're being followed.");
+      if (!silent) player.sendMessage(FOLLOWED);
     } else {
       player.getInventory().deleteNumber(pet.itemId, 1);
       Sounds.sendSound(player, Sound.DROP_ITEM);
@@ -1767,7 +1841,8 @@ function drop(player, itemId, reward, { silent = false } = {}) {
       currentPetId: currentPet?.getId?.() ?? null,
       currentPetRegistered: currentPet?.isRegistered?.() ?? null,
     });
-    player.sendMessage("You already have a pet following you.");
+    // rsprox_transcripts/232/03153.txt:10326 (Drop on a pet with one out; 229/00265:24055, the menagerie, the same).
+    player.sendMessage("You already have a follower.");
   }
 
   return true;
@@ -2080,18 +2155,21 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
     chance = (petBase - skills.getMaxLevel(skill) * 25) / (skills.getExperience(skill) >= MAX_XP ? 15 : 1);
   }
   if (!(Number.isFinite(chance) && chance > 0)) return false;
+  chance = Math.max(1, chance / skillingPetMultiplier());
   let hit = false;
   for (let roll = 0; roll < Math.max(1, rolls | 0) && !hit; roll++) {
     hit = Math.random() < 1 / chance;
   }
   if (!hit) return false;
-  if (!ownsPetFamily(player, pet)) {
-    World.sendMessage(
-      `@dre@${player.getDisplayName()} just found a stray ${getPetDisplayName(pet)} while ${normalizeSkillName(skill)}!`
-    );
-  }
+  // No world-wide line: live sends only the player's own (rsprox_transcripts/227/01857.txt:421576-421590, Rocky).
   awardPet(player, pet.itemId);
   return true;
+}
+
+/** The world's skilling pet multiplier; 1 (the OSRS rate) when unset or not above 1. */
+function skillingPetMultiplier() {
+  const multiplier = Number(pluginApi?.getPluginConfig?.(SKILLING_PET_MULTIPLIER_CONFIG, 1));
+  return Number.isFinite(multiplier) && multiplier > 1 ? multiplier : 1;
 }
 
 /** A gatherer may resolve its normal pet opportunity before delivering the resource. */
@@ -2119,12 +2197,55 @@ function fillSkillPetVariants({ ItemIdentifiers, NpcIdentifiers: Npcs }) {
   SKILL_PET_VARIANTS.set(`npc:${Npcs.BLACK_CHINCHOMPA}`, PET_BY_NAME.get("BLACK_CHINCHOMPA"));
 }
 
+/** The beaver's other forms, each its own item and follower (pets/Beaver.Pets.js). */
+function addBeaverForms({ CacheDefinitions }) {
+  const base = PET_BY_NAME.get("BEAVER");
+  for (const pet of Beaver.rows(base, CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+  }
+}
+
+/** The giant squirrel's other forms, each its own item and follower (pets/GiantSquirrel.Pets.js). */
+function addGiantSquirrelForms({ CacheDefinitions }) {
+  const base = PET_BY_NAME.get("GIANT_SQUIRREL");
+  for (const pet of GiantSquirrel.rows(base, CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+    if (Number.isInteger(pet.houseNpcId)) PET_BY_HOUSE_ID.set(pet.houseNpcId, pet);
+  }
+}
+
+/** The player's own active follower, free to change form now. */
+function isOwnFollower(player, npc) {
+  return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
+    && npc.isRegistered?.() !== false && player.busy?.() !== true;
+}
+
+/** Changes the follower to another form of its pet, keeping the item and insurance records in step. */
+function transformFollower(player, npc, next) {
+  const pet = getPetByNpcId(npc.getId());
+  npc.setNpcTransformationId(next.petId);
+  if (pet) setStoredVariant(player, pet, next.petId);
+  player.setAttribute(ACTIVE_PET_ATTRIBUTE, next.itemId);
+  player.setAttribute(LAST_PET_ATTRIBUTE, next.itemId);
+  recordOwnership(player, next);
+  syncFollowerIndex(player, npc);
+}
+
 let World;
 let RegionManager;
 let ItemOnGroundManager;
 
 module.exports = {
   name: "Pets",
+  description: "Pet followers: summoning, dismissing, item-backed ownership, storage, Probita reclaim, Metamorphosis variants and pet-specific behaviour.",
+  config: {
+    "Pets:skillingPetMultiplier": {
+      type: "number", label: "Skilling pet multiplier", default: 1, min: 1,
+      help: "Makes every skilling pet roll this many times likelier. 1 is the normal rate; values of 1 or less change nothing.",
+    },
+  },
   register(api) {
     World = api.getWorld();
     RegionManager = api.getRegionManager();
@@ -2141,6 +2262,9 @@ module.exports = {
     NPCRespawnTaskRef = api.core?.NPCRespawnTask ?? null;
     ItemDefinitionClass = api.core?.ItemDefinition ?? null;
     fillSkillPetVariants(api.core);
+    addBeaverForms(api.core);
+    addGiantSquirrelForms(api.core);
+    addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
     api.persistAttribute(ACTIVE_PET_ATTRIBUTE, null);
@@ -2180,6 +2304,8 @@ module.exports = {
     api.onPlayerDeath(onCatOwnerDeath);
     RiftGuardian.attach(api, {pets: PETS, skill: Skill.RUNECRAFTING, world: World, currentAttribute: CURRENT_PET_ATTRIBUTE,
       activeAttribute: ACTIVE_PET_ATTRIBUTE, lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant, recordOwnership, syncFollowerIndex});
+    Beaver.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
+    GiantSquirrel.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 
@@ -2192,6 +2318,9 @@ module.exports = {
   // Exposed for tests/pets.test.cjs; nothing else reads them.
   __internals: {
     PETS,
+    addExtensionPets,
+    onSkill,
+    skillingPetMultiplier,
     PET_BY_ID,
     PET_BY_ITEM_ID,
     petFamily,
@@ -2201,6 +2330,7 @@ module.exports = {
     morph,
     interact,
     pickup,
+    drop,
     handlePetClick,
     awardPet,
     getOwnedPetItems,

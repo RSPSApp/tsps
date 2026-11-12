@@ -14,6 +14,10 @@ const path = require("path");
 const Shared = require("./Shared.Gauntlet");
 
 const INTERFACE = 639;
+/** toplevel_mainmodal_open (-1, -1), run before the board as live does: a modal before it (the bank's
+ * -2) can leave the main modal stretched, which pulls the board's background to the top. */
+const SCRIPT_MAINMODAL_OPEN = 2524;
+
 const PANELS = { regular: { title: "The Gauntlet", first: 5 }, corrupted: { title: "The Corrupted Gauntlet", first: 18 } };
 const MODES = ["regular", "corrupted"];
 
@@ -69,6 +73,7 @@ function formatTicks(ticks) {
 
 function readScoreboard(player, stats) {
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(INTERFACE);
   for (const mode of MODES) {
     const { title, first } = PANELS[mode];

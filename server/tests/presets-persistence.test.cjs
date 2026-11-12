@@ -414,7 +414,7 @@ test("quest requirements validate the whole preset before changing gear and allo
   player.getPacketSender = () => sender;
   player.resetAttributes = () => {};
   player.getInventory().addItem(new Item(Items.COINS, 500));
-  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(Items.BRONZE_SWORD, 1));
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(Items.BRONZE_SHORTSWORD, 1));
   player.setSpellbook(MagicSpellbook.LUNAR);
   const items = container => container.getItems().map(item => [item.getId(), item.getAmount()]);
   const snapshot = () => ({

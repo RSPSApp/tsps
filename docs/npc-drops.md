@@ -49,12 +49,12 @@ Verification for this import: TypeScript build and 26 focused integration tests 
 
 ## The overrides
 
-`npc-drop-overrides.json` is applied when the drops load. Where the dump already has an NPC or a shared table, the dump's wins, so an override the dumper catches up with becomes a no-op. `tests/npc-drop-overrides.test.cjs` fails when an override is no longer needed, so it can be removed.
+`npc-drop-overrides.json` is applied when the drops load. Where the dump already has a shared table, the dump's wins, so an override the dumper catches up with becomes a no-op. An `addNpcs` entry for an NPC the dump already maps appends the tables it names that the dump does not, keeping the dump's own first table as the default; an entry that adds nothing is dead weight. `tests/npc-drop-overrides.test.cjs` fails when an override is no longer needed, so it can be removed.
 
 | Section | Does | Now |
 | --- | --- | --- |
 | `removeNpcs` | NPC ids that drop nothing themselves | the Ents (6594, 7234, 9474): their trunk gives the loot |
-| `addNpcs` | NPC ids mapped to a table the dumper doesn't map them to | 110 variants and versions (Phosani's Nightmare, the Nightmare, Ghast, Kalphite Guardian, Slagilith…), added by hand in September |
+| `addNpcs` | NPC ids mapped to a table the dumper doesn't map them to, or given the extra tables it misses | 110 variants and versions (Phosani's Nightmare, the Nightmare, Ghast, Kalphite Guardian, Slagilith…), added by hand in September; the five Chaos Temple zombie pirates, whose page's `dropversion=Diary` table the dumper exports but does not map |
 | `tables.<id>.addEntries` / `addTertiary` | entries added to a table | the Abyssal Sire's pet, the Abyssal orphan |
 | `tables.<id>.removeSections` | sections of a table left out of every roll | Yama's Contract section (what his contracts reward, not a normal kill) |
 | `subtables` | shared tables the dumper doesn't export | none: the uncommon seed table is in the dump since #1952 |

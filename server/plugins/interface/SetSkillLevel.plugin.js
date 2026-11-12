@@ -92,6 +92,7 @@ function claimStatClick(offer) {
 
 module.exports = {
   name: "SetSkillLevel",
+  description: "On PvP worlds with presets, clicking a Skills tab stat prompts you to set that skill's level, with checks against gear, combat and the Wilderness.",
   register(api) {
     api.onCustomEvent("skills:stat-clicked", claimStatClick);
   },

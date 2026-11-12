@@ -1,0 +1,388 @@
+'use strict';
+// Real channel membership, native packets, players, containers, map and instance owners.
+// Only the transport is inert; the game clock advances deterministically.
+process.env.DISABLE_PLAYER_BOTS = '1';
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { before, afterEach, test } = require('node:test');
+require('../dist/Server').Server.installProductionPathResolver();
+const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
+const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
+const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
+const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+const { FriendsChatManager: FC } = require('../plugins/interface/FriendsChatManager');
+const Presets = require('../plugins/modes/pvp/Presets.PvpMode');
+const C = require('../plugins/minigames/clanwars/Common.ClanWars');
+const Match = require('../plugins/minigames/clanwars/Match.ClanWars');
+const Negotiation = require('../plugins/minigames/clanwars/Negotiation.ClanWars');
+const core = PM.getCoreApi();
+const actors = [];
+let serial = 0;
+const errors = [];
+const originalError = console.error;
+
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3128, 3629);
+  require('../plugins/interface/FriendsList.plugin').register(PM.createApi('ClanWarsSocialTest'));
+  require('../plugins/minigames/DuelArena.plugin').register(PM.createApi('ClanWarsDuelTest'));
+  require('../plugins/combat/PvpStatistics.plugin').register(PM.createApi('ClanWarsPvpStatsTest'));
+  require('../plugins/combat/KillStreaks.plugin').register(PM.createApi('ClanWarsKillStreaksTest'));
+  require('../plugins/minigames/ClanWars.plugin').register(PM.createApi('ClanWarsTest'));
+  Presets.register(PM.createApi('ClanWarsPresetsTest'));
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
+});
+afterEach(() => {
+  Negotiation.shutdown();
+  Match.shutdown();
+  for (const p of actors.splice(0)) {
+    PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    if (p.getArea()) p.getArea().leave(p, true);
+    core.World.getPlayers().remove(p);
+  }
+  assert.deepEqual(errors.splice(0), [], 'production hooks must not swallow errors');
+});
+
+function actor() {
+  const transport = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(transport));
+  const name = `clanqa${++serial}`;
+  p.setUsername(name).setLongUsername(core.Misc.stringToLongBigInt(name));
+  p.setHostAddress(`192.0.2.${serial}`);
+  p.setPasswordHashWithSalt('test-only');
+  assert.equal(core.World.getPlayers().add(p), true);
+  p.setRegistered(true);
+  FC.onLogin(p);
+  p.setLocation(new core.Location(3128 + serial % 2, 3627, 0));
+  p.setNeedsPlacement(false);
+  AreaManager.process(p);
+  p.connection = new ClientConnection(transport);
+  p.connection.player = p;
+  actors.push(p);
+  return p;
+}
+function tick(count = 1) {
+  for (let i = 0; i < count; i++) {
+    core.World.processCycle++;
+    for (const p of actors) {
+      p.getMovementQueue().process();
+      core.TaskManager.processWalkTo(p.getIndex());
+      AreaManager.process(p);
+      p.resetUpdating();
+    }
+    core.TaskManager.process();
+  }
+}
+async function wire(p, frame) {
+  const packets = decodeClientPackets(frame);
+  assert.equal(packets.length, 1);
+  await p.connection.dispatch(packets);
+  p.connection.processTurnPackets();
+  tick(3);
+}
+async function challenge(p, target) {
+  const frame = Buffer.alloc(4); frame[0] = 73;
+  frame.writeUInt16BE(target.getIndex(), 1);
+  await wire(p, frame);
+}
+async function click(p, name, slot = 0xffff) {
+  const frame = Buffer.alloc(9); frame[0] = 23;
+  frame.writeInt32BE(C.uid(name), 1);
+  frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(0xffff, 7);
+  await wire(p, frame);
+}
+function channel(owner, members = []) {
+  owner.getRelations().setFriendsChatChannelName(`Team${serial}`);
+  owner.getRelations().setFriendsChatRanks(-1, -1, 2);
+  for (const member of members) {
+    owner.getRelations().addFriend(member.getLongUsername());
+    owner.getRelations().setFriendRank(member.getLongUsername(), 5);
+  }
+  assert.equal(FC.join(owner, owner.getUsername(), false), true);
+  for (const member of members) assert.equal(FC.join(member, owner.getUsername(), false), true);
+  assert.equal(C.captain(owner).rankOf(owner), 7);
+}
+async function negotiate(a, b, cap = null) {
+  await challenge(a, b); await challenge(b, a);
+  assert.equal(a.getInterfaceId(), C.group('clanwars_setup'));
+  if (cap !== null) { await click(a, 'clanwars_setup:dropdown_playercap', cap + 1); tick(9); }
+  await click(a, 'clanwars_setup:accept'); await click(b, 'clanwars_setup:accept');
+  assert.equal(a.getInterfaceId(), C.group('clanwars_confirm'));
+  tick(5);
+  await click(a, 'clanwars_confirm:button'); await click(b, 'clanwars_confirm:button');
+  const game = C.channelGames.get(C.channel(a).key);
+  assert.ok(game, 'native reciprocal challenge and confirmations create the match');
+  return game;
+}
+async function join(p) {
+  // The actual cache portal goes through production object dispatch; no synthetic loc.
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  const id = core.CacheDefinitions.getLocId('clanwars_portal');
+  const objects = [...MapObjects.mapObjects.values()].flat();
+  const portal = objects.find(o => o.getDefinition()?.getName() === 'Challenge portal'
+    && o.getLocation().getX() >= C.LOBBY.minX && o.getLocation().getX() <= C.LOBBY.maxX
+    && o.getLocation().getY() >= C.LOBBY.minY && o.getLocation().getY() <= C.LOBBY.maxY);
+  assert.ok(portal, `actual challenge portal exists (gameval lookup ${id})`);
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  new ObjectActionPacketListener().executeAction(p, portal.getId(), portal.getLocation().getX(), portal.getLocation().getY(), 1);
+  tick(15);
+  assert.equal(p.getInterfaceId(), C.group('clanwars_confirm'));
+  await click(p, 'clanwars_confirm:button');
+}
+
+test('native challenge revalidates captain rank and modal close cancels both offers', async () => {
+  const owner = actor(), a = actor(), b = actor(); channel(owner, [a]); channel(b);
+  await challenge(a, b); await challenge(b, a);
+  assert.equal(C.negotiations.has(a), true);
+  owner.getRelations().setFriendRank(a.getLongUsername(), 1);
+  // Refresh is the actual channel profile owner, not a replacement fake channel.
+  FC.refreshOwnedChannel(owner);
+  tick(2);
+  assert.equal(C.negotiations.has(a), false);
+  assert.equal(C.negotiations.has(b), false);
+  await challenge(owner, b); await challenge(b, owner);
+  assert.equal(C.negotiations.has(owner), true);
+  owner.getPacketSender().sendInterfaceRemoval();
+  assert.equal(C.negotiations.has(owner), false);
+  assert.equal(C.negotiations.has(b), false);
+});
+
+test('native reciprocal Challenge opens setup when both captains occupy the same tile', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  for (const p of [a, b]) {
+    p.moveTo(new core.Location(3128, 3622, 0));
+    p.setNeedsPlacement(false);
+    p.resetUpdating();
+    AreaManager.process(p);
+  }
+  await challenge(a, b); await challenge(b, a);
+  assert.equal(a.getInterfaceId(), C.group('clanwars_setup'), 'same-tile OPPLAYER4 reaches setup for first captain');
+  assert.equal(b.getInterfaceId(), C.group('clanwars_setup'), 'same-tile reciprocal OPPLAYER4 reaches setup for second captain');
+  assert.equal(C.negotiations.get(a), C.negotiations.get(b));
+});
+
+test('native cap choice limits real channel members, closes late entry and enforces enemy melee only', async () => {
+  const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+  const game = await negotiate(a, b, 1);
+  await join(a); await join(b); await join(extra);
+  for (const p of [a, b]) {
+    const mount = p.getPacketSender().subInterfaceTargets.get(C.group('clanwars_hud'));
+    assert.equal(mount?.targetUid, C.uid('toplevel_osrs_stretch:overlay_hud'),
+      'fighter counters use the native HUD container that keeps them clear of the minimap');
+  }
+  assert.equal(C.matches.get(a), game); assert.equal(C.matches.get(b), game);
+  assert.equal(C.matches.has(extra), false, '1v1 cap rejects an additional real teammate');
+  assert.equal(game.area.canAttack(a, b, { type: () => core.CombatType.MELEE }), false);
+  core.World.processCycle = game.starts - 1; game.tick();
+  assert.equal(game.phase, 'staging');
+  tick(); assert.equal(game.phase, 'combat');
+  assert.equal(game.area.canAttack(a, b, { type: () => core.CombatType.MELEE }), true);
+  assert.equal(game.area.canAttack(a, b, { type: () => core.CombatType.RANGED }), false);
+  assert.equal(game.area.canAttack(a, b, { type: () => core.CombatType.MAGIC }), false);
+  assert.equal(game.area.canAttack(a, extra, { type: () => core.CombatType.MELEE }), false);
+  await join(extra);
+  assert.equal(C.matches.has(extra), false, 'LTS entry is closed after preparation');
+  const preset = { player: a, allow: true }; PM.emitCustomEvent('presets:can-use', preset);
+  assert.equal(preset.allow, false);
+});
+
+test('native opponent cap revision invalidates prior acceptance and unsupported controls cannot change fixed terms', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  await challenge(a, b); await challenge(b, a);
+  await click(a, 'clanwars_setup:accept');
+  const session = C.negotiations.get(a);
+  assert.equal(session.accepted.has(a), true);
+  await click(b, 'clanwars_setup:dropdown_playercap', 2);
+  assert.equal(session.accepted.size, 0, 'previous acceptance does not survive changed terms');
+  await click(a, 'clanwars_setup:accept');
+  assert.equal(session.accepted.has(a), false, 'opponent must wait through change notice');
+  tick(9);
+  await click(a, 'clanwars_setup:magic', 0);
+  assert.equal(session.rules.magic, 4, 'forged hidden magic selection cannot enable spells');
+  await click(a, 'clanwars_setup:accept'); await click(b, 'clanwars_setup:accept');
+  assert.equal(session.stage, 'confirm');
+  // The client already changed to the confirmation; an old setup click cannot mutate it.
+  await click(a, 'clanwars_setup:dropdown_playercap', 1);
+  assert.equal(session.rules.playercap, 1);
+  assert.equal(session.stage, 'confirm');
+});
+
+test('real combat policy rejects teammates and other instances while admitting an opposing melee fighter', async () => {
+  const a = actor(), teammate = actor(), b = actor(); channel(a, [teammate]); channel(b);
+  const game = await negotiate(a, b); await join(a); await join(teammate); await join(b);
+  core.World.processCycle = game.starts; game.tick();
+  const melee = { type: () => core.CombatType.MELEE };
+  assert.equal(CombatFactory.canAttackByPolicy(a, teammate, melee), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(CombatFactory.canAttackByPolicy(a, b, melee), CanAttackResponse.CAN_ATTACK);
+  const c = actor(), d = actor(); channel(c); channel(d);
+  const other = await negotiate(c, d); await join(c); await join(d);
+  core.World.processCycle = other.starts; other.tick();
+  assert.notEqual(game.area, other.area);
+  assert.equal(CombatFactory.canAttackByPolicy(a, d, melee), CanAttackResponse.CANT_ATTACK_IN_AREA);
+});
+
+test('pending death remains safe when the last fighter ends a match; live metadata survives', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  const game = await negotiate(a, b); await join(a); await join(b);
+  const item = Presets._test.spawnPresetItem(new core.Item(995, 17, { qa: 'retain' }), Presets.getGlobalPresetPool()[0], a);
+  a.getInventory().add(item, false);
+  const held = a.getInventory().getValidItems().find(x => x.getId() === 995);
+  assert.equal(held.isPresetItem(), true);
+  core.World.processCycle = game.starts; game.tick();
+  const death = new PlayerDeathTask(a, false); death.execute();
+  game.tick(); assert.equal(game.phase, 'over');
+  for (let i = 0; i < 4; i++) death.execute();
+  assert.equal(a.getInventory().getAmount(995), 17);
+  assert.deepEqual(a.getInventory().getValidItems().find(x => x.getId() === 995).getMeta(), held.getMeta());
+  assert.equal(a.getPrivateArea(), null); assert.equal(a.getLocation().getX(), C.RETURN[0]);
+  assert.equal(Match.dying.has(a), false);
+});
+
+test('real chat leave cancels negotiation and disconnect removes instance ownership before saving', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  await challenge(a, b); await challenge(b, a);
+  FC.leave(a, false);
+  assert.equal(C.negotiations.has(a), false); assert.equal(C.negotiations.has(b), false);
+  assert.equal(FC.join(a, a.getUsername(), false), true);
+  const game = await negotiate(a, b); await join(a); await join(b);
+  PM.emitPlayerDisconnect({ player: a, username: a.getUsername(), source: 'native-test' });
+  assert.equal(C.matches.has(a), false); assert.equal(game.members.has(a), false);
+  assert.equal(a.getPacketSender().subInterfaceTargets.has(C.group('clanwars_hud')), false,
+    'disconnect removes the real HUD mount owned by this match');
+  assert.equal(a.getPrivateArea(), null);
+  assert.deepEqual([a.getLocation().getX(), a.getLocation().getY(), a.getLocation().getZ()], C.RETURN);
+  const save = PlayerSave.fromPlayer(a);
+  assert.deepEqual([save.position.getX(), save.position.getY(), save.position.getZ()], C.RETURN);
+});
+
+test('JSON save/load recovers an interrupted instance login without changing items or ordinary logout positions', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  const game = await negotiate(a, b); await join(a); await join(b);
+  a.getInventory().add(Presets._test.spawnPresetItem(new core.Item(995, 19, { qa: 'saved' }),
+    Presets.getGlobalPresetPool()[0], a), false);
+  let codec;
+  require('../plugins/persistence/JsonPlayerPersistence.plugin').register({
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    setPlayerPersistence: backend => { codec = backend; }, log() {},
+  });
+  const snapshot = p => JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p),
+    codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const raw = snapshot(a);
+  assert.equal(raw.attributes[C.IN_MATCH_ATTRIBUTE], true, 'active-instance ownership is persisted');
+  assert.ok(a.getLocation().getX() >= 8192, 'snapshot captures an allocated instance tile');
+  const loaded = actor();
+  codec.hydratePlayerSave(raw).applyToPlayer(loaded);
+  assert.equal(loaded.getAttribute(C.IN_MATCH_ATTRIBUTE), true);
+  assert.equal(loaded.getLocation().getX(), a.getLocation().getX());
+  PM.emitPlayerLogin({ player: loaded, username: loaded.getUsername(), isNewAccount: false });
+  assert.deepEqual([loaded.getLocation().getX(), loaded.getLocation().getY(), loaded.getLocation().getZ()], C.RETURN);
+  assert.equal(loaded.getAttribute(C.IN_MATCH_ATTRIBUTE), false);
+  assert.equal(C.matches.has(loaded), false, 'a recovered login does not recreate stale match membership');
+  assert.equal(loaded.getInventory().getAmount(995), 19);
+  const item = loaded.getInventory().getValidItems().find(x => x.getId() === 995);
+  assert.equal(item.isPresetItem(), true); assert.equal(item.isUnbankable(), true);
+  assert.equal(item.getMeta().qa, 'saved');
+
+  PM.emitPlayerLogout({ player: a, username: a.getUsername() });
+  assert.equal(game.members.has(a), false);
+  assert.equal(a.getAttribute(C.IN_MATCH_ATTRIBUTE), false);
+  a.setLocation(new core.Location(3126, 3624, 0));
+  const normal = snapshot(a);
+  assert.equal(normal.attributes[C.IN_MATCH_ATTRIBUTE], undefined, 'false ownership uses the saved default');
+  const ordinary = actor(); codec.hydratePlayerSave(normal).applyToPlayer(ordinary);
+  PM.emitPlayerLogin({ player: ordinary, username: ordinary.getUsername(), isNewAccount: false });
+  assert.deepEqual([ordinary.getLocation().getX(), ordinary.getLocation().getY(), ordinary.getLocation().getZ()], [3126, 3624, 0]);
+});
+
+test('real PvP statistics and killstreak consumers ignore arena deaths, including a result before death completion', async t => {
+  // A supported globally PvP-tagged world makes blood-money eligibility material even
+  // for allocated arena coordinates; use the real boundary policy rather than stub it.
+  const { WORLD_ZONE_BOUNDARIES } = require('../dist/game/definition/WorldDefinition');
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  const pvp = new core.Boundary(0, 0x3fff, 0, 0x3fff, 0);
+  WORLD_ZONE_BOUNDARIES.pvp.push(pvp);
+  t.after(() => WORLD_ZONE_BOUNDARIES.pvp.splice(WORLD_ZONE_BOUNDARIES.pvp.indexOf(pvp), 1));
+  const money = core.ItemIdentifiers.BLOOD_MONEY;
+  const stats = p => { const q = { player: p }; PM.emitCustomEvent('pvp:stats', q); return q.stats; };
+  const seed = p => {
+    p.setAttribute('pvp:killstreak', 4); p.setAttribute('pvp:player-killstreak', 3);
+    p.setAttribute('pvp:bot-killstreak', 2); p.setAttribute('killstreaks:total-kills', 7);
+    p.setAttribute('killstreaks:deaths', 5); p.setAttribute('killstreaks:highest-streak', 8);
+  };
+  const legacy = p => ['pvp:killstreak', 'killstreaks:total-kills', 'killstreaks:deaths',
+    'killstreaks:highest-streak', 'killstreaks:recent-kills'].map(key => p.getAttribute(key));
+  for (const finishPending of [false, true]) {
+    const victim = actor(), killer = actor();
+    const survivor = finishPending ? null : actor();
+    channel(victim, survivor ? [survivor] : []); channel(killer);
+    const game = await negotiate(victim, killer); await join(victim); await join(killer);
+    if (survivor) await join(survivor);
+    core.World.processCycle = game.starts; game.tick();
+    assert.equal(Wilderness.isIn(victim), true); assert.equal(Wilderness.isIn(killer), true);
+    for (const p of [victim, killer]) seed(p);
+    const before = [victim, killer].map(p => ({ stats: stats(p), legacy: legacy(p), money: p.getInventory().getAmount(money) }));
+    victim.getCombat().addDamage(killer, 10);
+    assert.equal(victim.getCombat().getKiller(false), killer, 'real damage owner supplies the death killer');
+    const death = new PlayerDeathTask(victim, false); death.execute();
+    if (finishPending) { game.tick(); assert.equal(game.phase, 'over'); }
+    for (let i = 0; i < 4; i++) death.execute();
+    for (const [index, p] of [victim, killer].entries()) {
+      assert.deepEqual(stats(p), before[index].stats, 'arena combat cannot change Elo, kills, deaths or split streaks');
+      assert.deepEqual(legacy(p), before[index].legacy, 'arena defeat cannot reset the victim streak or reward the killer');
+      assert.equal(p.getInventory().getAmount(money), before[index].money);
+    }
+    if (!finishPending) game.finish(null);
+  }
+  // Positive control proves both real consumers ran and their normal reward path works.
+  const victim = actor(), killer = actor();
+  victim.setLocation(new core.Location(3200, 3600, 0)); killer.setLocation(new core.Location(3201, 3600, 0));
+  victim.setAttribute('pvp:killstreak', 4);
+  assert.equal(Wilderness.isIn(victim), true); assert.equal(Wilderness.isIn(killer), true);
+  victim.getCombat().addDamage(killer, 10);
+  const death = new PlayerDeathTask(victim, false);
+  for (let i = 0; i < 5; i++) death.execute();
+  assert.equal(stats(killer).playerKills, 1); assert.equal(stats(victim).pvpDeaths, 1);
+  assert.equal(stats(killer).elo, 1016); assert.equal(stats(victim).elo, 984);
+  assert.equal(victim.getAttribute('pvp:killstreak'), 0);
+  assert.equal(killer.getAttribute('pvp:killstreak'), 1);
+  assert.equal(killer.getInventory().getAmount(money), 150);
+});
+
+test('independent: actual Plateau clipping separates staging and jail', async () => {
+  const a=actor(), ally=actor(), b=actor(); channel(a,[ally]); channel(b);
+  const game=await negotiate(a,b); await join(a); await join(ally); await join(b);
+  function reachable(from,to) {
+    const queue=[[from[0],from[1]]], seen=new Set([from.slice(0,2).join(',')]);
+    for(let i=0;i<queue.length;i++) {
+      const [x,y]=queue[i]; if(x===to[0] && y===to[1]) return true;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx=x+dx,ny=y+dy,k=`${nx},${ny}`;
+        if(nx<3264||nx>=3328||ny<4928||ny>=4992||seen.has(k)) continue;
+        const s=game.area.at([x,y,0]),t=game.area.at([nx,ny,0]);
+        if(core.RegionManager.canMovestart(s,t,1,1,game.area)) {seen.add(k);queue.push([nx,ny]);}
+      }
+    } return false;
+  }
+  assert.equal(reachable([3293,4933],[3293,4986]),false,'prep barrier prevents reaching opposing landing');
+  core.World.processCycle=game.starts; game.tick();
+  assert.equal(reachable([3293,4933],[3293,4986]),true,'barrier removed makes arena connected');
+  assert.equal(reachable([3323,4943],[3293,4933]),false,'south jail cannot walk back to combat');
+  assert.equal(reachable([3323,4976],[3293,4986]),false,'north jail cannot walk back to combat');
+});test('independent: closed join confirmation cannot intercept a later challenge', async () => {
+ const a=actor(),b=actor();channel(a);channel(b);
+ const first=await negotiate(a,b);
+ Match.enter({player:a});
+ assert.equal(a.getInterfaceId(),C.group('clanwars_confirm'));
+ a.getPacketSender().sendInterfaceRemoval();
+ first.finish(null);
+ const second=await negotiate(a,b);
+ assert.ok(second,'later native challenge confirmations must still start a battle');
+});

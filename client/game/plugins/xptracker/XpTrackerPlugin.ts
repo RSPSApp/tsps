@@ -172,14 +172,10 @@ export class XpTrackerPlugin extends Plugin {
             this.resetState();
         }
 
-        if (!this.xpState.isOverallInitialized() && this.config.saveState()) {
+        const shouldRestore = !this.xpState.isOverallInitialized() && this.config.saveState();
+        if (shouldRestore) {
             const save = this.loadSave();
             if (save) this.xpState.restore(save);
-            for (const skill of this.xpState.order) {
-                const xp = this.experience.get(skill);
-                const state = this.xpState.get(skill);
-                if (xp !== undefined && state) state.updateGoals(state.currentXp, ...this.goals(skill));
-            }
         }
 
         // Experience gained while logged out is not part of the session; less means a
@@ -194,6 +190,13 @@ export class XpTrackerPlugin extends Plugin {
                 break;
             }
             state.startXp += xp - state.currentXp;
+        }
+        if (shouldRestore) {
+            for (const skill of this.xpState.order) {
+                const xp = this.experience.get(skill);
+                const state = this.xpState.get(skill);
+                if (xp !== undefined && state) state.updateGoals(state.currentXp, ...this.goals(skill));
+            }
         }
         const overall = this.overallExperience();
         const total = this.xpState.overall;
@@ -237,7 +240,7 @@ export class XpTrackerPlugin extends Plugin {
         for (const skill of SKILL_IDS) {
             if (!this.pauseState.isPaused(skill)) this.xpState.tick(skill, delta, now, resetAfter);
         }
-        if (!this.pauseState.isOverallPaused()) this.xpState.tickOverall(delta);
+        if (!this.pauseState.isOverallPaused()) this.xpState.tickOverall(delta, now, resetAfter);
         this.emit();
     }
 

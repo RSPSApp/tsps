@@ -126,9 +126,9 @@
   "bundle": {
     "id": "easter-2026",
     "targetCache": {
-      "name": "osrs-241_2026-10-20",
+      "name": "osrs-242_2026-11-03",
       "game": "oldschool",
-      "revision": 241
+      "revision": 242
     },
     "sourceCache": {
       "name": "osrs-237_2026-04-01",
@@ -145,7 +145,7 @@
         "symbol": "easter26_easter_bunny",
         "dataBase64": "XwAADitjDStkDAFnAABjHlRhbGstdG8AH2hpZGRlbgACRWFzdGVyIEJ1bm55AD0BAACscz4BAACAwwA=",
         "crc": 1101159437,
-        "id": 16772
+        "id": 16876
       },
       {
         "kind": "npc",
@@ -153,7 +153,7 @@
         "symbol": "easter26_egg_last_spot",
         "dataBase64": "ZwAAXQ4wEw0wE18AAWpLHv//Af//PNwA",
         "crc": 838921463,
-        "id": 16773
+        "id": 16877
       },
       {
         "kind": "npc",
@@ -161,7 +161,7 @@
         "symbol": "easter26_egg_last_spot_found",
         "dataBase64": "XwAADjATDTATDAFnAAAeQ2F0Y2gAH2hpZGRlbgACQXJjaGliYWxkAD0BAAAPDz4BAADqdQA=",
         "crc": 1281872835,
-        "id": 16774
+        "id": 16878
       },
       {
         "kind": "npc",
@@ -169,7 +169,7 @@
         "symbol": "easter26_egg_church_cutscene",
         "dataBase64": "XwAADgbxDQbxDAFnAAAeQ2F0Y2gAH2hpZGRlbgACQXJjaGliYWxkAD0BAADqiD4BAADqdQA=",
         "crc": 957772055,
-        "id": 16775
+        "id": 16879
       }
     ]
   },
@@ -870,7 +870,8 @@
       {
         "symbol": "easter26_first_clue",
         "id": 60736,
-        "sourceCrc": 4182961785
+        "sourceCrc": 4182961785,
+        "currentCrc": 977571444
       },
       {
         "symbol": "easter26_first_clue_with_clue",
@@ -885,37 +886,44 @@
       {
         "symbol": "fai_varrock_chemisty_shelves1_easter26",
         "id": 60739,
-        "sourceCrc": 2030713739
+        "sourceCrc": 2030713739,
+        "currentCrc": 2697731061
       },
       {
         "symbol": "fai_varrock_stepladders_easter26",
         "id": 60742,
-        "sourceCrc": 4041720494
+        "sourceCrc": 4041720494,
+        "currentCrc": 179218089
       },
       {
         "symbol": "fai_varrock_castle_battlement_easter26",
         "id": 60825,
-        "sourceCrc": 860351249
+        "sourceCrc": 860351249,
+        "currentCrc": 1785756576
       },
       {
         "symbol": "fai_varrock_sword_table_easter26",
         "id": 60828,
-        "sourceCrc": 2978864670
+        "sourceCrc": 2978864670,
+        "currentCrc": 1591200089
       },
       {
         "symbol": "fai_varrock_posh_chair2_easter26",
         "id": 60831,
-        "sourceCrc": 2715646228
+        "sourceCrc": 2715646228,
+        "currentCrc": 4249464135
       },
       {
         "symbol": "fai_varrock_single_bed_easter26",
         "id": 60834,
-        "sourceCrc": 4248764287
+        "sourceCrc": 4248764287,
+        "currentCrc": 4094061012
       },
       {
         "symbol": "fai_varrock_suitofarmour_easter26",
         "id": 60837,
-        "sourceCrc": 2399195202
+        "sourceCrc": 2399195202,
+        "currentCrc": 2492108003
       }
     ],
     "obj": [

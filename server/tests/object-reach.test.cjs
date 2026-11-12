@@ -121,13 +121,14 @@ test('wall approach masks reject door flanks in both reach checks and route sear
 });
 
 
-test('straight wall decorations 4/5 use the wall-deco edge checks, not the open side', async () => {
+test('straight wall decorations 4/5 are operated from their own tile, as live', async () => {
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   await ensureCache();
   ObjectDefinition.init();
   RegionManager.init();
   RegionManager.loadMapFiles(1632, 4833, true);
   assert.equal(RegionManager.getClipping(1631, 4833, 0, null), 0, 'library side is open');
+  assert.equal(RegionManager.getClipping(1632, 4833, 0, null) & 0x100, 0, 'the painting tile is walkable');
   assert.equal(RegionManager.getClipping(1633, 4833, 0, null) & 0x80, 0x80, 'corridor side has the wall');
 
   const player = { getPacketSender: () => ({ getVarbit: id => id === 3468 ? 40 : 0, getVarp: () => 0 }) };
@@ -140,25 +141,46 @@ test('straight wall decorations 4/5 use the wall-deco edge checks, not the open 
     getSize: () => size,
     getPrivateArea: () => null,
   });
-  // 29650 is shape 4, face 2 at 1632,4833. The library/west side is the only
-  // open side; the corridor/east side is behind the wall and stays unreachable.
+  // 29650 is shape 4, face 2 at 1632,4833: reached on its own tile only, never from the
+  // library tile beside it or through the wall from the corridor.
   for (const shape of [4, 5]) {
-    assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, shape, 0), true,
-      `shape ${shape} library side`);
+    assert.equal(PathFinder.reachedObject(stand(1632, 4833), 1632, 4833, 1, 1, 2, shape, 0), true,
+      `shape ${shape} own tile`);
+    assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, shape, 0), false,
+      `shape ${shape} library tile beside it`);
     assert.equal(PathFinder.reachedObject(stand(1633, 4833), 1632, 4833, 1, 1, 2, shape, 0), false,
       `shape ${shape} corridor side stays blocked`);
-    // Non-overlapping size-2 footprints: the east edge (1631) is adjacent to the
-    // painting, so this exercises reachWallDecoN rather than the overlap shortcut.
-    assert.equal(PathFinder.reachedObject(stand(1630, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), true,
-      `shape ${shape} non-overlapping size-2 library footprint`);
-    assert.equal(PathFinder.reachedObject(stand(1633, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), false,
-      `shape ${shape} non-overlapping size-2 corridor footprint stays blocked`);
+    // A size-2 footprint covering the tile reaches it; one beside it does not.
+    assert.equal(PathFinder.reachedObject(stand(1631, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), true,
+      `shape ${shape} size-2 footprint over the tile`);
+    assert.equal(PathFinder.reachedObject(stand(1630, 4833, 2), 1632, 4833, 1, 1, 2, shape, 0), false,
+      `shape ${shape} size-2 footprint beside it`);
   }
   // Diagonal wall-deco forms and the other shape families keep their existing rules.
   assert.equal(PathFinder.reachedObject(stand(1633, 4833), 1632, 4833, 1, 1, 2, 6, 0), false);
   assert.equal(PathFinder.reachedObject(stand(1632, 4832), 1632, 4833, 1, 1, 2, 7, 0), true);
   assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, 8, 0), true);
   assert.equal(PathFinder.reachedObject(stand(1631, 4833), 1632, 4833, 1, 1, 2, 10, 0), true);
+
+  // The route walks onto the tile: the painting from the library, and the Wilderness levers
+  // from where live players clicked them, ending on the lever's tile as in
+  // rsprox_transcripts/224/01444.txt (Edgeville 3090,3475 from 3093,3479; Keep 3153,3923 from
+  // 3158,3943) and 233/00454.txt (bank 3090,3956 from 3092,3957; cellar 2539,4712 from 2536,4712).
+  const route = new RsmodRouteFinding((x, y, z) => RegionManager.getClipping(x, y, z, null));
+  for (const [from, to, shape, angle] of [
+    [[1630, 4833], [1632, 4833], 4, 2],
+    [[3093, 3479], [3090, 3475], 4, 0],
+    [[3158, 3943], [3153, 3923], 5, 0],
+    [[3092, 3957], [3090, 3956], 4, 0],
+    [[2536, 4712], [2539, 4712], 4, 3],
+    [[2562, 3311], [2561, 3311], 4, 0], // Ardougne, no recording: from the Keep lever's landing tile
+  ]) {
+    RegionManager.loadMapFiles(to[0], to[1], true);
+    const path = route.findRoute({ level: 0, srcX: from[0], srcY: from[1], destX: to[0], destY: to[1],
+      srcSize: 1, locShape: shape, locAngle: angle, blockAccessFlags: 0, privateArea: null });
+    assert.equal(path.alternative, false, `${to}: a real route`);
+    assert.deepEqual([path.endX, path.endY], to, `${from} -> ${to} ends on the lever's own tile`);
+  }
 });
 
 test('clipped type-10 crate 16560 uses its real wall sides without unmasked through-wall reach', async () => {
@@ -447,7 +469,11 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   const groundItem = new ItemOnGround(State.SEEN_BY_PLAYER, 'ObjectReachTest',
     new Location(100, 100, 0), floorItem, true, -1, null);
   const received = [];
+  const animations = [];
+  const faced = [];
   const player = {
+    performAnimation: (animation) => animations.push(animation.getId()),
+    setPositionToFace: (tile) => faced.push([tile.getX(), tile.getY()]),
     getUsername: () => 'ObjectReachTest',
     getLocation: () => location,
     getSize: () => 1,
@@ -481,6 +507,9 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   ItemOnGroundManager.pickup(player, groundItem);
   assert.equal(inventoryAdds, 1);
   assert.equal(removed, 1);
+  // Taken from the neighbouring tile: the table reach (human_pickuptable_walkmerge, live rev 239+).
+  assert.deepEqual(animations, [9401]);
+  assert.deepEqual(faced, [[100, 100]], 'the player turns to the item first');
 
   // A wall between the player and item makes that same adjacent-looking tile
   // unreachable; move-near pathing must not turn it into a pickup.
@@ -497,6 +526,13 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   ItemOnGroundManager.pickup(player, groundItem);
   assert.equal(inventoryAdds, 1, 'a distant item is not within pickup reach');
   assert.equal(resets, 3, 'all rejected attempts clear their stale movement action');
+
+  // Taken from the player's own tile: no animation (6,859 of 6,860 live own-tile takes).
+  location = new Location(100, 100, 0);
+  ItemOnGroundManager.pickup(player, groundItem);
+  assert.equal(inventoryAdds, 2);
+  assert.deepEqual(animations, [9401], 'an own-tile take plays nothing');
+  assert.equal(faced.length, 1, 'and does not turn');
 });
 
 test('ladder click waits for arrival before animating and changes plane one tick later', (t) => {
@@ -759,4 +795,144 @@ test('a skilling loc keeps its action going from any side of its footprint (5x5 
   } finally {
     ObjectDefinition.forId = originalSizes;
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Interaction parity with live recordings (ultraviolet-jordan/testing-scenarios). Mechanism per
+// LostCity Player.processInteraction/validateTarget: a route that runs out short of its target
+// ends with "I can't reach that!" on the tick it stops; a target removed or changed on the way
+// ends the walk where the player stands, silently.
+
+/** A real MovementQueue on a mock player over a synthetic clipping map; `blocked` tiles are solid. */
+function parityScene(t, start, blocked) {
+  const messages = [];
+  let location = start;
+  const noop = () => {};
+  const player = {
+    isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false, getAsPlayer() { return this; },
+    getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
+    getLocation: () => location, setLocation: (value) => { location = value; },
+    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getForceMovement: () => null, getTimers: () => ({ has: () => false }), getFollowing: () => null,
+    getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
+    getTrading: () => ({ getButtonDelay: () => ({ finished: () => true }) }),
+    getCombat: () => ({ setCastSpell: noop, reset: noop, isAnimationStalled: () => false }),
+    getSkillManager: () => ({ stopSkillable: noop }),
+    setFollowing: noop, setCombatFollowing: noop, setPositionToFace: noop, setMobileInteraction: noop,
+    setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
+    isRunningReturn: () => false, sendMessage: (message) => messages.push(message),
+    getArea: () => null,
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+  };
+  const queue = new MovementQueue(player);
+  player.getMovementQueue = () => queue;
+  queue.handleRegionChange = noop;
+  queue.syncWildernessStateForMovedPlayer = noop;
+  queue.drainRunEnergy = noop;
+  queue.checkDestination = () => true;
+  const solid = new Set(blocked.map(([x, y]) => `${x},${y}`));
+  queue.canWalkTo = (next) => !solid.has(`${next.x},${next.y}`);
+  const oldRoute = PathFinder.rsmodRouteFinding;
+  const oldCycle = World.processCycle;
+  PathFinder.rsmodRouteFinding = new RsmodRouteFinding((x, y) => solid.has(`${x},${y}`) ? 0x100 : 0);
+  World.processCycle = 100;
+  t.after(() => {
+    PathFinder.rsmodRouteFinding = oldRoute; World.processCycle = oldCycle;
+    TaskManager.cancelTasks(player); TaskManager.cancelTasks(1);
+  });
+  const tick = () => {
+    World.processCycle++;
+    TaskManager.process();
+    queue.beginCycle();
+    queue.processEntityPursuit();
+    if (queue.hasPendingWork()) queue.process();
+    TaskManager.processWalkTo(1);
+  };
+  return { player, queue, messages, tick, where: () => [location.x, location.y] };
+}
+
+test('a ground item with no reachable side: the walk ends on the closest tile with "I can\'t reach that!" once', (t) => {
+  // Live (jug on the Lumbridge kitchen table, clicked from the corridor): the player walks to the
+  // nearest tile, is told once, and the take is dropped - it does not keep re-routing.
+  const table = [[100, 100], [99, 100], [101, 100], [100, 99], [100, 101]];
+  const scene = parityScene(t, new Location(103, 103, 0), table);
+  let taken = 0;
+  scene.queue.walkToGroundItem(new Location(100, 100, 0), () => { taken++; });
+  for (let i = 0; i < 12; i++) scene.tick();
+  assert.deepEqual(scene.where(), [101, 101], 'stops on the closest reachable tile');
+  assert.deepEqual(scene.messages, ["I can't reach that!"]);
+  assert.equal(taken, 0);
+  assert.equal(scene.queue.points.length, 0, 'no route is left queued');
+});
+
+test('a ground item reachable from a side is still taken on arrival', (t) => {
+  const scene = parityScene(t, new Location(103, 100, 0), [[100, 100]]);
+  let taken = 0;
+  scene.queue.walkToGroundItem(new Location(100, 100, 0), () => { taken++; });
+  for (let i = 0; i < 8; i++) scene.tick();
+  assert.equal(taken, 1);
+  assert.deepEqual(scene.messages, []);
+});
+
+test('a loc the player cannot get any closer to is answered on the first tick', (t) => {
+  // Live (West Ardougne drawers from 2472,3299): "I can't reach that!" a tick after the click,
+  // without moving - not after two fruitless re-routes, and not "You can't ...".
+  t.mock.method(ObjectDefinition, 'forId', () => ({ getSizeX: () => 1, getSizeY: () => 1, getBlockingMask: () => 0 }));
+  t.mock.method(PluginManager, 'emitObjectRoute', () => {});
+  const scene = parityScene(t, new Location(99, 99, 0), [[100, 100], [99, 100], [100, 99], [101, 100], [100, 101]]);
+  let operated = 0;
+  scene.queue.walkToObject(new GameObject(348, new Location(100, 100, 0), 10, 0, null), { execute: () => { operated++; } });
+  scene.tick();
+  assert.deepEqual(scene.messages, ["I can't reach that!"]);
+  assert.deepEqual(scene.where(), [99, 99]);
+  for (let i = 0; i < 4; i++) scene.tick();
+  assert.deepEqual(scene.messages, ["I can't reach that!"], 'said once');
+  assert.equal(operated, 0);
+});
+
+test('a loc removed while the player walks to it stops the walk where they stand', (t) => {
+  // Live (a tree felled into a stump mid-approach): the player stops on the spot, no message.
+  t.mock.method(ObjectDefinition, 'forId', () => ({ getSizeX: () => 1, getSizeY: () => 1, getBlockingMask: () => 0 }));
+  t.mock.method(PluginManager, 'emitObjectRoute', () => {});
+  let standing = true;
+  t.mock.method(MapObjects, 'stillStands', () => standing);
+  const scene = parityScene(t, new Location(100, 92, 0), [[100, 100]]);
+  let operated = 0;
+  scene.queue.walkToObject(new GameObject(1276, new Location(100, 100, 0), 10, 0, null), { execute: () => { operated++; } });
+  scene.tick();
+  scene.tick();
+  const [, y] = scene.where();
+  assert.ok(y > 92 && y < 99, 'walking towards the tree');
+  standing = false;
+  scene.tick();
+  assert.deepEqual(scene.where(), [100, y], 'no further step once it is gone');
+  for (let i = 0; i < 6; i++) scene.tick();
+  assert.deepEqual(scene.where(), [100, y]);
+  assert.equal(operated, 0);
+  assert.deepEqual(scene.messages, []);
+});
+
+test('an NPC that changes type during the approach ends it where the player stands', (t) => {
+  // Live (a sheep sheared by another player while being walked to): the follower stops, with
+  // no "Nothing interesting happens." - LostCity validateTarget compares the clicked type.
+  const scene = parityScene(t, new Location(100, 100, 0), []);
+  let transform = -1;
+  const sheep = {
+    isNpc: () => true, isPlayer: () => false, getId: () => 2693, getSize: () => 1,
+    getNpcTransformationId: () => transform, isRegistered: () => true, getHitpoints: () => 10,
+    getPrivateArea: () => null, getLocation: () => new Location(108, 100, 0), getOwner: () => null,
+    getArea: () => null,
+  };
+  let operated = 0;
+  scene.queue.walkToEntity(sheep, () => { operated++; });
+  scene.tick();
+  const [x] = scene.where();
+  assert.ok(x > 100 && x < 107);
+  transform = 1178;
+  scene.tick();
+  assert.deepEqual(scene.where(), [x, 100], 'stops on the tick it changes');
+  for (let i = 0; i < 8; i++) scene.tick();
+  assert.deepEqual(scene.where(), [x, 100]);
+  assert.equal(operated, 0);
+  assert.deepEqual(scene.messages, []);
 });

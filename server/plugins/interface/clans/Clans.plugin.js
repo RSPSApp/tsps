@@ -23,6 +23,7 @@ const MAX_MESSAGE_LENGTH = 80;
 const MAX_NAME_LENGTH = 20;
 
 const BUTTON_TIMEOUT_VARBIT = 13806; // clan_transmit_affined_timeout
+const DISABLE_LAST_SEEN_VARBIT = 16118; // clan_disable_lastseen, the "Update clan 'last seen' records" setting
 const YOUR_CLAN_GROUP = 701;
 const CHANNEL_BUTTON = 8; // Chat, or Leave once in the channel (rsprox 2528)
 const SETTINGS_BUTTON = 9;
@@ -77,7 +78,8 @@ function login({ player }) {
     return;
   }
   const member = Core.memberOf(clan, Core.accountOf(player));
-  Core.noteSeen(clan, member);
+  // With "Update clan 'last seen' records" off, the member keeps the last seen day they had.
+  if (player.getPacketSender().getVarbit(DISABLE_LAST_SEEN_VARBIT) !== 1) Core.noteSeen(clan, member);
   if (member.rank === Core.RANK_OWNER) {
     clan.ownerLastSeen = Date.now();
     Store.save();
@@ -87,6 +89,14 @@ function login({ player }) {
     return;
   }
   Core.enterClan(player, clan);
+}
+
+/**
+ * "clans:release-guest" { player }: another group takes the listened slot (the PvP Arena's 1v1
+ * Duels group): the clan up on the Guest Clan tab, and its channel, are let go first.
+ */
+function releaseGuest({ player }) {
+  Core.removeGuestViewer(player);
 }
 
 function logout({ player }) {
@@ -431,10 +441,12 @@ function attachUnits(api) {
 
 module.exports = {
   name: "Clans",
+  description: "Clans: the Clan Hub, the player's own clan, // clan chat and the Your Clan tab.",
   register(api) {
     attachUnits(api);
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
+    api.onCustomEvent("clans:release-guest", releaseGuest);
     api.onSocialPacket(chat);
     api.onSocialPacket(channelAction);
     api.onInterfaceActionClick(clickYourClan);

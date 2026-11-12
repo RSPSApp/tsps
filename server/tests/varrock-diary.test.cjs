@@ -12,7 +12,7 @@ const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells")
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
-const Varrock = require("../plugins/achievements/diaries/VarrockDiary.plugin");
+const Varrock = require("../plugins/achievements/diaries/VarrockDiary.AchievementDiaries");
 
 const DIARY = Data.BY_KEY.get("varrock");
 const TASK = Varrock._test.TASK;
@@ -27,6 +27,8 @@ test.before(async () => {
   core = PluginManager.getCoreApi();
   const handlers = new Map();
   dispatch = (name, event) => {
+    // Dream Mentor gives Plank Make (Wiki); the quest plugins are not loaded here.
+    if (name === "quest:is-complete" && event?.key === "dream_mentor") event.complete = true;
     if (name === "museum:get-kudos") event.kudos = kudos;
     for (const handler of handlers.get(name) ?? []) handler(event);
   };
@@ -120,6 +122,13 @@ test("Varrock earth runes credit both the easy task and the 100-rune elite task"
   dispatch("runecrafting:success", { player: elite, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 25, amountPerEssence: 4 });
   assert.equal(completed(elite, TASK.earthRunes100), true);
 
+  // The Raiments of the Eye's bonus runes count toward the 100 (Wiki: Raiments of the Eye).
+  const raiments = fixture(t).player;
+  dispatch("runecrafting:success", { player: raiments, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 52, amountPerEssence: 1, bonusRunes: 31 });
+  assert.equal(completed(raiments, TASK.earthRunes100), false);
+  dispatch("runecrafting:success", { player: raiments, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 52, amountPerEssence: 1, bonusRunes: 48 });
+  assert.equal(completed(raiments, TASK.earthRunes100), true);
+
   const air = fixture(t).player;
   dispatch("runecrafting:success", { player: air, runeId: core.ItemIdentifiers.AIR_RUNE, rolls: 100, amountPerEssence: 1 });
   assert.equal(completed(air, TASK.earthRunes), false);
@@ -143,6 +152,16 @@ test("the yew task needs a Varrock chop, the church top, and resets on another t
   reset.setLocation(new core.Location(3255, 3480, 3));
   dispatch("firemaking:success", { player: reset, itemId: core.ItemIdentifiers.YEW_LOGS });
   assert.equal(completed(reset, TASK.yewBurn), false, "another diary task resets the chop (Wiki)");
+
+  // A task already done, repeated, completes or updates nothing, so the chop stands.
+  const repeat = fixture(t, { at: [3266, 3493, 0] }).player;
+  dispatch("diary:task", { player: repeat, diary: "varrock", task: TASK.iron });
+  assert.equal(completed(repeat, TASK.iron), true);
+  dispatch("woodcutting:attempt", { player: repeat, object: definition("Yew tree"), success: true });
+  dispatch("diary:task", { player: repeat, diary: "varrock", task: TASK.iron });
+  repeat.setLocation(new core.Location(3255, 3480, 3));
+  dispatch("firemaking:success", { player: repeat, itemId: core.ItemIdentifiers.YEW_LOGS });
+  assert.equal(completed(repeat, TASK.yewBurn), true, "repeating a finished task leaves the yew chop");
 });
 
 test("Varrock and Paddewwa teleports credit on the real spell arrival only", (t) => {

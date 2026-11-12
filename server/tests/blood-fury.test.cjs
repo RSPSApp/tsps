@@ -44,6 +44,7 @@ BloodFury.register({
     else itemActions.set(name, actions);
   },
   registerCombatMethodResolver() {},
+  onCustomEvent() {},
   onCombatHitResolved: (handler) => { combatHitResolved = handler; },
 });
 

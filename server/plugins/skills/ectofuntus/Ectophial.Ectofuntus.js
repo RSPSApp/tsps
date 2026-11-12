@@ -65,6 +65,16 @@ function empty({ player, slot }) {
   if (inventory.get(slot)?.getId() !== core.ItemIdentifiers.ECTOPHIAL) return true;
   const destination = landing();
   if (!core.TeleportHandler.checkReqs(player, destination)) return true;
+  core.TeleportHandler.confirm(player, destination, () => pour(player, slot, destination), 20, { item: core.ItemIdentifiers.ECTOPHIAL });
+  return true;
+}
+
+function pour(player, clicked, destination) {
+  const { core } = Common;
+  const inventory = player.getInventory();
+  // The clicked slot, else wherever the ectophial is now (moved while a warning asked).
+  const slot = inventory.get(clicked)?.getId() === core.ItemIdentifiers.ECTOPHIAL ? clicked : inventory.getSlotForItemId(core.ItemIdentifiers.ECTOPHIAL);
+  if (slot < 0) return;
   inventory.setItem(slot, new core.Item(core.ItemIdentifiers.ECTOPHIAL_2, 1)).refreshItems();
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();
@@ -80,7 +90,10 @@ function empty({ player, slot }) {
     constructor() { super(1, player, false); }
     execute() {
       tick++;
-      if (!player.isRegistered()) {
+      // A death during the pour stays where it happened: landing first would drop the items at Port Phasmatys, out
+      // of the killer's reach (fairy rings, spirit trees and home teleport stop on death too).
+      const dying = tick <= TELEPORT_TICK && (player.getHitpoints?.() <= 0 || player.isDyingReturn?.() === true);
+      if (!player.isRegistered() || dying) {
         this.stop();
         return;
       }
@@ -104,7 +117,6 @@ function empty({ player, slot }) {
       super.stop();
     }
   })());
-  return true;
 }
 
 /** The empty phial used on the Ectofuntus. */

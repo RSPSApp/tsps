@@ -14,6 +14,7 @@
  * (rsprox 4057, 1073-1075; zalcano.json `messages`).
  */
 const Common = require("./Common.Zalcano");
+const { actionInterval } = require("../../skills/SkillActions");
 
 const actions = new Map();
 
@@ -21,6 +22,16 @@ function bestPickaxe(player) {
   const request = { player, pickaxe: null };
   Common.api.emitCustomEvent("mining:best-pickaxe", request);
   return request.pickaxe ?? null;
+}
+
+/**
+ * Ticks to the next swing, as Mining rolls anywhere (Wiki, Pickaxe: dragon, infernal and crystal "3 ticks by default,
+ * 1/6 [1/4] chance to be 2 ticks", members only), then content's pace (a league relic's).
+ */
+function swingTicks(player, pickaxe) {
+  const request = { pickaxe, ticks: null };
+  Common.api.emitCustomEvent("mining:roll-interval", request);
+  return actionInterval(Common.api, player, Common.core.Skill.MINING, "mine", request.ticks ?? pickaxe.attemptIntervalTicks ?? 3);
 }
 
 function pickaxeLevel(pickaxe) {
@@ -146,12 +157,25 @@ function tickRock(prison, player, action, random) {
     return;
   }
   player.performAnimation(miningAnimation(pickaxe));
-  action.next = prison.tickCount + (pickaxe.attemptIntervalTicks ?? 3);
+  action.next = prison.tickCount + swingTicks(player, pickaxe);
   if (random() >= (rock.glowing ? tephra.glowingChance : tephra.rockChance)) return;
   let ore = rock.glowing && random() < tephra.glowingExtra ? 2 : 1;
   while (ore-- > 0 && inventory.getFreeSlots() > 0) {
     inventory.adds(Common.ids.items.tephra, 1);
     addXp(player, "MINING", tephra.miningXp);
+  }
+  // Tephra is level 1 in the Wiki's Mining enhancers table. Ask once per
+  // successful action: charged celestial jewellery spends a charge even if its
+  // bonus fails or the base yield filled the last slot.
+  const extra = { player, oreId: Common.ids.items.tephra, rockLevel: 1, bonuses: [] };
+  Common.api.emitCustomEvent("mining:extra-ore", extra);
+  for (const bonus of extra.bonuses) {
+    if (inventory.getFreeSlots() <= 0) break;
+    const before = inventory.getAmount(Common.ids.items.tephra);
+    inventory.adds(Common.ids.items.tephra, 1);
+    if (inventory.getAmount(Common.ids.items.tephra) <= before) break;
+    addXp(player, "MINING", tephra.miningXp);
+    if (bonus.message) Common.spam(player, bonus.message);
   }
   Common.spam(player, Common.message("mined"));
   // Recorded: the full-pack box comes the tick after the ore that filled it.
@@ -186,7 +210,7 @@ function tickMineZalcano(prison, player, action) {
   const pickaxe = bestPickaxe(player);
   if (!fight || fight.phase !== "down" || fight.finished() || !pickaxe) { stop(player); return; }
   player.performAnimation(miningAnimation(pickaxe));
-  action.next = prison.tickCount + (pickaxe.attemptIntervalTicks ?? 3);
+  action.next = prison.tickCount + swingTicks(player, pickaxe);
   // Recorded: the first swing only swings; each later one chips, her hit landing a tick after.
   if (!action.swung) {
     action.swung = true;

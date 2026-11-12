@@ -1,0 +1,17 @@
+{
+  "$comment": "NPC ids the cache retired (no name, no options) and the NPC that replaced each one in the same place, matched by identical models and confirmed in rev 242 captures where the area was visited. Until the transcripts are regenerated for the new NPCs, a successor that has no transcript of its own plays its predecessor's (NpcDialogues). Retired ids with no successor (Ranged, Magic, Cooking, Prayer and Banker tutors) are not listed.",
+  "successors": {
+    "3216": { "id": 16821, "name": "Captain Harlan", "was": "Melee combat tutor", "revision": 242 },
+    "3220": { "id": 16807, "name": "Cadmus", "was": "Crafting tutor", "revision": 242 },
+    "3221": { "id": 16810, "name": "Finlay", "was": "Fishing tutor", "revision": 242 },
+    "3222": { "id": 16809, "name": "Monlum", "was": "Mining tutor", "revision": 242 },
+    "3224": { "id": 16806, "name": "Feoras", "was": "Smithing apprentice", "revision": 242 },
+    "3225": { "id": 16816, "name": "Sani", "was": "Master smithing tutor", "revision": 242 },
+    "3226": { "id": 16808, "name": "Wilfred", "was": "Woodsman tutor", "revision": 242 },
+    "5523": { "id": 16804, "name": "Mikasi", "was": "Hatius Cosaintus (Lumbridge diary)", "revision": 242 },
+    "8665": { "id": 16811, "name": "Arthur", "was": "Arthur the Clue Hunter", "revision": 242 },
+    "16475": { "id": 16817, "name": "Flotsam", "was": "Floatsam", "revision": 242 },
+    "16476": { "id": 16818, "name": "Flotsam", "was": "Floatsam", "revision": 242 },
+    "16477": { "id": 16819, "name": "Flotsam", "was": "Floatsam", "revision": 242 }
+  }
+}

@@ -191,7 +191,8 @@ function player(woodcutting = 99) {
       assert.ok(left >= 0, `tried to remove missing item ${id}`);
       if (left) items.set(id, left); else items.delete(id);
     },
-    forceAdd: (id, amount = 1) => { items.set(id, (items.get(id) ?? 0) + amount); },
+    // The real signature: forceAdd(player, item).
+    forceAdd: (player, item) => { const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1; items.set(id, (items.get(id) ?? 0) + amount); },
   };
   const p = {
     attributes, items, varbits, messages, inventory, subInterfaces, closedSubInterfaces,

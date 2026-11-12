@@ -8,6 +8,7 @@
  */
 module.exports = {
   name: "ArcheryCompetition",
+  description: "Runs the Ranging Guild's Archery Competition: the Competition Judge charges 200 coins for 10 bronze arrows scored on the targets.",
   members: true,
   register(api) {
     require("./archerycompetition/Session.ArcheryCompetition")(api);

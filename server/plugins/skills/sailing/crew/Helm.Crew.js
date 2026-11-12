@@ -6,7 +6,7 @@
 // 40/50/60/70% at H1-H4) with "You gain some experience by watching your crew work."
 const common = require("./Common.Crew");
 const lines = require("./Lines.Crew");
-const helm = require("../Helm.plugin");
+const helm = require("../Helm.Sailing");
 const { isTrimmed } = require("../Trim.Helm");
 const { VARBIT, MOVE_MODE, getVarbit, animateSails } = require("../SailingContent.Sailing");
 
@@ -76,7 +76,8 @@ function crewTrimmed({ player, npc, xp }) {
   const found = common.memberFor(npc);
   if (!found) return;
   const { crew } = found.member;
-  const share = TRIM_XP_SHARE[crew.stats[common.STAT.HELMSMANSHIP]] ?? 0;
+  const owned = common.core().Sailing.activeBoat(player);
+  const share = TRIM_XP_SHARE[common.statOf(owned, crew, common.STAT.HELMSMANSHIP)] ?? 0;
   if (xp > 0 && share > 0) {
     player.getSkillManager().addExperiences(common.core().Skill.SAILING, xp * share);
     player.getPacketSender().sendTypedMessage(common.core().ChatType.SPAM, WATCHING);

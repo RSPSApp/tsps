@@ -14,11 +14,16 @@
  * step. Transcripts can't wait on an interface, so after the pick the rest of that branch is
  * played again from the step after the interface (the line for the task's modifier, then the
  * tips/cancel menu). While a choice waits, the other masters refuse (Wiki).
+ *
+ * Where content offers a choice of tasks instead of the assignment (Offer.Slayer.js, a league
+ * relic), each assignment path (Assignment, the transcript's assignment step, Turael's
+ * replacement, a remote assignment) ends the talk and shows that choice.
  */
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const Tasks = require("./Tasks.Slayer");
 const Choice = require("./Choice.Slayer");
+const Offer = require("./Offer.Slayer");
 
 /** Set when the player accepts Turael's offer to replace a task he wouldn't give. */
 const REPLACE_ATTRIBUTE = "slayer:replace-offered";
@@ -74,6 +79,20 @@ function waitingElsewhere(player, master) {
   return Choice.pending(player) && State.varbit(player, "slayer_choose_rolled_master") !== master.id;
 }
 
+/**
+ * Whether content offers this player a choice of tasks from this master now: no task, no other
+ * master's choice waiting, the master's levels met (Offer.Slayer.js).
+ */
+function offersChoice(player, master) {
+  if (Tasks.current(player) || waitingElsewhere(player, master) || !Tasks.meetsMaster(player, master)) return false;
+  return Offer.offerFor(player, master) != null;
+}
+
+/** Shows that choice once the talk has closed (closing it closes every interface, the menu included). */
+function offerLater(player, master, npcId) {
+  queueMicrotask(() => Offer.open(player, master, npcId));
+}
+
 /** Mortimer's task choice, or his line when he has none to offer. */
 function offerChoice(player, master, definition, npcId) {
   if (!Tasks.meetsMaster(player, master)) {
@@ -104,6 +123,10 @@ function assignmentClick(event) {
   event.handled = true;
   if (master.id === MORTIMER && !Tasks.current(event.player)) {
     offerChoice(event.player, master, event.definition, event.definition.getId());
+    return;
+  }
+  if (!assignmentTalk(event.player, master) && offersChoice(event.player, master)) {
+    Offer.open(event.player, master, event.definition.getId());
     return;
   }
   if (assignmentTalk(event.player, master) && playAssignmentBranch(event)) return;
@@ -149,6 +172,11 @@ function assignmentEvent(request) {
   }
   if (!Tasks.meetsMaster(request.player, master)) {
     request.line = tooWeak(master);
+    return;
+  }
+  // A remote assignment or a quest's: no line, the choice follows.
+  if (offersChoice(request.player, master)) {
+    offerLater(request.player, master, request.npcId ?? request.definitionId ?? null);
     return;
   }
   const result = Tasks.assign(request.player, master);
@@ -272,6 +300,12 @@ function action(request) {
     return;
   }
   if (master.id === MORTIMER && mortimerAction(request, master)) return;
+  if (request.action === "slayer_assignment" && offersChoice(player, master)) {
+    request.handled = true;
+    request.end = true;
+    offerLater(player, master, request.npcId ?? request.definition.getId());
+    return;
+  }
   if (request.action === "open_shop" && request.target === "Slayer Rewards") {
     // End the talk first: closing it closes every interface, the Rewards one included.
     request.handled = true;
@@ -290,7 +324,12 @@ function action(request) {
   if (step?.type === "missing" && player.getAttribute(REPLACE_ATTRIBUTE) === master.id) {
     player.setAttribute(REPLACE_ATTRIBUTE, null);
     request.handled = true;
-    request.steps = [{ npc: replaceTask(player, master) }];
+    const line = replaceTask(player, master);
+    if (line) request.steps = [{ npc: line }];
+    else {
+      request.end = true;
+      offerLater(player, master, request.npcId ?? request.definition.getId());
+    }
   }
 }
 
@@ -374,6 +413,8 @@ function findOption(steps, text) {
 function replaceTask(player, master) {
   Tasks.clear(player);
   State.setVarbit(player, "slayer_tasks_completed", 0);
+  // Null when content offers a choice instead (the caller shows it).
+  if (offersChoice(player, master)) return null;
   const result = Tasks.assign(player, master);
   return result.line ?? result.refused;
 }

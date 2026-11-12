@@ -148,6 +148,7 @@ Some options ask a question before moving the player. The captures record only t
 **Left for their own work:**
 - **The damaging Fossil Island mushroom jump:** it hurts the player.
 - **Callisto's cave:** a 50,000-coin fee.
+- **Cavey Davey's cave:** done since, see [Mos Le'Harmless cave](#mos-leharmless-cave-4091).
 - **The boat networks:** Fossil Island's rowboats, the Myreque boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and Slepe. Their rides run longer than the capture window, so the arrival isn't recorded for every stop.
 - **Owned by other plugins:** the Wilderness agility pipe, Wintertodt's door, the Revenant caves' fee, the Edgeville lever.
 
@@ -298,6 +299,38 @@ No new animation or sound is claimed for the uncaptured platforms.
 
 - **Boats, portals, doors, gates and barriers:** fares, quests and requirements; among them the Holy barrier under Paterdomus, which needs Priest in Peril (no capture of the refusal yet).
 - **The Kalphite Lair's rope** (a consumed rope and a varbit kept per player), and **the Brimhaven Dungeon's fare.**
-- **Gates still to decide:** the Agility Arena ladder (a minute's wait after leaving), Cavey Davey's cave (a warning dialogue), and the refused locs that aren't ladders, stairs or caves.
+- **Gates still to decide:** the Agility Arena ladder (a minute's wait after leaving), and the refused locs that aren't ladders, stairs or caves.
 - **Climb dialogues:** ladders whose "Climb" asks up or down, with both answers.
 - **The Prifddinas agility tree ladder:** the Agility plugin sends the player to the city's coordinates on another part of the map, where the capture goes to (2269, 3393, 2).
+
+## Trahaearn mine (#3823)
+
+The cave entrance (36556, 4x4 at 3269,6047) and the Steps out (36215, 3x2 at 3301,12455) had no
+handler, so clicking Enter did nothing. `prif_mine_entrance` and `prif_mine_exit` now fade between
+them. Capture 1105 shows the Enter click, the fade (client script 948) and a rebuild into the
+mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
+is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.
+
+## Mos Le'Harmless cave (#4091)
+
+The cave entrance (`harmless_cave_entrance_left`, 3650, at 3748,2973) and both halves of the way
+out (`harmless_dungeon_exit_left` 6702 and `harmless_dungeon_exit_right` 5553, at 3749,9374 and
+3749,9373) had no handler, so Enter did nothing.
+
+- **Enter** lands on 3748,9373 two ticks after arriving, with no animation or fade (captures 1638,
+  1846, 4066).
+- **The warning:** until it is turned off, Enter plays Cavey Davey's conversation (NPC 1052, fifteen
+  lines with their head animations, capture 4066) and ends on "Do you still want to proceed?" with
+  "Yes, I am not afraid to be killed in nasty ways." and "No, I think I need to go get one of
+  these Icon things." It is an entry's `warn`: the varbit, the lines and the question.
+- **Toggle-warning** asks "Disable warnings?" Yes. / No. and sets varbit `cave_horror_warning`
+  (4331, varp 622 bit 29) on Yes., as captured in 1846 and 4066. It is an entry's `toggle`. The
+  choice is saved (`loc-teleports:warnings-off`) and the varbit is sent again at login.
+- **Exit** lands on 3749,2973 two ticks after arriving (capture 1638, the north half).
+
+Inferred, not captured: the south half of the exit mirrors the north; "Yes, I am not afraid..."
+goes in a tick after the answer; and turning the warning back on asks "Enable warnings?". The
+conversation is the one branch the captures show (the player has "killed a few of them").
+
+Not part of this: the cave's darkness and insects without a light source, and the Witchwood
+icon's protection.

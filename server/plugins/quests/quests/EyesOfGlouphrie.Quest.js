@@ -24,11 +24,13 @@
  * 46 Magic (not boostable, not needed to start). Grand Tree is checked through
  * quest:is-complete; Magic is the transcript's own mind-link condition.
  *
- * Gaps/approximations (the cache has no anti-illusion machine or exchanger interface):
+ * Gaps/approximations:
  * - the lock and control-panel numbers are fixed (4; 16 with one slot, 30 with two,
- *   48 with three) instead of randomised, and are shown as system messages; discs are
- *   inserted by using them on the machine. A wrong set clunks back out unconsumed, a
- *   right set is absorbed.
+ *   48 with three) rather than randomised. The panel previews inventory slots and
+ *   consumes the six discs on activation; the unlocking disc remains in inventory.
+ *   Retail unlocking-disc disposition and relog behaviour are not established.
+ * - all four activation controls validate the complete six-disc puzzle; retail
+ *   per-row button behaviour is not established.
  * - Oaknock's exchanger is worked by using a disc on it; it deterministically splits
  *   one disc into two of equal total value instead of offering random exchanges.
  * - Brimstail's "three random discs" are a fixed set (green square, blue triangle,
@@ -119,6 +121,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const EXCHANGER_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_EXCHANGER; // 17248, Use
   const MACHINE_PANEL_OBJECT_ID = ObjectIdentifiers.MACHINE_PANEL; // 17272, Inspect
   const SINGING_BOWL_OBJECT_ID = ObjectIdentifiers.SINGING_BOWL; // 17239, Inspect / Sing-crystal
+  const SINGING_BOWL_INSPECT_RANGE = 3;
+  const SINGING_BOWL_INSPECT_RIM = { x: 2388, y: 9817, z: 0 }; // RSProx 310, tick 1460.
 
   /** Machine and exchanger tiles: the cave map carries only the platform and pipe. */
   const MACHINE_BROKEN_TILE = { x: 2390, y: 9824 };
@@ -201,9 +205,26 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   let quest;
   let objectsInstalled = false;
   const spiesByPlayer = new Map();
+  // Cache 2757: the side layer is populated by interface_inv_init (149).
+  const LOCK_INTERFACE = 145, MACHINE_INTERFACE = 189, DISC_SIDE_INTERFACE = 185;
+  const DISC_INVENTORY = 440, INVENTORY_INIT_SCRIPT = 149;
+  const SIDE_MODAL_UID = (161 << 16) | 74;
+  const DISC_SIDE_UID = DISC_SIDE_INTERFACE << 16;
+  const PANEL_BUTTONS = [8, 12, 13].map((child) => (LOCK_INTERFACE << 16) | child)
+    .concat([24, 25, 26, 27, 28, 29, 38, 39, 42].map((child) => (MACHINE_INTERFACE << 16) | child), [DISC_SIDE_UID]);
+  // Preview references inventory slots; nothing is removed until successful activation.
   const puzzleProgress = new WeakMap();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  /** A crystal saw or seed held, worn, or in any bank tab but the search tab (not a placeholder). */
+  function ownsSawOrSeed(player) {
+    const searchTab = api.core.Bank.BANK_SEARCH_TAB_INDEX;
+    return [CRYSTAL_SAW_ITEM_ID, CRYSTAL_SAW_SEED_ITEM_ID].some((id) => held(player, id)
+      || (player.getEquipment?.().contains?.(id) ?? false)
+      // A real banked amount: a placeholder (amount 0) left by withdrawing it is not a seed.
+      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.getAmount?.(id) > 0));
+  }
   const isBrimstail = (npcId) => BRIMSTAIL_NPC_IDS.has(npcId);
   const isHazelmere = (npcId) => HAZELMERE_NPC_IDS.has(npcId);
 
@@ -523,11 +544,12 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     if (value.includes("after the eyes of glouphrie")) {
       return quest.isComplete(player);
     }
+    // Owned counts the bank: inventory only, a banked saw or seed let Brimstail hand out seeds (value 10,000) forever.
     if (value.includes("does not have a crystal saw or crystal seed")) {
-      return !held(player, CRYSTAL_SAW_ITEM_ID) && !held(player, CRYSTAL_SAW_SEED_ITEM_ID);
+      return !ownsSawOrSeed(player);
     }
     if (value.includes("has a crystal saw or crystal seed")) {
-      return held(player, CRYSTAL_SAW_ITEM_ID) || held(player, CRYSTAL_SAW_SEED_ITEM_ID);
+      return ownsSawOrSeed(player);
     }
     if (value.includes("crystal seed or uses it on brimstail")) {
       return held(player, CRYSTAL_SAW_SEED_ITEM_ID);
@@ -709,8 +731,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ALREADY_WORKING);
       return;
     }
-    // Substitute for the machine interface: show the value the lock asks for.
-    player.sendMessage(`The machine's lock shows the number ${UNLOCK_VALUE}.`);
+    openMachinePanel(player, LOCK_INTERFACE);
   }
 
   function operateMachine(event) {
@@ -725,12 +746,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ALREADY_WORKING);
       return;
     }
-    // Substitute for the control panel interface.
-    const progress = puzzleProgress.get(player) ?? { index: 0, discs: [] };
-    player.sendMessage(
-      `The control panel shows the number ${OPERATE_VALUES[progress.index]}` +
-        ` with ${OPERATE_SLOTS[progress.index]} slot(s) to fill.`
-    );
+    openMachinePanel(player, MACHINE_INTERFACE);
   }
 
   function useExchanger(event) {
@@ -745,6 +761,17 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     setBit(player, BIT_BOWL_SEEN);
     player.getPacketSender().sendVarbit(VARBIT_BOWL_SEEN, 1);
     player.sendMessage("You look into the singing bowl. A faint crystal hum fills the air.");
+  }
+
+  function routeBowlInspect(event) {
+    if (event.objectId !== SINGING_BOWL_OBJECT_ID || event.clickType !== 1) return;
+    const at = event.player.getLocation();
+    const bowl = event.object?.getLocation?.();
+    if (!bowl || at.getZ() !== bowl.getZ()) return;
+    const distance = Math.max(Math.abs(at.getX() - bowl.getX()), Math.abs(at.getY() - bowl.getY()));
+    event.destination = distance <= SINGING_BOWL_INSPECT_RANGE
+      ? { x: at.getX(), y: at.getY(), z: at.getZ() }
+      : SINGING_BOWL_INSPECT_RIM;
   }
 
   function singCrystal(event) {
@@ -776,58 +803,134 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   // Items
   // ==========================================================================
 
-  function tryUnlock(player, itemId) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_REPAIRED) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
-      return;
-    }
-    if (stage >= STAGE_PANEL_UNLOCKED) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ALREADY_WORKING);
-      return;
-    }
-    if (DISC_VALUE_BY_ITEM.get(itemId) !== UNLOCK_VALUE) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_WRONG_UNLOCK);
-      return;
-    }
-    quest.setStage(player, STAGE_PANEL_UNLOCKED);
-    playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_UNLOCKED_PANEL);
+  function liveDisc(player, selection) {
+    if (!selection || !Number.isInteger(selection.id) || !Number.isInteger(selection.slot) ||
+        selection.slot < 0 || selection.slot >= 28) return false;
+    const item = player.getInventory().getItems()[selection.slot];
+    return !!item && item.getId?.() === selection.id && item.getAmount?.() > 0 && DISC_VALUE_BY_ITEM.has(selection.id);
   }
 
-  function insertDisc(player, itemId) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_PANEL_UNLOCKED) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
-      return;
-    }
-    if (stage >= STAGE_OPERATIONAL) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ALREADY_WORKING);
-      return;
-    }
-    const progress = puzzleProgress.get(player) ?? { index: 0, discs: [] };
-    progress.discs.push(itemId);
-    if (progress.discs.length < OPERATE_SLOTS[progress.index]) {
-      puzzleProgress.set(player, progress);
-      player.sendMessage("You insert the disc into the machine.");
-      return;
-    }
-    const total = progress.discs.reduce((sum, id) => sum + DISC_VALUE_BY_ITEM.get(id), 0);
-    if (total !== OPERATE_VALUES[progress.index]) {
-      progress.discs = [];
-      puzzleProgress.set(player, progress);
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
-      return;
-    }
-    for (const id of progress.discs) player.getInventory().deleteNumber(id, 1);
-    progress.index += 1;
-    progress.discs = [];
-    if (progress.index >= OPERATE_SLOTS.length) {
+  function renderPanel(player, state) {
+    const sender = player.getPacketSender();
+    const inventory = player.getInventory().getItems();
+    sender.sendInventory(DISC_INVENTORY, 28, inventory.map((item) => item?.getId?.() >= 0
+      ? { id: item.getId(), amount: item.getAmount() } : null), DISC_SIDE_INTERFACE);
+    sender.sendConfig(856, liveDisc(player, state.selected) ? state.selected.id : -1);
+    sender.sendVarbit(2510, UNLOCK_VALUE);
+    OPERATE_VALUES.forEach((value, i) => sender.sendVarbit(2511 + i, value));
+    sender.sendConfig(849, state.lock?.id ?? -1);
+    const discs = [state.groups[0][0], state.groups[1][0], state.groups[1][1],
+      state.groups[2][0], state.groups[2][1], state.groups[2][2]];
+    for (let i = 0; i < 6; i++) sender.sendConfig(850 + i, discs[i]?.id ?? -1);
+    sender.sendVarbit(2539, state.lock ? DISC_VALUE_BY_ITEM.get(state.lock.id) : 0);
+    state.groups.forEach((group, i) => sender.sendVarbit(2540 + i,
+      group.reduce((total, entry) => total + DISC_VALUE_BY_ITEM.get(entry.id), 0)));
+  }
+
+  function openMachinePanel(player, group) {
+    const state = { group, selected: null, lock: null, groups: [[], [], []] };
+    puzzleProgress.set(player, state);
+    const sender = player.getPacketSender();
+    sender.sendInterface(group);
+    sender.sendSubInterface(SIDE_MODAL_UID, DISC_SIDE_INTERFACE, 3);
+    renderPanel(player, state);
+    sender.sendClientScript(INVENTORY_INIT_SCRIPT, DISC_SIDE_UID, DISC_INVENTORY, 4, 7, 0, -1,
+      "Select", "", "", "", "");
+    sender.sendInterfaceFlagsRange(DISC_SIDE_UID, 0, 27, 2);
+  }
+
+  function clearPanel({ player, interfaceId }) {
+    if (interfaceId === LOCK_INTERFACE || interfaceId === MACHINE_INTERFACE || interfaceId === DISC_SIDE_INTERFACE) {
       puzzleProgress.delete(player);
-      activateMachine(player);
+    }
+  }
+
+  function machineButton(event) {
+    const { player, buttonId, slot, itemId } = event;
+    const state = puzzleProgress.get(player);
+    if (!state || player.getInterfaceId() !== state.group || event.action !== 1) return;
+    const stage = quest.getStage(player);
+    if ((state.group === LOCK_INTERFACE && (stage < STAGE_REPAIRED || stage >= STAGE_PANEL_UNLOCKED)) ||
+        (state.group === MACHINE_INTERFACE && stage !== STAGE_PANEL_UNLOCKED)) {
+      event.handled = true;
+      puzzleProgress.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
       return;
     }
-    puzzleProgress.set(player, progress);
-    player.sendMessage(`The discs are accepted. The next number is ${OPERATE_VALUES[progress.index]}.`);
+    const group = buttonId >>> 16, child = buttonId & 0xffff;
+    if (buttonId === DISC_SIDE_UID) {
+      event.handled = true;
+      const selected = { slot, id: itemId };
+      if (!liveDisc(player, selected)) return;
+      state.selected = selected;
+      renderPanel(player, state);
+      return;
+    }
+    if (group !== state.group) return;
+    event.handled = true;
+    if ((group === LOCK_INTERFACE && child === 13) || (group === MACHINE_INTERFACE && child === 42)) {
+      player.getPacketSender().sendInterfaceRemoval();
+      puzzleProgress.delete(player);
+      return;
+    }
+    if (group === LOCK_INTERFACE && child === 8) {
+      if (!liveDisc(player, state.selected)) return;
+      state.lock = state.selected;
+      state.selected = null;
+    } else if (group === LOCK_INTERFACE && child === 12) {
+      if (!liveDisc(player, state.lock) || DISC_VALUE_BY_ITEM.get(state.lock.id) !== UNLOCK_VALUE) {
+        playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_WRONG_UNLOCK);
+        return;
+      }
+      // The existing quest retains the unlocking disc; retail disposition is unverified.
+      puzzleProgress.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      quest.setStage(player, STAGE_PANEL_UNLOCKED);
+      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_UNLOCKED_PANEL);
+      return;
+    } else if (group === MACHINE_INTERFACE && child >= 24 && child <= 26) {
+      if (!liveDisc(player, state.selected)) return;
+      const index = child - 24;
+      if (state.groups[index].length >= OPERATE_SLOTS[index] ||
+          state.groups.flat().some((entry) => entry.slot === state.selected.slot)) return;
+      state.groups[index].push(state.selected);
+      state.selected = null;
+    } else if (group === MACHINE_INTERFACE && child === 38) {
+      state.groups = [[], [], []];
+      state.selected = null;
+    } else if (group === MACHINE_INTERFACE && [27, 28, 29, 39].includes(child)) {
+      const entries = state.groups.flat();
+      if (state.groups.some((entries, i) => entries.length !== OPERATE_SLOTS[i] ||
+          entries.reduce((total, entry) => total + DISC_VALUE_BY_ITEM.get(entry.id), 0) !== OPERATE_VALUES[i]) ||
+          entries.some((entry) => !liveDisc(player, entry)) || new Set(entries.map((entry) => entry.slot)).size !== 6) {
+        playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
+        return;
+      }
+      // Commit one replacement array. If setting the stage fails before it advances,
+      // restore the original inventory; never undo payment after activation advances.
+      const inventory = player.getInventory();
+      const original = inventory.getItems();
+      const replacement = original.slice();
+      for (const entry of entries) {
+        const item = original[entry.slot];
+        replacement[entry.slot] = item.getAmount() > 1
+          ? item.clone().setAmount(item.getAmount() - 1) : new api.core.Item(-1, 0);
+      }
+      inventory.setItems(replacement);
+      try {
+        activateMachine(player);
+        if (quest.getStage(player) < STAGE_OPERATIONAL) throw new Error("Machine activation did not advance the quest");
+      } catch (error) {
+        if (quest.getStage(player) < STAGE_OPERATIONAL) inventory.setItems(original);
+        inventory.refreshItems();
+        throw error;
+      }
+      puzzleProgress.delete(player);
+      inventory.refreshItems();
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    renderPanel(player, state);
   }
 
   function activateMachine(player) {
@@ -862,12 +965,12 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     if (!DISC_VALUE_BY_ITEM.has(itemId)) return;
     if (objectId === MACHINE_LOCKED_OBJECT_ID) {
       event.handled = true;
-      tryUnlock(player, itemId);
+      unlockMachine({ player, objectId });
       return;
     }
     if (objectId === MACHINE_FIXED_OBJECT_ID) {
       event.handled = true;
-      insertDisc(player, itemId);
+      operateMachine({ player, objectId });
       return;
     }
     if (objectId === MACHINE_BROKEN_OBJECT_ID) {
@@ -886,8 +989,14 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     const ids = new Set([usedItemId, usedWithItemId]);
     if (ids.has(MUD_RUNE_ITEM_ID) && ids.has(PESTLE_AND_MORTAR_ITEM_ID)) {
       event.handled = true;
-      player.getInventory().deleteNumber(MUD_RUNE_ITEM_ID, 1);
-      player.getInventory().adds(GROUND_MUD_RUNES_ITEM_ID, 1);
+      // A rune taken from a larger stack frees no slot, and `adds` drops what has no room.
+      const inventory = player.getInventory();
+      if (inventory.getAddableAmount(new api.core.Item(GROUND_MUD_RUNES_ITEM_ID, 1)) < 1 && inventory.getAmount(MUD_RUNE_ITEM_ID) > 1) {
+        inventory.full();
+        return;
+      }
+      inventory.deleteNumber(MUD_RUNE_ITEM_ID, 1);
+      inventory.adds(GROUND_MUD_RUNES_ITEM_ID, 1);
       return;
     }
     if (ids.has(GROUND_MUD_RUNES_ITEM_ID) && ids.has(BUCKET_OF_SAP_ITEM_ID)) {
@@ -975,6 +1084,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function handleLogout({ player }) {
+    puzzleProgress.delete(player);
     despawnSpies(player);
   }
 
@@ -1025,8 +1135,11 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   });
   api.onObjectInteraction("Oaknock's exchanger", { Use: useExchanger });
   api.onObjectInteraction("Singing bowl", { Inspect: inspectBowl, "Sing-crystal": singCrystal });
+  api.onObjectRoute(routeBowlInspect);
   api.onObjectInteraction("Machine panel", { Inspect: inspectPanel });
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onInterfaceActionButton(PANEL_BUTTONS, machineButton);
+  api.onCustomEvent("interface:closed", clearPanel);
   api.onItemOnItem(handleItemOnItem);
   api.onNpcDeath(handleNpcDeath);
   api.onServerStartup(ensureQuestObjects);

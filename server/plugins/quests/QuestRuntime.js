@@ -29,6 +29,8 @@ const QUEST_LIST_ENTRY_FLAGS = 0x3e; // Native OP1–5 (RSProx4267); Pin journal
 // Quest journal overlay (xrsps client/common/ui constants).
 const JOURNAL_GROUP = 119;
 const JOURNAL_TITLE_CHILD = 5;
+// The text layer the line widgets hang under (InterfaceID.Questjournal.TEXTLAYER, 119:6).
+const JOURNAL_TEXTLAYER_CHILD = 6;
 const JOURNAL_CLOSE_CHILD = 8;
 const JOURNAL_SWITCH_CHILD = 9;
 const JOURNAL_FIRST_LINE_CHILD = 11;
@@ -92,6 +94,12 @@ const BOOK_GROUP = 392;
 const BOOK_CLOSE = (BOOK_GROUP << 16) | 7;
 const BOOK_PREVIOUS = (BOOK_GROUP << 16) | 75;
 const BOOK_NEXT = (BOOK_GROUP << 16) | 77;
+/** pagepos: the left page of the open spread, 0, 2, 4 ... */
+const BOOK_PAGE_VARP = 334;
+/** human_readbook_turnright/left with readbook_spotanim_turnright/left at height 92 (ticks 359, 368). */
+const BOOK_TURN_RIGHT = { animation: 3140, graphic: 548 };
+const BOOK_TURN_LEFT = { animation: 3141, graphic: 549 };
+const BOOK_TURN_GRAPHIC_HEIGHT = 92;
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
 const INDEXED_BOOK = {
@@ -146,7 +154,9 @@ function sendQuestHeaderStats(player) {
   }).length;
   // Earned QP remains the saved gameplay value. Native maximum/counts describe the cache list.
   packet.sendConfig(QUEST_POINTS_VARP, Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0);
-  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, all.reduce((sum, row) => sum + Number(row.questpoints?.[0] ?? 0), 0));
+  // Rev 242 renamed the column `questpoints` to `questpoints_override` (same values).
+  const questPoints = row => Number((row.questpoints_override ?? row.questpoints)?.[0] ?? 0);
+  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, all.reduce((sum, row) => sum + questPoints(row), 0));
   packet.sendVarbit(QUESTS_COMPLETED_VARBIT, completed(0));
   packet.sendVarbit(QUESTS_TOTAL_VARBIT, main.length);
   packet.sendVarbit(MINIQUESTS_COMPLETED_VARBIT, completed(1));
@@ -274,6 +284,30 @@ function journalText(line) {
 }
 
 /**
+ * The journal widgets a quest's guide reads, for a snapshot with no client attached. Live sends
+ * these when the journal opens (openJournal); a headless evaluation never opens it, so a guide
+ * whose conditions are WidgetTextRequirements (Clock Tower's sync, its cog steps) would see
+ * nothing and report the route unsupported.
+ */
+function journalWidgets(quest, player) {
+  // A quest with no journal of its own has nothing for a guide to read; leave the snapshot alone.
+  if (typeof quest.buildJournal !== "function") return [];
+  // The lines are the text layer's static children, as live mounts them: guides read placed-cog
+  // and other progress lines with WidgetTextRequirement(TEXTLAYER, checkChildren = true), which
+  // walks getStaticChildren() and never looks at a line widget on its own.
+  return [
+    { id: (JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, text: `<col=7f0000>${quest.name}</col>` },
+    {
+      id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
+      staticChildren: journalLines(quest, player).map((line, index) => ({
+        id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
+        text: journalText(line),
+      })),
+    },
+  ];
+}
+
+/**
  * How the overview says the quest starts, after "I can start this quest by": from the data file
  * (Wiki journal transcripts and live captures), else from the quest's own not-started journal
  * line, which may wrap over several lines. Null when neither has one.
@@ -357,13 +391,19 @@ function openJournal(player, quest) {
   packet.sendInterfaceScript(SCRIPT_QJ_SCROLL, [0, lines.length]);
 }
 
+/** The scroll's reward groups after the quest points, in live's usual order unless a quest sets its own. */
+const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
+
 function rewardLines(quest) {
   const lines = ["You are awarded:"];
   const points = quest.questPoints || 0;
   lines.push(`${points} Quest Point${points === 1 ? "" : "s"}`);
-  for (const reward of quest.xpRewards ?? []) lines.push(`${reward.amount.toLocaleString("en-US")} ${reward.label} XP`);
-  if (quest.rewardItemLabel) lines.push(quest.rewardItemLabel);
-  lines.push(...(quest.otherRewards ?? []));
+  const groups = {
+    xp: (quest.xpRewards ?? []).map((reward) => `${reward.amount.toLocaleString("en-US")} ${reward.label} XP`),
+    item: quest.rewardItemLabel ? [quest.rewardItemLabel] : [],
+    other: quest.otherRewards ?? [],
+  };
+  for (const group of quest.rewardOrder ?? DEFAULT_REWARD_ORDER) lines.push(...(groups[group] ?? []));
   return lines.slice(0, COMPLETED_LINE_COUNT);
 }
 
@@ -375,6 +415,10 @@ function openCompletedScroll(player, quest, questPoints) {
     packet.sendString(String(text ?? ""), uid);
   };
   packet.sendInterfaceRemoval();
+  // Live opens the scroll with toplevel_mainmodal_open [-1, -1] (Observatory Quest capture
+  // 20261110T110141-5ab63b4 tick 1644): the main modal's backdrop goes back to none, so one an
+  // earlier modal set (the telescope's black [0, 0], tick 1606) doesn't show around the scroll.
+  packet.sendInterfaceScript(2524, [-1, -1]);
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
@@ -529,7 +573,6 @@ function registerQuestWidgets(api) {
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
-  player.getPacketSender().sendInterface(BOOK_GROUP);
   openBooks.set(player, { title, pages, page: 0, onClose });
   showBookPage(player);
 }
@@ -554,9 +597,14 @@ function showBookPage(player) {
       packet.sendInterfaceDisplayState((BOOK_GROUP << 16) | model, true);
     }
   }
-  packet.sendInterfaceDisplayState(BOOK_PREVIOUS, page === 0);
   packet.sendInterfaceDisplayState(BOOK_NEXT, page === pages.length - 1);
+  packet.sendInterfaceDisplayState(BOOK_PREVIOUS, page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Witches' Diary capture 20261108T030409 ticks 357-368) re-opens the book after every
+  // spread, its content first, and tracks the left page in varp pagepos; without it the client
+  // never sends the previous-page click.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(BOOK_GROUP);
 }
 
 /**
@@ -566,7 +614,6 @@ function showBookPage(player) {
  */
 function openIndexedBook(player, { title, spreads, spreadOf }, onClose) {
   if (!spreads.length) return;
-  player.getPacketSender().sendInterface(INDEXED_BOOK_GROUP);
   openBooks.set(player, { indexed: true, title, spreads, spreadOf, page: 0, onClose });
   showIndexedBookPage(player);
 }
@@ -591,6 +638,10 @@ function showIndexedBookPage(player) {
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.previous), page === 0);
   packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.indexJump), page === 0);
   packet.sendInterfaceScript(2524, [-1, -1]);
+  // Live (Sacraments of Ent Folk, RSProx 20261109T224258-5ab63b4 ticks 826-847) sends each
+  // spread's content first and then opens the book again, the left page in varp pagepos.
+  packet.sendConfig(BOOK_PAGE_VARP, page * 2);
+  packet.sendInterface(INDEXED_BOOK_GROUP);
 }
 
 function turnIndexedBookPage(event) {
@@ -610,8 +661,20 @@ function turnIndexedBookPage(event) {
     page = book.spreadOf(entry.index);
   }
   if (page < 0 || page >= book.spreads.length || page === book.page) return;
+  const forward = page > book.page;
   book.page = page;
+  turnAnimation(player, forward);
   showIndexedBookPage(player);
+}
+
+/** The reader's page-turn animation and spot effect, both books. */
+function turnAnimation(player, forward) {
+  if (!coreApi) return;
+  const turn = forward ? BOOK_TURN_RIGHT : BOOK_TURN_LEFT;
+  player.performAnimation?.(new coreApi.Animation(turn.animation));
+  const graphic = new coreApi.Graphic(turn.graphic);
+  graphic.height = BOOK_TURN_GRAPHIC_HEIGHT;
+  player.performGraphic?.(graphic);
 }
 
 function turnBookPage(event) {
@@ -626,9 +689,11 @@ function turnBookPage(event) {
     closeBook(player);
     return;
   }
-  const page = book.page + (buttonId === BOOK_NEXT ? 1 : -1);
+  const forward = buttonId === BOOK_NEXT;
+  const page = book.page + (forward ? 1 : -1);
   if (page < 0 || page >= book.pages.length) return;
   book.page = page;
+  turnAnimation(player, forward);
   showBookPage(player);
 }
 
@@ -663,6 +728,7 @@ function sendQuestVarps({ player }) {
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest), onReward?(player, quest),
  *               varpValue?(stage, player) }
@@ -732,11 +798,8 @@ function registerQuest(api, def) {
       player.getPacketSender().sendConfig(QUEST_POINTS_VARP, points | 0);
 
       if (def.onReward) def.onReward(player, quest, options);
-      if (def.rewardItemId !== undefined) {
-        const inventory = player.getInventory();
-        if (inventory.isFull()) inventory.forceAdd(player, new coreApi.Item(def.rewardItemId, 1));
-        else inventory.adds(def.rewardItemId, 1);
-      }
+      // A plain add would clamp at a capped stack; giveReward's forceAdd floors what does not fit.
+      if (def.rewardItemId !== undefined) giveReward(player, def.rewardItemId, 1);
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
         player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);
@@ -868,15 +931,30 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null, 
   return true;
 }
 
+/**
+ * A quest reward item: into the inventory, or (what does not fit) onto the floor under the player, as the runtime's
+ * own completion item already is. `adds` alone drops a full inventory's reward on the spot.
+ */
+function giveReward(player, itemId, amount = 1) {
+  // forceAdd adds what fits (stacks included, up to the cap) and puts the rest on the floor. A container without it
+  // (a test stand-in) takes a plain add.
+  const inventory = player.getInventory();
+  if (typeof inventory.forceAdd === "function") inventory.forceAdd(player, new coreApi.Item(itemId, amount));
+  else inventory.adds(itemId, amount);
+}
+
 module.exports = {
+  rewardLines,
   openBook,
   openIndexedBook,
+  journalWidgets,
   QUEST_POINTS_VARP,
   QUEST_POINTS_ATTRIBUTE,
   EXPERIENCE_WITHHELD_ATTRIBUTE,
   QUEST_COMPLETE_JINGLE,
   registerQuestWidgets,
   registerQuest,
+  giveReward,
   getRegisteredQuests: () => quests.slice(),
   questNamed,
   pickQuestShopVersion,

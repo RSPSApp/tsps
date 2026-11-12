@@ -147,7 +147,11 @@ async function harvest(t, f) {
 test("an open sack takes a grimy herb picked up from the ground", async (t) => {
   const f = actor(t, "Open herb sack");
   const guam = I.GRIMY_GUAM_LEAF;
+  const typed = [];
+  t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); return f.p.getPacketSender(); });
   await take(f, guam);
+  // rsprox 227/00560.txt:228486 ("You put the Grimy dwarf weed herb into your herb sack."), spam.
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "You put the Grimy guam leaf herb into your herb sack."]]);
   assert.equal(stored(f)[guam], 1, "in the sack");
   assert.equal(f.inv.getAmount(guam), 0, "not in the pack");
   assert.equal(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), guam, f.p.getLocation(), null), null, "off the ground");

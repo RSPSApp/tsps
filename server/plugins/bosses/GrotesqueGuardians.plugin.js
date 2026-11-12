@@ -11,6 +11,7 @@ const Kills = require("./grotesqueguardians/Kills.GrotesqueGuardians");
 
 module.exports = {
   name: "GrotesqueGuardians",
+  description: "Dusk and Dawn on the Slayer Tower roof: the key, bell and exit, the four-phase fight and the kill.",
   members: true,
   register(api) {
     Common.init(api);

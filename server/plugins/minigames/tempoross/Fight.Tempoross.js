@@ -22,6 +22,7 @@ const Spots = require("./Spots.Tempoross");
 const Cannons = require("./Cannons.Tempoross");
 const Tethers = require("./Tethers.Tempoross");
 const Attacks = require("./Attacks.Tempoross");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 const { DATA, NPC, VARBIT, SCRIPT, INTERFACE, JINGLE, MUSIC, ANIM } = Shared;
 const F = DATA.fight;
@@ -288,10 +289,16 @@ class Fight {
     Shared.stopAction(player);
     player.sendMessage(`<col=${Shared.PINK}>The skies clear as Tempoross retreats to the depths.</col>`);
     player.sendMessage("The Spirit Anglers will ferry you back to the Ruins of Unkah in 20 seconds.");
-    player.sendMessage(`Subdued in <col=ef1020>${Records.formatTicks(time)}</col>. Personal best: ${Records.formatTicks(bests.time)}.`);
-    player.sendMessage(`Points: <col=ef1020>${points.toLocaleString("en-GB")}</col>. Personal best: ${bests.points.toLocaleString("en-GB")}.`);
+    // rsprox 227/01858.txt:65783 "Subdued in <col=ef1020>2:00.60</col> (new personal best)." / 227/00552 "... Personal best: 1:44.40.".
+    player.sendMessage(bests.newTime
+      ? `Subdued in <col=ef1020>${Records.formatTicks(time)}</col> (new personal best).`
+      : `Subdued in <col=ef1020>${Records.formatTicks(time)}</col>. Personal best: ${Records.formatTicks(bests.time)}.`);
+    // rsprox: "Points: <col=ef1020>3,190</col> (new personal best)." / "Points: <col=ef1020>3,000</col>. Personal best: 3,190.".
+    player.sendMessage(bests.newPoints
+      ? `Points: <col=ef1020>${points.toLocaleString("en-GB")}</col> (new personal best).`
+      : `Points: <col=ef1020>${points.toLocaleString("en-GB")}</col>. Personal best: ${bests.points.toLocaleString("en-GB")}.`);
     player.sendMessage(`Reward permits: <col=ef1020>${earned}</col>. Total permits: <col=ef1020>${Records.permits(player)}</col>.`);
-    player.sendMessage(`Your Tempoross kill count is: <col=ff0000>${kills}</col>.`);
+    sendBossKillCount(player, `Your Tempoross kill count is: <col=ff0000>${kills}</col>.`);
     player.getPacketSender().sendJingle(JINGLE.VICTORY, 0);
     Shared.api().emitCustomEvent("tempoross:subdued", { player, points, permits: earned, ticks: time });
   }

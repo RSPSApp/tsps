@@ -1,7 +1,9 @@
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
+const CameraShake = require("../../interface/CameraShake.plugin");
+
 module.exports = function registerDragonSlayerQuest(api) {
-  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
+  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, CombatSpells, CombatType, MagicCombatMethod, PendingHit, Projectile, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { registerQuest, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
 
   const GUILDMASTER_NPC_ID = NpcIdentifiers.GUILDMASTER;
   const DUKE_HORACIO_NPC_ID = NpcIdentifiers.DUKE_HORACIO;
@@ -54,6 +56,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     mapWormbrain: ItemIdentifiers.MAP_PART_2,
     mapOracle: ItemIdentifiers.MAP_PART_3,
     crandorMap: ItemIdentifiers.CRANDOR_MAP,
+    cabbage: ItemIdentifiers.CABBAGE,
     mazeKey: ItemIdentifiers.MAZE_KEY,
     redKey: ItemIdentifiers.KEY_3,
     orangeKey: ItemIdentifiers.KEY_4,
@@ -86,11 +89,13 @@ module.exports = function registerDragonSlayerQuest(api) {
 
   const LOC = {
     magicDoor: ObjectIdentifiers.MAGIC_DOOR_6,
-    oracleChest: [ObjectIdentifiers.CHEST_14, ObjectIdentifiers.CHEST_15],
+    oracleChestShut: ObjectIdentifiers.CHEST_14,
+    oracleChestOpen: ObjectIdentifiers.CHEST_15,
     shipHole: SHIP_HOLE_ID,
     shipGangplanks: [ObjectIdentifiers.GANGPLANK_15, ObjectIdentifiers.GANGPLANK_16],
     melzarEntrance: ObjectIdentifiers.DOOR_91,
-    melzarChest: [ObjectIdentifiers.CHEST_16, ObjectIdentifiers.CHEST_17],
+    melzarChestShut: ObjectIdentifiers.CHEST_16,
+    melzarChestOpen: ObjectIdentifiers.CHEST_17,
     // Crandor's volcano: the surface hole drops into the lair by the exit rope,
     // and the wall divides the rope corridor from Elvarg's chamber.
     crandorOpening: ObjectIdentifiers.HOLE_40,
@@ -109,6 +114,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   // one-way only: from the room the player is leaving to the maze/exit corridor,
   // never back. The ground door's room is the ladder room east of it, reached by
   // climbing up from the basement after the chest.
+  /** The maze's doors Doors.plugin opens as pass-through doors (its PASS_THROUGH_FAMILIES). */
+  const PASS_THROUGH_DOORS = new Set([ObjectIdentifiers.DOOR_91, ...MAZE_DOORS, ObjectIdentifiers.EXIT_DOOR]);
   const MELZAR_EXIT_DOORS = [
     { x: 2938, y: 3252, z: 0, exitX: -1 }, // ground NE ladder room -> maze
     { x: 2931, y: 9640, z: 0, exitX: -1 }, // zombie room -> west exit corridor
@@ -120,9 +127,40 @@ module.exports = function registerDragonSlayerQuest(api) {
     melzarBasementLadder: new Location(2932, 3240, 0),
     melzarBasement: new Location(2932, 9640, 0),
     crandor: new Location(2835, 3235, 0),
-    crandorLair: new Location(2833, 9656, 0),
+    // Where the ruin entrance lands in the lair (rev242 capture tick 3436, after the intro).
+    crandorLair: new Location(2833, 9658, 0),
     crandorSurface: new Location(2833, 3256, 0),
   };
+
+  /** Melzar's Maze plays "The Maze" on all three floors (rev242 capture); the map's own region track is Emperor. */
+  const MELZAR_MAZE_TRACK = 365;
+  const MELZAR_MAZE_BOUNDS = { minX: 2921, maxX: 2940, minY: 3238, maxY: 3259, floors: [0, 1, 2] };
+  /** The basement under it, where Melzar fights; its own region track is already The Maze. */
+  const MELZAR_BASEMENT_BOUNDS = { minX: 2921, maxX: 2940, minY: 9638, maxY: 9659, z: 0 };
+  const MELZAR_NPC_ID = NpcIdentifiers.MELZAR_THE_MAD;
+  const MELZAR_FIGHT_VARIANT = "melzar-s-map-piece-fighting-melzar-the-mad";
+  // rev242 capture ticks 2584-2609 (Melzar's second fight): a line on 6 of 18 ticks in combat, on
+  // attack ticks and quiet ones alike and never out of combat, so a roll each tick, not one per attack.
+  const MELZAR_SHOUT_CHANCE = 1 / 3;
+  // Attacks every 4 ticks (2589-2605); kicks only from beside the player.
+  const MELZAR_ATTACK_SPEED = 4;
+  const MELZAR_KICK = 423;
+  // NOT FROM OSRS: the attack tables, the stat gating and the cabbage attack below come from another
+  // server's script, LostCity's 2004 (revision 274) melzar_the_mad.rs2 ("data based off of 200 or so
+  // attacks"), as server/AGENTS.md rule 10 asks us to say. The capture (5 attacks, no cabbage) is
+  // consistent with them; the Wiki names the cabbage spell. Its names are checked against the rev 241 cache.
+  const MELZAR_ROLL = 128;
+  /** The cabbage cast takes 5 ticks before his next attack, not 4 (LostCity: action delay map_clock + 5). */
+  const MELZAR_CABBAGE_SPEED = 5;
+  const MELZAR_CABBAGE_CAST = 710; // human_castentangle
+  const MELZAR_CABBAGE_CAST_GRAPHIC = 177, MELZAR_CABBAGE_CAST_HEIGHT = 92; // entangle_casting
+  const MELZAR_CABBAGE_SMOKE = 86, MELZAR_CABBAGE_SMOKE_HEIGHT = 124; // smokepuff, on the cabbage's tile
+  /** Up to 7 tiles from him, at least 1 (LostCity: map_findsquare(npc_coord, 1, 7, lineofwalk)). */
+  const MELZAR_CABBAGE_MIN_TILES = 1, MELZAR_CABBAGE_MAX_TILES = 7;
+  /** Half LostCity's 200-tick ground-item time (^lootdrop_duration / 2). */
+  const MELZAR_CABBAGE_TICKS = 100;
+  /** The Wiki's max hit, capping his spells (every spell splashed and both kicks hit 0 in the capture); the kick uses his definition's max hit, also 5. */
+  const MELZAR_MAX_HIT = 5;
 
   const ATTR_ORACLE = "dragon-slayer.oracle";
   const ATTR_NED_ASKED = "dragon-slayer.ned-asked";
@@ -140,6 +178,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   /** Guildmaster follow-up answers; set means the question has not been asked yet. */
   const INSTRUCTION = { melzar: 0, oracle: 1, wormbrain: 2, ship: 3, shield: 4 };
   const SHORTCUT_VARBIT = 3741;
+  /** The low wall's usual row into Elvarg's chamber. */
+  const CRANDOR_WALL_Y = 9636;
   const PRINCE_ALI_KEY = "prince_ali_rescue";
   const PRINCE_STAGE_WIG = 20;
   const PRINCE_STAGE_SAVED = 100;
@@ -148,8 +188,48 @@ module.exports = function registerDragonSlayerQuest(api) {
   const NED_SCENE_ID = 824, JENKINS_SCENE_ID = 826;
   const FIRE_SMALL = 25156, FIRE_LARGE = 25155, FIREBALL = 1155, FIRE_IMPACT_GRAPHIC = 1154;
   const ELVARG_INTRO_NPC_ID = 817;
+  const ELVARG_FOOTSTEP_SOUND = 3753;
+  /**
+   * The hand-over steps: "The Guildmaster hands you a key.", and the shield in this page's Duke
+   * variant (KoKING) and in the Duke's own page (LnbjYr, if_uB3 and their actions igRDii, emj6I8),
+   * which other quests' Duke conversations still reach.
+   */
+  const MELZAR_KEY_STEP = "xUz7Ja";
+  const GUILDMASTER_MAP_QUESTION = "Where can I find a map to Crandor?";
+  const GUILDMASTER_RETELL = "What's so special about this dragon?";
+  const MAP_PIECE_QUESTIONS = ["Where is Melzar's map piece?", "Where is Thalzar's map piece?", "Where is Lozar's map piece?"];
+  /** "Study" on each map piece (rev242 capture ticks 2942-2948): its transcript line, in an item box showing it. */
+  const MAP_STUDY = [
+    { item: ITEM.mapMelzar, variant: "melzar-s-map-piece-studying-melzar-s-map-part", step: "wjI3Hx" },
+    { item: ITEM.mapOracle, variant: "thalzar-s-map-piece-studying-thalzar-s-map-part", step: "Vk_HYB" },
+    { item: ITEM.mapWormbrain, variant: "lozar-s-map-piece-studying-lozar-s-map-part", step: "2JFb8u" },
+  ];
+  const DUKE_SHIELD_VARIANT = "protection-from-a-dragon-s-breath-talking-to-duke-horacio";
+  const DUKE_SHIELD_STEPS = new Set(["KoKING", "LnbjYr", "if_uB3", "igRDii", "emj6I8"]);
+  const CHEST_OPEN_ANIMATION = 536, CHEST_OPEN_SOUND = 52, CHEST_CLOSE_SOUND = 51;
+  /**
+   * The map chests' transcripts (rev242 capture ticks 1421-1435 and 2693-2709): the Oracle chest's
+   * lid inscription plays as it opens, and the open chest's "You find a map piece in the chest."
+   * is an item box as it shuts again.
+   */
+  const MAP_CHESTS = {
+    oracle: { variant: "thalzar-s-map-piece-searching-the-chest", lidLast: "87eeuP", found: "X_Dgh7" },
+    melzar: { variant: "melzar-s-map-piece-searching-the-chest", found: "Cql70f" },
+  };
+  const ORACLE_LID_STEPS = new Set(["kMeD2O", "a4P9BG", "BHT54J", MAP_CHESTS.oracle.lidLast]);
+  const CRASH_LANDING = { x: 2849, y: 3238 };
+  const HEAD_CUT_SOUND = 3744, HEAD_OFF_SOUND = 3745, SILENCE_TRACK = 147;
+  const HEAD_CUT_WALK_TICKS = 3, HEAD_CUT_WALK_MAX_TILES = 10;
+  /** The lair's west edge (east of the low wall) and Elvarg's footprint (cache size 4). */
+  const LAIR_WEST_X = 2847, ELVARG_FOOTPRINT = 4;
+  const ELVARG_INTRO_FOOTSTEPS = 7;
   const SCENE_OVERLAY_UID = (161 << 16) | 1;
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
+  /**
+   * toplevel_mainmodal_open's background around the main modal (rev242 capture ticks 3141 and 3153):
+   * ship_journey's own brown (its frame rectangle, 0x2a1e06) fills the screen, and none behind the route map.
+   */
+  const MAIN_MODAL_OPEN = 2524, SHIP_JOURNEY_BACKGROUND = [0x2a1e06, 0], NO_MODAL_BACKGROUND = [-1, -1];
   /** Walk animation of Doors.plugin's GATE_WALK_ANIMATION. */
   const DOOR_WALK_ANIMATION = 819;
   const MELZAR_DOOR_LOCKED_SOUND = 2402;
@@ -197,7 +277,6 @@ module.exports = function registerDragonSlayerQuest(api) {
 
 
   const PAGE = "Dragon Slayer I";
-  const DUKE_PAGE = "Duke Horacio";
   const OZIACH_PAGE = "Oziach";
   const ORACLE_PAGE = "Oracle";
   const KLARENSE_PAGE = "Klarense";
@@ -327,12 +406,15 @@ module.exports = function registerDragonSlayerQuest(api) {
     const scene = new VoyageScene(player); scenes.set(player, scene); freeze(player); fade(player, true);
     player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1).sendVarbit(4606, 1);
     later(scene, 2, () => {
-      for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
-      player.getPacketSender().sendInterface(SCENE_INTERFACE.journey).sendClientScript(1131, 3).sendSong(147).sendJingle(172, 0);
+      for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
+      player.getPacketSender().sendSong(147).sendJingle(172, 0).sendInterfaceScript(MAIN_MODAL_OPEN, SHIP_JOURNEY_BACKGROUND)
+        .sendInterface(SCENE_INTERFACE.journey).sendClientScript(1131, 3);
     });
-    later(scene, 14, () => player.getPacketSender().sendInterface(SCENE_INTERFACE.route));
+    later(scene, 14, () => player.getPacketSender().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND).sendInterface(SCENE_INTERFACE.route));
     later(scene, 20, () => {
-      player.moveTo(scene.sourceTile(2067, 5517)); scene.enter(player);
+      // rev242 capture tick 3158: the player stands south of Ned the whole voyage, facing east at first.
+      player.moveTo(scene.sourceTile(2066, 5516)); scene.enter(player);
+      player.setPositionToFace(scene.sourceTile(2067, 5516));
       scene.ned = sceneActor(scene, NED_SCENE_ID, 2066, 5517);
       scene.jenkins = sceneActor(scene, JENKINS_SCENE_ID, 2063, 5518);
       player.getPacketSender().sendInterfaceRemoval(); fade(player, false);
@@ -367,6 +449,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.getPacketSender().sendSoundEffect(3750, 1, 0);
       camera(player, scene, [2072, 5517, 300], [2062, 5515, 100]);
       camera(player, scene, [2072, 5520, 300], null, 1);
+      later(scene, 1, () => player.setPositionToFace(scene.sourceTile(2062, 5515))); // rev242 tick 3228
       for (const [from, to, delay] of [[[2076, 5526], [2065, 5516], 0], [[2073, 5526], [2064, 5516], 30], [[2078, 5526], [2063, 5516], 60]]) fireAt(scene, from, to, delay);
       later(scene, 2, () => { scene.ned?.performAnimation(new Animation(2105)); scene.jenkins?.performAnimation(new Animation(4280)); });
       for (let i = 0; i < 3; i++) later(scene, 2 + i, () => sceneFire(scene, FIRE_SMALL, 2065 - i, 5516));
@@ -380,10 +463,15 @@ module.exports = function registerDragonSlayerQuest(api) {
       later(scene, 3, () => {
         player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
         camera(player, scene, [2068, 5518, 300], [2062, 5518, 100]); camera(player, scene, [2074, 5526, 300], null, 1);
-        player.getPacketSender().sendCameraShake(1, 0, 5, 8); scene.jenkins?.moveTo(scene.sourceTile(2066, 5518));
+        CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 5, 8); scene.jenkins?.moveTo(scene.sourceTile(2066, 5518));
         sceneFire(scene, FIRE_LARGE, 2064, 5516);
         for (let i = 0; i < 5; i++) fireAt(scene, [2057 + i * 3, 5522], [2063 + i, 5518], i * 30);
       });
+      // rev242 ticks 3270-3271: the player hops to plane 2 on the same tile and back the next tick, which
+      // takes Ned and Jenkins out of view and re-adds them (Jenkins on his new tile).
+      later(scene, 1, () => player.moveTo(scene.sourceTile(2066, 5516, 2)));
+      later(scene, 2, () => player.moveTo(scene.sourceTile(2066, 5516, 1)));
+      later(scene, 4, () => player.setPositionToFace(scene.sourceTile(2062, 5518))); // rev242 tick 3273
       later(scene, 5, () => scene.jenkins?.performAnimation(new Animation(6649, 6)));
       later(scene, 7, () => { scene.jenkins?.performAnimation(new Animation(836)); player.getPacketSender().sendSoundEffect(513, 1, 0).sendSoundEffect(512, 1, 0); });
       for (let i = 0; i < 5; i++) later(scene, 4 + i, () => sceneFire(scene, FIRE_SMALL, 2063 + i, 5518));
@@ -391,10 +479,11 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
     if (stepId === "9r5-VW") {
       event.handled = true; event.end = true; freeze(player);
-      player.getPacketSender().sendCameraShake(0, 20).sendSoundEffect(3742, 1, 0); StatementDialogue.send(player, "<col=800000>CRASH!", false); fade(player, true);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 20).sendSoundEffect(3742, 1, 0); StatementDialogue.send(player, "<col=800000>CRASH!", false); fade(player, true);
       later(scene, 3, () => { scene.cameraReleased = true; player.getPacketSender().sendCameraReset(); });
       later(scene, 4, () => {
-        scene.returnTile = new Location(2852, 3238, 0); scene.leave(player, false); player.moveTo(scene.returnTile);
+        // rev242 tick 3339: the beach landing, where the player stays (and the camera looks) until released.
+        scene.returnTile = new Location(CRASH_LANDING.x, CRASH_LANDING.y, 0); scene.leave(player, false); player.moveTo(scene.returnTile);
         quest.setStage(player, STAGE_CRANDOR); syncState({player});
         player.getMovementQueue().setBlockMovement(true); player.setUntargetable(true); player.performAnimation(new Animation(4191));
         camera(player, null, [2854, 3241, 300], [2849, 3238, 200]); fade(player, false);
@@ -454,15 +543,28 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (request.step?.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
     else if (request.step?.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
     if (text.startsWith("Ah, it's good to feel")) request.before = () => {
-      camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8);
+      camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 10, 8);
     };
     if (text.startsWith("And this is a mighty")) request.before = () => camera(player, scene, [2073, 5516, 100], [2066, 5517, 25], 1);
     if (text.startsWith("How much longer")) request.before = () => camera(player, scene, [2069, 5513, 300], [2066, 5517, 100], 1);
     if (text.startsWith("Looks like there's a storm")) request.before = () => {
-      player.getPacketSender().sendCameraShake(1, 0); camera(player, scene, [2074, 5525, 1500], [2064, 5520, 300], 232, true); camera(player, scene, [2064, 5525, 1500], null, 1); player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0); camera(player, scene, [2074, 5525, 1500], [2064, 5520, 300], 232, true); camera(player, scene, [2064, 5525, 1500], null, 1); player.getPacketSender().closeSubInterface(SCENE_OVERLAY_UID);
     };
-    if (text === "We're going to sink!") request.before = () => { camera(player, scene, [2074, 5526, 600], [2066, 5517, 100]); camera(player, scene, [2064, 5518, 400], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8); };
+    if (text === "We're going to sink!") request.before = () => { camera(player, scene, [2074, 5526, 600], [2066, 5517, 100]); camera(player, scene, [2064, 5518, 400], null, 1); CameraShake.send(player.getPacketSender(), "atmospheric", 1, 0, 10, 8); };
     if (text === "We're going to crash!") request.before = () => camera(player, scene, [2064, 5518, 400], null, 2);
+    const face = voyageFacing(scene, request.step, text);
+    if (face) {
+      const before = request.before;
+      request.before = () => { player.setPositionToFace(face); before?.(); };
+    }
+  }
+
+  /** rev242 capture ticks 3159-3333: the player turns to Ned or Jenkins as each speaks, and to the land ahead. */
+  function voyageFacing(scene, step, text) {
+    if (step?.speaker === "Captain Ned") return scene.ned?.getLocation().clone();
+    if (step?.speaker === "Cabin Boy Jenkins") return scene.jenkins?.getLocation().clone();
+    if (text === "Look! Land ahead!") return scene.sourceTile(2072, 5517);
+    return null;
   }
 
   // ============================================================================
@@ -493,12 +595,12 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
 
     if (npcId === DUKE_HORACIO_NPC_ID) {
-      // Duke's flat page carries the anti-dragon shield conversation (the
-      // Dragon Slayer I page only holds Oziach/Ned/etc. variants). Defer while
-      // Ides of Milk needs its stage-10 permit dialogue; otherwise claim him
-      // while Dragon Slayer still owes the player a shield.
+      // The Dragon Slayer I page's shield conversation is the one live plays (rev242 capture ticks
+      // 2790-2811: "Yes!", "Well, you're braver than I!", "...as important as Falador or Varrock...";
+      // the Duke's own page words five of its lines differently). Defer while Ides of Milk needs its
+      // stage-10 permit dialogue; otherwise claim him while Dragon Slayer still owes a shield.
       if (stage < STAGE_GUILDMASTER || hasItem(player, ITEM.antiDragonShield) || idesNeedsDukePermit(player)) return null;
-      return { page: DUKE_PAGE };
+      return { page: PAGE, variant: DUKE_SHIELD_VARIANT };
     }
 
     if (npcId === OZIACH_NPC_ID) {
@@ -589,6 +691,7 @@ module.exports = function registerDragonSlayerQuest(api) {
         );
       }
       if (value.includes("does not have the key")) return !hasItem(player, ITEM.mazeKey);
+      if (value.includes("free inventory space")) return !hasItem(player, ITEM.mazeKey) && player.getInventory().isFull();
       if (value.includes("key in their key ring")) return false;
       if (value.includes("key in their inventory or bank")) return hasItem(player, ITEM.mazeKey);
       return null;
@@ -654,6 +757,26 @@ module.exports = function registerDragonSlayerQuest(api) {
   // Hooks / choices / chosen conditions that carry state
   // ============================================================================
 
+  /**
+   * The Guildmaster's "shows other options" after an answer (rev242 capture ticks 1141-1756) is not
+   * the menu the question came from: after a map piece it is the other two pieces then the ship, the
+   * breath and "Okay, I'll get going!"; after the ship or the breath, the outer questions but that
+   * one. "What's so special about this dragon?" never comes back.
+   */
+  function guildmasterOtherOptions(notice) {
+    if (notice.npcId !== GUILDMASTER_NPC_ID || notice.via !== "other" || !notice.chosen) return;
+    const options = notice.history.flatMap((menu) => menu.step?.options ?? []);
+    const outer = notice.history.find((menu) =>
+      (menu.step?.options ?? []).some((option) => option.text === GUILDMASTER_MAP_QUESTION))?.step.options;
+    if (!outer) return;
+    const piece = (text) => options.find((option) => option.text === text);
+    const pieces = MAP_PIECE_QUESTIONS.includes(notice.chosen)
+      ? MAP_PIECE_QUESTIONS.filter((text) => text !== notice.chosen).map(piece).filter(Boolean) : [];
+    const topics = outer.filter((option) => option.text !== GUILDMASTER_RETELL && option.text !== notice.chosen
+      && !(pieces.length && option.text === GUILDMASTER_MAP_QUESTION));
+    notice.options = [...pieces, ...topics];
+  }
+
   function handleStartHook({ player, npcId, hook }) {
     if (hook !== START_HOOK || npcId !== GUILDMASTER_NPC_ID) return;
     if (quest.getStage(player) !== STAGE_NOT_STARTED) return;
@@ -692,20 +815,16 @@ module.exports = function registerDragonSlayerQuest(api) {
       return; // leave the transcript's own message to play
     }
 
-    if (npcId === GUILDMASTER_NPC_ID && stepId === "xUz7Ja") {
-      if (!hasItem(player, ITEM.mazeKey) && !player.getInventory().isFull()) {
-        player.getInventory().adds(ITEM.mazeKey, 1);
-      }
-      return;
-    }
+    if (handleMapChestStep(event)) return;
+    const studied = MAP_STUDY.find(piece => piece.step === stepId);
+    if (studied) { event.box = { items: [studied.item] }; return; }
 
-    if (
-      npcId === DUKE_HORACIO_NPC_ID &&
-      (stepId === "LnbjYr" || stepId === "igRDii" || stepId === "if_uB3" || stepId === "emj6I8")
-    ) {
-      if (!hasItem(player, ITEM.antiDragonShield) && !player.getInventory().isFull()) {
-        player.getInventory().adds(ITEM.antiDragonShield, 1);
-      }
+    // The hand-overs are item boxes showing what is given (rev242 capture ticks 1756 and 2808).
+    const handOver = npcId === GUILDMASTER_NPC_ID && stepId === MELZAR_KEY_STEP ? ITEM.mazeKey
+      : npcId === DUKE_HORACIO_NPC_ID && DUKE_SHIELD_STEPS.has(stepId) ? ITEM.antiDragonShield : null;
+    if (handOver !== null) {
+      if (!hasItem(player, handOver) && !player.getInventory().isFull()) player.getInventory().adds(handOver, 1);
+      event.box = { items: [handOver] };
       return;
     }
 
@@ -826,13 +945,21 @@ module.exports = function registerDragonSlayerQuest(api) {
   }
 
   /**
-   * Cross a wall-straight maze door one tile past the edge it blocks. The
-   * use-item walk can leave the player standing on the door tile, and the old
-   * "east of the door" guess then sent them back the way they came; the door's
-   * face (0 west, 1 south, 2 east, 3 north - the blocked edge) says which way
-   * is through. A player already across the door is sent back the other way.
+   * Cross a maze door. Doors.plugin opens it as live does (rev242 capture ticks 2070-2688: a
+   * blocker on the doorway, the open leaf beside it, sound 62, an ordinary walk across and the door
+   * shut two ticks later); `onOpen` (spending a key) runs as it opens, as captured, and returns false
+   * to keep it shut. Without that door, the player is walked one tile past the edge the door blocks:
+   * the door's face (0 west, 1 north, 2 east, 3 south) says which way is through.
    */
-  function crossMazeDoor(player, object, location, onArrive) {
+  function crossMazeDoor(player, object, location, onOpen) {
+    if (doorWalks.has(player)) return;
+    if (object && PASS_THROUGH_DOORS.has(object.getId?.())) {
+      if (onOpen && onOpen() === false) return;
+      const request = { player, object, handled: false };
+      api.emitCustomEvent("door:open", request);
+      if (request.handled) return;
+      onOpen = null;
+    }
     const face = Number(object?.getFace?.() ?? 0) & 0x3;
     const pos = player.getLocation();
     if (face === 0 || face === 2) {
@@ -840,14 +967,14 @@ module.exports = function registerDragonSlayerQuest(api) {
       const acrossX = pos.getX() === location.x
         ? throughX
         : pos.getX() < location.x ? location.x + 1 : location.x - 1;
-      walkAcross(player, new Location(acrossX, location.y, location.z), onArrive);
+      walkAcross(player, new Location(acrossX, location.y, location.z), onOpen);
       return;
     }
     const throughY = face === 1 ? location.y + 1 : location.y - 1;
     const acrossY = pos.getY() === location.y
       ? throughY
       : pos.getY() < location.y ? location.y + 1 : location.y - 1;
-    walkAcross(player, new Location(location.x, acrossY, location.z), onArrive);
+    walkAcross(player, new Location(location.x, acrossY, location.z), onOpen);
   }
 
   /**
@@ -860,13 +987,17 @@ module.exports = function registerDragonSlayerQuest(api) {
    * actions are already refused while a force movement runs; this does not guard
    * against a plugin calling moveTo on the player mid-walk.
    */
+  /** ForceMovement's facing (0 north, 1 east, 2 south, 3 west) for a walk by dx, dy. */
+  function walkDirection(dx, dy) {
+    return dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+  }
+
   function walkAcross(player, to, onArrive) {
     if (actions.has(player) || doorWalks.has(player)) return;
     const from = player.getLocation().clone();
     const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
-    const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
     const ticks = Math.max(1, Math.abs(dx), Math.abs(dy));
-    const movement = new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, direction, DOOR_WALK_ANIMATION);
+    const movement = new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, walkDirection(dx, dy), DOOR_WALK_ANIMATION);
     // Its own token: a short walk must not look like a cutscene or ship repair to the other actions.
     const token = {}; doorWalks.set(player, token);
     player.getMovementQueue().reset(); player.setForceMovement(movement);
@@ -937,6 +1068,9 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);
       return;
     }
+    if (actions.has(player) || doorWalks.has(player)) return;
+    // rev242 capture (20261106T101002) tick 2070: sent on the click, as the walk through starts.
+    player.sendMessage("You use the key and the door opens.");
     crossMazeDoor(player, event.object, at);
   }
 
@@ -946,7 +1080,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     const { player } = event;
     event.handled = true;
     const key = MAZE_KEYS[doorIndex];
-    if (!hasItem(player, key)) { player.sendMessage("The door is locked."); return; }
+    // rev242 capture ticks 2114, 2136, 2556: a maze door without its key.
+    if (!hasItem(player, key)) { player.sendMessage("This door is securely locked."); return; }
     if (actions.has(player)) return;
     const at = plainLocation(event.location ?? event.object?.getLocation?.());
     crossMazeDoor(player, event.object, at, () => {
@@ -985,11 +1120,13 @@ module.exports = function registerDragonSlayerQuest(api) {
     const placement = MELZAR_EXIT_DOORS.find(door =>
       door.x === at.getX() && door.y === at.getY() && door.z === at.getZ());
     if (!placement) return;
+    // Claimed either way: a refused click left unhandled falls to Doors, whose pass-through
+    // family would carry the player back through the one-way door.
+    event.handled = true;
     const pos = event.player.getLocation();
     const dx = pos.getX() - placement.x, dy = pos.getY() - placement.y;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return;
     if (placement.exitX === 1 ? dx >= 0 : dx < 0) return;
-    event.handled = true;
     const location = plainLocation(event.location ?? at);
     crossMazeDoor(event.player, event.object, location);
   }
@@ -1011,22 +1148,98 @@ module.exports = function registerDragonSlayerQuest(api) {
     api.emitCustomEvent("ladders:climbDown", { player: request.player, destination: TILE.melzarBasement.clone() });
   }
 
-  function handleOracleChestClick(event) {
-    const { player } = event;
-    if (oracleState(player) < 3 || ownsMapPiece(player, ITEM.mapOracle)) {
-      player.sendMessage("You find nothing useful.");
-      return;
-    }
-    if (giveItem(player, ITEM.mapOracle)) player.sendMessage("You find a piece of an old map.");
+  function studyMapPiece(event) {
+    const piece = MAP_STUDY.find(entry => entry.item === event.itemId);
+    if (!piece) return false;
+    startTranscript(api, event.player, 0, PAGE, piece.variant);
   }
 
-  function handleMelzarChestClick(event) {
-    const { player } = event;
-    if (quest.getStage(player) < STAGE_OZIACH || ownsMapPiece(player, ITEM.mapMelzar)) {
-      player.sendMessage("You find nothing in the chest.");
-      return;
+  /** The chest a player last opened or searched, for the transcript steps that finish it (replaced, never a lock). */
+  const chestInUse = new WeakMap();
+
+  function swapChest(object, nextId) {
+    // Another player may have opened or shut it meanwhile (the lid's inscription takes a while): leave it.
+    if (api.core.MapObjects?.get?.(nextId, object.getLocation(), object.getPrivateArea?.() ?? null)) return object;
+    const objects = api.getObjectManager();
+    objects.deregister(object, true);
+    const next = new GameObject(nextId, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null);
+    objects.register(next, true);
+    return next;
+  }
+
+  function openChest(player, object, openId) {
+    player.performAnimation(new Animation(CHEST_OPEN_ANIMATION));
+    player.getPacketSender().sendSoundEffect(CHEST_OPEN_SOUND, 1, 0);
+    swapChest(object, openId);
+  }
+
+  function shutChest(player, object, shutId) {
+    swapChest(object, shutId);
+    player.getPacketSender().sendSoundEffect(CHEST_CLOSE_SOUND, 1, 0);
+  }
+
+  const needsOracleMap = (player) => oracleState(player) >= 3 && !ownsMapPiece(player, ITEM.mapOracle);
+  const needsMelzarMap = (player) => quest.getStage(player) >= STAGE_OZIACH && !ownsMapPiece(player, ITEM.mapMelzar);
+
+  /** Open: while the map is still inside, the lid's inscription plays first and the chest opens after it. */
+  function handleOracleChestOpen(event) {
+    const { player, object } = event;
+    if (!object) return;
+    if (!needsOracleMap(player)) { openChest(player, object, LOC.oracleChestOpen); return; }
+    chestInUse.set(player, object);
+    startTranscript(api, player, 0, PAGE, MAP_CHESTS.oracle.variant, steps => steps.filter(step => ORACLE_LID_STEPS.has(step.id)));
+  }
+
+  function handleMelzarChestOpen(event) {
+    const { player, object } = event;
+    if (!object) return;
+    player.sendMessage("You open the chest.");
+    openChest(player, object, LOC.melzarChestOpen);
+  }
+
+  /** Search: the map piece in an item box as the lid shuts, or the old reply when there is nothing to find. */
+  function searchMapChest(event, chest, needsMap, map, nothing) {
+    const { player, object } = event;
+    if (!object) return;
+    if (!needsMap(player)) { player.sendMessage(nothing); return; }
+    if (player.getInventory().isFull()) { giveItem(player, map); return; }
+    chestInUse.set(player, object);
+    startTranscript(api, player, 0, PAGE, chest.variant, steps => steps.filter(step => step.id === chest.found));
+  }
+
+  function handleOracleChestSearch(event) {
+    searchMapChest(event, MAP_CHESTS.oracle, needsOracleMap, ITEM.mapOracle, "You find nothing useful.");
+  }
+
+  function handleMelzarChestSearch(event) {
+    searchMapChest(event, MAP_CHESTS.melzar, needsMelzarMap, ITEM.mapMelzar, "You find nothing in the chest.");
+  }
+
+  function handleMapChestClose(event) {
+    const { player, object, objectId } = event;
+    if (!object) return;
+    shutChest(player, object, objectId === LOC.oracleChestOpen ? LOC.oracleChestShut : LOC.melzarChestShut);
+  }
+
+  /** The chest transcripts' own steps: lid inscription boxes, then the open or the found map. */
+  function handleMapChestStep(event) {
+    const { player, stepId } = event;
+    if (ORACLE_LID_STEPS.has(stepId)) {
+      event.box = { statement: true };
+      if (stepId === MAP_CHESTS.oracle.lidLast) event.after = () => {
+        const object = chestInUse.get(player); chestInUse.delete(player);
+        if (object) openChest(player, object, LOC.oracleChestOpen);
+      };
+      return true;
     }
-    if (giveItem(player, ITEM.mapMelzar)) player.sendMessage("You find a piece of an old map.");
+    const chest = stepId === MAP_CHESTS.oracle.found ? { map: ITEM.mapOracle, shut: LOC.oracleChestShut }
+      : stepId === MAP_CHESTS.melzar.found ? { map: ITEM.mapMelzar, shut: LOC.melzarChestShut } : null;
+    if (!chest) return false;
+    const object = chestInUse.get(player); chestInUse.delete(player);
+    if (!giveItem(player, chest.map)) { event.handled = true; event.end = true; return true; }
+    event.box = { items: [chest.map] };
+    if (object) shutChest(player, object, chest.shut);
+    return true;
   }
 
   function handleCrandorOpeningClick({player}) {
@@ -1034,12 +1247,20 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (saved(player, ELVARG_SEEN_ATTRIBUTE)) { player.moveTo(TILE.crandorLair.clone()); return; }
     const scene = new VoyageScene(player, true); scene.returnTile = TILE.crandorLair.clone(); scenes.set(player, scene);
     freeze(player); fade(player, true); player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1);
-    for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+    for (let axis = 0; axis < 5; axis++) CameraShake.send(player.getPacketSender(), "atmospheric", axis, 0);
+    // rev242 capture ticks 3420-3440: the player waits out of shot in the scene's south-west corner (+3);
+    // Elvarg appears facing west (+4), seven footsteps sound (+9) and she walks five tiles west (+10..+14).
+    later(scene, 3, () => { player.moveTo(scene.sourceTile(2840, 9624)); scene.enter(player); });
     later(scene, 4, () => {
-      player.moveTo(scene.sourceTile(2833, 9656)); scene.enter(player); sceneActor(scene, ELVARG_INTRO_NPC_ID, 2854, 9638);
+      scene.elvarg = sceneActor(scene, ELVARG_INTRO_NPC_ID, 2854, 9638);
+      scene.elvarg?.setPositionToFace(scene.sourceTile(2840, 9639));
       camera(player, scene, [2848, 9639, 475], [2856, 9650, 150], 232, true); fade(player, false);
     });
     later(scene, 7, () => camera(player, scene, [2848, 9639, 250], [2866, 9640, 150], 2, true));
+    later(scene, 9, () => {
+      for (let step = 1; step <= ELVARG_INTRO_FOOTSTEPS; step++) player.getPacketSender().sendSoundEffect(ELVARG_FOOTSTEP_SOUND, 1, 25 * step);
+      scene.elvarg?.getMovementQueue().addSteps(scene.sourceTile(2849, 9638));
+    });
     later(scene, 13, () => fade(player, true));
     later(scene, 16, () => {
       scene.cameraReleased = true;
@@ -1103,6 +1324,10 @@ module.exports = function registerDragonSlayerQuest(api) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
+    if (player.getAttribute(ATTR_SHORTCUT) !== true) {
+      // rev242 capture tick 3520: the first crossing only, with varbit 3741 set.
+      player.sendMessage("You found a secret door.<br>You remember where the secret door is for future reference.");
+    }
     openCrandorShortcut(player);
     api.emitCustomEvent("dragon-slayer:crandor-wall", { player });
     // Doors swings the wall open as captured (RSProx 2951), walks the player across and shuts it.
@@ -1131,17 +1356,205 @@ module.exports = function registerDragonSlayerQuest(api) {
     const entering = player.getLocation().getX() < 2846;
     if (entering && quest.getStage(player) < STAGE_OZIACH) { player.sendMessage("You have no reason to enter the dragon's lair."); return; }
     if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:false});
-    const start = new Location(entering ? 2845 : 2847, 9636, 0), end = new Location(entering ? 2847 : 2845, 9636, 0);
+    // rev242 capture ticks 3488, 3493, 3547: every crossing, on the filterable spam channel.
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb over the low wall.");
+    // The wall is two tiles long (rev242: clicked at 2846,9636 and 2846,9635); cross on the clicked row.
+    const y = plainLocation(event.location ?? event.object?.getLocation?.())?.y ?? CRANDOR_WALL_Y;
+    const start = new Location(entering ? 2845 : 2847, y, 0), end = new Location(entering ? 2847 : 2845, y, 0);
     const token = {}; actions.set(player, token);
     player.moveTo(start); player.getMovementQueue().reset().setBlockMovement(true);
     const movement = new ForceMovement(start, new Location(end.getX() - start.getX(), 0), 30, 94, entering ? 1 : 3, 839);
     player.setForceMovement(movement); player.performAnimation(new Animation(839, 30));
+    // Live moves the player as the jump starts, and Elvarg breathes the next tick (rev242 ticks 3488-3489).
+    if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) later(token, 1, () => {
+      if (actions.get(player) === token) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:true, entering:true});
+    });
     later(token, 4, () => {
       if (actions.get(player) !== token) return;
       actions.delete(player); player.setForceMovement(null); player.moveTo(end); player.getMovementQueue().setBlockMovement(false);
       if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:true});
       else if (!entering) api.emitCustomEvent("elvarg:leave", {player});
     });
+  }
+
+  // ============================================================================
+  // Melzar's Maze
+  // ============================================================================
+
+  /**
+   * All three floors play "The Maze" (rev242 capture); the map's own region track there is Emperor.
+   * The basement is in it too, so Melzar's shouts run only for actors in the maze.
+   */
+  function createMelzarMazeArea() {
+    class MelzarMazeArea extends Area {
+      getMusicTrack() { return MELZAR_MAZE_TRACK; }
+      process(mobile) { shoutInFight(mobile); }
+    }
+    const { minX, maxX, minY, maxY, floors } = MELZAR_MAZE_BOUNDS;
+    const basement = MELZAR_BASEMENT_BOUNDS;
+    return new MelzarMazeArea([
+      ...floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)),
+      new Boundary(basement.minX, basement.maxX, basement.minY, basement.maxY, basement.z),
+    ]);
+  }
+
+  let melzarShouts = null;
+  /** The transcript's four overhead lines for the fight, read once. */
+  function melzarFightLines() {
+    melzarShouts ??= (loadTranscripts(api)?.[PAGE]?.variants?.[MELZAR_FIGHT_VARIANT] ?? [])
+      .flatMap((step) => step.options ?? [])
+      .flatMap((option) => option.steps ?? [])
+      .filter((step) => step.presentation === "overhead" && typeof step.text === "string")
+      .map((step) => step.text);
+    return melzarShouts;
+  }
+
+  function shoutInFight(mobile) {
+    if (!mobile.isNpc?.() || mobile.getId() !== MELZAR_NPC_ID) return;
+    if (mobile.getHitpoints() <= 0 || !mobile.getCombat().getTarget()) return;
+    const lines = melzarFightLines();
+    if (lines.length === 0 || Math.random() >= MELZAR_SHOUT_CHANCE) return;
+    mobile.forceChat(lines[Math.floor(Math.random() * lines.length)]);
+  }
+
+  // rev242 capture ticks 2589, 2593, 2597: cast animation, projectile, and its start and end cycles
+  // from one tile (10 cycles a tile further, as Fire Strike's 51 -> 101 at five tiles shows).
+  const MELZAR_SPELLS = [
+    { base: CombatSpells.FIRE_STRIKE, anim: 9144, projectile: 100, start: 51, endAtOneTile: 61 },
+    { base: CombatSpells.CURSE, anim: 11428, projectile: 109, start: 51, endAtOneTile: 90 },
+    { base: CombatSpells.WEAKEN, anim: 11426, projectile: 106, start: 44, endAtOneTile: 60 },
+  ].map(({ base, anim, projectile, start, endAtOneTile }) => {
+    const spell = Object.create(base);
+    spell.castAnimation = () => new Animation(anim);
+    spell.arrival = (source, target) => Projectile.arrivalCycles(source, target, endAtOneTile - 10);
+    spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, projectile, start,
+      spell.arrival(source, target), 43, 31);
+    spell.maximumHit = () => Math.min(MELZAR_MAX_HIT, base.maximumHit());
+    return spell;
+  });
+
+  /**
+   * One attack's copy of `spell` whose hit (and Curse/Weaken effect) lands as its own projectile does.
+   * CombatSpell.hitDelay() takes no target, and without it MagicCombatMethod times an NPC's hit to the
+   * legacy 46 + 10 a tile, a tick before Curse's captured 90-cycle flight from one tile.
+   */
+  function castAt(spell, npc, target) {
+    const cast = Object.create(spell);
+    const ticks = Projectile.ticksToLand(spell.arrival(npc, target));
+    cast.hitDelay = () => ticks;
+    return cast;
+  }
+
+  const [MELZAR_FIRE_STRIKE, MELZAR_CURSE, MELZAR_WEAKEN] = MELZAR_SPELLS;
+  // LostCity's two tables, on a 0-127 roll: the first row the roll is under whose stat (if any) the player
+  // still has at full wins. Beside the player the rest is a kick; at range it is walking in (its Zap at
+  // 24-31, seen only when he auto-retaliates, is left out and walks in too).
+  const MELZAR_BESIDE = [
+    { under: 20, spell: MELZAR_WEAKEN, unlessLowered: Skill.STRENGTH },
+    { under: 40, spell: MELZAR_CURSE, unlessLowered: Skill.DEFENCE },
+    { under: 60, spell: MELZAR_FIRE_STRIKE },
+    { under: 80, cabbage: true },
+  ];
+  const MELZAR_AT_RANGE = [
+    { under: 8, spell: MELZAR_WEAKEN, unlessLowered: Skill.STRENGTH },
+    { under: 16, spell: MELZAR_FIRE_STRIKE },
+    { under: 24, cabbage: true },
+  ];
+  /** Melzar's next attack and who it is for, rolled when he picks one and kept until it is made, so his reach follows it. */
+  const melzarPlans = new WeakMap();
+
+  function lowered(target, skill) {
+    if (!target?.isPlayer?.()) return false;
+    const skills = target.getSkillManager();
+    return skills.getCurrentLevel(skill) < skills.getMaxLevel(skill);
+  }
+
+  function rollMelzarAttack(target, table, otherwise) {
+    const roll = Math.floor(Math.random() * MELZAR_ROLL);
+    return table.find((row) => roll < row.under && !(row.unlessLowered && lowered(target, row.unlessLowered))) ?? otherwise;
+  }
+
+  function melzarPlan(npc) {
+    const target = npc.getCombat().getTarget();
+    const beside = target != null && npc.calculateDistance(target) <= 1;
+    const kept = melzarPlans.get(npc);
+    // A plan outlives its attack only for the same target: a fight that ended without one (a logout, a lost
+    // target) rolls afresh. Walked in, he rolls beside the player, before anything reads his speed.
+    if (kept && kept.target === target && !(kept.plan.approach && beside)) return kept.plan;
+    const plan = beside ? rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }) : rollMelzarAttack(target, MELZAR_AT_RANGE, { approach: true });
+    melzarPlans.set(npc, { plan, target });
+    return plan;
+  }
+
+  /** A cabbage on a free tile near him in a puff of smoke; it deals no damage (LostCity's npc_cabbage_attack). */
+  function castCabbage(npc, target) {
+    npc.performAnimation(new Animation(MELZAR_CABBAGE_CAST));
+    npc.performGraphic(new Graphic(MELZAR_CABBAGE_CAST_GRAPHIC, 0, MELZAR_CABBAGE_CAST_HEIGHT));
+    // LostCity: "in osrs, the player stops attacking him".
+    if (target?.isPlayer?.() && target.getCombat().getTarget() === npc) target.getCombat().reset();
+    later(npc, 1, () => {
+      const tile = cabbageTile(npc);
+      if (!tile || !target?.isPlayer?.() || !itemOnGroundManager) return;
+      itemOnGroundManager.registerLocation(target, new Item(ITEM.cabbage, 1), tile, null,
+        { public: true, despawnDelay: MELZAR_CABBAGE_TICKS });
+      target.getPacketSender().sendGlobalGraphic(new Graphic(MELZAR_CABBAGE_SMOKE, 0, MELZAR_CABBAGE_SMOKE_HEIGHT), tile);
+    });
+  }
+
+  /**
+   * A random tile 1-7 from him that he could walk to (LostCity: map_findsquare with lineofwalk; the Wiki:
+   * "a random spot in the room"). A walk outward from his tile that no wall or closed door crosses keeps it
+   * in his own room. Ours: reachable by any path inside that square, which is a little wider than a straight
+   * line of walk.
+   */
+  function cabbageTile(npc) {
+    const regions = api.core.RegionManager;
+    const at = npc.getLocation(), z = at.getZ(), x0 = at.getX(), y0 = at.getY();
+    const steps = [[0, 1, "blockedNorth"], [1, 0, "blockedEast"], [0, -1, "blockedSouth"], [-1, 0, "blockedWest"]];
+    const seen = new Set([`${x0},${y0}`]), queue = [at], tiles = [];
+    while (queue.length) {
+      const here = queue.shift();
+      for (const [dx, dy, blocked] of steps) {
+        const x = here.getX() + dx, y = here.getY() + dy, key = `${x},${y}`;
+        if (seen.has(key) || Math.max(Math.abs(x - x0), Math.abs(y - y0)) > MELZAR_CABBAGE_MAX_TILES) continue;
+        if (regions?.[blocked]?.(here, null)) continue;
+        seen.add(key);
+        const tile = new Location(x, y, z);
+        queue.push(tile);
+        if (Math.max(Math.abs(x - x0), Math.abs(y - y0)) >= MELZAR_CABBAGE_MIN_TILES) tiles.push(tile);
+      }
+    }
+    return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : null;
+  }
+
+  /**
+   * Fire Strike, Curse, Weaken, the cabbage spell or (beside the player) a kick, on LostCity's tables (above).
+   * At range most rolls walk him in instead, so his reach follows the attack he has picked. Built for each attack.
+   */
+  class MelzarCombat extends MagicCombatMethod {
+    constructor(npc) { super(); this.npc = npc ?? null; }
+    plan() { return this.npc ? melzarPlan(this.npc) : { kick: true }; }
+    start(npc, target) {
+      // An approach is rolled again once beside the player (melzarPlan), so this is the attack made.
+      let plan = melzarPlan(npc);
+      if (plan.approach) plan = { kick: true }; // in reach but not beside (a diagonal past a corner): melee anyway
+      this.made = plan;
+      if (plan.kick) { npc.performAnimation(new Animation(MELZAR_KICK)); return; }
+      if (plan.cabbage) { castCabbage(npc, target); return; }
+      npc.getCombat().setCastSpell(castAt(plan.spell, npc, target));
+      super.start(npc, target);
+    }
+    current() { return this.made ?? this.plan(); }
+    type() { const plan = this.current(); return plan.kick || plan.approach ? CombatType.MELEE : super.type(); }
+    attackDistance(npc) { const plan = this.current(); return plan.kick || plan.approach ? 1 : super.attackDistance(npc); }
+    hits(npc, target) {
+      const plan = this.current();
+      if (plan.kick) return [new PendingHit(npc, target, this, 1)];
+      if (plan.cabbage) return [];
+      return super.hits(npc, target);
+    }
+    attackSpeed() { return this.current().cabbage ? MELZAR_CABBAGE_SPEED : MELZAR_ATTACK_SPEED; }
+    finished(npc) { melzarPlans.delete(npc); npc.getCombat().setCastSpell(null); }
   }
 
   // ============================================================================
@@ -1161,10 +1574,25 @@ module.exports = function registerDragonSlayerQuest(api) {
       const token = {}; actions.set(killer, token);
       killer.setAttribute(ELVARG_KILLED_ATTRIBUTE, 1);
       killer.getMovementQueue().reset().setBlockMovement(true); killer.setUntargetable(true);
+      // rev242 capture ticks 3606-3617 (this event is her removal, 5 ticks after the death animation): the
+      // player is walked in one move to the tile west of her head (+1), turns to it (+4) and cuts (+5).
+      // Her body against the lair's west edge leaves no tile west of her head; then the tile past her
+      // east side (ours: the capture only shows her away from the wall).
+      const cutX = at.getX() - 1 >= LAIR_WEST_X ? at.getX() - 1 : at.getX() + ELVARG_FOOTPRINT;
+      const cutTile = new Location(cutX, at.getY() + 1, at.getZ());
       later(token, 1, () => {
         killer.getPacketSender().sendConfig(VARP_DRAGON_SLAYER, 9);
+        if (actions.get(killer) === token) walkToHeadCut(killer, cutTile);
       });
-      later(token, 5, () => { if (actions.get(killer) === token) { killer.moveTo(new Location(at.getX(), at.getY() - 1, at.getZ())); killer.performAnimation(new Animation(6654)); } });
+      later(token, 4, () => {
+        if (actions.get(killer) !== token) return;
+        landHeadCut(killer, cutTile); killer.setPositionToFace(new Location(at.getX(), at.getY() + 1, at.getZ()));
+      });
+      later(token, 5, () => {
+        if (actions.get(killer) !== token) return;
+        landHeadCut(killer, cutTile);
+        killer.performAnimation(new Animation(6654)); killer.getPacketSender().sendSoundEffect(HEAD_CUT_SOUND, 1, 35);
+      });
       later(token, 11, () => {
         if (actions.get(killer) !== token) return;
         api.getObjectManager().deregister(body, true);
@@ -1176,20 +1604,45 @@ module.exports = function registerDragonSlayerQuest(api) {
           else giveItem(killer, ITEM.elvargsHead);
         }
         killer.sendMessage("You cut off Elvarg's head as proof of your victory!");
-        killer.getPacketSender().sendJingle(267, 0);
+        killer.getPacketSender().sendSoundEffect(HEAD_OFF_SOUND, 1, 0).sendSong(SILENCE_TRACK).sendJingle(267, 0);
         // Seq 6655 is 10.0 ticks in the cache (frame delays summed, 30 client ticks a tick): the player is held to its end. Cache length, ours.
         later(token, 10, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
       });
       return;
     }
 
-    if (npcId === WORMBRAIN_NPC_ID) {
-      if (stage >= STAGE_OZIACH && askedAbout(killer, INSTRUCTION.wormbrain) && !ownsMapPiece(killer, ITEM.mapWormbrain)) {
-        dropItem(killer, ITEM.mapWormbrain, event.location);
-        killer.sendMessage("Wormbrain drops a map piece on the floor.");
-      }
-      return;
-    }
+    // His table's guaranteed map piece is the drop (withholdWormbrainMap keeps it for those owed one).
+    if (npcId === WORMBRAIN_NPC_ID && owedWormbrainMap(killer)) killer.sendMessage("Wormbrain drops a map piece on the floor.");
+  }
+
+  const owedWormbrainMap = (player) =>
+    quest.getStage(player) >= STAGE_OZIACH && askedAbout(player, INSTRUCTION.wormbrain) && !ownsMapPiece(player, ITEM.mapWormbrain);
+
+  /** Wormbrain's table always lists his map piece (npc-drops.json); it stays off the floor for anyone not owed one. */
+  function withholdWormbrainMap({ player, npcId, context }) {
+    if (npcId !== WORMBRAIN_NPC_ID || !context) return;
+    if (!player || !owedWormbrainMap(player)) context.handledItemIds.add(ITEM.mapWormbrain);
+  }
+
+  /**
+   * The door walks' ForceMovement and walk animation, from wherever the kill left them. The capture's
+   * 3 tiles took the 3 ticks before the turn; a longer way is fitted into those ticks, and one
+   * beyond HEAD_CUT_WALK_MAX_TILES or off the plane is left to landHeadCut (ours).
+   */
+  function walkToHeadCut(player, to) {
+    const from = player.getLocation().clone();
+    const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
+    const tiles = Math.max(Math.abs(dx), Math.abs(dy));
+    if (tiles === 0 || tiles > HEAD_CUT_WALK_MAX_TILES || from.getZ() !== to.getZ()) return;
+    const ticks = Math.min(tiles, HEAD_CUT_WALK_TICKS);
+    player.setForceMovement(new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, walkDirection(dx, dy), DOOR_WALK_ANIMATION));
+  }
+
+  /** Puts the player on the cutting tile once the walk is played out (or cut short by a long one). */
+  function landHeadCut(player, to) {
+    if (player.getForceMovement()) player.setForceMovement(null);
+    const at = player.getLocation();
+    if (at.getX() !== to.getX() || at.getY() !== to.getY() || at.getZ() !== to.getZ()) player.moveTo(to.clone());
   }
 
   function repairShip(player) {
@@ -1255,6 +1708,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   });
 
   for (const key of [OFFERINGS_ATTRIBUTE, INSTRUCTIONS_ATTRIBUTE, NED_KNOWS_ATTRIBUTE, ELVARG_SEEN_ATTRIBUTE, ELVARG_KILLED_ATTRIBUTE, EXPLAINED_ATTRIBUTE]) api.persistAttribute(key, 0);
+  api.registerArea(createMelzarMazeArea());
+  api.registerNpcCombatMethodProvider(MELZAR_NPC_ID, MelzarCombat, { singleton: false });
   api.persistAttribute(ATTR_ORACLE, 0);
   api.persistAttribute(ATTR_NED_ASKED);
   api.persistAttribute(ATTR_OZIACH_CONGRATS);
@@ -1270,6 +1725,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onPlayerLogout(cleanup);
   api.onPlayerDisconnect(cleanup);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("npc-dialogue:menu", guildmasterOtherOptions);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onObjectFirstClick(LOC.shipHole, handleShipHoleClick);
@@ -1282,11 +1738,16 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onObjectFirstClick(LOC.melzarEntrance, handleMelzarEntranceClick);
   api.onObjectFirstClick(LOC.melzarExitDoor, handleMelzarExitDoorClick);
   api.onObjectFirstClick(MAZE_DOORS, handleMazeDoorClick);
-  api.onObjectFirstClick(LOC.oracleChest, handleOracleChestClick);
-  api.onObjectFirstClick(LOC.melzarChest, handleMelzarChestClick);
+  api.onItemAction("Map part", { Study: studyMapPiece });
+  api.onObjectFirstClick(LOC.oracleChestShut, handleOracleChestOpen);
+  api.onObjectFirstClick(LOC.oracleChestOpen, handleOracleChestSearch);
+  api.onObjectFirstClick(LOC.melzarChestShut, handleMelzarChestOpen);
+  api.onObjectFirstClick(LOC.melzarChestOpen, handleMelzarChestSearch);
+  api.onObjectSecondClick([LOC.oracleChestOpen, LOC.melzarChestOpen], handleMapChestClose);
   api.onObjectFirstClick(LOC.crandorOpening, handleCrandorOpeningClick);
   api.onObjectFirstClick(LOC.crandorRope, handleCrandorRopeClick);
   api.onObjectFirstClick(LOC.crandorWall, handleCrandorWallClick);
   api.onObjectFirstClick(LOC.crandorShortcut, handleCrandorShortcutClick);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:context", withholdWormbrainMap);
 };

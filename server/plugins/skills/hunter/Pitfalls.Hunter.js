@@ -21,6 +21,7 @@ const Traps = require("./Traps.Hunter");
  * - That creature won't use that pit again, even teased afresh, until it is caught: the player still jumps and
  *   three ticks later gets "The larupia won't jump the same pit twice in a row." (larupia ticks 438, 471).
  */
+// Teased creatures by NPC: a player may have several chasing at once (larupia capture ticks 370 and 399).
 const teased = new Map();
 const lastPit = new WeakMap();
 const runs = new Map();
@@ -56,6 +57,11 @@ const LEAP = { CAT: 5231, ANTELOPE: 10929 };
 // range (a larupia 12 tiles behind kept following).
 const CHASE_TICKS = 100;
 const CHASE_RANGE = 16;
+// The bite (larupia capture): hunter_big_cat_bite and panther_attack three ticks after the tease, then every four
+// ticks while beside the player, who blocks with 511 on a miss or one of human_hit_1-4 (518-521) on a hit.
+const BITE = { animation: 5228, sound: 666, first: 3, every: 4, block: 511, hits: [518, 519, 520, 521], soundDelay: 20 };
+// The spawn radius the engine keeps NPCs to; lifted while teased so its walk home doesn't fight the chase.
+const CHASE_RADIUS = 64;
 const NO_STICK = "I don't want to lose a finger by poking it. Maybe I should get a professional teasing implement instead.";
 
 function build({ player, object }) {
@@ -69,26 +75,39 @@ function tease({ player, npc, npcId }) {
   const creature = H.data.creatures.find(c => c.npc === npcId && c.trap === "pit");
   if (!creature) return false;
   if (!hasTool(player, H.core.ItemIdentifiers.TEASING_STICK) && !hasTool(player, H.core.ItemIdentifiers.HUNTERS_SPEAR)) { player.sendMessage(NO_STICK); return true; }
-  if (!requireLevel(player, creature.level) || !nearby(player, npc) || !available(npc) || teased.has(player)) return true;
-  const state = { player, npc, creature, due: H.tick + CHASE_TICKS, attack: H.tick + 4 };
+  if (!requireLevel(player, creature.level) || !nearby(player, npc) || !available(npc)) return true;
+  const state = { player, npc, creature, due: H.tick + CHASE_TICKS, attack: H.tick + BITE.first, radius: null };
   if (begin(player, 1, ANIM.TEASE, () => {
     if (!available(npc) || !nearby(player, npc) || !requireLevel(player, creature.level)) return;
-    H.reserved.set(npc, state); teased.set(player, state);
+    H.reserved.set(npc, state); teased.set(npc, state);
+    const coordinator = npc.getMovementCoordinator?.();
+    if (coordinator) { state.radius = coordinator.getRadius(); coordinator.setRadius(Math.max(state.radius, CHASE_RADIUS)); }
     npc.getMovementQueue().reset();
     npc.setFollowing(player);
   })) player.getPacketSender().sendSound(TEASE_SOUND, 1, 0);
   return true;
 }
 
-function clear({ player }) {
-  const state = teased.get(player);
-  if (!state) return;
+/** The player's teased creatures. */
+function chasing(player) {
+  return [...teased.values()].filter(state => state.player === player);
+}
+
+/** Ends one creature's chase: it stops following and the engine walks it home again. */
+function release(state) {
+  if (teased.get(state.npc) !== state) return;
+  teased.delete(state.npc);
+  if (state.radius != null) state.npc.getMovementCoordinator?.()?.setRadius(state.radius);
   const run = runs.get(state.npc);
   if (run?.kind === "leap") land(state.npc, run);
-  teased.delete(player);
   if (H.reserved.get(state.npc) === state) H.reserved.delete(state.npc);
+  if (runs.has(state.npc)) return;
   state.npc.getMovementQueue().resetFollow();
   state.npc.getMovementQueue().reset();
+}
+
+function clear({ player }) {
+  for (const state of chasing(player)) release(state);
 }
 
 /** The pit's footprint: the base loc's tiles, turned with its rotation. */
@@ -150,8 +169,10 @@ function jump({ player, object }) {
   const trap = Traps.owned(player, object);
   if (!trap || trap.kind !== "pit") return false;
   if (!nearby(player, object, 3) || trap.state !== "idle") return true;
-  const state = teased.get(player);
-  if (state && runs.has(state.npc)) return true;
+  // The teased creature nearest the pit is the one that follows the player over it.
+  const near = () => chasing(player).filter(s => !runs.has(s.npc))
+    .sort((a, b) => distance(a.npc.getLocation(), center(trap)) - distance(b.npc.getLocation(), center(trap)))[0];
+  const state = near();
   // Ours: no capture shows a creature jumped at another creature's pit.
   if (state && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(state.creature.caught)) {
     player.sendMessage("Lure this creature across a different pit."); return true;
@@ -164,15 +185,10 @@ function jump({ player, object }) {
     player.setForceMovement(null);
     if (!H.traps.has(trap) || trap.state !== "idle") return;
     player.moveTo(destination);
-    if (!state || teased.get(player) !== state || runs.has(state.npc) || distance(state.npc.getLocation(), center(trap)) > 5) return;
-    if (lastPit.get(state.npc) === trap.base) {
-      const text = `The ${shortName(state)} won't jump the same pit twice in a row.`;
-      later.push({ due: jumpedAt + REFUSAL_TICKS, run: () => { if (player.isRegistered()) player.sendMessage(text); } });
-      return;
-    }
-    if (!requireLevel(player, state.creature.level)) return;
-    const success = chance(player, state.creature, hasTool(player, H.core.ItemIdentifiers.HUNTERS_SPEAR) ? 0.05 : 0);
-    run(state, trap, dir, success, jumpedAt);
+    const follower = near();
+    if (!follower || distance(follower.npc.getLocation(), center(trap)) > 5) return;
+    if (follower !== state && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(follower.creature.caught)) return;
+    jumpWith(follower, player, trap, dir, jumpedAt);
   }, () => player.setForceMovement(null));
   if (started) {
     pitSound(trap, JUMP_SOUND, from);
@@ -181,6 +197,18 @@ function jump({ player, object }) {
     player.setForceMovement(new H.core.ForceMovement(from.clone(), delta, 0, 60, dir, ANIM.JUMP));
   }
   return true;
+}
+
+/** The creature's answer to the jump: refusing a pit it has leapt, or running over it to a catch or a leap. */
+function jumpWith(state, player, trap, dir, jumpedAt) {
+  if (lastPit.get(state.npc) === trap.base) {
+    const text = `The ${shortName(state)} won't jump the same pit twice in a row.`;
+    later.push({ due: jumpedAt + REFUSAL_TICKS, run: () => { if (player.isRegistered()) player.sendMessage(text); } });
+    return;
+  }
+  if (!requireLevel(player, state.creature.level)) return;
+  const success = chance(player, state.creature, hasTool(player, H.core.ItemIdentifiers.HUNTERS_SPEAR) ? 0.05 : 0);
+  run(state, trap, dir, success, jumpedAt);
 }
 
 /** "larupia" from "Spined larupia". Ours for the other creatures: only the larupia's line is captured. */
@@ -216,7 +244,8 @@ function run(state, trap, dir, success, jumpedAt) {
   queue.setBlockMovement(true);
   if (success) {
     // The creature is the pit's now; the chase ends but it stays reserved until it falls.
-    teased.delete(state.player);
+    release(state);
+    H.reserved.set(npc, state);
     lastPit.delete(npc);
     trap.state = "closing";
     trap.expires = Math.max(trap.expires, jumpedAt + fallAt + FULL_AFTER_FALL + 2);
@@ -271,8 +300,11 @@ function leap(npc, r) {
   npc.setPositionToFace(r.landing);
   const at = npc.getLocation(), [dx, dy] = STEPS[r.dir], far = r.size - 1;
   const graphics = Object.entries(LEAP_GRAPHICS).find(([key]) => H.core.NpcIdentifiers[key] === npc.getId())?.[1] ?? [];
-  // proj1 from the creature's far corner, proj2 from its own tile, both four tiles across (1108 tick 21492).
-  const starts = [at.clone().add(far, far), at.clone()];
+  // The two halves start on opposite corners of the creature, turned with the leap: heading north proj1 is on
+  // its north-east tile and proj2 its south-west (1108 tick 21492), heading east south-east and north-west
+  // (larupia tick 427). Both fly four tiles across.
+  const corners = [[[1, 1], [0, 0]], [[1, 0], [0, 1]], [[0, 0], [1, 1]], [[0, 1], [1, 0]]][r.dir];
+  const starts = corners.map(([cx, cy]) => at.clone().add(cx * far, cy * far));
   for (const viewer of viewers(r.state.player, r.trap)) {
     graphics.forEach((graphic, i) => viewer.getPacketSender().sendProjectile(starts[i], starts[i].clone().add(dx * 4, dy * 4),
       0, 90, graphic, 0, 0, null, 53, 0, 0));
@@ -328,7 +360,7 @@ function land(npc, r) {
   npc.exactMove(r.landing, { startCycles: 0, endCycles: 1 });
   if (r.state.player.isRegistered()) knockBack(r.state.player, r);
   npc.getMovementQueue().setBlockMovement(r.blocked);
-  if (teased.get(r.state.player) === r.state) npc.setFollowing(r.state.player);
+  if (teased.get(npc) === r.state) npc.setFollowing(r.state.player);
 }
 
 function pitSound(trap, soundId, at = center(trap)) {
@@ -338,23 +370,45 @@ function pitSound(trap, soundId, at = center(trap)) {
 function process() {
   for (const [npc, r] of runs) advance(npc, r);
   for (let i = later.length - 1; i >= 0; i--) if (H.tick >= later[i].due) later.splice(i, 1)[0].run();
-  for (const [player, state] of teased) {
-    if (runs.has(state.npc)) continue;
-    if (H.tick >= state.due || !state.npc.isRegistered() || !state.npc.isVisible() || !player.isRegistered()
-      || !nearby(player, state.npc, CHASE_RANGE)) { clear({ player }); continue; }
-    if (state.npc.getFollowing() !== player) state.npc.setFollowing(player);
-    if (H.tick >= state.attack && nearby(player, state.npc, 1) && !player.getForceMovement()) {
-      state.attack = H.tick + 4;
-      const protectedMelee = H.core.PrayerHandler.isActivated(player, H.core.PrayerHandler.PROTECT_FROM_MELEE);
-      if (!protectedMelee) {
-        const I = H.core.ItemIdentifiers;
-        const gear = [[I.KYATT_HAT,I.KYATT_TOP,I.KYATT_LEGS,0.4],[I.GRAAHK_HEADDRESS,I.GRAAHK_TOP,I.GRAAHK_LEGS,0.6],[I.LARUPIA_HAT,I.LARUPIA_TOP,I.LARUPIA_LEGS,0.8]];
-        const multiplier = gear.find(set => set.slice(0,3).every(id => player.getEquipment().getItems().some(item => item?.getId() === id)))?.[3] ?? 1;
-        const max = [H.core.NpcIdentifiers.SABRE_TOOTHED_KYATT,H.core.NpcIdentifiers.HORNED_GRAAHK].includes(state.creature.npc) ? 7 : 5;
-        player.getCombat().getHitQueue().addPendingDamage([new H.core.HitDamage(Math.floor(C.roll(0,max) * multiplier),H.core.HitMask.RED)]);
-      }
+  for (const state of [...teased.values()]) {
+    const { player, npc } = state;
+    if (runs.has(npc)) continue;
+    if (H.tick >= state.due || !npc.isRegistered() || !npc.isVisible() || !player.isRegistered()
+      || !nearby(player, npc, CHASE_RANGE)) { release(state); continue; }
+    if (npc.getFollowing() !== player) npc.setFollowing(player);
+    if (H.tick >= state.attack && touching(npc, player) && !player.getForceMovement()) {
+      state.attack = H.tick + BITE.every;
+      bite(state);
     }
   }
+}
+
+/** Whether a creature (of any size) stands next to the player. */
+function touching(npc, player) {
+  const at = npc.getLocation(), p = player.getLocation(), size = npc.getSize?.() ?? 1;
+  if (at.getZ() !== p.getZ() || npc.getPrivateArea() !== player.getPrivateArea()) return false;
+  const gap = (point, start) => Math.max(0, start - point, point - (start + size - 1));
+  return Math.max(gap(p.getX(), at.getX()), gap(p.getY(), at.getY())) <= 1;
+}
+
+function bite({ player, npc, creature }) {
+  npc.performAnimation(new H.core.Animation(BITE.animation));
+  npc.setPositionToFace(player.getLocation());
+  const sender = player.getPacketSender();
+  sender.sendSound(BITE.sound, 1, 0);
+  const I = H.core.ItemIdentifiers;
+  const gear = [[I.KYATT_HAT,I.KYATT_TOP,I.KYATT_LEGS,0.4],[I.GRAAHK_HEADDRESS,I.GRAAHK_TOP,I.GRAAHK_LEGS,0.6],[I.LARUPIA_HAT,I.LARUPIA_TOP,I.LARUPIA_LEGS,0.8]];
+  const multiplier = gear.find(set => set.slice(0,3).every(id => player.getEquipment().getItems().some(item => item?.getId() === id)))?.[3] ?? 1;
+  const max = [H.core.NpcIdentifiers.SABRE_TOOTHED_KYATT,H.core.NpcIdentifiers.HORNED_GRAAHK].includes(creature.npc) ? 7 : 5;
+  const protectedMelee = H.core.PrayerHandler.isActivated(player, H.core.PrayerHandler.PROTECT_FROM_MELEE);
+  const damage = protectedMelee ? 0 : Math.floor(C.roll(0, max) * multiplier);
+  if (!protectedMelee) player.getCombat().getHitQueue().addPendingDamage([new H.core.HitDamage(damage, H.core.HitMask.RED)]);
+  if (!player.getForceMovement() && !H.actions.has(player)) {
+    const block = player.getBlockAnim?.();
+    if (block >= 0) player.performAnimation(new H.core.Animation(block));
+  }
+  // Ours: which of the four hit sounds plays.
+  sender.sendSound(damage > 0 ? BITE.hits[Math.floor(Math.random() * BITE.hits.length)] : BITE.block, 1, BITE.soundDelay);
 }
 
 /** Frees every creature mid-run, so a reload never leaves one blocked. */
@@ -364,7 +418,7 @@ function shutdown() {
     else if (!r.fallen) abort(npc, r);
     else runs.delete(npc);
   }
-  for (const player of [...teased.keys()]) clear({ player });
+  for (const state of [...teased.values()]) release(state);
   for (const { run } of later.splice(0)) run();
 }
 

@@ -206,10 +206,12 @@ test('a miss leaps over the pit in view with its two leap projectiles, follows o
   assert.deepEqual(seen.animations.at(-1), [at + 5, 5231], '+5: the big-cat leap');
   assert.equal(npc.isVisible(), true, 'the creature never vanishes');
   const size = npc.getSize(), from = npc.getLocation();
-  // Both halves of the creature fly four tiles across, 53 to 90 cycles (1108 tick 21492).
+  // Both halves of the creature fly four tiles across, 53 to 90 cycles, from opposite corners turned with the
+  // leap: heading south proj1 starts on its south-west tile, proj2 on its north-east (1108 21492, larupia 427).
+  const far = size - 1;
   assert.deepEqual(projectiles, [
-    [939, from.getX() + size - 1, from.getY() + size - 1, from.getX() + size - 1, from.getY() + size - 1 - 4, 53, 90],
-    [940, from.getX(), from.getY(), from.getX(), from.getY() - 4, 53, 90]]);
+    [939, from.getX(), from.getY(), from.getX(), from.getY() - 4, 53, 90],
+    [940, from.getX() + far, from.getY() + far, from.getX() + far, from.getY() + far - 4, 53, 90]]);
   tick(2);
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [PIT.x, PIT.y - size], '+7: landed beyond the pit');
   assert.ok(npc.getExactMove(), 'the landing keeps the creature in view');
@@ -259,6 +261,28 @@ test('a creature 4 tiles out steps at +3, +5, +7, +8 onto the loc coord, falls a
   assert.equal(varbit(p), 2);
   tick(1);
   assert.equal(varbit(p), 4, '+13: full');
+});
+
+test('several creatures can be teased at once; the bite plays its animation and sound (larupia capture)', t => {
+  const { p, sent } = hunter(t, NORTH);
+  const first = larupia(t, [2543, 2911]), second = larupia(t, [2544, 2911]);
+  for (const { npc } of [first, second]) {
+    const coordinator = npc.getMovementCoordinator();
+    coordinator.setRadius(4);
+    t.after(() => coordinator.setRadius(4));
+  }
+  const teaseAt = H.tick;
+  tease(p, first.npc);
+  tease(p, second.npc);
+  assert.equal(first.npc.getFollowing(), p);
+  assert.equal(second.npc.getFollowing(), p, 'a second tease adds a second chaser');
+  assert.ok(first.npc.getMovementCoordinator().getRadius() >= 16, 'the walk home is lifted while teased');
+  tick(teaseAt + 3 - H.tick);
+  assert.deepEqual(first.seen.animations.at(-1), [teaseAt + 3, 5228], 'hunter_big_cat_bite three ticks after the tease');
+  assert.ok(sent.sounds.includes(666), 'panther_attack');
+  Pitfalls.clear({ player: p });
+  assert.equal(first.npc.getMovementCoordinator().getRadius(), 4, 'its radius comes back when the chase ends');
+  assert.equal(second.npc.getFollowing(), null);
 });
 
 test('the catch schedule follows the captured distances', () => {

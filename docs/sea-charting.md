@@ -85,9 +85,18 @@ Every task, on success (rsprox 1009, 944):
 6. An ocean fully charted: `You have completed charting an ocean: {ocean}`, its ever-completed
    and XP-owed varbits, `For fully charting this ocean, Chartin' Charles McAtless on the
    Pandemonium will provide you with some training when you next speak to him.`, its completion
-   varbit.
-7. The popup (`notification_display`, "Charting Complete!" with the hint), sound 11166 and the
-   XP: the task's and the sea's bonus in one drop.
+   varbit. The Miscellaneous groups' "ocean" (type 3) says `a group` and `this group` instead
+   (rsprox 235/948).
+7. Every task charted: `sailing_charting_full_completion`, `<col=0090bc>You have fully charted
+   the entire sea!` (the tag left open, as live sends it), `For fully charting the entire sea,
+   Chartin' Charles McAtless on the Pandemonium will provide you with some final training when
+   you next speak to him.`, then the full completion's XP-owed and ever-completed varbits
+   (rsprox 235/948).
+8. The popup (`notification_display`, "Charting Complete!" with the hint), then one more
+   "Charting Complete!" popup per sea, group, ocean or the whole map it completed, in that order
+   (`{name} fully charted!`, `Entire sea fully charted!`), each queued behind the last (rsprox
+   235/948); sound 11166 and the XP: the task's and the sea's bonus in one drop. The Charting
+   popups setting hides them all (ours: the capture only shows them on).
 
 | Kind | XP |
 |---|---|

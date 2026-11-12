@@ -304,6 +304,74 @@ test("an ocean's last task owes its bonus from Chartin' Charles (rsprox: Western
   }
 });
 
+const notifications = require("../plugins/interface/Notifications.plugin");
+/** The popup texts shown and queued for the player, in order. */
+function popups(player) {
+  const shown = player.sent.filter(([key, script]) => key === "sendInterfaceScript" && script === 3343).map(([, , args]) => args[1]);
+  return [...shown, ...(notifications._test.queues.get(player)?.waiting ?? []).map((popup) => popup.text)];
+}
+
+test("the Miscellaneous groups complete as a group, not an ocean (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const misc = [...common.allSeas().values()].find((sea) => sea.type === common.SEA_TYPE.MISCELLANEOUS);
+    assert.equal(misc.name, "Miscellaneous");
+    const list = common.oceanSpots(misc);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    const last = list.at(-1);
+    const from = player.messages().length;
+    common.complete(player, last);
+    const messages = player.messages().slice(from);
+    const at = messages.indexOf(`You have completed charting a group: ${blue("Miscellaneous")}`);
+    assert.ok(at > 0, messages.join("\n"));
+    assert.equal(messages[at - 2], `You have completed charting a group: ${blue(last.sea.name)}`);
+    assert.equal(messages[at + 1], "For fully charting this group, Chartin' Charles McAtless on the Pandemonium will provide you with some training when you next speak to him.");
+    assert.ok(!messages.some((line) => line.includes("an ocean") || line.includes("this ocean")), messages.join("\n"));
+    assert.deepEqual(popups(player).slice(-3), [last.hint, `${last.sea.name} fully charted!`, "Miscellaneous fully charted!"]);
+    assert.deepEqual(common.progress(player).owed, [misc.row]);
+  } finally {
+    leave(player);
+  }
+});
+
+test("a sea's and an ocean's last task queue their own popups after the task's (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const ocean = [...common.allSeas().values()].find((sea) => sea.name === "Sunset Ocean");
+    const list = common.oceanSpots(ocean);
+    for (const spot of list.slice(0, -1)) common.complete(player, spot);
+    const last = list.at(-1);
+    const before = popups(player).length;
+    common.complete(player, last);
+    assert.deepEqual(popups(player).slice(before), [last.hint, `${last.sea.name} fully charted!`, "Sunset Ocean fully charted!"]);
+  } finally {
+    leave(player);
+  }
+});
+
+test("the last of every task charts the entire sea: its lines, variables and popup (rsprox 948)", () => {
+  const player = captain();
+  try {
+    const all = [...common.allSpots().values()];
+    for (const spot of all.slice(0, -1)) common.complete(player, spot);
+    const from = player.sent.length;
+    const fromMessages = player.messages().length;
+    common.complete(player, all.at(-1));
+    const messages = player.messages().slice(fromMessages);
+    const at = messages.indexOf("<col=0090bc>You have fully charted the entire sea!");
+    assert.ok(at > 0, messages.join("\n"));
+    assert.equal(messages[at + 1], "For fully charting the entire sea, Chartin' Charles McAtless on the Pandemonium will provide you with some final training when you next speak to him.");
+    const full = ["sailing_charting_full_completion", "sailing_charting_full_completion_xp_owed",
+      "sailing_charting_full_completion_ever_complete"].map(varbit);
+    const order = player.sent.slice(from).filter(([key, id]) => key === "sendVarbit" && full.includes(id)).map(([, id]) => id);
+    assert.deepEqual(order, full, "live's order: complete, then the lines, then owed and ever-complete");
+    assert.equal(popups(player).at(-1), "Entire sea fully charted!");
+    assert.equal(common.progress(player).fullOwed, true);
+  } finally {
+    leave(player);
+  }
+});
+
 test("the charts are saved and sent again at login", () => {
   const player = captain();
   try {

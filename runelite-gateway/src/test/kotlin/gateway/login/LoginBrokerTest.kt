@@ -203,6 +203,44 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `concurrent new addresses at a full rate table keep it at its cap`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+                fun attempt(ip: String) =
+                    runCatching {
+                        client.send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding(),
+                        )
+                    }
+                for (i in 0 until 2048) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                assertEquals(2048, broker.rateTableSize())
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(16)
+                try {
+                    (0 until 16)
+                        .map { t ->
+                            pool.submit {
+                                for (i in 0 until 150)
+                                    attempt("2001:db8:1:${Integer.toHexString(t)}::${Integer.toHexString(i + 1)}")
+                            }
+                        }
+                        .forEach { it.get(60, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+                assertEquals(2048, broker.rateTableSize())
+            }
+        }
+    }
+
+    @Test
     fun `an unredeemed native ticket expires and releases the pending login`() {
         Backend().use { backend ->
             val port = freePort()

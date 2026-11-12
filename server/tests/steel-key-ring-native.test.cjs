@@ -53,6 +53,11 @@ function actor(t) {
   const send = p.sendMessage.bind(p); p.sendMessage = text => { messages.push(text); return send(text); };
   t.after(() => {
     const index = p.getIndex();
+    for (const item of [...core.World.getItems()]) if (item.getOwner() === p.getUsername()) {
+      core.ItemOnGroundManager.deregister(item);
+      const n = core.World.getItems().indexOf(item); if (n >= 0) core.World.getItems().splice(n, 1);
+    }
+    assert.equal(core.World.getItems().some(item => item.getOwner() === p.getUsername()), false);
     PM.emitPlayerDisconnect({ player: p, username: p.getUsername() }); PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.closeInterruptibleInterfaces(); p.getMovementQueue().reset(); p.getMovementQueue().walkToReset();
     core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(index); core.World.getPlayers().remove(p);
@@ -182,5 +187,19 @@ test("a stored brass key unlocks the existing door without materializing or cons
       assert.equal(amount(f, 983), mode === "physical" ? 1 : 0);
       if (mode === "stored") assert.equal(available(f, 983), true);
     } else { assert.equal(f.p.getLocation().getY(), 3449); assert.ok(f.messages.includes("The door is locked.")); }
+  }
+});
+
+
+test("real PvM and skull-protected PvP death item processing keeps the ring and keys intact", async t => {
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  for (const pvp of [false, true]) {
+    const f = actor(t), killer = pvp ? actor(t).p : null; ring(f); add(f, 983); await store(f, 983);
+    if (pvp) f.p.setSkullTimer(100);
+    const kept = PlayerDeathTask.dropItems(f.p, killer, f.p.getLocation());
+    assert.ok(kept.some(item => item.getId() === RING), "ring is explicitly kept even when no ranked item is protected");
+    PlayerDeathTask.returnKeptItems(f.p, kept);
+    assert.equal(amount(f, RING), 1); assert.equal(amount(f, 983), 0);
+    await check(f); assert.deepEqual(setup(f), [983, -1, -1, 1]);
   }
 });

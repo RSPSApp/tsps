@@ -1,0 +1,925 @@
+{
+  "low": {
+    "source": "https://oldschool.runescape.wiki/w/Simple_lockbox?action=raw",
+    "rolls": 3,
+    "gearWeight": 2,
+    "standard": [
+      {
+        "item": "copper_ore",
+        "minimum": 2,
+        "maximum": 3,
+        "noted": true,
+        "weight": 10
+      },
+      {
+        "item": "tin_ore",
+        "minimum": 2,
+        "maximum": 3,
+        "noted": true,
+        "weight": 8
+      },
+      {
+        "item": "iron_ore",
+        "minimum": 1,
+        "maximum": 2,
+        "noted": false,
+        "weight": 8
+      },
+      {
+        "item": "logs",
+        "minimum": 6,
+        "maximum": 8,
+        "noted": true,
+        "weight": 6
+      },
+      {
+        "item": "oak_logs",
+        "minimum": 4,
+        "maximum": 6,
+        "noted": true,
+        "weight": 6
+      },
+      {
+        "item": "feather",
+        "minimum": 1,
+        "maximum": 50,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "fishing_bait",
+        "minimum": 35,
+        "maximum": 40,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "softclay",
+        "minimum": 2,
+        "maximum": 3,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "coins",
+        "minimum": 50,
+        "maximum": 150,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "tinderbox",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "fishing_rod",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      }
+    ],
+    "gear": [
+      {
+        "item": "adamant_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "adamant_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "adamant_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "adamant_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "mithril_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "mithril_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "mithril_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "mithril_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "mithril_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "mithril_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 5
+      },
+      {
+        "item": "mithril_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "black_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "black_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 5
+      },
+      {
+        "item": "black_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "black_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "black_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "black_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 13
+      },
+      {
+        "item": "black_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 7
+      },
+      {
+        "item": "steel_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 8
+      },
+      {
+        "item": "steel_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "steel_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "steel_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 23
+      },
+      {
+        "item": "steel_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 22
+      },
+      {
+        "item": "steel_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 22
+      },
+      {
+        "item": "steel_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 13
+      },
+      {
+        "item": "iron_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      },
+      {
+        "item": "iron_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 32
+      }
+    ]
+  },
+  "mid": {
+    "source": "https://oldschool.runescape.wiki/w/Elaborate_lockbox?action=raw",
+    "rolls": 2,
+    "gearWeight": 4,
+    "standard": [
+      {
+        "item": "bluewizhat",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "wizards_robe",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "steel_arrow",
+        "minimum": 15,
+        "maximum": 25,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "air_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "water_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "earth_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "fire_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "steel_pickaxe",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "steel_axe",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "iron_ore",
+        "minimum": 5,
+        "maximum": 10,
+        "noted": true,
+        "weight": 3
+      },
+      {
+        "item": "coal",
+        "minimum": 3,
+        "maximum": 5,
+        "noted": true,
+        "weight": 3
+      },
+      {
+        "item": "3dose1energy",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "woodplank",
+        "minimum": 1,
+        "maximum": 3,
+        "noted": true,
+        "weight": 2
+      },
+      {
+        "item": "silver_bar",
+        "minimum": 4,
+        "maximum": 6,
+        "noted": true,
+        "weight": 5
+      },
+      {
+        "item": "coins",
+        "minimum": 400,
+        "maximum": 600,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "lawrune",
+        "minimum": 3,
+        "maximum": 6,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "naturerune",
+        "minimum": 3,
+        "maximum": 5,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "firerune",
+        "minimum": 75,
+        "maximum": 125,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "waterrune",
+        "minimum": 75,
+        "maximum": 125,
+        "noted": false,
+        "weight": 3
+      }
+    ],
+    "gear": [
+      {
+        "item": "adamant_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "adamant_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "adamant_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "adamant_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "adamant_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "mithril_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "mithril_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "mithril_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "mithril_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "mithril_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "mithril_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 5
+      },
+      {
+        "item": "mithril_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "black_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "black_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 5
+      },
+      {
+        "item": "black_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 4
+      },
+      {
+        "item": "black_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "black_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "black_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 13
+      },
+      {
+        "item": "black_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 7
+      },
+      {
+        "item": "steel_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 8
+      },
+      {
+        "item": "steel_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "steel_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "steel_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 23
+      },
+      {
+        "item": "steel_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 22
+      },
+      {
+        "item": "steel_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 22
+      },
+      {
+        "item": "steel_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 13
+      }
+    ]
+  },
+  "high": {
+    "source": "https://oldschool.runescape.wiki/w/Ornate_lockbox?action=raw",
+    "rolls": 1,
+    "gearWeight": 6,
+    "standard": [
+      {
+        "item": "blackwizhat",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "black_robe",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "mind_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "body_talisman",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "uncut_sapphire",
+        "minimum": 1,
+        "maximum": 2,
+        "noted": false,
+        "weight": 5
+      },
+      {
+        "item": "uncut_emerald",
+        "minimum": 1,
+        "maximum": 2,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "uncut_ruby",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 2
+      },
+      {
+        "item": "uncut_diamond",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 1
+      },
+      {
+        "item": "3dose1energy",
+        "minimum": 2,
+        "maximum": 3,
+        "noted": true,
+        "weight": 3
+      },
+      {
+        "item": "woodplank",
+        "minimum": 3,
+        "maximum": 6,
+        "noted": true,
+        "weight": 3
+      },
+      {
+        "item": "silver_bar",
+        "minimum": 8,
+        "maximum": 12,
+        "noted": true,
+        "weight": 5
+      },
+      {
+        "item": "coins",
+        "minimum": 900,
+        "maximum": 1100,
+        "noted": false,
+        "weight": 8
+      },
+      {
+        "item": "lawrune",
+        "minimum": 5,
+        "maximum": 8,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "naturerune",
+        "minimum": 5,
+        "maximum": 8,
+        "noted": false,
+        "weight": 3
+      }
+    ],
+    "gear": [
+      {
+        "item": "adamant_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "adamant_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "adamant_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "adamant_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "adamant_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "adamant_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "adamant_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 3
+      },
+      {
+        "item": "mithril_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 6
+      },
+      {
+        "item": "mithril_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 9
+      },
+      {
+        "item": "mithril_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 9
+      },
+      {
+        "item": "mithril_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 18
+      },
+      {
+        "item": "mithril_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 18
+      },
+      {
+        "item": "mithril_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 15
+      },
+      {
+        "item": "mithril_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 9
+      },
+      {
+        "item": "black_platebody",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 9
+      },
+      {
+        "item": "black_platelegs",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 15
+      },
+      {
+        "item": "black_plateskirt",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 12
+      },
+      {
+        "item": "black_mace",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 36
+      },
+      {
+        "item": "black_sword",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 36
+      },
+      {
+        "item": "black_sq_shield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 39
+      },
+      {
+        "item": "black_kiteshield",
+        "minimum": 1,
+        "maximum": 1,
+        "noted": false,
+        "weight": 21
+      }
+    ]
+  }
+}

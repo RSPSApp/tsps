@@ -470,10 +470,13 @@ const SPOT_TOOLS_BY_OPTIONS = new Map([
 ]);
 
 const FROG_SPAWN_AND_EELS = { "Small Net": TOOLS.FROG_SPAWN_NET, Net: TOOLS.FROG_SPAWN_NET, Bait: TOOLS.CAVE_EEL_ROD };
+const CAMDOZAAL_FISHING_SPOTS = [10686, 10687, 10688]; // cache camdozaal_fishingspot_1/2/3, Wiki Fishing spot (Camdozaal)
+const CAMDOZAAL_TOOLS = require("./fishing/Camdozaal.Fishing")(Fish, FishingTool, ItemIds);
 
 // Option lists that mean different fish at different spots, so they go by id. Spot types are
 // the Wiki's "Fishing spot (...)" pages, which list each type's ids.
 const SPOT_TOOLS_BY_NPC = new Map([
+  ...CAMDOZAAL_FISHING_SPOTS.map(id => [id, CAMDOZAAL_TOOLS]),
   // Tutorial Island's shrimp pond only offers "Net".
   [NpcIds.FISHING_SPOT_43, { Net: TOOLS.NET }],
   // Lumbridge Swamp's small net/bait spot labels its net "Net".
@@ -742,12 +745,15 @@ function rollCatch(player, tool, random = Math.random, bonus = 100) {
   if (tool.table) return random() < catchChance(level, tool.table, bonus) ? rollTable(tool.table, random) : [];
   const caught = [];
   for (const fish of tool.fish) {
+    if (!WorldDefinition.isMembersWorld() && CacheDefinitions.getItem(fish.id)?.isMembers === true) continue;
     if (getFishingLevel(player) < fish.level || !meetsLevels(player, fish.requires)) {
       continue;
     }
     const charted = rollsFor(player, fish);
     for (let roll = 0; roll < charted.rolls.length; roll++) {
-      if (random() < catchChance(level, charted, bonus, roll)) {
+      const chanceRequest = { player, toolId: tool.id, itemId: fish.id, chance: catchChance(level, charted, bonus, roll) };
+      pluginApi?.emitCustomEvent("fishing:catch-chance", chanceRequest);
+      if (random() < Math.max(0, Math.min(1, chanceRequest.chance))) {
         caught.push(fish);
         if (!tool.multi) {
           return caught;
@@ -1012,7 +1018,9 @@ class FishingTask extends Task {
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;
       }
-      const stopAfterCatch = landCatch(player, session.tool, variant, caught, session.npcId);
+      const catchRequest = { player, npcId: session.npcId, caught };
+      pluginApi.emitCustomEvent("fishing:catch", catchRequest);
+      const stopAfterCatch = landCatch(player, session.tool, variant, catchRequest.caught, session.npcId);
 
       // ponytail: spots without their own movement still stop at random instead of moving. A full
       // inventory waits for the next tick's check, which says so.

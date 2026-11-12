@@ -16,7 +16,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 15, arena: 0, melee: 1, ranged: 0, magic: 0, prayer: 3,
+    wincondition: 15, arena: 4, melee: 1, ranged: 0, magic: 0, prayer: 3,
     food: 2, drinks: 2, specialattacks: 1, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
@@ -169,7 +169,7 @@ test('Sylvan and Plateau arena rules retain supported modes and reject other lay
     assert.equal(Rules.validate(rules), true);
     assert.match(Rules.summary(rules), new RegExp(arena === 1 ? 'Plateau' : 'Sylvan Glade'));
   }
-  for (const arena of [-1, 0, 4, 13, 14, 1.5, '2']) {
+  for (const arena of [-1, -2, 4, 13, 14, 1.5, '2']) {
     assert.equal(Rules.validate({ ...Rules.create(), arena }), false);
   }
 });
@@ -188,7 +188,7 @@ test('Soggy Swamp is arena6 for supported melee modes while Ghastly and other ar
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:6};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Soggy Swamp/);
   }
-  for(const arena of [0,4,5.5,7,8,9,10,11.5,12.5,13,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4,5.5,7,8,9,10,11.5,12.5,13,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -196,7 +196,7 @@ test('Clan Cup is arena5 for supported melee modes while unsupported and malform
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:5};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Clan Cup Arena/);
   }
-  for(const arena of [0,4,7,8,9,10,11.5,12.5,13,14,-1,5.5,'5',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4,7,8,9,10,11.5,12.5,13,14,-1,5.5,'5',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -204,7 +204,7 @@ test('Classic arena11 preserves supported melee modes and refuses unsupported or
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:11};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Classic/);
   }
-  for(const arena of [0,4,7,8,9,10,12.5,13,14,-1,11.5,'11',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4,7,8,9,10,12.5,13,14,-1,11.5,'11',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -212,5 +212,13 @@ test('Lumbridge Castle arena12 preserves supported melee modes and rejects malfo
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:12};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Lumbridge Castle/);
   }
-  for(const arena of [0,4,7,8,9,10,13,14,-1,12.5,'12',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4,7,8,9,10,13,14,-1,12.5,'12',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+});
+
+
+test('Wasteland numeric zero preserves explicit Plateau default and supported mode summaries',()=>{
+  assert.equal(Rules.create().arena,1);assert.equal(Rules.OFFERED_RULES.arena,1);
+  for(const mode of [0,1,8,16,20]){const rules={...Rules.create(3,mode),arena:0};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Wasteland/);assert.equal(rules.arena,0);}
+  for(const arena of [null,undefined,false,'0',NaN,Infinity,-1,0.5,4,7,8,9,10,13,14])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  const missing={...Rules.create()};delete missing.arena;assert.equal(Rules.validate(missing),false);assert.equal(Rules.create().arena,1);
 });

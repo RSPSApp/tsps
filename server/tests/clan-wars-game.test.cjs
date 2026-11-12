@@ -1829,7 +1829,7 @@ test('native Sylvan selection and Plateau reselection reset agreement and refuse
   assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Sylvan Glade/);
   tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
   await click(b,'clanwars_setup:arena',3);assert.equal(s.rules.arena,1);assert.equal(s.accepted.size,0);
-  for(const slot of [0,1,2,12,39,65535]) {
+  for(const slot of [42,1,2,12,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,1);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);
   }
@@ -1982,7 +1982,7 @@ test('native Quarry selection, delivered arena reselection and unsupported rows 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,39,65535]) {
+  for(const slot of [42,1,2,12,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,3);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),3);
   }
@@ -2130,7 +2130,7 @@ test('native Soggy Swamp selection resets agreement across delivered arenas and 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,39,65535]) {
+  for(const slot of [42,1,2,12,21,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,6);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),6);
   }
@@ -2299,7 +2299,7 @@ test('native Clan Cup selection resets agreement across all five arenas and reje
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,39,65535]) {
+  for(const slot of [42,1,2,12,21,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,5);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),5);
   }
@@ -2497,7 +2497,7 @@ test('native Classic selection resets agreement across all six arenas and reject
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,30,39,65535]) {
+  for(const slot of [42,1,2,12,21,30,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,11);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),11);
   }
@@ -2769,7 +2769,7 @@ test('native Lumbridge Castle selection resets agreement across all seven arenas
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [0,1,2,12,21,30,39,65535]) {
+  for(const slot of [42,1,2,12,21,30,39,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,12);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),12);
   }
@@ -3091,4 +3091,197 @@ test('Magic Disabled refuses Lunar spells on oneself and teammates in staging an
   const outsider = actor(); lunar(outsider);
   assert.equal(EffectSpells.handleSpell(outsider, EffectSpells.VENGEANCE.spellId()), true);
   assert.equal(outsider.hasVengeanceReturn(), true, 'Vengeance works outside Clan Wars');
+});
+
+// N: Wasteland finite source-qualified TSPS choices; acquisition220 is not gameplay proof.
+const WASTELAND_ORIGIN=[3264,4992];
+const WASTELAND_LANDINGS=[[3296,5010,0],[3296,5100,0]];
+const WASTELAND_JAILS=[[3317,5053,0],[3317,5058,0]];
+const wastelandReachable=(game,from,to)=>layoutReachable(game,from,to,WASTELAND_ORIGIN);
+const wastelandObject=lumbridgeObject;
+async function wastelandWalk(p,game,xy) {
+  const at=game.area.at([...xy,0]);assert.ok(Math.abs(p.getLocation().getX()-at.getX())<64&&Math.abs(p.getLocation().getY()-at.getY())<64,'ordinary destination inside Rsmod search window');
+  await wire(p,walkClickFrame(at));for(let n=0;n<100&&!p.getLocation().equals(at);n++)tick();
+  assert.deepEqual(position(p),[at.getX(),at.getY(),0],'bounded ordinary queued walk reaches exact endpoint');
+}
+function wastelandMasks(area,plane=0){const masks=[];for(let y=0;y<128;y++)for(let x=0;x<64;x++)masks.push(area.getClip(area.tile(x,y,plane)));return masks;}
+function wastelandTemplate(){const area=new core.TemplatedInstanceArea(8,16);for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<16;y++)area.setChunk(z,x,y,{sourceChunkX:408+x,sourceChunkY:624+y,sourcePlane:z,rotation:0});area.at=tile=>area.tile(tile[0]-3264,tile[1]-4992,tile[2]);return area;}
+
+test('native Wasteland zero is deliberate while fresh negotiations keep Plateau and reset all accepts',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),bit=core.CacheDefinitions.getVarbitId('clanwars_arena');assert.equal(session.rules.arena,1,'fresh default remains Plateau');
+  await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',0);assert.equal(session.rules.arena,0,'actual numeric slot0 reaches authoritative offer');assert.equal(session.accepted.size,0);
+  for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Wasteland/);
+  for(const [slot,arena]of [[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[0,0]]){
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);
+  }
+  for(const slot of [1,2,12,21,30,39,42,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);}
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');assert.equal(session.rules.arena,0);tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,0);assert.equal(game.layout.name,'Wasteland');
+});
+for(const mode of [0,1,16]) test(`native Wasteland mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},0);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3296,5010,0]));b.moveTo(game.area.at([3297,5010,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,WASTELAND_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Wasteland side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const outsiders=[actor(),actor()];for(const p of outsiders) channel(p);
+  const foreignGame=await negotiate(outsiders[0],outsiders[1],null,1,null,1);for(const p of outsiders) await join(p);
+  const orbOutsiders=[actor(),actor()];for(const p of orbOutsiders)channel(p);const orbForeign=await negotiate(orbOutsiders[0],orbOutsiders[1],null,1,null,1);
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},0);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'wasteland'}));
+  await lethalMelee(killer,victim,game,true,[[3296,5010,0],[3297,5010,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,WASTELAND_JAILS[side]));
+  const otherJail=game.area.at(WASTELAND_JAILS[1-side]);await wire(victim,walkClickFrame(otherJail));tick(6);const sourceJailY=victim.getLocation().getY()-game.area.getBaseY()+4992;assert.ok(side===0?sourceJailY>=5048&&sourceJailY<=5055:sourceJailY>=5056&&sourceJailY<=5063,'ordinary walk remains inside its own jail');assert.equal(wastelandReachable(game,WASTELAND_JAILS[side],WASTELAND_JAILS[1-side]),false);
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'wasteland'});
+  const foreignPortal=mappedLayoutObjects(foreignGame,'clanwars_prisonportal_darkrock')[0],foreignOrb=mappedLayoutObjects(orbForeign,'clanwars_viewing_start_darkrock')[0];assert.ok(foreignPortal&&foreignOrb);
+  assert.equal(Match.exit({player:victim,object:foreignPortal}),false,'valid jailed member cannot use the real same-ID portal of another match');
+  assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false,'valid jailed member cannot use a real same-ID foreign orb');
+  assert.equal(C.matches.get(victim),game);assert.equal(game.jailed.has(victim),true);
+  const inactive=mappedLayoutObjects(game,'clanwars_viewing_darkrock')[0];assert.ok(inactive);
+  assert.equal(viewingUnit().use({player:victim,object:inactive}),false,'actual owned inactive orb is not an active Use target');
+  const scripts=scriptCalls(victim),orbXY=side===0?[3318,5053]:[3318,5058];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_darkrock',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9752));
+  console.log('WASTELAND_ORB_APPROACH_QUALIFICATION '+JSON.stringify({side,source:orbXY,approach:[state.location.getX(),state.location.getY(),state.location.getZ()]}));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.deepEqual(position(victim),[state.location.getX(),state.location.getY(),state.location.getZ()]);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const ownedPortal=mappedLayoutObjects(game,'clanwars_prisonportal_darkrock').find(o=>o.getLocation().equals(game.area.at([...(side===0?[3322,5051]:[3322,5060]),0])));assert.ok(ownedPortal);
+  const fake=new core.GameObject(ownedPortal.getId(),ownedPortal.getLocation().clone(),ownedPortal.getType(),ownedPortal.getFace(),game.area);
+  try {assert.equal(Match.exit({player:victim,object:fake}),false);assert.equal(game.jailed.has(victim),true);} finally {game.area.detach(fake);}
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3322,5051]:[3322,5060],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3322,5051]:[3322,5060],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,WASTELAND_LANDINGS[side]));
+});
+
+test('native Wasteland47 current owned walls restore full8192 masks before mutations and identical queued crossing',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,0);await join(a);await join(b);
+  assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[8,16]);for(const p of [a,b])assert.deepEqual(position(p),positionAt(game,WASTELAND_LANDINGS[game.members.get(p)]));
+  const reference=wastelandTemplate();
+  try{
+    for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<16;y++)assert.deepEqual(game.area.getChunk(z,x,y),reference.getChunk(z,x,y));
+    const baseline=wastelandMasks(reference),upper=wastelandMasks(reference,1),id=core.CacheDefinitions.getLocId('clanwars_barrier_darkrock'),def=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
+    assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.notEqual(def.clipType,0);assert.equal(def.blocksProjectile,true);assert.equal(walls.length,47);
+    console.log('WASTELAND_BARRIER_DEFINITION '+JSON.stringify({id,size:[def.sizeX,def.sizeY],clipType:def.clipType,blocksProjectile:def.blocksProjectile}));
+    for(const wall of walls){assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);assert.equal(wall.getDefinition().isSolid(),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getPrivateArea()===game.area).length,1);assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);}
+    for(let x=3268;x<=3315;x++){const old=baseline[(5055-4992)*64+x-3264],at=game.area.at([x,5055,0]),found=walls.filter(w=>w.getLocation().equals(at));assert.equal(found.length,old&core.RegionManager.BLOCKED_MASK?0:1);if(found.length)assert.equal(old&0x20100,0);}
+    for(let x=0;x<8;x++)for(let y=0;y<16;y++)for(const object of reference.getChunkObjects(0,x,y)){
+      if(![10,11].includes(object.getType())||!object.getDefinition().isSolid())continue;let{sizeX:w,sizeY:h}=object.getDefinition();if(object.getFace()%2)[w,h]=[h,w];const at=object.getLocation();
+      for(const wall of walls){const wx=wall.getLocation().getX()-game.area.getBaseX()+reference.getBaseX(),wy=wall.getLocation().getY()-game.area.getBaseY()+reference.getBaseY();assert.equal(wx>=at.getX()&&wx<at.getX()+w&&wy>=at.getY()&&wy<at.getY()+h,false,'full rotated effective0 source-solid footprint nonoverlap');}
+    }
+    assert.deepEqual(WASTELAND_JAILS.map(xy=>game.area.getClip(game.area.at(xy))),[0,0]);
+    assert.equal(wastelandReachable(game,WASTELAND_LANDINGS[0],WASTELAND_LANDINGS[1]),false,'native movement graph includes both ends and diagonals');
+    for(const jail of WASTELAND_JAILS)for(const landing of WASTELAND_LANDINGS)assert.equal(wastelandReachable(game,jail,landing),false);
+    assert.equal(wastelandReachable(game,WASTELAND_JAILS[0],WASTELAND_JAILS[1]),false);
+    for(const z of [2,3]){assert.equal(game.area.getChunk(z,0,0),null);assert.notEqual(game.area.getClip(game.area.at([3296,5010,z]))&0x200100,0);}
+    for(const [inside,outside]of [[[3264,5055,0],[3263,5055,0]],[[3327,5055,0],[3328,5055,0]],[[3296,4992,0],[3296,4991,0]],[[3296,5119,0],[3296,5120,0]]])assert.equal(core.RegionManager.canMovestart(game.area.at(inside),game.area.at(outside),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0);await wastelandWalk(walker,game,[3296,5054]);const target=game.area.at([3296,5056,0]);await wire(walker,walkClickFrame(target));tick(12);assert.equal(game.phase,'staging');assert.ok(walker.getLocation().getY()<game.area.at([3296,5055,0]).getY());
+    const state=()=>({position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}),staging=state();
+    completePreparation(game);assert.equal(game.walls.length,0);
+    for(const wall of walls){assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),null);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(core.World.getObjects().includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);}
+    assert.deepEqual(wastelandMasks(game.area),baseline,'full8192 restored BEFORE any intentional source mutation');assert.deepEqual(wastelandMasks(game.area,1),upper,'mapped upper masks unchanged');
+    assert.equal(game.area.getClip(game.area.at([3268,5055,0])),0x200100);assert.equal(game.area.getClip(game.area.at([3315,5055,0])),0x1008,'native prison-wall direction and ray bits survive');assert.equal(wastelandReachable(game,WASTELAND_LANDINGS[0],WASTELAND_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(target));tick(12);assert.deepEqual(position(walker),[target.getX(),target.getY(),0]);console.log('WASTELAND_MOVEMENT_QUALIFICATION '+JSON.stringify({requested:[target.getX(),target.getY(),0],staging,combat:state()}));
+    await wastelandWalk(walker,game,[3296,5100]);await wastelandWalk(walker,game,[3296,5057]);await wastelandWalk(walker,game,[3314,5054]);await wastelandWalk(walker,game,[3314,5056]);
+  }finally{reference.destroy();}
+});
+
+test('native Wasteland eighth layout preserves seven configurations and both distinct Forfeit footprints',async()=>{
+  const players=Array.from({length:16},()=>actor());for(const p of players)channel(p);const old=[];
+  for(const[offset,arena,axis,coordinate,face,count]of [[0,1,'y',4959,0,52],[2,2,'y',5023,0,null],[4,3,'y',5087,0,24],[6,6,'y',4959,0,57],[8,5,'x',3167,1,43],[10,11,'y',4735,0,51],[12,12,'y',4826,0,29]]){
+    const team=players.slice(offset,offset+2),other=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team)await join(p);assert.deepEqual([other.area.widthChunks,other.area.heightChunks],[8,arena===11?16:8]);assert.equal(other.phase,'staging');if(count!==null)assert.equal(other.walls.length,count);
+    for(const wall of other.walls){assert.equal(wall.getFace(),face);assert.equal(axis==='x'?wall.getLocation().getX()-other.area.getBaseX()+other.layout.origin[0]:wall.getLocation().getY()-other.area.getBaseY()+other.layout.origin[1],coordinate);}old.push({other,team});
+  }
+  const[a,b]=players.slice(14),game=await negotiate(a,b,null,1,null,0);await join(a);await join(b);assert.equal(new Set([...old.map(x=>x.other.area),game.area]).size,8);
+  const foreign=mappedLayoutObjects(old[0].other,'clanwars_exitportal_darkrock_s')[0];assert.ok(foreign);assert.equal(Match.forfeit({player:a,object:foreign}),false);
+  for(const player of [a,b]){const side=game.members.get(player),gameval=side===0?'clanwars_exitportal_darkrock_s':'clanwars_exitportal_darkrock_n',xy=side===0?[3294,5002]:[3295,5108],approach=side===0?[3296,5004]:[3296,5107],object=wastelandObject(game,gameval,xy);assert.equal(object.getId(),side===0?26727:26728);assert.equal(object.getFace(),side===0?0:2);assert.deepEqual([object.getDefinition().sizeX,object.getDefinition().sizeY],[4,2]);
+    const fake=new core.GameObject(object.getId(),object.getLocation().clone(),object.getType(),object.getFace(),game.area);try{assert.equal(Match.forfeit({player,object:fake}),false);}finally{game.area.detach(fake);}
+    assert.equal(wastelandReachable(game,WASTELAND_LANDINGS[side],[...approach,0]),true);assert.equal(wastelandReachable(game,WASTELAND_LANDINGS[1-side],[...approach,0]),false);await wastelandWalk(player,game,approach);await layoutObjectInput(player,game,gameval,xy,'Forfeit');assert.equal(C.matches.has(player),false);lobby(player);
+  }
+  assert.equal(game.phase,'staging');assert.equal(game.members.size,0);tick(game.starts-C.now());assert.equal(game.area.isDestroyed(),true);for(const{other,team}of old){assert.notEqual(other.phase,'over');assert.equal(other.area.isDestroyed(),false);for(const p of team)assert.equal(C.matches.get(p),other);}
+});
+
+test('native Wasteland Ignore5 actual six versus six retains real defeat threshold',async()=>{
+  const{b,teams,players,game}=await stragglerGame(6,1,3,{},0);completePreparation(game);assert.equal(game.fighters.size,12);await lethalMelee(b,teams[0][1],game,true,[[3296,5010,0],[3297,5010,0]]);tick(6);assert.equal(game.phase,'over');for(const p of players)lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+for(const y of [5006,5057,5106])test(`native Wasteland concurrent melee starts at source north-center-south sample ${y}`,async()=>{
+  const a=actor(true),mate=actor(true),b=actor(true);channel(a,[mate]);channel(b);const game=await negotiate(a,b,null,1,null,0);for(const p of [a,mate,b])await join(p);completePreparation(game);
+  // Disclosed local combat checkpoints, not natural north/south traversal or retail spawns.
+  for(const[p,xy]of [[a,[3296,y]],[mate,[3295,y]],[b,[3296,y+1]]]){ruleStats(p,99);p.moveTo(game.area.at([...xy,0]));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);assert.equal(game.area.getClip(p.getLocation()),0);}
+  assert.equal(game.area.isMulti(),true);assert.equal(game.fighters.get(a),game.fighters.get(mate));assert.notEqual(game.fighters.get(a),game.fighters.get(b));
+  for(const p of [a,mate]){assert.equal(CombatFactory.canAttackByPolicy(p,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);await wire(p,frame);assert.equal(p.getCombat().getTarget(),b);}
+  assert.equal(a.getCombat().getTarget(),b,'first melee start survives another valid attacker');assert.equal(mate.getCombat().getTarget(),b,'second native attacker shares the opposing target');assert.equal(game.phase,'combat');
+  console.log('WASTELAND_MULTI_QUALIFICATION '+JSON.stringify({sourceY:y,attackers:[a.getIndex(),mate.getIndex()],target:b.getIndex(),bothNativeTargets:true}));
+});
+
+test('native Wasteland source Tree and Mushroom distinguish ordinary walking from native projectile rays',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,0);await join(a);await join(b);completePreparation(game);
+  for(const specimen of [
+    {gameval:'wild6_tree_a',xy:[3278,5020],from:[3278,5019],to:[3278,5022],size:2,face:1,type:11,projectile:true},
+    {gameval:'wild6_mushrooms_a',xy:[3292,5026],from:[3292,5025],to:[3292,5027],size:1,face:0,type:11,projectile:false},
+  ]){
+    const object=wastelandObject(game,specimen.gameval,specimen.xy),def=object.getDefinition(),at=object.getLocation(),from=game.area.at([...specimen.from,0]),to=game.area.at([...specimen.to,0]);assert.equal(object.getType(),specimen.type);assert.equal(object.getFace(),specimen.face);assert.deepEqual([def.sizeX,def.sizeY],[specimen.size,specimen.size]);assert.equal(def.isSolid(),true);assert.equal(core.CacheDefinitions.getObject(object.getId()).blocksProjectile,specimen.projectile);
+    for(let x=0;x<specimen.size;x++)for(let y=0;y<specimen.size;y++)assert.equal(game.area.getClip(game.area.at([specimen.xy[0]+x,specimen.xy[1]+y,0]))&0x20100,specimen.projectile?0x20100:0x100);
+    assert.equal(game.area.getClip(from),0);assert.equal(game.area.getClip(to),0);assert.equal(wastelandReachable(game,WASTELAND_LANDINGS[0],[...specimen.from,0]),true);
+    await wastelandWalk(a,game,specimen.from);await wire(a,walkClickFrame(at));for(let n=0;n<12;n++){tick();const here=a.getLocation();assert.equal(core.RegionManager.blocked(here,game.area),false);assert.equal(here.getX()>=at.getX()&&here.getX()<at.getX()+specimen.size&&here.getY()>=at.getY()&&here.getY()<at.getY()+specimen.size,false,'ordinary input never enters full solid footprint');}
+    assert.equal(core.RegionManager.canMovestart(from,at,1,1,game.area),false);assert.equal(core.RegionManager.canProjectileAttackReturn(from,to,1,game.area),!specimen.projectile);await wastelandWalk(a,game,specimen.to);
+    console.log('WASTELAND_OBSTACLE_QUALIFICATION '+JSON.stringify({id:object.getId(),source:specimen.xy,ray:!specimen.projectile,position:position(a)}));
+  }
+  const open=game.area.at([3296,5010,0]),adjacent=game.area.at([3297,5010,0]);assert.equal(core.RegionManager.canMovestart(open,adjacent,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(open,adjacent,1,game.area),true);
+});
+
+test('native Wasteland actionless owned Trees cannot dispatch chopping while canonical world Tree still produces logs and respawns',async t=>{
+  resourceRandom(t);const a=actor(true),b=actor(true),world=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,0);await join(a);await join(b);completePreparation(game);
+  const WC=require('../plugins/skills/Woodcutting.plugin'),I=core.ItemIdentifiers;const skills=a.getSkillManager();skills.setMaxLevel(core.Skill.WOODCUTTING,99);skills.setCurrentLevel(core.Skill.WOODCUTTING,99);give(a,I.BRONZE_AXE,'wasteland-valid-axe');
+  const trees=['wild6_tree_a','wild6_tree_b','wild6_tree_c','wild6_fallen_tree'].flatMap(name=>mappedLayoutObjects(game,name));assert.equal(trees.length,134);const before=wastelandMasks(game.area),counts=new Map();
+  for(const tree of trees){assert.equal(tree.getPrivateArea(),game.area);assert.equal(core.MapObjects.getPrivateArea(a,tree.getId(),tree.getLocation()),tree);assert.equal(tree.getDefinition().getInteractions().some(Boolean),false);counts.set(tree.getId(),(counts.get(tree.getId())??0)+1);assert.equal(tree.getDefinition().isSolid(),true);}
+  assert.deepEqual([...counts].sort((x,y)=>x[0]-y[0]),[[14693,50],[14694,38],[14696,44],[14701,2]]);
+  const{ObjectActionPacketListener}=require('../dist/net/packet/impl/ObjectActionPacketListener');const listener=new ObjectActionPacketListener();
+  for(const[gameval,xy,approach]of [['wild6_tree_a',[3278,5020],[3278,5019]],['wild6_tree_b',[3277,5019],[3276,5019]],['wild6_tree_c',[3285,5011],[3284,5011]],['wild6_fallen_tree',[3293,5025],[3292,5025]]]){
+    const tree=wastelandObject(game,gameval,xy);await wastelandWalk(a,game,approach);const xp=skills.getExperience(core.Skill.WOODCUTTING),logs=a.getInventory().getAmount(I.LOGS),menu=a.getCreationMenu();assert.equal(WC.isWoodcuttingActive(a),false);
+    // Actual native object listener; unavailable named lookup and numeric first option both use the real all-null cache actions.
+    listener.executeAction(a,tree.getId(),tree.getLocation().getX(),tree.getLocation().getY(),0,'Chop down');listener.executeAction(a,tree.getId(),tree.getLocation().getX(),tree.getLocation().getY(),1);tick(20);
+    assert.equal(WC.isWoodcuttingActive(a),false);assert.equal(treeTask(tree),undefined);assert.equal(a.getCreationMenu(),menu);assert.equal(a.getInventory().getAmount(I.LOGS),logs);assert.equal(skills.getExperience(core.Skill.WOODCUTTING),xp);assert.equal(core.MapObjects.getPrivateArea(a,tree.getId(),tree.getLocation()),tree);
+  }
+  assert.deepEqual(wastelandMasks(game.area),before,'no unavailable chop can remove N geometry or create a stump');
+  // Disclosed seeded ordinary world control, not an N resource, native login or natural RNG proof.
+  world.moveTo(new core.Location(3222,3218,0));core.RegionManager.loadMapFiles(3222,3218);const tree=new core.GameObject(core.CacheDefinitions.getLocId('tree2'),new core.Location(3223,3218,0),10,2,null);core.ObjectManager.register(tree,true);tick();
+  try{const xp=world.getSkillManager().getExperience(core.Skill.WOODCUTTING),task=await chopTree(world,tree);assert.equal(world.getInventory().getAmount(I.LOGS),1);assert.ok(world.getSkillManager().getExperience(core.Skill.WOODCUTTING)>xp);const remaining=task.getRemainingTicks();assert.ok(remaining>0);tick(remaining+1);assert.equal(task.isStopped(),true);assert.equal(core.MapObjects.get(tree.getId(),tree.getLocation(),null),tree);assert.deepEqual(wastelandMasks(game.area),before,'world lifecycle never mutates N source');}
+  finally{core.ObjectManager.deregister(tree,true);}
+});
+
+test('native Wasteland cancellation reuses actual8x16 slot without changing another private match or world',async()=>{
+  const players=Array.from({length:4},()=>actor(true));for(const p of players)channel(p);const[a,b,c,d]=players,dead=await negotiate(a,b,null,1,null,0);await join(a);await join(b);completePreparation(dead);const live=await negotiate(c,d,null,1,null,0);await join(c);await join(d);completePreparation(live);
+  const baseline=wastelandMasks(dead.area),liveBefore=wastelandMasks(live.area),oldBase=[dead.area.getBaseX(),dead.area.getBaseY()],old=wastelandObject(dead,'wild6_tree_a',[3278,5020]),other=wastelandObject(live,'wild6_tree_a',[3278,5020]);const worldAt=new core.Location(3222,3218,0),worldClip=core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null);dead.finish(null);assert.equal(dead.area.isDestroyed(),true);for(const p of [a,b])lobby(p);
+  const replacement=wastelandTemplate(),replacementGame={area:replacement,layout:{origin:WASTELAND_ORIGIN}};
+  try{assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],oldBase,'actual freed8x16 slot reused');const fresh=wastelandObject(replacementGame,'wild6_tree_a',[3278,5020]);assert.notEqual(fresh,old);assert.equal(fresh.getPrivateArea(),replacement);assert.deepEqual(wastelandMasks(replacement),baseline);assert.equal(replacement.resolveObject(fresh.getId(),fresh.getLocation()),fresh);tick(105);assert.deepEqual(wastelandMasks(replacement),baseline);assert.equal(fresh.getDefinition().getInteractions().some(Boolean),false);assert.deepEqual(wastelandMasks(live.area),liveBefore);assert.equal(core.MapObjects.getPrivateArea(c,other.getId(),other.getLocation()),other);assert.equal(live.area.isDestroyed(),false);assert.equal(C.matches.get(c),live);assert.equal(core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null),worldClip);}
+  finally{replacement.destroy();}
+});
+
+test('native Wasteland food drink prayer special vetoes preserve actual supplies and safe-death metadata',async()=>{
+  const a=actor(true),b=actor(true);ruleStats(a);ruleStats(b);channel(a);channel(b);const game=await negotiate(a,b,null,1,{food:1,drinks:1,prayer:2,specialattacks:2},0);await join(a);await join(b);completePreparation(game);
+  const I=core.ItemIdentifiers;give(a,I.SHRIMPS,'wasteland-food');give(a,I.ATTACK_POTION_4_,'wasteland-potion');let before=resources(a);await nativeItem(a,I.SHRIMPS,'Eat');assert.deepEqual(resources(a),before);await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.deepEqual(resources(a),before);
+  await nativeButton(a,prayerWidget(core.PrayerHandler.THICK_SKIN));assert.equal(a.getPrayerActive().some(Boolean),false);assert.deepEqual(resources(a),before);await wield(a,I.DRAGON_DAGGER,'wasteland-special');before=resources(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);assert.deepEqual(resources(a),before);
+  const carried=carriedItems(a);await lethalMelee(b,a,game,true,[[3296,5010,0],[3297,5010,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),carried);assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'wasteland-special'});
+  game.finish(null);tick(2);a.setHitpoints(50);await nativeItem(a,I.SHRIMPS,'Eat');assert.equal(a.getInventory().contains(I.SHRIMPS),false,'same actual food is usable after match cleanup');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true);assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_).getMeta(),{qa:'wasteland-potion'});
 });

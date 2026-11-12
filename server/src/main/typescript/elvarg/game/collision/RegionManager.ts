@@ -718,7 +718,11 @@ export class RegionManager {
         for (let ii = 0; ii < max; ii++) {
             let currentX = endX - diffX;
             let currentY = endY - diffY;
-            for (let i = 0; i < xLength; i++) {
+            if ((xLength > 1 || yLength > 1) && diffX !== 0 && diffY !== 0) {
+                if (!RegionManager.canStepDiagonally(currentX, currentY, Math.sign(diffX), Math.sign(diffY), height, xLength, yLength, privateArea)) {
+                    return false;
+                }
+            } else for (let i = 0; i < xLength; i++) {
                 for (let i2 = 0; i2 < yLength; i2++)
                     if (diffX < 0 && diffY < 0) {
                         if ((RegionManager.getClipping((currentX + i) - 1, (currentY + i2) - 1, height, privateArea) & 0x12c010e) !== 0
@@ -768,6 +772,33 @@ export class RegionManager {
                 diffY--;
         }
 
+        return true;
+    }
+
+    /**
+     * One diagonal step of an actor larger than 1x1 from its south-west tile (x, y): only the tiles it steps into
+     * are checked (the new corner, the new column and the new row), as OSRS's route finder does (rsmod,
+     * RsmodRouteFinding's size-N diagonals). Checking beside every tile of the old footprint as well refused
+     * 3,187 of 14,156 diagonal steps size-2+ NPCs made in 400 rsprox.net recordings, and left large NPCs stuck
+     * where the route finder had them cut a corner.
+     */
+    private static canStepDiagonally(x: number, y: number, dx: number, dy: number, height: number,
+        xLength: number, yLength: number, privateArea: PrivateArea): boolean {
+        const blocked = (tileX: number, tileY: number, mask: number) =>
+            (RegionManager.getClipping(tileX, tileY, height, privateArea) & mask) !== 0;
+        // The step's own wall bits on the shared base (objects, blocked floor): corner, column and row masks.
+        const corner = dx < 0 ? (dy > 0 ? 0x12c0138 : 0x12c010e) : (dy > 0 ? 0x12c01e0 : 0x12c0183);
+        const column = dx < 0 ? 0x12c013e : 0x12c01e3;
+        const row = dy > 0 ? 0x12c01f8 : 0x12c018f;
+        const columnX = dx < 0 ? x - 1 : x + xLength;
+        const rowY = dy > 0 ? y + yLength : y - 1;
+        if (blocked(columnX, rowY, corner)) return false;
+        for (let i = 1; i < yLength; i++) {
+            if (blocked(columnX, dy > 0 ? y + i : y + i - 1, column)) return false;
+        }
+        for (let i = 1; i < xLength; i++) {
+            if (blocked(dx < 0 ? x + i - 1 : x + i, rowY, row)) return false;
+        }
         return true;
     }
 

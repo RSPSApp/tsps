@@ -259,6 +259,7 @@
       "table_name": "Abhorrent spectre Drops",
       "wiki_page": "Abhorrent spectre",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -17764,6 +17765,7 @@
       "table_name": "Basilisk Sentinel Drops",
       "wiki_page": "Basilisk Sentinel",
       "main_max_roll": 52,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -23300,6 +23302,7 @@
       "table_name": "Bloodthirst rockslug Drops",
       "wiki_page": "Bloodthirst rockslug",
       "main_max_roll": 128,
+      "rolls": 9,
       "entries": [
         {
           "item_id": 557,
@@ -45440,6 +45443,7 @@
       "table_name": "Cave abomination Drops",
       "wiki_page": "Cave abomination",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -51135,6 +51139,7 @@
       "table_name": "Choke devil Drops",
       "wiki_page": "Choke devil",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -51717,6 +51722,7 @@
       "table_name": "Cockathrice Drops",
       "wiki_page": "Cockathrice",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -65586,6 +65592,7 @@
       "table_name": "Dire gryphon Drops",
       "wiki_page": "Dire gryphon",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -67304,6 +67311,7 @@
       "table_name": "Dreadborn Araxyte Drops",
       "wiki_page": "Dreadborn Araxyte",
       "main_max_roll": 127,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 29784,
@@ -85726,6 +85734,7 @@
       "table_name": "Giant rockslug Drops",
       "wiki_page": "Giant rockslug",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 557,
@@ -90074,6 +90083,7 @@
       "table_name": "Greater abyssal demon Drops",
       "wiki_page": "Greater abyssal demon",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25775,
@@ -97378,6 +97388,7 @@
       "table_name": "Guardian Drake Drops",
       "wiki_page": "Guardian Drake",
       "main_max_roll": 93,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 22783,
@@ -107363,6 +107374,7 @@
       "table_name": "Insatiable Bloodveld Drops",
       "wiki_page": "Insatiable Bloodveld",
       "main_max_roll": 138,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25769,
@@ -130593,6 +130605,7 @@
       "table_name": "Monstrous basilisk Drops",
       "wiki_page": "Monstrous basilisk",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -135923,6 +135936,7 @@
       "table_name": "Nechryarch Drops (regular nechryael + Iorwerth)",
       "wiki_page": "Nechryarch",
       "main_max_roll": 116,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25772,
@@ -136228,6 +136242,7 @@
       "table_name": "Nechryarch Drops (greater nechryael)",
       "wiki_page": "Nechryarch",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25772,
@@ -137682,6 +137697,7 @@
       "table_name": "Night beast Drops",
       "wiki_page": "Night beast",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -138916,6 +138932,7 @@
       "table_name": "Nuclear smoke devil Drops",
       "wiki_page": "Nuclear smoke devil",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 592,
@@ -148179,6 +148196,7 @@
       "table_name": "Repugnant spectre Drops",
       "wiki_page": "Repugnant spectre",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -153734,6 +153752,7 @@
       "table_name": "Screaming banshee Drops",
       "wiki_page": "Screaming banshee",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 1420,
@@ -153982,6 +154001,7 @@
       "table_name": "Screaming twisted banshee Drops",
       "wiki_page": "Screaming twisted banshee",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 1391,
@@ -170933,6 +170953,7 @@
       "table_name": "Spiked Turoth Drops",
       "wiki_page": "Spiked Turoth",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,

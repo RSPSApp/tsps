@@ -684,7 +684,8 @@ test("a failed native H.A.M. attempt retries; an optional lockpick improves the 
   nativeTicks(player, 1);
   assert.equal(thievingXp(player), 0.5);
   assert.equal(player.getPacketSender().getVarbit(235), 0);
-  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "no invented numb-finger roll");
+  // #4523: each failure numbs the fingers (Wiki), but not below 1, so the attempt retries.
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "a level-one picker stays at 1");
   assert.deepEqual(sounds, [sound(2402), sound(2402), sound(2581)], "failure does not duplicate the next retry sound");
   player.getInventory().add(new core.Item(core.ItemIdentifiers.LOCKPICK, 1), false);
   nativeTicks(player, 1);

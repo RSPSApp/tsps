@@ -37,7 +37,8 @@ function spam(player, text) {
 function fumbled(player) {
   const skills = player.getSkillManager();
   spam(player, NUMB_MESSAGE);
-  skills.setCurrentLevels(core.Skill.THIEVING, Math.max(0, skills.getCurrentLevel(core.Skill.THIEVING) - 1));
+  // Not below 1: the attempt needs Thieving 1 to go on, and no drain below it is recorded.
+  skills.setCurrentLevels(core.Skill.THIEVING, Math.max(1, skills.getCurrentLevel(core.Skill.THIEVING) - 1));
   skills.updateSkill?.(core.Skill.THIEVING);
 }
 

@@ -3,6 +3,9 @@
 // weights are relative; the access chance is not multiplied again). Through the real NpcDrops loader and roller:
 // the aberrant spectre's 78/128 herb access gives 1, 2 or 3 herbs (11/26, 11/26, 4/26), the deviant spectre's
 // 46/128 access gives 2 or 3 (29/17). Expected means come from the entry data.
+// repugnant_spectre and bloodthirsty_repugnant_spectre are NOT covered: the Wiki gives every one of their rows rolls=3 but the
+// export carries no `rolls` for them, so they are expected to stay near 0.85 herbs per kill until the producer exports it;
+// do not change that number to make a test pass.
 const assert = require("node:assert/strict");
 const { test, before } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();

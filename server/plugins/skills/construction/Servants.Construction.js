@@ -41,6 +41,7 @@ function has(save, key) { return rooms(save).some(r => keys(r).includes(key)); }
 function hasServantBeds(save) {
   return rooms(save).filter(r => r.roomKey === "BEDROOM" && keys(r).some(k => k.endsWith("_BED"))).length >= 2;
 }
+function hasBellPull(save) { return rooms(save).some(r => keys(r).some(k => k.endsWith("BELL_PULL"))); }
 function definition(save) { return SERVANTS.find(s => s.id === save.servant?.id); }
 function persist(player) {
   const save = House.houseStateFor(player);
@@ -122,7 +123,7 @@ function enterServantHouse(player, house) {
 function callServant(player) {
   const runtime = ownerContext(player);
   if (!runtime) { player.sendMessage("You need a hired servant and two bedrooms with beds in your own house."); return; }
-  if (!rooms(runtime.house.save).some(r => keys(r).some(k => k.endsWith("BELL_PULL")))) {
+  if (!hasBellPull(runtime.house.save)) {
     player.sendMessage("You need a bell-pull in your dining room to call your servant."); return;
   }
   if (runtime.due !== undefined) { player.sendMessage("Your servant is still carrying out your request."); return; }
@@ -130,6 +131,27 @@ function callServant(player) {
   runtime.npc?.getMovementQueue().reset();
   runtime.npc?.moveTo(player.getLocation().clone());
   runtime.npc?.forceChat("You rang?");
+}
+/**
+ * House Options' Call Servant. Returns true when the servant is called (the panel then closes);
+ * a refusal leaves it open.
+ */
+function callServantFromOptions(player) {
+  const house = player.getPrivateArea();
+  // Ours: a guest in someone else's house gets the not-in-a-house line too.
+  if (!(house instanceof Instance.PlayerHouseInstance) || house.owner !== player || house.isDestroyed()) {
+    player.sendMessage("You're not in a house. You can't call your servant from here."); return false;
+  }
+  if (!definition(house.save)) { player.sendMessage("You must hire a servant from the Servants' Guild in Ardougne first."); return false; }
+  if (!hasBellPull(house.save)) {
+    player.sendMessage("You need a bell pull in your house to be able to call your servant like this."); return false;
+  }
+  const runtime = ownerContext(player);
+  if (runtime?.due !== undefined) { player.sendMessage("The servant is not back yet."); return false; }
+  if (!runtime) { player.sendMessage("You need a hired servant and two bedrooms with beds in your own house."); return false; }
+  player.sendMessage("The servant is on the way.");
+  callServant(player);
+  return true;
 }
 function payServant(player, automatic = false) {
   const save = House.houseStateFor(player), servant = save.servant, def = definition(save);
@@ -477,4 +499,4 @@ function attachServants(api) {
   api.onPlayerLogin(login);
 }
 
-Object.assign(module.exports, { SERVANTS, hasServantBeds, leaveServantHouse, enterServantHouse, callServant, payServant, startServantTask, fireServant, changeServantMoney, useServantFurniture, processServant, attachServants });
+Object.assign(module.exports, { SERVANTS, hasServantBeds, leaveServantHouse, enterServantHouse, callServant, callServantFromOptions, payServant, startServantTask, fireServant, changeServantMoney, useServantFurniture, processServant, attachServants });

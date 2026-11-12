@@ -2918,14 +2918,14 @@ test('native Lumbridge canonical internal doors preserve preparation, seals, jai
   const door=lumbridgeObject(game,'elfdoor',[3415,4825]);
   // Supplied ground checkpoint selects the actual reachable door side; native route opens it.
   p.moveTo(game.area.at([3415,4824,0]));tick();lumbridgeObjectClick(p,door,'Open');tick(12);
-  assert.ok(core.World.getRemovedObjects().includes(door),'native ordinary Open records the actual owned internal door removal');
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(door)),'native ordinary Open records the actual owned internal door removal');
   const openDoor=game.area.getObjects().find(o=>o.getId()!==door.getId()&&o.getDefinition()?.getName()==='Door'&&o.getDefinition().getInteractions()?.includes('Close'));assert.ok(openDoor,'canonical owned open leaf exists');
   lumbridgeObjectClick(p,openDoor,'Close');tick(12);
   const restored=game.area.getObjects().find(o=>o.getId()===door.getId()&&o.getLocation().equals(door.getLocation()));assert.ok(restored);assert.equal(restored.getFace(),door.getFace());
-  assert.equal(core.World.getRemovedObjects().includes(door),false,'canonical close clears original removal marker');
+  assert.equal(core.World.getRemovedObjects().some(object=>object.equals(door)),false,'canonical close clears original removal marker');
   const north=[a,b].find(actor=>game.members.get(actor)===1);north.moveTo(game.area.at([3422,4829,0]));tick();
   const double=lumbridgeObject(game,'castledoubledoorl',[3421,4829]);lumbridgeObjectClick(north,double,'Open');tick(12);
-  assert.ok(core.World.getRemovedObjects().includes(double));
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(double)));
   assert.equal(lumbridgeReachable(game,LUMBRIDGE_LANDINGS[0],LUMBRIDGE_LANDINGS[1]),false,'canonical double-door opening during preparation cannot bypass wall');
   const opened=game.area.getObjects().find(o=>o.getDefinition()?.getName()==='Large door'&&o.getDefinition().getInteractions()?.includes('Close'));assert.ok(opened);
   lumbridgeObjectClick(north,opened,'Close');tick(12);
@@ -2934,7 +2934,7 @@ test('native Lumbridge canonical internal doors preserve preparation, seals, jai
   for(const wall of wallIds)assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);
   completePreparation(game);await lumbridgeWalk(p,game,[3422,4829]);
   const large=lumbridgeObject(game,'castledoubledoorl',[3421,4829]);lumbridgeObjectClick(p,large,'Open');tick(12);
-  assert.ok(core.World.getRemovedObjects().includes(large),'canonical double door records its actual private closed-leaf removal');
+  assert.ok(core.World.getRemovedObjects().some(object=>object.equals(large)),'canonical double door records its actual private closed-leaf removal');
   assert.ok(game.area.getObjects().some(o=>o.getPrivateArea()===game.area&&o.getDefinition()?.getName()==='Large door'&&o.getDefinition().getInteractions()?.includes('Close')),'actual owned double-door opened leaf');
   await lumbridgeWalk(p,game,[3419,4829]);
   // Room access is an ordinary door route, not a seeded membership or clipping override.

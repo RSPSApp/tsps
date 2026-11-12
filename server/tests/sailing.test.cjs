@@ -2264,7 +2264,6 @@ test("leaving the shipyard takes its boat away", () => {
 
 test("Customise-boat at Catherby opens the selection for that dock, and the portal brings the player back beside Sophie", () => {
   const h = shipyardHarness();
-  h.shipyard.events["interface:closed"]?.({ player: h.player, interfaceId: -1 });
   const catherby = Sailing.getDock("catherby");
   Sailing.activeBoat(h.player).location = { kind: "docked", dock: "catherby" };
   h.player.moveTo(new Location(2805, 3429, 0)); // ends the harness's visit

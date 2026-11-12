@@ -138,24 +138,29 @@ function endVisit(player) {
   player.getPacketSender().sendTabInterface(0, 0);
 }
 
+/** A copy of the player's tile, kept while they move on. */
+function standingAt(player) {
+  const here = player.getLocation();
+  return new Location(here.getX(), here.getY(), here.getZ());
+}
+
 function enterShipyard(player, dock, slot) {
   const boat = ownedBoat(player, slot);
   if (!boat || boat.location.kind !== "docked" || boat.location.dock !== dock.id) {
     player.sendMessage("You can't choose that boat at the moment.");
     return;
   }
+  // Where the player stood with the shipwright: the portal's Exit brings them back beside it.
+  const from = standingAt(player);
   fade(player, true);
   later(player, 1, () => {
-    beginVisit(player, dock, slot);
+    beginVisit(player, dock, slot, from);
     later(player, 1, () => fade(player, false));
   });
 }
 
 /** Puts the player in the shipyard with the boat in `slot` shown. */
-function beginVisit(player, dock, slot) {
-  // Where the player stood with the shipwright: the portal's Exit brings them back beside it.
-  const here = player.getLocation();
-  const from = new Location(here.getX(), here.getY(), here.getZ());
+function beginVisit(player, dock, slot, from = standingAt(player)) {
   player.moveTo(new Location(SHIPYARD.arrival.x, SHIPYARD.arrival.y, SHIPYARD.arrival.z));
   const visit = { slot, dock: dock.id, from, shown: undefined, aboard: false, hotspot: undefined,
     sailingIntro: player.getPacketSender().getVarbit(VARBIT.SAILING_INTRO) };
@@ -406,8 +411,7 @@ function visitedBoat(player) {
 function forgetVisit({ player }) {
   const visit = visits.get(player);
   // Ours: saved back at the dock the visit started from, as the portal's Exit would leave them.
-  if (visit?.from) player.setLocation(visit.from);
-  else if (visit?.aboard) player.setLocation(new Location(SHIPYARD.landing.x, SHIPYARD.landing.y, SHIPYARD.landing.z));
+  if (visit) player.setLocation(visit.from);
   if (visit?.shown) BoatManager.dispose(visit.shown);
   visits.delete(player);
 }

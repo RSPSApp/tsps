@@ -19,6 +19,7 @@ const Broavs = require("./hunter/Broavs.Hunter");
 const Overworld = require("./hunter/Overworld.Hunter");
 const Ceto = require("./hunter/Ceto.Hunter");
 const Annette = require("./hunter/Annette.Hunter");
+const Matthias = require("./hunter/Matthias.Hunter");
 const ImplingTracker = require("./hunter/ImplingTracker.Hunter");
 
 // Ground traps are "Take" (op3) and "Lay"/"Activate" (op4) in the cache.
@@ -38,6 +39,7 @@ module.exports = {
     api.persistAttribute(Tracking.ATTRIBUTE);
     api.persistAttribute(Aerial.ATTRIBUTE);
     api.persistAttribute("hunter.herbiboars");
+    api.persistAttribute(Matthias.ATTRIBUTE, false);
     api.persistAttribute(ImplingTracker.TOTALS_ATTRIBUTE, {});
     api.onCustomEvent("hunter:success", Rumours.success);
     api.onCustomEvent("hunter:impling-caught", Overworld.caught);
@@ -95,6 +97,8 @@ module.exports = {
     api.onNpcDialogueCondition(Ceto.condition);
     api.onCustomEvent("npc-dialogue:action", Ceto.action);
     api.onCustomEvent("npc-dialogue:action", Annette.action);
+    api.onNpcDialogueCondition(Matthias.condition);
+    api.onCustomEvent("npc-dialogue:action", Matthias.action);
     api.onCustomEvent("npc-dialogue:line", Ceto.line);
     api.onNpcInteraction("Fish shoal", { Chase: DriftNets.chase });
     for (const name of ["Drift net anchors", "Drift net (full)"]) api.onObjectInteraction(name, {

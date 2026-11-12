@@ -49,3 +49,21 @@ It checks empty/nonempty state, all thirteen keys, conservation/refusals, stale 
 JSON save/load, drop loss/banked duplicates and the existing brass door. This fixture does
 not establish natural quest traversal or client rendering. Runtime results are recorded
 separately; source and fixture existence alone is not a passing test claim.
+
+## Reproducing the verification
+
+The validated runtime was Linux x64/glibc, Node **v22.17.0** in `node@sha256:b04ce4ae4e95b522112c2e5c52f781471a5cbc3b594527bcddedee9bc48c03a0`. Preparation used the packageManager-pinned Yarn **4.12.0**, `install --immutable --mode=skip-build`, and the [node-datachannel 0.32.1 NAPI-v8 Linux-x64 archive](https://github.com/murat-dogan/node-datachannel/releases/download/v0.32.1/node-datachannel-v0.32.1-napi-v8-linux-x64.tar.gz): archive SHA-256 `1a31d28a7aec9c1538cb96b76260d062399715b4dcea0ff3a0ebd6f58df5e391`, exact member `build/Release/node_datachannel.node`, binary SHA-256 `98ad24d9b992a7974628b339ce81dfe159ca8d255459da5531dfcd7be659af06`. Native `ldd`/load checks passed. The [public preparation recipe in PR #4732](https://github.com/RSPSApp/tsps/pull/4732) supplies equivalent shell download/hash/extraction steps, requiring `curl`, `tar`, `sha256sum`, `ldd` and network access to Yarn/GitHub/OpenRS2. Those shell preparation instructions are equivalent reproduction steps, not this executor's literal command history.
+
+Cache target: `osrs-242_2026-11-03`, OpenRS2 2757; all 28 cache files were checked.
+After the preparation above, these were the actual command arguments from `server/`:
+
+```sh
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=4096 node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/ensure-cache.ts
+node node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/world-config-docs.ts
+node node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/world-config-docs.ts
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/steel-key-ring-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/world-config-docs.test.cjs
+```
+
+At source `c1bd369b5e7da21208e7f767dd2924c7bf275fee`, the corrected native fixture passed 9/9 and the configuration checks passed 4/4. Both document generations matched; the exact generated document SHA-256 is `8058a78dd940172c4a08fecd88eeb4caef8912ede336d7b735091c98c4e3e92f`. Only that declared generated document changed during the run; all other source, compiled output and cache identities were preserved. These are separate native and documentation checks, not a full repository suite. The PR retains the earlier failed/diagnostically qualified runs and the unrelated Tourist Trap fixture failures.

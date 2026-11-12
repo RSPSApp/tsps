@@ -21,9 +21,10 @@ const TRAP_SOUND_RADIUS = 10;
 // Pitfalls are the map's 2x2 multiloc, driven by its own varbit (hunt_pitfall_state<n>): 0 Pit, 1 Spiked pit,
 // 2 collapsing, 3 and 4 the full pit for either jump direction. Each state change clears the coord timer
 // (script 6678) and a set or full pit draws add_overlaytimer_coord (5478): coord, timer id, ticks, colour, 1.
-// A set pit lasts 300 ticks, a full one 142 (rsprox captures 1108, 1757, 1858, 4046, 4051).
+// A set pit lasts 300 ticks (rsprox captures 1108, 1757, 1858, 4046, 4051), a full one 140: the main-game larupia
+// capture's timer is 141 and the pit collapses 140 ticks after filling (Leagues captures show 143 and 142).
 const PIT_VALUES = { idle: 1, closing: 2, caught: 3 };
-const PIT_TICKS = { idle: 300, caught: 142 };
+const PIT_TICKS = { idle: 300, caught: 140 };
 const COORD_TIMER_SCRIPT = 5478;
 const CLEAR_COORD_TIMER_SCRIPT = 6678;
 

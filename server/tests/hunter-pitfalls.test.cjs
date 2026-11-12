@@ -179,7 +179,7 @@ test('a catch falls in 8 ticks after the jump and shows full at 11; the same pit
     tick(3);
     assert.equal(varbit(p), 4, '+11: the full pit');
     assert.equal(trap.state, 'caught');
-    assert.deepEqual(sent.scripts.at(-1), [5478, coord(PIT.x, PIT.y), 4, 143, 2031427, 1]);
+    assert.deepEqual(sent.scripts.at(-1), [5478, coord(PIT.x, PIT.y), 4, 141, 2031427, 1]);
     assert.equal(npc.isVisible(), false);
     tick(1);
     assert.equal(npc.isVisible(), true, 'back at its spawn a tick later');
@@ -218,21 +218,53 @@ test('a miss leaps over the pit in view with its two leap projectiles, follows o
   assert.equal(trap.state, 'idle');
   tick(1);
   assert.equal(npc.getFollowing(), p, 'the chase goes on without another tease');
+  // Larupia capture ticks 438 and 471: the player still jumps back; three ticks later the creature refuses.
+  const refused = () => {
+    sent.messages.length = 0;
+    const jumpAt = H.tick, start = p.getLocation().clone();
+    Pitfalls.jump({ player: p, object: pit });
+    tick(2);
+    assert.notDeepEqual([p.getLocation().getX(), p.getLocation().getY()], [start.getX(), start.getY()], 'the player jumps');
+    assert.deepEqual(sent.messages, []);
+    tick(jumpAt + 3 - H.tick);
+    assert.deepEqual(sent.messages, ["The larupia won't jump the same pit twice in a row."]);
+    assert.equal(varbit(p), 1, 'the pit is still set');
+  };
+  tick(2);
+  assert.equal(p.getForceMovement(), null, 'the knock-back ends');
   p.setLocation(new core.Location(...SOUTH, 0));
-  Pitfalls.jump({ player: p, object: pit });
-  assert.equal(sent.messages.at(-1), 'Lure this creature across a different pit.');
+  refused();
+  // A fresh tease doesn't make it forget the pit (ticks 464, 474).
+  Pitfalls.clear({ player: p });
+  npc.setLocation(new core.Location(2543, 2911, 0));
+  p.setLocation(new core.Location(...NORTH, 0));
+  tease(p, npc);
+  refused();
 });
 
-test('a creature off the crossing line goes to its edge at +3, steps in at +5 and +6 and falls on the loc coord', t => {
+test('a creature 4 tiles out steps at +3, +5, +7, +8 onto the loc coord, falls at +10 and fills the pit at +13 (larupia tick 506)', t => {
   const { p } = hunter(t, [2544, 2910]);
   layPit(p);
-  const { npc } = larupia(t, [2545, 2912]);
+  const { npc, seen } = larupia(t, [2545, 2912]);
   tease(p, npc);
   const at = jump(p, true);
-  const seen = {};
-  for (const n of [3, 5, 6, 8]) { tick(at + n - H.tick); seen[n] = [npc.getLocation().getX(), npc.getLocation().getY()]; }
-  // 1108 and 1757: the edge on the loc's column, then one tile a tick into the pit (south jump, rotation 2).
-  assert.deepEqual(seen, { 3: [2543, 2910], 5: [2543, 2909], 6: [2543, 2908], 8: [2543, 2908] });
+  const where = {};
+  for (const n of [3, 5, 7, 8, 9]) { tick(at + n - H.tick); where[n] = [npc.getLocation().getX(), npc.getLocation().getY()]; }
+  assert.deepEqual(where, { 3: [2544, 2911], 5: [2543, 2910], 7: [2543, 2909], 8: [2543, 2908], 9: [2543, 2908] });
+  assert.equal(varbit(p), 1);
+  tick(1);
+  assert.equal(varbit(p), 2, '+10: collapsing');
+  assert.deepEqual(seen.animations.at(-1), [at + 10, 5234]);
+  tick(2);
+  assert.equal(varbit(p), 2);
+  tick(1);
+  assert.equal(varbit(p), 4, '+13: full');
+});
+
+test('the catch schedule follows the captured distances', () => {
+  assert.deepEqual(Pitfalls.catchSchedule(2), [5, 6]);
+  assert.deepEqual(Pitfalls.catchSchedule(3), [3, 5, 6]);
+  assert.deepEqual(Pitfalls.catchSchedule(4), [3, 5, 7, 8]);
 });
 
 test('the full pit value follows the jump direction and the loc rotation (captures 1108, 1757, 1858)', () => {

@@ -4,50 +4,57 @@ const C = require("./Context.Hunter"), { H, ANIM, requireLevel, hasTool, nearby,
 const Traps = require("./Traps.Hunter");
 
 /*
- * Pitfalls, from rsprox captures (graahk 1108, 1858; kyatt 1757; sunlight antelope 1108, 4046, 4051) and the
- * Wiki (Pitfall trapping). Ticks count from the player's jump.
+ * Pitfalls, from rsprox captures (spined larupia: the user's main-game capture hunter/larupia, rev 242; graahk
+ * 1108, 1858; kyatt 1757; sunlight antelope 1108, 4046, 4051) and the Wiki (Pitfall trapping). Ticks count from
+ * the player's jump.
  * - Tease: the teasing animation with sound 2524 and no message; the creature then follows the player,
- *   stepping every tick.
- * - Catch: the creature steps across the pit edge one tile at a time (+3, +5, +6). At +8 the pit's varbit
- *   goes to 2 and the creature plays its fall, with the collapse graphic 933 or 935 and sound 2638. At +11
- *   the pit shows full (3 or 4, the same choice as the graphic) and the creature goes; it is back at its
- *   spawn a tick later, its animation reset. The same pit catches the next creature straight away (1757 ticks 19124, 19143).
- * - The creature crosses on the loc's own row or column and falls on the loc's coord (1108 tick 25272, 1757).
- * - Miss (1108 tick 21487): one step towards the pit at +3; at +5 the leap animation, sound 2619 and the
- *   creature's two leap projectiles (start 53, end 90 cycles) four tiles across; at +7 the creature lands beyond
- *   the pit, knocking a player standing there back two tiles (stumble 5206, sound 513), and follows on. Wiki: "these creatures will not jump the same pit twice in a row",
- *   and 1108 caught that creature at the next, different pit.
+ *   stepping every tick, for about 100 ticks (larupia: teased at 252, gave up at 355).
+ * - Catch: the creature steps one tile at a time onto the loc's coord, along its row or column (`catchSchedule`:
+ *   2 tiles out at +5 and +6, 3 at +3, +5, +6, 4 at +3, +5, +7, +8). Two ticks after its last step the pit's
+ *   varbit goes to 2 and it plays its fall, with the collapse graphic 933 or 935 and sound 2638 (+8 from 2 or 3
+ *   tiles, +10 from 4). Three ticks later the pit shows full (3 or 4, the same choice as the graphic) with the
+ *   creature's sound, and it goes; it is back at its spawn a tick later, its animation reset. The same pit catches
+ *   the next creature straight away (1757 ticks 19124, 19143; larupia ticks 201, 229).
+ * - Miss (1108 tick 21487; larupia tick 422): one step towards the pit at +3; at +5 the leap animation, sound
+ *   2619 and the creature's two leap projectiles (start 53, end 90 cycles) four tiles across; at +7 the creature
+ *   lands beyond the pit, knocking a player standing there back two tiles (stumble 5206, sound 513), and follows on.
+ * - That creature won't use that pit again, even teased afresh, until it is caught: the player still jumps and
+ *   three ticks later gets "The larupia won't jump the same pit twice in a row." (larupia ticks 438, 471).
  */
 const teased = new Map();
 const lastPit = new WeakMap();
 const runs = new Map();
+// Timed one-offs: the refusal line, clearing a knock-back's forced movement.
+const later = [];
 const JUMP_SOUND = 2635;
 const COLLAPSE_SOUND = 2638;
 const LEAP_SOUND = 2619;
 // Live sends the pit's area sounds with range 5; the jump sound plays on the player's start tile (1108 tick 21563).
 const SOUND_RANGE = 5;
-const KNOCKBACK = { animation: 5206, sound: 513, delay: 14, start: 10, end: 36, tiles: 2 };
+const KNOCKBACK = { animation: 5206, sound: 513, delay: 14, start: 10, end: 36, tiles: 2, ticks: 2 };
 // RuneLite SpotanimID (hunter_<creature>_leaptrap_proj1/2), validated with dump:spotanim; graahk captured (1108).
 const LEAP_GRAPHICS = { SABRE_TOOTHED_KYATT: [937, 938], SPINED_LARUPIA: [939, 940], HORNED_GRAAHK: [941, 942],
   SUNLIGHT_ANTELOPE: [2800, 2801], MOONLIGHT_ANTELOPE: [2802, 2803] };
-// The creature's sound with the full pit (+11): kyatt 1757, graahk 1108 and 1858, sunlight antelope 1108 and 4046.
-// No larupia or moonlight antelope catch is captured.
-const FULL_SOUNDS = { SABRE_TOOTHED_KYATT: 836, HORNED_GRAAHK: 667, SUNLIGHT_ANTELOPE: 7890 };
+// The creature's sound with the full pit: kyatt 1757, graahk 1108 and 1858, larupia (panther_death, as the graahk),
+// sunlight antelope 1108 and 4046. No moonlight antelope catch is captured.
+const FULL_SOUNDS = { SABRE_TOOTHED_KYATT: 836, HORNED_GRAAHK: 667, SPINED_LARUPIA: 667, SUNLIGHT_ANTELOPE: 7890 };
 const TEASE_SOUND = 2524;
-// +3 puts the creature on the crossing's edge (live teleports it there, however far; nothing if it's there);
-// a catch then steps one tile into the pit at +5 and +6, ending on the loc coord.
+// A miss steps once towards the pit's edge at +3 before it leaps.
 const EDGE_TICK = 3;
-const IN_TICKS = [5, 6];
-const FALL_TICK = 8;
-const FULL_TICK = 11;
 const LEAP_TICK = 5;
+// After the last step the creature falls 2 ticks later and the pit shows full 3 after that.
+const FALL_AFTER_STEP = 2;
+const FULL_AFTER_FALL = 3;
+// The refusal at a pit the creature has leapt: three ticks after the jump.
+const REFUSAL_TICKS = 3;
 const LAND_TICK = 7;
 // hunting_pitfall_collapse_0 with full state 3, _2 with full state 4.
 const COLLAPSE_GRAPHICS = { 3: 933, 4: 935 };
 // Cache sequences: hunter_bigcat_leap_npc / unicorn_rework_leap_npc. Only the big-cat leap is captured.
 const LEAP = { CAT: 5231, ANTELOPE: 10929 };
-// Ours: no capture shows a teased creature giving up the chase, so it keeps the old 30 seconds and 16 tiles.
-const CHASE_TICKS = 50;
+// Larupia capture: teased at tick 252, still biting at 334 and following at 348, gave up at 355. Ours: the 16-tile
+// range (a larupia 12 tiles behind kept following).
+const CHASE_TICKS = 100;
 const CHASE_RANGE = 16;
 const NO_STICK = "I don't want to lose a finger by poking it. Maybe I should get a professional teasing implement instead.";
 
@@ -79,7 +86,6 @@ function clear({ player }) {
   const run = runs.get(state.npc);
   if (run?.kind === "leap") land(state.npc, run);
   teased.delete(player);
-  lastPit.delete(state.npc);
   if (H.reserved.get(state.npc) === state) H.reserved.delete(state.npc);
   state.npc.getMovementQueue().resetFollow();
   state.npc.getMovementQueue().reset();
@@ -146,8 +152,10 @@ function jump({ player, object }) {
   if (!nearby(player, object, 3) || trap.state !== "idle") return true;
   const state = teased.get(player);
   if (state && runs.has(state.npc)) return true;
-  if (state && (!H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(state.creature.caught)
-    || lastPit.get(state.npc) === trap.base)) { player.sendMessage("Lure this creature across a different pit."); return true; }
+  // Ours: no capture shows a creature jumped at another creature's pit.
+  if (state && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(state.creature.caught)) {
+    player.sendMessage("Lure this creature across a different pit."); return true;
+  }
   const from = player.getLocation().clone(), dir = heading(trap.base, from);
   const destination = beyond(trap.base, from, dir);
   if (H.core.RegionManager.blocked(destination, trap.area)) { player.sendMessage("You cannot land on the other side of this pit."); return true; }
@@ -157,6 +165,11 @@ function jump({ player, object }) {
     if (!H.traps.has(trap) || trap.state !== "idle") return;
     player.moveTo(destination);
     if (!state || teased.get(player) !== state || runs.has(state.npc) || distance(state.npc.getLocation(), center(trap)) > 5) return;
+    if (lastPit.get(state.npc) === trap.base) {
+      const text = `The ${shortName(state)} won't jump the same pit twice in a row.`;
+      later.push({ due: jumpedAt + REFUSAL_TICKS, run: () => { if (player.isRegistered()) player.sendMessage(text); } });
+      return;
+    }
     if (!requireLevel(player, state.creature.level)) return;
     const success = chance(player, state.creature, hasTool(player, H.core.ItemIdentifiers.HUNTERS_SPEAR) ? 0.05 : 0);
     run(state, trap, dir, success, jumpedAt);
@@ -170,14 +183,35 @@ function jump({ player, object }) {
   return true;
 }
 
+/** "larupia" from "Spined larupia". Ours for the other creatures: only the larupia's line is captured. */
+function shortName(state) {
+  const name = String(H.core.CacheDefinitions.getNpc(state.npc.getId())?.name ?? state.creature.name ?? "creature");
+  return name.split(" ").at(-1).toLowerCase();
+}
+
+/**
+ * The ticks after the jump a caught creature steps on, from how many tiles it is from the loc coord: one tile
+ * every other tick from +3, the last two on consecutive ticks, never before +5 (captures 1108, 1757, 1858 and
+ * larupia ticks 201, 229, 506). Ours: a creature already beside or on the loc coord.
+ */
+function catchSchedule(tiles) {
+  if (tiles <= 0) return [];
+  if (tiles === 1) return [6];
+  const last = Math.max(5, 3 + 2 * (tiles - 2));
+  const early = Array.from({ length: Math.max(0, tiles - 2) }, (_, i) => 3 + 2 * i);
+  return [...early, last, last + 1];
+}
+
 /** Starts the creature over the pit after the player's jump: a catch, or a leap across it. */
 function run(state, trap, dir, success, jumpedAt) {
   const npc = state.npc, queue = npc.getMovementQueue();
   queue.resetFollow();
   queue.reset();
   const size = npc.getSize?.() ?? 1, line = crossing(trap.base, dir, size);
+  const steps = catchSchedule(distance(npc.getLocation(), line.base));
+  const fallAt = Math.max(8, (steps.at(-1) ?? 5) + FALL_AFTER_STEP);
   runs.set(npc, { kind: success ? "catch" : "leap", state, trap, dir, at: jumpedAt, size,
-    edge: line.edge, base: line.base, blocked: queue.isMovementBlocked(),
+    edge: line.edge, base: line.base, blocked: queue.isMovementBlocked(), steps, fallAt, fullAt: fallAt + FULL_AFTER_FALL,
     landing: line.landing, value: fullValue(trap.base, dir), fallen: false });
   queue.setBlockMovement(true);
   if (success) {
@@ -185,7 +219,7 @@ function run(state, trap, dir, success, jumpedAt) {
     teased.delete(state.player);
     lastPit.delete(npc);
     trap.state = "closing";
-    trap.expires = Math.max(trap.expires, H.tick + FULL_TICK);
+    trap.expires = Math.max(trap.expires, jumpedAt + fallAt + FULL_AFTER_FALL + 2);
   } else lastPit.set(npc, trap.base);
 }
 
@@ -212,23 +246,22 @@ function advance(npc, r) {
   }
   if (r.kind === "catch") {
     // Live re-adds the creature at its spawn with its animation cleared (sequence -1).
-    if (elapsed > FULL_TICK) { runs.delete(npc); npc.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION); return; }
+    if (elapsed > r.fullAt) { runs.delete(npc); npc.performAnimation(H.core.Animation.DEFAULT_RESET_ANIMATION); return; }
     if (!H.traps.has(r.trap) || r.trap.state !== "closing") {
       // The pit went (its owner left): a creature that hadn't fallen yet is free again.
       if (r.fallen) runs.delete(npc); else abort(npc, r);
       return;
     }
-    if (elapsed === EDGE_TICK) moveTowards(npc, r.edge);
-    if (IN_TICKS.includes(elapsed)) moveTowards(npc, r.base, true);
-    if (elapsed === FALL_TICK) { moveTowards(npc, r.base); fall(npc, r); }
-    if (elapsed === FULL_TICK) {
+    if (r.steps.includes(elapsed)) moveTowards(npc, r.base, true);
+    if (elapsed === r.fallAt) { moveTowards(npc, r.base); fall(npc, r); }
+    if (elapsed === r.fullAt) {
       Traps.setPitState(r.trap, "caught", r.state.creature, r.value);
       const sound = Object.entries(FULL_SOUNDS).find(([key]) => H.core.NpcIdentifiers[key] === r.state.creature.npc)?.[1];
       if (sound) pitSound(r.trap, sound, r.trap.base.getLocation());
     }
     return;
   }
-  if (elapsed === EDGE_TICK) moveTowards(npc, r.edge);
+  if (elapsed === EDGE_TICK) moveTowards(npc, r.edge, true);
   if (elapsed === LEAP_TICK) leap(npc, r);
   if (elapsed >= LAND_TICK) land(npc, r);
 }
@@ -265,6 +298,8 @@ function knockBack(player, r) {
     KNOCKBACK.start, KNOCKBACK.end, r.dir, KNOCKBACK.animation));
   player.moveTo(to);
   player.getPacketSender().sendSound(KNOCKBACK.sound, 1, KNOCKBACK.delay);
+  const movement = player.getForceMovement();
+  later.push({ due: H.tick + KNOCKBACK.ticks, run: () => { if (player.getForceMovement() === movement) player.setForceMovement(null); } });
 }
 
 function fall(npc, r) {
@@ -275,8 +310,8 @@ function fall(npc, r) {
   npc.performGraphic(new H.core.Graphic(COLLAPSE_GRAPHICS[r.value]));
   pitSound(r.trap, COLLAPSE_SOUND);
   npc.getMovementQueue().setBlockMovement(r.blocked);
-  // Gone with the full pit (+11), back at its spawn a tick later.
-  hide(npc, FULL_TICK - FALL_TICK + 1, FULL_TICK - FALL_TICK);
+  // Gone with the full pit, back at its spawn a tick later.
+  hide(npc, FULL_AFTER_FALL + 1, FULL_AFTER_FALL);
 }
 
 /** Frees a creature whose pit went before it fell. */
@@ -302,6 +337,7 @@ function pitSound(trap, soundId, at = center(trap)) {
 
 function process() {
   for (const [npc, r] of runs) advance(npc, r);
+  for (let i = later.length - 1; i >= 0; i--) if (H.tick >= later[i].due) later.splice(i, 1)[0].run();
   for (const [player, state] of teased) {
     if (runs.has(state.npc)) continue;
     if (H.tick >= state.due || !state.npc.isRegistered() || !state.npc.isVisible() || !player.isRegistered()
@@ -329,6 +365,7 @@ function shutdown() {
     else runs.delete(npc);
   }
   for (const player of [...teased.keys()]) clear({ player });
+  for (const { run } of later.splice(0)) run();
 }
 
-module.exports = { build, tease, jump, clear, process, shutdown, heading, beyond, crossing, fullValue };
+module.exports = { build, tease, jump, clear, process, shutdown, heading, beyond, crossing, fullValue, catchSchedule };

@@ -168,7 +168,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade or Forsaken Quarry. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry or Soggy Swamp. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -272,7 +272,7 @@ function click(event) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
         && Layout.get(slot / 3)) return changeRules(session, player, "arena", slot / 3);
-      player.sendMessage("Only Plateau, Sylvan Glade and Forsaken Quarry are supported.");
+      player.sendMessage("Only Plateau, Sylvan Glade, Forsaken Quarry and Soggy Swamp are supported.");
     }
     if (clicked("clanwars_setup:stragglers")) {
       const slot = event.slot ?? event.action;

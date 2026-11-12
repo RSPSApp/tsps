@@ -2110,3 +2110,170 @@ test('native Quarry Ignore5 uses concurrent six-fighter starts and actual defeat
   await lethalMelee(b,teams[0][1],game,true,[[3424,5066,0],[3425,5066,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
 });
+
+// I: observed cache geometry; exact player placements/barrier row are TSPS choices.
+const SWAMP_ORIGIN=[3392,4928];
+const SWAMP_LANDINGS=[[3409,4934,0],[3439,4985,0]];
+const SWAMP_JAILS=[[3396,4932,0],[3451,4987,0]];
+const swampReachable=(game,from,to)=>layoutReachable(game,from,to,SWAMP_ORIGIN);
+
+test('native Soggy Swamp selection resets agreement across delivered arenas and rejects unsupported rows',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');const s=C.negotiations.get(a);assert.equal(s.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',18);assert.equal(s.rules.arena,6,'native Soggy Swamp option reaches authoritative offer');
+  assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Soggy Swamp/);
+  for(const [slot,arena] of [[6,2],[3,1],[9,3],[18,6]]) {
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
+    await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
+  }
+  for(const slot of [0,1,2,12,21,39,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,6);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),6);
+  }
+});
+
+test('native Soggy Swamp queued movement, full clip restoration and tree-root walk/LOS obstruction',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,6);
+  await join(a);await join(b);for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,SWAMP_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let plane=0;plane<2;plane++) for(let x=0;x<8;x++) for(let y=0;y<8;y++) {
+      reference.setChunk(plane,x,y,{sourceChunkX:424+x,sourceChunkY:616+y,sourcePlane:plane,rotation:0});
+      assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const wallId=core.CacheDefinitions.getLocId('clanwars_barrier_swamp'),def=core.CacheDefinitions.getObject(wallId);
+    assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.equal(game.walls.length,57);
+    const walls=game.walls.slice(),{MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of walls) {
+      assert.equal(wall.getId(),wallId);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);
+      assert.notEqual(game.area.getClip(wall.getLocation())&0x100,0);
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),wall);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wallId).length,1);
+    }
+    for(const [lo,hi] of [[3395,3452]]) for(let x=lo;x<=hi;x++) {
+      const old=reference.getClip(reference.tile(x-3392,4959-4928,0));
+      const count=walls.filter(o=>o.getLocation().equals(game.area.at([x,4959,0]))).length;
+      assert.equal(count,old&core.RegionManager.BLOCKED_MASK?0:1,'solid mapped tree needs no overlay');
+    }
+    assert.equal(swampReachable(game,SWAMP_LANDINGS[0],SWAMP_LANDINGS[1]),false,'cardinal+diagonal routes including both wall ends stay separated');
+    for(const side of [0,1]) assert.equal(swampReachable(game,SWAMP_JAILS[side],SWAMP_LANDINGS[side]),false);
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3392,4934,0]),game.area.at([3391,4934,0]),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3410,4934,0]),across=game.area.at(SWAMP_LANDINGS[1]);
+    await wire(walker,walkClickFrame(open));assert.deepEqual(position(walker),[open.getX(),open.getY(),0]);
+    await wire(walker,walkClickFrame(across));tick(60);assert.equal(game.phase,'staging');
+    assert.ok(walker.getLocation().getY()<game.area.at([3424,4959,0]).getY(),'ordinary movement cannot reach north during preparation');
+    const staging={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of walls) {
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),null);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);
+    }
+    const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'all4096 masks preserve static trees, roots and directional/projectile edges');
+    assert.equal(after[(4959-4928)*64+3397-3392],0x20100,'the skipped solid tree keeps both walking and projectile bits');
+    assert.equal(swampReachable(game,SWAMP_LANDINGS[0],SWAMP_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(across));tick(200);assert.deepEqual(position(walker),[across.getX(),across.getY(),0]);
+    console.log('SWAMP_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    for(const specimen of [
+      {gameval:'deadtree4swamp',xy:[3398,4946],left:[3397,4946],right:[3399,4946],size:1,face:1},
+      {gameval:'swamp_root',xy:[3398,4977],left:[3397,4978],right:[3401,4978],size:3,face:2},
+    ]) {
+      const obstacle=game.area.at([...specimen.xy,0]),left=game.area.at([...specimen.left,0]),right=game.area.at([...specimen.right,0]);
+      const object=mappedLayoutObjects(game,specimen.gameval).find(o=>o.getLocation().equals(obstacle));assert.ok(object);
+      const definition=core.CacheDefinitions.getObject(object.getId());
+      assert.deepEqual([definition.sizeX,definition.sizeY,definition.blocksProjectile],[specimen.size,specimen.size,true]);
+      assert.equal(object.getType(),10);assert.equal(object.getFace(),specimen.face);assert.equal(object.getPrivateArea(),game.area);
+      assert.equal(game.area.getClip(obstacle)&0x20100,0x20100);assert.equal(game.area.getClip(left),0);assert.equal(game.area.getClip(right),0);
+      assert.equal(swampReachable(game,SWAMP_LANDINGS[1],specimen.left),true);
+      await wire(walker,walkClickFrame(left));tick(240);assert.deepEqual(position(walker),[left.getX(),left.getY(),0],'ordinary queued walk reaches open obstacle approach');
+      await wire(walker,walkClickFrame(obstacle));
+      for(let cycle=0;cycle<10;cycle++) {
+        tick();assert.equal(core.RegionManager.blocked(walker.getLocation(),game.area),false,'processed ordinary movement never enters a solid obstacle');
+      }
+      const at=walker.getLocation();assert.ok(!(at.getX()>=obstacle.getX()&&at.getX()<obstacle.getX()+specimen.size&&at.getY()>=obstacle.getY()&&at.getY()<obstacle.getY()+specimen.size),'blocked click remains outside the full object footprint');
+      console.log('SWAMP_OBSTACLE_MOVEMENT_QUALIFICATION '+JSON.stringify({gameval:specimen.gameval,requested:[obstacle.getX(),obstacle.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}));
+      const edge=game.area.at([specimen.xy[0],specimen.left[1],0]);
+      assert.equal(core.RegionManager.canMovestart(left,edge,1,1,game.area),false,'selected obstacle blocks the adjacent native step');
+      assert.equal(core.RegionManager.canProjectileAttackReturn(left,right,1,game.area),false,'native ray across selected tree or roots is blocked');
+    }
+    const o1=game.area.at([3409,4934,0]),o2=game.area.at([3410,4934,0]);
+    assert.equal(core.RegionManager.canMovestart(o1,o2,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(o1,o2,1,game.area),true,'open ray positive control');
+  } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
+});
+
+for(const mode of [0,1,16]) test(`native Soggy Swamp mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},6);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3409,4934,0]));b.moveTo(game.area.at([3410,4934,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,SWAMP_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Soggy Swamp side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},6);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'swamp'}));
+  await lethalMelee(killer,victim,game,true,[[3409,4934,0],[3410,4934,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,SWAMP_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'swamp'});
+  const scripts=scriptCalls(victim),orbXY=side===0?[3397,4929]:[3450,4990];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_swamp',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9753));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',side===0?[3393,4933]:[3454,4986],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',side===0?[3393,4933]:[3454,4986],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,SWAMP_LANDINGS[side]));
+});
+
+test('native four-layout coexistence refuses same-ID foreign swamp objects and unregistered lookalikes',async()=>{
+  const players=Array.from({length:10},()=>actor());for(const p of players) channel(p);
+  const [a,b,c,d,e,f,g,h,i,j]=players;
+  const plateau=await negotiate(a,b,null,1);await join(a);await join(b);assert.equal(plateau.walls.length,52);
+  const sylvan=await negotiate(c,d,null,1,null,2);await join(c);await join(d);
+  const quarry=await negotiate(e,f,null,1,null,3);await join(e);await join(f);
+  const other=await negotiate(i,j,null,1,null,6);await join(i);await join(j);
+  const swamp=await negotiate(g,h,null,1,null,6);await join(g);await join(h);
+  assert.equal(new Set([plateau.area,sylvan.area,quarry.area,swamp.area]).size,4);
+  const foreign=mappedLayoutObjects(other,'clanwars_prisonportal_swamp')[0],owned=mappedLayoutObjects(swamp,'clanwars_prisonportal_swamp')[0];
+  assert.ok(foreign&&owned);assert.equal(foreign.getId(),owned.getId());
+  assert.equal(Match.exit({player:g,object:foreign}),false);assert.equal(C.matches.get(g),swamp);
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');assert.equal(MapObjects.getPrivateArea(g,foreign.getId(),foreign.getLocation()),null);
+  const fake=new core.GameObject(owned.getId(),owned.getLocation().clone(),owned.getType(),owned.getFace(),swamp.area);
+  try {assert.equal(Match.exit({player:g,object:fake}),false);assert.equal(C.matches.get(g),swamp);} finally {swamp.area.detach(fake);}
+  const wrong=mappedLayoutObjects(swamp,'clanwars_viewing_swamp')[0];assert.ok(wrong);assert.equal(viewingUnit().use({player:g,object:wrong}),false);
+  const foreignOrb=mappedLayoutObjects(other,'clanwars_viewing_start_swamp')[0];assert.ok(foreignOrb);assert.equal(viewingUnit().use({player:g,object:foreignOrb}),false);
+  const foreignExit=mappedLayoutObjects(quarry,'clanwars_exitportal_greyrock_s')[0];assert.ok(foreignExit);assert.equal(Match.forfeit({player:g,object:foreignExit}),false);
+  for(const p of [g,h]) {
+    const side=swamp.members.get(p),xy=side===0?[3407,4931]:[3437,4987];
+    // Supplied combat/Forfeit checkpoints remain explicit; jail routes start at actual death landings.
+    p.moveTo(swamp.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
+    await layoutObjectInput(p,swamp,side===0?'clanwars_exitportal_swamp_s':'clanwars_exitportal_swamp_n',xy,'Forfeit');assert.equal(C.matches.has(p),false);lobby(p);
+  }
+  assert.equal(swamp.members.size,0);assert.equal(swamp.phase,'staging');const remaining=swamp.starts-C.now();assert.ok(remaining>0);tick(remaining);
+  assert.equal(swamp.area.isDestroyed(),true);
+  for(const [game,team] of [[plateau,[a,b]],[sylvan,[c,d]],[quarry,[e,f]],[other,[i,j]]]) {
+    assert.notEqual(game.phase,'over');assert.equal(game.area.isDestroyed(),false);for(const p of team) assert.equal(C.matches.get(p),game);
+  }
+});
+
+test('native Soggy Swamp Ignore5 uses concurrent six-fighter starts and actual defeat threshold',async()=>{
+  const {a,b,teams,players,game}=await stragglerGame(6,1,3,{},6);completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.fighters.size,12);
+  await lethalMelee(b,teams[0][1],game,true,[[3409,4934,0],[3410,4934,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
+});

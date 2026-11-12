@@ -1065,8 +1065,9 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
     emitCustomEvent: (name, payload) => (listeners.get(name) ?? []).forEach((handler) => handler(payload)),
     onPlayerLogin: (handler) => logins.push(handler),
     getTaskManager: () => core.TaskManager,
-    sendMultiChatboxPrompt: () => true,
+    sendMultiChatboxPrompt: (player, title, ...pairs) => { ropePrompts.push({ title, pairs }); return true; },
   };
+  const ropePrompts = [];
   require("../plugins/objects/Ladders.plugin").register(api);
   const Misthalin = require("../plugins/areas/Misthalin.plugin");
   Misthalin.register(api);
@@ -1095,6 +1096,19 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
   const rope = { player: visit.player, object, objectId: 5947, itemId: 954, location: { x: 3169, y: 3172, z: 0 }, handled: false };
   assert.equal(itemOnObject.get("Rope:Dark hole")(rope), true);
   assert.equal(rope.handled, true);
+  // rsprox 227/00075.txt:174556: the game asks first; No leaves the rope.
+  const [asked] = ropePrompts.splice(0);
+  assert.deepEqual([asked.title, asked.pairs[0], asked.pairs[2]], ["Attach a rope to the top of the hole?", "Yes.", "No."]);
+  asked.pairs[3]();
+  assert.ok(visit.player.getAttribute(Misthalin._test.SWAMP_CAVE_ROPED_ATTRIBUTE) !== true, "No: not tied");
+  assert.equal(visit.player.getInventory().getAmount(954), 1);
+  itemOnObject.get("Rope:Dark hole")(rope);
+  let box = null;
+  visit.player.getDialogueManager().startDialogues = (chain) => { box = [...chain.getDialogues().values()][0]; };
+  ropePrompts.splice(0)[0].pairs[1]();
+  assert.ok(box instanceof core.ItemStatementDialogue, "Yes: the line in an item box");
+  assert.ok(JSON.stringify(box).includes("You tie the rope to the top of the hole and throw it down."));
+  assert.ok(visit.ticks.flat().includes("anim 827") && visit.ticks.flat().includes("sound 1774"), JSON.stringify(visit.ticks.flat()));
   assert.equal(visit.player.getAttribute(Misthalin._test.SWAMP_CAVE_ROPED_ATTRIBUTE), true, "the rope stays tied");
   assert.equal(visit.player.getInventory().getAmount(954), 0, "the rope is used up");
   assert.ok(visit.ticks.flat().includes(`varbit ${Misthalin._test.SWAMP_CAVE_ROPED_VARBIT}=1`));

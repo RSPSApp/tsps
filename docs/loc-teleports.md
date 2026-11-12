@@ -341,13 +341,13 @@ icon's protection.
 
 The tunnel into Araxxor's lair (54161) and the one out (54274) are loc teleports, not crawls:
 captured (rev 237), the player crawls (844) with sound 2454 as the screen fades out, the minimap
-goes off a tick later, the teleport is on tick 3 from arriving, and the screen fades back in a
-tick after it. The way in also shows "You crawl through the webbed tunnel." The lair is the
+goes off a tick later, the teleport comes two ticks after the crawl, and the screen fades back
+in a tick after it. The way in also shows "You crawl through the webbed tunnel." The lair is the
 player's own instance, so the move out leaves it; the fade back in still plays after that.
 
 The outer tunnels' reverse directions (54272, 54273) crawl with 844 and sound 2454 as captured
-(rev 224 and 237); 54271 long-crawls (2796) on all three of its links. The east link's reverse
-(54272 at 3693, 9836) has no capture and copies 54272's west link.
+(rev 224 and 237), the east link's reverse (54272 at 3693, 9836) among them (224/1452); 54271
+long-crawls (2796) on all three of its links.
 
 Not done: the tunnel's toggle-able "Are you sure you wish to enter?" question (Yes. / Yes, and
 don't ask again. / No.), whose setting isn't known; the sound's two loops and delay.

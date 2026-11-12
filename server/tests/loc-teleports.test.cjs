@@ -874,6 +874,9 @@ test("Araxxor's outer web tunnels crawl with sound 2454 both ways; only 54271 lo
     assert.equal(tunnel.sound, 2454, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
     assert.equal(tunnel.anim, tunnel.id === 54271 ? 2796 : 844, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
   }
+  // The east link's reverse: crawl and sound two ticks after arriving, the move a tick later.
+  const eastBack = tunnels.find((tunnel) => tunnel.id === 54272 && tunnel.x === 3693);
+  assert.deepEqual([eastBack.animTick, eastBack.tick, eastBack.recordings], [2, 3, 1]);
 });
 
 test("a Climb that Ladders would ask about goes the captured way: the Arceuus library stairs go up", () => {

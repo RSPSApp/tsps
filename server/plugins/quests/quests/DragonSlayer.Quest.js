@@ -288,7 +288,11 @@ module.exports = function registerDragonSlayerQuest(api) {
   const hasItem = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const hasCrandorMap = (player) => hasItem(player, ITEM.crandorMap);
   const hasAllMapPieces = (player) => MAP_PIECES.every((id) => hasItem(player, id));
-  const ownsMapPiece = (player, itemId) => hasItem(player, itemId) || hasCrandorMap(player);
+  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
+  const owns = (player, itemId) => hasItem(player, itemId) || (player.getBanks?.() ?? []).some((bank, tab) =>
+    tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(itemId) ?? 0) > 0);
+  /** A piece is owned on its own or inside the joined Crandor map, carried or banked. */
+  const ownsMapPiece = (player, itemId) => owns(player, itemId) || owns(player, ITEM.crandorMap);
   const questPoints = (player) => Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0;
   const oracleState = (player) => Number(player.getAttribute(ATTR_ORACLE)) || 0;
   const setOracleState = (player, value) => player.setAttribute(ATTR_ORACLE, value);

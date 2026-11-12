@@ -275,7 +275,7 @@ test("climbing down the roped hole says \"You climb down the rope.\" on the spam
   assert.deepEqual(typed, [[core.ChatType.SPAM, "You climb down the rope."]]);
 });
 
-function crackHarness({ agility = 60, stage = 99 } = {}) {
+function crackHarness({ agility = 60, stage = 99, location = at(2899, 3713, 0) } = {}) {
   require("../dist/Server").Server.installProductionPathResolver();
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();
@@ -296,15 +296,18 @@ function crackHarness({ agility = 60, stage = 99 } = {}) {
   Common.init(api);
   require("../plugins/bosses/godwars/Dungeon.GodWars").attachDungeon(api);
   const log = [];
+  const harness = { location, hitpoints: 99 };
   const attributes = new Map([["quest.troll_stronghold.stage", stage]]);
   const movement = { reset() { return movement; }, setBlockMovement: (blocked) => { log.push(["block", blocked]); return movement; } };
   const sender = {
+    sendString: (text, uid) => { log.push(["text", uid, text]); return sender; },
     sendSubInterface: (uid, id, type, options) => { log.push(["open", id, options]); return sender; },
     closeSubInterface: (uid) => { log.push(["close", uid]); return sender; },
   };
   const player = {
     getAttribute: (key) => attributes.get(key),
-    getLocation: () => at(2899, 3713, 0),
+    getLocation: () => harness.location,
+    getHitpoints: () => harness.hitpoints,
     getSkillManager: () => ({ getCurrentLevel: (skill) => (skill === core.Skill.AGILITY ? agility : 1) }),
     getPacketSender: () => sender,
     getMovementQueue: () => movement,
@@ -324,7 +327,7 @@ function crackHarness({ agility = 60, stage = 99 } = {}) {
     }
     return byTick;
   };
-  return { click, run, log, events, core };
+  return Object.assign(harness, { click, run, log, events, core });
 }
 
 test("the Little crack fades, crawls and teleports on the captured ticks (rsprox.net 224/01461 t167-174)", () => {
@@ -333,20 +336,33 @@ test("the Little crack fades, crawls and teleports on the captured ticks (rsprox
   assert.deepEqual(log, [["block", true]], "no message, nothing else on the op tick");
   const ticks = run();
   assert.deepEqual(Object.keys(ticks).map(Number), [1, 3, 6, 7]);
-  assert.equal(ticks[1][0][0], "open");
-  assert.equal(ticks[1][0][1], 174);
-  assert.deepEqual(ticks[1][0][2].postScripts, [{ scriptId: 948, args: [0, 255, 0, 0, 50] }]);
+  assert.deepEqual(ticks[1][0], ["text", (174 << 16) | 4, ""], "the caption is cleared before the fade opens");
+  assert.equal(ticks[1][1][0], "open");
+  assert.equal(ticks[1][1][1], 174);
+  assert.deepEqual(ticks[1][1][2].postScripts, [{ scriptId: 948, args: [0, 255, 0, 0, 50] }]);
   assert.deepEqual(events.map(([name]) => name), ["boss-hud:hide"]);
   assert.deepEqual(ticks[3], [["anim", 7041]]);
-  assert.deepEqual(ticks[6], [["move", 2904, 3720, 0], ["block", false]]);
+  assert.deepEqual(ticks[6], [["block", false], ["move", 2904, 3720, 0]]);
   assert.equal(ticks[7][0][0], "close");
   assert.ok(!log.some(([kind]) => kind === "message"));
 });
 
 test("the Little crack's north side leads back to the south side", () => {
-  const { click, run } = crackHarness();
+  const { click, run } = crackHarness({ location: at(2904, 3720, 0) });
   click(2904, 3719);
-  assert.deepEqual(run()[6][0], ["move", 2899, 3713, 0]);
+  assert.deepEqual(run()[6], [["block", false], ["move", 2899, 3713, 0]]);
+});
+
+test("a player killed during the crawl is not pulled from the respawn point", () => {
+  const harness = crackHarness();
+  harness.click(2900, 3713);
+  harness.hitpoints = 0;
+  harness.location = at(2899, 3713, 0);
+  assert.deepEqual(harness.run()[6], [["block", false]]);
+  const respawned = crackHarness();
+  respawned.click(2900, 3713);
+  respawned.location = at(2657, 3439, 0);
+  assert.deepEqual(respawned.run()[6], [["block", false]]);
 });
 
 test("the Little crack needs 60 Agility (Wiki)", () => {

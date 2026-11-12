@@ -20,6 +20,7 @@ const TROLL_STRONGHOLD_STAGE_ATTRIBUTE = "quest.troll_stronghold.stage";
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const BOULDER_PASSED_TILE = [2898, 3718, 0];
 const FADE_OVERLAY = 174;
+const FADE_MESSAGE_UID = (FADE_OVERLAY << 16) | 4;
 const FADE_SCRIPT = 948;
 const FADE_OUT_ARGS = [0, 255, 0, 0, 50];
 /**
@@ -158,6 +159,12 @@ function crackRoute(event) {
   return routes.reduce((best, route) => (distance(route) < distance(best) ? route : best));
 }
 
+/** Still at the crack the crawl started from (it is a 1x1 loc). */
+function besideCrack(player, { crack: [x, y, z] }) {
+  const at = player.getLocation();
+  return at.getZ() === z && Math.max(Math.abs(at.getX() - x), Math.abs(at.getY() - y)) <= 1;
+}
+
 /**
  * The Little crack (Wiki: 60 Agility, no XP), as captured from the south side: the screen fades
  * out a tick after the op (with the health overlay hidden), the crawl two ticks later, the player
@@ -184,13 +191,17 @@ function crawlThroughCrack(event) {
   Common.later(CRACK_STEPS.fade, () => {
     if (!alive()) return;
     Common.api.emitCustomEvent("boss-hud:hide", { player, fade: false, afterTicks: 0 });
+    // Live clears the fade's caption first (fade_overlay:message), then opens it.
+    sender.sendString("", FADE_MESSAGE_UID);
     sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args: FADE_OUT_ARGS }] });
   });
   Common.later(CRACK_STEPS.crawl, () => alive() && player.performAnimation(new Common.core.Animation(entrance.crawlAnim)));
   Common.later(CRACK_STEPS.move, () => {
     if (!alive()) return;
-    player.moveTo(Common.toLocation(route.to));
     movement.setBlockMovement(false);
+    // A thrower troll can kill the player on the way in: no pull from the respawn point.
+    if (player.getHitpoints() <= 0 || !besideCrack(player, route)) return;
+    player.moveTo(Common.toLocation(route.to));
   });
   Common.later(CRACK_STEPS.close, () => alive() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   return true;

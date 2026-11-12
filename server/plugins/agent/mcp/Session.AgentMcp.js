@@ -5,13 +5,20 @@ module.exports = function registerSessionTools(ctx) {
 
   tool(
     "login",
-    "Log a player in with no client attached, through the normal login (a new name creates the account with this password). They stay online until logout; drive them with the other tools.",
-    { username: z.string().min(1).max(12), password: z.string().min(1).max(64) },
-    async ({ username, password }) => {
+    "Log a player in with no client attached, through the normal login (a new name creates the account with this password). They stay online until logout; drive them with the other tools. A new account's first-login screens (the character designer, the Ironman setup) are skipped unless onboarding is \"show\": they hold every world click until answered.",
+    {
+      username: z.string().min(1).max(12),
+      password: z.string().min(1).max(64),
+      onboarding: z.enum(["skip", "show"]).default("skip")
+        .describe("skip: close a new account's character designer and Ironman setup (default look, no Ironman mode); show: leave them for the test"),
+    },
+    async ({ username, password, onboarding }) => {
       const { player: p, error } = await core.connectHeadlessClient(username, password);
       if (!p) throw new Error(error);
       await sleepTicks(1);
       core.PluginManager.emitCustomEvent("agent-mcp:normal-player", { player: p });
+      // "account:skip-onboarding" { player }: the first-login screens step aside (MakeOverMage, Ironman).
+      if (onboarding === "skip") core.PluginManager.emitCustomEvent("account:skip-onboarding", { player: p });
       return { username: p.getUsername(), ...status(find(p.getUsername())) };
     }
   );

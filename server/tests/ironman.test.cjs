@@ -670,6 +670,12 @@ test('new mainland characters choose an account type without enabling Tutorial I
     const request={player:old.p,upgrades:false};PM.emitCustomEvent('ironman:open-setup',request);await button(old,22);
     assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(old.p),'none');assert.ok(!old.p.getEnteredAmountAction(),'mainland setup still refuses upgrades');
   });
+  await t.test('account:skip-onboarding (the agent MCP login) closes the designer and leaves no setup pending',async t=>{
+    const f=actor(t);await login(f,true);assert.equal(f.p.getInterfaceId(),679,'PRE: the designer is up');
+    PM.emitCustomEvent('account:skip-onboarding',{player:f.p});await flush();await flush();
+    assert.notEqual(f.p.getInterfaceId(),679,'designer closed');assert.notEqual(f.p.getInterfaceId(),890,'no Ironman setup after it');
+    assert.notEqual(f.p.getAttribute(pending),true);assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
+  });
   await t.test('interrupted choice survives persistence-shaped attributes and waits for the welcome modal',async t=>{
     const f=actor(t);await login(f,true);await appearance(f);assert.equal(f.p.getAttribute(pending),true);
     const saved=JSON.parse(JSON.stringify({[pending]:f.p.getAttribute(pending)}));

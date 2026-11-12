@@ -87,6 +87,8 @@ function realPlayer(t) {
 
 /** One game to its end through Game.CastleWars.js: `teams` maps each player to a team. */
 function playGame(teams, saradominScore, zamorakScore) {
+  // Bots the last game logged out are deregistered before this one: a player still queued for removal isn't waiting.
+  World.getRemovePlayerQueue().splice(0);
   game.waitingAreas[TEAM.SARADOMIN].players.push(...[...teams].filter(([, team]) => team === TEAM.SARADOMIN).map(([p]) => p));
   game.waitingAreas[TEAM.ZAMORAK].players.push(...[...teams].filter(([, team]) => team === TEAM.ZAMORAK).map(([p]) => p));
   for (const [player, team] of teams) game.setTeamId(player, team);

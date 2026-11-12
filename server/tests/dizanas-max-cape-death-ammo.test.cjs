@@ -86,3 +86,13 @@ test("outside the Wilderness the max cape's ammo is left alone", (t) => {
   PlayerDeathTask.dropItems(victim, null, at);
   assert.deepEqual(victim.getAttribute(QUIVER_ATTRIBUTE), { id: I.DRAGON_ARROW, amount: 500 });
 });
+
+test("a player who keeps everything keeps the max cape's stored ammo, killed by a player or an NPC", (t) => {
+  for (const [label, y, killer] of [["player, level 30", LEVEL_30, actor(t)], ["player, level 11", LEVEL_11, actor(t)], ["NPC, level 30", LEVEL_30, null]]) {
+    t.mock.method(PlayerDeathTask, "keepsEverything", () => true);
+    const { victim, arrows } = die(t, I.DIZANAS_MAX_CAPE, y, killer);
+    t.mock.restoreAll();
+    assert.deepEqual(arrows, [], `${label}: nothing drops`);
+    assert.deepEqual(victim.getAttribute(QUIVER_ATTRIBUTE), { id: I.DRAGON_ARROW, amount: 500 }, `${label}: still stored`);
+  }
+});

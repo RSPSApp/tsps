@@ -11,7 +11,7 @@ const { PlayerDeathTask } = require("../../../src/main/typescript/elvarg/game/ta
  *   Items Perdu can't lock break as below level 20.
  * - The killer gets the repair cost in coins, or 500,000 for a mangled item.
  *
- * Protected items never break. Before one breaks, `broken-items:pvp-death` { player, killer, item, location }
+ * Protected items never break. Before one breaks, `broken-items:pvp-death` { player, killer, item, location, shouldDropItems }
  * is emitted with the item still in its original form.
  */
 const Common = require("./Common.BrokenItems");
@@ -45,7 +45,7 @@ function breakOnPvpDeath(event) {
   const { entry, form } = found;
   if (form.kind !== "unlocked" && form.kind !== "locked") return;
   // Before the item changes: content that keeps state with it (Dizana's max cape's stored ammo) sees what it was.
-  Common.getApi().emitCustomEvent("broken-items:pvp-death", { player, killer, item, location: event.location });
+  Common.getApi().emitCustomEvent("broken-items:pvp-death", { player, killer, item, location: event.location, shouldDropItems: event.shouldDropItems });
   const deep = entry.lockable && wildernessLevel(player) > DEEP_WILDERNESS_LEVEL;
   if (deep && form.kind === "locked" && form.mangledId != null) {
     item.setId(form.mangledId);

@@ -2638,9 +2638,18 @@ test("a part swap's XP still comes if the player logs out before the fade in", (
   clearTasks();
 });
 
+test("every facility in the cache has its Construction XP", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const xp = require("../plugins/skills/sailing/data/sailing-parts.json").facility_construction_xp;
+  const names = new Set(CacheDefinitions.getDbTableRows(176).map((row) => (typeof row === "number" ? CacheDefinitions.getDbRow(row) : row).string(0)));
+  // "Recoloured sails" has no Wiki facility row.
+  const missing = [...names].filter((name) => name !== "Recoloured sails" && !(name in xp));
+  assert.deepEqual(missing, []);
+});
+
 test("the cosmetic parts are saved with the boat", () => {
   const state = normalizeSailingState({ boats: [{ slot: 0, type: "sloop", parts: { hull: 3, trim: 10, flag: 2, brazier: 1 } },
-    { slot: 1, type: "skiff", parts: { hull: 1, trim: -1, flag: "x", brazier: 2 } }] });
+    { slot: 1, type: "skiff", parts: { hull: 1, trim: 3, flag: "x", brazier: 2 } }] });
   assert.deepEqual(state.boats[0].parts, { hull: 3, keel: 0, sails: 0, helm: 0, trim: 10, flag: 2, brazier: 1 });
   assert.deepEqual(state.boats[1].parts, { hull: 1, keel: 0, sails: 0, helm: 0 });
 });

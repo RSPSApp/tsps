@@ -2,8 +2,8 @@
 // boat schematics (interface 939) swap its hull, keel, sails or helm for another tier, paint its
 // trim, fly a flag or build the eternal brazier, and the portal returns them to the dock. Every
 // build costs the option's materials and gives Construction XP; the old part isn't refunded.
-// The boat's own gangplank puts the player on its deck, where facilities are built (ShipyardFacilities.Sailing.js). The flow follows live
-// captures (docs/sailing-osrs-reference.md); part options, levels and materials are the cache's.
+// The boat's own gangplank puts the player on its deck, where facilities are built
+// (ShipyardFacilities.Sailing.js). The flow follows live captures (docs/sailing-osrs-reference.md); part options, levels and materials are the cache's.
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
 const { Mobile } = require("../../../src/main/typescript/elvarg/game/entity/impl/Mobile");
@@ -144,6 +144,7 @@ function endVisit(player) {
   const visit = visits.get(player);
   if (!visit) return;
   visits.delete(player);
+  awardPendingXp(player, visit);
   if (visit.aboard) leaveDeck(player, visit);
   if (visit.shown) BoatManager.dispose(visit.shown);
   for (const id of [...DESCRIPTION_VARBITS, VARBIT_SHIPYARD_MODE, VARBIT_SHIPYARD_BOAT_ANGLE,

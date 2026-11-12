@@ -123,10 +123,11 @@ function normalizeName(raw: unknown): BoatName {
 function normalizeParts(raw: any): BoatParts {
     const tier = (value: unknown) => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 6 ? value as number : 0;
     const parts: BoatParts = { hull: tier(raw?.hull), keel: tier(raw?.keel), sails: tier(raw?.sails), helm: tier(raw?.helm) };
-    const cosmetic = (value: unknown, max: number) => Number.isInteger(value) && (value as number) > 0 && (value as number) <= max;
-    if (cosmetic(raw?.trim, 255)) parts.trim = raw.trim;
-    if (cosmetic(raw?.flag, 255)) parts.flag = raw.flag;
-    if (cosmetic(raw?.brazier, 1)) parts.brazier = raw.brazier;
+    const cosmetic = (value: unknown, min: number, max: number) => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+    // A trim below 7 is a hull tier's own "No trim": unset, so it follows the hull.
+    if (cosmetic(raw?.trim, 7, 255)) parts.trim = raw.trim;
+    if (cosmetic(raw?.flag, 1, 255)) parts.flag = raw.flag;
+    if (cosmetic(raw?.brazier, 1, 1)) parts.brazier = raw.brazier;
     return parts;
 }
 

@@ -45,17 +45,29 @@ const DOOR_OPEN_ID = 1539; // inactivepoordoor
 const DOOR_OPEN_FACE = 0;
 const DOOR_CLOSE_TICKS = 2;
 
-function later(player, ticks, action) {
+/**
+ * The door swap is world state (every player sees it), so its restore is keyed to the door, not to the player who
+ * opened it: a player-wide TaskManager.cancelTasks(player) (logging out, a quest) can't leave it open for good.
+ */
+const DOOR_TASK_KEY = "crafting-guild:door";
+
+function later(ticks, action) {
   core.TaskManager.submit(new (class extends core.Task {
-    constructor() { super(ticks, player, false); }
+    constructor() { super(ticks, DOOR_TASK_KEY, false); }
     execute() { this.stop(); action(); }
   })());
+}
+
+/** Mid-swap (inviswall on the doorway): another click, queued or another player's, waits for the door. */
+function doorwayOpen(doorTile) {
+  return core.ObjectManager.objectsAt(doorTile).some((object) => object.getId() === DOOR_BLOCKER_ID);
 }
 
 function crossDoor(player, door, entering) {
   if (player.getForceMovement()) return;
   const { Location, ForceMovement, ForceMovementTask } = core;
   const doorTile = door.getLocation();
+  if (doorwayOpen(doorTile)) return;
   const inside = new Location(doorTile.getX(), doorTile.getY() - 1, doorTile.getZ());
   const from = entering ? doorTile : inside;
   const to = entering ? inside : doorTile;
@@ -75,7 +87,7 @@ function crossDoor(player, door, entering) {
   ObjectManager.register(open, true);
   core.TaskManager.submit(new ForceMovementTask(player, 2,
     new ForceMovement(from.clone(), new Location(dx, dy), 0, 30, direction, WALK_ANIMATION)));
-  later(player, DOOR_CLOSE_TICKS, () => {
+  later(DOOR_CLOSE_TICKS, () => {
     ObjectManager.deregister(open, true);
     ObjectManager.deregister(blocker, true);
     ObjectManager.register(door, true);

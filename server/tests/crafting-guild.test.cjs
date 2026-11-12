@@ -33,6 +33,7 @@ function setup({ x = 2933, y = 3290, level = 40, bodyId = 1757 } = {}) {
   const tasks = [];
   const packets = [];
   const hooks = new Map();
+  const registered = new Set();
   const core = {
     CacheDefinitions: { getLocId: (name) => name },
     Equipment: { BODY_SLOT: 4 },
@@ -49,8 +50,9 @@ function setup({ x = 2933, y = 3290, level = 40, bodyId = 1757 } = {}) {
     TaskManager: { submit: (task) => tasks.push(task) },
     GameObject: require("../dist/game/entity/impl/object/GameObject").GameObject,
     ObjectManager: {
-      register: (o) => packets.push(["register", o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
-      deregister: (o) => packets.push(["deregister", o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
+      register: (o) => { registered.add(o); packets.push(["register", o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]); },
+      deregister: (o) => { registered.delete(o); packets.push(["deregister", o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]); },
+      objectsAt: (tile) => [...registered].filter((o) => o.getLocation().equals(tile)),
     },
   };
   const api = {
@@ -101,6 +103,20 @@ test("a player wearing a brown apron is welcomed and walked into the guild", () 
     ["deregister", 38848, 2933, 3289, 3],
     ["register", 14910, 2933, 3289, 3],
   ], "the guild door is back two ticks later");
+});
+
+test("the door's restore is not keyed to the player; a second click mid-swap waits for the door (#4647 review)", () => {
+  const state = setup();
+  state.handler({ player: state.player, object: state.door });
+  const restore = state.tasks.find((task) => task.ticks === 2 && !(task instanceof ForceMovementTask));
+  assert.notEqual(restore.owner, state.player, "a player-wide cancelTasks can't stop it");
+  const before = [state.packets.length, state.tasks.length];
+  state.handler({ player: state.player, object: state.door });
+  assert.deepEqual([state.packets.length, state.tasks.length], before, "no second swap or restore");
+  restore.execute();
+  const after = state.packets.length;
+  state.handler({ player: state.player, object: state.door });
+  assert.ok(state.packets.length > after, "the door works again once it is back");
 });
 
 test("leaving the guild is not gated by level or apron", () => {

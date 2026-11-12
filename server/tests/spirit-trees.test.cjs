@@ -215,3 +215,19 @@ test("\"Spirit Tree\" is the Poison Waste tree's name and the farming patches': 
   const patch = { player: traveller([3061, 3257, 0]).player, object: tree(3060, 3258) };
   assert.equal(SpiritTrees._test.ownTreeTravel(patch), false, "Port Sarim's patch stays Farming's");
 });
+
+test("Poison Waste opens once the crystal chime heals Incomitatus (stage 38), before The Path of Glouphrie is complete", () => {
+  grown = [];
+  const menuFor = (stage) => {
+    quests = [
+      { name: "Tree Gnome Village", isComplete: () => true },
+      { name: "The Path of Glouphrie", isComplete: () => stage >= 50, getStage: () => stage },
+    ];
+    const visit = traveller([3185, 3508, 0]);
+    SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
+    return visit.ticks[0].find((line) => line.startsWith("script 217"));
+  };
+  assert.ok(menuFor(37).includes("<col=5f5f5f>Poison Waste</col>"), "greyed before the chime");
+  assert.ok(menuFor(38).includes("|Poison Waste|"), "open once chimed (Wiki: Spirit Tree (Incomitatus))");
+  assert.ok(menuFor(50).includes("|Poison Waste|"));
+});

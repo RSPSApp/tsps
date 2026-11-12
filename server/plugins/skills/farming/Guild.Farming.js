@@ -407,6 +407,14 @@ function seedBoxGather(event) {
     const box = openSeedBox(event.player), left = event.amount - event.stored;
     if (box && left > 0) event.stored += storeCrop(event.player, box, event.itemId, left);
 }
+/**
+ * "herb-sack:gather" { player, itemId, amount, stored }: Sailing creature loot goes into an open herb sack that has room
+ * (Wiki: Herb sack, 6 May 2026). Silent, as for the seed box: ours.
+ */
+function herbSackGather(event) {
+    const sack = openHerbSack(event.player), left = event.amount - event.stored;
+    if (sack && left > 0) event.stored += storeCrop(event.player, sack, event.itemId, left);
+}
 const seedPickupItems = new WeakSet();
 const seedPickupPlayers = new WeakSet();
 function seedBoxPickup(event) {
@@ -496,4 +504,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { deathContainers, seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });

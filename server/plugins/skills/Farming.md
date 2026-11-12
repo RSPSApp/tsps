@@ -222,12 +222,14 @@ in your inventory for that." after its Emptied lines (captures 3911, 4300, 4302,
 Not covered (no capture or Wiki line): a herb used on the sack when it has room (no line here), the closed sack's own
 recordings (only the open sack is recorded; the two share these lines here), live's one-tick delay before Check's
 lines, what a sack does below 58 Herblore (here Fill finds no room), a sack used on a seed box (here the spoil line),
-and a bank Empty when the bank has no room (silent here).
+and a bank Empty when the bank has no room (silent here). Empty from a deposit box (Wiki, 27 September 2018) isn't
+here: deposit boxes don't offer any storage item's bank Empty yet.
 
 An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
 as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room
 (30 of each type here, 100 in a silklined sack). A closed sack takes none. Wiki: "will automatically
 store any grimy herbs that are picked up", "provided there is space for it". No message is shown, as none is documented.
+Open, it also takes grimy herbs looted from a Sailing creature ("herb-sack:gather", Wiki: Herb sack, 6 May 2026), silently.
 
 A pristine spider silk (Sarachnis's) used on a herb sack makes it a silklined herb sack, which stores 100 of each grimy herb
 and otherwise works the same, open or closed. The upgrade has no cost or level requirement (Wiki: [Silklined herb sack](https://oldschool.runescape.wiki/w/Silklined_herb_sack)).

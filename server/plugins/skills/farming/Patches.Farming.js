@@ -1324,6 +1324,7 @@ function attach(api) {
     api.onItemAction(Guild.rewardItem);
     api.onItemAction(Guild.storageAction);
     api.onCustomEvent("seed-box:gather", Guild.seedBoxGather);
+    api.onCustomEvent("herb-sack:gather", Guild.herbSackGather);
     api.onGroundItemPickup(Guild.seedBoxPickup);
     api.onGroundItemPickup(Guild.pickup);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, Guild.bankStorageOp);

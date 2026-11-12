@@ -392,3 +392,14 @@ test("the gather is for those sources: a stall's seed isn't taken", (t) => {
   assert.equal(request.stored, 0, "no source, no seed box");
   assert.equal(inBox(f, I.POTATO_SEED), 0);
 });
+
+test("Wiki (Herb sack, 6 May 2026): grimy herbs looted from a Sailing creature go into an open herb sack, not a closed one", (t) => {
+  const herb = Data.itemId("Grimy ranarr weed");
+  for (const [name, inSack] of [["Open herb sack", 2], ["Herb sack", 0]]) {
+    const f = actor(t, name);
+    f.p.getSkillManager().setCurrentLevel(core.Skill.HERBLORE, 99);
+    seaLoot(t, f, [{ itemId: herb, amount: 1 }, { itemId: herb, amount: 1 }]);
+    assert.equal(f.box.getMetaValue(STORED)?.[herb] ?? 0, inSack, name);
+    assert.equal(f.inv.getAmount(herb), 2 - inSack, `${name}: the rest is in the inventory`);
+  }
+});

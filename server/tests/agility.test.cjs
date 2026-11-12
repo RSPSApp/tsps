@@ -1710,13 +1710,21 @@ test("Grace's Toggle Counter hides the lap count message, and laps still count",
   runLap(draynor, player);
   assert.equal(lapMessages(), 1);
 
+  const said = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => said.push(...chain.getDialogues().values()) });
+  const before = player.state.messages.length;
   hooks.npcs.Grace["Toggle Counter"]({ player });
-  assert.equal(player.state.messages.at(-1), "Your lap count will no longer be shown when you complete a lap.");
+  // rsprox 233/03247.txt:25731: Grace's chathead (5919, chathap3 569), no game message.
+  assert.equal(player.state.messages.length, before, "no game message");
+  assert.equal(said.length, 1);
+  assert.equal(said[0].getNpcId(), 5919);
+  assert.equal(said[0].text, "I've disabled your lap counter messages, if you want to turn it back on, so you can see your total laps after you finish one, speak to me again.");
   runLap(draynor, player);
   assert.equal(lapMessages(), 1, "no message for the second lap");
   assert.equal(player.getAttribute("agility.laps").draynor, 2, "but it counted");
 
   hooks.npcs.Grace["Toggle Counter"]({ player });
+  assert.equal(said.at(-1).text, "I've turned on your lap counter, you'll get a message when you complete a lap on a course. To help you keep track.", "rsprox 233/03247.txt:25773");
   runLap(draynor, player);
   assert.equal(lapMessages(), 2);
 });

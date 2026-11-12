@@ -8611,8 +8611,6 @@ module.exports = function registerTheBloodMoonRises(api) {
       recipe = [[PREP.incompleteStew, PREP.cookedMeat], [PREP.incompleteStew, PREP.cookedMeat], [[PREP.uncookedStew, 1]]];
     } else if (pair.has(PREP.cookedStew) && pair.has(PREP.leaves)) {
       recipe = [[PREP.cookedStew, PREP.leaves], [PREP.cookedStew, PREP.leaves], [[PREP.stew, 1]]];
-    } else if (pair.has(PREP.blessedSickle) && pair.has(PREP.diamond)) {
-      recipe = [[PREP.blessedSickle, PREP.diamond], [PREP.blessedSickle, PREP.diamond], [[PREP.diamondSickle, 1]]];
     } else if (pair.has(PREP.diamondSickle) && pair.has(PREP.diamondTablet)) {
       recipe = [[PREP.diamondSickle, PREP.diamondTablet], [PREP.diamondSickle, PREP.diamondTablet], [[PREP.enchantedSickle, 1]]];
     } else if (pair.has(PREP.enchantedSickle) && pair.has(PREP.logs)) {
@@ -8622,9 +8620,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
     if (!recipe) return;
     event.handled = true;
-    if (pair.has(PREP.blessedSickle) || pair.has(PREP.enchantedSickle)) {
-      const diamond = pair.has(PREP.blessedSickle);
-      api.sendMultiChatboxPrompt(player, diamond ? "Craft a diamond sickle?" : "Craft an enhanced blisterwood sickle?",
+    if (pair.has(PREP.enchantedSickle)) {
+      api.sendMultiChatboxPrompt(player, "Craft an enhanced blisterwood sickle?",
         "Yes.", () => craftPrepRecipe(player, recipe, pair), "No.", () => {});
     } else craftPrepRecipe(player, recipe, pair);
   }
@@ -8645,6 +8642,19 @@ module.exports = function registerTheBloodMoonRises(api) {
     return true;
   }
 
+  /** The diamond on a silver sickle (b) (Crafting's gem sickles) belongs to the preparations. */
+  function allowDiamondSickle(request) {
+    if (request.product !== PREP.diamondSickle || quest.isComplete(request.player)) return;
+    if (stage(request.player) === STAGE.PREPARATIONS) request.allowed = true;
+  }
+
+  /** A diamond sickle made: the preparations' helper varbits follow the inventory, as after any prep recipe. */
+  function diamondSickleMade({ player, product }) {
+    if (product === PREP.diamondSickle && !quest.isComplete(player) && stage(player) === STAGE.PREPARATIONS) {
+      quest.setStage(player, STAGE.PREPARATIONS);
+    }
+  }
+
   function craftPrepRecipe(player, recipe, pair) {
     const currentStage = stage(player);
     const stakesRecipe = pair.has(PREP.logs) && pair.has(PREP.knife);
@@ -8655,8 +8665,6 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.setAttribute(PREP_ATTRIBUTE, { ...(player.getAttribute(PREP_ATTRIBUTE) ?? {}), stakes: true });
       publishHelperVarbits(player);
       player.sendMessage("You cut the blisterwood logs into five stakes.");
-    } else if (pair.has(PREP.blessedSickle)) {
-      player.sendMessage("You embed the diamond into the sickle.");
     } else if (pair.has(PREP.diamondSickle)) {
       player.sendMessage("You enchant the diamond sickle.");
     } else if (pair.has(PREP.enchantedSickle)) {
@@ -8876,6 +8884,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onItemOnObject(handleBloodHuntItemOnObject, { noted: false });
   api.onItemOnItem(handleAncientShieldAssembly);
   api.onItemOnItem(handlePrepItemOnItem);
+  api.onCustomEvent("crafting:gem-sickle-allowed", allowDiamondSickle);
+  api.onCustomEvent("crafting:gem-sickle-made", diamondSickleMade);
   api.onItemOnItem(handleBloodHuntItemOnItem);
   api.onItemOnNpc(feedSafalaan);
   api.onItemAction("Dusty book", { Read: readDustyBook });

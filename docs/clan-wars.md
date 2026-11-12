@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade or Forsaken Quarry**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry or Soggy Swamp**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -495,3 +495,43 @@ across it; this map property does not enable ranged combat.
 Sources and limits are the pinned Wiki/cache references above. Native tests use
 ordinary decoded movement/object input and existing actor/death-task fixtures;
 exact spawn/barrier coordinates are our choices, not recorded retail positions.
+
+
+## Soggy Swamp
+
+The native arena scrollbox offers Soggy Swamp (6, row slot 18) alongside Plateau,
+Sylvan Glade and Forsaken Quarry. Ghastly Swamp (7) is a separate, unsupported
+arena. Existing melee modes, restrictions, Ignore 5, safe deaths and membership
+rules use the same selected-layout consumers.
+
+The bounded revision-242 template is region 13645, source 3392..3455 / 4928..4991,
+with planes 0 and 1 copied to corresponding instance planes; source 2/3 remain
+unmapped. All 844 returned raw locs are plane 0. The four active orb/jail-portal
+targets have settings [0,1], no bridge bit and owned effective-plane-0 copies.
+This inspection footprint is not a retail arena extent.
+
+Exact placements are TSPS choices qualified against the map: south/north battle
+landings (3409,4934,0) / (3439,4985,0), southwest/northeast jails
+(3396,4932,0) / (3451,4987,0), and type-10 face-0 preparation barriers at y=4959,
+x=3395..3452. One already-solid tree at (3397,4959) receives no overlay; the other
+57 tiles use the existing native spawn/clipping path. Preparation stays 200 ticks.
+Source collision graphs place both landings in one 2032-tile component and the
+jails in separate 19-tile components. Native movement and exact collision
+restoration are verified separately from those source graphs.
+
+South/north jail orbs are (3397,4929) / (3450,4990), with model 9753; jail Exit
+portals are (3393,4933) / (3454,4986). Forfeit portals are (3407,4931) /
+(3437,4987), with source dimensions 4x2 and faces 0/2. Actual selected private-area
+object identity is required for every interaction.
+
+The map has roots, rotten trees and mossy rocks. The selected tree at (3398,4946)
+is a 1x1 walking/projectile obstacle; the selected roots at (3398,4977) occupy 3x3
+walking/projectile-blocked tiles. These bounded cache properties need native
+walking/ray checks with open controls; they do not enable ranged combat or assert
+blanket line-of-sight properties for every swamp object.
+
+Sources and limits are the pinned Wiki/cache references above. Landings, jail
+assignment and wall placement are TSPS choices, not recorded retail positions.
+Native fixtures disclose supplied levels/combat positions/pre-rolled damage and
+inert transport; they do not establish rendered-client, full-session, natural-RNG
+or retail timing equivalence.

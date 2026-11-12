@@ -603,6 +603,10 @@ const WEB_REGROW_TICKS = 99;
 const WEB_SLASH_MESSAGE = "You slash the web apart.";
 const WEB_FAIL_MESSAGE = "You fail to cut through it.";
 const WEB_NO_BLADE_MESSAGE = "Only a sharp blade can cut through this sticky web.";
+// rsprox 236/03927.txt:5035-5038, 236/03932.txt:4939 (the Forthos tomb web): with aranea boots on, Slash wades
+// through - human_aranea_boots_wade with a one-tile exactmove (delay 30), the web left standing, no message.
+const ARANEA_WADE_ANIMATION = 11511; // human_aranea_boots_wade
+const WADE_CYCLES = 30;
 /** Webs being cut, as "x,y,z", until they turn into the slashed web. */
 const websBeingSlashed = new Set();
 
@@ -637,6 +641,13 @@ function webTool(player, usedItem) {
   return best ? { item: best, chance: bestChance } : null;
 }
 
+/** Wiki (Web): "Wearing aranea boots will allow players to pass through webs without needing any other tools." */
+function wearsAraneaBoots(api, player) {
+  const id = player.getEquipment().getItems()[Equipment.FEET_SLOT]?.getId?.() ?? -1;
+  const I = api.core.ItemIdentifiers;
+  return [I.ARANEA_BOOTS, I.ARANEA_BOOTS_2, I.ARANEA_BOOTS_3, I.ARANEA_BOOTS_4, I.ARANEA_BOOTS_5].includes(id);
+}
+
 /** Live: a knife chops, a weapon swings its own slash animation. */
 function webSlashAnimation(item) {
   const definition = item.getDefinition();
@@ -646,6 +657,28 @@ function webSlashAnimation(item) {
   const style = definition.getWeaponInterface()?.getFightType()
     .find((type) => type.getBonusType() === BonusManager.ATTACK_SLASH);
   return style?.getAnimation() ?? KNIFE_SLASH_ANIMATION;
+}
+
+/**
+ * The wade: off the web's tile across its edge for a wall web (face 0-3: west, north, east, south), otherwise onto the
+ * web's tile, as recorded both ways (9919 -> 9920 and back).
+ */
+function wadeThroughWeb(api, player, object) {
+  const { Location, ForceMovement, ForceMovementTask } = api.core;
+  const from = player.getLocation();
+  const web = object.getLocation();
+  let to = web;
+  if (from.getX() === web.getX() && from.getY() === web.getY()) {
+    if (object.getType() > 3) return;
+    const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
+    to = new Location(web.getX() + ex, web.getY() + ey, web.getZ());
+  }
+  const dx = to.getX() - from.getX();
+  const dy = to.getY() - from.getY();
+  if (dx === 0 && dy === 0) return;
+  const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+  api.getTaskManager().submit(new ForceMovementTask(player, 1,
+    new ForceMovement(from.clone(), new Location(dx, dy), 0, WADE_CYCLES, direction, ARANEA_WADE_ANIMATION)));
 }
 
 function webKey(object) {
@@ -677,6 +710,12 @@ function slashWeb(api, event, usedItem) {
   const { player, object } = event;
   const key = webKey(object);
   if (player.busy() || websBeingSlashed.has(key) || !MapObjects.get(WEB_OBJECT_ID, object.getLocation(), object.getPrivateArea())) return;
+  // Wiki (Web, Aranea boots): the boots "pass through webs" with no tool. Slash then wades, as recorded at the
+  // Forthos web; using a blade on the web still slashes it.
+  if (!usedItem && wearsAraneaBoots(api, player)) {
+    wadeThroughWeb(api, player, object);
+    return;
+  }
   const tool = webTool(player, usedItem);
   if (!tool) {
     player.sendMessage(WEB_NO_BLADE_MESSAGE);

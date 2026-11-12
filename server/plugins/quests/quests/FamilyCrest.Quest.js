@@ -137,7 +137,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   }
 
   function grantReward(player) {
-    // Family Crest's listed reward is the gauntlets (granted by registerQuest); no XP.
+    // Family Crest's listed reward is the gauntlets (granted by registerQuest); the XP is grantCompletionXp's.
   }
 
   /** Plain steel gauntlets get the free first imbue; otherwise the brother's paid 25,000 coin change. */
@@ -456,6 +456,19 @@ module.exports = function registerFamilyCrestQuest(api) {
     refreshQuestList(player);
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.MINING, 2000, "Mining"], [api.core.Skill.SMITHING, 2000, "Smithing"], [api.core.Skill.CRAFTING, 2000, "Crafting"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    grantReward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "family_crest",
     name: "Family Crest",
@@ -463,11 +476,12 @@ module.exports = function registerFamilyCrestQuest(api) {
     startedValue: STAGE_SPOKEN_DIMINTHEIS,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemId: ItemIdentifiers.STEEL_GAUNTLETS,
     rewardItemLabel: "Steel gauntlets",
     otherRewards: ["The ability to enchant the gauntlets"],
     buildJournal,
-    onReward: grantReward,
+    onReward: rewardOnCompletion,
   });
 
   api.onNpcDialogueVariant(selectVariant);

@@ -44,12 +44,19 @@ function respawnTicks(pickable, random = Math.random) {
   return Array.isArray(ticks) ? ticks[0] + Math.floor(random() * (ticks[1] - ticks[0] + 1)) : ticks;
 }
 
-/** Wiki (Nettles): any gloves do, except beekeeper's gloves. */
-function wearsGloves(player) {
+/**
+ * Wiki (Nettles): gloves, not Beekeeper's. `rule` is the pickable's needsGloves: hands items whose
+ * name says glove/gauntlet/vambrace/bracers, or one of its `also` names (the Regen bracelet is the
+ * Wiki list's only bracelet), never its `not` names.
+ */
+function wearsGloves(player, rule) {
   const id = player.getEquipment().get(Equipment.HANDS_SLOT)?.getId?.() ?? -1;
   if (id <= 0) return false;
   const name = String(ItemDefinition.forId(id)?.getName?.() ?? "").toLowerCase();
-  return !name.startsWith("beekeeper");
+  const base = name.replace(/\s*\([^)]*\)$/, "");
+  const named = (list) => (list ?? []).some((entry) => [name, base].includes(entry.toLowerCase()));
+  if (named(rule?.not)) return false;
+  return named(rule?.also) || (rule?.names ?? []).some((word) => name.includes(word));
 }
 
 /** Removes the plant for everyone (or swaps in its empty version) until it respawns. */
@@ -98,10 +105,11 @@ class PickTask extends Task {
       picked.delete(plantKey(object));
       return;
     }
-    if (pickable.needsGloves && !wearsGloves(player)) {
+    if (pickable.needsGloves && !wearsGloves(player, pickable.needsGloves)) {
       picked.delete(plantKey(object));
       player.sendMessage("You have been stung by the nettles!");
-      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(1 + Math.floor(Math.random() * NETTLE_DAMAGE_MAX), HitMask.RED)]);
+      // Wiki (Nettles): "Although the resulting hitsplat is green, similar to poison, the player will not be poisoned."
+      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(1 + Math.floor(Math.random() * NETTLE_DAMAGE_MAX), HitMask.GREEN)]);
       return;
     }
     player.getInventory().adds(pickable.item, 1);

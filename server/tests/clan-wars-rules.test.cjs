@@ -182,3 +182,11 @@ test('Quarry is a bounded third arena for existing modes while other arenas stay
   }
   assert.equal(Rules.validate({...Rules.create(),arena:4}),false);
 });
+
+
+test('Soggy Swamp is arena6 for supported melee modes while Ghastly and other arenas remain refused',()=>{
+  for(const mode of [0,1,8,16,20]) {
+    const rules={...Rules.create(3,mode),arena:6};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Soggy Swamp/);
+  }
+  for(const arena of [0,4,5,7,8,9,10,11,12,13,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+});

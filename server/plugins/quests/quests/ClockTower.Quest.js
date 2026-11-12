@@ -590,6 +590,19 @@ module.exports = function registerClockTowerQuest(api) {
 
   api.persistAttribute(BITS_ATTRIBUTE);
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.FIREMAKING, 1000, "Firemaking"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    grantReward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "clock_tower",
     name: "Clock Tower",
@@ -601,11 +614,11 @@ module.exports = function registerClockTowerQuest(api) {
       return stage >= STAGE_COMPLETE ? WIRE_COMPLETE : stage;
     },
     questPoints: 1,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemLabel: "500 Coins",
     scrollItemId: COINS_ITEM_ID,
     buildJournal,
-    onReward: grantReward,
+    onReward: rewardOnCompletion,
   });
 
   api.onNpcDialogueVariant(selectVariant);

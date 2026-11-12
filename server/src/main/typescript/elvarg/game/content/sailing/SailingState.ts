@@ -86,6 +86,8 @@ export interface SailingState {
     /** The dock the player last docked at, and the last that was a port (not a mooring point). */
     lastDock: string | null;
     lastStandardDock: string | null;
+    /** The last mooring point the player docked at; absent until they dock at one. */
+    lastMooringPoint?: string | null;
     /** Docks at which this player has actually moored; absent on older saves. */
     mooredDocks?: string[];
 }
@@ -187,6 +189,7 @@ export function normalizeSailingState(raw: any): SailingState {
         boats, activeBoatSlot: active, returnPoint, tools,
         ...(missingToolParts.length > 0 && { missingToolParts }),
         lastDock: dockId(raw.lastDock), lastStandardDock: dockId(raw.lastStandardDock),
+        ...(typeof raw.lastMooringPoint === "string" && { lastMooringPoint: raw.lastMooringPoint }),
         ...(mooredDocks.length > 0 && { mooredDocks }),
     };
 }

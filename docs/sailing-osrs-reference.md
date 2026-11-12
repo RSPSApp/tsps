@@ -260,13 +260,13 @@ From a capture of docking at Port Sarim's buoy and disembarking at its gangplank
 
 Red Rock and Last Light have neither, so they're left out.
 
-**The landing** is the one walkable tile beside the gangplank, on the jetty. Both captured ports land one tile west of their plank: Port Sarim (3050, 3193) and the Pandemonium (3069, 2987). Every other port has exactly one walkable neighbour, which matches the plank's rotation (3 west, 0 north, 1 east, 2 south) except at Entrana. Islands, where every neighbour is walkable, use the rotation.
+**The landing** is the one walkable tile beside the gangplank, on the jetty. Both captured ports land one tile west of their plank: Port Sarim (3050, 3193) and the Pandemonium (3069, 2987). Every other port has exactly one walkable neighbour, which matches the plank's rotation (3 west, 0 north, 1 east, 2 south) except at Entrana. Islands, where every neighbour is walkable, use the rotation, except the 18 mooring points with a captured disembark (rsprox, rev 235-238): live puts the player 1-4 tiles inland there (the Tear of the Soul (2321, 2774), Anglers' Retreat (2469, 2719), Brittle Isle (1955, 4058) and so on; only Last Light lands beside its plank). The other mooring points keep the rotation's tile.
 
 **The mooring** (where a boat is placed when it isn't where it was left) is the Pandemonium's captured one, applied to every port: out from the plank on the sea side, 4 tiles for a raft and 5 for a skiff or sloop, side-on (angle 1024 for an east-west plank, 512 for a north-south one).
 
 **Dock** (op 1 on a port's buoy, from the boat):
 - the boat's per-boat `port` varbit becomes the port's id;
-- `sailing_boarded_boat_last_dock` (19145) and `sailing_boarded_boat_last_standard_dock` (19146) become the port's id;
+- `sailing_boarded_boat_last_dock` (19145) and `sailing_boarded_boat_last_standard_dock` (19146) become the port's id; at a mooring point, 19145 and `sailing_boarded_boat_last_mooring_point` (19147) do instead (rsprox 944, 936, 3837, 960, 1029), and all three are sent at login;
 - "You dock the boat at Port Sarim. You will return here if you have to abandon your boat for any reason.", and sound 1794.
 
 The player stays aboard and the boat stays where it is. At sea, the `port` varbit keeps the port the boat last docked at (it was 1, the Pandemonium, until the Dock).
@@ -623,9 +623,10 @@ Refusals, each with sound 2277:
 - **Ports**, guessed rather than captured:
   - Disembarking at a port's gangplank docks the boat there if it wasn't (the capture docked at the buoy first). It needs the port's level unless the boat is already docked there.
   - The too-low-level message, and that boarding a port's boat needs no level.
-  - The mooring for every port but the Pandemonium (its offsets, on each port's sea side), and the landing for islands (by the plank's rotation).
+  - The mooring for every port but the Pandemonium (its offsets, on each port's sea side), and the landing for the mooring points without a captured disembark (by the plank's rotation).
   - Locs on the shore can be used from up to 12 tiles away while aboard (the capture used a gangplank from 9).
   - Islands only differ in not being a "standard dock" (19146). Column 5's requirement isn't checked.
+  - A mooring point's level is checked against the unboosted level, for a guest disembarking too ([Wiki: Mooring point](https://oldschool.runescape.wiki/w/Mooring_point): not boostable; [Wiki: Tear of the Soul](https://oldschool.runescape.wiki/w/Tear_of_the_Soul): still required on a friend's boat). A port's level still counts a boost and a guest needs none there; neither case is captured.
 - **Sailing** is a skill (23). Salvaging and sorting give Sailing XP; nothing else does yet.
 - **Salvaging**, guessed rather than captured:
   - the hook's reach: 8 tiles from the hook to the nearest tile of the wreck (about what it is in OSRS, as played);

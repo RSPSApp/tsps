@@ -343,13 +343,21 @@ function completeLap(player, course) {
   pluginApi.emitCustomEvent("agility:success", { player, skill: core.Skill.AGILITY, petBase: course.petBase });
 }
 
-/** Grace's Toggle Counter: turns the lap count message off or back on. Guessed messages. */
-function toggleLapCounter({ player }) {
+/**
+ * Grace's Toggle Counter: turns the lap count message off or back on. Grace says so with her
+ * chathead (chat_left, chathap3 569), as rsprox 233/03247.txt:25731 and :25773 record.
+ */
+const GRACE_HAPPY = 569; // chathap3
+function toggleLapCounter({ player, npc }) {
   const off = !player.getAttribute(LAP_COUNTER_OFF_ATTRIBUTE);
   player.setAttribute(LAP_COUNTER_OFF_ATTRIBUTE, off);
-  player.sendMessage(off
-    ? "Your lap count will no longer be shown when you complete a lap."
-    : "Your lap count will now be shown when you complete a lap.");
+  const text = off
+    ? "I've disabled your lap counter messages, if you want to turn it back on, so you can see your total laps after you finish one, speak to me again."
+    : "I've turned on your lap counter, you'll get a message when you complete a lap on a course. To help you keep track.";
+  const graceId = npc?.getId?.() ?? core.NpcIdentifiers.GRACE;
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.NpcDialogue(0, graceId, text, "Grace", GRACE_HAPPY),
+  ));
 }
 
 /**

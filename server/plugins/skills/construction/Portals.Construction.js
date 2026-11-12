@@ -33,6 +33,16 @@ function directingCost(destination, nexus) {
   });
 }
 
+/**
+ * Where a portal to the spell `name` lands: like the spell, anywhere in its landing square (SpellTeleports), or its
+ * alternate's square with `alternate`; else on `fallback`.
+ */
+function landingTile(name, fallback, alternate = false) {
+  const request = { name, alternate, tile: fallback };
+  api.emitCustomEvent("spell:landing-tile", request);
+  return request.tile ? request.tile.clone() : request.tile;
+}
+
 function current(player, house, furniture) {
   return player.getPrivateArea() === house && house.save.rooms.flat(2).some(room => Object.values(room?.furnitureByLocation ?? {}).includes(furniture));
 }
@@ -122,7 +132,7 @@ function chooseDestination(player, house, furniture, mode, page = 0) {
     if (mode === "teleport") {
       const travel = () => {
         if (current(player, house, furniture) && furniture.destinations?.includes(destination.name) && TeleportHandler.checkReqs(player, destination.destination)) {
-          TeleportHandler.teleport(player, destination.destination.clone(), TeleportType.NORMAL, false);
+          TeleportHandler.teleport(player, landingTile(destination.name, destination.destination), TeleportType.NORMAL, false);
           api.emitCustomEvent("construction:portal", { player, destination: destination.name });
         }
       };
@@ -168,4 +178,4 @@ function useHousePortal(event) {
   return true;
 }
 
-Object.assign(module.exports, { houseDestinations, configureHouseDestination, mayConfigureHouseDestination, current, useHousePortal });
+Object.assign(module.exports, { houseDestinations, configureHouseDestination, mayConfigureHouseDestination, current, landingTile, useHousePortal });

@@ -66,6 +66,15 @@ function playHurtSoundForListeners(attacker, target, hurtIds) {
   }
 }
 
+/**
+ * Damage the player takes on itself (a divine potion's shock): only they hear it, in their own voice.
+ * Ours: Type B's voices here follow combat's; only Type A's were recorded for it.
+ */
+function playOwnHurtSound(player) {
+  if (!core || !player?.isRegistered?.() || player.isPlayerBot?.() || player.getNpcTransformationId() >= 0) return;
+  playHurtSound(player, hitSoundsType(player) === TYPE_A ? HURT_IDS.body0 : HURT_IDS.body1);
+}
+
 function initialize(coreApi) {
   core = coreApi;
 }
@@ -100,6 +109,7 @@ module.exports = {
   name: "PlayerHitSounds",
   description: "Plays the hurt sound to players struck in combat, in the voice their Hit sounds setting chooses.",
   hitSoundsType,
+  playOwnHurtSound,
   register(api) {
     api.persistAttribute(HIT_SOUNDS_ATTRIBUTE, null);
     api.onCustomEvent("settings:option-chosen", chooseHitSounds);

@@ -1108,6 +1108,10 @@ export const ChatType = {
   MESBOX: 115,
   /** The login greeting, "Welcome to Old School RuneScape." (rsprox `type=108`). */
   WELCOME: 108,
+  /** An NPC's examine (rsprox `type=npc_examine`; RuneLite NPC_EXAMINE). */
+  NPC_EXAMINE: 28,
+  /** An object's examine (rsprox `type=loc_examine`; RuneLite OBJECT_EXAMINE). */
+  LOC_EXAMINE: 29,
 } as const;
 
 /**

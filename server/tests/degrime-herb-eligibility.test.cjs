@@ -107,3 +107,17 @@ test('Degrime preserves runes and Magic XP when no herb is eligible', async t =>
   assert.equal(f.p.getInventory().getAmount(269), 0, 'TARGET: no clean torstol');
   assert.deepEqual(f.p.getInventory().getValidItems().map(i => [i.getId(), i.getAmount()]).sort((a,b) => a[0]-b[0]), [[219, 1], [557, 4], [561, 2]], 'TARGET: entire inventory unchanged');
 });
+
+test('Degrime cleans grimy huasca too, for half the Wiki cleaning XP of each herb (Wiki: Degrime, Herb)', async t => {
+  const f = caster(t, 75);
+  assert.equal(core.CacheDefinitions.getItem(30094).name, 'Grimy huasca', 'PRE: cache item 30094');
+  f.p.getInventory().add(new core.Item(30094, 1), false);
+  const before = f.p.getSkillManager().getExperience(core.Skill.HERBLORE);
+  await cast(f);
+  assert.equal(f.p.getInventory().getAmount(30094), 0, 'TARGET: grimy huasca consumed');
+  assert.equal(f.p.getInventory().getAmount(30097), 1, 'TARGET: huasca cleaned');
+  // Guam 2.5, torstol 15 and huasca 11.8 XP to clean (Wiki Herb), halved by Degrime.
+  const gained = f.p.getSkillManager().getExperience(core.Skill.HERBLORE) - before;
+  // 14.65 in all; the skill reads back whole experience (main's own map gave 1 + 9 = 10, and none for huasca).
+  assert.equal(gained, Math.floor((2.5 + 15 + 11.8) / 2 * core.GameConstants.EXPERIENCE_MULTIPLIER), 'TARGET: half the Wiki cleaning XP');
+});

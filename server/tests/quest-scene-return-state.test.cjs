@@ -87,6 +87,10 @@ function actor(t, scene) {
   assert.equal(core.World.getPlayers().add(player), true, "the test player joins the world list");
   const connection = new ClientConnection(channel);
   connection.player = player;
+  // The side tabs a logged-in player has up. The login gameframe mounts them as raw packets the sender does not track, so
+  // they are mounted here, before any baseline: a scene that closes and reopens them leaves them as they were.
+  player.getPacketSender().sendTabInterface(0, 593).sendTabInterface(6, player.getSpellbook().getInterfaceId());
+  for (const [slot, group] of [[77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [87, 116], [88, 216]]) player.getPacketSender().sendTabInterface(slot, group);
   const f = { t, player, connection, scene, packets: [], tick: 0 };
   const send = session.sendClientPacket.bind(session);
   t.mock.method(session, "sendClientPacket", (frame) => {

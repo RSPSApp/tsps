@@ -258,7 +258,8 @@ test("the infernal harpoon cooks a third of its catch, runs on 5,000 charges and
 
   const check = player({ inventory: [I.INFERNAL_HARPOON] });
   itemActions.get("Infernal harpoon").Check({ player: check, item: check.items[0] });
-  assert.equal(check.messages[0], "Your infernal harpoon has 5,000 charges left.");
+  // Wiki: "displayed as a percentage", in the infernal axe and pickaxe's recorded form.
+  assert.equal(check.messages[0], "Infernal harpoon: 100.0% remaining.");
 
   // Crystal harpoon: one charge per catch, 10,000 start, elven signet saves 10%.
   const CrystalHarpoon = require("../plugins/skills/fishing/CrystalHarpoon.Fishing");

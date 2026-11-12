@@ -29,9 +29,10 @@ const item = (name) => new core.Item(core.ItemIdentifiers[name], 1);
 const empty = () => new core.Item(-1, 0);
 
 /** A player holding `wielded` (or nothing) and carrying `carried`, recording what they are shown. */
-function fakePlayer({ wielded = null, carried = [] } = {}) {
+function fakePlayer({ wielded = null, carried = [], feet = null } = {}) {
   const worn = Array.from({ length: 14 }, empty);
   if (wielded) worn[core.Equipment.WEAPON_SLOT] = item(wielded);
+  if (feet) worn[core.Equipment.FEET_SLOT] = item(feet);
   const player = {
     messages: [],
     animations: [],
@@ -119,6 +120,66 @@ test("a slashed web grows back 99 ticks after it was cut, as recording 4155 show
   api.swaps.length = 0;
   api.tasks[1].execute();
   assert.deepEqual(api.swaps.slice(-1), [`+${WEB}`]);
+});
+
+// Wiki (Web): aranea boots "pass through webs without needing any other tools". Recorded at the Forthos web
+// (rsprox 236/03927.txt:5035-5038, 236/03932.txt:4939): a wade, human_aranea_boots_wade (11511) with a one-tile
+// exactmove, the web left standing and no message.
+test("aranea boots wade through a web on Slash, blade or not, and leave it standing", () => {
+  const { slashWeb } = Wilderness._test;
+  const { ForceMovementTask } = core;
+  const wade = (player, object) => {
+    const api = fakeApi();
+    slashWeb(api, { player, object, objectId: WEB });
+    return api;
+  };
+  const mover = (player, at) => {
+    let tile = new Location(...at);
+    Object.assign(player, {
+      forced: null,
+      getLocation: () => tile,
+      moveTo: (to) => { tile = to; },
+      getCombat: () => ({ reset() {} }),
+      getMovementQueue: () => ({ reset() {} }),
+      setForceMovement: (movement) => { player.forced = movement; },
+      getForceMovement: () => player.forced,
+    });
+    return player;
+  };
+  const centre = MapObjects.get(WEB, new Location(...WEB_TILE), null);
+  for (const carried of [[], ["KNIFE"]]) {
+    const player = mover(fakePlayer({ feet: "ARANEA_BOOTS", carried }), [3158, 3950, 0]);
+    const api = wade(player, centre);
+    assert.deepEqual(player.messages, [], "no slash message");
+    assert.deepEqual(api.swaps, [], "the web stays");
+    assert.equal(api.tasks.length, 1);
+    const task = api.tasks[0];
+    assert.ok(task instanceof ForceMovementTask);
+    assert.equal(player.forced.getAnimation(), 11511);
+    assert.equal(player.forced.getReverseSpeed(), 30);
+    assert.equal(player.forced.getDirection(), 0, "north (angle 1024, as recorded)");
+    task.execute();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3158, 3951], "onto the web's tile");
+  }
+  // A wall web, as at the Forthos web: from its tile across the edge, and back onto it.
+  const wall = new GameObject(WEB, new Location(3000, 3000, 0), 0, 1, null);
+  MapObjects.add(wall);
+  const player = mover(fakePlayer({ feet: "ARANEA_BOOTS" }), [3000, 3000, 0]);
+  wade(player, wall).tasks[0].execute();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3000, 3001]);
+  const back = wade(player, wall);
+  assert.equal(player.forced.getDirection(), 2, "south (angle 0, as recorded)");
+  back.tasks[0].execute();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3000, 3000]);
+  // Using a blade on the web still slashes it, boots or not; with neither, the refusal.
+  const knife = fakePlayer({ feet: "ARANEA_BOOTS", carried: ["KNIFE"] });
+  const api = fakeApi();
+  withRoll(0.1, () => slashWeb(api, { ...slashEvent(knife), objectId: WEB }, item("KNIFE")));
+  assert.deepEqual(knife.messages, ["You slash the web apart."]);
+  for (const task of api.tasks.splice(0)) task.execute();
+  const without = fakePlayer();
+  withRoll(0.1, () => slashWeb(fakeApi(), slashEvent(without)));
+  assert.deepEqual(without.messages, ["Only a sharp blade can cut through this sticky web."]);
 });
 
 test("a failed cut says so, swings, and leaves the web alone", () => {

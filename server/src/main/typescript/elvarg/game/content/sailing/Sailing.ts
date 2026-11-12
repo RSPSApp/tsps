@@ -21,6 +21,8 @@ export interface SailingDock {
     moorings?: Record<string, BoatPlacement>;
     /** Where a player steps ashore when disembarking here. */
     landing: { x: number; y: number; z: number };
+    /** The gangplank or mooring point loc's tile. */
+    gangplank?: { x: number; y: number; z: number };
     /** The port's name as a sentence uses it ("the Pandemonium", "Catherby"). */
     theName?: string;
 }
@@ -37,7 +39,7 @@ export type GuestLeaveReason = "disembark" | "teleport" | "logout" | "evicted";
 /** Why a player can't board another player's boat (content has the wording). */
 export type GuestRefusal = "aboard" | "not-aboard" | "not-here" | "full";
 
-/** How far from a dock's landing a boat still counts as moored there, in tiles. */
+/** How far from a dock's landing (a mooring point's own tile) a boat still counts as moored there, in tiles. */
 const MOORED_RANGE = 15;
 
 type SailingEvent = "sailing:boarded" | "sailing:left" | "sailing:guest-boarded" | "sailing:guest-left";
@@ -411,7 +413,8 @@ export class Sailing {
         const state = player.getSailing();
         state.returnPoint = { ...dock.landing };
         state.lastDock = dock.id;
-        if (!dock.mooringPoint) state.lastStandardDock = dock.id;
+        if (dock.mooringPoint) state.lastMooringPoint = dock.id;
+        else state.lastStandardDock = dock.id;
         if (moored) {
             const history = state.mooredDocks ??= [];
             if (!history.includes(dock.id)) history.push(dock.id);
@@ -438,10 +441,14 @@ export class Sailing {
         Sailing.leave(player, instance, "sunk");
     }
 
-    /** Whether a boat is close enough to a dock's landing to step between them. */
+    /**
+     * Whether a boat is close enough to a dock to step between them: measured from a port's
+     * landing, and from a mooring point itself, since its landing is further inland.
+     */
     private static mooredAt(instance: Boat, dock: SailingDock): boolean {
         const tile = instance.worldTile();
-        return Math.max(Math.abs(tile.x - dock.landing.x), Math.abs(tile.y - dock.landing.y)) <= MOORED_RANGE;
+        const from = dock.mooringPoint && dock.gangplank ? dock.gangplank : dock.landing;
+        return Math.max(Math.abs(tile.x - from.x), Math.abs(tile.y - from.y)) <= MOORED_RANGE;
     }
 
     /** Docking moves where the boat's guests go back to, as it does for its owner. */

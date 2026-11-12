@@ -135,7 +135,23 @@ give each destination's name, runes, Magic level and alternate). The player's sl
   faces the portal and leaves two ticks after arriving, with `poh_nexus_id` set (captures,
   revisions 228-239).
 - **Teleport Menu** opens `telenexus_teleport` (17); a row teleports at once, and the second
-  list gives the Grand Exchange, Seers' Village and Yanille (landings from captures).
+  list gives the Grand Exchange, Seers' Village and Yanille. Landings are the spell's: a standard
+  spellbook teleport lands anywhere in its 5x5 square (captures of Varrock, Lumbridge, Falador and
+  the left-click Grand Exchange), as do the Grand Exchange and Seers' Village alternates; Yanille
+  keeps its one captured tile. Framed portals in the portal chamber land the same way. Both ask
+  SpellTeleports for the tile (`spell:landing-tile`).
+- **Scry Mode** (captures 2899, 2901, 2854, 425, 1579; revisions 225-232): the menu's Scry Mode
+  button (`options_layer` sub 3) sets `poh_nexus_tele_scry_mode` to 1, and the menu opens again
+  with the nexus icon (`nexus_model`) clickable. A pick then views the destination as the scrying
+  pool does ("You view Lumbridge...", the overlay), the icon views the house's portal ("You view
+  the Yanille portal..."), and continuing says "You see N adventurers in the area." ("You see no
+  adventurers in the area.") and returns the player to the house. In building mode a pick is
+  refused with "You cannot use the scrying function while in building mode." A Wilderness
+  destination (Ghorrock, captured) gives only the adventurers line and no view (Wiki: Portal
+  nexus). Ours: sub 2 turns the mode off, the mode is kept across logins, "in the area" is 15
+  tiles, the line for one player reads "1 adventurer", and views other than Lumbridge, Falador,
+  the Grand Exchange, Seers' Village and Arceuus Library (captured view tiles) look from the
+  landing tile.
 - **Configuration** opens `telenexus` (19). Dragging a slot onto the portal makes it the
   left-click destination and its options pick it or its alternate; Done saves (captured). Adding
   a destination (dragging it from the available list), reordering and removing slots aren't
@@ -214,8 +230,10 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   captured contents box and takes them to the inventory or bank; Setup shows and switches
   notifications and banking on logout. One balance per house; Ironmen can't tip (Wiki).
 - **Scrying pool:** Scry offers the room's directed portals and the entrance, places the player
-  at the destination with the captured overlay and "You view ...", and brings them back to the
-  pool when they continue. The live game hides the scrying player; tsps has no hidden players.
+  at the destination with the captured overlay and "You view ..." ("You view the Yanille
+  portal..." for the entrance), and when they continue says how many players are there ("You see
+  no adventurers in the area.", "You see 2 adventurers in the area.") and brings them back to the
+  pool (capture 2854). The live game hides the scrying player; tsps has no hidden players.
 - **Garden plants:** furniture planted from a bagged plant (the `poh_sapling_*` objs: trees,
   plants, flowers, hedges, the topiary bush and the Zen theme) waters in, as rsprox captures
   show (rev 230-234, recordings 2856, 3267, 3275). The pick plays `farming_watering` with

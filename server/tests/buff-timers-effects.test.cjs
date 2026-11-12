@@ -126,6 +126,25 @@ test('a divine super combat counts ticks on the attack, strength, defence and co
   assert.deepEqual(f.sent(), { 'varbit 8429': 0, 'varbit 8430': 0, 'varbit 8431': 0, 'varbit 13663': 0 });
 });
 
+test('divineattack_potion_base holds the locked Attack level while the lock lasts, then 0', t => {
+  let now = 9_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const f = loggedIn();
+  const endsAt = now + 300_000;
+  const targets = [0, 2, 1].map(skillIndex => ({ skillIndex, target: 118, endsAt }));
+  targets[0].base = 118;
+  f.attributes.set('potions:divine:state', { endsAt, targets });
+  f.tick();
+  assert.equal(f.sent()['varbit 8434'], 118);
+  targets[0].target = 110;
+  now += 600;
+  f.tick();
+  assert.equal(f.sent()['varbit 8434'], undefined, 'a drain keeps the drink level');
+  now = endsAt;
+  f.tick();
+  assert.equal(f.sent()['varbit 8434'], 0, 'cleared with the timer');
+});
+
 test('a divine bastion sets ranged, defence and bastion, not combat', t => {
   const now = 9_000_000;
   t.mock.method(Date, 'now', () => now);

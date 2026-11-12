@@ -467,6 +467,17 @@ function castSpell(event) {
   }
 }
 
+/**
+ * "spell:landing-tile" { name, alternate?, tile }: where a teleport that goes where the spell `name` goes lands (the
+ * house portals and nexus). `tile` becomes a tile of the spell's landing square, or of its alternate's
+ * (`alternate: true`); it is left as it was for a spell that lands on its own tile.
+ */
+function landingTile(request) {
+  const alternate = request.alternate ? ALTERNATES.get(request.name) : null;
+  const centre = alternate ? tile(alternate.tile) : standardCentre(request.name);
+  if (centre) request.tile = landing(centre);
+}
+
 module.exports = {
   name: "SpellTeleports",
   description: "Teleport tablets and spell teleports, including house tablets and redirected scrolls, from the teleport-tablets data file.",
@@ -482,6 +493,7 @@ module.exports = {
     api.onSpellCast(castAlternate);
     api.onInterfaceActionClick(castSpell);
     api.onCustomEvent("magic:teleport-quest-lock", teleportQuestLock);
+    api.onCustomEvent("spell:landing-tile", landingTile);
     api.onCustomEvent("spell:teleport-confirm", confirmSpell);
     api.onCustomEvent("settings:setting-clicked", setAllWarnings);
   },

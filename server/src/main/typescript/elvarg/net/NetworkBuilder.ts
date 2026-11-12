@@ -48,6 +48,7 @@ import {
   PlayerAppearance,
   resolveGameframeRoot,
   encodePluginMessage,
+  ChatType,
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
@@ -1275,7 +1276,8 @@ export class ClientConnection {
         case "examine_npc":
           if (this.player) {
             const definition = NpcDefinition.forId(packet.id);
-            this.player.sendMessage(definition.getExamine());
+            // rsprox: examines have their own chat types (npc_examine, e.g. 237/01098.txt).
+            this.player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE, definition.getExamine());
           }
           continue;
         case "examine_object":
@@ -1290,7 +1292,9 @@ export class ClientConnection {
             // A multi-loc's text can be recorded under the variant this player sees.
             const definition = ObjectDefinition.forId(packet.id);
             const seen = ObjectDefinition.examineText(packet.id) === null ? ObjectDefinition.forPlayer(packet.id, this.player) : null;
-            this.player.sendMessage((seen && ObjectDefinition.examineText(seen.id) ? seen : definition)?.getExamine() ?? "It's nothing special.");
+            // rsprox 237/01098.txt:334474, 237/01104.txt:13832: `type=loc_examine`.
+            this.player.getPacketSender().sendTypedMessage(ChatType.LOC_EXAMINE,
+              (seen && ObjectDefinition.examineText(seen.id) ? seen : definition)?.getExamine() ?? "It's nothing special.");
           }
           continue;
         case "appearance":

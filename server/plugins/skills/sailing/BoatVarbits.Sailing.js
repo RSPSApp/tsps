@@ -44,9 +44,10 @@ const MAX_HOTSPOTS = 13;
  * is a real dock (Port Sarim), so a boat sunk by a teleport, Escape or death is "lost at sea".
  */
 const LOST_AT_SEA = 253;
-/** `sailing_boarded_boat_last_dock` and `_last_standard_dock`: port ids, as captured. */
+/** `sailing_boarded_boat_last_dock`, `_last_standard_dock` and `_last_mooring_point`: port ids, as captured. */
 const VARBIT_LAST_DOCK = 19145;
 const VARBIT_LAST_STANDARD_DOCK = 19146;
+const VARBIT_LAST_MOORING_POINT = 19147;
 
 function blockVarbit(slot, offset) {
   return FIRST_BLOCK + BLOCK_SIZE * slot + offset;
@@ -99,8 +100,8 @@ function slotVarbits(slot, boat) {
 }
 
 /**
- * Sends every boat slot's varbits, and the player's last dock and last port (not a mooring
- * point), as at login and after a boat changes.
+ * Sends every boat slot's varbits, and the player's last dock, last port (not a mooring point)
+ * and last mooring point, as at login and after a boat changes.
  */
 function sendBoatVarbits(player) {
   const state = player.getSailing();
@@ -110,6 +111,7 @@ function sendBoatVarbits(player) {
   }
   setVarbit(player, VARBIT_LAST_DOCK, dockById(state.lastDock)?.portId ?? 0);
   setVarbit(player, VARBIT_LAST_STANDARD_DOCK, dockById(state.lastStandardDock)?.portId ?? 0);
+  setVarbit(player, VARBIT_LAST_MOORING_POINT, dockById(state.lastMooringPoint)?.portId ?? 0);
 }
 
 module.exports = { blockVarbit, hotspotVarbit, hotspotDataVarbit, slotVarbits, sendBoatVarbits };

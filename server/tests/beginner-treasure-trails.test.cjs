@@ -258,6 +258,46 @@ test("casket opens once, grants full-inventory overflow, increments completion a
   f.api.emitCustomEvent("collection-log:category-count",request);assert.equal(request.count,1);
 });
 
+// rsprox 227/00091.txt:346300-346305: "Well done, you've completed the Treasure Trail!", then the red count and worth.
+test("opening a casket says the trail is done, the red count and the treasure's worth, in that order",()=>{
+  const f=fixture();
+  f.items[0]=new core.Item(23245,1);
+  assert.equal(Rewards.open(f.event()),true);
+  const messages=f.sent.filter(([name])=>name==="message").map(([,text])=>text);
+  assert.equal(messages[0],"Well done, you've completed the Treasure Trail!");
+  assert.equal(messages[1],"<col=ef1020>You have completed 1 beginner Treasure Trail.</col>");
+  assert.match(messages[2],/^<col=ef1020>Your treasure is worth around [\d,]+ coins!<\/col>$/);
+  assert.equal(messages.length,3);
+});
+
+// rsprox (227/00091.txt:346841, 346163): "You've found a new clue!" and "You've obtained a casket!" in an item box.
+test("a finished step shows the new clue or the casket in an item box",()=>{
+  for(const [length,itemId,text] of [[2,23182,"You've found a new clue!"],[1,23245,"You've obtained a casket!"]]){
+    const f=fixture();
+    const step=Runtime.data().steps.find(s=>s.kind==="npc");
+    const trail=f.place(step,length);
+    let box=null;
+    f.player.getDialogueManager=()=>({startDialogues:chain=>{
+      for(const d of chain.getDialogues().values()){
+        if(d instanceof core.ItemStatementDialogue) box=d;
+        if(d instanceof core.ActionDialogue) d.send(f.player);
+      }
+    }});
+    assert.equal(f.talk(trail).handled,true);
+    assert.ok(box,`${text}: an item box`);
+    assert.equal(JSON.stringify(box).includes(text),true,`${text}: ${JSON.stringify(box)}`);
+    assert.equal(JSON.stringify(box).includes(String(itemId)),true,`${text}: shows ${itemId}`);
+    assert.equal(f.sent.some(([name,t])=>name==="message"&&/found|casket/.test(t)),false,"not in chat");
+  }
+});
+
+test("Check steps: 'You have completed N steps on this beginner clue scroll.'",()=>{
+  const f=fixture();
+  const trail=f.place(Runtime.data().steps[0],3);
+  assert.equal(Runtime.checkSteps({player:f.player,slot:trail.slot,item:trail.item,itemId:trail.item.getId()}),true);
+  assert.deepEqual(f.sent.filter(([name])=>name==="message").map(([,t])=>t),["You have completed 0 steps on this beginner clue scroll."]);
+});
+
 test("Entrana blocks beginner caskets without consuming them",()=>{
   const f=fixture();f.items[0]=new core.Item(23245,1);f.move({x:2835,y:3335,z:0});
   assert.equal(Rewards.open(f.event()),true);assert.equal(f.items[0].getId(),23245);assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE),undefined);

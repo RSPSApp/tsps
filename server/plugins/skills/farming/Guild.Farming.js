@@ -254,7 +254,9 @@ function pickup(event) {
         if (storeCrop(player, sack, itemId, 1) !== 1) return;
         manager.deregister(groundItem);
         core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
-        // Mirror this server's ordinary ground pickup; live sack audio is not established.
+        // rsprox 227/00560.txt:228486, 237/01102.txt:366961: the pickup tick's spam line, with the
+        // ordinary pickup sound (synth 2582).
+        Patches.spam(player, `You put the ${core.CacheDefinitions.getItem(itemId).name} herb into your herb sack.`);
         core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
         player.getLastItemPickup().reset();
         player.getInventory().refreshItems();

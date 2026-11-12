@@ -515,7 +515,8 @@ test('the mine guard conversation advances the route and the camp can be left fo
   assert.deepEqual(p.moves.at(-1), [3272, 3029, 0]);
 });
 
-test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype dart and pineapple', () => {
+test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype dart and pineapple', (t) => {
+  t.mock.method(Math, 'random', () => 0); // both skill rolls succeed
   const h = harness();
   const p = makePlayer();
   const K = core.ItemIdentifiers;
@@ -539,11 +540,11 @@ test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype
   assert.equal(stage(h, p), 12);
 
   p.items.set(K.HAMMER, 1);
-  p.items.set(K.BRONZE_BAR, 3);
+  p.items.set(K.BRONZE_BAR, 2);
   p.items.set(K.FEATHER, 10);
   const anvil = object(h, 'An experimental anvil', 'Use', { player: p, objectId: 2672, handled: false });
   assert.equal(anvil.handled, true);
-  assert.equal(p.items.get(K.BRONZE_BAR), 0, 'all three bronze bars are spent');
+  assert.equal(p.items.get(K.BRONZE_BAR), 1, 'one bronze bar is spent (Wiki)');
   assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1);
   assert.equal(stage(h, p), 13);
 
@@ -950,6 +951,40 @@ test('the placed winch barrel and camp cart carry Ana out of the camp', () => {
   assert.equal(varbit(p, 2807), 1, 'Irena waits happily at the Shantay Pass');
 });
 
+// Wiki: one bronze bar; the tip and the dart roll the skilling charts (61-245 Smithing, 61-254 Fletching); "10 Fletching
+// experience is given after attaching the feather."
+test('the dart tip and the dart can fail, and the dart gives 10 Fletching XP', (t) => {
+  const h = harness();
+  const p = makePlayer();
+  const K = core.ItemIdentifiers;
+  seedStage(h, p, 12);
+  p.items.set(K.TECHNICAL_PLANS, 1);
+  p.items.set(K.HAMMER, 1);
+  p.items.set(K.BRONZE_BAR, 1);
+  let roll = 0.999;
+  t.mock.method(Math, 'random', () => roll);
+  object(h, 'An experimental anvil', 'Use', { player: p, objectId: 2672, handled: false });
+  assert.equal(p.items.get(K.PROTOTYPE_DART_TIP) ?? 0, 0, 'a failed smith makes no tip');
+  assert.equal(p.items.get(K.BRONZE_BAR), 1, 'and keeps the bar');
+  assert.equal(stage(h, p), 12);
+  roll = 0;
+  object(h, 'An experimental anvil', 'Use', { player: p, objectId: 2672, handled: false });
+  assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1);
+  assert.equal(p.items.get(K.BRONZE_BAR), 0);
+
+  p.items.set(K.FEATHER, 20);
+  roll = 0.999;
+  const fletch = () => { const e = { player: p, usedItemId: K.FEATHER, usedWithItemId: K.PROTOTYPE_DART_TIP, handled: false }; h.itemOnItem.forEach(handler => handler(e)); return e; };
+  assert.equal(fletch().handled, true);
+  assert.equal(p.items.get(K.FEATHER), 10, 'a failure spends the ten feathers');
+  assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1, 'and keeps the tip');
+  assert.equal(p.items.get(K.PROTOTYPE_DART) ?? 0, 0);
+  roll = 0;
+  fletch();
+  assert.equal(p.items.get(K.PROTOTYPE_DART), 1);
+  assert.deepEqual(p.xp.filter(([skill]) => skill === core.Skill.FLETCHING), [[core.Skill.FLETCHING, 10]]);
+});
+
 test('the prototype dart hand-in keeps the technical plans the anvil needs', () => {
   const h = harness();
   const p = makePlayer();
@@ -978,7 +1013,8 @@ test('the prototype dart hand-in keeps the technical plans the anvil needs', () 
   assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1, 'the dart tip can be forged again');
 });
 
-test('dart crafting enforces the actual Smithing and Fletching requirements without consuming supplies', () => {
+test('dart crafting enforces the actual Smithing and Fletching requirements without consuming supplies', (t) => {
+  t.mock.method(Math, 'random', () => 0); // the skill rolls succeed once the level is met
   const h = harness();
   const p = makePlayer();
   const K = core.ItemIdentifiers;
@@ -994,7 +1030,7 @@ test('dart crafting enforces the actual Smithing and Fletching requirements with
   p.setSkillLevel(core.Skill.SMITHING, 20);
   h.objectActions.get('An experimental anvil').Use({ player: p, objectId: 2672, handled: false });
   assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1);
-  assert.equal(p.items.get(K.BRONZE_BAR), 0);
+  assert.equal(p.items.get(K.BRONZE_BAR), 2, 'one bar is used (Wiki)');
   p.items.set(K.FEATHER, 10);
   p.setSkillLevel(core.Skill.FLETCHING, 9);
   const combine = { player: p, usedItemId: K.FEATHER, usedWithItemId: K.PROTOTYPE_DART_TIP, handled: false };

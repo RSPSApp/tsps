@@ -6,6 +6,13 @@
  * which also credits the Lumbridge diary). Everything else a tinderbox lights is here. The bug lantern is
  * lit the same way (Firemaking 33) though the Wiki notes it is not a light source for darkness.
  *
+ * An empty candle lantern also accepts a white or black candle, in either use direction (Wiki:
+ * Candle lantern, revision 15184430). Unlit candles make the matching unlit lantern at Firemaking 1;
+ * lit candles make the lit lantern at 4. Only the selected candle is consumed, and the selected
+ * lantern changes in place to retain its metadata. Refusing restricted candles is a TSPS safeguard
+ * against losing preset, untradeable or unbankable marks; the assembly refusal messages are our
+ * wording, not Wiki text or recorded dialogue.
+ *
  * Captured (rsprox 70 tick 1626, 75 tick 11666): lighting a torch says "You light your torch." and plays
  * no sequence and no sound. Nothing else was captured, so no other item gets a message or an animation, and
  * the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a

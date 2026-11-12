@@ -173,10 +173,23 @@ for (const [name, npcId, praise] of [
       assert.match(line, new RegExp(`\\b${task.count}\\b`));
       assert.equal(line.startsWith("Excellent, you're doing great. "), praise, line);
       assert.equal(h.lines.at(-2), ASSIGNMENT);
-      assert.deepEqual(options, MENU);
+      assert.deepEqual(options, praise ? MENU : [MENU[0], MENU[1], "Where is that area?", MENU[2]]);
     } finally { h.close(); }
   });
 }
+
+test("Konar: her area on asking, and her own closing line", async () => {
+  const h = harness(8623);
+  try {
+    await h.option("Assignment");
+    const task = Tasks.current(h.player);
+    assert.ok(task?.area, "a task with an area");
+    await h.toMenu();
+    await h.choose("Where is that area?");
+    await h.toMenu();
+    assert.deepEqual(h.lines.slice(-4), ["Where is that area?", task.area.hint, "Okay, great!", "Once the balance has been served, return to me."]);
+  } finally { h.close(); }
+});
 
 test("Talk-to with a task held still gives the transcript's still-hunting line", async () => {
   const h = harness(DURADEL);

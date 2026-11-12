@@ -21,7 +21,7 @@
  *
  * A new task is followed by the same menu at every master but Mortimer: "Got any tips for me?",
  * "Can I cancel that task? (30 Points)" (only while the player can pay for it) and "Okay,
- * great!". Talk-to's "I need another assignment." with no task plays that assignment for every
+ * great!" (Konar adds "Where is that area?" and closes with her own line). Talk-to's "I need another assignment." with no task plays that assignment for every
  * master the same way, as the transcripts' own branches differ (some hold only the line, some
  * no menu). There the master first says "Excellent, you're doing great." (not Konar or
  * Krystilia, whose lines have their own form); Assignment gives only the task line.
@@ -49,6 +49,9 @@ const TIPS_OPTION = "Got any tips for me?";
 const CANCEL_TASK_OPTION = "Can I cancel that task? (30 Points)";
 const OKAY_OPTION = "Okay, great!";
 const GOOD_LUCK = "Good luck! Don't forget to come back when you need a new assignment.";
+/** Konar's menu also asks where the area is, and she closes with her own line (Wiki transcript). */
+const AREA_OPTION = "Where is that area?";
+const KONAR_GOOD_LUCK = "Once the balance has been served, return to me.";
 const TASK_CANCELLED = "Your task has been cancelled.";
 /** Krystilia's tip ends with this (Wiki transcript). */
 const WILDERNESS_TIP = "You've got to do the task in the Wilderness.";
@@ -172,22 +175,29 @@ function praises(master) {
   return !master.locations && master.wilderness !== true;
 }
 
-const OKAY_STEPS = [{ player: OKAY_OPTION }, { npc: GOOD_LUCK }, { type: "end" }];
+/** "Okay, great!" and the master's closing line. */
+function okaySteps(master) {
+  return [{ player: OKAY_OPTION }, { npc: master.locations ? KONAR_GOOD_LUCK : GOOD_LUCK }, { type: "end" }];
+}
 
 /** The menu after a new task; cancelling is offered only while the player can pay for it. */
 function afterTaskMenu(player, master) {
+  const tip = { type: "action", action: "slayer_task_tip", target: master.names[0] };
   const tips = [
     { player: TIPS_OPTION },
-    { type: "action", action: "slayer_task_tip", target: master.names[0] },
+    tip,
     ...(master.wilderness === true ? [{ npc: WILDERNESS_TIP }] : []),
     { player: "Great, thanks!" },
     { type: "end" },
   ];
   const options = [{ text: TIPS_OPTION, steps: tips }];
   if (State.varbit(player, "slayer_points") >= Rewards.cancelPrice(player)) {
-    options.push({ text: CANCEL_TASK_OPTION, steps: [{ type: "action", action: CANCEL_ACTION, target: master.names[0] }] });
+    // Konar's transcript has the player ask; at the other masters the master answers the option.
+    const ask = master.locations ? [{ player: "Can I cancel that task?" }] : [];
+    options.push({ text: CANCEL_TASK_OPTION, steps: [...ask, { type: "action", action: CANCEL_ACTION, target: master.names[0] }] });
   }
-  options.push({ text: OKAY_OPTION, steps: OKAY_STEPS });
+  if (master.locations) options.push({ text: AREA_OPTION, steps: [{ player: AREA_OPTION }, tip, ...okaySteps(master)] });
+  options.push({ text: OKAY_OPTION, steps: okaySteps(master) });
   return { type: "choice", options };
 }
 
@@ -383,11 +393,10 @@ function action(request) {
     return;
   }
   if (request.action === CANCEL_ACTION) {
-    // No player line before it: the master answers the option.
     const cancel = { player, quiet: true, cancelled: false };
     api.emitCustomEvent("slayer:cancel-task", cancel);
     request.handled = true;
-    request.steps = cancel.cancelled ? [{ npc: TASK_CANCELLED }, ...OKAY_STEPS] : [{ type: "end" }];
+    request.steps = cancel.cancelled ? [{ npc: TASK_CANCELLED }, ...okaySteps(master)] : [{ type: "end" }];
     return;
   }
   if (request.action === "open_shop" && request.target === "Slayer Rewards") {

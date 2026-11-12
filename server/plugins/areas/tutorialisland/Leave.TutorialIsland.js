@@ -78,7 +78,7 @@ function complete(player) {
 
 function onLogin(event) {
   const player = event.player;
-  if (!player || player.isPlayerBot?.() === true) return;
+  if (!player || player.isPlayerBot?.() === true || !T.appliesTo(player)) return;
   if (event.isNewAccount) {
     // Drawn on the first tick, once the gameframe and the character design are up.
     player.setAttribute(T.PROGRESS_ATTRIBUTE, STEP.PAST_EXPERIENCE);

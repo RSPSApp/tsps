@@ -2990,10 +2990,10 @@ test('native Lumbridge canonical range cooks through item-use and Cook choice wh
   const cooked=p.getInventory().getAmount(I.SHRIMPS),xp=p.getSkillManager().getExperience(core.Skill.COOKING);
   give(p,I.RAW_SHRIMPS,'lumbridge-cook');lumbridgeItemOnObject(p,range,I.RAW_SHRIMPS);tick(12);
   assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),0);assert.equal(p.getInventory().getAmount(I.SHRIMPS),cooked+1);assert.ok(p.getSkillManager().getExperience(core.Skill.COOKING)>xp);
-  give(p,I.RAW_SHRIMPS,'lumbridge-menu');lumbridgeObjectClick(p,range,'Cook');tick(8);
+  give(p,I.RAW_SHRIMPS,'lumbridge-menu-1');give(p,I.RAW_SHRIMPS,'lumbridge-menu-2');lumbridgeObjectClick(p,range,'Cook');tick(8);
   const menu=p.getCreationMenu();assert.ok(menu,'actual owned Range Cook produces canonical quantity menu');
   // Existing skill menu callback; native Range listener and processed approach above, no decoded quantity-packet claim.
-  menu.execute(I.RAW_SHRIMPS,1);tick(12);assert.equal(p.getInventory().getAmount(I.SHRIMPS),cooked+2);assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),0);
+  menu.execute(I.RAW_SHRIMPS,1);tick(12);assert.equal(p.getInventory().getAmount(I.SHRIMPS),cooked+2);assert.equal(p.getInventory().getAmount(I.RAW_SHRIMPS),1,'selecting one from the actual two-item menu leaves one raw supply');
   const food=p.getInventory().getAmount(I.SHRIMPS);await nativeItem(p,I.SHRIMPS,'Eat');assert.equal(p.getInventory().getAmount(I.SHRIMPS),food,'cooked supplies do not bypass NoFood');
   give(p,I.ATTACK_POTION_4_,'lumbridge-no-drink');await nativeItem(p,I.ATTACK_POTION_4_,'Drink');assert.equal(p.getInventory().getAmount(I.ATTACK_POTION_4_),1,'ordinary Drink preserves disabled dose');
   const supplied=contents(p.getInventory());await lethalMelee(b,p,game,true,[[3417,4810,0],[3418,4810,0]]);tick(6);

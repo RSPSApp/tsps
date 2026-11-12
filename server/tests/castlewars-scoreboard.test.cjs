@@ -249,7 +249,10 @@ test("another loc's Scoreboard is left to its own handler", (t) => {
   assert.deepEqual(p.sent.interfaces, []);
 });
 
-test('both lobby boards are on the map and read from the lobby floor in front of them', () => {
+// The boards are straight wall decorations (shape 4), which are operated from their own tile
+// (the client's reach strategy; object-reach.test.cjs, #3928). The board's tile is open lobby floor,
+// so a player in front of it steps onto it and reads it there.
+test('both lobby boards are on the map and read from the open tile they hang on', () => {
   RegionManager.loadMapFiles(2437, 3086, true);
   for (const y of [3086, 3093]) {
     const board = MapObjects.get(BOARD, new Location(2437, y, 0), null);
@@ -257,7 +260,10 @@ test('both lobby boards are on the map and read from the lobby floor in front of
     assert.equal(board.getType(), 4);
     const stand = (x) => ({ getLocation: () => new Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null });
     assert.equal(RegionManager.getClipping(2438, y, 0, null), 0, 'the lobby floor east of it is open');
-    assert.equal(PathFinder.reachedObject(stand(2438, y), 2437, y, 1, 1, board.getFace(), board.getType(), 0), true);
+    assert.equal(RegionManager.blocked(new Location(2437, y, 0), null), false, "the board's own tile is walkable");
+    assert.equal(RegionManager.blockedWest(new Location(2438, y, 0), null), false, 'and steps onto it from the lobby');
     assert.equal(PathFinder.reachedObject(stand(2437, y), 2437, y, 1, 1, board.getFace(), board.getType(), 0), true);
+    assert.equal(PathFinder.reachedObject(stand(2438, y), 2437, y, 1, 1, board.getFace(), board.getType(), 0), false,
+      'not from the tile in front');
   }
 });

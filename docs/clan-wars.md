@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena or Soggy Swamp**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp or Classic**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -577,3 +577,50 @@ pinned Wiki/cache references above. Exact placement, team assignment and wall
 axis/face are TSPS choices, not recorded retail spawns or timing. Native tests
 retain disclosed combat/Forfeit checkpoints, pre-rolled damage and inert
 transport; no rendered-client/full-session/natural-RNG equivalence is claimed.
+
+## Classic
+
+Classic (11, native arena slot 33) uses the existing melee modes, restrictions,
+Ignore 5, safe-death and viewing routes alongside the five delivered layouts.
+The pinned Clan Wars Wiki lists Classic in the free-to-play section. Objective
+modes, other arenas, modern clans and ranged/ammunition parity remain outside
+this implementation.
+
+The selected copy is rectangular: source 3392..3455 / 4672..4799, regions 13641
+and 13642, eight by sixteen chunks. Source planes 0/1 map to matching instance
+planes; 2/3 remain unmapped. A separate read-only inspection returned all 1,683
+raw locs (866 and 817 respectively), all on raw plane 0, with full settings/clips
+and actual owned interactive copies. Its 141 checks were 140 retained controls
+plus one source inspection, not Classic gameplay proof. This bounded footprint
+is a TSPS choice qualified against source geometry, not a retail arena extent.
+
+The TSPS south/north battle landings are (3423,4690,0) / (3423,4787,0), and jail
+landings are (3448,4727,0) / (3448,4744,0). Source graphs identify a 5,766-tile
+battle component and two separate 100-tile jails. A darkrock preparation line
+at y=4735, x=3393..3445 skips two terrain-blocked cells and registers 51 native
+1x1, type-10, face-0 walls. The directional/projectile edge at (3445,4735) keeps
+its 0x140a mask; removal must restore all 8,192 plane-0 masks exactly. Ordinary
+processed movement is separate from the source graph. The shared Match copy
+uses selected width/height with each old dimension falling back to size; all
+five old literal configurations, square defaults and Clan Cup axis/face remain
+unchanged, as do native registration, removal and preparation lifetime.
+
+Actual active darkrock orbs are (3450,4720), face 0, and (3450,4751), face 2,
+using model 9752. Jail Exit portals are (3450,4734) / (3450,4737). All are raw
+plane 0 with settings [0,0] and owned effective plane 0. The existing policy
+requires a jailed member and the exact owned template object. Same IDs in other
+matches and unregistered lookalikes do not establish ownership. Both Forfeit
+copies use the same darkrock-south gameval, at (3421,4681), face 0, and
+(3423,4789), face 2. Both are 4x2: ordinary approach uses the actual footprint
+perimeter, not anchor-only adjacency. Suitable source approaches include
+(3423,4683) and (3423,4788); the two open tiles immediately west of the south
+portal are isolated and are not used as ordinary approach evidence.
+
+Selected Tree 14693 at (3410,4686), face 3, has a 2x2 footprint that blocks
+walking and projectiles. Selected Stone Pile 14731 at (3425,4730), face 2, is
+1x1 and blocks walking while allowing a ray. Adjacent open endpoints and an
+independent open control support bounded native movement/ray checks; names
+alone do not establish arena-wide line of sight. Placement, jail assignment,
+barrier and copied dimensions remain TSPS choices. Validation retains supplied
+combat/Forfeit checkpoints, pre-rolled melee damage and inert transport; no
+rendered-client, full-login, natural-RNG or retail spawn/timing claim is made.

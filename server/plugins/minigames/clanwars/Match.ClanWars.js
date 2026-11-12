@@ -24,11 +24,11 @@ function arenaClass() {
   if (Arena) return Arena;
   Arena = class ClanWarsArena extends C.core.TemplatedInstanceArea {
     constructor(game) {
-      super(game.layout.size, game.layout.size);
+      super(game.layout.width ?? game.layout.size, game.layout.height ?? game.layout.size);
       this.pluginName = "ClanWars";
       this.game = game;
-      const { size, origin, planes } = game.layout;
-      for (const plane of planes) for (let x = 0; x < size; x++) for (let y = 0; y < size; y++) {
+      const { origin, planes } = game.layout;
+      for (const plane of planes) for (let x = 0; x < this.widthChunks; x++) for (let y = 0; y < this.heightChunks; y++) {
         this.setChunk(plane, x, y, { sourceChunkX: origin[0] / 8 + x,
           sourceChunkY: origin[1] / 8 + y, sourcePlane: plane, rotation: 0 });
       }

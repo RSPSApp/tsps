@@ -3246,6 +3246,14 @@ test("mooring points land on their captured tiles and set the last-mooring varbi
     const saved = normalizeSailingState(JSON.parse(JSON.stringify(player.getSailing())));
     assert.equal(saved.lastMooringPoint, "tear_of_the_soul", "kept across logins");
     assert.equal(normalizeSailingState({}).lastMooringPoint, undefined);
+
+    // How far off a boat may be is still counted from the mooring point, not the inland landing.
+    Sailing.board(player, "tear_of_the_soul");
+    const boat = BoatManager.getBoatAboard(player);
+    Object.assign(boat, { fineX: (tear.gangplank.x - 15) * 128 + 64, fineY: tear.gangplank.y * 128 + 64 });
+    assert.equal(Sailing.boatNearDock(player, "tear_of_the_soul"), true, "15 tiles out from the mooring point");
+    boat.fineX -= 128;
+    assert.equal(Sailing.boatNearDock(player, "tear_of_the_soul"), false);
   } finally {
     if (Sailing.instanceAboard(player)) Sailing.disembark(player, "tear_of_the_soul");
     clearTasks();

@@ -174,7 +174,7 @@ function sendTimer(trap) {
 function trapSound(trap, soundId) {
   if (!soundId) return;
   const at = trap.objects.at(-1)?.getLocation() ?? trap.location;
-  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS });
+  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS, source: trap.player });
 }
 
 /**
@@ -230,7 +230,7 @@ function lay(player, kind, location, base = null, ground = null, layTicks = null
     }
   }
   if (def.laySound && kind !== "pit") {
-    if (def.layAreaSound) trapSound({ objects: [], location: base?.getLocation() ?? location }, def.laySound);
+    if (def.layAreaSound) trapSound({ player, objects: [], location: base?.getLocation() ?? location }, def.laySound);
     else player.getPacketSender().sendSound(def.laySound, 1, 0);
   }
   const message = def.layMessage ?? (def.item ? "You begin setting up the trap." : null);
@@ -397,8 +397,7 @@ function eligible(trap, npc, creature) {
   if (trap.base && trap.kind === "pit" && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(creature.caught)) return false;
   if (trap.kind === "deadfall" && (creature.npc === H.core.NpcIdentifiers.PYRE_FOX) !== (trap.location.getX() < 2000)) return false;
   if (npc.getCombat().getTarget() || npc.getCombat().getAttacker()) return false;
-  const range = H.data.traps[trap.kind].lureRange ?? (trap.kind === "bird" || trap.kind === "magic" ? 2 : 3);
-  return distance(npc.getLocation(), trap.location) <= range;
+  return distance(npc.getLocation(), trap.location) <= (H.data.traps[trap.kind].lureRange ?? 3);
 }
 
 /**

@@ -19,12 +19,12 @@ function build(core) {
     idleTree: loc(`hunting_sapling_set_${colour}`), idle: loc(`hunting_sapling_net_set_${colour}`),
     failing: loc(`hunting_sapling_failing_${colour}`), fail: loc(`hunting_sapling_failed_${colour}`) });
   const traps = {
-    bird: { level: 1, item: I.BIRD_SNARE, idle: loc("hunting_ojibway_trap"), failing: loc("hunting_ojibway_trap_failing"),
+    bird: { level: 1, item: I.BIRD_SNARE, lureRange: 2, idle: loc("hunting_ojibway_trap"), failing: loc("hunting_ojibway_trap_failing"),
       fail: loc("hunting_ojibway_trap_broken"), animation: 5208, layTicks: 3, layMessage: "You begin setting up the trap.", laySound: 2646,
       dismantle: 5207, trappingSound: 2637, fullSound: 2625, collapse: ["The bird snare that you laid has fallen over.", core.ChatType.GAME] },
     box: { level: 27, item: I.BOX_TRAP, idle: loc("hunting_boxtrap_empty"), failing: loc("hunting_boxtrap_failing"),
       fail: loc("hunting_boxtrap_failed"), animation: 5208, ...BOX },
-    magic: { level: 71, item: I.MAGIC_BOX, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
+    magic: { level: 71, item: I.MAGIC_BOX, lureRange: 2, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
     deadfall: { level: 23, idle: loc("hunting_deadfall_trap"), fail: loc("hunting_deadfall_boulder"), setting: loc("hunting_deadfall_setting"),
       failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1, keepsAnimation: true,
       layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631 },

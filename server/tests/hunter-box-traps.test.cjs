@@ -111,6 +111,7 @@ test('checking a caught box trap plays the dismantle sound as an area sound at t
   const sound = areaSounds.find(entry => entry.soundId === 2632);
   assert.ok(sound, 'area sound 2632');
   assert.deepEqual([sound.x, sound.y, sound.level, sound.radius], [box.location.getX(), box.location.getY(), 0, 5]);
+  assert.equal(sound.source, p, "scoped to the owner's private area");
   assert.equal(p.getSkillManager().getExperience(core.Skill.HUNTER) > 0, true);
 });
 

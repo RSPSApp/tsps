@@ -424,6 +424,13 @@ export class QuestHelperPlugin extends Plugin {
         }
         if (!this.cleanupSources.length)
             this.attachSources();
+        if (this.faulted) {
+            // The event queue overflowed (an evaluation pending a long time, or snapshots failing tick
+            // after tick), so what it held is gone: a fresh session, whose first evaluation is sent in full.
+            this.faulted = false;
+            this.events.clear();
+            this.session.restart("Quest Helper fell behind. Resynchronizing…");
+        }
         const now = Date.now();
         if (this.session.hasPendingEvaluation()) {
             if (now - this.pendingSince > 15000) {
@@ -433,7 +440,7 @@ export class QuestHelperPlugin extends Plugin {
             else
                 return;
         }
-        if (this.faulted || now - this.lastSent < 1000)
+        if (now - this.lastSent < 1000)
             return;
         if (!this.getState().selected) {
             // No quest: the session only polls the catalog by tick (QuestHelperSession); the scene isn't read.

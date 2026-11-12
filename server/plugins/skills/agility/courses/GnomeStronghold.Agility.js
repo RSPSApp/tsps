@@ -22,6 +22,7 @@ module.exports = {
   key: "gnome",
   name: "Gnome Stronghold Agility",
   helper: 1, // the Agility helper's course (enum 3507: "Gnome Stronghold Course")
+  lootSource: 66, // the loot tracker's source (enum 4976)
   lapXp: 110.5,
   petBase: 35609, // Giant squirrel base chance (Wiki)
   diaryTask: {

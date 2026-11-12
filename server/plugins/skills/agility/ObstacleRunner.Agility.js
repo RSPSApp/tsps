@@ -14,14 +14,17 @@
  *   { walk: [[x, y], ...], arrive: true }
  *                                     the steps after it run on the tick the last tile is
  *                                     reached (a tightrope's XP), not the tick after
+ *   { walk: [[x, y], ...], tilesPerTick: 2 }
+ *                                     two tiles a tick, sent as a run step (Seers' tightrope)
  *   { move: [x, y, z?], anim?, speed?, dir?, ticks? }
  *                                     exact-move to a tile, landing after `ticks` ticks;
  *                                     `ticks: 0` starts the move and leaves landing to a `tele`
  *   { tele: [x, y, z?] }              place the player on a tile (plane changes)
  *   { wait: ticks }                   continue after this many ticks
  *   { face: [x, y] } | { faceDir: "north" | ... }
- *   { hit: n | [min, max] | { percent, plus } }
- *                                     damage the player (the last: floor(HP * percent / 100) + plus)
+ *   { hit: n | [min, max] | { percent, plus, max? } }
+ *                                     damage the player (the last: floor(HP * percent / 100) + plus,
+ *                                     no more than `max`)
  *   { msg: message } | { say: text }  chat message (see `sendMessage`) / overhead text
  *   { varbit: [id, value] }           set a player varbit (a multiloc's side, say)
  *   { sound: id, loops?, delay? }     sound effect (delay in client cycles)
@@ -133,15 +136,18 @@ function hit(player, amount) {
   const damage = Array.isArray(amount)
     ? amount[0] + Math.floor(Math.random() * (amount[1] - amount[0] + 1))
     : typeof amount === "object"
-      ? Math.floor((player.getHitpoints() * amount.percent) / 100) + (amount.plus ?? 0)
+      ? Math.min(amount.max ?? Infinity, Math.floor((player.getHitpoints() * amount.percent) / 100) + (amount.plus ?? 0))
       : amount;
   if (damage > 0) {
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
   }
 }
 
-/** One tile of a forced walk; bypasses the movement queue so clipping never stops it. */
-function stepTowards(player, target) {
+/**
+ * One tile of a forced walk; bypasses the movement queue so clipping never stops it. A second
+ * tile in the same tick is the run step (`running`), as the client draws a two-tile move.
+ */
+function stepTowards(player, target, running = false) {
   const location = player.getLocation();
   const dx = Math.sign(target[0] - location.getX());
   const dy = Math.sign(target[1] - location.getY());
@@ -150,7 +156,8 @@ function stepTowards(player, target) {
   }
   const next = new Location(location.getX() + dx, location.getY() + dy, location.getZ());
   player.setLocation(next);
-  player.setWalkingDirection(Direction.fromDeltas(dx, dy));
+  if (running) player.setRunningDirection(Direction.fromDeltas(dx, dy));
+  else player.setWalkingDirection(Direction.fromDeltas(dx, dy));
   player.getMovementQueue().handleRegionChange();
   return true;
 }
@@ -190,6 +197,7 @@ function createObstacleTask(Task) {
       this.walkPath = null;
       this.walkedTiles = 0;
       this.walkArrives = false;
+      this.walkTilesPerTick = 1;
       this.finished = false;
       this.completed = false;
       // Ticks run, and the tick this obstacle last started an animation on.
@@ -222,13 +230,19 @@ function createObstacleTask(Task) {
     }
 
     advanceWalk() {
+      let stepped = 0;
       while (this.walkPath.length > 0) {
-        if (this.walkedTiles++ < MAX_WALK_TILES && stepTowards(this.player, this.walkPath[0])) {
+        if (this.walkedTiles < MAX_WALK_TILES && stepTowards(this.player, this.walkPath[0], stepped > 0)) {
+          this.walkedTiles++;
+          stepped++;
           if (this.walkArrives && this.walkPath.length === 1 && this.atTile(this.walkPath[0])) {
             this.walkPath = null;
+            return;
           }
-          return;
+          if (stepped >= this.walkTilesPerTick) return;
+          continue;
         }
+        if (stepped > 0) return;
         this.walkPath.shift();
       }
       this.walkPath = null;
@@ -256,6 +270,7 @@ function createObstacleTask(Task) {
         this.walkPath = step.walk.map((tile) => [tile[0], tile[1]]);
         this.walkedTiles = 0;
         this.walkArrives = step.arrive === true;
+        this.walkTilesPerTick = step.tilesPerTick ?? 1;
         this.advanceWalk();
       } else if (step.moveStart) {
         this.startMove(step.moveStart);

@@ -30,7 +30,7 @@ Two captains or channel owners in the Clan Wars building right-click each other 
 choose Challenge. Reciprocal requests open the native setup interface. The offered
 configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau**;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode and the bounded restrictions described below are negotiable. Other combat and arena controls are hidden;
+The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat and arena controls are hidden;
 objective mode selections are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -51,7 +51,8 @@ powered staves and Vesta's blighted longsword are not enabled by these terms.
 Death keeps the real inventory and equipment, including metadata. No kit or item
 snapshot is reconstructed. Food, drink and weapon charges are consumed normally.
 A defeated fighter goes to the map's jail if the battle is still running. In Last
-Team Standing, the team with no fighters loses. Result screens return remaining participants to the lobby.
+Team Standing's Kill-all setting, the team with no fighters loses. The negotiated
+Ignore-5 variant described below ends at five or fewer. Result screens return remaining participants to the lobby.
 There are no stakes, prizes, blood-money rewards, Elo changes or ordinary PvP streak
 changes. The existing PvP statistics/reward query is vetoed throughout a match death,
 including when the battle finishes before the death callback completes.
@@ -159,8 +160,9 @@ ticks at the engine's 600ms processing cycle.
 The native mode rows and both confirmation stages select the duration while
 preserving the fighter cap and fixed melee terms. Preparation retains the full
 selected duration. Combat time starts when the preparation wall is removed.
-The existing safe-death, jail Exit, unrestricted return, late entry, cap reservation
-and leaving-channel rules apply. Having no living fighters temporarily does not
+The existing safe-death, jail Exit, late entry and cap reservation rules apply.
+Return is unrestricted under rejoining rule 0; the negotiated delay and
+leaving-channel choices are described below. Having no living fighters temporarily does not
 end a respawning battle. The earlier explicit empty-roster withdrawal/no-show
 cleanup policy also remains; this is not evidence of exact retail forfeit behavior.
 
@@ -268,6 +270,10 @@ alone and both together refuse those Food-owned drinks; No Drinks alone permits
 ordinary Eat items. This is an explicit TSPS classification boundary, not a claim
 that every drink's retail classification has been recorded. Passive nonconsumables
 are not newly classified as food, so the existing phoenix-necklace behavior remains.
+The separate Dwarven rock cake producer remains unchanged too: it is never consumed,
+heals nothing and queues self-damage rather than using Food's consumption permission.
+Its Eat/Guzzle action label alone does not expand the supported food classification;
+this preserves the existing implementation and makes no retail exception claim.
 
 Normal and quick-prayer activation use the existing prayer permission path.
 Overheads are identified by the prayer definition's head icon; No overheads keeps
@@ -287,3 +293,130 @@ a real core nonlethal-damage callback for passive-item preservation. Supplied
 levels, placement and that damage are explicit setup; no full login, natural RNG,
 rendered client or exact retail classification/timing claim follows. Runtime
 outcomes and independent acceptance belong to the PR evidence.
+
+
+## Negotiated departure and rejoining terms
+
+[Wiki Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+lists Leaving channel as Counts as death / No penalty and Rejoining as Unrestricted /
+60 sec delay. The same pinned revision-242 dump has those labels and tooltips in
+enums 2336/2337 and 2338/2339. Setup interface 91 uses containers 28/29 and dropdowns
+42/44. The shared scripts create option subchildren at value + 1; script 573 sets
+the corresponding optimistic varbits. Both terms offer values 0/1, preserve all
+other negotiated terms and appear on both captain and member confirmations.
+
+No penalty suppresses the existing living-fighter channel-departure kill credit.
+It still removes participation and frees its cap slot. Ordinary departure is not
+a real combat kill under that option; a genuine queued death whose task captured
+an opposing participant still scores once when its dying callback arrives, even
+if the channel-departure event removed membership first. The pending owner keeps
+the victim's side, prior fighter eligibility and whether the score was already
+resolved. Counts as death resolves that score before a departure kill can finish
+the match, preventing a later callback from counting twice. The actual death
+task's captured killer supplies credit; the cleared damage map is not recomputed.
+
+This new retained credit applies to channel departure. Generic forfeit and
+disconnect-hook safety backups keep their existing score outcome; no additional
+disconnect credit is inferred. Real channel logout notifications retain channel
+departure semantics. A jailed or already-dying participant cannot incur a second
+departure death. Empty-roster withdrawal cleanup remains the existing explicit
+implementation policy, so No penalty does not guarantee a continuing match when
+the last member leaves. Existing deadline and same-team/unattributed credit rules
+also remain.
+
+With the delay selected, the completed death callback starts a 100-tick deadline:
+60 seconds at the engine's 600ms cycle. Choosing that callback, rather than the
+lethal hit or first animation tick, is an explicit TSPS policy. Wiki/cache provide
+the duration but no recording establishes its exact retail phase origin or reset
+semantics. The canonical account bigint from `Player.getLongUsername()` identifies
+the deadline within that match, independent of display name or replacement player
+object. Both the jail Exit and native lobby confirmation check the same deadline.
+It survives channel departure, forfeit or logout and failed return attempts, and
+does not restart or shorten when entry is refused. A fresh completed death starts
+a fresh deadline. First admission and living nondeath departure do not create one.
+No item, energy, charge or metadata snapshot is restored to enforce this rule.
+
+The return is refused before the deadline and permitted at it, subject to the
+existing mode, channel, health, busy, area and cap checks. Jailed fighters retain
+their cap slot. Last Team Standing still closes entry and return when combat
+starts; the delay option does not reopen it. Timed expiry still takes precedence.
+The LTS confirmation explicitly says that the selected 60-second delay cannot
+reopen entry after combat begins, addressing the wording note from PR #4671.
+Viewing relinquishes ownership through the existing return route, and successful
+return applies the agreed prayer/special preparation. Finish clears all account
+deadlines; a late completed death callback cannot repopulate a closed game or
+carry a deadline into a second match. Safe-item and pending-death owners retain
+their existing lifetime.
+
+The existing fixture adds the two native choices with mixed negotiated terms,
+the production extended social channel packet, actual hit queues/death tasks and
+native jail Exit assertions at guard ticks 99 and 100. It checks No penalty
+versus counted departures, a real queued lethal hit followed by channel leave
+before the first dying callback, six item/amount/metadata survivors, lobby bypass
+refusal, failed-attempt deadline preservation, empty-roster cleanup and a second
+match after a queued death finishes late. A replacement-player identity checkpoint
+is supplied setup, not a full session relog. Existing disconnect/forfeit handler
+controls retain their score expectations. The supply confirmation also describes
+only permitted supplies, including explicitly disabled food and drinks together,
+addressing the wording note from PR #4665. Exact retail phase timing, client
+rendering, natural combat RNG and a full login/logout traversal remain unproven;
+actual runtime results belong to the PR evidence.
+
+
+## Last Team Standing: Ignore 5
+
+Wiki Clan Wars revision 15379109 and pinned revision-242 enums 927/928 describe
+Stragglers as Kill 'em all (value 0, lose with no fighters) or Ignore 5 (value 1,
+lose with five or fewer). Interface 91 uses container 13, frame 14 and scrollbox
+15. Scripts 576/581 create option rectangles at subchild `3 * value`, so its
+native rows are 0/3, unlike the small dropdowns' `value + 1`. Script 579 calls
+573 to change the optimistic stragglers varbit. Both rows transmit and refusals
+resynchronize the authoritative offer.
+
+This delivery supports Ignore 5 only in Last Team Standing on the existing melee
+Plateau route. That is a bounded implementation scope, not a claim that retail
+restricts the setting to this mode. Selecting Ignore 5 in a respawning mode, or
+switching from an Ignore-5 offer to a respawning mode, is refused without changing
+the offer revision or acceptance state. Captains can choose Kill 'em all before
+switching mode. Valid changes preserve every other term, clear acceptance, keep
+the usual change delay, and reach both captain and member confirmations.
+
+No stragglers check ends a match during preparation. On each active match tick,
+including the first combat tick after the wall falls, one paired snapshot counts
+the two sides' fighters. Kill-all uses zero as before; Ignore-5 uses five. Exactly
+one side at or below the limit loses to the other; if both are at or below it, the
+battle ends without a winner. The neutral result for both-low teams, the first
+combat evaluation for already-small teams and this callback/tick sampling are
+explicit TSPS policies without a team recording establishing exact retail phase
+ordering. There is no invented minimum roster or cap restriction: a selected
+1v1 or 5v5 Ignore-5 battle can therefore reach that neutral result at combat start.
+
+Jailed, viewing and dying participants are not fighters. The existing No-penalty
+channel-leave term does not award a departure kill, but removal still reduces the
+LTS fighter count. Respawning modes retain their existing member-roster cleanup:
+jailed and pending-death members retain their roster slots, and a temporary lack
+of living fighters does not apply this LTS threshold. No kill-target credit,
+reward, item reconstruction or new combat method is added by the variant.
+
+The threshold uses the existing whole-match finish path, including channel
+reservations, HUD values, viewing ownership, task and instance cleanup. Pending
+safe deaths retain their own item/bone/reward protection until the final callback;
+that callback returns to the lobby and cannot recreate an ended-match deadline.
+The related mode-aware confirmation change states that an LTS rejoining delay
+cannot reopen combat entry, preserving the original wording-note custody from
+PR #4671 without changing timer or eligibility behavior.
+
+The existing fixture adds ordinary native 0/3 negotiation and mixed-term
+confirmation, bidirectional unsupported-combination refusal with actual sender
+resynchronization observations, and concurrent native portal/confirmation
+batches. Twelve sequential fixture joins would exceed the real 200-tick
+preparation, so enrollment uses real pending entry and confirmation packets in
+parallel, with roster/fighter/area checks before combat; it does not seed match
+membership, extend preparation or rewind the clock. It compares real six-versus-six
+death to five under both settings, checks both-small native caps, paired real
+lethal hits, No-penalty departure, safe metadata across finish/late callbacks and
+a second match. A seven-versus-seven case first creates an actual jailed viewing
+owner, then reaches the threshold and checks camera and instance cleanup.
+Supplied levels, scene placement and pre-rolled damage remain explicit setup;
+client rendering, natural combat RNG and exact retail phase timing are not
+established. Actual runtime outcomes belong to the PR evidence.

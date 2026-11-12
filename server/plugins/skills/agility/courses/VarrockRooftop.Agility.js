@@ -1,20 +1,21 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
-const { gapJump, wallScramble, faceLoc, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
+const { gapJump, wallScramble, faceLoc, hurt, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
 
 /**
  * Varrock Rooftop. Steps, sounds and ticks follow rsprox captures 339 and 3154 (rev 230 and 232,
  * main game); obstacle XP is the Wiki's, which the captured `helper_agility_add_xp` amounts match.
- * The two failures follow capture 1723 (Leagues V, rev 227).
+ * The two failures first followed capture 1723 (Leagues V, rev 227); the main-game captures of
+ * rev 241 and 242 (20261024T001512-d0ad0dc and 7 more: 203 clothes lines and 189 walls at Agility
+ * 30-36) agree on their steps and give their chances and damage.
  */
 const JUMP_SOUND = 2461;
 const HURDLE_SOUND = 1936;
 const HOLD_SOUND = 2459;
 const SIDESTEP_SOUND = 2451;
 const LAND_SOUND = 2455;
-/** A failure's sounds (rsprox 1723): the clothes line's wobble, and the hurt as the player lands. */
+/** The clothes line failure's wobble (rsprox 1723). */
 const WOBBLE_SOUND = 2493;
-const HURT_SOUND = 519;
 /** The hold that slips (agilityarena_handholds_middlefallreverse) and the landing on one knee. */
 const HOLD_SLIP = 1123;
 const FALL_LANDING = 1332;
@@ -35,7 +36,7 @@ function wallStart() {
 
 /** A failure's landing on the ground below: one knee, the thud and the hurt (rsprox 1723). */
 function fallTo(tile, hit) {
-  return [{ tele: tile }, { anim: FALL_LANDING }, { sound: LAND_SOUND }, { sound: HURT_SOUND, delay: 20 }, { hit }];
+  return [{ tele: tile }, { anim: FALL_LANDING }, { sound: LAND_SOUND }, hurt(), { hit }];
 }
 
 /**
@@ -68,8 +69,10 @@ function shimmyAlongWall() {
 
 /**
  * The wall failed (rsprox 1723, twice): three holds as usual, the fourth slips (1123, no sound)
- * and two ticks later the player is on the ground below it, 3190,3410, with no message. Damage
- * 2-5 (Wiki; 2 both times captured). The slip's animation is reset on landing, as captured.
+ * and two ticks later the player is on the ground below it, 3190,3410, with no message. The slip's
+ * animation is reset on landing, as captured. Damage as captured in the main game: 5 at 51-63
+ * Hitpoints, 6 at 70 (16 falls); floor(HP x 6%) + 2 fits them. The Wiki's 2-5 wins over the
+ * recordings, so it stops at 5 (1723's two falls took 2).
  */
 function fallOffWall() {
   const steps = wallStart();
@@ -80,8 +83,8 @@ function fallOffWall() {
     { move: WALL_HOLDS[3], anim: HOLD_SLIP, speed: [34, 52], dir: "west", ticks: 2 },
     { tele: [3190, 3410, 0] },
     { sound: LAND_SOUND },
-    { sound: HURT_SOUND, delay: 20 },
-    { hit: [2, 5] },
+    hurt(),
+    { hit: { percent: 6, plus: 2, max: 5 } },
   );
   return steps;
 }
@@ -90,6 +93,7 @@ module.exports = {
   key: "varrock",
   name: "Varrock Rooftop",
   helper: 7, // the Agility helper's course (enum 3507: "Varrock Rooftops")
+  lootSource: 24, // the loot tracker's source (enum 4976)
   lapXp: 269.7,
   petBase: 24410, // Giant squirrel base chance (Wiki)
   diaryTask: {
@@ -140,21 +144,23 @@ module.exports = {
         { sound: JUMP_SOUND },
         { move: [3208, 3414], anim: Anim.JUMP, speed: [15, 30], dir: "west", ticks: 2 },
       ],
-      // Wiki: can fail, 3-8 damage, no fail from 46 (Agility). Captured once (1723): the first
-      // jump, a wobble (764, sound 2493) the tick after and the fall onto the street below the
-      // next tick, no message. The chance below 46 isn't known: the engine's default linear
-      // curve is an approximation whose endpoint this is.
+      // Wiki: can fail, 3-8 damage, no fail from 46 (Agility). Captured (1723, and 14 times in the
+      // main game): the first jump, a wobble (764, sound 2493) the tick after and the fall onto
+      // the street below the next tick, no message. low/high are fitted to the main game's rate at
+      // 30-36 with the Wiki's 46. Damage as captured: 6 at 50-56 Hitpoints, 7 at 59-64; floor(HP x 7%)
+      // + 3 fits them, held to the Wiki's 3-8.
       fail: {
         xp: 0,
-        neverFailLevel: 46,
-        steps: [
+        low: 198,
+        high: 322,
+        steps: () => [
           { wait: 1 },
           { sound: JUMP_SOUND },
           { move: [3212, 3414], anim: Anim.JUMP, speed: [15, 30], dir: "west" },
           { anim: Anim.BALANCE_FALL },
           { sound: WOBBLE_SOUND, loops: 10 },
           { wait: 1 },
-          ...fallTo([3212, 3414, 0], [3, 8]),
+          ...fallTo([3212, 3414, 0], { percent: 7, plus: 3, max: 8 }),
         ],
       },
     },
@@ -173,9 +179,9 @@ module.exports = {
       xp: 28,
       route: [3194, 3416, 1],
       steps: shimmyAlongWall,
-      // Wiki: can fail, 2-5 damage, no fail from 46 (Agility). The chance below 46 isn't known:
-      // the engine's default linear curve is an approximation whose endpoint this is.
-      fail: { xp: 0, neverFailLevel: 46, steps: fallOffWall },
+      // Wiki: can fail, no fail from 46 (Agility). low/high are fitted to the main game's rate at
+      // 30-36 with the Wiki's 46.
+      fail: { xp: 0, low: 184, high: 338, steps: fallOffWall },
     },
     {
       object: ObjectIds.GAP_6,
@@ -230,7 +236,8 @@ module.exports = {
       index: 9,
       level: 30,
       xp: 143.7,
-      // A hop onto the edge, the jump down a tick later and the landing on the next, with the lap.
+      // A hop onto the edge, the jump down a tick later and the landing on the next, with the lap;
+      // the obstacle ends a tick after that (as captured).
       steps: ({ pos }) => [
         { wait: 1 },
         { sound: JUMP_SOUND },
@@ -240,6 +247,8 @@ module.exports = {
         { wait: 1 },
         { tele: [pos.x, pos.y + 2, 0] },
         { anim: Anim.LAND },
+        { complete: true },
+        { wait: 1 },
       ],
     },
   ],

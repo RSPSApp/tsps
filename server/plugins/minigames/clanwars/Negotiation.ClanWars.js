@@ -17,8 +17,8 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "arena_container", "stragglers_container", "other_container",
-  "melee", "ranged", "magic", "leavingcc", "rejoiningdelay",
+  "arena_container", "other_container",
+  "melee", "ranged", "magic",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -70,6 +70,13 @@ function renderSetup(session) {
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), 0, 71, 0);
       for (let mode = 0; mode < 24; mode++) {
         sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), mode * 3, mode * 3, OP1);
+      }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:stragglers_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:stragglers"), 0, 5, 0);
+      // This is script576's scrollbox, with option rectangles at value * 3.
+      // Both rows transmit so unsupported combinations can reset optimistic bits.
+      for (let value = 0; value < Rules.STRAGGLER_LIMITS.length; value++) {
+        sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:stragglers"), value * 3, value * 3, OP1);
       }
       for (const name of Object.keys(Rules.RESTRICTIONS)) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
@@ -187,7 +194,12 @@ function route(event) {
 
 function changeRules(session, player, key, index) {
   const next = { ...session.rules, [key]: index };
-  if (!Rules.validate(next)) return;
+  if (!Rules.validate(next)) {
+    player.sendMessage("Ignore 5 is only supported in Last Team Standing battles.");
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (session.rules[key] === index) {
     sendRules(player, session.rules);
     return;
@@ -250,6 +262,12 @@ function click(event) {
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
+    if (clicked("clanwars_setup:stragglers")) {
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
+        && slot / 3 < Rules.STRAGGLER_LIMITS.length) return changeRules(session, player, "stragglers", slot / 3);
+      player.sendMessage("That Clan Wars stragglers option is not supported.");
+    }
     if (clicked("clanwars_setup:dropdown_playercap")) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeRules(session, player, "playercap", slot - 1);

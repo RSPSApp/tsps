@@ -20,6 +20,7 @@ module.exports = {
   key: "pollnivneach",
   name: "Pollnivneach Rooftop",
   helper: 17, // the Agility helper's course (enum 3507: "Pollnivneach Rooftops")
+  lootSource: 28, // the loot tracker's source (enum 4976)
   lapXp: 890,
   petBase: 33422, // Giant squirrel base chance (Wiki)
   // Desert Diary hard: "Complete a lap of the Pollnivneach agility course." (capture 1788: completed with the lap)

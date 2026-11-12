@@ -26,6 +26,41 @@ records the 2026-11-01 run; the quest needs a whole run on the merged code.
 
 Newest first.
 
+- **fixed (live capture)** Five gaps against rev 241 recording 2026-11-02 (rsprox captures), found
+  while comparing with another server's Priest in Peril:
+  - The iron key stayed in the inventory after unlocking the cell. Live uses it up: tick 11429
+    clears its slot along with "You use the key to unlock the cell gate." and synth 2419.
+  - Drezel's blessings showed nothing. Live plays heal_casting (84) on the player at height
+    120, Drezel's human_castentangle (710) and synth 166. That happens for the water (tick 11453)
+    and for the player (tick 13629).
+  - Filling a bucket at the well now plays human_pickuptable (832) and synth 2615 (tick 11068).
+  - Blessed water on the coffin now plays throw_bucketofwater (1077), and
+    priestperil_coffin_spell (272) on 3413,3486,2 and 3413,3487,2 with delay 34. It also plays
+    synth 1733 with delay 30 (tick 11568).
+  - Varp 302 went straight to 61, and the hand-in capped at 59. Live climbs to 60 with the
+    last essence (tick 13457), stays at 60 through "Quest complete!", and goes to 61 when
+    Drezel's "Drezel blesses you..." message plays later in the same conversation (tick 13629).
+    The gap after completion is kept in `priest-in-peril:awaiting-blessing`. Saves completed
+    before this have no such flag and stay at 61.
+    **Ours:** someone who walks off in that gap gets the final conversation back from the step
+    after "Quest complete!" when they next talk to the mausoleum Drezel. The Holy barrier still
+    opens on completion. Neither case is captured.
+  - A lost Wolfbane could not be had back. Drezel's post-quest page (Transcript:Drezel) starts
+    with "If the player has lost their wolfbane dagger:", but once the quest is done Nature
+    Spirit's variants answer his Talk-to, so that page never played. **Ours (entry point):**
+    with the dagger lost, the Talk-to now plays his page. Its lost-dagger branch is answered
+    from the inventory, equipment and banks (both Wolfbane ids), along with its inventory-full
+    pair, and its "receive" step gives one dagger back.
+  - Still not matching live: "Drezel inspects the water..." and "Drezel blesses you..." show
+    as chat messages, where live shows them in a messagebox. That is how the dialogue runtime
+    plays every message step without a box. On a fresh account, the Prayer level-up box at
+    "Quest complete!" ends the conversation before the blessing, so the resume above is what
+    reaches varp 61 there.
+  Covered by `tests/priest-in-peril.test.cjs`; checked in game on a headless account, worktree
+  slot 40. That covered the well, the unlock (key gone, varp 6), the water blessing, the coffin
+  (both 272 graphics, varp 7), the hand-in (60, then 61 after talking again), a relog at 61,
+  and getting a dropped Wolfbane back.
+
 - **fixed (live capture, issue 4130)** The temple's large doors and Drezel's cell gate teleported
   the player across. Live opens them like doors (rev 241 recording 2026-11-02 ticks 10840-10847 in
   and 10980-10982 out; for the cell, recording 2026-10-17 ticks 1311-1317 and rsprox.net #365):

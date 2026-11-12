@@ -136,6 +136,7 @@ module.exports = {
   key: "ape-atoll",
   name: "Ape Atoll Agility",
   helper: 11, // the Agility helper's course (enum 3507: "Ape Atoll Agility Course")
+  lootSource: 20, // the loot tracker's source (enum 4976)
   lapXp: 580,
   petBase: 37720, // Giant squirrel base chance (Wiki)
   // A lap is the Western Provinces diary's hard task (Wiki: Ape Atoll Agility Course).

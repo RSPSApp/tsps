@@ -34,6 +34,7 @@ const {
   isSailCloth,
   playSound,
   content,
+  spam,
 } = require("./SailingContent.Sailing");
 
 const GUST_TICKS = 14;
@@ -163,7 +164,8 @@ function trimSails(player, boat, { actor = player, crew = false } = {}) {
   wind.released = false;
   // A trim adds a half-tile step to the sails, never past the cap and a step (rsprox 856, 908).
   boat.boostSpeed = BURST_STEP;
-  if (!crew) player.sendMessage(TRIM_MESSAGE);
+  // rsprox: a spam line in every recording (1,112 times, e.g. 229/00672.txt:17779).
+  if (!crew) spam(player, TRIM_MESSAGE);
   if (trim) {
     actor.performAnimation(new Animation(trim.player.trim));
     animateDeckLocs(player, boat, isHelm, trim.helm.trim);

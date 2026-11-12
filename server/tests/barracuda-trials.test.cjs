@@ -750,6 +750,8 @@ test("wind catcher: switched on it keeps trimmed gusts as motes, up to 2, and re
       "You trim the sails, catching the wind and storing a wind mote in your helm.",
       "For storing a wind mote, you'll receive full XP the next time you consume one.",
     ]);
+    // rsprox: both are spam lines (105), 432 times each.
+    assert.deepEqual(player.sent.filter(([key]) => key === "sendTypedMessage").slice(-2).map(([, type]) => type), [105, 105]);
     assert.equal(catcher.storeFromTrim(player, boat), false, "full at 2: an ordinary trim");
     tick();
     assert.equal(player.varbits.get(19178), 2, "the charges a tick later");

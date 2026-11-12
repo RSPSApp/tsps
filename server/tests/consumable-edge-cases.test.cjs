@@ -387,7 +387,7 @@ test("a Nardah scroll uses its Teleport action and is used up on the click", () 
   assert.equal(teleports.length, 1);
   assert.deepEqual(
     [teleports[0].destination.getX(), teleports[0].destination.getY(), teleports[0].destination.getZ()],
-    [3401, 2918, 0]
+    [3419, 2917, 0], // the Wiki's Nardah teleport map
   );
   assert.equal(teleports[0].type, "TELE_SCROLL");
   assert.equal(player.items.length, 0, "scrolls go on the click (docs/teleport-tablets.md)");

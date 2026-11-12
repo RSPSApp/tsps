@@ -120,6 +120,15 @@ test('Arceuus and Lunar tablets land where their spells do; Ape Atoll is the Arc
     assertLanding(use('ape atoll teleport', 'break').tile, [2770, 9100, 0]);
 });
 
+// Wiki maps (each a 2-tile square): Key master teleport 1310,1250 (next to the Key Master in Cerberus' Lair),
+// Wilderness crabs teleport 3352,3782, Nardah teleport 3419,2917 (recorded arrival 3421,2917: 227/01862.txt).
+test('the Key master, Wilderness crabs and Nardah scrolls land where the Wiki maps them', () => {
+    diaries = new Set();
+    assertLanding(use('key master teleport', 'teleport').tile, [1310, 1250, 0]);
+    assertLanding(use('wilderness crabs teleport', tabletIds.get('wilderness crabs teleport').op).tile, [3352, 3782, 0]);
+    assertLanding(use('nardah teleport', 'teleport').tile, [3419, 2917, 0]);
+});
+
 test('a scroll is used up on the click, a tablet as it is absorbed', () => {
     const scroll = use('spider cave teleport', 'teleport');
     assert.equal(scroll.player.inventory.get(tabletIds.get('spider cave teleport').id), 0);

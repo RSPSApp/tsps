@@ -266,7 +266,7 @@ for (const mode of ["none", "ironman"]) {
     const f = promptFixture(t, "bulk" + mode, mode);
     f.inventory.addItem(new Item(SPLITBARK[0], 1));
     openWardrobe(f);
-    choosePrompt(f.player, 1);
+    depositAllClick(f);
     assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
     assert.equal(f.inventory.getAmount(SPLITBARK[0]), 0);
     assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
@@ -335,6 +335,12 @@ function openWardrobe(f) {
     clickType: index + 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
 }
 
+function depositAllClick(f) {
+  assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  PluginManager.emitInterfaceActionClick({ player: f.player, buttonId: core.CacheDefinitions.getComponentId("poh_costumes:depositall"),
+    action: 1, opId: 1, handled: false });
+}
+
 function choosePrompt(player, option) {
   assert.ok(core.MultiChatboxPrompt.getPending(player));
   assert.equal(player.getPacketSender().isChatboxInterface(219), true);
@@ -372,7 +378,7 @@ for (const route of ["individual", "bulk"]) {
     assertBronzeTrimMapping(f);
     f.inventory.addItem(new Item(BRONZE_TRIM.legs, 1));
     if (route === "individual") promptItemOnWardrobe(f, BRONZE_TRIM.legs);
-    else { openWardrobe(f); choosePrompt(f.player, 1); }
+    else { openWardrobe(f); depositAllClick(f); }
     const title = core.MultiChatboxPrompt.getPending(f.player)?.title;
     choosePrompt(f.player, 1);
     assert.equal(f.wardrobe.storage[BRONZE_TRIM.legs], 1);
@@ -398,7 +404,7 @@ test("bulk warning stays accurate for mixed supported and alternate sets", (t) =
   f.inventory.addItem(new Item(BRONZE_TRIM.legs, 1));
   f.inventory.addItem(new Item(studdedBody, 1));
   openWardrobe(f);
-  choosePrompt(f.player, 1);
+  depositAllClick(f);
   const title = core.MultiChatboxPrompt.getPending(f.player)?.title;
   choosePrompt(f.player, 1);
   assert.equal(f.wardrobe.storage[BRONZE_TRIM.legs], 1);
@@ -443,8 +449,7 @@ test("Ultimate bulk confirmation stores one of two identical pieces", (t) => {
   f.inventory.addItem(new Item(SPLITBARK[0], 2));
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 2);
   openWardrobe(f);
-  assert.equal(core.MultiChatboxPrompt.getPending(f.player)?.title, "Costume storage");
-  choosePrompt(f.player, 1);
+  depositAllClick(f);
   assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Deposit", "Cancel"]);
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 2);
   choosePrompt(f.player, 1);
@@ -456,12 +461,12 @@ test("bulk cancel and changed inventory leave all pieces untouched", (t) => {
   const f = promptFixture(t, "uimbcancel");
   f.inventory.addItem(new Item(SPLITBARK[0], 1));
   openWardrobe(f);
-  choosePrompt(f.player, 1);
+  depositAllClick(f);
   choosePrompt(f.player, 2);
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
   assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
   openWardrobe(f);
-  choosePrompt(f.player, 1);
+  depositAllClick(f);
   f.inventory.addItem(new Item(Items.TINDERBOX, 1));
   choosePrompt(f.player, 1);
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
@@ -474,7 +479,7 @@ test("changing mode while the storage menu is open prevents bulk deposit", (t) =
   f.inventory.addItem(new Item(SPLITBARK[0], 1));
   openWardrobe(f);
   require("../plugins/modes/ironman/Common.Ironman").setMode(f.player, "none");
-  choosePrompt(f.player, 1);
+  depositAllClick(f);
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
   assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
 });

@@ -41,8 +41,9 @@ function enter(player) {
   player.moveTo(new core.Location(YANILLE_PORTAL_TILE[0], YANILLE_PORTAL_TILE[1] - 1, 0));
   const definition = ObjectDefinition.forPlayer(yanillePortalId, player) ?? ObjectDefinition.forId(yanillePortalId);
   PluginManager.emitObjectInteraction({ player, object: new GameObject(yanillePortalId, location, 10, 2, null), definition,
-    objectId: yanillePortalId, clickType: 1, location: { x: location.getX(), y: location.getY(), z: 0 },
+    objectId: yanillePortalId, clickType: 2, location: { x: location.getX(), y: location.getY(), z: 0 },
     sourceLocation: { x: location.getX(), y: location.getY() - 1, z: 0 }, handled: false });
+  for (let tick = 0; tick < 3; tick++) TaskManager.process(); // the house loads two ticks later
 }
 
 /** An owned house with one piece of costume-room furniture, the player beside it. */

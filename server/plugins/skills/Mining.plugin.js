@@ -1164,6 +1164,7 @@ module.exports = {
   ESSENCE_ROCKS,
   ORE_VEINS,
   findBestPickaxe,
+  swingAnimation,
   wearsBreathingFilter,
   rollOutcome,
   isMiningActive(player) {

@@ -3856,6 +3856,332 @@ test('Lost Tribe silverware search preserves capacity, duplicate and stage/conta
   }
 });
 
+// The Lost Tribe against rsprox 20261112T152024-5ab63b4 (revision 242, the whole quest; docs/quests/the-lost-tribe.md).
+const LT_WITNESS = 'lost-tribe:witness';
+const LT_HANS = 2; // Witness.LostTribe.js: 1 Cook, 2 Hans, 3 Bob, 4 Father Aereck
+function lostTribeFixture(t, stage, at = [3208, 3220, 0]) {
+  const f = fixture(t);
+  f.quest = registeredQuest('the_lost_tribe');
+  f.quest.setStage(f.player, stage);
+  f.player.setLocation(new core.Location(...at));
+  f.varbits = [];
+  const sender = f.player.getPacketSender();
+  const varbit = sender.sendVarbit.bind(sender);
+  t.mock.method(sender, 'sendVarbit', (id, value) => { f.varbits.push([id, value]); return varbit(id, value); });
+  f.animations = [];
+  const animate = f.player.performAnimation.bind(f.player);
+  t.mock.method(f.player, 'performAnimation', (animation) => { f.animations.push([f.tick, animation.getId(), animation.getDelay?.() ?? 0]); return animate(animation); });
+  f.tick = 0;
+  f.process = (ticks = 1) => { for (let n = 0; n < ticks; n++) { f.tick++; core.TaskManager.process(); } };
+  f.talk = (npc) => PM.emitNpcInteraction({ player: f.player, npc, npcId: npc.getContentId?.(f.player) ?? npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  f.current = () => f.player.getDialogueManager().getCurrent();
+  f.text = () => String(f.current()?.getText?.() ?? '').replace(/\s+/g, ' ');
+  return f;
+}
+async function lostTribeChoose(f, option) {
+  const options = MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  const index = options.indexOf(option);
+  assert.ok(index >= 0, `the menu offers "${option}" (${options.join(' | ')})`);
+  await choose(f, index + 1);
+}
+async function lostTribeLines(f, max = 12) {
+  const lines = [];
+  for (let n = 0; n < max && f.current(); n++) {
+    lines.push({ text: f.text(), npcId: f.current().getNpcId?.(), name: f.current().speakerName, stage: f.quest.getStage(f.player) });
+    await nextLine(f);
+  }
+  return lines;
+}
+
+test('Lost Tribe: every transcript step id the quest keys on is in the imported dialogue data', () => {
+  // A transcript refresh renumbers ids (revision 15398483 moved the Dragon Slayer and Rune
+  // Mysteries conditions); a stale id silently stops matching, so pin them to the data.
+  const fs = require('node:fs');
+  const data = require('../data/definitions/npc-dialogues.json');
+  const ids = new Set();
+  (function walk(node) {
+    if (Array.isArray(node)) node.forEach(walk);
+    else if (node && typeof node === 'object') { if (typeof node.id === 'string') ids.add(node.id); Object.values(node).forEach(walk); }
+  })(['The Lost Tribe', 'Kazgar', 'Mistag'].map((page) => data[page]));
+  const sources = ['../plugins/quests/quests/LostTribe.Quest.js', '../plugins/quests/losttribe/Treaty.LostTribe.js']
+    .map((file) => fs.readFileSync(path.join(__dirname, file), 'utf8')).join('\n');
+  const used = [...sources.matchAll(/_(?:CONDITION|ACTION|MESSAGE)_ID = "([^"]+)"|const (?:TITLE|COMPLETE) = "([^"]+)"/g)].map((m) => m[1] ?? m[2]);
+  assert.ok(used.length >= 20, `found the quest's step ids (${used.length})`);
+  assert.deepEqual(used.filter((id) => !ids.has(id)), [], 'no step id is missing from the data');
+});
+
+test('Lost Tribe start picks one of the four cellar witnesses and keeps Bob for saves past asking around', t => {
+  const f = lostTribeFixture(t, 0);
+  for (const skill of [core.Skill.MINING, core.Skill.AGILITY, core.Skill.THIEVING]) f.player.getSkillManager().setMaxLevel(skill, 20).setCurrentLevel(skill, 20);
+  const complete = (request) => { if (['goblin_diplomacy', 'rune_mysteries'].includes(request.key)) request.complete = true; };
+  PM.onCustomEvent?.('quest:is-complete', complete);
+  const hook = { player: f.player, npcId: core.NpcIdentifiers.SIGMUND_13, hook: 'quest:the-lost-tribe:start' };
+  PM.emitCustomEvent('npc-dialogue:hook', hook);
+  if (f.quest.getStage(f.player) === 1) assert.ok([1, 2, 3, 4].includes(f.player.getAttribute(LT_WITNESS)), 'the witness is picked as the quest starts');
+  const legacy = lostTribeFixture(t, 3);
+  const duke = core.NPC.create(core.NpcIdentifiers.DUKE_HORACIO, new core.Location(3211, 3220, 1));
+  legacy.player.setLocation(new core.Location(3211, 3221, 1));
+  legacy.talk(duke);
+  assert.equal(legacy.player.getAttribute(LT_WITNESS), 3, 'an old save already told the Duke about Bob');
+});
+
+test('Lost Tribe witness: Hans tells what he saw as live did, the others answer as themselves (ticks 62-121)', async t => {
+  const f = lostTribeFixture(t, 1, [3207, 3232, 0]);
+  f.player.setAttribute(LT_WITNESS, LT_HANS);
+  const hans = core.NPC.create(core.NpcIdentifiers.HANS, new core.Location(3207, 3233, 0));
+  assert.equal(f.talk(hans), true);
+  await lostTribeLines(f, 2);
+  await lostTribeChoose(f, 'Do you know what happened in the cellar?');
+  const lines = await lostTribeLines(f);
+  assert.equal(lines[0].text, 'Do you know what happened in the castle cellar?');
+  assert.match(lines[1].text, /^Last night I was in the kitchen/);
+  assert.ok(lines.slice(1).filter((line) => line.npcId !== undefined && !/^I believe you/.test(line.text))
+    .every((line) => line.npcId === core.NpcIdentifiers.HANS && line.name === 'Hans'), 'the witness lines are Hans\'s');
+  const thanks = lines.find((line) => line.text.startsWith('Thank you, '));
+  assert.ok(thanks, 'Hans thanks the player');
+  assert.equal(f.quest.getStage(f.player), 2, 'his last line moves the quest on');
+  assert.equal(f.varbits.filter(([id]) => id === 532).at(-1)[1], 2, 'lost_tribe_quest 1 -> 2');
+
+  // The Cook is not this player's witness: his own cellar answer, no progress.
+  const other = lostTribeFixture(t, 1, [3209, 3214, 0]);
+  other.player.setAttribute(LT_WITNESS, LT_HANS);
+  const cook = core.NPC.create(core.NpcIdentifiers.COOK_7, new core.Location(3209, 3215, 0));
+  other.talk(cook);
+  await lostTribeLines(other, 2);
+  await lostTribeChoose(other, 'Do you know what happened in the castle cellar?');
+  const cookLines = await lostTribeLines(other);
+  assert.match(cookLines.map((line) => line.text).join(' '), /rock dust everywhere/);
+  assert.equal(other.quest.getStage(other.player), 1);
+
+  // Father Aereck answers too (issue #4071's missing option); his two options with no lines are left out.
+  const church = lostTribeFixture(t, 1, [3244, 3207, 0]);
+  church.player.setAttribute(LT_WITNESS, LT_HANS);
+  const aereck = core.NPC.create(core.NpcIdentifiers.FATHER_AERECK, new core.Location(3244, 3206, 0));
+  assert.equal(church.talk(aereck), true);
+  await lostTribeLines(church, 2);
+  assert.deepEqual(MultiChatboxPrompt.getPending(church.player)?.options,
+    ['Do you know what happened in the castle cellar?', "I'd better be going."]);
+  await lostTribeChoose(church, 'Do you know what happened in the castle cellar?');
+  assert.match((await lostTribeLines(church)).map((line) => line.text).join(' '), /It's a shame, isn't it\?/);
+  // Mid-Restless Ghost he keeps that quest's dialogue, and he is never picked as the witness.
+  const ghost = registeredQuest('the_restless_ghost');
+  ghost.setStage(church.player, 1);
+  church.player.closeInterruptibleInterfaces();
+  church.talk(aereck);
+  assert.doesNotMatch(String(MultiChatboxPrompt.getPending(church.player)?.options ?? ''), /castle cellar/);
+  church.player.closeInterruptibleInterfaces();
+  for (let n = 0; n < 40; n++) {
+    church.player.setAttribute(LT_WITNESS, 0);
+    church.quest.setStage(church.player, 0);
+    for (const skill of [core.Skill.MINING, core.Skill.AGILITY, core.Skill.THIEVING]) church.player.getSkillManager().setMaxLevel(skill, 20).setCurrentLevel(skill, 20);
+    for (const key of ['goblin_diplomacy', 'rune_mysteries']) registeredQuest(key).complete(church.player, { experience: false });
+    PM.emitCustomEvent('npc-dialogue:hook', { player: church.player, npcId: core.NpcIdentifiers.SIGMUND_13, hook: 'quest:the-lost-tribe:start' });
+    assert.notEqual(church.player.getAttribute(LT_WITNESS), 4, 'not Father Aereck while The Restless Ghost is under way');
+  }
+
+  // The Duke hears the witness's name, and gives permission on his last line.
+  const duke = core.NPC.create(core.NpcIdentifiers.DUKE_HORACIO, new core.Location(3211, 3220, 1));
+  f.player.setLocation(new core.Location(3211, 3221, 1));
+  f.talk(duke);
+  await lostTribeLines(f, 2);
+  await lostTribeChoose(f, 'Hans says he saw something in the cellar');
+  const duke2 = await lostTribeLines(f, 10);
+  assert.equal(duke2[0].text, 'Hans says he saw something in the cellar. Like a goblin with big eyes.');
+  assert.ok(duke2.filter((line) => !line.text.startsWith('Hmm, very well')).every((line) => line.stage === 2), 'permission is the Duke\'s last line');
+  assert.equal(f.quest.getStage(f.player), 3);
+});
+
+test('Lost Tribe cellar hole squeezes across both ways with the captured animations; no light warns first (ticks 191-245)', async t => {
+  const f = lostTribeFixture(t, 4, [3219, 9618, 0]);
+  core.RegionManager.init();
+  const wall = (x, id) => {
+    const location = new core.Location(x, 9618, 0);
+    const object = new core.GameObject(id, location, 4, 0, null);
+    return PM.emitObjectInteraction({ player: f.player, object, location, objectId: id, x, y: 9618, z: 0,
+      option: 'Squeeze-through', clickType: 1, handled: false, definition: core.ObjectDefinition.forId(core.ObjectIdentifiers.HOLE_8) });
+  };
+  const messages = [];
+  const say = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, 'sendMessage', (text) => { messages.push([f.tick, text]); return say(text); });
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.LIT_TORCH, 1), false);
+  wall(3219, core.ObjectIdentifiers.LOST_TRIBE_CELLAR_WALL ?? 6898);
+  assert.deepEqual(messages, [[0, 'You squeeze through the hole.']]);
+  f.process();
+  assert.deepEqual(f.animations.at(-1).slice(0, 2), [1, 746], 'human_pipesqueeze the next tick');
+  assert.equal(f.player.getLocation().getX(), 3219);
+  f.process();
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3221, 9618], 'two tiles across');
+  assert.deepEqual(f.animations.at(-1).slice(0, 2), [2, 748], 'human_pipeunsqueeze on landing');
+  // Back out from the tunnel side lands in the cellar, not further in.
+  wall(3221, 6899);
+  f.process(2);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3219, 9618]);
+  // Without a light source the dark warning (cws_warning_16) comes first.
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.LIT_TORCH, 1);
+  const opened = [];
+  const sender = f.player.getPacketSender();
+  const open = sender.sendInterface.bind(sender);
+  t.mock.method(sender, 'sendInterface', (id) => { opened.push(id); return open(id); });
+  wall(3219, 6898);
+  assert.deepEqual(opened, [569]);
+  assert.deepEqual(f.varbits.filter(([id]) => id === 3866).at(-1), [3866, 1]);
+  f.process(2);
+  assert.equal(f.player.getLocation().getX(), 3219, 'nothing happens until the warning is answered');
+  await f.connection.dispatch([{ type: 'widget_action', widgetId: (569 << 16) | 17, groupId: 569, childId: 17, slot: -1, buttonNum: 1 }]);
+  f.connection.processTurnPackets();
+  f.process(2);
+  assert.equal(f.player.getLocation().getX(), 3221, '"Yes I am sure." squeezes through');
+});
+
+test('Lost Tribe bookcase: the first search takes the book; later ones find nothing four ticks on (ticks 363-374)', async t => {
+  const f = lostTribeFixture(t, 6, [3208, 3496, 0]);
+  const location = new core.Location(3207, 3496, 0);
+  const bookcase = new core.GameObject(core.ObjectIdentifiers.BOOKCASE_25, location, 10, 0, null);
+  const search = () => PM.emitObjectInteraction({ player: f.player, object: bookcase, location, objectId: bookcase.getId(),
+    x: 3207, y: 3496, z: 0, option: 'Search', clickType: 1, handled: false });
+  search();
+  const lines = await lostTribeLines(f);
+  assert.deepEqual(lines.map((line) => line.text), ["'A History of the Goblin Race'. This must be it.", 'You take the book from the bookcase.'],
+    'no Reldo first, and the reading is the book\'s own');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.GOBLIN_SYMBOL_BOOK), 1);
+  const messages = [];
+  t.mock.method(f.player, 'sendMessage', (text) => messages.push([f.tick, text]));
+  search();
+  f.process(4);
+  assert.deepEqual(messages, [[0, 'You search the bookcase...'], [4, 'You find nothing of interest.']]);
+
+  // A full inventory leaves the book on the shelf, with no take box.
+  const full = lostTribeFixture(t, 6, [3208, 3496, 0]);
+  for (let n = full.player.getInventory().getFreeSlots(); n > 0; n--) full.player.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1), false);
+  PM.emitObjectInteraction({ player: full.player, object: bookcase, location, objectId: bookcase.getId(),
+    x: 3207, y: 3496, z: 0, option: 'Search', clickType: 1, handled: false });
+  const fullLines = await lostTribeLines(full);
+  assert.ok(!fullLines.some((line) => line.text.startsWith('You take the book')), JSON.stringify(fullLines));
+  assert.equal(full.player.getInventory().getAmount(core.ItemIdentifiers.GOBLIN_SYMBOL_BOOK), 0);
+});
+
+test('Lost Tribe generals show both greetings after "Watch." on the captured ticks (518-529)', async t => {
+  const f = lostTribeFixture(t, 8, [2957, 3510, 0]);
+  const wartface = core.NPC.create(core.NpcIdentifiers.GENERAL_WARTFACE, new core.Location(2957, 3511, 0));
+  const bentnoze = core.NPC.create(core.NpcIdentifiers.GENERAL_BENTNOZE, new core.Location(2958, 3510, 0));
+  const npcAnimations = [];
+  for (const npc of [wartface, bentnoze]) {
+    const animate = npc.performAnimation.bind(npc);
+    t.mock.method(npc, 'performAnimation', (animation) => { npcAnimations.push([f.tick, npc.getId(), animation.getId()]); return animate(animation); });
+  }
+  t.mock.method(f.player, 'getLocalNpcs', () => [wartface, bentnoze]);
+  f.talk(wartface);
+  const route = ['Have you ever heard of the Dorgeshuun?', 'It doesn\'t really matter', 'Well either way they refused to fight',
+    'Well I found a brooch underground...', 'Well why not show me both greetings?'];
+  for (const option of route) {
+    for (let n = 0; n < 12 && !MultiChatboxPrompt.getPending(f.player); n++) await nextLine(f);
+    await lostTribeChoose(f, option);
+  }
+  for (let n = 0; n < 4 && f.text() !== 'That good idea. Watch.'; n++) await nextLine(f);
+  assert.equal(f.text(), 'That good idea. Watch.');
+  await nextLine(f);
+  assert.equal(f.current(), undefined, 'the chat closes for the demonstration');
+  assert.equal(f.varbits.filter(([id]) => id === 532).at(-1)[1], 7, 'lost_tribe_quest 6 -> 7 on the continue');
+  f.process(9);
+  assert.deepEqual(f.animations.map(([tick, id, delay]) => [tick, id, delay]), [[1, 2128, 45], [5, 2127, 45]]);
+  assert.deepEqual(npcAnimations, [[1, bentnoze.getId(), 6137], [5, wartface.getId(), 6136]]);
+  assert.equal(f.text(), 'The goblins show you the Goblin Victory Salute and Goblin Bow.');
+});
+
+test('Lost Tribe Mistag panics at every Talk-to and greets the Goblin Bow emote by himself (ticks 845-869)', async t => {
+  const f = lostTribeFixture(t, 8, [3317, 9611, 0]);
+  f.player.setAttribute('lost-tribe:emotes-taught', true);
+  const mistag = core.NPC.create(5324, new core.Location(3318, 9611, 0));
+  t.mock.method(f.player, 'getLocalNpcs', () => [mistag]);
+  for (let talk = 0; talk < 2; talk++) {
+    f.talk(mistag);
+    const lines = await lostTribeLines(f);
+    assert.deepEqual(lines.map((line) => line.text), ['Who...who are you? How did you get in here?',
+      'Help! A surface-dweller this deep in our mines? We will all be destroyed!']);
+  }
+  assert.equal(f.quest.getStage(f.player), 8);
+  assert.ok(!f.varbits.some(([id, value]) => id === 535 && value !== 0), 'mistag_denial stays 0, as live');
+  PM.emitCustomEvent('player:emote', { player: f.player, slot: 23, sequence: 2128 });
+  assert.equal(f.text(), 'Eeek! The war-dance!');
+  await lostTribeLines(f);
+  PM.emitCustomEvent('player:emote', { player: f.player, slot: 22, sequence: 2127 });
+  const bows = [];
+  const animate = mistag.performAnimation.bind(mistag);
+  t.mock.method(mistag, 'performAnimation', (animation) => { bows.push(animation.getId()); return animate(animation); });
+  const lines = await lostTribeLines(f, 14);
+  assert.equal(lines[0].text, 'A human knows ancient greeting?');
+  assert.deepEqual(bows, [6000], 'dttd_zanik_bow on "Greetings, friend" (tick 865)');
+  assert.ok(lines.find((line) => line.text.startsWith('We blocked up our tunnel')).stage === 9, 'contact on "We blocked up our tunnel"');
+  assert.equal(f.varbits.filter(([id]) => id === 532).at(-1)[1], 8);
+});
+
+test('Lost Tribe pickpocket, chest and crate give what live gives (ticks 972-1004, 1185-1191)', async t => {
+  const I = core.ItemIdentifiers;
+  const f = lostTribeFixture(t, 9, [3211, 3220, 1]);
+  f.player.setAttribute('quest.the_lost_tribe.contact', 2);
+  f.player.getSkillManager().setMaxLevel(core.Skill.THIEVING, 20).setCurrentLevel(core.Skill.THIEVING, 20);
+  const sigmund = core.NPC.create(core.NpcIdentifiers.SIGMUND_13, new core.Location(3212, 3220, 1));
+  const pick = () => PM.emitNpcInteraction({ player: f.player, npc: sigmund, npcId: sigmund.getId(), action: 'Pickpocket', clickType: 3, handled: false });
+  pick();
+  assert.equal(f.player.getInventory().getAmount(I.KEY_10), 1);
+  assert.deepEqual(f.animations.at(-1).slice(1, 2), [881], 'human_pickpocket');
+  assert.equal(f.text(), 'You steal a little key.');
+  await lostTribeLines(f);
+  const messages = [];
+  t.mock.method(f.player, 'sendMessage', (text) => messages.push(text));
+  pick();
+  assert.deepEqual(messages, ["You have already stolen Sigmund's key."]);
+
+  const objects = [];
+  const sender = f.player.getPacketSender();
+  t.mock.method(sender, 'sendObject', (object) => objects.push(object.getId()));
+  const location = new core.Location(3211, 3212, 1);
+  const chest = new core.GameObject(core.ObjectIdentifiers.CHEST_38, location, 10, 0, null);
+  PM.emitObjectInteraction({ player: f.player, object: chest, location, objectId: chest.getId(), x: 3211, y: 3212, z: 1, option: 'Open', clickType: 1, handled: false });
+  assert.equal(f.text(), 'In the chest you find a set of H.A.M. robes!');
+  assert.deepEqual([I.HAM_SHIRT, I.HAM_ROBE, I.HAM_HOOD, I.HAM_CLOAK, I.KEY_10].map((id) => f.player.getInventory().getAmount(id)), [1, 1, 1, 0, 0],
+    'shirt, robe and hood; the key is used up (tick 999: the shirt takes its slot)');
+  assert.deepEqual(objects, [core.ObjectIdentifiers.CHEST_7], 'the chest opens');
+  await lostTribeLines(f);
+  assert.deepEqual(objects, [core.ObjectIdentifiers.CHEST_7, core.ObjectIdentifiers.CHEST_38], 'and closes after the player\'s line');
+  assert.equal(f.varbits.filter(([id]) => id === 534).at(-1)[1], 1);
+
+  const crate = lostTribeSilverwareFixture(t, { ham: 1, silverware: false });
+  const crateVarbits = [];
+  const crateSender = crate.player.getPacketSender();
+  const crateVarbit = crateSender.sendVarbit.bind(crateSender);
+  t.mock.method(crateSender, 'sendVarbit', (id, value) => { crateVarbits.push([id, value]); return crateVarbit(id, value); });
+  crate.search();
+  assert.equal(String(crate.player.getDialogueManager().getCurrent()?.getText?.()), 'You find the Lumbridge Silverware!');
+  assert.deepEqual(crateVarbits.filter(([id]) => id === 534).at(-1), [534, 3], 'lost_tribe_ham 1 -> 3');
+  crate.player.closeInterruptibleInterfaces();
+  const crateMessages = [];
+  t.mock.method(crate.player, 'sendMessage', (text) => crateMessages.push(text));
+  crate.search();
+  assert.deepEqual(crateMessages, ['You search the crate but find nothing.']);
+});
+
+test('Lost Tribe dismissal: Sigmund walks out for 15 ticks while lost_tribe_sigmund_leaving is 1 for 30 (ticks 1238-1268)', async t => {
+  const f = lostTribeSilverwareFixture(t);
+  const varbits = [];
+  const sender = f.player.getPacketSender();
+  const varbit = sender.sendVarbit.bind(sender);
+  t.mock.method(sender, 'sendVarbit', (id, value) => { varbits.push([id, value]); return varbit(id, value); });
+  const castle = core.NPC.create(6288, new core.Location(3211, 3219, 1));
+  t.mock.method(f.player, 'getLocalNpcs', () => [castle]);
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  await lostTribeHandIn(f);
+  const added = queue.slice(before);
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.deepEqual(varbits.filter(([id]) => id === 540), [[540, 1]]);
+  const leaving = added.find((npc) => npc.getId() === 6289);
+  assert.ok(leaving && leaving.isOwnerOnly() && leaving.getOwner() === f.player, 'his own leaving NPC, for this player only');
+  for (let n = 0; n < 30; n++) core.TaskManager.process();
+  assert.deepEqual(varbits.filter(([id]) => id === 540), [[540, 1], [540, 0]]);
+  if (queue.includes(leaving)) queue.splice(queue.indexOf(leaving), 1);
+});
+
 // The Tourist Trap: use the registered NPC/dialogue/cart paths with a seeded quest stage.
 // The NPC and cart come from the active cache/map; no client or full quest was run.
 let touristDriverMapReady = false;

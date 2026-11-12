@@ -4,26 +4,59 @@ const { startTranscript } = require("../QuestRuntime");
 const PAGE = "The Lost Tribe";
 const VARIANT = "resolving-tensions-cut-scene-a-meeting-of-leaders";
 const TITLE = "aZkZjG";
-const CUTAWAY = "HosXce";
 const COMPLETE = "_c-03w";
 const TREATY_MUSIC = 410;
 const HUMAN_WALK = 819;
-const HUMAN_BOW = 858;
-const CAVE_GOBLIN_BOW = 2122;
+const HUMAN_BOW = 858; // emote_bow
+const HUMAN_NO = 856; // emote_no
+const HUMAN_LAUGH = 861; // emote_laugh
+const UR_TAG_BOW = 6000; // dttd_zanik_bow
+const UR_TAG_BOW_DELAY = 20;
 const ROOM_INSTANCE = { sourceChunk: [400, 401], size: 4 };
 const ROOM_BOUNDS = [[3200, 3231, 3208, 3239, 0]];
 const RECOVERY_ATTRIBUTE = "lost-tribe:treaty-scene-exit";
 const DINING_DOOR = [3207, 3217];
-const PLAYER_ENTRANCE = [3207, 3218];
-const PLAYER_INTRO = [3207, 3220];
-const PLAYER_WITNESS = [3207, 3223];
-const DUKE_TILE = [3206, 3222];
-const UR_TAG_TILE = [3206, 3220];
+const DINING_DOORWAY = [DINING_DOOR, [3207, 3218]];
+const DINING_DOOR_OPEN = 1544; // elfdooropen
+const DINING_DOOR_OPEN_TILE = [3207, 3218];
+const DINING_DOOR_OPEN_ROTATION = 2;
+const DOOR_OPEN_SOUND = 81; // nicedoor_open
+// The opening fade only dims the screen; the fade back in, and the closing ones, are full.
+const OPENING_FADE_ALPHA = 200;
 
-// The live scene opens by the fireplace, then pans across the dining table to the doors.
-// OSRS Quest Guides (2025) 8:22–8:35 and Slayermusiq1 (2015) 17:28–17:44.
+// rsprox 20261112T152024-5ab63b4 (revision 242), ticks 1305-1376 (docs/quests/the-lost-tribe/README.md).
+// Continuing Mistag's "I will summon Ur-tag" fades out; two ticks later the dining room copy opens
+// with the title box (it has no continue), the treaty music and the minimap off, and a tick after
+// that the camera is set and the screen fades in. Four ticks after the title the player walks five
+// tiles north from the doorway and Ur-tag and Mistag follow a tick behind; the player's line comes
+// ten ticks after the title, and its continue runs them two tiles on, beside the Duke.
+const PLAYER_ENTRANCE = [3207, 3217];
+const PLAYER_INTRO = [3207, 3222];
+const PLAYER_WITNESS = [3207, 3224];
+const DUKE_TILE = [3206, 3223];
+const UR_TAG_START = [3207, 3216];
+const UR_TAG_ARRIVAL = [3207, 3221];
+const UR_TAG_TILE = [3206, 3221];
+const UR_TAG_THANKS = [3207, 3223];
+const MISTAG_START = [3207, 3215];
+const MISTAG_TILE = [3207, 3220];
+const SIGMUND_TILE = [3213, 3222];
+const SIGMUND_FACING = [3214, 3222];
+const SIGMUND_EXIT = [[3214, 3221], [3215, 3220], [3216, 3220]];
+const PLAYER_WALK_TICK = 4;
+const ESCORT_WALK_TICK = 5;
+const UR_TAG_STEP_TICK = 10;
+const PRESENT_TICK = 10;
+// The last line's continue: Sigmund walks off, the screen fades out four ticks later (the quest
+// completes then), and three ticks after that the player stands on the real map.
+const CLOSING_FADE_TICKS = 4;
+const CLOSING_MOVE_TICKS = 3;
+const CAMERA_OPENING = { rate: 232, rate2: 232 };
+const CAMERA_PAN = { rate: 1, rate2: 1 };
+const CAMERA_TURN = { rate: 1, rate2: 2 };
+
 module.exports = function createTreatyScene(api, complete) {
-  const { ActionDialogue, Animation, DialogueChainBuilder, ForceMovement, Location,
+  const { ActionDialogue, Animation, DialogueChainBuilder, ForceMovement, GameObject, Location,
     NpcIdentifiers, ObjectIdentifiers, StatementDialogue } = api.core;
   const speakers = {
     "Duke Horacio": NpcIdentifiers.DUKE_HORACIO_2,
@@ -62,16 +95,26 @@ module.exports = function createTreatyScene(api, complete) {
     Scenes.walk(npc, at);
   }
 
-  // The player takes two short northbound walks while regular movement stays locked.
-  function walkPlayer(scene, at, tiles, facing) {
+  // The player walks north while regular movement stays locked: a tile a tick (30 cycles), or two
+  // in one tick for the run beside the Duke.
+  function walkPlayer(scene, at, tiles, ticks, facing) {
     const { player } = scene;
     const start = player.getLocation().clone();
-    player.setForceMovement(new ForceMovement(start, new Location(0, tiles), 0, 30 * tiles, 0, HUMAN_WALK));
-    later(scene, tiles, () => {
+    player.setForceMovement(new ForceMovement(start, new Location(0, tiles), 0, 30 * ticks, 0, HUMAN_WALK));
+    later(scene, ticks, () => {
       player.setForceMovement(null);
       Scenes.place(player, at);
       Scenes.face(player, facing);
     });
+  }
+
+  // Tick 1312: the closed door goes, elfdooropen stands swung open on the room's side, nicedoor_open.
+  function openDiningDoor(scene) {
+    const sender = scene.player.getPacketSender();
+    const { area } = scene.instance;
+    if (scene.door) sender.sendObjectRemoval(scene.door);
+    sender.sendObject(new GameObject(DINING_DOOR_OPEN, area.sourceTile(...DINING_DOOR_OPEN_TILE), 0, DINING_DOOR_OPEN_ROTATION, null));
+    sender.sendSound(DOOR_OPEN_SOUND, 0, 0);
   }
 
   function play(scene, after) {
@@ -88,7 +131,7 @@ module.exports = function createTreatyScene(api, complete) {
     const scene = { player, origin: player.getLocation().clone(), song: player.getSession().getCurrentMusicTrack() };
     active.set(player, scene);
     Scenes.controls(player, true, true);
-    Scenes.fade(player, true);
+    Scenes.fade(player, true, undefined, OPENING_FADE_ALPHA);
     later(scene, 2, () => {
       try {
         const { origin } = scene;
@@ -111,25 +154,27 @@ module.exports = function createTreatyScene(api, complete) {
         throw error;
       }
       scene.duke = Scenes.actor(scene.instance, NpcIdentifiers.DUKE_HORACIO_2, DUKE_TILE);
-      scene.urTag = Scenes.actor(scene.instance, NpcIdentifiers.UR_TAG_3, [3206, 3218]);
-      scene.mistag = Scenes.actor(scene.instance, NpcIdentifiers.MISTAG, PLAYER_ENTRANCE);
-      scene.sigmund = Scenes.actor(scene.instance, NpcIdentifiers.SIGMUND_15, [3214, 3222]);
+      scene.urTag = Scenes.actor(scene.instance, NpcIdentifiers.UR_TAG_3, UR_TAG_START);
+      scene.mistag = Scenes.actor(scene.instance, NpcIdentifiers.MISTAG, MISTAG_START);
+      scene.sigmund = Scenes.actor(scene.instance, NpcIdentifiers.SIGMUND_15, SIGMUND_TILE);
       if (!scene.duke || !scene.urTag || !scene.mistag || !scene.sigmund) {
         endAt(scene, scene.origin);
         return;
       }
-      Scenes.face(scene.duke, UR_TAG_TILE);
-      Scenes.face(scene.sigmund, [3213, 3222]);
+      Scenes.face(scene.duke, [DUKE_TILE[0], DUKE_TILE[1] - 1]);
+      Scenes.face(scene.sigmund, [SIGMUND_TILE[0] - 1, SIGMUND_TILE[1] - 1]);
+      const { area } = scene.instance;
+      const door = area.resolveObject(ObjectIdentifiers.DOOR_302, area.sourceTile(...DINING_DOOR));
+      const sender = player.getPacketSender();
+      // The doorway is clear in the copy's collision from the start, for Ur-tag and Mistag walking
+      // in behind the player; the door itself opens as the player sets off (openDiningDoor).
+      scene.door = door;
+      for (const tile of DINING_DOORWAY) area.removeClip?.(area.sourceTile(...tile));
+      sender.sendSong(TREATY_MUSIC);
+      play(scene);
       later(scene, 1, () => {
-        const { area } = scene.instance;
-        const door = area.resolveObject(ObjectIdentifiers.DOOR_302, area.sourceTile(...DINING_DOOR));
-        const sender = player.getPacketSender();
-        // The copy starts with the dining entrance open, as the party comes through it.
-        if (door) sender.sendObjectRemoval(door);
-        sender.sendSong(TREATY_MUSIC);
-        Scenes.camera(player, [3209, 3225, 310], [3206, 3220, 100]);
+        Scenes.camera(player, [3208, 3226, 300], [3206, 3222, 100], CAMERA_OPENING);
         Scenes.fade(player, false);
-        play(scene);
       });
     });
   }
@@ -141,26 +186,36 @@ module.exports = function createTreatyScene(api, complete) {
     if (stepId === TITLE) {
       const title = new ActionDialogue(0, { execute: () => StatementDialogue.send(player, event.text, false) }, true);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(title));
-      walkPlayer(scene, PLAYER_INTRO, 2, DUKE_TILE);
-      walkActor(scene, scene.urTag, UR_TAG_TILE);
-      walkActor(scene, scene.mistag, [3207, 3219]);
-      later(scene, 6, () => {
-        Scenes.face(scene.urTag, DUKE_TILE);
+      later(scene, PLAYER_WALK_TICK, () => openDiningDoor(scene));
+      later(scene, PLAYER_WALK_TICK, () => walkPlayer(scene, PLAYER_INTRO, PLAYER_INTRO[1] - PLAYER_ENTRANCE[1],
+        PLAYER_INTRO[1] - PLAYER_ENTRANCE[1], DUKE_TILE));
+      later(scene, ESCORT_WALK_TICK, () => {
+        walkActor(scene, scene.urTag, UR_TAG_ARRIVAL);
+        walkActor(scene, scene.mistag, MISTAG_TILE);
+      });
+      later(scene, UR_TAG_STEP_TICK, () => {
+        walkActor(scene, scene.urTag, UR_TAG_TILE);
         Scenes.face(scene.mistag, DUKE_TILE);
+      });
+      later(scene, PRESENT_TICK, () => {
         scene.speaking = true;
         play(scene, TITLE);
       });
-    } else if (stepId === CUTAWAY) {
-      // The east hallway is between the dining doors at x=3213 and the wall at x=3217.
-      Scenes.camera(player, [3216, 3224, 265], [3214, 3222, 105], { rate: 14, rate2: 9 });
     } else if (stepId === COMPLETE) {
       scene.speaking = false;
       event.end = true;
-      Scenes.fade(player, true);
-      later(scene, 2, () => {
-        endAt(scene, new Location(...PLAYER_WITNESS, 0));
-        complete(player);
+      SIGMUND_EXIT.forEach((tile, index) => later(scene, index, () => walkActor(scene, scene.sigmund, tile)));
+      later(scene, CLOSING_FADE_TICKS, () => {
+        Scenes.fade(player, true);
+        // Live completes as it fades (tick 1372); here the scene is left first, so ending it
+        // cannot close the quest's reward scroll.
+        later(scene, CLOSING_MOVE_TICKS, () => {
+          endAt(scene, new Location(...PLAYER_WITNESS, 0));
+          complete(player);
+        });
       });
+    } else if (event.pages?.some(({ page }) => page === PAGE) && /^(HosXce|NovY-8)$/.test(String(stepId))) {
+      // The cutaway to Sigmund and the ring are the lines' own camera and the quest's reward.
     } else {
       return false;
     }
@@ -174,23 +229,36 @@ module.exports = function createTreatyScene(api, complete) {
     const { player } = scene;
     const speakerId = speakers[event.step?.speaker];
     if (speakerId) event.speakerId = speakerId;
+    const text = String(event.text);
     if (event.step?.player?.startsWith("Your grace, I present")) {
-      event.before = () => player.performAnimation(new Animation(HUMAN_BOW));
-    } else if (event.text.startsWith("Welcome, Ur-tag")) {
       event.before = () => {
-        walkPlayer(scene, PLAYER_WITNESS, 3, DUKE_TILE);
-        scene.duke.performAnimation(new Animation(HUMAN_BOW));
-        later(scene, 2, () => scene.urTag.performAnimation(new Animation(CAVE_GOBLIN_BOW)));
+        player.performAnimation(new Animation(HUMAN_BOW));
+        Scenes.camera(player, [3207, 3225, 300], [3206, 3222, 100], CAMERA_PAN);
       };
-    } else if (event.text.includes("Lumbridge is in your debt")) {
+    } else if (text.startsWith("Welcome, Ur-tag")) {
+      event.before = () => {
+        walkPlayer(scene, PLAYER_WITNESS, PLAYER_WITNESS[1] - PLAYER_INTRO[1], 1, DUKE_TILE);
+        scene.duke.performAnimation(new Animation(HUMAN_BOW));
+        scene.urTag.performAnimation(new Animation(UR_TAG_BOW, UR_TAG_BOW_DELAY));
+      };
+    } else if (text.startsWith("I assure you")) {
+      event.before = () => Scenes.camera(player, [3210, 3222, 250], [3206, 3222, 100], CAMERA_PAN);
+    } else if (text.startsWith("No, let it stay")) {
+      event.before = () => scene.duke.performAnimation(new Animation(HUMAN_NO));
+    } else if (text.includes("Lumbridge is in your debt")) {
       event.before = () => {
         Scenes.face(scene.duke, PLAYER_WITNESS);
-        Scenes.camera(player, [3210, 3222, 290], [3206, 3222, 100], { rate: 8, rate2: 8 });
+        Scenes.camera(player, [3213, 3222, 300], [3206, 3223, 100], CAMERA_TURN);
       };
-    } else if (event.text.startsWith("I too thank you")) {
-      event.before = () => Scenes.face(scene.urTag, PLAYER_WITNESS);
-    } else if (event.step?.speaker === "Sigmund" && event.text.startsWith("Prattle on")) {
-      event.holdTicks = 3;
+    } else if (text.startsWith("I too thank you")) {
+      event.before = () => walkActor(scene, scene.urTag, UR_TAG_THANKS);
+    } else if (text.startsWith("These are strange times")) {
+      event.before = () => Scenes.camera(player, [3216, 3221, 300], [3206, 3223, 100], CAMERA_PAN);
+    } else if (event.step?.speaker === "Sigmund" && text.startsWith("Soon you will be destroyed")) {
+      event.before = () => {
+        Scenes.face(scene.sigmund, SIGMUND_FACING);
+        scene.sigmund.performAnimation(new Animation(HUMAN_LAUGH));
+      };
     }
   }
 

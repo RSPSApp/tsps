@@ -21855,7 +21855,7 @@ test('Song of the Elves remembers Elena’s earlier answer and fills the cave di
   assert.equal(line.text, 'Is Sam here, Sam?', 'the player gives the transcript fake identity instead of their actual name');
 });
 
-test('The Lost Tribe reads its symbol book and advances only when the reader closes', () => {
+test('The Lost Tribe reads its symbol book and a close before the symbols does not advance', () => {
   // Real-engine coverage, arrows included: lost-tribe-symbol-book.test.cjs.
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/LostTribe.Quest')(api);
@@ -21878,8 +21878,9 @@ test('The Lost Tribe reads its symbol book and advances only when the reader clo
   assert.equal(hidden.get((183 << 16) | 33), false, 'on its title spread');
   assert.equal(quest.getStage(player), 7, 'reading begins without skipping the book');
   for (const handler of handlers.custom.get('interface:closed')) handler({ player, interfaceId: 183 });
-  assert.equal(quest.getStage(player), 8, 'closing the book completes the reading step');
-  assert.equal(varbits.get(532), 6);
+  // rsprox 20261112T152024-5ab63b4, tick 387: the stage moves on the turn to the symbols spread.
+  assert.equal(quest.getStage(player), 7, 'closing on the title spread is not the reading');
+  assert.equal(varbits.get(532), 5);
 });
 
 test('The Lost Tribe guide dialogue preserves the treaty checkpoint without an immediate teleport', () => {

@@ -236,6 +236,29 @@ test('the Old crone hands over her cup and drinks the milky tea in one talk each
   // Again (470-490): her "not found your son" menu.
   assert.equal(talk(p, crone), true);
   assert.deepEqual(play(p).find((s) => s.kind === 'menu').options[0], 'I am afraid I have not found your son yet.');
+  // "Remind me": her amulet question, the answer and the materials, then her menu again (Transcript).
+  lines.set(p, []);
+  const remind = play(p, ['Remind me - what can I do about Necrovarus?']);
+  assert.deepEqual(lines.get(p).slice(0, 4), [
+    'Remind me - what can I do about Necrovarus?',
+    'Do you have such a thing as a ghostspeak amulet?',
+    "Yes, I'm wearing one right now.",
+    "Well, that's a stroke of luck.",
+  ]);
+  assert.equal(lines.get(p).at(-1), 'I cannot read the strange letters of the eastern lands. I will need something to help me translate the book.');
+  assert.equal(remind.at(-1).options[0], 'I am afraid I have not found your son yet.');
+  assert.equal(lines.get(p).length, 9);
+});
+
+test('an enchanted amulet lost at stage 6: the crone enchants a plain one again', (t) => {
+  const p = actor(t, { x: 3463, y: 3557, stage: 6 });
+  for (const v of [STATE.VARBIT.GIVEN_ROBES, STATE.VARBIT.GIVEN_BOOK, STATE.VARBIT.GIVEN_MANUAL]) STATE.set(p, v, 1);
+  const crone = spawn(t, core.NpcIdentifiers.OLD_CRONE, 3464, 3558);
+  talk(p, crone);
+  play(p);
+  tick(3);
+  assert.equal(p.getEquipment().get(core.Equipment.AMULET_SLOT).getId(), I().GHOSTSPEAK_AMULET_2);
+  assert.equal(quest.getStage(p), 6);
 });
 
 test('with Animal Magnetism done the crone asks Necrovarus or the farmers first (ticks 346-353)', (t) => {

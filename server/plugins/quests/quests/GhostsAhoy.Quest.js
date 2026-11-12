@@ -275,8 +275,9 @@ module.exports = function registerGhostsAhoyQuest(api) {
       if (now === STAGE.STARTED) return "starting-off-talking-to-velorina-again";
       if (now === STAGE.PLEADED) return "returning-to-velorina-after-talking-to-necrovarus";
       if (now === STAGE.OLD_CRONE) return "returning-to-velorina-after-talking-to-necrovarus-talking-to-velorina-again";
-      if (now === STAGE.CRONE_HELP) return "talking-to-velorina-after-talking-to-the-old-crone";
-      if (now <= STAGE.ENCHANTED) return "talking-to-velorina";
+      // Until the amulet glows her talk is the "after the Old crone" one (its "enchanted" variant has nothing for a plain amulet).
+      if (now <= STAGE.CRONE_RITUAL) return "talking-to-velorina-after-talking-to-the-old-crone";
+      if (now === STAGE.ENCHANTED) return "talking-to-velorina";
       if (now === STAGE.COMMANDED) return "talking-to-velorina-2";
       return "post-quest-dialogue-velorina";
     }
@@ -542,18 +543,23 @@ module.exports = function registerGhostsAhoyQuest(api) {
     setStage(player, STAGE.CRONE_HELP);
   }
 
+  /** Swaps `from` for `to` in its own inventory slot, as live does (ticks 374, 528, 819). */
+  function swapInSlot(player, from, to) {
+    const inventory = player.getInventory();
+    const slot = inventory.getSlot?.(from) ?? -1;
+    if (slot < 0 || typeof inventory.setItem !== "function") {
+      inventory.deleteNumber(from, 1);
+      inventory.adds(to, 1);
+      return;
+    }
+    inventory.setItem(slot, new Item(to, 1));
+    inventory.refreshItems?.();
+  }
+
   /** "The Captain says yes." (tick 819): the boat changes hands for the key, in its slot. */
   function giveChestKey(player) {
     if (State.get(player, State.VARBIT.TOY_BOAT) !== 1 || !held(player, ids.REPAIRED_SHIP)) return;
-    const inventory = player.getInventory();
-    const slot = inventory.getSlot?.(ids.REPAIRED_SHIP) ?? -1;
-    if (slot >= 0 && typeof inventory.setItem === "function") {
-      inventory.setItem(slot, new Item(ids.CHEST_KEY, 1));
-      inventory.refreshItems?.();
-    } else {
-      inventory.deleteNumber(ids.REPAIRED_SHIP, 1);
-      inventory.adds(ids.CHEST_KEY, 1);
-    }
+    swapInSlot(player, ids.REPAIRED_SHIP, ids.CHEST_KEY);
     State.set(player, State.VARBIT.TOY_BOAT, 2);
   }
 
@@ -701,11 +707,17 @@ module.exports = function registerGhostsAhoyQuest(api) {
     State.set(player, State.VARBIT.BOW, 8);
   }
 
+  /** Ours: the enchanted amulet lost at stage 6, a plain one is enchanted again (Transcript: "find another one"). */
+  function needsReenchant(player) {
+    return stage(player) === STAGE.ENCHANTED && !wearing(player, Equipment.AMULET_SLOT, ids.ENCHANTED_AMULET)
+      && !held(player, ids.ENCHANTED_AMULET) && (wearingAmulet(player) || carryingAmulet(player));
+  }
+
   function performRitual(player, crone) {
-    if (stage(player) !== STAGE.CRONE_RITUAL) return;
+    if (stage(player) !== STAGE.CRONE_RITUAL && !needsReenchant(player)) return;
     crone?.performAnimation?.(new Animation(818));
     api.core.TaskManager.submit(new api.core.CountdownTask(player, 3, () => {
-      if (!player.isRegistered?.() || stage(player) !== STAGE.CRONE_RITUAL) return;
+      if (!player.isRegistered?.() || (stage(player) !== STAGE.CRONE_RITUAL && !needsReenchant(player))) return;
       if (!enchantAmulet(player)) return;
       setStage(player, STAGE.ENCHANTED);
       const text = findNode(variantSteps("talking-to-the-old-crone-with-the-materials"), "DseMBm")?.text
@@ -898,6 +910,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
       return menu ? [menu] : variantSteps("talking-to-the-old-crone-talking-to-the-old-crone-again");
     }
     if (now === STAGE.CRONE_RITUAL) return findNode(variantSteps("talking-to-the-old-crone-with-the-materials"), "BUgbCE")?.steps ?? [];
+    if (needsReenchant(player)) return findNode(variantSteps("talking-to-the-old-crone-with-the-materials"), "BUgbCE")?.steps ?? [];
     if (now <= STAGE.COMMANDED && now >= STAGE.ENCHANTED) return variantSteps("talking-to-the-old-crone-with-the-materials-talking-to-the-old-crone-again");
     if (now >= STAGE.COMPLETE) return variantSteps("post-quest-dialogue-old-crone");
     return null;
@@ -940,6 +953,47 @@ module.exports = function registerGhostsAhoyQuest(api) {
   }
 
   /** With Animal Magnetism done she asks which matter first (ticks 346, 354, 390, 470, 1798). */
+  /**
+   * Her menus' "same as above" options, as her first talk has them: the transcript's jumps only
+   * point back at lines ("Remind me..." looped on "Do you have such a thing as a ghostspeak
+   * amulet?"), so each option plays her first menu's body, its amulet answers included, and
+   * "initial" returns to the menu it came from.
+   */
+  function croneMenuBodies() {
+    const first = variantSteps("talking-to-the-old-crone");
+    const milky = findNode(first, "pnTKEw")?.steps ?? [];
+    const menu = milky.find((step) => step?.type === "choice");
+    const answers = milky.filter((step) => ["WLPenj", "Oq41_U", "hspLEg"].includes(step?.id));
+    const bodies = new Map();
+    for (const option of menu?.options ?? []) {
+      const steps = (option.steps ?? []).flatMap((step) => {
+        if (step?.id === "6hETn9") return answers;
+        if (step?.id === "4utF7H") return [];
+        return [step];
+      });
+      bodies.set(normalOption(option.text), steps);
+    }
+    return bodies;
+  }
+
+  const normalOption = (text) => String(text ?? "").replace("items you wanted.", "items you asked for.");
+  const onlyJump = (steps) => (steps ?? []).length === 1 && steps[0]?.type === "jump";
+
+  function resolveCroneMenus(steps, bodies = croneMenuBodies()) {
+    return (steps ?? []).map((step) => {
+      if (step?.type !== "choice") return step?.steps ? { ...step, steps: resolveCroneMenus(step.steps, bodies) } : step;
+      const menu = { ...step };
+      menu.options = (step.options ?? []).map((option) => {
+        const body = bodies.get(normalOption(option.text));
+        const own = onlyJump(option.steps) && body ? body : option.steps ?? [];
+        // "initial" goes back to this menu ("other" replays the menu being answered), not to the
+        // Animal Magnetism question that may come before it.
+        return { ...option, steps: own.map((inner) => (inner?.type === "jump" && /^initial/i.test(inner.reference ?? "") ? { ...inner, reference: "other" } : inner)) };
+      });
+      return menu;
+    });
+  }
+
   function wrapCroneMenu(player, steps) {
     if (!questComplete(player, "animal_magnetism")) return steps;
     const both = loadTranscripts(api)?.[CRONE_RECORD]?.variants?.[CRONE_BOTH_QUESTS];
@@ -967,7 +1021,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
     if (stage(player) < STAGE.OLD_CRONE || animalMagnetismNeedsCrone(player)) return false;
     const steps = croneSteps(player);
     if (!steps?.length) return false;
-    startTranscript(api, player, NPC.OLD_CRONE, PAGE, "talking-to-the-old-crone", () => wrapCroneMenu(player, steps), event.npc);
+    startTranscript(api, player, NPC.OLD_CRONE, PAGE, "talking-to-the-old-crone", () => wrapCroneMenu(player, resolveCroneMenus(steps)), event.npc);
     return true;
   }
 
@@ -1057,11 +1111,9 @@ module.exports = function registerGhostsAhoyQuest(api) {
     const pour = POURS.find(([from, into]) => pair.has(from) && pair.has(into) && from !== into);
     if (pour) {
       const [from, into, emptied, made] = pour;
-      const inventory = player.getInventory();
-      inventory.deleteNumber(from, 1);
-      inventory.deleteNumber(into, 1);
-      inventory.adds(emptied, 1);
-      inventory.adds(made, 1);
+      // The brew stays in the cup's (or bowl's) slot; the emptied container takes the other's (tick 374).
+      swapInSlot(player, into, made);
+      swapInSlot(player, from, emptied);
       api.core.Sounds.sendSound(player, new api.core.Sound(LIQUID_SOUND, 1, 0, 0));
       event.handled = true;
       return;

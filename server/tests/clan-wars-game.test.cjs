@@ -571,3 +571,47 @@ test('kill-target finish protects two queued production death tasks before the s
     assert.deepEqual([p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()],C.RETURN);
   }
 });
+
+// A supplied lethal HP update queues the real death task, but no task runs until tick().
+// Each departure leaves two other fighters in combat, isolating remove from finish.
+for (const mode of [0, 1]) {
+  for (const departure of ['channel leave', 'disconnect', 'logout', 'forfeit']) {
+    test(`queued safe death survives ${departure} before its first callback in mode ${mode}`, async () => {
+      const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+      const game = await negotiate(a, b, 2, mode);
+      await join(a); await join(extra); await join(b);
+      core.World.processCycle = game.starts; game.tick();
+      assert.equal(game.phase, 'combat');
+      assert.equal(game.members.size, 3);
+      const side = game.members.get(extra);
+      for (const id of [4151, 1127, 1079, 1163, 1201, 995]) {
+        extra.getInventory().add(new core.Item(id, id === 995 ? 77 : 1, { qa: `queued-${id}` }), false);
+      }
+      const inventory = () => extra.getInventory().getValidItems().map(item =>
+        ({ id: item.getId(), amount: item.getAmount(), meta: structuredClone(item.getMeta()) }));
+      const before = inventory();
+      assert.equal(before.length, 6, 'more than three protected items expose unsafe death drops');
+      extra.getCombat().addDamage(b, 10);
+      extra.setHitpoints(0);
+      assert.equal(extra.isDyingReturn(), true, 'production death task is queued');
+      assert.equal(Match.dying.has(extra), false, 'first dying callback has not run');
+      if (departure === 'channel leave') FC.leave(extra, false);
+      else if (departure === 'disconnect') PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+      else if (departure === 'logout') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      else assert.equal(Match.leave({ player: extra }), true, 'registered Forfeit handler removes the fighter');
+      assert.equal(C.matches.has(extra), false);
+      assert.equal(game.members.has(extra), false);
+      assert.equal(game.phase, 'combat', 'this is removal without match completion');
+      tick(6);
+      assert.deepEqual(inventory(), before, 'safe queued death preserves every item, amount and metadata');
+      assert.deepEqual([extra.getLocation().getX(), extra.getLocation().getY(), extra.getLocation().getZ()], C.RETURN,
+        'final death callback returns to the Clan Wars lobby');
+      assert.equal(extra.getPrivateArea(), null);
+      assert.equal(Match.dying.has(extra), false, 'final callback releases independent ownership');
+      const expected = [0, 0];
+      if (mode && departure === 'channel leave') expected[1 - side] = 1;
+      assert.deepEqual(game.kills, expected, 'departure is not credited again by the delayed death task');
+      assert.equal(game.phase, 'combat');
+    });
+  }
+}

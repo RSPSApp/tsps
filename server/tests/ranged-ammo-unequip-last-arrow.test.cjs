@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/ranged-ammo-unequip-last-arrow.test.cjs
-// A shot is paid when it lands, from the same ammo wherever it is. Unequipping moves the worn object itself into the
-// pack, and paying the last arrow from there empties that object in place. The landed arrow must still drop as the
-// arrow fired, with its meta, not as the emptied object. Real engine: every plugin loaded, a real Player, Equipment
+// A shot is paid as it leaves the bow (rsprox_transcripts/237/01156.txt), and lands on the floor later. Moving the
+// stack mid-flight (unequip, bank, drop) cannot make it free, and the landed arrow drops as the arrow fired, with
+// its meta. Real engine: every plugin loaded, a real Player, Equipment
 // and Inventory, the real CombatFactory.decrementAmmo and TaskManager.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -70,4 +70,22 @@ test("a dark bow double shot with one arrow left pays and drops just that one", 
   const drops = fireThenUnequip(t, p, 2);
   assert.deepEqual(drops, [[I.RUNE_ARROW, 1, false]]);
   assert.equal(p.getInventory().getAmount(I.RUNE_ARROW), 0);
+});
+
+test("ammo banked or dropped mid-flight has already paid for the shot", (t) => {
+  for (const amount of [50, 1]) {
+    const p = archer(t, I.MAGIC_SHORTBOW, RangedWeapon.MAGIC_SHORTBOW, new core.Item(I.RUNE_ARROW, amount));
+    const drops = [];
+    t.mock.method(ItemOnGroundManager, "registerLocation", (_player, item) => { drops.push([item.getId(), item.getAmount()]); });
+    t.mock.method(Math, "random", () => 0.5); // the shot lands on the floor (no Ava's)
+    CombatFactory.decrementAmmo(p, new core.Location(3223, 3218, 0), 1, 2);
+    // Banked (or dropped) before the arrow lands: whatever is left in the slot leaves the player.
+    const moved = p.getEquipment().getItems()[core.Equipment.AMMUNITION_SLOT];
+    const movedAmount = moved.getId() === I.RUNE_ARROW ? moved.getAmount() : 0;
+    p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(-1, 0));
+    for (let i = 0; i < 3; i++) core.TaskManager.process();
+    assert.equal(movedAmount, amount - 1, `${amount}: the fired arrow is no longer in the stack that was moved`);
+    assert.deepEqual(drops, [[I.RUNE_ARROW, 1]], `${amount}: the fired arrow still lands`);
+    t.mock.restoreAll();
+  }
 });

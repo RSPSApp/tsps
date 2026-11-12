@@ -101,6 +101,83 @@ test('the resin text over the belt matches the capture', () => {
   assert.equal(Orders.chatterText({ mox: 448, aga: 0, lye: 560 }), '<col=389cff>+448 Mox</col>   <col=ff242f>+560 Lye</col>');
 });
 
+/** A real player at the conveyor, with the registered Fulfil-order handler and its packets recorded. */
+function conveyorHandIn(t, items) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const core = PluginManager.getCoreApi();
+  const previousApi = Shared.api();
+  const hooks = new Map();
+  const sounds = [], chat = [], boxes = [];
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(1801);
+  player.setUsername('mixologybelt');
+  player.setLocation(new core.Location(Shared.LOC.CONVEYOR.x, Shared.LOC.CONVEYOR.y - 1, Shared.LAB.z));
+  t.after(() => {
+    core.TaskManager.cancelTasks(player.getIndex());
+    player.setRegistered(false);
+    Shared.bind(previousApi);
+  });
+  const sender = player.getPacketSender();
+  t.mock.method(sender, 'sendSound', (id, loops, delay) => { sounds.push([id, delay]); return sender; });
+  t.mock.method(sender, 'sendTypedMessage', (type, text) => { chat.push([type, text]); return sender; });
+  t.mock.method(sender, 'sendMessage', (text) => { chat.push([0, text]); return sender; });
+  t.mock.method(sender, 'sendChatboxInterface', (id) => { boxes.push(id); return sender; });
+  const api = { ...previousApi, core,
+    onObjectInteraction(name, actions) { hooks.set(name, actions); },
+    emitCustomEvent() {},
+    spawnNpc: () => null,
+    removeNpc() {},
+  };
+  Shared.bind(api);
+  Orders(api);
+  Shared.set(player, Shared.VARBIT.MET_SUPERVISOR, 1);
+  Shared.set(player, Shared.VARBIT.ORDER_TYPE[0], 1);
+  Shared.set(player, Shared.VARBIT.ORDER_MODIFIER[0], Shared.MODIFIER.AGITATOR);
+  for (const item of items) player.getInventory().add(item, false);
+  hooks.get(Shared.OBJECT.CONVEYOR)['Fulfil-order']({ player });
+  return { player, sounds, chat, boxes };
+}
+
+test('conveyor: with no finished potion, a message box says so and nothing is deposited', t => {
+  const h = conveyorHandIn(t, []);
+  const text = "You're not carrying any finished potions.";
+  const { ChatType } = PluginManager.getCoreApi();
+  assert.deepEqual(h.chat, [[ChatType.MESBOX, text]]);
+  assert.deepEqual(h.boxes, [229]); // messagebox
+  assert.deepEqual(h.sounds, []);
+  assert.equal(Shared.get(h.player, Shared.VARBIT.ORDER_TYPE[0]), 1, 'orders are not re-drawn');
+});
+
+test('conveyor: a hand-in that fills an order also plays 9512 (delay 20), once', t => {
+  const filled = conveyorHandIn(t, [finished(1, Shared.MODIFIER.AGITATOR)]);
+  assert.deepEqual(filled.sounds, [[2739, 15], [9512, 20]]);
+  assert.deepEqual(filled.boxes, []);
+});
+
+test('conveyor: an unordered hand-in plays only the deposit sound', t => {
+  const unordered = conveyorHandIn(t, [finished(1, Shared.MODIFIER.RETORT)]);
+  assert.deepEqual(unordered.sounds, [[2739, 15]]);
+  assert.ok(unordered.chat.some(([, text]) => /fail to fulfil an order/.test(text)));
+});
+
+test('every lab message box also writes its text to chat, line breaks as spaces', () => {
+  const { ChatType } = PluginManager.getCoreApi();
+  const chat = [];
+  const player = {
+    getPacketSender: () => ({ sendTypedMessage: (type, text) => chat.push([type, text]) }),
+    getDialogueManager: () => ({ startDialogues() {} }),
+  };
+  Shared.statement(player, "You don't currently have enough reagents to mix that potion. You<br>are missing the following:<br>30 Aga");
+  Shared.itemStatement(player, Shared.ITEM.LAB_NOTES, 'You take a set of lab notes from the bookshelf.');
+  assert.deepEqual(chat, [
+    [ChatType.MESBOX, "You don't currently have enough reagents to mix that potion. You are missing the following: 30 Aga"],
+    [ChatType.MESBOX, 'You take a set of lab notes from the bookshelf.'],
+  ]);
+});
+
 /** Exercise the shared reward shop with actual cache rows and a native inventory. */
 function omnishopHarness(shop = 'forestry_shop') {
   const core = PluginManager.getCoreApi();

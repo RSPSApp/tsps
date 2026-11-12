@@ -60,7 +60,7 @@ const persistence = {
   copyProfile: async (name, from, to, reason) => {
     calls.push(['copy', name, from, to, reason]);
     if (saves.has(`${to}:${name}`) || !saves.has(`${from}:${name}`)) return false;
-    saves.set(`${to}:${name}`, saves.get(`${from}:${name}`));
+    saves.set(`${to}:${name}`, storedSave(JSON.parse(JSON.stringify(saves.get(`${from}:${name}`))))); // a save of its own, as the real copy writes
     return true;
   },
   updateOffline: async (name, update, reason, profile) => {
@@ -386,21 +386,29 @@ test('the choice opens after the death and stays until made; Reset keeps only th
   assert.equal(left.life, undefined, 'nothing of the old life');
   assert.equal(left.password, 'hash');
   assert.equal(said('gravestones:forfeit')[0].player, p, 'the grave and Death\'s Office items are destroyed');
-  Common.resetStoreCache();
-  assert.equal(Common.resetCount('Fast Plank'), 1, 'written to the resets file');
+  await waitFor(() => { Common.resetStoreCache(); return Common.resetCount('Fast Plank') === 1; });
+  assert.equal(Common.resetCount('Fast Plank'), 1, 'written to the resets file once the save is unmade');
 });
 
 test('Transfer makes the character the account\'s main one, unless it has one', async () => {
   const p = player();
-  saves.set('hardcore:Fast Plank', storedSave({ life: 1, password: 'hash' }));
+  // The logout save, as the death left it: the choice is still pending in it until the copy is made.
+  const attributes = { [Common.CHOICE_PENDING_ATTRIBUTE]: true, [Common.DEATH_OPTION_ATTRIBUTE]: 2, [Common.DIED_DATE_ATTRIBUTE]: 8000, kept: 1 };
+  saves.set('hardcore:Fast Plank', storedSave({ life: 1, password: 'hash', attributes: { ...attributes } }));
   p.setAttribute(Common.CHOICE_PENDING_ATTRIBUTE, true);
   handlers.button[0]({ player: p, buttonId: (982 << 16) | 7 });
   assert.equal(p.varbits.get(16690), 2);
   prompts.at(-1).pick(DATA.ours.confirmTransfer);
   assert.equal(p.loggedOut, true);
-  assert.equal(p.getAttribute(Common.CHOICE_PENDING_ATTRIBUTE), false, 'saved with nothing left to choose');
-  await waitFor(() => calls.length > 1);
-  assert.deepEqual(calls, [['copy', 'Fast Plank', 'hardcore', 'main', 'hardcore-transfer'], ['update', 'Fast Plank', 'hardcore', 'hardcore-reset']]);
+  assert.equal(p.getAttribute(Common.CHOICE_PENDING_ATTRIBUTE), true, 'the Hardcore save keeps the choice until the copy is made');
+  assert.equal(Choice.pending(p), false, 'but nothing is asked while leaving');
+  await waitFor(() => calls.length > 2);
+  assert.deepEqual(calls, [
+    ['copy', 'Fast Plank', 'hardcore', 'main', 'hardcore-transfer'],
+    ['update', 'Fast Plank', 'main', 'hardcore-transfer'],
+    ['update', 'Fast Plank', 'hardcore', 'hardcore-reset'],
+  ]);
+  assert.deepEqual(saves.get('main:Fast Plank').attributes, { kept: 1 }, 'the main character has nothing left to choose');
   assert.equal(said('gravestones:forfeit')[0].player, p, 'the grave doesn\'t follow the character (Wiki)');
 
   const q = player('Has Main');
@@ -410,6 +418,27 @@ test('Transfer makes the character the account\'s main one, unless it has one', 
   prompts.at(-1).pick(DATA.ours.confirmTransfer);
   assert.equal(q.loggedOut, false);
   assert.deepEqual(q.messages, [DATA.ours.transferTaken]);
+});
+
+test('a relog before the logout finished leaves Reset and Transfer to be chosen again, unchanged', async () => {
+  for (const [button, confirm] of [[15, DATA.ours.confirmReset], [7, DATA.ours.confirmTransfer]]) {
+    calls = [];
+    const p = player();
+    saves.set('hardcore:Fast Plank', storedSave({ life: 1, password: 'hash' }));
+    saves.delete('main:Fast Plank');
+    p.setAttribute(Common.CHOICE_PENDING_ATTRIBUTE, true);
+    handlers.button[0]({ player: p, buttonId: (982 << 16) | button });
+    prompts.at(-1).pick(confirm);
+    assert.equal(p.loggedOut, true);
+    const again = player(); // the account is online again before the wait sees it gone
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual(calls, [], 'no offline edit while the account is online');
+    assert.equal(saves.get('hardcore:Fast Plank').life, 1, 'the Hardcore save is as the death left it');
+    again.loggedOut = true;
+    online.delete('Fast Plank');
+  }
+  Common.resetStoreCache();
+  assert.equal(Common.resetCount('Fast Plank'), 0, 'a Reset that did not happen is not counted');
 });
 
 test('a choice left unmade is asked again at the next login', () => {

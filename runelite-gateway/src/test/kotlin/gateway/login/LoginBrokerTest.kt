@@ -24,6 +24,7 @@ class LoginBrokerTest {
         val flags = LinkedBlockingQueue<Int>()
         private val held = ArrayList<Pair<ChannelHandlerContext, ByteArray>>()
         private var released = false
+        val forgets = LinkedBlockingQueue<Pair<String, String>>()
         val group = NioEventLoopGroup(1)
         val channel =
             ServerBootstrap()
@@ -48,7 +49,11 @@ class LoginBrokerTest {
                                             // LOGIN is var-short; the normal gateway sends it
                                             // without entering the world.
                                             val reader = TspsReader(bytes)
-                                            reader.u8()
+                                            if (reader.u8() == TspsClientPacket.LOGIN_FORGET) {
+                                                reader.u8()
+                                                forgets.add(reader.string() to reader.string())
+                                                return
+                                            }
                                             reader.u16()
                                             val name = reader.string()
                                             val secret = reader.string()
@@ -172,6 +177,21 @@ class LoginBrokerTest {
                 val ticket = String(Base64.getDecoder().decode(reply[3]))
                 broker.redeem(ticket, "Tester", "127.0.0.1")!!.close()
                 assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `forget account revokes the remembered token on tsps`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                assertEquals(listOf("OK"), request(port, "forget", "c".repeat(43)))
+                assertEquals("Tester" to "c".repeat(43), backend.forgets.poll(5, TimeUnit.SECONDS))
+                assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+                // Only a well-formed token is passed on.
+                assertEquals(listOf("ERROR", "8"), request(port, "forget", "short"))
+                assertNull(backend.forgets.poll(100, TimeUnit.MILLISECONDS))
             }
         }
     }

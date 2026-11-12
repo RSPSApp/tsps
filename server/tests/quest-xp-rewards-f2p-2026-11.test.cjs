@@ -28,7 +28,7 @@ const LAMPS = [
   { file: 'RomeoAndJuliet', key: 'romeo_and_juliet', lamp: 34754, count: 1, line: 'An antique lamp giving 500 XP' },
   { file: 'ShieldOfArrav', key: 'shield_of_arrav', lamp: 34755, count: 1, line: 'An antique lamp giving 500 XP' },
   { file: 'ErnestTheChicken', key: 'ernest_the_chicken', lamp: 34750, count: 1, line: 'An antique lamp giving 500 XP' },
-  { file: 'BlackKnightsFortress', key: 'black_knights_fortress', lamp: 34748, count: 2, line: '2 antique lamps giving 1,000 combat XP each' },
+  { file: 'BlackKnightsFortress', key: 'black_knights_fortress', lamp: 34748, count: 2, line: '2 Antique Lamps' }, // the rev 242 scroll (BlackKnightsFortress.bin tick 1113)
 ];
 
 before(async () => {

@@ -20,15 +20,21 @@ function freeHands(player) {
   const equipment = player.getEquipment();
   const slots = [core.Equipment.WEAPON_SLOT, core.Equipment.SHIELD_SLOT]
     .filter((slot) => equipment.getSlot(slot) > 0);
-  if (player.getInventory().getFreeSlots() < slots.length) {
-    player.sendMessage(`You need ${slots.length === 1 ? "one free inventory space" : "two free inventory spaces"} to take the standard.`);
+  // A worn stack (thrown weapons) that joins the same stack in the inventory needs no free slot.
+  const needed = slots.filter((slot) => !joinsInventoryStack(player, equipment.getItems()[slot])).length;
+  if (player.getInventory().getFreeSlots() < needed) {
+    player.sendMessage(`You need ${needed === 1 ? "one free inventory space" : "two free inventory spaces"} to take the standard.`);
     return false;
   }
-  for (const slot of slots) {
-    player.getInventory().addItem(equipment.getItems()[slot]);
-    equipment.setItem(slot, new core.Item(-1, 0));
-  }
-  return true;
+  // The normal unequip: its can-unequip hooks, the weapon reset (autocast, attack style, special bar) and the stack cap.
+  return slots.every((slot) => core.EquipPacketListener.unequip(player, slot));
+}
+
+function joinsInventoryStack(player, item) {
+  if (!item.getDefinition().isStackable()) return false;
+  const meta = JSON.stringify(item.getMeta() ?? null);
+  return player.getInventory().getItems()
+    .some((held) => held?.getId() === item.getId() && JSON.stringify(held.getMeta() ?? null) === meta);
 }
 
 function captureFlag(player, flagTeam) {

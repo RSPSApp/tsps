@@ -68,17 +68,32 @@ function attachHorn({ player }) {
   return true;
 }
 
+/** Preset, untradeable and unbankable copies (Presets.PvpMode tags them) are never ground into plain dust. */
+function restricted(item) {
+  const { Item } = Common.core;
+  return item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
 function grindShard({ player }) {
   const { ItemIdentifiers } = Common.core;
   const inventory = player.getInventory();
   if (!inventory.contains(ItemIdentifiers.NIHIL_SHARD)) return true;
+  const slot = inventory.getItems().findIndex((item) => item?.getId() === ItemIdentifiers.NIHIL_SHARD && item.getAmount() > 0 && !restricted(item));
+  if (slot < 0) {
+    // Herblore's own refusal (Common.Herblore PRESET_REFUSAL), which this handler runs before.
+    player.sendMessage("Preset items cannot be used for this.");
+    return true;
+  }
   // Shards stack, so taking one from a stack frees no slot: the dust needs room of its own, or it was lost.
-  const lastShard = inventory.getAmount(ItemIdentifiers.NIHIL_SHARD) === 1;
+  const lastShard = inventory.getItems()[slot].getAmount() === 1;
   if (!lastShard && inventory.getAddableAmount(new Common.core.Item(ItemIdentifiers.NIHIL_DUST, 1)) < 1) {
     player.sendMessage("You don't have enough inventory space.");
     return true;
   }
-  inventory.delete(ItemIdentifiers.NIHIL_SHARD, 1);
+  inventory.deleteAtSlot(slot, 1);
   inventory.adds(ItemIdentifiers.NIHIL_DUST, 1);
   player.performAnimation(Common.animation(GRIND_ANIM));
   player.sendMessage("You grind the nihil shard into dust.");

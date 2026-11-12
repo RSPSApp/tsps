@@ -29,10 +29,16 @@ does not move the player away from their normal respawn or logout position.
   object placements come from the same recording.
 - [RSProx 4045](https://rsprox.net/download/4045), revision 237, 9 April 2026: Edgeville
   construction, assistant Store-axe (including missing-axe refusal), Waka carving and travel
-  to Barbarian Village at 3109,3415. Confirms assistant and missing-tool messages.
+  to Barbarian Village at 3109,3415, sinking canoe at 3109,3411. Confirms assistant and
+  missing-tool messages.
+- Arrival feedback, every arrival in 1710, 1723, 3996, 4005 and 4045: the arrival line is a spam
+  chat message; sound 2731 plays with the push-in animation on the Float click and 2732 on
+  arrival with the sinking canoe, which is removed three ticks later. The shaping menu opens with
+  `toplevel_mainmodal_open` 3612928, 0; the travel maps with -1, -1.
 - [RSProx 1710](https://rsprox.net/download/1710), revision 227: Champions' Guild arrival
   3199,3344. [RSProx 1723](https://rsprox.net/download/1723), revision 227: Edgeville arrival
-  3128,3503. Decode errors later in these older recordings do not affect the canoe sections.
+  3128,3503. Their sinking canoes sit at 3197,3342 and 3127,3504; 1723 also shows another
+  player's log sinking at Lumbridge, 3239,3240 (all rotation 1). Decode errors later in these older recordings do not affect the canoe sections.
 - Current cache `osrs-241_2026-10-20`: `dump:loc` confirms every tree placement, `Gamevals`
   resolves all loc/varbit/animation/NPC identifiers, and `dump:widget 416`, `952`, `953` plus
   clientscripts 3093/3095/3103–3108/7886/7891 confirm native controls, level filtering and
@@ -56,7 +62,8 @@ checked inside the enclave boundary. Server build and 20 focused/adjacent tests 
 ## Limits
 
 Lumbridge, Ferox and pond arrivals are adjacent cache-bank tiles checked for collision,
-not recorded OSRS landing coordinates. Their sinking positions are likewise provisional.
+not recorded OSRS landing coordinates. Ferox and pond sinking positions are likewise
+provisional. Live shows a sinking canoe to nearby players too; here only the traveller sees it.
 The rowing scene uses the captured source map, camera, west-facing rowing animation, the
 `fov_clamp`/`draw_distance_max_override` variables, the river sound (2728, 16 loops) and the
 captured scenery: four NPCs stepping north through the map one tile a tick, the three that reach

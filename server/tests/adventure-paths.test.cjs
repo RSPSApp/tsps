@@ -368,6 +368,14 @@ test("canonical Jon conversation supplies a kit and recovers a lost unopened kit
     await choose(f, "Do you have any Adventure Path starter kits");
     await menu(f);
     assert.equal(f.p.getInventory().getAmount(id), 1);
+    // A bank placeholder of the kit is not a kit.
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.p.getInventory().deleteNumber(id, 1, false);
+    f.p.getBank(1).add(new core.Item(id, 0), false);
+    jon(f, 1);
+    await choose(f, "Do you have any Adventure Path starter kits");
+    await menu(f);
+    assert.equal(f.p.getInventory().getAmount(id), 1);
 });
 test("native opt-out and opt-in use the canonical confirmation choices and Jon transform", async (t) => {
     const f = actor(t);

@@ -2,6 +2,7 @@
  * Shared Taverley Dungeon key doors, Velrak's canonical dusty-key hand-out and the suits of
  * armour guarding the Cauldron of Thunder's prison door.
  */
+const { hasKey, ownsStoredKey } = require("../items/KeyAvailability");
 const DOORS = [
   { id: 'DOOR_99', key: 'JAIL_KEY', tile: [2931, 9690, 0], inside: [2931, 9689, 0], freeExit: true },
   { id: 'DOOR_99', key: 'JAIL_KEY', tile: [2931, 9694, 0], inside: [2931, 9695, 0], freeExit: true },
@@ -54,12 +55,13 @@ function doorAt(core, event) {
   return DOORS.find(door => event.objectId === core.ObjectIdentifiers[door.id] && at(location, door.tile));
 }
 
-function checkDoorKey(core, event) {
+function checkDoorKey(api, event) {
+  const core = api.core;
   if (event.handled) return;
   const door = doorAt(core, event);
   if (!door) return;
   if (door.freeExit && at(event.player.getLocation(), door.inside)) return;
-  if (event.player.getInventory().getAmount(core.ItemIdentifiers[door.key]) > 0) return;
+  if (hasKey(api, event.player, core.ItemIdentifiers[door.key])) return;
   event.player.sendMessage('The door is locked.');
   event.handled = true;
 }
@@ -77,21 +79,24 @@ function isVelrak(core, event) {
     && event.pages?.some(({ page }) => page === VELRAK_PAGE);
 }
 
-function answerVelrak(core, event) {
+function answerVelrak(api, event) {
+  const core = api.core;
   if (!isVelrak(core, event)) return null;
-  const held = event.player.getInventory().getAmount(core.ItemIdentifiers.DUSTY_KEY) > 0;
+  const held = event.player.getInventory().contains(core.ItemIdentifiers.DUSTY_KEY)
+    || ownsStoredKey(api, event.player, core.ItemIdentifiers.DUSTY_KEY);
   if (event.text === 'Without having a dusty key in the inventory:') return !held;
   if (event.text === 'With a dusty key in the inventory:') return held;
   return null;
 }
 
-function giveDustyKey(core, event) {
+function giveDustyKey(api, event) {
+  const core = api.core;
   if (event.kind !== 'message' || event.stepId !== DUSTY_KEY_RECEIPT || !isVelrak(core, event)) return;
   event.handled = true;
   const inventory = event.player.getInventory();
   const key = core.ItemIdentifiers.DUSTY_KEY;
   const before = inventory.getAmount(key);
-  if (before > 0) {
+  if (before > 0 || ownsStoredKey(api, event.player, key)) {
     event.end = true;
     return;
   }
@@ -204,11 +209,11 @@ module.exports = {
   description: 'Taverley Dungeon\'s key doors, Velrak\'s dusty key and the suits of armour that come alive at the Cauldron of Thunder prison door.',
   members: true,
   register(api) {
-    api.onCustomEvent('door:toggle', checkDoorKey.bind(null, api.core));
+    api.onCustomEvent('door:toggle', checkDoorKey.bind(null, api));
     api.onCustomEvent('door:toggle', wakeSuit.bind(null, api));
     api.onItemOnObject(useKey.bind(null, api), { noted: false });
-    api.onNpcDialogueCondition(answerVelrak.bind(null, api.core));
-    api.onCustomEvent('npc-dialogue:action', giveDustyKey.bind(null, api.core));
+    api.onNpcDialogueCondition(answerVelrak.bind(null, api));
+    api.onCustomEvent('npc-dialogue:action', giveDustyKey.bind(null, api));
   },
   _test: { awakeSuits },
 };

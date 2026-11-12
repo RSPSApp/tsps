@@ -1668,6 +1668,10 @@ test('Ketla reclaims a lost blackstone fragment, but not while one is banked', (
         const lost = someone();
         reclaimAt(lost);
         assert.equal(lost.getInventory().contains(Common.data.items.fragment), true, 'a lost one comes back');
+        const placeholder = someone();
+        placeholder.getBank(1).add(new core.Item(Common.data.items.fragment, 0), false);
+        reclaimAt(placeholder);
+        assert.equal(placeholder.getInventory().contains(Common.data.items.fragment), true, 'a bank placeholder owns nothing');
     } finally {
         Common.init({ core, emitCustomEvent() { }, removeNpc() { } });
     }

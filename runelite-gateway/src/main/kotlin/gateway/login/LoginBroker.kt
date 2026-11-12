@@ -159,7 +159,7 @@ class LoginBroker(
                 val data = exchange.requestBody.readNBytes(4097)
                 require(data.size <= 4096)
                 val fields = String(data, Charsets.UTF_8).trimEnd('\n', '\r').split('\n')
-                require(fields.size == 3 && fields[0] in listOf("password", "token"))
+                require(fields.size == 3 && fields[0] in listOf("password", "token", "forget"))
                 val username = String(Base64.getDecoder().decode(fields[1]), Charsets.UTF_8)
                 val secret = String(Base64.getDecoder().decode(fields[2]), Charsets.UTF_8)
                 require(
@@ -167,6 +167,7 @@ class LoginBroker(
                         secret.length in 1..64 &&
                         '\u0000' !in secret
                 )
+                require(fields[0] != "forget" || secret.matches(Regex("[A-Za-z0-9_-]{43}")))
                 val bridge = Bridge()
                 val loginResult = bridge.resultFuture()
                 val connection = TspsSocket.connect(tspsUrl, ip, bridge)
@@ -177,6 +178,13 @@ class LoginBroker(
                         connection.whenComplete { late, _ -> late?.close() }
                         throw error
                     }
+                if (fields[0] == "forget") {
+                    // Forget account: tsps drops this token from the account's save. It replies
+                    // nothing, so OK only means the request reached tsps.
+                    socket.send(TspsClientPacket.loginForget(username, secret))
+                    reply(exchange, 200, "OK\n")
+                    return@createContext
+                }
                 socket.send(
                     TspsClientPacket.login(
                         username,

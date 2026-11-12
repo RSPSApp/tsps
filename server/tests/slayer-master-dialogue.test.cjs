@@ -191,6 +191,24 @@ test("Konar: her area on asking, and her own closing line", async () => {
   } finally { h.close(); }
 });
 
+test("Aya's replacement of another master's task is followed by the same menu", async () => {
+  const h = harness(13619);
+  try {
+    const masters = [...require("../plugins/skills/slayer/Data.Slayer").get().masters.values()];
+    const named = (name) => masters.find((master) => master.names.includes(name));
+    const entry = named("Duradel").tasks.find((row) => !named("Aya").tasks.some((own) => own.task.id === row.task.id));
+    Tasks.assignPicked(h.player, named("Duradel"), entry, 0, 10);
+    await h.option("Assignment");
+    assert.ok((await h.toMenu()).includes("Yes, please."));
+    await h.choose("Yes, please.");
+    const options = await h.toMenu();
+    const task = Tasks.current(h.player);
+    assert.notEqual(task.taskId, entry.task.id, "a new task");
+    assert.equal(h.lines.at(-1), `Your new task is to kill ${task.count} ${task.task.displayName}.`);
+    assert.deepEqual(options, [MENU[0], MENU[2]]);
+  } finally { h.close(); }
+});
+
 test("Talk-to with a task held still gives the transcript's still-hunting line", async () => {
   const h = harness(DURADEL);
   try {

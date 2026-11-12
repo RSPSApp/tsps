@@ -151,7 +151,7 @@ function assignmentClick(event) {
     return;
   }
   if (assignmentTalk(event.player, master) && playAssignmentBranch(event)) return;
-  if (!Tasks.current(event.player) && playSteps(event.player, master, event.npc, event.definition.getId(), assignmentSteps(event.player, master, false))) return;
+  if (!Tasks.current(event.player) && playSteps(event.player, master, event.npc, event.definition.getId(), () => assignmentSteps(event.player, master, false))) return;
   say(event.player, event.definition, assignmentLine(event.player, master));
 }
 
@@ -203,15 +203,22 @@ function afterTaskMenu(player, master) {
 
 /**
  * Plays steps through the dialogue engine as this master's talk (menus and stage directions
- * work as in the transcripts); a null `steps` shows the offered choice of tasks instead.
+ * work as in the transcripts). `build` runs only once the talk can start; when it gives null,
+ * the offered choice of tasks shows instead.
  */
-function playSteps(player, master, npc, npcId, steps) {
-  if (!steps) {
+function playSteps(player, master, npc, npcId, build) {
+  let offered = false;
+  const select = () => {
+    const steps = build();
+    if (!steps) offered = true;
+    return steps;
+  };
+  const request = { player, npc, npcId, select, handled: false };
+  api.emitCustomEvent("npc-dialogue:start", request);
+  if (offered) {
     Offer.open(player, master, npcId);
     return true;
   }
-  const request = { player, npc, npcId, select: () => steps, handled: false };
-  api.emitCustomEvent("npc-dialogue:start", request);
   return request.handled === true;
 }
 
@@ -418,7 +425,7 @@ function action(request) {
     player.setAttribute(REPLACE_ATTRIBUTE, null);
     request.handled = true;
     const line = replaceTask(player, master);
-    if (line) request.steps = [{ npc: line }];
+    if (line) request.steps = Tasks.current(player) ? [{ npc: line }, afterTaskMenu(player, master)] : [{ npc: line }];
     else {
       request.end = true;
       offerLater(player, master, request.npcId ?? request.definition.getId());
@@ -539,7 +546,7 @@ function talkToAssignment(event, master) {
     { player: ASSIGNMENT_OPTION },
     { type: "action", action: "slayer_assignment", target: master.names[0], text: praises(master) ? PRAISE : "" },
   ];
-  if (!playSteps(player, master, event.npc, event.npcId ?? event.definition.getId(), steps)) return false;
+  if (!playSteps(player, master, event.npc, event.npcId ?? event.definition.getId(), () => steps)) return false;
   event.end = true;
   return true;
 }

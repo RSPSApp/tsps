@@ -210,13 +210,13 @@ function refreshQuestRequirements({ player }) {
  */
 
 
-function journalLines(quest, player) {
-  return typeof quest.buildJournal === "function" ? quest.buildJournal(player, quest) : [];
+function journalLines(quest, player, row) {
+  return typeof quest.buildJournal === "function" ? quest.buildJournal(player, quest, { row }) : [];
 }
 
 function openJournalById(player, id) {
   const quest = nativeQuestIndex(quests, coreApi?.CacheDefinitions).get(id);
-  if (quest) openJournal(player, quest);
+  if (quest) openJournal(player, quest, questRowById(id, coreApi?.CacheDefinitions));
 }
 
 /**
@@ -261,12 +261,12 @@ function questListAction({ player, slot, opId, action }) {
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
-    start = startSentence(row, journalLines(quest, view));
+    start = startSentence(row, journalLines(quest, view, row));
   }
   if (op === 1 && start) {
     openOverview(player, { name: row.displayname[0] }, row, start);
   } else if (quest) {
-    openJournal(player, quest);
+    openJournal(player, quest, row);
   } else if (start) {
     openOverview(player, { name: row.displayname[0] }, row, start);
   }
@@ -360,13 +360,12 @@ function showStartOnMap({ player, slot }) {
  * The quest list's "Read journal": the overview for a quest not started yet (as live OSRS opens
  * it), otherwise the journal (119) with the quest's progress lines.
  */
-function openJournal(player, quest) {
-  const lines = journalLines(quest, player);
-  const row = questMetadata(quest, coreApi?.CacheDefinitions);
+function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDefinitions)) {
+  const lines = journalLines(quest, player, row);
   if (row && !quest.isStarted(player)) {
     const start = startSentence(row, lines);
     if (start) {
-      openOverview(player, quest, row, start);
+      openOverview(player, { name: row.displayname?.[0] ?? quest.name }, row, start);
       return;
     }
   }
@@ -384,7 +383,7 @@ function openJournal(player, quest) {
   packet.sendInterfaceFlagsRange((JOURNAL_GROUP << 16) | JOURNAL_CLOSE_CHILD, -1, -1, 1 << 1);
   packet.sendInterfaceFlagsRange((JOURNAL_GROUP << 16) | JOURNAL_SWITCH_CHILD, -1, -1, 1 << 1);
   packet.sendInterfaceScript(SCRIPT_QJ_RESET, []);
-  setText((JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, `<col=7f0000>${quest.name}</col>`);
+  setText((JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, `<col=7f0000>${row?.displayname?.[0] ?? quest.name}</col>`);
   lines.forEach((line, index) => {
     setText((JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), journalText(line));
   });
@@ -730,7 +729,7 @@ function sendQuestVarps({ player }) {
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
- *               buildJournal?(player, quest), onReward?(player, quest),
+ *               buildJournal?(player, quest, { row }?), onReward?(player, quest),
  *               varpValue?(stage, player) }
  */
 function registerQuest(api, def) {

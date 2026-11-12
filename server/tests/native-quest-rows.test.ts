@@ -17,7 +17,7 @@ test("canonical cache identities select quests independently of registration or 
         assert.equal(rows.has(218), false, "native header children are not quests");
     }
 });
-test("RFD subrows share the combined journal unless registered separately", () => {
+test("RFD subrows resolve to the combined quest unless registered separately", () => {
     const rows = nativeQuestIndex([rfd], cache);
     assert.deepEqual([...rows.keys()].sort((a,b) => a-b), [106,171,172,173,174,175,176,177,178,179,180]);
     assert.ok([...rows.values()].every(quest => quest === rfd));
@@ -27,6 +27,7 @@ test("RFD subrows share the combined journal unless registered separately", () =
     assert.equal(distinct.get(175), rfd);
     assert.equal(nativeQuestIndex([], cache).size, 0);
 });
+
 
 test("native row ops use canonical journals, metadata map/wiki actions and the live event mask", () => {
     const buttons = new Map<number, Function>();
@@ -87,4 +88,43 @@ test("native row ops use canonical journals, metadata map/wiki actions and the l
     click({player, slot: 16, opId: 3});
     assert.equal(scripts[0][0], "map");
     assert.equal(scripts[1][1][1], require("../plugins/quests/QuestList.QuestRuntime").questRowById(16, cache).startcoord[0]);
+});
+
+test("journal callbacks retain their quest argument and receive the selected native row", () => {
+    const Q = require("../plugins/quests/QuestRuntime");
+    const { questRowById } = require("../plugins/quests/QuestList.QuestRuntime");
+    const calls: any[] = [], strings: any[] = [], configs = new Map<number, number>();
+    const api = new Proxy({ core: { CacheDefinitions: cache } }, { get: (target: any, key) => target[key] ?? (() => {}) });
+    const quest = Q.registerQuest(api, { ...rfd, varpId: 678,
+        buildJournal: (player: any, handle: any, context: any) => {
+            calls.push([player, handle, context?.row]);
+            return [`Row ${context?.row?.id?.[0] ?? "default"}`];
+        },
+    });
+    const sender: any = new Proxy({
+        sendString: (text: string, uid: number) => strings.push([text, uid]),
+        sendConfig: (id: number, value: number) => configs.set(id, value),
+    }, { get: (target, key) => target[key] ?? (() => sender) });
+    const player = { getAttribute: () => 1, getPacketSender: () => sender };
+    // The helper route and ordinary Read journal route must agree, including native metadata.
+    for (const open of [Q.openJournalById, Q.openQuestJournal]) {
+        for (const id of [171, 172, 174, 180]) {
+            strings.length = 0;
+            open(player, id);
+            const row = questRowById(id, cache);
+            assert.deepEqual(calls[calls.length - 1], [player, quest, row]);
+            assert.equal(configs.get(3679), row.rowId, "latest journal uses the DB row, not the quest id");
+            assert.equal(configs.get(4398), 1);
+            assert.ok(strings.some(([text, uid]) => uid === ((119 << 16) | 5) && text.includes(row.displayname[0])));
+            assert.ok(strings.some(([text, uid]) => uid === ((119 << 16) | 11) && text.includes(`Row ${id}`)));
+        }
+    }
+    Q.openJournal(player, quest);
+    assert.equal(calls[calls.length - 1][2], questRowById(106, cache), "direct calls default to the registered parent row");
+    Q.journalWidgets(quest, player);
+    assert.deepEqual(calls[calls.length - 1], [player, quest, undefined], "headless helper default remains available");
+    const count = calls.length;
+    Q.openQuestJournal(player, 65535);
+    Q.openJournalById(player, -1);
+    assert.equal(calls.length, count, "unknown rows do not invoke a registered journal");
 });

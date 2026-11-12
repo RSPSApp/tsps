@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic or Lumbridge Castle**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle or Wasteland**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -678,3 +678,43 @@ metadata, viewing, delayed return, both Forfeit footprints and prior-layout cont
 Coverage descriptions are source intent; observed outcomes and failure history belong
 to the PR evidence. Supplied setup, controlled RNG, native listener versus decoded
 packet boundaries, inert transport and unrendered client/session limits remain explicit.
+
+## Wasteland
+
+Wasteland (arena 0, native slot 0) uses the existing melee Last Team Standing,
+First to X and timed modes, restrictions, Ignore 5 and safe deaths. Explicit
+selection of zero is valid; a fresh negotiation still defaults to Plateau (1).
+The pinned Clan Wars Wiki revision 15379109 has conflicting wording: its arena
+row says single combat near portals, while its dated 26 June 2014 Changes entry
+says the whole map is multi-way and trees were added. Update:Midsummer_Event
+revision 14354395 corroborates the dated change. This implementation follows
+that whole-map multi intent using the existing shared area policy; it adds no
+single-combat zones or new combat rules.
+
+The bounded TSPS copy maps source regions 13134/13135 from (3264,4992), 8 by 16
+chunks, source planes 0/1. Source 2/3 are unmapped, not a retail allowed-floor
+policy. Returned ground collision has one 5,193-tile main component and two
+separate 54-tile jail components, all strictly inside the acquired rectangle.
+That supports this finite copy, not a retail arena extent. Landings (3296,5010)
+and (3296,5100), and jails (3317,5053)/(3317,5058), are TSPS choices.
+The preparation row at Y5055 covers X3268..3315, skipping blocked X3268.
+Its 47 temporary darkrock walls must preserve the source wall flags at the
+jail-side endpoint and restore all native clips when removed.
+
+Actual cache-backed active orbs use the existing darkrock model 9752. Jail Exit
+portals and the distinct south/north Forfeit portals retain their owned native
+identities and full rotated footprints. The 134 returned named Tree objects
+have no cache actions; their names and the update's mention of trees do not
+establish choppable resources. Their source collision and scenery are retained.
+No action injection, manual private-tree registration, resource disabling or
+Woodcutting change is introduced. Tree/Mushroom obstacle examples distinguish
+walking from projectile rays; this does not establish ranged-combat parity.
+
+Existing native and Rules fixtures will cover deliberate slot-zero offers and
+reset/reselection, both jail/orb/Exit paths, both Forfeit footprints, complete
+barrier restoration and causal movement, native walk/ray distinctions, truthful
+unavailable resource actions with a separate canonical actionful-tree control,
+instance reuse, modes, restrictions and melee multi controls. This paragraph
+states intended coverage until actual runtime evidence accompanies the PR.
+Supplied checkpoints and handler inputs do not prove natural traversal, login,
+client rendering, retail timing or the remaining content in issue #153.

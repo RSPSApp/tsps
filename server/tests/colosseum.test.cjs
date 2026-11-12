@@ -1107,6 +1107,48 @@ test('reward clicks reject stale items and leave what does not fit in the chest'
   run.end('left');
 });
 
+test('a full bank or inventory gives one refusal line and the chest keeps its rewards (rsprox 1193, 1194)', () => {
+  const { player, run } = runWith({}, 'Refusals');
+  run.completeWave();
+  run.finish();
+  run.loot.rewards.push({ id: 1201, amount: 4 });
+  Rewards.openChest({ player });
+  let space = 0;
+  const received = [];
+  player.getInventory = () => ({ getAddableAmount: (item) => Math.min(space, item.getAmount()), add: (item) => received.push([item.getId(), item.getAmount()]), refreshItems() {} });
+  let bankSpace = 0;
+  const banked = [];
+  player.getBank = () => ({ contains: () => bankSpace > 0, getFreeSlots: () => bankSpace, getAddableAmount: (item) => (bankSpace > 0 ? item.getAmount() : 0), add: (item) => banked.push([item.getId(), item.getAmount()]) });
+  const handler = (child) => hooks.buttons.find((entry) => entry.ids.includes((864 << 16) | child)).handler;
+  const value = () => player.texts[(246 << 16) | 3];
+  const before = value();
+  const lines = () => player.messages.splice(0);
+  lines();
+
+  handler(15)({ player, opId: 6 });
+  assert.deepEqual(lines(), ['Your bank cannot hold your items.'], 'one line for the whole chest');
+  assert.deepEqual(run.loot.rewards, [{ id: 28924, amount: 80 }, { id: 1201, amount: 4 }]);
+  assert.equal(value(), before, 'the value line is resent');
+
+  handler(14)({ player, opId: 1 });
+  assert.deepEqual(lines(), ["You don't have enough space to take anything."]);
+  assert.deepEqual(received, []);
+
+  handler(17)({ player, buttonId: (864 << 16) | 17, slot: 0, itemId: 28924, opId: 1 });
+  assert.deepEqual(lines(), ["You don't have enough inventory space to take any."]);
+  assert.equal(run.loot.rewards[0].amount, 80);
+
+  bankSpace = 1;
+  handler(15)({ player, opId: 6 });
+  assert.deepEqual(lines(), []);
+  assert.deepEqual(banked, [[28924, 80], [1201, 4]]);
+  assert.deepEqual(run.loot.rewards, []);
+  handler(15)({ player, opId: 6 });
+  assert.deepEqual(lines(), ['You have nothing to deposit.']);
+  assert.ok(player.scripts.at(-1)[0] === 4929 && player.scripts.at(-1)[1] === 0n, 'the empty value is resent');
+  run.end('left');
+});
+
 test('discarding the rewards asks for confirmation and cancellation reopens the chest (rsprox 4117)', () => {
   const { player, run } = runWith({}, 'Discard');
   run.completeWave();

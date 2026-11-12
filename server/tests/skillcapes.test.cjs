@@ -339,7 +339,7 @@ test("the Magic cape menu leaves out the current spellbook and counts what is le
   assert.deepEqual(prompts[0].options, ["Ancient", "Lunar", "Arceuus", "Cancel"]);
 });
 
-// rsprox 232/03139 (normal world): after the fifth change of the day the max cape's Spellbook
+// After the fifth change of the day the max cape's Spellbook
 // option opens the message box, not the menu; its Check sub-option still gives the 5/5 line.
 test("with five changes used, the Spellbook option (max or Magic cape) shows the limit box, no menu", (t) => {
   const boxes = [];
@@ -363,7 +363,7 @@ test("with five changes used, the Spellbook option (max or Magic cape) shows the
   assert.deepEqual(p.messages, ["<col=ef1020>You have changed your spellbook 5/5 times today.</col>"]);
 });
 
-// rsprox 235/03448 (normal world): a player without every 99 picking a Teleports entry gets the box.
+// A player without every 99 picking a Teleports entry gets the box.
 test("the max cape's Teleports need every skill at 99", (t) => {
   const boxes = [];
   t.mock.method(Capes, "messageBox", (_player, text) => boxes.push(text));

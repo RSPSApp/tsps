@@ -13,12 +13,17 @@
  */
 const Common = require("./Common.Quetzals");
 const Whistle = require("./Whistle.Quetzals");
+const Rumours = require("../../skills/hunter/Rumours.Hunter");
 
 const PITRI = "Soar Leader Pitri";
 const RECHARGE_VARIANT = "standard-dialogue-choosing-the-recharge-whistle-option";
 const BLUEPRINT_TARGET = "a Basic quetzal whistle blueprint";
 const BASIC_BLUEPRINT = "hg_whistle_blueprint_1";
 const BLUEPRINT_CLAIMED_ATTRIBUTE = "quetzals:free-blueprint-claimed";
+const PERFECTED_WHISTLES = ["hg_quetzalwhistle_perfected", "hg_quetzalwhistle_perfected_infinite"];
+const PERFECTED_BLUEPRINT = "hg_whistle_blueprint_3";
+/** The transcript's hand-over line in "I've lost my perfected whistle": the whistle comes back empty. */
+const LOST_WHISTLE_LINE = "Here you go! I'm afraid it has no charges left, though.";
 
 function meats() {
   return Object.entries(Common.data.meatCharges).map(([name, charges]) => ({ id: Common.obj(name), charges }));
@@ -79,12 +84,44 @@ function freeBlueprintDue(player) {
   return rumoursCompleted(player) >= Common.data.freeBlueprintRumours && player.getAttribute(BLUEPRINT_CLAIMED_ATTRIBUTE) !== true;
 }
 
+/** Whether the player holds the item anywhere: carried, worn or banked. */
+function owns(player, id) {
+  return player.getInventory().contains(id) || Boolean(player.getEquipment?.()?.contains?.(id))
+    || (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(id));
+}
+
+/**
+ * "If the player lost their perfected whistle:": they unlocked it (the perfected blueprint came from a
+ * rumour's loot sack) and hold neither the whistle nor the unused blueprint anywhere.
+ */
+function lostPerfectedWhistle(player) {
+  if (Rumours.state(player).perfected !== true) return false;
+  return ![...PERFECTED_WHISTLES, PERFECTED_BLUEPRINT].some((name) => owns(player, Common.obj(name)));
+}
+
+/** Pitri hands a lost perfected whistle back, with no charges (his transcript's line). */
+function returnLostWhistle(event) {
+  if (event.definition?.getName?.() !== PITRI || event.text !== LOST_WHISTLE_LINE) return;
+  const { player } = event;
+  event.after = () => {
+    if (!lostPerfectedWhistle(player)) return;
+    const id = Common.obj(PERFECTED_WHISTLES[0]);
+    if (player.getInventory().getAddableAmount(new Common.core.Item(id, 1)) < 1) {
+      player.getInventory().full();
+      return;
+    }
+    player.getInventory().add(new Common.core.Item(id, 1), true);
+    Whistle.setCharges(player, Whistle.whistleOf(id), 0);
+  };
+}
+
 /** Pitri's prose conditions, by what the player carries and has done. */
 function answer({ player, definition, text }) {
   if (definition?.getName?.() !== PITRI) return null;
   const value = String(text).toLowerCase();
   const whistle = chargeableWhistle(player);
   if (value.includes("free whistle blueprint")) return freeBlueprintDue(player);
+  if (value.includes("lost their perfected whistle")) return lostPerfectedWhistle(player);
   if (value.includes("not completed 10 rumours")) return rumoursCompleted(player) < Common.data.freeBlueprintRumours;
   if (value.includes("completed 10 rumours")) return rumoursCompleted(player) >= Common.data.freeBlueprintRumours;
   if (value.includes("does not have a whistle")) return !hasWhistle(player);
@@ -118,7 +155,8 @@ function roomFor(inventory, blueprint, free) {
  * free claim and the payment only stand once the blueprint is in the inventory.
  */
 function giveBlueprint(event) {
-  if (event.action !== "receive" || event.target !== BLUEPRINT_TARGET) return;
+  // The transcript's receive steps carry their wording in `text` (there is no `target`).
+  if (event.action !== "receive" || (event.target ?? event.text) !== BLUEPRINT_TARGET) return;
   if (event.definition?.getName?.() !== PITRI) return;
   event.handled = true;
   const { player } = event;
@@ -159,6 +197,7 @@ function attach(api) {
   api.onNpcInteraction(PITRI, { "Recharge-whistle": rechargeWhistle });
   api.onNpcDialogueCondition(answer);
   api.onCustomEvent("npc-dialogue:action", giveBlueprint);
+  api.onCustomEvent("npc-dialogue:line", returnLostWhistle);
 }
 
-module.exports = { attach, answer, recharge, giveBlueprint, rechargeWhistle, BLUEPRINT_CLAIMED_ATTRIBUTE };
+module.exports = { attach, answer, recharge, giveBlueprint, rechargeWhistle, returnLostWhistle, lostPerfectedWhistle, BLUEPRINT_CLAIMED_ATTRIBUTE };

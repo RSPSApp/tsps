@@ -45,8 +45,19 @@ const HELM_LOCKED_IN = 3;
 const HELM_STATUS_CREW = 3;
 /** While navigating, the helm and the helmsman replay their loop every 10 ticks (rsprox). */
 const HELM_LOOP_TICKS = 10;
-const SOUND_SAIL_RAISE = 10831;
-const SOUND_SAIL_LOWER = 10833;
+/**
+ * Each sail step has its own sound: from rest, setting the sails (half) and raising them straight
+ * to full; raising and lowering the speed; un-setting them from half and from full. Reversing,
+ * and stopping a reversing boat, are silent. Ours: button 0's Set sails, straight to full from
+ * rest, takes the raise-to-full sound of the sail cloth's Set and of a heading's first full sail;
+ * the cloth's Un-set and button 0 from half sail take the panel's un-set-from-half sound.
+ */
+const SOUND_SAILS_SET = 10832;
+const SOUND_SAILS_SET_FULL = 11089;
+const SOUND_SPEED_RAISE = 10836;
+const SOUND_SPEED_LOWER = 10834;
+const SOUND_SAILS_UNSET_HALF = 10835;
+const SOUND_SAILS_UNSET_FULL = 10833;
 /** All Settings 461 "Stop the boat when leaving the helm": ticked while 0. */
 const VARBIT_STOP_WHEN_LEAVING_HELM_DISABLED = 18135;
 /** All Settings 462 `sailing_start_boat_when_setting_heading`: First time only, Always, Never. */
@@ -108,8 +119,18 @@ function sailState(moveMode) {
   return "down";
 }
 
-/** Sets the sails for whoever steers; `raiseSound` replaces the raise sound (a crewmate's, rsprox 11089). */
-function setSailMode(player, boat, mode, { raiseSound = SOUND_SAIL_RAISE } = {}) {
+/** The sound of a sail step from one move mode to another, or undefined for a silent one. */
+function sailSound(from, to) {
+  if (from === to) return undefined;
+  if (to === MOVE_MODE.FULL) return from === MOVE_MODE.HALF ? SOUND_SPEED_RAISE : SOUND_SAILS_SET_FULL;
+  if (to === MOVE_MODE.HALF) return from === MOVE_MODE.FULL ? SOUND_SPEED_LOWER : SOUND_SAILS_SET;
+  if (to === MOVE_MODE.STOPPED && from === MOVE_MODE.FULL) return SOUND_SAILS_UNSET_FULL;
+  if (to === MOVE_MODE.STOPPED && from === MOVE_MODE.HALF) return SOUND_SAILS_UNSET_HALF;
+  return undefined;
+}
+
+/** Sets the sails for whoever steers (the helmsman, or the captain while a crewmate holds the helm). */
+function setSailMode(player, boat, mode) {
   const previous = getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE);
   boat.moveMode = SAIL_MODES[mode].boat;
   setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, SAIL_MODES[mode].varbit);
@@ -117,11 +138,8 @@ function setSailMode(player, boat, mode, { raiseSound = SOUND_SAIL_RAISE } = {})
   if (mode === "full" || mode === "half") windFor(boat);
   setSailClothOps(player, boat, mode !== "stop", canTrim(boat));
   animateSails(player, boat, sailState(previous), sailState(SAIL_MODES[mode].varbit));
-  if (mode === "full" || mode === "half") {
-    playSound(player, raiseSound);
-  } else if (mode === "stop") {
-    playSound(player, SOUND_SAIL_LOWER);
-  }
+  const sound = sailSound(previous, SAIL_MODES[mode].varbit);
+  if (sound !== undefined) playSound(player, sound);
   pluginApi?.emitCustomEvent("sailing:sail-mode-changed", { player, boat, mode });
 }
 
@@ -503,6 +521,8 @@ function clickSailButton(event) {
     setSailMode(player, boat, mode);
   } else if (event.slot === 2 && moveMode === MOVE_MODE.FULL) {
     player.sendMessage("The boat is already going as fast as it can.");
+  } else if (event.slot === 1 && moveMode === MOVE_MODE.REVERSE) {
+    player.sendMessage("The boat is already reversing.");
   }
 }
 
@@ -575,6 +595,7 @@ function raiseSailForHeading(player, boat) {
 
 module.exports = {
   sailButtonTransition,
+  sailSound,
   sailState,
   setSailMode,
   playHelm,

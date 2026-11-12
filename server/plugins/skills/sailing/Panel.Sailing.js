@@ -25,7 +25,8 @@ const { repairKitUses } = require("./Cargo.Sailing");
 const { specFor, boatStatsForRow } = require("./BoatParts.Sailing");
 const { hotspotLocs } = require("./BoatFacilities.Sailing");
 const { describeBoat, boatVarps, describeSuppliedBoat, suppliedBoatVarps,
-  openSidepanel, clearBoatVarps, DESCRIPTION_VARBITS } = require("./Sidepanel.Sailing");
+  openSidepanel, clearBoatVarps, clickTab, DESCRIPTION_VARBITS, VARBIT_SIDEPANEL_TABS,
+  SIDEPANEL_TAB } = require("./Sidepanel.Sailing");
 const StaticShips = require("./StaticShips.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
@@ -168,6 +169,7 @@ function onGuestBoarded({ player, boat, owned }) {
     execute() {
       this.stop();
       if (Sailing.guestBoat(player) !== boat) return;
+      setVarbit(player, VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB.FACILITIES);
       applyBoarded(player, owned, playersAboard(boat));
       updateHeadCount(boat);
     }
@@ -187,6 +189,8 @@ function onBoarded({ player, boat, owned }) {
     constructor() { super(1, player); }
     execute() {
       if (player.getArea()?.boat !== boat) return this.stop();
+      // Boarding shows the facilities tab.
+      setVarbit(player, VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB.FACILITIES);
       applyBoarded(player, owned);
       // Boarding shows the sails at rest, on the mast and the sail cloth (rsprox).
       animateSails(player, boat, "down", "down", { settle: false });
@@ -366,5 +370,6 @@ module.exports = {
     api.onCustomEvent("quest:stage-changed", pandemoniumStageChanged);
     Sailing.setSpecResolver(builtSpec);
     api.onInterfaceActionClick(switchCombatTab);
+    api.onInterfaceActionClick(clickTab);
   },
 };

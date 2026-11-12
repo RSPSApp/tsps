@@ -1771,8 +1771,10 @@ test("the combat tab's View button shows the sailing sidepanel aboard, and Comba
   Sailing.board(player, "the_pandemonium");
   click(593, 48);
   assert.deepEqual(mounted, [[161, 76, 937]]);
-  assert.deepEqual(events, [[937, 1, 0, 12, 2], [937, 25, 0, 16, 30], [937, 20, 0, 16, 2], [937, 29, 0, 11, 2], [937, 38, 0, 3, 2]],
-    "View Combat Options, the raft's facility buttons, the crew picker, its Back button and the crew tab's radio buttons get OSRS's event ranges");
+  assert.deepEqual(events, [[937, 1, 0, 12, 2], [937, 25, 0, 16, 30], [937, 26, 0, 16, 4096], [937, 20, 0, 16, 2], [937, 29, 0, 11, 2],
+    [937, 10, 0, 1, 16384], [937, 38, 0, 3, 2]],
+    "View Combat Options, the raft's facility buttons and their NPC target layer, the crew picker, its Back button, the crew "
+    + "list's player target layer and the crew tab's radio buttons get OSRS's event ranges, in live's order");
 
   const assign = WeaponInterfaceManager.assign;
   let restored = 0;
@@ -2372,6 +2374,11 @@ function shipyardHarness() {
   const openSchematics = () => shipyard.objects["Boat schematics"].Modify({ player });
   return { Skill, shipyard, player, levels, xp, statements, varbits, varps, chatboxes, flags, scripts, buildRow, openSchematics, boat: () => player.getSailing().boats[0] };
 }
+
+test("a shipyard visit shows the boat's stats tab (rsprox)", () => {
+  const h = shipyardHarness();
+  assert.equal(h.varbits.get(19152), 1);
+});
 
 test("the schematics' options carry op 1 and script triggers, as captured, so the official client sends Build", () => {
   const h = shipyardHarness();
@@ -3234,6 +3241,121 @@ test("sails play live's sequence on the mast and the sail cloth (rsprox: a skiff
     assert.equal(sailButtonTransition(2, MOVE_MODE.FULL), undefined, "already as fast as it can");
   } finally {
     BoatManager.getSpec = getSpec;
+    clearTasks();
+  }
+});
+
+test("each sail step plays its own sound; reversing and stopping a reversal are silent (rsprox, rev 235-238)", () => {
+  const { sailSound } = require("../plugins/skills/sailing/Helm.Sailing");
+  const { MOVE_MODE: M } = require("../plugins/skills/sailing/SailingContent.Sailing");
+  const steps = [
+    [M.STOPPED, M.HALF, 10832], [M.MOORED, M.HALF, 10832], // Set sails
+    [M.STOPPED, M.FULL, 11089], [M.MOORED, M.FULL, 11089], // straight to full: the cloth's Set, a heading's start
+    [M.HALF, M.FULL, 10836], [M.FULL, M.HALF, 10834], // Raise speed, Lower speed
+    [M.HALF, M.STOPPED, 10835], [M.FULL, M.STOPPED, 10833], // Un-set sails
+    [M.STOPPED, M.REVERSE, undefined], [M.MOORED, M.REVERSE, undefined], [M.REVERSE, M.STOPPED, undefined],
+    [M.FULL, M.FULL, undefined], [M.STOPPED, M.STOPPED, undefined],
+  ];
+  for (const [from, to, sound] of steps) assert.equal(sailSound(from, to), sound, `${from} -> ${to}`);
+});
+
+test("the side panel's sail buttons and the sail cloth play live's sound per step and refuse a second reverse (rsprox)", () => {
+  clearTasks();
+  const helm = registerPlugin("Helm.Sailing");
+  const [clickSailButton] = helm.interfaceClicks;
+  const player = sailor();
+  const varbits = new Map();
+  const sounds = [];
+  const sender = new Proxy({}, {
+    get: (_t, key, proxy) => (...args) => {
+      if (key === "getVarbit") return varbits.get(args[0]) ?? 0;
+      if (key === "sendVarbit") varbits.set(args[0], args[1]);
+      if (key === "sendSoundEffect") sounds.push(args[0]);
+      return proxy;
+    },
+  });
+  player.getPacketSender = () => sender;
+  player.getLocalPlayers = () => [];
+  player.performAnimation = () => {};
+  player.setPositionToFace = () => player;
+  Sailing.giveBoat(player, "raft", DOCK.id);
+  Sailing.board(player, DOCK.id);
+  const SAIL_SOUNDS = [10832, 10833, 10834, 10835, 10836, 11089];
+  const MOVE_MODE = 19175;
+  const step = (slot) => {
+    sounds.length = 0;
+    player.messages.length = 0;
+    const event = { player, groupId: 937, childId: 25, slot, handled: false };
+    clickSailButton(event);
+    assert.equal(event.handled, true);
+    return [varbits.get(MOVE_MODE), sounds.filter((id) => SAIL_SOUNDS.includes(id)), player.messages.splice(0)];
+  };
+  try {
+    helm.objects.Helm.Navigate({ player });
+    assert.equal(varbits.get(MOVE_MODE), 4, "moored at the helm");
+    assert.deepEqual(step(2), [1, [10832], []], "Set sails: half");
+    assert.deepEqual(step(2), [2, [10836], []], "Raise speed: full");
+    assert.deepEqual(step(2), [2, [], ["The boat is already going as fast as it can."]]);
+    assert.deepEqual(step(1), [1, [10834], []], "Lower speed");
+    assert.deepEqual(step(1), [0, [10835], []], "Un-set sails from half");
+    assert.deepEqual(step(1), [3, [], []], "Reverse, silently");
+    assert.deepEqual(step(1), [3, [], ["The boat is already reversing."]]);
+    assert.deepEqual(step(2), [0, [], []], "Stop boat, silently");
+    assert.deepEqual(step(0), [2, [11089], []], "button 0's Set sails, to full");
+    assert.deepEqual(step(0), [0, [10833], []], "Un-set sails from full");
+    sounds.length = 0;
+    helm.objects.Sails.Set({ player });
+    assert.deepEqual([varbits.get(MOVE_MODE), sounds.filter((id) => SAIL_SOUNDS.includes(id))], [2, [11089]], "the sail cloth's Set");
+    sounds.length = 0;
+    helm.objects.Sails["Un-set"]({ player });
+    assert.deepEqual([varbits.get(MOVE_MODE), sounds.filter((id) => SAIL_SOUNDS.includes(id))], [0, [10833]], "the sail cloth's Un-set");
+  } finally {
+    const boat = Sailing.instanceAboard(player);
+    if (boat) boat.helmPlayerId = undefined;
+    Sailing.disembark(player, DOCK.id);
+    clearTasks();
+  }
+});
+
+test("the side panel's tab buttons show their tab; boarding shows the facilities (rsprox)", () => {
+  clearTasks();
+  const panel = registerPlugin("Panel.Sailing");
+  const player = sailor();
+  const varbits = new Map();
+  const sender = new Proxy({}, {
+    get: (_t, key, proxy) => (...args) => {
+      if (key === "getVarbit") return varbits.get(args[0]) ?? 0;
+      if (key === "sendVarbit") varbits.set(args[0], args[1]);
+      return proxy;
+    },
+  });
+  player.getPacketSender = () => sender;
+  player.getLocalPlayers = () => [];
+  player.performAnimation = () => {};
+  const TABS = 19152;
+  const click = (childId) => {
+    const event = { player, groupId: 937, childId, handled: false };
+    panel.interfaceClicks.forEach((handler) => handler(event));
+    return event.handled;
+  };
+  assert.equal(click(34), true);
+  assert.equal(varbits.get(TABS), 1, "Stats");
+  click(35);
+  assert.equal(varbits.get(TABS), 2, "Crew");
+  click(33);
+  assert.equal(varbits.get(TABS), 0, "Facilities");
+  assert.equal(click(36), false, "other components are left alone");
+  click(35);
+  const owned = Sailing.giveBoat(player, "raft", DOCK.id);
+  Sailing.board(player, DOCK.id);
+  try {
+    const boat = Sailing.instanceAboard(player);
+    player.getArea = () => ({ boat });
+    panel.events["sailing:boarded"]({ player, boat, owned });
+    TaskManager.process();
+    assert.equal(varbits.get(TABS), 0, "boarding shows the facilities tab");
+  } finally {
+    Sailing.disembark(player, DOCK.id);
     clearTasks();
   }
 });

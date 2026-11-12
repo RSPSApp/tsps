@@ -1,6 +1,7 @@
 {
-  "_comment": "Each servant's own lines: [text, chathead] or a list of them. {sir}/{Sir} become madam/Madam and {he} becomes she for a female player. A situation a servant has no line for is left out: the flow goes on without one. `_wiki` names the situations whose words come from the Wiki transcript (their chatheads are ours); everything else is as live sends it.",
+  "_comment": "Each servant's own lines: [text, chathead] or a list of them. {sir}/{Sir} become madam/Madam and {he} becomes she for a female player. A situation a servant has no line for is left out: the flow goes on without one. `_wiki` names the situations (under `player` and `messages`, the lines) whose words come from the Wiki transcripts (their chatheads are ours); everything else is as live sends it.",
   "player": {
+    "_wiki": ["cannotPay"],
     "whatCanYouDo": ["What can you do?", "chatquiz1"],
     "previousJobs": ["Tell me about your previous jobs.", "chatneu1"],
     "hired": ["You're hired!", "chathap1"],
@@ -162,7 +163,7 @@
     "_wiki": ["previousJobs", "levelTooLow", "cannotPay", "paid"],
     "greeting": ["<col=000080>Greetings! I am Alathazdrar, butler to the Demon <col=000080>Lords, and I offer thee my services for a mere 10000 <col=000080>coins!", "chathap3"],
     "whatCanYouDo": [
-      ["<col=000080>I have learned my trade under the leash of some of the <col=000080>harshest masters of the Demon Dimensions. I can cook <col=000080>to satisfy the most infernal stomachs, and fly on wings of flame to deposit thine items in the bank or bring", "chathap4"],
+      ["<col=000080>I have learned my trade under the leash of some of the <col=000080>harshest masters of the Demon Dimensions. I can cook <col=000080>to satisfy the most infernal stomachs, and fly on wings <col=000080>of flame to deposit thine items in the bank or bring", "chathap4"],
       ["<col=000080>planks from the sawmill in seconds.", "chathap1"]
     ],
     "previousJobs": [
@@ -224,6 +225,7 @@
     "_wiki": ["noHouse", "noBedrooms", "playerThanks"]
   },
   "messages": {
+    "_wiki": ["alreadyHired"],
     "alreadyHired": "You already have a servant.",
     "noBedroom": "You need a second bedroom with a bed for your servant to sleep in.",
     "kitchen": "Your kitchen must contain:<br><col=800000>A larder<br><col=800000>A stove<br><col=800000>A sink<br><col=800000>Kitchen shelves",

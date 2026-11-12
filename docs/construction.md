@@ -408,14 +408,19 @@ the NPC (`poh_servant_dogsbody` Rick, `_waiter_woman` Maid, `_cook_woman` Cook,
 no line for is left out and the flow goes on without it; the file's `_wiki` lists name the
 lines that come from the Wiki transcripts rather than captures.
 
-From rsprox recordings 303-311 and 2930-2947 (all revision 230):
+From rsprox recordings 303-311 and 2930-2947 (all revision 230), except where a line says
+Wiki:
 
 - Guild: greeting, then "What can you do?" / "Tell me about your previous jobs" / "You're
-  hired!". The level refusal is the servant's line; an existing servant and a missing second
-  bedroom are message boxes; no coins is the player's "can I owe you?" line (with a money bag
-  built: "...you should find some in a bag in the bedroom") and the servant's refusal. The
-  Chief servant's first option is "Tell me about servants." or, with a servant,
-  "I'd like to dismiss my servant, please.".
+  hired!". The level refusal is the servant's line (Wiki). A missing second bedroom is a
+  message box; so is "You already have a servant." (Wiki, a `tbox` like the bedroom line). With
+  no coins and a money bag built, the player says "...you should find some in a bag in the
+  bedroom. How's that?" and the servant refuses; without a bag the player's line is the Wiki's
+  "...can I owe you? I'm good for it, honest.". The Chief servant's first option is "Tell me
+  about servants." or, with a servant, "I'd like to dismiss my servant, please.".
+- While tea or drinks are being made the servant works in the kitchen (recording 2931): no
+  second order or errand is taken. Ours: Talk-to does nothing then, and a call says "The
+  servant is not back yet.". Dinner frees the servant once it is on the table.
 - `poh_servant_pay` is 16 on hire; an errand takes 2, tea 1, dinner 2, sending held items
   back 1, drinks nothing. Tea is charged before the kitchen check (Rick still says he can't
   work without the equipment); dinner checks the dining table first. At 0 the servant asks

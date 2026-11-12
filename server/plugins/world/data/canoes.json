@@ -1,9 +1,9 @@
 {
   "stations": [
-    { "id": 1, "name": "Lumbridge", "river": 0, "loc": "canoeing_canoestation_lumbridge", "state": "canoestation_state_lumbridge", "tree": [3241, 3235], "landing": [3240, 3242], "sink": [3242, 3241, 1] },
-    { "id": 2, "name": "the Champions' Guild", "river": 0, "loc": "canoeing_canoestation_championsguild", "state": "canoestation_state_championsguild", "tree": [3200, 3341], "landing": [3199, 3344], "sink": [3200, 3342, 2] },
-    { "id": 3, "name": "the Barbarian Village", "river": 0, "loc": "canoeing_canoestation_barbarianvillage", "state": "canoestation_state_barbarianvillage", "tree": [3110, 3409], "landing": [3109, 3415], "sink": [3111, 3414, 1] },
-    { "id": 4, "name": "Edgeville", "river": 0, "loc": "canoeing_canoestation_edgeville", "state": "canoestation_state_edgeville", "tree": [3130, 3508], "landing": [3128, 3503], "sink": [3130, 3503, 1] },
+    { "id": 1, "name": "Lumbridge", "river": 0, "loc": "canoeing_canoestation_lumbridge", "state": "canoestation_state_lumbridge", "tree": [3241, 3235], "landing": [3240, 3242], "sink": [3239, 3240, 1] },
+    { "id": 2, "name": "the Champions' Guild", "river": 0, "loc": "canoeing_canoestation_championsguild", "state": "canoestation_state_championsguild", "tree": [3200, 3341], "landing": [3199, 3344], "sink": [3197, 3342, 1] },
+    { "id": 3, "name": "the Barbarian Village", "river": 0, "loc": "canoeing_canoestation_barbarianvillage", "state": "canoestation_state_barbarianvillage", "tree": [3110, 3409], "landing": [3109, 3415], "sink": [3109, 3411, 1] },
+    { "id": 4, "name": "Edgeville", "river": 0, "loc": "canoeing_canoestation_edgeville", "state": "canoestation_state_edgeville", "tree": [3130, 3508], "landing": [3128, 3503], "sink": [3127, 3504, 1] },
     { "id": 5, "name": "Ferox Enclave", "river": 0, "loc": "canoeing_canoestation_sanctuary", "state": "canoestation_state_sanctuary", "tree": [3155, 3628], "landing": [3154, 3634], "sink": [3155, 3633, 2] },
     { "id": 0, "name": "the Wilderness", "river": 0, "landing": [3133, 3796], "sink": [3135, 3796, 1] },
     { "id": 6, "name": "Castle Wars", "river": 1, "loc": "canoeing_canoestation_castle_wars", "state": "canoestation_state_castle_wars", "tree": [2437, 3133], "landing": [2436, 3134], "sink": [2439, 3131, 2] },

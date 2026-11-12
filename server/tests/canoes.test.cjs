@@ -10,6 +10,7 @@ const { Animation } = require("../dist/game/model/Animation");
 const { Location } = require("../dist/game/model/Location");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
 const { Item } = require("../dist/game/model/Item");
+const { ChatType } = require("../dist/net/protocol/ClientProtocol");
 const plugin = require("../plugins/world/Canoes.plugin");
 const { stations, TYPES, CHOP_DELAY_TICKS } = plugin._test;
 const spawned = [];
@@ -41,7 +42,7 @@ before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   plugin.register({
     core: {
-      CacheDefinitions, Skill, Animation, Location, GameObject, CountdownTask, PrivateArea, Item,
+      CacheDefinitions, Skill, Animation, Location, GameObject, CountdownTask, PrivateArea, Item, ChatType,
       DialogueChainBuilder: class { add() { return this; } }, NpcDialogue: class {},
       Boundary: class {},
       TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => { for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].key === key) tasks.splice(i, 1); } },
@@ -69,7 +70,7 @@ function player(station = stations[0], woodcutting = 99) {
   const attrs = new Map();
   const vars = new Map();
   const p = {
-    hasAxe: true, location: new Location(...station.tree, 0), messages: [], xp: 0, interfaceId: -1, blocked: false, animation: -1,
+    hasAxe: true, location: new Location(...station.tree, 0), messages: [], packets: [], xp: 0, interfaceId: -1, blocked: false, animation: -1,
     getAttribute: (key, fallback) => attrs.has(key) ? attrs.get(key) : fallback,
     setAttribute: (key, value) => attrs.set(key, value),
     getLocation: () => p.location, moveTo: (at) => { p.location = at; },
@@ -83,12 +84,15 @@ function player(station = stations[0], woodcutting = 99) {
     getPacketSender: () => sender,
   };
   const movement = { reset: () => movement, setBlockMovement: (value) => { p.blocked = value; return movement; } };
-  const sender = new Proxy({ sendVarbit: (id, value) => vars.set(id, value), getVarbit: (id) => vars.get(id) ?? 0 }, { get: (o, key) => o[key] ?? (() => sender) });
+  const sender = new Proxy({ sendVarbit: (id, value) => vars.set(id, value), getVarbit: (id) => vars.get(id) ?? 0 }, { get: (o, key) => o[key] ?? ((...args) => { p.packets.push([key, ...args]); return sender; }) });
   return p;
 }
 function object(station) {
   return new GameObject(CacheDefinitions.getLocId(station.loc), new Location(...station.tree, 0), 10, 3);
 }
+function sent(p, name) { return p.packets.filter(([key]) => key === name).map(([, ...args]) => args); }
+function sounds(p) { return sent(p, "sendSound").map(([id]) => id); }
+function spam(p) { return sent(p, "sendTypedMessage").filter(([type]) => type === ChatType.SPAM).map(([, text]) => text); }
 function choose(p, group, child) { plugin._test.select({ player: p, buttonId: (group << 16) | child, opId: 1 }); }
 function make(p, station, type) {
   const oldRandom = Math.random;
@@ -167,7 +171,26 @@ test("a real map choice rows privately, lands, consumes the canoe and releases c
   assert.equal(varbit("fov_clamp"), 0); assert.equal(varbit("draw_distance_max_override"), 0);
   assert.deepEqual([p.location.getX(), p.location.getY()], to.landing);
   assert.equal(p.area, null); assert.equal(p.blocked, false); assert.equal(plugin._test.state(p, from), 0);
-  assert.match(p.messages.at(-1), /Your canoe sinks/);
+  assert.match(spam(p).at(-1), /Your canoe sinks/);
+});
+
+test("floating and arriving play their sounds; arrival is a spam line with the sinking canoe at the station's tile", () => {
+  const from = stations.find((station) => station.id === 4); const to = stations.find((station) => station.id === 3);
+  const p = player(from);
+  make(p, from, TYPES[3]);
+  assert.ok(sounds(p).includes(2731), "pushing the canoe in plays 2731");
+  assert.deepEqual(sent(p, "sendInterfaceScript").find(([id]) => id === 2524), [2524, [3612928, 0]], "the shaping menu's modal arguments");
+  p.packets.length = 0;
+  plugin._test.paddle({ player: p, object: object(from) });
+  assert.deepEqual(sent(p, "sendInterfaceScript").find(([id]) => id === 2524), [2524, [-1, -1]], "the map's modal arguments");
+  choose(p, 953, 17);
+  advance(28);
+  assert.deepEqual(spam(p), ["You arrive at the Barbarian Village.<br>Your canoe sinks into the water after the hard journey."]);
+  assert.ok(!p.messages.some((text) => /You arrive/.test(text)), "not a plain game message");
+  assert.ok(sounds(p).includes(2732), "arrival plays 2732");
+  const [sinking] = sent(p, "sendObject").map(([o]) => o);
+  assert.equal(sinking.getId(), CacheDefinitions.getLocId("canoeing_waka_sinking"));
+  assert.deepEqual([sinking.getLocation().getX(), sinking.getLocation().getY(), sinking.getType(), sinking.getFace()], [3109, 3411, 10, 1]);
 });
 
 test("Waka travel from Lumbridge to Edgeville emits the Lumbridge diary task", () => {
@@ -198,7 +221,7 @@ test("the Wilderness pond choice offers paired confirmation options and rows the
   advance(26);
   assert.deepEqual([p.location.getX(), p.location.getY()], to.landing);
   assert.equal(p.blocked, false); assert.equal(plugin._test.state(p, from), 0);
-  assert.match(p.messages.at(-1), /Your canoe sinks/);
+  assert.match(spam(p).at(-1), /Your canoe sinks/);
 });
 
 test("a second station clears the previous canoe; logout cancels work and an interrupted ride returns safely", () => {

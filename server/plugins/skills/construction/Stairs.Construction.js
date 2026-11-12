@@ -49,6 +49,12 @@ const OPEN_TRAPDOORS = {
   MAHOGANY_TRAPDOOR: Ids.loc("poh_trapdoor_mag_open_7"),
 };
 
+// Removing a room whose stairs join it to another floor warns first.
+const ROOM_WARNING = "<col=800000>Warning:<col=000000> If you remove this room you may be unable to access the<br><col=000000>";
+const BASEMENT_FROM_GROUND = `${ROOM_WARNING}basement from the ground floor.`;
+const BASEMENT_LEVEL = `${ROOM_WARNING}basement level.`;
+const UPPER_FROM_GROUND = `${ROOM_WARNING}upper floor from the ground.`;
+
 function say(player, text) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
@@ -152,6 +158,22 @@ function buildRoomThrough(player, house, room, furniture, next, template) {
   House.rebuildHouse(player, house);
 }
 
+/**
+ * `construction:room-removing`: a basement room with stairs up warns of the basement, a ground
+ * floor room with stairs down of the basement level, and an upper floor room of the upper floor.
+ * Ours: a ground floor room whose stairs only go up (nothing above, or it couldn't be removed)
+ * warns of the upper floor too.
+ */
+function warnOfRoomRemoval(removal) {
+  if (removal.warning) return;
+  const stairs = STAIRS[stairsIn(removal.room)?.buildableKey];
+  if (!stairs) return;
+  const plane = removal.position.plane;
+  if (plane === BASEMENT) removal.warning = stairs.up ? BASEMENT_FROM_GROUND : null;
+  else if (plane === TOP_FLOOR) removal.warning = stairs.down ? UPPER_FROM_GROUND : null;
+  else removal.warning = stairs.down ? BASEMENT_LEVEL : UPPER_FROM_GROUND;
+}
+
 function climbUp(event) { return climb(event, "up"); }
 function climbDown(event) { return climb(event, "down"); }
 
@@ -198,6 +220,7 @@ function furnitureClimbs(event) {
 
 function attachStairs(api) {
   api.onCustomEvent("ladders:climb", claimClimb);
+  api.onCustomEvent("construction:room-removing", warnOfRoomRemoval);
   api.onObjectInteraction("Staircase", { "Climb-up": climbUp, "Climb-down": climbDown, Climb: climbEither });
   api.onObjectInteraction("Dungeon entrance", { Enter: climbDown });
   api.onObjectInteraction("Ladder", { Climb: climbUp });
@@ -206,4 +229,4 @@ function attachStairs(api) {
   }
 }
 
-Object.assign(module.exports, { attachStairs });
+Object.assign(module.exports, { attachStairs, BASEMENT_FROM_GROUND, BASEMENT_LEVEL, UPPER_FROM_GROUND });

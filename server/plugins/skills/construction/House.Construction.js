@@ -572,12 +572,36 @@ function rebuildHouse(player, house) {
   syncHouseOptions(player);
 }
 
+/**
+ * Building, moving or removing a room rebuilds the house behind the loading screen: the screen
+ * and the house style's loading jingle at once, the new house a tick later, and the screen closes
+ * the tick after, when `then` runs (the house viewer opens again).
+ */
+function rebuildRooms(player, house, then = () => {}) {
+  if (loadingHouses.has(player)) { rebuildHouse(player, house); then(); return; }
+  saveHouse(house);
+  player.getPacketSender().sendInterfaceRemoval();
+  showHouseLoading(player, { sound: false, jingle: house.save });
+  loadHouse(player, {
+    1: () => { if (houseFor(player) === house) rebuildHouse(player, house); },
+    2: () => {
+      hideHouseLoading(player);
+      if (houseFor(player) === house && isBuildingMode(player)) then();
+    },
+  });
+}
+
 const ROOM_CREATION_INTERFACE = Ids.iface("poh_add_room");
 const pendingRoomMenus = new WeakMap();
+const CANT_AFFORD_ROOM = "You can't afford to build that room.";
 
 function chooseRoom(player, house, target) {
   if (houseFor(player) !== house || !isBuildingMode(player)) return;
   pendingRoomMenus.set(player, { house, target, viewer: player.getInterfaceId() === HOUSE_VIEWER_INTERFACE });
+  sendRoomList(player);
+}
+
+function sendRoomList(player) {
   player.getPacketSender().sendInterface(ROOM_CREATION_INTERFACE)
     .sendInterfaceFlagsRange((ROOM_CREATION_INTERFACE << 16) | 4, 1, 29, 1);
 }
@@ -589,8 +613,14 @@ function selectRoomFromInterface(event) {
   const id = pending.target.plane === 2 && (event.action === 7 || event.action === 9) ? event.action + 1 : event.action;
   const room = Data.CONSTRUCTION_ROOMS.find(candidate => candidate.id === id);
   if (!room) { event.player.sendMessage("That room is not available yet."); return true; }
-  pendingRoomMenus.delete(event.player);
   const copy = pending.house.getOnlyCopy(room);
+  // Too few coins is a chat line, and the room list stays open.
+  if (!copy && roomProblem(event.player, pending.house, pending.target, room) === CANT_AFFORD_ROOM) {
+    event.player.sendMessage(CANT_AFFORD_ROOM);
+    sendRoomList(event.player);
+    return true;
+  }
+  pendingRoomMenus.delete(event.player);
   if (copy) return offerRoomMove(event.player, pending.house, pending.target, room, copy, pending.viewer), true;
   if (pending.viewer) previewRoom(event.player, pending.house, pending.target, room);
   else roomMenu(event.player, pending.house, pending.target, room, startingRotation(pending.house, pending.target, room));
@@ -632,7 +662,7 @@ function roomMenu(player, house, target, room, rotation, moving = null) {
 /** rsprox captures (poh_add_room:list): the coins are checked when the room is picked, in the chat. */
 function roomProblem(player, house, target, room) {
   return house.canPlaceRoom(room, target, constructionLevel(player))
-    ?? (player.getInventory().getAmount(COINS_ID) < room.cost ? "You can't afford to build that room." : null);
+    ?? (player.getInventory().getAmount(COINS_ID) < room.cost ? CANT_AFFORD_ROOM : null);
 }
 
 /**
@@ -711,8 +741,7 @@ function buildRoom(player, viewer, reopenViewer = true) {
     player.getInventory().delete(COINS_ID, room.cost);
     house.placeRoom(target, room, rotation);
   }
-  rebuildHouse(player, house);
-  if (reopenViewer) openHouseViewer(player);
+  rebuildRooms(player, house, reopenViewer ? () => openHouseViewer(player) : undefined);
 }
 
 /**
@@ -724,16 +753,20 @@ function removeRoomPrompt(player, house, target, onNo = () => {}, onRemoved = ()
   if (!room) return;
   const problem = house.canRemoveRoom(target);
   if (problem) return Menu.refuse(player, problem);
-  api.sendMultiChatboxPrompt(player, `Remove the ${Data.ROOM_BY_KEY.get(room.roomKey).name}?`, "Yes", () => {
+  const confirm = () => api.sendMultiChatboxPrompt(player, `Remove the ${Data.ROOM_BY_KEY.get(room.roomKey).name}?`, "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player) || house.getRoom(target) !== room) return;
     const currentProblem = house.canRemoveRoom(target);
     if (currentProblem) return Menu.refuse(player, currentProblem);
     house.removeRoom(target);
-    rebuildHouse(player, house);
     api.emitCustomEvent("construction:room-removed", { player, house, room });
     player.sendMessage("Room deleted!");
-    onRemoved();
+    rebuildRooms(player, house, onRemoved);
   }, "No", onNo);
+  // A room whose loss may cut off a floor, or costs the player something, warns first.
+  const removal = { player, house, position: target, room, warning: null };
+  api.emitCustomEvent("construction:room-removing", removal);
+  if (removal.warning) Menu.warn(player, removal.warning, confirm);
+  else confirm();
 }
 
 /** Build on a door hotspot: a new room through an empty doorway, else removing the room beyond it. */
@@ -1097,8 +1130,7 @@ function handleHouseViewer(event) {
         if (problem) { Menu.refuse(player, problem); syncViewerSelection(player, viewer); return true; }
         viewer.house.moveRoom(viewer.selected, viewer.destination, viewer.rotation);
       } else viewer.house.rotateRoom(viewer.selected, viewer.rotation);
-      rebuildHouse(player, viewer.house);
-      openHouseViewer(player);
+      rebuildRooms(player, viewer.house, () => openHouseViewer(player));
       return true;
     } else if (childId === 67 && !viewer.mode) {
       removeRoomPrompt(player, viewer.house, viewer.selected, () => openHouseViewer(player), () => openHouseViewer(player));

@@ -60,6 +60,7 @@ const STATE_ATTRIBUTE = "construction:nexus";
 const SCRY_ATTRIBUTE = "construction:nexus-scry";
 /** rsprox captures (Remove on the nexus), shown before the usual confirmation (docs/construction.md). */
 const REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove this nexus you will have to pay for your<br><col=000000>upgrades and teleports to be used again.";
+const ROOM_REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove this room you will have to pay for your<br><col=000000>teleports to be used in the nexus again.";
 const LEFT_CLICK_DELAY_TICKS = 2;
 const PAUSEBUTTON = 1, OP1 = 1 << 1, OP10 = 1 << 10, DEPTH5 = 5 << 17, DRAG_TARGET = 1 << 20;
 
@@ -336,6 +337,11 @@ function warnOfRemoval(removal) {
   if (TIERS[removal.furniture?.buildableKey]) removal.warning = REMOVAL_WARNING;
 }
 
+/** So does removing the room the nexus stands in. */
+function warnOfRoomRemoval(removal) {
+  if (Object.values(removal.room?.furnitureByLocation ?? {}).some(entry => TIERS[entry.buildableKey])) removal.warning = ROOM_REMOVAL_WARNING;
+}
+
 /** Runes are paid again when a nexus is rebuilt after it or its room was removed (Wiki: Portal Nexus). */
 function forgetDestinations({ player, furniture, room }) {
   const nexus = furniture ? TIERS[furniture.buildableKey]
@@ -354,6 +360,7 @@ function attachNexus(api) {
   api.persistAttribute(STATE_ATTRIBUTE, null);
   api.persistAttribute(SCRY_ATTRIBUTE, 0);
   api.onCustomEvent("construction:furniture-removing", warnOfRemoval);
+  api.onCustomEvent("construction:room-removing", warnOfRoomRemoval);
   api.onCustomEvent("construction:furniture-removed", forgetDestinations);
   api.onCustomEvent("construction:room-removed", forgetDestinations);
   api.onInterfaceActionClick(interfaceClick);
@@ -375,4 +382,4 @@ function nexusOption(event, action) {
   return false;
 }
 
-Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, REMOVAL_WARNING, destinations });
+Object.assign(module.exports, { attachNexus, nexusOption, STATE_ATTRIBUTE, REMOVAL_WARNING, ROOM_REMOVAL_WARNING, destinations });

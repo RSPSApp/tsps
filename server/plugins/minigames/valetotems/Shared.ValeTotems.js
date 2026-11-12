@@ -83,6 +83,11 @@ function itemName(id) {
   return core().ItemDefinition.forId(id)?.getName?.() ?? "item";
 }
 
+/** A filterable ("spam") chat line. */
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(core().ChatType.SPAM, text);
+}
+
 function statement(player, text) {
   const { DialogueChainBuilder, StatementDialogue } = core();
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
@@ -157,5 +162,5 @@ function stopAction(player) {
 module.exports = {
   DATA, SEQ, SOUND, SOUND_DELAY,
   init, api, core, obj, loc, npc, animate, sound, face, level, addXp, ownsHouse, itemName,
-  statement, itemStatement, statementThenPlayer, hasRoomFor, later, startAction, stopAction,
+  spam, statement, itemStatement, statementThenPlayer, hasRoomFor, later, startAction, stopAction,
 };

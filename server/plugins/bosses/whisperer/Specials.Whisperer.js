@@ -1,4 +1,9 @@
 const Common = require('./Common.Whisperer');
+
+/** A spam line (filterable), as these are in the recordings. */
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, text);
+}
 const centre = fight => [Common.data.site.boss[0] - (fight.shadow ? Common.data.site.realmOffset : 0), Common.data.site.boss[1]];
 /** Tile-grid transcription of the four route diagrams on the Wiki strategy page.
  * The first layout's camera is rotated: transform its diagonal grid into world tiles.
@@ -122,8 +127,11 @@ function columnHealth(fight, column) {
     column.npc.removeHeadbar(bar.id);
 }
 function finish(fight, result) {
-  fight.player.sendMessage(Common.data.messages.deplete);
-  if (result)
+  // Recorded: the depletion (58) and both "deter" lines are spam; "Leeches from the shadows hatch..." is a game message.
+  spam(fight.player, Common.data.messages.deplete);
+  if (result === "seedsPerfect" || result === "seedsDone")
+    spam(fight.player, Common.data.messages[result]);
+  else if (result)
     fight.player.sendMessage(Common.data.messages[result]);
   clear(fight);
   fight.completed++;

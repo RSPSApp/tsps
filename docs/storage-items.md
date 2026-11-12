@@ -274,10 +274,41 @@ its real query consumer; they do not claim a natural boss fight. Uncaptured refu
 wording and the signed-int safety ceiling are TSPS choices. The fixture does not claim
 natural loot-sack acquisition or a rendered client playthrough.
 
-For an inventory check, carry a kit, several ropes and a small fishing net. View opens
+For an inventory check, carry a kit, several ropes, a small fishing net and an unlit torch. View opens
 the native kit; Fill stores the eligible inventory. Withdraw 1/5/X/All from the grid,
 leave an interior gap, then Empty with one free inventory slot to check reverse-slot
 order. Stored tools are unavailable until withdrawn. The maintained native fixture
 passed 13 cases; the separate existing storage and Hunter-rumour suites passed 21
 and 14 cases. Those latter suites include component/unit controls, rather than 35
 additional native playthroughs.
+
+The accepted Linux x64 run used Node **v22.17.0** in
+`node@sha256:b04ce4ae4e95b522112c2e5c52f781471a5cbc3b594527bcddedee9bc48c03a0`.
+Preparation downloaded Yarn **4.12.0** from its versioned distribution and verified
+its SHA-512 against `server/package.json`'s `packageManager` pin, then ran
+`node <verified-yarn-cli> install --immutable --mode=skip-build`.
+It downloaded the [node-datachannel 0.32.1 NAPI-v8 Linux-x64 archive](https://github.com/murat-dogan/node-datachannel/releases/download/v0.32.1/node-datachannel-v0.32.1-napi-v8-linux-x64.tar.gz):
+archive SHA-256 `1a31d28a7aec9c1538cb96b76260d062399715b4dcea0ff3a0ebd6f58df5e391`,
+exact member `build/Release/node_datachannel.node`, binary SHA-256
+`98ad24d9b992a7974628b339ce81dfe159ca8d255459da5531dfcd7be659af06`.
+Native `ldd` and load checks exited 0 with `NATIVE_LOAD_OK`.
+The [existing public preparation reference](https://github.com/RSPSApp/tsps/blob/fecb70473f9540ff2faae324ea26901e706a15e2/docs/steel-key-ring.md#reproducing-the-verification)
+links the equivalent shell download/hash/extraction recipe. It requires `curl`,
+`tar`, `sha256sum`, `ldd` and network access to Yarn, GitHub releases and OpenRS2.
+Those shell steps reproduce the preparation; the actual executor performed its
+bounded download/hash/member checks in Node. Ordinary Yarn lifecycle installation
+was not the executed preparation.
+
+After that preparation, the literal build/cache/test arguments from `server/` were:
+
+```sh
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=4096 node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/ensure-cache.ts
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/huntsmans-kit-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/storage-items.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/hunter-rumours.test.cjs
+```
+
+The target was `osrs-242_2026-11-03`, OpenRS2 2757, with all 28 cache files checked.
+This run did not generate documentation. The later reproduction-documentation edits
+change no tested gameplay, data or fixture bytes.

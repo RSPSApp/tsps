@@ -505,7 +505,8 @@ test("as captured: withdrawing into a full inventory says there is no space", ()
 
   Bank.withdraw(player, TRIDENT, 0, 1, 0);
 
-  assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
+  // Spam on bank clicks: 224/01463.txt:7863, 231/03063.txt:9533.
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:You don't have enough inventory space.`]);
   assert.equal(player.getBank(0).getAmount(TRIDENT), 3);
 });
 
@@ -516,7 +517,7 @@ test("as captured: withdrawing more than the free slots takes what fits and says
 
   Bank.withdraw(player, TRIDENT, 0, 5, 0);
 
-  assert.deepEqual(player.messages, ["You don't have enough inventory space to withdraw that many."]);
+  assert.deepEqual(player.messages, [`${ChatType.SPAM}:You don't have enough inventory space to withdraw that many.`]);
   assert.equal(player.getInventory().getAmount(TRIDENT), 2);
   assert.equal(player.getBank(0).getAmount(TRIDENT), 3);
 });

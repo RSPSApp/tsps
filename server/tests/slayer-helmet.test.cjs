@@ -16,9 +16,34 @@ const NAMES = new Map([
   [ItemIdentifiers.BLACK_MASK_7_I_, "Black mask (7) (i)"],
   [ItemIdentifiers.BLACK_MASK_I_, "Black mask (i)"],
   [ItemIdentifiers.EARMUFFS, "Earmuffs"],
+  [ItemIdentifiers.KBD_HEADS, "Kbd heads"],
+  [ItemIdentifiers.BLACK_SLAYER_HELMET, "Black slayer helmet"],
+  [ItemIdentifiers.BLACK_SLAYER_HELMET_I_, "Black slayer helmet (i)"],
+  [ItemIdentifiers.BLACK_SLAYER_HELMET_I__3, "Black slayer helmet (i)"],
+  [ItemIdentifiers.SLAYER_HELMET_I__3, "Slayer helmet (i)"],
+  [ItemIdentifiers.BLACK_MASK_I__3, "Black mask (i)"],
 ]);
 
+/** The gamevals the plugin looks up, as the cache names them. */
+const OBJS = new Map([
+  ["slayer_helm", ItemIdentifiers.SLAYER_HELMET],
+  ["slayer_helm_i", ItemIdentifiers.SLAYER_HELMET_I_],
+  ["sw_slayer_helm_i", ItemIdentifiers.SLAYER_HELMET_I__3],
+  ["nzone_black_mask", ItemIdentifiers.BLACK_MASK_I_],
+  ["sw_black_mask", ItemIdentifiers.BLACK_MASK_I__3],
+  ["slayer_helm_black", ItemIdentifiers.BLACK_SLAYER_HELMET],
+  ["slayer_helm_i_black", ItemIdentifiers.BLACK_SLAYER_HELMET_I_],
+  ["sw_slayer_helm_i_black", ItemIdentifiers.BLACK_SLAYER_HELMET_I__3],
+  ["slayer_helm_jad", ItemIdentifiers.TZTOK_SLAYER_HELMET],
+  ["league_6_slayer_helm2", ItemIdentifiers.RADIANT_SLAYER_HELMET],
+  ["poh_trophydrop_kbd", ItemIdentifiers.KBD_HEADS],
+]);
+const OBJ_NAMES = new Map([...OBJS].map(([name, id]) => [id, name]));
+
 const HELM_UNLOCKED_VARBIT = 3202;
+const BLACK_UNLOCKED_VARBIT = 5080;
+const VARBITS = new Map([["slayer_helm_unlocked", HELM_UNLOCKED_VARBIT], ["slayer_unlock_helm_black", BLACK_UNLOCKED_VARBIT]]);
+const prompts = [];
 const events = [];
 const modifiers = {};
 let onTask = true;
@@ -29,8 +54,16 @@ SlayerHelmet.register({
     Skill,
     Equipment: { HEAD_SLOT: 0 },
     ItemDefinition: { forId: (id) => ({ getName: () => NAMES.get(id) ?? "" }) },
-    CacheDefinitions: { getVarbitId: (name) => (name === "slayer_helm_unlocked" ? HELM_UNLOCKED_VARBIT : null) },
+    CacheDefinitions: {
+      getVarbitId: (name) => VARBITS.get(name) ?? null,
+      getObjId: (name) => OBJS.get(name) ?? null,
+      getObjNames: () => OBJ_NAMES,
+    },
+    ChatType: { SPAM: "spam", MESBOX: "mesbox" },
+    DialogueChainBuilder: class { add(dialogue) { this.dialogue = dialogue; return this; } },
+    StatementDialogue: class { constructor(index, text) { this.text = text; } },
   },
+  sendMultiChatboxPrompt: (player, title, ...options) => prompts.push({ player, title, options }),
   emitCustomEvent: (name, request) => {
     events.push([name, request]);
     if (name === "slayer:on-task") request.onTask = onTask;
@@ -46,7 +79,7 @@ SlayerHelmet.register({
   onCustomEvent() {},
 });
 
-const { assemble, imbue } = SlayerHelmet._test;
+const { assemble, imbue, recolour, disassemble, HELMET_NAMES } = SlayerHelmet._test;
 
 const EquipmentStats = require("../plugins/interface/EquipmentStats.plugin");
 EquipmentStats.register({
@@ -66,20 +99,32 @@ function item(id) {
   };
 }
 
-function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked = true } = {}) {
+function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked = true, blackUnlocked = true } = {}) {
   const items = inventory.map(item);
   const messages = [];
+  const typed = [];
+  const sounds = [];
+  const dialogues = [];
+  const unlocked = new Set([helmUnlocked && HELM_UNLOCKED_VARBIT, blackUnlocked && BLACK_UNLOCKED_VARBIT]);
   const target = { isNpc: () => true, getAsNpc: () => ({}) };
   const player = {
     messages,
+    typed,
+    sounds,
+    dialogues,
     items,
+    getDialogueManager: () => ({ startDialogues: (chain) => dialogues.push(chain.dialogue.text) }),
     isPlayer: () => true,
     getAsPlayer: () => player,
     getEquipment: () => ({ getItems: () => [head > 0 ? item(head) : null] }),
     getCombat: () => ({ getTarget: () => target }),
     getSkillManager: () => ({ getCurrentLevel: () => crafting }),
     sendMessage: (message) => messages.push(message),
-    getPacketSender: () => ({ getVarbit: (id) => (id === HELM_UNLOCKED_VARBIT && helmUnlocked ? 1 : 0) }),
+    getPacketSender: () => ({
+      getVarbit: (id) => (unlocked.has(id) ? 1 : 0),
+      sendTypedMessage: (type, text) => typed.push([type, text]),
+      sendSoundEffect: (id) => sounds.push(id),
+    }),
     getInventory: () => ({
       getItems: () => items,
       contains: (id) => items.some((entry) => entry.getId() === id),
@@ -178,7 +223,7 @@ test("assembly needs the Malevolent masquerade unlock", () => {
   assemble(event);
   assert.equal(event.handled, true);
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_7_, ...PARTS]);
-  assert.match(player.messages[0], /Malevolent masquerade/);
+  assert.deepEqual(player.messages, ["You have not unlocked the ability to combine these items."]);
   assert.equal(events.filter(([name]) => name === "league:complete-task").length, awarded, "a refused assembly awards nothing");
 });
 
@@ -264,6 +309,128 @@ test("equipment stats shows the imbued percentages and whether the target is on 
   onTask = true;
 });
 
+test("assembling says it made a Slayer helm, as a spam line with the combine sound", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ...PARTS] });
+  assemble({ player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK, handled: false });
+  assert.deepEqual(player.typed, [["spam", "You combine the items into a Slayer helm."]]);
+  assert.deepEqual(player.sounds, [2241]);
+});
+
+test("a Soul Wars imbued mask makes the Soul Wars imbued helmet", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I__3, ...PARTS] });
+  assemble({ player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK_I__3, handled: false });
+  assert.equal(player.items[0].getId(), ItemIdentifiers.SLAYER_HELMET_I__3);
+});
+
+function headOn(player, helmSlot, headSlot, headFirst = true) {
+  const helm = { item: player.items[helmSlot], id: player.items[helmSlot].getId(), slot: helmSlot };
+  const head = { item: player.items[headSlot], id: player.items[headSlot].getId(), slot: headSlot };
+  const [used, usedWith] = headFirst ? [head, helm] : [helm, head];
+  const event = { player, usedItem: used.item, usedItemId: used.id, usedItemSlot: used.slot,
+    usedWithItem: usedWith.item, usedWithItemId: usedWith.id, usedWithItemSlot: usedWith.slot, handled: false };
+  recolour(event);
+  return event;
+}
+
+test("Kbd heads on an imbued helmet ask first, then make the black imbued helmet", () => {
+  for (const headFirst of [true, false]) {
+    prompts.length = 0;
+    const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET_I_, ItemIdentifiers.KBD_HEADS] });
+    const event = headOn(player, 0, 1, headFirst);
+    assert.equal(event.handled, true);
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0].title, "Combine the Kbd heads with your helm?");
+    assert.deepEqual(prompts[0].options.filter((entry) => typeof entry === "string"), ["Yes", "No"]);
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_, ItemIdentifiers.KBD_HEADS], "nothing changes before Yes");
+    prompts[0].options[1]();
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_SLAYER_HELMET_I_, -1]);
+    assert.deepEqual(player.typed, [["spam", "You combine the items into a Black slayer helmet (i)."]]);
+    assert.deepEqual(player.sounds, [2241]);
+  }
+});
+
+test("No, or a head that's gone by Yes, leaves the helmet as it was", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS] });
+  headOn(player, 0, 1);
+  prompts[0].options[3]();
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS]);
+  player.items[1].setId(-1);
+  prompts[0].options[1]();
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, -1]);
+  assert.deepEqual(player.typed, []);
+});
+
+test("the Soul Wars imbued helmet turns into its own black copy", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET_I__3, ItemIdentifiers.KBD_HEADS] });
+  headOn(player, 0, 1);
+  prompts[0].options[1]();
+  assert.equal(player.items[0].getId(), ItemIdentifiers.BLACK_SLAYER_HELMET_I__3);
+});
+
+test("without the recolour's unlock the player is sent to a Slayer master", () => {
+  prompts.length = 0;
+  const player = createPlayer({ blackUnlocked: false, inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS] });
+  const event = headOn(player, 0, 1);
+  assert.equal(event.handled, true);
+  assert.equal(prompts.length, 0);
+  const line = "You must first learn how to do this from a Slayer Master.";
+  assert.deepEqual(player.typed, [["mesbox", line]]);
+  assert.deepEqual(player.dialogues, [line]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS]);
+});
+
+test("a recoloured helmet takes no second head", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_SLAYER_HELMET, ItemIdentifiers.KBD_HEADS] });
+  assert.equal(headOn(player, 0, 1).handled, false);
+  assert.equal(prompts.length, 0);
+});
+
+test("a scroll of imbuing on a recoloured helmet keeps its colour", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_SLAYER_HELMET, ItemIdentifiers.SCROLL_OF_IMBUING] });
+  imbue({ player, usedItem: player.items[1], usedWithItem: player.items[0], usedItemId: ItemIdentifiers.SCROLL_OF_IMBUING,
+    usedWithItemId: ItemIdentifiers.BLACK_SLAYER_HELMET, handled: false });
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_SLAYER_HELMET_I_, -1]);
+  assert.equal(player.messages.at(-1), "You imbue the Slayer helmet with the scroll.");
+});
+
+test("Disassemble gives back the helmet's own mask, the components and the head", () => {
+  const cases = [
+    [ItemIdentifiers.BLACK_SLAYER_HELMET_I_, ItemIdentifiers.BLACK_MASK_I_, [ItemIdentifiers.KBD_HEADS]],
+    [ItemIdentifiers.BLACK_SLAYER_HELMET_I__3, ItemIdentifiers.BLACK_MASK_I__3, [ItemIdentifiers.KBD_HEADS]],
+    [ItemIdentifiers.SLAYER_HELMET_I__3, ItemIdentifiers.BLACK_MASK_I__3, []],
+    [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.BLACK_MASK, []],
+    [ItemIdentifiers.TZTOK_SLAYER_HELMET, ItemIdentifiers.BLACK_MASK, []],
+  ];
+  for (const [helmet, mask, head] of cases) {
+    const player = createPlayer({ inventory: [helmet] });
+    disassemble({ player, item: player.items[0] });
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [mask, ...PARTS, ...head], `helmet ${helmet}`);
+    assert.deepEqual(player.typed, [["spam", "You disassemble your Slayer helm."]]);
+    assert.deepEqual(player.sounds, [2241]);
+  }
+});
+
+test("Disassemble needs room for the head too; a Radiant helmet isn't taken apart", () => {
+  const full = createPlayer({ inventory: [ItemIdentifiers.BLACK_SLAYER_HELMET, ...Array(22).fill(ItemIdentifiers.EARMUFFS)] });
+  disassemble({ player: full, item: full.items[0] });
+  assert.equal(full.items[0].getId(), ItemIdentifiers.BLACK_SLAYER_HELMET);
+  assert.match(full.messages[0], /enough inventory space/);
+  const radiant = createPlayer({ inventory: [ItemIdentifiers.RADIANT_SLAYER_HELMET] });
+  disassemble({ player: radiant, item: radiant.items[0] });
+  assert.deepEqual(radiant.items.map((entry) => entry.getId()), [ItemIdentifiers.RADIANT_SLAYER_HELMET]);
+});
+
+test("every colour's plain and imbued helmet has the helmet's options", () => {
+  for (const name of ["Slayer helmet", "Slayer helmet (i)", "Black slayer helmet (i)", "Tzkal slayer helmet",
+    "Araxyte slayer helmet (i)", "Hooded slayer helmet", "Oathplate slayer helmet (i)", "Radiant slayer helmet"]) {
+    assert.ok(HELMET_NAMES.includes(name), name);
+  }
+  assert.equal(HELMET_NAMES.length, 30);
+});
+
 test("a worn Slayer helmet's Check is its worn option, not the inventory's Disassemble", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const { Equipment } = require("../dist/game/model/container/impl/Equipment");
@@ -300,8 +467,8 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
   PluginManager.emitServerStartup({});
   // The old prefix uses private fake APIs only; native registration replaces module API state.
   const slayerHooks = PluginManager.itemOnItemHooks.filter(h => h.pluginName === "SlayerHelmet");
-  assert.equal(slayerHooks.length, 2, "real imbue and assembly registrations must be loaded");
-  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble"]);
+  assert.equal(slayerHooks.length, 3, "real imbue, assembly and recolour registrations must be loaded");
+  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble", "recolour"]);
   const porcine = require("../plugins/quests/QuestRuntime").questNamed("A Porcine of Interest");
   assert.ok(porcine, "real quest registered");
   const parts = [I.EARMUFFS, I.FACEMASK, I.NOSE_PEG, I.SPINY_HELMET, I.ENCHANTED_GEM];
@@ -428,7 +595,7 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
     console.log("SLAYER_MASK_OBSERVATION " + JSON.stringify({ spec, after: snapshot(), handled: e.event.handled,
       hookTrace, selectedStillOwned: items().includes(selected), otherStillOwned: other && items().includes(other) }));
     const slayerTrace = hookTrace.filter(row => row.plugin === "SlayerHelmet");
-    assert.deepEqual(slayerTrace.map(row => row.handler), ["imbue", "assemble"]);
+    assert.deepEqual(slayerTrace.map(row => row.handler).slice(0, 2), ["imbue", "assemble"]);
     assert.equal(slayerTrace[0].beforeHandled, false, "earlier full-manager hook did not suppress target");
     assert.equal(slayerTrace[0].afterHandled, false, "imbue declines mask/component interaction");
     assert.equal(slayerTrace[1].beforeHandled, false, "assembly really receives the unhandled event");
@@ -457,4 +624,33 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
     assert.equal(inv.getAmount(selectedImbued ? I.SLAYER_HELMET_I_ : I.SLAYER_HELMET), 1);
     assert.equal(items().filter(item => item && item.getId() > 0).length, other ? 2 : 1);
   });
+});
+
+// The recolour table against the real cache: every helmet, mask, head and unlock it names exists.
+test("native cache has every recolour, form, head and unlock the plugin names", async () => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize();
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const { FORMS, RECOLOURS } = SlayerHelmet._test;
+  const names = new Set();
+  const nameOf = (gameval) => {
+    const id = CacheDefinitions.getObjId(gameval);
+    assert.ok(Number.isInteger(id), gameval);
+    return CacheDefinitions.getItem(id).name;
+  };
+  for (const form of FORMS) {
+    if (form.mask) assert.equal(nameOf(form.mask), "Black mask (i)");
+    names.add(nameOf(form.helm));
+    for (const recolour of RECOLOURS) {
+      const name = nameOf(recolour.item(form.helm));
+      assert.equal(name, `${recolour.name} slayer helmet${form.helm === "slayer_helm" ? "" : " (i)"}`);
+      names.add(name);
+    }
+  }
+  for (const recolour of RECOLOURS.filter((entry) => entry.head)) {
+    nameOf(recolour.head);
+    assert.ok(Number.isInteger(CacheDefinitions.getVarbitId(recolour.unlock)), recolour.unlock);
+  }
+  assert.deepEqual([...names].sort(), [...SlayerHelmet._test.HELMET_NAMES].sort());
 });

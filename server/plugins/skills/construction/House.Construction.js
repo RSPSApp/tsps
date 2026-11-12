@@ -106,6 +106,8 @@ const OPTIONS_VARBITS = {
 };
 const SETTINGS_TARGET_UID = Ids.component("toplevel_osrs_stretch:side11");
 const HOUSE_KICK_OPTION = 7;
+// The click House Options' settings (teleport, default building mode, doors) play.
+const OPTION_SOUND = 2266;
 const houseOptionsOpen = new WeakSet();
 const kickOptionVisible = new WeakSet();
 
@@ -195,7 +197,11 @@ function grantHouse(request) {
   request.granted = true;
 }
 
-function enterHouse(player, buildingMode, diaryEntryContext = null) {
+/**
+ * `via` is where the entry came from: "portal", "options" (House Options' building mode buttons,
+ * which say "Building mode is now on/off." instead of the entry line) or "teleport".
+ */
+function enterHouse(player, buildingMode, diaryEntryContext = null, via = "teleport") {
   const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
   if (houseStateFor(player).owned === false) {
     player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
@@ -204,12 +210,16 @@ function enterHouse(player, buildingMode, diaryEntryContext = null) {
   let house = activeHouses.get(player);
   if (house?.isDestroyed()) house = undefined;
   if (buildingMode && house?.getPlayers().some(guest => guest !== player)) {
-    player.sendMessage("Expel your guests before entering building mode.");
+    player.sendMessage("You cannot enter building mode if there are other players in the house.");
+    return true;
+  }
+  if (buildingMode && via !== "teleport" && hasFollower(player)) {
+    player.sendMessage("You should pick up your follower before entering building mode.");
     return true;
   }
   if (buildingMode) {
     // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
-    const pin = { player, feature: "poh-building-mode", resume: () => enterHouse(player, true, diaryEntryContext) };
+    const pin = { player, feature: "poh-building-mode", resume: () => enterHouse(player, true, diaryEntryContext, via) };
     api.emitCustomEvent("bank-pin:guard", pin);
     if (pin.locked) return true;
   }
@@ -233,11 +243,18 @@ function enterHouse(player, buildingMode, diaryEntryContext = null) {
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   syncHouseOptions(player);
   syncKickOption(player);
-  player.sendMessage(buildingMode ? "You enter your house in building mode." : "You enter your house.");
+  if (via === "options") player.sendMessage(buildingMode ? "Building mode is now on." : "Building mode is now off.");
+  else player.sendMessage(buildingMode ? "You enter your house in building mode." : "You enter your house.");
   if (canCreditDiaryTask && house.owner === player && houseFor(player) === house) {
     api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_POH_TASK });
   }
   return true;
+}
+
+function hasFollower(player) {
+  const request = { player, pet: null };
+  api.emitCustomEvent("pets:current", request);
+  return !!request.pet;
 }
 
 function canVisitHouse(player, house) {
@@ -277,10 +294,15 @@ function promptVisit({ player, objectId, location: portalLocation, sourceLocatio
 function expelGuests(player) {
   const house = activeHouses.get(player);
   if (!house || houseFor(player) !== house || house.owner !== player) return;
-  for (const guest of house.getPlayers().slice()) if (guest !== player) {
+  const guests = house.getPlayers().filter(guest => guest !== player);
+  for (const guest of guests) {
     exitHouse(guest);
     guest.sendMessage("The house owner has expelled you.");
   }
+  if (!guests.length) player.sendMessage("No guests were found in your house.");
+  else if (guests.length === 1) player.sendMessage("Attempted to expel one guest.");
+  // Ours: the line for several guests is our wording.
+  else player.sendMessage(`Attempted to expel ${guests.length} guests.`);
 }
 
 function addAdvertisement({ player, objectId }) {
@@ -632,7 +654,7 @@ function syncHouseOptions(player) {
   sender.sendVarbit(OPTIONS_VARBITS.teleportOutside, saved.teleportOutside ? 1 : 0);
   sender.sendVarbit(OPTIONS_VARBITS.defaultBuildingMode, saved.defaultBuildingMode ? 1 : 0);
   sender.sendVarbit(OPTIONS_VARBITS.doors, saved.doorMode ?? 0);
-  if (houseOptionsOpen.has(player)) sender.sendString("Rooms: " + (house?.getRoomCount() ?? saved.rooms.flat(2).filter(Boolean).length),
+  if (houseOptionsOpen.has(player)) sender.sendString("Number of rooms: " + (house?.getRoomCount() ?? saved.rooms.flat(2).filter(Boolean).length),
     (HOUSE_OPTIONS_INTERFACE << 16) | 23);
 }
 
@@ -644,6 +666,24 @@ function openHouseSettings(player) {
     sender.sendInterfaceFlags((HOUSE_OPTIONS_INTERFACE << 16) | child, 1 << 1);
   }
   syncHouseOptions(player);
+}
+
+/** Puts the Settings tab back in place of House Options. */
+function closeHouseOptions(player) {
+  if (!houseOptionsOpen.delete(player)) return;
+  player.getPacketSender().sendSubInterface(SETTINGS_TARGET_UID, SETTINGS_SIDE_INTERFACE, 1);
+}
+
+function isSeated(player) {
+  const seat = seatedPlayers.get(player);
+  return !!seat && player.getPrivateArea() === seat.house && player.getLocation().equals(seat.sitting ? seat.location : seat.front);
+}
+
+function toggleBuildingMode(player, house, on) {
+  if (house.buildingMode === on) return;
+  closeHouseOptions(player);
+  if (isSeated(player)) { player.sendMessage("You cannot enter or leave building mode while sitting down."); return; }
+  enterHouse(player, on, null, "options");
 }
 
 function closeHouseSettings(event) {
@@ -659,26 +699,29 @@ function handleHouseOptions(event) {
   if (action !== 1) return false;
   if (groupId === SETTINGS_SIDE_INTERFACE && childId === 31) { openHouseSettings(player); return true; }
   if (groupId !== HOUSE_OPTIONS_INTERFACE || !houseOptionsOpen.has(player)) return false;
-  if (childId === 24) {
-    houseOptionsOpen.delete(player);
-    player.getPacketSender().sendSubInterface(SETTINGS_TARGET_UID, SETTINGS_SIDE_INTERFACE, 1);
-    return true;
-  }
+  if (childId === 24) { closeHouseOptions(player); return true; }
   const saved = houseStateFor(player);
   const house = houseFor(player);
+  const setting = (childId >= 8 && childId <= 9) || (childId >= 11 && childId <= 12) || (childId >= 14 && childId <= 19);
+  if (setting) player.getPacketSender().sendSound(OPTION_SOUND, 1, 0);
   if (childId === 8 || childId === 9) saved.teleportOutside = childId === 9;
   else if (childId === 11 || childId === 12) saved.defaultBuildingMode = childId === 11;
   else if (childId >= 14 && childId <= 19) {
     saved.doorMode = childId <= 15 ? 0 : childId <= 17 ? 1 : 2;
     if (house?.owner === player && !house.buildingMode) house.refreshDoors();
   } else if (childId === 21) {
+    if (houseFor(player)) closeHouseOptions(player);
     if (!exitHouse(player)) player.sendMessage("You are not in a house.");
-  } else if (childId === 22) Servants.callServant(player);
-  else if (!house || house.owner !== player) player.sendMessage("You must be inside your own house to do that.");
-  else if (childId === 5 || childId === 6) {
-    if (house.buildingMode !== (childId === 5)) enterHouse(player, childId === 5);
-  } else if (childId === 20) expelGuests(player);
-  else if (childId === 1) openHouseViewer(player);
+  } else if (childId === 22) {
+    if (Servants.callServantFromOptions(player)) closeHouseOptions(player);
+  } else if ((childId === 5 || childId === 6) && !house) {
+    player.sendMessage("Building mode really only helps if you're in a house.");
+  } else if (childId === 1 && (!house || house.owner !== player || !house.buildingMode)) {
+    player.sendMessage("The layout viewer is only for building mode.");
+  } else if (!house || house.owner !== player) player.sendMessage("You must be inside your own house to do that.");
+  else if (childId === 5 || childId === 6) toggleBuildingMode(player, house, childId === 5);
+  else if (childId === 20) { closeHouseOptions(player); expelGuests(player); }
+  else if (childId === 1) { closeHouseOptions(player); openHouseViewer(player); }
   player.setAttribute(HOUSE_ATTRIBUTE, saved);
   // Also restores the teleport preference after this cache's Default Off listener changes it locally.
   syncHouseOptions(player);
@@ -724,7 +767,7 @@ const houseViewers = new WeakMap();
 function openHouseViewer(player) {
   const house = houseFor(player);
   if (!house || house.owner !== player || !house.buildingMode) {
-    player.sendMessage("The house viewer is only available in building mode.");
+    player.sendMessage("The layout viewer is only for building mode.");
     return;
   }
   player.getPacketSender().sendInterface(HOUSE_VIEWER_INTERFACE);
@@ -1348,7 +1391,7 @@ function enterAtPortal(player, buildingMode, location, diaryEntryContext) {
     player.sendMessage("Your house is not located here.");
     return true;
   }
-  enterHouse(player, buildingMode, diaryEntryContext);
+  enterHouse(player, buildingMode, diaryEntryContext, "portal");
   if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
   return true;
 }

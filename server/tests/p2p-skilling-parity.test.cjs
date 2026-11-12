@@ -116,8 +116,12 @@ test('Porcine interrupted fade is closed on logout and the rope remains usable a
   const q = register('PorcineOfInterest', 'a_porcine_of_interest'), p = player();
   q.quest.setStage(p, 3);
   sceneAction(q, p, 'K_pMcL'); q.emit('interface:closed', {player:p, interfaceId:222});
-  sceneAction(q, p, 'GiFHeZ'); q.tick(7);
+  const previousRender = [809, 823, 819, 820, 821, 822, 824];
+  p.setRenderAnimations(previousRender);
+  sceneAction(q, p, 'GiFHeZ'); q.tick(20);
+  assert.deepEqual(p.getRenderAnimations(), [6280, 6280, -1, -1, -1, -1, -1]);
   q.call('onPlayerLogout', {player:p});
+  assert.equal(p.getRenderAnimations(), previousRender);
   const closed = p.packets.length;
   assert.ok(p.packets.some(([m,uid]) => m === 'closeSubInterface' && uid === ((161<<16)|1)));
   q.tick(60);
@@ -155,7 +159,10 @@ test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and
   sceneAction(q,p,'K_pMcL'); q.emit('interface:closed',{player:p,interfaceId:222}); q.tick(1);
   sceneAction(q,p,'eShaqt'); q.tick(13); sceneAction(q,p,'GiFHeZ');
   assert.deepEqual([p.facing.getX(), p.facing.getY()], [3167, 9676]);
-  q.tick(56);
+  q.tick(20);
+  assert.deepEqual(p.getRenderAnimations(), [6280, 6280, -1, -1, -1, -1, -1]);
+  q.tick(36);
+  assert.equal(p.getRenderAnimations()[0], 6280, 'the player remains unconscious through the next view');
   assert.ok(p.packets.some(([m,,,,,id]) => m === 'sendProjectile' && id === 1817));
   assert.ok(p.packets.some(([m,x,y,h,r]) => m === 'sendCameraMoveTo' && x === 3167 && y === 9693 && h === 900 && r.rate2 === 10));
   sceneAction(q,p,'32r40G'); q.tick(16); sceneAction(q,p,'Rb2zDN'); q.tick(6);
@@ -163,6 +170,7 @@ test('Porcine Pig Thing attack and Spria rescue retain recorded camera paths and
   assert.ok(p.packets.some(([m,x,y,h,r]) => m === 'sendCameraLookAt' && x === 3162 && y === 9699 && h === 50 && r.rate2 === 1));
   assert.equal(q.quest.getStage(p),3); sceneAction(q,p,'EaeUfj'); q.tick(4);
   assert.equal(q.quest.getStage(p),4); assert.equal(p.vars.get(10582),20); assert.equal(p.getLocation().getX(),3095); assert.equal(p.getLocation().getY(),3267); assert.equal(p.isBlocked(),false);
+  assert.equal(p.getRenderAnimations(), null, 'waking restores the normal pose');
   assert.deepEqual(cameras(p), PORCINE_CAMERA);
   const fades = p.packets.filter(([m]) => m === 'mountSubInterface');
   assert.ok(fades.length > 0);

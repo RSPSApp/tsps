@@ -46,12 +46,16 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "native Watchtower fixture uses an actual members world");
   I = core.ItemIdentifiers;
   core.ObjectDefinition.init();
   core.RegionManager.init();
   for (const scene of Object.values(SCENES)) core.RegionManager.loadMapFiles(scene.start[0], scene.start[1]);
   core.RegionManager.loadMapFiles(3240, 3395);
   core.RegionManager.loadMapFiles(...VARROCK_SQUARE);
+  for (const at of [[2500, 3020], [2540, 3060], [2520, 9435], [2580, 9437], [2549, 3116], [2585, 3108]]) {
+    core.RegionManager.loadMapFiles(...at);
+  }
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -99,6 +103,359 @@ function tick(f) {
 }
 const ticks = (f, count) => { for (let i = 0; i < count; i++) tick(f); };
 const quest = (key) => QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key);
+
+// #4412: real cache objects and ordinary packets; quest/inventory/NPC positions are
+// seeded checkpoints. These tests do not run a client or a natural full quest.
+const WATCHTOWER_WIZARD = { start: [2548, 3116, 2] };
+const WATCHTOWER_GUARD = { start: [2506, 3035, 0] };
+const xyz = player => { const p = player.getLocation(); return [p.getX(), p.getY(), p.getZ()]; };
+const items = player => player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]);
+function watchtowerLocs(id) {
+  const out = [];
+  for (const objects of core.MapObjects.mapObjects.values()) for (const object of objects) {
+    const p = object.getLocation();
+    if (object.getId() === id && p.getX() >= 2450 && p.getX() <= 2650 &&
+      ((p.getY() >= 2950 && p.getY() <= 3150) || (p.getY() >= 9380 && p.getY() <= 9480))) out.push(object);
+  }
+  return out;
+}
+async function operateWatchtowerLoc(f, object, expected) {
+  const p = object.getLocation();
+  const definition = core.ObjectDefinition.forId(object.getId());
+  const actions = definition.getInteractions?.() ?? definition.getActions();
+  assert.ok(actions[0], `cache object ${object.getId()} has its first operation`);
+  observeWatchtowerInputs(f);
+  let width = definition.getSizeX(), height = definition.getSizeY();
+  if (object.getFace() & 1) [width, height] = [height, width];
+  // Use the actual rotated footprint: +/-1 can be inside a 4x2 cave. Try only
+  // outside perimeter tiles, stopping at the FIRST delivered ordinary operation.
+  // An observed wrong result fails immediately, never retries until green.
+  const perimeter = [];
+  for (let x = 0; x < width; x++) perimeter.push([x, -1], [x, height]);
+  for (let y = 0; y < height; y++) perimeter.push([-1, y], [width, y]);
+  for (const [dx, dy] of perimeter) {
+    f.player.moveTo(new core.Location(p.getX() + dx, p.getY() + dy, p.getZ()));
+    ticks(f, 2);
+    const before = f.watchtowerObjectOps.length;
+    await f.connection.dispatch([{ type: "object_option", id: object.getId(), x: p.getX(), y: p.getY(), clickType: 1 }]);
+    ticks(f, 12);
+    if (f.watchtowerObjectOps.length > before) {
+      assert.equal(f.watchtowerObjectOps.at(-1).id, object.getId(), "ordinary packet resolves the actual cache target");
+      if (expected) assert.deepEqual(xyz(f.player), expected, `ordinary object ${object.getId()} reaches its supported destination`);
+      return;
+    }
+  }
+  assert.fail(`ordinary object was not operated: ${JSON.stringify({ id: object.getId(), at: [p.getX(), p.getY(), p.getZ()], width, height, actor: xyz(f.player), messages: f.watchtowerMessages.slice(-6) })}`);
+}
+function observeWatchtowerInputs(f) {
+  if (f.watchtowerObjectOps) return;
+  f.watchtowerObjectOps = [];
+  f.watchtowerItemOps = [];
+  f.watchtowerMessages = [];
+  const send = f.player.sendMessage;
+  f.t.mock.method(f.player, "sendMessage", function (message) {
+    f.watchtowerMessages.push(String(message));
+    return send.call(this, message);
+  });
+  const objectOp = PM.emitObjectInteraction;
+  f.t.mock.method(PM, "emitObjectInteraction", function (event) {
+    const result = objectOp.call(this, event);
+    if (event.player === f.player) f.watchtowerObjectOps.push({ id: event.objectId, option: event.option, handled: event.handled });
+    return result;
+  });
+  const itemOp = PM.emitItemOnNpc;
+  f.t.mock.method(PM, "emitItemOnNpc", function (event) {
+    const result = itemOp.call(this, event);
+    if (event.player === f.player) f.watchtowerItemOps.push({ item: event.itemId, npc: event.npcId, handled: event.handled });
+    return result;
+  });
+}
+function watchtowerNpc(f, id, at) {
+  const npc = core.NPC.create(id, new core.Location(...at));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  f.t.after(() => core.World.getNpcs().remove(npc));
+  return npc;
+}
+async function useOnNpc(f, itemId, npc) {
+  // World.add calls Player.onLogin, which marks placement pending again after
+  // actor()'s initial setup. Complete that real update phase before sending input;
+  // movement correctly refuses an item route while placement is still pending.
+  if (f.player.isNeedsPlacement()) tick(f);
+  assert.equal(f.player.isNeedsPlacement(), false, "initial placement completed before the ordinary item input");
+  const slot = f.player.getInventory().getSlotForItemId(itemId);
+  assert.ok(slot >= 0, "ordinary item-on-NPC input has the supplied item");
+  observeWatchtowerInputs(f);
+  const before = f.watchtowerItemOps.length;
+  await f.connection.dispatch([{ type: "inventory_use_on", itemId, slot, target: { kind: "npc", id: npc.getIndex() } }]);
+  ticks(f, 6); // same bounded walk/turn allowance as this fixture's existing playScene
+  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered: ${JSON.stringify({ itemId, npcId: npc.getId(), npcAt: xyz(npc), npcHp: npc.getHitpoints(), npcRegistered: npc.isRegistered(), playerAt: xyz(f.player), hp: f.player.getHitpoints(), canMove: f.player.getMovementQueue().getMobility().canMove(), messages: f.watchtowerMessages.slice(-6) })}`);
+  assert.equal(f.watchtowerItemOps.at(-1).item, itemId);
+  assert.equal(f.watchtowerItemOps.at(-1).npc, npc.getContentId(f.player), "ordinary input resolves the intended current NPC");
+}
+async function beginRelicScene(f) {
+  quest("watchtower").setStage(f.player, 2);
+  f.player.setAttribute("quest.watchtower.bits", (1 << 6) | (1 << 7));
+  f.player.getInventory().add(new core.Item(I.RELIC_PART_3, 1), false);
+  const npc = watchtowerNpc(f, core.NpcIdentifiers.WATCHTOWER_WIZARD, [2549, 3116, 2]);
+  await useOnNpc(f, I.RELIC_PART_3, npc);
+  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
+  assert.equal(f.player.getInventory().getAmount(I.RELIC_PART_3), 0, "third part was actually handed in through the ordinary input");
+  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (1 << 8), 1 << 8, "third hand-in bit is set before testing cinematic absence");
+  return { area: f.player.getArea(), npc };
+}
+async function beginEnclaveScene(f) {
+  quest("watchtower").setStage(f.player, 7);
+  f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 2), false);
+  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
+  await useOnNpc(f, I.CAVE_NIGHTSHADE, npc);
+  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 50);
+  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1, "ordinary guard hand-in consumes exactly one nightshade before scene assertion");
+  assert.equal(quest("watchtower").getStage(f.player), 8, "ordinary guard hand-in reaches stage 8 before scene assertion");
+  return f.player.getArea();
+}
+function assertWatchtowerRestored(f) {
+  assert.equal(f.player.getArea(), null);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+  assert.equal(f.player.getAttribute("watchtower:scene-exit"), null);
+}
+
+test("Watchtower: four mapless entries follow different surface caves without light, conserving items, XP and quest state", async t => {
+  const f = actor(t, { start: [2524, 3070, 0] });
+  quest("watchtower").setStage(f.player, 2);
+  const inventory = items(f.player), xp = f.player.getSkillManager().getExperience(core.Skill.AGILITY);
+  const messages = [], send = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
+  for (const [id, destination] of [[2806, [2540, 3055, 0]], [2807, [2553, 3055, 0]], [2808, [2552, 3034, 0]], [2809, [2563, 3024, 0]]]) {
+    const [object] = watchtowerLocs(id);
+    assert.ok(object, `current map places fixed-route cave ${id}`);
+    await operateWatchtowerLoc(f, object, null);
+    assert.ok(messages.some(m => m.includes("without a map")), "mapless click reached the ordinary map guard");
+    assert.deepEqual(xyz(f.player), destination, "the delivered mapless operation follows the fixed circuit");
+  }
+  assert.deepEqual(items(f.player), inventory);
+  assert.equal(f.player.getSkillManager().getExperience(core.Skill.AGILITY), xp);
+  assert.equal(quest("watchtower").getStage(f.player), 2);
+});
+
+test("Watchtower: a mapped cave still requires light and then reaches its skavid interior", async t => {
+  const f = actor(t, { start: [2524, 3070, 0] });
+  const [object] = watchtowerLocs(2806);
+  assert.ok(object, "mapped cave exists in the active cache");
+  f.player.getInventory().add(new core.Item(I.SKAVID_MAP, 1), false);
+  f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
+  await operateWatchtowerLoc(f, object, [2532, 9469, 0]);
+  f.player.getInventory().deleteNumber(I.LIT_CANDLE, 1);
+  const messages = [];
+  const send = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
+  await operateWatchtowerLoc(f, object, null);
+  assert.ok(messages.some(m => m.includes("light source")), "mapped cave refuses with actionable light feedback");
+  assert.ok(f.player.getLocation().getY() < 4000, "refusal cannot enter the interior");
+  f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
+  await operateWatchtowerLoc(f, object, [2532, 9469, 0]);
+  assert.equal(f.player.getInventory().getAmount(I.SKAVID_MAP), 1);
+  assert.equal(f.player.getInventory().getAmount(I.LIT_CANDLE), 1);
+});
+
+test("Watchtower: Toban's own ladder returns to the tunnel's outer entrance", async t => {
+  const f = actor(t, { start: [2576, 3029, 0] });
+  const [ladder] = watchtowerLocs(2812), [entrance] = watchtowerLocs(2811);
+  assert.ok(ladder && entrance, "both distinct Toban tunnel ends exist in the current map");
+  await operateWatchtowerLoc(f, ladder, [2500, 2988, 0]);
+  await operateWatchtowerLoc(f, entrance, [2576, 3029, 0]);
+});
+
+test("Watchtower: every actionable Yanille hole and the enclave opening have working returns", async t => {
+  const f = actor(t, { start: [2522, 9411, 0] });
+  const holes = watchtowerLocs(2823), [opening] = watchtowerLocs(2813);
+  assert.ok(holes.length > 0 && opening, "current map has the reported return objects");
+  for (const hole of holes) await operateWatchtowerLoc(f, hole, [2585, 3108, 0]);
+  await operateWatchtowerLoc(f, opening, [2540, 3054, 0]);
+  const decorative = core.ObjectDefinition.forId(2824);
+  assert.ok(!(decorative.getInteractions?.() ?? decorative.getActions() ?? []).some(Boolean), "surface hole is decorative, not an invented reverse operation");
+});
+
+test("Watchtower: third relic hand-in plays its private assembly before one completed relic is awarded", async t => {
+  const f = actor(t, WATCHTOWER_WIZARD), bystander = actor(t, WATCHTOWER_WIZARD);
+  ticks(f, 3); ticks(bystander, 3);
+  recordSender(f);
+  const { area } = await beginRelicScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea, "third hand-in starts the missing assembly cinematic");
+  assert.equal(f.player.getInventory().getAmount(I.RELIC_PART_3), 0);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0, "relic is not awarded before assembly");
+  assert.equal(quest("watchtower").getStage(f.player), 2);
+  const wizard = area.entities.find(n => n.isNpc?.() && n.getId() === core.NpcIdentifiers.WATCHTOWER_WIZARD);
+  assert.ok(wizard, "wizard is a private actor");
+  assert.equal(wizard.getAnimation().id, 5352, "cache's relic assembly animation plays");
+  assert.equal(wizard.getGraphic().getId(), 969, "cache's combining-parts effect plays");
+  assert.equal(bystander.player.getPrivateArea(), null);
+  assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION));
+  f.player.getPacketSender().sendInterfaceRemoval(); // closing the held box must not strand the scene
+  ticks(f, 12);
+  assertWatchtowerRestored(f);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(quest("watchtower").getStage(f.player), 3);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1);
+  ticks(f, 12);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1, "completion cannot double-award");
+  assert.ok(f.packets.some(p => p.op === OP.REBUILD_REGION));
+  assert.ok(f.packets.some(p => p.op === OP.REBUILD_NORMAL));
+});
+
+for (const how of ["walkout", "logout"]) test(`Watchtower: interrupted relic assembly (${how}) retains parts and can resume without another hand-in`, async t => {
+  const f = actor(t, WATCHTOWER_WIZARD);
+  ticks(f, 3);
+  const { area, npc } = await beginRelicScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea, "assembly began through item/dialogue input");
+  if (how === "logout") f.player.onLogout();
+  else { f.player.moveTo(area.tile(24, 3, 2)); ticks(f, 2); }
+  ticks(f, 12);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(quest("watchtower").getStage(f.player), 2);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0);
+  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
+  f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
+  PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+  if (f.player.isNeedsPlacement()) tick(f);
+  assert.equal(f.player.isNeedsPlacement(), false, "resume placement completed before Talk-to");
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+  ticks(f, 2);
+  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
+  assert.ok(f.player.getArea() instanceof core.TemplatedInstanceArea, "ordinary Talk-to resumes stored parts");
+  ticks(f, 12);
+  assertWatchtowerRestored(f);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1);
+});
+
+test("Watchtower: nightshade entry plays private shaman/dragon actors without changing world actors or potion progress", async t => {
+  const f = actor(t, WATCHTOWER_GUARD), bystander = actor(t, { start: [2582, 9437, 0] });
+  ticks(f, 3); ticks(bystander, 3);
+  const casts = [], deaths = [];
+  const animate = core.NPC.prototype.performAnimation;
+  t.mock.method(core.NPC.prototype, "performAnimation", function (animation) {
+    if (this.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5) casts.push(animation.id);
+    if (this.getId() === core.NpcIdentifiers.BLUE_DRAGON_6) deaths.push(animation.id);
+    return animate.call(this, animation);
+  });
+  const bits = 1 << 12;
+  f.player.setAttribute("quest.watchtower.bits", bits);
+  const worldDragon = watchtowerNpc(bystander, core.NpcIdentifiers.BLUE_DRAGON, [2592, 9431, 0]);
+  const hp = worldDragon.getHitpoints();
+  const area = await beginEnclaveScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea, "nightshade dialogue starts the missing entry cinematic");
+  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1, "entry consumes exactly one nightshade");
+  const actors = area.entities.filter(n => n.isNpc?.());
+  assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5));
+  assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.BLUE_DRAGON_6));
+  ticks(f, 12);
+  assert.ok(casts.includes(5357), "shaman performs the dedicated spellcast");
+  assert.ok(deaths.includes(92), "private dragon plays its death");
+  assertWatchtowerRestored(f);
+  assert.deepEqual(xyz(f.player), [2588, 9410, 0]);
+  assert.equal(quest("watchtower").getStage(f.player), 8);
+  assert.equal(f.player.getAttribute("quest.watchtower.bits"), bits, "scene awards no shaman kills/crystals or potion progress");
+  assert.equal(worldDragon.getHitpoints(), hp, "the world dragon is unharmed");
+  assert.equal(bystander.player.getPrivateArea(), null);
+  assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION));
+  assert.equal(f.player.getAttribute("watchtower:enclave-scene-seen"), true);
+});
+
+test("Watchtower: full-inventory assembly resume keeps progress pending until the relic is delivered", async t => {
+  const f = actor(t, WATCHTOWER_WIZARD);
+  ticks(f, 3);
+  const { area, npc } = await beginRelicScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  area.leave(f.player, true);
+  f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
+  const inventory = f.player.getInventory();
+  while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE), false);
+  assert.equal(inventory.getFreeSlots(), 0, "resumption starts with an actually full bag");
+  const before = items(f.player);
+  const resume = async () => {
+    if (f.player.isNeedsPlacement()) tick(f);
+    assert.equal(f.player.isNeedsPlacement(), false, "full-bag retry placement completed before Talk-to");
+    await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+    ticks(f, 2);
+    await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
+    assert.ok(f.player.getArea() instanceof core.TemplatedInstanceArea, "Talk-to resumes all retained parts");
+    ticks(f, 12);
+  };
+  await resume();
+  assert.equal(quest("watchtower").getStage(f.player), 2, "failed award cannot advance the quest");
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 0);
+  assert.deepEqual(items(f.player), before, "full-bag refusal preserves inventory");
+  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
+  inventory.deleteNumber(I.RAKE, 1);
+  assert.equal(inventory.getFreeSlots(), 1);
+  await resume();
+  assert.equal(quest("watchtower").getStage(f.player), 3);
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
+  assert.equal(inventory.getAmount(I.RAKE), 27);
+  ticks(f, 12);
+  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
+});
+
+test("Watchtower: early nightshade use is refused without consumption or a cinematic", async t => {
+  const f = actor(t, WATCHTOWER_GUARD);
+  quest("watchtower").setStage(f.player, 6);
+  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
+  f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 1), false);
+  const messages = [], send = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
+  await useOnNpc(f, I.CAVE_NIGHTSHADE, npc);
+  ticks(f, 6);
+  assert.ok(messages.some(m => m.includes("deal with those skavids")), "valid ordinary target reaches the quest gate");
+  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1);
+  assert.equal(quest("watchtower").getStage(f.player), 6);
+  assert.ok(!(f.player.getArea() instanceof core.TemplatedInstanceArea));
+});
+
+test("Watchtower: an in-scene saved checkpoint recovers at the real enclave entrance", async t => {
+  const f = actor(t, WATCHTOWER_GUARD);
+  const area = await beginEnclaveScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  const saved = { at: f.player.getLocation().clone(), exit: f.player.getAttribute("watchtower:scene-exit") };
+  area.leave(f.player, true);
+  const restored = actor(t, WATCHTOWER_GUARD);
+  restored.player.setLocation(saved.at);
+  restored.player.setAttribute("watchtower:scene-exit", saved.exit);
+  quest("watchtower").setStage(restored.player, 8);
+  PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
+  ticks(restored, 4);
+  assert.deepEqual(xyz(restored.player), [2588, 9410, 0]);
+  assert.equal(restored.player.getAttribute("watchtower:scene-exit"), null);
+  assert.equal(quest("watchtower").getStage(restored.player), 8);
+  assert.notEqual(restored.player.getAttribute("watchtower:enclave-scene-seen"), true, "interrupted scene is not marked watched");
+});
+
+test("Watchtower: forced death cancels assembly and uses a real grave exit without granting the relic", async t => {
+  const f = actor(t, WATCHTOWER_WIZARD);
+  ticks(f, 3);
+  const { area } = await beginRelicScene(f);
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  const request = { player: f.player, tile: { x: f.player.getLocation().getX(), y: f.player.getLocation().getY(), z: 2 } };
+  PM.emitCustomEvent("gravestones:grave-location", request);
+  assert.deepEqual(request.tile, { x: 2548, y: 3116, z: 2 });
+  const errors = [];
+  t.mock.method(console, "error", (...args) => errors.push(args.map(String).join(" ")));
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  f.player.setHitpoints(0);
+  core.TaskManager.submit(new PlayerDeathTask(f.player));
+  ticks(f, 12);
+  assert.deepEqual(errors, []);
+  assert.equal(area.isDestroyed(), true);
+  assert.ok(f.player.getLocation().getX() < 8192);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0);
+  assert.equal(quest("watchtower").getStage(f.player), 2);
+  const returned = f.player.getLocation().clone();
+  ticks(f, 12);
+  assert.ok(f.player.getLocation().equals(returned), "cancelled scene cannot move the player or grant its item later");
+});
 
 // ---- tablet and door ------------------------------------------------------------------------------------------------
 

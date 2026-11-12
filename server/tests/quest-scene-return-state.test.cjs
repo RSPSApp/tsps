@@ -106,7 +106,7 @@ const quest = (key) => QuestRuntime.getRegisteredQuests().findLast((entry) => en
 // #4412: real cache objects and ordinary packets; quest/inventory/NPC positions are
 // seeded checkpoints. These tests do not run a client or a natural full quest.
 const WATCHTOWER_WIZARD = { start: [2548, 3116, 2] };
-const WATCHTOWER_GUARD = { start: [2504, 3018, 0] };
+const WATCHTOWER_GUARD = { start: [2506, 3035, 0] };
 const xyz = player => { const p = player.getLocation(); return [p.getX(), p.getY(), p.getZ()]; };
 const items = player => player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]);
 function watchtowerLocs(id) {
@@ -123,16 +123,45 @@ async function operateWatchtowerLoc(f, object, expected) {
   const definition = core.ObjectDefinition.forId(object.getId());
   const actions = definition.getInteractions?.() ?? definition.getActions();
   assert.ok(actions[0], `cache object ${object.getId()} has its first operation`);
-  // A wall/large cave is reachable on only some sides. Placement is a checkpoint;
-  // every attempt still resolves the real object and walks/operates through packets.
-  for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1], [-1, -1], [1, 1], [0, 0]]) {
+  observeWatchtowerInputs(f);
+  let width = definition.getSizeX(), height = definition.getSizeY();
+  if (object.getFace() & 1) [width, height] = [height, width];
+  // Use the actual rotated footprint: +/-1 can be inside a 4x2 cave. Try only
+  // outside perimeter tiles, stopping at the FIRST delivered ordinary operation.
+  // An observed wrong result fails immediately, never retries until green.
+  const perimeter = [];
+  for (let x = 0; x < width; x++) perimeter.push([x, -1], [x, height]);
+  for (let y = 0; y < height; y++) perimeter.push([-1, y], [width, y]);
+  for (const [dx, dy] of perimeter) {
     f.player.moveTo(new core.Location(p.getX() + dx, p.getY() + dy, p.getZ()));
     ticks(f, 2);
+    const before = f.watchtowerObjectOps.length;
     await f.connection.dispatch([{ type: "object_option", id: object.getId(), x: p.getX(), y: p.getY(), clickType: 1 }]);
     ticks(f, 12);
-    if (JSON.stringify(xyz(f.player)) === JSON.stringify(expected)) return;
+    if (f.watchtowerObjectOps.length > before) {
+      assert.equal(f.watchtowerObjectOps.at(-1).id, object.getId(), "ordinary packet resolves the actual cache target");
+      if (expected) assert.deepEqual(xyz(f.player), expected, `ordinary object ${object.getId()} reaches its supported destination`);
+      return;
+    }
   }
-  assert.deepEqual(xyz(f.player), expected, `ordinary object ${object.getId()} reaches its supported destination`);
+  assert.fail(`ordinary object ${object.getId()} was not operated from its cache footprint perimeter`);
+}
+function observeWatchtowerInputs(f) {
+  if (f.watchtowerObjectOps) return;
+  f.watchtowerObjectOps = [];
+  f.watchtowerItemOps = [];
+  const objectOp = PM.emitObjectInteraction;
+  f.t.mock.method(PM, "emitObjectInteraction", function (event) {
+    const result = objectOp.call(this, event);
+    if (event.player === f.player) f.watchtowerObjectOps.push({ id: event.objectId, option: event.option, handled: event.handled });
+    return result;
+  });
+  const itemOp = PM.emitItemOnNpc;
+  f.t.mock.method(PM, "emitItemOnNpc", function (event) {
+    const result = itemOp.call(this, event);
+    if (event.player === f.player) f.watchtowerItemOps.push({ item: event.itemId, npc: event.npcId, handled: event.handled });
+    return result;
+  });
 }
 function watchtowerNpc(f, id, at) {
   const npc = core.NPC.create(id, new core.Location(...at));
@@ -143,8 +172,13 @@ function watchtowerNpc(f, id, at) {
 async function useOnNpc(f, itemId, npc) {
   const slot = f.player.getInventory().getSlotForItemId(itemId);
   assert.ok(slot >= 0, "ordinary item-on-NPC input has the supplied item");
+  observeWatchtowerInputs(f);
+  const before = f.watchtowerItemOps.length;
   await f.connection.dispatch([{ type: "inventory_use_on", itemId, slot, target: { kind: "npc", id: npc.getIndex() } }]);
-  ticks(f, 2);
+  ticks(f, 6); // same bounded walk/turn allowance as this fixture's existing playScene
+  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered (item ${itemId}, npc ${npc.getId()}, player ${xyz(f.player)})`);
+  assert.equal(f.watchtowerItemOps.at(-1).item, itemId);
+  assert.equal(f.watchtowerItemOps.at(-1).npc, npc.getContentId(f.player), "ordinary input resolves the intended current NPC");
 }
 async function beginRelicScene(f) {
   quest("watchtower").setStage(f.player, 2);
@@ -153,14 +187,18 @@ async function beginRelicScene(f) {
   const npc = watchtowerNpc(f, core.NpcIdentifiers.WATCHTOWER_WIZARD, [2549, 3116, 2]);
   await useOnNpc(f, I.RELIC_PART_3, npc);
   await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
+  assert.equal(f.player.getInventory().getAmount(I.RELIC_PART_3), 0, "third part was actually handed in through the ordinary input");
+  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (1 << 8), 1 << 8, "third hand-in bit is set before testing cinematic absence");
   return { area: f.player.getArea(), npc };
 }
 async function beginEnclaveScene(f) {
   quest("watchtower").setStage(f.player, 7);
   f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 2), false);
-  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2504, 3019, 0]);
+  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
   await useOnNpc(f, I.CAVE_NIGHTSHADE, npc);
   await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 50);
+  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1, "ordinary guard hand-in consumes exactly one nightshade before scene assertion");
+  assert.equal(quest("watchtower").getStage(f.player), 8, "ordinary guard hand-in reaches stage 8 before scene assertion");
   return f.player.getArea();
 }
 function assertWatchtowerRestored(f) {
@@ -176,10 +214,14 @@ test("Watchtower: four mapless entries follow different surface caves without li
   const f = actor(t, { start: [2524, 3070, 0] });
   quest("watchtower").setStage(f.player, 2);
   const inventory = items(f.player), xp = f.player.getSkillManager().getExperience(core.Skill.AGILITY);
+  const messages = [], send = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
   for (const [id, destination] of [[2806, [2540, 3055, 0]], [2807, [2553, 3055, 0]], [2808, [2552, 3034, 0]], [2809, [2563, 3024, 0]]]) {
     const [object] = watchtowerLocs(id);
     assert.ok(object, `current map places fixed-route cave ${id}`);
-    await operateWatchtowerLoc(f, object, destination);
+    await operateWatchtowerLoc(f, object, null);
+    assert.ok(messages.some(m => m.includes("without a map")), "mapless click reached the ordinary map guard");
+    assert.deepEqual(xyz(f.player), destination, "the delivered mapless operation follows the fixed circuit");
   }
   assert.deepEqual(items(f.player), inventory);
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.AGILITY), xp);
@@ -191,13 +233,13 @@ test("Watchtower: a mapped cave still requires light and then reaches its skavid
   const [object] = watchtowerLocs(2806);
   assert.ok(object, "mapped cave exists in the active cache");
   f.player.getInventory().add(new core.Item(I.SKAVID_MAP, 1), false);
+  f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
+  await operateWatchtowerLoc(f, object, [2532, 9469, 0]);
+  f.player.getInventory().deleteNumber(I.LIT_CANDLE, 1);
   const messages = [];
   const send = f.player.sendMessage.bind(f.player);
   t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
-  const p = object.getLocation();
-  f.player.moveTo(new core.Location(p.getX(), p.getY() + 1, 0));
-  await f.connection.dispatch([{ type: "object_option", id: 2806, x: p.getX(), y: p.getY(), clickType: 1 }]);
-  ticks(f, 12);
+  await operateWatchtowerLoc(f, object, null);
   assert.ok(messages.some(m => m.includes("light source")), "mapped cave refuses with actionable light feedback");
   assert.ok(f.player.getLocation().getY() < 4000, "refusal cannot enter the interior");
   f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
@@ -343,7 +385,7 @@ test("Watchtower: full-inventory assembly resume keeps progress pending until th
 test("Watchtower: early nightshade use is refused without consumption or a cinematic", async t => {
   const f = actor(t, WATCHTOWER_GUARD);
   quest("watchtower").setStage(f.player, 6);
-  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2504, 3019, 0]);
+  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
   f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 1), false);
   const messages = [], send = f.player.sendMessage.bind(f.player);
   t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });

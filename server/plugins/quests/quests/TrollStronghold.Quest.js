@@ -279,8 +279,9 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   /** Pockets hold one key each; once both cell keys are held, the stage moves on. */
   function addCellKey(player, itemId) {
-    // Wiki (Berry): the cell key comes from pickpocketing "Only during Troll Stronghold".
-    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY || quest.getStage(player) >= STAGE_COMPLETE) return;
+    // Only the pickpocket path stops at completion (Wiki, Twig and Berry: "Only during Troll Stronghold" is on the
+    // Pickpocketing rows; their kill drops are a plain 100% cell key), so a kill after the quest still drops it.
+    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) return;
     if (!held(player, itemId)) {
       const inventory = player.getInventory();
       const before = inventory.getAmount(itemId);

@@ -133,7 +133,7 @@ export class Projectile {
             startHeight,
             endHeight,
             across ? null : source.getPrivateArea()
-        ).withSource(source);
+        ).withSource(source.isPlayer?.() ? null : source);
     }
 
     /** `centreOf`, from the main-world tile under a mobile aboard a boat. */
@@ -148,8 +148,10 @@ export class Projectile {
      * the projectile from where the mobile is drawn: a caster that attacks on the tick it steps
      * into range is still walking there on screen.
      */
-    public withSource(source: Mobile): Projectile {
-        this.sourceIndex = Projectile.resolveLockonTargetIndex(source);
+    public withSource(source: Mobile | null): Projectile {
+        // rsprox: a player's projectile never names its caster (0 of ~450,000 map_projanim
+        // sources); live starts it from the caster's tile. NPCs keep theirs (some are recorded so).
+        this.sourceIndex = source ? Projectile.resolveLockonTargetIndex(source) : 0;
         return this;
     }
 

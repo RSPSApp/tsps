@@ -294,9 +294,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
 
   const IVANDIS_FLAIL_ITEM_ID = ItemIdentifiers.IVANDIS_FLAIL; // 22398
   const DRAKANS_MEDALLION_ITEM_ID = ItemIdentifiers.DRAKANS_MEDALLION; // 22400
-  const RUBY_ITEM_ID = ItemIdentifiers.RUBY; // 1603
   const KNIFE_ITEM_ID = ItemIdentifiers.KNIFE; // 946
-  const CHISEL_ITEM_ID = ItemIdentifiers.CHISEL; // 1755
   const COSMIC_RUNE_ITEM_ID = ItemIdentifiers.COSMIC_RUNE; // 564
   const FIRE_RUNE_ITEM_ID = ItemIdentifiers.FIRE_RUNE; // 554
   const ENCHANT_RUBY_TABLET_ITEM_ID = ItemIdentifiers.ENCHANT_RUBY_OR_TOPAZ; // 8018
@@ -3583,6 +3581,13 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     }
   }
 
+  /** The ruby on a silver sickle (b) (Crafting's gem sickles) is made between Vertida's logs and the flail. */
+  function allowRubySickle(request) {
+    if (request.product !== RUBY_SICKLE_ITEM_ID) return;
+    const stage = quest.getStage(request.player);
+    if (stage >= STAGE_LOGS_GIVEN && stage < STAGE_FLAIL) request.allowed = true;
+  }
+
   function handleItemOnItem(event) {
     const { player, usedItemId, usedWithItemId } = event;
     if (!player) return;
@@ -3599,19 +3604,6 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       give(player, LONG_VINE_ITEM_ID, 1);
       player.sendMessage("You twist the vines together to make a long vine.");
       syncQuestObjects(player);
-      return;
-    }
-    if (pair.has(RUBY_ITEM_ID) && pair.has(SILVER_SICKLE_BLESSED_ITEM_ID)) {
-      if (stage < STAGE_LOGS_GIVEN || stage >= STAGE_FLAIL) return;
-      event.handled = true;
-      if (!held(player, CHISEL_ITEM_ID)) {
-        player.sendMessage("You need a chisel to set the ruby into the sickle.");
-        return;
-      }
-      player.getInventory().deleteNumber(RUBY_ITEM_ID, 1);
-      player.getInventory().deleteNumber(SILVER_SICKLE_BLESSED_ITEM_ID, 1);
-      give(player, RUBY_SICKLE_ITEM_ID, 1);
-      player.sendMessage("You embed the ruby into the silver sickle.");
       return;
     }
     if (pair.has(COSMIC_RUNE_ITEM_ID) && pair.has(RUBY_SICKLE_ITEM_ID)) {
@@ -3846,6 +3838,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
+  api.onCustomEvent("crafting:gem-sickle-allowed", allowRubySickle);
   api.onItemAction("Tome of Experience", { Read: readTome });
   api.onItemAction("Old note", { Read: readOldNote });
   api.onCustomEvent("drakan-medallion:destinations", addDarkmeyerMedallionDestination);

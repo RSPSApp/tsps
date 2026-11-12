@@ -1,5 +1,5 @@
 /**
- * Native legacy chat-channel challenges for the bounded Plateau/melee-only LTS and kill-target slice.
+ * Native legacy chat-channel challenges for bounded Plateau/melee-only team battles.
  * Messages are implementation wording; there is no team-match recording to quote.
  * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
@@ -60,9 +60,9 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee LTS or first-to-kills - Plateau", Common.uid("clanwars_setup:title"));
-      // The cache creates mode rows at index * 3 (script 576). Only LTS and
-      // kill targets are accepted. Every actual row must transmit: script579
+      sender.sendString("Melee team battles - Plateau", Common.uid("clanwars_setup:title"));
+      // The cache creates mode rows at index * 3 (script 576). Every actual row
+      // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
@@ -148,7 +148,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing or First to X kills on Plateau. Timed and objective modes are unavailable. Choose a mode and team cap, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau. Objective modes are unavailable. Choose a mode and team cap, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -251,8 +251,8 @@ function click(event) {
     if (clicked("clanwars_setup:wincondition")) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
-        && slot / 3 < Rules.KILL_TARGETS.length) return changeRules(session, player, "wincondition", slot / 3);
-      player.sendMessage("Only Last Team Standing and First to X kills are supported.");
+        && Rules.create(session.rules.playercap, slot / 3)) return changeRules(session, player, "wincondition", slot / 3);
+      player.sendMessage("Only Last Team Standing, First to X kills and Most kills are supported.");
     }
     // A forged unsupported selection cannot alter the server's offer, nor leave a
     // client-only optimistic selection behind for the confirmation screen.

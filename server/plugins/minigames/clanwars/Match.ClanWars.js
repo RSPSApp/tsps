@@ -1,6 +1,6 @@
 /**
- * Wiki-backed legacy-channel LTS and First-to-X kills: two-minute preparation, safe
- * deaths and jail. Kill-target battles permit late entry and unrestricted jail return.
+ * Wiki-backed legacy-channel LTS, First-to-X kills and timed Most kills: two-minute
+ * preparation, safe deaths and jail. Respawning modes permit late entry and jail return.
  * No rewards or inventory snapshots.
  * Uncaptured cleanup policy: withdrawal/disconnect eliminates; both empty cancels without a
  * winner. Landing/wall placement is chosen from the active Plateau map, not a recording.
@@ -8,6 +8,8 @@
 const C = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const PREPARATION_TICKS = 200;
+// Rev242 varbits4290/4291 are 16 bits; HUD script595 renders this value as "Lots!".
+const MAX_HUD_KILLS = 65535;
 const ORIGIN = [3264, 4928];
 const SIZE = 8;
 const LANDINGS = [[3293, 4933, 0], [3293, 4986, 0]];
@@ -34,7 +36,8 @@ function arenaClass() {
     isMulti() { return true; }
     canAttack(attacker, target, method) {
       if (!attacker.isPlayer() || !target.isPlayer()) return false;
-      if (this.game.phase !== "combat" || attacker.getArea() !== this || target.getArea() !== this) return false;
+      if (this.game.phase !== "combat" || this.game.expired()
+        || attacker.getArea() !== this || target.getArea() !== this) return false;
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
       // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
@@ -56,8 +59,9 @@ function arenaClass() {
 function hud(game, player) {
   C.bit(player, "clanwars_useclansystem", 0);
   C.bit(player, "clanwars_wincondition", game.rules.wincondition);
-  C.bit(player, "clanwars_kills_1", game.kills[0]);
-  C.bit(player, "clanwars_kills_2", game.kills[1]);
+  C.bit(player, "clanwars_kills_1", Math.min(MAX_HUD_KILLS, game.kills[0]));
+  C.bit(player, "clanwars_kills_2", Math.min(MAX_HUD_KILLS, game.kills[1]));
+  C.bit(player, "clanwars_timeremaining", game.timeRemaining());
   C.bit(player, "clanwars_myteam", game.members.get(player) + 1);
   C.bit(player, "clanwars_players_1", [...game.fighters.values()].filter((side) => side === 0).length);
   C.bit(player, "clanwars_players_2", [...game.fighters.values()].filter((side) => side === 1).length);
@@ -76,6 +80,7 @@ class Game {
     this.kills = [0, 0];
     this.phase = "staging";
     this.starts = C.now() + PREPARATION_TICKS;
+    this.ends = null;
     this.area = new (arenaClass())(this);
     this.walls = [];
     const wallId = C.core.CacheDefinitions.getLocId("clanwars_barrier_darkrock");
@@ -113,15 +118,28 @@ class Game {
   }
   canJoin() {
     return this.phase === "staging" && C.now() < this.starts
-      || this.phase === "combat" && Rules.killTarget(this.rules) > 0;
+      || this.phase === "combat" && Rules.respawns(this.rules) && !this.expired();
+  }
+  expired() { return this.phase === "combat" && this.ends != null && C.now() >= this.ends; }
+  timeRemaining() {
+    if (this.phase === "staging") return Rules.timeLimitTicks(this.rules);
+    return this.phase === "combat" && this.ends != null ? Math.max(0, this.ends - C.now()) : 0;
+  }
+  expire() {
+    if (!this.expired()) return false;
+    // Exact-deadline callbacks do not add kills or channel-leave penalties.
+    // This cutoff and an equal-score draw are explicit, uncaptured policies.
+    this.finish(this.kills[0] === this.kills[1] ? null : this.kills[0] > this.kills[1] ? 0 : 1);
+    return true;
   }
   score(side) {
-    if (this.phase !== "combat" || !Rules.killTarget(this.rules)) return;
+    if (this.expire() || this.phase !== "combat" || !Rules.respawns(this.rules)) return;
     this.kills[side]++;
-    if (this.kills[side] >= Rules.killTarget(this.rules)) this.finish(side);
+    const target = Rules.killTarget(this.rules);
+    if (target && this.kills[side] >= target) this.finish(side);
   }
   rejoin(player) {
-    if (this.phase !== "combat" || !Rules.killTarget(this.rules) || !this.jailed.has(player)
+    if (this.phase !== "combat" || this.expired() || !Rules.respawns(this.rules) || !this.jailed.has(player)
       || dying.has(player) || player.getHitpoints() <= 0 || player.busy()
       || player.getArea() !== this.area
       || C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) return false;
@@ -135,19 +153,22 @@ class Game {
   }
   channelLeft(player) {
     const side = this.members.get(player);
-    if (side == null) return;
+    if (side == null || this.expire()) return;
     // Fixed leavingcc=0: a fighter leaving the channel counts as an opposing kill.
     // A fighter already in a death callback or jail is not a second death.
     if (this.fighters.has(player)) this.score(1 - side);
     this.remove(player, false);
   }
   tick() {
+    if (this.expire()) return;
     for (const player of this.members.keys()) {
       if (C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) this.channelLeft(player);
       if (this.phase === "over") return;
     }
     if (this.phase === "staging" && C.now() >= this.starts) {
       this.phase = "combat";
+      const duration = Rules.timeLimitTicks(this.rules);
+      this.ends = duration ? C.now() + duration : null;
       for (const wall of this.walls) C.core.ObjectManager.deregister(wall, true);
       this.walls = [];
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
@@ -155,13 +176,14 @@ class Game {
     if (this.phase === "combat") {
       // Jail and pending safe deaths retain their roster slot in respawning modes.
       // A temporary lack of living fighters must not end a 1v1 after its first kill.
-      const sides = new Set((Rules.killTarget(this.rules) ? this.members : this.fighters).values());
+      const sides = new Set((Rules.respawns(this.rules) ? this.members : this.fighters).values());
       if (sides.size < 2) return this.finish(sides.size ? [...sides][0] : null);
     }
     for (const player of this.members.keys()) {
       C.bit(player, "clanwars_countdown", this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0);
-      C.bit(player, "clanwars_kills_1", this.kills[0]);
-      C.bit(player, "clanwars_kills_2", this.kills[1]);
+      C.bit(player, "clanwars_kills_1", Math.min(MAX_HUD_KILLS, this.kills[0]));
+      C.bit(player, "clanwars_kills_2", Math.min(MAX_HUD_KILLS, this.kills[1]));
+      C.bit(player, "clanwars_timeremaining", this.timeRemaining());
       C.bit(player, "clanwars_players_1", [...this.fighters.values()].filter((team) => team === 0).length);
       C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
     }
@@ -182,7 +204,7 @@ class Game {
     player.getPacketSender().closeSubInterface(C.uid("toplevel_osrs_stretch:overlay_hud"));
     player.getPacketSender().sendPlayerOption(1, "", true);
     C.bit(player, "clanwars_accept", 0);
-    for (const name of ["clanwars_myteam", "clanwars_wincondition", "clanwars_countdown", "clanwars_players_1", "clanwars_players_2", "clanwars_kills_1", "clanwars_kills_2"]) C.bit(player, name, 0);
+    for (const name of ["clanwars_myteam", "clanwars_wincondition", "clanwars_countdown", "clanwars_timeremaining", "clanwars_players_1", "clanwars_players_2", "clanwars_kills_1", "clanwars_kills_2"]) C.bit(player, name, 0);
     // Remove ownership before moving so Area.leave can safely re-enter without recursion.
     this.area.leave(player, logout);
     if (logout) player.setLocation(C.location(C.RETURN));
@@ -193,7 +215,13 @@ class Game {
     this.phase = "over";
     this.task.stop();
     active.delete(this);
-    for (const [player, game] of joining) if (game === this) joining.delete(player);
+    for (const [player, game] of joining) if (game === this) {
+      joining.delete(player);
+      if (!C.negotiations.has(player) && player.getInterfaceId() === C.group("clanwars_confirm")) {
+        player.getPacketSender().sendInterfaceRemoval();
+        player.sendMessage("This Clan Wars battle has ended.");
+      }
+    }
     for (const key of this.channelKeys) if (C.channelGames.get(key) === this) C.channelGames.delete(key);
     const recipients = [...this.members.entries()];
     for (const [player, side] of recipients) {
@@ -235,11 +263,19 @@ function enter({ player }) {
 function joinClicked(event) {
   const game = joining.get(event.player);
   if (!game || event.groupId !== C.group("clanwars_confirm")) return;
-  if (C.negotiations.has(event.player) || !game.canJoin() || !active.has(game)) {
+  if (C.negotiations.has(event.player)) {
     joining.delete(event.player);
     return;
   }
   event.handled = true;
+  if (!game.canJoin() || !active.has(game)) {
+    joining.delete(event.player);
+    if (event.player.getInterfaceId() === C.group("clanwars_confirm")) {
+      event.player.getPacketSender().sendInterfaceRemoval();
+      event.player.sendMessage("You cannot enter this battle now.");
+    }
+    return;
+  }
   if (event.childId !== (C.uid("clanwars_confirm:button") & 65535) || (event.opId ?? event.action) !== 1) return;
   joining.delete(event.player);
   if (event.player.getInterfaceId() !== C.group("clanwars_confirm")) return;
@@ -267,6 +303,7 @@ function noBones(event) { if (C.matches.has(event.player) || dying.has(event.pla
 function died(event) {
   const state = dying.get(event.player);
   if (!state) return;
+  state.game.expire();
   dying.delete(event.player);
   event.handled = true;
   if (state.game.phase === "over" || !state.game.members.has(event.player)) event.player.moveTo(C.location(C.RETURN));
@@ -280,7 +317,7 @@ function leave({ player }) { const game = C.matches.get(player); if (!game) retu
 function exit(event) {
   const game = C.matches.get(event.player);
   if (!game) return false;
-  if (game.jailed.has(event.player) && Rules.killTarget(game.rules)) {
+  if (game.jailed.has(event.player) && Rules.respawns(game.rules)) {
     if (!game.rejoin(event.player)) event.player.sendMessage("You cannot rejoin this battle now.");
     return true;
   }

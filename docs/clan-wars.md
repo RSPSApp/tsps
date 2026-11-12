@@ -17,7 +17,7 @@ free-for-all portal remains separate.
   `clanwars_setup`, `clanwars_confirm`, `clanwars_hud`, `clanwars_gameover`;
   scripts 554, 591 and 592; enum 374 (mode), 929 (arena), 2340/2341 (team cap).
   These establish client contracts, not server defaults or death policies.
-- Active revision 241 cache/map: Challenge portal at 3126,3620; Plateau template
+- Original LTS delivery, revision 241 cache/map: Challenge portal at 3126,3620; Plateau template
   region 51,77, its paired dark-rock Forfeit portals and east-side jail exits.
   The selected landing and jail tiles were checked against real collision.
 - No team setup, HUD, result or viewing interface appeared in the inspected local
@@ -28,9 +28,10 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing or First to X kills on Plateau**; this is an explicit
-supported configuration, not a claim about official default settings. The team cap and Last Team Standing / First-to-X-kills mode are negotiable. Other
-combat and arena controls are hidden; timed and objective mode selections are refused and reset to the server offer.
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau**;
+this is an explicit supported configuration, not a claim about official default settings.
+The team cap and supported mode are negotiable. Other combat and arena controls are hidden;
+objective mode selections are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
 100v100. Uncapped still respects the absolute 100-fighter maximum. Both captains
@@ -72,7 +73,7 @@ choices where no exact team recording was available. Both-empty ends without a w
 there is no guessed reward or penalty. Cache collision verifies separation and reachability,
 but does not establish official server placement or cleanup policy.
 
-Other arenas, adjustable combat restrictions, timed/King-of-the-Hill/Oddskull
+Other arenas, adjustable combat restrictions, King-of-the-Hill/Oddskull
 modes, modern-clan selection, spectating, exact official messages and exact team-specific
 ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
 restriction avoids introducing an unverified ammunition-return implementation. No dangerous
@@ -112,7 +113,7 @@ The native setup scrollbox creates each clickable mode row at subchild `3 * mode
 (script 576). Every native mode row transmits so the server can reset an unsupported optimistic
 client selection. Both confirmation stages list the
 chosen target. A mode change preserves the cap, invalidates both acceptances and
-applies the existing opponent-change delay. Timed and objective rows are refused.
+applies the existing opponent-change delay. Objective rows are refused; timed modes are described below.
 The existing HUD consumes the chosen `clanwars_wincondition` and `clanwars_kills_1/2`
 through script 595, showing the target and both scores.
 
@@ -143,3 +144,49 @@ real negotiation packets, attack input, hit queues, death tasks, actual cache
 portals and instance ownership. They are deterministic server-path evidence;
 these supplied inputs do not establish natural combat RNG or a rendered client
 playthrough. Runtime results and independent acceptance are reported with the PR.
+
+
+## Timed Most-kills battles
+
+[Wiki Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+says the team with the most kills for the selected duration wins and fighters may
+enter at any time. The primary [Clan Wars Game Modes & More update, revision 11842615](https://oldschool.runescape.wiki/w/Update:Clan_Wars_Game_Modes_%26_More?oldid=11842615)
+describes mutually selected timed deathmatch, won by the most kills in the set period.
+The same pinned revision-242 enum dump above maps modes 16–20 through enum 1119 to
+5, 10, 20, 60 and 120 minutes. These are 500, 1,000, 2,000, 6,000 and 12,000 server
+ticks at the engine's 600ms processing cycle.
+
+The native mode rows and both confirmation stages select the duration while
+preserving the fighter cap and fixed melee terms. Preparation retains the full
+selected duration. Combat time starts when the preparation wall is removed.
+The existing safe-death, jail Exit, unrestricted return, late entry, cap reservation
+and leaving-channel rules apply. Having no living fighters temporarily does not
+end a respawning battle. The earlier explicit empty-roster withdrawal/no-show
+cleanup policy also remains; this is not evidence of exact retail forfeit behavior.
+
+At the deadline the higher authoritative kill score wins. Equal scores end without
+a winner using script 592's neutral “Game Over!” presentation. Exact tie and callback
+ordering are unrecorded implementation policies: scoring occurs at the death task's
+first `player:dying` callback, and callbacks at or after the deadline add no score,
+even if the lethal hit occurred beforehand. The deadline also blocks further
+combat, entry and jail return, and is resolved before a channel-leave penalty.
+Queued deaths remain safe across result and instance cleanup, using the shared
+pending-death owner before match membership is removed.
+
+Revision-242 script 595 shows scores when enum 1119 is nonzero. Timer varbit
+`clanwars_timeremaining` has bits 0–14, sufficient for the 12,000-tick maximum.
+Script 213 pauses the display while the preparation countdown is positive and
+converts each server tick to 30 client cycles; script 744 formats 50 cycles per
+second. Scripts 213/743 resynchronize and count down the native timer. Scores use
+the existing 16-bit varbits 4290/4291: script 595 displays “Lots!” at 65,535, so only
+the outbound HUD saturates there. Full server scores determine the winner. Cleanup
+clears the timer and scores; a following untimed match starts with zero timer.
+
+The existing fixture covers all five native mode selections, preparation and timer
+units, a complete 500-tick five-minute battle with real melee hit/death tasks,
+respawn/portal return, late entry, unequal and tied results, cleanup and a second
+untimed battle. Exact-deadline and large-score checks use explicit clock/score
+checkpoints; they do not claim 65,536 naturally earned kills or retail event ordering.
+Outgoing native-script argument observations pass through the real packet sender
+and do not establish rendered-client presentation. Runtime outcomes and independent
+acceptance belong to the PR evidence, not these coverage descriptions.

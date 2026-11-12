@@ -75,11 +75,15 @@ function actor(t, rd = 4) {
     assert.equal(p.isRegistered(), false); assert.equal(core.TaskManager.hasActiveTask(p), false); assert.equal(core.TaskManager.hasActiveTask(index), false);
   });
   seed(p, "black_knights_fortress"); seed(p, "druidic_ritual"); seed(p, "recruitment_drive", rd);
+  // Talk-to reaches the seated NPC from beside his bench. Walking into the
+  // bench/NPC tile is not the interaction's admission rule. Keep real clipping
+  // on the supplied standing tile; talk() proves ordinary engine admission.
   const adjacent = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) =>
-    core.RegionManager.canMove(2997 + dx, 3373 + dy, 2997, 3373, 0, 1, 1, null)
-    && !core.RegionManager.blocked(new core.Location(2997 + dx, 3373 + dy, 0), null));
+    !core.RegionManager.blocked(new core.Location(2997 + dx, 3373 + dy, 0), null));
   assert.ok(adjacent, "real spawn has a walkable adjacent tile");
   p.moveTo(new core.Location(2997 + adjacent[0], 3373 + adjacent[1], 0));
+  assert.equal(core.RegionManager.blocked(p.getLocation(), null), false);
+  assert.equal(p.getLocation().isWithinDistance(tiffy.getLocation(), 1), true);
   assert.equal(p.isNeedsPlacement(), true, "placement starts pending");
   const cycle = core.World.getProcessCycle();
   for (let i = 0; i < 4 && p.isNeedsPlacement(); i++) turn();

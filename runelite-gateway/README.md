@@ -31,7 +31,10 @@ DEV_USERNAME=gwdev,gwtest yarn gateway:test
 
 The gateway reads its ports from the root `.env`, the same block `scripts/wt` writes
 ([docs/worktrees.md](../docs/worktrees.md)): `GATEWAY_PORT` (43595 in the main checkout, 43900 + N
-in slot N) and `WEBSOCKET_PORT`. It serves JS5 from the cache in `server/target.txt`.
+in slot N) and `WEBSOCKET_PORT`. It serves JS5 from the cache in `server/target.txt`, with the
+few files the official client gets changed listed in
+[`ClientCachePatches`](src/main/kotlin/gateway/cache/ClientCachePatches.kt): enum 850 suggests no
+world in the Grouping tab, since a tsps server is one world.
 
 The login key is generated on first start into `runelite-gateway/keys/rsa.txt` (not committed). Startup
 prints its modulus for the RSProx target.
@@ -105,7 +108,7 @@ What helped most in fixing the gateway, roughly in order:
 | --- | --- |
 | `config` | `.env` and `server/target.txt` |
 | `crypto` | the login RSA key |
-| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index |
+| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` |
 | `net` | rsprot's network service: JS5 from the cache, login, the 242 codecs |
 | `tsps` | the tsps WebSocket and its wire format |
 | `session` | per-player state; `GatewaySession` bridges one client to tsps; `EntityWorld` is its rsprot player/NPC/world-entity world |

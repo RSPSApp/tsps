@@ -4,7 +4,9 @@ const { leap, gapJump, wallScramble } = require("../Steps.Agility");
 
 /**
  * Draynor Village Rooftop. Steps, sounds and ticks follow rsprox captures 91, 1718 and 1723
- * (Leagues V, rev 227; no main-game recording), tiles walked from 1723. XP is the Wiki's.
+ * (Leagues V, rev 227), tiles walked from 1723, and the main-game captures of rev 241 and 242
+ * (20261108T062407-ae5c1f1 and 20 more: 551 laps) agree with them. XP is the Wiki's, which the
+ * captured `helper_agility_add_xp` amounts match.
  */
 const TIGHTROPE_SOUND = 2495;
 const SIDESTEP_SOUND = 2451;
@@ -105,12 +107,15 @@ module.exports = {
       level: 1,
       xp: 79,
       route: [3101, 3261, 3],
-      // Down onto the crate a tick after arriving, and down to the ground three ticks later.
+      // Down onto the crate a tick after arriving, and down to the ground three ticks later, with
+      // the lap; the obstacle ends a tick after that (as captured).
       steps: [
         ...leap([3102, 3261, 1], { windup: 1 }),
         { wait: 1 },
         { anim: -1 },
         ...leap([3103, 3261, 0], { windup: 1 }),
+        { complete: true },
+        { wait: 1 },
       ],
     },
   ],

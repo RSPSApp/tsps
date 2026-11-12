@@ -25,7 +25,7 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `render` | Optional walk animation for the whole crossing (`"BALANCE_WALK"`) |
 | `route` | Optional tile the player walks to before starting |
 | `requires` | Optional: alternatives, any one of which lets the player use it (below). Without it, `level` is the Agility needed |
-| `fail` | Optional: the chance (`low`/`high`, the Wiki's success chart), `xp` and `steps` of a failure, or `cross: true` and `hit` (a range, or `{ "percent": 5, "plus": 1 }` of the player's Hitpoints) and `hits` (how many) when a failed attempt still gets across |
+| `fail` | Optional: the chance (`low`/`high`, the Wiki's success chart), `xp` and `steps` of a failure, or `cross: true` and `hit` (a range, or `{ "percent": 5, "plus": 1 }` of the player's Hitpoints, with an optional `"max"`) and `hits` (how many) when a failed attempt still gets across |
 | `unverified`, `note` | What has no capture behind it, or where a value comes from (`rsprox captures <ids>`: see `docs/agility-shortcuts.md`) |
 
 and one way to play it:

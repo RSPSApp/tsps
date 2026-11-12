@@ -4,6 +4,13 @@ const { Anim } = require("./Constants.Agility");
 const JUMP_DOWN_SOUND = 2462;
 /** The scrape of a jump up a wall to grab its ledge (rsprox captures). */
 const WALL_JUMP_SOUND = 2468;
+/** A rooftop fall's hurt (human_hit_1-4), one of the four each time, 20 cycles in (rsprox captures). */
+const HURT_SOUNDS = [518, 519, 520, 521];
+
+/** The hurt sound of a fall, chosen per attempt (call it inside a steps function). */
+function hurt() {
+  return { sound: HURT_SOUNDS[Math.floor(Math.random() * HURT_SOUNDS.length)], delay: 20 };
+}
 
 /** Climbs (wall, net, tree) onto another plane: animate, then land a tick later. */
 function climb(destination, animation = Anim.CLIMB_UP, ticks = 1) {
@@ -74,4 +81,4 @@ function balance(...path) {
   return [{ walk: path }];
 }
 
-module.exports = { climb, leap, gapJump, wallScramble, balance, faceLoc, JUMP_DOWN_SOUND, WALL_JUMP_SOUND };
+module.exports = { climb, leap, gapJump, wallScramble, balance, faceLoc, hurt, JUMP_DOWN_SOUND, WALL_JUMP_SOUND };

@@ -36,9 +36,9 @@ const World = {
   }),
 };
 
-function player(name, { profile = "main", x = 3200, y = 3200, z = 0, privacy = "on", bot = false, combat = 50 } = {}) {
+function player(name, { profile = "main", x = 3200, y = 3200, z = 0, privacy = "on", bot = false, combat = 50, mode = null } = {}) {
   const self = {
-    name, privacy, attributes: new Map(), messages: [], strings: new Map(), hidden: new Map(),
+    name, privacy, mode, attributes: new Map(), messages: [], strings: new Map(), hidden: new Map(),
     friends: new Set(), ignores: new Set(), interfaceId: -1, location: { x, y, z },
     getUsername: () => name,
     getProfile: () => profile,
@@ -144,6 +144,7 @@ beforeEach(() => {
     onServerStartup: (handler) => (hooks.startup = handler),
     onPlayerLogin: (handler) => (hooks.login = handler),
     onPlayerLogout: (handler) => (hooks.logout = handler),
+    onServerStartup: (handler) => (hooks.startup = handler),
     onObjectInteraction: (name, actions) => hooks.objects.set(name, actions),
     onCustomEvent: (name, handler) => hooks.custom.set(name, [...(hooks.custom.get(name) ?? []), handler]),
     emitCustomEvent: (name, payload) => {
@@ -152,6 +153,10 @@ beforeEach(() => {
     },
     onInterfaceActionButton: (ids, handler) => [].concat(ids).forEach((id) => hooks.buttons.set(id, handler)),
   });
+  // The Ironman plugin's answer: a test player's `mode` ("group" for a Group Ironman).
+  hooks.custom.set("ironman:mode", [(query) => {
+    if (query.player?.mode) query.mode = query.player.mode;
+  }]);
 });
 
 afterEach(() => {
@@ -700,4 +705,265 @@ test("a row id still names the same row after the list is refreshed", () => {
   select(alice, { id: before });
   primary(alice);
   assert.equal(said(bob), "Alice has invited you to join their group. Type ::group to answer.");
+});
+
+// --- Group Ironman groups ---------------------------------------------------------------------
+
+const { Kinds, Leadership, Leaving } = Grouping._test;
+const iron = (name, options = {}) => login(player(name, { ...options, mode: "group" }));
+const afterLeaving = () => Date.now() + Leaving.LEAVING_MS + 1000;
+const leavingOf = (self) => groupOf(self)?.leaving.get(encoded(self.name));
+
+test("a Group Ironman's group takes only Group Ironmen, and a Group Ironman joins no other kind", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = login(player("Carl"));
+  const dana = login(player("Dana"));
+
+  assert.equal(group(alice, "invite", "Carl"), Kinds.MESSAGE.ONLY_IRONMEN);
+  assert.equal(groupOf(alice), undefined, "a refused invitation forms no group");
+  wait();
+  assert.equal(group(carl, "invite", "Bob"), Kinds.MESSAGE.IRONMAN_ELSEWHERE);
+  wait();
+  group(alice, "invite", "Bob");
+  group(bob, "accept");
+  assert.equal(groupOf(bob), groupOf(alice));
+  assert.equal(groupOf(alice).ironman, true);
+  assert.equal(emit("grouping:get", { player: bob }).group.ironman, true);
+
+  // Dana is invited to a plain group, then becomes a Group Ironman before she accepts.
+  wait();
+  group(carl, "invite", "Dana");
+  dana.mode = "group";
+  assert.equal(group(dana, "accept"), Kinds.MESSAGE.IRONMAN_ELSEWHERE);
+  assert.equal(groupOf(dana), undefined);
+  assert.equal(groupOf(carl).ironman, false);
+
+  // Find lists only players of the group's kind.
+  iron("Eve");
+  const found = Rows.candidates(alice, Members.identify(alice)).map(({ player: other }) => other.name);
+  assert.deepEqual(found.sort(), ["Dana", "Eve"]);
+  assert.deepEqual(Rows.candidates(carl, Members.identify(carl)).map(({ player: other }) => other.name), []);
+});
+
+test("leaving a Group Ironman group takes seven days, stay takes it back, and a leaving leader hands on", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob, carl);
+
+  assert.equal(group(alice, "leave"), Leaving.MESSAGE.LEAVING);
+  assert.equal(groupOf(alice), groupOf(bob), "still in the group while leaving");
+  assert.equal(leavingOf(alice).kicked, false);
+  assert.equal(groupOf(bob).leader, encoded("Bob"), "the longest-serving member who isn't leaving leads");
+  assert.equal(said(carl), "Alice is leaving the group.");
+  const view = emit("grouping:get", { player: alice });
+  assert.ok(view.member.leaving > Date.now(), "the leaver's own entry says until when");
+  assert.equal(view.role, "member");
+  assert.match(group(bob, "info"), /Alice \(leaving\)/);
+  assert.deepEqual(Rows.actionsFor(Members.identify(alice), { kind: Rows.KIND.MEMBER, account: encoded("Alice") }), [Rows.ACTION.STAY]);
+  assert.deepEqual(Rows.actionsFor(Members.identify(bob), { kind: Rows.KIND.MEMBER, account: encoded("Alice") }), [],
+    "a leaver can't be promoted or kicked again");
+  assert.equal(group(alice, "leave"), Leaving.MESSAGE.ALREADY_LEAVING);
+
+  // A leaver can't join another group meanwhile.
+  const dana = iron("Dana");
+  wait();
+  assert.equal(group(dana, "invite", "Alice"), "Alice is already in a group.");
+
+  assert.equal(group(alice, "stay"), Leaving.MESSAGE.STAYING);
+  assert.equal(leavingOf(alice), undefined);
+  assert.equal(groupOf(bob).leader, encoded("Bob"), "staying doesn't take the lead back");
+  assert.equal(group(alice, "stay"), Leaving.MESSAGE.NOT_LEAVING);
+
+  group(alice, "leave");
+  Leaving.settle(Date.now() + 60_000);
+  assert.equal(groupOf(alice), groupOf(bob), "not out before the seven days");
+  Leaving.settle(afterLeaving());
+  assert.equal(groupOf(alice), undefined);
+  assert.equal(said(alice), Leaving.MESSAGE.LEFT);
+  assert.deepEqual([...groupOf(bob).members], [encoded("Bob"), encoded("Carl")]);
+  assert.deepEqual(changes().map(([, event]) => event.type).filter((type) => ["leaving", "stayed", "left"].includes(type)),
+    ["leaving", "stayed", "leaving", "left"]);
+});
+
+test("a removed Group Ironman also has seven days, can't stay, and can't be promoted", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob, carl);
+
+  assert.equal(group(alice, "kick", "Bob"), "Bob has been removed from the group.");
+  assert.ok(bob.messages.includes(Leaving.MESSAGE.KICKED));
+  assert.equal(leavingOf(bob).kicked, true);
+  assert.equal(group(alice, "kick", "Bob"), Leaving.MESSAGE.TARGET_LEAVING);
+  assert.equal(group(alice, "promote", "Bob"), "Bob is leaving the group.");
+  assert.equal(group(bob, "stay"), Leaving.MESSAGE.CANNOT_STAY);
+  assert.deepEqual(Rows.actionsFor(Members.identify(bob), { kind: Rows.KIND.MEMBER, account: encoded("Bob") }), []);
+
+  logout(bob);
+  Leaving.settle(afterLeaving());
+  assert.equal(groupOf(alice).members.has(encoded("Bob")), false);
+  login(bob);
+  assert.equal(said(bob), Lifecycle.NO_LONGER_IN_GROUP, "told at the next login");
+  assert.equal(changes("kicked").length, 1);
+});
+
+test("the last member who isn't leaving may only leave once content lets the group end; it ends after the seven days", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  formed(alice, bob);
+  let keep = true;
+  hooks.custom.set(Kinds.CAN_END_EVENT, [(request) => {
+    if (keep) {
+      request.allowed = false;
+      request.reason = "Empty the group storage first.";
+    }
+  }]);
+
+  group(bob, "leave");
+  assert.equal(group(alice, "leave"), "Empty the group storage first.");
+  assert.equal(group(alice, "disband"), Leadership.MESSAGE.NO_DISBAND, "a Group Ironman group is never disbanded by hand");
+  keep = false;
+  assert.equal(group(alice, "leave"), Leaving.MESSAGE.LEAVING, "the last one gets their seven days too");
+  assert.equal(groupOf(alice).leader, encoded("Alice"), "with nobody else to lead, the leaver leads on");
+  Leaving.settle(afterLeaving());
+  assert.equal(groupOf(alice), undefined);
+  assert.equal(groupOf(bob), undefined);
+  assert.deepEqual(changes().map(([, event]) => event.type).filter((type) => ["left", "disbanded"].includes(type)),
+    ["left", "left", "disbanded"]);
+
+  // Plain groups ask too, and a member alone in a kept group can't take another invitation.
+  keep = true;
+  const carl = login(player("Carl"));
+  const dana = login(player("Dana"));
+  group(carl, "create");
+  assert.equal(group(carl, "disband"), "Empty the group storage first.");
+  wait();
+  group(dana, "invite", "Carl");
+  assert.equal(group(carl, "accept"), "Empty the group storage first.");
+  assert.notEqual(groupOf(carl), groupOf(dana));
+});
+
+test("a Group Ironman leader steps down over seven days to the member they name, and can call it off", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob, carl);
+  const days = (n) => Date.now() + n * 24 * 60 * 60 * 1000;
+
+  assert.match(group(alice, "promote", "Bob"), /Bob will lead the group in 7 days/);
+  assert.equal(groupOf(alice).leader, encoded("Alice"), "not yet");
+  assert.deepEqual(Rows.actionsFor(Members.identify(alice), { kind: Rows.KIND.MEMBER, account: encoded("Alice") }),
+    [Rows.ACTION.LEAVE, Rows.ACTION.KEEP_LEAD]);
+  Leadership.settle(days(6));
+  assert.equal(groupOf(alice).leader, encoded("Alice"));
+  Leadership.settle(days(7) + 1000);
+  assert.equal(groupOf(alice).leader, encoded("Bob"));
+  assert.equal(said(carl), "Bob is now the group leader.");
+
+  group(bob, "promote", "Carl");
+  assert.equal(group(bob, "cancel"), Leadership.MESSAGE.STEP_DOWN_CANCELLED);
+  Leadership.settle(days(8));
+  assert.equal(groupOf(bob).leader, encoded("Bob"));
+  assert.equal(group(bob, "cancel"), Leadership.MESSAGE.NOT_STEPPING_DOWN);
+
+  // A successor who starts leaving meanwhile doesn't get the lead.
+  group(bob, "promote", "Carl");
+  group(carl, "leave");
+  Leadership.settle(days(8));
+  assert.equal(groupOf(bob).leader, encoded("Bob"));
+  assert.equal(groupOf(bob).stepDown, null);
+  assert.equal(group(bob, "promote", "Carl"), "Carl is leaving the group.");
+});
+
+test("an inactive Group Ironman leader is replaced after thirty days; a logout alone hands nothing on", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob, carl);
+  group(bob, "leave");
+  logout(alice);
+  runTicks(GRACE + 1);
+  assert.equal(groupOf(carl).leader, encoded("Alice"), "a minute away is nothing");
+  const days = (n) => Date.now() + n * 24 * 60 * 60 * 1000;
+  Leadership.settle(days(29));
+  assert.equal(groupOf(carl).leader, encoded("Alice"));
+  Leadership.settle(days(31));
+  assert.equal(groupOf(carl).leader, encoded("Carl"), "the longest-serving member who isn't leaving");
+  assert.equal(groupOf(carl).members.has(encoded("Alice")), true, "the old leader stays");
+});
+
+test("the leader can take a removal back during its seven days", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  formed(alice, bob);
+  group(alice, "kick", "Bob");
+  assert.deepEqual(Rows.actionsFor(Members.identify(alice), { kind: Rows.KIND.MEMBER, account: encoded("Bob") }),
+    [Rows.ACTION.CANCEL_KICK]);
+  assert.equal(group(alice, "unkick", "Bob"), "Bob is no longer being removed from the group.");
+  assert.equal(bob.messages.at(-1), Leadership.MESSAGE.UNKICKED);
+  assert.equal(leavingOf(bob), undefined);
+  assert.equal(group(alice, "unkick", "Bob"), Leadership.MESSAGE.NOT_REMOVING);
+  group(bob, "leave");
+  assert.equal(group(alice, "unkick", "Bob"), Leadership.MESSAGE.NOT_REMOVING, "a member's own leave is theirs to take back");
+});
+
+test("a Group Ironman group of one outlives its leader's logout", () => {
+  const alice = iron("Alice");
+  group(alice, "create");
+  const id = groupOf(alice).id;
+  logout(alice);
+  runTicks(GRACE + 1);
+  assert.equal(Store.byId(id)?.members.has(encoded("Alice")), true);
+  login(alice);
+  assert.equal(groupOf(alice).id, id);
+});
+
+test("no change into or out of Group Ironman in a group; same-group answers for players and names", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob);
+
+  const change = (who, from, to) => emit("ironman:change-mode", { player: who, from, to, allowed: true, reason: null });
+  const refused = change(alice, "group", "none");
+  assert.deepEqual([refused.allowed, refused.reason], [false, Kinds.MESSAGE.MODE_LOCKED]);
+  assert.equal(change(carl, "group", "none").allowed, true, "outside a group it's the Ironman plugin's call");
+  assert.equal(change(alice, "ironman", "ultimate").allowed, true);
+
+  const same = (who, other) => emit("grouping:same-group", { player: who, other });
+  assert.deepEqual([same(alice, bob).same, same(alice, bob).ironman], [true, true]);
+  assert.equal(same(alice, "bob").same, true, "a ground item's owner is a login name");
+  assert.equal(same(alice, carl).same, false);
+  group(bob, "leave");
+  assert.equal(same(alice, bob).same, true, "a leaver still trades with the group");
+});
+
+test("the group's kind and its leavers survive a restart, and the storage door says who is leaving", () => {
+  const alice = iron("Alice");
+  const bob = iron("Bob");
+  const carl = iron("Carl");
+  formed(alice, bob, carl);
+  group(alice, "kick", "Carl");
+  group(bob, "leave");
+  const until = leavingOf(bob).until;
+
+  for (const self of [carl, bob, alice]) logout(self);
+  Store.reset();
+  login(alice);
+  assert.equal(groupOf(alice).ironman, true);
+  assert.deepEqual(leavingOf(bob), { until, kicked: false });
+  assert.equal(groupOf(alice).leaving.get(encoded("Carl")).kicked, true);
+
+  login(bob);
+  let seen;
+  hooks.custom.set(Lifecycle.STORAGE_EVENT, [(request) => {
+    seen = request;
+    request.handled = true;
+  }]);
+  hooks.objects.get("Group storage").Open({ player: bob });
+  assert.equal(seen.member.name, "Bob");
+  assert.equal(seen.member.leaving, until);
+  assert.equal(seen.group.ironman, true);
 });

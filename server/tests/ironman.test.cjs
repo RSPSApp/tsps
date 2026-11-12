@@ -14,6 +14,7 @@ const { DuelState } = require("../dist/game/content/Duelling");
 const DuelArena = require("../plugins/minigames/DuelArena.plugin");
 
 let core;
+let harnessApi;
 const hooks = {};
 const custom = {};
 const emitted = [];
@@ -32,6 +33,7 @@ before(async () => {
       custom[name]?.(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
+  harnessApi = api;
   // DuelArena first: this harness keeps one handler per core hook, and the Ironman rules below
   // must be the ones that answer.
   DuelArena.register(api);
@@ -632,6 +634,111 @@ test("Ironmen use GE only for single-bond buys, with safe collection", async t =
     await selectBuy(f, I.OLD_SCHOOL_BOND); await confirm(f);
     assert.equal(placed(f).length, 1, "legal purchase after PIN");
   });
+});
+
+// --- Group Ironman ------------------------------------------------------------------------------
+
+/** Stands in for the Grouping plugin: `groups` lists each Group Ironman group's login names. */
+function groupsOf(groups) {
+  // Earlier tests load every plugin through the PluginManager, which points the Ironman units at it.
+  require("../plugins/modes/ironman/Common.Ironman").init(harnessApi);
+  custom["grouping:same-group"] = (query) => {
+    const name = (who) => (typeof who === "string" ? who : who.getUsername()).toLowerCase();
+    const found = groups.find((members) => members.includes(name(query.player)));
+    query.same = Boolean(found?.includes(name(query.other)));
+    query.ironman = query.same;
+  };
+}
+
+test("::ironman group makes a Group Ironman: varbit 1777 = 4, the Group storage chests and icon 41", () => {
+  const gim = account("gim", "group");
+  assert.equal(gim.getAttribute("ironman:mode"), "group");
+  assert.equal(gim.varbits.get(1777), 4, "the cache's enum 859: 4 is Group Ironman");
+  assert.equal(gim.varbits.get(13677), 2, "bank_chest_access 2 shows the Group storage chests");
+  const icon = { player: gim, icon: null };
+  custom["account:chat-icon"](icon);
+  assert.equal(icon.icon, 41);
+  const query = { player: gim, mode: "none" };
+  custom["ironman:mode"](query);
+  assert.deepEqual([query.mode, query.label], ["group", "Group Ironman"]);
+  hooks["command:ironman"]({ player: gim, parts: ["ironman", "none"] });
+  assert.equal(gim.varbits.get(13677), 0, "a regular account sees the stools again");
+});
+
+test("Group Ironmen trade with their group mates; anyone else is told the Wiki's line", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const stranger = account("stranger", "group");
+  const main = account("main");
+  groupsOf([["gim", "mate"], ["stranger"]]);
+  const request = (player, target) => {
+    const event = { player, target, handled: false };
+    hooks.onTradeRequest(event);
+    const window = { player, target, allow: null };
+    hooks.onCanTrade(window);
+    return [event.handled, window.allow];
+  };
+  assert.deepEqual(request(gim, mate), [false, null]);
+  assert.deepEqual(request(mate, gim), [false, null]);
+  assert.deepEqual(gim.messages, []);
+
+  assert.deepEqual(request(gim, stranger), [true, false]);
+  assert.equal(gim.messages[0], "You are a Group Ironman. You can only trade members of your group.");
+  assert.deepEqual(request(main, gim), [true, false]);
+  assert.equal(main.messages[0], "gim is a Group Ironman. He can only trade members of their group.");
+  const iron = account("iron", "ironman");
+  groupsOf([["gim", "iron"]]);
+  assert.deepEqual(request(gim, iron), [true, false], "a standard Ironman is never a group mate");
+});
+
+test("a Group Ironman takes group mates' drops and loot from kills only group mates helped with", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const helper = account("helper");
+  groupsOf([["gim", "mate"]]);
+  const pick = (owner) => {
+    const event = { player: gim, groundItem: { getOwner: () => owner }, handled: false };
+    hooks.onGroundItemPickup(event);
+    return event.handled;
+  };
+  assert.equal(pick("mate"), false, "a group mate's drop");
+  assert.equal(pick("helper"), true, "anyone else's still isn't theirs");
+
+  const mates = { player: gim, drops: [{ id: 995 }], damagers: [gim, mate] };
+  custom["npc-drops:roll"](mates);
+  assert.equal(mates.drops.length, 1);
+  const mixed = { player: gim, drops: [{ id: 995 }], damagers: [gim, mate, helper] };
+  custom["npc-drops:roll"](mixed);
+  assert.deepEqual(mixed.drops, [], "an outsider's help still means no loot");
+
+  gim.isPlayer = () => true;
+  gim.messages.length = 0;
+  const npc = { isNpc: () => true, getCombat: () => ({ getRecentDamagers: () => [mate] }) };
+  hooks.onCanAttack({ attacker: gim, target: npc, allow: null });
+  assert.deepEqual(gim.messages, [], "no kill-credit warning for a group mate's damage");
+});
+
+test("a Group Ironman can loot a group mate they kill in the Wilderness", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const outsider = account("outsider");
+  groupsOf([["gim", "mate"]]);
+  const drop = (fallen) => {
+    const event = { player: fallen, killer: gim, item: { id: 4151 }, location: {}, dropEligible: true, suppressDefaultDrop: false, handled: false };
+    const manager = core.ItemOnGroundManager;
+    const original = manager.registerLocation;
+    manager.registerLocation = () => {};
+    try {
+      hooks.onPlayerDeathItemDrop(event);
+    } finally {
+      manager.registerLocation = original;
+    }
+    const owner = { player: fallen, killer: gim, owner: gim };
+    custom["player-death:loot-owner"](owner);
+    return [event.suppressDefaultDrop, owner.owner === gim];
+  };
+  assert.deepEqual(drop(mate), [false, true]);
+  assert.deepEqual(drop(outsider), [true, false]);
 });
 
 test('new mainland characters choose an account type without enabling Tutorial Island',async t=>{

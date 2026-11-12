@@ -447,6 +447,7 @@ module.exports = {
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
     api.onCustomEvent("clans:release-guest", releaseGuest);
+    api.onCustomEvent("clans:name-taken", Store.answerNameTaken);
     api.onSocialPacket(chat);
     api.onSocialPacket(channelAction);
     api.onInterfaceActionClick(clickYourClan);

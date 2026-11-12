@@ -1,19 +1,23 @@
 # Ironman modes
 
-Ironman, Ultimate Ironman and Hardcore Ironman as **account types**: per player, on a normal world, as in OSRS.
+Ironman, Ultimate Ironman, Hardcore Ironman and Group Ironman as **account types**: per player, on a normal world, as in OSRS.
 - **Plugin:** `server/plugins/modes/Ironman.plugin.js`, with one unit per area in `server/plugins/modes/ironman/`.
 - **Data:** `server/plugins/modes/data/ironman.json`.
 
-Group Ironman comes later.
+Group Ironman's groups are Grouping's (`server/docs/grouping.md`), its shared storage is
+`GroupStorage.plugin.js` (`server/docs/group-storage.md`), and its own rules (The Node, forming,
+Hardcore lives, Unranked, prestige, wealth caps, the Group Ironman tab) are
+`GroupIronman.plugin.js` (`server/docs/group-ironman.md`).
 
 ## Setting a mode
 
 **In game**, as captured on Tutorial Island (`server/plugins/modes/ironman/Setup.Ironman.js`):
-- **The Ironman tutor (Paul)** on Tutorial Island: "I'd like to change my Ironman mode." opens the setup interface (`ironman_setup` 890, after varps 263=0, 264=1, 266=1). The mode buttons are None 21, IM 22, UIM 23, HCIM 24 and the group modes 25-27, in the order its script 519 lays them out (modes 0-6). The group modes say they aren't available yet. None asks "Would you like to stop being a <mode>?" instead (ours).
+- **The Ironman tutor (Paul)** on Tutorial Island: "I'd like to change my Ironman mode." opens the setup interface (`ironman_setup` 890, after varps 263=0, 264=1, 266=1). The mode buttons are None 21, IM 22, UIM 23, HCIM 24 and the group modes 25-27, in the order its script 519 lays them out (modes 0-6). Group, Hardcore Group and Unranked Group Ironman (25, 26, 27) are chosen like the others. None asks "Would you like to stop being a <mode>?" instead (ours).
+- **Group and Hardcore Group Ironman only on the island** (Wiki: they are chosen before Tutorial Island ends): Adam answers such a choice with "Group Ironman can only be chosen on Tutorial Island." *(ours)*. Unranked Group Ironman can be chosen later, at the Ironman tutor in Lumbridge, and takes effect after 7 days (`server/docs/group-ironman.md`). A Group Ironman can still go down to None. While in a group, no change into or out of Group Ironman: "Leave your group first." (Grouping answers `ironman:change-mode`).
 - **Confirming:** a mode button opens the confirmation (`popupoverlay` 289 in `890:29`, script 4212). The answer comes back as the count dialog: 1 Proceed, 0 Cancel. Proceed sets the mode and `ironman_downgradepermitted` (1776) = 1, then shows "Your Ironman mode has been updated."
 - **The bank PIN:** OSRS also asks for a new bank PIN at this point ("…and your new PIN is now in effect."). This server has no bank PIN, so the confirmation leaves it out. The captured popup text is kept in `ironman.json`.
-- **Already chosen:** "Your mode is already Hardcore Ironman." (captured). Group Ironman answers "Group Ironman isn't available yet." *(ours)*.
-- **Adam in Lumbridge** (311): his transcript's setup only allows downgrades, as the tutor explains (Hardcore or Ultimate to Ironman, Ironman to none). His "Armour" option hands out the mode's helm, platebody and platelegs: "There you go. Wear it with pride." (captured), or "You're not an Ironman. This armour is only for them." (captured).
+- **Already chosen:** "Your mode is already Hardcore Ironman." (captured).
+- **Adam in Lumbridge** (311): his transcript's setup only allows downgrades, as the tutor explains (Hardcore or Ultimate to Ironman, Ironman to none). His "Armour" option hands out the mode's helm, platebody and platelegs (plus bracers for a Group Ironman, the Wiki's Group Ironman armour set; where OSRS hands that set out isn't checked): "There you go. Wear it with pride." (captured), or "You're not an Ironman. This armour is only for them." (captured).
 - **A world with Tutorial Island off** *(ours)* (`server/plugins/modes/ironman/Onboarding.Ironman.js`): OSRS offers the choice only at the end of Tutorial Island and never later (Wiki: Ironman Mode), so without the island a new character would have no chance to pick a mode. A brand-new account (no save yet, mode None, not a bot) on a world where `tutorial:availability` is false gets the saved attribute `ironman:initial-setup-pending`.
   - **When:** once the character designer closes, the tutor's setup (890) opens with every mode on offer (`upgrades: true, initial: true`), not Adam's downgrade-only one.
   - **Until it's chosen:** world input (`player:world-input`) is held, and a relog reopens the setup after the welcome screen. Disconnecting doesn't choose None.
@@ -24,18 +28,21 @@ Group Ironman comes later.
 **Admin command** (administrator and up):
 
 ```
-::ironman                                          show your mode
-::ironman <none|ironman|ultimate|hardcore>        set yours
-::ironman <none|ironman|ultimate|hardcore> <name> set an online player's
+::ironman                show your mode
+::ironman <mode>         set yours
+::ironman <mode> <name>  set an online player's
 ```
+
+`<mode>` is `none`, `ironman`, `ultimate`, `hardcore`, `group`, `group-hardcore` or `group-unranked`.
 
 Setting a mode updates the client at once: the `ironman` varbit and the chat icon. It's saved as the attribute `ironman:mode`.
 
 ## What the client is told
 
-- **The `ironman` varbit (1777):** 0 none, 1 Ironman, 2 Ultimate Ironman, 3 Hardcore Ironman. The cache's enum 859 names these values (4–6 are the group modes), and the account summary shows "Your mode:" from it. It's sent on login and whenever the mode changes.
+- **The `ironman` varbit (1777):** 0 none, 1 Ironman, 2 Ultimate Ironman, 3 Hardcore Ironman, 4 Group Ironman, 5 Hardcore Group Ironman, 6 Unranked Group Ironman, as the cache's enum 859 names them, and the account summary shows "Your mode:" from it. It's sent on login and whenever the mode changes.
+- **`bank_chest_access` (13677):** 2 for any of the three Group Ironman modes, which turns the bank-side stools into the Group storage chests; 0 otherwise.
 - **A fallen Hardcore Ironman:** `ironman_hardcore_dead` (5403) = 1, `ironman_downgradepermitted` (1776) = 1, and `ironman_hardcore_downgradedate` (5405) = the day of the death, counted from 27 February 2002. All three as in the rsprox captures, where the varbits appear together.
-- **The chat icon:** Ironman 2, Ultimate 3, Hardcore 10 (mod icons).
+- **The chat icon:** Ironman 2, Ultimate 3, Hardcore 10, Group Ironman 41, Hardcore Group 42, Unranked Group 43 (mod icons; the cache's `mod_icons` frames 41, 42 and 43 are the Group, Hardcore Group and Unranked Group helms, with blue, red and green trim; 41 checked in game).
   - StaffCrowns sets it: a staff crown first, otherwise the account's icon, which content answers through the custom event `account:chat-icon`.
   - `account:refresh-chat-icons` recomputes it.
   - The game sends these numbers with the chat line, so they're not in a cache table. Check them in game.
@@ -62,6 +69,7 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | No Seed Vault access ([Jagex update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault)) | Ultimate | no Vault-specific line |
 | All items dropped on death, none kept (the Ironman tutor, captured) | Ultimate | none |
 | One life: a dangerous death makes them a standard Ironman; a safe death (a minigame) doesn't | Hardcore | "You have fallen as a Hardcore Ironman. You are now a standard Ironman." *(ours)* |
+| Every rule above, except with the members of their own group (a member in their leaving period included): they trade freely, pick up each other's items, keep the drop of a kill only group mates helped with, get no kill-credit warning for a group mate's damage, can loot a group mate they kill in the Wilderness, and can enter a group mate's house (Wiki, Group Ironman Mode). An outsider's help still means no loot | Group | to an outsider: "*name* is a Group Ironman. He/She/They can only trade members of their group." (Wiki); to the Group Ironman: "You are a Group Ironman. You can only trade members of your group." *(ours)*. The Ironman tutor says the same rule: "Group Ironmen have the same restrictions as regular Ironmen except you can trade your items with each other!" (rsprox 3178, rev 232, tick 164) |
 
 **Item-on-player:** the only hand-off that actually moves an item into the target's inventory
 is a bond (`Bonds.plugin.js`), and the Wiki lets Ironmen give and receive bonds; Shield of
@@ -97,7 +105,7 @@ Generic additions for these rules:
 
 ## Not done yet
 
-- **Group Ironman** (and Hardcore and Unranked Group Ironman).
+- **Group Ironman:** group storage unlocks beyond 80 spaces, Teleport to House's group options, and the rest listed in `server/docs/group-ironman.md`.
 - **A bank PIN** when choosing a mode, as OSRS asks for one.
 - **Bonds:** Ironmen can buy a single bond per offer through the existing Grand Exchange screen; the OSRS Ironman-specific presentation is not yet implemented.
 - **Other limits:**

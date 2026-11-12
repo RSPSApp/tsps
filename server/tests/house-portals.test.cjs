@@ -219,6 +219,32 @@ function hostWithHouse(name = "hosty") {
   return host;
 }
 
+test("a Group Ironman may visit a group member's house; anyone else's is refused", () => {
+  const Common = require("../plugins/modes/ironman/Common.Ironman");
+  const mate = hostWithHouse("matehost");
+  const stranger = hostWithHouse("strangerhost");
+  // Stands in for Grouping: matehost is the visitor's group mate.
+  api.onCustomEvent("grouping:same-group", (query) => {
+    query.same = query.other === mate;
+    query.ironman = query.same;
+  });
+  const visitor = playerFixture("gimvisitor");
+  Common.setMode(visitor, "group");
+  click(visitor, portalId, 4);
+  assert.equal(typeof visitor.enteredSyntaxAction?.execute, "function", "a Group Ironman gets the name prompt");
+  let refusals = withRefusals(() => withPlayerByName(() => mate, () => visitor.enteredSyntaxAction.execute("matehost")));
+  assert.deepEqual(refusals, []);
+  tick(visitor);
+  assert.equal(House.houseFor(visitor), House.houseFor(mate));
+  House.releaseHouse(visitor, true);
+
+  click(visitor, portalId, 4);
+  refusals = withRefusals(() => withPlayerByName(() => stranger, () => visitor.enteredSyntaxAction.execute("strangerhost")));
+  assert.deepEqual(refusals, [Menu.messageBox("Ironmen do not visit their friends.<br>Ironmen stand alone.")]);
+  House.releaseHouse(mate, true);
+  House.releaseHouse(stranger, true);
+});
+
 test("each failed visit gets its own line: offline or private, building mode, locked", () => {
   const guest = playerFixture("guesty");
   click(guest, portalId, 4);

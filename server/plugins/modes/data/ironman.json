@@ -1,12 +1,16 @@
 {
-  "$comment": "Ironman account types, used by plugins/modes/Ironman.plugin.js (docs/ironman.md). `varbit` is the `ironman` varbit's value (1777; the cache's enum 859 names them), `icon` the mod-icon shown before the name in chat, `rank` orders the modes for downgrades, `armour` is what Adam hands out. Each message notes where it comes from: the rsprox capture database (https://rsprox.net/database), the OSRS Wiki, or ours where neither has it.",
-  "varbits": { "mode": 1777, "downgradePermitted": 1776, "hardcoreDead": 5403, "hardcoreDowngradeDate": 5405 },
+  "$comment": "Ironman account types, used by plugins/modes/Ironman.plugin.js (docs/ironman.md). `varbit` is the `ironman` varbit's value (1777; the cache's enum 859 names them), `icon` the mod-icon shown before the name in chat, `rank` orders the modes for downgrades, `armour` is what Adam hands out, `chests` the `bank_chest_access` varbit (13677) that turns the bank-side stools into Group storage chests (2). Each message notes where it comes from: the rsprox capture database (https://rsprox.net/database), the OSRS Wiki, or ours where neither has it.",
+  "varbits": { "mode": 1777, "downgradePermitted": 1776, "hardcoreDead": 5403, "hardcoreDowngradeDate": 5405, "bankChestAccess": 13677 },
   "modes": {
     "none": { "label": "None", "varbit": 0, "icon": null, "rank": 0 },
     "ironman": { "label": "Ironman", "varbit": 1, "icon": 2, "rank": 1, "armour": ["IRONMAN_HELM", "IRONMAN_PLATEBODY", "IRONMAN_PLATELEGS"] },
     "ultimate": { "label": "Ultimate Ironman", "varbit": 2, "icon": 3, "rank": 2, "armour": ["ULTIMATE_IRONMAN_HELM", "ULTIMATE_IRONMAN_PLATEBODY", "ULTIMATE_IRONMAN_PLATELEGS"] },
-    "hardcore": { "label": "Hardcore Ironman", "varbit": 3, "icon": 10, "rank": 2, "armour": ["HARDCORE_IRONMAN_HELM", "HARDCORE_IRONMAN_PLATEBODY", "HARDCORE_IRONMAN_PLATELEGS"] }
+    "hardcore": { "label": "Hardcore Ironman", "varbit": 3, "icon": 10, "rank": 2, "armour": ["HARDCORE_IRONMAN_HELM", "HARDCORE_IRONMAN_PLATEBODY", "HARDCORE_IRONMAN_PLATELEGS"] },
+    "group": { "label": "Group Ironman", "varbit": 4, "icon": 41, "rank": 1, "chests": 2, "islandOnly": true, "armour": ["GROUP_IRONMAN_HELM", "GROUP_IRONMAN_PLATEBODY", "GROUP_IRONMAN_PLATELEGS", "GROUP_IRONMAN_BRACERS"] },
+    "group-hardcore": { "label": "Hardcore Group Ironman", "varbit": 5, "icon": 42, "rank": 2, "chests": 2, "islandOnly": true, "armour": ["HARDCORE_GROUP_IRONMAN_HELM", "HARDCORE_GROUP_IRONMAN_PLATEBODY", "HARDCORE_GROUP_IRONMAN_PLATELEGS", "HARDCORE_GROUP_IRONMAN_BRACERS"] },
+    "group-unranked": { "label": "Unranked Group Ironman", "varbit": 6, "icon": 43, "rank": 1, "chests": 2, "armour": ["GROUP_IRONMAN_HELM", "GROUP_IRONMAN_PLATEBODY", "GROUP_IRONMAN_PLATELEGS", "GROUP_IRONMAN_BRACERS"] }
   },
+  "groupModes": ["group", "group-hardcore", "group-unranked"],
   "setup": {
     "$comment": "The setup interface (ironman_setup 890) and its confirmation (popupoverlay 289 in 890:29, script 4212), as captured on Tutorial Island. The varps are sent before it opens. Buttons 21-27 are modes 0-6 in the order the interface's script 519 lays them out (None, Ironman, Ultimate, Hardcore, then the three group modes).",
     "interface": 890,
@@ -14,11 +18,13 @@
     "popupInterface": 289,
     "popupScript": 4212,
     "varps": {"263": 0, "264": 1, "266": 1},
-    "buttons": {"21": "none", "22": "ironman", "23": "ultimate", "24": "hardcore", "25": "group", "26": "group", "27": "group"}
+    "buttons": {"21": "none", "22": "ironman", "23": "ultimate", "24": "hardcore", "25": "group", "26": "group-hardcore", "27": "group-unranked"}
   },
   "messages": {
     "tradeSelf": { "text": "You are an Ironman. You stand alone.", "source": "capture" },
     "tradeOther": { "text": "{name} is an Ironman. {pronoun} {stands} alone.", "source": "capture (He/She; Wiki adds They)" },
+    "tradeGroupSelf": { "text": "You are a Group Ironman. You can only trade members of your group.", "source": "ours (after the Wiki's line for others)" },
+    "tradeGroupOther": { "text": "{name} is a Group Ironman. {pronoun} can only trade members of their group.", "source": "Wiki (Group Ironman Mode, Trading)" },
     "pickup": { "text": "You're an Ironman, so you can't take items that other players have dropped.", "source": "capture" },
     "sharedKill": { "text": "As an Ironman, you don't get loot if other players helped you kill the monster.", "source": "capture" },
     "killCredit": { "text": "As an Ironman, you might not receive kill-credit for this monster.", "source": "capture" },
@@ -33,7 +39,7 @@
     "setupConfirm": { "text": "Choosing an Ironman mode|Would you like to become a<br><col=ffb83f>{mode}</col>?|<col=ff0000>Cancel</col>|<col=0dc10d>Proceed</col>", "source": "ours (the captured popup without the PIN)" },
     "modeUpdated": { "text": "Your Ironman mode has been updated.", "source": "capture, without its \", and your new PIN is now in effect.\"" },
     "modeAlready": { "text": "Your mode is already {mode}.", "source": "capture" },
-    "groupUnavailable": { "text": "Group Ironman isn't available yet.", "source": "ours" },
+    "groupIslandOnly": { "text": "Group Ironman can only be chosen on Tutorial Island.", "source": "ours (Wiki: Group Ironman is chosen before leaving Tutorial Island)" },
     "upgradeRefused": { "text": "Now that you've left Tutorial Island, you can only switch your restrictions downwards.", "source": "ours (the Ironman tutor's lines on the Wiki)" },
     "armour": { "text": "There you go. Wear it with pride.", "source": "capture" },
     "armourNotIron": { "text": "You're not an Ironman. This armour is only for them.", "source": "capture" },

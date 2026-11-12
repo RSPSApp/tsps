@@ -73,4 +73,9 @@ function reset() {
   nextKey = 1;
 }
 
-module.exports = { all, create, remove, byName, byMember, save, reset };
+/** "clans:name-taken" { name, taken }: whether a clan already has this name (Group Ironman groups share the names). */
+function answerNameTaken(request) {
+  request.taken = request.taken === true || !!byName(String(request.name ?? ""));
+}
+
+module.exports = { all, create, remove, byName, byMember, save, reset, answerNameTaken };

@@ -1,0 +1,51 @@
+{
+  "$comment": "Group Ironman rules, used by plugins/modes/GroupIronman.plugin.js (server/docs/group-ironman.md). Sources: the OSRS Wiki (Group Ironman Mode, 9 Nov 2026; The Node), the launch post (Update:Group Ironman, 6 Oct 2021), Tony's transcript, or ours where none has it. Each message says which.",
+  "variants": {
+    "ranked": { "mode": "group", "label": "Group Ironman" },
+    "hardcore": { "mode": "group-hardcore", "label": "Hardcore Group Ironman" },
+    "unranked": { "mode": "group-unranked", "label": "Unranked Group Ironman" }
+  },
+  "groupSize": { "min": 2, "max": 5 },
+  "unrankedSwitchDays": 7,
+  "wealthCaps": {
+    "$comment": "Wiki (Group Ironman Mode, Prestige): what a member without individual prestige may receive from group mates and group storage, by week since joining; from week 5 nothing. Counted at Grand Exchange value (ours: the Wiki doesn't say how).",
+    "weeks": [1000000, 20000000, 50000000, 100000000],
+    "restrictedWeeks": 5
+  },
+  "hardcoreUnsafeAreas": {
+    "$comment": "Wiki (Group Ironman Mode, Hardcore): deaths in these cost a Hardcore group a life although they keep items for others. Matched against the plugin that owns the area the player died in (Construction: a death in a player-owned house). Not matched yet: the Camelot training room, Lunar Diplomacy's Dream World, Nightmare Zone and the PvM Arena, which have no area of their own here.",
+    "plugins": ["BarbarianAssault", "ChambersOfXeric", "FishingTrawler", "Inferno", "MageTrainingArena", "PestControl", "TzhaarFightCaves", "RoguesDen", "RandomEvents", "Construction"]
+  },
+  "messages": {
+    "formed": { "text": "Your group has been formed.", "source": "ours" },
+    "formedPrestige": { "text": "Your group has Group Prestige.", "source": "ours (Wiki: prestige is shown as a gold star)" },
+    "formedNoPrestige": { "text": "Your group was formed without Group Prestige.", "source": "ours" },
+    "formTooSmall": { "text": "A group needs at least two members to be formed.", "source": "ours (Wiki: groups are 2 to 5 players)" },
+    "alreadyFormed": { "text": "Your group has already been formed.", "source": "ours" },
+    "notIronGroup": { "text": "You aren't in a Group Ironman group.", "source": "ours" },
+    "hardcoreNoNewMembers": { "text": "A Hardcore group can't take new members.", "source": "ours (launch post: Hardcore groups cannot accept new members)" },
+    "hardcoreNoUnranked": { "text": "A Hardcore group can't take a player who has played before.", "source": "ours" },
+    "unrankedOnly": { "text": "An Unranked Group Ironman can only join an Unranked group.", "source": "ours (Wiki: Unranked is one-way)" },
+    "variantMismatch": { "text": "That player can't join your group: they play a different Group Ironman mode.", "source": "ours" },
+    "warnUnranked": { "text": "{name} has played before: inviting them makes your group Unranked for good. Invite them again to confirm.", "source": "ours (Wiki: a group that invites an experienced player becomes Unranked)" },
+    "warnPrestige": { "text": "Inviting a new member will cost your group its Group Prestige. Invite them again to confirm.", "source": "ours (Wiki: members are warned before an action that costs prestige)" },
+    "nowUnranked": { "text": "Your group is now an Unranked group.", "source": "ours" },
+    "youAreUnranked": { "text": "You are now an Unranked Group Ironman.", "source": "ours" },
+    "prestigeLost": { "text": "Your group has lost its Group Prestige.", "source": "ours" },
+    "lifeLost": { "text": "{name} has died. Your group has {lives} {livesWord} left.", "source": "ours (launch post: online members are told)" },
+    "lifeLostLeaving": { "text": "{name} has left the group. Your group has {lives} {livesWord} left.", "source": "ours (launch post: leaving or being kicked costs a life)" },
+    "hardcoreLost": { "text": "Your group has lost its Hardcore status. You are now a Group Ironman.", "source": "ours (Tony: you will all be downgraded to regular Group Iron players)" },
+    "chooseMode": { "text": "You have left your group. Choose what you become.", "source": "ours" },
+    "tradeablesDeleted": { "text": "Your tradeable items have been deleted. You lead a new group.", "source": "ours (Wiki: all tradeable items are deleted)" },
+    "becameUnranked": { "text": "You are now an Unranked Group Ironman, leading a new group.", "source": "ours" },
+    "becameRegular": { "text": "You are no longer an Ironman.", "source": "ours" },
+    "unrankedSwitchPending": { "text": "You will become an Unranked Group Ironman in {days} days. Choose it again to change your mind.", "source": "ours (Wiki: a 7-day grace period follows)" },
+    "unrankedSwitchCancelled": { "text": "You will stay as you are.", "source": "ours" },
+    "unrankedSwitchDone": { "text": "You are now an Unranked Group Ironman.", "source": "ours" },
+    "unrankedOnlyIron": { "text": "Only Ironmen can become Unranked Group Ironmen.", "source": "ours (Wiki: any Iron mode can)" },
+    "unrankedInGroup": { "text": "Leave your group first.", "source": "ours" },
+    "capReached": { "text": "As a new member, you can only receive {left} coins' worth from your group this week.", "source": "ours (Wiki: new members' wealth transfer is capped weekly)" },
+    "capTradeOther": { "text": "{name} can't receive that much from the group this week.", "source": "ours" },
+    "restrictedItem": { "text": "You need to have killed {source} before you can use that.", "source": "ours (Wiki: certain items require you to have killed the monster that drops them)" }
+  }
+}

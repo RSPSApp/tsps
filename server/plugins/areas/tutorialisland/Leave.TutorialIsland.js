@@ -61,19 +61,29 @@ function giveStarterKit(player) {
  */
 const SKIP_PENDING_ATTRIBUTE = "tutorial-island:skip-pending";
 
-/** Ends the tutorial where the player stands (or at the world's spawn when that isn't Lumbridge). */
+/**
+ * Ends the tutorial where the player stands (or at the world's spawn when that isn't Lumbridge).
+ * "tutorial-island:destination" { player, location, welcome } lets a mode send them elsewhere
+ * (a Group Ironman goes to The Node) with its own welcome line instead of Lumbridge's box.
+ */
 function complete(player) {
   player.setAttribute(SKIP_PENDING_ATTRIBUTE, null);
   clearItems(player);
   giveStarterKit(player);
+  const destination = { player, location: null, welcome: null };
+  pluginApi.emitCustomEvent("tutorial-island:destination", destination);
   const spawn = core.GameConstants.DEFAULT_LOCATION;
   const nearLumbridge = Math.abs(spawn.getX() - LUMBRIDGE.x) <= 32 && Math.abs(spawn.getY() - LUMBRIDGE.y) <= 32;
-  if (!nearLumbridge || T.atTutorial(player)) player.moveTo(spawn.clone());
+  if (destination.location) {
+    const { x, y, z = 0 } = destination.location;
+    player.moveTo(new core.Location(x, y, z));
+  } else if (!nearLumbridge || T.atTutorial(player)) player.moveTo(spawn.clone());
   T.setProgress(player, STEP.COMPLETED);
   player.getPacketSender().sendVarbit(T.data.varbits.freeStuffCheck, 1);
   const { welcome, welcomeLumbridge, welcomeLumbridgeItem } = T.data.messages;
   player.sendMessage(welcome);
-  T.showBoxes(player, [{ item: welcomeLumbridgeItem, text: welcomeLumbridge }]);
+  if (destination.welcome) player.sendMessage(destination.welcome);
+  else T.showBoxes(player, [{ item: welcomeLumbridgeItem, text: welcomeLumbridge }]);
 }
 
 function onLogin(event) {

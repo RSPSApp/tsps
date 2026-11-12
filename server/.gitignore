@@ -12,6 +12,10 @@ data/saves/gauntlet-scoreboard.json
 data/saves/clans.json
 data/saves/groups.json
 data/saves/groups.json.tmp
+data/saves/group-storage.json
+data/saves/group-storage.json.tmp
+data/saves/group-ironman.json
+data/saves/group-ironman.json.tmp
 data/saves/hardcore-world.json
 data/saves/hardcore-world.json.tmp
 data/saves/display-names.json

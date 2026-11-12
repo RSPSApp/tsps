@@ -127,7 +127,8 @@ const NAME_INPUT_SCRIPT = 109; // meslayer_mode8, answered by resume_p_namedialo
 const VISIT_PROMPT = "Enter name:";
 const VISIT_OFFLINE = "That player is offline, or has privacy mode enabled.";
 const IRONMAN_VISIT = "Ironmen do not visit their friends.<br>Ironmen stand alone.";
-const IRON_MODES = ["ironman", "ultimate", "hardcore"];
+const IRON_MODES = ["ironman", "ultimate", "hardcore", "group", "group-hardcore", "group-unranked"];
+const GROUP_IRON_MODES = ["group", "group-hardcore", "group-unranked"];
 const kickOptionVisible = new WeakSet();
 
 const activeHouses = new WeakMap();
@@ -372,10 +373,22 @@ function hasFollower(player) {
   return !!request.pet;
 }
 
-function isIronman(player) {
+function ironModeOf(player) {
   const mode = { player, mode: "none" };
   api.emitCustomEvent("ironman:mode", mode);
-  return IRON_MODES.includes(mode.mode);
+  return mode.mode;
+}
+
+function isIronman(player) {
+  return IRON_MODES.includes(ironModeOf(player));
+}
+
+/** Wiki (Player-owned house): a Group Ironman may enter a group member's house. */
+function groupMateHouse(player, owner) {
+  if (!GROUP_IRON_MODES.includes(ironModeOf(player))) return false;
+  const query = { player, other: owner, same: false, ironman: false };
+  api.emitCustomEvent("grouping:same-group", query);
+  return query.same === true && query.ironman === true;
 }
 
 /**
@@ -384,7 +397,7 @@ function isIronman(player) {
  */
 function visitRefusal(player, owner, house, location) {
   if (!owner || !owner.getRelations().canReceivePrivateMessageFrom(player)) return VISIT_OFFLINE;
-  if (owner !== player && isIronman(player)) return Menu.messageBox(IRONMAN_VISIT);
+  if (owner !== player && isIronman(player) && !groupMateHouse(player, owner)) return Menu.messageBox(IRONMAN_VISIT);
   if (!house || house.isDestroyed() || (location != null && Estate.houseLocation(house.save).id !== location)) {
     return "That house is unavailable or its owner is not accepting guests.";
   }
@@ -436,10 +449,10 @@ function arriveAsGuest(player, owner, house) {
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
 }
 
-/** Friend's house: Ironmen are refused at once; anyone else names the host. */
+/** Friend's house: Ironmen are refused at once (a Group Ironman may still name a group member); anyone else names the host. */
 function promptVisit({ player, objectId, location: portalLocation, sourceLocation, object }) {
   portalClickTiles.delete(player);
-  if (isIronman(player)) {
+  if (isIronman(player) && !GROUP_IRON_MODES.includes(ironModeOf(player))) {
     Menu.refuse(player, Menu.messageBox(IRONMAN_VISIT));
     return true;
   }

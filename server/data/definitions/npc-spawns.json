@@ -30826,5 +30826,17 @@
   {"level":0,"name":"Trader Crewmember","x":1808,"y":3681,"id":12642,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":1807,"y":3676,"id":12636,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":3065,"y":3000,"id":15509,"source":"wiki","wanderRadius":0},
-  {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0}
+  {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Seagull","x":3106,"y":3045,"id":1338,"source":"wiki"},
+  {"level":0,"name":"Seagull","x":3110,"y":3039,"id":1338,"source":"wiki"},
+  {"level":0,"name":"Boar","x":3104,"y":3011,"id":11066,"source":"wiki"},
+  {"level":0,"name":"Boar","x":3098,"y":3012,"id":11066,"source":"wiki"},
+  {"level":0,"name":"Boar","x":3106,"y":3013,"id":11066,"source":"wiki"},
+  {"level":0,"name":"Enraged Boar","x":3100,"y":3011,"id":11227,"source":"wiki"},
+  {"level":0,"name":"D3ad1i F15her","x":3114,"y":3045,"id":11225,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Boar31337Killer","x":3099,"y":3011,"id":11226,"source":"wiki"},
+  {"level":0,"name":"R0ck 5masher","x":3106,"y":3012,"id":11228,"source":"wiki"},
+  {"level":0,"name":"Regent","x":3104,"y":3024,"id":11229,"source":"wiki"},
+  {"level":0,"name":"Group Storage tutor","x":3096,"y":3027,"id":11230,"source":"wiki"},
+  {"level":0,"name":"Group Ironman tutor","x":3107,"y":3028,"id":11231,"source":"wiki"}
 ]

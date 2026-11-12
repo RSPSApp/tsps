@@ -1,6 +1,6 @@
 /**
- * `::ironman` shows a player's account type; `::ironman <none|ironman|ultimate|hardcore> [player]`
- * sets it (yours without a name). The only way to set one for now: there's no Ironman tutor yet.
+ * `::ironman` shows a player's account type; `::ironman <mode> [player]` (a mode of ironman.json)
+ * sets it (yours without a name).
  */
 const Common = require("./Common.Ironman");
 
@@ -28,5 +28,5 @@ function ironmanCommand({ player, parts }) {
 }
 
 module.exports = function attach(api) {
-  api.registerCommand("ironman", ironmanCommand, api.core.PlayerRights.ADMINISTRATOR, "Show or set an account's Ironman mode: ::ironman [none|ironman|ultimate|hardcore] [player]");
+  api.registerCommand("ironman", ironmanCommand, api.core.PlayerRights.ADMINISTRATOR, "Show or set an account's Ironman mode: ::ironman [none|ironman|ultimate|hardcore|group] [player]");
 };

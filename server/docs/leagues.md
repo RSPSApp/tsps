@@ -1115,8 +1115,8 @@ Animal Wrangler's Hunter and cooking ones) do not.
   helmet's check offers a new task from the last master or a cancel at the usual price
   (`slayer:remote-task`; not Mortimer's tasks, a choice with modifiers made in person: ours); the bracelet of slaughter works 35% of the time and uses no charge;
   superiors come 1 time in 25; each gives Slayer points (ours: 5 plus a fifth of its Slayer
-  requirement, the Wiki says only "based on" it) and six more rolls on its normal monster's table;
-  a quarter spawn bloodthirsty (a message of ours says so): nine rolls, a clue scroll for sure when
+  requirement, the Wiki says only "based on" it) and six rolls in all on its normal monster's table (the Wiki's "six rolls", a kill total: what the superior's own table already rolls counts, three for a superior whose page says rolls=3, so the relic adds 3 there and 5 elsewhere);
+  a quarter spawn bloodthirsty (a message of ours says so): nine rolls in all, a clue scroll for sure when
   its table has one (the rarest the player can take now, by its chance), three times the unique chance and a roll on the bloodthirsty
   table (Wiki, Bloodthirsty Nechryarch). Not here: the expeditious bracelet (not in this server);
   the variants' stronger stats, names and icon (no NPCs of their own in this cache).

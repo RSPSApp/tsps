@@ -73,8 +73,9 @@ to pay up then? You owe me 25/50/75 gold coins!". At 100 the threat and the item
 the oak longbow for you." (1410-1415). Talking to him after a loss replays the loss lines (1274).
 
 **Ghost villagers.** "Would you sign this petition form, please?" then a random answer; asked
-again, the same ghost says "You only just asked me the same thing!..." (1541). Bribes ask "Oh,
-it'll cost you 2 ecto-tokens." and take 2 (1528-1533). Each signature is an item box "The ghost
+again, the same ghost says "You only just asked me the same thing!..." (1541). Bribes name 1-3 ecto-tokens
+(Transcript: "Oh, it'll cost you [1-3] ecto-tokens.") and take what they name; the capture's three
+asks were all 2 (1528-1533). Each signature is an item box "The ghost
 signs your petition. You have obtained N signature(s) so far." The tenth is "You have succeeded in
 obtaining 10 signatures on the petition form!" (1609). "My answer is no." is one of the refusals
 (1538).
@@ -110,7 +111,8 @@ sound 2461 and the move. A fall plays anim 767, sound 2455 and hits 3 two ticks 
 (981-985). The island chest gives scrap 3 (968). The three scraps make the map in an item box
 (1025).
 
-**The Ghost captain.** Travel has no dialogue. On reaching him 25 tokens go (outbound only), the
+**The Ghost captain.** Travel has no dialogue. On reaching him 25 tokens go (outbound only; 10
+with the Ring of Charos(a) worn, per the Wiki), the
 screen fades out (174, script 948 `[0, 255, 0, 0, 50]`) with the caption "After a long boat trip
 you arrive at Dragontooth Island." / "... you return to Port Phasmatys." The move comes four
 ticks later (3792,3559 / 3702,3487), the fade in a tick after (`[0, 0, 0, 255, 50]`), and the

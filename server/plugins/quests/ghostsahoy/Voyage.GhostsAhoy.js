@@ -6,7 +6,7 @@
  * 1158-1167):
  *
  * - Travel (op3) has no dialogue. On reaching the captain the fare (25 Ectotokens, outbound
- *   only) is taken and the screen fades out with the caption "After a long boat trip you arrive
+ *   only; Wiki, Ghost captain: "or 10 with the Ring of Charos(a)") is taken and the screen fades out with the caption "After a long boat trip you arrive
  *   at Dragontooth Island." / "... you return to Port Phasmatys." (fade_overlay 174, script 948
  *   [0, 255, 0, 0, 50]).
  * - Four ticks later the player is on the far jetty; the tick after, the caption clears and
@@ -26,6 +26,8 @@ const FADE_IN_TICKS = 5;
 const CLOSE_TICKS = 7;
 
 const FARE = 25;
+/** Wiki (Ghost captain): 10 with the Ring of Charos(a). Ours: only while it is worn. */
+const CHAROS_FARE = 10;
 const DRAGONTOOTH = Object.freeze({ minX: 3776, maxX: 3812, minY: 3520, maxY: 3584 });
 const DRAGONTOOTH_LANDING = Object.freeze([3792, 3559, 0]);
 const PORT_PHASMATYS_LANDING = Object.freeze([3702, 3487, 0]);
@@ -52,8 +54,13 @@ function fade(player, args, caption) {
   sender.sendString(caption, FADE_CAPTION);
 }
 
+function fare(player) {
+  const ring = player.getEquipment().get(core.Equipment.RING_SLOT)?.getId?.();
+  return ring === core.ItemIdentifiers.RING_OF_CHAROS_A_ || ring === core.ItemIdentifiers.RING_OF_CHAROS_A__2 ? CHAROS_FARE : FARE;
+}
+
 function canAfford(player) {
-  return atDragontooth(player) || player.getInventory().getAmount(ids.ECTO_TOKEN) >= FARE;
+  return atDragontooth(player) || player.getInventory().getAmount(ids.ECTO_TOKEN) >= fare(player);
 }
 
 /** Sails to the other end of the route; false (nothing taken) when the fare can't be paid. */
@@ -61,8 +68,9 @@ function sail(player) {
   if (sailing.has(player)) return true;
   const home = atDragontooth(player);
   if (!home) {
-    if (player.getInventory().getAmount(ids.ECTO_TOKEN) < FARE) return false;
-    player.getInventory().deleteNumber(ids.ECTO_TOKEN, FARE);
+    const cost = fare(player);
+    if (player.getInventory().getAmount(ids.ECTO_TOKEN) < cost) return false;
+    player.getInventory().deleteNumber(ids.ECTO_TOKEN, cost);
   }
   const landing = home ? PORT_PHASMATYS_LANDING : DRAGONTOOTH_LANDING;
   sailing.set(player, landing);
@@ -116,4 +124,4 @@ function attach(registry, shared) {
   ({ ids } = shared);
 }
 
-module.exports = { attach, sail, canAfford, atDragontooth, leave, OUTBOUND, RETURN, FARE, DRAGONTOOTH_LANDING, PORT_PHASMATYS_LANDING };
+module.exports = { attach, sail, canAfford, fare, CHAROS_FARE, atDragontooth, leave, OUTBOUND, RETURN, FARE, DRAGONTOOTH_LANDING, PORT_PHASMATYS_LANDING };

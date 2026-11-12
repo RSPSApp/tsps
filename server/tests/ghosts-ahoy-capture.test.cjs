@@ -414,7 +414,7 @@ test('the bedsheet dipped in ectoplasm turns green, the bucket comes back (tick 
   assert.ok(messages.get(p).includes('You dip the bedsheet in the bucket of ectoplasm.'));
 });
 
-test('villagers: a ghost asked once has had its say, the bribe is 2 and the tenth signature has its own box', (t) => {
+test('villagers: a ghost asked once has had its say, the bribe is the 1-3 it names and the tenth signature has its own box', (t) => {
   const p = actor(t, { x: 3661, y: 3497, stage: 4 });
   p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));
   give(p, I().PETITION_FORM);
@@ -426,8 +426,14 @@ test('villagers: a ghost asked once has had its say, the bribe is 2 and the tent
     lines.set(p, []);
     const fresh = spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3662, 3497);
     talk(p, fresh);
+    const before = p.getInventory().getAmount(I().ECTO_TOKEN);
     shown = play(p, ['Okay, if you insist.']);
-    if (lines.get(p).some((line) => /cost you/.test(line))) assert.ok(lines.get(p).includes("Oh, it'll cost you 2 ecto-tokens."));
+    const asked = lines.get(p).find((line) => /cost you/.test(line));
+    if (asked) {
+      const named = Number(/cost you ([1-3]) ecto-tokens\.$/.exec(asked)?.[1]);
+      assert.ok(named >= 1 && named <= 3, asked);
+      assert.equal(before - p.getInventory().getAmount(I().ECTO_TOKEN), named, 'charged what was named');
+    }
   }
   assert.equal(lastVarbit(p, STATE.VARBIT.SIGNATURES), STATE.SIGNATURES_FULL);
   assert.deepEqual(shown.find((s) => s.kind === 'item'), { kind: 'item', itemId: I().PETITION_FORM, text: 'You have succeeded in obtaining 10 signatures on the petition form!' });
@@ -469,6 +475,12 @@ test('the Ghost captain sails with the captured fade, fare and landing (ticks 11
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3702, 3487]);
   assert.equal(p.getInventory().getAmount(I().ECTO_TOKEN), 14);
   tick(3);
+  // Wiki (Ghost captain): 10 with the Ring of Charos(a).
+  p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(I().RING_OF_CHAROS_A_));
+  assert.equal(PluginManager.emitNpcInteraction({ player: p, npc: captain, npcId: 3005, definition, clickType: travel, handled: false }), true);
+  assert.equal(p.getInventory().getAmount(I().ECTO_TOKEN), 4);
+  tick(7);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3792, 3559]);
 });
 
 test('the tomb: the disciple at the locked door, the bone key kept, the coffin\'s robes (ticks 1668-1705)', (t) => {

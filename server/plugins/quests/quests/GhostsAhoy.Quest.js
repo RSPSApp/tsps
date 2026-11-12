@@ -438,8 +438,8 @@ module.exports = function registerGhostsAhoyQuest(api) {
       if (value.includes("not wearing a slimy bedsheet")) return head !== ids.GREEN_BEDSHEET && head !== ids.BEDSHEET;
       if (value.includes("wearing a bedsheet but not slime")) return head === ids.BEDSHEET;
       if (value.includes("wearing a slime covered bedsheet")) return head === ids.GREEN_BEDSHEET;
-      if (value.includes("not have enough ecto-tokens")) return !held(player, ids.ECTO_TOKEN, VILLAGER_BRIBE);
-      if (value.includes("has at least")) return held(player, ids.ECTO_TOKEN, VILLAGER_BRIBE);
+      if (value.includes("not have enough ecto-tokens")) return !held(player, ids.ECTO_TOKEN, bribe(player));
+      if (value.includes("has at least")) return held(player, ids.ECTO_TOKEN, bribe(player));
     }
     if (npcId === NPC.GHOST_CAPTAIN) {
       if (value.includes("500 ectotokens")) return value.includes("does not have") ? !held(player, ids.ECTO_TOKEN, 500) : held(player, ids.ECTO_TOKEN, 500);
@@ -448,8 +448,15 @@ module.exports = function registerGhostsAhoyQuest(api) {
     return null;
   }
 
-  /** Live asked for 2 Ectotokens all three times (ticks 1528, 1556, 1578) and took 2. */
-  const VILLAGER_BRIBE = 2;
+  /**
+   * A bribe is 1-3 Ectotokens (Transcript: "Oh, it'll cost you [1-3] ecto-tokens."), drawn each
+   * time the villager names it and charged as named; the capture's three asks all came to 2
+   * (ticks 1528, 1556, 1578). Kept until the next ask (not saved).
+   */
+  const VILLAGER_BRIBE_ATTRIBUTE = "ghosts-ahoy:villager-bribe";
+  const VILLAGER_BRIBE = Object.freeze({ min: 1, max: 3 });
+  const bribeRoll = () => VILLAGER_BRIBE.min + Math.floor(Math.random() * (VILLAGER_BRIBE.max - VILLAGER_BRIBE.min + 1));
+  const bribe = (player) => Number(player.getAttribute(VILLAGER_BRIBE_ATTRIBUTE)) || VILLAGER_BRIBE.max;
 
   // ==========================================================================
   // Starting
@@ -570,7 +577,11 @@ module.exports = function registerGhostsAhoyQuest(api) {
     if (npcId === NPC.ROBIN) request.text = text.replace("[#]", String(robinDebt(player)));
     else if (npcId === NPC.GRAVINGAS) {
       request.text = text.replace("[#]", String(Math.max(0, State.SIGNATURES_FULL - signatures(player))));
-    } else if (npcId === NPC.GHOST_VILLAGER) request.text = text.replace("[1-3]", String(VILLAGER_BRIBE));
+    } else if (npcId === NPC.GHOST_VILLAGER && text.includes("[1-3]")) {
+      const amount = bribeRoll();
+      player.setAttribute(VILLAGER_BRIBE_ATTRIBUTE, amount);
+      request.text = text.replace("[1-3]", String(amount));
+    }
   }
 
   function villagerLine(request, text) {
@@ -690,7 +701,15 @@ module.exports = function registerGhostsAhoyQuest(api) {
       event.end = true;
       return;
     }
-    if (bribed) player.getInventory().deleteNumber(ids.ECTO_TOKEN, VILLAGER_BRIBE);
+    if (bribed) {
+      const amount = bribe(player);
+      if (!held(player, ids.ECTO_TOKEN, amount)) {
+        event.handled = true;
+        event.end = true;
+        return;
+      }
+      player.getInventory().deleteNumber(ids.ECTO_TOKEN, amount);
+    }
     const count = signatures(player) + 1;
     State.set(player, State.VARBIT.SIGNATURES, count);
     const obtained = count - State.SIGNATURES_FORM;

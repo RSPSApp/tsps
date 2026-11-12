@@ -2013,16 +2013,15 @@ test("Harold's bedroom door rotates without needing a separate open cache loc", 
 });
 
 
-test('Death Plateau equipment door swings open after the quest unlocks it', () => {
+// rsprox 233/03252.txt:36053-36090: inviswall 38848 on the doorway and castledoor_inactive 3744 the tile north, the
+// opener walking over; the door is back two ticks later.
+test('Death Plateau equipment door passes the player through as recorded', () => {
   const h = buildHarness();
   try {
     assert.deepEqual(h.click(3743, 2894, 3566, 1, 'Open', 'Large door'), [
       ['deregister', 3743, 2894, 3566, 1],
-      ['register', 3743, 2894, 3567, 2],
-    ]);
-    assert.deepEqual(h.click(3743, 2894, 3567, 2, 'Open', 'Large door'), [
-      ['deregister', 3743, 2894, 3567, 2],
-      ['register', 3743, 2894, 3566, 1],
+      ['register', 38848, 2894, 3566, 1],
+      ['register', 3744, 2894, 3567, 2],
     ]);
   } finally { h.restore(); }
 });

@@ -78,6 +78,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
+  HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726
+  CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
   MOURNER_CAGE_GATE_LEFT_OPEN: 2059, // mournerquaters_gatelopen; Biohazard capture tick 557
   MOURNER_CAGE_GATE_RIGHT_OPEN: 2061, // mournerquaters_gateropen
   // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
@@ -111,6 +113,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // The Ranging Guild's entrance (11665) is Open only; 11666 is a ladder, so there is no
     // open leaf to pair with and the leaf swings in place.
     O.GUILD_DOOR,
+    // Harold's door and the equipment room door (Death Plateau) are pass-through gates, which take their clicks first.
     O.DOOR_287, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
     // The Blood Moon Rises crank-wheel house exit (61824) has no cache Close partner.
     O.DOOR_831,
@@ -418,6 +421,32 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
+    // Death Plateau: Harold's door (233/03247.txt:4726-4744, and leaving at :5755-5783). The doorway gets inviswall
+    // 38848 and the open door the tile south; the player walks over, and the door is back two ticks later. Entering,
+    // the quest knocks first ("You knock on the door.", "Harold: Come in!") and opens it through door:open.
+    Object.freeze({
+      closed: [[O.DOOR_115, 2906, 3543, 1, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2906, 3543, 1, 3],
+        [NAMELESS_DOOR_LEAF_IDS.HAROLD_DOOR_OPEN, 2906, 3542, 1, 0],
+      ],
+      crossY: 3543,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 81,
+    }),
+    // Death Plateau equipment room door (233/03252.txt:36053-36090): the same swap, the open door the tile north.
+    Object.freeze({
+      closed: [[O.LARGE_DOOR_23, 2894, 3566, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2894, 3566, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.CASTLE_DOOR_OPEN, 2894, 3567, 0, 2],
+      ],
+      crossY: 3567,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 81,
+    }),
     // Grand Tree footage at 6:58 and 7:48 shows the player walking through the opened leaves.
     Object.freeze({
       closed: [[O.PRISON_DOOR_8, 2465, 3496, 3, 0]],

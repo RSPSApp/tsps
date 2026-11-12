@@ -834,9 +834,10 @@ test("Araxxor's lair web tunnel in needs 92 Slayer, Priest in Peril and a spider
   visit.player.sendMessage = (message) => messages.push(message);
   visit.player.getDialogueManager().startDialogues = (chain) => boxes.push([...chain.getDialogues().values()].map((line) => line.text).join(" / "));
   let task = null;
+  let answering = true;
   const slayer = PluginManager.createApi("AraxxorTunnelSlayer");
-  slayer.onCustomEvent("slayer:current-task", (query) => { query.task = task; });
-  t.after(() => { questsDone.delete("priest_in_peril"); task = null; });
+  slayer.onCustomEvent("slayer:current-task", (query) => { if (answering) query.task = task; });
+  t.after(() => { questsDone.delete("priest_in_peril"); answering = false; });
   const click = () => {
     const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
     hooks.object(event);
@@ -866,7 +867,7 @@ test("Araxxor's lair web tunnel in needs 92 Slayer, Priest in Peril and a spider
   ]);
 });
 
-test("Araxxor's outer web tunnels crawl with sound 2454 both ways; only the north and east links long-crawl", () => {
+test("Araxxor's outer web tunnels crawl with sound 2454 both ways; only 54271 long-crawls", () => {
   const tunnels = data.locs.filter((loc) => loc.name.startsWith("araxxor_cave_outer_tunnel_multi") && loc.id !== 54274);
   assert.equal(tunnels.length, 6);
   for (const tunnel of tunnels) {

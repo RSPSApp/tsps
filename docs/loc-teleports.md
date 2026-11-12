@@ -346,7 +346,7 @@ tick after it. The way in also shows "You crawl through the webbed tunnel." The 
 player's own instance, so the move out leaves it; the fade back in still plays after that.
 
 The outer tunnels' reverse directions (54272, 54273) crawl with 844 and sound 2454 as captured
-(rev 224 and 237); only 54271's north and east links long-crawl (2796). The east link's reverse
+(rev 224 and 237); 54271 long-crawls (2796) on all three of its links. The east link's reverse
 (54272 at 3693, 9836) has no capture and copies 54272's west link.
 
 Not done: the tunnel's toggle-able "Are you sure you wish to enter?" question (Yes. / Yes, and

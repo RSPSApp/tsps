@@ -191,7 +191,7 @@ test("a stored brass key unlocks the existing door without materializing or cons
 });
 
 
-test("real PvM and skull-protected PvP death item processing keeps the ring and keys intact", async t => {
+test("real PvM and skulled PvP death item processing keeps the ring and keys intact", async t => {
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
   for (const pvp of [false, true]) {
     const f = actor(t), killer = pvp ? actor(t).p : null; ring(f); add(f, 983); await store(f, 983);
@@ -202,4 +202,27 @@ test("real PvM and skull-protected PvP death item processing keeps the ring and 
     assert.equal(amount(f, RING), 1); assert.equal(amount(f, 983), 0);
     await check(f); assert.deepEqual(setup(f), [983, -1, -1, 1]);
   }
+});
+
+
+test("physical weapon-store key-on-door remains connected; stored keys cannot be handed to another player", async t => {
+  const f = actor(t), other = actor(t), KEY = core.ItemIdentifiers.WEAPON_STORE_KEY;
+  const row = require("../data/definitions/npc-spawns.json").find(row => row.name === "Weaponsmaster");
+  assert.ok(row); core.RegionManager.loadMapFiles(row.x, row.y);
+  const candidates = [...core.MapObjects.mapObjects.values()].flat().filter(object => object.getId() === core.ObjectIdentifiers.DOOR_70);
+  const door = candidates.find(object => Math.abs(object.getLocation().getX() - row.x) < 10 && Math.abs(object.getLocation().getY() - row.y) < 10);
+  assert.ok(door, "actual cache weapon-store door near canonical Weaponsmaster");
+  const at = door.getLocation(), cross = require("../plugins/objects/WallDoor.Doors").crossingFor(door, at);
+  assert.ok(cross); f.p.moveTo(new core.Location(cross.approach.x, cross.approach.y, cross.approach.z));
+  for (let n = 0; n < 4 && f.p.isNeedsPlacement(); n++) turn();
+  assert.equal(f.p.isNeedsPlacement(), false); add(f, KEY);
+  await input(f, { type: "inventory_use_on", widgetId: 3214, itemId: KEY, slot: slot(f, KEY),
+    target: { kind: "loc", id: door.getId(), x: at.getX(), y: at.getY() } }, 4);
+  assert.equal(amount(f, KEY), 1, "physical reusable key is retained");
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [cross.destination.x, cross.destination.y], "physical key-on-door crosses through its existing handler");
+  assert.ok(f.messages.includes("You unlock the door using the key you're carrying."));
+  ring(f); await store(f, KEY); assert.equal(amount(f, KEY), 0); assert.equal(available(f, KEY), true);
+  await input(f, { type: "inventory_use_on", widgetId: 3214, itemId: KEY, slot: slot(f, RING),
+    target: { kind: "player", id: other.p.getIndex() } }, 4);
+  assert.equal(amount(other, KEY), 0); assert.equal(amount(f, KEY), 0); assert.equal(available(f, KEY), true);
 });

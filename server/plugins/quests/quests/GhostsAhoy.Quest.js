@@ -546,7 +546,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
   /** Swaps `from` for `to` in its own inventory slot, as live does (ticks 374, 528, 819). */
   function swapInSlot(player, from, to) {
     const inventory = player.getInventory();
-    const slot = inventory.getSlot?.(from) ?? -1;
+    const slot = inventory.getSlotForItemId?.(from) ?? -1;
     if (slot < 0 || typeof inventory.setItem !== "function") {
       inventory.deleteNumber(from, 1);
       inventory.adds(to, 1);
@@ -952,7 +952,6 @@ module.exports = function registerGhostsAhoyQuest(api) {
     });
   }
 
-  /** With Animal Magnetism done she asks which matter first (ticks 346, 354, 390, 470, 1798). */
   /**
    * Her menus' "same as above" options, as her first talk has them: the transcript's jumps only
    * point back at lines ("Remind me..." looped on "Do you have such a thing as a ghostspeak
@@ -977,23 +976,31 @@ module.exports = function registerGhostsAhoyQuest(api) {
   }
 
   const normalOption = (text) => String(text ?? "").replace("items you wanted.", "items you asked for.");
-  const onlyJump = (steps) => (steps ?? []).length === 1 && steps[0]?.type === "jump";
-
+  
   function resolveCroneMenus(steps, bodies = croneMenuBodies()) {
     return (steps ?? []).map((step) => {
       if (step?.type !== "choice") return step?.steps ? { ...step, steps: resolveCroneMenus(step.steps, bodies) } : step;
       const menu = { ...step };
       menu.options = (step.options ?? []).map((option) => {
         const body = bodies.get(normalOption(option.text));
-        const own = onlyJump(option.steps) && body ? body : option.steps ?? [];
+        const own = body ?? option.steps ?? [];
         // "initial" goes back to this menu ("other" replays the menu being answered), not to the
         // Animal Magnetism question that may come before it.
-        return { ...option, steps: own.map((inner) => (inner?.type === "jump" && /^initial/i.test(inner.reference ?? "") ? { ...inner, reference: "other" } : inner)) };
+        // "Not found your son yet" ends the talk, as live (ticks 488-490).
+        const ends = option.text === "I am afraid I have not found your son yet.";
+        return {
+          ...option,
+          steps: own.flatMap((inner) => {
+            if (inner?.type !== "jump" || !/^initial/i.test(inner.reference ?? "")) return [inner];
+            return ends ? [] : [{ ...inner, reference: "other" }];
+          }),
+        };
       });
       return menu;
     });
   }
 
+  /** With Animal Magnetism done she asks which matter first (ticks 346, 354, 390, 470, 1798). */
   function wrapCroneMenu(player, steps) {
     if (!questComplete(player, "animal_magnetism")) return steps;
     const both = loadTranscripts(api)?.[CRONE_RECORD]?.variants?.[CRONE_BOTH_QUESTS];
@@ -1062,10 +1069,24 @@ module.exports = function registerGhostsAhoyQuest(api) {
     let claimed = false;
     if (npcId === NPC.GHOST_CAPTAIN && option === "travel") claimed = travel(event);
     else if (option !== "talk-to") return;
-    else if (npcId === NPC.OLD_CRONE) claimed = talkToCrone(event);
+    else if ((npcId === NPC.VELORINA || npcId === NPC.NECROVARUS) && !wearingAmulet(event.player) && !quest.isComplete(event.player)) {
+      claimed = wail(event);
+    } else if (npcId === NPC.OLD_CRONE) claimed = talkToCrone(event);
     else if (npcId === NPC.ROBIN) claimed = talkToRobin(event);
     else if (npcId === NPC.GHOST_VILLAGER) claimed = talkToVillager(event);
     if (claimed) event.handled = true;
+  }
+
+  /**
+   * Without an amulet the ghosts only wail ("Woooo wooo wooooo woooo" and the "You cannot
+   * understand the ghost." box): the later sections' "not wearing" branches only jump back to it.
+   */
+  function wail(event) {
+    const [variant, condition] = event.npcId === NPC.VELORINA
+      ? ["starting-off-talking-to-velorina", "l67HQ6"] : ["talking-to-necrovarus", "5bmhwZ"];
+    startTranscript(api, event.player, event.npcId, PAGE, variant,
+      (steps) => steps.find((step) => step?.id === condition)?.steps ?? [], event.npc);
+    return true;
   }
 
   /** Travel (tick 1110): no words; without an amulet the captain only wails. */

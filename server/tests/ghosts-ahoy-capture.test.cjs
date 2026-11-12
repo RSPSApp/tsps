@@ -199,8 +199,10 @@ test('the Old crone hands over her cup and drinks the milky tea in one talk each
   assert.deepEqual(varbits.get(p).filter(([id]) => id === STATE.VARBIT.NETTLE_TEA).map(([, v]) => v), [1, 2]);
   assert.equal(quest.getStage(p), 3);
 
-  // Ticks 373-383: the tea into her cup, then the milk.
+  // Ticks 373-383: the tea into her cup, then the milk; the brew stays in the cup's slot (374).
+  const cupSlot = p.getInventory().getSlotForItemId(I().PORCELAIN_CUP);
   assert.equal(useItemOnItem(p, I().NETTLE_TEA, I().PORCELAIN_CUP), true);
+  assert.equal(p.getInventory().getSlotForItemId(I().CUP_OF_TEA_6), cupSlot);
   assert.ok(has(p, I().CUP_OF_TEA_6) && has(p, I().BOWL) && !has(p, I().PORCELAIN_CUP));
   give(p, I().BUCKET_OF_MILK);
   assert.equal(useItemOnItem(p, I().CUP_OF_TEA_6, I().BUCKET_OF_MILK), true);
@@ -227,6 +229,12 @@ test('the Old crone hands over her cup and drinks the milky tea in one talk each
     'What did you want me to get for you?',
     'I\'ll go and search for those items you asked for.',
   ]);
+  // Her first menu's "Remind me" is the amulet question and the materials, not the son's story.
+  lines.set(p, []);
+  play(p, ['Remind me - what can I do about Necrovarus?']);
+  assert.ok(!lines.get(p).some((line) => line.startsWith('I have lived here on my own')));
+  assert.equal(lastVarbit(p, STATE.VARBIT.TOY_BOAT), undefined);
+  assert.equal(lines.get(p).at(-1), 'I cannot read the strange letters of the eastern lands. I will need something to help me translate the book.');
   // The son's story and the toy boat (455-459), shown with the repaired boat's model.
   const story = play(p, ['You are doing so much for me - is there anything I can do for you?']);
   assert.deepEqual(story.find((s) => s.kind === 'item'), { kind: 'item', itemId: I().MODEL_SHIP_2, text: 'The old woman gives you a toy boat.' });
@@ -248,6 +256,20 @@ test('the Old crone hands over her cup and drinks the milky tea in one talk each
   assert.equal(lines.get(p).at(-1), 'I cannot read the strange letters of the eastern lands. I will need something to help me translate the book.');
   assert.equal(remind.at(-1).options[0], 'I am afraid I have not found your son yet.');
   assert.equal(lines.get(p).length, 9);
+  // "Not found your son yet" ends the talk (488-490).
+  play(p, ['I am afraid I have not found your son yet.']);
+  assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+  assert.equal(p.getDialogueManager().isActive(), false);
+});
+
+test('without the amulet Velorina only wails, at any stage before the end', (t) => {
+  const p = actor(t, { stage: 7, amulet: false });
+  const velorina = spawn(t, core.NpcIdentifiers.VELORINA, 3678, 3510);
+  talk(p, velorina);
+  const shown = play(p);
+  assert.deepEqual(lines.get(p), ['Woooo wooo wooooo woooo']);
+  assert.deepEqual(shown.map((s) => s.text), ['You cannot understand the ghost.']);
+  assert.equal(quest.getStage(p), 7);
 });
 
 test('an enchanted amulet lost at stage 6: the crone enchants a plain one again', (t) => {

@@ -411,7 +411,7 @@ function repairToyBoat({ player }) {
     return true;
   }
   const inventory = player.getInventory();
-  const slot = inventory.getSlot?.(ids.SILK) ?? -1;
+  const slot = inventory.getSlotForItemId?.(ids.SILK) ?? -1;
   inventory.deleteNumber(ids.MODEL_SHIP, 1);
   inventory.deleteNumber(ids.THREAD, 1);
   if (slot >= 0 && typeof inventory.setItem === "function") {

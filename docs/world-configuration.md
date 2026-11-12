@@ -680,7 +680,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `WeaponPoison` | WeaponPoison | items | yes | Lets weapon poison coat melee weapons, darts and arrows, and a cleaning cloth strip the poison off again. (members only) |
 | `WebweaverBow` | WebweaverBow | items | yes | Adds the webweaver bow: activation and charging with revenant ether, and its damage bonus including an imbued Slayer helmet on task. (members only) |
 | `WildernessChests` | WildernessChests | items | yes | Adds the Wilderness diary chests: the Muddy chest in the Lava Maze (muddy key) and the Rogues' chest in Rogues' Castle, with their loot. |
-| `WornWeights` | WornWeights | items | yes | Makes boots of lightness and penance gloves weigh their lighter worn weight in the equipment panel and for run-energy drain. |
+| `WornWeights` | WornWeights | items | yes | Makes boots of lightness, penance gloves and spotted and spottier capes weigh their lighter worn weight in the equipment panel and for run-energy drain. |
 | `ZoryasTome` | ZoryasTome | items | yes | Adds Zorya's tome from the Fractured Archive: a powered tome charged with astral and nature runes, plus its Zorya's flow special attack. (members only) |
 | `ArcheryCompetition` | ArcheryCompetition | minigames | yes | Runs the Ranging Guild's Archery Competition: the Competition Judge charges 200 coins for 10 bronze arrows scored on the targets. (members only) |
 | `BarbarianAssault` | BarbarianAssault | minigames | yes | Runs Barbarian Assault: Commander Connad, the Outpost ladder, role assignment and the nine waves plus the final Queen wave in private arenas. (members only) |

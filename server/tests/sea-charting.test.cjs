@@ -110,6 +110,7 @@ function captain({ level = 99 } = {}) {
       addExperiences: (skill, amount) => xp.push(amount),
     }),
     getEquipment: () => ({ get: () => undefined, getItems: () => [], contains: () => false }),
+    getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getBank: () => ({ contains: () => false }),
     getDialogueManager: () => ({
       startDialogues: (chain) => { player.chain = chain; current = [...chain.getDialogues().values()][0]; },
@@ -424,6 +425,9 @@ test("the crab statue hands over a Medallion fragment (rsprox 944)", () => {
 });
 
 const spyglass = require("../plugins/skills/sailing/charting/Spyglass.Charting");
+// The combat tab's weapon setup needs a whole player; here it only mounts the tab.
+require("../dist/game/content/combat/WeaponInterfaceManager").WeaponInterfaceManager.assign =
+  (player) => player.getPacketSender().sendTabInterface(0, 593);
 
 test("the spyglass far from any view: nothing to look at (rsprox 907 and others)", () => {
   const player = captain();
@@ -475,6 +479,47 @@ test("the spyglass by the Wizards' Tower plays its captured view, then charts it
     // Charted views aren't looked at again.
     spyglass.lookThrough({ player });
     assert.equal(player.messages().at(-1), "There isn't anything nearby worth looking at.");
+  } finally {
+    leave(player);
+  }
+});
+
+test("a spyglass view locks the tabs, XP drops and world options, then gives them back (rsprox 948, 939)", () => {
+  const player = captain();
+  player.setAttribute("xp-drops:enabled", true);
+  const hudResets = [];
+  PluginManager.createApi("SpyglassHudTest").onCustomEvent("boss-hud:reset", (event) => hudResets.push(event.player));
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, { fineX: 3104 * 128 + 64, fineY: 3183 * 128 + 64 });
+  tick(); // the boarded sidepanel is mounted a tick after boarding
+  const TOPLEVEL = 161;
+  assert.equal(player.varbits.get(19151), 1, "sailing_sidepanel_visible: the sidepanel is on the combat tab");
+  try {
+    const from = player.sent.length;
+    spyglass.lookThrough({ player });
+    tick(2);
+    assert.deepEqual(hudResets, [player], "the fade out clears the NPC health overlay");
+    assert.ok(!player.sent.slice(from).some(([key]) => key === "sendHideNpcOps"), "the world stays clickable until the cutscene tick");
+    tick(2);
+    const closed = player.sent.slice(from).filter(([key]) => key === "closeSubInterface").map(([, uid]) => uid & 0xffff);
+    // xp_drops, then combat, magic, stats, journal, inventory, worn items, prayer, settings, emotes.
+    assert.deepEqual(closed.sort((a, b) => a - b), [9, 76, 77, 78, 79, 80, 81, 82, 87, 88]);
+    assert.ok(player.sent.slice(from).every(([key, uid]) => key !== "closeSubInterface" || uid >>> 16 === TOPLEVEL));
+    assert.deepEqual(player.sent.slice(from).filter(([key]) => key === "sendHideNpcOps" || key === "sendHideObjOps"),
+      [["sendHideNpcOps", true], ["sendHideObjOps", true]]);
+
+    const restoreFrom = player.sent.length;
+    tick(23);
+    const restored = player.sent.slice(restoreFrom);
+    assert.ok(restored.some(([key]) => key === "sendCameraReset"));
+    assert.deepEqual(restored.filter(([key]) => key === "sendHideNpcOps" || key === "sendHideObjOps"),
+      [["sendHideNpcOps", false], ["sendHideObjOps", false]]);
+    assert.ok(restored.some(([key, uid, group]) => key === "sendSubInterface" && uid === ((TOPLEVEL << 16) | 9) && group === 122), "XP drops back");
+    const tabs = restored.filter(([key]) => key === "sendTabInterface").map(([, slot, group]) => [slot, group]);
+    for (const group of [320, 629, 149, 387, 541, 218, 116, 216]) assert.ok(tabs.some(([, each]) => each === group), `tab ${group} back`);
+    const combatTab = restored.filter(([key, uid]) => key === "sendSubInterface" && uid === ((TOPLEVEL << 16) | 76)).map(([, , group]) => group);
+    assert.equal(combatTab.at(-1), 937, "the sailing sidepanel back on the combat tab");
+    assert.deepEqual(hudResets, [player, player], "the fade back in clears it again");
   } finally {
     leave(player);
   }

@@ -853,6 +853,7 @@ test('area music follows actual same-region movement, dynamic selection and manu
     player.setArea(null);
     const index = AreaManager.areas.indexOf(area);
     if (index >= 0) AreaManager.areas.splice(index, 1);
+    AreaManager.get(player.getLocation()); // Refresh the index after removing this temporary area.
     core.World.getPlayers().remove(player);
   });
   let tick = 0;
@@ -1708,7 +1709,7 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
         assert.deepEqual(songs, [280], 'Area mode plays Sign Here on first entry');
         const { encodePlaySong } = require('../dist/net/protocol/ClientProtocol');
         assert.deepEqual(packets[0], encodePlaySong(280), 'the actual native song packet was accepted by the recording transport');
-        assert.ok(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE).includes(280), 'entry persisted the unlock');
+        assert.ok(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE).includes(280), 'entry stored the unlock attribute');
         const slot = catalog.slotByTrackId[280];
         assert.ok(player.configs.some(([varp, value]) => varp === slot.varp && (value & (1 << slot.bit)) !== 0), 'native unlock bit was sent');
         assert.equal(session.getCurrentMusicTrack(), 280);

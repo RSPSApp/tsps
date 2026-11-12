@@ -1003,3 +1003,13 @@ test('a free world refuses a buy offer for a members item, and still sells one',
   seller.place(true, PRICED, 1, 180);
   assert.equal(seller.inventory.getAmount(PRICED), 0, 'the members item is listed for sale');
 });
+
+// rsprox 226/01671.txt:24807 (and 232/03215.txt:42779): clicking an untradeable item in the GE side panel.
+test("an untradeable item clicked in the side panel says the recorded line", (t) => {
+  const UNTRADEABLE = 1099;
+  define(UNTRADEABLE, { isTradeable: () => false });
+  const { p, inventory, hooks, messages } = exchange(t);
+  inventory.add(new Item(UNTRADEABLE, 1), false);
+  hooks.onItemFirstAction({ player: p, itemId: UNTRADEABLE, slot: inventory.getSlotForItemId(UNTRADEABLE) });
+  assert.ok(messages.includes("You can't trade that item on the Grand Exchange."), messages.join(' | '));
+});

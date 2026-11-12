@@ -42,6 +42,8 @@ const ShortcutAnim = Object.freeze({
 });
 
 const PIPE_SOUND = 2489;
+const HOLE_EXIT_SOUND = 2490;
+const UNDERWALL_SOUND = 2452;
 
 function distance(a, b) {
   return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
@@ -140,6 +142,41 @@ function tunnel(to, cycles = 180) {
   ];
 }
 
+/** One tile from `from` towards `to`. */
+function stepTowards(from, to) {
+  return [from[0] + Math.sign(to[0] - from[0]), from[1] + Math.sign(to[1] - from[1]), ...from.slice(2)];
+}
+
+/**
+ * The underwall tunnels (Yanille, Grand Exchange, Falador): the player faces the tunnel for a tick,
+ * then with the tunnel sound crosses in three one-tick legs - into the hole at `enter`, through the
+ * wall to `exit`, and out onto `to`. `enter` and `exit` default to the tiles next to each end.
+ */
+function underwall(from, to, enter = stepTowards(from, to), exit = stepTowards(to, from)) {
+  return [
+    { face: enter },
+    { wait: 1 },
+    { sound: UNDERWALL_SOUND },
+    { move: enter, anim: ShortcutAnim.DUCK, speed: [0, 30], ticks: 1 },
+    { move: exit, anim: ShortcutAnim.INVISIBLE, speed: [0, 30], ticks: 1 },
+    { move: to, anim: ShortcutAnim.EMERGE, speed: [0, 30], ticks: 1 },
+  ];
+}
+
+/**
+ * The hole in the Piscatoris Fishing Colony wall: into the hole over two ticks, a three-tick crawl to the
+ * tile before the far end, then out, with an entry and an exit sound.
+ */
+function hole(from, to) {
+  return [
+    { sound: PIPE_SOUND },
+    { move: stepTowards(from, to), anim: ShortcutAnim.DUCK, speed: [0, 50], ticks: 2 },
+    { move: stepTowards(to, from), anim: ShortcutAnim.INVISIBLE, speed: [0, 100], ticks: 3 },
+    { sound: HOLE_EXIT_SOUND },
+    { move: to, anim: ShortcutAnim.EMERGE, speed: [15, 33], ticks: 1 },
+  ];
+}
+
 /** Crawls into a crevice at `entry`, through to `far`, and out onto `exit`. */
 function crevice(entry, far, exit, crawlTicks = 5) {
   return [
@@ -191,6 +228,8 @@ module.exports = {
   hops,
   pipe,
   tunnel,
+  underwall,
+  hole,
   crevice,
   crawlDown,
   crawlUp,

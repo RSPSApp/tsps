@@ -40,7 +40,7 @@
       "object": 12656,
       "at": [2344,3651,0],
       "level": 1,
-      "between": {"ends":[[2344,3650,0],[2344,3655,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "between": {"ends":[[2344,3650,0],[2344,3655,0]],"cross":[{"use":"hole","args":["from","to"]}]}
     },
     {
       "name": "Hole (Draynor Manor and Falador walls)",
@@ -89,7 +89,7 @@
       "object": 12656,
       "at": [2344,3654,0],
       "level": 1,
-      "between": {"ends":[[2344,3650,0],[2344,3655,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "between": {"ends":[[2344,3650,0],[2344,3655,0]],"cross":[{"use":"hole","args":["from","to"]}]}
     },
     {
       "name": "Hole (Draynor Manor and Falador walls)",
@@ -218,8 +218,8 @@
       "name": "Underwall tunnel (Draynor Village)",
       "object": [19032,19036],
       "level": 42,
-      "note": "rsprox 4001, 2 April 2026: human_crawling (844) then the opposite landing one tick later; no diary requirement.",
-      "between": {"ends":[[3066,3257,0],[3070,3257,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
+      "note": "rsprox 4001, 2 April 2026: sound 2452 with human_crawling (844), then the opposite landing one tick later; no diary requirement.",
+      "between": {"ends":[[3066,3257,0],[3070,3257,0]],"cross":[{"sound":2452},{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {
       "name": "Stepping stone (Champions' Guild)",
@@ -248,24 +248,11 @@
       }
     },
     {
-      "name": "Underwall tunnel (Grand Exchange, north side)",
-      "object": 16529,
+      "name": "Underwall tunnel (Grand Exchange)",
+      "object": [16529,16530],
       "level": 21,
-      "steps": [
-        {"move":[3138,3516],"anim":"DUCK","speed":[0,60]},
-        {"move":[3141,3513],"anim":"INVISIBLE","speed":[0,120],"ticks":4},
-        {"move":[3142,3513],"anim":"EMERGE","speed":[0,60],"ticks":2}
-      ]
-    },
-    {
-      "name": "Underwall tunnel (Grand Exchange, south side)",
-      "object": 16530,
-      "level": 21,
-      "steps": [
-        {"move":[3141,3513],"anim":"DUCK","speed":[0,60]},
-        {"move":[3138,3516],"anim":"INVISIBLE","speed":[0,120],"ticks":4},
-        {"move":[3137,3516],"anim":"EMERGE","speed":[0,60],"ticks":2}
-      ]
+      "keepAnimation": true,
+      "between": {"ends":[[3137,3516,0],[3142,3513,0]],"via":[[3138,3516,0],[3141,3513,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {
       "name": "Monkeybars (Edgeville Dungeon)",
@@ -330,7 +317,8 @@
       "name": "Underwall tunnel (Falador)",
       "object": [16527,16528],
       "level": 26,
-      "between": {"ends":[[2948,3309,0],[2948,3313,0]],"cross":[{"use":"tunnel","args":["to",150]}]}
+      "keepAnimation": true,
+      "between": {"ends":[[2948,3309,0],[2948,3313,0]],"via":[[2948,3310,0],[2948,3312,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {
       "name": "Narrow crevice (Dwarven Mine)",
@@ -851,7 +839,8 @@
       "name": "Underwall tunnel (Yanille)",
       "object": [16519,16520],
       "level": 16,
-      "between": {"ends":[[2575,3107,0],[2575,3112,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "keepAnimation": true,
+      "between": {"ends":[[2575,3107,0],[2575,3112,0]],"via":[[2575,3108,0],[2575,3111,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {
       "name": "Balancing ledge (Yanille Agility dungeon)",

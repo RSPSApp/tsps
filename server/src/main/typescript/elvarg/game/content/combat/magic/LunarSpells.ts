@@ -24,7 +24,8 @@ import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 /** A cast's animation, graphic and sound on the caster (cache ids); `areaSound` is heard nearby. */
-type CastVisuals = { animation: number; graphic?: number; sound?: number; areaSound?: number };
+/** `graphicHeight`: the spotanim height rsprox captures show (0 when none is recorded). */
+type CastVisuals = { animation: number; graphic?: number; graphicHeight?: number; sound?: number; areaSound?: number };
 /**
  * Each spell's level and runes are the cache's (its spell obj's params); `experience` is the
  * Wiki's. `cast` is what the caster plays, as in rsprox captures of live OSRS; null for a
@@ -34,23 +35,23 @@ type CastVisuals = { animation: number; graphic?: number; sound?: number; areaSo
 type SpellData = { experience: number; cast?: CastVisuals | null; spellId?: number };
 type TeleportData = SpellData & { destination: Location };
 
-const UNCAPTURED: CastVisuals = { animation: 4413, graphic: 747 };
+const UNCAPTURED: CastVisuals = { animation: 4413, graphic: 747, graphicHeight: 92 };
 /** The Lunar spells rsprox captures show, by cache name: the caster's animation, then graphic. */
 const CASTS = {
     // lunar_human_magic_summon2, quest_lunar_bakepie_spotanim
     "bake pie": { animation: 4413, graphic: 746 },
     // dream_player_humidify_spell, dream_humidify_spell_spotanim; area sound 3614 (rsprox 547)
-    "humidify": { animation: 6294, graphic: 1061, areaSound: 3614 },
+    "humidify": { animation: 6294, graphic: 1061, graphicHeight: 72, areaSound: 3614 },
     // dream_player_hunter_box_spell, dream_hunter_spell_spotanim; sound 3615 (rsprox 75)
-    "hunter kit": { animation: 6303, graphic: 1074, sound: 3615 },
+    "hunter kit": { animation: 6303, graphic: 1074, graphicHeight: 62, sound: 3615 },
     // dream_player_make_plank_spell, dream_plank_make_spell_spotanim; sound 3617 (rsprox 3461)
-    "plank make": { animation: 6298, graphic: 1063, sound: 3617 },
+    "plank make": { animation: 6298, graphic: 1063, graphicHeight: 60, sound: 3617 },
     // dream_player_monsterexam_statspy, dream_spell_monsterexam_statspy_spotanim; sound 3620 (rsprox 3235)
-    "monster examine": { animation: 6293, graphic: 1059, sound: 3620 },
+    "monster examine": { animation: 6293, graphic: 1059, graphicHeight: 32, sound: 3620 },
     // lunar_human_magic_summon2, quest_lunar_magic_flax_strim; sound 3618 (rsprox 4045)
-    "astral contact": { animation: 4413, graphic: 728, sound: 3618 },
+    "astral contact": { animation: 4413, graphic: 728, graphicHeight: 92, sound: 3618 },
     // dream_player_spellbook_swap, dream_spellbook_spotanim
-    "spellbook swap": { animation: 6299, graphic: 1062 },
+    "spellbook swap": { animation: 6299, graphic: 1062, graphicHeight: 10 },
     // lunar_human_magic_summon1, quest_lunar_spellbook_string_jewelery_spot_anim
     "string jewellery": { animation: 4412, graphic: 730 },
     // quest_lunar_pushing_magic_animation; the target shows the Vengeance graphic (725)
@@ -164,7 +165,8 @@ class LunarSpell extends Spell {
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
-            if (cast.graphic !== undefined) player.performGraphic(new Graphic(cast.graphic));
+            // (id, delay, height): a 2-argument number that is not a GraphicHeight member would be read as a delay.
+            if (cast.graphic !== undefined) player.performGraphic(new Graphic(cast.graphic, 0, (cast.graphicHeight ?? 0) as GraphicHeight));
             if (cast.sound !== undefined) player.getPacketSender().sendSoundEffect(cast.sound, 1, 0, 255);
             if (cast.areaSound !== undefined) {
                 const at = player.getLocation();

@@ -22,11 +22,13 @@ const RESET = Animation.DEFAULT_RESET_ANIMATION.getId();
 test("a Lunar teleport shows lunar_teleport_spotanim, not the pickaxe summon effect", () => {
   assert.equal(TeleportType.LUNAR.getStartAnimation().getId(), seq("human_teleport_other_impact"));
   assert.equal(TeleportType.LUNAR.getStartGraphic().getId(), spotanim("lunar_teleport_spotanim"));
+  assert.equal(TeleportType.LUNAR.getStartGraphic().getHeight(), 92, "rsprox: lunar_teleport_spotanim at height 92");
 });
 
 test("an Arceuus teleport has its own animation and graphic, not the Lunar ones", () => {
   assert.equal(TeleportType.ARCEUUS.getStartAnimation().getId(), seq("arceuus_necromancy_anim"));
   assert.equal(TeleportType.ARCEUUS.getStartGraphic().getId(), spotanim("arceuus_teleport_spotanim"));
+  assert.equal(TeleportType.ARCEUUS.getStartGraphic().getHeight(), 0, "rsprox: arceuus_teleport_spotanim has no height");
 });
 
 test("a lever teleports with the standard teleport's graphic", () => {

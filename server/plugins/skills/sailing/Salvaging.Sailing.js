@@ -44,6 +44,8 @@ const VARBIT_AT_FACILITY0 = 19193;
 const AT_FACILITY_HOTSPOTS = 11;
 /** How far (tiles) from the hook a wreck can be: about 8 in OSRS, as played. */
 const HOOK_RANGE = 8;
+/** How far (tiles) from the boat a wreck can be inspected. */
+const WRECK_INSPECT_REACH = 32;
 /** Ticks from the cast until the hook settles, and until its first roll (captured: settled at 3, salvage at 10). */
 const SETTLE_TICKS = 3;
 const FIRST_ROLL_TICKS = 6;
@@ -53,7 +55,10 @@ const ROLL_TICKS = 4;
 const SORT_TICKS = 3;
 
 const NO_WRECK = "There are no shipwrecks within range of the salvaging hook.";
+/** A message box, when the only wrecks in range have sunk. */
+const PLUNDERED = "This shipwreck has already been plundered. Perhaps there's another one nearby?";
 const CAST = "You cast out your salvaging hook towards the shipwreck...";
+/** On the spam channel. */
 const REELED = "You reel in some salvage.";
 const SUNK = "You salvage all you can from the shipwreck before it is reclaimed by the sea.";
 const SORT_BEGIN = "You begin sorting through your salvage...";
@@ -163,6 +168,24 @@ function outwardFrom(boat, hook, owned, hotspot) {
   return new Location(boat.deckBaseX + hook.x + dx, boat.deckBaseY + hook.y, 0);
 }
 
+/**
+ * A raised wreck's Inspect: a message box naming it, and the level it needs when the player is
+ * below it. Ours: the level line uses the current level, as Deploy does.
+ */
+function inspectWreck(event) {
+  if (event.clickType !== 1) return;
+  const at = event.location;
+  const wreck = shipwrecks.raisedWreckAt(at.x, at.y, at.z ?? at.level ?? 0);
+  const type = wreck ? shipwrecks.wreckType(wreck.type) : undefined;
+  if (!type || type.active !== event.objectId) return;
+  event.handled = true;
+  const { player } = event;
+  const named = `It's a ${type.inspectName} shipwreck. You might be able to salvage something from the wreckage using a salvaging hook.`;
+  messageBox(player, player.getSkillManager().getCurrentLevel(Skill.SAILING) < type.level
+    ? `${named} However, you'll first need a Sailing level of ${type.level} to do so.`
+    : named);
+}
+
 /** A salvaging hook's Deploy: cast it towards the nearest raised wreck in range. */
 function deployHook(event) {
   if (event.clickType !== 1 || event.definition?.getInteractions?.()?.[0] !== "Deploy") return;
@@ -178,7 +201,8 @@ function deployHook(event) {
   const at = hookTile(boat, hook);
   const wreck = shipwrecks.raisedWreckNear(at.x, at.y, at.level, HOOK_RANGE);
   if (!wreck) {
-    player.sendMessage(NO_WRECK);
+    if (shipwrecks.sunkenWreckNear(at.x, at.y, at.level, HOOK_RANGE)) messageBox(player, PLUNDERED);
+    else player.sendMessage(NO_WRECK);
     return;
   }
   const type = shipwrecks.wreckType(wreck.type);
@@ -233,7 +257,7 @@ function salvageTick(player, session) {
     return stop(player);
   }
   player.getInventory().addItem(new Item(type.salvage, 1));
-  player.sendMessage(REELED);
+  spam(player, REELED);
   player.getSkillManager().addExperiences(Skill.SAILING, type.xp);
   if (type.petChance) {
     // Soup's chance is per wreck type, not level-scaled (Wiki, Soup#Drop rates).
@@ -437,6 +461,10 @@ module.exports = {
     pluginApi = api;
     api.onServerStartup(startShipwrecks);
     api.onObjectInteraction(deployHook);
+    api.onObjectInteraction(inspectWreck);
+    // Raised wrecks are inspected from the boat's deck, the helm included, as far off as they
+    // are drawn. Ours: the reach is the scene's view distance.
+    api.setDeckReach?.(Object.values(salvageData().wrecks).map((type) => type.active), WRECK_INSPECT_REACH);
     api.onObjectInteraction("Salvaging station", { "Sort-salvage": sortSalvage });
     api.onPlayerLogout(forgetSession);
   },

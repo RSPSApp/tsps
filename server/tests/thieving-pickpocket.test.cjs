@@ -71,6 +71,27 @@ Thieving.register({
 });
 Sounds.sendSound = () => {};
 
+test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 Thieving off (Wiki: Trapdoor (H.A.M. Hideout))', () => {
+    const core = PluginManager.getCoreApi();
+    const typed = [];
+    let level = 16;
+    const player = {
+        getPacketSender: () => ({ sendTypedMessage: (type, text) => typed.push([type, text]) }),
+        getSkillManager: () => ({
+            getCurrentLevel: () => level,
+            setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            updateSkill() {},
+        }),
+    };
+    HamTrapdoor._test.fumbled(player);
+    // rsprox 227/01723.txt:186365-186387: spam line, then Thieving 16 -> 15.
+    assert.deepEqual(typed, [[core.ChatType.SPAM, 'You fail to pick the lock - your fingers get numb from fumbling with the lock.']]);
+    assert.equal(level, 15);
+    level = 0;
+    HamTrapdoor._test.fumbled(player);
+    assert.equal(level, 0, 'never below 0');
+});
+
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
     const chance = HamTrapdoor._test.successChance;
     assert.equal(chance(1, false), 11 / 256);

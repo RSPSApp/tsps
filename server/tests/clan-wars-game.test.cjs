@@ -1846,6 +1846,11 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
     assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);
     assert.ok(game.walls.length>0);assert.ok(game.walls.every(o=>o.getPrivateArea()===game.area&&o.getType()===10&&o.getFace()===0));
     assert.ok(game.walls.every(o=>(game.area.getClip(o.getLocation())&0x100)!==0),'native registration adds solid barrier clipping after the lazy grid exists');
+    const stagedWalls=game.walls.slice(), {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of stagedWalls) {
+      assert.equal(MapObjects.getPrivateArea(a,wall.getId(),wall.getLocation()),wall,'native resolver sees the exact registered barrier');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wall.getId()).length,1,'one runtime registration per barrier');
+    }
     assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
     for(const side of [0,1]) assert.equal(sylvanReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
     for(const x of [3444,3445,3446,3450,3451]) assert.equal(game.walls.some(o=>o.getLocation().getX()===game.area.at([x,5023,0]).getX()),false,'mapped solid trees receive no overlay barrier');
@@ -1859,6 +1864,11 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
     assert.ok(walker.getLocation().getY()<game.area.at([3424,5023,0]).getY(),'ordinary queued movement cannot cross staging wall');
     const before={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
     core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of stagedWalls) {
+      assert.equal(MapObjects.getPrivateArea(a,wall.getId(),wall.getLocation()),null,'removed barriers leave no native resolver entry');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false,'removed runtime barrier identity is gone');
+      assert.equal(game.area.getObjects().includes(wall),false,'area detaches the exact removed barrier');
+    }
     const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
     assert.deepEqual(after,baseline,'all4096 masks including directional/projectile/tree bits restored exactly');
     assert.equal(after[(5023-4992)*64+3414-3392],0x4020,'known directional/projectile fence bits survive');

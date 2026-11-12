@@ -40,6 +40,7 @@ const MahoganyHomes = require("./MahoganyHomes.Construction");
 const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const MaxHouse = require("./MaxHouse.Construction");
 const Nexus = require("./Nexus.Construction");
+const ClockworkToys = require("./ClockworkToys.Construction");
 
 const HAMMER_ID = ItemIdentifiers.HAMMER;
 const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
@@ -1726,6 +1727,7 @@ function attach(api) {
   MahoganyHomes.attachMahoganyHomes(api);
   CarpenterOutfit.attachCarpenterOutfit(api);
   Nexus.attachNexus(api);
+  ClockworkToys.attachClockworkToys(api);
   api.persistAttribute(HOUSE_ATTRIBUTE, defaultHouse());
   api.onObjectFirstClick(HOUSE_PORTAL_IDS, openPortalMenu);
   api.onObjectSecondClick(HOUSE_PORTAL_IDS, enterNormalHouse);

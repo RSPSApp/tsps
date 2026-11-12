@@ -1,5 +1,5 @@
 // Run with: node --test server/tests/araxxor-combat.test.cjs
-// Pure Araxxor combat math: no server boot needed.
+// Araxxor combat math; the enrage test loads the cache and the real NPC (after yarn build).
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const Shared = require("../plugins/bosses/araxxor/Shared.Araxxor");
@@ -534,27 +534,43 @@ test("the collection log gets what the corpse hands over: the harvest's loot, an
 });
 
 // Wiki (Araxxor/Strategies): the enrage "will additionally increase his Defence level by 35, Magic by 28 and Ranged by 31".
-test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31", () => {
+test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31 on the real NPC, and nowhere else", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
   const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
   const core = PluginManager.getCoreApi();
   const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
   Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
-  const levels = new Map([[core.Skill.DEFENCE, 135], [core.Skill.MAGIC, 190], [core.Skill.RANGED, 210]]);
-  const attributes = new Map();
-  const npc = {
-    isRegistered: () => true,
-    getHitpoints: () => Math.floor(Shared.MAX_HITPOINTS * Shared.ENRAGE_THRESHOLD),
-    getAttribute: (key) => attributes.get(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-    performAnimation() {},
-    getMovementQueue: () => ({ setBlockMovement() {} }),
-    getCurrentLevel: (skill) => levels.get(skill),
-    setCurrentLevels: (skill, level) => levels.set(skill, level),
+  const { DEFENCE, MAGIC, RANGED } = core.Skill;
+  const spawn = () => {
+    const npc = new NPC(Shared.BOSS_ID, new core.Location(Shared.SPAWN_TILE[0], Shared.SPAWN_TILE[1], Shared.SPAWN_TILE[2]));
+    npc.setRegistered(true);
+    npc.setHitpoints(Math.floor(Shared.MAX_HITPOINTS * Shared.ENRAGE_THRESHOLD));
+    return npc;
   };
-  Combat.checkEnrage(npc, 1);
-  assert.equal(attributes.get(Shared.ATTR_ENRAGED), true);
-  assert.deepEqual([levels.get(core.Skill.DEFENCE), levels.get(core.Skill.MAGIC), levels.get(core.Skill.RANGED)], [170, 218, 241]);
-  Combat.checkEnrage(npc, 1);
-  assert.equal(levels.get(core.Skill.DEFENCE), 170, "only once");
-  core.TaskManager.cancelTasks(npc);
+  const levels = (npc) => [DEFENCE, MAGIC, RANGED].map((skill) => npc.getCurrentLevel(skill));
+  const npc = spawn();
+  const other = spawn();
+  assert.deepEqual(levels(npc), [135, 190, 210], "the definition's levels");
+  npc.setCurrentLevels(MAGIC, 150); // drained before the enrage
+  try {
+    Combat.checkEnrage(npc, 1);
+    assert.equal(npc.getAttribute(Shared.ATTR_ENRAGED), true);
+    assert.deepEqual(levels(npc), [170, 178, 241], "raised; the drained Magic comes up by the same 28");
+    assert.deepEqual([DEFENCE, MAGIC, RANGED].map((skill) => npc.getMaxLevel(skill)), [170, 218, 241]);
+    Combat.checkEnrage(npc, 1);
+    assert.equal(npc.getCurrentLevel(DEFENCE), 170, "only once");
+    npc.setCurrentLevels(DEFENCE, 200);
+    assert.equal(npc.getCurrentLevel(DEFENCE), 170, "nothing goes past the raised level");
+    npc.setCurrentLevels(DEFENCE, 120);
+    assert.equal(npc.getCurrentLevel(DEFENCE), 120, "drains still work after the enrage");
+    assert.deepEqual(levels(other), [135, 190, 210], "another Araxxor keeps the definition's levels");
+  } finally {
+    core.TaskManager.cancelTasks(npc);
+  }
 });

@@ -283,7 +283,8 @@ test('DOTI evidence hand-in is safe in a full bag and the box shows labels + fla
   for (let slot = 4; slot < 28; slot++) p.inventory.getItems()[slot] = new core.Item(995, 100);
   assert.equal(p.inventory.getFreeSlots(), 0);
   const event = h.action(p, N.STRADIUS, 'JwtSTS');
-  assert.deepEqual(event.box.items, [I.WINE_LABELS, I.DRINKING_FLASK]);
+  // rsprox 226/01695.txt:124649-124651: the box shows the flask and the note.
+  assert.deepEqual(event.box.items, [I.DRINKING_FLASK, I.THREATENING_NOTE]);
   assert.equal(p.varbits.get(11233), 1, 'given items flag');
   for (const id of [I.WINE_LABELS, I.THREATENING_NOTE, I.DRINKING_FLASK, I.SHIPPING_CONTRACT]) {
     assert.equal(p.inventory.getAmount(id), 0, `evidence ${id} delivered`);

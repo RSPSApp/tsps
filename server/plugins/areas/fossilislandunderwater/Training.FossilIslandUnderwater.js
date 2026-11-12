@@ -23,6 +23,7 @@ const RATE_VARPS = Object.freeze({ agility: 261, thieving: 262, bothAgility: 263
 const AMOUNTS = Object.freeze({ 1: 1, 2: 5 });
 const EXCHANGE_X = 3;
 const EXCHANGE_ALL = 4;
+// Captured (231/00712 Exchange-1 with none carried).
 const NONE_MESSAGE = "You don't have any glistening tears to exchange.";
 
 let core;

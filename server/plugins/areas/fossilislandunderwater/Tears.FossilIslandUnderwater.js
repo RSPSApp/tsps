@@ -10,22 +10,30 @@
  *   again). Nobody else is ever seen in the area, so each player has their own.
  * - A hint arrow stands on its west side (height 128), sent again every 3 ticks with
  *   `current_hint_arrow` (varbit 14192) going to 0 and back to 6.
- * - The first time a dive brings the player next to it: "You have successfully found an open chest;
- *   the mermaids will reward you from now on." (or clam), and Mairin's "Thanks, you should be able
- *   to get some tears from the next chest!".
+ * - A clam shuts (fossil_loc_clam_shut, 7673) the tick before it closes (231/00713 t81-82).
+ * - The first search on a dive gives no tears: it answers "You have successfully found an open
+ *   chest; the mermaids will reward you from now on." (or clam) and Mairin's "Thanks, you should be
+ *   able to get some tears from the next chest!", and that opening then only gives "You'll have to
+ *   wait for the next chest or clam to open." (231/00715 t155-165, and every other capture; the
+ *   Wiki's "the very first clam or chest will not reward any tears").
  * - Search: human_swim_steal (7707) at once, the outcome a tick later. A success is
  *   human_swim_steal_success (7709), sound 73, a glistening tear and a mermaid's tear, and Agility
- *   and Thieving XP (4.5 each, Wiki). The first search of each opening always succeeds (7 of 7
- *   captured); later ones failed 92 times in 115. A failure is a nibble (spam): 37 of the 92
- *   "...and lose some breath.", which takes 2% oxygen.
+ *   and Thieving XP (4.5 each, Wiki); the next search can start a tick after. The first search of
+ *   each later opening always succeeds (7 of 7 captured); later ones failed 92 times in 115. A
+ *   failure is a nibble: human_swim_steal_fail (7708) a tick after the steal, then
+ *   human_swim_steal_fail_end (7710) with the line (spam) a tick later, the next search no sooner
+ *   than the tick after that (231/00715 t292-297). 37 of the 92 were "...and lose some breath.",
+ *   which takes 2% oxygen.
  * - Wiki: later searches succeed 12.1% of the time at Thieving 1 rising to 16.0% at 99 (the
  *   skilling roll's low 30 / high 40; the captures' 23 in 115 at 99 is within its spread).
  */
-const SEARCH = Object.freeze({ STEAL: 7707, SUCCESS: 7709, SOUND: 73 });
+const SEARCH = Object.freeze({ STEAL: 7707, FAIL: 7708, SUCCESS: 7709, FAIL_END: 7710, SOUND: 73 });
+const CLAM_SHUT = 7673; // fossil_loc_clam_shut
 const HINT_VARBIT = 14192; // current_hint_arrow
 const HINT_ON = 6;
 const HINT_WEST = 3;
 const HINT_HEIGHT = 128;
+// Ours: no full-inventory search was captured; the game's usual line.
 const FULL_MESSAGE = "You don't have enough inventory space.";
 const CLOSED_MESSAGE = "You'll have to wait for the next chest or clam to open.";
 const NIBBLE = "You jerk back as something nibbles your hand.";
@@ -87,19 +95,10 @@ function close(player, state, clear = false) {
   }
 }
 
-/** Next to the open loc's footprint, as the captures' "found" lines come (a tile off a chest, the clam's 2x2). */
-function besideSpot(player, state) {
-  const [kind, x, y, z] = state.spot;
-  const { size } = spotIds(kind);
-  const location = player.getLocation();
-  if (location.getZ() !== z) return false;
-  const dx = location.getX() < x ? x - location.getX() : Math.max(0, location.getX() - (x + size - 1));
-  const dy = location.getY() < y ? y - location.getY() : Math.max(0, location.getY() - (y + size - 1));
-  return Math.max(dx, dy) <= 1;
-}
-
+/** The dive's first search: the found lines, no tears, and that opening is spent. */
 function find(player, state) {
   state.found = true;
+  state.spent = state.object;
   player.sendMessage(`You have successfully found an open ${state.spot[0]}; the mermaids will reward you from now on.`);
   const { DialogueChainBuilder, NpcDialogue, NpcIdentifiers } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
@@ -107,7 +106,7 @@ function find(player, state) {
 }
 
 function enter(player) {
-  const state = { ticks: 0, found: false, searching: false, spot: null, object: null, opensAt: 0 };
+  const state = { ticks: 0, found: false, spent: null, searching: false, spot: null, object: null, opensAt: 0 };
   states.set(player, state);
   open(player, state);
 }
@@ -127,7 +126,9 @@ function tick(player) {
   if (state.object && state.ticks >= state.closesAt) close(player, state);
   else if (!state.object && state.opensAt != null && state.ticks >= state.opensAt) open(player, state);
   else if (state.object && state.ticks % TEARS.hintTicks === 0) sendHint(player, state);
-  if (state.object && !state.found && besideSpot(player, state)) find(player, state);
+  if (state.object && state.spot[0] === "clam" && state.ticks === state.closesAt - 1) {
+    player.getPacketSender().sendObjectAnimation(state.object, new core.Animation(CLAM_SHUT));
+  }
 }
 
 /** The OSRS skilling roll over levels 1-99 (Wiki: Skilling success rate). */
@@ -153,29 +154,42 @@ function reward(player, state) {
   state.searched = true;
 }
 
-function nibble(player) {
-  const { ChatType } = core;
-  const breath = Math.random() < TEARS.breathChance;
-  player.getPacketSender().sendTypedMessage(ChatType.SPAM, breath ? NIBBLE_BREATH : NIBBLE);
-  if (breath) shared.changeOxygen(player, -TEARS.breathLoss);
+/** A miss: the fail (7708) now, and a tick later its end (7710) with the nibble; searching again only after. */
+function nibble(player, state) {
+  const { ChatType, Animation } = core;
+  player.performAnimation(new Animation(SEARCH.FAIL));
+  shared.later(1, () => {
+    state.searching = false;
+    if (!player.isRegistered()) return;
+    player.performAnimation(new Animation(SEARCH.FAIL_END));
+    const breath = Math.random() < TEARS.breathChance;
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, breath ? NIBBLE_BREATH : NIBBLE);
+    if (breath && shared.isDiving(player)) shared.changeOxygen(player, -TEARS.breathLoss);
+  });
 }
 
 function resolveSearch(player, object) {
   const state = states.get(player);
   if (!state) return;
-  state.searching = false;
-  if (!player.isRegistered() || state.object !== object) return;
+  if (!player.isRegistered() || state.object !== object) {
+    state.searching = false;
+    return;
+  }
   const level = player.getSkillManager().getCurrentLevel(core.Skill.THIEVING);
   const { low, high } = TEARS.searchChance;
-  if (!state.searched || Math.random() < chance(low, high, level)) reward(player, state);
-  else nibble(player);
+  if (!state.searched || Math.random() < chance(low, high, level)) {
+    state.searching = false;
+    reward(player, state);
+  } else {
+    nibble(player, state);
+  }
 }
 
 function search({ player, location }) {
   const state = states.get(player);
   if (!state || !shared.isDiving(player)) return false;
   const [, x, y, z] = state.spot ?? [];
-  if (!state.object || location.x !== x || location.y !== y || location.z !== z) {
+  if (!state.object || state.spent === state.object || location.x !== x || location.y !== y || location.z !== z) {
     player.sendMessage(CLOSED_MESSAGE);
     return true;
   }
@@ -184,7 +198,10 @@ function search({ player, location }) {
     player.sendMessage(FULL_MESSAGE);
     return true;
   }
-  if (!state.found) find(player, state);
+  if (!state.found) {
+    find(player, state);
+    return true;
+  }
   state.searching = true;
   player.performAnimation(new core.Animation(SEARCH.STEAL));
   const object = state.object;
@@ -192,7 +209,11 @@ function search({ player, location }) {
   return true;
 }
 
-/** Puff: "You depuff the pufferfish, restoring some of your puff." 15% oxygen (rsprox 715: +150 of 1,000). */
+/**
+ * Puff: "You depuff the pufferfish, restoring some of your puff." 15% oxygen (rsprox 234/03299
+ * t18111: 480 to 630). Live also lets the depuffed fish (NPC 7781) swim off from the player's tile;
+ * that isn't done.
+ */
 function puff({ player }) {
   if (!shared.isDiving(player)) return false;
   const { ItemIdentifiers: I, Animation } = core;
@@ -211,4 +232,4 @@ function attach(api, sharedHelpers, data) {
   api.onItemAction("Pufferfish", { Puff: puff });
 }
 
-module.exports = { attach, enter, leave, tick, _test: { states, chance, besideSpot, search, puff } };
+module.exports = { attach, enter, leave, tick, _test: { states, chance, search, puff } };

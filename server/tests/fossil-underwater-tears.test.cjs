@@ -147,23 +147,33 @@ test("it is open 100 ticks, then the closed loc is back; 3 ticks on another open
   Tears.leave(player);
 });
 
-test("coming next to it the first time on a dive: the found line and Mairin's", () => {
+test("the dive's first search gives the found lines and no tears; that opening then only says to wait (231/00715 t155-165)", () => {
   const player = withOpenChest();
-  Tears.tick(player);
-  assert.equal(player.state.dialogues, 0, "not near it yet");
   player.setLocation(new core.Location(3805, 10265, 1));
   Tears.tick(player);
+  assert.equal(player.state.dialogues, 0, "being next to it isn't enough");
+  assert.equal(searchChest(player), true);
   assert.deepEqual(player.state.messages, ["You have successfully found an open chest; the mermaids will reward you from now on."]);
   assert.equal(player.state.dialogues, 1);
-  Tears.tick(player);
+  assert.deepEqual(player.state.anims, [], "no search");
+  runLater();
+  assert.equal(player.held.get(TEAR) ?? 0, 0);
+  searchChest(player);
+  assert.equal(player.state.messages.at(-1), "You'll have to wait for the next chest or clam to open.");
   assert.equal(player.state.dialogues, 1, "once a dive");
   Tears.leave(player);
 });
 
-test("a search: human_swim_steal, then a tick later the success, a glistening and a mermaid's tear and 4.5 XP each; the first always succeeds", () => {
-  const player = withOpenChest();
+/** A diving player who has already found an opening this dive, beside the open chest at 3804,10265. */
+function foundChest(options) {
+  const player = withOpenChest(options);
   player.setLocation(new core.Location(3805, 10265, 1));
-  Tears.tick(player);
+  Tears._test.states.get(player).found = true;
+  return player;
+}
+
+test("a search: human_swim_steal, then a tick later the success, a glistening and a mermaid's tear and 4.5 XP each; the first of an opening always succeeds", () => {
+  const player = foundChest();
   const random = Math.random;
   Math.random = () => 0.999;
   try {
@@ -182,17 +192,41 @@ test("a search: human_swim_steal, then a tick later the success, a glistening an
   Tears.leave(player);
 });
 
-test("later searches roll Thieving's 30/40 chance; a miss is a nibble, sometimes costing 2% oxygen", () => {
-  const player = withOpenChest();
-  player.setLocation(new core.Location(3805, 10265, 1));
+test("a clam shuts (7673) the tick before it closes", () => {
+  const player = createPlayer();
+  const random = Math.random;
+  const index = DATA.tears.spots.findIndex(([kind]) => kind === "clam");
+  Math.random = () => index / DATA.tears.spots.length + 1e-6;
+  const animations = [];
+  player.getPacketSender = ((sender) => () => ({ ...sender(), sendObjectAnimation: (object, animation) => animations.push(animation.getId()) }))(player.getPacketSender);
+  try {
+    Tears.enter(player);
+  } finally {
+    Math.random = random;
+  }
+  for (let i = 0; i < 98; i++) Tears.tick(player);
+  assert.deepEqual(animations, []);
   Tears.tick(player);
+  assert.deepEqual(animations, [7673]);
+  Tears.leave(player);
+});
+
+test("later searches roll Thieving's 30/40 chance; a miss is 7708, then 7710 and the nibble a tick later, sometimes costing 2% oxygen (231/00715 t292-297)", () => {
+  const player = foundChest();
   searchChest(player);
   runLater();
   const random = Math.random;
   try {
     Math.random = () => 0.5;
+    player.state.anims.length = 0;
     searchChest(player);
     runLater();
+    assert.deepEqual(player.state.anims, [7707, 7708]);
+    assert.deepEqual(player.state.spam, [], "the line comes with the fail's end");
+    searchChest(player);
+    assert.deepEqual(player.state.anims, [7707, 7708], "no new search until the miss has played out");
+    runLater();
+    assert.deepEqual(player.state.anims, [7707, 7708, 7710]);
     assert.deepEqual(player.state.spam, ["You jerk back as something nibbles your hand."]);
     assert.equal(player.oxygen, 1000);
     Math.random = () => 0.1;
@@ -202,6 +236,7 @@ test("later searches roll Thieving's 30/40 chance; a miss is a nibble, sometimes
     const rolls = [0.99, 0.2];
     Math.random = () => rolls.shift() ?? 0.2;
     searchChest(player);
+    runLater();
     runLater();
     assert.equal(player.state.spam.at(-1), "You jerk back as something nibbles your hand and lose some breath.");
     assert.equal(player.oxygen, 980);
@@ -218,6 +253,7 @@ test("searching what isn't open, or with no room, gives the captured lines and n
   const clam = hooks.firstClick.get(core.ObjectIdentifiers.CLAM_2);
   assert.equal(clam({ player, location: { x: 3777, y: 10242, z: 1 } }), true);
   assert.deepEqual(player.state.messages, ["You'll have to wait for the next chest or clam to open."]);
+  Tears._test.states.get(player).found = true;
   player.state.full = true;
   player.state.messages.length = 0;
   searchChest(player);

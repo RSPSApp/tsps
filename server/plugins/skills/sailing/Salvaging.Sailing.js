@@ -325,7 +325,8 @@ function rollClue(player, clue, random = Math.random) {
 
 /**
  * The first salvage in the inventory the player has the level to sort, with its sorting data;
- * `{ tooLow: true }` when all of it is above their level, undefined when there is none.
+ * `{ tooLow: true }` when all of it is above their level, undefined when there is none. Ours:
+ * salvage above the level is passed over for the next kind, in the data's order.
  */
 function nextSalvage(player) {
   const table = salvageData().salvage;
@@ -344,7 +345,7 @@ function nextSalvage(player) {
 function findLine(salvageName, loot) {
   if (!loot) return `You sort through the ${salvageName} and find nothing.`;
   const itemName = CacheDefinitions.getItem(loot.item)?.name ?? "something";
-  return `You sort through the ${salvageName} and find: ${loot.amount.toLocaleString("en-US")} x ${itemName}.`;
+  return `You sort through the ${salvageName} and find: ${Number(loot.amount).toLocaleString("en-US")} x ${itemName}.`;
 }
 
 /** A salvaging station's Sort-salvage: sorts every salvage in the inventory, one each 3 ticks. */

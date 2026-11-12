@@ -6,8 +6,11 @@
  * event worlds, whose searches all succeed, so only their timings are used):
  * - One of the sea floor's 54 chests and clams (the cache's closed locs, 30972 and 30970) is open
  *   at a time, for the player alone: the open loc (30971, 30969) replaces it in their scene for
- *   100 ticks, and 3 ticks after it closes another opens, chosen at random (the same one can open
- *   again). Nobody else is ever seen in the area, so each player has their own.
+ *   100 ticks, and about 3 ticks after it closes another opens, chosen at random (the same one can
+ *   open again; gaps of 1 to 3 ticks are recorded, 231/00715 t307-308, 231/00714 t98-101). Nobody
+ *   else is ever seen in the area, so each player has their own.
+ * - Not done: at each new opening live plays the open animation (7674) on 4 to 12 other chests and
+ *   clams nearby (231/00714 t99-100, 231/00715 t102, 205, 308).
  * - A hint arrow stands on its west side (height 128), sent again every 3 ticks with
  *   `current_hint_arrow` (varbit 14192) going to 0 and back to 6.
  * - A chest or clam shuts (fossil_loc_clam_shut, 7673) the tick before it closes (231/00713 t81-82,

@@ -61,6 +61,7 @@ function createPlayer({ x = 3732, y = 10281, z = 1, thieving = 99, agility = 99,
     performAnimation: (a) => state.anims.push(a.getId()),
     getDialogueManager: () => ({ startDialogues: () => { state.dialogues++; } }),
     setEnteredAmountAction: (action) => { state.amountAction = action; },
+    getInterfaceId: () => state.interfaces.at(-1) ?? -1,
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === core.Skill.THIEVING ? thieving : agility),
       getMaxLevel: (skill) => (skill === core.Skill.THIEVING ? thieving : agility),
@@ -303,9 +304,23 @@ test("exchanges pay as every captured one did", () => {
   }
 });
 
+test("the rows answer only while Mairin's interface is open, the amount prompt too", () => {
+  const button = (child) => hooks.buttons.get((287 << 16) | child);
+  const player = createPlayer({ items: { [TEAR]: 28 } });
+  assert.equal(button(3)({ player, childId: 3, opId: 4 }), false);
+  assert.equal(player.held.get(TEAR), 28, "nothing exchanged without 287 open");
+  hooks.npcs.Mairin.Training({ player });
+  button(5)({ player, childId: 5, opId: 3 });
+  player.state.interfaces.push(-1); // closed before answering
+  player.state.amountAction.execute(5);
+  assert.equal(player.held.get(TEAR), 28);
+  assert.deepEqual(player.state.xp, { agility: 0, thieving: 0 });
+});
+
 test("the rows' Exchange-1, -5, -X and -All; none carried", () => {
   const button = (child) => hooks.buttons.get((287 << 16) | child);
   const player = createPlayer({ items: { [TEAR]: 28 } });
+  hooks.npcs.Mairin.Training({ player });
   button(3)({ player, childId: 3, opId: 2 });
   assert.equal(player.held.get(TEAR), 23);
   button(5)({ player, childId: 5, opId: 3 });

@@ -99,14 +99,17 @@ function exchange(player, row, wanted) {
   sendRates(player);
 }
 
+/** Only from Mairin's open interface: a click or an amount sent without it does nothing. */
+const trainingOpen = (player) => player.getInterfaceId() === INTERFACE;
+
 function click(event) {
   const { player } = event;
   const row = ROWS[event.childId ?? (event.buttonId & 0xffff)];
-  if (!row) return false;
+  if (!row || !trainingOpen(player)) return false;
   const op = Number(event.opId ?? event.action);
   if (op === EXCHANGE_X) {
     const held = player.getInventory().getAmount(core.ItemIdentifiers.GLISTENING_TEAR);
-    player.setEnteredAmountAction({ execute: (amount) => amount > 0 && exchange(player, row, amount) });
+    player.setEnteredAmountAction({ execute: (amount) => amount > 0 && trainingOpen(player) && exchange(player, row, amount) });
     player.getPacketSender().sendEnterAmountPrompt(`How many glistening tears do you wish to exchange? (${held})`);
     return true;
   }

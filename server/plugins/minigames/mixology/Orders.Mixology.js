@@ -12,6 +12,9 @@
  *   unordered for a third of the XP and 10 of its best resin (lye over aga over mox). Digweed
  *   doubles a potion's XP and resin; filling two orders at once pays 20% more resin, three
  *   40% (Wiki; the Leagues captures carry the same 1.4 on their x8).
+ * - A hand-in that fills at least one order also plays synth 9512 (delay 20), once however
+ *   many it fills. With no finished potion carried, a message box (and its chat line) reads
+ *   "You're not carrying any finished potions." and nothing else happens.
  * - rsprox captures (4197, 1107): human_pickuptable_walkmerge, synth 2739 (delay 15), one
  *   "You deposit some <col=6800bf>Alco-augmentator</col> and fulfil an order." (or ", but fail
  *   to fulfil an order.") per potion, the resin varps, "You are rewarded <col=0000b2>336</col>/
@@ -34,12 +37,13 @@ const DIGWEED_MULTIPLIER = 2;
 const BEST_RESIN_FIRST = ["lye", "aga", "mox"];
 const SOUND_DEPOSIT = 2739;
 const SOUND_DEPOSIT_DELAY = 15;
+const SOUND_ORDER_FILLED = 9512;
+const SOUND_ORDER_FILLED_DELAY = 20;
 const PROJECTILE = { delay: 10, speed: 120, height: 30, angle: 0, offset: 0 };
 const CHATTER_TICKS = 10;
 const CHATTER_COLOUR = { mox: "389cff", aga: "11ff00", lye: "ff242f" };
 const CHATTER_GAP = "   ";
-/** Not captured. */
-const NOTHING_TO_DEPOSIT = "You don't have any finished potions to deposit.";
+const NOTHING_TO_DEPOSIT = "You're not carrying any finished potions.";
 
 function orders(player) {
   return Shared.VARBIT.ORDER_TYPE.map((varbit, index) => ({
@@ -170,7 +174,8 @@ function fulfil({ player }) {
   if (!Shared.permitted(player)) return;
   const deposits = choose(player);
   if (!deposits.length) {
-    player.sendMessage(NOTHING_TO_DEPOSIT);
+    player.getPacketSender().sendTypedMessage(Shared.core().ChatType.MESBOX, NOTHING_TO_DEPOSIT);
+    Shared.statement(player, NOTHING_TO_DEPOSIT);
     return;
   }
   const inventory = player.getInventory();
@@ -202,6 +207,7 @@ function fulfil({ player }) {
   Shared.addXp(player, xp);
   Shared.animate(player, "human_pickuptable_walkmerge");
   Shared.sound(player, SOUND_DEPOSIT, SOUND_DEPOSIT_DELAY);
+  if (filled > 0) Shared.sound(player, SOUND_ORDER_FILLED, SOUND_ORDER_FILLED_DELAY);
   for (const deposit of deposits) sendAlongBelt(player, deposit.entry);
   showChatter(player, gained);
   Digweed.afterHandIn(player);

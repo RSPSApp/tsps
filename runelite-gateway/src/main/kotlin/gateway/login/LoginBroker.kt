@@ -121,7 +121,12 @@ class LoginBroker(
                 require(exchange.requestHeaders.getFirst("Origin") == null)
                 val now = clock()
                 attempts.entries.removeIf { now - it.value.first > 60_000 }
-                require(attempts.size < 2048 || attempts.containsKey(ip))
+                // A full table forgets its oldest window instead of refusing every new address:
+                // otherwise 2048 rotating addresses lock everyone else out for a minute.
+                if (attempts.size >= 2048 && !attempts.containsKey(ip))
+                    attempts.entries
+                        .minByOrNull { it.value.first }
+                        ?.let { attempts.remove(it.key, it.value) }
                 val rate =
                     attempts.compute(ip) { _, old ->
                         if (old == null || now - old.first > 60_000) now to 1

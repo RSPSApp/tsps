@@ -536,16 +536,27 @@ function listTierMenu(player, state, tiers) {
   tierMenus.set(player, { state, count: tiers.length });
 }
 
+// chatdefault_restoreinput: the list menu with numbers stops chat input, so every way out of it
+// gives typing back to the chat, as for the house's other uses of the menu (Menu.Construction).
+function restoreChatInput(player) {
+  player.getPacketSender().sendClientScript(RESTORE_INPUT_SCRIPT);
+}
+
+/** "interface:closed": the tier list closed without a pick (its X, Esc, walking away). */
+function tierListClosed({ player, interfaceId }) {
+  if (interfaceId === LIST_MENU && tierMenus.delete(player)) restoreChatInput(player);
+}
+
 /** A pick in the tier list (its sub is the tier): the storage again, on that tier. */
 function pickTier(event) {
   if (event.groupId !== LIST_MENU || event.childId !== (LIST_MENU_OPTIONS & 0xffff)) return;
   const pending = tierMenus.get(event.player);
   if (!pending) return;
   event.handled = true;
-  tierMenus.delete(event.player);
   const tier = event.slot ?? event.action;
   if (event.player.getInterfaceId?.() !== LIST_MENU || !Number.isInteger(tier) || tier < 0 || tier >= pending.count) return;
-  event.player.getPacketSender().sendInterfaceScript(RESTORE_INPUT_SCRIPT, []);
+  tierMenus.delete(event.player);
+  restoreChatInput(event.player);
   showTier(event.player, pending.state, tier);
 }
 
@@ -595,7 +606,8 @@ function attachStorage(pluginApi) {
   pluginApi.onInterfaceActionButton(TIER, clickTier);
   pluginApi.onInterfaceActionButton(MODE, clickMode);
   pluginApi.onInterfaceActionClick(pickTier);
-  pluginApi.onCustomEvent("interface:close", ({ player }) => { openFor.delete(player); tierMenus.delete(player); });
+  pluginApi.onCustomEvent("interface:close", ({ player }) => openFor.delete(player));
+  pluginApi.onCustomEvent("interface:closed", tierListClosed);
 }
 
 Object.assign(module.exports, { storageItems, depositHouseItem, withdrawHouseItem, withdrawRow, openHouseStorage, storeItemOnFurniture, attachStorage, MAIN, ROW_COMPONENTS });

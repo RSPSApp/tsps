@@ -265,9 +265,24 @@ test("a mahogany chest asks for its six tiers in the list menu", (t) => {
   PluginManager.emitInterfaceActionClick({ player: f.player, buttonId: core.CacheDefinitions.getComponentId("menu:lj_layer1"),
     groupId: menu, childId: 3, action: 3, slot: 3, handled: false });
   assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  assert.equal(scripts.filter(([id]) => id === 2158).length, 1);
   // On the hard tier, row 0 is the hard enum's first entry.
   button(f, "poh_costumes:items", 1, rowSlot(0));
   assert.equal(f.inventory.getAmount(hard), 1);
+});
+
+test("closing the tier list without a pick gives chat input back", (t) => {
+  const f = fixture(t, "costier6close", "TREASURE_CHEST", "MAHOGANY_TREASURE_CHEST");
+  const scripts = [];
+  const sender = f.player.getPacketSender(), send = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push(id); return send(id, ...args); };
+  open(f);
+  button(f, "poh_costumes:tier");
+  assert.equal(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId("menu"));
+  sender.sendInterfaceRemoval();
+  assert.deepEqual(scripts.filter(id => id === 217 || id === 2158), [217, 2158]);
+  sender.sendInterfaceRemoval();
+  assert.equal(scripts.filter(id => id === 2158).length, 1);
 });
 
 test("Deposit mode flips and keeps poh_costumes_mode", (t) => {

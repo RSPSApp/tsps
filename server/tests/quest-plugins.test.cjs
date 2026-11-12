@@ -18321,22 +18321,33 @@ test("Death Plateau walks the castle and inn stairs without climbing", (t) => {
 });
 
 test("Death Plateau doors require Eohric's hint and the solved puzzle", () => {
-  const { api, handlers, quest, player, messages } = questScene('DeathPlateau');
+  const { api, handlers, quest, player } = questScene('DeathPlateau');
   const door = api.core.ObjectIdentifiers.DOOR_115;
+  const started = [];
+  player.getDialogueManager = () => ({ startDialogues: (chain) => started.push(chain) });
   const toggle = objectId => {
     const event = { player, objectId, handled: false };
     handlers.custom.get('door:toggle').forEach(handler => handler(event));
     return event.handled;
   };
+  // Transcript:Death_Plateau: the refusal is the player's chathead line; after Eohric, a knock from the corridor, and
+  // leaving the room is the door's own pass-through.
+  player.moveTo(new api.core.Location(2906, 3542, 1));
   for (const stage of [0, 10]) {
     quest.setStage(player, stage);
+    started.length = 0;
     assert.equal(toggle(door), true);
-    assert.match(messages.at(-1), /without a reason/);
+    assert.ok(JSON.stringify([...started[0].getDialogues().values()]).includes('without a reason'));
   }
   for (const stage of [20, 30, 40, 60, 80]) {
     quest.setStage(player, stage);
-    assert.equal(toggle(door), false, 'the shared door handler opens it');
+    assert.equal(toggle(door), false, 'leaving: the shared door handler opens it');
   }
+  player.moveTo(new api.core.Location(2906, 3543, 1));
+  quest.setStage(player, 20);
+  started.length = 0;
+  assert.equal(toggle(door), true, 'entering: the knock first');
+  assert.ok(JSON.stringify([...started[0].getDialogues().values()]).includes('You knock on the door.'));
   for (const stage of [0, 55, 60, 65, 70, 80]) {
     quest.setStage(player, stage);
     assert.equal(toggle(api.core.ObjectIdentifiers.LARGE_DOOR_23), stage < 65);

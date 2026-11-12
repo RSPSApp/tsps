@@ -421,6 +421,10 @@ export class MagicOnItemPacketListener {
           return;
         }
         if (player.getInventory().getItems()[queued.slot] !== queued.item) return;
+        // A dialogue, menu or prompt opened while it waited drops it: cast under a hand-in's dialogue, it would alch
+        // the item the dialogue had checked and the dialogue would still pay.
+        const sender = player.getPacketSender?.();
+        if (player.getDialogueManager?.()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.()) return;
         listener.castAlchemy(player, queued.spellId, queued.slot, queued.itemId, true, queued.source);
       }
     });

@@ -873,6 +873,19 @@ module.exports = function registerTrollStrongholdQuest(api) {
     syncFreedHelperState(player);
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.AGILITY, 2000, "Agility"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    grantReward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "troll_stronghold",
     name: "Troll Stronghold",
@@ -881,12 +894,12 @@ module.exports = function registerTrollStrongholdQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemId: ItemIdentifiers.LAW_TALISMAN,
     rewardItemLabel: "Law talisman",
     otherRewards: ["Access to the Troll Stronghold"],
     buildJournal,
-    onReward: grantReward,
+    onReward: rewardOnCompletion,
   });
 
   api.persistAttribute(GODRIC_FREED_ATTRIBUTE);

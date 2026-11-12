@@ -770,6 +770,14 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (player) clearTracked(player);
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.FIREMAKING, 1000, "Firemaking"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
   quest = registerQuest(api, {
     key: "merlins_crystal",
     name: "Merlin's Crystal",
@@ -777,11 +785,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 6,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     scrollItemId: EXCALIBUR_ITEM_ID,
     rewardItemLabel: "Excalibur",
     otherRewards: ["Become a Knight of the Round Table"],
     buildJournal,
+    onReward: grantCompletionXp,
   });
 
   api.persistAttribute(READ_INCANTATION_ATTRIBUTE);

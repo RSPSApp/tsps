@@ -160,7 +160,7 @@ function roguesLoot(player, hard, random = Math.random) {
 function muddyRoom(player) {
   const copy = new core.Inventory(player);
   copy.setItems(player.getInventory().getCopiedItems());
-  copy.deleteNumber(ids().MUDDY_KEY, 1);
+  copy.deleted(ids().MUDDY_KEY, 1, false);
   for (const [id, amount] of muddyAlways()) {
     const item = new core.Item(id, amount);
     if (copy.getAddableAmount(item) < amount) return false;

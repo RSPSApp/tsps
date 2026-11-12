@@ -134,6 +134,15 @@ function openFromCommand(f) {
   const selected = f.p.getAttribute("pvp:current-preset");
   assert.equal(selected, Presets.getGlobalPresetPool()[0], "the command selects the configured first loadout");
   assert.ok(selected.getInventory().length > 0);
+  for (const item of selected.getEquipment()) {
+    const slot = core.CacheDefinitions.getItem(item.getId()).wearPos;
+    assert.notEqual(PM.emitCanEquip(f.p, slot, item), false, `configured gear must be eligible: ${f.messages.join(" | ")}`);
+  }
+  for (const item of [...selected.getEquipment(), ...selected.getInventory()]) {
+    const request = { player: f.p, item, allow: true, messages: [] };
+    PM.emitCustomEvent("quest:can-equip", request);
+    assert.equal(request.allow, true, `quest prerequisites must be supplied: ${request.messages.join(" | ")}`);
+  }
   return selected;
 }
 
@@ -155,13 +164,18 @@ function carriedState(p) {
 }
 
 function seedCarried(f) {
+  // Supply the configured first loadout's climbing-boots prerequisite, not a quest playthrough.
+  const quest = require("../plugins/quests/QuestRuntime").questNamed("Death Plateau");
+  assert.ok(quest, "the real equipment-requirement quest is registered");
+  quest.setStage(f.p, quest.completionValue);
+  assert.equal(quest.isComplete(f.p), true);
   f.p.getInventory().setItem(0, new core.Item(I.LOBSTER, 2));
   f.p.getBank(0).setItem(0, new core.Item(I.COINS, 123));
 }
 
 function expectLoad(f, selected, label) {
   assert.deepEqual(f.p.getInventory().getValidItems().map((item) => [item.getId(), item.getAmount()]),
-    selected.getInventory().map((item) => [item.getId(), item.getAmount()]), label);
+    selected.getInventory().map((item) => [item.getId(), item.getAmount()]), `${label}: ${f.messages.join(" | ")}`);
   assert.ok(f.p.getInventory().getValidItems().every((item) => item.isPresetItem()), "spawned copies retain preset metadata");
   const equipment = (items) => items.map((item) => [item.getId(), item.getAmount()]).sort((a, b) => a[0] - b[0]);
   assert.deepEqual(equipment(f.p.getEquipment().getValidItems()), equipment(selected.getEquipment()), "configured equipment is worn");

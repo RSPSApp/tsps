@@ -204,6 +204,7 @@ test('a miss leaps over the pit in view with its two leap projectiles, follows o
   const at = jump(p, false);
   tick(at + 5 - H.tick);
   assert.deepEqual(seen.animations.at(-1), [at + 5, 5231], '+5: the big-cat leap');
+  assert.equal(npc.getAnimation?.()?.getDelay?.() ?? 20, 20, 'started 20 cycles late');
   assert.equal(npc.isVisible(), true, 'the creature never vanishes');
   const size = npc.getSize(), from = npc.getLocation();
   // Both halves of the creature fly four tiles across, 53 to 90 cycles, from opposite corners turned with the
@@ -219,7 +220,9 @@ test('a miss leaps over the pit in view with its two leap projectiles, follows o
   assert.equal(varbit(p), 1, 'the pit is still set');
   assert.equal(trap.state, 'idle');
   tick(1);
-  assert.equal(npc.getFollowing(), p, 'the chase goes on without another tease');
+  assert.equal(npc.getFollowing(), null, '+8: it stands while the leap animation ends');
+  tick(1);
+  assert.equal(npc.getFollowing(), p, '+9: the chase goes on without another tease');
   // Larupia capture ticks 438 and 471: the player still jumps back; three ticks later the creature refuses.
   const refused = () => {
     sent.messages.length = 0;

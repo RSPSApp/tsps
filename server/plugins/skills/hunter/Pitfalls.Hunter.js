@@ -53,6 +53,12 @@ const LAND_TICK = 7;
 const COLLAPSE_GRAPHICS = { 3: 933, 4: 935 };
 // Cache sequences: hunter_bigcat_leap_npc / unicorn_rework_leap_npc. Only the big-cat leap is captured.
 const LEAP = { CAT: 5231, ANTELOPE: 10929 };
+// The leap animation starts 20 client cycles late (1108 tick 21492, larupia tick 427) and runs about three ticks;
+// the creature stands where it landed until it ends, follows again at +9 and bites from +11 (1108: walks at
+// +10; larupia: first bite at tick 433, 11 after the jump).
+const LEAP_DELAY = 20;
+const RESUME_TICK = 9;
+const LEAP_BITE_TICK = 11;
 // Larupia capture: teased at tick 252, still biting at 334 and following at 348, gave up at 355. Ours: the 16-tile
 // range (a larupia 12 tiles behind kept following).
 const CHASE_TICKS = 100;
@@ -300,7 +306,7 @@ function advance(npc, r) {
 }
 
 function leap(npc, r) {
-  npc.performAnimation(new H.core.Animation(antelope(r.state.creature) ? LEAP.ANTELOPE : LEAP.CAT));
+  npc.performAnimation(new H.core.Animation(antelope(r.state.creature) ? LEAP.ANTELOPE : LEAP.CAT, LEAP_DELAY));
   npc.setPositionToFace(ahead(r));
   const at = npc.getLocation(), [dx, dy] = STEPS[r.dir], far = r.size - 1;
   const graphics = Object.entries(LEAP_GRAPHICS).find(([key]) => H.core.NpcIdentifiers[key] === npc.getId())?.[1] ?? [];
@@ -370,8 +376,15 @@ function land(npc, r) {
   npc.telejump(r.landing);
   npc.setPositionToFace(ahead(r));
   if (r.state.player.isRegistered()) knockBack(r.state.player, r);
-  npc.getMovementQueue().setBlockMovement(r.blocked);
-  if (teased.get(npc) === r.state) npc.setFollowing(r.state.player);
+  // It stands while the leap animation plays out, then follows on.
+  const resume = () => {
+    if (!npc.isRegistered()) return;
+    npc.getMovementQueue().setBlockMovement(r.blocked);
+    if (teased.get(npc) === r.state) npc.setFollowing(r.state.player);
+  };
+  r.state.paused = true;
+  r.state.attack = Math.max(r.state.attack, r.at + LEAP_BITE_TICK);
+  later.push({ due: r.at + RESUME_TICK, run: () => { delete r.state.paused; resume(); } });
 }
 
 function pitSound(trap, soundId, at = center(trap)) {
@@ -383,7 +396,7 @@ function process() {
   for (let i = later.length - 1; i >= 0; i--) if (H.tick >= later[i].due) later.splice(i, 1)[0].run();
   for (const state of [...teased.values()]) {
     const { player, npc } = state;
-    if (runs.has(npc)) continue;
+    if (runs.has(npc) || state.paused) continue;
     if (H.tick >= state.due || !npc.isRegistered() || !npc.isVisible() || !player.isRegistered()
       || !nearby(player, npc, CHASE_RANGE)) { release(state); continue; }
     if (npc.getFollowing() !== player) npc.setFollowing(player);

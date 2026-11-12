@@ -29,6 +29,7 @@ const MAIN_MODAL = uid(161, 16);
 const FLOATER = uid(161, 18);
 
 let core;
+let api;
 const hooks = {};
 const custom = {};
 let worldLeague = 5;
@@ -51,7 +52,7 @@ before(async () => {
       return false;
     };
   };
-  const api = new Proxy({
+  api = new Proxy({
     core,
     persistAttribute() {},
     registerArea() {},
@@ -75,7 +76,6 @@ before(async () => {
   require("../plugins/modes/Base.LeagueMode").register(api);
   require("../plugins/modes/Points.LeagueMode").register(api);
   require("../plugins/modes/Relics.LeagueMode").register(api);
-  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
 });
 
 beforeEach(() => {
@@ -560,6 +560,9 @@ test("the welcome screen names the league and the days left in it", () => {
 
 
 test("Tutorial Island leaves new and returning Leagues VI characters' journal usable", async () => {
+  // The earlier tutorial-only cases intentionally supply area-unlock state themselves.
+  // This integration case adds the real deferred area hooks before creating its characters.
+  require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
   const T = require("../plugins/areas/tutorialisland/Common.TutorialIsland");
   // A normal character remains opted into Tutorial Island, with its locked journal.
   const ordinary = character("island control", { profile: "main" });

@@ -86,3 +86,34 @@ test("a two-handed weapon comes back to the pack, not the hands, when a shield w
   assert.equal(p.getInventory().getAmount(I.ARMADYL_GODSWORD), 1, "the godsword is in the pack");
   assert.equal(p.getEquipment().getItems()[core.Equipment.SHIELD_SLOT].getId(), I.DRAGONFIRE_SHIELD);
 });
+
+test("with the hands, the pack and the bank full, a bankable weapon lands at the feet instead of vanishing", (t) => {
+  const p = fighter(t);
+  const slot = core.Equipment.WEAPON_SLOT;
+  p.getEquipment().setItem(slot, new core.Item(I.ARMADYL_GODSWORD, 1));
+  const fight = { player: p, state: {} };
+  Blue.takeWeapon(fight);
+  p.getEquipment().setItem(slot, new core.Item(I.ABYSSAL_WHIP, 1));
+  for (let i = 0; i < 28; i++) p.getInventory().setItem(i, new core.Item(I.LOGS, 1));
+  const tab = p.getBank(0);
+  for (let id = 1000; tab.getFreeSlots() > 0; id += 2) tab.add(new core.Item(id, 1), false);
+  const { World } = require("../dist/game/World");
+  const before = [...World.getItems().values()].filter((g) => g?.getItem().getId() === I.ARMADYL_GODSWORD).length;
+  Blue.giveWeapon(p, fight.state.weapon);
+  assert.equal(p.getBank(0).getAmount(I.ARMADYL_GODSWORD), 0, "no room in the bank");
+  const after = [...World.getItems().values()].filter((g) => g?.getItem().getId() === I.ARMADYL_GODSWORD).length;
+  assert.equal(after - before, 1, "an AGS at the feet");
+  assert.equal(p.getAttribute(Blue.FROZEN_WEAPON_ATTRIBUTE), null);
+});
+
+test("with the hands and the pack full and room in the bank, a bankable weapon goes to the bank", (t) => {
+  const p = fighter(t);
+  const slot = core.Equipment.WEAPON_SLOT;
+  p.getEquipment().setItem(slot, new core.Item(I.ARMADYL_GODSWORD, 1));
+  const fight = { player: p, state: {} };
+  Blue.takeWeapon(fight);
+  p.getEquipment().setItem(slot, new core.Item(I.ABYSSAL_WHIP, 1));
+  for (let i = 0; i < 28; i++) p.getInventory().setItem(i, new core.Item(I.LOGS, 1));
+  Blue.giveWeapon(p, fight.state.weapon);
+  assert.equal(p.getBank(0).getAmount(I.ARMADYL_GODSWORD), 1, "in the bank");
+});

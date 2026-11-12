@@ -59,11 +59,19 @@ function characterAttributes(player) {
   return Object.fromEntries(characterKeys().map((key) => [key, player.getAttribute(key)]));
 }
 
+/** The player's own poison or venom (its damage and venom's last hit), or null when they have none. */
+function afflictionOf(player) {
+  const poison = player.getPoisonDamage();
+  if (!(poison > 0)) return null;
+  const venomed = player.isVenomed();
+  return { poison, venomed, lastVenom: venomed ? player.getLastVenomDamage() : undefined };
+}
+
 /**
  * Puts the player's own character aside, leaving them empty-handed. False, and nothing
  * touched, when one is already held: a second fight must not start on top of it.
  */
-function save(player, exit) {
+function save(player, exit, affliction = afflictionOf(player)) {
   if (stashed(player)) return false;
   stashes.set(player, {
     inventory: itemsOf(player.getInventory()),
@@ -74,6 +82,7 @@ function save(player, exit) {
     run: player.getRunEnergy(),
     autocast: player.getCombat().getAutocastSpell?.() ?? null,
     timers: timersOf(player),
+    affliction,
     attributes: characterAttributes(player),
     exit: exit ?? Common.data.arena.sides[0].exits[0],
   });
@@ -131,6 +140,13 @@ function restoreTimers(player, timers) {
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
+/** Whatever the fight left goes, and the player's own poison or venom comes back as it was. */
+function restoreAffliction(player, affliction) {
+  player.setPoisonDamage(affliction?.poison ?? 0);
+  player.setVenomed(affliction?.venomed === true);
+  if (affliction?.venomed) player.setLastVenomDamage(affliction.lastVenom);
+}
+
 function itemOf([id, amount, meta]) {
   return new Common.core.Item(id, amount, meta ? { ...meta } : null);
 }
@@ -167,6 +183,7 @@ function restore(player) {
   for (const [key, value] of Object.entries(stash.attributes)) player.setAttribute(key, value);
   player.setHasVengeance(false);
   restoreTimers(player, stash.timers);
+  restoreAffliction(player, stash.affliction);
   player.getCombat().setAutocastSpell(stash.autocast);
   WeaponInterfaceManager.assign(player);
   BonusManager.update(player);
@@ -201,6 +218,10 @@ function snapshot({ player, save: playerSave }) {
   playerSave.poisonClock = stash.timers?.poison ?? undefined;
   // Without a stashed clock the legacy immunity seconds would rebuild the arena's anti-venom on load.
   playerSave.setPoisonImmunityTimer(0);
+  const affliction = stash.affliction;
+  playerSave.setPoisonDamage(affliction?.poison ?? 0);
+  playerSave.setVenomed(affliction?.venomed === true);
+  playerSave.lastVenomDamage = affliction?.venomed ? affliction.lastVenom : undefined;
   playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
   playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
   const attributes = { ...(playerSave.attributes ?? {}) };
@@ -221,4 +242,4 @@ function attachStash(api) {
   api.onCustomEvent("persistence:snapshot", snapshot);
 }
 
-module.exports = { attachStash, save, restore, stashed, clear, snapshot, COMBAT_SKILLS };
+module.exports = { attachStash, save, restore, stashed, clear, snapshot, afflictionOf, COMBAT_SKILLS };

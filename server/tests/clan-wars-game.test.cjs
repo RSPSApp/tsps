@@ -506,6 +506,9 @@ test('first-to-25 plays through real melee deaths, jail portals, exact target an
   assert.equal(b.getInventory().getAmount(995),37);
   assert.equal(Match.dying.has(b),false);
   assert.equal(C.channelGames.size,0);
+  // The final death callback also places the loser in the lobby after updates.
+  tick();
+  for (const p of [a,b]) assert.equal(p.isNeedsPlacement(),false,'lobby placement completed before the second challenge');
   const second = await negotiate(a,b,1,1); await join(a); await join(b);
   assert.notEqual(second,game); assert.deepEqual(second.kills,[0,0]);
   assert.equal(second.phase,'staging'); assert.equal(second.fighters.size,2);

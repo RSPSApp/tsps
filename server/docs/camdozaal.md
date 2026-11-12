@@ -81,7 +81,7 @@ prioritized that conditional wording and yielded 27/19600 (about 1/726) for the
 hammer; maintainer review requested the published overall 1/300 anchor instead.
 Boundary tests check the declared cumulative intervals and F2P exclusion, not
 measured retail distributions. Prior completed runs exercised the earlier model;
-the changed reward model requires its own reviewed runtime evidence.
+the changed reward model was exercised by the later run described below.
 
 ## Conservation and lifecycle
 
@@ -117,14 +117,29 @@ Its source/dist/cache seals were unchanged. This is meaningful feature absence,
 not a green suite. Seeded completed quest/materials and reachable perimeter placement
 are explicit; it does not prove natural quest traversal, raw socket input or rendering.
 
-At tested revision `10ab60ddba8ce9166bde2c9c48cc7da2a11dc9ec`, the correction
-supported Linux run completed with separate clean processes:
+At tested revision `1bc96319083ec7b8388cf2b2a596022fa54e68c5`, the supported
+Linux run exercised the requested direct deposit marginals and canonical plugin
+description. Its overall provider outcome was **ERROR70**, because the full
+world-configuration documentation test found four unrelated stale entries.
+The actual separate-process results were:
 
 | File | Passed / total | Exit |
 | --- | --- | --- |
 | `camdozaal-native.test.cjs` | 27 / 27 | 0 |
 | `fishing.test.cjs` | 16 / 16 | 0 |
 | `cooking.test.cjs` | 53 / 53 | 0 |
+| `world-config-docs.test.cjs` | 3 / 4 | 1 |
+
+The existing canonical `yarn world-config-docs` command exited 0, emitted the exact
+committed Camdozaal row, then the executor restored the original document bytes
+before tests and content seals. The full documentation assertion then failed on
+DisplayName sessionMinutes and DorgeshuunGuides, StorageItems and ClanWars
+descriptions. Their source metadata and the committed document outside the
+Camdozaal row are byte-identical to the branch base; this is source-qualified
+pre-existing documentation drift, not a newly executed baseline. Only the
+Camdozaal row is included in this PR, as requested by review. The 96 activity/related
+passes plus 3 documentation passes and 1 failure are from one run; they are not
+a completed 100-test green result.
 
 Actual build/test commands, run from `server` after dependency/cache setup:
 
@@ -133,6 +148,7 @@ node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/camdozaal-native.test.cjs
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/fishing.test.cjs
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/cooking.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/world-config-docs.test.cjs
 ```
 
 The Camdozaal suite includes decoded ordinary item/object/NPC/widget inputs,
@@ -153,11 +169,11 @@ assertion failed without identifying its loop branch in raw output. Subsequent
 source qualification corrected an inconsistent workshop/introduction checkpoint;
 it does not retroactively identify that failed branch. Both attempts stopped before
 the generic suites. Their failures are retained rather than merged into the final
-run's 96 passing results.
+run's per-file passing results.
 
 Final source/compiled/cache seals remained unchanged (8,447 original source files,
 28 cache files), no stage timed out, and no child process group remained. The
-provider reported terminal completion. This is process-group plus platform-terminal
+provider reported terminal ERROR70 after the documentation failure. This is process-group plus platform-terminal
 closure, not an independent census of escaped/setsid descendants or Windows proof.
 Checkpoint placement at vault pedestals/barriers tests ordinary interactions and
 one sampled legal layout, not natural maze traversal or every layout combination.
@@ -167,10 +183,16 @@ The earlier completed 25/16/53 run at `fb3a5e24` remains genuine historical
 94-test evidence. A later source trace found that the existing members golem Area
 shadowed the new public Boost Area, a path those 25 native cases did not cover.
 Ready was withdrawn while that ownership path was corrected. The new 27/16/53
-run is a separate completed 96-test result. Its added cases buy Boost through the
+run at `10ab60dd` is a separate historical completed 96-test result. Its added cases buy Boost through the
 ordinary Exchange, assert the real members Area owner, seed expiry deadlines and
 use World/AreaManager processing to check all warnings/countdown exactly once.
 They also awaken mapped golem rubble and verify original slot/id/owner/HP restoration
 on actual AreaManager departure. Seeded deadlines are boundary tests, not naturally
 elapsed minutes; the unchanged F2P fallback is source preservation, not a separate
 executed F2P-world claim. Earlier results are not expanded retroactively.
+
+Maintainer review then requested the direct 1/300 member hammer marginal and plugin
+description/catalog row. The later `1bc96319` run re-executed all 27/16/53 cases
+with that changed model, and verified the canonical generator row. The original
+96-test run remains evidence for its earlier source and model; the later provider
+error and 3/4 documentation result remain explicit.

@@ -149,7 +149,10 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
     const loc=Common.toLocation(Common.data.tiles.out);
     const object=new core.GameObject(Common.data.locs.entrance,loc,10,0,null);
     const objectDef=core.ObjectDefinition.forPlayer(Common.data.locs.entrance,player);
-    PM.emitObjectInteraction({player,object,objectId:object.getId(),definition:objectDef,clickType:1,option:'climb-down',handled:false});
+    const source=player.getLocation().clone();
+    PM.emitObjectInteraction({player,object,objectId:object.getId(),definition:objectDef,clickType:1,option:'climb-down',
+      location:{x:loc.getX(),y:loc.getY(),z:loc.getZ()},
+      sourceLocation:{x:source.getX(),y:source.getY(),z:source.getZ()},handled:false});
     const game=Game.gameOf(player); assert.ok(game,'registered entrance joins the actual game'); games.add(game);
     assert.equal(player.getInventory().getAmount(21539),1); return game;
   };

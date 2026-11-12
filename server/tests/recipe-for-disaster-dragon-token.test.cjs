@@ -26,16 +26,19 @@ before(async () => {
 
 /** The request NpcDrops.plugin.js emits for one row of a kill's table. */
 function questItemRequest(itemId) {
-  return { player: {}, npc: {}, npcId: 252, itemId, requirement: { key: "quest_siramikvarzesubquestofrecipefordisaster", mode: "RequiresDuring" }, allowed: undefined };
+  return { player: {}, npc: {}, npcId: 252, itemId, requirement: { key: "quest_recipefordisasterfreeingsiramikvarze", mode: "RequiresDuring" }, allowed: undefined };
 }
 
 test("the shared black dragon table's dragon token row is declined, so Taverley's dragons cannot drop it", () => {
   // The row is still in the generated data and carries only the quest condition — no place limit.
   assert.ok(tokenRow, "the black_dragon table still lists the dragon token");
   assert.ok(tokenRow.always);
+  // The dump keeps the Wiki's prose and no typed quest note (its quest classifier only names known quest
+  // pages), so NpcDrops gates the token by item id (QUEST_REQUIREMENT_BY_ITEM) to reach the handler below.
   assert.deepEqual(tokenRow.notes, [
-    "Quest requirement: WikiQuestDropRequirement(questKey=quest_siramikvarzesubquestofrecipefordisaster, mode=RequiresDuring)",
+    "The dragon token overrides normal drops, and is only dropped during the Sir Amik Varze subquest of Recipe for Disaster if the player doesn't have one already.",
   ]);
+  assert.equal((tokenRow.notes ?? []).some((note) => /^Quest requirement:/.test(note)), false, "no typed requirement in the row");
   assert.equal((tokenRow.notes ?? []).some((note) => /^Only dropped/i.test(note)), false, "no place limit to read");
 
   const request = questItemRequest(DRAGON_TOKEN);

@@ -15499,7 +15499,7 @@ test('Suqah tiara drops wait for Meteora and never duplicate the Lunar amulet', 
   const handler = handlers.custom.get('npc-drops:quest-item').at(-1);
   assert.equal(typeof handler, 'function');
   const tiara = api.core.ItemIdentifiers.A_SPECIAL_TIARA;
-  const requirement = { key: 'quest_lunardiplomacyafteraskingmeteoraaboutherheadgear', mode: 'RequiresDuring' };
+  const requirement = { key: 'quest_lunardiplomacy', mode: 'RequiresDuring' };
   const allowed = (state, hold = {}) => {
     const fixture = lunarPlayer(api, {
       stage: state,

@@ -55,6 +55,7 @@ export const enum ServerPacket {
 
 export type PlayerAppearance = {
   gender: number;
+  hidden?: boolean;
   pronouns?: number;
   colors: number[];
   kits: number[];
@@ -3020,7 +3021,7 @@ export function encodePlayerAppearance(
   text(name);
   byte(combatLevel);
   short(skillLevel);
-  byte(0); // visible
+  byte(appearance.hidden ? 1 : 0);
   short(0); // no colour/texture overrides
   text("");
   text("");

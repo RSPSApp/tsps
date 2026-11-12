@@ -333,71 +333,91 @@ test('other items used on a needle are left to other handlers', () => {
   assert.equal(useNeedle(player, ItemIds.COINS).handled, false);
 });
 
-// Wiki (Small meat pouch, Large meat pouch, Small/Medium/Large fur pouch): needle and thread on the
-// furs, 3 ticks each; an upgrade also uses up the closed pouch below it.
-test("a needle on 4 fox fur sews a small meat pouch at 35 Crafting for 30 XP", t => {
+// The Hunters' Guild pouches (rsprox captures pyre-fur-and-smallpouch-1 to -3, rev 242; levels and XP:
+// Wiki). No menu: the needle on the fur makes one, animation at once, the pouch 2 ticks later.
+function sewPouch(player, furId, needleId = ItemIds.NEEDLE, reverse = false) {
+  const event = { player, usedItemId: reverse ? furId : needleId, usedWithItemId: reverse ? needleId : furId, handled: false };
+  player.log.length = 0;
+  const before = tasks.length;
+  handlers.handleNeedleOnFur(event);
+  const byTick = [player.log.splice(0)];
+  const task = tasks.length > before ? tasks.at(-1) : null;
+  for (let i = 1; i <= 3; i++) {
+    if (task && player.getAttribute(TASK_ATTRIBUTE) === task) task.execute();
+    byTick.push(player.log.splice(0));
+  }
+  return { event, byTick };
+}
+
+test("a needle on 4 fox fur, either way round, sews a small meat pouch with no menu, as captured", t => {
   membersWorld(t, true);
-  const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 4]], { level: 35 });
-  assert.equal(useNeedle(player, ItemIds.FOX_FUR).handled, true);
-  assert.deepEqual(getMenu().getItems(), [ItemIds.SMALL_MEAT_POUCH]);
-  const byTick = craft(player, getMenu(), ItemIds.SMALL_MEAT_POUCH, 1, 3);
-  assert.deepEqual(messages(byTick[2]), ["You make a small meat pouch."]);
-  assert.ok(byTick[2].some(row => row[0] === "xp" && row[1] === 30));
-  assert.equal(player.amounts.get(ItemIds.SMALL_MEAT_POUCH), 1);
-  assert.equal(player.amounts.get(ItemIds.FOX_FUR), 0);
+  for (const reverse of [false, true]) {
+    const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 4]], { level: 35 });
+    const { event, byTick } = sewPouch(player, ItemIds.FOX_FUR, ItemIds.NEEDLE, reverse);
+    assert.equal(event.handled, true);
+    assert.equal(getMenu(), undefined, "no skillmulti menu");
+    assert.deepEqual(byTick[0].filter(row => row[0] === "animation"), [["animation", LEATHER_CRAFTING_ANIMATION]]);
+    assert.deepEqual(messages(byTick[1]), []);
+    assert.deepEqual(messages(byTick[2]), ["You make a small meat pouch."]);
+    assert.ok(byTick[2].some(row => row[0] === "xp" && row[1] === 30));
+    assert.ok(!byTick[2].some(row => row[0] === "animation" && row[1] === LEATHER_CRAFTING_ANIMATION), "the animation isn't replayed");
+    assert.equal(player.amounts.get(ItemIds.SMALL_MEAT_POUCH), 1);
+    assert.equal(player.amounts.get(ItemIds.FOX_FUR), 0);
+  }
+});
+
+test("a needle on fox fur without thread gets the captured messagebox", t => {
+  membersWorld(t, true);
+  const { player } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.FOX_FUR, 4]], { level: 99 });
+  const { event, byTick } = sewPouch(player, ItemIds.FOX_FUR);
+  assert.equal(event.handled, true);
+  assert.deepEqual(byTick.flat(), [["statement", "You'll need a needle and some thread to craft a small meat pouch."]]);
+  assert.equal(player.amounts.get(ItemIds.FOX_FUR), 4);
 });
 
 test("fox fur below 35 Crafting gets the level box, and 3 fox fur sews nothing", t => {
   membersWorld(t, true);
   const low = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 4]], { level: 34 });
-  useNeedle(low.player, ItemIds.FOX_FUR);
-  const lowTicks = craft(low.player, low.getMenu(), ItemIds.SMALL_MEAT_POUCH, 1, 3).flat();
-  assert.ok(lowTicks.some(row => row[0] === "statement" && row[1] === "You need a Crafting level of 35 to make a small meat pouch."));
+  assert.ok(sewPouch(low.player, ItemIds.FOX_FUR).byTick.flat()
+    .some(row => row[0] === "statement" && row[1] === "You need a Crafting level of 35 to make a small meat pouch."));
   assert.equal(low.player.amounts.get(ItemIds.SMALL_MEAT_POUCH) ?? 0, 0);
   const short = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 3]], { level: 99 });
-  useNeedle(short.player, ItemIds.FOX_FUR);
-  craft(short.player, short.getMenu(), ItemIds.SMALL_MEAT_POUCH, 1, 3);
+  sewPouch(short.player, ItemIds.FOX_FUR);
   assert.equal(short.player.amounts.get(ItemIds.SMALL_MEAT_POUCH) ?? 0, 0);
   assert.equal(short.player.amounts.get(ItemIds.FOX_FUR), 3);
 });
 
 test("the pouch upgrades use 3 fur and the closed pouch below, with the Wiki's levels and XP", t => {
   membersWorld(t, true);
-  for (const [furId, from, to, level, xp] of [
-    [ItemIds.SUNLIGHT_ANTELOPE_FUR, ItemIds.SMALL_MEAT_POUCH, ItemIds.LARGE_MEAT_POUCH, 65, 60],
-    [ItemIds.LARUPIA_FUR, null, ItemIds.SMALL_FUR_POUCH, 35, 20],
-    [ItemIds.GRAAHK_FUR, ItemIds.SMALL_FUR_POUCH, ItemIds.MEDIUM_FUR_POUCH, 50, 40],
-    [ItemIds.KYATT_FUR, ItemIds.MEDIUM_FUR_POUCH, ItemIds.LARGE_FUR_POUCH, 65, 60],
+  for (const [furId, from, to, level, xp, made] of [
+    [ItemIds.SUNLIGHT_ANTELOPE_FUR, ItemIds.SMALL_MEAT_POUCH, ItemIds.LARGE_MEAT_POUCH, 65, 60, "a large meat pouch"],
+    [ItemIds.LARUPIA_FUR, null, ItemIds.SMALL_FUR_POUCH, 35, 20, "a small fur pouch"],
+    [ItemIds.GRAAHK_FUR, ItemIds.SMALL_FUR_POUCH, ItemIds.MEDIUM_FUR_POUCH, 50, 40, "a medium fur pouch"],
+    [ItemIds.KYATT_FUR, ItemIds.MEDIUM_FUR_POUCH, ItemIds.LARGE_FUR_POUCH, 65, 60, "a large fur pouch"],
   ]) {
     const items = [[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [furId, 4], ...(from ? [[from, 1]] : [])];
-    const { player, getMenu } = playerWith(items, { level });
-    useNeedle(player, furId);
-    assert.deepEqual(getMenu().getItems(), [to]);
-    const byTick = craft(player, getMenu(), to, 1, 3);
-    assert.ok(byTick[2].some(row => row[0] === "xp" && row[1] === xp), `${to} XP`);
+    const { player } = playerWith(items, { level });
+    const { byTick } = sewPouch(player, furId);
+    assert.deepEqual(messages(byTick[2]), [`You make ${made}.`]);
+    assert.ok(byTick[2].some(row => row[0] === "xp" && row[1] === xp), `${made} XP`);
     assert.equal(player.amounts.get(to), 1);
     assert.equal(player.amounts.get(furId), from ? 1 : 0);
     if (from) assert.equal(player.amounts.get(from), 0, "the pouch below is used up");
   }
 });
 
-test("an upgrade needs the closed pouch below: none says so, an open one asks to close it", t => {
+test("an upgrade without the closed pouch below gets the captured objectbox and uses nothing", t => {
   membersWorld(t, true);
-  const none = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.KYATT_FUR, 3]], { level: 99 });
-  useNeedle(none.player, ItemIds.KYATT_FUR);
-  assert.deepEqual(messages(craft(none.player, none.getMenu(), ItemIds.LARGE_FUR_POUCH, 1, 3).flat()),
-    ["You need a medium fur pouch to make a large fur pouch."]);
-});
-
-test("an upgrade with only the open pouch below uses nothing", t => {
-  membersWorld(t, true);
-  const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.SUNLIGHT_ANTELOPE_FUR, 3],
-    [ItemIds.SMALL_MEAT_POUCH_OPEN_, 1]], { level: 99 });
-  useNeedle(player, ItemIds.SUNLIGHT_ANTELOPE_FUR);
-  const byTick = craft(player, getMenu(), ItemIds.LARGE_MEAT_POUCH, 1, 3);
-  assert.deepEqual(messages(byTick.flat()), ["You need to close your small meat pouch first."], "the Wiki's closed-pouch rule");
-  assert.equal(player.amounts.get(ItemIds.SUNLIGHT_ANTELOPE_FUR), 3);
-  assert.equal(player.amounts.get(ItemIds.LARGE_MEAT_POUCH) ?? 0, 0);
+  for (const carried of [[], [[ItemIds.SMALL_MEAT_POUCH_OPEN_, 1]]]) {
+    const { player } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.SUNLIGHT_ANTELOPE_FUR, 3], ...carried], { level: 99 });
+    const { byTick } = sewPouch(player, ItemIds.SUNLIGHT_ANTELOPE_FUR);
+    assert.deepEqual(byTick.flat(), [["statement", "You need a small meat pouch to upgrade into a large pouch."]]);
+    assert.equal(player.amounts.get(ItemIds.SUNLIGHT_ANTELOPE_FUR), 3);
+    assert.equal(player.amounts.get(ItemIds.LARGE_MEAT_POUCH) ?? 0, 0);
+  }
+  const fur = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.KYATT_FUR, 3]], { level: 99 });
+  assert.deepEqual(sewPouch(fur.player, ItemIds.KYATT_FUR).byTick.flat(),
+    [["statement", "You need a medium fur pouch to upgrade into a large pouch."]]);
 });
 
 // --- Gems, glass, spinning, weaving, silver, battlestaves, amethyst, studs

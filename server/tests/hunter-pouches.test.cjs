@@ -1,6 +1,7 @@
 // Run after `yarn build`: node --test tests/hunter-pouches.test.cjs
 // The Hunters' Guild meat and fur pouches (docs/storage-items.md), with a real Player, the cache and
-// the StorageItems plugin's hooks, and Hunter's catch delivery into an open pouch.
+// the StorageItems plugin's hooks, and Hunter's catch delivery into an open pouch. Lines and behaviour:
+// rsprox captures pyre-fur-and-smallpouch-1 to -4 (rev 242).
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -44,10 +45,14 @@ function actor(t, items = [], location = new core.Location(3200, 3200, 0)) {
   player.setLocation(location);
   player.needsPlacement = false;
   const messages = [];
+  const spam = [];
+  const sounds = [];
   t.mock.method(player, "sendMessage", (text) => { messages.push(text); });
+  t.mock.method(player.getPacketSender(), "sendTypedMessage", (_type, text) => { spam.push(text); return player.getPacketSender(); });
+  t.mock.method(core.Sounds, "sendSound", (_player, sound) => { sounds.push(sound.getId?.() ?? sound.id); });
   for (const [id, amount] of items) player.getInventory().adds(id, amount);
   nearBank = false;
-  return { player, messages };
+  return { player, messages, spam, sounds };
 }
 
 function option(player, id, name) {
@@ -69,23 +74,45 @@ test("every pouch's op is answered: Fill, Empty, Check and Open or Close", (t) =
       assert.equal(option(player, id, name), true, `${CacheDefinitions.getItem(id).name} ${name}`);
     }
   }
-  const { player } = actor(t, [[I.SMALL_MEAT_POUCH, 1]]);
-  option(player, I.SMALL_MEAT_POUCH, "Open");
+  const { player, messages } = actor(t, [[I.LARGE_MEAT_POUCH, 1]]);
+  option(player, I.LARGE_MEAT_POUCH, "Open");
   const openId = player.getInventory().getItems()[0].getId();
-  assert.equal(CacheDefinitions.getItem(openId).name, "Small meat pouch (open)");
+  assert.equal(CacheDefinitions.getItem(openId).name, "Large meat pouch (open)");
+  assert.equal(messages.at(-1), "You open your large meat pouch.");
   assert.equal(option(player, openId, "Close"), true);
-  assert.equal(player.getInventory().getItems()[0].getId(), I.SMALL_MEAT_POUCH);
+  assert.equal(player.getInventory().getItems()[0].getId(), I.LARGE_MEAT_POUCH);
+  assert.equal(messages.at(-1), "You close your large meat pouch.");
 });
 
-test("a small meat pouch holds 14 hunter meats, not bird meat, and Check gives the count", (t) => {
-  const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1], [I.RAW_PYRE_FOX, 16], [I.RAW_BIRD_MEAT, 2]]);
+test("a small meat pouch holds 14 hunter meats, not bird meat, with the captured Fill and Check lines", (t) => {
+  const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1], [I.RAW_BIRD_MEAT, 2]]);
+  option(player, I.SMALL_MEAT_POUCH, "Check");
+  assert.equal(messages.at(-1), "Your meat pouch is currently holding 0 meat.");
   option(player, I.SMALL_MEAT_POUCH, "Fill");
+  assert.equal(messages.at(-1), "You don't have any meats that can go into this pouch.", "raw bird meat is no hunter meat");
+  player.getInventory().adds(I.RAW_PYRE_FOX, 16);
+  const before = messages.length;
+  option(player, I.SMALL_MEAT_POUCH, "Fill");
+  assert.equal(messages.length, before, "Fill is silent");
   assert.equal(Storage.total(player, meat()), 14);
   assert.equal(player.getInventory().getAmount(I.RAW_PYRE_FOX), 2);
-  assert.equal(player.getInventory().getAmount(I.RAW_BIRD_MEAT), 2, "raw bird meat is no hunter meat");
+  assert.equal(player.getInventory().getAmount(I.RAW_BIRD_MEAT), 2);
+  option(player, I.SMALL_MEAT_POUCH, "Fill");
   assert.equal(messages.at(-1), "Your pouch is full.");
   option(player, I.SMALL_MEAT_POUCH, "Check");
-  assert.equal(messages.at(-1), "Your pouch contains 14 pieces of meat.");
+  assert.equal(messages.at(-1), "Your meat pouch is currently holding 14 meat.");
+});
+
+test("one meat used on a closed pouch puts every meat carried in, silently", (t) => {
+  const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1], [I.RAW_PYRE_FOX, 3]]);
+  const inventory = player.getInventory();
+  const pouch = inventory.getItems()[0];
+  const meatItem = inventory.getItems()[1];
+  const event = { player, usedItem: meatItem, usedWithItem: pouch, usedItemId: meatItem.getId(), usedWithItemId: pouch.getId(), handled: false };
+  PluginManager.emitItemOnItem(event);
+  assert.equal(Storage.total(player, meat()), 3);
+  assert.equal(inventory.getAmount(I.RAW_PYRE_FOX), 0);
+  assert.deepEqual(messages, []);
 });
 
 test("fur pouches hold 14, 21 or 28 hunter furs by the largest carried, never tatty fur", (t) => {
@@ -101,16 +128,19 @@ test("fur pouches hold 14, 21 or 28 hunter furs by the largest carried, never ta
 
 test("a meat pouch empties only at a bank or on the Hunters' Guild's top floor", (t) => {
   const { player, messages } = actor(t, [[I.LARGE_MEAT_POUCH, 1]]);
+  option(player, I.LARGE_MEAT_POUCH, "Empty");
+  assert.equal(messages.at(-1), "Your meat pouch is empty.", "an empty pouch says so anywhere");
   Storage.store(player, meat(), I.RAW_SUNLIGHT_ANTELOPE, 3);
   option(player, I.LARGE_MEAT_POUCH, "Empty");
   assert.equal(messages.at(-1), "You can't empty your meat pouch here.");
   assert.equal(Storage.total(player, meat()), 3);
 
   player.setLocation(new core.Location(1556, 3046, 2));
+  const before = messages.length;
   option(player, I.LARGE_MEAT_POUCH, "Empty");
   assert.equal(Storage.total(player, meat()), 0);
   assert.equal(player.getInventory().getAmount(I.RAW_SUNLIGHT_ANTELOPE), 3);
-  assert.equal(messages.at(-1), "You empty your pouch.");
+  assert.equal(messages.length, before, "emptying into the inventory is silent");
 
   player.setLocation(new core.Location(1556, 3046, 0));
   Storage.store(player, meat(), I.RAW_PYRE_FOX, 1);
@@ -121,12 +151,12 @@ test("a meat pouch empties only at a bank or on the Hunters' Guild's top floor",
   assert.equal(player.getInventory().getAmount(I.RAW_PYRE_FOX), 1);
 });
 
-test("a fur pouch empties only into an open bank, also from the bank panel's op", (t) => {
-  const { player, messages } = actor(t, [[I.SMALL_FUR_POUCH, 1]]);
+test("a fur pouch empties only into an open bank; the bank panel's op deposits with the captured line", (t) => {
+  const { player, messages, spam, sounds } = actor(t, [[I.SMALL_FUR_POUCH, 1]]);
   Storage.store(player, fur(), I.LARUPIA_FUR, 4);
   nearBank = true;
   option(player, I.SMALL_FUR_POUCH, "Empty");
-  assert.equal(messages.at(-1), "You can only empty your fur pouch into a bank.");
+  assert.equal(messages.at(-1), "You can't empty your fur pouch here.");
   assert.equal(Storage.total(player, fur()), 4);
 
   player.setStatus(PlayerStatus.BANKING);
@@ -137,17 +167,22 @@ test("a fur pouch empties only into an open bank, also from the bank panel's op"
   assert.equal(event.handled, true);
   assert.equal(Storage.total(player, fur()), 0);
   assert.equal(player.getBank(Bank.getTabForItem(player, I.LARUPIA_FUR)).getAmount(I.LARUPIA_FUR), 4);
+  assert.deepEqual(spam, ["You deposit some fur into your bank."]);
+  assert.deepEqual(sounds, [2285]);
 });
 
-test("an open pouch takes a catch's meat and fur without inventory room; a closed one doesn't", (t) => {
-  const { player } = actor(t, [[I.SMALL_MEAT_POUCH, 1], [I.SMALL_FUR_POUCH, 1], [I.COINS, 1]]);
-  player.getInventory().adds(I.LOGS, 24); // one slot free
+test("a catch needs room for all its loot even with open pouches, which then take the meat and fur", (t) => {
+  const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1], [I.SMALL_FUR_POUCH, 1], [I.COINS, 1]]);
+  player.getInventory().adds(I.LOGS, 25); // nothing free
   const loot = [[I.BONES, 1], [I.RAW_PYRE_FOX, 1], [I.FOX_FUR, 1]];
-  assert.equal(C.catchExchange(player, [], loot, false), false, "closed pouches leave the catch needing three slots");
-
   option(player, I.SMALL_MEAT_POUCH, "Open");
   option(player, I.SMALL_FUR_POUCH, "Open");
-  assert.equal(C.catchExchange(player, [], loot, false), true, "one slot for the bones is enough");
+  assert.equal(C.catchExchange(player, [], loot, false), false, "captured: an open pouch with room doesn't lower the slots needed");
+  C.catchRefusal(player, [], loot);
+  assert.equal(messages.at(-1), "You don't have enough inventory space. You need 3 more free slots.");
+
+  player.getInventory().deleteNumber(I.LOGS, 3);
+  assert.equal(C.catchExchange(player, [], loot, false), true);
   assert.equal(C.catchExchange(player, [], loot), true);
   assert.equal(Storage.amountOf(player, meat(), I.RAW_PYRE_FOX), 1);
   assert.equal(Storage.amountOf(player, fur(), I.FOX_FUR), 1);
@@ -155,15 +190,23 @@ test("an open pouch takes a catch's meat and fur without inventory room; a close
   assert.equal(player.getInventory().getAmount(I.RAW_PYRE_FOX), 0);
 });
 
-test("a full open pouch leaves the catch to the inventory", (t) => {
+test("an open pouch filling up from a catch says nothing; a full one leaves the catch to the inventory", (t) => {
   const { player, messages } = actor(t, [[I.SMALL_MEAT_POUCH, 1]]);
   option(player, I.SMALL_MEAT_POUCH, "Open");
   Storage.store(player, meat(), I.RAW_LARUPIA, 13);
+  const before = messages.length;
   assert.equal(C.catchExchange(player, [], [[I.RAW_LARUPIA, 1]]), true);
   assert.equal(Storage.total(player, meat()), 14);
-  assert.equal(messages.at(-1), "Your pouch is full.");
+  assert.equal(messages.length, before);
   assert.equal(C.catchExchange(player, [], [[I.RAW_LARUPIA, 1]]), true);
   assert.equal(player.getInventory().getAmount(I.RAW_LARUPIA), 1);
+});
+
+test("Destroy warns with the captured line", (t) => {
+  const { player } = actor(t, [[I.LARGE_MEAT_POUCH, 1]]);
+  const prompt = { player, item: player.getInventory().getItems()[0], question: "q", warning: "w" };
+  PluginManager.emitCustomEvent("destroy-item:prompt", prompt);
+  assert.equal(prompt.warning, "If you destroy this item, you will lose all contents stored within.");
 });
 
 test("every small and large meat pouch shares one store; the last one destroyed takes it along", (t) => {
@@ -185,12 +228,12 @@ test("the guild's top floor covers its walls on plane 2 only", () => {
   assert.equal(at(1556, 3046, 1), false);
 });
 
-test("a noose-wand catch puts its fur in an open fur pouch, so a full inventory still takes it", (t) => {
+test("a noose-wand catch puts its fur in an open fur pouch", (t) => {
   const Tracking = require("../plugins/skills/hunter/Tracking.Hunter");
   const { player, messages } = actor(t, [[I.NOOSE_WAND, 1], [I.SMALL_FUR_POUCH, 1]]);
   player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 99).setMaxLevel(core.Skill.HUNTER, 99);
   option(player, I.SMALL_FUR_POUCH, "Open");
-  player.getInventory().adds(I.LOGS, 24); // two slots left: the bones and the beast meat
+  player.getInventory().adds(I.LOGS, 23); // three slots left: room for the whole catch
   const varbits = new Map();
   t.mock.method(player.getPacketSender(), "sendVarbit", (id, value) => { varbits.set(id, value); return player.getPacketSender(); });
   const at = ([x, y, z]) => new core.GameObject(1, new core.Location(x, y, z), 10, 0, null);

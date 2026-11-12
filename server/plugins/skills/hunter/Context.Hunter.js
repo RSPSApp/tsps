@@ -60,58 +60,68 @@ function rewardItems(loot) {
 // Preflight the complete exchange, including stacks and slots freed by inputs.
 // ItemContainer.addItems itself can partially add; Hunter must never consume a
 // trap/jar/clockwork and then lose the reward because a later item does not fit.
-function exchange(player, remove, add, commit = true) {
+/** The inventory slots the exchange leaves used, or null when it can't happen (a missing input, a bad item). */
+function slotsAfter(player, remove, add) {
   const inv = player.getInventory();
   const counts = new Map();
   for (const item of inv.getItems()) {
     if (item && item.getId() > 0 && item.getAmount() > 0) counts.set(item.getId(), (counts.get(item.getId()) ?? 0) + item.getAmount());
   }
   for (const [id, amount] of remove) {
-    if (!Number.isInteger(id) || !Number.isInteger(amount) || amount <= 0 || (counts.get(id) ?? 0) < amount) return false;
+    if (!Number.isInteger(id) || !Number.isInteger(amount) || amount <= 0 || (counts.get(id) ?? 0) < amount) return null;
     counts.set(id, counts.get(id) - amount);
   }
   for (const [id, amount] of add) {
-    if (!Number.isInteger(id) || !Number.isInteger(amount) || id <= 0 || amount <= 0) return false;
+    if (!Number.isInteger(id) || !Number.isInteger(amount) || id <= 0 || amount <= 0) return null;
     const total = (counts.get(id) ?? 0) + amount;
-    if (total > 2147483647) return false;
+    if (total > 2147483647) return null;
     counts.set(id, total);
   }
   let slots = 0;
   for (const [id, amount] of counts) {
     if (amount > 0) slots += H.core.ItemDefinition.forId(id).isStackable() ? 1 : amount;
   }
-  if (slots > inv.capacity()) return false;
+  return slots;
+}
+
+function exchange(player, remove, add, commit = true) {
+  const slots = slotsAfter(player, remove, add);
+  if (slots === null || slots > player.getInventory().capacity()) return false;
   if (commit) {
+    const inv = player.getInventory();
     for (const [id, amount] of remove) inv.deleteNumber(id, amount);
     for (const [id, amount] of add) inv.adds(id, amount);
   }
   return true;
 }
 
-/** Whether an open container (a meat or fur pouch, StorageItems) would take one more of `id` from a catch. */
-function pouchRoom(player, id) {
-  const request = { player, itemId: id, skill: H.core.Skill.HUNTER, room: false };
-  H.api.emitCustomEvent("storage:room", request);
-  return request.room === true;
+/**
+ * rsprox captures (pyre-fur-and-smallpouch-3/-4, rev 242): a deadfall catch on a full inventory says
+ * "You don't have enough inventory space. You need 3 more free slots." for its bones, fur and meat,
+ * also with an open meat pouch that had room. The singular for one slot is ours.
+ */
+function catchRefusal(player, remove, add) {
+  const short = (slotsAfter(player, remove, add) ?? 0) - player.getInventory().capacity();
+  if (short <= 0) { player.getInventory().full(); return; }
+  player.sendMessage(`You don't have enough inventory space. You need ${short} more free slot${short === 1 ? "" : "s"}.`);
 }
 
 /**
- * `exchange` for a catch's loot: single pieces an open meat or fur pouch has room for go into it
- * (`storage:gather`, skill Hunter), so they need no inventory space; the rest goes to the
- * inventory as `exchange` would. Nothing moves unless all of it fits.
+ * `exchange` for a catch's loot. As live (rsprox captures pyre-fur-and-smallpouch-1/-4): the catch
+ * needs inventory room for all of it, meat and fur included, whatever an open pouch holds; once it
+ * fits, an open meat or fur pouch takes what it has room for (`storage:gather`, skill Hunter) and
+ * the rest goes to the inventory.
  */
 function catchExchange(player, remove, add, commit = true) {
-  const pouched = [];
-  const carried = [];
-  for (const entry of add) (entry[1] === 1 && pouchRoom(player, entry[0]) ? pouched : carried).push(entry);
-  if (!exchange(player, remove, carried, false)) return false;
+  if (!exchange(player, remove, add, false)) return false;
   if (!commit) return true;
-  exchange(player, remove, carried);
-  for (const [id, amount] of pouched) {
+  const inv = player.getInventory();
+  for (const [id, amount] of remove) inv.deleteNumber(id, amount);
+  for (const [id, amount] of add) {
     const request = { player, itemId: id, amount, stored: 0, skill: H.core.Skill.HUNTER };
     H.api.emitCustomEvent("storage:gather", request);
     const left = amount - request.stored;
-    if (left > 0 && !exchange(player, [], [[id, left]])) drop(player, [[id, left]], player.getLocation());
+    if (left > 0) inv.adds(id, left);
   }
   return true;
 }
@@ -271,4 +281,4 @@ function questStage(player, key) {
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  footprintDistance, exchange, catchExchange, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };
+  footprintDistance, exchange, catchExchange, catchRefusal, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

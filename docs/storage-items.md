@@ -58,28 +58,44 @@ mining here; the source does not establish every live-game gather source.
 
 ## Meat and fur pouches
 
-Wiki (Small meat pouch, Large meat pouch, Fur pouch, Small/Medium/Large fur pouch, Bank-use item,
-Hunter meat); no capture of them exists (the user's captures and the rsprox.net index have none).
+Sources: **rsprox captures** of the small and large meat pouch (recordings pyre-fur-and-smallpouch-1
+to -4, rev 242: sewing, every option, the bank panel, Destroy and pyre fox deadfall catches), and the
+OSRS Wiki (Small/Large meat pouch, Fur pouch, Small/Medium/Large fur pouch, Hunter meat, Bank-use item)
+for levels, XP, sizes, what each holds and the fur pouches, which weren't captured.
 
-- **Sewing** (Crafting's needle table, `skills/data/crafting.json` `leather`): a needle (with thread, or a
-  costume needle) on 4 fox fur makes a small meat pouch (35 Crafting, 30 XP), on 4 larupia fur a small
-  fur pouch (35, 20 XP). Upgrades use 3 fur and the closed pouch below (the recipe's `with`): sunlight
-  antelope fur for a large meat pouch (65, 60 XP), graahk fur for a medium fur pouch (50, 40 XP), kyatt
-  fur for a large fur pouch (65, 60 XP). 3 ticks each, as the other needle crafts.
-- **One store per kind:** every meat pouch shares one store, as does every fur pouch ("shares its inventory
-  with every meat pouch the player owns"). The largest pouch carried sets the room, so an upgrade keeps the
-  contents. The Wiki's small meat pouch page has an upgrade overwrite a large pouch's separate store, and
-  both pages describe an Empty that deletes another pouch's contents; those bugs are left out.
-- **Open pouches** take a catch's meat or fur first (Hunter's `storage:gather` with skill Hunter, from trap
-  collection and falconry, through `catchExchange` in `Context.Hunter.js`), so a full inventory still
-  takes it.
-- **Empty:** both kinds empty into an open bank (and through the bank panel's op9, param 595 "Empty"). A
-  meat pouch also empties into the inventory near a bank (LeagueMode's `league:near-bank`, as the chugging
-  barrel asks it) or on the Hunters' Guild's top floor (plane 2 inside the guild's walls, x 1552-1564,
-  y 3033-3053 in the cache map); elsewhere "You can't empty your meat pouch here." (Wiki, Bank-use item).
-- The upgrade wants the closed pouch (Wiki: "must be closed before the player can upgrade it").
-  Every other line (full, empty, Check's count, the fur pouch's bank-only refusal, a missing or open pouch
-  for an upgrade) is ours.
+- **Sewing** (`Leather.Crafting.js`, `skills/data/crafting.json` `huntersPouches`): a needle (with
+  thread, or a costume needle) on the fur, or the fur on the needle, makes one pouch with **no menu**:
+  `human_leather_crafting` at once, then 2 ticks later "You make a small meat pouch." (spam), the XP and
+  the pouch, with the reel counted as the other needle crafts ("You use up one of your reels of
+  thread." on the fifth). 4 fox fur make a small meat pouch (35 Crafting, 30 XP), 4 larupia fur a small
+  fur pouch (35, 20 XP). Upgrades use 3 fur and the **closed** pouch below, whose slot the new one
+  takes: sunlight antelope fur for a large meat pouch (65, 60 XP), graahk fur for a medium fur pouch
+  (50, 40 XP), kyatt fur for a large fur pouch (65, 60 XP).
+  - Without thread: messagebox "You'll need a needle and some thread to craft a small meat pouch."
+  - Without the closed pouch below (an open one doesn't count): objectbox with that pouch, "You need a
+    small meat pouch to upgrade into a large pouch."
+  - Ours: the level box and the too-little-fur line; the fur pouches' versions of the lines above.
+- **One store per kind:** every meat pouch shares one store, as does every fur pouch. The largest pouch
+  carried sets the room. An upgrade keeps the contents (captured: 11 meat before and after); destroying
+  the only pouch loses them (captured: a new pouch then held only what went in).
+- **Fill**, or a meat used on the pouch (open or closed): every meat carried goes in, silently. With
+  none, "You don't have any meats that can go into this pouch."; with the pouch full, "Your pouch is
+  full.".
+- **Check:** "Your meat pouch is currently holding # meat." (0 included).
+- **Open / Close:** "You open your small meat pouch." / "You close your large meat pouch.", the item
+  swapped in place.
+- **Catches** (trap collection, falconry and noose-wand tracking, through `catchExchange` in
+  `Context.Hunter.js`): the catch needs inventory room for all of its loot, meat and fur included,
+  even with an open pouch that has room (captured: "You don't have enough inventory space. You need 3
+  more free slots." on a deadfall, the singular ours). Once it fits, an open pouch takes the meat or fur
+  (`storage:gather`, skill Hunter), silently, also when that fills it.
+- **Empty:** an empty pouch says "Your meat pouch is empty." anywhere. Away from a bank, "You can't
+  empty your meat pouch here."; next to one with the bank closed (`league:near-bank`, as the chugging
+  barrel asks it) or on the Hunters' Guild's top floor (Wiki; plane 2 inside the guild's walls, x
+  1552-1564, y 3033-3053 in the cache map) the meat goes into the inventory silently; with no room the
+  inventory-full line is ours. The bank panel's op9 (param 595 "Empty") puts it in the bank, "You
+  deposit some meat into your bank." (spam), sound 2285. The fur pouch empties only into the bank (Wiki).
+- **Destroy:** "If you destroy this item, you will lose all contents stored within."
 
 ## Events
 
@@ -117,8 +133,8 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Log basket | "You empty some of your basket's contents into the bank." / "Your bank cannot hold the remaining contents of your basket." | Ours (not captured) |
 | Tackle box | "The tackle box is now empty." | captured |
 | Tackle box | "The tackle box cannot hold itself! How weird would that be?" | Wiki |
-| Meat pouch | "You can't empty your meat pouch here." | Wiki |
-| Meat and fur pouches | "Your pouch is full." / "Your pouch is empty." / "Your pouch contains # pieces of meat/fur." / "You empty your pouch." / "You empty as much meat as you can carry." / "You have no meat/fur to put in the pouch." / "You can only empty your fur pouch into a bank." | Ours (not captured) |
+| Meat pouch | the lines in "Meat and fur pouches" above | captured (rev 242) |
+| Fur pouches | the meat pouch's lines with "fur" | Ours (not captured) |
 
 The barrel's and basket's Check opens a box that starts "The barrel contains:" or "The basket
 contains:" and lists "# x Item" per kind.

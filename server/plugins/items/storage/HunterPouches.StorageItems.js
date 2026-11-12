@@ -4,20 +4,28 @@
  *
  * - A meat pouch holds 14 (small) or 28 (large) raw hunter meats, not raw bird meat; a fur pouch
  *   14, 21 or 28 hunter furs, not tatty fur or fur from combat (`data/storage-items.json`).
- * - Every pouch of a kind shares one store ("The pouch shares its inventory with every meat
- *   pouch the player owns"), so the largest one carried sets the room and an upgrade keeps it.
+ * - Every pouch of a kind shares one store, so the largest one carried sets the room; an upgrade
+ *   keeps it and destroying the only pouch loses it (both captured).
  * - Open, a pouch takes the meat or fur a Hunter catch gives (Hunter's `storage:gather`).
- * - A meat pouch empties into the bank while the bank is open, and into the inventory at a bank
- *   or on the Hunters' Guild's top floor; elsewhere "You can't empty your meat pouch here."
- *   (Wiki: Bank-use item). A fur pouch empties only into an open bank.
- * - Sewing them is Crafting's needle recipe (`skills/data/crafting.json`, leather).
  *
- * No capture covers them: every other line here is Ours.
+ * rsprox captures (pyre-fur-and-smallpouch-1 to -4, rev 242, small and large meat pouch):
+ * - Fill and using a meat on the pouch put every meat carried in, silently; with none "You don't
+ *   have any meats that can go into this pouch.", full "Your pouch is full.". Filling up from a
+ *   catch says nothing.
+ * - Check: "Your meat pouch is currently holding # meat." (also 0).
+ * - Open / Close: "You open your small meat pouch." / "You close your large meat pouch.".
+ * - Empty: an empty pouch "Your meat pouch is empty."; away from a bank "You can't empty your meat
+ *   pouch here."; next to one (bank closed) into the inventory, silently; the bank panel's op9 into
+ *   the bank, "You deposit some meat into your bank." (spam) with sound 2285.
+ * - Destroy: "If you destroy this item, you will lose all contents stored within."
+ * The fur pouches weren't captured: their lines follow the meat pouches' with "fur" (ours), and as the
+ * Wiki says they empty only into a bank. The Hunters' Guild top floor is the Wiki's.
  */
 const Storage = require("./Common.StorageItems");
 
-/** Wiki: Bank-use item, the line for both meat pouches outside a bank. */
-const CANT_EMPTY_MEAT_HERE = "You can't empty your meat pouch here.";
+/** The bank panel's deposit sound (captured: apple_splat). */
+const DEPOSIT_SOUND = 2285;
+const DESTROY_WARNING = "If you destroy this item, you will lose all contents stored within.";
 
 /**
  * The Hunters' Guild's top floor (Wiki: Small meat pouch, "on the top floor of the Hunters' Guild"):
@@ -30,7 +38,7 @@ const KINDS = [
   {
     key: "meat-pouch",
     noun: "meat",
-    contents: "pieces of meat",
+    plural: "meats",
     data: "hunterMeat",
     tiers: [
       { names: ["Small meat pouch", "Small meat pouch (open)"], pair: ["hg_meatpouch_small", "hg_meatpouch_small_open"], holds: 14 },
@@ -41,7 +49,7 @@ const KINDS = [
   {
     key: "fur-pouch",
     noun: "fur",
-    contents: "pieces of fur",
+    plural: "furs",
     data: "hunterFur",
     tiers: [
       { names: ["Small fur pouch", "Small fur pouch (open)"], pair: ["hg_furpouch_small", "hg_furpouch_small_open"], holds: 14 },
@@ -52,16 +60,17 @@ const KINDS = [
   },
 ];
 
-/** Ours (not captured): the lines for one kind of pouch. */
+/** The lines for one kind of pouch: captured for meat, the same with "fur" for the fur pouches (ours). */
 function messages(kind) {
   return {
-    NOTHING: `You have no ${kind.noun} to put in the pouch.`,
+    NOTHING: `You don't have any ${kind.plural} that can go into this pouch.`,
     FULL: "Your pouch is full.",
-    EMPTY: "Your pouch is empty.",
-    HOLDS: (amount) => `Your pouch contains ${amount} ${amount === 1 ? kind.contents.replace("pieces", "piece") : kind.contents}.`,
-    EMPTIED: "You empty your pouch.",
-    SOME_LEFT: `You empty as much ${kind.noun} as you can carry.`,
-    BANK_ONLY: `You can only empty your ${kind.noun} pouch into a bank.`,
+    EMPTY: `Your ${kind.noun} pouch is empty.`,
+    HOLDS: (amount) => `Your ${kind.noun} pouch is currently holding ${amount} ${kind.noun}.`,
+    CANT_EMPTY: `You can't empty your ${kind.noun} pouch here.`,
+    DEPOSITED: `You deposit some ${kind.noun} into your bank.`,
+    OPENED: (name) => `You open your ${name.toLowerCase()}.`,
+    CLOSED: (name) => `You close your ${name.toLowerCase()}.`,
   };
 }
 
@@ -98,9 +107,6 @@ function makeKind(kind) {
     accepts: (id) => ids().has(id),
     room: (player, _id, held) => capacity(player) - held.reduce((sum, entry) => sum + entry.amount, 0),
     gathers: (player, event) => event?.skill === Storage.core.Skill.HUNTER && Storage.hasOpen(player, family),
-    gathered: (player) => {
-      if (Storage.total(player, family) >= capacity(player)) player.sendMessage(lines.FULL);
-    },
     bankEmpty: (player) => emptyIntoBank(player),
   };
 
@@ -115,12 +121,10 @@ function makeKind(kind) {
       return;
     }
     for (const id of held) Storage.fillFrom(player, family, id);
-    if (Storage.total(player, family) >= capacity(player)) player.sendMessage(lines.FULL);
   }
 
   function check({ player }) {
-    const amount = Storage.total(player, family);
-    player.sendMessage(amount === 0 ? lines.EMPTY : lines.HOLDS(amount));
+    player.sendMessage(lines.HOLDS(Storage.total(player, family)));
   }
 
   function emptyIntoBank(player) {
@@ -128,33 +132,42 @@ function makeKind(kind) {
       player.sendMessage(lines.EMPTY);
       return;
     }
-    Storage.emptyToBank(player, family);
+    if (Storage.emptyToBank(player, family) <= 0) return;
+    player.getPacketSender().sendTypedMessage(Storage.core.ChatType.SPAM, lines.DEPOSITED);
+    Storage.core.Sounds.sendSound(player, new Storage.core.Sound(DEPOSIT_SOUND, 1, 0, 0));
   }
 
   function empty({ player }) {
-    if (Storage.core.Bank.isOpen(player)) {
-      emptyIntoBank(player);
-      return;
-    }
-    if (!kind.emptiesToInventory) {
-      player.sendMessage(lines.BANK_ONLY);
-      return;
-    }
-    if (!nearBank(player) && !inGuildTopFloor(player)) {
-      player.sendMessage(CANT_EMPTY_MEAT_HERE);
-      return;
-    }
     if (Storage.total(player, family) === 0) {
       player.sendMessage(lines.EMPTY);
       return;
     }
-    const { moved, left } = Storage.emptyToInventory(player, family);
-    if (moved === 0) player.getInventory().full();
-    else player.sendMessage(left > 0 ? lines.SOME_LEFT : lines.EMPTIED);
+    if (Storage.core.Bank.isOpen(player)) {
+      emptyIntoBank(player);
+      return;
+    }
+    if (!kind.emptiesToInventory || (!nearBank(player) && !inGuildTopFloor(player))) {
+      player.sendMessage(lines.CANT_EMPTY);
+      return;
+    }
+    // Silent next to a bank (captured); a full inventory's line is ours.
+    if (Storage.emptyToInventory(player, family).moved === 0) player.getInventory().full();
   }
 
   function toggle({ player, item }) {
+    const name = closedName(item);
+    const opening = !Storage.isOpen(family, item);
     Storage.toggle(player, family, item);
+    player.sendMessage(opening ? lines.OPENED(name) : lines.CLOSED(name));
+  }
+
+  /** "Small meat pouch" for either copy. */
+  function closedName(item) {
+    return Storage.nameOf(item).replace(/ \(open\)$/, "");
+  }
+
+  function destroyPrompt(event) {
+    if (family.names.includes(Storage.nameOf(event.item))) event.warning = DESTROY_WARNING;
   }
 
   /** Meat or fur used on its pouch fills it. */
@@ -168,7 +181,7 @@ function makeKind(kind) {
     fill({ player });
   }
 
-  return { family, lines, fill, check, empty, toggle, useOnPouch, capacity };
+  return { family, lines, fill, check, empty, toggle, useOnPouch, destroyPrompt, capacity };
 }
 
 const UNITS = KINDS.map(makeKind);
@@ -180,7 +193,8 @@ module.exports = (api) => {
       api.onItemAction(name, { Fill: unit.fill, Empty: unit.empty, Check: unit.check, Open: unit.toggle, Close: unit.toggle });
     }
     api.onItemOnItem(unit.useOnPouch);
+    api.onCustomEvent("destroy-item:prompt", unit.destroyPrompt);
   }
 };
 
-Object.assign(module.exports, { KINDS, UNITS, CANT_EMPTY_MEAT_HERE, GUILD_TOP_FLOOR, inGuildTopFloor });
+Object.assign(module.exports, { KINDS, UNITS, DESTROY_WARNING, GUILD_TOP_FLOOR, inGuildTopFloor });

@@ -724,7 +724,7 @@
   /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
   function enterReconnect(unreachable) {
     if (dialog.open) dialog.close();
-    pluginPanel.closeSpawnPicker();
+    pluginPanel.clearSpawnPicker();
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
     if (unreachable) state.reconnect.wasDown = true;
     showOverlay("Restarting the server… reconnecting", true);

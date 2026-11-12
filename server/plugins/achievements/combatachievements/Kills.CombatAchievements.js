@@ -13,10 +13,12 @@
  * it. "combat-achievements:count" { player, monster } comes back with `total` and changes
  * nothing. At login, plugins
  * that keep a count answer
- *   "combat-achievements:kill-count" { player, counts }  -> counts["Zulrah"] = 41
+ *   "combat-achievements:kill-count" { player, counts, exact }  -> counts["Zulrah"] = 41
  * so kills from before Combat Achievements still finish their tasks (as the Wiki says kill-count
- * tasks were completed retroactively). The boss pages show the count through the monster's
- * kill-count varp (data/bosses.json).
+ * tasks were completed retroactively). A saved count only rises to a plugin's, unless the plugin
+ * marks its count as the count (`exact["Zulrah"] = true`): then a higher saved count comes down to
+ * it (Zulrah's, which counted each kill twice before #3577). The boss pages show the count through
+ * the monster's kill-count varp (data/bosses.json).
  *
  * Counts are saved by monster name: the cache's monster keys (enum 3970) are alphabetical and move
  * when a monster is added. Saves keyed by number are from before, and read through the keys of
@@ -109,12 +111,14 @@ function onCount(request) {
 
 /** At login: catch up with the counts plugins keep, send every count, finish what they reach. */
 function restore(player) {
-  const request = { player, counts: {} };
+  const request = { player, counts: {}, exact: {} };
   pluginApi?.emitCustomEvent("combat-achievements:kill-count", request);
   const all = counts(player);
   for (const [name, value] of Object.entries(request.counts)) {
     const monster = Data.monsterNamed(name);
-    if (monster && Number(value) > (Number(all[monster.name]) || 0)) all[monster.name] = Math.floor(Number(value));
+    const count = Math.floor(Number(value));
+    if (!monster || !(count >= 0)) continue;
+    if (count > (Number(all[monster.name]) || 0) || request.exact[name] === true) all[monster.name] = count;
   }
   player.setAttribute(KILLS_ATTRIBUTE, all);
   for (const monster of Data.monsters().values()) {

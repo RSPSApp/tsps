@@ -12,19 +12,52 @@ canonical dialogue branches rather than opening a shop directly.
 
 ## Reproduce the checks
 
-Use Node >=22.5, the repository dependencies, server data, and the ordinary
-configured revision-242 cache (including map/clipping data). From `server`:
+Observed platform: Linux x64/glibc, Node **22.17.0**, image
+`node@sha256:b04ce4ae4e95b522112c2e5c52f781471a5cbc3b594527bcddedee9bc48c03a0`.
+Use verified Yarn **4.12.0**, immutable dependencies with scripts skipped, and
+node-datachannel **0.32.1** with its validated Linux x64 native binary and shared
+libraries. The public [dependency/native preparation recipe](https://github.com/RSPSApp/tsps/pull/4732)
+uses the same pinned Yarn/native inputs as these runs. Its shell download recipe
+is equivalent reproduction preparation; the actual executor downloaded and
+validated the inputs with Node. It is not a claim we ran the shell recipe.
+
+From `server`, these are the actual build/cache arguments used in both runs.
+Network access to OpenRS2 is needed for cache preparation. `server/target.txt`
+selects `osrs-242_2026-11-03`; retained actual cache metadata identified **2757**,
+with all 28 files sealed. Check that `caches/osrs-242_2026-11-03/info.json` reports
+id2757 before comparing results; another cache is not the validated input.
 
 ```sh
-yarn build
-node --test --test-concurrency=1 tests/sir-tiffy-armour-native.test.cjs
-node --test --test-concurrency=1 tests/wanted-commorb-full-inventory.test.cjs
-node --test --test-concurrency=1 tests/qh728-q123.test.cjs
-node --test --test-concurrency=1 tests/qh728-q106.test.cjs
-node --test --test-concurrency=1 tests/qh728-q022.test.cjs
-node --test --test-concurrency=1 tests/quest-shops.test.cjs
-node --test --test-concurrency=1 tests/quest-plugins.test.cjs
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=4096 node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/ensure-cache.ts
 ```
+
+Actual test arguments at `10825bda10c8429d0b8afa0a84cbca24b4187469` (each file
+runs in its own process; the later qh123 failure stopped that run):
+
+```sh
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/sir-tiffy-armour-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/wanted-commorb-full-inventory.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q123.test.cjs
+```
+
+Actual test arguments at `a23525102c27349bc75c6a26cb4497e917c07c65` (five files,
+separate processes; the final broad file failed):
+
+```sh
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q123.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q106.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q022.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/quest-shops.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/quest-plugins.test.cjs
+```
+
+The observed executor also set `DISABLE_PLAYER_BOTS=1`,
+`NODE_DISABLE_COMPILE_CACHE=1`, `CI=1`, `LANG=C.UTF-8`, `TZ=UTC`,
+`YARN_ENABLE_SCRIPTS=false` and `npm_config_ignore_scripts=true`. For equivalent
+shell reproduction, export those settings before preparation/build/tests. The
+native fixture itself disables player bots. Commands above are matched to their
+historical sources, not a claim that the documentation-only head was executed.
 
 The native fixture uses registered World actors and decoded in-memory
 ClientConnection inputs, with supplied quest states, prerequisites, materials and

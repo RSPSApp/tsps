@@ -26,6 +26,7 @@ const fakeApi = new Proxy({
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } getId() { return this.id; } },
     World: { getProcessCycle: () => processCycle },
     Equipment: { WEAPON_SLOT: 3 },
+    CombatType: { 0: "MELEE", 1: "RANGED", 2: "MAGIC", MELEE: 0, RANGED: 1, MAGIC: 2 },
     PrayerHandler: { PROTECT_FROM_MELEE: 18, isActivated: (player, id) => player.prayers?.has(id) === true },
     PlayerRights: { ADMINISTRATOR: 2 },
   },
@@ -278,13 +279,19 @@ test("fights: a rule reads how the monster died", () => {
   player.getFightType = () => ({ getBonusType: () => 0 });
   player.isSpecialActivated = () => false;
   player.getEquipment = () => ({ getItems: () => [] });
-  const npc = { isNpc: () => true, isPlayer: () => false, getHitpoints: () => 0, getCurrentDefinition: () => ({ getName: () => "King Black Dragon" }) };
-  const hit = { getCombatType: () => "MELEE", getTotalDamage: () => 30 };
+  // As the game sends them: CombatType is a numeric enum (0 is MELEE), and a resolved hit's damage
+  // is still queued, so the dragon has its hitpoints left when the killing blow resolves.
+  let queued = 0;
+  const npc = { isNpc: () => true, isPlayer: () => false, getHitpoints: () => 30,
+    getCombat: () => ({ getHitQueue: () => ({ getQueuedDamage: () => queued }) }),
+    getCurrentDefinition: () => ({ getName: () => "King Black Dragon" }) };
+  const hit = { getCombatType: () => 0, getTotalDamage: () => 30 };
   Fights.onKill("King Black Dragon", {
     "Claw Clipper": (fight) => fight.prayedAtKill("PROTECT_FROM_MELEE"),
     "Hide Penetration": (fight) => fight.onlyMelee("stab"),
   });
   Fights.onDealt({ player, target: npc, hit });
+  queued = 30;
   Fights.onHitResolved({ attacker: player, target: npc, hit });
   Fights.onNpcDeath({ npc, killer: player, damagers: [player] });
   assert.equal(Progress.isComplete(player, named("Claw Clipper").id), true);

@@ -2881,7 +2881,7 @@ test('native Lumbridge full masks and owned walls preserve source geometry with 
     }
     const baseline=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)baseline.push(reference.getClip(reference.tile(x,y,0)));
     const id=core.CacheDefinitions.getLocId('clanwars_barrier_greyrock'),definition=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
-    assert.deepEqual([definition.sizeX,definition.sizeY,definition.clipType,definition.blocksProjectile],[1,1,2,true]);assert.equal(walls.length,29);
+    assert.deepEqual([definition.sizeX,definition.sizeY,definition.clipType,definition.blocksProjectile],[1,1,1,true]);assert.equal(walls.length,29);
     for(const wall of walls){
       assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);
       assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);

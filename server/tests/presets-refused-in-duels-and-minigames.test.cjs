@@ -2,7 +2,8 @@
 // A preset load wrote gear straight into the slots, set 99 stats and full health after only a Wilderness check: in a
 // No Weapons duel it re-geared the player mid-fight, and in a minigame that keeps its own gear (Last Man Standing,
 // Castle Wars) it banked the minigame's items and stripped the team cape. It now refuses in a duel, in combat and in
-// an area that won't let the player teleport, and each piece must pass the normal equip checks first. Real engine:
+// an area that won't let the player teleport unless its preset policy permits re-gearing; each piece must pass
+// the normal equip checks first. Real engine:
 // every plugin loaded with PvpMode, a real Player, Bank and Inventory, the real applyPreset.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -242,4 +243,39 @@ test("a global teleport veto still refuses a lobby load", (t) => {
   openFromCommand(f);
   t.mock.method(PM, "emitCanTeleport", () => false);
   expectLoadRefused(f, /can't load a preset here/);
+});
+
+test("lobby loading rechecks the account and existing Clan Wars veto after the interface opens", (t) => {
+  for (const ironman of [true, false]) {
+    const f = actor(t);
+    seedCarried(f);
+    place(f, 3423, 4061);
+    openFromCommand(f);
+    if (ironman) {
+      const Ironman = require("../plugins/modes/ironman/Common.Ironman");
+      f.p.setAttribute(Ironman.MODE_ATTRIBUTE, "ironman");
+    } else {
+      // Seed only membership to exercise the existing consumer, not a match playthrough.
+      const C = require("../plugins/minigames/clanwars/Common.ClanWars");
+      assert.equal(C.matches.has(f.p), false);
+      C.matches.set(f.p, {});
+      t.after(() => C.matches.delete(f.p));
+    }
+    expectLoadRefused(f, ironman ? /As an Ironman, you cannot use presets/ : /Leave Clan Wars before loading a preset/);
+  }
+});
+
+test("area preset policy is tri-state and defaults to the existing teleport restriction", (t) => {
+  for (const [permission, teleport, allowed] of [[true, false, true], [false, true, false], [null, false, false], [undefined, false, false]]) {
+    const f = actor(t);
+    const area = { canTeleport: () => teleport };
+    if (permission !== undefined) area.canLoadPreset = () => permission;
+    t.mock.method(f.p, "getArea", () => area);
+    if (allowed) {
+      assert.equal(Presets.applyPreset(f.p, geared()), true);
+      assert.equal(f.p.getInventory().getAmount(I.SHARK), 5);
+    } else {
+      refused(t, f, /can't load a preset here/);
+    }
+  }
 });

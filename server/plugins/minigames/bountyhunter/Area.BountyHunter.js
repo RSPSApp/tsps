@@ -210,6 +210,11 @@ function blockPhoenixNecklace(event) {
 
 function createAreas() {
   class BountyHunterLobby extends core.Area {
+    canLoadPreset(player) {
+      // Membership can lag movement until the next area tick; never re-gear an arena tile.
+      return bh.isLobbyTile(player.getLocation()) ? true : null;
+    }
+
     postEnter(mobile) {
       if (isPlayer(mobile)) enterLobby(mobile);
     }

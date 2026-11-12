@@ -1832,7 +1832,7 @@ test('native Sylvan selection and Plateau reselection reset agreement and refuse
 });
 
 test('native Sylvan bridge mapping, both-end diagonal staging isolation and exact tree clip restoration', async () => {
-  const a=actor(),b=actor();channel(a);channel(b);const game=await negotiate(a,b,null,0,null,2);
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,2);
   await join(a);await join(b);
   for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,SYLVAN_LANDINGS[game.members.get(p)]));
   const reference=new core.TemplatedInstanceArea(8,8);
@@ -1849,17 +1849,33 @@ test('native Sylvan bridge mapping, both-end diagonal staging isolation and exac
     assert.ok(game.walls.length>0);assert.ok(game.walls.every(o=>o.getPrivateArea()===game.area&&o.getType()===10&&o.getFace()===0));
     for(const x of [3444,3445,3446,3450,3451]) assert.equal(game.walls.some(o=>o.getLocation().getX()===game.area.at([x,5023,0]).getX()),false,'mapped solid trees receive no overlay barrier');
     assert.equal(core.RegionManager.canMovestart(game.area.at([3392,5000,0]),game.area.at([3391,5000,0]),1,1,game.area),false,'unmapped footprint refuses exit');
+    const walker=[a,b].find(p=>game.members.get(p)===0);
+    const open=game.area.at([3425,5000,0]), across=game.area.at(SYLVAN_LANDINGS[1]);
+    await wire(walker,sylvanWalkFrame(open));
+    assert.deepEqual(position(walker),[open.getX(),open.getY(),0],'ordinary decoded walk queues and reaches open tile');
+    await wire(walker,sylvanWalkFrame(across));tick(60);
+    assert.equal(game.phase,'staging','walk checks fit within unchanged preparation');
+    assert.ok(walker.getLocation().getY()<game.area.at([3424,5023,0]).getY(),'ordinary queued movement cannot cross staging wall');
+    const before={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
     core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
     const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
     assert.deepEqual(after,baseline,'all4096 masks including directional/projectile/tree bits restored exactly');
     assert.equal(after[(5023-4992)*64+3414-3392],0x4020,'known directional/projectile fence bits survive');
     assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),true);
+    await wire(walker,sylvanWalkFrame(across));tick(80);
+    assert.deepEqual(position(walker),[across.getX(),across.getY(),0],'same native crossing reaches destination after barriers disappear');
+    console.log('SYLVAN_MOVEMENT_QUALIFICATION '+JSON.stringify({staging:before,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
     const tree=game.area.at([3408,5020,0]);assert.equal(game.area.getClip(tree)&0x20100,0x20100,'mapped tree keeps walking and projectile obstruction');
     assert.equal(core.RegionManager.canMovestart(game.area.at([3407,5020,0]),tree,1,1,game.area),false);
     assert.equal(core.RegionManager.canProjectileAttackReturn(game.area.at([3407,5020,0]),game.area.at([3409,5020,0]),1,game.area),false,'actual native ray is occluded by copied tree');
     assert.equal(core.RegionManager.canProjectileAttackReturn(game.area.at([3424,5000,0]),game.area.at([3425,5000,0]),1,game.area),true,'open ray control remains visible');
   } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
 });
+function sylvanWalkFrame(at) {
+  // Existing click-teleport fixture's literal MOVE_GAMECLICK encoding, plain click.
+  const add=value=>[(value>>8)&255,((value&255)+128)&255];
+  return Buffer.from([16,...add(at.getY()),0,...add(at.getX()),128,0]);
+}
 function positionAt(game, source) {const at=game.area.at(source);return [at.getX(),at.getY(),at.getZ()];}
 
 for(const mode of [0,1,16]) test(`native Sylvan mode ${mode} retains combat restrictions and lifetime`,async()=>{
@@ -1887,15 +1903,16 @@ for(const victimIndex of [0,1]) test(`native Sylvan side ${victimIndex} safe def
   assert.equal(victim.getInventory().getAmount(995),77);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'sylvan'});
   const scripts=scriptCalls(victim);
   const orbXY=side===0?[3423,5022]:[3424,5025];
-  // Seed settled adjacent tile; ordinary object input and approach own the interaction.
-  victim.moveTo(game.area.at([orbXY[0],orbXY[1]+(side===0?-1:1),0]));tick(2);
+  // Start at the actual completed death jail landing; native object routing owns approach.
   await sylvanObjectInput(victim,game,'clanwars_viewing_start_elfwood',orbXY,'Use');
   assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));
   assert.equal(viewingUnit().active.has(victim),true);
+  const approached=viewingUnit().active.get(victim).location, orbAt=game.area.at([...orbXY,0]);
+  assert.ok(Math.max(Math.abs(approached.getX()-orbAt.getX()),Math.abs(approached.getY()-orbAt.getY()))<=1,'actual jail landing routes to orb before opening camera');
   assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9754),'viewing uses actual elfwood orb model');
   await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
   const portalXY=side===0?[3424,5017]:[3423,5029];
-  victim.moveTo(game.area.at([portalXY[0],portalXY[1]+(side===0?1:-1),0]));tick(2);
+  // Continue from restored orb approach position; no adjacency seed hides portal routing.
   await sylvanObjectInput(victim,game,'clanwars_prisonportal_elfwood',portalXY,'Exit');
   assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);
   assert.deepEqual(position(victim),positionAt(game,SYLVAN_LANDINGS[side]));

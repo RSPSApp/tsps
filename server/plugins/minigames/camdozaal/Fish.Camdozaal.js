@@ -24,7 +24,9 @@ function prepareChance(player, row) {
   const stop = permanent ? row.preparationStopBurn : row.stopBurn;
   if (level >= stop) return 1;
   const base = 0.6 + 0.4 * (level - row.level) / (row.stopBurn - row.level);
-  return Math.max(0, Math.min(1, base + (permanent ? 0.1 : 0) + (S.boostTicks(player) > 0 ? 0.05 : 0)));
+  // Preserve a real ruin outcome below the published no-ruin boundary, even
+  // when the estimated additive curve would otherwise saturate early.
+  return Math.max(0, Math.min(255 / 256, base + (permanent ? 0.1 : 0) + (S.boostTicks(player) > 0 ? 0.05 : 0)));
 }
 function prepareOne(player, row) {
   const inventory = player.getInventory();

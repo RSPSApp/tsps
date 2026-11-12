@@ -253,6 +253,7 @@ test('fish preparation requires knife and grants cooking then prayer at the prop
 
 test('vault requires stored payment, starts a real timer and returns on timeout without prior-box loss', async t => {
   const f = actor(t), shard = obj('camdozaal_barronite_shard');
+  f.player.setRunEnergy(20);
   const door = locate(/^camdozaal_vault_door$/);
   const outside = new core.Location(door.x + 1, door.y - 1, 0);
   assert.equal(core.RegionManager.blocked(outside, null), false, 'observed door has walkable south floor');
@@ -264,7 +265,23 @@ test('vault requires stored payment, starts a real timer and returns on timeout 
   const oldBox = obj('camdozaal_vault_chest_low');
   f.player.getInventory().adds(oldBox, 1);
   f.player.setAttribute('camdozaal:stored-shards', 1000);
-  await clickObject(f, door, 'Open', false);
+  let processed = 0, timedArea = null, originalProcess = null;
+  const emit = PM.emitObjectInteraction;
+  PM.emitObjectInteraction = function(event) {
+    const result = emit.call(this, event);
+    if (event.player === f.player && !timedArea && f.player.getPrivateArea()) {
+      timedArea = f.player.getPrivateArea();
+      originalProcess = timedArea.process;
+      timedArea.process = function(mobile) {
+        if (mobile === f.player) processed++;
+        return originalProcess.call(this, mobile);
+      };
+    }
+    return result;
+  };
+  try { await clickObject(f, door, 'Open', false); }
+  finally { PM.emitObjectInteraction = emit; }
+  t.after(() => { if (timedArea && originalProcess) timedArea.process = originalProcess; });
   assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 250);
   assert.equal(f.player.getInventory().getAmount(shard), 750, 'entry uses only stored shards');
   const area = f.player.getPrivateArea();
@@ -282,13 +299,19 @@ test('vault requires stored payment, starts a real timer and returns on timeout 
   await clickObject(f, pedestal, 'Take');
   const temporary = obj('camdozaal_vault_chest_low_temporary');
   assert.equal(f.player.getInventory().getAmount(temporary), 1);
-  const energy = f.player.getRunEnergy();
-  ticks(100);
+  assert.ok(f.player.getRunEnergy() < 100, 'low energy precondition before timeout');
+  assert.ok(processed > 0 && processed < 99, 'all setup area processes were accounted');
+  ticks(99 - processed);
+  assert.equal(processed, 99);
+  assert.equal(f.player.getPrivateArea(), area, 'vault remains active immediately before deadline');
+  assert.equal(f.player.getInventory().getAmount(temporary), 1);
+  ticks(1);
+  assert.equal(processed, 100, 'timeout occurs on actual hundredth Area process');
   assert.equal(f.player.getPrivateArea(), null);
   assert.equal(f.player.getInventory().getAmount(temporary), 0);
   assert.equal(f.player.getInventory().getAmount(oldBox), 1, 'previous-run boxes survive failure');
   assert.ok(f.player.getLocation().equals(outside));
-  assert.ok(f.player.getRunEnergy() <= energy, 'timeout does not restore energy');
+  assert.ok(f.player.getRunEnergy() < 100, 'timeout cannot restore full energy; ordinary recovery allowed');
   assert.equal(Number(f.player.getAttribute('camdozaal:vault-return')) || 0, 0);
 });
 
@@ -534,13 +557,23 @@ test('each selected blue barrier crosses its actual cache footprint while yellow
     const selected = f.player.getPacketSender().getVarbit(12069 + i);
     assert.ok(selected >= 0 && selected < groups[i].length);
     const blue = locate(new RegExp(`^camdozaal_vault_barrier_${groups[i][selected]}$`));
-    const definition = stand(f.player, blue); ticks(3);
+    const definition = ObjectDefinition.forPlayer(blue.id, f.player);
     assert.ok(definition.getInteractions().includes('Enter'));
-    const before = f.player.getLocation().clone();
+    const footprint = ObjectDefinition.forId(blue.id);
+    let width = footprint.getSizeX(), height = footprint.getSizeY();
+    if (blue.face & 1) [width, height] = [height, width];
+    assert.ok((width === 1 && height === 2) || (width === 2 && height === 1), 'actual cache footprint is two tiles');
+    const crossX = height > width;
+    const candidates = Array.from({length: crossX ? height : width}, (_, offset) => crossX
+      ? [new core.Location(blue.x - 1, blue.y + offset, 0), new core.Location(blue.x + width, blue.y + offset, 0)]
+      : [new core.Location(blue.x + offset, blue.y - 1, 0), new core.Location(blue.x + offset, blue.y + height, 0)]);
+    const sides = candidates.find(pair => pair.every(tile => !core.RegionManager.blocked(tile, f.player.getPrivateArea())));
+    assert.ok(sides, 'actual barrier has walkable floor on opposite footprint sides');
+    f.player.moveTo(sides[0]); ticks(3);
     await clickObject(f, blue, 'Enter', false);
-    const after = f.player.getLocation();
-    assert.equal(after.equals(before), false, 'blue barrier crosses to a different tile');
-    assert.equal(core.RegionManager.blocked(after, f.player.getPrivateArea()), false);
+    assert.ok(f.player.getLocation().equals(sides[1]), 'ordinary Enter crosses to the opposite side of the footprint');
+    await clickObject(f, blue, 'Enter', false);
+    assert.ok(f.player.getLocation().equals(sides[0]), 'ordinary reverse Enter crosses back through the same footprint');
     const yellow = locate(new RegExp(`^camdozaal_vault_barrier_${groups[i][(selected + 1) % groups[i].length]}$`));
     const closed = ObjectDefinition.forPlayer(yellow.id, f.player);
     assert.equal(closed.getInteractions().includes('Enter'), false, 'yellow cannot offer crossing');
@@ -688,4 +721,74 @@ test('imbued barronite on the forge remains owned by Defender of Varrock', async
   assert.equal(f.player.getInventory().getAmount(item), 0, 'quest consumes its own imbued material');
   assert.ok(quest.getStage(f.player) >= 34, 'quest forge progression still occurs');
   assert.equal(Number(f.player.getAttribute('camdozaal:stored-shards')) || 0, stored, 'quest material is not shard fuel');
+});
+
+test('carried Imcando hammer supports the ordinary crusher exchange', async t => {
+  const f = actor(t), deposit = obj('camdozaal_barronite_deposit');
+  skill(f.player, 'SMITHING', 14);
+  f.player.getInventory().adds(deposit, 1);
+  f.player.getInventory().adds(core.ItemIdentifiers.IMCANDO_HAMMER, 1);
+  assert.equal(f.player.getEquipment().contains(core.ItemIdentifiers.IMCANDO_HAMMER), false);
+  await useItem(f, deposit, locate(/camdozaal_anvil/)); ticks(4);
+  assert.equal(f.player.getInventory().getAmount(deposit), 0);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.IMCANDO_HAMMER), 1);
+});
+
+test('permanent preparation buff permits guppy ruin below36 and guarantees success at36', async t => {
+  const preparation = locate(/^camdozaal_preparation_table$/);
+  for (const level of [34, 35, 36]) {
+    const f = actor(t), raw = obj('raw_guppy'), prepared = obj('guppy'), ruined = obj('ruined_guppy');
+    skill(f.player, 'COOKING', level);
+    f.player.setAttribute('camdozaal:buffs', 1 << 1);
+    f.player.getInventory().adds(core.ItemIdentifiers.KNIFE, 1);
+    f.player.getInventory().adds(raw, 1);
+    const random = Math.random;
+    try { Math.random = () => 0.999; await useItem(f, raw, preparation); ticks(2); }
+    finally { Math.random = random; }
+    assert.equal(f.player.getInventory().getAmount(raw), 0);
+    assert.equal(f.player.getInventory().getAmount(prepared), level === 36 ? 1 : 0);
+    assert.equal(f.player.getInventory().getAmount(ruined), level < 36 ? 1 : 0);
+  }
+});
+
+test('ordinary big net catch reaches clue-bottle rolls and the Luck consumer', async t => {
+  const f = actor(t);
+  skill(f.player, 'FISHING', 99);
+  f.player.setAttribute('camdozaal:buffs', 1 << 4);
+  f.player.getInventory().adds(core.ItemIdentifiers.BIG_FISHING_NET, 1);
+  const npc = PM.spawnNpc({ id: core.CacheDefinitions.getNpcId('camdozaal_fishingspot_1'), x: 2922, y: 5788, z: 0, wanderRadius: 0 });
+  assert.ok(npc);
+  t.after(() => { if (npc.isRegistered()) core.World.getRemoveNPCQueue().push(npc); ticks(1); });
+  const shore = [[2923,5788],[2921,5788],[2922,5789],[2922,5787]]
+    .map(([x,y]) => new core.Location(x,y,0)).find(tile => !core.RegionManager.blocked(tile, null));
+  assert.ok(shore); f.player.moveTo(shore); ticks(3);
+  const op = npc.getCurrentDefinition(f.player).getActions().indexOf('Big Net') + 1;
+  assert.ok(op > 0);
+  const seen = [], emit = PM.emitCustomEvent, random = Math.random;
+  PM.emitCustomEvent = function(name, event) {
+    const result = emit.call(this, name, event);
+    if (name === 'treasure-trails:vessel-chance' && event.player === f.player && event.tier === 'beginner') seen.push({ ...event });
+    return result;
+  };
+  try {
+    Math.random = () => 0.5;
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]);
+    ticks(20);
+    assert.ok(f.player.getInventory().getAmount(core.ItemIdentifiers.RAW_TETRA)
+      + f.player.getInventory().getAmount(core.ItemIdentifiers.RAW_CATFISH) > 0);
+    assert.ok(seen.length > 0, 'actual landed catch invokes ClueBottles producer');
+    assert.ok(seen.every(event => event.vessel === 'bottle' && event.multiplier > 1));
+    const insideRolls = seen.length;
+    // Negative scope fixture: relocate this owned NPC, not a claim of a retail spawn outside the ruins.
+    const outsideNpc = new core.Location(3222, 3218, 0);
+    core.RegionManager.loadMapFiles(3222, 3218);
+    const outsideShore = [[3223,3218],[3221,3218],[3222,3219],[3222,3217]]
+      .map(([x,y]) => new core.Location(x,y,0)).find(tile => !core.RegionManager.blocked(tile, null));
+    assert.ok(outsideShore);
+    npc.moveTo(outsideNpc); f.player.moveTo(outsideShore); ticks(3);
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]); ticks(20);
+    const outsideRolls = seen.slice(insideRolls);
+    assert.ok(outsideRolls.length > 0, 'same native producer runs outside the buff area');
+    assert.ok(outsideRolls.every(event => event.multiplier === 1), 'Camdozaal Luck does not affect outside catches');
+  } finally { PM.emitCustomEvent = emit; Math.random = random; }
 });

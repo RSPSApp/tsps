@@ -20,7 +20,7 @@ function hasHammer(player) {
   return player.getInventory().contains(S.core().ItemIdentifiers.HAMMER)
     || HAMMERS.some(name => {
       const id = S.core().CacheDefinitions.getObjId(name);
-      return Number.isInteger(id) && player.getEquipment().contains(id);
+      return Number.isInteger(id) && (player.getInventory().contains(id) || player.getEquipment().contains(id));
     });
 }
 function canCrush(player) {

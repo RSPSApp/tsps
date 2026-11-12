@@ -127,7 +127,7 @@ class FishingTool {
     id, level, animation, loopAnimation = animation, catchAnimation = null, fish, variants, bait = [], worn = [], quest = null, multi = false,
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
     vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
-    noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null, barehand = false,
+    noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null, barehand = false, clueBase = null,
   }) {
     this.id = id;
     this.level = level;
@@ -143,6 +143,7 @@ class FishingTool {
     this.requires = requires;
     this.interval = interval;
     this.firstRoll = firstRoll;
+    this.clueBase = clueBase;
     this.animateOnRoll = animateOnRoll;
     this.unboostable = unboostable;
     this.spot = spot;
@@ -854,7 +855,7 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   // The park uses its own base even though its successful catches are labelled junk.
   if (spotId !== NpcIds.FISHING_SPOT_43) {
     const clueFish = landed.find(({ kind }) => CLUE_BOTTLE_FISH.has(kind))?.kind;
-    const clueBase = landed.length && tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase;
+    const clueBase = landed.length ? tool.clueBase ?? (tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase) : null;
     if (clueBase > 0) ClueBottles.rollClueBottles(player, clueBase);
   }
 

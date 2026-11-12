@@ -63,7 +63,12 @@ Boost's additional 5% roll factor is estimated. No displayed skill level changes
 Luck uses the published inverse-denominator example (500 becomes 475); combining
 Luck and Boost as a ten-percent denominator reduction is an explicit inference.
 Fishing's three-shard common outcome uses an estimated 1/5 replacement weight;
-the handle uses the published 1/512 base chance.
+the handle uses the published 1/512 base chance. Big-net catches reach the existing
+clue-bottle producer with an estimated 100,000 base (the Wiki lists bottle tiers but
+no complete base-rate chart); this is independent of the unknown Heron pet base.
+Below each published no-ruin level, preparation retains at least a 1/256 ruin
+chance, so the estimated additive curve cannot guarantee guppies at level 34/35
+when the permanent buff's published boundary is 36.
 
 Deposit rates are incomplete approximate observations, not an exhaustive normalized
 table. Let `K = 1/200 + 5/350`. The implementation anchors the head and each relic's

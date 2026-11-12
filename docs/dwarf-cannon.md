@@ -62,6 +62,7 @@ Only changed vars are sent, as in the capture; all of them are sent again on log
 - **Targets:**
   - in singles, only what fights the owner or nothing at all, and only while the owner isn't fighting something else; in multi, anything attackable;
   - never sand crabs, ammonite crabs, demonic gorillas, kurasks, the Mage Arena's battle mages or Kolodion (Wiki: "The cannon no longer works on the Mage Arena mages and Kolodion");
+  - never a sea creature (the Sailing creatures in `sea-combat.json`; Wiki, 18 March 2026: "The dwarf multicannon no longer fires at sea creatures.");
   - in line of sight from the cannon's footprint.
   - **Ours:** a target fighting the owner first, otherwise the nearest.
 - **Granite:** granite balls load first, and steel only once the granite is used up. Granite fires first (projectile 1443).
@@ -141,6 +142,6 @@ A further **18 previously missing outlines** are now supported:
 These four remain listed without guessed rectangles. Older imported Near-Reality outlines also retain their explicit unverified provenance.
 
 ## Follow-ups
-- not yet done, from the Wiki: a Forestry event spawning where the cannon stands decays it; the Kalphite Queen, King Black Dragon, thermonuclear smoke devil, God Wars Dungeon inhabitants and the Giant Roc destroy cannons; the cannon no longer fires at sea creatures; a very low accuracy bonus can deal 1 instead of 0;
+- not yet done, from the Wiki: a Forestry event spawning where the cannon stands decays it; the Kalphite Queen, King Black Dragon, thermonuclear smoke devil, God Wars Dungeon inhabitants and the Giant Roc destroy cannons; a very low accuracy bonus can deal 1 instead of 0;
 - the four unsupported active outlines listed above, and independent verification of older imported outlines;
 - the real messages for the parts marked "ours".

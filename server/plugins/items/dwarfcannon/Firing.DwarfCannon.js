@@ -8,6 +8,7 @@ const Cannon = require("./Common.DwarfCannon");
 const Data = require("./Data.DwarfCannon");
 const Ammo = require("./Ammo.DwarfCannon");
 const Decay = require("./Decay.DwarfCannon");
+const SeaCombat = require("../../skills/sailing/seacombat/Common.SeaCombat");
 
 /** Captured once (rsprox 1510), red. */
 const OUT_OF_AMMO = "<col=ef1020>Your cannon is out of ammo.</col>";
@@ -109,6 +110,8 @@ function canTarget(owner, npc) {
   const definition = npc.getDefinition();
   if (!definition?.getActions?.()?.includes("Attack")) return false;
   if (Data.NO_CANNON_NPCS.includes(definition.getName())) return false;
+  // Wiki (Dwarf multicannon, 18 March 2026): "no longer fires at sea creatures".
+  if (SeaCombat.creatureOf(npc)) return false;
   if (npc.getTimers().has(TimerKey.ATTACK_IMMUNITY)) return false;
   if (!CombatFactory.multiCombatBetween(owner, npc)) {
     const ownerFoe = owner.getCombat().getAttacker();

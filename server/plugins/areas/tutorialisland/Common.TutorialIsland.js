@@ -72,8 +72,14 @@ function init(pluginApi) {
   core = pluginApi.core;
 }
 
-/** Progress, migrating a legacy stage index the first time it is read. -1 when never started. */
+/** League characters have their own onboarding, even before LeagueMode's login hook runs. */
+function appliesTo(player) {
+  return player?.getProfile?.() !== "league";
+}
+
+/** Progress, migrating a legacy stage index the first time it is read. -1 when not participating. */
 function progress(player) {
+  if (!appliesTo(player)) return -1;
   const value = Number(player.getAttribute(PROGRESS_ATTRIBUTE));
   if (Number.isFinite(value)) return value | 0;
   const legacy = Number(player.getAttribute(LEGACY_STAGE_ATTRIBUTE));
@@ -184,7 +190,7 @@ function showBoxes(player, boxes, then) {
 
 module.exports = {
   init, data, STEP, ORDER, IDS, NPCS, PROGRESS_ATTRIBUTE, LEGACY_STAGE_ATTRIBUTE, EXPERIENCE_ATTRIBUTE, BANK_COINS_ATTRIBUTE, giveBankCoins,
-  progress, isActive, setProgress, advance, advanceFrom, onStep, step,
+  appliesTo, progress, isActive, setProgress, advance, advanceFrom, onStep, step,
   inTutorial, atTutorial, hasItem, worn, pronoun, later, showBoxes,
   get api() { return api; },
   get core() { return core; },

@@ -2076,3 +2076,19 @@ the loc exists.
 The cache's "League Skill Cape Shop" (652) is not a shop: its only script (3201) creates 22 tiny
 cape items and prints "Loading: <cape>" for each, a model preloader. Nothing sells through it, and
 the Wiki names no such shop.
+
+When Tutorial Island is enabled on the same world, league character profiles use the league's
+onboarding only. The profile is selected before login hooks run; Tutorial Island neither starts
+nor resumes on that profile, including old saves with island progress. Main characters still
+use Tutorial Island normally. This keeps the quest journal mounted for the league tutorial's
+Open the Leagues Menu step, including after the welcome screen rebuilds the gameframe.
+
+The separate Leagues VI Yama's Lair plays **Sign Here** (Wiki
+[Yama's Lair](https://oldschool.runescape.wiki/w/Yama%27s_Lair), cache song 280).
+`YamaLair.LeagueAreaUnlocks.js` supplies the existing area's music policy for plane 0 of cache
+map square 5975, including the recorded start (1503, 5602) and League Home Teleport landing
+(1502, 5592). The whole map square is used as the isolated lair's boundary; the Wiki names the
+music but does not draw a music polygon for this copy. The session owns unlocking and playback,
+so relog/return work and manual music modes remain respected. The generated Modern and Classic
+Wiki music maps are unchanged. The regression records server music output and unlock bits;
+it does not establish client audio rendering or a natural end-to-end World login playthrough.

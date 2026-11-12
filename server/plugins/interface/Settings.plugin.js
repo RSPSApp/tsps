@@ -25,6 +25,14 @@ const XPDROPS_ORB_COMPONENTS = ["orbs:xp_drops", "orbs_osm:xp_drops"];
 const XPDROPS_OVERLAY_UID = (ROOT_INTERFACE << 16) | 9; // toplevel_osrs_stretch:xp_drops
 const XPDROPS_INTERFACE_ID = 122;
 const XPDROPS_SETUP_INTERFACE_ID = 137;
+// CS2 1010 builds the skill picker under child 18; Configure is op1 on each dynamic row.
+const XPDROPS_SKILL_PICKER_BUTTON = (XPDROPS_SETUP_INTERFACE_ID << 16) | 18;
+const XPDROPS_SKILL_PICKER_ACTION = 1;
+const XPDROPS_SKILL_PICKER_TOTAL_SLOT = 24;
+const XPDROPS_SKILL_ENUM = 681;
+const XPDROPS_SETUP_STATE_VARP = 638; // cache CS2 1010 onVarTransmit
+const XPDROPS_SETUP_SKILL_VARBIT = 4703; // xpdrops_setup_skill
+const XPDROPS_SETUP_STATE_MASK = 0x3f800000; // varbits 4703 and 4704, bits 23-29
 const XPDROPS_ENABLED_VARBIT = 4702;
 // XP drops setup: each dropdown's option rows are created in a list component paired with its
 // header (scripts 1010, 1030, 1031), and the cache's script 1036 sets that dropdown's varbit to
@@ -44,6 +52,21 @@ const XPDROPS_SETUP_MAX_ROW = 31;
 // The varps behind them, saved as whole values: the browser transmits them, the official client
 // only reports the row it chose.
 const XPDROPS_SETUP_ATTRIBUTE = "settings:xpdrops-setup";
+// Cache CS2 1002, indexed by the client skill id; its second varp for each skill is +24.
+const XPDROPS_TRACKER_START_VARPS = [1229, 1233, 1230, 1234, 1231, 1235, 1232, 1244, 1246, 1247, 1243, 1245, 1239, 1242, 1241, 1237, 1236, 1238, 1248, 1249, 1240, 1251, 1250, 4964];
+const XPDROPS_TRACKER_TOTAL_START_VARP = 1228;
+const XPDROPS_TRACKER_TOTAL_END_VARP = 1252;
+const XPDROPS_TRACKER_END_OFFSET = 24;
+const XPDROPS_TRACKER_TOTAL_MAX_XP = 0x7fffffff;
+// Cache group 137:30 is Tracker start, 38 Goal start, and 42 Goal end.
+const XPDROPS_TRACKER_FIELDS = new Map([
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 30, "start"],
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 38, "start"],
+  [(XPDROPS_SETUP_INTERFACE_ID << 16) | 42, "end"],
+]);
+// The widgets' cache actions: option 7 is “Set to XP value”; option 10 is “Set to current XP”.
+const XPDROPS_SET_XP_ACTION = 7;
+const XPDROPS_SET_CURRENT_XP_ACTION = 10;
 
 // The side panel's volume sliders: the cache's scripts (9232, 9238, 9244, 9250) set the varp in
 // the client, then trigger the slider's op (if_triggeroplocal) with the new volume when it is
@@ -983,12 +1006,19 @@ function toggleMute({ player, buttonId }) {
 let xpDropsVarps = null;
 
 function xpDropsSetupVarps() {
-  xpDropsVarps ??= new Set([...XPDROPS_SETUP_DROPDOWNS.values()].map((varbit) => CacheDefinitions.getVarbit(varbit).baseVar));
+  xpDropsVarps ??= new Set([
+    XPDROPS_SETUP_STATE_VARP,
+    ...[...XPDROPS_SETUP_DROPDOWNS.values()].map((varbit) => CacheDefinitions.getVarbit(varbit).baseVar),
+    ...Array.from({ length: 48 }, (_, index) => index + 1228),
+    4964,
+    4965,
+  ]);
   return xpDropsVarps;
 }
 
 function saveXpDropsSetup(player, varpId, value) {
-  player.setAttribute(XPDROPS_SETUP_ATTRIBUTE, { ...(player.getAttribute(XPDROPS_SETUP_ATTRIBUTE) ?? {}), [varpId]: value | 0 });
+  const savedValue = varpId === XPDROPS_SETUP_STATE_VARP ? value & XPDROPS_SETUP_STATE_MASK : value | 0;
+  player.setAttribute(XPDROPS_SETUP_ATTRIBUTE, { ...(player.getAttribute(XPDROPS_SETUP_ATTRIBUTE) ?? {}), [varpId]: savedValue });
 }
 
 function restoreXpDropsSetup({ player }) {
@@ -996,11 +1026,16 @@ function restoreXpDropsSetup({ player }) {
   if (!saved || typeof saved !== "object") return;
   const varps = xpDropsSetupVarps();
   for (const [varpId, value] of Object.entries(saved)) {
-    if (varps.has(Number(varpId)) && Number.isInteger(value)) player.getPacketSender().sendConfig(Number(varpId), value);
+    const id = Number(varpId);
+    if (!varps.has(id) || !Number.isInteger(value)) continue;
+    const restored = id === XPDROPS_SETUP_STATE_VARP
+      ? (player.getPacketSender().getVarp(id) & ~XPDROPS_SETUP_STATE_MASK) | (value & XPDROPS_SETUP_STATE_MASK)
+      : value;
+    player.getPacketSender().sendConfig(id, restored);
   }
 }
 
-/** The browser applies the setup itself and transmits the varp; keep it for the next login. */
+/** The cache applies setup changes and transmits the varp; keep them for the next login. */
 function transmitXpDropsSetup(transmission) {
   const { player, varpId, value } = transmission;
   if (!xpDropsSetupVarps().has(varpId)) return;
@@ -1018,6 +1053,73 @@ function chooseXpDropsSetupRow({ player, buttonId, slot }) {
   sender.sendVarbit(varbit, slot - 1);
   const varpId = CacheDefinitions.getVarbit(varbit).baseVar;
   saveXpDropsSetup(player, varpId, sender.getVarp(varpId));
+  return true;
+}
+
+function xpDropsTrackerVarps(skillId) {
+  if (skillId === -1) return [XPDROPS_TRACKER_TOTAL_START_VARP, XPDROPS_TRACKER_TOTAL_END_VARP];
+  const start = XPDROPS_TRACKER_START_VARPS[skillId];
+  if (!Number.isInteger(start)) return null;
+  return [start, skillId === 23 ? 4965 : start + XPDROPS_TRACKER_END_OFFSET];
+}
+
+function setXpDropsTrackerValue(player, varpId, value) {
+  const maxXp = varpId === XPDROPS_TRACKER_TOTAL_START_VARP || varpId === XPDROPS_TRACKER_TOTAL_END_VARP
+    ? XPDROPS_TRACKER_TOTAL_MAX_XP
+    : pluginApi.core.SkillManager.MAX_EXPERIENCE;
+  const bounded = Math.max(0, Math.min(maxXp, Math.trunc(Number(value) || 0)));
+  player.getPacketSender().sendConfig(varpId, bounded);
+  saveXpDropsSetup(player, varpId, bounded);
+}
+
+function currentXpForTracker(player, skillId) {
+  const manager = player.getSkillManager();
+  if (skillId === -1) {
+    return pluginApi.core.Skill.values().reduce((total, skill) => total + manager.getExperience(skill), 0);
+  }
+  const skill = pluginApi.core.Skill.values().find((entry) => entry.getClientId() === skillId);
+  return skill ? manager.getExperience(skill) : null;
+}
+
+/** The native cache picker sends IF_BUTTONX on 137:18, with its dynamic row in `slot`. */
+function chooseXpDropsSetupSkill(event) {
+  const { player, slot } = event;
+  if (event.buttonId !== XPDROPS_SKILL_PICKER_BUTTON || event.action !== XPDROPS_SKILL_PICKER_ACTION) return false;
+  if (!Number.isInteger(slot) || slot < 0 || slot > XPDROPS_SKILL_PICKER_TOTAL_SLOT) return false;
+  const clientSkillId = slot === XPDROPS_SKILL_PICKER_TOTAL_SLOT
+    ? -1
+    : CacheDefinitions.getEnumValues(XPDROPS_SKILL_ENUM).get(slot + 1);
+  if (!Number.isInteger(clientSkillId)) return false;
+
+  const sender = player.getPacketSender();
+  sender.sendVarbit(XPDROPS_SETUP_SKILL_VARBIT, clientSkillId + 1);
+  saveXpDropsSetup(player, XPDROPS_SETUP_STATE_VARP, sender.getVarp(XPDROPS_SETUP_STATE_VARP));
+  return true;
+}
+
+/** Native setup-menu option: ask for XP or copy the selected skill's current XP into its goal. */
+function xpDropsTrackerFieldClick(event) {
+  const field = XPDROPS_TRACKER_FIELDS.get(event.buttonId);
+  if (!field || (event.action !== XPDROPS_SET_XP_ACTION && event.action !== XPDROPS_SET_CURRENT_XP_ACTION)) return false;
+  if (event.action === XPDROPS_SET_CURRENT_XP_ACTION && (field !== "start" || event.childId === 42)) return false;
+
+  const selectedSkill = event.player.getPacketSender().getVarbit(XPDROPS_SETUP_SKILL_VARBIT) - 1;
+  const varps = xpDropsTrackerVarps(selectedSkill);
+  if (!varps) return false;
+  const targetVarp = field === "start" ? varps[0] : varps[1];
+  if (event.action === XPDROPS_SET_CURRENT_XP_ACTION) {
+    const experience = currentXpForTracker(event.player, selectedSkill);
+    if (!Number.isInteger(experience)) return false;
+    setXpDropsTrackerValue(event.player, targetVarp, experience);
+    return true;
+  }
+
+  const { player } = event;
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute: (amount) => setXpDropsTrackerValue(player, targetVarp, amount),
+  });
+  player.getPacketSender().sendEnterAmountPrompt("Enter the XP value:");
   return true;
 }
 
@@ -1134,6 +1236,8 @@ module.exports = {
     api.onPlayerLogin(restoreXpDropsSetup);
     api.onCustomEvent("player:varp-transmit", handleSettingsVarpTransmit);
     api.onInterfaceActionButton([...XPDROPS_SETUP_DROPDOWNS.keys()], chooseXpDropsSetupRow);
+    api.onInterfaceActionClick(chooseXpDropsSetupSkill);
+    api.onInterfaceActionClick(xpDropsTrackerFieldClick);
     api.onInterfaceActionButton([...VOLUME_SLIDER_VARPS.keys()], releaseVolumeSlider);
     api.onInterfaceActionButton([...VOLUME_MUTE_BUTTONS.keys()], toggleMute);
     api.onPlayerLogin(enableVolumeSlidersLater);

@@ -7,6 +7,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test, mock } = require("node:test");
+process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");

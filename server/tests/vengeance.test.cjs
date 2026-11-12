@@ -463,3 +463,64 @@ test('the blighted teleport sack only pays in the Wilderness and Bounty Hunter (
   const player = sackCaster({ x: 2539, y: 4712, item: 'BLIGHTED_ANCIENT_ICE_SACK', book: ice.getSpellbook() });
   assert.equal(ice.canCast(player, true), true);
 });
+
+// ---- Monsters immune to recoil (Wiki: Category:Monsters immune to recoil, "immune to recoil effects
+// such as ring of recoil and vengeance"). rsprox_transcripts/237/01148.txt: The Nightmare's 3 sets
+// vengeance off ("Taste vengeance!", vengeance_rebound 1 -> 0) and no rebound reaches it; a
+// Kalphite's 4 in 227/01864.txt rebounds 3.
+
+let reboundCycle = 1_000_000;
+function reboundFight(npcId, npcIndex) {
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const { CombatType } = require("../dist/game/content/combat/CombatType");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { Location } = require("../dist/game/model/Location");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel), new Location(3222, 3218));
+  player.setIndex(npcIndex + 1);
+  player.setUsername(`venger${npcIndex}`);
+  player.setRegistered(true);
+  player.setNeedsPlacement(false);
+  player.setHitpoints(99);
+  player.setHasVengeance(true);
+  const npc = NPC.create(npcId, new Location(3223, 3218));
+  npc.setIndex(npcIndex);
+  npc.setRegistered(true);
+  npc.setHitpoints(500);
+  const hit = new PendingHit(npc, player, { type: () => CombatType.MELEE, accuracyDefenceType: () => undefined },
+    { damage: 40, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+  CombatFactory.executeHit(hit);
+  player.getCombat().getHitQueue().process(++reboundCycle);
+  npc.getCombat().getHitQueue().process(++reboundCycle);
+  return { player, npc, done: () => { player.setRegistered(false); npc.setRegistered(false); } };
+}
+
+test("vengeance goes off against a monster immune to recoil but deals it nothing; others take 75%", () => {
+  require("../plugins/items/RingOfRecoil.plugin").register(PluginManager.createApi("VengeanceRecoilImmunity"));
+  const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+
+  for (const [name, id] of [["Nex", NpcIdentifiers.NEX], ["Vorkath", NpcIdentifiers.VORKATH]]) {
+    const { player, npc, done } = reboundFight(id, 3100);
+    try {
+      assert.equal(npc.getCurrentDefinition().getName(), name);
+      assert.equal(player.getHitpoints(), 99 - 40, `${name}'s hit lands`);
+      assert.equal(player.getForcedChat(), "Taste vengeance!", `vengeance still goes off against ${name}`);
+      assert.equal(player.hasVengeanceReturn(), false, `and is spent against ${name}`);
+      assert.equal(npc.getHitpoints(), 500, `${name} takes no rebound`);
+    } finally {
+      done();
+    }
+  }
+
+  const { player, npc, done } = reboundFight(NpcIdentifiers.MAN, 3110);
+  try {
+    assert.equal(player.getForcedChat(), "Taste vengeance!");
+    assert.equal(player.hasVengeanceReturn(), false);
+    assert.equal(npc.getHitpoints(), 500 - 30, "75% of 40 rebounds onto a monster that is not immune");
+  } finally {
+    done();
+  }
+});

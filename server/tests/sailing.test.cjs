@@ -2031,6 +2031,118 @@ test("a tool already in the tools compartment is not stored again, so a second c
   }
 });
 
+test("Deposit inventory with nothing storable says so, with the refusal sound", () => {
+  const h = holdHarness();
+  try {
+    h.give(8794); // a saw: the hold can't store it
+    h.open();
+    h.click(943, 15, 1);
+    assert.equal(h.player.messages.at(-1), "You have nothing suitable to deposit.");
+    assert.equal(h.sent.sounds.at(-1), 2277);
+    assert.equal(h.player.getInventory().getAmount(8794), 1);
+  } finally {
+    h.done();
+  }
+});
+
+test("taking a tool with no room names the slots needed and plays the refusal sound", () => {
+  const h = holdHarness();
+  try {
+    h.give(31803); // spyglass
+    h.give(7534);
+    h.give(7535);
+    h.open();
+    h.click(943, 15, 1);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 4]);
+    h.give(2, 1);
+    for (let i = 0; h.player.getInventory().getFreeSlots() > 0; i++) h.give(31964);
+    h.click(943, 18, 1, 1);
+    assert.equal(h.player.messages.at(-1), "You need one free slot to take a spyglass from the tools compartment.");
+    assert.equal(h.sent.sounds.at(-1), 2277);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 4], "the spyglass stays in the compartment");
+
+    h.player.getInventory().delete(31964, 1);
+    h.click(943, 18, 1, 4);
+    assert.equal(h.player.messages.at(-1), "You need two free slots to take some diving gear from the tools compartment.");
+    h.click(943, 18, 1, 1);
+    assert.equal(h.player.getInventory().getAmount(31803), 1, "one free slot is enough for the spyglass");
+  } finally {
+    h.done();
+  }
+});
+
+test("the crowbar can't be taken while one is carried; other tools can", () => {
+  const h = holdHarness();
+  try {
+    h.give(31807); // crowbar
+    h.give(31803); // spyglass
+    h.open();
+    h.click(943, 15, 1);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 3]);
+    h.give(31807);
+    h.give(31803);
+    h.click(943, 18, 1, 3);
+    assert.equal(h.player.messages.at(-1), "You already have a crowbar in your inventory.");
+    assert.equal(h.sent.sounds.at(-1), 2277);
+    assert.equal(h.player.getInventory().getAmount(31807), 1);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 3]);
+    h.click(943, 18, 1, 1);
+    assert.equal(h.player.getInventory().getAmount(31803), 2, "a carried spyglass doesn't stop taking the stored one");
+  } finally {
+    h.done();
+  }
+});
+
+test("each part of diving gear goes in on its own click, and only the stored parts come back", () => {
+  const h = holdHarness();
+  try {
+    h.give(7534); // helmet
+    h.give(7535); // apparatus
+    h.open();
+    h.click(944, 1, 1, h.slotOf(7534), 7534);
+    assert.equal(h.player.getInventory().getAmount(7534), 0, "the helmet goes in");
+    assert.equal(h.player.getInventory().getAmount(7535), 1, "the apparatus stays");
+    assert.deepEqual(h.player.getSailing().tools, [4]);
+    assert.deepEqual(h.player.getSailing().missingToolParts, [7535]);
+
+    const saved = normalizeSailingState(JSON.parse(JSON.stringify(h.player.getSailing())));
+    assert.deepEqual(saved.missingToolParts, [7535], "the missing part is saved");
+
+    h.click(943, 18, 1, 4);
+    assert.equal(h.player.getInventory().getAmount(7534), 1, "only the helmet comes back");
+    assert.equal(h.player.getInventory().getAmount(7535), 1);
+    assert.deepEqual(h.player.getSailing().tools, []);
+    assert.equal(h.player.getSailing().missingToolParts, undefined);
+
+    h.click(944, 1, 1, h.slotOf(7535), 7535);
+    h.click(944, 1, 1, h.slotOf(7534), 7534);
+    assert.equal(h.player.getInventory().getAmount(7534) + h.player.getInventory().getAmount(7535), 0);
+    assert.equal(h.player.getSailing().missingToolParts, undefined, "both parts stored");
+    h.click(943, 18, 1, 4);
+    assert.equal(h.player.getInventory().getAmount(7534) + h.player.getInventory().getAmount(7535), 2);
+    assert.equal(normalizeSailingState(JSON.parse(JSON.stringify(h.player.getSailing()))).missingToolParts, undefined);
+  } finally {
+    h.done();
+  }
+});
+
+test("the stack toggle flips cargo_hold_draw_stacked, and the hold remembers it", () => {
+  const h = holdHarness();
+  try {
+    h.open();
+    assert.equal(h.sent.varbits.get(19592), 0);
+    h.click(943, 3, 1);
+    assert.equal(h.sent.varbits.get(19592), 1);
+    h.sent.varbits.clear();
+    h.open();
+    assert.equal(h.sent.varbits.get(19592), 1, "sent again on opening");
+    h.click(943, 3, 1);
+    assert.equal(h.sent.varbits.get(19592), 0);
+  } finally {
+    h.done();
+  }
+});
+
 test("Deposit Cargo and Deposit Salvage only take their own items", () => {
   const h = holdHarness();
   try {

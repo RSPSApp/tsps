@@ -479,8 +479,8 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 - **Refused:** "The cargo hold cannot store that item." (game message).
 - **Deposit buttons** (943:13 Cargo, 14 Salvage, 15 Inventory):
   - Deposit Inventory moves everything storable, with sound 10905.
-  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit.", with sound 2277.
-- **Item stacking:** the "Item stacking" toggle (varbit 19592) sends nothing to the server. It only changes how the client draws the hold.
+  - With nothing to move: "You have no cargo to deposit." / "You have no salvage to deposit." / "You have nothing suitable to deposit." (Inventory), with sound 2277.
+- **Item stacking:** the toggle (943:3, op 1) is a button: the server flips `cargo_hold_draw_stacked` (varbit 19592) a tick later. It only changes how the client draws the hold.
 - **Warning:** "Dismiss" (944:8) sets varbit 19123 and hides the warning on the side panel.
 
 **The tools compartment:** shared by all your boats, and taking no space. Taking a tool is op 1 on 943:18, with sound 2582.
@@ -489,11 +489,17 @@ Craft-repair-kits opening their menu straight away (added 11 March 2026, after t
 | --- | --- | --- | --- |
 | 0 | Captain's log | 31986 | You collect your captain's log from the tools compartment. |
 | 1 | Spyglass | 31803 | You collect a spyglass from the tools compartment. |
-| 2 | Current duck | 31805 | not captured |
-| 3 | Crowbar | 31807 | not captured |
+| 2 | Current duck | 31805 | You collect your current duck from the tools compartment. |
+| 3 | Crowbar | 31807 | You collect a crowbar from the tools compartment. |
 | 4 | Diving gear | 7534 + 7535 | You collect some diving gear from the tools compartment. |
 
-Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment.
+Depositing a tool, by Deposit Inventory or singly, puts it back in the compartment, with no message or sound. Each part of diving gear is deposited on its own click (the other part stays in the pack).
+
+Refusals, each with sound 2277:
+- No room: "You need one free slot to take a spyglass from the tools compartment." (one recording).
+- The crowbar while carrying one: "You already have a crowbar in your inventory." (one recording).
+- A current duck still out at sea: "You have a current duck out at sea. Either find it or wait # seconds to collect another."
+
 
 **Tool unlocks:** script 9138 shows a tool only once its quest progress is reached. The captain's log always shows.
 
@@ -514,8 +520,9 @@ Depositing a tool, by Deposit Inventory or singly, puts it back in the compartme
 | Recovery | dialogue (Junior Jim) | All done! The boat is now docked here at the Pandemonium. |
 | Hull upgrade | message box | With the help of some workers, you swap out the hull of your boat. |
 | Cargo hold | game | The cargo hold cannot store that item. |
-| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. |
-| Tools compartment | game | You collect your captain's log / a spyglass / some diving gear from the tools compartment. |
+| Cargo hold | game | You have no cargo to deposit. / You have no salvage to deposit. / You have nothing suitable to deposit. |
+| Tools compartment | game | You collect your captain's log / a spyglass / your current duck / a crowbar / some diving gear from the tools compartment. |
+| Tools compartment | game | You need one free slot to take a spyglass from the tools compartment. / You already have a crowbar in your inventory. |
 
 ## Where tsps differs
 

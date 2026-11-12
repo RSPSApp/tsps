@@ -20,6 +20,7 @@ const MAIN_MODAL = (161 << 16) | 16;
 const SIDE_MODAL = (161 << 16) | 74;
 const uid = (group, child) => (group << 16) | child;
 const HOLD_FRAME = uid(HOLD, 1);
+const TOGGLE_STACKS = 3;
 const HOLD_CAPACITY = uid(HOLD, 5);
 const HOLD_ITEMS = 10;
 const DEPOSIT_CARGO = 13;
@@ -37,8 +38,11 @@ const VARP_CARGO_INVENTORY = 5204;
 const VARP_SIDE_WHITELIST = 5205;
 const VARBIT_QUANTITY_MODE = 4430;
 const VARBIT_WARNING_DISMISSED = 19123;
+/** cargo_hold_draw_stacked: the hold's grid draws each item's stack in one slot. */
+const VARBIT_DRAW_STACKED = 19592;
 const QUANTITY_ATTRIBUTE = "sailing:cargo-quantity-mode";
 const WARNING_ATTRIBUTE = "sailing:cargo-warning-dismissed";
+const STACKED_ATTRIBUTE = "sailing:cargo-draw-stacked";
 
 const SOUND_OPEN = 10907;
 const SOUND_DEPOSIT_ALL = 10905;
@@ -108,6 +112,14 @@ function openHold({ player }) {
   sender.sendInterfaceScript(SCRIPT_STEELBORDER, [HOLD_FRAME, `Cargo Hold: ${boatName(boat)}`]);
   setVarbit(player, VARBIT_QUANTITY_MODE, quantityMode(player));
   setVarbit(player, VARBIT_WARNING_DISMISSED, player.getAttribute?.(WARNING_ATTRIBUTE) ? 1 : 0);
+  setVarbit(player, VARBIT_DRAW_STACKED, player.getAttribute?.(STACKED_ATTRIBUTE) ? 1 : 0);
+}
+
+/** The stack toggle flips how the hold's grid is drawn; the hold itself is unchanged. */
+function toggleStacks(player) {
+  const stacked = !player.getAttribute?.(STACKED_ATTRIBUTE);
+  player.setAttribute?.(STACKED_ATTRIBUTE, stacked);
+  setVarbit(player, VARBIT_DRAW_STACKED, stacked ? 1 : 0);
 }
 
 /**
@@ -207,7 +219,7 @@ function deposit(player, slot, itemId, amount) {
     return;
   }
   if (cargo.toolFor(itemId)) {
-    storeTool(player, cargo.toolFor(itemId));
+    storeTool(player, cargo.toolFor(itemId), itemId);
   } else {
     storeItem(player, boat, itemId, amount);
   }
@@ -226,29 +238,66 @@ function storeItem(player, boat, itemId, amount) {
 
 /** How a tool is named in the compartment's lines: "a spyglass", "your current duck", "some diving gear". */
 function toolText(tool) {
-  return { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 4: "some diving gear" }[tool.slot]
+  return { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 3: "a crowbar", 4: "some diving gear" }[tool.slot]
     ?? `a ${ItemDefinition.forId(tool.give[0])?.getName?.()?.toLowerCase?.() ?? "tool"}`;
 }
 
+/** Parts of a stored multi-part tool (diving gear's helmet and apparatus) that are not in the compartment. */
+function missingParts(player) {
+  return player.getSailing().missingToolParts ?? [];
+}
+
+/** The items a tool's compartment slot holds now: every part, unless some were stored alone. */
+function storedParts(player, tool) {
+  if (!player.getSailing().tools.includes(tool.slot)) return [];
+  const missing = missingParts(player);
+  return tool.give.filter((id) => !missing.includes(id));
+}
+
+function setMissing(player, ids, isMissing) {
+  const sailing = player.getSailing();
+  const missing = new Set(missingParts(player));
+  for (const id of ids) isMissing ? missing.add(id) : missing.delete(id);
+  if (missing.size > 0) sailing.missingToolParts = [...missing];
+  else delete sailing.missingToolParts;
+}
+
 /**
- * Puts a tool in the tools compartment; diving gear needs both parts. The compartment holds one of each and
- * remembers only which are in it, so a second copy is refused rather than deleted (message not captured).
+ * Puts the clicked item in the tools compartment. Each part of diving gear goes in on its own. The
+ * compartment holds one of each and remembers only which are in it, so a second copy is refused
+ * rather than deleted (ours: that line).
  */
-function storeTool(player, tool) {
+function storeTool(player, tool, itemId) {
   const inventory = player.getInventory();
-  if (player.getSailing().tools.includes(tool.slot)) {
+  const tools = player.getSailing().tools;
+  if (tool.give.length > 1) {
+    if (!tool.give.includes(itemId) || !inventory.contains(itemId)) return false;
+    if (storedParts(player, tool).includes(itemId)) {
+      player.sendMessage(`You already have ${toolText(tool)} in your tools compartment.`);
+      return false;
+    }
+    if (!tools.includes(tool.slot)) {
+      tools.push(tool.slot);
+      setMissing(player, tool.give, true);
+    }
+    inventory.delete(itemId, 1);
+    setMissing(player, [itemId], false);
+    return true;
+  }
+  if (tools.includes(tool.slot)) {
     player.sendMessage(`You already have ${toolText(tool)} in your tools compartment.`);
     return false;
   }
-  const held = tool.accept.filter((id) => inventory.contains(id));
-  if (tool.give.length > 1 && !tool.give.every((id) => inventory.contains(id))) {
-    player.sendMessage(CANNOT_STORE);
-    return false;
-  }
-  for (const id of tool.give.length > 1 ? tool.give : held.slice(0, 1)) inventory.delete(id, 1);
-  const tools = player.getSailing().tools;
-  if (!tools.includes(tool.slot)) tools.push(tool.slot);
+  const held = tool.accept.find((id) => inventory.contains(id));
+  if (held === undefined) return false;
+  inventory.delete(held, 1);
+  tools.push(tool.slot);
   return true;
+}
+
+function refuse(player, message) {
+  playSound(player, SOUND_NOTHING);
+  player.sendMessage(message);
 }
 
 function takeTool(player, slot) {
@@ -259,12 +308,18 @@ function takeTool(player, slot) {
   pluginApi.emitCustomEvent("sailing:can-take-tool", request);
   if (request.allowed === false) return;
   const inventory = player.getInventory();
-  if (inventory.getFreeSlots() < tool.give.length) {
-    player.sendMessage("You don't have enough inventory space.");
-    return;
+  const parts = storedParts(player, tool);
+  if (tool.refuseIfHeld && tool.accept.some((id) => inventory.contains(id))) {
+    return refuse(player, `You already have ${toolText(tool)} in your inventory.`);
+  }
+  if (inventory.getFreeSlots() < parts.length) {
+    // Ours: the two-slot wording, for both parts of diving gear.
+    const slots = parts.length === 1 ? "one free slot" : "two free slots";
+    return refuse(player, `You need ${slots} to take ${toolText(tool)} from the tools compartment.`);
   }
   tools.splice(tools.indexOf(tool.slot), 1);
-  for (const id of tool.give) inventory.add(new Item(id, 1), true);
+  setMissing(player, tool.give, false);
+  for (const id of parts) inventory.add(new Item(id, 1), true);
   // rsprox: "You collect your current duck from the tools compartment."
   player.sendMessage(`You collect ${toolText(tool)} from the tools compartment.`);
   playSound(player, SOUND_TOOL);
@@ -280,14 +335,14 @@ function depositAll(player, category) {
   const ids = [...new Set(inventory.getItems().filter((item) => item && item.getId() >= 0).map((item) => item.getId()))]
     .filter((id) => category ? cargo.categoryOf(id) === category : cargo.isStorable(id));
   if (ids.length === 0) {
-    if (category) player.sendMessage(`You have no ${category} to deposit.`);
     playSound(player, SOUND_NOTHING);
+    player.sendMessage(category ? `You have no ${category} to deposit.` : "You have nothing suitable to deposit.");
     return;
   }
   for (const id of ids) {
     const tool = cargo.toolFor(id);
     if (tool) {
-      if (inventory.contains(id)) storeTool(player, tool);
+      if (inventory.contains(id)) storeTool(player, tool, id);
     } else {
       // Preset copies stay in the pack (the hold would hand them back plain); the plain ones go in.
       const plain = plainAmount(inventory, id);
@@ -323,6 +378,7 @@ function setQuantityMode(player, mode) {
 }
 
 function holdButton(player, childId, slot) {
+  if (childId === TOGGLE_STACKS) return toggleStacks(player);
   if (QUANTITY_BUTTON_MODES.has(childId)) return setQuantityMode(player, QUANTITY_BUTTON_MODES.get(childId));
   if (childId === DEPOSIT_INVENTORY) return depositAll(player, null);
   if (childId === DEPOSIT_SALVAGE) return depositAll(player, "salvage");
@@ -368,6 +424,7 @@ module.exports = {
     content();
     api.persistAttribute(QUANTITY_ATTRIBUTE);
     api.persistAttribute(WARNING_ATTRIBUTE);
+    api.persistAttribute(STACKED_ATTRIBUTE);
     for (const name of HOLD_NAMES) api.onObjectInteraction(name, HOLD_ACTIONS);
     api.onInterfaceActionClick(clickHold);
     api.onCustomEvent("sailing:cargo-changed", cargoChanged);

@@ -83,6 +83,7 @@ sailing: {
   activeBoatSlot: number | null; // the boat the player is aboard or last set sail in
   returnPoint: { x: number; y: number; level: number } | null; // last gangplank, mooring point or buoy
   tools: number[]; // tools compartment slots holding their tool, shared by all boats
+  missingToolParts?: number[]; // diving gear parts not stored, when only one part is in its slot
 }
 ```
 

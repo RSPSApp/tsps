@@ -169,6 +169,11 @@ class Game {
   eliminate(player) { this.fighters.delete(player); player.getCombat().reset(); }
   remove(player, logout) {
     if (!this.members.has(player)) return;
+    // A lethal hit queues its task before player:dying. Preserve safe-death
+    // ownership before any departure deletes membership, including match finish.
+    if (player.isDyingReturn() && !dying.has(player)) {
+      dying.set(player, { game: this, side: this.members.get(player) });
+    }
     this.eliminate(player);
     this.jailed.delete(player);
     this.members.delete(player);
@@ -185,11 +190,6 @@ class Game {
   }
   finish(winner) {
     if (this.phase === "over") return;
-    // Lethal hits enqueue death tasks before those tasks emit player:dying. A
-    // target reached by the first task must also protect the other queued deaths.
-    for (const [player, side] of this.members) {
-      if (player.isDyingReturn() && !dying.has(player)) dying.set(player, { game: this, side });
-    }
     this.phase = "over";
     this.task.stop();
     active.delete(this);

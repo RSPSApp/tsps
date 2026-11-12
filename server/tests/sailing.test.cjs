@@ -2390,7 +2390,7 @@ test("salvaging's hook tiers, success chance and loot rolls", () => {
   const small = content().salvage.salvage[32847];
   assert.equal(small.name, "Small salvage");
   // Every roll below the first pre-roll's 1/750 hits it; otherwise the main table by weight.
-  assert.deepEqual(rollLoot(small, () => 0), { item: 31989, amount: 1 }, "boat bottle (empty)");
+  assert.deepEqual(rollLoot(small, () => 0), { item: 31989, amount: 1, collectionLog: true }, "boat bottle (empty), a collection log item");
   const rolls = [0.5, 0.5, 0.5, 0.05, 0];
   assert.deepEqual(rollLoot(small, () => rolls.shift()), { item: 2349, amount: 1 }, "bronze bar, first on the table");
   // Working a hook, the player faces out over its side: the sloop's hook hotspot 7 is on the

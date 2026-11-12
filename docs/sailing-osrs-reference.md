@@ -401,6 +401,9 @@ From captures of salvaging a small shipwreck with a sloop's adamant hook, deploy
 - The animation replays with each, with sound 10864 after the first and 10866 after the rest.
 - With none left: "You have no more salvage to sort."
 - Loot: each salvage's pre-rolls first (1 in n each), then its main table by weight.
+- The find line is spam, with the amount written with a thousands separator ("find: 3,504 x Coins."). A find from the salvage's own collection log section (every pre-roll, and Opulent salvage's table Dragon cannonball) is a game message instead: Dragon nails, Mouldy doll, Broken compass, Rusty coin, Smashed mirror, Boat bottle, Sailors' amulet and Dragon cannon barrel every time in rev 235 captures. Opulent salvage's Dragon cannonball is spam in the earliest captures and a game message in later ones, which fits the 10 December 2025 update that put it in the collection log.
+- Salvage above the player's level is left; sorting ends with "You do not have a high enough Sailing level to sort through any more salvage." (Wiki, Opulent salvage trivia; no capture). Ours: the same line refuses Sort-salvage when all of it is above the player's level.
+- Cannonball amounts follow the Wiki (2-5, 2-7 and so on): rev 235 captures give the amounts from before the 18 March 2026 update that raised them (1-3, 1-5, 1-2, and 1 for the pre-roll Dragon cannonball).
 
 ## Shipwrights' workbench
 

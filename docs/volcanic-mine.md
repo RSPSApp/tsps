@@ -44,7 +44,8 @@ The shop is Petrified Pete's Ore Shop (1457, generated data, opened by Shopkeepe
   - At 0: "The mine has become too unstable! It's collapsing in!", and death 5 ticks later.
 - **Gas holes.** "Ouch! Hot hot!", over to the recorded far tile, and a 3-6 hit.
 - **Water.**
-  - 36 throws; a throw hardens the lava in front (+1 point). It isn't allowed on the boulder channel.
+  - TSPS permits 36 successful throws with the base vessel and 72 after Pete's persistent 10,000-point upgrade, following the [Heat-proof vessel Wiki page](https://oldschool.runescape.wiki/w/Heat-proof_vessel). The [Volcanic Mine Wiki page](https://oldschool.runescape.wiki/w/Volcanic_Mine) instead says 35 base and 70 upgraded. These sources conflict; the upgraded count has not been verified by our recordings. A throw hardens the lava in front (+1 point); it isn't allowed on the boulder channel.
+  - The existing generic shop presents its heat-proof vessel row as the upgrade and consumes the delivered vessel into the unlock. Its Buy action and inventory-space check are TSPS policy, not confirmed retail behavior; the Large water container is the collection-log entry.
   - The crust lasts 74 + 65 + 10 ticks, then is lava again. Hardened lava can be walked on.
 - **The boulder.**
   - Five stages of 40 HP a player (the small one 60).
@@ -74,7 +75,7 @@ The shop is Petrified Pete's Ore Shop (1457, generated data, opened by Shopkeepe
 ## Not yet
 
 - Multi-player boulder scaling beyond HP (the extra channels for 10+ and 20+ players).
-- The heat-proof vessel and ore pack unlocks from the shop.
+- The ore pack unlock from the shop.
 
 ## Tests
 

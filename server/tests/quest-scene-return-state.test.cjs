@@ -144,12 +144,18 @@ async function operateWatchtowerLoc(f, object, expected) {
       return;
     }
   }
-  assert.fail(`ordinary object ${object.getId()} was not operated from its cache footprint perimeter`);
+  assert.fail(`ordinary object was not operated: ${JSON.stringify({ id: object.getId(), at: [p.getX(), p.getY(), p.getZ()], width, height, actor: xyz(f.player), messages: f.watchtowerMessages.slice(-6) })}`);
 }
 function observeWatchtowerInputs(f) {
   if (f.watchtowerObjectOps) return;
   f.watchtowerObjectOps = [];
   f.watchtowerItemOps = [];
+  f.watchtowerMessages = [];
+  const send = f.player.sendMessage;
+  f.t.mock.method(f.player, "sendMessage", function (message) {
+    f.watchtowerMessages.push(String(message));
+    return send.call(this, message);
+  });
   const objectOp = PM.emitObjectInteraction;
   f.t.mock.method(PM, "emitObjectInteraction", function (event) {
     const result = objectOp.call(this, event);
@@ -176,7 +182,7 @@ async function useOnNpc(f, itemId, npc) {
   const before = f.watchtowerItemOps.length;
   await f.connection.dispatch([{ type: "inventory_use_on", itemId, slot, target: { kind: "npc", id: npc.getIndex() } }]);
   ticks(f, 6); // same bounded walk/turn allowance as this fixture's existing playScene
-  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered (item ${itemId}, npc ${npc.getId()}, player ${xyz(f.player)})`);
+  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered: ${JSON.stringify({ itemId, npcId: npc.getId(), npcAt: xyz(npc), playerAt: xyz(f.player), hp: f.player.getHitpoints(), canMove: f.player.getMovementQueue().getMobility().canMove(), messages: f.watchtowerMessages.slice(-6) })}`);
   assert.equal(f.watchtowerItemOps.at(-1).item, itemId);
   assert.equal(f.watchtowerItemOps.at(-1).npc, npc.getContentId(f.player), "ordinary input resolves the intended current NPC");
 }

@@ -30,8 +30,12 @@ const ROUTES = {
 
 let api;
 
+// Revision 224's recordings fade to 255; revision 242's (20261112T152024-5ab63b4: Mistag at tick
+// 881, Kazgar at 1288) fade to 200, the screen only darkened.
+const FADE_ALPHA = 200;
+
 function fade(player, out) {
-  const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
+  const args = out ? [0, FADE_ALPHA, 0, 0, FADE_CYCLES] : [0, 0, 0, FADE_ALPHA, FADE_CYCLES];
   player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
 }
 

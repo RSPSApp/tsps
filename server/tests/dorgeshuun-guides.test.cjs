@@ -27,14 +27,19 @@ before(() => {
 
 function player() {
   const p = {
-    location: new Location(3231, 9611, 0), messages: [], types: [], log: [], blocked: false,
+    location: new Location(3231, 9611, 0), messages: [], types: [], log: [], alphas: [], blocked: false,
     isRegistered: () => true,
     sendMessage: (message) => { p.types.push("normal"); p.messages.push(message); },
     moveTo(l) { p.location = l; p.log.push('move'); },
     getMovementQueue: () => ({ setBlockMovement(b) { p.blocked = b; return this; }, reset() {} }),
     getPacketSender: () => ({
       sendTypedMessage: (type, message) => { p.types.push(type); p.messages.push(message); },
-      sendSubInterface: (uid, id, type, { postScripts }) => p.log.push(`fade ${postScripts[0].args[1] === 255 ? 'out' : 'in'}`),
+      // Revision 242 (rsprox 20261112T152024-5ab63b4, ticks 881 and 1288) fades to and from 200.
+      sendSubInterface: (uid, id, type, { postScripts }) => {
+        const [, from, , to] = postScripts[0].args;
+        p.log.push(`fade ${from > 0 ? 'out' : 'in'}`);
+        p.alphas.push(from || to);
+      },
       closeSubInterface: () => p.log.push('close'),
     }),
   };
@@ -60,6 +65,7 @@ test("Kazgar's Follow: the recorded line and fade, moved 3 ticks later to (3309,
   assert.deepEqual(log, ['-', '-', 'move', 'fade in', '-', 'close']);
   assert.deepEqual([p.location.getX(), p.location.getY()], [3309, 9613]);
   assert.equal(p.blocked, false);
+  assert.deepEqual(p.alphas, [200, 200], 'the screen dims to 200 and back');
 });
 
 test("Mistag's Follow and Cellar lead to Kazgar (3235, 9610); after Death to the Dorgeshuun, Kazgar's Mines goes to the mine", () => {

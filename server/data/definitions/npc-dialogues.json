@@ -1125737,13 +1125737,236 @@
           "type": "choice",
           "options": [
             {
-              "text": "I seek a shield that will protect me from dragonbreath."
+              "text": "I seek a shield that will protect me from dragonbreath.",
+              "steps": [
+                {
+                  "player": "I seek a shield that will protect me from dragonbreath."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Duke Horacio",
+                  "text": "A knight going on a dragon quest, hmm? What dragon do you intend to slay?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Elvarg, the dragon of Crandor island!",
+                      "condition": "During Dragon Slayer I:",
+                      "steps": [
+                        {
+                          "player": "Elvarg, the dragon of Crandor island!"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Duke Horacio",
+                          "text": "Elvarg? Are you sure?"
+                        },
+                        {
+                          "type": "choice",
+                          "prompt": "Well, are you sure?",
+                          "options": [
+                            {
+                              "text": "Yes.",
+                              "steps": [
+                                {
+                                  "player": "Yes."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "Well, you're a braver [man/woman] than I!"
+                                },
+                                {
+                                  "player": "Why is everyone so scared of this dragon?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "Back in my father's day, Crandor was an important city-state. Politically it was as important as Falador and Varrock and its ships traded with every port."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "But, one day, when I was little, all contact was lost. The trading ships and the diplomatic envoys just stopped coming."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Duke Horacio",
+                                  "text": "I remember my father being very scared. He posted lookouts on the roof to warn if the dragon was approaching. All the city rulers worried that Elvarg would devastate the whole continent."
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "I'd better leave that dragon alone.",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "saWr2f"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "So, are you going to give me the shield or not?",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "cn7FgA"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "No.",
+                              "steps": [
+                                {
+                                  "type": "call",
+                                  "branch": "nzGmXm"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "id": "7GKyg9"
+                    },
+                    {
+                      "text": "Oh, no dragon in particular",
+                      "steps": [
+                        {
+                          "player": "Oh, no dragon in particular. I just feel like killing a dragon."
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has not finished Dragon Slayer I:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "JVYlhB"
+                            }
+                          ],
+                          "id": "zHKrL2"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has finished Dragon Slayer I:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "vSAAt1"
+                            }
+                          ],
+                          "id": "MzcOcB"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
-              "text": "Have you any quests for me?"
+              "text": "Have you any quests for me?",
+              "steps": [
+                {
+                  "player": "Have you any quests for me?"
+                },
+                {
+                  "type": "condition",
+                  "text": "Before starting the Rune Mysteries quest.",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "Well, it's not really a quest but I recently discovered this strange talisman."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "It seems to be mystical and I have never seen anything like it before. Would you take it to the head wizard at"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Duke Horacio",
+                      "text": "the Wizards' Tower for me? It's just south-west of here and should not take you very long at all. I would be awfully grateful."
+                    },
+                    {
+                      "type": "choice",
+                      "options": [
+                        {
+                          "text": "Yes.",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "RlDs-9"
+                            }
+                          ]
+                        },
+                        {
+                          "text": "No.",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "dFi-kP"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "id": "1Xm1Mf"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and still having the talisman.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "AHm0E4"
+                    }
+                  ],
+                  "id": "Cz-xNJ"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and having lost the talisman.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "Xlvoxu"
+                    }
+                  ],
+                  "id": "3RS_bB"
+                },
+                {
+                  "type": "action",
+                  "text": "After giving the talisman to Sedridor.",
+                  "id": "KISUz1"
+                },
+                {
+                  "type": "action",
+                  "text": "After starting the Rune Mysteries quest and having the Research package.",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "fGthc3"
+                    }
+                  ],
+                  "id": "VAZRgi"
+                }
+              ]
             },
             {
-              "text": "Where can I find money?"
+              "text": "Where can I find money?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "p5txee"
+                }
+              ]
             },
             {
               "text": "What happened in the cellar?",
@@ -1125970,25 +1126193,7 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "Last night I was in the kitchen and I heard a noise from the cellar. I opened the trapdoor and saw a creature dart into a hole in the wall."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "It looked a bit like a goblin, but it had big bulging eyes. It wasn't wearing armour, but it had this odd helmet with a light on it."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "The tunnel was too dark for me to follow it, so I went to tell the Duke. But when we went down to the cellar the hole had been blocked up, and no one believes me."
-                },
-                {
-                  "player": "I believe you."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Bob",
-                  "text": "Thank you, [player name]! If you can convince the Duke I'm telling the truth then we can get to the bottom of this mystery."
+                  "text": "No. But we should find whoever is responsible and slay them! With an axe!"
                 }
               ]
             },
@@ -1126004,7 +1126209,106 @@
           ]
         }
       ],
-      "a-hole-in-the-wall-asking-bob-talking-to-bob-again": [
+      "a-hole-in-the-wall-asking-father-aereck": [
+        {
+          "type": "line",
+          "speaker": "Father Aereck",
+          "text": "Welcome to this church of holy Saradomin."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Could you tell me more about prayers?"
+            },
+            {
+              "text": "Could you tell me more about Saradomin?"
+            },
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Father Aereck",
+                  "text": "It's a shame, isn't it? The castle is even older than this church, and so it's terrible that it would be damaged, even if it's only the cellar."
+                }
+              ]
+            },
+            {
+              "text": "I'd better be going."
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-asking-donie-or-gee": [
+        {
+          "type": "line",
+          "speaker": "Donie/Gee",
+          "text": "Hello there, can I help you?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Where am I?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "tMJJz9"
+                }
+              ]
+            },
+            {
+              "text": "How are you today?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "cjSB-d"
+                }
+              ]
+            },
+            {
+              "text": "Are there any quests I can do here?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "PX3n9d"
+                }
+              ]
+            },
+            {
+              "text": "Your shoe lace is untied.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "oSaymb"
+                }
+              ]
+            },
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Donie/Gee",
+                  "text": "I heard the wall collapsed or something. I don't know why. Perhaps you could get to the bottom of this mystery!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin": [
         {
           "type": "choice",
           "options": [
@@ -1126016,24 +1126320,53 @@
                 },
                 {
                   "type": "line",
-                  "speaker": "Bob",
-                  "text": "I told you about the creature I saw. You should go and tell the Duke."
+                  "speaker": "NPC",
+                  "text": "Last night I was in the kitchen and I heard a noise from the cellar. I opened the trapdoor and saw a creature dart into a hole in the wall."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "It looked a bit like a goblin, but it had big bulging eyes. It wasn't wearing armour, but it had this odd helmet with a light on it."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "The tunnel was too dark for me to follow it, so I went to tell the Duke. But when we went down to the cellar the hole had been blocked up, and no one believes me."
+                },
+                {
+                  "player": "I believe you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "Thank you, [player name]! If you can convince the Duke I'm telling the truth then we can get to the bottom of this mystery."
                 }
               ]
-            },
-            {
-              "text": "Give me a quest!"
-            },
-            {
-              "text": "Have you anything to sell?"
-            },
-            {
-              "text": "Can you repair my items for me?"
             }
           ]
         }
       ],
-      "a-hole-in-the-wall-asking-bob-talking-to-sigmund-after-talking-to-bob": [
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-them-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Do you know what happened in the castle cellar?",
+              "steps": [
+                {
+                  "player": "Do you know what happened in the castle cellar?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "NPC",
+                  "text": "I told you about the creature I saw. You should go and tell the Duke."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "a-hole-in-the-wall-talking-to-the-npc-who-saw-the-goblin-talking-to-sigmund-after-talking-to-who-saw-the-goblin": [
         {
           "type": "line",
           "speaker": "Sigmund",
@@ -1126043,10 +1126376,10 @@
           "type": "choice",
           "options": [
             {
-              "text": "Bob says he saw something in the cellar.",
+              "text": "[NPC] says he saw something in the cellar.",
               "steps": [
                 {
-                  "player": "Bob says he saw something in the cellar. Like a goblin with big eyes."
+                  "player": "[NPC] says he saw something in the cellar. Like a goblin with big eyes."
                 },
                 {
                   "type": "line",
@@ -1126177,10 +1126510,10 @@
               ]
             },
             {
-              "text": "Bob says he saw something in the cellar",
+              "text": "[NPC] says he saw something in the cellar",
               "steps": [
                 {
-                  "player": "Bob says he saw something in the cellar. Like a goblin with big eyes."
+                  "player": "[NPC] says he saw something in the cellar. Like a goblin with big eyes."
                 },
                 {
                   "type": "line",
@@ -1126205,7 +1126538,7 @@
                       "text": "Your grace, this is the adventurer who defeated the dragon Elvarg. I think you should listen to [him/her/them]."
                     }
                   ],
-                  "id": "PbfBX1"
+                  "id": "QQJ5aZ"
                 },
                 {
                   "type": "condition",
@@ -1126217,7 +1126550,7 @@
                       "text": "Your grace, this adventurer took that talisman you discovered to Sedridor. I think you should listen to [him/her/them]."
                     }
                   ],
-                  "id": "We9PoA"
+                  "id": "qSGrsq"
                 },
                 {
                   "type": "line",
@@ -1126692,7 +1127025,7 @@
                 {
                   "type": "line",
                   "speaker": "Sigmund",
-                  "text": "It is unknown to me, your grace. But the fact it is there is enough to prove Bob's story. It must have been dropped by a goblin as it fled."
+                  "text": "It is unknown to me, your grace. But the fact it is there is enough to prove [NPC]'s story. It must have been dropped by a goblin as it fled."
                 },
                 {
                   "type": "line",
@@ -1127501,12 +1127834,8 @@
                                       "text": "I'd better leave that dragon alone.",
                                       "steps": [
                                         {
-                                          "player": "I'd better leave that dragon alone."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "That's a relief. I would hate to see such a promising adventurer cut down in [his/her] prime."
+                                          "type": "call",
+                                          "branch": "saWr2f"
                                         }
                                       ]
                                     },
@@ -1127514,33 +1127843,8 @@
                                       "text": "So, are you going to give me the shield or not?",
                                       "steps": [
                                         {
-                                          "player": "So, are you going to give me the shield or not?"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "If you really think you're up to it then perhaps you are the one who can kill this dragon."
-                                        },
-                                        {
-                                          "type": "message",
-                                          "text": "The Duke hands you a heavy orange shield.",
-                                          "id": "LnbjYr"
-                                        },
-                                        {
-                                          "type": "action",
-                                          "action": "receive",
-                                          "text": "Anti-dragon shield",
-                                          "id": "igRDii"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "Take care out there. If you kill it..."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Duke Horacio",
-                                          "text": "If you kill it, for Saradomin's sake make sure it's really dead!"
+                                          "type": "call",
+                                          "branch": "cn7FgA"
                                         }
                                       ]
                                     }
@@ -1127552,9 +1127856,8 @@
                               "text": "No.",
                               "steps": [
                                 {
-                                  "type": "line",
-                                  "speaker": "Duke Horacio",
-                                  "text": "Very wise. There are some monsters that are best left alone."
+                                  "type": "call",
+                                  "branch": "nzGmXm"
                                 }
                               ]
                             }
@@ -1127574,12 +1127877,8 @@
                           "text": "If the player has not finished Dragon Slayer I:",
                           "steps": [
                             {
-                              "type": "line",
-                              "speaker": "Duke Horacio",
-                              "text": "I don't have an infinite supply of these shields, you know. I'll only give one for a truly worthy cause."
-                            },
-                            {
-                              "type": "end"
+                              "type": "call",
+                              "branch": "JVYlhB"
                             }
                           ],
                           "id": "zHKrL2"
@@ -1127589,23 +1127888,8 @@
                           "text": "If the player has finished Dragon Slayer I:",
                           "steps": [
                             {
-                              "player": "Oh, no dragon in particular. I just feel like killing a dragon."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Duke Horacio",
-                              "text": "Of course. Now you've slain Elvarg, you've earned the right to call the shield your own!"
-                            },
-                            {
-                              "type": "message",
-                              "text": "The Duke hands you the shield.",
-                              "id": "if_uB3"
-                            },
-                            {
-                              "type": "action",
-                              "action": "receive",
-                              "text": "Anti-dragon shield",
-                              "id": "emj6I8"
+                              "type": "call",
+                              "branch": "vSAAt1"
                             }
                           ],
                           "id": "MzcOcB"
@@ -1129090,6 +1129374,85 @@
           "type": "line",
           "speaker": "Sigmund",
           "text": "I only advise the Duke. But if you want to make yourself useful, there are evil goblins to slay on the other side of the river."
+        }
+      ],
+      "saWr2f": [
+        {
+          "player": "I'd better leave that dragon alone."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "That's a relief. I would hate to see such a promising adventurer cut down in [his/her] prime."
+        }
+      ],
+      "cn7FgA": [
+        {
+          "player": "So, are you going to give me the shield or not?"
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "If you really think you're up to it then perhaps you are the one who can kill this dragon."
+        },
+        {
+          "type": "message",
+          "text": "The Duke hands you a heavy orange shield.",
+          "id": "LnbjYr"
+        },
+        {
+          "type": "action",
+          "action": "receive",
+          "text": "Anti-dragon shield",
+          "id": "igRDii"
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Take care out there. If you kill it..."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "If you kill it, for Saradomin's sake make sure it's really dead!"
+        }
+      ],
+      "nzGmXm": [
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Very wise. There are some monsters that are best left alone."
+        }
+      ],
+      "JVYlhB": [
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "I don't have an infinite supply of these shields, you know. I'll only give one for a truly worthy cause."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "vSAAt1": [
+        {
+          "player": "Oh, no dragon in particular. I just feel like killing a dragon."
+        },
+        {
+          "type": "line",
+          "speaker": "Duke Horacio",
+          "text": "Of course. Now you've slain Elvarg, you've earned the right to call the shield your own!"
+        },
+        {
+          "type": "message",
+          "text": "The Duke hands you the shield.",
+          "id": "if_uB3"
+        },
+        {
+          "type": "action",
+          "action": "receive",
+          "text": "Anti-dragon shield",
+          "id": "emj6I8"
         }
       ],
       "RlDs-9": [

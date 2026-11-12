@@ -1063,7 +1063,7 @@ test("the sail buttons follow their labels for each move mode", () => {
   assert.equal(sailButtonTransition(3, 0), undefined);
 });
 
-function registerPlugin(file) {
+function registerPlugin(file, api = {}) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
     core: {
@@ -1092,6 +1092,7 @@ function registerPlugin(file) {
     spawnNpc: (definition) => { hooks.spawned = definition; return null; },
     removeNpc: () => {},
     sendMultiChatboxPrompt: (_player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
+    ...api,
   });
   return hooks;
 }
@@ -4409,6 +4410,92 @@ test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (r
     assert.equal(h.player.messages.at(-1), "The crystal extractor is now disabled.");
     assert.equal(h.locAt().id, 59703);
     assert.equal(h.owned.crystalExtractorOn, false);
+  } finally {
+    h.done();
+  }
+});
+
+/** An NPC as a plugin's spawnNpc makes it, recording the headbars shown over it. */
+function deckNpc(definition) {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const npc = NPC.create(definition.id, new Location(definition.x, definition.y, definition.z));
+  Object.assign(npc, { definition, bars: [] });
+  npc.showHeadbar = (id, options) => { npc.bars.push([id, options.fill]); return npc; };
+  return npc;
+}
+
+test("the crystal extractor's progress bar: an NPC on it with headbar 82 filling every 5 ticks, gone with the mote (rsprox)", () => {
+  const spawned = [];
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: (definition) => {
+      const npc = deckNpc(definition);
+      spawned.push(npc);
+      return npc;
+    },
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const { MOTE_TICKS } = require("../plugins/skills/sailing/CrystalExtractor.Sailing");
+  const h = facilityAtSea("sloop", "Crystal extractor");
+  try {
+    const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
+    h.click(extractor);
+    h.tick(2);
+    assert.equal(spawned.length, 0, "no bar before it's enabled");
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "The crystal extractor is now enabled.");
+    assert.equal(spawned.length, 1, "the bar comes with the enable line");
+    const [bar] = spawned;
+    assert.equal(bar.definition.id, 15111, "crystal_extractor_headbar");
+    assert.deepEqual([bar.definition.x, bar.definition.y, bar.definition.z], [...tile, 0], "on the extractor, on the deck's level");
+    assert.deepEqual(bar.bars, [[82, 0]]);
+    h.tick(4);
+    assert.equal(bar.bars.length, 1);
+    h.tick();
+    assert.equal(bar.bars.length, 2, "sent again 5 ticks in");
+    h.tick(MOTE_TICKS - 6);
+    // As live: 0 at the start and 5 ticks in, then 2 more every 5 ticks, 38 five ticks before the mote.
+    const fills = bar.bars.map(([, fill]) => fill);
+    assert.deepEqual(fills, [0, 0, ...Array.from({ length: 19 }, (_, i) => 2 * (i + 1))]);
+    assert.deepEqual(removed, [], "still charging");
+    h.tick();
+    assert.equal(h.owned.crystalMote, true);
+    assert.deepEqual(removed, [bar], "gone with the mote");
+    h.tick(20);
+    assert.equal(spawned.length, 1, "no bar while it holds a mote");
+
+    // Harvested: a new bar with the next charge.
+    h.click(extractor);
+    h.tick(4);
+    assert.equal(h.owned.crystalMote, false);
+    assert.equal(spawned.length, 2);
+    assert.deepEqual(spawned[1].bars, [[82, 0]]);
+
+    // Ours: switched off, the bar goes with the charge.
+    h.click(extractor, 2);
+    h.tick();
+    assert.equal(h.owned.crystalExtractorOn, false);
+    assert.deepEqual(removed, [bar, spawned[1]]);
+    h.tick(MOTE_TICKS);
+    assert.equal(spawned[1].bars.length, 1, "no more fills once it's off");
+    assert.equal(spawned.length, 2);
+  } finally {
+    h.done();
+  }
+});
+
+test("the crystal extractor's bar goes when its owner leaves the boat", () => {
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: deckNpc,
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const h = facilityAtSea("sloop", "Crystal extractor", (owned) => { owned.crystalExtractorOn = true; });
+  try {
+    extractor.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+    assert.equal(removed.length, 0);
+    extractor.events["sailing:left"]({ player: h.player, boat: h.boat, reason: "disembark" });
+    assert.equal(removed.length, 1);
   } finally {
     h.done();
   }

@@ -378,7 +378,7 @@ test('the ruin climb lands in the hobgoblin dungeon and the false wall leads onw
   const ruin = { getLocation: () => new h.core.Location(2696, 3283, 0) };
   h.hooks.custom.get('ladders:climb')[0]({ player: h.player, objectId: 18270, object: ruin });
   assert.equal(climbs.at(-1).destination.getX(), 2696);
-  assert.equal(climbs.at(-1).destination.getY(), 9683);
+  assert.equal(climbs.at(-1).destination.getY(), 9684); // rsprox 236/03965.txt:6304
 
   const exit = { getLocation: () => new h.core.Location(2696, 9682, 0) };
   h.hooks.custom.get('ladders:climb')[0]({ player: h.player, objectId: 18354, object: exit });
@@ -392,7 +392,7 @@ test('the ruin climb lands in the hobgoblin dungeon and the false wall leads onw
   assert.equal(h.varbits.get(2618), 1);
 
   h.hooks.objects[0]({ player: h.player, objectId: 19124, option: 'enter', location: { x: 2701, y: 9688, z: 0 } });
-  assert.equal(h.getLocation().getX(), 2323);
+  assert.equal(h.getLocation().getX(), 2324); // rsprox 236/03965.txt:6490
   assert.equal(h.getLocation().getY(), 5104);
 
   h.hooks.objects[0]({ player: h.player, objectId: 18412, option: 'enter', location: { x: 2322, y: 5104, z: 0 } });

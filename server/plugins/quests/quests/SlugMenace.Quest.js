@@ -240,9 +240,10 @@ module.exports = function registerSlugMenaceQuest(api) {
   ]);
 
   const OLD_RUIN_ENTRANCE_TILE = { x: 2696, y: 3283, z: 0 };
-  const DUNGEON_ENTRY_TILE = { x: 2323, y: 5104, z: 0 };
+  // rsprox 236/03965.txt:6490 (hidden entrance) and :6304 (old ruin entrance): the recorded landings.
+  const DUNGEON_ENTRY_TILE = { x: 2324, y: 5104, z: 0 };
   const HIDDEN_ENTRANCE_TILE = { x: 2701, y: 9688, z: 0 };
-  const DUNGEON_LANDING_TILE = { x: 2696, y: 9683, z: 0 };
+  const DUNGEON_LANDING_TILE = { x: 2696, y: 9684, z: 0 };
   const DUNGEON_EXIT_TILE = { x: 2696, y: 9682, z: 0 };
   const SURFACE_LANDING_TILE = { x: 2697, y: 3283, z: 0 };
   const DEAD_SLUG_TILE = { x: 2334, y: 5093, z: 0 };

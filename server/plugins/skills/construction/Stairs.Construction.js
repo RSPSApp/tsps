@@ -160,9 +160,9 @@ function buildRoomThrough(player, house, room, furniture, next, template) {
 
 /**
  * `construction:room-removing`: a basement room with stairs up warns of the basement, a ground
- * floor room with stairs down of the basement level, and an upper floor room of the upper floor.
- * Ours: a ground floor room whose stairs only go up (nothing above, or it couldn't be removed)
- * warns of the upper floor too.
+ * floor room with stairs down of the basement level, and an upper floor room with stairs down of
+ * the upper floor. A ground floor room with stairs only up has nothing above it (it couldn't be
+ * removed otherwise), so it doesn't warn.
  */
 function warnOfRoomRemoval(removal) {
   if (removal.warning) return;
@@ -171,7 +171,7 @@ function warnOfRoomRemoval(removal) {
   const plane = removal.position.plane;
   if (plane === BASEMENT) removal.warning = stairs.up ? BASEMENT_FROM_GROUND : null;
   else if (plane === TOP_FLOOR) removal.warning = stairs.down ? UPPER_FROM_GROUND : null;
-  else removal.warning = stairs.down ? BASEMENT_LEVEL : UPPER_FROM_GROUND;
+  else removal.warning = stairs.down ? BASEMENT_LEVEL : null;
 }
 
 function climbUp(event) { return climb(event, "up"); }

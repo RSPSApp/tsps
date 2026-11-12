@@ -319,9 +319,9 @@ function tileOf(player) {
 /**
  * Runs `steps` ({ ticks from now: action }) behind the loading screen, holding the player still
  * until the last one. A logout cancels it with the player's other tasks; a move its own steps
- * didn't make (another teleport, a death) cancels it and closes the screen.
+ * didn't make (another teleport, a death) cancels it, closes the screen and runs `cancelled`.
  */
-function loadHouse(player, steps) {
+function loadHouse(player, steps, cancelled = () => {}) {
   loadingHouses.add(player);
   const movement = player.getMovementQueue();
   const wasBlocked = movement.isMovementBlocked();
@@ -347,7 +347,7 @@ function loadHouse(player, steps) {
       if (loadingHouses.has(player)) {
         loadingHouses.delete(player);
         if (!wasBlocked) movement.setBlockMovement(false);
-        if (tick < last) hideHouseLoading(player);
+        if (tick < last) { hideHouseLoading(player); cancelled(); }
       }
       super.stop();
     }
@@ -579,16 +579,21 @@ function rebuildHouse(player, house) {
  */
 function rebuildRooms(player, house, then = () => {}) {
   if (loadingHouses.has(player)) { rebuildHouse(player, house); then(); return; }
-  saveHouse(house);
+  let rebuilt = false;
+  const rebuild = () => {
+    if (rebuilt || houseFor(player) !== house) return;
+    rebuilt = true;
+    rebuildHouse(player, house);
+  };
   player.getPacketSender().sendInterfaceRemoval();
   showHouseLoading(player, { sound: false, jingle: house.save });
   loadHouse(player, {
-    1: () => { if (houseFor(player) === house) rebuildHouse(player, house); },
+    1: rebuild,
     2: () => {
       hideHouseLoading(player);
       if (houseFor(player) === house && isBuildingMode(player)) then();
     },
-  });
+  }, rebuild);
 }
 
 const ROOM_CREATION_INTERFACE = Ids.iface("poh_add_room");
@@ -615,7 +620,8 @@ function selectRoomFromInterface(event) {
   if (!room) { event.player.sendMessage("That room is not available yet."); return true; }
   const copy = pending.house.getOnlyCopy(room);
   // Too few coins is a chat line, and the room list stays open.
-  if (!copy && roomProblem(event.player, pending.house, pending.target, room) === CANT_AFFORD_ROOM) {
+  if (!copy && !pending.house.canPlaceRoom(room, pending.target, constructionLevel(event.player))
+    && event.player.getInventory().getAmount(COINS_ID) < room.cost) {
     event.player.sendMessage(CANT_AFFORD_ROOM);
     sendRoomList(event.player);
     return true;
@@ -750,7 +756,7 @@ function buildRoom(player, viewer, reopenViewer = true) {
  */
 function removeRoomPrompt(player, house, target, onNo = () => {}, onRemoved = () => {}) {
   const room = house.getRoom(target);
-  if (!room) return;
+  if (!room || loadingHouses.has(player)) return;
   const problem = house.canRemoveRoom(target);
   if (problem) return Menu.refuse(player, problem);
   const confirm = () => api.sendMultiChatboxPrompt(player, `Remove the ${Data.ROOM_BY_KEY.get(room.roomKey).name}?`, "Yes", () => {
@@ -774,6 +780,8 @@ function openRoomDoor(event) {
   const player = event.player;
   const house = houseFor(player);
   if (!house || !isBuildingMode(player)) return false;
+  // The loading screen covers the old house until the new one is drawn.
+  if (loadingHouses.has(player)) return true;
   const target = house.getDoorTarget(event.location);
   if (!target) return false;
   if (!house.getRoom(target)) {

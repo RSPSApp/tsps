@@ -339,6 +339,7 @@ function warnOfRemoval(removal) {
 
 /** So does removing the room the nexus stands in. */
 function warnOfRoomRemoval(removal) {
+  if (removal.warning) return;
   if (Object.values(removal.room?.furnitureByLocation ?? {}).some(entry => TIERS[entry.buildableKey])) removal.warning = ROOM_REMOVAL_WARNING;
 }
 

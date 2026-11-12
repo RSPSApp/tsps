@@ -198,7 +198,6 @@ test("removing a room whose stairs join another floor warns first, then asks", (
     [{ plane: 0, x: 4, y: 5 }, "DUNGEON_STAIRS", "OAK_STAIRCASE_UP", Stairs.BASEMENT_FROM_GROUND],
     [{ plane: 1, x: 3, y: 4 }, "SKILL_HALL_UP", "OAK_STAIRCASE_DOWN", Stairs.BASEMENT_LEVEL],
     [{ plane: 2, x: 4, y: 5 }, "SKILL_HALL_DOWN", "OAK_STAIRCASE_DOWN", Stairs.UPPER_FROM_GROUND],
-    [{ plane: 1, x: 3, y: 4 }, "SKILL_HALL_UP", "OAK_STAIRCASE_UP", Stairs.UPPER_FROM_GROUND],
   ];
   for (const [position, roomKey, stairs, warning] of cases) {
     const { player, house } = owner("stairs" + position.plane + stairs.length);
@@ -216,13 +215,39 @@ test("removing a room whose stairs join another floor warns first, then asks", (
   assert.equal(Stairs.BASEMENT_LEVEL, "<col=800000>Warning:<col=000000> If you remove this room you may be unable to access the<br><col=000000>basement level.");
 });
 
-test("a hall without stairs gets no warning", () => {
-  const { player, house } = owner("nostairs");
-  house.placeRoom({ plane: 1, x: 3, y: 4 }, Data.ROOM_BY_KEY.get("SKILL_HALL_UP"), 0);
-  withPrompts(({ prompts, warnings }) => {
-    House.removeRoomPrompt(player, house, { plane: 1, x: 3, y: 4 });
-    assert.deepEqual(warnings, []);
-    assert.equal(prompts.at(-1).title, "Remove the skill hall?");
+test("a hall without stairs, or whose stairs only go up, gets no warning", () => {
+  for (const stairs of [null, "OAK_STAIRCASE_UP"]) {
+    const { player, house } = owner("nostairs" + (stairs ? 1 : 0));
+    if (stairs) withStairs(house, { plane: 1, x: 3, y: 4 }, "SKILL_HALL_UP", stairs);
+    else house.placeRoom({ plane: 1, x: 3, y: 4 }, Data.ROOM_BY_KEY.get("SKILL_HALL_UP"), 0);
+    withPrompts(({ prompts, warnings }) => {
+      House.removeRoomPrompt(player, house, { plane: 1, x: 3, y: 4 });
+      assert.deepEqual(warnings, []);
+      assert.equal(prompts.at(-1).title, "Remove the skill hall?");
+    });
+    House.releaseHouse(player, true);
+  }
+});
+
+test("a move during the loading screen still rebuilds the house, and door hotspots wait for it", () => {
+  const { player, house } = owner("movedremover");
+  const spot = { plane: 1, x: 4, y: 5 };
+  withPrompts(({ prompts }) => {
+    House.removeRoomPrompt(player, house, spot);
+    let rebuilds = 0;
+    const rebuild = house.rebuild.bind(house);
+    house.rebuild = (...args) => { rebuilds++; return rebuild(...args); };
+    prompts.at(-1).options[1]();
+    const count = prompts.length;
+    assert.equal(clickDoorTo(player, house, spot), true, "the click is taken");
+    assert.equal(prompts.length, count, "but nothing opens under the loading screen");
+    assert.notEqual(player.getInterfaceId(), ids.roomList);
+    const at = player.getLocation();
+    player.moveTo(new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+    const sent = tick(player);
+    assert.ok(has(sent, "closeSubInterface", ids.overlay), "the screen closes");
+    assert.equal(rebuilds, 1, "the house is still rebuilt");
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
   });
   House.releaseHouse(player, true);
 });

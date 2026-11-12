@@ -38,6 +38,12 @@ test('antipoisons send no line of their own', t => {
   }
 });
 
+test('an antipoison weakens venom to poison with no line of its own (rsprox 234/03280.txt:69820)', t => {
+  const f = drinker(t, { venom: true, poison: 8 }); f.drink(I.ANTIPOISON_4_);
+  assert.equal(f.p.isVenomed(), false, 'the venom is now poison');
+  assert.deepEqual(f.lines, []);
+});
+
 test('anti-venom: "It cures your venom." when venomed, else immunity from poison', t => {
   const venomed = drinker(t, { venom: true, poison: 8 }); venomed.drink(I.ANTI_VENOM_4_);
   assert.equal(venomed.p.isVenomed(), false);

@@ -793,11 +793,12 @@ export class World {
     // reads this list directly to know which NPCs to include in the player's view.
     /**
      * A teleported NPC stays in view the tick it moves when that tick's update has to reach the
-     * client with it: an exact move (its glide), or a fade (its fade in where it lands); otherwise
-     * it is dropped and added back the next tick, and the update would be lost.
+     * client with it: an exact move (its glide), a fade (its fade in where it lands) or a telejump
+     * (NPC.telejump: it snaps there in place); otherwise it is dropped and added back the next
+     * tick, and the update would be lost.
      */
     private static staysInViewWhenPlaced(npc: NPC): boolean {
-        return npc.getExactMove?.() != null || npc.getTransparency?.() != null;
+        return npc.getExactMove?.() != null || npc.getTransparency?.() != null || npc.isTelejumping?.() === true;
     }
 
     /** How far the player sees NPCs (15 unless an area widens it). */

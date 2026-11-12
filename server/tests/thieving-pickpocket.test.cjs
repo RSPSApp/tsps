@@ -87,9 +87,9 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     // rsprox 227/01723.txt:186365-186387: spam line, then Thieving 16 -> 15.
     assert.deepEqual(typed, [[core.ChatType.SPAM, 'You fail to pick the lock - your fingers get numb from fumbling with the lock.']]);
     assert.equal(level, 15);
-    level = 0;
+    level = 1;
     HamTrapdoor._test.fumbled(player);
-    assert.equal(level, 0, 'never below 0');
+    assert.equal(level, 1, 'never below 1, so picking can go on');
 });
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {

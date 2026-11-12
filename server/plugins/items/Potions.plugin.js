@@ -138,8 +138,9 @@ const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
 function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null) {
   const wasVenomed = player.isVenomed();
   if (wasVenomed && !fullVenomCure) {
+    // No line of its own: venomed antipoison drinks send only the drink line (rsprox 234/03280.txt:69820,
+    // 223/00014.txt:133172, 227/00572.txt:565041, 234/00787.txt:52834: venom to poison, then that line).
     curePoison(player);
-    if (message) player.sendMessage("The potion weakens the venom to poison.");
     return;
   }
   curePoisonAndVenom(player);

@@ -9,6 +9,7 @@ const { Location } = require('../dist/game/model/Location');
 const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
 const { Sounds } = require('../dist/game/Sounds');
 const { ItemDefinition } = require('../dist/game/definition/ItemDefinition');
+const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
 const { Equipment } = require('../dist/game/model/container/impl/Equipment');
 const Pickable = require('../plugins/objects/Pickable.plugin');
 
@@ -37,7 +38,7 @@ function player({ gloves = -1 } = {}) {
         sendMessage: (message) => log.push(message),
         // Typed lines are logged as "spam:..." (ChatType.SPAM is 105).
         getPacketSender: () => ({ sendTypedMessage: (type, message) => log.push(type === 105 ? `spam:${message}` : message) }),
-        getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => log.push(`hit ${hit.getDamage()}`) }) }),
+        getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => log.push(`hit ${hit.getDamage()}${hit.getHitmask?.() === HitMask.GREEN ? ' green' : ''}`) }) }),
     };
 }
 
@@ -102,9 +103,16 @@ test('flax disappears 3 times in 16 (Wiki), and sweetcorn turns into its empty v
 test('nettles need gloves (Wiki): bare-handed they sting and give nothing; beekeeper\'s gloves do not count', () => {
     ItemDefinition.forId = (id) => ({ getName: () => (id === 1 ? 'Leather gloves' : id === 2 ? "Beekeeper's gloves" : '') });
     const bare = pickOnce(plant(5253, 'Nettles', 3600), player(), 0.5);
-    assert.deepEqual(bare.next, ['You have been stung by the nettles!', 'hit 2']);
+    assert.deepEqual(bare.next, ['You have been stung by the nettles!', 'hit 2 green'], 'a green hitsplat (Wiki)');
     assert.deepEqual(pickOnce(plant(5253, 'Nettles', 3601), player({ gloves: 2 }), 0.5).next.slice(0, 1), ['You have been stung by the nettles!']);
     assert.deepEqual(pickOnce(plant(5253, 'Nettles', 3602), player({ gloves: 1 }), 0.5).next, ['item 4241 x1', 'You pick the nettles.', 'sound 2581']);
+});
+
+test("nettle gloves: gloves, gauntlets, vambraces, bracers and the Wiki list's others; bracelets do not count", () => {
+    const names = { 1: "Black d'hide vambraces", 2: 'Combat bracelet(4)', 3: 'Regen bracelet', 4: 'Crab claw', 5: 'Barrows gloves', 6: 'Bracelet of ethereum (uncharged)', 7: 'Dark tuxedo cuffs', 8: 'Bandos bracers' };
+    ItemDefinition.forId = (id) => ({ getName: () => names[id] ?? '' });
+    const picks = (gloves, x) => pickOnce(plant(5253, 'Nettles', x), player({ gloves }), 0.5).next[0] !== 'You have been stung by the nettles!';
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map((id, i) => picks(id, 3700 + i)), [true, false, true, true, true, false, false, true]);
 });
 
 test('cabbage respawns after 40 to 80 ticks (Wiki)', () => {

@@ -48,6 +48,7 @@ function player({ ranged = 60, coins = 1000, arrows = 0, weapon = 841 } = {}) {
       getAmount: (id) => items.get(id) ?? 0,
       contains: (id) => (items.get(id) ?? 0) > 0,
       getFreeSlots: () => 28 - items.size,
+      getAddableAmount: (item) => ((items.get(item.getId()) ?? 0) > 0 || items.size < 28 ? item.getAmount() : 0),
       deleteNumber: (id, n) => items.set(id, (items.get(id) ?? 0) - n),
       addItem: (item) => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),
       forceAdd: (_, item) => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),

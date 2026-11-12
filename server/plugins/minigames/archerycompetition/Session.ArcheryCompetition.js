@@ -104,12 +104,20 @@ function attackRoll(player) {
   return attackRollOverride ? attackRollOverride(player) : core.AccuracyFormulasDpsCalc.attackRangedRoll(player);
 }
 
+/**
+ * Room for the judge's 10 plain bronze arrows: a free slot or a plain stack they join. A preset
+ * (or other meta) arrow stack doesn't take them, so it doesn't count as room.
+ */
+function hasArrowRoom(player) {
+  return player.getInventory().getAddableAmount(new core.Item(core.ItemIdentifiers.BRONZE_ARROW, ARROWS_PER_ROUND)) >= ARROWS_PER_ROUND;
+}
+
 function canStart(player) {
   const session = sessions.get(player);
   if (session && !session.finished) return false;
   if (level(player) < RANGED_LEVEL) return false;
   if (coins(player) < ENTRY_FEE) return false;
-  return player.getInventory().getFreeSlots() > 0 || player.getInventory().contains(core.ItemIdentifiers.BRONZE_ARROW);
+  return hasArrowRoom(player);
 }
 
 function startRound(player) {
@@ -210,6 +218,7 @@ Object.assign(module.exports, {
   markPlayed,
   bowEquipped,
   attackRoll,
+  hasArrowRoom,
   canStart,
   startRound,
   takeShot,

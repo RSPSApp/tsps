@@ -6,7 +6,668 @@
 <meta name="referrer" content="no-referrer">
 <title>Host local</title>
 <link rel="stylesheet" href="/panel/panel.css">
+<style id="local-bots-styles">
+.local-bots{display:grid;gap:16px;max-width:1600px;color:#e4dfd3;font-size:13px}.local-bots h2,.local-bots h3,.local-bots h4{margin:0;font-weight:600;color:#e4dfd3}.local-bots h2{font-size:19px}.local-bots h3{font-size:15px}.local-bots h4{margin:13px 0 7px;color:#caa95e;font-size:12px}.local-bots p{margin:5px 0 0;color:#aaa59a;line-height:1.55}.local-bots button,.local-bots .local-bots-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 11px;border:1px solid rgba(202,169,94,.28);border-radius:5px;background:#202125;color:#e4dfd3;font:inherit;cursor:pointer;text-decoration:none;white-space:nowrap}.local-bots button:hover,.local-bots .local-bots-button:hover{border-color:#caa95e;background:#2a2b30}.local-bots button:disabled{opacity:.45;cursor:not-allowed}.local-bots button.primary{border-color:#caa95e;background:#383120;color:#f6f2e8}.local-bots input,.local-bots select{box-sizing:border-box;min-width:0;min-height:34px;padding:5px 9px;border:1px solid rgba(202,169,94,.25);border-radius:5px;background:#101113;color:#e4dfd3;font:inherit}.local-bots input:focus,.local-bots select:focus{outline:2px solid #caa95e;outline-offset:1px}.local-bots-heading,.local-bots-card-heading,.local-bot-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.local-bots-heading-actions{display:flex;gap:8px;flex:none}.local-bot-card{min-width:0;padding:16px;border:1px solid rgba(202,169,94,.17);border-radius:8px;background:#1c1d21}.local-bots-card-heading{margin-bottom:12px}.local-bot-count{display:grid;place-items:center;min-width:32px;height:26px;padding:0 8px;border:1px solid rgba(202,169,94,.2);border-radius:99px;color:#dfc882;font-variant-numeric:tabular-nums}.local-bot-deploy-grid{display:grid;grid-template-columns:minmax(250px,2fr) minmax(130px,1fr);gap:12px;margin:14px 0}.local-bot-deploy-grid label{display:grid;gap:6px;color:#b8b3a7;font-size:12px}.local-bot-overrides{border-top:1px solid #2b2c30;padding-top:11px}.local-bot-overrides summary{color:#d8bc80;cursor:pointer}.local-bot-overrides>.local-bot-note{max-width:900px;margin-bottom:12px}.local-bot-check{display:flex;align-items:center;gap:8px;margin:10px 0;color:#d3cfc5}.local-bot-check input{min-width:15px;min-height:15px;accent-color:#caa95e}.local-bot-location-row{display:grid;grid-template-columns:repeat(3,minmax(80px,140px));gap:8px;margin:6px 0 12px}.local-bot-override-list{display:grid;gap:7px;margin:6px 0 12px}.local-bot-override-list[hidden]{display:none}.local-bot-override-row{display:flex;align-items:center;gap:7px;max-width:760px}.local-bot-override-row>select:first-child{width:180px}.local-bot-override-row>input[type=number]{width:100px}.local-bot-override-row>button,.local-bot-override-list>button{min-height:29px;padding:0 9px}.local-bot-picker{position:relative;flex:1;min-width:120px}.local-bot-picker input{width:100%}.local-bot-matches{position:absolute;z-index:5;top:calc(100% + 3px);left:0;right:0;display:grid;max-height:190px;overflow:auto;background:#131416;border:1px solid rgba(202,169,94,.3);border-radius:5px}.local-bot-matches:empty{display:none}.local-bot-matches button{justify-content:flex-start;border:0;border-radius:0}.local-bot-item-row{max-width:1000px}.local-bot-item-row>select:first-child{width:130px}.local-bot-item-row .local-bot-picker{flex:1}.local-bot-deploy-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.local-bot-deploy-status{min-width:0;font-size:12px}.local-bot-agent-warning{padding:8px 10px;border-left:2px solid #caa95e;background:#26231b}.local-bot-agent-warning[hidden]{display:none}.local-bot-watch-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 15px;border:1px solid rgba(111,165,188,.22);border-radius:8px;background:#1b2023}.local-bot-watch-bar>div{min-width:0}.local-bot-watch-bar strong{color:#b7d6e1;font-weight:600}.local-bot-watch-bar .local-bot-note{margin-top:2px;font-size:12px}.local-bot-watch-bar .is-watching{color:#88d3a1}.local-bot-watch-bar select{min-width:180px}.local-bot-columns{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);align-items:start;gap:16px}.local-bot-table{display:block;max-height:460px;overflow:auto}.local-bot-table table{width:100%}.local-bot-table th,.local-bot-table td{white-space:nowrap}.local-bot-table td:nth-child(6){max-width:260px;overflow:hidden;text-overflow:ellipsis}.local-bot-table td:first-child strong{display:block}.local-bot-managed{display:block;margin-top:2px;color:#caa95e;font-size:10px}.local-bot-row-actions{display:flex;justify-content:flex-end;gap:4px}.local-bot-row-actions button{min-height:27px;padding:0 8px;font-size:11px}.local-bot-row-actions .local-bot-remove{width:27px;padding:0;color:#d99080}.local-bot-empty{padding:14px;color:#aaa59a}.local-bot-empty[hidden]{display:none}.local-bot-detail{display:grid;gap:10px}.local-bot-detail-heading{align-items:flex-start}.local-bot-detail-heading p{font-family:var(--host-mono,monospace);font-size:11px}.local-bot-summary{display:grid;grid-template-columns:minmax(110px,.75fr) minmax(0,1.25fr);gap:5px 10px;margin:5px 0 0;padding:10px;border-radius:6px;background:#17181b;font-size:12px}.local-bot-summary dt{color:#969186}.local-bot-summary dd{min-width:0;margin:0;color:#e3ddcf;overflow-wrap:anywhere}.local-bot-skill-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px}.local-bot-skill{display:grid;grid-template-columns:26px minmax(0,1fr);grid-template-rows:auto 4px auto;align-items:center;column-gap:7px;min-width:0;padding:7px 8px;border:1px solid #2a2b30;border-radius:5px;background:#191a1e}.local-bot-skill-icon{grid-column:1;grid-row:1/4;width:25px;height:25px;object-fit:contain;image-rendering:pixelated}.local-bot-skill-label{display:flex;justify-content:space-between;gap:5px;font-size:11px}.local-bot-skill-label span{overflow:hidden;text-overflow:ellipsis}.local-bot-skill-label strong{color:#dfc882;font-variant-numeric:tabular-nums}.local-bot-skill-track{height:3px;margin-top:5px;overflow:hidden;border-radius:4px;background:#303136}.local-bot-skill-track i{display:block;height:100%;background:#91bd98}.local-bot-skill small{color:#88847a;font-size:9px}.local-bot-container-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.local-bot-items{min-width:0;padding:10px;border:1px solid #2a2b30;border-radius:6px;background:#191a1e}.local-bot-items h4{margin:0 0 7px}.local-bot-items ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.local-bot-items li{display:flex;justify-content:space-between;gap:8px;font-size:11px}.local-bot-items li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.local-bot-items li small{flex:none;color:#89857c;font-size:9px}.local-bot-items p{font-size:11px}.local-bot-detail-tabs{display:flex;gap:4px;overflow:auto;border-bottom:1px solid #3b3c40}.local-bot-detail-tab{flex:none;border:1px solid transparent!important;border-bottom:0!important;border-radius:5px 5px 0 0!important;background:transparent!important;color:#aaa59a!important}.local-bot-detail-tab.is-active{border-color:rgba(202,169,94,.28)!important;background:#26241e!important;color:#dfc882!important}.local-bot-detail-tab:focus-visible{outline:2px solid #caa95e;outline-offset:1px}.local-bot-detail-panel{min-width:0;padding:10px 2px}.local-bot-detail-panel[hidden]{display:none}.local-bot-inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;max-width:340px}.local-bot-equipment-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(5,minmax(70px,auto));gap:5px;max-width:330px}.local-bot-osrs-slot{position:relative;display:flex;min-width:0;min-height:58px;aspect-ratio:1;flex-direction:column;align-items:center;justify-content:center;gap:3px;overflow:hidden;padding:5px;border:1px solid #414044;border-radius:4px;background:#202126;text-align:center}.local-bot-osrs-slot.has-item{border-color:#63563a;background:#29271f}.local-bot-osrs-slot>small{position:absolute;top:3px;left:4px;color:#817d75;font-size:9px}.local-bot-osrs-slot>span{display:-webkit-box;max-width:100%;overflow:hidden;color:#dcd6c9;font-size:10px;line-height:1.25;-webkit-box-orient:vertical;-webkit-line-clamp:2}.local-bot-osrs-slot>span[hidden]{display:none}.local-bot-osrs-slot>.local-bot-item-icon{width:34px;height:34px;object-fit:contain;image-rendering:pixelated}.local-bot-osrs-slot>strong{position:absolute;right:4px;bottom:3px;color:#dfc882;font-size:10px}.local-bot-osrs-slot .local-bot-slot-empty{color:#77736b;font-size:9px}
+@media(max-width:1050px){.local-bot-columns{grid-template-columns:1fr}.local-bot-table{max-height:360px}.local-bot-detail{grid-row:1}}@media(max-width:650px){.local-bots-heading,.local-bot-detail-heading{align-items:flex-start;flex-direction:column}.local-bots-heading-actions{width:100%}.local-bot-deploy-grid{grid-template-columns:1fr}.local-bot-watch-bar{align-items:stretch;flex-direction:column;gap:8px}.local-bot-watch-bar select{width:100%}.local-bot-table{font-size:11px}.local-bot-table th,.local-bot-table td{padding:7px 8px}.local-bot-table th:nth-child(4),.local-bot-table td:nth-child(4),.local-bot-table th:nth-child(5),.local-bot-table td:nth-child(5){display:none}.local-bot-skill-grid{grid-template-columns:1fr 1fr}.local-bot-container-grid{grid-template-columns:1fr}.local-bot-summary{grid-template-columns:1fr 1.3fr}.local-bot-item-row{flex-wrap:wrap}.local-bot-item-row .local-bot-picker{flex-basis:calc(100% - 150px)}}
+.local-bot-swarm{display:grid;gap:14px}.local-bot-swarm-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.local-bot-swarm-metric{display:grid;gap:4px;min-width:0;padding:10px;border:1px solid #2a2b30;border-radius:5px;background:#17181b}.local-bot-swarm-metric span{color:#969186;font-size:10px}.local-bot-swarm-metric strong{font-size:19px;font-variant-numeric:tabular-nums}.local-bot-swarm-section{min-width:0;padding-top:8px;border-top:1px solid #2b2c30}.local-bot-swarm-section h4{margin:0 0 8px}.local-bot-routine-mix{display:flex;gap:7px;flex-wrap:wrap;max-height:120px;overflow:auto}.local-bot-routine-chip{min-height:29px!important;padding:3px 9px!important;border-left:3px solid #e7c66e!important;font-size:11px!important}.local-bot-routine-chip[aria-pressed=true]{background:#383120!important;border-color:#e7c66e!important;color:#f6e4a9!important}.local-bot-routine-color-1{border-left-color:#7fc5a1!important}.local-bot-routine-color-2{border-left-color:#80b9e7!important}.local-bot-routine-color-3{border-left-color:#cf98dc!important}.local-bot-routine-color-4{border-left-color:#e58e77!important}.local-bot-routine-color-5{border-left-color:#83d2d3!important}.local-bot-routine-color-6{border-left-color:#d9a76f!important}.local-bot-routine-color-7{border-left-color:#aeb9ef!important}.local-bot-movement-actions,.local-bot-cohort-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.local-bot-movement-actions select{min-width:110px}.local-bot-cohort-filters{margin:8px 0}.local-bot-cohort-filters label{display:grid;gap:4px;min-width:180px;color:#aaa59a;font-size:11px}.local-bot-movement-map{min-width:0;overflow:hidden;border:1px solid #2b2c30;border-radius:5px;background:#151619}.local-bot-movement-map svg{display:block;width:100%;height:300px}.local-bot-map-gridline{stroke:#37383c;stroke-width:1;stroke-dasharray:3 5}.local-bot-map-axis{fill:#aaa59a;font-size:10px}.local-bot-map-trail{opacity:.72;cursor:pointer;transition:opacity .15s}.local-bot-map-trail:hover,.local-bot-map-trail.selected{opacity:1}.local-bot-map-point{cursor:pointer}.local-bot-map-point:focus{outline:none;stroke:#fff;stroke-width:3}.local-bot-movement-legend{display:flex;gap:5px;flex-wrap:wrap;padding:8px}.local-bot-movement-legend-item{min-height:27px!important;padding:2px 7px!important;font-size:10px!important}.local-bot-movement-legend-item i{width:8px;height:8px;border-radius:50%}.local-bot-movement-legend-item[aria-pressed=true]{color:#f6e4a9!important;border-color:#caa95e!important}.local-bot-swarm .local-bot-note{font-size:11px}.local-bot-movement-map .local-bot-empty{padding:12px}@media(max-width:1000px){.local-bot-swarm-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.local-bot-swarm-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.local-bot-movement-map svg{height:230px}.local-bot-movement-actions{align-items:stretch}.local-bot-movement-actions select{flex:1}.local-bot-cohort-filters{align-items:stretch;flex-direction:column}.local-bot-cohort-filters label{width:100%}}
+
+</style>
 <script src="/panel/panel.js"></script>
+<script id="local-bots-script">
+"use strict";
+
+window.LocalBots = {
+  mount(container, el, api, flash) {
+    const skillNames = ["attack", "defence", "strength", "hitpoints", "ranged", "prayer", "magic", "cooking", "woodcutting", "fletching", "fishing", "firemaking", "crafting", "smithing", "mining", "herblore", "agility", "thieving", "slayer", "farming", "runecrafting", "hunter", "construction", "sailing"];
+    const equipmentSlots = [0, 1, 2, 3, 4, 5, 7, 9, 10, 12, 13];
+    const equipmentNames = { 0: "Head", 1: "Cape", 2: "Neck", 3: "Weapon", 4: "Body", 5: "Shield", 7: "Legs", 9: "Hands", 10: "Feet", 12: "Ring", 13: "Ammo" };
+    let snapshot = { bots: [], activities: [], viewers: [], clientUrl: "http://localhost:3000", defaultLocation: { x: 3222, y: 3218, z: 0 }, maxDeployCount: 20, maxManagedCount: 50, managedCount: 0, aiAgentAvailable: false };
+    let skillIconSources = [];
+    const itemIconSources = new Map(), loadingItemIcons = new Set();
+    void api("/panel/skill-icons.json").then(result => { if (result.ok && Array.isArray(result.body?.skills)) { skillIconSources = result.body.skills; if (selectedBot) renderDetail(); } });
+    let selectedBot = null;
+    let detailTab = "skills";
+    let selectedActivity = null;
+    let routineFilter = "all";
+    let statusFilter = "all";
+    let viewerName = "";
+    const movementByBot = new Map();
+    const movementWindowMs = 15 * 60 * 1000;
+    const maxMovementBots = 100;
+    const maxMovementPoints = 60;
+    let online = false;
+    let active = false;
+    let timer = null;
+    let refreshSerial = 0;
+    let busy = false;
+    const locationOverride = { enabled: false, x: 3222, y: 3218, z: 0 };
+    const skillsOverride = { enabled: false, rows: [] };
+    const inventoryOverride = { enabled: false, rows: [] };
+    const equipmentOverride = { enabled: false, rows: [] };
+
+    const clientLink = el("a", { className: "local-bots-button", target: "_blank", rel: "noopener", text: "Open game client", href: snapshot.clientUrl });
+    const heading = el("div", { className: "local-bots-heading" }, [
+      el("div", null, [el("h2", { text: "Bot deployment & monitoring" }), el("p", { text: "Deploy saved bot routines, inspect their live state, or switch a connected game client into read-only watch mode." })]),
+      el("div", { className: "local-bots-heading-actions" }, [
+        clientLink,
+        el("button", { type: "button", text: "Refresh", onclick: () => refresh() }),
+      ]),
+    ]);
+    const deployActivity = el("select", { "aria-label": "Bot routine" });
+    const deployCount = el("input", { type: "number", min: 1, max: 20, value: 1, "aria-label": "Number of bots" });
+    const deployLocationX = el("input", { type: "number", min: 0, max: 16383, value: 3222, "aria-label": "Spawn X" });
+    const deployLocationY = el("input", { type: "number", min: 0, max: 16383, value: 3218, "aria-label": "Spawn Y" });
+    const deployLocationZ = el("input", { type: "number", min: 0, max: 3, value: 0, "aria-label": "Spawn plane" });
+    const locationToggle = el("input", { type: "checkbox", onchange: () => { locationOverride.enabled = locationToggle.checked; renderOverrides(); } });
+    const skillToggle = el("input", { type: "checkbox", onchange: () => { skillsOverride.enabled = skillToggle.checked; renderOverrides(); } });
+    const inventoryToggle = el("input", { type: "checkbox", onchange: () => { inventoryOverride.enabled = inventoryToggle.checked; renderOverrides(); } });
+    const equipmentToggle = el("input", { type: "checkbox", onchange: () => { equipmentOverride.enabled = equipmentToggle.checked; renderOverrides(); } });
+    const overrideBody = el("div", { className: "local-bot-overrides-body" });
+    const deployStatus = el("p", { className: "local-bot-deploy-status", role: "status" });
+    const agentWarning = el("p", { className: "local-bot-note local-bot-agent-warning", role: "status" });
+    const deployButton = el("button", { type: "button", className: "primary", text: "Deploy bots", onclick: deploy });
+    const viewerSelect = el("select", { "aria-label": "Game client to watch from", onchange: () => { viewerName = viewerSelect.value; renderBots(); } });
+    const viewerNote = el("p", { className: "local-bot-note" });
+    const deployForm = el("section", { className: "local-bot-card" }, [
+      el("div", { className: "local-bots-card-heading" }, [el("div", null, [el("h3", { text: "Deploy a bot routine" }), el("p", { text: "Every bot runs the selected routine independently. Its Start setup is copied to each new bot." })])]),
+      el("div", { className: "local-bot-deploy-grid" }, [
+        el("label", null, [el("span", { text: "Bot routine" }), deployActivity]),
+        el("label", null, [el("span", { text: "Count (1–20)" }), deployCount]),
+      ]),
+      el("details", { className: "local-bot-overrides" }, [
+        el("summary", { text: "Override this deployment’s Start setup" }),
+        el("p", { className: "local-bot-note", text: "Overrides apply only to this deployment; they do not edit the saved routine. Skills merge into its Start values. Inventory and equipment options replace those Start lists." }),
+        el("label", { className: "local-bot-check" }, [locationToggle, el("span", { text: "Override spawn location" })]),
+        el("div", { className: "local-bot-location-row" }, [deployLocationX, deployLocationY, deployLocationZ]),
+        el("label", { className: "local-bot-check" }, [skillToggle, el("span", { text: "Override / add starting skill levels" })]),
+        el("div", { className: "local-bot-override-list", id: "bot-skill-overrides" }),
+        el("label", { className: "local-bot-check" }, [inventoryToggle, el("span", { text: "Replace starting inventory" })]),
+        el("div", { className: "local-bot-override-list", id: "bot-inventory-overrides" }),
+        el("label", { className: "local-bot-check" }, [equipmentToggle, el("span", { text: "Replace starting equipment" })]),
+        el("div", { className: "local-bot-override-list", id: "bot-equipment-overrides" }),
+      ]),
+      agentWarning,
+      el("div", { className: "local-bot-deploy-actions" }, [deployButton, deployStatus]),
+    ]);
+    const watchBar = el("section", { className: "local-bot-watch-bar" }, [
+      el("div", null, [el("strong", { text: "Live client" }), viewerNote]),
+      viewerSelect,
+    ]);
+    const swarmMetrics = el("div", { className: "local-bot-swarm-metrics", "aria-label": "Live bot cohort metrics" });
+    const routineMix = el("div", { className: "local-bot-routine-mix", role: "group", "aria-label": "Bot counts by routine" });
+    const movementPlane = el("select", { "aria-label": "Movement map plane", onchange: renderMovement });
+    const movementMap = el("div", { className: "local-bot-movement-map" });
+    const clearMovement = el("button", { type: "button", text: "Clear movement history", onclick: () => { movementByBot.clear(); renderSwarm(); } });
+    const swarmCard = el("section", { className: "local-bot-card local-bot-swarm", "aria-label": "Bot swarm overview" }, [
+      el("div", { className: "local-bots-card-heading" }, [el("div", null, [el("h3", { text: "Swarm overview" }), el("p", { text: "Live cohort metrics and movement trails from this panel’s recent snapshots." })]), el("span", { className: "local-bot-count", id: "bot-swarm-updated" })]),
+      swarmMetrics,
+      el("div", { className: "local-bot-swarm-section" }, [el("h4", { text: "Routine cohorts" }), routineMix]),
+      el("div", { className: "local-bot-swarm-section" }, [el("div", { className: "local-bots-card-heading" }, [el("h4", { text: "World-coordinate movement" }), el("div", { className: "local-bot-movement-actions" }, [movementPlane, clearMovement])]), movementMap,
+        el("p", { className: "local-bot-note", text: "Trails use successive bot snapshots in world X/Y coordinates, separated by plane. The view zooms to observed positions; it is not a geographic map. History is in-memory for up to 15 minutes and resets when this tab closes." })]),
+    ]);
+    const routineFilterControl = el("select", { "aria-label": "Filter bots by routine", onchange: () => { routineFilter = routineFilterControl.value; renderBots(); } });
+    const statusFilterControl = el("select", { "aria-label": "Filter bots by status", onchange: () => { statusFilter = statusFilterControl.value; renderBots(); } });
+    const tableBody = el("tbody");
+    const botTable = el("table", { className: "host-player-table local-bot-table" }, [
+      el("thead", null, [el("tr", null, ["Bot", "Routine / mode", "Status", "Location", "HP", "Current step", ""].map(label => el("th", { text: label })))]), tableBody,
+    ]);
+    const botList = el("section", { className: "local-bot-card" }, [
+      el("div", { className: "local-bots-card-heading" }, [el("div", null, [el("h3", { text: "Online bots" }), el("p", { text: "Live state refreshes every 3 seconds while this tab is open." })]), el("span", { className: "local-bot-count", id: "bot-count" })]),
+      el("div", { className: "local-bot-cohort-filters" }, [el("label", null, [el("span", { text: "Routine cohort" }), routineFilterControl]), el("label", null, [el("span", { text: "Status" }), statusFilterControl])]),
+      botTable,
+      el("p", { className: "local-bot-empty", hidden: true, id: "bot-empty", text: "No bots are currently online." }),
+    ]);
+    const detailPane = el("section", { className: "local-bot-card local-bot-detail", id: "bot-detail" }, [el("p", { className: "local-bot-empty", text: "Select a bot to inspect its live state." })]);
+    container.append(el("div", { className: "local-bots" }, [heading, deployForm, watchBar, swarmCard, el("div", { className: "local-bot-columns" }, [botList, detailPane])]));
+
+    function labelToggle(input, text) {
+      input.checked = input.checked === true;
+      return el("label", { className: "local-bot-check" }, [input, el("span", { text })]);
+    }
+
+    function fillActivities() {
+      deployActivity.replaceChildren(...snapshot.activities.map(activity => el("option", { value: activity.id, text: activity.id })));
+      if (!snapshot.activities.some(activity => activity.id === selectedActivity)) selectedActivity = snapshot.activities[0]?.id ?? null;
+      deployActivity.value = selectedActivity ?? "";
+      deployActivity.disabled = !online || snapshot.activities.length === 0 || busy;
+      if (snapshot.activities.length === 0) deployActivity.append(el("option", { value: "", text: "No saved custom bot routines" }));
+    }
+
+    function updateSpawnDefaults() {
+      const activity = snapshot.activities.find(item => item.id === deployActivity.value);
+      selectedActivity = activity?.id ?? null;
+      if (!locationOverride.enabled) {
+        const point = activity?.setup?.location ?? snapshot.defaultLocation;
+        deployLocationX.value = point.x;
+        deployLocationY.value = point.y;
+        deployLocationZ.value = point.z;
+      }
+      renderOverrides();
+    }
+
+    function renderSkillRows() {
+      const root = container.querySelector("#bot-skill-overrides");
+      root.replaceChildren();
+      if (!skillsOverride.enabled) return;
+      skillsOverride.rows.forEach((row, index) => {
+        const skill = el("select", { "aria-label": "Skill to override" }, skillNames.map(name => el("option", { value: name, text: name[0].toUpperCase() + name.slice(1) })));
+        skill.value = row.name;
+        skill.onchange = () => { row.name = skill.value; };
+        const level = el("input", { type: "number", min: 1, max: 99, value: row.level, "aria-label": "Starting level" });
+        level.onchange = () => { row.level = Number(level.value); };
+        const remove = el("button", { type: "button", text: "×", title: "Remove skill override", onclick: () => { skillsOverride.rows.splice(index, 1); renderSkillRows(); } });
+        root.append(el("div", { className: "local-bot-override-row" }, [skill, level, remove]));
+      });
+      root.append(el("button", { type: "button", text: "+ Add skill", onclick: () => {
+        const name = skillNames.find(skill => !skillsOverride.rows.some(row => row.name === skill));
+        if (name) { skillsOverride.rows.push({ name, level: 1 }); renderSkillRows(); }
+      } }));
+    }
+
+    function itemPicker(row, kind) {
+      const wrap = el("div", { className: "local-bot-picker" });
+      const input = el("input", { type: "search", placeholder: kind === "loc" ? "Loc ID or gameval" : "Item ID or gameval", value: row.id && row.name ? `${row.name} (${row.id})` : row.id ?? "" });
+      const matches = el("div", { className: "local-bot-matches" });
+      let timer;
+      let generation = 0;
+      input.addEventListener("input", () => {
+        const query = input.value.trim(), version = ++generation;
+        clearTimeout(timer);
+        row.id = /^\d+$/.test(query) ? Number(query) : null;
+        row.name = null;
+        matches.replaceChildren();
+        if (!query) return;
+        timer = setTimeout(async () => {
+          try {
+            const result = await api("/api/bot-editor-search?" + new URLSearchParams({ kind, text: query }));
+            if (version !== generation) return;
+            if (!result.ok) throw new Error(result.body?.error || "Cache search failed.");
+            matches.replaceChildren(...(result.body.hits ?? []).map(hit => el("button", { type: "button", text: `${hit.name} (${hit.id})`, onclick: () => {
+              row.id = hit.id; row.name = hit.name; input.value = `${hit.name} (${hit.id})`; matches.replaceChildren();
+            } })));
+          } catch (error) { if (version === generation) matches.textContent = error.message; }
+        }, 250);
+      });
+      wrap.append(input, matches);
+      return wrap;
+    }
+
+    function renderContainerRows(kind) {
+      const config = kind === "inventory" ? inventoryOverride : equipmentOverride;
+      const root = container.querySelector(kind === "inventory" ? "#bot-inventory-overrides" : "#bot-equipment-overrides");
+      root.replaceChildren();
+      if (!config.enabled) return;
+      const allowed = kind === "inventory" ? Array.from({ length: 28 }, (_, index) => index) : equipmentSlots;
+      config.rows.forEach((row, index) => {
+        const slotOptions = kind === "inventory" ? allowed : equipmentSlots;
+        const slot = el("select", { "aria-label": `${kind} slot` }, slotOptions.map(value => el("option", { value, text: kind === "inventory" ? `Slot ${value}` : `${equipmentNames[value]} (${value})` })));
+        slot.value = String(row.slot);
+        slot.onchange = () => { row.slot = Number(slot.value); };
+        const amount = el("input", { type: "number", min: 1, max: 2147483647, value: row.amount, "aria-label": "Item amount" });
+        amount.onchange = () => { row.amount = Number(amount.value); };
+        const remove = el("button", { type: "button", text: "×", title: `Remove ${kind} item`, onclick: () => { config.rows.splice(index, 1); renderContainerRows(kind); } });
+        root.append(el("div", { className: "local-bot-override-row local-bot-item-row" }, [slot, itemPicker(row, "item"), amount, remove]));
+      });
+      root.append(el("button", { type: "button", text: `+ Add ${kind} item`, onclick: () => {
+        const slot = allowed.find(value => !config.rows.some(row => row.slot === value));
+        if (slot !== undefined) { config.rows.push({ slot, id: null, amount: 1, name: null }); renderContainerRows(kind); }
+      } }));
+    }
+
+    function renderOverrides() {
+      overrideBody.replaceChildren();
+      const activity = snapshot.activities.find(item => item.id === selectedActivity);
+      const setup = activity?.setup ?? { location: null, skills: {}, inventory: [], equipment: [] };
+      if (!locationOverride.enabled) {
+        const spawn = setup.location ?? snapshot.defaultLocation;
+        deployLocationX.value = spawn.x; deployLocationY.value = spawn.y; deployLocationZ.value = spawn.z;
+      }
+      locationToggle.checked = locationOverride.enabled;
+      skillToggle.checked = skillsOverride.enabled;
+      inventoryToggle.checked = inventoryOverride.enabled;
+      equipmentToggle.checked = equipmentOverride.enabled;
+      const skillRoot = container.querySelector("#bot-skill-overrides");
+      const inventoryRoot = container.querySelector("#bot-inventory-overrides");
+      const equipmentRoot = container.querySelector("#bot-equipment-overrides");
+      skillRoot.hidden = !skillsOverride.enabled;
+      inventoryRoot.hidden = !inventoryOverride.enabled;
+      equipmentRoot.hidden = !equipmentOverride.enabled;
+      renderSkillRows();
+      renderContainerRows("inventory");
+      renderContainerRows("equipment");
+      const needsAi = activity?.usesAiAgent === true;
+      const availableSlots = Math.max(0, snapshot.maxManagedCount - snapshot.managedCount);
+      agentWarning.textContent = needsAi && !snapshot.aiAgentAvailable
+        ? "This routine uses an AI Agent block, but PlayerBots AI is not enabled with a configured provider. Enable it in server settings and configure an AI provider before deploying."
+        : availableSlots === 0 ? `The panel limit of ${snapshot.maxManagedCount} managed bots has been reached; despawn one before deploying more.`
+          : needsAi ? "AI Agent calls use the server’s configured provider and rate limits; they can only select one of this routine’s routes."
+            : "";
+      agentWarning.hidden = !needsAi && availableSlots > 0;
+      deployCount.max = Math.min(snapshot.maxDeployCount, availableSlots || 1);
+      deployButton.disabled = !online || busy || !selectedActivity || availableSlots === 0 || needsAi && !snapshot.aiAgentAvailable;
+    }
+
+    function setBusy(value) {
+      busy = value;
+      const activity = snapshot.activities.find(item => item.id === selectedActivity);
+      const availableSlots = Math.max(0, snapshot.maxManagedCount - snapshot.managedCount);
+      deployButton.disabled = !online || busy || !selectedActivity || availableSlots === 0 || activity?.usesAiAgent === true && !snapshot.aiAgentAvailable;
+      deployActivity.disabled = !online || busy || snapshot.activities.length === 0;
+      renderBots();
+    }
+
+    function currentOverrides() {
+      const overrides = {};
+      if (locationOverride.enabled) overrides.location = {
+        x: Number(deployLocationX.value), y: Number(deployLocationY.value), z: Number(deployLocationZ.value),
+      };
+      if (skillsOverride.enabled) overrides.skills = Object.fromEntries(skillsOverride.rows.map(row => [row.name, Number(row.level)]));
+      if (inventoryOverride.enabled) { overrides.replaceInventory = true; overrides.inventory = inventoryOverride.rows.map(({ slot, id, amount }) => ({ slot: Number(slot), id: Number(id), amount: Number(amount) })); }
+      if (equipmentOverride.enabled) { overrides.replaceEquipment = true; overrides.equipment = equipmentOverride.rows.map(({ slot, id, amount }) => ({ slot: Number(slot), id: Number(id), amount: Number(amount) })); }
+      return overrides;
+    }
+
+    async function deploy() {
+      if (!selectedActivity) return;
+      setBusy(true);
+      deployStatus.textContent = "Deploying…";
+      try {
+        const result = await api("/api/bots/deploy", {
+          activityId: selectedActivity, count: Number(deployCount.value), overrides: currentOverrides(),
+        });
+        if (!result.ok) throw new Error(result.body?.error || "Deployment failed.");
+        const names = result.body.spawned ?? [];
+        deployStatus.textContent = `Deployed ${names.length}/${result.body.requested}: ${names.join(", ")}${result.body.failures?.length ? " · " + result.body.failures.join(" ") : ""}`;
+        selectedBot = names[0] ?? selectedBot;
+        await refresh();
+        if (result.body.failures?.length) flash("warn", result.body.failures.join(" "));
+      } catch (error) {
+        deployStatus.textContent = error.message;
+        flash("error", error.message);
+      } finally { setBusy(false); }
+    }
+
+    function renderViewers() {
+      const previous = viewerName || viewerSelect.value;
+      viewerSelect.replaceChildren(...snapshot.viewers.map(viewer => el("option", { value: viewer.username, text: viewer.watching ? `${viewer.displayName} · watching ${viewer.watching}` : viewer.displayName })));
+      if (snapshot.viewers.some(viewer => viewer.username === previous)) viewerName = previous;
+      else viewerName = snapshot.viewers.find(viewer => viewer.watching)?.username ?? snapshot.viewers[0]?.username ?? "";
+      viewerSelect.value = viewerName;
+      viewerSelect.disabled = snapshot.viewers.length === 0 || busy;
+      const watching = snapshot.viewers.find(viewer => viewer.username === viewerName)?.watching;
+      viewerNote.textContent = snapshot.viewers.length === 0
+        ? "Log in to the game client as any player, then refresh."
+        : watching ? `Client is currently showing ${watching}; stop watching to return to your character.`
+          : "Watch switches this connected client to the bot in read-only mode; the bot keeps running.";
+      viewerNote.classList.toggle("is-watching", !!watching);
+    }
+
+    async function watchBot(username) {
+      if (!viewerName) { flash("warn", "Open the game client and log in as any player first."); return; }
+      if (!window.confirm(`Switch ${viewerName}'s game client to ${username}? Their character is parked until watching stops; client game-changing input is blocked and the bot continues running.`)) return;
+      try {
+        setBusy(true);
+        const result = await api("/api/bots/watch", { bot: username, viewer: viewerName });
+        if (!result.ok) throw new Error(result.body?.error || "Could not watch this bot.");
+        flash("info", `${viewerName}'s game client now shows ${username}. Use Stop watching to return to the developer character.`);
+        await refresh();
+      } catch (error) { flash("error", error.message); }
+      finally { setBusy(false); }
+    }
+
+    async function stopWatching() {
+      if (!viewerName) return;
+      try {
+        setBusy(true);
+        const result = await api("/api/bots/unwatch", { viewer: viewerName });
+        if (!result.ok) throw new Error(result.body?.error || "Could not return to the developer character.");
+        flash("info", "Returned to your developer character.");
+        await refresh();
+      } catch (error) { flash("error", error.message); }
+      finally { setBusy(false); }
+    }
+
+    async function despawn(username) {
+      if (!window.confirm(`Despawn ${username}? This only removes bots deployed from this panel.`)) return;
+      try {
+        const result = await api("/api/bots/despawn", { bot: username });
+        if (!result.ok) throw new Error(result.body?.error || "Could not despawn bot.");
+        if (selectedBot === username) selectedBot = null;
+        flash("info", `${username} despawned.`);
+        await refresh();
+      } catch (error) { flash("error", error.message); }
+    }
+
+    function statusLabel(bot) {
+      if (bot.status === "completed") return "Completed";
+      if (bot.status === "watching") return `Watching · ${bot.watchedBy ?? "viewer"}`;
+      if (bot.status === "idle") return "Idle";
+      if (bot.status === "failed") return "Failed";
+      return bot.status?.[0]?.toUpperCase() + bot.status?.slice(1) || "Running";
+    }
+
+    function routineKey(bot) { return bot.activityId ?? bot.mode ?? "Unassigned"; }
+
+    function recordMovement(bots, at = Date.now()) {
+      for (const bot of bots) {
+        const location = bot.location;
+        if (!bot.username || !location || ![location.x, location.y, location.z].every(Number.isFinite)) continue;
+        const previous = movementByBot.get(bot.username);
+        const points = (previous?.points ?? []).filter(point => at - point.at <= movementWindowMs);
+        const last = points.at(-1);
+        if (!last || last.x !== location.x || last.y !== location.y || last.z !== location.z || at - last.at >= 10000) {
+          points.push({ x: location.x, y: location.y, z: location.z, at });
+        }
+        movementByBot.set(bot.username, { username: bot.username, displayName: bot.displayName, routine: routineKey(bot), points: points.slice(-maxMovementPoints) });
+      }
+      for (const [username, trail] of movementByBot) {
+        const points = trail.points.filter(point => at - point.at <= movementWindowMs);
+        if (!points.length) movementByBot.delete(username);
+        else trail.points = points;
+      }
+      if (movementByBot.size > maxMovementBots) {
+        const oldest = [...movementByBot.entries()].sort((a, b) => (a[1].points.at(-1)?.at ?? 0) - (b[1].points.at(-1)?.at ?? 0));
+        for (const [username] of oldest.slice(0, movementByBot.size - maxMovementBots)) movementByBot.delete(username);
+      }
+    }
+
+    function renderSwarm() {
+      const bots = snapshot.bots ?? [];
+      const routineCounts = new Map();
+      const statusValues = new Map();
+      for (const bot of bots) {
+        const routine = routineKey(bot), status = bot.status ?? "unknown";
+        routineCounts.set(routine, (routineCounts.get(routine) ?? 0) + 1);
+        statusValues.set(status, (statusValues.get(status) ?? 0) + 1);
+      }
+      if (routineFilter !== "all" && !routineCounts.has(routineFilter)) routineFilter = "all";
+      if (statusFilter !== "all" && !statusValues.has(statusFilter)) statusFilter = "all";
+      routineFilterControl.replaceChildren(el("option", { value: "all", text: `All routines (${bots.length})` }), ...[...routineCounts].sort((a, b) => a[0].localeCompare(b[0])).map(([routine, count]) => el("option", { value: routine, text: `${routine} (${count})` })));
+      statusFilterControl.replaceChildren(el("option", { value: "all", text: `All statuses (${bots.length})` }), ...[...statusValues].sort((a, b) => a[0].localeCompare(b[0])).map(([status, count]) => el("option", { value: status, text: `${statusLabel({ status })} (${count})` })));
+      routineFilterControl.value = routineFilter;
+      statusFilterControl.value = statusFilter;
+      const health = bots.filter(bot => Number(bot.maxHitpoints) > 0 && Number.isFinite(Number(bot.hitpoints)));
+      const hpPercent = health.length ? Math.round(health.reduce((total, bot) => total + Math.max(0, Math.min(1, Number(bot.hitpoints) / Number(bot.maxHitpoints))), 0) / health.length * 100) : null;
+      const active = bots.filter(bot => !["completed", "failed", "idle"].includes(bot.status)).length;
+      const sampled = [...movementByBot.values()].filter(trail => trail.points.length > 1).length;
+      const metrics = [
+        ["Online bots", bots.length], ["Active bots", active], ["Routine cohorts", routineCounts.size],
+        ["Average health", hpPercent === null ? "—" : `${hpPercent}%`], ["With location", bots.filter(bot => bot.location).length], ["Trails sampled", sampled],
+      ];
+      swarmMetrics.replaceChildren(...metrics.map(([label, value]) => el("div", { className: "local-bot-swarm-metric" }, [el("span", { text: label }), el("strong", { text: String(value) })])));
+      const ordered = [...routineCounts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      routineMix.replaceChildren(...(ordered.length ? ordered.map(([routine, count], index) => el("button", {
+        type: "button", className: `local-bot-routine-chip local-bot-routine-color-${index % 8}`, "aria-pressed": String(routineFilter === routine),
+        title: `Filter the bot list to ${routine}`, text: `${routine} · ${count}`,
+        onclick: () => { routineFilter = routineFilter === routine ? "all" : routine; renderBots(); },
+      })) : [el("span", { className: "local-bot-note", text: "No online bots to group yet." })]));
+      container.querySelector("#bot-swarm-updated").textContent = `${bots.length} online`;
+      renderMovement();
+    }
+
+    function renderMovement() {
+      const allPoints = [...movementByBot.values()].flatMap(trail => trail.points);
+      const planes = [...new Set(allPoints.map(point => point.z))].sort((a, b) => a - b);
+      const previousPlane = movementPlane.value || "all";
+      movementPlane.replaceChildren(el("option", { value: "all", text: "All planes" }), ...planes.map(plane => el("option", { value: String(plane), text: `Plane ${plane}` })));
+      movementPlane.value = previousPlane === "all" || planes.includes(Number(previousPlane)) ? previousPlane : "all";
+      const trails = [...movementByBot.values()].filter(trail => routineFilter === "all" || trail.routine === routineFilter)
+        .map(trail => ({ ...trail, visible: trail.points.filter(point => movementPlane.value === "all" || point.z === Number(movementPlane.value)) }))
+        .filter(trail => trail.visible.length).sort((a, b) => Number(b.username === selectedBot) - Number(a.username === selectedBot) || (b.visible.at(-1).at - a.visible.at(-1).at)).slice(0, 30);
+      if (!trails.length) {
+        movementMap.replaceChildren(el("p", { className: "local-bot-empty", text: "Movement trails will appear after bots report world coordinates." }));
+        return;
+      }
+      const points = trails.flatMap(trail => trail.visible);
+      let minX = Math.min(...points.map(point => point.x)), maxX = Math.max(...points.map(point => point.x));
+      let minY = Math.min(...points.map(point => point.y)), maxY = Math.max(...points.map(point => point.y));
+      const padX = Math.max(8, (maxX - minX) * 0.08), padY = Math.max(8, (maxY - minY) * 0.08);
+      minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+      const svgNS = "http://www.w3.org/2000/svg", width = 760, height = 340, left = 64, right = 18, top = 18, bottom = 42;
+      const svg = document.createElementNS(svgNS, "svg");
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`); svg.setAttribute("role", "group");
+      svg.setAttribute("aria-label", `Recent bot movement in world coordinates, ${movementPlane.value === "all" ? "all planes" : `plane ${movementPlane.value}`}`);
+      const addSvg = (tag, attrs = {}, text = null) => {
+        const node = document.createElementNS(svgNS, tag);
+        for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+        if (text !== null) node.textContent = text;
+        svg.append(node); return node;
+      };
+      const xAt = value => left + (value - minX) / (maxX - minX) * (width - left - right);
+      const yAt = value => height - bottom - (value - minY) / (maxY - minY) * (height - top - bottom);
+      for (let tick = 0; tick <= 4; tick++) {
+        const x = left + tick * (width - left - right) / 4, y = top + tick * (height - top - bottom) / 4;
+        addSvg("line", { x1: x, y1: top, x2: x, y2: height - bottom, class: "local-bot-map-gridline" });
+        addSvg("line", { x1: left, y1: y, x2: width - right, y2: y, class: "local-bot-map-gridline" });
+        addSvg("text", { x, y: height - 12, class: "local-bot-map-axis", "text-anchor": "middle" }, String(Math.round(minX + tick / 4 * (maxX - minX))));
+        addSvg("text", { x: left - 8, y: y + 4, class: "local-bot-map-axis", "text-anchor": "end" }, String(Math.round(maxY - tick / 4 * (maxY - minY))));
+      }
+      addSvg("text", { x: (left + width - right) / 2, y: height - 1, class: "local-bot-map-axis", "text-anchor": "middle" }, "World X");
+      addSvg("text", { x: 12, y: top + (height - top - bottom) / 2, class: "local-bot-map-axis", "text-anchor": "middle", transform: `rotate(-90 12 ${top + (height - top - bottom) / 2})` }, "World Y");
+      const colors = ["#e7c66e", "#7fc5a1", "#80b9e7", "#cf98dc", "#e58e77", "#83d2d3", "#d9a76f", "#aeb9ef"];
+      const legend = [];
+      trails.forEach((trail, index) => {
+        const color = colors[index % colors.length], selected = trail.username === selectedBot;
+        const byPlane = new Map();
+        for (const point of trail.visible) {
+          const segments = byPlane.get(point.z) ?? [];
+          const segment = segments.at(-1), previous = segment?.at(-1);
+          if (!segment || point.at - previous.at > 30000 || Math.hypot(point.x - previous.x, point.y - previous.y) > 64) segments.push([point]);
+          else segment.push(point);
+          byPlane.set(point.z, segments);
+        }
+        for (const [plane, segments] of byPlane) for (const segment of segments) {
+          const tooltip = `${trail.displayName}: ${segment.length} samples · plane ${plane} · latest ${segment.at(-1).x}, ${segment.at(-1).y}`;
+          const selectBot = () => { selectedBot = trail.username; renderBots(); renderDetail(); };
+          if (segment.length > 1) {
+            const coords = segment.map(point => `${xAt(point.x)},${yAt(point.y)}`).join(" ");
+            const line = addSvg("polyline", { points: coords, class: `local-bot-map-trail${selected ? " selected" : ""}`, stroke: color, "stroke-width": selected ? 4 : 2.5, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" });
+            const title = document.createElementNS(svgNS, "title"); title.textContent = tooltip; line.append(title);
+            line.addEventListener("click", selectBot);
+          }
+          const current = segment.at(-1), dot = addSvg("circle", { cx: xAt(current.x), cy: yAt(current.y), r: selected ? 6 : 4.5, fill: color, stroke: "#101113", "stroke-width": 2, class: "local-bot-map-point", tabindex: 0, role: "button", "aria-label": tooltip });
+          const title = document.createElementNS(svgNS, "title"); title.textContent = tooltip; dot.append(title);
+          dot.addEventListener("click", selectBot);
+          dot.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectBot(); } });
+        }
+        legend.push(el("button", { type: "button", className: "local-bot-movement-legend-item", "aria-pressed": String(selected), onclick: () => { selectedBot = trail.username; renderBots(); renderDetail(); } }, [el("i", { style: `background:${color}` }), el("span", { text: trail.displayName })]));
+      });
+      movementMap.replaceChildren(svg, el("div", { className: "local-bot-movement-legend" }, legend));
+    }
+
+    function renderBots() {
+      tableBody.replaceChildren();
+      const bots = snapshot.bots ?? [];
+      const visibleBots = bots.filter(bot => (routineFilter === "all" || routineKey(bot) === routineFilter) && (statusFilter === "all" || (bot.status ?? "unknown") === statusFilter));
+      container.querySelector("#bot-count").textContent = visibleBots.length === bots.length ? String(bots.length) : `${visibleBots.length}/${bots.length}`;
+      const empty = container.querySelector("#bot-empty");
+      empty.textContent = bots.length ? "No bots match this cohort." : "No bots are currently online.";
+      empty.hidden = visibleBots.length !== 0;
+      botTable.hidden = visibleBots.length === 0;
+      for (const bot of visibleBots) {
+        const position = bot.location ? `${bot.location.x}, ${bot.location.y}, ${bot.location.z}` : "—";
+        const selected = bot.username === selectedBot;
+        const watchButton = bot.watchedBy
+          ? el("button", { type: "button", text: bot.watchedBy === viewerName ? "Stop watching" : "In use", disabled: busy || bot.watchedBy !== viewerName, onclick: event => { event.stopPropagation(); stopWatching(); } })
+          : el("button", { type: "button", text: "Watch in client", disabled: busy || !viewerName || !online, onclick: event => { event.stopPropagation(); void watchBot(bot.username); } });
+        const controls = el("div", { className: "local-bot-row-actions" }, [watchButton,
+          bot.managed ? el("button", { type: "button", className: "local-bot-remove", text: "×", title: "Despawn this panel-managed bot", disabled: busy, onclick: event => { event.stopPropagation(); void despawn(bot.username); } }) : null,
+        ]);
+        const row = el("tr", { className: selected ? "host-player-selected" : "", onclick: () => { selectedBot = bot.username; renderBots(); renderDetail(); } }, [
+          el("td", null, [el("strong", { text: bot.displayName }), bot.managed ? el("small", { className: "local-bot-managed", text: "Panel deployment" }) : null]),
+          el("td", { text: bot.activityId ?? bot.mode ?? "—" }),
+          el("td", { text: statusLabel(bot) }),
+          el("td", { className: "local-player-num", text: position }),
+          el("td", { className: "local-player-num", text: `${bot.hitpoints}/${bot.maxHitpoints}` }),
+          el("td", { text: bot.action?.description ?? bot.action?.id ?? "—" }),
+          el("td", null, [controls]),
+        ]);
+        tableBody.append(row);
+      }
+      renderSwarm();
+      renderViewers();
+    }
+
+    function loadItemIcon(id) {
+      if (itemIconSources.has(id) || loadingItemIcons.has(id)) return;
+      loadingItemIcons.add(id);
+      void api(`/api/bots/item-icon?id=${encodeURIComponent(id)}`).then(result => {
+        if (!result.ok || typeof result.body?.src !== "string") { itemIconSources.set(id, null); return; }
+        itemIconSources.set(id, result.body.src);
+        for (const image of detailPane.querySelectorAll(".local-bot-item-icon")) {
+          if (image.dataset.itemIcon !== String(id)) continue;
+          image.src = result.body.src;
+          image.hidden = false;
+          const name = image.parentElement.querySelector(".local-bot-item-name");
+          if (name) name.hidden = true;
+        }
+      }).catch(() => { itemIconSources.set(id, null); }).finally(() => loadingItemIcons.delete(id));
+    }
+
+    function renderDetail() {
+      const bot = snapshot.bots.find(item => item.username === selectedBot);
+      if (!bot) {
+        detailPane.replaceChildren(el("p", { className: "local-bot-empty", text: "Select a bot to inspect its live state." }));
+        return;
+      }
+      const detailHeader = el("div", { className: "local-bot-detail-heading" }, [
+        el("div", null, [el("h3", { text: bot.displayName }), el("p", { text: `${bot.activityId ?? bot.mode ?? "No activity"} · ${bot.location ? `${bot.location.x}, ${bot.location.y}, plane ${bot.location.z}` : "unknown location"}` })]),
+        bot.watchedBy === viewerName
+          ? el("button", { type: "button", text: "Stop watching", disabled: busy, onclick: stopWatching })
+          : el("button", { type: "button", className: "primary", text: "Watch in game client", disabled: busy || !viewerName || !online || !!bot.watchedBy, title: !online ? "The game server is offline." : !viewerName ? "Log in to the game client as any player, then refresh the Bots tab." : bot.watchedBy ? "This bot is already being watched." : "Watch this bot in read-only mode.", onclick: () => watchBot(bot.username) }),
+      ]);
+      const values = [
+        ["Status", statusLabel(bot)], ["Current step", bot.action?.description ?? bot.action?.id ?? "—"],
+        ["Mode", bot.mode ?? "—"], ["Combat target", bot.target ?? "None"], ["Health", `${bot.hitpoints}/${bot.maxHitpoints}`],
+        ["Combat level", bot.combatLevel], ["Total level", bot.totalLevel], ["Run energy", `${bot.runEnergy}%`],
+        ["Last error", bot.lastError ?? "None"],
+      ];
+      const summary = el("dl", { className: "local-bot-summary" }, values.flatMap(([label, value]) => [el("dt", { text: label }), el("dd", { text: String(value) })]));
+      const skills = el("div", { className: "local-bot-skill-grid", "aria-label": "Skills" }, (bot.skills ?? []).map(skill => {
+        const fill = skill.max > 0 ? Math.max(0, Math.min(100, skill.level / skill.max * 100)) : 0;
+        const skillIndex = skillNames.indexOf(String(skill.name).toLowerCase());
+        const icon = skillIndex >= 0 ? skillIconSources[skillIndex] : null;
+        return el("div", { className: "local-bot-skill" }, [
+          icon ? el("img", { className: "local-bot-skill-icon", src: icon, alt: "" }) : null,
+          el("div", { className: "local-bot-skill-label" }, [el("span", { text: skill.name }), el("strong", { text: `${skill.level}/${skill.max}` })]),
+          el("div", { className: "local-bot-skill-track" }, [el("i", { style: `width:${fill}%` })]),
+          el("small", { text: `${Number(skill.xp).toLocaleString()} XP` }),
+        ]);
+      }));
+      const inventoryBySlot = new Map((bot.inventory ?? []).map(item => [item.slot, item]));
+      const inventorySlots = Array.from({ length: 28 }, (_, slot) => {
+        const item = inventoryBySlot.get(slot);
+        const label = item ? `${item.name}, amount ${item.amount}, slot ${slot}, item ID ${item.id}` : `Empty inventory slot ${slot}`;
+        const contents = [];
+        if (item) {
+          const icon = el("img", { className: "local-bot-item-icon", alt: "" });
+          icon.dataset.itemIcon = String(item.id);
+          const cached = itemIconSources.get(item.id), itemName = el("span", { className: "local-bot-item-name", text: item.name });
+          if (typeof cached === "string") { icon.src = cached; icon.hidden = false; itemName.hidden = true; } else icon.hidden = true;
+          contents.push(icon, itemName, el("strong", { text: `×${item.amount}` }));
+        }
+        return el("div", { className: `local-bot-osrs-slot${item ? " has-item" : ""}`, role: "gridcell", title: item ? `${item.name} ×${item.amount} · slot ${slot} · id ${item.id}` : `Empty slot ${slot}`, "aria-label": label }, contents);
+      });
+      const inventoryView = el("div", { className: "local-bot-inventory-grid", role: "grid", "aria-label": "28 inventory slots" }, inventorySlots);
+      const equipmentLayout = [
+        { slot: 0, name: "Head", row: 1, column: 2 }, { slot: 13, name: "Ammo", row: 1, column: 3 },
+        { slot: 1, name: "Cape", row: 2, column: 1 }, { slot: 2, name: "Neck", row: 2, column: 2 }, { slot: 3, name: "Weapon", row: 2, column: 3 },
+        { slot: 4, name: "Body", row: 3, column: 2 }, { slot: 5, name: "Shield", row: 3, column: 3 },
+        { slot: 7, name: "Legs", row: 4, column: 2 },
+        { slot: 9, name: "Hands", row: 5, column: 1 }, { slot: 10, name: "Feet", row: 5, column: 2 }, { slot: 12, name: "Ring", row: 5, column: 3 },
+      ];
+      const equipmentBySlot = new Map((bot.equipment ?? []).map(item => [item.slot, item]));
+      const equipmentView = el("div", { className: "local-bot-equipment-grid", role: "grid", "aria-label": "Equipment slots" }, equipmentLayout.map(({ slot, name, row, column }) => {
+        const item = equipmentBySlot.get(slot);
+        const label = item ? `${name}: ${item.name}, amount ${item.amount}, item ID ${item.id}` : `${name}: empty`;
+        const contents = [el("small", { text: name })];
+        if (item) {
+          const icon = el("img", { className: "local-bot-item-icon", alt: "" });
+          icon.dataset.itemIcon = String(item.id);
+          const cached = itemIconSources.get(item.id), itemName = el("span", { className: "local-bot-item-name", text: item.name });
+          if (typeof cached === "string") { icon.src = cached; icon.hidden = false; itemName.hidden = true; } else icon.hidden = true;
+          contents.push(icon, itemName, el("strong", { text: `×${item.amount}` }));
+        } else contents.push(el("span", { className: "local-bot-slot-empty", text: "Empty" }));
+        return el("div", { className: `local-bot-osrs-slot equipment-slot${item ? " has-item" : ""}`, role: "gridcell", style: `grid-row:${row};grid-column:${column}`, title: item ? `${name}: ${item.name} ×${item.amount} · slot ${slot} · id ${item.id}` : `${name}: empty`, "aria-label": label }, contents);
+      }));
+      const tabItems = [{ id: "skills", label: "Skills" }, { id: "inventory", label: "Inventory" }, { id: "equipment", label: "Equipment" }];
+      const tabs = el("div", { className: "local-bot-detail-tabs", role: "tablist", "aria-label": "Bot details" }, tabItems.map(({ id, label }) => {
+        const activeTab = detailTab === id;
+        const tab = el("button", { type: "button", className: `local-bot-detail-tab${activeTab ? " is-active" : ""}`, id: `bot-detail-tab-${id}`, role: "tab", "aria-selected": String(activeTab), "aria-controls": `bot-detail-panel-${id}`, tabIndex: activeTab ? 0 : -1, text: label, onclick: () => { detailTab = id; renderDetail(); detailPane.querySelector(`#bot-detail-tab-${id}`)?.focus(); } });
+        tab.onkeydown = event => {
+          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+          event.preventDefault();
+          const offset = event.key === 'ArrowRight' ? 1 : -1;
+          detailTab = tabItems[(tabItems.findIndex(item => item.id === id) + offset + tabItems.length) % tabItems.length].id;
+          renderDetail();
+          detailPane.querySelector(`#bot-detail-tab-${detailTab}`)?.focus();
+        };
+        return tab;
+      }));
+      const skillsPanel = el("div", { className: "local-bot-detail-panel", id: "bot-detail-panel-skills", role: "tabpanel", "aria-labelledby": "bot-detail-tab-skills", hidden: detailTab !== "skills" }, [skills]);
+      const inventoryPanel = el("div", { className: "local-bot-detail-panel", id: "bot-detail-panel-inventory", role: "tabpanel", "aria-labelledby": "bot-detail-tab-inventory", hidden: detailTab !== "inventory" }, [inventoryView]);
+      const equipmentPanel = el("div", { className: "local-bot-detail-panel", id: "bot-detail-panel-equipment", role: "tabpanel", "aria-labelledby": "bot-detail-tab-equipment", hidden: detailTab !== "equipment" }, [equipmentView]);
+      const watched = el("p", { className: "local-bot-note", text: bot.watchedBy ? `Being watched by ${bot.watchedBy} in read-only client mode.` : "Not currently being watched." });
+      const watchHint = !online ? "Start the game server to watch a bot." : !viewerName ? "To enable watching, log in to the game client as any player, then refresh this panel." : bot.watchedBy ? `This bot is already being watched by ${bot.watchedBy}.` : null;
+      detailPane.replaceChildren(detailHeader, watched, watchHint ? el("p", { className: "local-bot-note", text: watchHint }) : null, summary, tabs, skillsPanel, inventoryPanel, equipmentPanel);
+      for (const item of [...(bot.inventory ?? []), ...(bot.equipment ?? [])]) loadItemIcon(item.id);
+    }
+
+    async function refresh() {
+      const serial = ++refreshSerial;
+      if (!online) { renderBots(); renderDetail(); return; }
+      try {
+        const result = await api("/api/bots");
+        if (serial !== refreshSerial) return;
+        if (!result.ok) throw new Error(result.body?.error || "Could not load bot monitoring data.");
+        snapshot = result.body;
+        recordMovement(snapshot.bots ?? []);
+        clientLink.href = snapshot.clientUrl;
+        fillActivities();
+        updateSpawnDefaults();
+        renderViewers();
+        renderBots();
+        renderDetail();
+      } catch (error) {
+        if (serial === refreshSerial) flash("error", error.message);
+      }
+    }
+
+    function setOnline(value) {
+      online = value === true;
+      const activity = snapshot.activities.find(item => item.id === selectedActivity);
+      const availableSlots = Math.max(0, snapshot.maxManagedCount - snapshot.managedCount);
+      deployButton.disabled = !online || busy || !selectedActivity || availableSlots === 0 || activity?.usesAiAgent === true && !snapshot.aiAgentAvailable;
+      if (!online) {
+        deployStatus.textContent = "Start the game server to deploy or monitor bots.";
+        snapshot.bots = [];
+        renderBots(); renderDetail();
+      } else if (active) void refresh();
+    }
+
+    function setActive(value) {
+      active = value === true;
+      clearInterval(timer);
+      timer = active && online ? setInterval(() => { if (!document.hidden) void refresh(); }, 3000) : null;
+      if (active && online) void refresh();
+    }
+
+    deployActivity.addEventListener("change", updateSpawnDefaults);
+    deployCount.addEventListener("change", () => {
+      const max = Number(snapshot.maxDeployCount || 20);
+      const available = Math.max(0, snapshot.maxManagedCount - snapshot.managedCount);
+      deployCount.value = String(Math.max(1, Math.min(max, available || max, Math.floor(Number(deployCount.value) || 1))));
+      renderOverrides();
+    });
+    renderOverrides();
+    fillActivities();
+    renderBots();
+    renderDetail();
+    return { refresh, setOnline, setActive };
+  },
+};
+
+</script>
 <style>
   @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/panel/fonts/plex-sans-400.woff2") format("woff2"); }
   @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/panel/fonts/plex-sans-500.woff2") format("woff2"); }
@@ -240,6 +901,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v4m6-4v4M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v4"/></svg>
         Plugins
       </button>
+      <button type="button" role="tab" id="tab-bots" aria-controls="panel-bots" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4m-4 5h.01M16 12h.01M8 16h8"/></svg>
+        Bots
+      </button>
     </div>
     <nav class="tool-group" aria-label="Tools">
       <div class="tool-group-label">Tools</div>
@@ -251,6 +916,11 @@
       <a id="cache-editor-link" class="tool-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.7 7.5 4.4 7.5-4.4M12 12.1V21"/></svg>
         <span>Cache editor</span>
+        <svg class="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+      </a>
+      <a id="bot-editor-link" class="tool-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4m-4 5h.01M16 12h.01M8 16h8"/></svg>
+        <span>Bot routine editor</span>
         <svg class="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
       </a>
     </nav>
@@ -282,6 +952,7 @@
       </div>
       <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
       <div id="panel-plugins" class="host-plugin-panel" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <div id="panel-bots" role="tabpanel" aria-labelledby="tab-bots" hidden></div>
       <p id="loading" class="empty">Loading…</p>
     </main>
     <footer class="footer">
@@ -429,6 +1100,7 @@
     var catalog = state.data.catalog;
     updateToolLink("map-editor-link", state.data.mapEditorUrl, "edit");
     updateToolLink("cache-editor-link", state.data.cacheEditorUrl, "cache");
+    updateToolLink("bot-editor-link", state.data.botEditorUrl, "bot");
     var settings = document.getElementById("settings-fields");
     pluginPanel.clearSpawnPicker();
     settings.textContent = "";
@@ -500,8 +1172,9 @@
     if (!event.matches && sidebar.classList.contains("open")) setMenuOpen(false);
   });
 
-  var sections = ["settings", "players", "plugins"];
+  var sections = ["settings", "players", "plugins", "bots"];
   var playersPanel;
+  var botsPanel;
   var serverOnline = false;
   function selectTab(tab) {
     if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
@@ -516,13 +1189,19 @@
     var title = tab[0].toUpperCase() + tab.slice(1);
     document.getElementById("page-title").textContent = title;
     document.getElementById("search").placeholder = "Search " + title.toLowerCase();
-    document.querySelector("header .search").hidden = tab === "players";
-    document.querySelector(".workspace > footer").hidden = tab === "players";
+    document.querySelector("header .search").hidden = tab === "players" || tab === "bots";
+    document.querySelector(".workspace > footer").hidden = tab === "players" || tab === "bots";
     if (tab === "players") {
       playersPanel ||= window.LocalPlayers.mount(document.getElementById("panel-players"), el, api, flash);
       playersPanel.setOnline(serverOnline);
       playersPanel.refresh();
     }
+    if (tab === "bots") {
+      botsPanel ||= window.LocalBots.mount(document.getElementById("panel-bots"), el, api, flash);
+      botsPanel.setOnline(serverOnline);
+      botsPanel.refresh();
+    }
+    if (botsPanel) botsPanel.setActive(tab === "bots");
     if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);
   }
   sections.forEach(function (tab) {
@@ -538,7 +1217,7 @@
     }
     var next;
     if (event.key === "Home") next = "settings";
-    else if (event.key === "End") next = "plugins";
+    else if (event.key === "End") next = "bots";
     else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       var step = event.key === "ArrowUp" ? -1 : 1;
       next = sections[(sections.indexOf(state.tab) + step + sections.length) % sections.length];
@@ -579,6 +1258,7 @@
     power.disabled = !data.serverStatus || busy || !!data.pending || !!data.countdown?.scheduled;
     document.getElementById("server-restart").disabled = power.disabled || !running;
     if (playersPanel) playersPanel.setOnline(running);
+    if (botsPanel) botsPanel.setOnline(running);
   }
 
   async function controlServer(action) {
@@ -873,6 +1553,7 @@
         build();
       }
       if (statusChanged && state.tab === "players") playersPanel?.refresh();
+      if (statusChanged && state.tab === "bots") botsPanel?.refresh();
       renderBanners();
       updateFooter();
       var pending = res.body.pending;

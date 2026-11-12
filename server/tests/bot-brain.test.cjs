@@ -50,6 +50,21 @@ function fakeRegistry(next = []) {
 const action = (id, results) => ({ id, update: () => results.shift() ?? 'running' });
 const tickN = (brain, n) => { for (let i = 0; i < n; i++) brain.tick(i); };
 
+test('one-shot graph completion leaves the bot idle instead of reassignment loops', () => {
+  let picks = 0;
+  const registry = fakeRegistry();
+  registry.pickActivity = () => { picks++; return null; };
+  const brain = new BotBrain({ player: fakePlayer(), state: {}, registry, world: {}, nowMs: 0,
+    activity: { id: 'custom_single', oneShot: true, repeat: false, actions: [{ id: 'done', update: () => 'success', madeProgress: () => true }] },
+  });
+  brain.tick(1); brain.tick(2); brain.tick(3);
+  assert.equal(brain.stopped, true);
+  assert.equal(brain.frames.length, 0);
+  assert.equal(picks, 0);
+  brain.tick(4);
+  assert.equal(picks, 0);
+});
+
 test('unmet setup pushes a resolver; the parent resumes once it succeeds', () => {
   let hasAxe = false;
   const resolver = {
@@ -1830,11 +1845,74 @@ test('bots are given tools, never resources: inputs come from gathering or the b
   assert.ok(followOns(raw.templates.mine_rocks).includes('smelt'), 'miners can smelt their ore');
 });
 
-test('combat-training activity compiles against the real plugin core API', () => {
+test('editor activities compile in the real registry without becoming site activities', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
-  const registry = createBotActivityRegistry({ world: { core: PluginManager.getCoreApi() } });
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-editor-registry-'));
+  try {
+    const editorPath = path.join(dir, 'activities.json');
+    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_walk', repeat: false, actions: [{ type: 'walkTo', x: 3222, y: 3218, z: 0, radius: 3 }, { type: 'if', condition: { hasItem: { id: 1511, min: 1 } }, then: { type: 'dropItems', itemIds: [1511] }, else: null }] }]));
+    const registry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
+    const activity = registry.byId.get('custom_walk');
+    assert.equal(activity.manual, true);
+    assert.equal(activity.actions[0].id, 'walkTo');
+    assert.equal(activity.actions[1].id, 'if');
+    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_graph', repeat: false, graph: { nodes: [{ id: 'start', kind: 'start', x: 0, y: 0 }, { id: 'check', kind: 'if', x: 200, y: 0, condition: { hasItem: { id: 1511, min: 1 } } }, { id: 'drop', kind: 'action', x: 400, y: 0, action: { type: 'dropItems', itemIds: [1511] } }, { id: 'end', kind: 'end', x: 600, y: 0 }], edges: [{ from: 'start', port: 'next', to: 'check' }, { from: 'check', port: 'true', to: 'drop' }, { from: 'check', port: 'false', to: 'end' }, { from: 'drop', port: 'next', to: 'end' }] } }]));
+    const graphRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
+    const graphActivity = graphRegistry.byId.get('custom_graph');
+    assert.equal(graphActivity.actions[0].id, 'graph');
+    assert.equal(graphActivity.oneShot, true);
+    assert.deepEqual(graphActivity.spawnSetup, { location: null, skills: {}, inventory: [], equipment: [] });
+    const presenceGraph = present => ({
+      nodes: [
+        { id: 'start', kind: 'start', x: 0, y: 0 },
+        { id: 'check', kind: 'if', x: 100, y: 0, condition: { hasItem: { id: 1511, present } } },
+        { id: 'match', kind: 'end', x: 200, y: 0 },
+        { id: 'no_match', kind: 'end', x: 200, y: 100 },
+      ],
+      edges: [
+        { from: 'start', port: 'next', to: 'check' },
+        { from: 'check', port: 'true', to: 'match' },
+        { from: 'check', port: 'false', to: 'no_match' },
+      ],
+    });
+    fs.writeFileSync(editorPath, JSON.stringify([
+      { id: 'custom_has_logs', repeat: false, graph: presenceGraph(true) },
+      { id: 'custom_no_logs', repeat: false, graph: presenceGraph(false) },
+    ]));
+    const presenceRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
+    const routeFor = (id, amount) => {
+      const action = presenceRegistry.byId.get(id).actions[0];
+      const ctx = { player: { getInventory: () => ({ getAmount: () => amount }) }, brain: {} };
+      assert.equal(action.update(ctx), 'running');
+      assert.equal(action.update(ctx), 'running');
+      return action.describe(ctx);
+    };
+    assert.equal(routeFor('custom_has_logs', 2), 'end: match');
+    assert.equal(routeFor('custom_has_logs', 0), 'end: no_match');
+    assert.equal(routeFor('custom_no_logs', 0), 'end: match');
+    assert.equal(routeFor('custom_no_logs', 1), 'end: no_match');
+    assert.ok(registry.sites.every(site => !site.activities.some(entry => entry.id === 'custom_walk')));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('combat-training preset and editor overrides compile against the real plugin core API', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
+  const os = require('node:os'), path = require('node:path');
+  const core = PluginManager.getCoreApi();
+  const registry = createBotActivityRegistry({ world: { core } });
   assert.equal(registry.byId.get('combat_training').actions[0].id, 'trainCombat');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-train-editor-'));
+  try {
+    const editorPath = path.join(dir, 'activities.json');
+    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_train_options', repeat: true, actions: [{ type: 'trainCombat', preset: 'default', styles: ['magic'], durationSeconds: { min: 30, max: 90 }, food: 'LOBSTER', foodAmount: 12, maxFailedTargets: 9, spreadDistance: 240 }] }]));
+    const edited = createBotActivityRegistry({ editorPath, world: { core } }).byId.get('custom_train_options');
+    assert.equal(edited.manual, true);
+    assert.equal(edited.actions[0].id, 'trainCombat');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a rotation switches activity after its time, never mid-fight or under an overlay', () => {
@@ -3069,6 +3147,31 @@ test('manual control preserves both characters and restores the bot on return or
   assert.equal(World.getRemovePlayerQueue().includes(bot), false);
   World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(owner), 1);
   assert.deepEqual(bootstraps, [owner, bot, owner, bot, owner]);
+});
+
+test('read-only spectator control receives bot updates but ignores game-changing client input', async (t) => {
+  const { ClientConnection, controlPlayer, dispatchClientMessages } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { World } = require('../dist/game/World');
+  const owner = nativeFollowCombatPlayer(t, 'spectator-owner', new Location(3089, 3524));
+  owner.setPlayerBot(false);
+  const bot = nativeFollowCombatPlayer(t, 'spectated-bot', new Location(3100, 3524));
+  bot.setSession(new BotPlayerSession());
+  const connection = new ClientConnection(new HeadlessBinaryChannel());
+  t.mock.method(connection, 'sendPlayerBootstrap', () => {});
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  connection.bindControlledPlayer(owner);
+  owner.setNeedsPlacement(false);
+  bot.setNeedsPlacement(false);
+  assert.equal(controlPlayer(owner, bot, () => {}, { readOnly: true }), true);
+  assert.equal(dispatchClientMessages(bot, [{ type: 'move', worldX: 3096, worldY: 3524, modifierFlags: 0 }]), true);
+  await new Promise(setImmediate);
+  bot.process();
+  assert.equal(bot.getLocation().getX(), 3100, 'spectator movement input must not move the bot');
+  assert.equal(bot.getFollowing() ?? null, null, 'spectator interactions must not issue game actions');
+  assert.equal(connection.releasePlayerControl(), true);
+  assert.equal(connection.player, owner);
 });
 
 test('manually controlled bots skip recovery, re-gearing and brain decisions', () => {

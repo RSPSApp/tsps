@@ -1728,7 +1728,7 @@ export interface PluginCoreApi {
   /** Public chat as a client sends it (filter, mute, broadcast): bots speak through it too. */
   ChatPacketListener: any;
   TradeState: any;
-  controlPlayer: (owner: any, target: any, released: () => void) => boolean;
+  controlPlayer: (owner: any, target: any, released: () => void, options?: { readOnly?: boolean }) => boolean;
   releasePlayerControl: (player: any) => boolean;
   /** The parked owner left the world: release the controlled player and close the owner's connection. */
   endPlayerControl: (controlled: any) => boolean;

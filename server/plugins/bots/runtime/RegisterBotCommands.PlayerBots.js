@@ -11,6 +11,7 @@ const {
 } = require("../brain/BrainActivities.PlayerBots");
 
 const { registerBotControlCommands } = require("./Control.PlayerBots");
+const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
 
 function registerBotCommands(options) {
   registerBotControlCommands(options);
@@ -129,15 +130,25 @@ function registerBotCommands(options) {
       }
       return true;
     }
-    const bot = runtime.spawnPvpBot(player.getLocation(), {
+    const setup = activity?.spawnSetup ?? null;
+    const core = api.core;
+    const setupError = validateSpawnSetup(setup, core);
+    if (setupError) {
+      player.sendMessage(`Bot setup has ${setupError}.`);
+      return true;
+    }
+    const loc = setup?.location;
+    const spawn = loc ? new core.Location(loc.x, loc.y, loc.z) : player.getLocation();
+    const bot = runtime.spawnPvpBot(spawn, {
       mode: activity?.mode ?? normalizedBehavior,
     });
     if (!bot) {
       player.sendMessage("Unable to spawn a bot right now.");
       return true;
     }
+    applySpawnSetup(bot, setup, core);
     if (activity) {
-      const attached = startActivity(bot, activity.id, { home: player.getLocation() });
+      const attached = startActivity(bot, activity.id, { home: spawn });
       player.sendMessage(
         attached
           ? `${bot.getUsername()} spawned as ${activity.mode} (brain).`

@@ -430,20 +430,39 @@ class Fight {
 
   /** A hit on her, by the fight's rules. */
   hitBoss(hit) {
-    const { fight, npcs, zaros } = Common.data;
     const attacker = hit.getAttacker?.();
     const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
-    const total = hit.getTotalDamage();
+    this.applyRules(hit.getHits(), player, hit.getCombatType?.(), false);
+    hit.updateTotalDamage();
+  }
+
+  /**
+   * A thrall's, recoil's or vengeance's hit as it lands on her: it skipped her hit hook, so the
+   * same rules apply here (Wiki, Nex/Strategies: during a siphon "all damage she receives will
+   * instead heal her"; the dash is immune to "any hits"). No style, so no Zaros deflect; no
+   * "immune" line, as the Wiki gives none for them and a thrall would repeat it every attack.
+   */
+  directHit(hit) {
+    const source = hit.getSource?.();
+    const player = source?.isPlayer?.() ? source.getAsPlayer() : null;
+    this.applyRules([hit], player, null, true);
+  }
+
+  applyRules(parts, player, combatType, direct) {
+    const { fight, npcs, zaros } = Common.data;
+    const total = parts.reduce((sum, part) => sum + part.getDamage(), 0);
+    const tell = (text) => {
+      if (player && !direct) player.sendMessage(text);
+    };
     const zero = () => {
-      for (const part of hit.getHits()) part.setDamage(0);
-      hit.updateTotalDamage();
+      for (const part of parts) part.setDamage(0);
     };
     if (this.stage === "spawning" || this.stage === "dying" || this.stage === "ended" || this.tick < this.immuneUntil) {
       zero();
-      if (player && this.stage !== "dying") player.sendMessage(fight.immune);
+      if (this.stage !== "dying") tell(fight.immune);
       return;
     }
-    this.areaSound(fight.hitSound);
+    if (!direct) this.areaSound(fight.hitSound);
     if (this.tick < this.siphonUntil && total > 0) {
       zero();
       Common.healNpc(this.boss, total, fight.hitpoints);
@@ -453,7 +472,7 @@ class Fight {
     const phase = this.phase();
     if (phase.key === "zaros") {
       const { CombatType } = Common.core;
-      if (this.form() === npcs.deflect && hit.getCombatType?.() === CombatType.MELEE && total > 0) {
+      if (this.form() === npcs.deflect && combatType === CombatType.MELEE && total > 0) {
         zero();
         if (player) {
           Common.damage(player, Math.floor(total * zaros.deflectShare));
@@ -467,20 +486,19 @@ class Fight {
       const room = Math.max(0, this.boss.getHitpoints() - floor);
       if (room === 0) {
         zero();
-        if (player) player.sendMessage(fight.immune);
+        tell(fight.immune);
         return;
       }
       if (total > room) {
         let left = room;
-        for (const part of hit.getHits()) {
+        for (const part of parts) {
           const amount = Math.min(left, part.getDamage());
           part.setDamage(amount);
           left -= amount;
         }
-        hit.updateTotalDamage();
       }
     }
-    this.credit(player, hit.getTotalDamage());
+    this.credit(player, parts.reduce((sum, part) => sum + part.getDamage(), 0));
   }
 
   // ------------------------------------------------------------------ HUD and music
@@ -747,6 +765,25 @@ function npcDied({ npc, killer }) {
   if (fight.reavers.includes(npc)) Specials.reaverDied(fight, npc);
 }
 
+/** `combat:damage-apply`: a thrall's, recoil's or vengeance's hit on Nex or one of her fight's NPCs. */
+function directDamage({ target, hit }) {
+  if (!hit?.getOrigin?.() || !target?.isNpc?.()) return;
+  const npc = target.getAsNpc?.() ?? target;
+  const fight = fightOf(npc);
+  if (!fight) return;
+  if (npc === fight.boss) {
+    fight.directHit(hit);
+    return;
+  }
+  if (fight.isImmuneMage(npc)) {
+    hit.setDamage(0);
+    return;
+  }
+  // A vulnerable mage or a reaver: the owner's share, as for their own hits (modifyHit).
+  const source = hit.getSource?.();
+  if (source?.isPlayer?.()) fight.credit(source.getAsPlayer(), hit.getDamage());
+}
+
 function attachFight(api) {
   const { npcs } = Common.data;
   api.persistAttribute(Common.KILLS_ATTRIBUTE, 0);
@@ -755,6 +792,7 @@ function attachFight(api) {
   const method = scriptedClass();
   for (const id of [npcs.nex, npcs.spawning, npcs.soulSplit, npcs.deflect, npcs.dying]) api.registerNpcCombatMethodProvider(id, method);
   api.onNpcHitModify(modifyHit);
+  api.onCustomEvent("combat:damage-apply", directDamage);
   api.onPlayerDealtDamage(dealtDamage);
   api.onNpcBeforeDeath(beforeDeath);
   api.onNpcDeath(npcDied);

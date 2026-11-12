@@ -42,6 +42,10 @@ do not grant the perk. A later Magic change does not resize an existing summon;
 replacement and logout keep the existing owned-task cleanup.
 Each attack's max hit is asked through `magic:thrall-max-hit` { player, thrall,
 target, maxHit } (Shattered Relics' Thrall Damage fragment raises it).
+The hit goes straight to the target's HitQueue, past `onNpcHitModify`, and carries
+`HitDamage.getOrigin()` "thrall" (recoil and vengeance carry "recoil" and "vengeance"):
+content whose rules live in that hook applies them in `combat:damage-apply`, as Nex
+(siphon, floors, immunity) and the Alchemical Hydra (its shield) do.
 
 Four regressions were observed failing before implementation: a zero roll dealt
 the tier maximum, launch awarded damage before application, cooldown was 30

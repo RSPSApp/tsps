@@ -125,6 +125,23 @@ test("the data: every id as the cache names it", () => {
   assert.deepEqual(DATA.shrine.evilChicken.pieces.map(item).sort(), ["Evil chicken feet", "Evil chicken head", "Evil chicken legs", "Evil chicken wings"]);
 });
 
+test("both carved redwoods link the two scaffolding levels at their cache placements", () => {
+  core.RegionManager.init();
+  const x = 1570;
+  for (const y of [3484, 3490]) {
+    core.RegionManager.loadMapFiles(x, y);
+    const player = createPlayer(x - 1, y);
+    player.setLocation(new Location(x - 1, y, 1));
+    const enter = (objectId, z) => Guild.enterRedwood({ player, objectId, location: { x, y, z } });
+    assert.equal(enter(core.ObjectIdentifiers.CARVED_REDWOOD_2, 1), true);
+    assert.equal(player.getLocation().getZ(), 2);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+    assert.equal(enter(core.ObjectIdentifiers.CARVED_REDWOOD_3, 2), true);
+    assert.equal(player.getLocation().getZ(), 1);
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+  }
+});
+
 test("as captured: Ents attack (12506), block (12504) and die (12508) with their own animations", () => {
   const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
   new NpcDefinitionLoader().load();

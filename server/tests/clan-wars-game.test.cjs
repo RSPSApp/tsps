@@ -1922,10 +1922,11 @@ test('native Sylvan and Plateau coexist and refuse foreign exit or viewing objec
 
 
 test('native Sylvan Ignore5 preserves six-fighter starts and real five-fighter defeat',async()=>{
-  const a=actor(),b=actor(),allies=Array.from({length:5},()=>actor()),enemies=Array.from({length:5},()=>actor());
+  const a=actor(true),b=actor(true),allies=Array.from({length:5},()=>actor(true)),enemies=Array.from({length:5},()=>actor(true));
+  for(const p of [a,...allies,b,...enemies]) ruleStats(p);
   channel(a,allies);channel(b,enemies);
   const game=await negotiate(a,b,3,0,{stragglers:1},2);
-  for(const p of [a,...allies,b,...enemies]) await join(p);
+  await batchJoin([a,...allies,b,...enemies],game);
   assert.equal(game.fighters.size,12);core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');
   await lethalMelee(b,allies[0],game,true,[[3400,5020,0],[3401,5020,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of [a,...allies,b,...enemies]) lobby(p);

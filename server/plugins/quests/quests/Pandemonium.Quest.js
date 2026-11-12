@@ -975,7 +975,10 @@ module.exports = function registerPandemoniumQuest(api) {
     const stage = quest.getStage(player);
     if (isSteve(npcId)) {
       // 48: Grog's gone and only the rewards are left; the "again" variant jumps to them.
-      if (complete || stage >= STAGE_GROG_DONE) return STEVE_POST_QUEST_VARIANT;
+      if (complete || stage >= STAGE_GROG_DONE) {
+        removeOldGrog(player);
+        return STEVE_POST_QUEST_VARIANT;
+      }
       if (stage >= STAGE_JIM_DONE) {
         ensureOldGrog(player);
         return STEVE_FINALE_VARIANT;
@@ -1403,6 +1406,7 @@ module.exports = function registerPandemoniumQuest(api) {
         event.box = { statement: true, holdTicks: 4 };
         // Live removes him during the hold, between the box and its continue.
         Scenes.later(player, 3, () => removeOldGrog(player));
+        event.after = () => removeOldGrog(player);
         if (quest.getStage(player) < STAGE_GROG_DONE) quest.setStage(player, STAGE_GROG_DONE);
         return;
       default:

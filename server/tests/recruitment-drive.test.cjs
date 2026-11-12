@@ -657,3 +657,14 @@ test("the entrance portal does nothing once the room is failing (review)", async
     && String(call.args[0]).replace(/<br>/g, " ").replace(/\s+/g, " ").trim() === text);
   assert.equal(sends.length, 1, "Sir Tiffy's failure lines play once");
 });
+
+test("items given during Sir Tiffy's trip stop it before the grounds (review)", async (t) => {
+  const f = actor(t);
+  drive().course.travel(f.player, [ROOM.cheevers, ROOM.kuam, ROOM.table, ROOM.ren, ROOM.hynn]);
+  ticks(f, 3);
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 1000), true);
+  ticks(f, 12);
+  assert.deepEqual(at(f), TALK_TILE.slice(0, 2));
+  assert.equal(drive().course.run(f.player), null);
+  assert.equal(varbit(f, 6719), 0);
+});

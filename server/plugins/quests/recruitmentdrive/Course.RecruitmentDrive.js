@@ -31,6 +31,7 @@ const PAGE = "Recruitment Drive";
 const ROOMS_PER_RUN = 5;
 const KUAM_ROOM = 3;
 const FALADOR_RETURN = { x: 2996, y: 3375, z: 0 };
+const TIFFY_TILE = [2997, 3373];
 const GROUNDS = { minX: 2430, maxX: 2500, minY: 4925, maxY: 4990 };
 
 const FADE_UID = (161 << 16) | 1;
@@ -302,6 +303,14 @@ module.exports = function createCourse(api, hooks) {
     later(player, 8, () => heldLine(player, hooks.tiffyNpcId, lines[2]));
     later(player, 11, () => {
       closeChat(player);
+      // Ours: the trip is checked again as it lands; a player who was moved or given items in
+      // the dark is left where they are.
+      const at = player.getLocation();
+      const nearTiffy = Math.abs(at.getX() - TIFFY_TILE[0]) <= 3 && Math.abs(at.getY() - TIFFY_TILE[1]) <= 3 && at.getZ() === 0;
+      if (!nearTiffy || !player.getInventory().isEmpty() || player.getEquipment().getValidItems().length > 0) {
+        abandon(player);
+        return;
+      }
       teleport(player, currentRoom(player).landing);
     });
     later(player, 13, () => {

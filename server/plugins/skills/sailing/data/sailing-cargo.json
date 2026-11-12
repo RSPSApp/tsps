@@ -3,7 +3,7 @@
     { "slot": 0, "name": "Captain's log", "give": [31986], "accept": [31985, 31986] },
     { "slot": 1, "name": "Spyglass", "give": [31803], "accept": [31803] },
     { "slot": 2, "name": "Current duck", "give": [31805], "accept": [31805] },
-    { "slot": 3, "name": "Crowbar", "give": [31807], "accept": [31807] },
+    { "slot": 3, "name": "Crowbar", "give": [31807], "accept": [31807], "refuseIfHeld": true },
     { "slot": 4, "name": "Diving gear", "give": [7534, 7535], "accept": [7534, 7535] }
   ],
   "categories": {

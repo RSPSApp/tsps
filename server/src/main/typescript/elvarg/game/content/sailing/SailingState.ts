@@ -76,6 +76,8 @@ export interface SailingState {
     returnPoint: { x: number; y: number; z: number } | null;
     /** Tools compartment slots holding their tool; shared by all of the player's boats. */
     tools: number[];
+    /** Parts of a stored multi-part tool (diving gear) that are not in the compartment; absent when none. */
+    missingToolParts?: number[];
     /** The dock the player last docked at, and the last that was a port (not a mooring point). */
     lastDock: string | null;
     lastStandardDock: string | null;
@@ -163,12 +165,16 @@ export function normalizeSailingState(raw: any): SailingState {
         ? { x: point.x, y: point.y, z: point.z }
         : null;
     const tools = Array.isArray(raw.tools) ? [...new Set<number>(raw.tools.filter(Number.isInteger))] : [];
+    const missingToolParts = Array.isArray(raw.missingToolParts)
+        ? [...new Set<number>(raw.missingToolParts.filter(Number.isInteger))]
+        : [];
     const dockId = (value: unknown) => (typeof value === "string" ? value : null);
     const mooredDocks = Array.isArray(raw.mooredDocks)
         ? [...new Set<string>(raw.mooredDocks.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))]
         : [];
     return {
         boats, activeBoatSlot: active, returnPoint, tools,
+        ...(missingToolParts.length > 0 && { missingToolParts }),
         lastDock: dockId(raw.lastDock), lastStandardDock: dockId(raw.lastStandardDock),
         ...(mooredDocks.length > 0 && { mooredDocks }),
     };

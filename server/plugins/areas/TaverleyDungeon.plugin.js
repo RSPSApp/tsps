@@ -2,6 +2,7 @@
  * Shared Taverley Dungeon key doors, Velrak's canonical dusty-key hand-out and the suits of
  * armour guarding the Cauldron of Thunder's prison door.
  */
+const { hasKey } = require("../items/KeyAvailability");
 const DOORS = [
   { id: 'DOOR_99', key: 'JAIL_KEY', tile: [2931, 9690, 0], inside: [2931, 9689, 0], freeExit: true },
   { id: 'DOOR_99', key: 'JAIL_KEY', tile: [2931, 9694, 0], inside: [2931, 9695, 0], freeExit: true },
@@ -54,12 +55,13 @@ function doorAt(core, event) {
   return DOORS.find(door => event.objectId === core.ObjectIdentifiers[door.id] && at(location, door.tile));
 }
 
-function checkDoorKey(core, event) {
+function checkDoorKey(api, event) {
+  const core = api.core;
   if (event.handled) return;
   const door = doorAt(core, event);
   if (!door) return;
   if (door.freeExit && at(event.player.getLocation(), door.inside)) return;
-  if (event.player.getInventory().getAmount(core.ItemIdentifiers[door.key]) > 0) return;
+  if (hasKey(api, event.player, core.ItemIdentifiers[door.key])) return;
   event.player.sendMessage('The door is locked.');
   event.handled = true;
 }
@@ -204,7 +206,7 @@ module.exports = {
   description: 'Taverley Dungeon\'s key doors, Velrak\'s dusty key and the suits of armour that come alive at the Cauldron of Thunder prison door.',
   members: true,
   register(api) {
-    api.onCustomEvent('door:toggle', checkDoorKey.bind(null, api.core));
+    api.onCustomEvent('door:toggle', checkDoorKey.bind(null, api));
     api.onCustomEvent('door:toggle', wakeSuit.bind(null, api));
     api.onItemOnObject(useKey.bind(null, api), { noted: false });
     api.onNpcDialogueCondition(answerVelrak.bind(null, api.core));

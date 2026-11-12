@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * Elemental Workshop I (members).
  *
@@ -182,8 +183,8 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     player.getSkillManager().addExperiences(Skill.SMITHING, 5000);
   }
 
-  function crossOddWall(player, hasKey) {
-    if (!hasKey && !has(player, ItemIdentifiers.BATTERED_KEY)) {
+  function crossOddWall(player, keySupplied) {
+    if (!keySupplied && !hasKey(api, player, ItemIdentifiers.BATTERED_KEY)) {
       player.sendMessage("You see a keyhole, but have no key that fits.");
       return;
     }

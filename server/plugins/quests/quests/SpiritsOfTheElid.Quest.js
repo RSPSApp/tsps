@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * Spirits of the Elid (members).
  *
@@ -948,7 +949,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   }
 
   function useAncestralDoor(player) {
-    if (!held(player, ANCESTRAL_KEY_ITEM_ID)) {
+    if (!hasKey(api, player, ANCESTRAL_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
       return;
     }

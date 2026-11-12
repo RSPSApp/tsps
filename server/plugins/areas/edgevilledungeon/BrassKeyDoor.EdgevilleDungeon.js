@@ -10,6 +10,7 @@
  */
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 const Common = require("./Common.EdgevilleDungeon");
+const { hasKey, storedKey } = require("../../items/KeyAvailability");
 
 let core = null;
 let DOOR = null;
@@ -44,14 +45,14 @@ function open(event) {
   if (event.objectId !== DOOR.door || !same(event.location, DOOR.tile)) return false;
   const { player } = event;
   if (ObstacleRunner.isBusy(player)) return true;
-  if (!player.getInventory().contains(DOOR.key)) {
+  if (!hasKey(Common.api, player, DOOR.key)) {
     player.sendMessage(DOOR.messages.locked);
     return true;
   }
   const at = player.getLocation();
   const inside = at.getX() === DOOR.inside.x && at.getY() === DOOR.inside.y;
   const to = inside ? DOOR.outside : DOOR.inside;
-  player.sendMessage(DOOR.messages.unlock);
+  player.sendMessage(storedKey(Common.api, player, DOOR.key) ? "You use your keyring to unlock the door." : DOOR.messages.unlock);
   player.getPacketSender().sendSound(DOOR.unlockSound, 1, 0);
   ObstacleRunner.run({ player }, [
     { wait: 1 },

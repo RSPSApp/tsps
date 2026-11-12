@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * The Tourist Trap (members).
  *
@@ -725,7 +726,7 @@ module.exports = function registerTouristTrapQuest(api) {
       moveTo(player, MINING_CAMP_EXIT_TILE);
       return;
     }
-    if (!held(player, METAL_KEY_ITEM_ID)) {
+    if (!hasKey(api, player, METAL_KEY_ITEM_ID)) {
       player.sendMessage("This gate needs a key in order to be opened.");
       return;
     }

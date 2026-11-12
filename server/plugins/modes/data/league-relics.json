@@ -135,7 +135,7 @@
       "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC"]
     },
     "equilibrium": { "league": [4, 5], "key": "equilibrium", "bonusFraction": 0.1, "leastExperiencedFraction": 0.2 },
-    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the trap's 5-tick look for prey halved to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt follows its smeltBars conversions and waives other ingredients (iron becomes steel without coal; coal stays coal), its four depletion attempts are counted per rock for everyone who mines it; ordinary single-yield rock glove saves are separate (expert iron lasts seven gathers), and finite-yield stacking remains unverified; a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
+    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the box trap's 3-tick look for prey cut to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt follows its smeltBars conversions and waives other ingredients (iron becomes steel without coal; coal stays coal), its four depletion attempts are counted per rock for everyone who mines it; ordinary single-yield rock glove saves are separate (expert iron lasts seven gathers), and finite-yield stacking remains unverified; a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
     "endlessHarvest": {
       "league": [4, 6], "key": "endless-harvest", "skills": ["MINING", "WOODCUTTING", "FISHING"], "multiplier": 2,
       "_demonicPacts": "Demonic Pacts' (Wiki, cache text): banking is the relic's toggle (cache row league_relic_endless_harvest_toggle_bank, on by default), and rocks and trees no longer deplete while the relic's owner gathers from them (ours: they stay standing for everyone, as Power Miner's rocks do).",
@@ -285,7 +285,7 @@
       "league": 6, "key": "woodsman", "maxActions": 28,
       "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "boltTips", "arrows", "bolts", "tipped", "darts"] },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 },
-      "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: the trap's 5-tick look for prey every 2 ticks.",
+      "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: every trap looks for prey every 2 ticks.",
       "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank",
       "rumourXpMultiplier": 2, "sackRollMultiplier": 2, "implingLootMultiplier": 2,
       "_implings": "A jar's loot doubled and noted (Wiki); its clue rolls are not loot, and an item that neither stacks nor notes stays single (as the other noted-loot relics: ours). The sack's doubled rolls are its loot rolls, not its blueprint, kit and outfit rolls."

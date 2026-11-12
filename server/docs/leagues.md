@@ -947,7 +947,7 @@ These relics have their effects (`leaguerelics/*.LeagueRelics.js`, numbers in th
   stacks nor notes, once), the pickpocket repeats itself while neither the player nor the NPC
   has moved (`thieving:done`), Agility rolls and fire lighting succeed (`agility:roll`,
   `firemaking:light-roll`), Hunter catches never fail (`hunter:catch-chance`), box traps give
-  double loot and XP (`hunter:rewards`) and look for prey every 2 ticks instead of 5
+  double loot and XP (`hunter:rewards`) and look for prey every 2 ticks instead of 3
   (`hunter:lure-interval`: the Wiki says "faster" and no more, so the number is ours), impling
   jars never break (`hunter:jar-kept`), and up to nine logs burn in one action
   (`firemaking:logs-per-action`, one fire, XP for each). Not here: the Sage's greaves (not in

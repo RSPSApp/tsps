@@ -482,14 +482,20 @@ const NO_BOX_SEED = "Your seed box does not contain any seeds that can be plante
 /**
  * Wiki (Seed box, 3 June 2026): the box used on a patch plants the first seed in it, in slot order, that suits the patch.
  * With none it says so in a message box; on a tree patch, which takes saplings, nothing happens.
- * Ours: the first seed of the patch's type is the one tried, and planting then answers as for that seed from the inventory.
+ * Ours: a seed the player has the level for comes first; with none, the first of the patch's type is tried, and planting
+ * then answers as for that seed from the inventory (the level, tool and seed-count refusals).
  */
 function plantFromBox(player, patch, box, id) {
     if (box?.getId() !== id) return;
     if ([...Data.CROPS.values()].some(crop => crop.type === patch.type && crop.sapling)) {
         player.sendMessage("Nothing interesting happens."); return;
     }
-    const entry = SeedBox.entriesOf(box).find(([seed]) => Data.SEEDS.get(seed)?.type === patch.type);
+    const fits = SeedBox.entriesOf(box).filter(([seed]) => {
+        const crop = Data.SEEDS.get(seed);
+        return crop?.type === patch.type && !(patch === TROLL_HERB_PATCH && crop.key === "GOUTWEED");
+    });
+    const level = player.getSkillManager().getCurrentLevel(core.Skill.FARMING);
+    const entry = fits.find(([seed]) => Data.SEEDS.get(seed).level <= level) ?? fits[0];
     if (!entry) {
         player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, NO_BOX_SEED);
         player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, NO_BOX_SEED)));
@@ -497,7 +503,7 @@ function plantFromBox(player, patch, box, id) {
     }
     const seed = entry[0];
     plant(player, patch, seed, {
-        amount: () => (box.getMetaValue("farming:stored") ?? {})[seed] ?? 0,
+        amount: () => SeedBox.amountOf(box, seed),
         take: count => SeedBox.take(box, seed, count),
     });
 }

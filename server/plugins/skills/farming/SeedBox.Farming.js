@@ -53,6 +53,7 @@ function arrange(box, slots = slotsOf(box)) {
     while (order.length && order.at(-1) === -1) order.pop();
     box.setMetaValue(SLOTS_META, order.length ? order : undefined);
 }
+const amountOf = (box, id) => (box.getMetaValue(STORED_META) ?? {})[id] ?? 0;
 /** Takes `amount` of `id` out of the box. */
 function take(box, id, amount) {
     const stored = box.getMetaValue(STORED_META) ?? {};
@@ -160,4 +161,4 @@ function drag(event) {
     sync(player, session.box);
 }
 function logout({ player }) { SESSIONS.delete(player); }
-Object.assign(module.exports, { open, click, closed, drag, logout, slotsOf, entriesOf, arrange, take });
+Object.assign(module.exports, { open, click, closed, drag, logout, slotsOf, entriesOf, arrange, take, amountOf });

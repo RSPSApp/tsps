@@ -168,3 +168,30 @@ test('the box with no seed for the patch says so in a message box; on a tree pat
     useBox(f, tree);
     assert.deepEqual(f.messages, ['Nothing interesting happens.']);
 });
+test('the box passes over a seed above the player\'s level for one they can plant, and tries the first when none fits', t => {
+    const f = fixture(t, { stored: [['Torstol seed', 1], ['Guam seed', 2]], slots: ['Torstol seed', 'Guam seed'], seeds: [['Seed dibber', 1]] });
+    const { patch, state } = herbPatch(t, f);
+    state.weeds = 0;
+    f.player.getSkillManager().setMaxLevels(core.Skill.FARMING, 30, false).setCurrentLevel(core.Skill.FARMING, 30, false);
+    useBox(f, patch);
+    ticks(4);
+    assert.equal(state.crop, 'GUAM');
+    const low = fixture(t, { stored: [['Torstol seed', 1]], seeds: [['Seed dibber', 1]] });
+    const second = herbPatch(t, low);
+    second.state.weeds = 0;
+    low.player.getSkillManager().setMaxLevels(core.Skill.FARMING, 30, false).setCurrentLevel(core.Skill.FARMING, 30, false);
+    useBox(low, second.patch);
+    assert.equal(second.state.crop, undefined);
+    assert.equal(SeedBox.amountOf(low.box, id('Torstol seed')), 1, 'the seed stays in the box');
+});
+test('bank Empty deposits in slot order and the emptied box keeps no order', t => {
+    const f = fixture(t, { stored: [['Irit seed', 1], ['Watermelon seed', 2]], slots: ['Watermelon seed', 'Irit seed'] });
+    f.player.setStatus(core.PlayerStatus.BANKING).setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+    f.player.setCurrentBankTab(0);
+    const order = [];
+    const bank = f.player.getBank(0), add = bank.add.bind(bank);
+    t.mock.method(bank, 'add', (item, refresh) => { order.push(name(item.getId())); return add(item, refresh); });
+    Guild.bankStorageOp({ player: f.player, slot: 0, op: 9, item: f.box, handled: false });
+    assert.deepEqual(order, ['Watermelon seed', 'Irit seed']);
+    assert.equal(f.box.getMetaValue('farming:slots'), undefined);
+});

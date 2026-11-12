@@ -420,16 +420,23 @@ async function jailExit(player, game) {
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
   const side = game.members.get(player);
-  const jail = side === 0 ? [3323, 4943] : [3323, 4976];
-  const portals = [...MapObjects.mapObjects.values()].flat().filter(o => {
-    const p = o.getLocation();
-    return o.getDefinition()?.getName() === 'Portal' && p.getX() >= 3319 && p.getX() < 3328
-      && Math.abs(p.getY() - jail[1]) < 12;
-  });
-  assert.ok(portals.length, 'the active Plateau map supplies a real jail exit portal');
-  const portal = portals.sort((a,b) => Math.abs(a.getLocation().getY()-jail[1])-Math.abs(b.getLocation().getY()-jail[1]))[0];
-  const at = game.area.at([portal.getLocation().getX(), portal.getLocation().getY(), 0]);
-  new ObjectActionPacketListener().executeAction(player, portal.getId(), at.getX(), at.getY(), 1);
+  const jail = game.area.at(side === 0 ? [3323, 4943, 0] : [3323, 4976, 0]);
+  // Template scene locs are not in the main-world or spawned-object lists.
+  const objects = [];
+  for (let x=0; x<game.area.widthChunks; x++) for (let y=0; y<game.area.heightChunks; y++) {
+    objects.push(...game.area.getChunkObjects(0,x,y));
+  }
+  const distance = object => Math.max(Math.abs(object.getLocation().getX()-jail.getX()),
+    Math.abs(object.getLocation().getY()-jail.getY()));
+  const portals = objects.filter(object => object.getDefinition()?.getName() === 'Portal'
+    && object.getDefinition().getInteractions().some(op => op?.toLowerCase() === 'exit'));
+  assert.ok(portals.length, 'the active Plateau instance supplies a real jail exit portal');
+  const portal = portals.sort((a,b) => distance(a)-distance(b))[0];
+  const at = portal.getLocation();
+  assert.equal(MapObjects.getPrivateArea(player,portal.getId(),at),portal,
+    'the native dispatcher resolves this exact mapped instance portal');
+  const op = portal.getDefinition().getInteractions().findIndex(option => option?.toLowerCase() === 'exit') + 1;
+  new ObjectActionPacketListener().executeAction(player, portal.getId(), at.getX(), at.getY(), op);
   tick(15);
 }
 

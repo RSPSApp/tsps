@@ -799,6 +799,82 @@ test("the Tlati dragon nest cave plays as captured: crawl, sound and fade, then 
   ]);
 });
 
+test("Araxxor's lair web tunnel out crawls, fades and teleports out of the instance, then fades back in", () => {
+  // Captured: crawl (844), sound 2454 and the fade out a tick after arriving, the minimap off a tick
+  // later, the teleport to (3658, 9815) on tick 3, the fade back in a tick after it.
+  const object = locAt(54274, 3648, 9814, 0);
+  const visit = explorer([3649, 9815, 0]);
+  // The lair is the player's own instance, which the move takes them out of.
+  let area = {};
+  visit.player.getPrivateArea = () => area;
+  const moveTo = visit.player.moveTo;
+  visit.player.moveTo = (location) => { area = null; return moveTo(location); };
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 6);
+  assert.deepEqual(visit.ticks, [
+    ["anim 844", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 3658,9815,0"],
+    ["varbit 6719=0", "open 174"],
+    [],
+    ["close overlay"],
+    [],
+  ]);
+  assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test("Araxxor's lair web tunnel in needs 92 Slayer, Priest in Peril and a spider task, then crawls in with its box", (t) => {
+  const object = locAt(54161, 3655, 9814, 0);
+  const entry = data.locs.find((loc) => loc.id === 54161);
+  const visit = explorer([3658, 9814, 0]);
+  const messages = [];
+  const boxes = [];
+  visit.player.sendMessage = (message) => messages.push(message);
+  visit.player.getDialogueManager().startDialogues = (chain) => boxes.push([...chain.getDialogues().values()].map((line) => line.text).join(" / "));
+  let task = null;
+  const slayer = PluginManager.createApi("AraxxorTunnelSlayer");
+  slayer.onCustomEvent("slayer:current-task", (query) => { query.task = task; });
+  t.after(() => { questsDone.delete("priest_in_peril"); task = null; });
+  const click = () => {
+    const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+  };
+  visit.player.getSkillManager().setCurrentLevel(core.Skill.SLAYER, 91, false);
+  click();
+  visit.player.getSkillManager().setCurrentLevel(core.Skill.SLAYER, 92, false);
+  click();
+  questsDone.add("priest_in_peril");
+  task = { name: "Kalphite" };
+  click();
+  assert.deepEqual(messages, entry.requires.map((gate) => gate.refuse.message));
+  assert.deepEqual(visit.ticks.flat(), [], "a refusal plays nothing");
+  task = { name: "Spiders" };
+  click();
+  runTicks(visit, 6);
+  assert.deepEqual(boxes, ["You crawl through the webbed tunnel."]);
+  assert.deepEqual(visit.ticks, [
+    ["anim 844", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 3647,9815,0"],
+    ["varbit 6719=0", "open 174"],
+    [],
+    ["close overlay"],
+    [],
+  ]);
+});
+
+test("Araxxor's outer web tunnels crawl with sound 2454 both ways; only the north and east links long-crawl", () => {
+  const tunnels = data.locs.filter((loc) => loc.name.startsWith("araxxor_cave_outer_tunnel_multi") && loc.id !== 54274);
+  assert.equal(tunnels.length, 6);
+  for (const tunnel of tunnels) {
+    assert.equal(tunnel.sound, 2454, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
+    assert.equal(tunnel.anim, tunnel.id === 54271 ? 2796 : 844, `${tunnel.name} at ${tunnel.x},${tunnel.y}`);
+  }
+});
+
 test("a Climb that Ladders would ask about goes the captured way: the Arceuus library stairs go up", () => {
   const object = locAt(27851, 1612, 3818, 1);
   const visit = explorer([1615, 3819, 1]);

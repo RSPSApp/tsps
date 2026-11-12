@@ -4221,36 +4221,6 @@
       "note": "The way to Mac (Wiki: Mac); the mined rockslide. rsprox captures 3144, 3146"
     },
     {
-      "name": "Araxxor lair web tunnel (in)",
-      "object": 54161,
-      "level": 1,
-      "requires": [
-        {
-          "skills": {"slayer": 92},
-          "quest": {"key": "priest_in_peril", "message": "You need to complete Priest in Peril before entering Morytania."},
-          "slayerTask": ["araxyte", "spider"],
-          "slayerTaskMessage": "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair."
-        }
-      ],
-      "render": "LONG_CRAWL",
-      "steps": [
-        {"sound":2454},
-        {"walk":[[3647,9815]]}
-      ],
-      "note": "The squeeze-through into Araxxor's lair (OSRS Wiki); crawl movement and ends ours"
-    },
-    {
-      "name": "Araxxor lair web tunnel (out)",
-      "object": 54274,
-      "level": 1,
-      "render": "LONG_CRAWL",
-      "steps": [
-        {"sound":2454},
-        {"walk":[[3658,9815]]}
-      ],
-      "note": "The squeeze-through out of Araxxor's lair (OSRS Wiki); crawl movement and ends ours"
-    },
-    {
       "name": "Railing (Arceuus Library, middle floor)",
       "object": [28373,28374],
       "option": "Jump-down",

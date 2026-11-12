@@ -146,7 +146,14 @@
     {"name": "vmq4_crypt_lift_surface", "source": "#3828: https://oldschool.runescape.wiki/w/Lift_Platform_(Crypt_of_Tonali) (an un-interactable pit until activated); Use shows once vmq4_lift_activated (varbit 16694) is on. No refusal: the client shows no Use",
       "requires": [
         {"varbit": 16694, "atLeast": 1, "refuse": {}}
-      ]}
+      ]},
+    {"name": "araxxor_boss_tunnel_multi", "x": 3655, "y": 9814, "z": 0, "source": "https://oldschool.runescape.wiki/w/Araxxor (92 Slayer, Morytania access, an araxyte or spider task); no refusal captured, the lines are the lair's own",
+      "requires": [
+        {"skill": "slayer", "atLeast": 92, "refuse": {"message": "You need a Slayer level of at least 92 to enter Araxxor's lair."}},
+        {"quest": "priest_in_peril", "refuse": {"message": "You need to complete Priest in Peril before entering Morytania."}},
+        {"slayerTask": ["araxyte", "spider"], "refuse": {"message": "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair."}}
+      ],
+      "mesbox": "You crawl through the webbed tunnel."}
   ],
   "dialogues": [
     {"name": "varlamore_thieving_house_window_multi", "prompt": "Climb out of the window?", "options": ["Yes.", "No."], "go": ["Yes."], "answer": {"animTick": 1, "tick": 2}},

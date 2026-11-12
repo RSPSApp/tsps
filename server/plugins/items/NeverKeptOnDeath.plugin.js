@@ -18,13 +18,19 @@ const NAMES = new Set([
 
 function isNeverKept(item) {
   const definition = item?.getDefinition?.();
-  if (!definition) return false;
+  // A noted clue box is a tradeable stack, not the item the Wiki means: it drops or goes to the grave as before.
+  if (!definition || definition.isNoted?.() === true) return false;
   return NAMES.has(String(definition.getName() ?? "").toLowerCase());
 }
 
 /** Never one of the kept items, however valuable. */
 function neverKept(event) {
   if (isNeverKept(event.item)) event.keep = false;
+}
+
+/** For the Items Kept on Death screen: `items:never-kept-on-death` { item, neverKept }. */
+function answerNeverKept(query) {
+  if (isNeverKept(query?.item)) query.neverKept = true;
 }
 
 /** Destroyed on any unsafe death: not dropped, not to the grave, not given back. */
@@ -41,5 +47,6 @@ module.exports = {
   register(api) {
     api.onShouldKeepItemOnDeath(neverKept);
     api.onPlayerDeathItemDrop(lostOnDeath);
+    api.onCustomEvent("items:never-kept-on-death", answerNeverKept);
   },
 };

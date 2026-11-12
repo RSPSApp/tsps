@@ -135,3 +135,38 @@ test("other unkept untradeables are still given back on a PvP death", (t) => {
   const { kept } = die(t, victim, killer, WILDERNESS());
   assert.ok(kept.includes(I.GHOSTSPEAK_AMULET), `kept: ${JSON.stringify(kept)}`);
 });
+
+test("a noted clue box is a tradeable stack: it drops for the killer like any other", (t) => {
+  const NOTED_CLUE_BOX = 12790;
+  assert.equal(new core.Item(NOTED_CLUE_BOX, 1).getDefinition().isNoted(), true);
+  assert.equal(NeverKept._test.isNeverKept(new core.Item(NOTED_CLUE_BOX, 100)), false);
+  const victim = actor(t);
+  const killer = actor(t);
+  victim.getInventory().setItem(0, new core.Item(NOTED_CLUE_BOX, 100));
+  victim.getInventory().setItem(1, new core.Item(I.BRONZE_DAGGER, 1));
+  const { floor } = die(t, victim, killer, WILDERNESS());
+  assert.ok(floor.some(([id, amount]) => id === NOTED_CLUE_BOX && amount === 100), `the noted boxes drop: ${JSON.stringify(floor)}`);
+  assert.ok(floor.some(([id]) => id === I.BRONZE_DAGGER), "and the dagger");
+});
+
+test("the Items Kept on Death screen marks never-kept items deleted, not to the grave", (t) => {
+  // The real interface plugin, on the real custom events (NeverKeptOnDeath and the gravestones answer them).
+  const buttons = new Map();
+  const api = {
+    core, getPrayerHandler: () => ({ isActivated: () => false, PROTECT_ITEM: 0 }),
+    onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
+    emitCustomEvent: (name, query) => PM.emitCustomEvent(name, query),
+  };
+  require("../plugins/interface/ItemsKeptOnDeath.plugin").register(api);
+  const player = actor(t);
+  player.setLocation(LUMBRIDGE());
+  core.CombatFactory.skull(player, core.SkullType.WHITE_SKULL, core.CombatFactory.PVP_SKULL_SECONDS);
+  const ids = [I.LUNAR_HELM, I.CHRONICLE, I.AMULET_OF_THE_DAMNED, I.CLUE_BOX, I.GHOSTSPEAK_AMULET, I.ABYSSAL_WHIP];
+  ids.forEach((id, slot) => player.getInventory().setItem(slot, new core.Item(id, 1)));
+  let sent;
+  t.mock.method(player.getPacketSender(), "sendInterfaceScript", function (_id, _args, _varps, _varbits, inventories) { sent = inventories; return this; });
+  buttons.get((387 << 16) | 5)({ player });
+  const marker = Object.fromEntries(sent[584].slots.map((slot) => [slot.itemId, sent[468].slots[slot.slot].itemId]));
+  for (const id of [I.LUNAR_HELM, I.CHRONICLE, I.AMULET_OF_THE_DAMNED, I.CLUE_BOX]) assert.equal(marker[id], 368, `${id} is deleted`);
+  for (const id of [I.GHOSTSPEAK_AMULET, I.ABYSSAL_WHIP]) assert.equal(marker[id], 367, `${id} goes to the grave`);
+});

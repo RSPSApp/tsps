@@ -29,6 +29,7 @@ function player() {
     getPacketSender: () => ({
       sendSubInterface: (uid, id, type, { postScripts }) => p.log.push(`fade ${postScripts[0].args[1] === 255 ? 'out' : 'in'}`),
       closeSubInterface: () => p.log.push('close'),
+      sendTypedMessage: (type, m) => p.messages.push(type === PluginManager.getCoreApi().ChatType.SPAM ? `spam:${m}` : m),
     }),
   };
   return p;
@@ -44,7 +45,7 @@ function ticks(count, p, log) {
 test("Kazgar's Follow: the recorded line and fade, moved 3 ticks later to (3309, 9613), back in a tick on, closed 2 ticks after", () => {
   const p = player();
   assert.equal(handlers.Kazgar.Follow({ player: p }), true);
-  assert.deepEqual(p.messages, ['Kazgar shows you the way through the tunnels.']);
+  assert.deepEqual(p.messages, ['spam:Kazgar shows you the way through the tunnels.']);
   assert.deepEqual(p.log.splice(0), ['fade out']);
   assert.equal(p.blocked, true);
   const log = [];
@@ -58,7 +59,7 @@ test("Mistag's Follow and Cellar lead to Kazgar (3235, 9610); after Death to the
   for (const option of ['Follow', 'Cellar']) {
     const p = player();
     handlers.Mistag[option]({ player: p });
-    assert.deepEqual(p.messages, ['Mistag shows you the way through the tunnels.']);
+    assert.deepEqual(p.messages, ['spam:Mistag shows you the way through the tunnels.']);
     ticks(6, p, []);
     assert.deepEqual([p.location.getX(), p.location.getY()], [3235, 9610], option);
   }

@@ -1199,10 +1199,11 @@ function choppingAxeEligible(axe) {
 /** The current tree, including an unchanged loc lazily copied into a template scene. */
 function treeAt(id, location, privateArea, type, face) {
   if (privateArea?.isDestroyed()) return null;
-  const current = MapObjects.get(id, location, privateArea);
   const matches = (object) => object && object.getId() === id
     && object.getPrivateArea() === privateArea && object.getLocation().equals(location)
     && object.getType() === type && object.getFace() === face;
+  const current = MapObjects.get(id, location, privateArea)
+    ?? ObjectManager.objectsAt(location).find(matches);
   if (current) return matches(current) ? current : null;
   if (!privateArea?.usesTemplateMap()) return null;
   const tree = privateArea.resolveObject(id, location);
@@ -1212,6 +1213,7 @@ function treeAt(id, location, privateArea, type, face) {
   const sameSlot = (object) => object.getPrivateArea() === privateArea
     && object.getType() === tree.getType() && object.getLocation().equals(location);
   if (privateArea.getObjects().some(sameSlot)
+    || ObjectManager.objectsAt(location).some(sameSlot)
     || pluginApi.core.World.getRemovedObjects().some(sameSlot)) return null;
   return tree;
 }

@@ -659,8 +659,9 @@ The Oak's 3x3 footprint has directional clipping on every cardinal approach;
 walkable corner tiles do not establish native object reach. Other copied scenery
 is not assumed usable merely from its name.
 
-Canonical Woodcutting resolves untouched lazy template trees as well as spawned
-and world trees, while honoring an area's removed or replaced shape slots. This
+Canonical Woodcutting and Cooking resolve untouched lazy template trees/ranges
+as well as spawned and world objects, while honoring an area's removed or
+replaced shape slots. This
 keeps a depleted original unavailable until its actual respawn rather than reading
 it straight back from the immutable template index.
 

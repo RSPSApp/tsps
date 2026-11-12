@@ -286,3 +286,21 @@ test('full postquest inventory refuses without charging materials and recovers a
 test('postquest duplicate condition rechecks an item received while the player reply is still open',async t=>{
   const f=actor(t,9,195,stronghold);await selectReclaim(f,reclaims[0][1]);add(f,4024);await drain(f);assert.equal(amount(f,4024),1);
 });
+
+test('initial MM1 tunnel amulet materials use ordinary 7170 input and return the enchanted bar and mould',async t=>{
+  const f=actor(t,7);assert.equal(tunnel.getContentId(f.p),7170);
+  const I=core.ItemIdentifiers;
+  for(const id of [I.MONKEY_DENTURES,I.MAMULET_MOULD,I.GOLD_BAR])add(f,id);
+  await use(f,I.MONKEY_DENTURES);await drain(f);
+  assert.equal(amount(f,I.MONKEY_DENTURES),0);
+  assert.equal(f.p.getAttribute('quest.monkey_madness_i.dentures-given'),true);
+  await use(f,I.MAMULET_MOULD);await drain(f);
+  assert.equal(amount(f,I.MAMULET_MOULD),0);
+  assert.equal(f.p.getAttribute('quest.monkey_madness_i.mould-given'),true);
+  await use(f,I.GOLD_BAR);await drain(f);
+  assert.equal(amount(f,I.GOLD_BAR),0);
+  assert.equal(amount(f,I.ENCHANTED_BAR),1);
+  assert.equal(amount(f,I.MAMULET_MOULD),1);
+  assert.equal(amount(f,I.KARAMJAN_MONKEY_GREEGREE),0);
+  assert.equal(mm1.getStage(f.p),7);
+});

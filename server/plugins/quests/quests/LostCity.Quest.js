@@ -469,6 +469,14 @@ module.exports = function registerLostCityQuest(api) {
   }
 
   pluginApi = api;
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.WOODCUTTING, 1500, "Woodcutting"], [api.core.Skill.CRAFTING, 1500, "Crafting"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
   quest = registerQuest(api, {
     key: "lost_city",
     name: "Lost City",
@@ -476,6 +484,7 @@ module.exports = function registerLostCityQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     scrollItemId: DRAMEN_STAFF_ITEM_ID,
     otherRewards: [
       "Access to Zanaris",
@@ -483,6 +492,7 @@ module.exports = function registerLostCityQuest(api) {
       "Ability to buy and wield Dragon Daggers & Longswords",
     ],
     buildJournal,
+    onReward: grantCompletionXp,
   });
 
   api.onNpcDialogueVariant(selectVariant);

@@ -1076,7 +1076,7 @@ function registerPlugin(file) {
     onObjectRoute: (handler) => { hooks.route = handler; },
     persistAttribute: () => {},
     onPlayerLogin: (handler) => { hooks.login = handler; },
-    onPlayerLogout: () => {},
+    onPlayerLogout: (handler) => { hooks.logout = handler; },
     onServerStartup: (handler) => { hooks.startup = handler; },
     spawnNpc: (definition) => { hooks.spawned = definition; return null; },
     removeNpc: () => {},
@@ -1084,6 +1084,49 @@ function registerPlugin(file) {
   });
   return hooks;
 }
+
+/**
+ * Every dock's shipwright: the cache names each by its port (`sailing_shipwright_<dock>`), and
+ * where live captures add them, they stand still on that tile facing that way (Direction.ts:
+ * 0 north-west, 1 north, 3 west, 6 south). Shipwright Sarah (Port Khazard) has no capture, so
+ * she has no spawn.
+ */
+const SHIPWRIGHTS = {
+  the_pandemonium: ["Junior Jim", 14972, 3058, 2979, 6],
+  port_sarim: ["Shipwright Sam", 15363, 3024, 3204, 1],
+  musa_point: ["Shipwright Sally", 15364, 2946, 3148, 6],
+  catherby: ["Shipwright Sophie", 15365, 2805, 3428, 3],
+  brimhaven: ["Shipwright Steve", 15366, 2769, 3228, 6],
+  port_khazard: ["Shipwright Sarah", 15367],
+  lands_end: ["Shipwright Sasha", 15368, 1510, 3410, 1],
+  port_piscarilius: ["Shipwright Spencer", 15369, 1822, 3681, 3],
+  civitas_illa_fortis: ["Shipwright Sennia", 15370, 1780, 3125, 0],
+  rellekka: ["Shipwright Sigrun", 15371, 2638, 3686, 6],
+  aldarin: ["Shipwright Silas", 15372, 1444, 2969, 6],
+  corsair_cove: ["Shipwright Soraya", 15373, 2562, 2851, 1],
+  port_roberts: ["Shipwright Scott", 15374, 1883, 3296, 3],
+  red_rock: ["Shipwright Sylvia", 15375, 2804, 2523, 6],
+  deepfin_point: ["Shipwright Sornik", 15376, 1937, 2758, 3],
+  prifddinas: ["Shipwright Silrien", 15377, 2173, 3334, 3],
+};
+
+test("every port with a shipwright offers Buy-boat, Customise-boat and Recover-boat, and they stand there", () => {
+  const shipwright = registerPlugin("Shipwright.Sailing");
+  const shipyard = registerPlugin("Shipyard.Sailing");
+  const spawns = require("../data/definitions/npc-spawns.json");
+  for (const [dockId, [name, id, x, y, direction]] of Object.entries(SHIPWRIGHTS)) {
+    assert.equal(Sailing.getDock(dockId)?.shipwright, name, `${dockId}'s shipwright`);
+    assert.deepEqual(Object.keys(shipwright.npcs[name]), ["Buy-boat", "Recover-boat"], name);
+    assert.deepEqual(Object.keys(shipyard.npcs[name]), ["Customise-boat"], name);
+    const placed = spawns.filter((spawn) => spawn.id === id);
+    if (x === undefined) {
+      assert.equal(placed.length, 0, `${name} has no captured spawn`);
+      continue;
+    }
+    assert.deepEqual(placed.map((spawn) => [spawn.x, spawn.y, spawn.level, spawn.direction, spawn.wanderRadius]),
+      [[x, y, 0, direction, 0]], `${name} stands still at ${dockId}, facing the captured way`);
+  }
+});
 
 test("the sailing plugins register their hooks and load the boat and dock data", () => {
   const gangplank = registerPlugin("Gangplank.Sailing").objects;
@@ -1100,7 +1143,7 @@ test("the sailing plugins register their hooks and load the boat and dock data",
     ["quest:stage-changed", "sailing:board-supplied-panel", "sailing:boarded", "sailing:guest-boarded", "sailing:guest-left",
      "sailing:leave-supplied-panel", "sailing:left", "settings:option-chosen"]);
   assert.deepEqual(Object.keys(registerPlugin("Shipwright.Sailing").npcs).sort(),
-    ["Junior Jim", "Shipwright Sam"]);
+    Object.values(SHIPWRIGHTS).map(([name]) => name).sort());
   assert.ok(Sailing.getDock("the_pandemonium"));
   assert.equal(Sailing.getDock("port_sarim").shipwright, "Shipwright Sam",
     "Port Sarim's shipwright is Sam (Wiki)");
@@ -1221,6 +1264,37 @@ test("Junior Jim's Recover-boat asks which boat, takes the fee from the bank and
   h.choose(0);
   assert.equal(h.player.messages.at(-1), "That boat is already at the nearby dock. There's no need to recover it.");
   assert.equal(h.bank.getAmount(995), 750, "nothing is charged for a refused recovery");
+});
+
+/** Shipwright Sophie at Catherby, as the interaction resolves her (her own id, no multinpc). */
+function sophie(player) {
+  const definition = { getName: () => "Shipwright Sophie" };
+  return { player, npc: { getId: () => 15365, getDefinition: () => definition }, definition };
+}
+
+test("Shipwright Sophie recovers a boat to Catherby, and the Port Wizard appears beside the player", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  const varps = new Map();
+  const sender = h.player.getPacketSender();
+  h.player.getPacketSender = () => new Proxy(sender, {
+    get: (target, key) => key === "sendConfig" ? (id, value) => { varps.set(id, value); return target; } : target[key],
+  });
+  h.player.setLocation(new Location(2805, 3429, 0));
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  assert.equal(h.player.getInterfaceId(), 934);
+  assert.equal(h.varbits.get(18553), 5, "the boat selection interface in Recover mode");
+  assert.equal(varps.get(5005), 8593, "sailing_boat_selection_current_dock: Catherby's db row");
+  h.choose(0);
+
+  assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "catherby" });
+  assert.equal(h.bank.getAmount(995), 9750);
+  const wizard = h.shipwright.spawned;
+  const [dx, dy] = [Math.abs(wizard.x - 2805), Math.abs(wizard.y - 3429)];
+  assert.ok(Math.max(dx, dy) === 1 && wizard.z === 0, `the wizard stands next to the player, not on the gangplank (${wizard.x}, ${wizard.y})`);
+  clearTasks();
 });
 
 test("the shipwright's boat-service dialogue steps are claimed, so they do not fall through", () => {
@@ -2188,6 +2262,34 @@ test("leaving the shipyard takes its boat away", () => {
   assert.equal(BoatManager.getBoat(shown[0].entityIndex), undefined);
   assert.equal(h.varbits.get(18314), 0, "the tools stay behind ::sailingtools");
   assert.equal(h.varbits.has(18166), false, "18166 locks Sailing in the skills tab");
+});
+
+test("Customise-boat at Catherby opens the selection for that dock, and the portal brings the player back beside Sophie", () => {
+  const h = shipyardHarness();
+  const catherby = Sailing.getDock("catherby");
+  Sailing.activeBoat(h.player).location = { kind: "docked", dock: "catherby" };
+  h.player.moveTo(new Location(2805, 3429, 0)); // ends the harness's visit
+  h.shipyard.npcs["Shipwright Sophie"]["Customise-boat"](sophie(h.player));
+  assert.equal(h.varbits.get(18553), 2, "the boat selection interface in Customise mode");
+  assert.equal(h.varps.get(5005), 8593, "sailing_boat_selection_current_dock: Catherby's db row");
+
+  require("../plugins/skills/sailing/Shipyard.Sailing").beginVisit(h.player, catherby, 0);
+  assert.notEqual(h.player.getLocation().getX(), 2805, "in the shipyard");
+  h.shipyard.objects["Shipyard Portal"].Exit({ player: h.player });
+  withRandom(0, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
+  const back = h.player.getLocation();
+  assert.ok(Math.max(Math.abs(back.getX() - 2805), Math.abs(back.getY() - 3429)) <= 1 && back.getZ() === 0,
+    `back at Catherby within a tile of where they stood, not at the Pandemonium (${back.getX()}, ${back.getY()})`);
+  clearTasks();
+});
+
+test("logging out in the shipyard saves the player at the dock the visit started from", () => {
+  const h = shipyardHarness();
+  h.player.moveTo(new Location(2805, 3429, 0)); // ends the harness's visit
+  require("../plugins/skills/sailing/Shipyard.Sailing").beginVisit(h.player, Sailing.getDock("catherby"), 0);
+  h.shipyard.logout({ player: h.player });
+  const saved = h.player.getLocation();
+  assert.deepEqual([saved.getX(), saved.getY(), saved.getZ()], [2805, 3429, 0]);
 });
 
 test("::boatmats spawns a part's materials from the cache, for the named or current boat", () => {

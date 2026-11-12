@@ -44,7 +44,8 @@ before(async () => {
     require(`../plugins/combat/specials/${name}.SpecialAttack`)(PM.createApi('ClanWarsSpecialTest'));
   }
   for (const [file,name] of [['objects/Doors.plugin','Doors'],['world/WaterSources.plugin','Water'],
-    ['skills/Cooking.plugin','Cooking'],['skills/Woodcutting.plugin','Woodcutting']]) {
+    ['skills/Cooking.plugin','Cooking'],['skills/Woodcutting.plugin','Woodcutting'],
+    ['objects/Ladders.plugin','Ladders'],['skills/Smithing.plugin','Smithing']]) {
     require(`../plugins/${file}`).register(PM.createApi(`ClanWars${name}Test`));
   }
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
@@ -3072,7 +3073,7 @@ function faladorTemplate() {
   for(let z=0;z<2;z++)for(let x=0;x<16;x++)for(let y=0;y<8;y++)area.setChunk(z,x,y,{sourceChunkX:432+x,sourceChunkY:592+y,sourcePlane:z,rotation:0});
   area.at=tile=>area.tile(tile[0]-3456,tile[1]-4736,tile[2]);return area;
 }
-test('native Falador Park selection resets agreement across all seven arenas and rejects unsupported rows',async()=>{
+test('native Falador Park selection resets agreement across all eight arenas and rejects unsupported rows',async()=>{
   const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
   await click(a,'clanwars_setup:accept');const session=C.negotiations.get(a);assert.equal(session.accepted.has(a),true);
   await click(b,'clanwars_setup:arena',39);assert.equal(session.rules.arena,13,'native Falador Park option reaches authoritative offer');
@@ -3209,4 +3210,96 @@ test('native Falador Ignore5 uses actual six versus six and real defeat threshol
   const {b,teams,players,game}=await stragglerGame(6,1,3,{},13);completePreparation(game);assert.equal(game.fighters.size,12);
   await lethalMelee(b,teams[0][1],game,true,[[3472,4759,0],[3473,4759,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of players)lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+test('native Falador canonical Close Open preserves clips, preparation walls and park room upper seals',async t=>{
+  resourceRandom(t);
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,13);await join(a);await join(b);
+  const p=[a,b].find(actor=>game.members.get(actor)===1),original=faladorObject(game,'fai_falador_poor_door_open',[3515,4755]),walls=game.walls.slice();
+  const edge=()=>core.RegionManager.canMovestart(game.area.at([3514,4755,0]),game.area.at([3515,4755,0]),1,1,game.area);
+  const originalClips=[[3514,4755],[3515,4755],[3515,4754],[3516,4755]].map(xy=>game.area.getClip(game.area.at([...xy,0])));
+  assert.equal(original.getId(),24051);assert.equal(original.getType(),0);assert.equal(original.getFace(),3);assert.equal(edge(),true);
+  async function cycle(open){
+    await faladorWalk(p,game,[3514,4755]);lumbridgeObjectClick(p,open,'Close');tick(12);
+    const closed=game.area.getObjects().find(o=>o.getPrivateArea()===game.area&&o.getDefinition()?.getName()==='Door'&&o.getDefinition().getInteractions()?.includes('Open'));
+    assert.ok(closed,'canonical Close actually creates owned closed leaf');assert.equal(edge(),false,'real current closed-door edge blocks crossing');
+    assert.ok(core.World.getRemovedObjects().some(o=>o.equals(open)),'semantic native marker for original open leaf, not raw reference');
+    lumbridgeObjectClick(p,closed,'Open');tick(12);
+    const reopened=game.area.getObjects().find(o=>o.equals(original));assert.ok(reopened,'canonical Open restores exact owned original ID XYZ type face');
+    assert.equal(edge(),true);assert.deepEqual([[3514,4755],[3515,4755],[3515,4754],[3516,4755]].map(xy=>game.area.getClip(game.area.at([...xy,0]))),originalClips,'source Door edge flags restore');
+    await faladorWalk(p,game,[3516,4755]);return reopened;
+  }
+  let current=await cycle(original);assert.equal(game.phase,'staging');
+  assert.equal(faladorReachable(game,FALADOR_LANDINGS[0],FALADOR_LANDINGS[1]),false,'actual Close/Open cannot bypass staging');for(const wall of walls)assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);
+  completePreparation(game);current=await cycle(current);assert.equal(current.getPrivateArea(),game.area);
+  for(const outside of [[3521,4758],[3480,4785],[3477,4742],...FALADOR_JAILS.map(j=>j.slice(0,2))]){
+    assert.equal(faladorReachable(game,FALADOR_LANDINGS[0],[...outside,0]),false,'door mutation leaves source component isolated');
+    await wire(p,walkClickFrame(game.area.at([...outside,0])));tick(30);assert.notDeepEqual(position(p),positionAt(game,[...outside,0]));assert.equal(p.getLocation().getZ(),0);
+  }
+  for(const xy of [[3470,4747],[3477,4744],[3520,4758]]){
+    const seal=game.area.getTemplateObjects(game.area.at([...xy,0])).find(o=>[1539,23995].includes(o.getId()));assert.ok(seal);assert.equal((seal.getDefinition().getInteractions()??[]).some(Boolean),false,'actual boundary seal offers no invented Open');
+  }
+  const I=core.ItemIdentifiers;ruleStats(p);for(const skill of [core.Skill.COOKING,core.Skill.SMITHING,core.Skill.WOODCUTTING]){p.getSkillManager().setCurrentLevel(skill,99);p.getSkillManager().setMaxLevel(skill,99);}
+  give(p,I.RAW_SHRIMPS,'isolated-range');give(p,I.COPPER_ORE,'isolated-furnace');give(p,I.TIN_ORE,'isolated-furnace');give(p,I.BRONZE_AXE,'isolated-oak');
+  const items=contents(p.getInventory()),xp=[core.Skill.COOKING,core.Skill.SMITHING,core.Skill.WOODCUTTING].map(s=>p.getSkillManager().getExperience(s));
+  for(const [gameval,xy,z,action]of [['fai_falador_stairs',[3459,4746],0,'Climb-up'],['fai_falador_stairstop',[3459,4747],1,'Climb-down'],['fai_falador_furnace',[3464,4744],0,'Smelt'],['range',[3476,4741],0,'Cook'],['oaktree',[3516,4746],0,'Chop down'],['tree',[3477,4749],0,'Chop down']]){
+    await faladorWalk(p,game,[3514,4755]);const object=faladorObject(game,gameval,xy,z);assert.equal(object.getLocation().getZ(),z);const menuBefore=p.getCreationMenu(),positionBefore=position(p);
+    lumbridgeObjectClick(p,object,action);tick(40);assert.equal(p.getLocation().getZ(),0,'actual isolated ground climb and upper request cannot change floor');
+    const {PathFinder}=require('../dist/game/model/movement/path/PathFinder');let {sizeX:w,sizeY:h}=object.getDefinition();if(object.getFace()%2)[w,h]=[h,w];
+    assert.equal(PathFinder.reachedObject(p,object.getLocation().getX(),object.getLocation().getY(),w,h,object.getFace(),object.getType(),object.getDefinition().getBlockingMask()),false,'ordinary endpoint cannot reach isolated source footprint');
+    assert.deepEqual(contents(p.getInventory()),items);assert.deepEqual([core.Skill.COOKING,core.Skill.SMITHING,core.Skill.WOODCUTTING].map(s=>p.getSkillManager().getExperience(s)),xp);
+    assert.equal(p.getCreationMenu(),menuBefore,'isolated object request opens no menu');if(z===1)assert.deepEqual(position(p),positionBefore,'upper object rejected before ground movement');assert.equal(treeTask(object),undefined);assert.equal(require('../plugins/skills/Cooking.plugin').isCookingActive(p),false);assert.equal(require('../plugins/skills/Smithing.plugin').isSmeltingActive(p),false);
+  }
+  // Ordinary reachable positive after all valid-skills/tool/input negative cases; no handler disabling.
+  await faladorWalk(p,game,[3474,4765]);const tree=faladorObject(game,'tree2',[3474,4766]);assert.equal(core.MapObjects.getPrivateArea(p,tree.getId(),tree.getLocation()),tree);await chopTree(p,tree);
+});
+
+for(const [gameval,xy,face,approach]of [['tree2',[3474,4766],1,[3474,4765]],['tree',[3478,4766],0,[3478,4765]],['tree2',[3482,4766],3,[3482,4765]],['tree',[3486,4766],3,[3486,4765]]])test(`native Falador ordinary Tree ${xy} gives real logs XP stump and live respawn`,async t=>{
+  resourceRandom(t);const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,13);await join(a);await join(b);completePreparation(game);
+  const tree=faladorObject(game,gameval,xy);assert.equal(tree.getFace(),face);assert.deepEqual([tree.getDefinition().sizeX,tree.getDefinition().sizeY],[2,2]);assert.equal(game.area.getObjects().includes(tree),false,'actual untouched lazy tree, never manually registered');
+  await faladorWalk(a,game,approach);const xp=a.getSkillManager().getExperience(core.Skill.WOODCUTTING),task=await chopTree(a,tree);assert.ok(a.getSkillManager().getExperience(core.Skill.WOODCUTTING)>xp);
+  const logs=a.getInventory().getAmount(core.ItemIdentifiers.LOGS);lumbridgeObjectClick(a,tree,'Chop down');tick(8);assert.equal(a.getInventory().getAmount(core.ItemIdentifiers.LOGS),logs);assert.equal(treeTask(tree),task,'lazy original cannot bypass real stump');
+  tick(task.getRemainingTicks()+2);assert.equal(task.isStopped(),true);assert.equal(core.World.getObjects().includes(tree),true);assert.equal(game.area.resolveObject(tree.getId(),tree.getLocation()),tree);assert.equal(core.World.getObjects().includes(task.stumpObject),false);assert.equal(C.matches.get(b),game);
+  console.log('FALADOR_TREE_QUALIFICATION '+JSON.stringify({source:xy,id:tree.getId(),owned:tree.getPrivateArea()===game.area,logs,respawned:task.isStopped()}));
+});
+
+test('native Falador ordinary tree movement cancellation and actual supplies retain NoFood NoDrinks and safe death metadata',async t=>{
+  let allowLogs=false;t.mock.method(Math,'random',()=>new Error().stack.includes('rollLog')?(allowLogs?0.001:0.99):0.99);
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,{food:1,drinks:1},13);await join(a);await join(b);completePreparation(game);
+  const I=core.ItemIdentifiers,wood=require('../plugins/skills/Woodcutting.plugin');ruleStats(a);a.getSkillManager().setCurrentLevel(core.Skill.WOODCUTTING,99);a.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING,99);
+  give(a,I.BRONZE_AXE,'falador-axe');give(a,I.SHRIMPS,'falador-food');give(a,I.ATTACK_POTION_4_,'falador-drink');
+  const tree=faladorObject(game,'tree2',[3474,4766]);await faladorWalk(a,game,[3474,4765]);const before=a.getInventory().getAmount(I.LOGS);
+  lumbridgeObjectClick(a,tree,'Chop down');tick(3);assert.equal(wood.isWoodcuttingActive(a),true,'actual ordinary session active before cancel');assert.equal(a.getInventory().getAmount(I.LOGS),before);
+  await wire(a,walkClickFrame(game.area.at([3472,4764,0])));tick(8);assert.equal(wood.isWoodcuttingActive(a),false,'ordinary movement cancels actual chopping');assert.equal(a.getInventory().getAmount(I.LOGS),before);assert.equal(treeTask(tree),undefined);
+  allowLogs=true;await faladorWalk(a,game,[3474,4765]);const task=await chopTree(a,tree);assert.ok(task.isRunning());
+  const supplies=contents(a.getInventory());await nativeItem(a,I.SHRIMPS,'Eat');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.deepEqual(contents(a.getInventory()),supplies,'actual supplies cannot bypass food/drink restrictions');
+  await lethalMelee(b,a,game,true,[[3472,4759,0],[3473,4759,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(contents(a.getInventory()),supplies,'actual supplies and metadata survive native safe death');
+});
+
+test('native Falador depleted tree teardown before delay preserves reused slot, concurrent match and world respawns',async t=>{
+  resourceRandom(t);const a=actor(true),b=actor(true),c=actor(true),d=actor(true),world=actor(true);for(const p of [a,b,c,d])channel(p);
+  const game=await negotiate(a,b,null,1,null,13);await join(a);await join(b);completePreparation(game);
+  const other=await negotiate(c,d,null,1,null,13);await join(c);await join(d);completePreparation(other);
+  const tree=faladorObject(game,'tree2',[3474,4766]),liveTree=faladorObject(other,'tree2',[3474,4766]);
+  await faladorWalk(a,game,[3474,4765]);await faladorWalk(c,other,[3474,4765]);
+  world.moveTo(new core.Location(3222,3218,0));core.RegionManager.loadMapFiles(3222,3218);
+  // Disclosed runtime WORLD control, actual cache definition; never seed an owned lazy Tree.
+  const worldTree=new core.GameObject(tree.getId(),new core.Location(3223,3218,0),tree.getType(),tree.getFace(),null);core.ObjectManager.register(worldTree,true);tick();
+  let pending,liveTask,worldTask,replacement;
+  try {
+    pending=await chopTree(a,tree);liveTask=await chopTree(c,liveTree);worldTask=await chopTree(world,worldTree);
+    assert.ok([pending,liveTask,worldTask].every(task=>task.isRunning()&&task.getRemainingTicks()>0),'all actual ordinary respawns pending at destruction');
+    const base=[game.area.getBaseX(),game.area.getBaseY()];game.finish(null);assert.equal(game.area.isDestroyed(),true);lobby(a);lobby(b);
+    replacement=faladorTemplate();assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],base,'actual16x8 slot reused before old delay');
+    const replacementGame={area:replacement,layout:{origin:FALADOR_ORIGIN}},replacementTree=faladorObject(replacementGame,'tree2',[3474,4766]),masks=faladorMasks(replacement);
+    tick(Math.max(pending.getRemainingTicks(),liveTask.getRemainingTicks(),worldTask.getRemainingTicks())+2);
+    for(const object of [tree,pending.stumpObject]){assert.equal(core.World.getObjects().includes(object),false);assert.equal(core.World.getRemovedObjects().includes(object),false);assert.equal(core.ObjectManager.objectsAt(object.getLocation()).includes(object),false);assert.equal(game.area.getObjects().includes(object),false);}
+    assert.equal(core.MapObjects.get(tree.getId(),tree.getLocation(),game.area),null);assert.equal(pending.isStopped(),true);
+    assert.deepEqual(faladorMasks(replacement),masks,'full8192 reused-slot masks unchanged');assert.equal(replacement.resolveObject(replacementTree.getId(),replacementTree.getLocation()),replacementTree);assert.equal(replacementTree.getPrivateArea(),replacement);
+    assert.equal(core.World.getObjects().includes(liveTree),true);assert.equal(other.area.resolveObject(liveTree.getId(),liveTree.getLocation()),liveTree);assert.equal(C.matches.get(c),other);assert.equal(C.matches.get(d),other);
+    assert.equal(core.World.getObjects().includes(worldTree),true);assert.equal(core.MapObjects.get(worldTree.getId(),worldTree.getLocation(),null),worldTree);assert.ok(liveTask.isStopped()&&worldTask.isStopped());
+  }finally{
+    for(const task of [pending,liveTask,worldTask].filter(Boolean)){task.stop();if(core.World.getObjects().includes(task.stumpObject))core.ObjectManager.deregister(task.stumpObject,true);}
+    if(core.World.getObjects().includes(worldTree))core.ObjectManager.deregister(worldTree,true);replacement?.destroy();
+  }
 });

@@ -658,15 +658,19 @@ test('shared NPC selectors claim only their EAA dialogue windows', () => {
   h.quest.setStage(p, STAGE.betty);
   assert.equal(h.crewTalk(9312), false, 'stage 18 Port Sarim crew fall through');
 
-  // Betty 18-21 only.
+  // Betty 18-37: "again after visiting Curator Haig Halen" once Haig has been seen (24+), as the transcript has.
   h.quest.setStage(p, STAGE.betty);
   assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty');
   h.quest.setStage(p, STAGE.readNotes);
   assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again');
   h.quest.setStage(p, STAGE.haig);
-  assert.equal(h.variant(npcs.BETTY), null);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again');
+  h.quest.setStage(p, STAGE.storeroom);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
+  h.quest.setStage(p, STAGE.return_);
+  assert.equal(h.variant(npcs.BETTY), 'clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen');
 
-  // Haig 22-35 only.
+  // Haig 22-37: after the diadem's return is arranged (36), his own transcript page.
   h.quest.setStage(p, STAGE.haig);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curtor-haig-halen');
   h.quest.setStage(p, STAGE.storeroom);
@@ -674,10 +678,10 @@ test('shared NPC selectors claim only their EAA dialogue windows', () => {
   h.quest.setStage(p, 35);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-finding-the-diadem');
   h.quest.setStage(p, STAGE.return_);
-  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), null);
+  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return');
 });
 
-test('registered order releases Haig to the real Bone Voyage hook after stage 35', () => {
+test('registered order releases Haig to the real Bone Voyage hook once EAA is complete', () => {
   const h = withPrerequisites(setup({ boneVoyage: true }));
   const npcs = N();
   const p = h.player;
@@ -692,9 +696,9 @@ test('registered order releases Haig to the real Bone Voyage hook after stage 35
   h.quest.setStage(p, STAGE.storeroom);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curtor-haig-halen-talking-to-haig-again');
 
-  // Stage 36 is outside EAA's window: EAA yields and Bone Voyage's variant wins.
+  // Stage 36 is EAA's "after arranging the diadem's return" page; once EAA is done, Bone Voyage's variant wins.
   h.quest.setStage(p, STAGE.return_);
-  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'starting-out-talking-to-curator-haig-halen');
+  assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return');
   h.quest.setStage(p, STAGE.complete);
   assert.equal(h.variant(npcs.CURATOR_HAIG_HALEN), 'starting-out-talking-to-curator-haig-halen');
 });

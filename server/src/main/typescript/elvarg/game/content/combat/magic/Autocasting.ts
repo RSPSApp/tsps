@@ -93,7 +93,7 @@ export class Autocasting {
         }
         // The bladed staves and Iban's staff have their own lists (cache autocast_spellpos: sotd, staff_of_light,
         // staff_of_balance, ibanstaff); live sends 11791 for the Staff of the Dead (rsprox_transcripts/228/02283.txt).
-        const list = this.OWN_SELECTOR_LISTS.get(weaponId);
+        const list = this.ownList(weaponId);
         if (list !== undefined) return list;
         return this.SELECTOR_STANDARD;
     }
@@ -105,8 +105,19 @@ export class Autocasting {
         [ItemIdentifiers.STAFF_OF_BALANCE, ItemIdentifiers.STAFF_OF_BALANCE],
         // Cache autocast_spellpos (pest_void_knight_mace): Crumble Undead, Claws of Guthix, the waves and surges.
         [ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.VOID_KNIGHT_MACE],
+        [ItemIdentifiers.VOID_KNIGHT_MACE_L_, ItemIdentifiers.VOID_KNIGHT_MACE],
         [ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF],
+        [ItemIdentifiers.IBANS_STAFF_O_, ItemIdentifiers.IBANS_STAFF], [ItemIdentifiers.IBANS_STAFF_U_O_, ItemIdentifiers.IBANS_STAFF],
+        // Cache autocast_spellpos (wild_cave_*_recol): the standard list and Flames of Zamorak; live sends the
+        // sceptre's own id (rsprox_transcripts/232/03126.txt: 664 = 27679 with the accursed sceptre (a)).
+        [ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.THAMMARONS_SCEPTRE_A_],
+        [ItemIdentifiers.ACCURSED_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_],
     ]);
+
+    /** The weapon's own selector list, or the list of the item it copies (Last Man Standing's br_sotd). */
+    private static ownList(weaponId: number): number | undefined {
+        return ItemAliases.lookup(this.OWN_SELECTOR_LISTS, weaponId);
+    }
 
     /** The god-spell slots, which only the matching god's staff may choose. */
     private static readonly GOD_SLOTS = new Set([19, 20, 52]);
@@ -133,9 +144,9 @@ export class Autocasting {
         // standard list has no god slots (Wiki: the Zamorak staff cannot autocast Flames of Zamorak).
         const weaponId = player.getEquipment().getWeapon().getId();
         if (spell && this.GOD_SLOTS.has(slot)
-            && (!this.OWN_SELECTOR_LISTS.has(weaponId) || this.godSpell(weaponId) !== spell)) spell = null;
+            && (this.ownList(weaponId) === undefined || this.godSpell(weaponId) !== spell)) spell = null;
         // Iban Blast is only in Iban's staff's list.
-        if (spell && slot === 47 && this.OWN_SELECTOR_LISTS.get(weaponId) !== ItemIdentifiers.IBANS_STAFF) spell = null;
+        if (spell && slot === 47 && this.ownList(weaponId) !== ItemIdentifiers.IBANS_STAFF) spell = null;
         if (spell) this.setAutocast(player, spell);
         this.openCombatInterface(player);
         return true;
@@ -185,7 +196,8 @@ export class Autocasting {
             // rsprox_transcripts/234/00843.txt tick 465 (a bladed staff), 237/01107.txt tick 5739.
             return "You cannot autocast Ancient Magicks with that.";
         }
-        if (spellbook === MagicSpellbook.NORMAL && weaponId === ItemIdentifiers.ANCIENT_STAFF) {
+        // Its Last Man Standing copy (br_ancient_staff) too.
+        if (spellbook === MagicSpellbook.NORMAL && ItemAliases.same(weaponId, ItemIdentifiers.ANCIENT_STAFF)) {
             return "You can only autocast ancient magicks with that.";
         }
         if (spellbook === MagicSpellbook.ARCEUUS && !this.canAutocastArceuus(weapon.getDefinition().getName())) {
@@ -268,11 +280,13 @@ export class Autocasting {
     }
 
     private static godSpell(weaponId: number): CombatSpell | null {
+        weaponId = ItemAliases.baseOf(weaponId) ?? weaponId;
         if (weaponId === ItemIdentifiers.SARADOMIN_STAFF || weaponId === ItemIdentifiers.STAFF_OF_LIGHT) return CombatSpells.SARADOMIN_STRIKE;
         if (weaponId === ItemIdentifiers.GUTHIX_STAFF || weaponId === ItemIdentifiers.STAFF_OF_BALANCE
-            || weaponId === ItemIdentifiers.VOID_KNIGHT_MACE) return CombatSpells.CLAWS_OF_GUTHIX;
+            || weaponId === ItemIdentifiers.VOID_KNIGHT_MACE || weaponId === ItemIdentifiers.VOID_KNIGHT_MACE_L_) return CombatSpells.CLAWS_OF_GUTHIX;
         if (weaponId === ItemIdentifiers.ZAMORAK_STAFF || weaponId === ItemIdentifiers.STAFF_OF_THE_DEAD
-            || weaponId === 12902 || weaponId === ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD) return CombatSpells.FLAMES_OF_ZAMORAK;
+            || weaponId === 12902 || weaponId === ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD
+            || weaponId === ItemIdentifiers.THAMMARONS_SCEPTRE_A_ || weaponId === ItemIdentifiers.ACCURSED_SCEPTRE_A_) return CombatSpells.FLAMES_OF_ZAMORAK;
         return null;
     }
 }

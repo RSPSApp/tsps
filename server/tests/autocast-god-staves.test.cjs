@@ -128,3 +128,41 @@ test("the selector's recorded refusals, and no line when it opens", (t) => {
   assert.equal(normal.list(), I.STAFF_OF_THE_DEAD, "the selector opened");
   assert.deepEqual(normalLines, []);
 });
+
+// The variants of the staves with their own lists: Iban's staff (o) and (u) (o) (Wiki: the (o) autocasts the standard
+// book "including Iban Blast"), the Void knight mace (l), Thammaron's/accursed sceptre (a) (cache autocast_spellpos
+// wild_cave_*_recol: the standard list and Flames; live sends 664 = 27679, rsprox_transcripts/232/03126.txt) and Last
+// Man Standing's br_sotd, a copy of the Staff of the Dead.
+test("staff variants open their own list and autocast and cast its special spell", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  const common = require("../plugins/minigames/lms/Common.LastManStanding");
+  common.init({ core });
+  require("../plugins/minigames/lms/Items.LastManStanding").registerAliases();
+  const runes = (p) => { for (const id of [554, 556, 560, 565]) p.getInventory().add(new core.Item(id, 100), false); };
+  for (const [staff, list, slot, spell] of [
+    [I.IBANS_STAFF_O_, I.IBANS_STAFF, 47, S.IBAN_BLAST],
+    [I.IBANS_STAFF_U_O_, I.IBANS_STAFF, 47, S.IBAN_BLAST],
+    [I.VOID_KNIGHT_MACE_L_, I.VOID_KNIGHT_MACE, 19, S.CLAWS_OF_GUTHIX],
+    [I.THAMMARONS_SCEPTRE_A_, I.THAMMARONS_SCEPTRE_A_, 20, S.FLAMES_OF_ZAMORAK],
+    [I.ACCURSED_SCEPTRE_A_, I.ACCURSED_SCEPTRE_A_, 20, S.FLAMES_OF_ZAMORAK],
+    [core.CacheDefinitions.getObjId("br_sotd"), I.STAFF_OF_THE_DEAD, 20, S.FLAMES_OF_ZAMORAK],
+  ]) {
+    const f = wielding(t, staff);
+    runes(f.p);
+    assert.equal(choose(f.p, slot), spell, `${staff} slot ${slot}`);
+    assert.equal(f.list(), list, `${staff} varp 664`);
+    assert.equal(f.p.getCombat().getAutocastSpell().canCast(f.p, false), true, `${staff} casts it`);
+  }
+});
+
+test("Last Man Standing's Ancient staff copy refuses the standard book like the Ancient staff", (t) => {
+  require("../plugins/minigames/lms/Common.LastManStanding").init({ core });
+  require("../plugins/minigames/lms/Items.LastManStanding").registerAliases();
+  const f = wielding(t, core.CacheDefinitions.getObjId("br_ancient_staff"));
+  const messages = [];
+  t.mock.method(f.p, "sendMessage", (line) => messages.push(line));
+  Autocasting.handleWidgetAction(f.p, 593, 28);
+  assert.deepEqual(messages, ["You can only autocast ancient magicks with that."]);
+  assert.equal(f.list(), undefined, "the selector did not open");
+  assert.equal(Autocasting.canAutocast(f.p, core.CombatSpells.FIRE_WAVE), false);
+});

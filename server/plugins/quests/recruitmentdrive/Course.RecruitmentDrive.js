@@ -139,10 +139,12 @@ module.exports = function createCourse(api, hooks) {
   }
 
   /** Runs fn once the player's chatbox (a conversation or a menu) is clear. */
+  /** Runs fn once the chatbox is clear, unless a newer course sequence started meanwhile. */
   function whenChatClear(player, fn) {
     const { MultiChatboxPrompt } = api.core;
+    const token = sequences.get(player);
     const check = () => {
-      if (player.isRegistered?.() === false) return;
+      if (player.isRegistered?.() === false || sequences.get(player) !== token) return;
       const prompt = MultiChatboxPrompt?.getPending?.(player) ?? null;
       if (player.getDialogueManager?.()?.isActive?.() === true || prompt !== null) {
         TaskManager.submit(new CountdownTask(player, 1, check));
@@ -397,8 +399,14 @@ module.exports = function createCourse(api, hooks) {
   }
 
   /** A room's entrance portal: quitting the training grounds. */
+  /** Whether the player is in a room, not already on the way out (failing, finishing, a door). */
+  function canLeave(player) {
+    const phase = run(player)?.phase;
+    return phase === "room" || phase === "arriving";
+  }
+
   function quitPrompt(player) {
-    if (!run(player)) return;
+    if (!canLeave(player)) return;
     api.sendMultiChatboxPrompt(player, "Quit the Training Grounds?",
       "YES", () => quit(player),
       "NO", () => {});
@@ -406,7 +414,7 @@ module.exports = function createCourse(api, hooks) {
 
   function quit(player) {
     const state = run(player);
-    if (!state) return;
+    if (!state || !canLeave(player)) return;
     state.phase = "failing";
     sequence(player);
     later(player, 1, () => returnToTiffy(player, false));
@@ -418,6 +426,8 @@ module.exports = function createCourse(api, hooks) {
     if (!state) return;
     state.phase = "finishing";
     sequence(player);
+    // Saved now: closing or leaving Sir Tiffy's welcome must not cost the five passes.
+    hooks.onAllPassed?.(player);
     fade(player, true);
     later(player, 3, () => {
       // The run ends before the move, so leaving the grounds is not taken for abandoning it.
@@ -483,6 +493,10 @@ module.exports = function createCourse(api, hooks) {
     if (!inRoom(player, room.number)) return true;
     if (!isPassed(player, room.number)) {
       if (units.get(room.number)?.lockedDoor?.(player) === true) return true;
+      player.sendMessage("You have not completed this room's puzzle yet.");
+      return true;
+    }
+    if (units.get(room.number)?.canOpen?.(player) === false) {
       player.sendMessage("You have not completed this room's puzzle yet.");
       return true;
     }

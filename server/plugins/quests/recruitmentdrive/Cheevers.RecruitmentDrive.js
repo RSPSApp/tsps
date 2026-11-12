@@ -533,16 +533,16 @@ module.exports = function createCheeversRoom(api, course, ids) {
     return true;
   }
 
-  /** The exit door: the key opens it. */
-  function lockedDoor(player) {
-    return false;
+  /** The exit door opens with the duplicate key carried (every captured Open had it). */
+  function canOpen(player) {
+    return player.getInventory().getAmount(ITEM.KEY) > 0;
   }
 
   function openingDoor(player) {
     player.sendMessage("You use the duplicate key you made to unlock the door.");
   }
 
-  course.defineRoom(ROOM, { enter, clear, lockedDoor, openingDoor });
+  course.defineRoom(ROOM, { enter, clear, canOpen, openingDoor });
   api.onNpcInteraction("Miss Cheevers", { "Talk-to": talk });
   api.onObjectInteraction("Old Bookshelf", { Search: searchBooks });
   api.onObjectInteraction("Crate", { Search: searchCrate });

@@ -12,8 +12,8 @@
  * Stages (varbit 657 rd_main, varp 496):
  *   0 not started; 1 recommended by Sir Amik (rd_main 1, capture tick 69);
  *   2 taken to the training grounds at least once (rd_spoke_to_tiffy 692 = 1, tick 335);
- *   3 a save from before the grounds were rebuilt that had passed every test: Sir Tiffy finishes
- *     it (the grounds now end in his finishing conversation, tick 3593);
+ *   3 every test passed (set as the fifth room's line closes): Sir Tiffy's finishing
+ *     conversation plays at once (tick 3593), and again on a talk if it was left;
  *   4 complete (rd_main 2, tick 3600).
  * A run itself lives only in the session: logging out, dying or leaving the grounds ends it.
  *
@@ -66,6 +66,9 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     tableFailConditionId: "Hsk37b",
     ObstacleRunner,
     onFinish: playFinish,
+    onAllPassed: (player) => {
+      if (quest.getStage(player) < STAGE_RETURN) quest.setStage(player, STAGE_RETURN);
+    },
   });
   const ids = {
     SIR_SPISHYUS: NpcIdentifiers.SIR_SPISHYUS, LADY_TABLE: NpcIdentifiers.LADY_TABLE,

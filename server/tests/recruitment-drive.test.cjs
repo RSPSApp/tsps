@@ -457,7 +457,7 @@ test("Sir Kuam: Sir Leye appears as the second line closes; a blade's last hit f
   }
 });
 
-test("Miss Cheevers: the captured solve, spade to key, opens the exit door (ticks 2056-2277)", async (t) => {
+test("Miss Cheevers: the captured solve, spade to key, and the key opens the exit door (ticks 2056-2280)", async (t) => {
   const f = actor(t);
   intoGrounds(f, [ROOM.cheevers, ROOM.kuam, ROOM.table, ROOM.ren, ROOM.hynn]);
   await finishChat(f);
@@ -508,6 +508,18 @@ test("Miss Cheevers: the captured solve, spade to key, opens the exit door (tick
   assert.ok(has(f, I.KEY));
   assert.equal(varbit(f, 664), 1, "rd_room6_complete");
   assert.equal(f.messages.at(-1).text, "You prise the duplicate key out of the tin.");
+  // The exit door wants the key carried (review): without it, the refusal; with it, the door.
+  await clickLoc(f, 7342, 2477, 4940, 1, 6); // Walk-through to 2478,4940
+  assert.deepEqual(at(f), [2478, 4940]);
+  const key = f.player.getInventory().getSlotForItemId(I.KEY);
+  f.player.getInventory().deleteAtSlot(key, 1, true);
+  await clickLoc(f, 7326, 2478, 4940, 1, 2);
+  assert.equal(f.messages.at(-1).text, "You have not completed this room's puzzle yet.");
+  give(I.KEY);
+  await clickLoc(f, 7326, 2478, 4940, 1, 4);
+  assert.equal(f.messages.at(-1).text, "You use the duplicate key you made to unlock the door.");
+  ticks(f, 3);
+  assert.deepEqual(at(f), drive().course.roomByNumber.get(ROOM.kuam).landing);
 });
 
 test("Sir Spishyus: the chicken left with the grain eats it nine ticks after the crossing starts (2425-2435); all three across passes (3303)", async (t) => {
@@ -604,4 +616,44 @@ test("dying in Sir Leye's room ends the run and keeps the steel weapons in the g
   PM.emitPlayerDeath({ player: f.player, killer: null, handled: false });
   assert.equal(drive().course.run(f.player), null);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEEL_SHORTSWORD), 0);
+});
+
+test("leaving Sir Tiffy's welcome keeps the five passes: a talk finishes the quest (review)", async (t) => {
+  const f = actor(t);
+  intoGrounds(f, [ROOM.hynn, ROOM.kuam, ROOM.table, ROOM.ren, ROOM.tinley]);
+  const { course } = drive();
+  const state = course.run(f.player);
+  state.done = new Set([ROOM.kuam, ROOM.table, ROOM.ren, ROOM.tinley]);
+  state.order = [ROOM.kuam, ROOM.table, ROOM.ren, ROOM.tinley, ROOM.hynn];
+  state.index = 4;
+  course.closeChat(f.player);
+  course.sayPassed(f.player, core.NpcIdentifiers.MS_HYNN_TERPRETT, course.passRoom(f.player, ROOM.hynn));
+  tick(f);
+  await continueLine(f);
+  assert.equal(quest().getStage(f.player), 3, "saved as the fifth line closes");
+  ticks(f, 7);
+  assert.equal(shown(f).text, "I believe I've managed to pass the tests!");
+  course.closeChat(f.player); // walked away
+  ticks(f, 2);
+  const tiffy = spawn(f, core.NpcIdentifiers.SIR_TIFFY_CASHIEN, TIFFY_TILE);
+  await talk(f, tiffy);
+  assert.equal(shown(f).text, "I believe I've managed to pass the tests!");
+  await finishChat(f);
+  assert.equal(quest().getStage(f.player), 4);
+});
+
+test("the entrance portal does nothing once the room is failing (review)", async (t) => {
+  const f = actor(t);
+  intoGrounds(f, [ROOM.cheevers, ROOM.kuam, ROOM.table, ROOM.ren, ROOM.hynn]);
+  await finishChat(f);
+  const { course } = drive();
+  course.fail(f.player, [{ npc: core.NpcIdentifiers.MISS_CHEEVERS, text: course.failLine() }]);
+  tick(f);
+  course.quit(f.player);
+  await finishChat(f);
+  ticks(f, 12);
+  const text = "Oh, jolly bad luck, what? Not quite the brainbox you thought you were, eh?";
+  const sends = f.calls.filter((call) => call.name === "sendString" && call.args[1] === ((231 << 16) | 6)
+    && String(call.args[0]).replace(/<br>/g, " ").replace(/\s+/g, " ").trim() === text);
+  assert.equal(sends.length, 1, "Sir Tiffy's failure lines play once");
 });

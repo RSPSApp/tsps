@@ -46,10 +46,15 @@ module.exports = function createTinleyRoom(api, course, ids) {
     const wait = { counting: false, value: 1, stopped: false };
     waits.set(player, wait);
     player.getPacketSender().sendVarbit(COUNT_VARBIT, 1);
-    // The count starts on the continue's tick (597); a closed chatbox starts it too.
+    // The count starts on the continue's tick (597). Ours: a line closed some other way (a walk
+    // click) starts nothing; the next talk gives the clue again.
     course.say(player, course.lines(course.variant(V_TALK)).map((line) => ({ npc: NPC, text: line.text })),
       () => startCounting(player, wait));
-    course.whenChatClear(player, () => startCounting(player, wait));
+    course.whenChatClear(player, () => {
+      if (waits.get(player) !== wait || wait.counting || wait.stopped) return;
+      waits.delete(player);
+      player.getPacketSender().sendVarbit(COUNT_VARBIT, 0);
+    });
     return true;
   }
 

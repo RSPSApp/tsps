@@ -1060,3 +1060,29 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
 
 });
 
+
+test('coffin runes go to the rune pouch first, still announced and logged (Wiki: Rune pouch)', () => {
+  const Coffins = require('../plugins/minigames/hallowedsepulchre/Coffins.HallowedSepulchre');
+  const p = fakePlayer();
+  const api = Common.api;
+  const previous = api.emitCustomEvent;
+  const logged = [];
+  let pouchTakes = true;
+  api.emitCustomEvent = function (name, request) {
+    if (name === 'rune-pouch:gather' && pouchTakes && request.itemId === 565) request.stored = request.amount;
+    if (name === 'collection-log:obtain') logged.push(request);
+    return previous.call(this, name, request);
+  };
+  try {
+    Coffins.give(p, [[565, 20], [24711, 3]]);
+    assert.equal(p.inventory.getAmount(565), 0, 'the blood runes went into the pouch');
+    assert.equal(p.inventory.getAmount(24711), 3, 'the marks to the inventory');
+    assert.ok(p.messages.includes('<col=005f00>Tester received a drop: 20 x Blood rune</col>'));
+    assert.ok(logged.some((event) => event.itemId === 565 && event.amount === 20));
+    pouchTakes = false;
+    Coffins.give(p, [[565, 20]]);
+    assert.equal(p.inventory.getAmount(565), 20, 'no pouch room: the inventory');
+  } finally {
+    api.emitCustomEvent = previous;
+  }
+});

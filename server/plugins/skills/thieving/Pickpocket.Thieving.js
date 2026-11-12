@@ -272,6 +272,8 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
     // Wiki (Seed box): "Seeds pickpocketed from Master Farmers will now be directly placed into an open seed box."
     const request = { player, itemId: id, amount: left, stored: 0 };
     if (target.key === "master_farmer") pluginApi.emitCustomEvent("seed-box:gather", request);
+    // Wiki (Rune pouch), 25 February 2026: stolen runes go into the pouch when it already holds them and has room.
+    else pluginApi.emitCustomEvent("rune-pouch:gather", request);
     if (left > request.stored) inventory.forceAdd(player, new core.Item(id, left - request.stored));
     given.push({ ...item, amount: total });
   }

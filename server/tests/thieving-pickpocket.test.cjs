@@ -49,6 +49,7 @@ const combat = {
     stunTicks: (_player, ticks, _force, options) => log.push(`stun ${ticks} ticks, graphic ${options?.graphic?.id}/${options?.graphic?.height}, message ${options?.message}`),
 };
 const { PluginManager } = require("../dist/plugins/PluginManager");
+let runePouchAnswer = null;
 Thieving.register({
     core: { ...PluginManager.getCoreApi(), CombatFactory: combat, TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } } },
     onCustomEvent: () => {},
@@ -62,6 +63,7 @@ Thieving.register({
         if (name === 'thieving:success') log.push(name);
         if (name === 'thieving:done' && repeatAgain) request.again = true;
         if (name === 'thieving:pickpocket-target') pickpocketTargetAnswer?.(request);
+        if (name === 'rune-pouch:gather') runePouchAnswer?.(request);
         // The Skillcapes plugin answers this; a worn Thieving cape is all these tests need.
         if (name === 'skillcape:has-perk' && request.skill === 'THIEVING') {
             request.result = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === I.THIEVING_CAPE;
@@ -704,4 +706,23 @@ test('a delayed workman repeat respects a changed interaction', (t) => {
     const repeated = submitted[0];
     repeated.execute(); repeated.execute(); repeated.execute();
     assert.equal(submitted.length, 2, 'unchanged interaction schedules the requested repeat');
+});
+
+test('stolen runes go to the rune pouch first; what it does not take goes to the inventory (Wiki: Rune pouch)', () => {
+    const { giveLoot } = Pickpocket._test;
+    const rogue = DATA.targets.find((t) => t.key === 'rogue');
+    const asked = [];
+    runePouchAnswer = (request) => { asked.push({ ...request }); if (request.itemId === I.AIR_RUNE) request.stored = request.amount; };
+    try {
+        const who = player();
+        giveLoot(who, rogue, [{ id: I.AIR_RUNE, amount: 8 }], () => 0);
+        assert.equal(who.inv.getAmount(I.AIR_RUNE), 0, 'all eight in the pouch');
+        assert.deepEqual(asked.map(({ itemId, amount, runePicking }) => [itemId, amount, runePicking]), [[I.AIR_RUNE, 8, undefined]],
+            'asked for the whole stack, whatever the Rune-picking setting');
+        runePouchAnswer = () => {};
+        giveLoot(who, rogue, [{ id: I.AIR_RUNE, amount: 8 }], () => 0);
+        assert.equal(who.inv.getAmount(I.AIR_RUNE), 8, 'no pouch room: the inventory');
+    } finally {
+        runePouchAnswer = null;
+    }
 });

@@ -25,6 +25,10 @@ const POUCH_FLAGS = OPS | (3 << 17);
 const INVENTORY_FLAGS = OPS | (2 << 17);
 const POUCH_LIST_SLOTS = 6;
 const QUANTITY_PROMPT = "Enter amount: (1 - 16,000)";
+const MESSAGE = {
+  NOT_A_RUNE: "You can't store that in the rune pouch.",
+  POUCH: "Don't be silly.",
+};
 const AMOUNT_PROMPT = "Enter amount:";
 /** rune_pouch_selectedquantity values. */
 const MODE = { ONE: 0, FIVE: 1, ALL: 2, X: 3 };
@@ -128,7 +132,10 @@ function clickPouchSlot(player, slot, op) {
 function clickInventorySlot(player, slot, op, itemId) {
   const item = player.getInventory().getItems()[slot];
   if (!item || item.getId() !== itemId) return;
-  if (!Pouch.isRune(itemId)) return;
+  if (!Pouch.isRune(itemId)) {
+    player.sendMessage(Pouch.isPouch(item) ? MESSAGE.POUCH : MESSAGE.NOT_A_RUNE);
+    return;
+  }
   if (!Pouch.isPlainRune(item)) {
     player.sendMessage(Pouch.MESSAGE.PRESET);
     return;
@@ -137,16 +144,21 @@ function clickInventorySlot(player, slot, op, itemId) {
   deposit(player, itemId, opAmount(player, op));
 }
 
-/** X: op1 picks it (asking first while no amount is set), op2 "Set custom quantity". */
+/**
+ * X: op1 picks it (asking first while no amount is set), op2 "Set custom quantity". Entering 0
+ * clears the amount and selects 1 again.
+ */
 function clickX(player, op) {
   if (op === 1 && Pouch.customQuantity(player) > 0) {
     Pouch.setSelectedQuantity(player, MODE.X);
     return;
   }
   Pouch.askAmount(player, QUANTITY_PROMPT, {
+    acceptsZero: true,
     execute(amount) {
-      Pouch.setCustomQuantity(player, Math.min(Pouch.MAX_AMOUNT, Math.max(1, Math.floor(amount))));
-      Pouch.setSelectedQuantity(player, MODE.X);
+      const value = Math.min(Pouch.MAX_AMOUNT, Math.max(0, Math.floor(amount)));
+      Pouch.setCustomQuantity(player, value);
+      Pouch.setSelectedQuantity(player, value > 0 ? MODE.X : MODE.ONE);
     },
   });
 }
@@ -173,4 +185,4 @@ module.exports = function attach(api) {
   api.onCustomEvent("interface:closed", closed);
 };
 
-module.exports._test = { open, click, opAmount, MODE };
+module.exports._test = { open, click, opAmount, MODE, MESSAGE };

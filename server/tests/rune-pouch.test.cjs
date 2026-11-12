@@ -756,3 +756,68 @@ test('loadout transfer boundaries never consume metadata-bearing copies to fill 
   assert.equal(bank.getAmount(Items.AIR_RUNE),90,'protected bank runes remain when ordinary availability runs out');
   assert.equal(p.getInventory().getAmount(Items.AIR_RUNE),30);
 });
+
+test("in the interface, a non-rune gets the recorded refusal and the pouch itself \"Don't be silly.\"", () => {
+  const { MESSAGE } = require("../plugins/items/runepouch/Interface.RunePouch")._test;
+  for (const pouchId of [Items.RUNE_POUCH, Items.DIVINE_RUNE_POUCH]) {
+    const pouch = new Item(pouchId, 1);
+    const spade = new Item(Items.SPADE, 1);
+    const player = createPlayer([pouch, spade]);
+    itemOption(player, pouch, "Open");
+    for (const op of [1, 2, 6]) clickComponent(player, "rune_pouch:inventory", op, { slot: 1, itemId: Items.SPADE });
+    clickComponent(player, "rune_pouch:inventory", 1, { slot: 0, itemId: pouchId });
+    assert.deepEqual(player.messages, [MESSAGE.NOT_A_RUNE, MESSAGE.NOT_A_RUNE, MESSAGE.NOT_A_RUNE, MESSAGE.POUCH]);
+    assert.equal(MESSAGE.NOT_A_RUNE, "You can't store that in the rune pouch.");
+    assert.equal(MESSAGE.POUCH, "Don't be silly.");
+    assert.equal(player.getInventory().getAmount(Items.SPADE), 1, "nothing moves");
+    assert.equal(player.enteredAmountAction, null, "and nothing asks for an amount");
+  }
+});
+
+test("0 at Set custom quantity clears the X amount and selects 1, as captured", () => {
+  const pouch = new Item(Items.RUNE_POUCH, 1);
+  const water = new Item(Items.WATER_RUNE, 100);
+  const player = createPlayer([pouch, water]);
+  itemOption(player, pouch, "Open");
+  const sender = player.getPacketSender();
+  clickComponent(player, "rune_pouch:x", 2);
+  player.enteredAmountAction.execute(18);
+  assert.equal(sender.getVarbit(varbit("rune_pouch_selectedquantity")), 3);
+
+  clickComponent(player, "rune_pouch:x", 2);
+  assert.equal(player.enteredAmountAction.acceptsZero, true, "the count prompt passes 0 through");
+  player.enteredAmountAction.execute(0);
+  assert.equal(sender.getVarbit(varbit("rune_pouch_customquantity")), 0);
+  assert.equal(sender.getVarbit(varbit("rune_pouch_selectedquantity")), 0);
+  clickComponent(player, "rune_pouch:inventory", 1, { slot: 1, itemId: Items.WATER_RUNE });
+  assert.deepEqual(varbitSlots(player), [[Items.WATER_RUNE, 1]], "deposits 1 again");
+
+  clickComponent(player, "rune_pouch:x", 1);
+  assert.equal(player.log.at(-1), "prompt Enter amount: (1 - 16,000)", "X asks again with no amount set");
+  player.enteredAmountAction.execute(17);
+  assert.equal(sender.getVarbit(varbit("rune_pouch_customquantity")), 17);
+  assert.equal(sender.getVarbit(varbit("rune_pouch_selectedquantity")), 3);
+});
+
+test("rune-pouch:gather puts runes the pouch already holds into it when all of them fit", () => {
+  const { GATHER_EVENT, TOGGLE_VARBIT } = require("../plugins/items/runepouch/Pickup.RunePouch");
+  const gather = (player, itemId, amount, extra = {}) => {
+    const request = { player, itemId, amount, stored: 0, ...extra };
+    PluginManager.emitCustomEvent(GATHER_EVENT, request);
+    return request.stored;
+  };
+  const player = createPlayer([new Item(Items.RUNE_POUCH, 1)]);
+  pouchWith(player, [[Items.CHAOS_RUNE, 100], [Items.DEATH_RUNE, 15995]]);
+  assert.equal(gather(player, Items.CHAOS_RUNE, 12), 12, "setting off: still goes in");
+  assert.equal(gather(player, Items.DEATH_RUNE, 6), 0, "no room for all of them");
+  assert.equal(gather(player, Items.LAW_RUNE, 4), 0, "never an empty slot");
+  assert.equal(gather(player, Items.SPADE, 1), 0);
+  assert.deepEqual(varbitSlots(player), [[Items.CHAOS_RUNE, 112], [Items.DEATH_RUNE, 15995]]);
+
+  assert.equal(gather(player, Items.CHAOS_RUNE, 5, { runePicking: true }), 0, "runePicking: only with the setting on");
+  player.getPacketSender().sendVarbit(Pouch.varbit(TOGGLE_VARBIT), 1);
+  assert.equal(gather(player, Items.CHAOS_RUNE, 5, { runePicking: true }), 5);
+
+  const none = createPlayer([]);
+  assert.equal(gather(none, Items.CHAOS_RUNE, 5), 0, "no pouch carried");
+});

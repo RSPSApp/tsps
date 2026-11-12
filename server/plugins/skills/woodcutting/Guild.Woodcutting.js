@@ -10,6 +10,7 @@
  * Going in completes "Enter the Woodcutting Guild", and a redwood log "Chop some Redwood logs".
  */
 const ObstacleRunner = require("../agility/ObstacleRunner.Agility");
+const ClimbLinks = require("../../objects/ClimbLinks");
 const GuildData = require("./GuildData.Woodcutting");
 
 const GUILD_LEVEL = 60;
@@ -123,6 +124,23 @@ function climbVine(event) {
   return true;
 }
 
+function enterRedwood({ player, objectId, location }) {
+  const { CARVED_REDWOOD_2, CARVED_REDWOOD_3 } = core.ObjectIdentifiers;
+  if (objectId !== CARVED_REDWOOD_2 && objectId !== CARVED_REDWOOD_3) return false;
+  // Both trees have matching entrances at the same map coordinates on planes 1 and 2.
+  const goingUp = objectId === CARVED_REDWOOD_2;
+  const otherId = goingUp ? CARVED_REDWOOD_3 : CARVED_REDWOOD_2;
+  const { x, y } = location;
+  const privateArea = player.getPrivateArea();
+  const exit = core.MapObjects.get(otherId, new core.Location(x, y, goingUp ? 2 : 1), privateArea);
+  if (!exit) return false;
+  const from = player.getLocation();
+  const landing = ClimbLinks.landingTile(exit, { x: from.getX(), y: from.getY() }, privateArea);
+  if (!landing) return false;
+  player.moveTo(landing);
+  return true;
+}
+
 /** Over the root to the tile across from the player. */
 function stepOverRoot(event) {
   const roots = DATA.roots;
@@ -149,8 +167,9 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent("door:toggle", guildGate);
   pluginApi.onCustomEvent("woodcutting:success", redwoodChopped);
   pluginApi.onObjectInteraction("Cave", { Enter: enterCave });
+  pluginApi.onObjectInteraction("Carved redwood", { Enter: enterRedwood });
   pluginApi.onObjectInteraction("Vine", { Climb: climbVine });
   pluginApi.onObjectInteraction("Root", { "Step-over": stepOverRoot });
 }
 
-module.exports = { attach, isInGuild, invisibleBoost, guildGate, enterCave, climbVine, stepOverRoot, redwoodChopped };
+module.exports = { attach, isInGuild, invisibleBoost, guildGate, enterCave, enterRedwood, climbVine, stepOverRoot, redwoodChopped };

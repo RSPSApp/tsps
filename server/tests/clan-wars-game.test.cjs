@@ -461,14 +461,18 @@ test('first-to-25 plays through real melee deaths, jail portals, exact target an
   const held = new core.Item(995, 37, { qa: 'kill-target-retain' });
   b.getInventory().add(held, false);
   const meta = structuredClone(b.getInventory().getValidItems().find(i => i.getId() === 995).getMeta());
+  const scoringSide = game.channelKeys.indexOf(C.channel(a).key);
+  assert.equal(game.members.get(a), scoringSide);
+  assert.equal(game.members.get(b), 1 - scoringSide);
   core.World.processCycle = game.starts; game.tick();
   for (let kill = 1; kill <= 25; kill++) {
     await lethalMelee(a,b,game);
-    assert.deepEqual(game.kills, [kill,0], 'one real death awards exactly one opposing-team kill');
+    const expected = [0,0]; expected[scoringSide] = kill;
+    assert.deepEqual(game.kills, expected, 'one real death awards exactly one opposing-team kill');
     if (kill < 25) {
       assert.equal(game.phase, 'combat', 'one living side is not an early LTS victory');
       tick(4);
-      assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_kills_1')), kill, 'native HUD receives the score');
+      assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`clanwars_kills_${scoringSide + 1}`)), kill, 'native HUD receives the score');
       assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_wincondition')), 1);
       assert.equal(game.jailed.has(b), true);
       assert.equal(game.fighters.has(b), false);
@@ -513,9 +517,11 @@ test('kill-target late join and channel-leave death credit use real channel even
   core.World.processCycle=game.starts; game.tick();
   await join(extra);
   assert.equal(C.matches.get(extra),game,'mode allows the ordinary purple portal after preparation');
+  const otherSide = 1 - game.channelKeys.indexOf(C.channel(extra).key);
+  const expected = [0,0]; expected[otherSide] = 1;
   FC.leave(extra,false);
-  assert.deepEqual(game.kills,[0,1],'fixed counts-as-death rule credits the other team');
-  tick(2); assert.deepEqual(game.kills,[0,1],'channel event and polling cannot double count');
+  assert.deepEqual(game.kills,expected,'fixed counts-as-death rule credits the other team');
+  tick(2); assert.deepEqual(game.kills,expected,'channel event and polling cannot double count');
   assert.equal(C.matches.has(extra),false); assert.equal(game.phase,'combat');
 });
 
@@ -526,7 +532,7 @@ test('kill-target finish protects two queued production death tasks before the s
   core.World.processCycle=game.starts; game.tick();
   // Seed the immediately-before-target state for the concurrent death boundary.
   // The separate full-match case reaches the actual 25-kill target without seeding scores.
-  game.kills[1]=24;
+  game.kills[game.channelKeys.indexOf(C.channel(b).key)]=24;
   for (const [i,p] of [a,b].entries()) {
     p.getInventory().add(new core.Item(995,41+i,{qa:`pending-${i}`}),false);
     p.getCombat().addDamage(i===0?b:a,10);

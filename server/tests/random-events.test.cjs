@@ -762,6 +762,20 @@ test('real Rub event reaches every skill, uses base level XP, exact slot and one
   }
 });
 
+test('the lamp leaves the chat line to the xpreward interface; the book has its own lines at 15 x level', t => {
+  const h = harness(t), skill = Skill.values()[0];
+  const lamp = h.player(); lamp.levels.set(skill, 37); rub(h, lamp);
+  confirm(h, skill);
+  assert.equal((lamp.typed ?? []).some(([type]) => type === 115), false, 'no second chat copy');
+  for (const [level, amount] of [[49, '735'], [85, '1,275']]) {
+    const p = h.player(); p.levels.set(skill, level);
+    const item = new Item(I.BOOK_OF_KNOWLEDGE, 1); p.slots[2] = item;
+    assert.equal(h.hooks['Book of Knowledge'].Read({ player: p, item, itemId: I.BOOK_OF_KNOWLEDGE, slot: 2, clickType: 1, handled: false }), true);
+    assert.equal(confirm(h, skill), `Your brain power serves you well!<br>You have been awarded ${amount} ${skill.getName()} experience!`);
+    assert.equal(p.slots[2], undefined);
+  }
+});
+
 test('lamp keeps blocked/maxed XP and rejects changed slot, replay, replacement prompts and logout', t => {
   const h = harness(t), skill = Skill.values()[0];
   for (const reason of ['blocked', 'moved', 'swapped', 'new-request', 'offline', 'PlayerLogout', 'PlayerDisconnect', 'PlayerDeath']) {
@@ -2769,7 +2783,7 @@ test('Book of Knowledge grants 15 times the level and keeps itself when XP is bl
   const event = { player: p, item: p.slots[slot], itemId: I.BOOK_OF_KNOWLEDGE, slot, handled: false };
   assert.equal(h.hooks['Book of Knowledge'].Read(event), true);
   const request = h.xpRewards.at(-1);
-  assert.equal(request.onConfirm(Skill.values()[0]), 'You have been awarded 150 Attack XP!');
+  assert.equal(request.onConfirm(Skill.values()[0]), 'Your brain power serves you well!<br>You have been awarded 150 Attack experience!');
   assert.equal(p.xp.get(Skill.values()[0]), 150);
   assert.equal(p.slots[slot], undefined);
 });

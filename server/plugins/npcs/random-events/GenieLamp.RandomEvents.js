@@ -2,11 +2,11 @@
 
 // Skill-level reward/slot consumption adapted from Void RandomEventGift.kt (BSD-3).
 // The skill is chosen on the xpreward interface (plugins/interface/XpReward.plugin.js), as
-// captured: "Your wish has been granted! You have been awarded 980 Runecraft XP!" (10 x level),
-// sent as a type 115 game message as well as in the message box (3467 tick 4038).
-// The Book of Knowledge uses the same flow at 15 x level.
+// The lamp gives 10 x the skill's level: "Your wish has been granted!<br>You have been awarded
+// 980 Runecraft XP!". The Book of Knowledge uses the same flow at 15 x level, with its own lines:
+// "Your brain power serves you well!<br>You have been awarded 1,275 Agility experience!".
+// The xpreward plugin copies the box to chat.
 const pending = new WeakMap();
-const MESSAGE_BOX_CHAT_TYPE = 115;
 
 function openReward(api, { player, item, itemId, slot }, multiplier) {
   if (itemId !== api.core.ItemIdentifiers.LAMP && itemId !== api.core.ItemIdentifiers.BOOK_OF_KNOWLEDGE) {
@@ -50,9 +50,9 @@ function grant(api, player, request, skill, name = skill.getName()) {
   manager.addExperience(skill, xp, true);
   if (manager.getExperience(skill) === before) return null;
   inventory.deleteAtSlot(request.slot, 1);
-  if (request.itemId !== api.core.ItemIdentifiers.LAMP) return `You have been awarded ${xp} ${name} XP!`;
-  player.getPacketSender().sendTypedMessage(MESSAGE_BOX_CHAT_TYPE,
-    `Your wish has been granted! You have been awarded ${xp} ${name} XP!`);
+  if (request.itemId !== api.core.ItemIdentifiers.LAMP) {
+    return `Your brain power serves you well!<br>You have been awarded ${xp.toLocaleString("en-GB")} ${name} experience!`;
+  }
   return `Your wish has been granted!<br>You have been awarded ${xp} ${name} XP!`;
 }
 

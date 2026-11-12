@@ -174,6 +174,53 @@ test("Tumeken's shadow: with both held only the plain runes pay, and Uncharge re
   assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 500);
 });
 
+test("Tumeken's shadow: aether runes count as soul runes, after the plain soul runes (Wiki)", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, new core.Item(I.SOUL_RUNE, 3));
+  f.inv.setItem(2, new core.Item(I.AETHER_RUNE, 7));
+  f.inv.setItem(3, new core.Item(I.CHAOS_RUNE, 50));
+  await useOnEye(f, 2, I.AETHER_RUNE);
+  assert.equal(f.messages.at(-1), "You apply 5 charges to your Tumeken's shadow.");
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 0, "the soul runes first");
+  assert.equal(amount(f.inv, I.AETHER_RUNE, false), 0, "then 7 aether runes: 10 souls, 5 charges");
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 25);
+});
+
+// Wiki (Tumeken's shadow): aether runes "will not be refunded if the staff is uncharged" (#4702 review).
+test("Tumeken's shadow: Uncharge refunds no soul runes for the aether runes paid, and all the chaos runes", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, new core.Item(I.AETHER_RUNE, 10));
+  f.inv.setItem(2, new core.Item(I.CHAOS_RUNE, 25));
+  await useOnEye(f, 1, I.AETHER_RUNE);
+  assert.equal(f.messages.at(-1), "You apply 5 charges to your Tumeken's shadow.");
+  await send(f, { type: "inventory_action", slot: 0, itemId: f.inv.getItems()[0].getId(), widgetId: 3214, option: "Uncharge" });
+  answerPrompt(f);
+  assert.equal(f.messages.at(-1), "You uncharge your Tumeken's shadow, regaining 25 chaos runes in the process.");
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 0, "no soul runes for aether-paid charges");
+  assert.equal(amount(f.inv, I.AETHER_RUNE, false), 0, "and no aether runes either");
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 25);
+  assert.equal(f.inv.getItems()[0].getId(), I.TUMEKENS_SHADOW_UNCHARGED_);
+
+});
+
+test("Tumeken's shadow: charged with 3 soul and 7 aether runes, Uncharge gives back just the 3 soul runes", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, new core.Item(I.SOUL_RUNE, 3));
+  f.inv.setItem(2, new core.Item(I.AETHER_RUNE, 7));
+  f.inv.setItem(3, new core.Item(I.CHAOS_RUNE, 25));
+  await useOnEye(f, 2, I.AETHER_RUNE);
+  assert.equal(f.messages.at(-1), "You apply 5 charges to your Tumeken's shadow.");
+  await send(f, { type: "inventory_action", slot: 0, itemId: f.inv.getItems()[0].getId(), widgetId: 3214, option: "Uncharge" });
+  answerPrompt(f);
+  assert.equal(f.messages.at(-1), "You uncharge your Tumeken's shadow, regaining 3 soul runes and 25 chaos runes in the process.");
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 3);
+  assert.equal(amount(f.inv, I.AETHER_RUNE, false), 0);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 25);
+});
+
 // Warped sceptre: 2 chaos and 5 earth runes a charge, through an amount prompt; Uncharge asks Yes/No.
 test("Warped sceptre: preset chaos and earth runes are refused", async (t) => {
   const f = actor(t);

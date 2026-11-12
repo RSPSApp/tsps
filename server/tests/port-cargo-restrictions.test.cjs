@@ -560,3 +560,19 @@ test('depositing at the destination plays the pickup animation and sound; the la
   assert.deepEqual(seen.typed[1], [core.ChatType.MESBOX, `You deliver the ${name} and complete your courier task!`]);
   assert.equal(common.slots(p)[0], null);
 });
+
+test("Take-last-cargo takes the last-taken task's crate without asking, else asks as Take-cargo does", t => {
+  const p = player(t), table = sarimLedger(p);
+  const [first, second] = twoSarimTasks();
+  common.setSlots(p, [{ id: first.id, taken: 0, delivered: 0 }, { id: second.id, taken: 0, delivered: 0 }]);
+  objectOption(p, table, 'Take-last-cargo');
+  assert.equal(p.getDialogueManager().getCurrent().getTitle(), ledger.WHICH_CARGO, 'nothing taken yet: the menu');
+  p.getDialogueManager().getCurrent().execute(2);
+  assert.equal(common.heldCrate(p), second.crate);
+  common.putDown(p);
+  const slots = common.slots(p);
+  slots[1] = { ...slots[1], taken: 0 };
+  common.setSlots(p, slots);
+  objectOption(p, table, 'Take-last-cargo');
+  assert.equal(common.heldCrate(p), second.crate, 'the last-taken task again, no menu');
+});

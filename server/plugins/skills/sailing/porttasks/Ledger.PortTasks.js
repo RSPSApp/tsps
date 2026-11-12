@@ -117,16 +117,16 @@ function takeCargo(player, location, mode) {
 function chooseCargo(player, location, options) {
   const { DialogueChainBuilder, OptionDialogue } = common.core();
   const owner = {};
-  const slots = options.map(([index]) => index);
+  const picks = options.map(([index, , task]) => [index, task.id]);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new OptionDialogue(0, {
       executeOption: (option) => {
         player.getPacketSender().closeChatboxFor(owner);
-        const index = slots[Number(option) - 1];
+        const [index, taskId] = picks[Number(option) - 1] ?? [];
         if (index === undefined) return;
         // Hands, slots and crew may have changed while the menu was open.
         const found = takeable(player, location);
-        const pick = found?.options.find(([i]) => i === index);
+        const pick = found?.options.find(([i, , task]) => i === index && task.id === taskId);
         if (pick) take(player, found.dock, pick);
       },
     }, ...options.map(([, , task]) => cargoOption(task))).setTitle(WHICH_CARGO)), owner);

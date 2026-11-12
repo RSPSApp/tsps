@@ -185,6 +185,33 @@ Ours: the level, lockpick and full-inventory refusals; an attempt cut short (mov
 before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
 (52 Thieving, three loot tables) aren't implemented.
 
+## Isle of Souls Dungeon chest
+
+`plugins/skills/thieving/SoulChest.Thieving.js`; tests in `server/tests/thieving-soul-chest.test.cjs`.
+
+From the Wiki ([Chest (Isle of Souls Dungeon)](https://oldschool.runescape.wiki/w/Chest_(Isle_of_Souls_Dungeon))): 28 Thieving,
+150 experience per loot, the unlock roll -23/153 out of 256 (+26 to both with a lockpick, Mod Ash), a 1 in 6 trap on a
+failed roll, and the 20-row loot table (out of 200, the dark key 1/200, a medium clue 2/200).
+
+From the rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V: 906 attempts, 55 traps), ticks from
+the click on an adjacent chest:
+
+| Tick | Unlocked | Failed | Trapped |
+| ---: | --- | --- | --- |
+| 0 | `human_lockedchest`, sound 1243, "You attempt to picklock the chest." | same | same |
+| 1 | varbit `busy` 1 | same | same |
+| 2 | `human_openchest` and sound 52 (delay 10), "You manage to unlock the chest." | sound 2402, "You fail to picklock the chest.", `busy` 0 | as failed (no `busy` 0), plus `human_castteleport`, `teleport_casting` (height 92), area sound 200 |
+| 3 | "You steal some loot from the chest.", the loot, the XP, the chest open | | |
+| 4 | sound 51 (delay 15) | | "You have activated a trap on the chest." |
+| 5 | the chest closed, `busy` 0 | | `busy` 0, teleport to a random tile of 2321-2327, 2930-2936 |
+
+The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another player's loot can open the chest during
+an attempt without stopping it (91, 95). Every line is spam.
+
+Ours: a loot that does not fit is not given, though the XP is (the Wiki only says nothing comes with one free slot and
+two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line. The
+Dark Chest the dark key opens is not implemented.
+
 ## Not modelled
 
 - **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.

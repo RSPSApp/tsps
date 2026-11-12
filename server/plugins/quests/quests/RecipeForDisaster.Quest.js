@@ -3627,6 +3627,22 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return lines;
   }
 
+  function councilJournal(player) {
+    const guidance = finaleJournal(player);
+    if (player.getAttribute(FEAST_PENDING_ATTRIBUTE) && !quest.isComplete(player)) return guidance;
+    // Informational progress, not the retail interactive member selector (CS2
+    // recipe_for_disaster_subquests). Use the same completion as each child and
+    // the remaining count; zero alone does not tell us whether a guest was inspected.
+    const members = [...journalStages].map(([name, read]) => {
+      const steps = rescueJournals[name];
+      const complete = read(player) >= steps[steps.length - 1][0];
+      const label = name === "Wartface & Bentnoze" ? "Goblin generals (Wartface & Bentnoze)" : name;
+      const line = `${label}: ${complete ? "rescue complete" : "still needs rescuing"}.`;
+      return complete ? `<str>${line}</str>` : line;
+    });
+    return ["Council members:", ...members, "", ...guidance];
+  }
+
   // Like Vampyre Slayer's journal, prose is split across the native fixed-height
   // line widgets. Whole-line colour/strike tags are repeated on continuation lines.
   function wrapJournalLine(text) {
@@ -3682,7 +3698,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (complete) lines.push("", "<col=ff0000>QUEST COMPLETE!</col>");
       return lines;
     }
-    if (child === "Culinaromancer" || stage(player) >= STAGE_OPENING_COMPLETE) return finaleJournal(player);
+    if (child === "Culinaromancer") return finaleJournal(player);
+    if (stage(player) >= STAGE_OPENING_COMPLETE) return councilJournal(player);
     return openingJournal(player);
   }
 

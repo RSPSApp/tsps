@@ -23896,6 +23896,9 @@ function rfdJournalFixture({ stage = 4, flags = 0, attributes = {}, inventory = 
   require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
   const Q = require('../plugins/quests/QuestRuntime');
   const quest = Q.getRegisteredQuests().findLast(q => q.key === 'recipe_for_disaster');
+  for (const key of ['desert_treasure_i', 'horror_from_the_deep']) {
+    if (!Q.getRegisteredQuests().some(q => q.key === key)) Q.registerQuest(api, { key, name: key, completionValue: 2 });
+  }
   const attrs = new Map(Object.entries({
     'quest.recipe_for_disaster.stage': stage, 'recipe-for-disaster:rescues': flags,
     'recipe-for-disaster:feast-seen': true, 'quest.points': 200,
@@ -24016,10 +24019,6 @@ test('RFD parent and finale journals distinguish remaining rescues, prerequisite
     assert.match(f.open(name).text, /175 quest points/);
     assert.doesNotMatch(f.open(name).text, /still need to free/);
     f.attrs.set('quest.points', 200);
-    // The prerequisite registrations may not be loaded by a filtered test run.
-    for (const key of ['desert_treasure_i', 'horror_from_the_deep']) {
-      if (!f.Q.getRegisteredQuests().some(q => q.key === key)) f.Q.registerQuest(mockApi().api, { key, name: key, completionValue: 2 });
-    }
     f.attrs.set('quest.desert_treasure_i.stage', 0);
     assert.match(f.open(name).text, /Desert Treasure I completed/);
     f.attrs.set('quest.desert_treasure_i.stage', 100);
@@ -24106,4 +24105,44 @@ test('RFD parent journal counts legacy numeric completion consistently with its 
     assert.doesNotMatch(result.text, /free 0|through the portal and defeat him|QUEST COMPLETE/);
   }
   assert.equal(f.attrs.get('recipe-for-disaster:rescues'), 0, 'no invented flag migration or mechanics change');
+});
+
+
+test('RFD parent journal lists all council names once with truthful complete or pending status', () => {
+  const labels = rfdJournalCases.map(([name]) => name === 'Wartface & Bentnoze' ? 'Goblin generals (Wartface & Bentnoze)' : name);
+  const checkMembers = (f, completed) => {
+    const result = f.open('Recipe for Disaster');
+    assert.match(result.text, /Council members:/);
+    for (const [i, label] of labels.entries()) {
+      assert.equal(result.text.split(label).length - 1, 1, `${label} appears once`);
+      assert.ok(result.text.includes(`${label}: ${completed(i) ? 'rescue complete' : 'still needs rescuing'}.`), label);
+    }
+    assert.doesNotMatch(f.open('Recipe for Disaster - Culinaromancer').text, /Council members:/, 'finale child retains its own guidance');
+    return result;
+  };
+  const zero = rfdJournalFixture();
+  checkMembers(zero, () => false);
+  const mixed = rfdJournalFixture({ flags: 85 });
+  const before = [...mixed.attrs];
+  checkMembers(mixed, i => Boolean(85 & rfdJournalCases[i][2]));
+  assert.deepEqual([...mixed.attrs], before, 'informational rendering never awards or migrates rescues');
+  const legacy = rfdJournalFixture({ attributes: { 'recipe-for-disaster:pirate-stage': 110 } });
+  checkMembers(legacy, i => i === 2);
+  assert.match(legacy.open('Recipe for Disaster').text, /free 7 council members/);
+  assert.match(legacy.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  assert.equal(legacy.attrs.get('recipe-for-disaster:rescues'), 0);
+  for (const [, key, , end] of rfdJournalCases) legacy.attrs.set(`recipe-for-disaster:${key}-stage`, end);
+  assert.match(checkMembers(legacy, () => true).text, /finish the council's rescue at the banquet/);
+  assert.equal(legacy.attrs.get('recipe-for-disaster:rescues'), 0);
+  const freed = rfdJournalFixture({ flags: 255 });
+  assert.match(checkMembers(freed, () => true).text, /through the portal and defeat him/);
+  freed.attrs.set('quest.points', 174);
+  assert.match(checkMembers(freed, () => true).text, /175 quest points/);
+  freed.attrs.set('quest.recipe_for_disaster.stage', 5);
+  assert.match(checkMembers(freed, () => true).text, /QUEST COMPLETE/);
+  const intro = rfdJournalFixture({ stage: 1 });
+  assert.doesNotMatch(intro.open('Recipe for Disaster').text, /Council members:/, 'the banquet introduction remains separate');
+  // Reopen the long parent after a short child journal; only the new active lines count.
+  assert.match(mixed.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  checkMembers(mixed, i => Boolean(85 & rfdJournalCases[i][2]));
 });

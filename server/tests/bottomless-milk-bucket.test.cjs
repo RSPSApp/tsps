@@ -217,6 +217,18 @@ test('moving away stops the milking', () => {
   assert.equal(uses(p), 1);
 });
 
+test('an inventory item action stops the milking, as it stops a chop or mining (player:interaction-cleared)', () => {
+  const p = player();
+  give(p, EMPTY);
+  const task = milkCow(p);
+  for (let tick = 1; tick <= 7; tick++) task.tick();
+  assert.equal(uses(p), 1);
+  for (const fn of hooks.events['player:interaction-cleared'] ?? []) fn({ player: p });
+  for (let tick = 1; tick <= 14; tick++) task.tick();
+  assert.equal(uses(p), 1, 'no more milk once interrupted');
+  assert.equal(task.isRunning(), false);
+});
+
 test('quests take one use: holds/spend events, Gertrude\'s Cat on Fluffs', () => {
   const p = player();
   give(p, FILLED);

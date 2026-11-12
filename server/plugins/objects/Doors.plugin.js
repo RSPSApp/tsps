@@ -543,14 +543,19 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossRows: [3299, 3300],
       closeTicks: 5,
     }),
-    // Mort Myre: capture 1638 ticks 1014/1016. Both Open-only leaves close behind the player.
+    // Mort Myre: capture 1638 ticks 1005/1014/1016. Open puts inviswall 38848 on both gate tiles
+    // (226/01638.txt:21703, :21806) and the open leaves on the tiles south; the opener walks over the
+    // blocker, which stops anyone following. Both Open-only leaves close behind the player.
     Object.freeze({
       closed: [[O.GATE_73, 3443, 3458, 0, 3], [O.GATE_72, 3444, 3458, 0, 3]],
       opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3443, 3458, 0, 3],
         [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3443, 3457, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3444, 3458, 0, 3],
         [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 3444, 3457, 0, 2],
       ],
       crossY: 3458,
+      walkOver: true,
       closeTicks: 2,
       openSoundId: 71,
     }),

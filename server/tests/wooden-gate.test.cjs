@@ -2051,8 +2051,9 @@ test('Mort Myre gate swings through its captured leaves and closes after passage
       assert.deepEqual(steps, [[x, fromNorth ? 3457 : 3458]], 'pass to the opposite side on the clicked column');
       for (const [openId, ox, oy, face] of opened) assert.equal(at(openId, ox, oy)?.getFace(), face);
       for (const [closedId, cx, cy] of closed) assert.equal(at(closedId, cx, cy), null);
-      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), true);
-      assert.equal(RegionManager.canMove(x, 3457, x, 3458, 0, 1, 1, null), true);
+      // 226/01638.txt:21703: inviswall 38848 holds both gate tiles while open; only the opener walks over it.
+      for (const ix of [3443, 3444]) assert.equal(at(38848, ix, 3458)?.getFace(), 3, `inviswall on ${ix},3458`);
+      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false, 'no one follows through');
       assert.equal(h.sounds.at(-1)[1].getId(), 71, 'capture 1638 opening sound');
       const close = h.submitted.at(-1);
       assert.equal(close.getDelay(), 2);
@@ -2062,6 +2063,7 @@ test('Mort Myre gate swings through its captured leaves and closes after passage
       close.tick();
       for (const [closedId, cx, cy, face] of closed) assert.equal(at(closedId, cx, cy)?.getFace(), face);
       for (const [openId, ox, oy] of opened) assert.equal(at(openId, ox, oy), null);
+      for (const ix of [3443, 3444]) assert.equal(at(38848, ix, 3458), null, 'the inviswalls go with the open leaves');
       assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false);
     }
   } finally {

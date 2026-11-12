@@ -88,8 +88,11 @@ function actor(t) {
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
     // Examine price info: both settings on; barbarian vial smashing (5668) as the test sets it.
     getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
-    // Spam lines land in `messages` marked, so a test sees the type live sends.
-    sendTypedMessage(type, message) { messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : message); return sender; },
+    // Spam and mesbox lines land in `messages` marked, so a test sees the type live sends.
+    sendTypedMessage(type, message) {
+      messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : type === core.ChatType.MESBOX ? `mesbox: ${message}` : message);
+      return sender;
+    },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
@@ -442,7 +445,8 @@ test("assembling and disassembling show the recorded two-item boxes", (t) => {
   itemAction(f, BARREL_NAME, "Dismantle", 0);
   assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, "an empty barrel needs no confirm");
   assert.deepEqual(box(f), [[I.CHUGGING_BARREL, I.CHUGGING_BARREL_DISASSEMBLED_], "You disassemble the Chugging barrel."]);
-  assert.deepEqual(f.messages, [], "boxes, not chat lines");
+  // Each box's mesbox chat line goes with it (238/04236.txt ticks 98, 339).
+  assert.deepEqual(f.messages, ["mesbox: You assemble the Chugging barrel.", "mesbox: You disassemble the Chugging barrel."]);
 });
 
 test("dismantling a barrel with potions warns, asks on the confirm screen, and only Yes clears it", (t) => {
@@ -451,7 +455,9 @@ test("dismantling a barrel with potions warns, asks on the confirm screen, and o
   put(f, I.CHUGGING_BARREL, 0);
   seed(f.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
   itemAction(f, BARREL_NAME, "Dismantle", 0);
-  assert.deepEqual(box(f), [[I.CHUGGING_BARREL], "Your barrel contains potions. If you disassemble it without emptying it first, they'll be lost."]);
+  // Wrapped as sent (238/04236.txt line 51250); its mesbox chat line has the breaks as spaces (tick 5395).
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL], "Your barrel contains potions.<br>If you disassemble it without emptying it first, they'll be<br>lost."]);
+  assert.deepEqual(f.messages, ["mesbox: Your barrel contains potions. If you disassemble it without emptying it first, they'll be lost."]);
   f.player.getDialogueManager().advance();
   assert.deepEqual(f.packets.filter((p) => p[0] === "chatbox" || p[0] === "clientscript").slice(-2), [
     ["chatbox", 584],
@@ -767,4 +773,48 @@ test("legacy name-key insertion order survives canonical numeric keys and later 
   t.mock.method(Potions.doseOf(I.PRAYER_POTION_4_).potion, "effect", () => effects.push("prayer"));
   itemAction(f, BARREL_NAME, "Drink", 27);
   assert.deepEqual(effects, ["energy", "prayer"]);
+});
+
+test("a destroy prompt left open or walked away from never takes the barrel's Yes (real PacketSender)", () => {
+  const I = core.ItemIdentifiers;
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const DestroyItem = require("../plugins/interface/DestroyItem.plugin");
+  // DestroyItem registers on the shared confirm button (584) ahead of the barrel, as in production.
+  let dropPolicy, destroyConfirm;
+  const destroyed = [];
+  DestroyItem.register(new Proxy({
+    core,
+    onItemDropPolicy: (handler) => { dropPolicy = handler; },
+    onInterfaceActionButton: (_button, handler) => { destroyConfirm = handler; },
+    emitCustomEvent: (name, event) => { if (name === "destroy-item:destroyed") destroyed.push(event.itemId); },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const yes = (player) => destroyConfirm({ player, action: 1 }) === false && ChuggingBarrel._test.confirmDismantle({ player, action: 1 });
+
+  for (const leave of ["walk-away", "still-open"]) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel), new core.Location(3200, 3200, 0));
+    player.setIndex(1801);
+    player.getSession().sendClientPacket = () => true;
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(I.CHUGGING_BARREL, 1));
+    const keep = new core.Item(I.FIRE_CAPE, 1, { [core.Item.UNTRADEABLE_META]: true });
+    inventory.setItem(1, keep);
+    seed(player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
+
+    // The cape's Drop opens DestroyItem's 584 prompt, armed for the cape.
+    const drop = { player, item: keep, itemId: keep.getId(), slot: 1, interfaceId: 149, handled: false };
+    dropPolicy(drop);
+    assert.equal(drop.handled, true);
+    assert.equal(player.getAttribute("destroy-item:pending"), keep.getId(), `${leave}: the destroy prompt is armed`);
+    if (leave === "walk-away") player.getPacketSender().sendInterfaceRemoval();
+
+    actions.get(BARREL_NAME).Dismantle({ player, item: inventory.getItems()[0], itemId: I.CHUGGING_BARREL, slot: 0, clickType: 1, handled: false });
+    player.getDialogueManager().advance();
+    assert.equal(player.getPacketSender().isChatboxInterface(584), true, `${leave}: the barrel's confirm is up`);
+    assert.notEqual(player.getAttribute("destroy-item:pending"), keep.getId(), `${leave}: the stale destroy is disarmed`);
+    assert.equal(yes(player), true, `${leave}: Yes answers the barrel`);
+    assert.equal(inventory.getItems()[1], keep, `${leave}: the cape is kept`);
+    assert.deepEqual(destroyed, [], `${leave}: nothing is destroyed`);
+    assert.equal(inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, `${leave}: the barrel is dismantled`);
+  }
 });

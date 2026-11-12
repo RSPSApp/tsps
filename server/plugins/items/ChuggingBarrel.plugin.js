@@ -53,8 +53,8 @@ const MESSAGE = {
   DRINK: (name) => `You drink some of your ${name}.`,
   /** Captured (4236): using a barrel away from a bank. */
   NEAR_BANK: "You must be near a bank to use that barrel.",
-  /** Captured (238/04236.txt tick 5395): the objectbox warning before dismantling a barrel with potions. */
-  CONTAINS_POTIONS: "Your barrel contains potions. If you disassemble it without emptying it first, they'll be lost.",
+  /** Captured (238/04236.txt tick 5395, line 51250): the objectbox warning before dismantling a barrel with potions, wrapped as sent. */
+  CONTAINS_POTIONS: "Your barrel contains potions.<br>If you disassemble it without emptying it first, they'll be<br>lost.",
   /** Captured (tick 5398): confirmdestroy_init's question and note. */
   DISMANTLE_QUESTION: "Are you sure you want to disassemble the barrel?",
   DISMANTLE_NOTE: "The potions stored will be lost.",
@@ -129,9 +129,13 @@ function setItem(player, item, id) {
   player.getInventory().refreshItems();
 }
 
-/** A one- or two-item box (objectbox 193 / objectbox_double 11), as the captures show these lines. */
+/**
+ * A one- or two-item box (objectbox 193 / objectbox_double 11), as the captures show these lines, each after its
+ * mesbox chat line, the box's text with its <br> as spaces (238/04236.txt ticks 98, 339, 5395, 5703).
+ */
 function itemBox(player, items, text, then = null) {
   const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue, EndDialogue } = core;
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder().add(items.length > 1
     ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
     : new ItemStatementDialogue(0, items[0], text));

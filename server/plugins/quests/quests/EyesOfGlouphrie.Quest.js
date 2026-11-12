@@ -122,6 +122,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const MACHINE_PANEL_OBJECT_ID = ObjectIdentifiers.MACHINE_PANEL; // 17272, Inspect
   const SINGING_BOWL_OBJECT_ID = ObjectIdentifiers.SINGING_BOWL; // 17239, Inspect / Sing-crystal
   const SINGING_BOWL_INSPECT_RANGE = 3;
+  const SINGING_BOWL_INSPECT_RIM = { x: 2388, y: 9817, z: 0 }; // RSProx 310, tick 1460.
 
   /** Machine and exchanger tiles: the cave map carries only the platform and pipe. */
   const MACHINE_BROKEN_TILE = { x: 2390, y: 9824 };
@@ -768,8 +769,9 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     const bowl = event.object?.getLocation?.();
     if (!bowl || at.getZ() !== bowl.getZ()) return;
     const distance = Math.max(Math.abs(at.getX() - bowl.getX()), Math.abs(at.getY() - bowl.getY()));
-    if (distance > SINGING_BOWL_INSPECT_RANGE) return;
-    event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+    event.destination = distance <= SINGING_BOWL_INSPECT_RANGE
+      ? { x: at.getX(), y: at.getY(), z: at.getZ() }
+      : SINGING_BOWL_INSPECT_RIM;
   }
 
   function singCrystal(event) {

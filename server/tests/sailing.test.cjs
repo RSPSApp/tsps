@@ -4449,6 +4449,7 @@ test("the crystal extractor's progress bar: an NPC on it with headbar 82 filling
     assert.equal(bar.definition.id, 15111, "crystal_extractor_headbar");
     assert.deepEqual([bar.definition.x, bar.definition.y, bar.definition.z], [...tile, 0], "on the extractor, on the deck's level");
     assert.deepEqual(bar.bars, [[82, 0]]);
+    assert.ok(BoatManager.getDeck(h.boat).getNpcs().includes(bar), "on the boat's deck");
     h.tick(4);
     assert.equal(bar.bars.length, 1);
     h.tick();
@@ -4461,6 +4462,7 @@ test("the crystal extractor's progress bar: an NPC on it with headbar 82 filling
     h.tick();
     assert.equal(h.owned.crystalMote, true);
     assert.deepEqual(removed, [bar], "gone with the mote");
+    assert.equal(BoatManager.getDeck(h.boat).getNpcs().includes(bar), false, "and off the deck");
     h.tick(20);
     assert.equal(spawned.length, 1, "no bar while it holds a mote");
 

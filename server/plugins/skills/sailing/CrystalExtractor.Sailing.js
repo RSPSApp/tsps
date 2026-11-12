@@ -97,8 +97,7 @@ function extractorTile(boat, loc) {
 /** The progress bar over the extractor: an NPC on its tile, added to the boat's deck (level 0). */
 function spawnHeadbar(boat) {
   const loc = extractorOf(boat);
-  const tile = loc && extractorTile(boat, loc);
-  const npc = tile && pluginApi.spawnNpc({ id: HEADBAR_NPC, x: tile.getX(), y: tile.getY(), z: 0 });
+  const npc = loc && pluginApi.spawnNpc({ id: HEADBAR_NPC, x: boat.deckBaseX + loc.x, y: boat.deckBaseY + loc.y, z: 0 });
   if (!npc) return undefined;
   core().BoatManager.getDeck(boat)?.enter(npc);
   npc.showHeadbar(HEADBAR, { fill: 0 });
@@ -110,7 +109,9 @@ function stopCharging(player) {
   const charge = charging.get(player);
   if (!charge) return;
   charging.delete(player);
-  if (charge.npc) pluginApi.removeNpc(charge.npc);
+  if (!charge.npc) return;
+  core().BoatManager.getDeck(charge.boat)?.leave(charge.npc, false);
+  pluginApi.removeNpc(charge.npc);
 }
 
 /** The bar's fill `ticks` into the charge: how close the mote is. */
@@ -119,14 +120,16 @@ function headbarFill(ticks) {
   return Math.max(0, Math.floor((HEADBAR_WIDTH * (HEADBAR_TICKS - left)) / HEADBAR_TICKS));
 }
 
-/** Every 5 ticks of the charge: the bar shows how much of the mote is made. */
-function fillHeadbar(player, charge) {
-  if (charging.get(player) !== charge) return;
-  if (ownBoat(player)?.boat !== charge.boat) return stopCharging(player);
-  charge.ticks += HEADBAR_EVERY;
-  if (charge.ticks >= MOTE_TICKS) return;
-  charge.npc?.showHeadbar(HEADBAR, { fill: headbarFill(charge.ticks) });
-  later(player, HEADBAR_EVERY, () => fillHeadbar(player, charge));
+/** Runs the charge on: the bar every 5 ticks, then the mote. */
+function nextStep(player, charge) {
+  const ticks = Math.min(HEADBAR_EVERY, MOTE_TICKS - charge.ticks);
+  later(player, ticks, () => {
+    if (charging.get(player) !== charge) return;
+    charge.ticks += ticks;
+    if (charge.ticks >= MOTE_TICKS) return moteReady(player, charge);
+    charge.npc?.showHeadbar(HEADBAR, { fill: headbarFill(charge.ticks) });
+    nextStep(player, charge);
+  });
 }
 
 /** The mote being made is done: it waits in the extractor until harvested. */
@@ -149,8 +152,7 @@ function startCharging(player, owned) {
   stopCharging(player);
   const charge = { boat, npc: spawnHeadbar(boat), ticks: 0 };
   charging.set(player, charge);
-  later(player, HEADBAR_EVERY, () => fillHeadbar(player, charge));
-  later(player, MOTE_TICKS, () => moteReady(player, charge));
+  nextStep(player, charge);
 }
 
 function faceExtractor(player, boat, loc) {

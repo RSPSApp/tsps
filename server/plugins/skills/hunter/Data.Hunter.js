@@ -7,8 +7,11 @@ function build(core) {
   // Trap stages by cache gameval: the loc while it is being set, the empty trap, the catch or miss
   // (shown two ticks before the full or failed loc) and the sounds they play (rsprox captures).
   const loc = name => core.CacheDefinitions.getLocId(name);
-  const BOX = { layTicks: 2, layMessage: "You begin setting up the trap.", laySound: 2636, dismantle: 5212,
-    trappingSound: 2627, fullSound: 362, collapse: ["The box trap that you laid has collapsed.", core.ChatType.SPAM] };
+  // Box traps look for prey every 3 ticks within 2 tiles (a 5x5 square), dismantle a catch with an area
+  // sound at the trap, and Reset lays the new trap in 3 ticks where Lay takes 2.
+  const BOX = { layTicks: 2, resetLayTicks: 3, lureTicks: 3, lureRange: 2, layMessage: "You begin setting up the trap.", laySound: 2636,
+    dismantle: 5212, caughtDismantleAreaSound: true, trappingSound: 2627, fullSound: 362,
+    collapse: ["The box trap that you laid has collapsed.", core.ChatType.SPAM] };
   const NET = { layTicks: 1, layMessage: "You begin setting up a trap.", laySound: 2644, layAreaSound: true, dismantle: 5207,
     dismantleSoundFirst: true, trappingSound: 2652, settingAnimation: 5266, refusal: "You need a net and rope to set a net trap.",
     collapse: ["The net trap that you set has collapsed.", core.ChatType.SPAM] };
@@ -16,12 +19,12 @@ function build(core) {
     idleTree: loc(`hunting_sapling_set_${colour}`), idle: loc(`hunting_sapling_net_set_${colour}`),
     failing: loc(`hunting_sapling_failing_${colour}`), fail: loc(`hunting_sapling_failed_${colour}`) });
   const traps = {
-    bird: { level: 1, item: I.BIRD_SNARE, idle: loc("hunting_ojibway_trap"), failing: loc("hunting_ojibway_trap_failing"),
+    bird: { level: 1, item: I.BIRD_SNARE, lureRange: 2, idle: loc("hunting_ojibway_trap"), failing: loc("hunting_ojibway_trap_failing"),
       fail: loc("hunting_ojibway_trap_broken"), animation: 5208, layTicks: 3, layMessage: "You begin setting up the trap.", laySound: 2646,
       dismantle: 5207, trappingSound: 2637, fullSound: 2625, collapse: ["The bird snare that you laid has fallen over.", core.ChatType.GAME] },
     box: { level: 27, item: I.BOX_TRAP, idle: loc("hunting_boxtrap_empty"), failing: loc("hunting_boxtrap_failing"),
       fail: loc("hunting_boxtrap_failed"), animation: 5208, ...BOX },
-    magic: { level: 71, item: I.MAGIC_BOX, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
+    magic: { level: 71, item: I.MAGIC_BOX, lureRange: 2, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
     deadfall: { level: 23, idle: loc("hunting_deadfall_trap"), fail: loc("hunting_deadfall_boulder"), setting: loc("hunting_deadfall_setting"),
       failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1, keepsAnimation: true,
       layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631 },
@@ -45,7 +48,7 @@ function build(core) {
     [N.COPPER_LONGTAIL, "bird", 9, 61.2, O.BIRD_SNARE_13, 85, 390, [[I.BONES, 1], [I.RAW_BIRD_MEAT, 1], [I.ORANGE_FEATHER, 5, 10]]],
     [N.CERULEAN_TWITCH, "bird", 11, 64.5, O.BIRD_SNARE_9, 82, 380, [[I.BONES, 1], [I.RAW_BIRD_MEAT, 1], [I.BLUE_FEATHER, 5, 10]]],
     [N.TROPICAL_WAGTAIL, "bird", 19, 95.2, O.BIRD_SNARE_5, 75, 370, [[I.BONES, 1], [I.RAW_BIRD_MEAT, 1], [I.STRIPY_FEATHER, 5, 10]]],
-    [N.FERRET, "box", 27, 115.2, O.SHAKING_BOX_4, 100, 420, [[I.FERRET, 1]]],
+    [N.FERRET, "box", 27, 115, O.SHAKING_BOX_4, 100, 420, [[I.FERRET, 1]]],
     [N.CHINCHOMPA, "box", 53, 198.4, O.SHAKING_BOX_2, 6, 268, [[I.CHINCHOMPA_2, 1]]],
     [N.CARNIVOROUS_CHINCHOMPA, "box", 63, 265, O.SHAKING_BOX_3, -78, 228, [[I.RED_CHINCHOMPA_2, 1]]],
     [N.BLACK_CHINCHOMPA, "box", 73, 315, O.SHAKING_BOX, -78, 228, [[I.BLACK_CHINCHOMPA, 1]]],

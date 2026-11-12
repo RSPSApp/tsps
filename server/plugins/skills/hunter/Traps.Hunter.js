@@ -17,7 +17,10 @@ const RESET_LAY_TICKS = 3;
 const DISMANTLE_SOUND = 2632;
 // rsprox captures play the net dismantle sound with the animation, 25 client cycles late.
 const NET_DISMANTLE_SOUND_DELAY = 25;
-const TRAP_SOUND_RADIUS = 10;
+// Trap area sounds (setting up, trapping, full, dismantling a caught box) reach 5 tiles.
+const TRAP_SOUND_RADIUS = 5;
+// Ticks between an idle trap's looks for prey, unless its trap data sets lureTicks.
+const LURE_TICKS = 5;
 // Pitfalls are the map's 2x2 multiloc, driven by its own varbit (hunt_pitfall_state<n>): 0 Pit, 1 Spiked pit,
 // 2 collapsing, 3 and 4 the full pit for either jump direction. Each state change clears the coord timer
 // (script 6678) and a set or full pit draws add_overlaytimer_coord (5478): coord, timer id, ticks, colour, 1.
@@ -171,7 +174,7 @@ function sendTimer(trap) {
 function trapSound(trap, soundId) {
   if (!soundId) return;
   const at = trap.objects.at(-1)?.getLocation() ?? trap.location;
-  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS });
+  H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS, source: trap.player });
 }
 
 /**
@@ -180,7 +183,7 @@ function trapSound(trap, soundId) {
  * from the inventory goes on the floor until the loc replaces it (box 2 ticks, bird snare 3); a tree
  * or boulder turns into its setting loc and the trap stands a tick later.
  */
-function lay(player, kind, location, base = null, ground = null) {
+function lay(player, kind, location, base = null, ground = null, layTicks = null) {
   if (!nearby(player, base ?? { getPrivateArea: () => player.getPrivateArea(), getLocation: () => location }, 2)
     || !canLay(player, kind, location, base, ground)) return;
   const def = H.data.traps[kind];
@@ -190,7 +193,7 @@ function lay(player, kind, location, base = null, ground = null) {
     removeObject(setting); setting = null;
     H.core.ObjectManager.register(base, true);
   };
-  if (!begin(player, def.layTicks ?? 3, def.animation, () => {
+  if (!begin(player, layTicks ?? def.layTicks ?? 3, def.animation, () => {
     restore();
     if (!canLay(player, kind, location, base, placed)) return;
     if (placed) {
@@ -198,7 +201,7 @@ function lay(player, kind, location, base = null, ground = null) {
       if (placed.getItem().getAmount() > 1) drop(player, [[placed.getItem().getId(), placed.getItem().getAmount() - 1]], location);
     } else if (!exchange(player, materials(def, player), [])) return;
     const trap = { player, kind, location: location.clone(), area: player.getPrivateArea(), base, objects: [],
-      state: "idle", expires: H.tick + 100, next: H.tick + 5, npc: null, bait: null, smoked: false, rewards: null };
+      state: "idle", expires: H.tick + 100, next: H.tick + (def.lureTicks ?? LURE_TICKS), npc: null, bait: null, smoked: false, rewards: null };
     if (!["rabbit","pit"].includes(kind) && !def.noSmoke && player.getInventory().contains(H.core.ItemIdentifiers.ANTI_ODOUR_SALT)
       && exchange(player, [[H.core.ItemIdentifiers.ANTI_ODOUR_SALT, 1]], [])) trap.smoked = true;
     H.traps.add(trap);
@@ -227,7 +230,7 @@ function lay(player, kind, location, base = null, ground = null) {
     }
   }
   if (def.laySound && kind !== "pit") {
-    if (def.layAreaSound) trapSound({ objects: [], location: base?.getLocation() ?? location }, def.laySound);
+    if (def.layAreaSound) trapSound({ player, objects: [], location: base?.getLocation() ?? location }, def.laySound);
     else player.getPacketSender().sendSound(def.laySound, 1, 0);
   }
   const message = def.layMessage ?? (def.item ? "You begin setting up the trap." : null);
@@ -286,12 +289,14 @@ function collect(event, reset = false, check = true) {
     if (!H.traps.has(trap) || !owned(player, object) || !catchExchange(player, [], items)) return;
     if (trap.state === "caught") xp(player, trap.xp ?? trap.creature.xp, trap.kind, trap.creature.npc);
     const { kind, location, base } = trap;
+    const caught = trap.state === "caught";
     remove(trap);
-    if (!def.dismantleSoundFirst) player.getPacketSender().sendSound(def.dismantleSound ?? DISMANTLE_SOUND, 1, 0);
+    if (caught && def.caughtDismantleAreaSound) trapSound(trap, def.dismantleSound ?? DISMANTLE_SOUND);
+    else if (!def.dismantleSoundFirst) player.getPacketSender().sendSound(def.dismantleSound ?? DISMANTLE_SOUND, 1, 0);
     for (const line of dismantleLines(trap).slice(def.dismantleTicks === 1 ? 1 : 0)) {
       player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
     }
-    if (reset) begin(player, RESET_LAY_TICKS, null, () => lay(player, kind, location, base));
+    if (reset) begin(player, RESET_LAY_TICKS, null, () => lay(player, kind, location, base, null, def.resetLayTicks ?? null));
   }, undefined, { reset: !def.keepsAnimation })) return true;
   if (def.dismantleSoundFirst) player.getPacketSender().sendSound(DISMANTLE_SOUND, 1, NET_DISMANTLE_SOUND_DELAY);
   if (def.dismantleTicks === 1) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, "You dismantle the trap.");
@@ -392,8 +397,7 @@ function eligible(trap, npc, creature) {
   if (trap.base && trap.kind === "pit" && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(creature.caught)) return false;
   if (trap.kind === "deadfall" && (creature.npc === H.core.NpcIdentifiers.PYRE_FOX) !== (trap.location.getX() < 2000)) return false;
   if (npc.getCombat().getTarget() || npc.getCombat().getAttacker()) return false;
-  const range = trap.kind === "bird" || trap.kind === "magic" ? 2 : 3;
-  return distance(npc.getLocation(), trap.location) <= range;
+  return distance(npc.getLocation(), trap.location) <= (H.data.traps[trap.kind].lureRange ?? 3);
 }
 
 /**
@@ -494,7 +498,7 @@ function rewardsFor(player, trap) {
 
 /** Ticks between an idle trap's looks for prey, as content may shorten them ("hunter:lure-interval"). */
 function lureInterval(trap) {
-  const request = { player: trap.player, kind: trap.kind, ticks: 5 };
+  const request = { player: trap.player, kind: trap.kind, ticks: H.data.traps[trap.kind].lureTicks ?? LURE_TICKS };
   H.api.emitCustomEvent("hunter:lure-interval", request);
   return Math.max(1, request.ticks | 0);
 }

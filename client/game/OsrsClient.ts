@@ -1604,8 +1604,11 @@ export class OsrsClient {
         return false;
     }
 
-    /** Mounts a sub-interface and runs everything the open packet asked for. */
-    private mountSubInterface(payload: any): void {
+    /**
+     * Mounts a sub-interface and runs everything the open packet asked for. `remount` mounts
+     * an open again after a root change, which the server does not resend the contents of.
+     */
+    private mountSubInterface(payload: any, remount = false): void {
         if (!this.widgetManager) {
             return;
         }
@@ -1655,7 +1658,7 @@ export class OsrsClient {
                 this.widgetManager.invalidateWidgetRender(w);
             }
         }
-        this.customInterfaces.onInterfaceOpened(payload.groupId | 0);
+        this.customInterfaces.onInterfaceOpened(payload.groupId | 0, remount);
     }
 
     /**
@@ -2898,7 +2901,7 @@ export class OsrsClient {
                         this.mountSubInterface({
                             ...entry.payload,
                             targetUid: standardTargetUid,
-                        });
+                        }, true);
                     }
                     // Trigger initial onVarTransmit for root interface widgets
                     this.triggerInitialVarTransmitForGroup(payload.groupId);
@@ -2952,9 +2955,8 @@ export class OsrsClient {
                         this.mountSubInterface(payload);
                     } else {
                         // A server-defined interface the client has not seen yet: fetch its
-                        // definition, then mount. This costs one round trip on the first
-                        // open of a session, so a server should not send component updates
-                        // in the same batch as that open - they would land before the
+                        // definition, then mount. Updates for it that arrive in the meantime
+                        // (its contents, sent with the open) are held and applied once its
                         // widgets exist.
                         const pendingGroupId = payload.groupId | 0;
                         const pendingTargetUid = payload.targetUid | 0;

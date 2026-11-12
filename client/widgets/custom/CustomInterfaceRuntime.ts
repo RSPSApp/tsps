@@ -212,6 +212,17 @@ function sanitize(value: string | undefined): string {
     return String(value ?? "").replace(/[<>]/g, "");
 }
 
+/** What the server sent an interface, and the player's place in it, kept over a re-mount. */
+type ParkedInterfaceState = {
+    focused: boolean;
+    query: string;
+    dataParts: CustomInterfaceRow[][];
+    tabLayouts: Array<Array<number | { header: string }>>;
+    activeTab: number;
+    selectedRowId: number | undefined;
+    labelActions: Map<number, unknown>;
+};
+
 export class CustomInterfaceRuntime {
     private declaration?: CustomInterfaceDeclaration;
     private focused = false;
@@ -234,6 +245,12 @@ export class CustomInterfaceRuntime {
     private fetchTimer: ReturnType<typeof setTimeout> | undefined;
     private fetchSequence = 0;
     private fetchState: "idle" | "loading" | "error" = "idle";
+    /**
+     * The last closed interface, until the next one opens. A root change (Play on the welcome
+     * screen) closes every interface and mounts it again, and the server sends nothing again:
+     * that re-mount takes this back instead of starting empty.
+     */
+    private parked?: { groupId: number; state: ParkedInterfaceState };
 
     constructor(private readonly deps: CustomInterfaceRuntimeDeps) {}
 
@@ -241,25 +258,43 @@ export class CustomInterfaceRuntime {
         return this.focused;
     }
 
-    /** True when this group is server-declared, i.e. the runtime owns its behaviour. */
-    onInterfaceOpened(groupId: number): boolean {
+    /**
+     * True when this group is server-declared, i.e. the runtime owns its behaviour. `remount`
+     * is the same open mounted again by the client; a new open from the server starts afresh.
+     */
+    onInterfaceOpened(groupId: number, remount = false): boolean {
         const declaration = getCustomInterface(groupId) as CustomInterfaceDeclaration | undefined;
         if (!declaration) {
             return false;
         }
+        const parked = remount && this.parked?.groupId === (groupId | 0) ? this.parked.state : undefined;
+        this.parked = undefined;
         this.reset();
         this.declaration = declaration;
         this.focused = !!declaration.search;
+        if (parked) {
+            Object.assign(this, parked);
+            this.applyData();
+        }
         this.syncInput();
         this.applyHint();
         this.applyTabLabels();
         this.applyScrollRegions();
-        this.renderRows(true);
+        if (parked && declaration.search) {
+            // Its widgets stayed loaded, scroll position included.
+            this.scheduleFetch(false);
+            if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
+        } else {
+            this.renderRows(true);
+        }
         return true;
     }
 
     onInterfaceClosed(groupId: number): void {
         if (((this.declaration?.groupId ?? -1) | 0) === (groupId | 0)) {
+            const { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions } = this;
+            const state = { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions };
+            this.parked = { groupId: groupId | 0, state };
             this.reset();
         }
     }
@@ -267,10 +302,7 @@ export class CustomInterfaceRuntime {
     /** The server can drive the query too - prefill, clear, or correct it. */
     handleSetText(uid: number, text: string): boolean {
         const search = this.declaration?.search;
-        const dataComponents = search?.dataComponent === undefined
-            ? []
-            : [search.dataComponent, ...(search.extraDataComponents ?? [])];
-        const part = dataComponents.findIndex((component) => uid === this.uid(component));
+        const part = this.dataComponents().findIndex((component) => uid === this.uid(component));
         if (part >= 0) {
             let rows: CustomInterfaceRow[] = [];
             try {
@@ -284,13 +316,7 @@ export class CustomInterfaceRuntime {
                 rows = [];
             }
             this.dataParts[part] = rows;
-            rows = dataComponents.flatMap((_, index) => this.dataParts[index] ?? []);
-            if (this.declaration?.tabs) {
-                this.catalog = new Map(rows.map((row) => [row.id, row]));
-                this.sourceRows = this.tabRows();
-            } else {
-                this.sourceRows = rows;
-            }
+            this.applyData();
             // New data for the same list (a favourite toggled) keeps the scroll; a new query
             // starts from the top.
             this.scheduleFetch(false);
@@ -364,6 +390,24 @@ export class CustomInterfaceRuntime {
             this.syncInput();
         }
         this.scheduleFetch(true);
+    }
+
+    private dataComponents(): number[] {
+        const search = this.declaration?.search;
+        return search?.dataComponent === undefined
+            ? []
+            : [search.dataComponent, ...(search.extraDataComponents ?? [])];
+    }
+
+    /** Every data part's rows: the catalog the tabs draw from, or else the list itself. */
+    private applyData(): void {
+        const rows = this.dataComponents().flatMap((_, index) => this.dataParts[index] ?? []);
+        if (this.declaration?.tabs) {
+            this.catalog = new Map(rows.map((row) => [row.id, row]));
+            this.sourceRows = this.tabRows();
+        } else {
+            this.sourceRows = rows;
+        }
     }
 
     /** The active tab's rows from the catalog, with its section headers. */
@@ -543,7 +587,7 @@ export class CustomInterfaceRuntime {
         this.dataParts = [];
         this.tabLayouts = [];
         this.activeTab = 0;
-        this.labelActions.clear();
+        this.labelActions = new Map();
         this.scrollbarState.clear();
     }
 

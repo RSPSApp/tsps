@@ -116,12 +116,12 @@ Its source/dist/cache seals were unchanged. This is meaningful feature absence,
 not a green suite. Seeded completed quest/materials and reachable perimeter placement
 are explicit; it does not prove natural quest traversal, raw socket input or rendering.
 
-At tested revision `fb3a5e24d9f64fa4b7ea86d365e0a8c633a3c329`, the final
+At tested revision `10ab60ddba8ce9166bde2c9c48cc7da2a11dc9ec`, the correction
 supported Linux run completed with separate clean processes:
 
 | File | Passed / total | Exit |
 | --- | --- | --- |
-| `camdozaal-native.test.cjs` | 25 / 25 | 0 |
+| `camdozaal-native.test.cjs` | 27 / 27 | 0 |
 | `fishing.test.cjs` | 16 / 16 | 0 |
 | `cooking.test.cjs` | 53 / 53 | 0 |
 
@@ -152,7 +152,7 @@ assertion failed without identifying its loop branch in raw output. Subsequent
 source qualification corrected an inconsistent workshop/introduction checkpoint;
 it does not retroactively identify that failed branch. Both attempts stopped before
 the generic suites. Their failures are retained rather than merged into the final
-run's 94 passing results.
+run's 96 passing results.
 
 Final source/compiled/cache seals remained unchanged (8,447 original source files,
 28 cache files), no stage timed out, and no child process group remained. The
@@ -161,3 +161,15 @@ closure, not an independent census of escaped/setsid descendants or Windows proo
 Checkpoint placement at vault pedestals/barriers tests ordinary interactions and
 one sampled legal layout, not natural maze traversal or every layout combination.
 No rendered-client, audio, raw-socket or complete quest-traversal proof is claimed.
+
+The earlier completed 25/16/53 run at `fb3a5e24` remains genuine historical
+94-test evidence. A later source trace found that the existing members golem Area
+shadowed the new public Boost Area, a path those 25 native cases did not cover.
+Ready was withdrawn while that ownership path was corrected. The new 27/16/53
+run is a separate completed 96-test result. Its added cases buy Boost through the
+ordinary Exchange, assert the real members Area owner, seed expiry deadlines and
+use World/AreaManager processing to check all warnings/countdown exactly once.
+They also awaken mapped golem rubble and verify original slot/id/owner/HP restoration
+on actual AreaManager departure. Seeded deadlines are boundary tests, not naturally
+elapsed minutes; the unchanged F2P fallback is source preservation, not a separate
+executed F2P-world claim. Earlier results are not expanded retroactively.

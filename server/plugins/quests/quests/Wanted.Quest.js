@@ -222,7 +222,7 @@ module.exports = function registerWantedQuest(api) {
   const RUNE_ESSENCE_ITEM_ID = ItemIdentifiers.RUNE_ESSENCE; // 1436
   const PURE_ESSENCE_ITEM_ID = ItemIdentifiers.PURE_ESSENCE; // 7936
   // The sixth stop hands over 20 noted pure essence (cert_blankrune_high 7937; the box shows 7936, tick 4012).
-  const NOTED_PURE_ESSENCE_ITEM_ID = 7937; // cert_blankrune_high
+  const NOTED_PURE_ESSENCE_ITEM_ID = ItemIdentifiers.PURE_ESSENCE_2; // 7937, cert_blankrune_high
   const FREMENNIK_PURPLE_CLOAK_ITEM_ID = ItemIdentifiers.FREMENNIK_PURPLE_CLOAK; // 3785
   const BLUE_CAPE_ITEM_ID = ItemIdentifiers.BLUE_CAPE; // 1021
   const BLUE_WIZARD_HAT_ITEM_ID = ItemIdentifiers.BLUE_WIZARD_HAT; // 579
@@ -230,7 +230,7 @@ module.exports = function registerWantedQuest(api) {
   const CASTLE_WARS_TICKET_ITEM_ID = ItemIdentifiers.CASTLE_WARS_TICKET; // 4067
   const BANANA_ITEM_ID = ItemIdentifiers.BANANA; // 1963
   // The capture's Draynor clue was the grey horsey (horsey_grey 2526, tick 2532); whether live picks a colour is uncaptured.
-  const GREY_TOY_HORSEY_ITEM_ID = 2526; // horsey_grey
+  const GREY_TOY_HORSEY_ITEM_ID = ItemIdentifiers.GREY_TOY_HORSEY; // 2526, horsey_grey
   const GOBLIN_MAIL_ITEM_ID = ItemIdentifiers.GOBLIN_MAIL; // 288
   const BEAR_FUR_ITEM_ID = ItemIdentifiers.BEAR_FUR; // 948
   const CREAM_HAT_ITEM_ID = ItemIdentifiers.CREAM_HAT; // 662
@@ -312,7 +312,6 @@ module.exports = function registerWantedQuest(api) {
   const SLAYER_TOWER_ZONE = { minX: 3405, maxX: 3453, minY: 3534, maxY: 3580, levels: ZONE_LEVEL_0_ONLY };
   const YANILLE_PUB_ZONE = { minX: 2548, maxX: 2557, minY: 3077, maxY: 3082, levels: ZONE_LEVEL_0_ONLY };
   const LUMBRIDGE_SWAMP_CAVES_ZONE = { minX: 3216, maxX: 3239, minY: 9540, maxY: 9555, levels: ZONE_LEVEL_0_ONLY };
-
 
   // Each entry describes the destination (QH mission id), the zone to scan in,
   // the clue item that points there, and the transcript condition/message ids

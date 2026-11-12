@@ -375,7 +375,12 @@ module.exports = function createWantedScenes(api, hooks) {
         if (line.box) clue(player, state);
         if (tick === table.advance) advance(player, state);
         if (tick === table.off) cutscene(player, false);
-        showLine(player, state, line, index === lines.length - 1, () => sceneDone(player, state));
+        const last = index === lines.length - 1;
+        // Once the last line is up the scene is over, continued or not: a dialogue that replaces
+        // it must not leave the CommOrb thinking a scene still plays. Only the continue summons
+        // stop 6's knight; without it a rescan replays the scene.
+        if (last) finish(player, state);
+        showLine(player, state, line, last, () => sceneDone(player, state));
       });
     }
     if (table.advance !== undefined && !table.lines.includes(table.advance)) {
@@ -455,9 +460,14 @@ module.exports = function createWantedScenes(api, hooks) {
     player.addTickHit(player.decrementHealth(new HitDamage(damage, HitMask.RED)));
   }
 
+  function finish(player, state) {
+    if (playing.get(player) === state) playing.delete(player);
+    state.finished = true;
+  }
+
   function sceneDone(player, state) {
-    if (playing.get(player) !== state) return;
-    playing.delete(player);
+    if (!state.finished || state.done || playing.has(player)) return;
+    state.done = true;
     api.core.TaskManager.cancelTasks(state.key);
     if (state.position === 6) {
       // The knight comes on the continue's next tick (capture ticks 3978-3979).
@@ -484,7 +494,24 @@ module.exports = function createWantedScenes(api, hooks) {
       .sendAreaSound(1930, tile.getX(), tile.getY(), tile.getZ(), 1, 0, 10)
       .sendEntityHint(knight);
     Scenes.later(knight, 1, () => knight.isRegistered?.() && knight.getCombat().attack(player));
+    watchKnight(player, knight);
     hooks.knight?.(player, knight);
+  }
+
+  /**
+   * The Wiki: "It is not necessary to kill the Black Knight; you can simply run away." What live
+   * does then is uncaptured; ours: the knight goes once its owner is gone or 16+ tiles away, and
+   * a rescan at the stop summons a new one.
+   */
+  function watchKnight(player, knight) {
+    Scenes.later(knight, 5, () => {
+      if (!knight.isRegistered?.()) return;
+      if (player.isRegistered?.() === false || !near(player.getLocation(), knight.getLocation(), 16)) {
+        removeNpc(knight);
+        return;
+      }
+      watchKnight(player, knight);
+    });
   }
 
   /** The summoned knight's death: the clue box, the mission varbits and Savant's results. */
@@ -501,11 +528,9 @@ module.exports = function createWantedScenes(api, hooks) {
           clue(player, state);
           advance(player, state);
         }
-        showLine(player, state, lines[index], index === lines.length - 1, () => {
-          if (playing.get(player) !== state) return;
-          playing.delete(player);
-          hooks.ended?.(player, 6);
-        });
+        const last = index === lines.length - 1;
+        if (last) finish(player, state);
+        showLine(player, state, lines[index], last, () => hooks.ended?.(player, 6));
       };
       if (tick === 0) show();
       else Scenes.later(state.key, tick, show);

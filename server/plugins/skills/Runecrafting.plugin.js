@@ -807,7 +807,7 @@ function teleportToEssenceMine(player, wizard) {
  * as the core's teleports do. A death (dying, or the respawn's onPlayerDeath), a logout or a later
  * travel cancels it; `onRelease` runs whenever the hold ends, landed or not.
  * A death leaves the movement and targeting holds to the death sequence, which resets them on
- * respawn. `land`, when given, replaces the move to `destination` and its "teleport:landed".
+ * respawn. `land`, when given, replaces the move to `destination`, its "teleport:landed" and `onLanded`.
  */
 function travel(player, ticks, destination, steps = {}, onRelease = undefined, onLanded = undefined, land = undefined) {
   const { Task } = pluginApi.core;
@@ -837,8 +837,8 @@ function travel(player, ticks, destination, steps = {}, onRelease = undefined, o
       if (tick < ticks) return;
       releaseTravel(player, token);
       if (land) {
+        // Not in the mine, so the mine-teleport diary tasks (onLanded) don't count.
         land();
-        onLanded?.();
         this.stop();
         return;
       }

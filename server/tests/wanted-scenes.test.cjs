@@ -184,6 +184,21 @@ test("the sixth stop: the knight comes on the continue, and its death hands over
   assert.equal(log.continues.at(-1).text, "Click here to continue");
 });
 
+test("a dialogue that replaces a scene's last line ends the scene: the next scan answers again, with no knight", (t) => {
+  const { player, log } = actor(t, [2551, 3082], { position: 6, destination: 18 });
+  scan(player);
+  tick(ScenesModule.POSITION_SCENES[6].off);
+  assert.equal(log.continues.at(-1).text, "Click here to continue");
+  // Another dialogue takes the chatbox instead of the continue (Talk-to on a nearby NPC, say).
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Something else.")));
+  tick(2);
+  assert.equal(owned(player, 4959), null, "the knight only comes on the continue");
+  scan(player);
+  tick(2);
+  assert.ok(owned(player, 4956), "the stop replays: wanted_solus18 again");
+  assert.equal(log.lines.at(-1).text, "Well you ARE a persistent one, aren't you?");
+});
+
 test("a wrong place still plays the scan, then one of Savant's answers; before the hunt the orb only says so", (t) => {
   const { player, log } = actor(t, [3200, 3200], { position: 2, destination: 6 });
   scan(player);

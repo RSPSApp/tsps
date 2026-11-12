@@ -18,6 +18,11 @@ export class Inventory extends ItemContainer {
   }
 
   public refreshItems(): ItemContainer {
+    // Only the player's own inventory is shown. A copy built on the player to plan a change (does the loot fit
+    // once the key is gone?) must never reach the client: sending it showed the planned state, the key gone,
+    // although the refusal kept it (issue 4684).
+    const own = this.getPlayer().getInventory?.();
+    if (own && own !== this) return this;
     // The bank inventory's Wield/Wear labels follow the slots (lazy: Bank imports Inventory).
     const { Bank } = require("./Bank") as typeof import("./Bank");
     if (this.getPlayer().getInterfaceId?.() === Bank.MAIN_INTERFACE_ID) Bank.sendSideOps(this.getPlayer());

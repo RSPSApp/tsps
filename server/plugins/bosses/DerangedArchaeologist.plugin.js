@@ -37,8 +37,13 @@ const AMBIENT_LINES = [
 const SPECIAL_COOLDOWN_TICKS = 25;
 /** Books explode four ticks after the shout (Wiki Strategies). */
 const SPECIAL_IMPACT_DELAY_TICKS = 4;
-/** The burst books follow "after another delay" (Wiki); length is an approximation. */
-const SPECIAL_BURST_DELAY_TICKS = 2;
+/**
+ * The burst books follow "after another delay" (Wiki): 4 ticks after the first impact in all 24
+ * recorded specials (rsprox 227/00080.txt, 00083, 01751; Leagues V worlds, none on a normal one).
+ */
+const SPECIAL_BURST_DELAY_TICKS = 4;
+/** The next attack comes 3 ticks after the shout, its normal speed (Wiki; the same 24 recordings). */
+const SPECIAL_NEXT_ATTACK_TICKS = 3;
 /** Direct hits up to 56, adjacent tiles up to 18; defence and prayers ignored (Wiki). */
 const SPECIAL_DIRECT_MAX = 56;
 const SPECIAL_SPLASH_MAX = 18;
@@ -190,7 +195,7 @@ function combatClass(apiCore) {
       }
       afterTicks(SPECIAL_BURST_DELAY_TICKS, target, () => explodeTiles(npc, burst));
     });
-    npc.getCombat().setAttackDelay(5);
+    npc.getCombat().setAttackDelay(SPECIAL_NEXT_ATTACK_TICKS);
   }
 
   function fireRanged(npc, target) {

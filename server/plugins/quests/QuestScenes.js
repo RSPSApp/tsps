@@ -172,11 +172,14 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     if (key) TaskManager.cancelTasks(key);
   }
 
-  /** `cycles` is how long script 948 takes (client cycles); most captured scenes take 50. */
-  function fade(player, out, cycles = FADE_CYCLES) {
+  /**
+   * `cycles` is how long script 948 takes (client cycles); most captured scenes take 50. `alpha` is
+   * the darkness faded to or from: 255 black, less for a scene that only dims.
+   */
+  function fade(player, out, cycles = FADE_CYCLES, alpha = 255) {
     const sender = player.getPacketSender();
     const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
-      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, cycles] : [0, 0, 0, 255, cycles] }],
+      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, alpha, 0, 0, cycles] : [0, 0, 0, alpha, cycles] }],
     });
     if (!out) TaskManager.submit(new CountdownTask(player, 3, () => sender.closeSubInterfaceMount(mount)));
   }

@@ -331,11 +331,19 @@ From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind
 - The server:
   1. takes the materials from the inventory;
   2. sets the part, with no refund of the old one;
-  3. gives Construction XP;
-  4. closes 939, clears varp 5190 and varbit 19525, and opens the message box (229) "With the help of some workers, you swap out the hull of your boat." with **no** "Click here to continue", then fades out;
-  5. next tick, rebuilds the boat from its new template column;
-  6. 4 ticks after the build, fades back in and reopens the message box, now with "Click here to continue". Continuing closes it and the fade overlay.
-- The hull swap also moves the per-boat trim varbit with it (trim follows hull). Lower tiers can be built too (downgrades).
+  3. closes 939, clears varp 5190 and varbit 19525, and opens the message box (229) "With the help of some workers, you swap out the hull of your boat." with **no** "Click here to continue", then fades out;
+  4. next tick, rebuilds the boat from its new template column and plays sounds 2104 and 2103 (delay 15);
+  5. 4 ticks after the build, fades back in, gives the Construction XP and reopens the message box, now with "Click here to continue". Continuing closes it and the fade overlay.
+- The message names the part: "the hull of", "the keel of" and "the trim of your boat", but "the helm on", "the mast and sails on", "the flag on" and "the brazier on your boat" (rsprox 908, 934, 937, 3461).
+- An unpainted trim follows the hull: the hull swap moves the per-boat trim varbit with it. Lower tiers can be built too (downgrades).
+- Every build gives XP, upgrade or downgrade: the stat packets after the 4-tick fade carry exactly the Wiki's value (sloop hull tier 4 1,380, keel 1,211, sails 139, helm 960; rsprox 937).
+
+**Cosmetic parts** (one option each, no tiers), rsprox 908, 937, 3461:
+- **Trims** (table 166 column 30, table 186): seven "No trim" rows (one per hull tier) and then the paints. The trim varbit (`sailing_boat_N_trim`, block +26; sidepanel 19172) is the option's position in that list: shark 7 and salvor's 10, as captured. A paint is used up (1 on a skiff, 2 on a sloop) and gives 10 or 20 Construction XP (Wiki: Trims). The raft has no trims. Choosing "No trim" takes the paint off (ours: no XP).
+- **Flags** (column 29, table 184): oak logs ×4 and a rope are used, the fabric roll is needed and kept (Wiki: Flags). 34 XP. `sailing_boat_N_flag` (block +13; sidepanel 19169) is the row's column 13 (1-3); swamp cruiser's set 0 → 2.
+- **Eternal brazier** (column 31, table 185): Sailing 78, Construction 72, 1,373 XP (capture and Wiki). Sets `sailing_boat_N_brazier` (block +14; sidepanel 19170) to 1 and `sailing_sidepanel_boat_icyseas_resistant` (19255), from its stats row's column 32.
+- Each row's loc column is `[coord, id, rotation, shape]`; the coord is a tile of the type's base template, so its deck tile is the coord less the template's corner.
+- Sail patterns (column 27, table 230) are newer than the captures (rev 241); tsps doesn't build them yet.
 
 ### The cache's sailing tables
 
@@ -343,13 +351,15 @@ Everything a part is lives in db tables. tsps reads them at runtime (`CacheDefin
 
 | Table | What | Columns used |
 | --- | --- | --- |
-| 166 | Boat types (rows 8110-8112, also the sidepanel boat type) | 18 recovery fee (raft 250, skiff 3,750, sloop 50,000); option lists by tier: 24 keels, 25 hulls, 26 sails, 27 helms, 29 trims; 31 facility hotspots |
+| 166 | Boat types (rows 8110-8112, also the sidepanel boat type) | 18 recovery fee (raft 250, skiff 3,750, sloop 50,000); option lists by tier: 24 keels, 25 hulls, 26 sails, 28 helms; 27 sail patterns, 29 flags, 30 trims, 31 eternal brazier; 32 facility hotspots (rev 241; 27 was added then) |
 | 178 | Hulls (raft "bases" 8264-8270, skiff 8271-8277, sloop 8278-8284) | 0 name, 7 Sailing, 8 Construction, 12 materials (item, count pairs), 13 stats row |
 | 177 | Keels | 3 loc [coord, id, rotation, shape], 6 Sailing, 7 Construction, 11 materials, 12 stats row |
 | 179 | Masts and sails | 15 loc [id, coord, rotation, shape], 6 Sailing, 7 Construction, 11 materials, 16 stats row |
 | 181 | Helms | 6 loc [coord, id, rotation, shape], 9 Sailing, 10 Construction, 14 materials, 15 stats row |
 | 164 | Part stats | 0 HP, 10 armour, 21 storm resistance, 22 rapids resistance, 24 base speed, 25 speed cap, 26 extra acceleration, 27 boost duration, 30 crystal-flecked immunity |
-| 186 | Trims (cosmetic painted trims) | |
+| 184 | Flags | 0 name, 5 loc, 6 Sailing, 7 Construction, 11 materials, 13 flag number |
+| 185 | Eternal brazier (one per size) | 0 name, 6 loc, 7 Sailing, 8 Construction, 12 materials, 13 stats row |
+| 186 | Trims (cosmetic painted trims) | 0 name, 2 loc, 5 Sailing, 6 Construction, 10 materials (the paint) |
 | 176 | Facilities (97 rows; some per boat size, such as each size's cargo holds and hooks) | 0 name, 6 loc (the first is placed), 8 preview angles row, 12 Sailing, 13 Construction, 17 materials, 22 category |
 | 175 | What a facility hotspot allows | 2 facility rows, in order |
 | 188 | Customisation preview angles | 0 `[boat size, offsetX, offsetY, xan, yan, zan, zoom]` tuples |
@@ -364,7 +374,7 @@ Everything a part is lives in db tables. tsps reads them at runtime (`CacheDefin
 
 These reproduce every captured boat.
 
-**Construction XP isn't in the tables.** It comes from the wiki, and the camphor skiff hull's 881 matches the capture.
+**Construction XP isn't in the tables.** It comes from the wiki (sailing-parts.json: parts by tier, the cosmetic parts, facilities by name), and the camphor skiff hull's 881 matches the capture.
 
 ## Facilities (shipyard)
 
@@ -399,9 +409,11 @@ From a capture of building and removing a range on a sloop in the shipyard.
 1. resets the customisation varbits and closes 939;
 2. plays animation 3676 (`human_poh_build`) and sound 938;
 3. takes the materials (the range: 4 steel bars, 2 charcoal, 1 tinderbox);
-4. gives **no XP**;
+4. gives the facility's Construction XP (Wiki: Facilities; the rune salvaging hook's 1,233, the crystal extractor's 3,066 and the greater teleport focus's 3,582 match rsprox 937);
 5. sets the hotspot varbits and `facilities_unaltered` 0;
 6. replaces the placeholder with the facility's loc (range 59682) on the deck.
+
+Without a saw and a hammer, the same tick resets the customisation varbits, closes 939 and opens `objectbox_double` with the saw (8794) and hammer (2347): "You need a saw and a hammer in order to build a<br>facility." (rsprox 960). The yard's Crate of saws (59733) and Crate of hammers (59732) Take-from gives one a tick after reaching it, with sound 2582 and an item box "You take a saw from the crate." (rsprox 960, 3448, 3651).
 
 There's no message.
 

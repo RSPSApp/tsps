@@ -1,8 +1,10 @@
 // Run after `yarn build`: node --test tests/lost-tribe-symbol-book.test.cjs
 // The Lost Tribe's goblin symbol book is its own cache interface, lost_tribe_symbol_book (183), whose
 // text the cache holds (Wiki, Transcript:Goblin symbol book). Read opens it on the title spread; the
-// "Turn page" arrows show the next spread's layer and hide the rest; closing it after reading moves
-// stage 7 to 8. Real plugins, a real Player, native inventory and widget packets.
+// "Turn page" arrows show the next spread's layer and hide the rest; turning to the symbols spread
+// moves stage 7 to 8 (lost_tribe_quest 5 -> 6), and closing the book then plays the player's line
+// (rsprox 20261112T152024-5ab63b4, ticks 381-397). Real plugins, a real Player, native inventory
+// and widget packets.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -65,6 +67,7 @@ test('the goblin symbol book opens its own interface, turns through six spreads 
   for (const layer of SPREADS.slice(1)) {
     await send({ type: 'widget_action', widgetId: uid(RIGHT), groupId: BOOK, childId: RIGHT, slot: -1, buttonNum: 1 });
     assert.deepEqual(shown(), [layer]);
+    assert.equal(quest.getStage(p), layer === SPREADS.at(-1) ? 8 : 7, 'the symbols spread completes the reading step');
   }
   assert.equal(hidden.get(uid(RIGHT_LAYER)), true, 'no right arrow on the last spread');
   assert.equal(hidden.get(uid(LEFT_LAYER)), false);
@@ -72,8 +75,14 @@ test('the goblin symbol book opens its own interface, turns through six spreads 
   assert.deepEqual(shown(), [15], 'the left arrow turns back from the symbols to the directions');
   assert.deepEqual(bookmarks, [1, 2, 3, 4, 5, 4], 'every arrow click writes the spread to varbit 541');
 
+  const lines = [];
+  t.mock.method(p.getDialogueManager(), 'startDialogues', function (chain) { lines.push(chain); return this.constructor.prototype.startDialogues.call(this, chain); });
   sender.sendInterfaceRemoval();
-  assert.equal(quest.getStage(p), 8, 'closing the book completes the reading step');
+  assert.equal(quest.getStage(p), 8);
+  assert.ok(lines.length > 0, 'closing after the symbols plays the player\'s line');
+  const text = JSON.stringify(p.getDialogueManager().getCurrent?.() ?? {});
+  assert.match(text, /Dorgeshuun/, 'Hey... The symbol of the \'Dorgeshuun\' tribe ...');
+  p.getDialogueManager().reset();
 
   // Read again: it opens on the saved spread, the directions, with both arrows.
   await send({ type: 'inventory_action', widgetId: core.Inventory.INTERFACE_ID, slot: 0,

@@ -188,5 +188,13 @@ test('Soggy Swamp is arena6 for supported melee modes while Ghastly and other ar
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:6};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Soggy Swamp/);
   }
-  for(const arena of [0,4,5,7,8,9,10,11,12,13,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0,4,5.5,7,8,9,10,11,12,13,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+});
+
+
+test('Clan Cup is arena5 for supported melee modes while unsupported and malformed arena choices stay refused',()=>{
+  for(const mode of [0,1,8,16,20]) {
+    const rules={...Rules.create(3,mode),arena:5};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Clan Cup Arena/);
+  }
+  for(const arena of [0,4,7,8,9,10,11,12,13,14,-1,5.5,'5',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });

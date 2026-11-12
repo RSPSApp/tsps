@@ -755,6 +755,18 @@ module.exports = function registerErnestTheChickenQuest(api) {
     }
   }
 
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "ERNEST_THE_CHICKEN", count: 1 });
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    reward(player, completed, options);
+    grantCompletionLamps(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "ernest_the_chicken",
     name: "Ernest the Chicken",
@@ -763,11 +775,12 @@ module.exports = function registerErnestTheChickenQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 4,
+    otherRewards: ["An antique lamp giving 500 XP"],
     scrollItemId: ItemIdentifiers.FEATHER,
     completionJingleId: 153,
     rewardItemLabel: "300 Coins",
     buildJournal,
-    onReward: reward,
+    onReward: rewardOnCompletion,
   });
 
   api.persistAttribute(FOUNTAIN_ATTRIBUTE, 0);

@@ -186,7 +186,7 @@ function harness(t, members = true) {
       getInterfaceId: () => p.interfaceId, setInterfaceId(id) { p.interfaceId = id; },
       sendMessage: text => messages.push(text), forceChat(text) { p.chat = text; },
       setNpcTransformationId(id) { p.transformation = id; },
-      performAnimation(animation) { p.animation = animation.getId(); },
+      performAnimation(animation) { p.animation = animation.getId(); p.animationDelay = animation.getDelay(); },
       setPositionToFace(location) { p.face = location; },
       moveTo(location) { p.location = location; }, setLocation(location) { p.location = location; },
       getEquipment: () => ({ containsNumber: () => false }),
@@ -743,6 +743,27 @@ test('dismissal, expiry, distance, plane, instances, logout, death and shutdown 
   }
 });
 
+// No, Wave, Yawn, Angry and Ya boo sucks.
+const DISMISS_EMOTES = [856, 863, 2111, 859, 2110];
+
+test('Dismiss makes the owner play one of the five dismissive emotes, chosen at random', t => {
+  const h = harness(t), random = Math.random, seen = new Set();
+  t.after(() => { Math.random = random; });
+  DISMISS_EMOTES.forEach((emote, index) => {
+    const p = h.player(), npc = h.spawn(p, 1);
+    Math.random = () => (index + 0.5) / DISMISS_EMOTES.length;
+    h.hooks['Sandwich lady'].Dismiss({ player: p, npc });
+    Math.random = random;
+    assert.equal(p.animation, emote); assert.equal(p.animationDelay, 10); assert.equal(npc.removed, true);
+    seen.add(p.animation);
+  });
+  assert.equal(seen.size, DISMISS_EMOTES.length);
+  const owner = h.player(), stranger = h.player(), npc = h.spawn(owner);
+  h.hooks.Genie.Dismiss({ player: stranger, npc });
+  assert.equal(stranger.animation, undefined, 'only the owner can dismiss the event');
+  assert.equal(npc.removed, undefined);
+});
+
 function rub(h, p, slot = 3) {
   const item = new Item(I.LAMP, 1); p.slots[slot] = item;
   assert.equal(h.hooks.Lamp.Rub({ player: p, item, itemId: I.LAMP, slot, clickType: 1, handled: false }), true);
@@ -759,6 +780,20 @@ test('real Rub event reaches every skill, uses base level XP, exact slot and one
     assert.equal(confirm(h, skill), `Your wish has been granted!<br>You have been awarded 370 ${skill.getName()} XP!`);
     assert.equal(confirm(h, skill), null, 'once');
     assert.equal(p.xp.get(skill), 370, skill.getName()); assert.equal(p.slots[3], undefined);
+  }
+});
+
+test('the lamp leaves the chat line to the xpreward interface; the book has its own lines at 15 x level', t => {
+  const h = harness(t), skill = Skill.values()[0];
+  const lamp = h.player(); lamp.levels.set(skill, 37); rub(h, lamp);
+  confirm(h, skill);
+  assert.equal((lamp.typed ?? []).some(([type]) => type === 115), false, 'no second chat copy');
+  for (const [level, amount] of [[49, '735'], [85, '1,275']]) {
+    const p = h.player(); p.levels.set(skill, level);
+    const item = new Item(I.BOOK_OF_KNOWLEDGE, 1); p.slots[2] = item;
+    assert.equal(h.hooks['Book of Knowledge'].Read({ player: p, item, itemId: I.BOOK_OF_KNOWLEDGE, slot: 2, clickType: 1, handled: false }), true);
+    assert.equal(confirm(h, skill), `Your brain power serves you well!<br>You have been awarded ${amount} ${skill.getName()} experience!`);
+    assert.equal(p.slots[2], undefined);
   }
 });
 
@@ -1216,6 +1251,27 @@ test('Kiss the frog: the other frogs give the live lines, by owner', t => {
   const q = h.player();
   h.hooks.Frog['Talk-to']({ player: q, npc: other, handled: false });
   assert.deepEqual(pageTexts(q), ['The frogs do not need your help right now.']);
+});
+
+test('Kiss the frog: Dismiss on the crier or another chorus frog sends the whole event away', t => {
+  for (const id of [N.FROG_5, N.FROG_6]) {
+    const { h, p, npc, frogs } = frogEvent(t);
+    const frog = frogs.find(entry => entry.definition.id === id), q = h.player();
+    h.hooks.Frog.Dismiss({ player: q, npc: frog });
+    assert.equal(q.animation, undefined); assert.ok(frogs.every(entry => !entry.removed), 'only the owner can dismiss it');
+    h.hooks.Frog.Dismiss({ player: p, npc: frog });
+    assert.ok(DISMISS_EMOTES.includes(p.animation));
+    assert.equal(npc.removed, true); assert.ok(frogs.every(entry => entry.removed), 'the whole group leaves together');
+    assert.equal(Events.activeFor(p), null);
+  }
+  const { h, p, npc, frogs, prompt } = frogEvent(t);
+  choose(h, p, prompt.options.findIndex(entry => FROG_KISS.includes(entry.label)));
+  endChat(p); endChat(p);
+  h.hooks.Frog.Dismiss({ player: p, npc: frogs.find(entry => entry.definition.id === N.FROG_6) });
+  assert.equal(npc.removed, undefined, 'the turning-back scene carries on');
+  assert.equal(Events.activeFor(p)?.npc, npc);
+  h.ticks(4); endChat(p);
+  assert.deepEqual(p.rewards, [I.FROG_TOKEN], 'and still pays the token');
 });
 
 test('Thessalia exchanges a frog token for costume pieces, keeping the rest', t => {
@@ -2769,7 +2825,7 @@ test('Book of Knowledge grants 15 times the level and keeps itself when XP is bl
   const event = { player: p, item: p.slots[slot], itemId: I.BOOK_OF_KNOWLEDGE, slot, handled: false };
   assert.equal(h.hooks['Book of Knowledge'].Read(event), true);
   const request = h.xpRewards.at(-1);
-  assert.equal(request.onConfirm(Skill.values()[0]), 'You have been awarded 150 Attack XP!');
+  assert.equal(request.onConfirm(Skill.values()[0]), 'Your brain power serves you well!<br>You have been awarded 150 Attack experience!');
   assert.equal(p.xp.get(Skill.values()[0]), 150);
   assert.equal(p.slots[slot], undefined);
 });
@@ -2860,10 +2916,15 @@ test('native random-event followers and Count Check use real movement, account m
       assert.deepEqual(tile, { x: npc.getLocation().getX(), y: npc.getLocation().getY(), level: 0 }, 'native NPC_INFO encoded the walked tile');
       const dismiss = npc.getCurrentDefinition(f.p).getActions().indexOf('Dismiss') + 1;
       assert.ok(dismiss > 0, 'the cache supplies the Dismiss option');
+      const played = [], perform = f.p.performAnimation.bind(f.p);
+      f.p.performAnimation = animation => { played.push([animation.getId(), animation.getDelay()]); return perform(animation); };
       await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: dismiss }]);
       f.connection.processTurnPackets();
       for (let tick = 0; tick < 5; tick++) turn();
       assert.equal(npc.isRegistered(), false, 'dismissal removes the actual invitation from world scheduling');
+      assert.equal(played.length, 1, 'the owner plays one dismissive emote');
+      assert.ok(DISMISS_EMOTES.includes(played[0][0]), `emote ${played[0][0]} is No, Wave, Yawn, Angry or Ya boo sucks`);
+      assert.equal(played[0][1], 10);
       const retiredTile = npc.getLocation().clone();
       f.p.getMovementQueue().requestWalk(new Location(3222, 3218, 0));
       for (let tick = 0; tick < 8; tick++) turn();

@@ -19,6 +19,7 @@ function createPlayer(levels = {}, attributes = {}) {
     sendInterfaceFlagsRange: (uid, from, to, flags) => { log.push(`flags ${uid >> 16}:${uid & 0xffff} ${from}-${to} ${flags}`); return sender; },
     sendString: (text, uid) => { log.push(`text ${uid >> 16}:${uid & 0xffff} ${text}`); return sender; },
     sendInterfaceRemoval: () => { log.push("close"); return sender; },
+    sendTypedMessage: (type, text) => { log.push(`chat ${type} ${text}`); return sender; },
   };
   return {
     log,
@@ -78,7 +79,8 @@ test("as captured: the confirmed slot is enum 681's key less one (slot 11 -> Run
   XpReward._test.confirm(event);
   assert.equal(event.handled, true);
   assert.deepEqual(chosen, [Skill.RUNECRAFTING, "Runecraft"]);
-  assert.deepEqual(player.log, ["close", "mesbox"]);
+  // The box's text goes to chat as a message box line, its line break a space.
+  assert.deepEqual(player.log, ["close", "chat 115 Your wish has been granted! You have been awarded 980 Runecraft XP!", "mesbox"]);
   assert.deepEqual(sounds, [2655]);
   player.log.length = 0;
   XpReward._test.confirm(event);

@@ -325,3 +325,47 @@ test("the house cider sends its captured line, two spaces after the first senten
   assert.equal(slotId(f, 10), I.BEER_GLASS_4);
   assert.deepEqual(f.spam, ["You drink the cider.  You feel slightly reinvigorated...", "...and slightly dizzy too."]);
 });
+
+// Sailing drinks, rsprox rec 237/04103 (human_eat, two spam lines, the glass left) and the Wiki pages.
+function setLevels(f, levels) {
+  for (const [name, value] of Object.entries(levels)) {
+    const skill = core.Skill[name];
+    f.skills.setMaxLevel(skill, value);
+    f.skills.setCurrentLevel(skill, value, false);
+  }
+}
+const ALL_99 = { DEFENCE: 99, SAILING: 99, FISHING: 99, SLAYER: 99, HUNTER: 99, COOKING: 99, AGILITY: 99,
+  THIEVING: 99, RANGED: 99, MAGIC: 99 };
+const SAILING_DRINKS = [
+  ["BARNACLE_BLASTER", "COCKTAIL_GLASS", ["You drink the Barnacle blaster.", "It has a bit of a crunch to it."],
+    { ATTACK: 96, DEFENCE: 96, STRENGTH: 96, SAILING: 96, FISHING: 100 }],
+  ["KRAKEN_COLADA", "COCKTAIL_GLASS", ["You drink the Kraken colada.", "You find yourself feeling rather woozy."],
+    { ATTACK: 96, DEFENCE: 96, STRENGTH: 96, SAILING: 96, SLAYER: 100 }],
+  ["SAILORS_MIRAGE", "COCKTAIL_GLASS", ["You drink the Sailor's mirage.", "You feel something sharp in your mouth."],
+    { ATTACK: 96, DEFENCE: 96, STRENGTH: 96, SAILING: 96, HUNTER: 100 }],
+  ["WHIRLPOOL_SURPRISE", "BEER_GLASS", ["You drink the rum cocktail. It tastes great!", "You feel inspired to both cook and sail!"],
+    { COOKING: 101, SAILING: 102, AGILITY: 97 }],
+  ["HORIZONS_LURE", "BEER_GLASS", ["You drink the rich golden ale. It tastes like a fond memory.", "You feel optimistic about the future."],
+    { SAILING: 103, THIEVING: 97 }],
+  ["TRAWLERS_TRUST", "BEER_GLASS", ["You drink the refreshing beer. It tastes foamy and salty.", "You feel at one with the sea!"],
+    { SAILING: 101, FISHING: 101, ATTACK: 97 }],
+  ["PERILDANCE_BITTER", "BEER_GLASS", ["You drink the deep red bitter. It tastes paradoxically sweet!", "You feel your muscles bulge and your sight become sharp!"],
+    { SAILING: 100, STRENGTH: 101, RANGED: 101, MAGIC: 97 }],
+  ["KRAKEN_INK_STOUT", "BEER_GLASS", ["You drink the rich stout. It thickly coats the back of your throat.", "Somehow you feel more adept at magic."],
+    { SAILING: 100, MAGIC: 101, ATTACK: 97 }],
+];
+for (const [item, glass, lines, expected] of SAILING_DRINKS) {
+  test(`${item} drinks with its captured lines, boosts and drains, leaving a glass`, async t => {
+    const f = actor(t);
+    setLevels(f, ALL_99);
+    f.inv.setItem(2, new core.Item(I[item], 1));
+    await drink(f, 2);
+    assert.equal(slotId(f, 2), I[glass]);
+    assert.deepEqual(f.spam, lines);
+    assert.deepEqual(f.game, []);
+    assert.deepEqual(f.animations, [829]);
+    assert.equal(f.p.getHitpoints(), 80, "no healing");
+    const after = { ATTACK: 99, STRENGTH: 99, DEFENCE: 99, ...ALL_99, ...expected };
+    for (const [name, value] of Object.entries(after)) assert.equal(level(f, name), value, name);
+  });
+}

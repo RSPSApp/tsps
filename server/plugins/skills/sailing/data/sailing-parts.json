@@ -18,5 +18,65 @@
       "helm": [152, 320, 520, 800, 960, 1300, 1560]
     }
   },
-  "trim_xp": [10.5, 19.5, 30, 48, 64, 80, 125]
+  "trim_xp": [10.5, 19.5, 30, 48, 64, 80, 125],
+  "cosmetic_construction_xp": {
+    "skiff": {
+      "trim": 10,
+      "flag": 34,
+      "brazier": 1373
+    },
+    "sloop": {
+      "trim": 20,
+      "flag": 34,
+      "brazier": 1373
+    },
+    "raft": {
+      "flag": 34,
+      "brazier": 1373
+    }
+  },
+  "facility_construction_xp": {
+    "Bronze cannon": 157,
+    "Iron cannon": 328,
+    "Steel cannon": 526,
+    "Mithril cannon": 816,
+    "Adamant cannon": 986,
+    "Rune cannon": 1359,
+    "Dragon cannon": 1586,
+    "Bronze salvaging hook": 151,
+    "Iron salvaging hook": 312,
+    "Steel salvaging hook": 499,
+    "Mithril salvaging hook": 769,
+    "Adamant salvaging hook": 919,
+    "Rune salvaging hook": 1233,
+    "Dragon salvaging hook": 1537,
+    "Rope trawling net": 458,
+    "Linen trawling net": 783,
+    "Hemp trawling net": 1003,
+    "Cotton trawling net": 1289,
+    "Cargo hold": 232,
+    "Oak cargo hold": 491,
+    "Teak cargo hold": 738,
+    "Mahogany cargo hold": 1153,
+    "Camphor cargo hold": 1326,
+    "Ironwood cargo hold": 1492,
+    "Rosewood cargo hold": 1634,
+    "Range": 90,
+    "Keg": 313,
+    "Inoculation station": 765,
+    "Salvaging station": 366,
+    "Chum station": 1522,
+    "Bosun's workbench": 1003,
+    "Advanced chum station": 1738,
+    "Chum spreader": 2028,
+    "Wind catcher": 741,
+    "Crystal extractor": 3066,
+    "Gale catcher": 1517,
+    "Anchor": 176,
+    "Ballistic attractor": 2141,
+    "Teleport focus": 2154,
+    "Fathom stone": 1652,
+    "Greater teleport focus": 3582,
+    "Fathom pearl": 2307
+  }
 }

@@ -563,6 +563,13 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   }
   function restoreJuliet({player}) { player.getPacketSender().sendVarbit(JULIET_VARBIT,quest.isComplete(player)?2:quest.getStage(player)>=STAGE_JULIET_IN_CRYPT?1:0); }
 
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "ROMEO_AND_JULIET", count: 1 });
+  }
+
   quest = registerQuest(api, {
     key: "romeo_and_juliet",
     name: "Romeo & Juliet",
@@ -570,11 +577,13 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     startedValue: STAGE_SPOKEN_TO_ROMEO,
     completionValue: STAGE_COMPLETE,
     questPoints: 5,
+    otherRewards: ["An antique lamp giving 500 XP"],
     completionJingleId: 154,
     xpRewards: [],
     scrollItemId: CADAVA_POTION_ITEM_ID,
     rewardItemLabel: "Cadava potion",
     buildJournal,
+    onReward: grantCompletionLamps,
   });
 
   api.onNpcDialogueVariant(selectVariant);

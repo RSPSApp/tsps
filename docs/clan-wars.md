@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry or Soggy Swamp**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena or Soggy Swamp**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -535,3 +535,45 @@ assignment and wall placement are TSPS choices, not recorded retail positions.
 Native fixtures disclose supplied levels/combat positions/pre-rolled damage and
 inert transport; they do not establish rendered-client, full-session, natural-RNG
 or retail timing equivalence.
+
+
+## Clan Cup Arena
+
+Clan Cup Arena (5, native row slot 15) joins the four delivered layouts through
+the same selected-layout negotiation, modes, restrictions, Ignore 5, safe-death,
+viewing and membership paths. The Wiki lists it as a free-to-play arena adapted
+from the 2013 Clan Cup; objective modes are still outside this implementation.
+
+The bounded template is region 12621, source 3136..3199 / 4928..4991, with source
+planes 0/1 mapped to matching instance planes and source 2/3 unmapped. Full source
+inspection returned 2,649 raw locs (1,795 on plane 0 and 854 on plane 1). Both jail
+Exit portals and all six active orbs have raw plane 1 and settings [1,2]: normal
+bridge rules lower them to owned effective-plane-0 objects and collision. The
+bounded footprint is not a claim about retail arena extent.
+
+West/east placement is an explicit TSPS choice qualified against that source:
+battle landings (3150,4960,0) / (3185,4960,0), jails (3141,4957,0) /
+(3194,4957,0), and a vertical greyrock preparation wall at x=3167,
+y=4936..4983, type 10 face 1. Five existing walk-blocked cells receive no overlay;
+43 tiles use native spawn/clipping registration. Existing layouts retain their
+exact Y-line, face-0 placement and registration/removal defaults. Preparation is
+still 200 ticks. Offline source graphs distinguish the 2,092-tile battle component
+from west/east waiting areas of 430/422 tiles; native processed movement, actual
+barrier registration and exact 4,096-mask restoration are separate checks.
+
+West waiting-area orbs are (3140,4961), (3157,4932), (3157,4987); east orbs are
+(3195,4961), (3178,4932), (3178,4987). All use greyrock model 9755. Every active
+owned copy uses the existing jailed-member and ordinary approach rules; no
+single-coordinate orb shortcut or new retail side policy is inferred. Exit
+portals are (3140,4952) / (3195,4952), sharing the darkrock gameval with Plateau
+and Quarry. Forfeit portals share the small-purple gameval at (3144,4936) /
+(3191,4936). Actual selected private-template identity is required, not just IDs.
+
+The selected stalagmite at (3146,4973) blocks walking and projectiles; selected
+bones at (3146,4944) block walking while allowing a ray across them. These are
+bounded source properties needing native obstacle and open controls, not a
+blanket arena line-of-sight or ranged-combat claim. Sources and limits are the
+pinned Wiki/cache references above. Exact placement, team assignment and wall
+axis/face are TSPS choices, not recorded retail spawns or timing. Native tests
+retain disclosed combat/Forfeit checkpoints, pre-rolled damage and inert
+transport; no rendered-client/full-session/natural-RNG equivalence is claimed.

@@ -552,17 +552,25 @@ export class ShopManager {
         sender.sendVarbit(this.QUANTITY_VARBIT, this.quantityMode(player));
         sender.sendSubInterface(targetUid, this.MAIN_INTERFACE_ID, 0)
             .sendSubInterface((161 << 16) | 79, this.SIDE_INTERFACE_ID, 1)
-            .sendInterfaceScript(1074, [516, shop.definition.getName(), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
+            .sendInterfaceScript(1074, [516, this.title(shop.definition.getName()), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
             .sendInterfaceFlagsRange((this.MAIN_INTERFACE_ID << 16) | 16, 0, 299, 1662)
             .sendInterfaceScript(149, [this.SIDE_INTERFACE_ID << 16, 93, 4, 7, 0, -1, "Value", "Sell 1", "Sell 5", "Sell 10", "Sell 50"])
             .sendInterfaceFlagsRange(this.SIDE_INTERFACE_ID << 16, 0, 27, 1086)
             .sendItemContainer(player.getInventory(), this.INVENTORY_INTERFACE_ID);
         player.getSession().sendClientPacket(encodeShopOpen(
-            String(shop.definition.getId()), shop.definition.getName(),
+            String(shop.definition.getId()), this.title(shop.definition.getName()),
             this.currencyItemId(shop.definition.getCurrency()), this.isGeneralStore(shop), 1, 1, stock
         ));
         if (opening) Sounds.sendSound(player, Sound.CONTAINER_OPEN);
         return true;
+    }
+
+    /**
+     * The title a shop shows: its name without the Wiki's " (shop)" disambiguation ("Slayer
+     * Equipment", "Oziach"), which the shop data keeps to tell the shop from its owner.
+     */
+    private static title(name: string): string {
+        return name.replace(/ \(shop\)$/, "");
     }
 
     private static refresh(shopId: number): void {

@@ -48,6 +48,7 @@ function makePlayer() {
   let prayer = 50;
   let location = new core.Location(3442, 3340, 0);
   let wearingGhostspeak = true;
+  const started = [];
 
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
@@ -87,7 +88,7 @@ function makePlayer() {
   };
 
   const player = {
-    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [], animations, graphics, sounds,
+    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [], animations, graphics, sounds, started,
     localNpcs: [],
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
@@ -116,7 +117,7 @@ function makePlayer() {
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
     sendMessage: (message) => messages.push(message),
-    getDialogueManager: () => ({ isActive: () => false }),
+    getDialogueManager: () => ({ isActive: () => false, startDialogues(builder) { started.push(builder); } }),
     getArea: () => null,
     getIndex: () => 1,
     isPlayer: () => true,
@@ -377,10 +378,14 @@ test('mandatory source route reaches completion through the registered handlers'
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
   assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.spawned.length, 0, 'entering the swamp does not summon Filliman');
+  // Wiki Transcript:Nature Spirit, "If the player attempts to enter the Grotto": the line, the
+  // apparition box, then Filliman's dialogue; without the amulet that is the failed talk (15).
+  p.setWearingGhostspeak(false);
   objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK));
+  assert.equal(p.started.length, 1, 'the apparition and Filliman play on the entrance');
+  assert.equal(h.quest.getStage(p), 15);
 
-  p.setWearingGhostspeak(false);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
   assert.equal(h.quest.getStage(p), 15);
   p.setWearingGhostspeak(true);
@@ -1049,8 +1054,9 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
     [3440, 3336, 0], 'Filliman stands between the three ritual stones');
   await click(O.GROTTO, 3440, 3337);
   assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 1, 'repeat Enter does not duplicate Filliman');
-  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
-  assert.equal(h.quest.getStage(player), 20, 'the still-reachable ghost advances the existing dialogue');
+  // With the amulet, the entrance's own Filliman conversation (Wiki transcript) is speaking to him.
+  assert.equal(h.quest.getStage(player), 20, 'the entrance conversation advances like Talk-to');
+  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman');
 
   // Players saved underground by the old handler can leave and resume at the entrance.
   player.moveTo(new core.Location(3441, 9736, 0)); player.needsPlacement = false;

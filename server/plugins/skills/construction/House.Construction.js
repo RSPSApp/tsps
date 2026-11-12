@@ -353,9 +353,14 @@ function loadHouse(player, steps) {
   })());
 }
 
-/** A house teleport lands inside at once; the loading screen and jingle cover the next two ticks. */
-function teleportIntoHouse(player, buildingMode) {
+/**
+ * A house teleport lands inside at once; the loading screen and jingle cover the next two ticks.
+ * `landing(house)` picks another tile than the entry (a spirit tree's, beside it).
+ */
+function teleportIntoHouse(player, buildingMode, landing = null) {
   if (!enterHouse(player, buildingMode) || !houseFor(player) || loadingHouses.has(player)) return;
+  const tile = landing?.(houseFor(player));
+  if (tile) player.moveTo(tile);
   showHouseLoading(player, { sound: false, jingle: houseFor(player).save });
   loadHouse(player, { 2: () => hideHouseLoading(player) });
 }
@@ -904,6 +909,51 @@ function houseTablet(request) {
   const outside = request.option === "outside" || (request.option === "break" && !!saved.teleportOutside);
   request.destination = Estate.houseExit(saved);
   request.onArrival = outside ? null : () => { teleportIntoHouse(player, saved.defaultBuildingMode); };
+}
+
+/** The house's own spirit trees: the Spirit tree and the Spiritual fairy tree (superior garden). */
+const SPIRIT_TREE_KEYS = new Set(["SPIRIT_TREE", "SPIRIT_TREE_AND_FAIRY_RING"]);
+
+const isSpiritTree = (furniture) => SPIRIT_TREE_KEYS.has(furniture?.buildableKey ?? furniture);
+
+function hasSpiritTree(save) {
+  return save.rooms.flat(2).some((room) => room && (Object.values(room.furniture ?? {}).some(isSpiritTree)
+    || Object.values(room.furnitureByLocation ?? {}).some(isSpiritTree)));
+}
+
+/**
+ * "construction:spirit-tree" { player, owns, location, built }: the spirit tree network's
+ * "Your house" entry. `location` is where the house stands ("Your house (Yanille)"); the entry
+ * can be travelled to once a spirit tree is built in it.
+ */
+function spiritTreeHouse(request) {
+  if (!request?.player) return;
+  const save = houseStateFor(request.player);
+  request.owns = save.owned !== false;
+  if (!request.owns) return;
+  request.location = Estate.houseLocation(save).name;
+  request.built = hasSpiritTree(save);
+}
+
+/** The tile beside the house's spirit tree: east of its footprint, on its south row. */
+function spiritTreeLanding(house) {
+  const entry = house.furnitureEntries().find(({ furniture, room }) => isSpiritTree(furniture) && house.furnitureObjectId(room, furniture) >= 0);
+  if (!entry) return null;
+  const definition = api.core.CacheDefinitions.getObject(house.furnitureObjectId(entry.room, entry.furniture));
+  const width = (entry.face & 1) ? definition?.sizeY ?? 1 : definition?.sizeX ?? 1;
+  return new api.core.Location(entry.location.getX() + width, entry.location.getY(), entry.location.getZ());
+}
+
+/**
+ * "construction:spirit-tree-travel" { player }: a spirit tree's trip into the house.
+ * The player enters as a house teleport does (its loading screen and jingle) and stands by the tree.
+ */
+function spiritTreeTravel(request) {
+  const { player } = request ?? {};
+  if (!player) return;
+  const saved = houseStateFor(player);
+  if (saved.owned === false || !hasSpiritTree(saved)) return;
+  teleportIntoHouse(player, saved.defaultBuildingMode, spiritTreeLanding);
 }
 
 const HOUSE_VIEWER_INTERFACE = Ids.iface("poh_viewer");
@@ -1763,6 +1813,8 @@ function attach(api) {
   api.onCustomEvent("construction:house-tablet", houseTablet);
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
+  api.onCustomEvent("construction:spirit-tree", spiritTreeHouse);
+  api.onCustomEvent("construction:spirit-tree-travel", spiritTreeTravel);
   api.onSpellDisabled(refuseHouseVengeance);
   api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);

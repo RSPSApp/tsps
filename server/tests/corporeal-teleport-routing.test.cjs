@@ -171,7 +171,9 @@ function openBox(player) {
   player.moveTo(new core.Location(2542, 3096, 0));
   const portal = new GameObject(yanillePortalId, portalLocation, 10, 2, null);
   const portalDefinition = ObjectDefinition.forPlayer(yanillePortalId, player) ?? ObjectDefinition.forId(yanillePortalId);
-  assert.equal(objectClick(player, portal, portalDefinition, 1), true);
+  // Home: the house loads behind the loading screen two ticks later.
+  assert.equal(objectClick(player, portal, portalDefinition, 2), true);
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process();
   const house = House.houseFor(player);
   assert.equal(house?.owner === player, true);
   const room = house.save.rooms[1][4][6];

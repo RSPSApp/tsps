@@ -1,6 +1,6 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
-const { leap, gapJump, wallScramble } = require("../Steps.Agility");
+const { leap, gapJump, wallScramble, hurt } = require("../Steps.Agility");
 
 /**
  * Seers' Village Rooftop. Steps, sounds, tiles and ticks follow the rsprox captures of the main
@@ -13,12 +13,7 @@ const TIGHTROPE_SOUND = 2495;
 /** A failure (as captured): the stumble's sound, the thud of the landing and the hurt, 20 cycles in. */
 const STUMBLE_SOUND = 2493;
 const LAND_SOUND = 2455;
-const HURT_SOUNDS = [518, 519, 520, 521];
 const FALL_LANDING = 1332;
-
-function hurt() {
-  return { sound: HURT_SOUNDS[Math.floor(Math.random() * HURT_SOUNDS.length)], delay: 20 };
-}
 
 /**
  * The tightrope as captured: onto the rope a tick after starting, two tiles the next tick (sent

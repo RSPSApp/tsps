@@ -1,6 +1,6 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
-const { gapJump, wallScramble, faceLoc, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
+const { gapJump, wallScramble, faceLoc, hurt, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
 
 /**
  * Varrock Rooftop. Steps, sounds and ticks follow rsprox captures 339 and 3154 (rev 230 and 232,
@@ -14,9 +14,8 @@ const HURDLE_SOUND = 1936;
 const HOLD_SOUND = 2459;
 const SIDESTEP_SOUND = 2451;
 const LAND_SOUND = 2455;
-/** A failure's sounds (rsprox 1723): the clothes line's wobble, and the hurt as the player lands (one of four). */
+/** The clothes line failure's wobble (rsprox 1723). */
 const WOBBLE_SOUND = 2493;
-const HURT_SOUNDS = [518, 519, 520, 521];
 /** The hold that slips (agilityarena_handholds_middlefallreverse) and the landing on one knee. */
 const HOLD_SLIP = 1123;
 const FALL_LANDING = 1332;
@@ -33,10 +32,6 @@ function wallStart() {
     { sound: WALL_JUMP_SOUND, delay: 20 },
     { move: [3190, 3414], anim: Anim.JUMP_SHORT, delay: 20, speed: [25, 30], dir: "west" },
   ];
-}
-
-function hurt() {
-  return { sound: HURT_SOUNDS[Math.floor(Math.random() * HURT_SOUNDS.length)], delay: 20 };
 }
 
 /** A failure's landing on the ground below: one knee, the thud and the hurt (rsprox 1723). */

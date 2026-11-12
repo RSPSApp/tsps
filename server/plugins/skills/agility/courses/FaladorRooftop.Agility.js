@@ -1,6 +1,6 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
-const { faceLoc, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
+const { faceLoc, hurt, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
 
 /**
  * Falador Rooftop. Steps, sounds, tiles and ticks follow the rsprox captures of the main game,
@@ -15,7 +15,6 @@ const HOLD_SOUND = 2459;
 const LAND_SOUND = 2455;
 /** The slide along the third rope (deathslide_first). */
 const SLIDE_SOUND = 1934;
-const HURT_SOUNDS = [518, 519, 520, 521];
 const FALL_LANDING = 1332;
 /** The roll along the third rope (human_walk_logbalance_loop). */
 const ROPE_ROLL = 7134;
@@ -55,10 +54,6 @@ function handHolds() {
     { tele: [3050, 3357, 3] },
   );
   return steps;
-}
-
-function hurt() {
-  return { sound: HURT_SOUNDS[Math.floor(Math.random() * HURT_SOUNDS.length)], delay: 20 };
 }
 
 /**

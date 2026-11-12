@@ -34,8 +34,9 @@ tick after):
   where `busy` goes to 1): a leading `{ wait: 1 }`. Varrock's wall shimmy starts on the op tick
   itself (rsprox 20261024T001512-d0ad0dc: `busy` with the run-up, a tick after the last step).
 - **The last obstacle of a lap** at Draynor (the crate), Varrock and Falador (the edges) keeps the
-  player a tick after the landing, the XP and the lap count, then resets the animation; Seers'
-  edge ends with the lap (main-game captures of rev 241 and 242).
+  player a tick after the landing, the XP and the lap count; Draynor and Varrock then reset the
+  animation, while Falador's landing plays out. Seers' edge ends with the lap (main-game captures
+  of rev 241 and 242).
 
 - **Gaps:** the player turns towards the far roof, jumps (2586, sound 2462, both 15 cycles in) two
   ticks after arriving, lands (2588) a tick later and gets the XP the tick after (`gapJump`).
@@ -342,7 +343,8 @@ course's `marks` block:
   Draynor's and Varrock's Leagues timing was checked against them (551 and 203 laps) and kept.
   - **Seers':** the wall (737) and the grab on the sign (1118) with both lines as spam; the first
     gap is two jumps, onto 2719,3495,2 and on to 2713,3494,2; the tightrope's second step is two
-    tiles in one tick, sent as a run step (the runner's `walk` with `tilesPerTick: 2`); the second
+    tiles in one tick (the runner's `walk` with `tilesPerTick: 2`, sent as a run step: live sends the
+    two tiles at walk speed, which the encoder can't yet say for a two-tile move); the second
     gap is a wall scramble from wherever along it the player stands (2710 or 2712).
   - **Falador:** the hand holds hang on 3050,3351,2, turn the corner (drawn to 3050,3352, the
     player on 3051,3352), take three holds two ticks apart and drop onto 3050,3357 eleven ticks

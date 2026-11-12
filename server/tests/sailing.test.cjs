@@ -2523,6 +2523,8 @@ test("shipwreck sites raise their share of wrecks, and a sunk wreck raises anoth
   withRandom(0, () => shipwrecks.sink(wreck));
   assert.equal(wreck.raised, false);
   assert.equal(wreck.generation, generation + 1);
+  assert.equal(pandemonium.filter((candidate) => candidate.raised).length, 4, "the next rises a tick later");
+  shipwrecks.onTick();
   assert.equal(pandemonium.filter((candidate) => candidate.raised).length, 5, "another rose");
 
   // A small wreck is 2x1; its range is measured to its nearest tile.
@@ -2596,13 +2598,26 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
     assert.equal(h.animation(), 13577, "the hook's idle");
     withRandom(0, () => TaskManager.process());
     assert.equal(h.player.getInventory().getAmount(32847), 1, "the first salvage, 6 ticks after the cast");
-    assert.equal(h.player.messages.at(-1), "You reel in some salvage.");
+    assert.equal(h.player.messages.at(-1), "spam: You reel in some salvage.");
     assert.deepEqual(h.xp, [["Sailing", 10]]);
 
     // The wreck sinking ends it.
     shipwrecks.sink(wreck);
     TaskManager.process();
     assert.equal(h.player.messages.at(-1), "You salvage all you can from the shipwreck before it is reclaimed by the sea.");
+
+    // Only sunken wrecks in range: the plundered message box.
+    const hook = { x: boat.deckBaseX + 3, y: boat.deckBaseY + 4 };
+    const tile = boat.deckTileToWorld(hook.x, hook.y);
+    for (const near of shipwrecks.all()) {
+      if (near.raised && shipwrecks.distanceTo(near, tile.x, tile.y) <= 8) shipwrecks.sink(near);
+    }
+    const boxes = [];
+    h.player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(chain.getDialogues().get(0).getText()) });
+    const before = h.player.messages.length;
+    deploy();
+    assert.deepEqual(boxes, ["This shipwreck has already been plundered. Perhaps there's another one nearby?"]);
+    assert.equal(h.player.messages.length, before, "no chat line");
 
     // Far from any wreck.
     boat.fineX += 60 * 128;
@@ -2611,6 +2626,66 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
   } finally {
     BoatManager.dispose(boat);
     clearTasks();
+  }
+});
+
+test("Inspect on a raised shipwreck names it, and the level it needs when the player is below it", () => {
+  clearTasks();
+  withRandom(0, () => shipwrecks.start());
+  const salvaging = registerPlugin("Salvaging.Sailing");
+  const h = salvager();
+  const boxes = [];
+  h.player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(chain.getDialogues().get(0).getText()) });
+  const inspect = (wreck, objectId = shipwrecks.wreckType(wreck.type).active) => {
+    const event = { player: h.player, clickType: 1, objectId, handled: false, location: { x: wreck.x, y: wreck.y, z: wreck.z } };
+    salvaging.objectHandlers.forEach((handler) => handler(event));
+    return event.handled;
+  };
+  const barracuda = shipwrecks.all().find((wreck) => wreck.type === "barracuda" && wreck.raised);
+  h.levels.set(Skill.SAILING, 35);
+  assert.equal(inspect(barracuda), true);
+  h.levels.set(Skill.SAILING, 34);
+  inspect(barracuda);
+  const small = shipwrecks.all().find((wreck) => wreck.type === "small" && wreck.raised);
+  inspect(small);
+  assert.deepEqual(boxes, [
+    "It's a Barracuda shipwreck. You might be able to salvage something from the wreckage using a salvaging hook.",
+    "It's a Barracuda shipwreck. You might be able to salvage something from the wreckage using a salvaging hook. However, you'll first need a Sailing level of 35 to do so.",
+    "It's a small shipwreck. You might be able to salvage something from the wreckage using a salvaging hook.",
+  ]);
+  assert.equal(inspect(barracuda, 1234), false, "another loc on the tile");
+});
+
+test("A wreck sinks and the next rises a tick later, each animating into its idle", () => {
+  clearTasks();
+  const { World } = require("../dist/game/World");
+  withRandom(0, () => shipwrecks.start());
+  const anims = [];
+  const viewer = {
+    getPrivateArea: () => null,
+    getSession: () => ({ isTileInScene: () => true }),
+    // The loc swaps themselves go out too; only the animations are recorded.
+    getPacketSender: () => new Proxy({ sendObjectAnimation: (loc, anim) => anims.push([loc.getId(), loc.getLocation().getX(), anim.getId()]) },
+      { get: (sender, name) => sender[name] ?? (() => sender) }),
+  };
+  const original = World.forEachNetworkPlayer;
+  World.forEachNetworkPlayer = (each) => each(viewer);
+  try {
+    const wreck = shipwrecks.all().find((candidate) => candidate.type === "barracuda" && candidate.raised);
+    withRandom(0, () => shipwrecks.sink(wreck));
+    const rising = shipwrecks.all().find((candidate) => candidate.risesAt !== undefined);
+    assert.ok(rising && rising !== wreck && rising.site === wreck.site);
+    assert.deepEqual(anims, [[60469, wreck.x, 13610]], "the stump, full_to_depleted");
+    shipwrecks.onTick();
+    assert.equal(rising.raised, true);
+    assert.deepEqual(anims.at(-1), [60468, rising.x, 13611], "depleted_to_full");
+    shipwrecks.onTick();
+    assert.deepEqual(anims.at(-1), [60469, wreck.x, 13609], "the sunk one's idle, two ticks on");
+    shipwrecks.onTick();
+    assert.deepEqual(anims.at(-1), [60468, rising.x, 13608], "the risen one's idle");
+    assert.equal(anims.length, 4);
+  } finally {
+    World.forEachNetworkPlayer = original;
   }
 });
 

@@ -235,7 +235,7 @@ const TAKE_ALL_REFUSAL = {
 };
 
 /**
- * Takes or banks everything that fits, with one line if anything is left behind.
+ * Takes or banks everything that fits, with one line if nothing does.
  * Bank-all on an empty chest: "You have nothing to deposit." Either way the value line is resent.
  */
 function takeAll(player, destination) {
@@ -245,12 +245,15 @@ function takeAll(player, destination) {
   if (rewards.length === 0) {
     if (destination === "bank") player.sendMessage("You have nothing to deposit.");
   } else {
+    let moved = 0;
     for (const entry of [...rewards]) {
-      entry.amount -= take(player, entry, entry.amount, destination);
+      const taken = take(player, entry, entry.amount, destination);
+      moved += taken;
+      entry.amount -= taken;
       if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
     }
-    // Ours: the line also follows a partial take, when only some of the rewards fit.
-    if (rewards.length > 0) player.sendMessage(TAKE_ALL_REFUSAL[destination]);
+    // Ours: when only some of the rewards fit, the rest stay in the chest without a line.
+    if (moved === 0) player.sendMessage(TAKE_ALL_REFUSAL[destination]);
   }
   refreshChest(player, rewards);
 }

@@ -2,8 +2,8 @@
 //
 // A stack can't grow past its cap, and add() drops what doesn't fit, so a holder must keep the rest and
 // a reward must not take tokens for what won't arrive. Native fixture: real plugins and items. NPCs are
-// registered and reached by npc_option through ClientConnection.dispatch. Short of dispatch: Zulrah's collect and Soul Wars' reward buttons through
-// their exports. Held items are set on their saved attributes rather than by dying.
+// registered and reached by npc_option through ClientConnection.dispatch. Zulrah's retrieval button is sent as a widget_action. Short of dispatch: Soul Wars' reward
+// buttons through their exports. Held items are set on their saved attributes rather than by dying.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -15,7 +15,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
 
-const Shrine = require("../plugins/bosses/zulrah/Shrine.Zulrah");
+const ZulrahShared = require("../plugins/bosses/zulrah/Shared.Zulrah");
 const YamaCommon = require("../plugins/bosses/yama/Common.Yama");
 const SoulWarsCommon = require("../plugins/minigames/soulwars/Common.SoulWars");
 const Rewards = require("../plugins/minigames/soulwars/Rewards.SoulWars");
@@ -114,7 +114,15 @@ function holderCases(name, attribute, collect, extra = {}) {
   });
 }
 
-holderCases("Zulrah's priestess", ZULRAH_HELD, (_t, f) => Shrine.collect({ player: f.p }));
+/** Collect from the priestess, then her retrieval interface's button, as the client sends both. */
+async function zulrahCollect(t, f) {
+  await npcOption(t, f, ZulrahShared.NPC.PRIESTESS, "Collect");
+  const button = core.CacheDefinitions.getComponentId("gravestone_retrieval:button");
+  assert.ok(f.p.getPacketSender().isSubInterfaceOpen(button >>> 16), "the retrieval interface opens");
+  await send(f, { type: "widget_action", widgetId: button, groupId: button >>> 16, childId: button & 0xffff, slot: -1, buttonNum: 1 });
+}
+
+holderCases("Zulrah's priestess", ZULRAH_HELD, zulrahCollect);
 holderCases("Nightmare's Shura", NIGHTMARE_HELD, (t, f) => npcOption(t, f, SHURA, "Collect"), { holder: "shura" });
 holderCases("the Voice of Yama", YAMA_HELD, (t, f) => npcOption(t, f, YamaCommon.data.npcs.voiceVariants[0], "Talk-to"));
 

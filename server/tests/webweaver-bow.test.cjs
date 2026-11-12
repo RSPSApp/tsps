@@ -353,3 +353,15 @@ test("Dismantle on the (u) asks, then splits it into Craw's bow (u) and the Fang
   assert.deepEqual(p.messages, []);
   assert.equal(B.dismantle({ player: p, item: bow(p, 5) }), false, "a charged bow has no Dismantle");
 });
+
+test("a preset Webweaver bow (u) is not dismantled into a plain Fangs of Venenatis", () => {
+  const p = player();
+  const item = bow(p, null);
+  item.setMetaValue(core.Item.PRESET_META, true);
+  prompts.length = 0;
+  assert.equal(B.dismantle({ player: p, item }), true);
+  assert.equal(prompts.length, 0);
+  assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+  assert.equal(p.getInventory().getAmount(I.FANGS_OF_VENENATIS), 0);
+  assert.equal(p.messages.at(-1), "Preset items cannot be used for this.");
+});

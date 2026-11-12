@@ -359,3 +359,16 @@ test("an ether Dismantle shows the weapon's objectbox, then asks; only Yes break
     assert.deepEqual(p.messages, []);
   }
 });
+
+test("a preset weapon is not dismantled into ether or parts", () => {
+  for (const kind of WEAPONS) {
+    const p = player();
+    const item = weapon(p, kind, null);
+    item.setMetaValue(core.Item.PRESET_META, true);
+    prompts.length = 0;
+    assert.equal(dismantle(kind, p, item), true);
+    assert.equal(prompts.length, 0, `${kind.name}: no prompt`);
+    assert.equal(item.getId(), kind.uncharged);
+    assert.equal(p.messages.at(-1), "Preset items cannot be used for this.");
+  }
+});

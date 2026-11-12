@@ -19,14 +19,15 @@ let pluginApi = null;
 let notesById = null;
 
 function noteFor(itemId) {
-  if (!notesById) {
+  const definitions = pluginApi?.core?.CacheDefinitions;
+  if (!notesById && typeof definitions?.getObjId === "function") {
     notesById = new Map();
     for (const [name, entry] of Object.entries(NOTES)) {
-      const id = pluginApi?.core?.CacheDefinitions?.getObjId?.(name);
+      const id = definitions.getObjId(name);
       if (Number.isInteger(id)) notesById.set(id, typeof entry === "string" ? { note: entry } : entry);
     }
   }
-  return notesById.get(itemId);
+  return notesById?.get(itemId);
 }
 
 function close(player) {

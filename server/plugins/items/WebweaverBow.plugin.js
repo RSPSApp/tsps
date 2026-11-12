@@ -114,6 +114,10 @@ function unchargeNow(player, item) {
 
 function dismantle({ player, item }) {
   if (item?.getId() !== core.ItemIdentifiers.WEBWEAVER_BOW_U_ || !player.getInventory().getItems().includes(item)) return false;
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, dismantleNow);
   return true;
 }

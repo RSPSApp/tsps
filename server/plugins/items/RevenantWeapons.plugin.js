@@ -160,6 +160,10 @@ function dismantle({ player, item }) {
   const inventory = player.getInventory();
   if (activated(item) || !weaponFor(item) || !inventory.getItems().includes(item)) return false;
   const weapon = weaponFor(item);
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   if (weapon.parts) {
     askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, splitNow);
     return true;

@@ -28,7 +28,7 @@
  * Dismantle ask on the destroy prompt first; Thammaron's Dismantle shows its objectbox before that.
  */
 
-const { definePoweredStaff, restricted, ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther } = require("./PoweredStaff");
+const { definePoweredStaff, restricted, PRESET_TEXT, ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther } = require("./PoweredStaff");
 
 const CHARGES_KEY = "accursed-sceptre-charges";
 // Set only when addEther takes the activation ether: a sceptre from a spawn, load-out or older save has
@@ -245,7 +245,7 @@ function checkCharges({ player, item }) {
 
 /** Wiki: every ether comes back, the activation deposit included. */
 function uncharge({ player, item }) {
-  if (!isActivated(item)) return false;
+  if (!isActivated(item) || !player.getInventory().getItems().includes(item)) return false;
   askFirst(api, player, item, ETHER_PROMPT.UNCHARGE_QUESTION, ETHER_PROMPT.UNCHARGE_NOTE, unchargeNow);
   return true;
 }
@@ -304,6 +304,10 @@ function thammaronsOf(item) {
 
 function dismantle({ player, item }) {
   if (thammaronsOf(item) === undefined) return false;
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, splitNow);
   return true;
 }
@@ -324,7 +328,11 @@ function splitNow(player, item) {
 /** Wiki: dismantling an uncharged Thammaron's sceptre yields 7,500 revenant ether. */
 function dismantleThammarons({ player, item }) {
   const inventory = player.getInventory();
-  if (!isThammarons(item?.getId?.()) || isActivated(item) || !inventory.getItems().includes(item)) return false;
+  if (!isThammarons(item?.getId?.()) || !inventory.getItems().includes(item)) return false;
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   if (item.getMetaValue(UNPAID_META) === true) {
     player.sendMessage("Your sceptre was never activated with ether, so it cannot be dismantled.");
     return true;
@@ -338,7 +346,7 @@ function dismantleThammarons({ player, item }) {
 
 function dismantleThammaronsNow(player, item) {
   const inventory = player.getInventory();
-  if (!isThammarons(item.getId()) || isActivated(item) || item.getMetaValue(UNPAID_META) === true) return;
+  if (!isThammarons(item.getId()) || item.getMetaValue(UNPAID_META) === true) return;
   const slot = inventory.getItems().indexOf(item);
   // A copy to put back: the delete empties the slot's own Item (id -1), so restoring `item` restored nothing.
   const kept = item.clone();

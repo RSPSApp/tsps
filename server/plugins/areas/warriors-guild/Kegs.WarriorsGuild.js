@@ -41,22 +41,36 @@ function setHead(player, itemId) {
   player.getUpdateFlag().flag(Flag.APPEARANCE);
 }
 
+/** Hands, and the head unless it already holds the kegs, must be empty. */
+function wearingInTheWay(player) {
+  const { Equipment } = Guild.core;
+  const items = player.getEquipment().getItems();
+  return [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT, Equipment.HANDS_SLOT, ...(balancing.has(player) ? [] : [Equipment.HEAD_SLOT])]
+    .some((slot) => items[slot]?.getId() > 0);
+}
+
+function refuseWorn(player) {
+  // ponytail: Near-Reality's wording; the Wiki gives the rule but not the message.
+  player.sendMessage("You must have both your hands as well as your head completely free to balance kegs.");
+}
+
 function pickUpKeg({ player, objectId }) {
   if (!KEGS.has(objectId)) return false;
-  const { Equipment, Animation } = Guild.core;
+  const { Animation } = Guild.core;
   const state = balancing.get(player);
-  const items = player.getEquipment().getItems();
-  const busy = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT, Equipment.HANDS_SLOT, ...(state ? [] : [Equipment.HEAD_SLOT])]
-    .some((slot) => items[slot]?.getId() > 0);
-  if (busy) {
-    // ponytail: Near-Reality's wording; the Wiki gives the rule but not the message.
-    player.sendMessage("You must have both your hands as well as your head completely free to balance kegs.");
+  if (wearingInTheWay(player)) {
+    refuseWorn(player);
     return;
   }
   if (state?.taken.has(objectId)) return;
   player.performAnimation(new Animation(PICK_UP_ANIMATION));
   Guild.later(player, PICK_UP_TICKS, () => {
     if (!inRoom(player)) return;
+    // Something put on in the two ticks (a helmet, or a weapon that dropped the stack) would be overwritten by the keg.
+    if (wearingInTheWay(player)) {
+      refuseWorn(player);
+      return;
+    }
     const current = balancing.get(player) ?? { kegs: 0, ticks: 0, taken: new Set() };
     // A second click on the same keg (or a sixth keg) lands here too, two ticks on: it counts once.
     if (current.taken.has(objectId) || current.kegs >= MAX_KEGS) return;

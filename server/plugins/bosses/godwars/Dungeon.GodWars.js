@@ -19,7 +19,15 @@ const Rules = require("./Rules.GodWars");
 const TROLL_STRONGHOLD_STAGE_ATTRIBUTE = "quest.troll_stronghold.stage";
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const BOULDER_PASSED_TILE = [2898, 3718, 0];
-const CRACK_PASSED_TILE = [2902, 3718, 0];
+const FADE_OVERLAY = 174;
+const FADE_MESSAGE_UID = (FADE_OVERLAY << 16) | 4;
+const FADE_SCRIPT = 948;
+const FADE_OUT_ARGS = [0, 255, 0, 0, 50];
+/**
+ * The Little crack, ticks after the op (rsprox.net 224/01461 t167-174, 234/00801 t374-381 and
+ * 234/03279 t1944-1951): fade out, the crawl, the teleport, the fade overlay closed.
+ */
+const CRACK_STEPS = Object.freeze({ fade: 1, crawl: 3, move: 6, close: 7 });
 
 /** Faction key -> players standing in its shared chamber. */
 const occupants = new Map(Common.factions.map((faction) => [faction.key, new Set()]));
@@ -142,13 +150,60 @@ function moveBoulder({ player }) {
   return true;
 }
 
-function crawlThroughCrack({ player }) {
+/** Which side of the crack was clicked: the route whose crack sits on the clicked tile, else the nearer one. */
+function crackRoute(event) {
+  const routes = Common.data.entrance.crackRoutes;
+  const x = event.location?.x ?? event.player.getLocation().getX();
+  const y = event.location?.y ?? event.player.getLocation().getY();
+  const distance = ({ crack: [cx, cy] }) => Math.max(Math.abs(cx - x), Math.abs(cy - y));
+  return routes.reduce((best, route) => (distance(route) < distance(best) ? route : best));
+}
+
+/** Still at the crack the crawl started from (it is a 1x1 loc). */
+function besideCrack(player, { crack: [x, y, z] }) {
+  const at = player.getLocation();
+  return at.getZ() === z && Math.max(Math.abs(at.getX() - x), Math.abs(at.getY() - y)) <= 1;
+}
+
+/**
+ * The Little crack (Wiki: 60 Agility, no XP), as captured from the south side: the screen fades
+ * out a tick after the op (with the health overlay hidden), the crawl two ticks later, the player
+ * is moved to the far side three ticks after that, and the fade overlay closes the next tick.
+ * No message and no XP. Nobody captured the north side; it mirrors the south (Ours).
+ */
+function crawlThroughCrack(event) {
+  const { player } = event;
+  const { entrance } = Common.data;
   if (trollStrongholdStage(player) < Rules.TROLL_STRONGHOLD_DAD_STAGE) {
     player.sendMessage("You need to have helped the Troll Stronghold before venturing further.");
     return true;
   }
-  player.sendMessage("You squeeze through the crack in the wall.");
-  player.smartMove(Common.toLocation(CRACK_PASSED_TILE), 2);
+  if (player.getSkillManager().getCurrentLevel(Common.core.Skill.AGILITY) < entrance.crackAgility) {
+    // Ours: no capture refuses the crack; this is live's wording for other Agility checks.
+    player.sendMessage(`You need an Agility level of ${entrance.crackAgility} to do that.`);
+    return true;
+  }
+  const route = crackRoute(event);
+  const sender = player.getPacketSender();
+  const movement = player.getMovementQueue();
+  movement.reset().setBlockMovement(true);
+  const alive = () => player.isRegistered?.() !== false;
+  Common.later(CRACK_STEPS.fade, () => {
+    if (!alive()) return;
+    Common.api.emitCustomEvent("boss-hud:hide", { player, fade: false, afterTicks: 0 });
+    // Live clears the fade's caption first (fade_overlay:message), then opens it.
+    sender.sendString("", FADE_MESSAGE_UID);
+    sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args: FADE_OUT_ARGS }] });
+  });
+  Common.later(CRACK_STEPS.crawl, () => alive() && player.performAnimation(new Common.core.Animation(entrance.crawlAnim)));
+  Common.later(CRACK_STEPS.move, () => {
+    if (!alive()) return;
+    movement.setBlockMovement(false);
+    // A thrower troll can kill the player on the way in: no pull from the respawn point.
+    if (player.getHitpoints() <= 0 || !besideCrack(player, route)) return;
+    player.moveTo(Common.toLocation(route.to));
+  });
+  Common.later(CRACK_STEPS.close, () => alive() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   return true;
 }
 

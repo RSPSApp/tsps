@@ -116,7 +116,7 @@ test('accepted emote interrupts chopping; another player and a fresh chop remain
   for (let i=0; i<8; i++) turn(a,b);
   assert.deepEqual(a.attempts,[], 'no delayed chop attempts after the accepted emote');
   assert.equal(b.attempts.length,1, 'the other actor reached a real attempt');
-  assert.equal(draws.cut,1); assert.equal(draws.nest,1);
+  assert.equal(draws.cut,1); assert.equal(draws.nest,0, 'a normal tree rolls no bird nest');
   assert.deepEqual(a.gains,[], 'accepted emote must prevent delayed woodcutting XP');
   assert.equal(a.logs(),0, 'accepted emote must prevent delayed owned logs');
   assert.deepEqual(b.gains,[25], 'another player continues their own action'); assert.equal(b.logs(),1);
@@ -141,7 +141,7 @@ test('a refused locked emote does not interrupt an active chop', async t => {
   assert.deepEqual(accepted,[], 'the locked Glass Box emote must be refused');
   assert.deepEqual(a.attempts,[], 'refusal was processed before the first attempt');
   for (let i=0; i<8; i++) turn(a);
-  assert.equal(a.attempts.length,1); assert.equal(draws.cut,1); assert.equal(draws.nest,1); assert.deepEqual(a.gains,[25]); assert.equal(a.logs(),1);
+  assert.equal(a.attempts.length,1); assert.equal(draws.cut,1); assert.equal(draws.nest,0, 'a normal tree rolls no bird nest'); assert.deepEqual(a.gains,[25]); assert.equal(a.logs(),1);
   assert.ok(a.respawn()?.stumpObject, 'the continuing normal tree actually depleted');
 });
 

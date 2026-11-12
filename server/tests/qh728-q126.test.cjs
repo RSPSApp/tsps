@@ -174,7 +174,7 @@ test('the trained-broav handoff consumes the unconscious broav and records the t
   assert.ok(p.messages.includes('The broav seems to have found something interesting...'));
   assert.equal(p.items.get(I.DIRTY_SHIRT), 1, 'the shirt is kept until the descent');
   assert.ok(p.log.some(entry => entry[0] === 'sendVarbit' && entry[1] === 10840 && entry[2] === 1));
-  assert.deepEqual([steps.at(-1).getX(), steps.at(-1).getY(), steps.at(-1).getZ()], [2519, 3248, 0], 'the broav follows the scent to the broken table');
+  assert.deepEqual(steps, [], 'the broav stays where it is (226/01698.txt: no walk from the sniff to the descent)');
 
   // The helper says another dirty shirt comes from the Khazard Launderer.
   p.attrs.set('while-guthix-sleeps:shirt-paid', 1);

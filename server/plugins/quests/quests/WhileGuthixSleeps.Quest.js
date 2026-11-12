@@ -150,7 +150,7 @@ module.exports = function registerWhileGuthixSleeps(api) {
     if(val(player,TRAIL_ATTRIBUTE)||sniffing.has(player))return true;
     // rsprox 226/01698.txt:32945-33145: the sniff line with wgs_player_gives_clothes and wgs_broav_clothes_scent, then 7 ticks
     // later "The broav seems to have found something interesting..." with the table varbit. The shirt is kept until the descent.
-    npc.getMovementQueue().addSteps(new Location(2519,3248,0));
+    // The broav doesn't move: it stays on (2518,3248) from the sniff to the descent, with no walk (226/01698.txt:32944-33924).
     const {Animation,CacheDefinitions,TaskManager,CountdownTask}=api.core;
     player.performAnimation(new Animation(CacheDefinitions.getSeqId('wgs_player_gives_clothes')));
     npc.performAnimation?.(new Animation(CacheDefinitions.getSeqId('wgs_broav_clothes_scent')));

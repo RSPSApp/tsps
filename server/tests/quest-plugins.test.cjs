@@ -926,7 +926,7 @@ test('While Guthix Sleeps only tracks a shirt through the player’s own broav',
   // The find comes 7 ticks after the sniff (rsprox 226/01698.txt:32945-33145).
   for (let i = 0; i < 7; i++) api.core.TaskManager.process();
   assert.equal(attributes.get('while-guthix-sleeps:broav-trail'),1);
-  assert.equal(moves.length,1);
+  assert.equal(moves.length,0,'the broav stays put (rsprox 226/01698.txt)');
 });
 
 test("While Guthix Sleeps counts Thaerisk's actual assassin kill without a player death event", () => {

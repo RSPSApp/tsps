@@ -2,11 +2,18 @@ import assert from "node:assert/strict";
 import { before, test } from "node:test";
 import { CachePipeline } from "../src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheDefinitions as cache } from "../src/main/typescript/elvarg/game/cache/CacheDefinitions";
-const { nativeQuestIndex } = require("../plugins/quests/QuestList.QuestRuntime");
+const { nativeQuestIndex, questRowById } = require("../plugins/quests/QuestList.QuestRuntime");
 before(async () => CachePipeline.initialize(process.cwd()));
 const pirate = { key: "pirate", name: "Pirate's Treasure" };
 const elemental = { key: "elemental", name: "Elemental Workshop I" };
 const rfd = { key: "rfd", name: "Recipe for Disaster" };
+// Matching cache 242 / OpenRS2 2757: quest IDs 1..219, then generated headers.
+// https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339
+// config/dump.dbrow + dump.dbtable; script/[proc,questlist_draw].cs2.
+const LAST_QUEST_ROW = 219;
+const FIRST_HEADER_ROW = 220;
+const RELEASED_MAIN_QUESTS = 187;
+const RELEASED_QUEST_POINTS = 346;
 
 test("canonical cache identities select quests independently of registration or visual order", () => {
     for (const quests of [[pirate, elemental], [elemental, pirate]]) {
@@ -14,7 +21,7 @@ test("canonical cache identities select quests independently of registration or 
         assert.equal(rows.get(16), pirate);
         assert.equal(rows.get(55), elemental);
         assert.equal(rows.has(17), false, "unregistered native rows cannot select a neighbouring quest");
-        assert.equal(rows.has(218), false, "native header children are not quests");
+        assert.equal(rows.has(FIRST_HEADER_ROW), false, "native header children are not quests");
     }
 });
 test("RFD subrows resolve to the combined quest unless registered separately", () => {
@@ -30,6 +37,9 @@ test("RFD subrows resolve to the combined quest unless registered separately", (
 
 
 test("native row ops use canonical journals, metadata map/wiki actions and the live event mask", () => {
+    assert.equal(questRowById(218, cache).displayname[0], "Mudfoot's Big Adventure", "the former header slot is now a quest");
+    assert.equal(questRowById(LAST_QUEST_ROW, cache).displayname[0], "The Writing's on the Wall");
+    assert.equal(questRowById(FIRST_HEADER_ROW, cache), undefined, "header control is outside the native quest IDs");
     const buttons = new Map<number, Function>();
     const Q = require("../plugins/quests/QuestRuntime");
     const api = new Proxy({
@@ -55,9 +65,9 @@ test("native row ops use canonical journals, metadata map/wiki actions and the l
     }, {get: (target, key) => target[key] ?? (() => sender)});
     const player = {getPacketSender: () => sender, getAttribute: () => 0, sendMessage: (text: string) => messages.push(text)};
     Q.refreshQuestList(player);
-    assert.deepEqual(flags, [[(399<<16)|7, 0, 217, 0x3e]]);
-    assert.equal(varbits.get(11877), 184, "main total excludes miniquests and subquests");
-    assert.equal(varbits.get(1782), 343, "QP maximum includes RFD's ten canonical rewards");
+    assert.deepEqual(flags, [[(399<<16)|7, 0, LAST_QUEST_ROW, 0x3e]]);
+    assert.equal(varbits.get(11877), RELEASED_MAIN_QUESTS, "main total excludes miniquests, subquests and unreleased rows");
+    assert.equal(varbits.get(1782), RELEASED_QUEST_POINTS, "QP maximum includes RFD's ten canonical rewards and excludes unreleased rows");
     assert.equal(varbits.get(14162), 0);
     assert.equal(goblin.isComplete(player), false);
     assert.equal(varbits.get(6347), 1, "header follows the native-published completion, not internal reward timing");
@@ -70,7 +80,7 @@ test("native row ops use canonical journals, metadata map/wiki actions and the l
         assert.ok(strings.some(([text, uid]) => uid === ((119<<16)|5) && text.includes(title)));
     }
     strings.length = 0;
-    click({player, slot: 218, opId: 2});
+    click({player, slot: FIRST_HEADER_ROW, opId: 2});
     click({player, slot: 16, opId: 6});
     assert.equal(strings.length, 0, "headers and dormant Pin never open journals");
     click({player, slot: 23, opId: 2});

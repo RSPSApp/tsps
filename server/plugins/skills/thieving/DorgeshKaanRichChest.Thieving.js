@@ -19,8 +19,10 @@
  *   Wiki's 300 seconds. Each chest empties and refills for everyone on its own.
  *
  * Ours (nothing captured): the level, lockpick and full-inventory refusals (the stalls' and the Ardougne castle
- * chest's lines); an attempt ends without loot if the player moves, dies, logs out or the chest is emptied by
- * someone else before tick 4; Open, and Pick-lock on an empty chest, are not answered here.
+ * chest's lines; the level is the unboosted one, Wiki Boostable=No), also when the inventory fills before the loot
+ * tick (the chest stays full); an attempt ends without loot if the player moves, dies, logs out or the chest is emptied by
+ * someone else before tick 4, and walking off or clicking again ends it at once (the engine cancels the task);
+ * Open, and Pick-lock on an empty chest, are not answered here.
  */
 const LEVEL = 78;
 const XP = 650;
@@ -151,7 +153,7 @@ function pickLock(event) {
   if (event.objectId !== resolveIds().chest || emptied.has(tileKey(object.getLocation()))) return false;
   event.handled = true;
   if (attempts.has(player)) return;
-  if (player.getSkillManager().getCurrentLevel(core.Skill.THIEVING) < LEVEL) { player.sendMessage(MESSAGE.LEVEL); return; }
+  if (player.getSkillManager().getMaxLevel(core.Skill.THIEVING) < LEVEL) { player.sendMessage(MESSAGE.LEVEL); return; }
   if (!hasLockpick(player)) { player.sendMessage(MESSAGE.LOCKPICK); return; }
   if (player.getInventory().isFull()) { player.getInventory().full(); return; }
 
@@ -164,19 +166,31 @@ function pickLock(event) {
   const area = player.getPrivateArea();
   let elapsed = 0;
   let looted = false;
-  const finish = (task) => { attempts.delete(player); setBusy(player, 0); task.stop(); };
+  let ended = false;
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(1, player.getIndex()); }
+    /** Every end frees the player: our own, and the engine's cancelTasks on a walk or another click. */
+    stop() {
+      super.stop();
+      if (ended) return;
+      ended = true;
+      attempts.delete(player);
+      setBusy(player, 0);
+    }
     execute() {
       elapsed += 1;
-      if (!looted && (!stillThere(player, origin, area) || emptied.has(tileKey(object.getLocation())))) { finish(this); return; }
+      if (!looted && (!stillThere(player, origin, area) || emptied.has(tileKey(object.getLocation())))) { this.stop(); return; }
       if (elapsed === TICK.BUSY) setBusy(player, 1);
       if (elapsed === TICK.OPEN) {
         spam(player, MESSAGE.OPEN);
         player.getPacketSender().sendSound(SOUND.OPEN, 1, 0);
       }
-      if (elapsed === TICK.LOOT) { looted = true; loot(player, object); }
-      if (elapsed >= TICK.EMPTY) finish(this);
+      if (elapsed === TICK.LOOT) {
+        if (player.getInventory().isFull()) { player.getInventory().full(); this.stop(); return; }
+        looted = true;
+        loot(player, object);
+      }
+      if (elapsed >= TICK.EMPTY) this.stop();
     }
   })());
 }

@@ -18,6 +18,7 @@ let objects;
 let events;
 let eliteDone;
 let playerIndex = 28700;
+const startXp = new WeakMap();
 
 function advance(count = 1) {
   for (let i = 0; i < count; i++) {
@@ -62,14 +63,17 @@ beforeEach(() => {
   eliteDone = false;
 });
 
-function playerFixture(t, { level = 78, lockpick = "LOCKPICK", filledSlots = 0 } = {}) {
+function playerFixture(t, { level = 78, base = level, lockpick = "LOCKPICK", filledSlots = 0 } = {}) {
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const player = new Player(null, new core.Location(2700, 5349, 1));
   player.setIndex(playerIndex++);
   player.setUsername(`dorgesh-rich-chest-${playerIndex}`);
   player.setRegistered(true);
   player.setNeedsPlacement(false);
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  player.getSkillManager().setExperiences(core.Skill.THIEVING, SkillManager.getExperienceForLevel(base), false);
   player.getSkillManager().setCurrentLevel(core.Skill.THIEVING, level, false);
+  startXp.set(player, player.getSkillManager().getExperience(core.Skill.THIEVING));
   player.getPrivateArea = () => null;
   const log = { messages: [], spam: [], sounds: [], varbits: [], animations: [] };
   player.sendMessage = (message) => log.messages.push(message);
@@ -99,7 +103,9 @@ function pick(player, object = chestObject()) {
   return { event, result, object };
 }
 
-const xp = (player) => player.getSkillManager().getExperience(core.Skill.THIEVING);
+const xp = (player) => player.getSkillManager().getExperience(core.Skill.THIEVING) - startXp.get(player);
+/** What TaskManager.cancelTasks does on a walk or object click: stop the player's tasks. */
+const cancelTasks = (player) => { for (const task of tasks) if (task.getKey?.() === player.getIndex() || task.key === player.getIndex()) task.stop(); };
 const diaryTasks = () => events.filter(([name]) => name === "diary:task").map(([, request]) => request.task);
 
 test("a pick-lock plays the captured timeline, loots once and credits the Lumbridge elite task", (t) => {
@@ -162,6 +168,7 @@ test("the loot table has the Wiki's 15 rows, and cave goblin wire is 2 with the 
 test("level, lockpick and inventory refusals start nothing; a hair clip picks it", (t) => {
   for (const [options, message] of [
     [{ level: 77 }, Chest._test.MESSAGE.LEVEL],
+    [{ level: 80, base: 77 }, Chest._test.MESSAGE.LEVEL], // Wiki: Boostable=No
     [{ lockpick: null }, Chest._test.MESSAGE.LOCKPICK],
   ]) {
     const { player, log } = playerFixture(t, options);
@@ -216,4 +223,39 @@ test("moving away before the loot tick gives nothing and frees the player", (t) 
   pick(player);
   advance(4);
   assert.equal(xp(player), Chest._test.XP);
+});
+
+test("an attempt the engine cancels (a walk, another click) frees the player and resets busy", (t) => {
+  const { player, log } = playerFixture(t);
+  pick(player);
+  advance(1);
+  assert.deepEqual(log.varbits, [[ids.busy, 1]]);
+  cancelTasks(player);
+  assert.deepEqual(log.varbits.at(-1), [ids.busy, 0]);
+  advance(10);
+  assert.equal(xp(player), 0);
+  assert.deepEqual(objects, []);
+
+  const spamBefore = log.spam.length;
+  pick(player);
+  assert.equal(log.spam.length, spamBefore + 2);
+  advance(4);
+  assert.equal(xp(player), Chest._test.XP);
+  cancelTasks(player); // walking off after the loot, before the chest shuts
+  assert.deepEqual(log.varbits.at(-1), [ids.busy, 0]);
+  advance(3);
+  assert.equal(objects.at(-1)[1], ids.empty);
+});
+
+test("an inventory filled before the loot tick ends the attempt and leaves the chest full", (t) => {
+  const { player, log } = playerFixture(t, { filledSlots: 26 });
+  pick(player);
+  advance(2);
+  player.getInventory().add(new core.Item(I.WHIP, 1), false);
+  advance(5);
+  assert.equal(xp(player), 0);
+  assert.deepEqual(objects, []);
+  assert.equal(diaryTasks().length, 0);
+  assert.deepEqual(log.varbits.at(-1), [ids.busy, 0]);
+  assert.equal(log.spam.includes("You find treasure inside!"), false);
 });

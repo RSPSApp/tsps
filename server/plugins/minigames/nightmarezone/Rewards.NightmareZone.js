@@ -109,11 +109,13 @@ function buyResource(player, id, count) {
   const plain = uncert(id);
   const price = rewards().resourcePrices[String(plain)];
   if (price == null || count <= 0) return true;
+  // Wiki (Dom Onion's Reward Shop): ironmen buy only the scrolls of redirection from Resources. The refusal is
+  // recorded for the herb box (rsprox 237/01150.txt:342294-342295) and sent for every other resource too.
+  if (isIronman(player) && !rewards().ironmanResources.includes(plain)) {
+    player.sendMessage(Common.message("ironmanResource"));
+    return true;
+  }
   if (plain === rewards().herbBox) {
-    if (isIronman(player)) {
-      player.sendMessage(Common.message("herbBoxIronman"));
-      return true;
-    }
     const left = herbBoxesLeft(player);
     if (left <= 0) {
       player.sendMessage(Common.message("herbBoxLimit", { limit: rewards().herbBoxesPerDay }));

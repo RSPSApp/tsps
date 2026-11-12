@@ -637,6 +637,13 @@ function webTool(player, usedItem) {
   return best ? { item: best, chance: bestChance } : null;
 }
 
+/** Wiki (Web): "Wearing aranea boots will allow players to pass through webs without needing any other tools." */
+function wearsAraneaBoots(api, player) {
+  const id = player.getEquipment().getItems()[Equipment.FEET_SLOT]?.getId?.() ?? -1;
+  const I = api.core.ItemIdentifiers;
+  return [I.ARANEA_BOOTS, I.ARANEA_BOOTS_2, I.ARANEA_BOOTS_3, I.ARANEA_BOOTS_4, I.ARANEA_BOOTS_5].includes(id);
+}
+
 /** Live: a knife chops, a weapon swings its own slash animation. */
 function webSlashAnimation(item) {
   const definition = item.getDefinition();
@@ -678,13 +685,17 @@ function slashWeb(api, event, usedItem) {
   const key = webKey(object);
   if (player.busy() || websBeingSlashed.has(key) || !MapObjects.get(WEB_OBJECT_ID, object.getLocation(), object.getPrivateArea())) return;
   const tool = webTool(player, usedItem);
-  if (!tool) {
+  // Aranea boots get through every time, blade or not; a blade still swings its slash.
+  const boots = wearsAraneaBoots(api, player);
+  if (!tool && !boots) {
     player.sendMessage(WEB_NO_BLADE_MESSAGE);
     return;
   }
-  player.performAnimation(new Animation(webSlashAnimation(tool.item)));
-  player.getPacketSender().sendSoundEffect(WEB_SLASH_SOUND, 1, 15);
-  if (Math.random() >= tool.chance) {
+  if (tool) {
+    player.performAnimation(new Animation(webSlashAnimation(tool.item)));
+    player.getPacketSender().sendSoundEffect(WEB_SLASH_SOUND, 1, 15);
+  }
+  if (!boots && Math.random() >= tool.chance) {
     player.sendMessage(WEB_FAIL_MESSAGE);
     return;
   }

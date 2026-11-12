@@ -29,9 +29,10 @@ const item = (name) => new core.Item(core.ItemIdentifiers[name], 1);
 const empty = () => new core.Item(-1, 0);
 
 /** A player holding `wielded` (or nothing) and carrying `carried`, recording what they are shown. */
-function fakePlayer({ wielded = null, carried = [] } = {}) {
+function fakePlayer({ wielded = null, carried = [], feet = null } = {}) {
   const worn = Array.from({ length: 14 }, empty);
   if (wielded) worn[core.Equipment.WEAPON_SLOT] = item(wielded);
+  if (feet) worn[core.Equipment.FEET_SLOT] = item(feet);
   const player = {
     messages: [],
     animations: [],
@@ -119,6 +120,26 @@ test("a slashed web grows back 99 ticks after it was cut, as recording 4155 show
   api.swaps.length = 0;
   api.tasks[1].execute();
   assert.deepEqual(api.swaps.slice(-1), [`+${WEB}`]);
+});
+
+test("aranea boots get through every time, with no blade at all (Wiki: Web)", () => {
+  const { slashWeb } = Wilderness._test;
+  const slash = (player, roll) => {
+    const api = fakeApi();
+    withRoll(roll, () => slashWeb(api, slashEvent(player)));
+    for (const task of api.tasks.splice(0)) task.execute(); // clear the web's "being slashed" mark
+  };
+  const bare = fakePlayer({ feet: "ARANEA_BOOTS" });
+  slash(bare, 0.99);
+  assert.deepEqual(bare.messages, ["You slash the web apart."]);
+  assert.deepEqual(bare.animations, [], "no blade to swing");
+  const knife = fakePlayer({ feet: "ARANEA_BOOTS", carried: ["KNIFE"] });
+  slash(knife, 0.99);
+  assert.deepEqual(knife.messages, ["You slash the web apart."], "a knife's 50% doesn't fail with the boots on");
+  assert.deepEqual(knife.animations, [911]);
+  const without = fakePlayer();
+  slash(without, 0.1);
+  assert.deepEqual(without.messages, ["Only a sharp blade can cut through this sticky web."]);
 });
 
 test("a failed cut says so, swings, and leaves the web alone", () => {

@@ -26,7 +26,10 @@ const THIEVING_ANIMATION = new Animation(881);
 const STEAL_LEVEL = 15;
 const STEAL_XP = 16;
 const STEAL_STUN_TICKS = 8;
+const STUNNED_THIEVING_GRAPHIC = 245;
 const COLD_WAR_QUEST_KEY = "cold_war";
+// rsprox 227/00090.txt:200368, 232/00424.txt:88405.
+const NO_BUCKET_MESSAGE = "You'll need an empty bucket to collect the milk.";
 const BOTTOMLESS_FULL_MESSAGE = "Your bottomless milk bucket, surprisingly, is full.";
 const COLD_WAR_REQUIRED_MESSAGE = "You need to have started Cold War to steal a cowbell.";
 
@@ -63,7 +66,8 @@ function milkCow(event) {
     player.getInventory().deleteNumber(ItemIdentifiers.BUCKET, 1);
     player.getInventory().adds(ItemIdentifiers.BUCKET_OF_MILK, 1);
     player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
-    player.sendMessage("You milk the cow.");
+    // rsprox: a spam line (10 recordings).
+    player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, "You milk the cow.");
   }));
 }
 
@@ -75,7 +79,7 @@ function milkIntoBottomless(player) {
   const request = { player, bucket: null, full: false };
   pluginApi.emitCustomEvent("bottomless-milk:fillable", request);
   if (!request.bucket) {
-    player.sendMessage(request.full ? BOTTOMLESS_FULL_MESSAGE : "You need an empty bucket to milk the cow.");
+    player.sendMessage(request.full ? BOTTOMLESS_FULL_MESSAGE : NO_BUCKET_MESSAGE);
     return;
   }
   const from = player.getLocation().clone();
@@ -135,7 +139,6 @@ function stealCowbell(event) {
   player.getMovementQueue().reset();
   player.setPositionToFace(new Location(event.location.x, event.location.y, event.location.z));
   player.performAnimation(THIEVING_ANIMATION);
-  player.sendMessage("You attempt to steal a cowbell...");
   player.getClickDelay().reset();
 
   TaskManager.submit(new (class extends Task {
@@ -147,10 +150,13 @@ function stealCowbell(event) {
           player.getSkillManager().addExperiences(Skill.THIEVING, STEAL_XP);
           player.sendMessage("You steal a cowbell.");
         } else {
-          player.sendMessage("The cow kicks you and stuns you.");
-          player.sendMessage("MOO");
+          // rsprox 227/00075.txt:338001-338002, :338122-338123 (Leagues V): both lines, then the cow's
+          // "MOO" as a chathead line two ticks later (not modelled: the cow is a loc, not an NPC).
+          player.sendMessage("You fail to steal a cowbell.");
+          player.sendMessage("The cow kicks you and stuns you!");
           Sounds.sendSound(player, Sound.THIEVING_STUNNED);
-          CombatFactory.stunTicks(player, STEAL_STUN_TICKS, true);
+          // As recorded: stunned_thieving (245) at height 124, and no "You've been stunned!" line.
+          CombatFactory.stunTicks(player, STEAL_STUN_TICKS, true, { graphic: new pluginApi.core.Graphic(STUNNED_THIEVING_GRAPHIC, 0, 124), message: false });
           player.getMovementQueue().reset();
         }
       }

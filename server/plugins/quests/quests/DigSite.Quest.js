@@ -86,6 +86,8 @@ module.exports = function registerDigSiteQuest(api) {
   const NETTLE_TEA_THANKS = "Urg! Is that what you call tea? Oh well, I suppose it will do; you can pan all you want.";
   const EMPTY_TRAY = ItemIdentifiers.PANNING_TRAY;
   const MUD_TRAY = ItemIdentifiers.PANNING_TRAY_3;
+  const EMPTY_TRAY_CHAT_EXPRESSION = 554; // chatquiz1, rsprox 232/03231 tick 3074
+  const FULL_TRAY_CHAT_EXPRESSION = 576; // chatcon2, rsprox 232/03231 tick 3463
   const SEARCH_ANIMATION = 832; // RSProx 232/03228, tick 1081
   const PAN_ANIMATION = 4593; // RSProx 232/03231, tick 2625
   const PAGE = "The Dig Site";
@@ -177,7 +179,7 @@ module.exports = function registerDigSiteQuest(api) {
     if (slot < 0) {
       if (held(player, MUD_TRAY)) {
         player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-          .add(new PlayerDialogue(0, "I already have a full panning tray; perhaps I should<br>search it first.")));
+          .add(new PlayerDialogue(0, "I already have a full panning tray; perhaps I should<br>search it first.", FULL_TRAY_CHAT_EXPRESSION)));
       } else {
         player.sendMessage("You need a panning tray to pan here!");
       }
@@ -219,7 +221,7 @@ module.exports = function registerDigSiteQuest(api) {
   function searchTray({ player, itemId, slot }) {
     if (itemId === EMPTY_TRAY) {
       player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-        .add(new PlayerDialogue(0, "Err, why am I searching an empty tray?")));
+        .add(new PlayerDialogue(0, "Err, why am I searching an empty tray?", EMPTY_TRAY_CHAT_EXPRESSION)));
       return true;
     }
     if (itemId !== MUD_TRAY) return false;

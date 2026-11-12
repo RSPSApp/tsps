@@ -19,6 +19,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { encodeWidgetSetAnimation } = require("../dist/net/protocol/ClientProtocol");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
@@ -64,8 +65,10 @@ const quest = (key) => {
 };
 
 function actor(t, key, stage) {
+  const outboundPackets = [];
   const channel = {
-    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: (packet) => { outboundPackets.push(Buffer.from(packet)); return true; },
     close() {}, onData() {}, onError() {}, onClose() {},
   };
   const p = new Player(new PlayerSession(channel));
@@ -86,7 +89,7 @@ function actor(t, key, stage) {
     core.TaskManager.cancelTasks(p);
   });
   quest(key).setStage(p, stage);
-  return { p, c, inv: p.getInventory(), messages };
+  return { p, c, inv: p.getInventory(), messages, outboundPackets };
 }
 
 const stageOf = (f, key) => quest(key).getStage(f.p);
@@ -236,10 +239,15 @@ test("Dig Site: the teddy bush works and giving the guide tea unlocks the native
 test("Dig Site: panning refusals use player chat and nuggets show the gold tray box", async (t) => {
   const empty = actor(t, DIG, 0);
   put(empty, I.PANNING_TRAY, 0);
+  empty.outboundPackets.length = 0;
   await send(empty, { type: "inventory_action", slot: 0, itemId: I.PANNING_TRAY, widgetId: 3214, option: "Search" });
+  await new Promise((resolve) => setImmediate(resolve));
   let dialogue = empty.p.getDialogueManager().getCurrent();
   assert.ok(dialogue instanceof PlayerDialogue);
   assert.equal(dialogue.getText(), "Err, why am I searching an empty tray?");
+  const playerHead = (217 << 16) | 2;
+  const emptyTrayExpression = encodeWidgetSetAnimation(playerHead, 554);
+  assert.ok(empty.outboundPackets.some((packet) => packet.includes(emptyTrayExpression)), "native player head receives chatquiz1 (554)");
   await send(empty, { type: "dialogue_continue", widgetId: (217 << 16) | 5, childIndex: -1 });
   assert.equal(empty.p.getDialogueManager().isActive(), false, "the native player-chat continue packet closes the line");
 
@@ -248,11 +256,15 @@ test("Dig Site: panning refusals use player chat and nuggets show the gold tray 
   core.RegionManager.loadMapFiles(3378, 3377);
   full.p.setLocation(new core.Location(3378, 3377, 0));
   put(full, I.PANNING_TRAY_3, 0);
+  full.outboundPackets.length = 0;
   await send(full, { type: "object_option", id: O.PANNING_POINT, x: 3379, y: 3377, action: "Pan" });
   ticks(full, 8);
+  await new Promise((resolve) => setImmediate(resolve));
   dialogue = full.p.getDialogueManager().getCurrent();
   assert.ok(dialogue instanceof PlayerDialogue);
   assert.equal(dialogue.getText(), "I already have a full panning tray; perhaps I should<br>search it first.");
+  const fullTrayExpression = encodeWidgetSetAnimation(playerHead, 576);
+  assert.ok(full.outboundPackets.some((packet) => packet.includes(fullTrayExpression)), "native player head receives chatcon2 (576)");
 
   const nuggets = actor(t, DIG, 0);
   put(nuggets, I.PANNING_TRAY_3, 0);

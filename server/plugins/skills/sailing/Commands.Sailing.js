@@ -160,7 +160,8 @@ function maxBoat({ player, parts }) {
     player.sendMessage("Step off the boat first; it's rebuilt the next time you board.");
     return;
   }
-  boat.parts = Object.fromEntries(PARTS.map((part) => [part, Math.max(0, partOptions(boat.type, part).length - 1)]));
+  // The best tiered parts; a painted trim, flag or brazier stays.
+  boat.parts = { ...boat.parts, ...Object.fromEntries(PARTS.map((part) => [part, Math.max(0, partOptions(boat.type, part).length - 1)])) };
   for (const [hotspot, row] of loadoutFacilities(boat.type, loadout)) setFacility(boat, hotspot, row);
   sendBoatVarbits(player);
   refreshShownBoat(player);

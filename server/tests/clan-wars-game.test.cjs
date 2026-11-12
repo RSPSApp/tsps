@@ -110,10 +110,15 @@ function channel(owner, members = []) {
   for (const member of members) assert.equal(FC.join(member, owner.getUsername(), false), true);
   assert.equal(C.captain(owner).rankOf(owner), 7);
 }
-async function negotiate(a, b, cap = null) {
+async function negotiate(a, b, cap = null, mode = 0) {
   await challenge(a, b); await challenge(b, a);
   assert.equal(a.getInterfaceId(), C.group('clanwars_setup'));
   if (cap !== null) { await click(a, 'clanwars_setup:dropdown_playercap', cap + 1); tick(9); }
+  if (mode) {
+    await click(a, 'clanwars_setup:wincondition', mode * 3);
+    assert.equal(C.negotiations.get(a).rules.wincondition, mode, 'native mode selection must reach the server offer');
+    tick(9);
+  }
   await click(a, 'clanwars_setup:accept'); await click(b, 'clanwars_setup:accept');
   assert.equal(a.getInterfaceId(), C.group('clanwars_confirm'));
   tick(5);
@@ -386,3 +391,240 @@ test('independent: actual Plateau clipping separates staging and jail', async ()
  const second=await negotiate(a,b);
  assert.ok(second,'later native challenge confirmations must still start a battle');
 });
+
+
+// These tests seed scene placement and pre-rolled melee damage. Negotiation, attack
+// input, hit/death tasks, portal dispatch, inventories and instance cleanup are real.
+async function lethalMelee(killer, victim, game) {
+  const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
+  const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
+  killer.moveTo(game.area.at([3293, 4955, 0]));
+  victim.moveTo(game.area.at([3294, 4955, 0]));
+  for (const p of [killer, victim]) { p.setNeedsPlacement(false); p.resetUpdating(); AreaManager.process(p); }
+  assert.equal(CombatFactory.canAttackByPolicy(killer, victim, CombatFactory.MELEE_COMBAT), CanAttackResponse.CAN_ATTACK);
+  const frame = Buffer.alloc(4); frame[0] = 44; frame[1] = 128; frame.writeUInt16BE(victim.getIndex(), 2);
+  const decoded = decodeClientPackets(frame);
+  assert.equal(decoded[0].index, victim.getIndex());
+  assert.equal(decoded[0].option, 1);
+  await wire(killer, frame);
+  assert.equal(killer.getCombat().getTarget(), victim, 'native Attack owns the opposing target');
+  const hit = new PendingHit(killer, victim, CombatFactory.MELEE_COMBAT,
+    { damage: victim.getHitpoints(), rollAccuracy: false, handleAfterHitEffects: false, experience: false });
+  CombatFactory.addPendingHit(hit);
+  core.World.processCycle++;
+  HitQueue.processAll(core.World.processCycle);
+  assert.equal(victim.getHitpoints(), 0, 'real incoming melee hit starts the production death task');
+  tick();
+}
+async function jailExit(player, game) {
+  // The death task moves after this fixture's player updates; complete that
+  // ordinary placement update before sending the next object's input.
+  tick();
+  assert.equal(player.isNeedsPlacement(), false, 'death placement completed before the jail portal click');
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  const side = game.members.get(player);
+  const jail = game.area.at(side === 0 ? [3323, 4943, 0] : [3323, 4976, 0]);
+  // Template scene locs are not in the main-world or spawned-object lists.
+  const objects = [];
+  for (let x=0; x<game.area.widthChunks; x++) for (let y=0; y<game.area.heightChunks; y++) {
+    objects.push(...game.area.getChunkObjects(0,x,y));
+  }
+  const distance = object => Math.max(Math.abs(object.getLocation().getX()-jail.getX()),
+    Math.abs(object.getLocation().getY()-jail.getY()));
+  const portals = objects.filter(object => object.getDefinition()?.getName() === 'Portal'
+    && object.getDefinition().getInteractions().some(op => op?.toLowerCase() === 'exit'));
+  assert.ok(portals.length, 'the active Plateau instance supplies a real jail exit portal');
+  const portal = portals.sort((a,b) => distance(a)-distance(b))[0];
+  const at = portal.getLocation();
+  assert.equal(MapObjects.getPrivateArea(player,portal.getId(),at),portal,
+    'the native dispatcher resolves this exact mapped instance portal');
+  const op = portal.getDefinition().getInteractions().findIndex(option => option?.toLowerCase() === 'exit') + 1;
+  new ObjectActionPacketListener().executeAction(player, portal.getId(), at.getX(), at.getY(), op);
+  tick(15);
+}
+
+test('native kill-target negotiation preserves cap, invalidates acceptance and rejects unsupported mode rows', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  await challenge(a,b); await challenge(b,a);
+  await click(a, 'clanwars_setup:dropdown_playercap', 3); tick(9);
+  await click(a, 'clanwars_setup:accept');
+  const session = C.negotiations.get(a);
+  assert.equal(session.accepted.has(a), true);
+  await click(b, 'clanwars_setup:wincondition', 3);
+  assert.equal(session.rules.wincondition, 1, 'first-to-25 is a reachable native selection');
+  assert.equal(session.rules.playercap, 2, 'mode changes retain the agreed cap');
+  assert.equal(session.accepted.size, 0);
+  await click(a, 'clanwars_setup:accept'); assert.equal(session.accepted.has(a), false);
+  tick(9);
+  for (const forged of [1, 2, 27, 48, 69, 65535]) {
+    await click(a, 'clanwars_setup:wincondition', forged);
+    assert.equal(session.rules.wincondition, 1, 'non-row and deferred mode selections cannot alter the offer');
+  }
+  await click(a, 'clanwars_setup:accept'); await click(b, 'clanwars_setup:accept');
+  assert.equal(session.stage, 'confirm');
+  assert.equal(session.rules.wincondition, 1);
+});
+
+test('first-to-25 plays through real melee deaths, jail portals, exact target and a second native match', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  const game = await negotiate(a,b,1,1); await join(a); await join(b);
+  const held = new core.Item(995, 37, { qa: 'kill-target-retain' });
+  b.getInventory().add(held, false);
+  const meta = structuredClone(b.getInventory().getValidItems().find(i => i.getId() === 995).getMeta());
+  const scoringSide = game.channelKeys.indexOf(C.channel(a).key);
+  assert.equal(game.members.get(a), scoringSide);
+  assert.equal(game.members.get(b), 1 - scoringSide);
+  core.World.processCycle = game.starts; game.tick();
+  for (let kill = 1; kill <= 25; kill++) {
+    await lethalMelee(a,b,game);
+    const expected = [0,0]; expected[scoringSide] = kill;
+    assert.deepEqual(game.kills, expected, 'one real death awards exactly one opposing-team kill');
+    if (kill < 25) {
+      assert.equal(game.phase, 'combat', 'one living side is not an early LTS victory');
+      tick(4);
+      assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`clanwars_kills_${scoringSide + 1}`)), kill, 'native HUD receives the score');
+      assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_wincondition')), 1);
+      assert.equal(game.jailed.has(b), true);
+      assert.equal(game.fighters.has(b), false);
+      assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT), false, 'jail is outside combat');
+      assert.equal(b.getInventory().getAmount(995), 37);
+      assert.deepEqual(b.getInventory().getValidItems().find(i => i.getId() === 995).getMeta(), meta);
+      await jailExit(b,game);
+      assert.equal(game.fighters.has(b), true, 'native jail Exit returns the defeated fighter to combat');
+      assert.equal(game.jailed.has(b), false);
+    }
+  }
+  assert.equal(game.phase, 'over', 'the sourced 25th kill ends the battle');
+  assert.equal(Match.dying.has(b), true, 'last kill retains independent safe-death ownership');
+  tick(4);
+  for (const p of [a,b]) {
+    assert.equal(C.matches.has(p), false); assert.equal(p.getPrivateArea(), null);
+    assert.deepEqual([p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()],C.RETURN);
+    p.getPacketSender().sendInterfaceRemoval();
+  }
+  assert.equal(b.getInventory().getAmount(995),37);
+  assert.equal(Match.dying.has(b),false);
+  assert.equal(C.channelGames.size,0);
+  // The final death callback also places the loser in the lobby after updates.
+  tick();
+  for (const p of [a,b]) assert.equal(p.isNeedsPlacement(),false,'lobby placement completed before the second challenge');
+  const second = await negotiate(a,b,1,1); await join(a); await join(b);
+  assert.notEqual(second,game); assert.deepEqual(second.kills,[0,0]);
+  assert.equal(second.phase,'staging'); assert.equal(second.fighters.size,2);
+});
+
+test('kill-target late entry and reserved jail roster obey the native team cap', async () => {
+  const a=actor(), extra=actor(), b=actor(); channel(a,[extra]); channel(b);
+  const game=await negotiate(a,b,1,1); await join(a); await join(b);
+  core.World.processCycle=game.starts; game.tick();
+  await lethalMelee(b,a,game); tick(4);
+  assert.equal(game.jailed.has(a),true);
+  await join(extra);
+  assert.equal(C.matches.has(extra),false,'a jailed fighter retains their reserved 1v1 slot');
+  await jailExit(a,game); assert.equal(game.fighters.has(a),true);
+});
+
+test('kill-target late join and channel-leave death credit use real channel events once', async () => {
+  const a=actor(), extra=actor(), b=actor(); channel(a,[extra]); channel(b);
+  const game=await negotiate(a,b,2,1); await join(a); await join(b);
+  core.World.processCycle=game.starts; game.tick();
+  await join(extra);
+  assert.equal(C.matches.get(extra),game,'mode allows the ordinary purple portal after preparation');
+  const otherSide = 1 - game.channelKeys.indexOf(C.channel(extra).key);
+  const expected = [0,0]; expected[otherSide] = 1;
+  FC.leave(extra,false);
+  assert.deepEqual(game.kills,expected,'fixed counts-as-death rule credits the other team');
+  tick(2); assert.deepEqual(game.kills,expected,'channel event and polling cannot double count');
+  assert.equal(C.matches.has(extra),false); assert.equal(game.phase,'combat');
+});
+
+
+test('kill-target finish protects two queued production death tasks before the second dying event', async () => {
+  const a=actor(), b=actor(); channel(a); channel(b);
+  const game=await negotiate(a,b,1,1); await join(a); await join(b);
+  core.World.processCycle=game.starts; game.tick();
+  // Seed the immediately-before-target state for the concurrent death boundary.
+  // The separate full-match case reaches the actual 25-kill target without seeding scores.
+  game.kills[game.channelKeys.indexOf(C.channel(b).key)]=24;
+  for (const [i,p] of [a,b].entries()) {
+    p.getInventory().add(new core.Item(995,41+i,{qa:`pending-${i}`}),false);
+    p.getCombat().addDamage(i===0?b:a,10);
+  }
+  a.setHitpoints(0); b.setHitpoints(0);
+  assert.equal(a.isDyingReturn(),true); assert.equal(b.isDyingReturn(),true);
+  assert.equal(Match.dying.size,0,'both tasks are queued before either emits dying');
+  tick();
+  assert.equal(game.phase,'over','the first queued death reaches the target');
+  for (const p of [a,b]) {
+    assert.equal(Match.dying.has(p),true,'cleanup retains both current and not-yet-started safe deaths');
+    const reward={victim:p,allow:true}; PM.emitCustomEvent('pvp:count-stats',reward);
+    assert.equal(reward.allow,false);
+    assert.equal(PM.emitShouldDropItemsOnDeath(p,null),false);
+  }
+  tick(4);
+  for (const [i,p] of [a,b].entries()) {
+    assert.equal(Match.dying.has(p),false);
+    assert.equal(p.getInventory().getAmount(995),41+i);
+    assert.deepEqual(p.getInventory().getValidItems().find(x=>x.getId()===995).getMeta(),{qa:`pending-${i}`});
+    assert.equal(p.getPrivateArea(),null);
+    assert.deepEqual([p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()],C.RETURN);
+  }
+});
+
+// A supplied lethal HP update queues the real death task, but no task runs until tick().
+// Each departure leaves two other fighters in combat, isolating remove from finish.
+for (const mode of [0, 1]) {
+  for (const departure of ['channel leave', 'disconnect hook', 'logout hook', 'forfeit handler']) {
+    test(`queued safe death survives ${departure} before its first callback in mode ${mode}`, async () => {
+      const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+      const game = await negotiate(a, b, 2, mode);
+      await join(a); await join(extra); await join(b);
+      core.World.processCycle = game.starts; game.tick();
+      assert.equal(game.phase, 'combat');
+      assert.equal(game.members.size, 3);
+      const side = game.members.get(extra);
+      assert.equal(C.matches.get(extra), game);
+      assert.equal(game.fighters.get(extra), side);
+      assert.equal(game.members.get(b), 1 - side);
+      for (const id of [4151, 1127, 1079, 1163, 1201, 995]) {
+        extra.getInventory().add(new core.Item(id, id === 995 ? 77 : 1, { qa: `queued-${id}` }), false);
+      }
+      const inventory = () => extra.getInventory().getValidItems().map(item =>
+        ({ id: item.getId(), amount: item.getAmount(), meta: structuredClone(item.getMeta()) }));
+      const before = inventory();
+      assert.equal(before.length, 6, 'more than three protected items expose unsafe death drops');
+      extra.getCombat().addDamage(b, 10);
+      assert.equal(extra.getCombat().getKiller(false), b, 'real damage owner supplies the queued task killer');
+      extra.setHitpoints(0);
+      assert.equal(extra.isDyingReturn(), true, 'production death task is queued');
+      assert.equal(Match.dying.has(extra), false, 'first dying callback has not run');
+      if (departure === 'channel leave') FC.leave(extra, false);
+      else if (departure === 'disconnect hook') PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+      else if (departure === 'logout hook') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      else assert.equal(Match.leave({ player: extra }), true, 'registered Forfeit handler removes the fighter');
+      assert.equal(C.matches.has(extra), false);
+      assert.equal(game.members.has(extra), false);
+      assert.equal(game.phase, 'combat', 'this is removal without match completion');
+      const guards = { shouldDrop: PM.emitShouldDropItemsOnDeath(extra, b), bones: { player: extra, killer: b, allow: true }, pvp: { victim: extra, allow: true } };
+      PM.emitCustomEvent('player:death-bones', guards.bones);
+      PM.emitCustomEvent('pvp:count-stats', guards.pvp);
+      tick(6);
+      console.log(JSON.stringify({ queuedDeparture: departure, mode, itemIds: inventory().map(item => item.id),
+        location: [extra.getLocation().getX(), extra.getLocation().getY(), extra.getLocation().getZ()],
+        shouldDrop: guards.shouldDrop, bones: guards.bones.allow, pvp: guards.pvp.allow }));
+      assert.deepEqual(inventory(), before, 'safe queued death preserves every item, amount and metadata');
+      assert.deepEqual([extra.getLocation().getX(), extra.getLocation().getY(), extra.getLocation().getZ()], C.RETURN,
+        'final death callback returns to the Clan Wars lobby');
+      assert.equal(extra.getPrivateArea(), null);
+      assert.equal(guards.shouldDrop, false, 'queued owner vetoes item drops immediately after departure');
+      assert.equal(guards.bones.allow, false, 'queued owner vetoes bones immediately after departure');
+      assert.equal(guards.pvp.allow, false, 'queued owner vetoes PvP rewards immediately after departure');
+      assert.equal(Match.dying.has(extra), false, 'final callback releases independent ownership');
+      const expected = [0, 0];
+      if (mode && ['channel leave', 'logout hook'].includes(departure)) expected[1 - side] = 1;
+      assert.deepEqual(game.kills, expected, 'departure is not credited again by the delayed death task');
+      assert.equal(game.phase, 'combat');
+    });
+  }
+}

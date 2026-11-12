@@ -3155,10 +3155,10 @@ test('native Falador full8192 masks,23 owned walls and identical queued crossing
   try {
     for(let z=0;z<2;z++)for(let x=0;x<16;x++)for(let y=0;y<8;y++)assert.deepEqual(game.area.getChunk(z,x,y),reference.getChunk(z,x,y));
     const baseline=faladorMasks(reference),id=core.CacheDefinitions.getLocId('clanwars_barrier_elfwood'),definition=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
-    assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);assert.equal(definition.isSolid(),true);assert.equal(walls.length,23);
+    assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);assert.notEqual(definition.clipType,0);assert.equal(walls.length,23);
     console.log('FALADOR_BARRIER_DEFINITION '+JSON.stringify({id,size:[definition.sizeX,definition.sizeY],clipType:definition.clipType,blocksProjectile:definition.blocksProjectile}));
     for(const wall of walls){
-      assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),1);
+      assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),1);assert.equal(wall.getDefinition().isSolid(),true);
       assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);
       assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getPrivateArea()===game.area).length,1);
     }

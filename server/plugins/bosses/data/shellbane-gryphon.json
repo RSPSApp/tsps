@@ -71,8 +71,8 @@
   "spit": {
     "landTicks": 3,
     "hits": 6,
-    "_every": "the Wiki's captures: one value every 5 ticks",
-    "every": 5,
+    "_every": "rsprox 235/03456.txt:49039-49463: a hit every 6 ticks, the first as it lands (Wiki: 6 hits over 32 ticks)",
+    "every": 6,
     "min": 3,
     "max": 12,
     "_calibrated": "the Wiki's talk page: about +125 ranged defence brings every splat down to 3",

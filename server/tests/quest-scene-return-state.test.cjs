@@ -46,6 +46,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "native Watchtower fixture uses an actual members world");
   I = core.ItemIdentifiers;
   core.ObjectDefinition.init();
   core.RegionManager.init();
@@ -182,7 +183,7 @@ async function useOnNpc(f, itemId, npc) {
   const before = f.watchtowerItemOps.length;
   await f.connection.dispatch([{ type: "inventory_use_on", itemId, slot, target: { kind: "npc", id: npc.getIndex() } }]);
   ticks(f, 6); // same bounded walk/turn allowance as this fixture's existing playScene
-  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered: ${JSON.stringify({ itemId, npcId: npc.getId(), npcAt: xyz(npc), playerAt: xyz(f.player), hp: f.player.getHitpoints(), canMove: f.player.getMovementQueue().getMobility().canMove(), messages: f.watchtowerMessages.slice(-6) })}`);
+  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered: ${JSON.stringify({ itemId, npcId: npc.getId(), npcAt: xyz(npc), npcHp: npc.getHitpoints(), npcRegistered: npc.isRegistered(), playerAt: xyz(f.player), hp: f.player.getHitpoints(), canMove: f.player.getMovementQueue().getMobility().canMove(), messages: f.watchtowerMessages.slice(-6) })}`);
   assert.equal(f.watchtowerItemOps.at(-1).item, itemId);
   assert.equal(f.watchtowerItemOps.at(-1).npc, npc.getContentId(f.player), "ordinary input resolves the intended current NPC");
 }

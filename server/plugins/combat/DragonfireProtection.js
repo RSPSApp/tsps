@@ -170,6 +170,14 @@ function getDragonfireProtectionTier(player) {
 }
 
 /**
+ * The tier of the antifire potion the player has active, ignoring anything else that protects
+ * them from dragonfire (a league relic's combat:status-apply answer): for tasks about the potion.
+ */
+function getDragonfirePotionTier(player) {
+  return normalizeState(player)?.tier ?? DragonfireProtectionTier.NONE;
+}
+
+/**
  * Regular (chromatic, brutal and metallic) dragonfire against a player. `prayerProtects` is false
  * for metallic dragons, whose fire ignores Protect from Magic. Returns the damage and the
  * messages to send, one per protection layer as live sends them.
@@ -239,6 +247,7 @@ module.exports = {
   clearDragonfireProtection,
   processDragonfireProtection,
   getDragonfireProtectionTier,
+  getDragonfirePotionTier,
   resolveChromaticDragonfireDamage,
   sendDragonfireMessages,
 };

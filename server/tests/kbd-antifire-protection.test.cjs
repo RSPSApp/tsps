@@ -77,3 +77,20 @@ test('the shield alone, the potion alone, or an expired potion do not', () => {
   expired.getPacketSender = () => ({ sendMessage() {} });
   assert.equal(rule({ player: expired }), false, 'the potion ran out');
 });
+
+test("other dragonfire immunity (a league relic's answer) is not an antifire potion", () => {
+  // Brawler's Resolve answers combat:status-apply for dragonfire with allow: false.
+  Dragonfire.initDragonfireProtectionCoreAccess({
+    core,
+    emitCustomEvent: (name, event) => { if (name === 'combat:status-apply' && event.kind === 'dragonfire') event.allow = false; },
+  });
+  try {
+    const p = player('Anti-dragon shield');
+    assert.equal(Dragonfire.getDragonfireProtectionTier(p), Dragonfire.DragonfireProtectionTier.SUPER_ANTIFIRE, 'the relic protects');
+    assert.equal(rule({ player: p }), false, 'but no potion is active');
+    drink(p);
+    assert.equal(rule({ player: p }), true, 'with a potion too');
+  } finally {
+    Dragonfire.initDragonfireProtectionCoreAccess({ core });
+  }
+});

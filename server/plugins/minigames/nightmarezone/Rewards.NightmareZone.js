@@ -109,6 +109,11 @@ function buyResource(player, id, count) {
   const plain = uncert(id);
   const price = rewards().resourcePrices[String(plain)];
   if (price == null || count <= 0) return true;
+  // Wiki (Dom Onion's Reward Shop): ironmen buy only the scrolls of redirection from Resources.
+  if (isIronman(player) && plain !== rewards().herbBox && !rewards().ironmanResources.includes(plain)) {
+    player.sendMessage(Common.message("ironmanResource"));
+    return true;
+  }
   if (plain === rewards().herbBox) {
     if (isIronman(player)) {
       player.sendMessage(Common.message("herbBoxIronman"));

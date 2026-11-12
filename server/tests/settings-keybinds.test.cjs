@@ -719,6 +719,38 @@ test('the mute buttons save the volume and restore it, as live does', () => {
   assert.deepEqual(sent.splice(0), [[3797, 100], [3796, 0]]);
 });
 
+test('the saved-levels varp keeps its high bits: a live negative 3109 survives the client, a mute and a save', () => {
+  const {Player} = require('../dist/game/entity/impl/player/Player');
+  const {PlayerSave} = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { buttons } = registered();
+  // Recorded 3109 values with bits 30 and 31 set (rsprox_transcripts/238/01201.txt, 235/03313.txt).
+  const LIVE = -2146989505;
+  const player = new Player(null);
+  const sent = [];
+  player.getPacketSender = () => ({ sendConfig: (varp, value) => sent.push([varp, value]) });
+  assert.equal(player.applyAudioSettingFromClient(3109, LIVE), true);
+  assert.equal(player.getAudioSettings()[3109], LIVE, 'the client value is kept, not clamped to 0');
+  player.applyAudioSettingFromClient(3109, -2147483643);
+  assert.equal(player.getAudioSettings()[3109], -2147483643);
+  player.applyAudioSettingFromClient(3109, LIVE);
+  // Muting music (116:110) at volume 50 rewrites only bits 0-7.
+  player.applyAudioSettingFromClient(168, 50);
+  const mute = (116 << 16) | 110;
+  assert.equal(buttons.get(mute)({ player, buttonId: mute }), true);
+  const muted = (LIVE & ~0xff) | 50;
+  assert.ok(muted < 0);
+  assert.deepEqual(sent.splice(0), [[3109, muted], [168, 0]]);
+  assert.equal(player.getAudioSettings()[3109], muted);
+  const loaded = new Player(null);
+  PlayerSave.fromPlayer(player).applyToPlayer(loaded);
+  assert.equal(loaded.getAudioSettings()[3109], muted, 'the save keeps the high bits');
+  // Unmuting restores the saved level.
+  loaded.getPacketSender = () => ({ sendConfig: (varp, value) => sent.push([varp, value]) });
+  loaded.applyAudioSettingFromClient(168, 0);
+  assert.equal(buttons.get(mute)({ player: loaded, buttonId: mute }), true);
+  assert.equal(loaded.getAudioSettings()[168], 50);
+});
+
 test('the volume sliders get the transmit-trigger event at login, so the client sends their triggers', async () => {
   const { logins } = registered();
   const flags = [];

@@ -128,3 +128,29 @@ test("the selector's recorded refusals, and no line when it opens", (t) => {
   assert.equal(normal.list(), I.STAFF_OF_THE_DEAD, "the selector opened");
   assert.deepEqual(normalLines, []);
 });
+
+// rsprox_transcripts/234/00843.txt tick 465: Water Wave autocast on a bladed staff, then the defensive autocast
+// button on the Ancient book: the refusal line and autocast_set, autocast_defmode and autocast_spell go to 0.
+test("the Ancient refusal turns an existing autocast off", (t) => {
+  const I = core.ItemIdentifiers, S = core.CombatSpells;
+  const f = wielding(t, I.STAFF_OF_THE_DEAD);
+  assert.equal(choose(f.p, 14), S.WATER_WAVE);
+  const messages = [], varbits = [];
+  t.mock.method(f.p, "sendMessage", (line) => messages.push(line));
+  const sendVarbit = f.p.getPacketSender().sendVarbit.bind(f.p.getPacketSender());
+  t.mock.method(f.p.getPacketSender(), "sendVarbit", (id, value) => { varbits.push([id, value]); return sendVarbit(id, value); });
+  f.p.setSpellbook(core.MagicSpellbook.ANCIENT);
+  Autocasting.handleWidgetAction(f.p, 593, 23);
+  assert.deepEqual(messages, ["You cannot autocast Ancient Magicks with that."]);
+  assert.equal(f.p.getCombat().getAutocastSpell(), null);
+  assert.deepEqual(varbits, [[275, 0], [276, 0], [2668, 0]]);
+});
+
+test("a refusal with no autocast set sends no autocast varbits", (t) => {
+  const f = wielding(t, core.ItemIdentifiers.STAFF_OF_THE_DEAD, core.MagicSpellbook.ANCIENT);
+  const varbits = [];
+  t.mock.method(f.p, "sendMessage", () => {});
+  t.mock.method(f.p.getPacketSender(), "sendVarbit", (id, value) => { varbits.push([id, value]); return f.p.getPacketSender(); });
+  Autocasting.handleWidgetAction(f.p, 593, 28);
+  assert.deepEqual(varbits, []);
+});

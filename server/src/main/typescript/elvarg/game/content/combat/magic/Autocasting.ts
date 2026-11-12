@@ -145,6 +145,7 @@ export class Autocasting {
         if (player.getSpellbook() === MagicSpellbook.LUNAR) {
             // rsprox_transcripts/234/03297.txt tick 212.
             player.sendMessage("You cannot autocast Lunar Magicks.");
+            this.clearForRefusal(player);
             return true;
         }
         if (!player.getEquipment().hasStaffEquipped()) {
@@ -156,6 +157,7 @@ export class Autocasting {
         const refusal = this.weaponRefusal(player, player.getSpellbook());
         if (refusal != null) {
             player.sendMessage(refusal);
+            this.clearForRefusal(player);
             return true;
         }
 
@@ -246,6 +248,15 @@ export class Autocasting {
         if (player.getCombat().getAutocastSpell() == null) return;
         player.getCombat().setAutocastSpell(null);
         this.refreshIndicators(player);
+    }
+
+    /**
+     * A refused autocast button turns an existing autocast off (rsprox_transcripts/234/00843.txt tick 465:
+     * autocast_set, autocast_defmode and autocast_spell go to 0 with the refusal line).
+     */
+    private static clearForRefusal(player: Player): void {
+        if (player.getCombat().getAutocastSpell() == null) return;
+        this.setAutocast(player, null);
     }
 
     public static refreshIndicators(player: Player): void {

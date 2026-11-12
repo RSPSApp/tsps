@@ -42,6 +42,7 @@ function wielding(weaponId, spellbook = MagicSpellbook.NORMAL) {
     getSpellbook: () => spellbook,
     getEquipment: () => equipment,
     getWeapon: () => null,
+    getCombat: () => ({ getAutocastSpell: () => null }),
     setFightType(type) { this.fightType = type; },
     getPacketSender: () => sender,
     sendMessage: (message) => sent.messages.push(message),

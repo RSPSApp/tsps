@@ -1,8 +1,8 @@
 // The shipyard: a shipwright's Customise-boat takes the player there with the chosen boat, the
-// boat schematics (interface 939) swap its hull, keel, sails or helm for another tier, and the
-// portal returns them to the dock. Upgrades and downgrades cost the part's materials and give
-// Construction XP; the old part isn't refunded. The boat's own gangplank puts the player on its
-// deck, where facilities are built (ShipyardFacilities.Sailing.js). The flow follows live
+// boat schematics (interface 939) swap its hull, keel, sails or helm for another tier, paint its
+// trim, fly a flag or build the eternal brazier, and the portal returns them to the dock. Every
+// build costs the option's materials and gives Construction XP; the old part isn't refunded.
+// The boat's own gangplank puts the player on its deck, where facilities are built (ShipyardFacilities.Sailing.js). The flow follows live
 // captures (docs/sailing-osrs-reference.md); part options, levels and materials are the cache's.
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
@@ -14,7 +14,10 @@ const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/T
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
-const { VARBIT, content, boatType, setVarbit, fade, tileBeside } = require("./SailingContent.Sailing");
+const { ItemStatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
+const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { VARBIT, content, boatType, setVarbit, fade, tileBeside, playSound } = require("./SailingContent.Sailing");
 const { describeBoat, boatVarps, clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS,
   VARBIT_SIDEPANEL_TABS, SIDEPANEL_TAB } = require("./Sidepanel.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
@@ -57,8 +60,22 @@ const IF_EVENT_OP1 = 1 << 1;
 const IF_EVENT_SCRIPT_TRIGGER = 1 << 23;
 /** Ticks from a build's fade out to its fade in, as captured. */
 const REBUILD_FADE_TICKS = 4;
-/** How each part is named when swapped ("…you swap out the hull of your boat."). */
-const PART_NAMES = { hull: "hull", keel: "keel", sails: "mast and sails", helm: "helm" };
+/** How each part is named when swapped: "…the hull of your boat.", "…the helm on your boat." */
+const PART_NAMES = {
+  hull: "hull of", keel: "keel of", trim: "trim of",
+  sails: "mast and sails on", helm: "helm on", flag: "flag on", brazier: "brazier on",
+};
+/** Played with the rebuild, the tick after a part is swapped. */
+const SOUND_SWAP = 2104;
+const SOUND_SWAP_AFTER = 2103;
+const SOUND_SWAP_AFTER_DELAY = 15;
+
+/** The yard's tool crates: a saw or a hammer for every facility build, as captured. */
+const TOOL_CRATES = {
+  "Crate of saws": { item: ItemIdentifiers.SAW, name: "saw" },
+  "Crate of hammers": { item: ItemIdentifiers.HAMMER, name: "hammer" },
+};
+const SOUND_TAKE_TOOL = 2582;
 
 /**
  * Per player in the shipyard: the boat slot being customised, the boat shown, whether they're
@@ -280,7 +297,7 @@ function build(player, optionRow) {
   const schematic = { player, row: optionRow, allow: null };
   pluginApi.emitCustomEvent("sailing:schematic-can-build", schematic);
   if (schematic.allow === false) return false;
-  if ((boat.parts?.[option.part] ?? 0) === option.tier) {
+  if (parts.hasBuilt(boat, option)) {
     player.sendMessage("Your boat already has that.");
     return false;
   }
@@ -290,24 +307,39 @@ function build(player, optionRow) {
     player.sendMessage(refused);
     return false;
   }
-  for (const [item, count] of requirements.materials) player.getInventory().delete(item, count);
-  boat.parts = { ...boat.parts, [option.part]: option.tier };
-  player.getSkillManager().addExperience(Skill.CONSTRUCTION, parts.constructionXp(boat.type, option.part, option.tier), true);
+  for (const [item, count] of requirements.materials) {
+    if (!parts.KEPT_MATERIALS.has(item)) player.getInventory().delete(item, count);
+  }
+  boat.parts = parts.withOption(boat, option);
+  const xp = parts.constructionXp(boat.type, option.part, option.tier);
   closeCustomisation(player);
   // As captured: the message shows while the screen fades and the boat is rebuilt, and can be
-  // continued once it fades back in.
-  const message = `With the help of some workers, you swap out the ${PART_NAMES[option.part]} of your boat.`;
+  // continued once it fades back in, when the XP is given.
+  const message = `With the help of some workers, you swap out the ${PART_NAMES[option.part]} your boat.`;
   StatementDialogue.send(player, message, false);
   fade(player, true);
-  later(player, 1, () => showBoat(player, visit));
+  later(player, 1, () => {
+    showBoat(player, visit);
+    playSound(player, SOUND_SWAP);
+    playSound(player, SOUND_SWAP_AFTER, SOUND_SWAP_AFTER_DELAY);
+  });
+  visit.pendingXp = (visit.pendingXp ?? 0) + xp;
   later(player, REBUILD_FADE_TICKS, () => {
     fade(player, false);
+    awardPendingXp(player, visit);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
       new StatementDialogue(0, message),
       new EndDialogue(1),
     ));
   });
   return true;
+}
+
+/** The XP of a swap still fading in; also given if the player logs out first. */
+function awardPendingXp(player, visit) {
+  const xp = visit.pendingXp ?? 0;
+  visit.pendingXp = 0;
+  if (xp > 0) player.getSkillManager().addExperience(Skill.CONSTRUCTION, xp, true);
 }
 
 /** A Build in the parts customisation (facility builds are ShipyardFacilities.Sailing.js's). */
@@ -399,7 +431,25 @@ function leaveOnMove(mobile, target) {
   if (!inShipyard(target)) endVisit(mobile);
 }
 
-/** The boat a player is customising in the shipyard, if any. */
+/**
+ * A tool crate's Take-from: a tick after reaching it, the tool and an item box. Ours: a full
+ * inventory is refused with the usual line; carrying one already doesn't stop another.
+ */
+function takeTool({ player, location, definition }) {
+  const crate = TOOL_CRATES[definition?.getName?.()];
+  if (!crate || !location || !inShipyard(location)) return false;
+  later(player, 1, () => {
+    if (player.getInventory().getFreeSlots() <= 0) {
+      player.getInventory().full();
+      return;
+    }
+    player.getInventory().add(new Item(crate.item, 1));
+    playSound(player, SOUND_TAKE_TOOL);
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new ItemStatementDialogue(0, crate.item, `You take a ${crate.name} from the crate.`)));
+  });
+}
+
 /** Rebuilds the boat shown in the shipyard after it was changed elsewhere (::maxboat). */
 function refreshShownBoat(player) {
   const visit = visits.get(player);
@@ -413,6 +463,7 @@ function visitedBoat(player) {
 
 function forgetVisit({ player }) {
   const visit = visits.get(player);
+  if (visit) awardPendingXp(player, visit);
   // Ours: saved back at the dock the visit started from, as the portal's Exit would leave them.
   if (visit) player.setLocation(visit.from);
   if (visit?.shown) BoatManager.dispose(visit.shown);
@@ -448,6 +499,7 @@ module.exports = {
     }
     api.onObjectInteraction("Boat schematics", { Modify: openSchematics });
     api.onObjectInteraction("Shipyard Portal", { Exit: exitShipyard });
+    for (const name of Object.keys(TOOL_CRATES)) api.onObjectInteraction(name, { "Take-from": takeTool });
     api.onObjectInteraction("Gangplank", { Board: boardShipyardBoat, Disembark: disembarkShipyardBoat });
     api.onInterfaceActionClick(clickCustomisation);
     api.onCustomEvent("interface:closed", customisationClosed);

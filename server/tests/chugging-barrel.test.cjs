@@ -74,8 +74,12 @@ function actor(t) {
   const inventory = player.getInventory();
   const messages = [];
   const packets = [];
-  const sender = {
-    sendInterfaceRemoval() { player.setInterfaceId(-1); return sender; },
+  let chatbox = -1;
+  const sender = new Proxy({
+    sendInterfaceRemoval() { player.setInterfaceId(-1); chatbox = -1; return sender; },
+    sendChatboxInterface(id) { chatbox = id; packets.push(["chatbox", id]); return sender; },
+    isChatboxInterface: (id) => chatbox === id,
+    sendClientScript(...args) { packets.push(["clientscript", ...args]); return sender; },
     sendSoundEffect() { return sender; },
     sendInterface(id) { player.setInterfaceId(id); packets.push(["open", id]); return sender; },
     sendInventory(...args) { packets.push(["inventory", ...args]); return sender; },
@@ -86,7 +90,7 @@ function actor(t) {
     getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
     // Spam lines land in `messages` marked, so a test sees the type live sends.
     sendTypedMessage(type, message) { messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : message); return sender; },
-  };
+  }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
   t.mock.method(player, "getPacketSender", () => sender);
@@ -421,14 +425,45 @@ test("Drink enforces bank, area, food permission, content and stun refusals", (t
   assert.ok(away.messages.includes("You must be near a bank to use that barrel."));
 });
 
-test("dismantling clears contents on confirmation and ignores a moved barrel", (t) => {
+// rsprox 238/04236.txt ticks 5395-5403: objectbox warning, then confirmdestroy (584, script 814);
+// ticks 98 and 339: assemble and disassemble are objectbox_double boxes, one form to the other.
+const box = (f) => {
+  const current = f.player.getDialogueManager().getCurrent();
+  return [current?.getItemIds?.() ?? [current?.getItemId?.()], current?.getText?.()];
+};
+const confirmScreen = (f, action) => ChuggingBarrel._test.confirmDismantle({ player: f.player, action });
+
+test("assembling and disassembling show the recorded two-item boxes", (t) => {
   const I = core.ItemIdentifiers;
   const f = actor(t);
-  const barrel = put(f, I.CHUGGING_BARREL, 0);
+  put(f, I.CHUGGING_BARREL_DISASSEMBLED_, 0);
+  itemAction(f, "Chugging barrel (disassembled)", "Assemble", 0);
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL_DISASSEMBLED_, I.CHUGGING_BARREL], "You assemble the Chugging barrel."]);
+  itemAction(f, BARREL_NAME, "Dismantle", 0);
+  assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, "an empty barrel needs no confirm");
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL, I.CHUGGING_BARREL_DISASSEMBLED_], "You disassemble the Chugging barrel."]);
+  assert.deepEqual(f.messages, [], "boxes, not chat lines");
+});
+
+test("dismantling a barrel with potions warns, asks on the confirm screen, and only Yes clears it", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = actor(t);
+  put(f, I.CHUGGING_BARREL, 0);
   seed(f.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
   itemAction(f, BARREL_NAME, "Dismantle", 0);
-  assert.equal(typeof confirm, "function");
-  confirm();
+  assert.deepEqual(box(f), [[I.CHUGGING_BARREL], "Your barrel contains potions. If you disassemble it without emptying it first, they'll be lost."]);
+  f.player.getDialogueManager().advance();
+  assert.deepEqual(f.packets.filter((p) => p[0] === "chatbox" || p[0] === "clientscript").slice(-2), [
+    ["chatbox", 584],
+    ["clientscript", 814, I.CHUGGING_BARREL, 1, "Are you sure you want to disassemble the barrel?", "The potions stored will be lost."],
+  ]);
+  assert.equal(confirmScreen(f, 0), true, "No");
+  assert.equal(balance(f, "Prayer potion").doses, 1, "No keeps the potions");
+  assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL);
+
+  itemAction(f, BARREL_NAME, "Dismantle", 0);
+  f.player.getDialogueManager().advance();
+  assert.equal(confirmScreen(f, 1), true, "Yes");
   assert.deepEqual(f.player.getAttribute(ATTRIBUTE), {});
   assert.equal(f.inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_);
 
@@ -436,10 +471,11 @@ test("dismantling clears contents on confirmation and ignores a moved barrel", (
   const moved = put(stale, I.CHUGGING_BARREL, 0);
   seed(stale.player, { "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 1 } });
   itemAction(stale, BARREL_NAME, "Dismantle", 0);
+  stale.player.getDialogueManager().advance();
   stale.inventory.setItem(0, new core.Item(I.VIAL));
   stale.inventory.setItem(1, moved);
-  confirm();
-  assert.equal(balance(stale, "Prayer potion").doses, 1);
+  confirmScreen(stale, 1);
+  assert.equal(balance(stale, "Prayer potion").doses, 1, "a moved barrel is not dismantled");
   assert.equal(stale.inventory.getItems()[1].getId(), I.CHUGGING_BARREL);
 });
 

@@ -19,6 +19,8 @@ const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { emptySailingState } = require("../dist/game/content/sailing/SailingState");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { World } = require("../dist/game/World");
+const { TimerRepository } = require("../dist/util/timers/TimerRepository");
+const { TimerKey } = require("../dist/util/timers/TimerKey");
 const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Skill } = require("../dist/game/model/Skill");
@@ -66,6 +68,8 @@ before(() => {
 });
 
 let nextIndex = 600;
+/** Every test player's timers, which tick() runs as the game loop does. */
+const playerTimers = [];
 /** A player on the real Mobile prototype, recording what they're sent, said and given. */
 function captain({ sailing = 99, ranged = 99 } = {}) {
   const player = Object.create(Mobile.prototype);
@@ -77,6 +81,8 @@ function captain({ sailing = 99, ranged = 99 } = {}) {
   const said = [];
   const xp = [];
   const anims = [];
+  const timers = new TimerRepository();
+  playerTimers.push(timers);
   const levels = new Map([["Sailing", sailing], ["Ranged", ranged]]);
   let location = new Location(3060, 2980, 0);
   let state = emptySailingState();
@@ -113,6 +119,7 @@ function captain({ sailing = 99, ranged = 99 } = {}) {
     setMobileInteraction() {},
     getLocalPlayers: () => [],
     getLocalNpcs: () => player.localNpcs ?? [],
+    getTimers: () => timers,
     getSailing: () => state,
     setSailing: (next) => { state = next; },
     getAttribute: (key) => attributes.get(key),
@@ -141,6 +148,7 @@ function captain({ sailing = 99, ranged = 99 } = {}) {
 function tick(count = 1) {
   for (let i = 0; i < count; i++) {
     World.processCycle += 1;
+    for (const timers of playerTimers) timers.process();
     TaskManager.process();
     Cannon.tick();
     Creatures.tick();
@@ -633,7 +641,7 @@ test("a repair kit on a boat at full health is still used up", () => {
   }
 });
 
-test("repair kits go on at most one every 3 ticks; clicks in between do nothing", () => {
+test("repair kits carry the food delay: one every 3 ticks; clicks in between do nothing", () => {
   const player = captain();
   const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
   const { Item } = require("../dist/game/model/Item");
@@ -650,6 +658,27 @@ test("repair kits go on at most one every 3 ticks; clicks in between do nothing"
     assert.deepEqual(repaired, [0, 3, 6]);
     assert.equal(player.inventory.getAmount(31964), 2, "an ignored click keeps the kit");
     assert.equal(player.messages().filter((text) => text === "You use the repair kit to fix up the boat.").length, 3);
+  } finally {
+    leave(player);
+  }
+});
+
+test("a repair kit and eating share one delay, both ways", () => {
+  const player = captain();
+  const { owned } = aboardWithCannon(player, { type: "skiff", cannon: "adamant cannon" });
+  const { Item } = require("../dist/game/model/Item");
+  const timers = player.getTimers();
+  try {
+    owned.damage = 100;
+    player.inventory.add(new Item(31964, 2));
+    timers.extendOrRegister(TimerKey.FOOD, 3); // a bite of ordinary food, as Food.plugin.js
+    applyKit(player, 31964);
+    assert.equal(owned.damage, 100, "a kit waits out the eat delay");
+    assert.equal(player.inventory.getAmount(31964), 2);
+    timers.cancel(TimerKey.FOOD);
+    applyKit(player, 31964);
+    assert.equal(owned.damage, 95);
+    assert.equal(timers.left(TimerKey.FOOD), 3, "food waits out the kit's delay (Food.plugin.js checks this timer)");
   } finally {
     leave(player);
   }

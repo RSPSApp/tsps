@@ -3,9 +3,11 @@
 // human_repairkit (not while steering at the helm, where the helmsman's pose stays) and sound 2101
 // three times (15, 30 and 45 cycles in), "You use the repair kit to fix up the boat.", the kit
 // goes and the boat gets its hitpoints back (wooden 5 up to rosewood 50), up to its maximum. A
-// boat already at full health still uses up the kit. One kit at most every 3 ticks: a click
-// before then does nothing. Like eating, it holds off the player's next cannon shot (Wiki; ours:
-// 3 ticks, as food).
+// boat already at full health still uses up the kit. A kit carries the same delay as eating
+// (Wiki): it waits out the food delay, a click during it does nothing, and applying one starts a
+// 3-tick food delay, so the next kit, or ordinary food, waits too. Live has been seen to eat and
+// apply a kit on the same tick; the Wiki's shared delay is followed here. Like eating, it holds
+// off the player's next cannon shot (Wiki; ours: 3 ticks, as food).
 const common = require("./Common.SeaCombat");
 const cargo = require("../Cargo.Sailing");
 const BoatHp = require("./BoatHp.SeaCombat");
@@ -23,9 +25,6 @@ const KIT_NAMES = Object.freeze([
   "Repair kit", "Oak repair kit", "Teak repair kit", "Mahogany repair kit", "Camphor repair kit",
   "Ironwood repair kit", "Rosewood repair kit",
 ]);
-
-/** player -> the tick their last kit went on. */
-const lastRepairTick = new WeakMap();
 
 /** The boat the player stands on, their own or one they visit: `{ boat, owned, owner }`, or undefined. */
 function boatAboard(player) {
@@ -46,13 +45,13 @@ function apply(event) {
     player.sendMessage(NOT_ABOARD);
     return true;
   }
-  const now = common.core().World.getProcessCycle();
-  const last = lastRepairTick.get(player);
-  if (last !== undefined && now >= last && now < last + REPAIR_DELAY_TICKS) return true;
+  const { TimerKey, World } = common.core();
+  const timers = player.getTimers();
+  if (timers.has(TimerKey.FOOD)) return true;
   const inventory = player.getInventory();
   if (!inventory.contains(event.itemId)) return true;
   inventory.deleteNumber(event.itemId, 1);
-  lastRepairTick.set(player, now);
+  timers.extendOrRegister(TimerKey.FOOD, REPAIR_DELAY_TICKS);
   if (aboard.boat.helmPlayerId !== player.getIndex()) {
     player.performAnimation(new (common.core().Animation)(ANIM_REPAIR));
   }
@@ -65,7 +64,7 @@ function apply(event) {
   }
   const gunner = require("./Cannon.SeaCombat").mannedBy(player);
   if (gunner) {
-    gunner.nextAttackTick = Math.max(gunner.nextAttackTick, now + ATTACK_DELAY_TICKS);
+    gunner.nextAttackTick = Math.max(gunner.nextAttackTick, World.getProcessCycle() + ATTACK_DELAY_TICKS);
   }
   return true;
 }

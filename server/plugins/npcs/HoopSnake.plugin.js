@@ -11,7 +11,7 @@
  *   stunned spotanim (80), and it stands still.
  * - If no one picks it up, 10 ticks later it turns back into a Hoop Snake at its spawn tile
  *   (telejump; 708 ticks 294 -> 304, 882 -> 892).
- * - Pick-up: human_pickupfloor (827), sound 2582, the snake leaves and the hoop snake item
+ * - Pick-up: human_pickupfloor (827), sound 2582 (delay 10), the snake leaves and the hoop snake item
  *   (21624) is added. The snake comes back at its spawn 17 ticks later (709 66 -> 83; 708 2237
  *   -> 2254, 2360 -> 2377, 3115 -> 3132, 3466 -> 3483). The Wiki gives the same 17-tick respawn.
  * - Roll asks "Roll the hoop snake forward?" Yes./No. On Yes: human_pickupfloor (827), the item
@@ -38,6 +38,7 @@ const ITEM_NAME = "Hoop snake";
 const STUNNED_GRAPHIC = 80; // stunned
 const PICKUP_ANIMATION = 827; // human_pickupfloor
 const PICKUP_SOUND = 2582;
+const PICKUP_SOUND_DELAY = 10;
 const ROLL_PROJECTILE = 1408; // fossil_projectile_hoopsnake
 const ROLL_DISTANCE = 7;
 const ROLL_START = 0;
@@ -126,14 +127,19 @@ function pickUpSnake({ player, npc }) {
   if (inventory.getAddableAmount(item) > 0) inventory.add(item, true);
   else core.ItemOnGroundManager.registerLocation(player, item, npc.getLocation().clone(), npc.getPrivateArea?.() ?? null);
   player.performAnimation(new core.Animation(PICKUP_ANIMATION));
-  player.getPacketSender().sendSoundEffect(PICKUP_SOUND, 1, 0);
+  player.getPacketSender().sendSoundEffect(PICKUP_SOUND, 1, PICKUP_SOUND_DELAY);
   npc.setVisible(false);
   core.TaskManager.submit(new core.CountdownTask(npc, RESPAWN_TICKS, () => respawn(npc, state)));
   return true;
 }
 
+/** Live deletes the snake and adds a new one, so it comes back at full health and cured. */
 function respawn(npc, state) {
-  if (held.get(npc) === state) reset(npc);
+  if (held.get(npc) !== state) return;
+  reset(npc);
+  // After the reset: the stunned form's own hitpoints are not the snake's.
+  npc.setHitpoints(npc.getMaxHitpoints());
+  npc.setPoisonDamage(0);
 }
 
 function holdsSnake(player, slot) {

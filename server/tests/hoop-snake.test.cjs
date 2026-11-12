@@ -64,7 +64,7 @@ function actor(t, at = [SPAWN[0] - 1, SPAWN[1]]) {
   t.mock.method(p, "performAnimation", (animation) => { animations.push(animation.getId()); return performAnimation(animation); });
   const sender = p.getPacketSender();
   const sendSoundEffect = sender.sendSoundEffect.bind(sender);
-  t.mock.method(sender, "sendSoundEffect", (id, ...rest) => { sounds.push(id); return sendSoundEffect(id, ...rest); });
+  t.mock.method(sender, "sendSoundEffect", (id, loops, delay, ...rest) => { sounds.push([id, delay]); return sendSoundEffect(id, loops, delay, ...rest); });
   // Projectile.sendProjectile broadcasts to network players, which this fixture is not; the projectile itself is read.
   t.mock.method(core.Projectile.prototype, "sendProjectile", function capture() { projectiles.push(this); });
   const dialogues = p.getDialogueManager();
@@ -174,11 +174,12 @@ test("a stun holds the snake for 10 ticks, then it is a Hoop Snake at its spawn 
 test("pick-up gives the hoop snake; the snake comes back at its spawn 17 ticks later", async (t) => {
   const f = actor(t);
   const npc = snake(t);
+  npc.setHitpoints(5);
   await stun(t, f, npc, 0);
   await pickUp(f, npc);
   assert.equal(f.inv.getAmount(ITEM), 1);
   assert.deepEqual(f.animations, [827]);
-  assert.deepEqual(f.sounds, [2582]);
+  assert.deepEqual(f.sounds, [[2582, 10]]);
   assert.equal(npc.isVisible(), false);
   tick(f, 11);
   assert.equal(npc.isVisible(), false, "the stun's end does not bring a picked-up snake back");
@@ -188,6 +189,7 @@ test("pick-up gives the hoop snake; the snake comes back at its spawn 17 ticks l
   assert.equal(npc.isVisible(), false, "still gone on the sixteenth tick");
   tick(f, 1);
   assert.equal(npc.isVisible(), true, "back on the seventeenth");
+  assert.equal(npc.getHitpoints(), npc.getMaxHitpoints(), "a new snake, at full health");
   assert.equal(npc.getNpcTransformationId(), -1);
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], SPAWN);
 });

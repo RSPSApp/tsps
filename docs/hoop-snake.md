@@ -12,7 +12,7 @@ stunned snake up, and then rolls or releases the hoop snake item (21624).
 | Stun, miss | "The movement of the snake causes you to miss." (game message) on arrival, with no animation (708, 710) |
 | Stun, hit | on arrival: transformation to `fossil_hoopsnake_stunned` (7803) and spotanim `stunned` (80). No player animation. The snake stands still |
 | stun wears off | 10 ticks later, if nobody picked it up: telejump back to its spawn tile with seq -1, a Hoop Snake again (708 ticks 294 -> 304, 882 -> 892) |
-| Pick-up | `human_pickupfloor` (827), synth sound 2582, the NPC is deleted, +1 `fossil_hoopsnake` (21624) (709 66; 708 2237, 2360, 3115, 3466) |
+| Pick-up | `human_pickupfloor` (827), synth sound 2582 (delay 10), the NPC is deleted, +1 `fossil_hoopsnake` (21624) (709 66; 708 2237, 2360, 3115, 3466) |
 | respawn | 17 ticks after the pick-up, at its spawn tile (709 66 -> 83; 708 2237 -> 2254, 2360 -> 2377, 3115 -> 3132, 3466 -> 3483) |
 | Roll | chat menu "Roll the hoop snake forward?" with "Yes." and "No." |
 | Roll, Yes | `human_pickupfloor` (827), the item is removed, `map_projanim` 1408 from the player's tile to the tile 7 squares ahead in the direction they face: start 0, end 105, angle 127, progress 0, heights 0 (708 1866, 2249, 2464, 3150, 3475; 709 82; 710 434). One roll went 7 squares on both axes (708 3475) |

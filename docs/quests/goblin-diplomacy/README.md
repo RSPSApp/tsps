@@ -73,7 +73,7 @@ reward. Ticks are the capture's.
 
 ## Findings
 
-- **open** Scenes were missing; repeated NPC conversations could be needed to progress. [#1257](https://github.com/RSPSApp/tsps/pull/1257)
+- **fixed** Scenes were missing; repeated NPC conversations could be needed to progress. [#1257](https://github.com/RSPSApp/tsps/pull/1257) The fittings and the mid-quest menu follow the capture since [#4685](https://github.com/RSPSApp/tsps/pull/4685).
 
 ## Runs
 

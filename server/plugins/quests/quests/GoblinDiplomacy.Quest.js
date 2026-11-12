@@ -7,7 +7,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 const { createQuestScenes } = require("../QuestScenes");
 
 module.exports = function registerGoblinDiplomacyQuest(api) {
-  const { Skill, Location, Animation, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, CacheDefinitions } = api.core;
+  const { Skill, Location, Animation, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, CacheDefinitions } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const GENERAL_BENTNOZE_NPC_ID = NpcIdentifiers.GENERAL_BENTNOZE;
@@ -123,9 +123,9 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const FADE_CYCLES = 25;
   const CURTAIN_OPEN = "curtain_open";
   const CURTAIN_CLOSING = "curtain_closing";
-  /** Ticks after Grubfoot is back at the curtain: [tick, step] (orange 194-205, blue 233-244, brown 272-283). */
   /** Grubfoot is at most three tiles from the curtain; past this he is put there. */
   const WALK_BACK_TICKS = 6;
+  /** Ticks after Grubfoot is back at the curtain: [tick, step] (orange 194-205, blue 233-244, brown 272-283). */
   const CHANGING = [
     [1, "face-curtain"], [2, "open"], [3, "in"], [4, "face-out"], [4, "close"],
     [8, "change"], [8, "open"], [9, "out"], [10, "out-again"], [10, "close"], [11, "speak"],

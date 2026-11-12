@@ -2,6 +2,10 @@
 const SETS = 451;
 const MAIN_ITEMS = (SETS << 16) | 3;
 const SIDE = 430;
+// The exchange's own screens, closed when item sets open over them.
+const GE_OFFERS = 465;
+const GE_COLLECT = 402;
+const GE_HISTORY = 383;
 const SIDE_ITEMS = SIDE << 16;
 const RECIPE_LIST = 1033;
 const RECIPE_BY_ITEM = 1034;
@@ -25,7 +29,7 @@ function allowedRecipe(value) {
 }
 
 function openSets({ player }) {
-  if ([SETS, 465, 402].includes(player.getInterfaceId())) player.getPacketSender().sendInterfaceRemoval();
+  if ([SETS, GE_OFFERS, GE_COLLECT, GE_HISTORY].includes(player.getInterfaceId())) player.getPacketSender().sendInterfaceRemoval();
   if (player.busy()) {
     player.sendMessage("Finish what you are doing before opening item sets.");
     return true;

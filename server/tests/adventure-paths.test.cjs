@@ -439,6 +439,19 @@ test("native path overview mounts its side panel and restores the last selected 
     );
     assert.equal(f.p.getPacketSender().getVarp(C.getVarpId("adventurepath_selected_task")), 1);
 });
+test("the Grand Exchange Clerk's unpaid-voucher branch never plays: Talk-to pays the voucher first", (t) => {
+    const f = actor(t);
+    login(f.p);
+    assert.equal(
+        PluginManager.emitNpcDialogueCondition({
+            player: f.p,
+            definition: { getName: () => "Grand Exchange Clerk" },
+            text: "If the player is carrying a Combat path voucher and hasn't received their reward:",
+        }),
+        false,
+    );
+});
+
 test("Lumbridge tutor conditions use actual Adventure Path participation", (t) => {
     const f = actor(t);
     login(f.p);

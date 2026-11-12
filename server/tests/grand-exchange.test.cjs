@@ -433,7 +433,8 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
     click(30);
     return p.getAttribute(OFFERS_ATTRIBUTE)[slot];
   };
-  return { p, inventory, place, click, historyClick, emitEvent, hooks, buttons, calls, messages, timers, npcActions };
+  const listen = (eventName, handler) => customEvents.set(eventName, [...(customEvents.get(eventName) ?? []), handler]);
+  return { p, inventory, place, click, historyClick, emitEvent, listen, hooks, buttons, calls, messages, timers, npcActions };
 }
 
 test('maxTradeDelay overrides volume and price caps for newly placed buys and sells', t => {
@@ -677,6 +678,16 @@ test("the clerk's History, opened from the offers screen, replaces it", t => {
   assert.equal(p.getInterfaceId(), 383);
 });
 
+test("the clerk's History is refused where the exchange is", t => {
+  const { p, calls, npcActions, listen, messages } = exchange(t);
+  p.setInterfaceId(-1);
+  listen('grand-exchange:can-open', (request) => { request.allow = false; request.message = 'Not here.'; });
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+  assert.equal(p.getInterfaceId(), -1);
+  assert.equal(calls.some(({ name }) => name === 'sendSubInterface'), false);
+  assert.deepEqual(messages, ['Not here.']);
+});
+
 test("the clerk's Talk-to trade offers choice closes the chat and opens the exchange", t => {
   const { p, calls, emitEvent } = exchange(t);
   p.setInterfaceId(-1);
@@ -704,7 +715,6 @@ test("the clerk's Talk-to offers the reminder option the setting is not on, and 
   assert.equal(condition(ON_CONDITION), true);
   assert.equal(condition(OFF_CONDITION), false);
   assert.equal(condition(ON_CONDITION, { getName: () => 'Banker' }), null);
-  assert.equal(condition("If the player is carrying a Combat path voucher and hasn't received their reward:"), false);
   assert.equal(condition('If the player is on a members world:'), null);
 
   emitEvent('npc-dialogue:line', { player: p, definition: clerk, step: { npc:

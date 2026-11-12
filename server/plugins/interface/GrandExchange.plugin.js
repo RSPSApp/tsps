@@ -69,9 +69,6 @@ const CLERK = "Grand Exchange Clerk";
 const REMINDERS_CONDITION = /^If the player has Exchange collection reminders on login (on|off):$/;
 const REMINDERS_ON_LINE = /^Okay, when you log in, we'll send you a message about any items/;
 const REMINDERS_OFF_LINE = /^Okay, when you log in, you will no longer be reminded/;
-// Adventure Paths pays a carried combat path voucher on Talk-to before this conversation
-// starts, so the transcript's voucher branch never applies here.
-const VOUCHER_CONDITION = /^If the player is carrying a Combat path voucher/;
 const EXCHANGE_TARGET = "Grand Exchange";
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
@@ -446,7 +443,6 @@ function login(event) {
 /** Talk-to's reminder options: each is offered only while the setting is the other way. */
 function clerkCondition({ player, definition, text }) {
   if (definition?.getName?.() !== CLERK) return null;
-  if (VOUCHER_CONDITION.test(text ?? "")) return false;
   const match = REMINDERS_CONDITION.exec(text ?? "");
   return match ? remindersOn(player) === (match[1] === "on") : null;
 }
@@ -609,7 +605,10 @@ function showHistory(player) {
 }
 
 /** The clerk's History option: the trade history on its own, without the offers screen. */
+// Wiki: Bank_PIN guards trading at the exchange, not this list of past trades; its Exchange and
+// Buy-offer buttons go through openGrandExchange, which asks for the PIN.
 function openHistory({ player }) {
+  if (refusedEntry(player)) return true;
   if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) {
     player.getPacketSender().sendInterfaceRemoval();
     historyOpen.delete(player);
@@ -1077,14 +1076,17 @@ function collectAll(player, action) {
   }
 }
 
-function openGrandExchange({ player }) {
-  // "grand-exchange:can-open": other content may keep a player out.
+/** "grand-exchange:can-open": other content may keep a player out. */
+function refusedEntry(player) {
   const request = { player, allow: true, message: null };
   pluginApi.emitCustomEvent("grand-exchange:can-open", request);
-  if (!request.allow) {
-    if (request.message) player.sendMessage(request.message);
-    return true;
-  }
+  if (request.allow) return false;
+  if (request.message) player.sendMessage(request.message);
+  return true;
+}
+
+function openGrandExchange({ player }) {
+  if (refusedEntry(player)) return true;
   // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
   const pin = { player, feature: "grand-exchange", resume: () => openGrandExchange({ player }) };
   pluginApi.emitCustomEvent("bank-pin:guard", pin);

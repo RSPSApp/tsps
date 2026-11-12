@@ -118,6 +118,15 @@ test('Sets actions open the native main and side interfaces with their own opera
   assert.ok(p.calls.some(([name]) => name === 'sendItemContainer'), 'the real inventory is refreshed');
 });
 
+test('item sets open over the trade history and close it first', () => {
+  const h = harness(), p = h.player();
+  p.setInterfaceId(383);
+  h.open(p);
+  assert.equal(p.calls[0][0], 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), MAIN);
+  assert.deepEqual(p.messages, []);
+});
+
 test("the clerk's Talk-to item sets choice closes the chat and opens item sets", () => {
   const h = harness(), p = h.player();
   const action = { player: p, action: 'open_interface', target: 'Item Sets', handled: false };

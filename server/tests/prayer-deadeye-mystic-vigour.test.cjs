@@ -26,7 +26,7 @@ const itemActions = new Map();
 let prayerDisabledHook = null;
 let prompt = null;
 plugin.register({
-  core: { PrayerData, PrayerHandler, ItemIdentifiers: ItemIds },
+  core: { PrayerData, PrayerHandler, ItemIdentifiers: ItemIds, Skill },
   persistAttribute() {},
   onPlayerLogin() {},
   onPrayerDisabled(handler) { prayerDisabledHook = handler; },
@@ -96,6 +96,24 @@ test("the scrolls teach Deadeye and Mystic Vigour without locking Eagle Eye or M
   }
 });
 
+test("below 62 / 63 Prayer the scroll can't be read, so Eagle Eye and Mystic Might stay (Wiki)", (t) => {
+  for (const [name, item, slot, level, text] of [
+    ["Deadeye prayer scroll", ItemIds.DEADEYE_PRAYER_SCROLL, "EAGLE_EYE", 61,
+      "You need a Prayer level of at least 62 to learn Deadeye."],
+    ["Mystic vigour prayer scroll", ItemIds.MYSTIC_VIGOUR_PRAYER_SCROLL, "MYSTIC_MIGHT", 62,
+      "You need a Prayer level of at least 63 to learn Mystic Vigour."],
+  ]) {
+    const { player, varbits, messages } = nativePlayer(t, { prayer: level, items: [item] });
+    prompt = null;
+    assert.equal(itemActions.get(name).Read({ player, itemId: item }), true);
+    assert.equal(prompt, null, `${name}: no prompt`);
+    assert.deepEqual(messages, [text]);
+    assert.equal(player.getInventory().contains(item), true, "the scroll stays");
+    assert.deepEqual(varbits, []);
+    assert.equal(PrayerHandler.canUse(player, PrayerData[slot], true), true, `${slot} still usable`);
+  }
+});
+
 test("Mystic Might's slot sends prayer_mysticvigour after prayer_mysticmight once learnt (rsprox recs 3273, 3276)", (t) => {
   const { player, varbits } = nativePlayer(t, { attributes: vigour });
   PrayerHandler.activatePrayerPrayerId(player, PrayerHandler.MYSTIC_MIGHT);
@@ -121,7 +139,7 @@ test("without the scroll Eagle Eye sends no Deadeye varbit and stays Eagle Eye",
   assert.equal(AccuracyFormulasDpsCalc.defencePrayerPercent(player), 100);
 });
 
-test("Deadeye: +18% Ranged accuracy and strength, +5% Defence (Wiki)", (t) => {
+test("Deadeye: +18% Ranged accuracy and strength, +5% Defence (Wiki); prayer_deadeye after prayer_eagleeye (rec 3279)", (t) => {
   const { player, varbits } = nativePlayer(t, { attributes: deadeye });
   PrayerHandler.activatePrayerPrayerId(player, PrayerHandler.EAGLE_EYE);
   assert.deepEqual(varbits.filter(([id]) => id === PRAYER_EAGLEEYE || id === PRAYER_DEADEYE),

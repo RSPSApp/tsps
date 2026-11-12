@@ -25,7 +25,10 @@ Tests: `server/tests/prayer-deadeye-mystic-vigour.test.cjs`.
   - Recordings 3273, 3276 (rev 234) and 4068 (rev 237): with Mystic Vigour learnt, the Mystic
     Might button sets Mystic Might's `prayer_allactive` bit, `prayer_mysticmight` and then
     `prayer_mysticvigour` (16091), with Mystic Might's sound (2669); switching it off clears both.
-    These are event and Leagues worlds; no main-world capture of either prayer exists yet.
+  - Recording 3279 (rev 234, from tick 438): the Eagle Eye button with Deadeye learnt sets
+    allactive 4194304, `prayer_eagleeye` and then `prayer_deadeye` (16090), with Eagle Eye's
+    sound (2665), and clears both on off; recordings 3276, 3277 and 3280 show it too.
+  - These are event and Leagues worlds; no main-world capture of either prayer exists yet.
 
 ## What the server does
 
@@ -35,7 +38,9 @@ Tests: `server/tests/prayer-deadeye-mystic-vigour.test.cjs`.
 - Eagle Eye and Mystic Might stay usable without the scrolls. With one learnt, the slot sends
   `prayer_deadeye` (16090) / `prayer_mysticvigour` (16091) after the slot's own varbit, and clears
   it when the prayer goes off.
-- Where the upgrade shows, it needs its own Prayer level (62 / 63).
+- Where the upgrade shows, it needs its own Prayer level (62 / 63). Below that level the scroll
+  isn't read (the Wiki's "Reading it requires level 62 Prayer"), so the player keeps Eagle Eye /
+  Mystic Might. Ours: the refusal "You need a Prayer level of at least 62 to learn Deadeye."
 - Combat: 118% Ranged attack and strength for Deadeye; 118% Magic attack and Magic defence level,
   +3% Magic damage for Mystic Vigour; both add 5 percentage points to the Defence prayer
   multiplier, on top of a skin prayer (Steel Skin + Deadeye = 120%).
@@ -44,6 +49,4 @@ Tests: `server/tests/prayer-deadeye-mystic-vigour.test.cjs`.
 
 - Ours: an upgrade is only ever the earned scroll. A minigame's unlock bypass (Last Man Standing,
   PvP-mode presets) does not show or apply Deadeye or Mystic Vigour.
-- The Wiki says reading needs 62 / 63 Prayer but gives no refusal text, so the scroll is not
-  gated on level; the prayer itself is.
-- The Deadeye button is not captured; it is assumed to behave like the captured Mystic Vigour one.
+- The refusal for reading below 62 / 63 Prayer is our own wording; no capture or Wiki text has it.

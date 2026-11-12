@@ -76,10 +76,11 @@ function upgradeScrolls() {
   const { ItemIdentifiers, PrayerData, PrayerHandler } = core;
   return [
     { itemId: ItemIdentifiers.DEADEYE_PRAYER_SCROLL, prayer: PrayerData.EAGLE_EYE, name: "Deadeye",
-      attribute: PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, varbit: DEADEYE_UNLOCKED_VARBIT, upgrades: PrayerHandler.EAGLE_EYE },
+      attribute: PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, varbit: DEADEYE_UNLOCKED_VARBIT, upgrades: PrayerHandler.EAGLE_EYE,
+      readLevel: 62 },
     { itemId: ItemIdentifiers.MYSTIC_VIGOUR_PRAYER_SCROLL, prayer: PrayerData.MYSTIC_MIGHT, name: "Mystic Vigour",
       attribute: PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, varbit: MYSTIC_VIGOUR_UNLOCKED_VARBIT,
-      upgrades: PrayerHandler.MYSTIC_MIGHT },
+      upgrades: PrayerHandler.MYSTIC_MIGHT, readLevel: 63 },
   ];
 }
 
@@ -187,8 +188,26 @@ function unlockPrayer({ player, prayer }) {
   sendUnlock(player, scroll);
 }
 
+/**
+ * Wiki (Deadeye prayer scroll): "Reading it requires level 62 Prayer" (Mystic Vigour's 63). Read
+ * below it, the slot would ask for a level the player lacks and Eagle Eye would be lost.
+ */
+function belowReadLevel(player, scroll) {
+  return scroll.readLevel !== undefined
+    && player.getSkillManager().getMaxLevel(core.Skill.PRAYER) < scroll.readLevel;
+}
+
+// Ours: the Wiki gives the requirement but not the refusal's wording.
+function readLevelMessage(scroll) {
+  return `You need a Prayer level of at least ${scroll.readLevel} to learn ${scroll.name}.`;
+}
+
 function learnScroll(player, scroll) {
   if (player.getAttribute(scroll.attribute) === true) return;
+  if (belowReadLevel(player, scroll)) {
+    player.sendMessage(readLevelMessage(scroll));
+    return;
+  }
   if (!player.getInventory().contains(scroll.itemId)) return;
   player.getInventory().deleteNumber(scroll.itemId, 1);
   player.setAttribute(scroll.attribute, true);
@@ -208,6 +227,10 @@ function readScroll(event) {
   }
   if (event.player.getAttribute(scroll.attribute) === true) {
     event.player.sendMessage(ALREADY_LEARNED);
+    return true;
+  }
+  if (belowReadLevel(event.player, scroll)) {
+    event.player.sendMessage(readLevelMessage(scroll));
     return true;
   }
   api.sendMultiChatboxPrompt(

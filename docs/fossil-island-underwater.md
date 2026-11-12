@@ -33,7 +33,20 @@ The sea floor north of Fossil Island: Ceto and drift net fishing, Mernia's seawe
 - **Drain:** 1% every 3 ticks.
 - **Kept full by:** a fishbowl helmet with a diving apparatus, or the Medallion of the Deep.
 - **At 0%:** the player drowns, taking no damage. They lose 10-20 of the mermaid's tears they carry and wake on the small island. The drowning message is ours; nothing captured it.
-- **Not done yet:** air bubbles and pufferfish refilling oxygen, and the "Your hands are full." swim prompt.
+- **Pufferfish:** Puff, underwater, uses one up: `human_inhale_pufferfish` (7701), "You depuff the pufferfish, restoring some of your puff." and 15% oxygen (rsprox 715: +150 of 1,000). Out of the water it does nothing here (no capture).
+- **Not done yet:** air bubbles refilling oxygen, catching pufferfish on the sea floor and charging the merfolk trident with them, and the "Your hands are full." swim prompt.
+
+## Underwater Agility and Thieving
+
+`plugins/areas/fossilislandunderwater/Tears.FossilIslandUnderwater.js` and `Training.FossilIslandUnderwater.js`, data in the same JSON (`tears`, `training`). From the rsprox captures 231/00712-00715 (the main game, Thieving 99) and 234/03273 and 03299 (Grid Master event worlds, whose searches all succeed, so only their timings are used), and the [Wiki](https://oldschool.runescape.wiki/w/Underwater_Agility_and_Thieving).
+
+- **The open chest or clam:** one of the 54 sea-floor chests and clams (the cache's closed locs 30972 and 30970, `tears.spots`) is open at a time, for the diving player alone: the open loc (30971, 30969) is the player's own object over the cache's. It stays open 100 ticks; 3 ticks after it closes another opens, chosen at random (the captures open the same one twice in a row too). Nobody else is seen in the area in any capture, so each player has their own. Which one opens first on a dive, and when, isn't captured: one opens as the player arrives.
+- **The hint arrow** stands on the open loc's west side (height 128), sent again every 3 ticks with `current_hint_arrow` (varbit 14192) going to 0 and back to 6, as captured.
+- **Found:** the first time on a dive the player comes next to it, "You have successfully found an open chest; the mermaids will reward you from now on." (or clam) and Mairin's "Thanks, you should be able to get some tears from the next chest!" (all six captures).
+- **Search:** `human_swim_steal` (7707) at once, the outcome a tick later; each click is one search. A success is `human_swim_steal_success` (7709), sound 73, a glistening tear and a mermaid's tear, and 4.5 Agility and Thieving XP. The first search of each opening always succeeds (7 of 7 captured); later ones roll the Wiki's chart, 12.1% at Thieving 1 to 16.0% at 99 (low 30, high 40; captured 23 of 115 at 99). A miss is a nibble, "You jerk back as something nibbles your hand." (spam), and 37 of the 92 captured were "...and lose some breath.", 2% oxygen. Without room: "You don't have enough inventory space."; on anything not open: "You'll have to wait for the next chest or clam to open."
+- **Mairin's Training** (her fourth op): if1-if4 (varps 261-264) get the whole XP a tear gives, then `fossil_underwater_training` (287) opens. Its rows (287:3 Agility, 287:5 Thieving, 287:7 both) take Exchange-1, -5, -X ("How many glistening tears do you wish to exchange? (N)") and -All. A tear gives level squared times 0.027 Agility or 0.099 Thieving XP, or 0.018 and 0.066 for both, cut to a tenth, and the exchange pays the tears times that, rounded down: every captured exchange fits (234/03299: 251 tears at Agility 83 for 46,686; 220 at 85 for 42,900; 458 at 87 for 93,569; 310 at 90 for 67,797; 231/00715: one at 99 for 264 Agility or 970 Thieving, 3 split for 529 and 1,940; 234/03273: 83 split at 62/80 for 5,735 and 35,059). The varps are sent again after an exchange.
+- **Wiki, not captured:** at most 700 tears go in one exchange, and Mairin confiscates the rest of an Exchange-All ("Mairin confiscared a further N tears; she did not approve of how many you had.").
+- **Not done yet:** the numulites and unidentified fossils a search can find (Wiki; the captures' rates are boosted event worlds'), the very first chest of all giving nothing (Wiki), and Mairin's talk that sets the activity up.
 
 ## Drift net area
 

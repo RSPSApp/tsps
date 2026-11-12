@@ -42,7 +42,7 @@ function cleanup(event) {
 }
 
 function shutdown() {
-  task?.stop(); Rabbits.shutdown(); Overworld.clear();
+  task?.stop(); Rabbits.shutdown(); Pitfalls.shutdown(); Overworld.clear();
   for (const player of H.players) cleanup({ player });
   for (const npc of H.hidden.keys()) C.reveal(npc);
 }

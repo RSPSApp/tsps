@@ -137,6 +137,7 @@ export class NPC extends Mobile {
     private defenceBonusOverrides: Array<number | null> | null = null;
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
+    private telejumped = false;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
     private headbars: NpcHeadbar[] = [];
     /** This tick's fade, sent with the NPC's update and cleared after it. */
@@ -886,6 +887,22 @@ export class NPC extends Mobile {
         return this.exactMoveState;
     }
 
+    /**
+     * Moves the NPC to `destination` at once, staying in view, as OSRS's NPC telejump does: clients
+     * see it snap there in place, its animation carrying on, rather than vanish for a tick and
+     * come back (a plain moveTo) or glide (exactMove).
+     */
+    public telejump(destination: Location): NPC {
+        this.moveTo(destination);
+        this.telejumped = true;
+        return this;
+    }
+
+    /** Whether the NPC telejumped this tick (cleared with the tick's update). */
+    public isTelejumping(): boolean {
+        return this.telejumped;
+    }
+
     /** The orientation facing along (dx, dy): 0 south, 512 west, 1024 north, 1536 east. */
     public static travelAngle(dx: number, dy: number): number {
         if (dx === 0 && dy === 0) return 0;
@@ -973,6 +990,7 @@ export class NPC extends Mobile {
     public resetUpdating() {
         super.resetUpdating();
         this.exactMoveState = null;
+        this.telejumped = false;
         this.headbars = [];
         this.faceTileState = null;
         this.transparencyState = null;

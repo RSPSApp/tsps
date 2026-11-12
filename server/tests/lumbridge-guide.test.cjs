@@ -76,3 +76,15 @@ test('an uninspected locket cannot be exchanged and another page cannot trigger 
   const other={...event(player({unlocked:true})),pages:[{page:'Other NPC'}],kind:'message',stepId:'xm3rMD'};
   api.emitCustomEvent('npc-dialogue:action',other);assert.equal(other.handled,undefined);
 });
+
+// Wiki (Amulet of the Eye): "If the amulet was recoloured before it was destroyed, then it will still be recoloured when
+// it is reclaimed."
+test('a recoloured amulet is reclaimed in its colour', () => {
+  const p = player({ unlocked: true, ownedAt: 'inventory', ownedId: 26990 }); // gotr_amulet_of_the_eye_red
+  assert.equal(reclaim(p).end, true, 'still owned: no reclaim');
+  p.items.delete(26990);
+  const granted = reclaim(p);
+  assert.equal(p.items.get(26990), 1);
+  assert.deepEqual(granted.box, { items: [26990] });
+  assert.equal(p.items.has(26914), false, 'not the plain amulet');
+});

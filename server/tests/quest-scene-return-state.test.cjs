@@ -275,7 +275,7 @@ test("Watchtower: every actionable Yanille hole and the enclave opening have wor
   for (const hole of holes) await operateWatchtowerLoc(f, hole, [2585, 3108, 0]);
   await operateWatchtowerLoc(f, opening, [2540, 3054, 0]);
   const decorative = core.ObjectDefinition.forId(2824);
-  assert.ok(!(decorative.getInteractions?.() ?? decorative.getActions()).some(Boolean), "surface hole is decorative, not an invented reverse operation");
+  assert.ok(!(decorative.getInteractions?.() ?? decorative.getActions() ?? []).some(Boolean), "surface hole is decorative, not an invented reverse operation");
 });
 
 test("Watchtower: third relic hand-in plays its private assembly before one completed relic is awarded", async t => {

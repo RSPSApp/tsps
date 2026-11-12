@@ -10,6 +10,8 @@
  * Saved stages (quest.priest_in_peril.stage): 10 started, 20 guardian killed,
  * 30 told King Roald, 40 met Drezel, 43 cell unlocked, 46 vampyre sealed,
  * 50 asked to meet in the mausoleum, 55 repairing the barrier, 60 complete.
+ * Live sends 60 with the last essence and 61 once Drezel blesses the player at the end of
+ * the same conversation (AWAITING_BLESSING_ATTRIBUTE holds the gap after completion).
  * The client sees OSRS's own varp 302 values (see wireValue); saves made before
  * 43/46/55 existed keep their meaning (an old 50 had the vampyre sealed).
  */
@@ -61,12 +63,13 @@ module.exports = function registerPriestInPerilQuest(api) {
    * Varp 302 as live OSRS sends it (Quest Helper's PriestInPeril steps; the cache's
    * transforms key on the same values): 1 started, 2 agreed to kill the dog,
    * 3 dog killed, 4 King told, 5 met Drezel, 6 cell unlocked, 7 coffin sealed,
-   * 8 meet in the mausoleum, 10-59 essence (60 minus the essence still owed), 61 done.
+   * 8 meet in the mausoleum, 10-60 essence (60 minus the essence still owed: 60 with the last
+   * hand-in, capture 2026-11-02 tick 13457), 60 complete, 61 blessed for Morytania (tick 13629).
    * The guardian 3487 shows at 0-2, the cell Drezel at 4-8, the mausoleum Drezel at 8-61.
    */
   function wireValue(stage, player) {
-    if (stage >= STAGE_COMPLETE) return 61;
-    if (stage >= STAGE_REPAIRING_BARRIER) return 10 + Math.min(ESSENCE_REQUIRED - 1, essenceHandedIn(player));
+    if (stage >= STAGE_COMPLETE) return awaitingBlessing(player) ? 60 : 61;
+    if (stage >= STAGE_REPAIRING_BARRIER) return 10 + Math.min(ESSENCE_REQUIRED, essenceHandedIn(player));
     if (stage >= STAGE_MEET_IN_MAUSOLEUM) return 8;
     if (stage >= STAGE_VAMPYRE_SEALED) return 7;
     if (stage >= STAGE_CELL_UNLOCKED) return 6;
@@ -98,6 +101,14 @@ module.exports = function registerPriestInPerilQuest(api) {
   const FINAL_ESSENCE_MESSAGE_ID = "4daSZa";
   /** "Drezel inspects the water. He then says some sort of prayer." */
   const BLESSING_MESSAGE_ID = "feQ9cD";
+  /** "Drezel blesses you, allowing you to pass through the barrier into Morytania." (both copies). */
+  const PLAYER_BLESSING_MESSAGE_IDS = new Set(["R9VGgf", "ab5TxS"]);
+  /** Drezel's post-quest "receive" step that hands back a lost Wolfbane. */
+  const WOLFBANE_RETURN_ACTION_ID = "cb-Z4u";
+  const WOLFBANE_ITEM_IDS = [ItemIdentifiers.WOLFBANE, ItemIdentifiers.WOLFBANE_2];
+  const POST_QUEST_DREZEL_VARIANT = "standard-dialogue-after-priest-in-peril";
+  /** Set at "Quest complete!" and cleared by Drezel's blessing: varp 302 shows 60 until then. */
+  const AWAITING_BLESSING_ATTRIBUTE = "priest-in-peril:awaiting-blessing";
   const ESSENCE_REMAINING_BLANK = "[1-50]";
   const ESSENCE_HANDED_ATTRIBUTE = "priest-in-peril:essence-handed-in";
   /** How many times Drezel has blessed water: his "first time" lines follow the first blessing. */
@@ -173,6 +184,23 @@ module.exports = function registerPriestInPerilQuest(api) {
   const HOLY_BARRIER_LANDING = new Location(3423, 3485, 0);
   /** "You use the key to unlock the cell gate." plays this (capture 2026-11-02 tick 11429). */
   const CELL_UNLOCK_SOUND_ID = 2419;
+  // Rev 241 capture 2026-11-02. Drezel's blessings (water tick 11453, the player tick 13629):
+  // heal_casting on the player at height 120, Drezel's human_castentangle and synth 166.
+  const BLESSING_GFX_ID = 84;
+  const BLESSING_GFX_HEIGHT = 120;
+  const BLESSING_SEQ_ID = 710;
+  const BLESSING_SOUND_ID = 166;
+  // Bucket on the well (tick 11068): the player's human_pickuptable and synth 2615.
+  const WELL_FILL_SEQ_ID = 832;
+  const WELL_FILL_SOUND_ID = 2615;
+  // Blessed water on the coffin (tick 11568): throw_bucketofwater, priestperil_coffin_spell on
+  // both coffin tiles 34 cycles on, and synth 1733 30 cycles on.
+  const COFFIN_POUR_SEQ_ID = 1077;
+  const COFFIN_SPELL_GFX_ID = 272;
+  const COFFIN_SPELL_GFX_DELAY = 34;
+  const COFFIN_SPELL_TILES = [new Location(3413, 3486, 2), new Location(3413, 3487, 2)];
+  const COFFIN_POUR_SOUND_ID = 1733;
+  const COFFIN_POUR_SOUND_DELAY = 30;
   /** Drezel's cell spawn is on the temple's top floor; the mausoleum one is underground. */
   const MAUSOLEUM_MIN_Y = 9000;
 
@@ -380,7 +408,7 @@ module.exports = function registerPriestInPerilQuest(api) {
 
   /** The Drezel in the mausoleum takes the essence once the vampyre is sealed. */
   function mausoleumDrezelVariant(stage, player) {
-    if (stage >= STAGE_COMPLETE) return { page: DREZEL_PAGE, variant: "standard-dialogue-after-priest-in-peril" };
+    if (stage >= STAGE_COMPLETE) return { page: DREZEL_PAGE, variant: POST_QUEST_DREZEL_VARIANT };
     if (stage >= STAGE_REPAIRING_BARRIER) {
       // Paid in full: talkToPaidMausoleumDrezel resumes after the hand-in.
       if (essenceAllHandedIn(player)) return FINAL_ESSENCE_VARIANT;
@@ -464,6 +492,32 @@ module.exports = function registerPriestInPerilQuest(api) {
       (steps) => steps.slice(steps.findIndex((step) => step?.id === FINAL_ESSENCE_MESSAGE_ID) + 1), npc);
   }
 
+  /**
+   * Ours (not captured): complete but walked off before the blessing (varp 302 still 60).
+   * Talking to the mausoleum Drezel resumes the final conversation after "Quest complete!".
+   */
+  function talkToUnblessedDrezel(event) {
+    const { player, npc, npcId, clickType } = event;
+    if (npcId !== DREZEL_NPC_ID || clickType !== 1 || !inMausoleum(npc)) return;
+    if (!quest.isComplete(player) || !awaitingBlessing(player)) return;
+    event.handled = startTranscript(api, player, DREZEL_NPC_ID, PAGE, FINAL_ESSENCE_VARIANT,
+      (steps) => steps.slice(steps.findIndex((step) => step?.id === COMPLETE_ACTION_ID) + 1), npc);
+  }
+
+  /**
+   * Drezel's post-quest page (Transcript:Drezel) opens with "If the player has lost their
+   * wolfbane dagger:", but once the quest is done Nature Spirit's variants answer his Talk-to.
+   * Ours (entry point): with the dagger lost, the Talk-to plays his page, whose lost-dagger
+   * branch comes first, so it can be had back before, during and after Nature Spirit.
+   */
+  function talkToDrezelLostWolfbane(event) {
+    const { player, npc, npcId, clickType } = event;
+    if (event.handled || npcId !== DREZEL_NPC_ID || clickType !== 1) return;
+    if (!quest.isComplete(player) || awaitingBlessing(player) || ownsWolfbane(player)) return;
+    event.handled = startTranscript(api, player, DREZEL_NPC_ID, DREZEL_PAGE, POST_QUEST_DREZEL_VARIANT,
+      undefined, npc);
+  }
+
   /** Which transcript variant the speaker plays. */
   function selectVariant({ npcId, npc, player }) {
     const stage = quest.getStage(player);
@@ -475,13 +529,18 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   /** Answer the page's prose conditions. */
-  function answerCondition({ player, text }) {
+  function answerCondition({ player, npcId, text }) {
     const value = String(text).toLowerCase();
     if (value.includes("attempts to use magic spells on the guardian")) return true;
     if (value.includes("doesn't have murky water")) return !held(player, MURKY_WATER_ITEM_ID);
     if (value.includes("has murky water")) return held(player, MURKY_WATER_ITEM_ID);
     // Asked right after the blessing message, so the blessing just given counts.
     if (value.includes("first time blessing water")) return blessings(player) <= 1;
+    if (npcId !== DREZEL_NPC_ID || !quest.isComplete(player)) return null;
+    // Drezel's post-quest page opens with these (see talkToDrezelLostWolfbane).
+    if (value.includes("has lost their wolfbane dagger")) return !ownsWolfbane(player);
+    if (value.includes("inventory isn't full")) return !player.getInventory().isFull();
+    if (value.includes("inventory is full")) return player.getInventory().isFull();
     return null;
   }
 
@@ -491,13 +550,40 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   /** Drezel blesses every bucket of murky water the player carries. */
-  function blessWater(player) {
+  function blessWater(player, npc) {
     const inventory = player.getInventory();
     const amount = inventory.getAmount(MURKY_WATER_ITEM_ID);
     if (amount <= 0) return;
     inventory.deleteNumber(MURKY_WATER_ITEM_ID, amount);
     inventory.adds(BLESSED_WATER_ITEM_ID, amount);
     player.setAttribute(BLESSINGS_ATTRIBUTE, blessings(player) + 1);
+    playBlessing(player, npc);
+  }
+
+  /** Drezel's prayer, for the water and for the player alike (see BLESSING_GFX_ID). */
+  function playBlessing(player, npc) {
+    player.performGraphic(new Graphic(BLESSING_GFX_ID, 0, BLESSING_GFX_HEIGHT));
+    npc?.performAnimation?.(new Animation(BLESSING_SEQ_ID));
+    Sounds.sendSound(player, new Sound(BLESSING_SOUND_ID, 1, 0, 0));
+  }
+
+  function awaitingBlessing(player) {
+    return player.getAttribute(AWAITING_BLESSING_ATTRIBUTE) === true;
+  }
+
+  /** "Drezel blesses you...": varp 302 goes from 60 to 61 (capture 2026-11-02 tick 13629). */
+  function blessPlayer(player, npc) {
+    if (!quest.isComplete(player) || !awaitingBlessing(player)) return;
+    player.setAttribute(AWAITING_BLESSING_ATTRIBUTE, false);
+    player.getPacketSender().sendConfig(VARP_PRIEST_IN_PERIL, wireValue(quest.getStage(player), player));
+    playBlessing(player, npc);
+  }
+
+  /** Wolfbane anywhere the player keeps it: inventory, worn or banked. */
+  function ownsWolfbane(player) {
+    return WOLFBANE_ITEM_IDS.some((itemId) => held(player, itemId)
+      || (player.getEquipment?.()?.getAmount?.(itemId) ?? 0) > 0
+      || inBank(player, itemId));
   }
 
   function blessings(player) {
@@ -515,7 +601,18 @@ module.exports = function registerPriestInPerilQuest(api) {
     }
     if (npcId !== DREZEL_NPC_ID) return;
     if (kind === "message" && stepId === BLESSING_MESSAGE_ID) {
-      if (quest.getStage(player) === STAGE_CELL_UNLOCKED) blessWater(player);
+      if (quest.getStage(player) === STAGE_CELL_UNLOCKED) blessWater(player, event.npc);
+      return;
+    }
+    if (kind === "message" && PLAYER_BLESSING_MESSAGE_IDS.has(stepId)) {
+      blessPlayer(player, event.npc);
+      return;
+    }
+    if (stepId === WOLFBANE_RETURN_ACTION_ID) {
+      if (quest.isComplete(player) && !ownsWolfbane(player) && !player.getInventory().isFull()) {
+        player.getInventory().adds(ItemIdentifiers.WOLFBANE, 1);
+      }
+      event.handled = true;
       return;
     }
     if (kind === "message" && ESSENCE_MESSAGE_IDS.has(stepId)) {
@@ -525,6 +622,8 @@ module.exports = function registerPriestInPerilQuest(api) {
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
     if (quest.getStage(player) === STAGE_REPAIRING_BARRIER && essenceHandedIn(player) >= ESSENCE_REQUIRED) {
+      // Set first, so completing keeps 60; the blessing a few lines on sends 61.
+      player.setAttribute(AWAITING_BLESSING_ATTRIBUTE, true);
       quest.complete(player);
     }
   }
@@ -810,8 +909,12 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (object) api.emitCustomEvent("door:open", { player, object, handled: false });
   }
 
-  /** Live leaves the player outside the cell: the gate is only unlocked (capture 2026-11-02 tick 11429). */
+  /**
+   * Live leaves the player outside the cell: the gate is only unlocked, and the iron key is
+   * used up (capture 2026-11-02 tick 11429 clears its inventory slot).
+   */
   function unlockCellGate(player) {
+    player.getInventory().deleteNumber(IRON_KEY_ITEM_ID, 1);
     quest.setStage(player, STAGE_CELL_UNLOCKED);
     Sounds.sendSound(player, new Sound(CELL_UNLOCK_SOUND_ID, 1, 0, 0));
     playPage(player, UNLOCK_VARIANT);
@@ -870,6 +973,11 @@ module.exports = function registerPriestInPerilQuest(api) {
       player.getInventory().deleteNumber(BLESSED_WATER_ITEM_ID, 1);
       player.getInventory().adds(BUCKET_ITEM_ID, 1);
       quest.setStage(player, STAGE_VAMPYRE_SEALED);
+      player.performAnimation(new Animation(COFFIN_POUR_SEQ_ID));
+      for (const tile of COFFIN_SPELL_TILES) {
+        player.getPacketSender().sendGlobalGraphic(new Graphic(COFFIN_SPELL_GFX_ID, COFFIN_SPELL_GFX_DELAY), tile);
+      }
+      Sounds.sendSound(player, new Sound(COFFIN_POUR_SOUND_ID, 1, COFFIN_POUR_SOUND_DELAY, 0));
       playPage(player, "talking-to-drezel-with-the-iron-key-pouring-blessed-water-on-the-coffin");
       return true;
     }
@@ -902,6 +1010,8 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (itemId !== BUCKET_ITEM_ID || quest.isComplete(player)) return false;
     player.getInventory().deleteNumber(BUCKET_ITEM_ID, 1);
     player.getInventory().adds(MURKY_WATER_ITEM_ID, 1);
+    player.performAnimation(new Animation(WELL_FILL_SEQ_ID));
+    Sounds.sendSound(player, new Sound(WELL_FILL_SOUND_ID, 1, 0, 0));
     playPage(player, "talking-to-drezel-with-the-iron-key-filling-a-bucket-from-the-well");
     return true;
   }
@@ -1045,6 +1155,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.persistAttribute(BLESSINGS_ATTRIBUTE, 0);
   api.persistAttribute(SOUVENIRS_ATTRIBUTE, 0);
   api.persistAttribute(MAUSOLEUM_GATE_UNLOCKED_ATTRIBUTE, false);
+  api.persistAttribute(AWAITING_BLESSING_ATTRIBUTE, false);
 
   api.registerArea(new GuardianRoomArea([GUARDIAN_ROOM]));
   api.onNpcDialogueVariant(selectVariant);
@@ -1062,6 +1173,8 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.registerNpcCombatMethodProvider([...MONK_CASTERS.keys()], MonkOfZamorakCombat, { singleton: false });
   api.onNpcInteraction(talkToUnlockedDrezel);
   api.onNpcInteraction(talkToPaidMausoleumDrezel);
+  api.onNpcInteraction(talkToUnblessedDrezel);
+  api.onNpcInteraction(talkToDrezelLostWolfbane);
   api.onObjectRoute(handleTrapdoorRoute);
   api.onObjectInteraction("Holy barrier", { "Pass-through": handleHolyBarrier });
   api.onObjectInteraction("Cell gate", { Open: openCellGate });

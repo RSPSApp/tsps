@@ -1072,6 +1072,16 @@ function extraRolls(event) {
 }
 
 /**
+ * Answers npc-drops:table-rolls { player, npc, npcId, rolls }: how many times one kill of this NPC rolls
+ * its table (the exported `rolls`, e.g. 3 for a superior Slayer monster), 1 when the table has none.
+ */
+function tableRolls(event) {
+  ensureDropsLoaded?.();
+  const table = tableForNpc(event.npcId, event.player, event.npc);
+  event.rolls = Number.isInteger(table?.rolls) && table.rolls > 1 ? table.rolls : 1;
+}
+
+/**
  * Answers npc-drops:roll-shared { player, table, drops, ringOfWealth }: one roll of a shared table
  * by name ("gem", "rareSeed", "usefulHerb" ...), pushed onto `drops`; an empty slot pushes nothing.
  * For content outside NPC kills that rolls the same tables (sorting salvage). `ringOfWealth: false`
@@ -1210,6 +1220,7 @@ module.exports = {
     };
     ensureDropsLoaded = ensureDrops;
     api.onCustomEvent("npc-drops:extra-rolls", extraRolls);
+    api.onCustomEvent("npc-drops:table-rolls", tableRolls);
     api.onCustomEvent("npc-drops:roll-shared", rollSharedRequest);
 
     // "npc-drops:roll-table" { player, table, drops }: a table outside an NPC's own (a boss's

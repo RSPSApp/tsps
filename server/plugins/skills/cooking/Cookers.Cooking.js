@@ -58,7 +58,7 @@ function availableOnWorld(cookable) {
 
 function cookableFor(itemId) {
   const cookable = Common.cookables().get(itemId) ?? deliberateBurnFor(itemId);
-  return cookable && availableOnWorld(cookable) ? cookable : undefined;
+  return cookable && !cookable.facility && availableOnWorld(cookable) ? cookable : undefined;
 }
 
 // Wiki: cooking a raw karambwan yields a poison karambwan until Tinsay teaches
@@ -283,7 +283,7 @@ function carriedCookables(player, onFire) {
   for (const item of player.getInventory().getItems()) {
     if (!item || Common.core.ItemDefinition.forId(item.getId()).isNoted()) continue;
     const cookable = Common.cookables().get(item.getId());
-    if (cookable && availableOnWorld(cookable)
+    if (cookable && !cookable.facility && availableOnWorld(cookable)
       && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
   }
   return [...found.values()];
@@ -531,7 +531,7 @@ function handleCookClick(event) {
 /** "cooking:cooked": what request.rawId cooks into and the XP, for content that cooks as it gathers (a league relic). */
 function answerCooked(request) {
   const cookable = Common.cookables().get(request.rawId);
-  if (cookable) {
+  if (cookable && !cookable.facility) {
     request.cookedId = cookable.cooked;
     request.xp = cookable.xp;
   }
@@ -540,7 +540,7 @@ function answerCooked(request) {
 /** "cooking:raw-xp": the Cooking XP for cooking request.rawId, e.g. for the infernal harpoon. */
 function answerRawXp(request) {
   const cookable = Common.cookables().get(request.rawId);
-  if (cookable) {
+  if (cookable && !cookable.facility) {
     request.xp = cookable.xp;
   }
 }

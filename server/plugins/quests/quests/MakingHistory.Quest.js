@@ -1,3 +1,4 @@
+const { ownsStoredKey } = require("../../items/KeyAvailability");
 /**
  * Making History (members).
  *
@@ -241,9 +242,9 @@ module.exports = function registerMakingHistoryQuest(api) {
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
   const bankedKey = (player) => (player.getBanks?.() ?? []).some(
-    (bank) => (bank?.getAmount(ENCHANTED_KEY) ?? 0) > 0
+    (bank, tab) => tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && (bank?.getAmount(ENCHANTED_KEY) ?? 0) > 0
   );
-  const ownsKey = (player) => held(player, ENCHANTED_KEY) || bankedKey(player);
+  const ownsKey = (player) => held(player, ENCHANTED_KEY) || bankedKey(player) || ownsStoredKey(api, player, ENCHANTED_KEY);
 
   function freeSlots(player) {
     const inventory = player.getInventory();
@@ -642,8 +643,9 @@ module.exports = function registerMakingHistoryQuest(api) {
       case "hiIg7x":
         return bankedKey(player);
       case "07rNIp":
+        return ownsStoredKey(api, player, ENCHANTED_KEY);
       case "APjFg8":
-        // No steel-key-ring owner or Enchanted Key miniquest exists yet.
+        // Enchanted Key miniquest completion is not implemented.
         return false;
       case "7eJupI":
       case "mNP0yr":

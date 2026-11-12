@@ -203,10 +203,15 @@ function chain(player, npc, lines, then) {
   player.getDialogueManager().startDialogues(builder);
 }
 
-/** The bank tab holding the player's coins, or -1. */
-function bankCoinsTab(player) {
-  const tab = core.Bank.getTabForItem(player, core.ItemIdentifiers.COINS);
-  return Number.isInteger(tab) && tab >= 0 && player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) > 0 ? tab : -1;
+/** Every bank tab but the search tab, which only shows copies of the others' items. */
+function bankTabs(player) {
+  return Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab))
+    .filter((_bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX);
+}
+
+/** The bank's coins in every tab: a coins placeholder holds none, and coins can sit in more than one tab. */
+function bankCoins(player) {
+  return bankTabs(player).reduce((sum, bank) => sum + bank.getAmount(core.ItemIdentifiers.COINS), 0);
 }
 
 /**
@@ -214,9 +219,7 @@ function bankCoinsTab(player) {
  * are in neither. (The recording behind docs/bank.md showed 10M banked coins refused; the Wiki is followed.)
  */
 function availableCoins(player) {
-  const tab = bankCoinsTab(player);
-  const banked = tab >= 0 ? player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) : 0;
-  return player.getInventory().getAmount(core.ItemIdentifiers.COINS) + banked;
+  return player.getInventory().getAmount(core.ItemIdentifiers.COINS) + bankCoins(player);
 }
 
 function choose(player, npc, slots, cost) {
@@ -261,11 +264,14 @@ function purchase(player, count, cost) {
   const fromInventory = Math.min(cost, player.getInventory().getAmount(COINS));
   if (fromInventory > 0) player.getInventory().deleteNumber(COINS, fromInventory);
   player.getInventory().refreshItems();
-  const fromBank = cost - fromInventory;
+  let fromBank = cost - fromInventory;
   if (fromBank > 0) {
-    const tab = bankCoinsTab(player);
-    player.getBank(tab).deleteNumber(COINS, fromBank);
-    if (core.Bank.isOpen?.(player)) player.getBank(player.getCurrentBankTab?.() ?? tab).refreshItems();
+    for (const bank of bankTabs(player)) {
+      const take = Math.min(fromBank, bank.getAmount(COINS));
+      if (take > 0) bank.deleteNumber(COINS, take);
+      fromBank -= take;
+    }
+    if (core.Bank.isOpen?.(player)) player.getBank(player.getCurrentBankTab?.() ?? 0).refreshItems();
   }
   const bought = blocks(player) + count;
   player.setAttribute(BLOCKS_ATTRIBUTE, bought);

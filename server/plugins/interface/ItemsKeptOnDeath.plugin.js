@@ -61,8 +61,15 @@ function graveFee(player, item) {
   return Math.max(0, Number(query.fee) || 0);
 }
 
+/** Destroyed on every unsafe death (NeverKeptOnDeath answers `items:never-kept-on-death`). */
+function neverKept(item) {
+  const query = { item, neverKept: false };
+  pluginApi.emitCustomEvent("items:never-kept-on-death", query);
+  return query.neverKept === true;
+}
+
 function itemState(player, item, lostOnDeath, makesGrave) {
-  if (item.getDefinition().getName() === LOOTING_BAG) return { itemId: DELETED_ITEM_STATE, quantity: 1 };
+  if (item.getDefinition().getName() === LOOTING_BAG || neverKept(item)) return { itemId: DELETED_ITEM_STATE, quantity: 1 };
   if (!lostOnDeath) return { itemId: KEPT_ITEM_STATE, quantity: 1 };
   if (makesGrave) return { itemId: GRAVE_ITEM_STATE, quantity: 1 + graveFee(player, item) };
   return { itemId: LOST_ITEM_STATE, quantity: 1 };

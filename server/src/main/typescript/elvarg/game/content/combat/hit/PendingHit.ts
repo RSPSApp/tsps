@@ -16,6 +16,22 @@ import { resolveSpecialAttackType } from "../WeaponSpecialTraits";
 import type { WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import type { CombatSpell } from "../magic/CombatSpell";
 import { Spell, SpellCastContext } from "../magic/Spell";
+import { Equipment } from "../../../model/container/impl/Equipment";
+import { Ammunition } from "../ranged/RangedData";
+import type { Item } from "../../../model/Item";
+
+/**
+ * What a player's ranged hit was fired with, read when it is rolled. The ammo is paid on the firing tick, so by the
+ * landing the last arrow, bolt or thrown weapon is gone from the slot; what it does on landing (poison, venom) reads
+ * this instead of the worn slots.
+ */
+export interface FiredRangedShot {
+    readonly weapon: Item | null;
+    readonly ammo: Item | null;
+    readonly weaponInterface: any;
+    /** The projectile: the ammo slot's item for a bow or crossbow, else the weapon itself (Ammunition.firesFromAmmoSlot). */
+    readonly projectile: Item | null;
+}
 
 type PendingHitConfig = {
     delay?: number;
@@ -84,6 +100,7 @@ export class PendingHit {
     private incomingDamageDeferred = false;
     /** Index of the `firstSuccessfulAccuracyDamageRanges` branch that landed; -1 when every roll missed. */
     private firstSuccessfulRangeIndex: number | undefined;
+    private firedRangedShot: FiredRangedShot | null = null;
 
     constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean,
         private readonly spellContext: SpellCastContext | null = null) {
@@ -92,6 +109,23 @@ export class PendingHit {
         this.method = method;
         this.combatType = method.type();
         this.protectionType = this.combatType;
+        if (this.combatType === CombatType.RANGED && attacker?.isPlayer?.()) {
+            const player = attacker.getAsPlayer();
+            const equipment = player.getEquipment?.();
+            const copy = (slot: number): Item | null => {
+                const item = equipment?.get?.(slot);
+                return typeof item?.clone === "function" && item.getId() > 0 && item.getAmount?.() > 0 ? item.clone() : null;
+            };
+            // Only a real Equipment is read (stand-in players keep the worn-slot fallback).
+            if (typeof equipment?.getItems === "function") {
+                const weapon = copy(Equipment.WEAPON_SLOT);
+                const ammo = copy(Equipment.AMMUNITION_SLOT);
+                this.firedRangedShot = {
+                    weapon, ammo, weaponInterface: player.getWeapon?.(),
+                    projectile: Ammunition.firesFromAmmoSlot(player) ? ammo : weapon,
+                };
+            }
+        }
 
         let resolvedDelay = 0;
         let resolvedHandleAfterHitEffects = true;
@@ -161,6 +195,11 @@ export class PendingHit {
         }
         this.delay = Math.max(0, resolvedDelay);
         this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
+    }
+
+    /** A player's ranged shot as it was fired (see FiredRangedShot), or null. */
+    public getFiredRangedShot(): FiredRangedShot | null {
+        return this.firedRangedShot;
     }
 
     public getAttacker(): Mobile {

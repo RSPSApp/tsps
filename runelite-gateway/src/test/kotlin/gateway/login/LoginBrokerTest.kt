@@ -21,6 +21,7 @@ class LoginBrokerTest {
     private class Backend : AutoCloseable {
         val packets = LinkedBlockingQueue<TspsReader>()
         val flags = LinkedBlockingQueue<Int>()
+        val forgets = LinkedBlockingQueue<Pair<String, String>>()
         val group = NioEventLoopGroup(1)
         val channel =
             ServerBootstrap()
@@ -45,7 +46,11 @@ class LoginBrokerTest {
                                             // LOGIN is var-short; the normal gateway sends it
                                             // without entering the world.
                                             val reader = TspsReader(bytes)
-                                            reader.u8()
+                                            if (reader.u8() == TspsClientPacket.LOGIN_FORGET) {
+                                                reader.u8()
+                                                forgets.add(reader.string() to reader.string())
+                                                return
+                                            }
                                             reader.u16()
                                             val name = reader.string()
                                             val secret = reader.string()
@@ -90,6 +95,7 @@ class LoginBrokerTest {
         kind: String = "password",
         secret: String = "test-password",
         origin: Boolean = false,
+        ip: String = "127.0.0.1",
     ): List<String> {
         val encoder = Base64.getEncoder()
         val body =
@@ -103,7 +109,7 @@ class LoginBrokerTest {
             java.net.http.HttpRequest.newBuilder(
                     URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
                 )
-                .header("X-Real-IP", "127.0.0.1")
+                .header("X-Real-IP", ip)
                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
         if (origin) request.header("Origin", "https://untrusted.invalid")
         return HttpClient.newHttpClient()
@@ -157,6 +163,21 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `forget account revokes the remembered token on tsps`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                assertEquals(listOf("OK"), request(port, "forget", "c".repeat(43)))
+                assertEquals("Tester" to "c".repeat(43), backend.forgets.poll(5, TimeUnit.SECONDS))
+                assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+                // Only a well-formed token is passed on.
+                assertEquals(listOf("ERROR", "8"), request(port, "forget", "short"))
+                assertNull(backend.forgets.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
     fun `bad credentials and browser origin cannot mint a ticket`() {
         Backend().use { backend ->
             val port = freePort()
@@ -165,6 +186,76 @@ class LoginBrokerTest {
                 assertEquals(1, backend.flags.poll(5, TimeUnit.SECONDS))
                 assertEquals(listOf("ERROR", "8"), request(port, origin = true))
                 assertNull(backend.flags.poll(100, TimeUnit.MILLISECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `a full rate table admits a new address and still limits the busy one`() {
+        Backend().use { backend ->
+            val port = freePort()
+            var now = 1_000L
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { now++ }).use {
+                val client = HttpClient.newHttpClient()
+                fun attempt(ip: String): List<String> =
+                    client
+                        .send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create(
+                                        "http://127.0.0.1:$port/login-utilities/v1/session"
+                                    )
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x\n"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString(),
+                        )
+                        .body()
+                        .trimEnd()
+                        .split('\n')
+                // 2047 one-off addresses plus one at its 20-a-minute limit fill the table.
+                for (i in 0 until 2047) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                repeat(20) { attempt("198.51.100.1") }
+                assertEquals("OK", request(port, ip = "198.51.100.2")[0])
+                assertEquals(listOf("ERROR", "8"), request(port, ip = "198.51.100.1"))
+            }
+        }
+    }
+
+    @Test
+    fun `concurrent new addresses at a full rate table keep it at its cap`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+                fun attempt(ip: String) =
+                    runCatching {
+                        client.send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding(),
+                        )
+                    }
+                for (i in 0 until 2048) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                assertEquals(2048, broker.rateTableSize())
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(16)
+                try {
+                    (0 until 16)
+                        .map { t ->
+                            pool.submit {
+                                for (i in 0 until 150)
+                                    attempt("2001:db8:1:${Integer.toHexString(t)}::${Integer.toHexString(i + 1)}")
+                            }
+                        }
+                        .forEach { it.get(60, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+                assertEquals(2048, broker.rateTableSize())
             }
         }
     }

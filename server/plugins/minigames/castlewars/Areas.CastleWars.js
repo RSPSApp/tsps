@@ -13,12 +13,15 @@ let data;
 
 /**
  * Wiki (Castle Wars, 2013 update): "Your prayer points and other stats are now restored when you leave Castle Wars".
- * Drained skills, Hitpoints and Prayer back to their levels and run energy full, prayers off; a boost stays.
+ * (2015): "Active prayers will now be disabled upon leaving a game of Castle Wars". Runs on leaving a waiting room and
+ * the game. Drained skills, Hitpoints and Prayer back to their resting levels (a permanent boost such as a League one
+ * included, as natural restoration has it) and run energy full, prayers off; a boost stays.
  */
 function restoreStats(player) {
   const skills = player.getSkillManager();
   for (const skill of core.Skill.values()) {
-    if (skills.getCurrentLevel(skill) < skills.getMaxLevel(skill)) skills.setCurrentLevel(skill, skills.getMaxLevel(skill), true);
+    const resting = skills.getRestingLevel(skill);
+    if (skills.getCurrentLevel(skill) < resting) skills.setCurrentLevel(skill, resting, true);
   }
   player.setRunEnergy(100);
   core.PrayerHandler.deactivatePrayers(player);
@@ -164,6 +167,7 @@ function defineAreas() {
       game.dropCarriedFlag(player);
       game.clearCastleWarsItems(player);
       game.clearBraceletEffect(player);
+      restoreStats(player);
       if (logout) {
         game.returnToLobby(player);
       }

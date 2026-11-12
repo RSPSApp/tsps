@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * Haunted Mine (members).
  *
@@ -1058,7 +1059,7 @@ module.exports = function registerHauntedMineQuest(api) {
     if (request.handled) return;
     const { player, objectId, object } = request;
     if (LARGE_DOOR_OBJECT_IDS.has(objectId)) {
-      if (hasCrystalKey(player)) return; // let Doors open the leaf normally
+      if (hasKey(api, player, CRYSTAL_MINE_KEY_ITEM_ID)) return; // let Doors open the leaf normally
       request.handled = true;
       startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_LARGE_DOOR);
       return;

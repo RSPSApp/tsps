@@ -12,7 +12,8 @@ function owns(player, itemId) {
         player.getEquipment().contains(itemId) ||
         player
             .getBanks()
-            .some((b, i) => i !== Common.core.Bank.BANK_SEARCH_TAB_INDEX && b?.contains(itemId))
+            // A bank placeholder keeps the id at amount 0: it owns nothing.
+            .some((b, i) => i !== Common.core.Bank.BANK_SEARCH_TAB_INDEX && b?.getAmount(itemId) > 0)
     );
 }
 function canKit(player) {

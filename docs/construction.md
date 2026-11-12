@@ -164,8 +164,9 @@ give each destination's name, runes, Magic level and alternate). The player's sl
   usual "Really remove it?". The recordings end at the warning, so that order is the generic
   remove flow's, not captured. Confirming Remove, or removing the room the nexus stands in,
   clears the player's slots and left-click destination, so the runes are paid again when a nexus
-  is rebuilt (Wiki, Portal Nexus). Upgrading a tier keeps them (Wiki). Room removal has no
-  capture of a warning, so none is shown.
+  is rebuilt (Wiki, Portal Nexus). Upgrading a tier keeps them (Wiki). Removing the room warns
+  first: "Warning: If you remove this room you will have to pay for your teleports to be used in
+  the nexus again." (recording 2904).
 
 ### Floors
 
@@ -340,12 +341,16 @@ Rsprox captures of picking a room in the room menu (212, rev 229-236):
   1376), Clockwise and Anticlockwise turn it, Done builds it and opens the viewer again, and
   Cancel goes back to the plain viewer.
 
-Either way the room starts turned so one of its doorways meets a neighbour's. Rooms built
+Either way the room starts turned so one of its doorways meets a neighbour's. Build or Done (and
+moving or turning a room in the viewer) closes the menu and puts up the loading screen
+(`poh_loading`, minimap off) with the house style's loading jingle; the house is rebuilt a tick
+later and the screen closes the tick after, when the viewer opens again (captures 2591, 2621,
+3950; 167 of 187 viewer Done clicks). Rooms built
 through a staircase or trapdoor ask Yes/No instead (captures). No room build sends a "You build"
 line.
 
 Refusals (captures, rev 229-235): "You can't afford to build that room." is a chat line on the
-pick; the rest are message boxes: "You can only build 38 rooms with your Construction level."
+pick, and the room list opens again (recordings 2549, 2572); the rest are message boxes: "You can only build 38 rooms with your Construction level."
 (the player's cap), "That room can only be built underground." / "... on ground level.", "You
 can't build a room that would have no room to support it.", "Your house is already the maximum
 length.". A costume room, portal nexus or menagerie the house already has asks "You can only
@@ -362,7 +367,16 @@ can't move it above itself. It would fall down.", "You can't put it above that r
 Build on a door hotspot into a built room, or Delete in the viewer, asks "Remove the parlour?"
 Yes / No (captures, 14 of 16 recordings); Yes says "Room deleted!". The door removes the room on
 the far side from the player. "You can't remove a room that is supporting another room." and
-"Your house must have at least one exit portal." are message boxes.
+"Your house must have at least one exit portal." are message boxes. Yes rebuilds the house behind
+the loading screen, as building does (recording 2575).
+
+A room whose stairs lead to another floor first shows a red warning box, then the question
+(16 recordings, rev 229-230): "Warning: If you remove this room you may be unable to access the
+basement from the ground floor." for a basement room with stairs up (dungeon stairs, the
+oubliette's ladder), "... the basement level." for a ground floor room with stairs down, and
+"... the upper floor from the ground." for an upper floor hall. Not covered: recording 2575
+shows the basement-level warning on a study, which holds no stairs; Remove on stair furniture,
+which on live goes on to removing the room at the other end (recordings 251, 2551, 2864).
 
 ### Building furniture
 

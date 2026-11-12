@@ -29,6 +29,7 @@ const NO_WARNING_ATTRIBUTE = "charting:drink-no-warning";
 const WARNING_SETTING = 455;
 
 const NO_CROWBAR = "You require a crowbar to do that.";
+const NO_ROOM = "You don't have enough inventory space.";
 const WARNING = "This drink has been sealed in a crate for an unknown amount of time. It could do anything to you, good or bad. Are you sure you want to drink it?";
 const CHOICE = "Are you sure you want to drink this?";
 
@@ -105,8 +106,14 @@ function pryOpen(event) {
     itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't take it as you already have one.`);
     return;
   }
+  const bottle = new (common.core().Item)(spot.item, 1);
+  // Ours: a full inventory isn't captured; the crate stays shut, as the other charting rewards do.
+  if (player.getInventory().getAddableAmount(bottle) < 1) {
+    player.sendMessage(NO_ROOM);
+    return;
+  }
   player.getPacketSender().sendSoundEffect(SOUND_PRY, 1, 0);
-  player.getInventory().add(new (common.core().Item)(spot.item, 1), true);
+  player.getInventory().add(bottle, true);
   itemBox(player, spot.item, `You pry open the crate and take a bottle of ${name} to sample.`);
 }
 

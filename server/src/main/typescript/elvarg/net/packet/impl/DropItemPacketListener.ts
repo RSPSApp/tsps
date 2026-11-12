@@ -40,6 +40,9 @@ export class DropItemPacketListener {
     if (player == null || player.getHitpoints() <= 0) {
       return;
     }
+    // As the gear-swap refusal (NetworkBuilder.inventoryAction): nothing drops mid-teleport. A teleport tablet is used
+    // up at the absorb (docs/teleport-tablets.md), so dropping it in the windup teleported and kept the tablet.
+    if (player.isTeleportingReturn?.()) return;
 
     if (interfaceId != Inventory.INTERFACE_ID) {
       return;

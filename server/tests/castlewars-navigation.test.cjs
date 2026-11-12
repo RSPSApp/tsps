@@ -100,6 +100,41 @@ test('insufficient room leaves both hands and the standard unchanged', () => {
   assert.match(p.messages.at(-1), /one free inventory space/);
 });
 
+test('a worn thrown-weapon stack joins its inventory stack, so a full inventory still takes the standard', () => {
+  const p = player();
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.RUNE_KNIFE, 50));
+  p.getInventory().setItem(0, new core.Item(core.ItemIdentifiers.RUNE_KNIFE, 100));
+  for (let i = 1; i < 28; i++) p.getInventory().setItem(i, new core.Item(core.ItemIdentifiers.BANDAGES, 1));
+  clickFlag(p, game.TEAM.ZAMORAK);
+  assert.equal(game.getCarriedFlagTeam(p), game.TEAM.ZAMORAK, 'the standard is taken');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.RUNE_KNIFE), 150, 'the knives joined the stack');
+  assert.equal(p.getInventory().getFreeSlots(), 0);
+
+  // A stack at the cap has no room: nothing moves.
+  const capped = player();
+  capped.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.RUNE_KNIFE, 50));
+  capped.getInventory().setItem(0, new core.Item(core.ItemIdentifiers.RUNE_KNIFE, 0x7fffffff));
+  for (let i = 1; i < 28; i++) capped.getInventory().setItem(i, new core.Item(core.ItemIdentifiers.BANDAGES, 1));
+  game.restoreFlagToBase(game.TEAM.ZAMORAK);
+  clickFlag(capped, game.TEAM.ZAMORAK);
+  assert.equal(game.getCarriedFlagTeam(capped), null, 'no standard over a capped stack');
+  assert.equal(game.flagStatus[game.TEAM.ZAMORAK], 0);
+  assert.equal(capped.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getAmount(), 50, 'the knives stay worn');
+});
+
+test('stowing gear for the standard runs the normal unequip, so a can-unequip veto keeps the gear and the stand', (t) => {
+  const p = player();
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.RUNE_SCIMITAR, 1));
+  const vetoed = [];
+  t.mock.method(PluginManager, 'emitCanUnequip', (who, slot) => { vetoed.push(slot); return false; });
+  clickFlag(p, game.TEAM.ZAMORAK);
+  assert.deepEqual(vetoed, [core.Equipment.WEAPON_SLOT], 'the unequip hooks were asked');
+  assert.equal(game.flagStatus[game.TEAM.ZAMORAK], 0, 'the standard stays on its stand');
+  assert.equal(game.getCarriedFlagTeam(p), null);
+  assert.equal(p.getEquipment().getSlot(core.Equipment.WEAPON_SLOT), core.ItemIdentifiers.RUNE_SCIMITAR);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.RUNE_SCIMITAR), 0);
+});
+
 test('the own standard returns immediately inside either castle, including a tunnel landing', () => {
   for (const [team, outside, inside] of [
     [game.TEAM.SARADOMIN, [2426, 3088, 0], [2426, 3087, 0]],

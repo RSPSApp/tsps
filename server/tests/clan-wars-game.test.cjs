@@ -3309,3 +3309,37 @@ test('native Falador depleted tree teardown before delay preserves reused slot, 
     if(core.World.getObjects().includes(worldTree))core.ObjectManager.deregister(worldTree,true);replacement?.destroy();
   }
 });
+
+test('Magic Disabled refuses Lunar spells on oneself and teammates in staging and battle; outside a match they work', async () => {
+  const { EffectSpells } = require('../dist/game/content/combat/magic/EffectSpells');
+  const { LunarSpells } = require('../dist/game/content/combat/magic/LunarSpells');
+  const I = core.ItemIdentifiers;
+  const lunar = (p) => {
+    ruleStats(p); p.setSpellbook(core.MagicSpellbook.LUNAR);
+    for (const id of [I.ASTRAL_RUNE, I.DEATH_RUNE, I.EARTH_RUNE, I.BLOOD_RUNE, I.LAW_RUNE]) p.getInventory().add(new core.Item(id, 100), false);
+  };
+  const a = actor(), teammate = actor(), b = actor(); channel(a, [teammate]); channel(b);
+  const game = await negotiate(a, b);
+  assert.equal(game.rules.magic, 4, 'the offered terms are Magic: Disabled (enum_917)');
+  await join(a); await join(teammate); await join(b);
+  for (const p of [a, teammate]) lunar(p);
+  const lines = messagesOf(a);
+  const astral = () => a.getInventory().getAmount(I.ASTRAL_RUNE);
+  assert.equal(game.phase, 'staging');
+  assert.equal(EffectSpells.handleSpell(a, EffectSpells.VENGEANCE.spellId()), true);
+  assert.equal(a.hasVengeanceReturn(), false, 'no Vengeance cast in staging');
+  assert.equal(astral(), 100, 'no runes paid');
+  assert.equal(lines.at(-1), 'Magic is disabled in this Clan Wars battle.');
+  core.World.processCycle = game.starts; game.tick();
+  assert.equal(game.phase, 'combat');
+  teammate.setHitpoints(40);
+  assert.equal(LunarSpells.handlePlayerTarget(a, teammate, 'Vengeance Other'), true);
+  assert.equal(teammate.hasVengeanceReturn(), false, 'no Vengeance Other on a teammate');
+  assert.equal(LunarSpells.handlePlayerTarget(a, teammate, 'Heal Other'), true);
+  assert.equal(teammate.getHitpoints(), 40, 'no Heal Other on a teammate');
+  assert.equal(astral(), 100, 'still no runes paid');
+  // A Lunar caster outside any match is unaffected.
+  const outsider = actor(); lunar(outsider);
+  assert.equal(EffectSpells.handleSpell(outsider, EffectSpells.VENGEANCE.spellId()), true);
+  assert.equal(outsider.hasVengeanceReturn(), true, 'Vengeance works outside Clan Wars');
+});

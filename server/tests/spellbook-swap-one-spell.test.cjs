@@ -74,3 +74,25 @@ test("a cast whose runes a weapon saves still ends the swap", (t) => {
   assert.equal(strike.canCast(f.p, true), true);
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR, "a saved cast is still the one spell");
 });
+
+test("a save taken during the swap keeps the Lunar book, not the swapped one", (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const f = swapper(t);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 2);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.NORMAL, "swapped to the standard book");
+  const strike = core.CombatSpells.WIND_STRIKE.getSpell();
+  f.p.getCombat().setAutocastSpell(strike);
+  const save = PlayerSave.fromPlayer(f.p);
+  assert.equal(save.getSpellBook(), core.MagicSpellbook.LUNAR, "logging out mid-swap returns to Lunar");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.NORMAL, "the live swap is untouched until it ends");
+  assert.equal(f.p.getCombat().getAutocastSpell(), strike);
+  const back = swapper(t).p;
+  back.setSpellbook(core.MagicSpellbook.NORMAL);
+  save.applyToPlayer(back);
+  assert.equal(back.getSpellbook(), core.MagicSpellbook.LUNAR, "the reloaded character is on Lunar");
+  assert.equal(back.getCombat().getAutocastSpell(), null, "no standard autocast left on the Lunar book");
+  LunarSpells.handleSelf(f.p, "spellbook swap", 2);
+  Spell.endSpellbookSwap(f.p);
+  f.p.setSpellbook(core.MagicSpellbook.NORMAL);
+  assert.equal(PlayerSave.fromPlayer(f.p).getSpellBook(), core.MagicSpellbook.NORMAL, "with no swap the live book is saved");
+});

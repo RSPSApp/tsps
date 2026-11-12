@@ -105,7 +105,8 @@ function stageOf(itemId) {
 
 /**
  * The stage of a worn quiver. Dizana's max cape "retains the perks of the blessed Dizana's
- * quiver" (Wiki), so it is one while worn; its death rules stay with broken-items.json.
+ * quiver" (Wiki), so it is one while worn; the cape's own death rules stay with broken-items.json, its stored
+ * ammo's with maxCapeDeathAmmo.
  */
 function wornStageOf(itemId) {
   const I = itemIdentifiers();
@@ -637,9 +638,34 @@ function clearQuiverState(player, item) {
   store(player, null);
 }
 
+/**
+ * Dizana's max cape holds the quiver's ammo while worn, and its Wilderness death keeps the quiver's ammo rule (Wiki,
+ * Dizana's quiver: locking applies to "its max cape variant" too): up to level 20, or unlocked above it, the ammo
+ * drops where the player died; a locked cape above 20 loses it. The cape itself breaks by broken-items.json, which
+ * on a PvP death can change or destroy it before this plugin's death hook sees it, so that death comes through
+ * `broken-items:pvp-death`; other Wilderness deaths (to an NPC) through deathItemDrop.
+ */
+function maxCapeDeathAmmo(event) {
+  const { player, item } = event;
+  const I = itemIdentifiers();
+  if (item?.getId?.() !== I.DIZANAS_MAX_CAPE && item?.getId?.() !== I.DIZANAS_MAX_CAPE_L_) return;
+  const locked = item.getId() === I.DIZANAS_MAX_CAPE_L_;
+  const level = wildernessLevel(player);
+  const ammo = stored(player);
+  if (level <= 0 || !ammo || event.shouldDropItems === false) return;
+  if (event.location && (level <= 20 || !locked)) {
+    const { Item, ItemOnGroundManager } = core();
+    ItemOnGroundManager.registerLocation(PlayerDeathTask.lootOwner(player, event.killer), new Item(ammo.id, ammo.amount), event.location);
+  }
+  store(player, null);
+}
+
 function deathItemDrop(event) {
   const { player, item } = event;
-  if (!stageOf(item?.getId?.())) return;
+  if (!stageOf(item?.getId?.())) {
+    maxCapeDeathAmmo(event);
+    return;
+  }
   const level = wildernessLevel(player);
   if (level <= 0) return;
   const ammo = stored(player);
@@ -698,6 +724,7 @@ module.exports = {
     api.onCombatHitResolved(spendCharge);
     api.onShouldKeepItemOnDeath(shouldKeepQuiver);
     api.onPlayerDeathItemDrop(deathItemDrop);
+    api.onCustomEvent("broken-items:pvp-death", maxCapeDeathAmmo);
     api.registerCustomInterface(buildOpenInterface());
     for (const quiver of QUIVER_NAMES) {
       api.onItemAction(quiver, { Open: openQuiver, Empty: emptyQuiver, Uncharge: uncharge });

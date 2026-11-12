@@ -161,7 +161,7 @@ function bankStorageOp(event) {
         if (!stored[key]) delete stored[key];
     }
     container.setMetaValue("farming:stored", stored);
-    if (seeds && Object.keys(stored).length === 0 && initial) player.sendMessage("Your seed box is now empty.");
+    if (seeds && Object.keys(stored).length === 0 && initial) Patches.spam(player, "Your seed box is now empty."); // spam, as recorded
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
 }
@@ -295,10 +295,11 @@ function storagePair(event) {
     const id = (container === a ? b : a).getId();
     const stored = storeCrop(event.player, container, id, inventory.getAmount(id));
     if (stored) inventory.deleteNumber(id, stored);
-    if (stored && containerKind(container) === "seed") event.player.sendMessage(storedLine(id, stored));
+    if (stored && containerKind(container) === "seed") Patches.spam(event.player, storedLine(id, stored));
     else if (!stored) event.player.sendMessage(containerKind(container) === "seed" && isSeed(id) ? NO_SEED_ROOM : "There is no room for that in this container.");
 }
-// Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines.
+// Captures 960, 982, 3883, 3906: Fill and a seed used on the box answer in these lines. The
+// Stored, Emptied and "now empty" lines are spam (every recorded one); the refusals are game messages.
 const NO_SEED_ROOM = "You don't have space in your seed box for that.";
 const NO_SEEDS = "You have no seeds that will fit in the seed box.";
 const displayName = id => core.CacheDefinitions.getItem(id).name;
@@ -320,7 +321,7 @@ function storageAction(event) {
             if (!amount) continue;
             inventory.deleteNumber(id, amount);
             any = true;
-            if (kind === "seed") event.player.sendMessage(storedLine(id, amount));
+            if (kind === "seed") Patches.spam(event.player, storedLine(id, amount));
         }
         if (kind === "seed" && !any) event.player.sendMessage(refused ? NO_SEED_ROOM : NO_SEEDS);
     } else if (kind === "seed" && action === "check") {
@@ -333,7 +334,7 @@ function storageAction(event) {
             if (amount && Patches.give(event.player, +id, amount)) {
                 stored[id] -= amount;
                 if (!stored[id]) delete stored[id];
-                if (kind === "seed") event.player.sendMessage(`Emptied ${amount} x ${displayName(+id)} to your inventory.`);
+                if (kind === "seed") Patches.spam(event.player, `Emptied ${amount} x ${displayName(+id)} to your inventory.`);
             }
         }
     }

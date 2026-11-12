@@ -24,7 +24,12 @@ before(async () => {
 const STORED = 'farming:stored';
 function fixture(t, { box = 'Open seed box', stored = {}, seeds = {}, fillers = 0 } = {}) {
     const player = new Player(null), calls = [], messages = [];
-    const sender = new Proxy({}, { get: (_, name) => (...args) => { calls.push([name, ...args]); return sender; } });
+    // Spam lines (sendTypedMessage SPAM) are listed as "spam:<text>", game messages as they are.
+    const sender = new Proxy({}, { get: (_, name) => (...args) => {
+        calls.push([name, ...args]);
+        if (name === 'sendTypedMessage') messages.push(args[0] === core.ChatType.SPAM ? `spam:${args[1]}` : args[1]);
+        return sender;
+    } });
     sender.isSubInterfaceOpen = () => calls.some(call => call[0] === 'sendSubInterface');
     player.getPacketSender = () => sender;
     player.sendMessage = text => messages.push(text);
@@ -45,7 +50,7 @@ function fixture(t, { box = 'Open seed box', stored = {}, seeds = {}, fillers = 
 test('Fill stores each seed kind with a "Stored N x Seed in your seed box." line', t => {
     const f = fixture(t, { seeds: { 'Irit seed': 3, 'Kwuarm seed': 2 } });
     f.action('Fill');
-    assert.deepEqual(f.messages, ['Stored 3 x Irit seed in your seed box.', 'Stored 2 x Kwuarm seed in your seed box.']);
+    assert.deepEqual(f.messages, ['spam:Stored 3 x Irit seed in your seed box.', 'spam:Stored 2 x Kwuarm seed in your seed box.']);
     assert.deepEqual(f.contents(), { 'Irit seed': 3, 'Kwuarm seed': 2 });
 });
 test('Fill with no seed to store says so, and with every kind slot taken says there is no space', t => {
@@ -59,14 +64,14 @@ test('Fill with no seed to store says so, and with every kind slot taken says th
 test('Empty returns each kind with an "Emptied N x Seed to your inventory." line', t => {
     const f = fixture(t, { stored: { 'Irit seed': 3 } });
     f.action('Empty');
-    assert.deepEqual(f.messages, ['Emptied 3 x Irit seed to your inventory.']);
+    assert.deepEqual(f.messages, ['spam:Emptied 3 x Irit seed to your inventory.']);
     assert.equal(f.inventory.getAmount(Data.itemId('Irit seed')), 3);
 });
 test('a seed used on the box says what was stored, or that there is no space', t => {
     const f = fixture(t, { seeds: { 'Snapdragon seed': 2 } });
     const used = f.inventory.forSlot(1);
     Guild.storagePair({ player: f.player, usedItemId: f.id, usedItemSlot: 0, usedWithItemId: used.getId(), usedWithItemSlot: 1 });
-    assert.deepEqual(f.messages, ['Stored 2 x Snapdragon seed in your seed box.']);
+    assert.deepEqual(f.messages, ['spam:Stored 2 x Snapdragon seed in your seed box.']);
     const full = fixture(t, { stored: { 'Irit seed': 1, 'Kwuarm seed': 1, 'Toadflax seed': 1, 'Avantoe seed': 1, 'Snapdragon seed': 1, 'Cadantine seed': 1 }, seeds: { 'Torstol seed': 1 } });
     Guild.storagePair({ player: full.player, usedItemId: full.id, usedItemSlot: 0, usedWithItemId: full.inventory.forSlot(1).getId(), usedWithItemSlot: 1 });
     assert.deepEqual(full.messages, ["You don't have space in your seed box for that."]);
@@ -94,14 +99,14 @@ test('the window withdraws 1, 3, 4 or all of a kind, examines on op 10 and Close
     f.click(5, 1, 'Kwuarm seed');
     assert.equal(f.inventory.getAmount(Data.itemId('Kwuarm seed')), 5);
     f.click(10, 0, 'Irit seed');
-    assert.deepEqual(f.messages, ['Emptied 1 x Irit seed to your inventory.', 'Emptied 3 x Irit seed to your inventory.', 'Emptied 4 x Irit seed to your inventory.',
-        'Emptied 5 x Kwuarm seed to your inventory.', core.CacheDefinitions.getItem(Data.itemId('Irit seed')).examine]);
+    assert.deepEqual(f.messages, ['spam:Emptied 1 x Irit seed to your inventory.', 'spam:Emptied 3 x Irit seed to your inventory.', 'spam:Emptied 4 x Irit seed to your inventory.',
+        'spam:Emptied 5 x Kwuarm seed to your inventory.', core.CacheDefinitions.getItem(Data.itemId('Irit seed')).examine]);
     assert.deepEqual(f.contents(), { 'Irit seed': 12 });
     f.messages.length = 0;
     f.click(1, undefined, undefined, 'close_button');
     assert.ok(f.calls.some(call => call[0] === 'sendInterfaceRemoval'));
     core.PluginManager.emitCustomEvent('interface:closed', { player: f.player, interfaceId: core.CacheDefinitions.getInterfaceId('hosidius_seedbox') });
-    assert.deepEqual(f.messages, ['The seed box contains:', '12 x Irit seed.']);
+    assert.deepEqual(f.messages, ['spam:The seed box contains:', 'spam:12 x Irit seed.']);
 });
 test('native bank Empty reports the box empty, or that it already was', t => {
     const f = fixture(t, { stored: { 'Irit seed': 3 } });
@@ -109,7 +114,7 @@ test('native bank Empty reports the box empty, or that it already was', t => {
     f.player.setCurrentBankTab(0);
     const empty = () => Guild.bankStorageOp({ player: f.player, slot: 0, op: 9, item: f.container, handled: false });
     empty();
-    assert.deepEqual(f.messages, ['Your seed box is now empty.']);
+    assert.deepEqual(f.messages, ['spam:Your seed box is now empty.']);
     f.messages.length = 0;
     empty();
     assert.deepEqual(f.messages, ['Your seed box is already empty.']);

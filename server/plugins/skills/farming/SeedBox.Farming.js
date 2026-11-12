@@ -47,13 +47,17 @@ function open(player, box) {
         ...AMOUNTS.map(n => `Withdraw ${n}`), "Withdraw X", "Withdraw All"]);
 }
 /** Closed by any route (its Close button, Esc, walking away): the contents are listed, then the window is gone. */
+function spam(player, text) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
+}
 function closed({ player, interfaceId }) {
     const session = SESSIONS.get(player);
     if (!session || interfaceId !== group()) return;
     SESSIONS.delete(player);
     player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId("busy"), 0);
-    player.sendMessage("The seed box contains:");
-    for (const [id, count] of slotsOf(session.box)) player.sendMessage(`${count} x ${nameOf(id)}.`);
+    // Spam, as every recorded close lists them (e.g. "The seed box contains:", "8 x Poison ivy seed.").
+    spam(player, "The seed box contains:");
+    for (const [id, count] of slotsOf(session.box)) spam(player, `${count} x ${nameOf(id)}.`);
 }
 function withdraw(player, session, id, requested) {
     const stored = session.box.getMetaValue(STORED_META) ?? {}, inventory = player.getInventory();
@@ -65,7 +69,7 @@ function withdraw(player, session, id, requested) {
     stored[id] -= amount;
     if (!stored[id]) delete stored[id];
     session.box.setMetaValue(STORED_META, stored);
-    player.sendMessage(`Emptied ${amount} x ${nameOf(id)} to your inventory.`);
+    spam(player, `Emptied ${amount} x ${nameOf(id)} to your inventory.`);
     inventory.refreshItems();
     sync(player, session.box);
 }

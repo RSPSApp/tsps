@@ -1241,7 +1241,7 @@ export interface PluginApi {
     handler: (event: PluginInterfaceActionClickEvent) => void | boolean
   ): void;
   /**
-   * While the player is locked (a teleport, a forced move, an agility obstacle: Player.isLocked), a click on
+   * While the player is locked (a teleport's cast, an agility obstacle: Player.isLocked), a click on
    * one of these buttons answers "Please finish what you are doing first." and reaches no handler.
    */
   refuseWhileBusy(buttonIds: number | number[]): void;

@@ -98,7 +98,7 @@ test("a busy-refusing button tells a locked player to finish first and runs no h
   assert.deepEqual(opened, [other, button]);
 });
 
-test("a player is locked by a teleport, a forced move or an agility obstacle, not by other movement holds", () => {
+test("a player is locked by a teleport or an agility obstacle, not by other holds", () => {
   const state = (overrides) => ({
     isTeleportingReturn: () => false,
     forceMovement: null,
@@ -108,9 +108,9 @@ test("a player is locked by a teleport, a forced move or an agility obstacle, no
     ...overrides,
   });
   const isLocked = (overrides) => Player.prototype.isLocked.call(state(overrides));
-  // Blocked movement alone (a freeze, a boss's stun, a cutscene) is not a lock.
+  // Blocked movement (a freeze, a boss's stun, a cutscene) and a forced move alone are not locks.
   assert.equal(isLocked({}), false);
+  assert.equal(isLocked({ forceMovement: {} }), false);
   assert.equal(isLocked({ isTeleportingReturn: () => true }), true);
-  assert.equal(isLocked({ forceMovement: {} }), true);
   assert.equal(isLocked({ attributes: { "agility.obstacle": {} } }), true);
 });

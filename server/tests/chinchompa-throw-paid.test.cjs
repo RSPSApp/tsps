@@ -68,3 +68,43 @@ test("throws given back on top of a kept throw (ranged:ammo-saving extra) join t
   land();
   assert.equal(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getAmount(), 102, "kept, and two more");
 });
+
+/** One swing as Combat.attack runs it (start, hits, finished), the first hit forced accurate, in multicombat. */
+function swing(t, p, target, bystander) {
+  const method = core.CombatFactory.getMethod(p);
+  const seen = [];
+  const emit = PM.emitCombatHitDamage;
+  t.mock.method(PM, "emitCombatHitDamage", (event) => {
+    seen.push(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId());
+    return emit.call(PM, event);
+  });
+  t.mock.method(core.PendingHit.prototype, "isAccurate", () => true);
+  t.mock.method(core.CombatFactory, "multiCombatBetween", () => true);
+  t.mock.method(core.CombatFactory, "canAttackSecondaryTarget", (_a, _t, candidate) => candidate === bystander);
+  t.mock.method(p, "getLocalNpcs", () => new Map([[1, bystander]]));
+  method.start(p, target);
+  const hits = method.hits(p, target);
+  method.finished(p, target);
+  t.mock.restoreAll();
+  return { hits, seen };
+}
+
+test("the last chinchompa is still in the hand while its throw is rolled, and gone right after", (t) => {
+  const at = (x) => new core.Location(x, 3218, 0);
+  const result = (amount) => {
+    const p = thrower(t);
+    p.setLocation(at(3222));
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.RED_CHINCHOMPA_2, amount));
+    core.WeaponInterfaceManager.assign(p);
+    const target = core.NPC.create(core.NpcIdentifiers.MAN, at(3227)); // 5 tiles
+    const bystander = core.NPC.create(core.NpcIdentifiers.MAN, at(3228));
+    return { p, ...swing(t, p, target, bystander) };
+  };
+  const two = result(2);
+  const last = result(1);
+  assert.ok(last.seen.length > 0 && last.seen.every((id) => id === I.RED_CHINCHOMPA_2), `rolled with the chinchompa in hand: ${last.seen}`);
+  assert.equal(last.hits[0].getDelay(), two.hits[0].getDelay(), "the last throw lands as any other throw does");
+  assert.equal(last.hits.length, 2, "and still blasts the bystander");
+  assert.equal(last.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), -1, "paid on the throw's tick");
+  assert.equal(two.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getAmount(), 1);
+});

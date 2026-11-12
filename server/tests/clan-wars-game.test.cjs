@@ -127,7 +127,7 @@ async function negotiate(a, b, cap = null, mode = 0) {
   assert.ok(game, 'native reciprocal challenge and confirmations create the match');
   return game;
 }
-async function join(p) {
+async function join(p, confirm = true) {
   // The actual cache portal goes through production object dispatch; no synthetic loc.
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const id = core.CacheDefinitions.getLocId('clanwars_portal');
@@ -140,7 +140,7 @@ async function join(p) {
   new ObjectActionPacketListener().executeAction(p, portal.getId(), portal.getLocation().getX(), portal.getLocation().getY(), 1);
   tick(15);
   assert.equal(p.getInterfaceId(), C.group('clanwars_confirm'));
-  await click(p, 'clanwars_confirm:button');
+  if (confirm) await click(p, 'clanwars_confirm:button');
 }
 
 test('native challenge revalidates captain rank and modal close cancels both offers', async () => {
@@ -457,7 +457,7 @@ test('native kill-target negotiation preserves cap, invalidates acceptance and r
   assert.equal(session.accepted.size, 0);
   await click(a, 'clanwars_setup:accept'); assert.equal(session.accepted.has(a), false);
   tick(9);
-  for (const forged of [1, 2, 27, 48, 69, 65535]) {
+  for (const forged of [1, 2, 27, 45, 63, 69, 65535]) {
     await click(a, 'clanwars_setup:wincondition', forged);
     assert.equal(session.rules.wincondition, 1, 'non-row and deferred mode selections cannot alter the offer');
   }
@@ -628,3 +628,196 @@ for (const mode of [0, 1]) {
     });
   }
 }
+
+// Observe the actual sender arguments while still emitting the production packet.
+// This establishes server-sent native script data, not rendered-client output.
+function scriptCalls(player) {
+  const sender = player.getPacketSender(), original = sender.sendClientScript;
+  const calls = [];
+  sender.sendClientScript = function (id, ...args) {
+    calls.push([id, ...args]);
+    return original.call(this, id, ...args);
+  };
+  return calls;
+}
+function timer(player) {
+  return player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_timeremaining'));
+}
+function lobby(player) {
+  assert.equal(C.matches.has(player), false);
+  assert.equal(player.getPrivateArea(), null);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], C.RETURN);
+  assert.equal(timer(player), 0, 'cleanup clears the native battle timer');
+}
+
+for (const [mode, duration] of [[16,500], [17,1000], [18,2000], [19,6000], [20,12000]]) {
+  test(`native timed mode ${mode} negotiates its sourced duration and pauses during preparation`, async () => {
+    const a = actor(), b = actor(); channel(a); channel(b);
+    const scripts = scriptCalls(a);
+    const game = await negotiate(a, b, 1, mode);
+    assert.equal(game.rules.wincondition, mode);
+    assert.equal(game.rules.playercap, 1, 'mode selection preserves the negotiated 1v1 cap');
+    assert.ok(scripts.some(([id, stage, text]) => id === 554 && stage === 0
+      && text.includes(`Most kills in ${duration / 100} minutes on Plateau`)),
+      'native captain confirmation receives the chosen time limit');
+    await join(a); await join(b);
+    assert.equal(timer(a), duration); assert.equal(timer(b), duration);
+    tick(3);
+    assert.equal(game.phase, 'staging');
+    assert.equal(game.ends, null, 'no battle deadline runs behind the preparation wall');
+    assert.equal(timer(a), duration, 'preparation does not consume the selected battle time');
+    core.World.processCycle = game.starts - 1; tick();
+    assert.equal(game.phase, 'combat');
+    assert.equal(game.ends, game.starts + duration);
+    assert.equal(timer(a), duration);
+    tick(); assert.equal(timer(a), duration - 1);
+  });
+}
+
+test('five-minute Most kills plays real respawns through the deadline, late entry and a second untimed match', async () => {
+  const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+  const aScripts = scriptCalls(a), bScripts = scriptCalls(b);
+  const game = await negotiate(a, b, 2, 16); await join(a); await join(b);
+  const side = game.members.get(a);
+  b.getInventory().add(new core.Item(995, 37, { qa: 'timed-retain' }), false);
+  core.World.processCycle = game.starts - 1; tick();
+  const started = C.now(); assert.equal(game.ends - started, 500);
+  await lethalMelee(a, b, game); tick(4);
+  assert.equal(game.phase, 'combat'); assert.equal(game.jailed.has(b), true);
+  assert.equal(b.getInventory().getAmount(995), 37);
+  assert.deepEqual(b.getInventory().getValidItems().find(item => item.getId() === 995).getMeta(), { qa: 'timed-retain' });
+  await jailExit(b, game);
+  await lethalMelee(b, a, game); tick(4); await jailExit(a, game);
+  await lethalMelee(a, b, game); tick(4); await jailExit(b, game);
+  const expected = [0, 0]; expected[side] = 2; expected[1 - side] = 1;
+  assert.deepEqual(game.kills, expected);
+  await join(extra);
+  assert.equal(C.matches.get(extra), game, 'ordinary purple-portal late entry is supported');
+  assert.equal(timer(extra), game.ends - C.now(), 'late entrant sees the remaining time');
+  assert.equal(extra.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`clanwars_kills_${side + 1}`)), 2);
+  assert.equal(game.area.canAttack(a, b, CombatFactory.MELEE_COMBAT), true);
+  assert.equal(game.area.canAttack(a, b, { type: () => core.CombatType.MAGIC }), false);
+  assert.equal(game.area.canAttack(a, extra, CombatFactory.MELEE_COMBAT), false);
+  assert.ok(game.ends - C.now() > 1);
+  tick(game.ends - C.now() - 1);
+  assert.equal(game.phase, 'combat'); assert.equal(timer(a), 1);
+  tick();
+  assert.equal(C.now() - started, 500, 'all 500 combat ticks elapse before the time-limit result');
+  assert.equal(game.phase, 'over'); assert.deepEqual(game.kills, expected);
+  assert.deepEqual(aScripts.filter(([id]) => id === 592).at(-1), [592, 1, 'Your team won the battle.']);
+  assert.deepEqual(bScripts.filter(([id]) => id === 592).at(-1), [592, 0, 'Your team lost the battle.']);
+  for (const p of [a, b, extra]) { lobby(p); p.getPacketSender().sendInterfaceRemoval(); }
+  assert.equal(C.channelGames.size, 0); assert.equal(Match.dying.size, 0);
+  tick();
+  for (const p of [a, b]) assert.equal(p.isNeedsPlacement(), false);
+  const second = await negotiate(a, b, 1, 0); await join(a); await join(b);
+  assert.notEqual(second, game); assert.equal(second.ends, null);
+  assert.deepEqual(second.kills, [0, 0]); assert.equal(timer(a), 0); assert.equal(timer(b), 0);
+  core.World.processCycle = second.starts - 1; tick();
+  assert.equal(second.phase, 'combat'); assert.equal(timer(a), 0);
+});
+
+test('timed equal-score battle ends without a winner on the native result interface', async () => {
+  const a = actor(), b = actor(), late = actor(); channel(a); channel(b, [late]);
+  const aScripts = scriptCalls(a), bScripts = scriptCalls(b);
+  const game = await negotiate(a, b, 1, 16); await join(a); await join(b);
+  core.World.processCycle = game.starts - 1; tick();
+  await lethalMelee(a, b, game); tick(4); await jailExit(b, game);
+  await lethalMelee(b, a, game); tick(4); await jailExit(a, game);
+  assert.deepEqual(game.kills, [1, 1]);
+  await join(late, false);
+  assert.equal(late.getInterfaceId(), C.group('clanwars_confirm'));
+  tick(game.ends - C.now());
+  assert.equal(game.phase, 'over');
+  for (const scripts of [aScripts, bScripts]) {
+    assert.deepEqual(scripts.filter(([id]) => id === 592).at(-1), [592, 0, 'The battle ended without a winner.']);
+  }
+  lobby(a); lobby(b);
+  assert.equal(C.matches.has(late), false);
+  assert.notEqual(late.getInterfaceId(), C.group('clanwars_confirm'), 'expiry closes pending outsider confirmations');
+});
+
+test('exact-deadline channel leave cannot change the result and queued real deaths remain safe', async () => {
+  const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+  const scripts = scriptCalls(a);
+  const game = await negotiate(a, b, 2, 16); await join(a); await join(extra); await join(b);
+  core.World.processCycle = game.starts - 1; tick();
+  const side = game.members.get(a);
+  // A checkpoint isolates ordering at the exact deadline; the full match above earns its scores.
+  game.kills[side] = 2; game.kills[1 - side] = 1;
+  core.World.processCycle = game.ends - 1;
+  for (const p of [extra, b]) {
+    for (const id of [4151, 1127, 1079, 1163, 1201, 995]) {
+      p.getInventory().add(new core.Item(id, id === 995 ? 77 : 1, { qa: `deadline-${id}` }), false);
+    }
+    p.getCombat().addDamage(p === b ? a : b, 10);
+    p.setHitpoints(0);
+    assert.equal(p.isDyingReturn(), true);
+    assert.equal(Match.dying.has(p), false);
+  }
+  const scores = game.kills.slice();
+  core.World.processCycle = game.ends;
+  FC.leave(a, false);
+  assert.equal(game.phase, 'over', 'ordinary channel event resolves the expired battle before its penalty');
+  assert.deepEqual(game.kills, scores, 'a deadline penalty cannot turn the earned win into a tie');
+  assert.deepEqual(scripts.filter(([id]) => id === 592).at(-1), [592, 1, 'Your team won the battle.']);
+  for (const p of [extra, b]) {
+    assert.equal(Match.dying.has(p), true);
+    assert.equal(PM.emitShouldDropItemsOnDeath(p, a), false);
+  }
+  tick(6);
+  for (const p of [extra, b]) {
+    assert.deepEqual(p.getInventory().getValidItems().map(item => item.getId()), [4151,1127,1079,1163,1201,995]);
+    assert.equal(p.getInventory().getAmount(995), 77);
+    assert.deepEqual(p.getInventory().getValidItems().find(item => item.getId() === 995).getMeta(), { qa: 'deadline-995' });
+    assert.equal(Match.dying.has(p), false); lobby(p);
+  }
+});
+
+test('timed deadline refuses combat, jail return and an already-open native join confirmation', async () => {
+  const a = actor(), b = actor(), teammate = actor(), late = actor(); channel(a); channel(b, [teammate, late]);
+  const game = await negotiate(a, b, 2, 16); await join(a); await join(b); await join(teammate);
+  core.World.processCycle = game.starts - 1; tick();
+  await lethalMelee(a, b, game); tick(4);
+  assert.equal(game.jailed.has(b), true);
+  await join(late, false);
+  assert.equal(late.getInterfaceId(), C.group('clanwars_confirm'));
+  core.World.processCycle = game.ends - 1;
+  assert.equal(game.canJoin(), true);
+  assert.equal(game.area.canAttack(a, teammate, CombatFactory.MELEE_COMBAT), true);
+  const scores = game.kills.slice();
+  core.World.processCycle = game.ends;
+  assert.equal(game.canJoin(), false);
+  assert.equal(game.rejoin(b), false, 'jail return is closed at the same deadline');
+  assert.equal(game.jailed.has(b), true);
+  assert.equal(game.area.canAttack(a, teammate, CombatFactory.MELEE_COMBAT), false);
+  await click(late, 'clanwars_confirm:button');
+  assert.equal(C.matches.has(late), false, 'stale native confirmation cannot enter the expired battle');
+  assert.notEqual(late.getInterfaceId(), C.group('clanwars_confirm'), 'deadline refusal closes the stale join modal');
+  assert.equal(game.phase, 'over'); assert.deepEqual(game.kills, scores);
+  for (const p of [a, b, teammate]) lobby(p);
+});
+
+test('timed HUD saturates at native Lots while full server scores and the scoring deadline decide the winner', async () => {
+  const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
+  const scripts = scriptCalls(a);
+  const game = await negotiate(a, b, 2, 16); await join(a); await join(b);
+  core.World.processCycle = game.starts - 1; tick();
+  const side = game.members.get(a);
+  // Boundary checkpoints, not a claim that the fixture earned 65,536 natural kills.
+  game.kills[side] = 65536; game.kills[1 - side] = 65535;
+  tick();
+  for (const name of ['clanwars_kills_1', 'clanwars_kills_2']) {
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name)), 65535);
+  }
+  await join(extra);
+  for (const name of ['clanwars_kills_1', 'clanwars_kills_2']) {
+    assert.equal(extra.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name)), 65535);
+  }
+  const scores = game.kills.slice();
+  core.World.processCycle = game.ends;
+  game.score(1 - side);
+  assert.equal(game.phase, 'over'); assert.deepEqual(game.kills, scores, 'deadline callback cannot add a tying kill');
+  assert.deepEqual(scripts.filter(([id]) => id === 592).at(-1), [592, 1, 'Your team won the battle.']);
+  lobby(a); lobby(b); lobby(extra);
+});

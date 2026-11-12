@@ -174,7 +174,7 @@ module.exports = function registerLostTribeQuest(api) {
   const NO_TREATY_CONDITION_ID = "cXIAOU";
   const DRAGON_SLAYER_CONDITION_ID = "PbfBX1";
   const RUNE_MYSTERIES_CONDITION_ID = "We9PoA";
-  /** Kazgar's water-mill option needs Death to the Dorgeshuun, which this server lacks. */
+  /** Kazgar's nested water-mill option ("After Death to the Dorgeshuun" on the transcript). */
   const WATERMILL_OPTION_CONDITION_ID = "UEIaPX";
   // Action / message step ids.
   const TAKE_BOOK_ACTION_ID = "ThLyr1";
@@ -638,7 +638,7 @@ module.exports = function registerLostTribeQuest(api) {
     if (stepId === KEY_CONDITION_ID) return held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_KEY_CONDITION_ID) return !held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_TREATY_CONDITION_ID) return !held(player, ItemIdentifiers.PEACE_TREATY);
-    if (stepId === WATERMILL_OPTION_CONDITION_ID) return false;
+    if (stepId === WATERMILL_OPTION_CONDITION_ID) return hasQuest(player, "death_to_the_dorgeshuun");
     // Unknown condition: leave it for the owning plugin (null = unanswered).
     return null;
   }

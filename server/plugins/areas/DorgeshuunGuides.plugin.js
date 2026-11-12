@@ -77,12 +77,22 @@ const DIALOGUE_ROUTES = {
   yWjjdW: ["Mistag", CELLAR], uzpbCL: ["Mistag", CELLAR], _mrum5: ["Mistag", WATERMILL_FROM_MISTAG],
   SCTNDo: ["Dartog", MINE], S9W4wW: ["Dartog", CELLAR],
 };
+/** The water mill route opens with Death to the Dorgeshuun (Wiki, Kazgar and Mistag), though the
+ * transcript offers Kazgar's and Mistag's top-level water mill options at every stage. */
+const WATERMILL_STEPS = new Set(["ccERZh", "_mrum5"]);
+
+function questComplete(player, key) {
+  const request = { player, key, complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
 
 function travelFromDialogue(event) {
   if (event.kind !== "message") return;
   const route = DIALOGUE_ROUTES[event.stepId];
   if (!route || event.text !== `${route[0]} shows you the way through the tunnels.`) return;
   event.handled = true;
+  if (WATERMILL_STEPS.has(event.stepId) && !questComplete(event.player, "death_to_the_dorgeshuun")) return;
   guide(route[0], route[1])(event);
 }
 

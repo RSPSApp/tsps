@@ -14,9 +14,14 @@ const { Location } = require('../dist/game/model/Location');
 
 const handlers = {};
 const custom = {};
+/** Players who have finished Death to the Dorgeshuun, answered through quest:is-complete. */
+const dttdDone = new WeakSet();
 
 before(() => {
-  const api = { core: PluginManager.getCoreApi(), onNpcInteraction: (name, actions) => { handlers[name] = actions; }, onCustomEvent: (name, fn) => { custom[name] = fn; } };
+  const api = { core: PluginManager.getCoreApi(), onNpcInteraction: (name, actions) => { handlers[name] = actions; }, onCustomEvent: (name, fn) => { custom[name] = fn; },
+    emitCustomEvent: (name, request) => {
+      if (name === 'quest:is-complete' && request.key === 'death_to_the_dorgeshuun') request.complete = dttdDone.has(request.player);
+    } };
   require('../plugins/areas/DorgeshuunGuides.plugin').register(api);
 });
 
@@ -85,6 +90,7 @@ test("recorded dialogue routes use the same timed crossing as quick travel", () 
   ];
   for (const [name, stepId, x, y] of routes) {
     const p = player();
+    dttdDone.add(p);
     const event = { player: p, stepId, kind: 'message', text: `${name} shows you the way through the tunnels.` };
     custom['npc-dialogue:action'](event);
     assert.equal(event.handled, true, stepId);
@@ -94,6 +100,19 @@ test("recorded dialogue routes use the same timed crossing as quick travel", () 
     assert.deepEqual([p.location.getX(), p.location.getY()], [3231, 9611], stepId);
     ticks(4, p, []);
     assert.deepEqual([p.location.getX(), p.location.getY()], [x, y], stepId);
+  }
+});
+
+test("water mill dialogue routes stay put before Death to the Dorgeshuun", () => {
+  for (const [name, stepId] of [['Kazgar', 'ccERZh'], ['Mistag', '_mrum5']]) {
+    const p = player();
+    const event = { player: p, stepId, kind: 'message', text: `${name} shows you the way through the tunnels.` };
+    custom['npc-dialogue:action'](event);
+    assert.equal(event.handled, true, stepId);
+    ticks(6, p, []);
+    assert.deepEqual(p.log, [], stepId);
+    assert.deepEqual(p.messages, [], stepId);
+    assert.deepEqual([p.location.getX(), p.location.getY()], [3231, 9611], stepId);
   }
 });
 

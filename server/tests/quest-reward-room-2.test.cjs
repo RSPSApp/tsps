@@ -22,6 +22,8 @@ const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
+const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
 
@@ -229,6 +231,39 @@ test("Dig Site: the teddy bush works and giving the guide tea unlocks the native
   await send(f, { type: "inventory_action", slot: 1, itemId: I.PANNING_TRAY_3, widgetId: 3214, option: "Search" });
   assert.equal(f.inv.getAmount(I.PANNING_TRAY), 1, "searching empties the tray");
   assert.equal(f.inv.getAmount(I.SPECIAL_CUP), 1, "the quest cup can be found");
+});
+
+test("Dig Site: panning refusals use player chat and nuggets show the gold tray box", async (t) => {
+  const empty = actor(t, DIG, 0);
+  put(empty, I.PANNING_TRAY, 0);
+  await send(empty, { type: "inventory_action", slot: 0, itemId: I.PANNING_TRAY, widgetId: 3214, option: "Search" });
+  let dialogue = empty.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof PlayerDialogue);
+  assert.equal(dialogue.getText(), "Err, why am I searching an empty tray?");
+  await send(empty, { type: "dialogue_continue", widgetId: (217 << 16) | 5, childIndex: -1 });
+  assert.equal(empty.p.getDialogueManager().isActive(), false, "the native player-chat continue packet closes the line");
+
+  const full = actor(t, DIG, 0);
+  full.p.setAttribute("dig-site:panning-permission", true);
+  core.RegionManager.loadMapFiles(3378, 3377);
+  full.p.setLocation(new core.Location(3378, 3377, 0));
+  put(full, I.PANNING_TRAY_3, 0);
+  await send(full, { type: "object_option", id: O.PANNING_POINT, x: 3379, y: 3377, action: "Pan" });
+  ticks(full, 8);
+  dialogue = full.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof PlayerDialogue);
+  assert.equal(dialogue.getText(), "I already have a full panning tray; perhaps I should<br>search it first.");
+
+  const nuggets = actor(t, DIG, 0);
+  put(nuggets, I.PANNING_TRAY_3, 0);
+  t.mock.method(Math, "random", () => 5 / 40);
+  await send(nuggets, { type: "inventory_action", slot: 0, itemId: I.PANNING_TRAY_3, widgetId: 3214, option: "Search" });
+  dialogue = nuggets.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof ItemStatementDialogue);
+  assert.equal(dialogue.getItemId(), I.PANNING_TRAY_2, "the objectbox shows tray_gold (678)");
+  assert.equal(dialogue.getText(), "You find some gold nuggets within the mud.");
+  assert.equal(nuggets.inv.getAmount(I.NUGGETS), 1, "the reward remains gold nuggets (680)");
+  assert.equal(nuggets.inv.getAmount(I.PANNING_TRAY_3), 0, "the searched mud tray is consumed");
 });
 
 async function reloadDigSite(t, original) {

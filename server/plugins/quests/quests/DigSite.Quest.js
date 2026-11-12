@@ -22,7 +22,7 @@
  */
 module.exports = function registerDigSiteQuest(api) {
   const { Animation, ChatType, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue,
-    NpcDialogue, NpcIdentifiers, ObjectIdentifiers, Skill, Task, TaskManager } = api.core;
+    NpcDialogue, NpcIdentifiers, ObjectIdentifiers, PlayerDialogue, Skill, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const EXAMINER_NPC_IDS = new Set([
@@ -175,9 +175,12 @@ module.exports = function registerDigSiteQuest(api) {
     }
     const slot = inventory.getSlotForItemId(EMPTY_TRAY);
     if (slot < 0) {
-      player.sendMessage(held(player, MUD_TRAY)
-        ? "I already have a full panning tray; perhaps I should search it first."
-        : "You need a panning tray to pan here!");
+      if (held(player, MUD_TRAY)) {
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+          .add(new PlayerDialogue(0, "I already have a full panning tray; perhaps I should<br>search it first.")));
+      } else {
+        player.sendMessage("You need a panning tray to pan here!");
+      }
       return true;
     }
     const start = player.getLocation().clone();
@@ -206,7 +209,7 @@ module.exports = function registerDigSiteQuest(api) {
   // OSRS Wiki, Panning tray (mud): drop table out of 40 rolls.
   const PAN_REWARDS = [
     [4, ItemIdentifiers.COINS, "You find some coins within the mud."],
-    [8, ItemIdentifiers.NUGGETS, "You find some gold nuggets within the mud."],
+    [8, ItemIdentifiers.NUGGETS, "You find some gold nuggets within the mud.", ItemIdentifiers.PANNING_TRAY_2],
     [11, ItemIdentifiers.OYSTER, "You find an oyster within the mud!"],
     [14, ItemIdentifiers.UNCUT_OPAL, "You find a gem within the mud!"],
     [17, ItemIdentifiers.UNCUT_JADE, "You find a gem within the mud!"],
@@ -215,7 +218,8 @@ module.exports = function registerDigSiteQuest(api) {
 
   function searchTray({ player, itemId, slot }) {
     if (itemId === EMPTY_TRAY) {
-      player.sendMessage("Err, why am I searching an empty tray?");
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+        .add(new PlayerDialogue(0, "Err, why am I searching an empty tray?")));
       return true;
     }
     if (itemId !== MUD_TRAY) return false;
@@ -230,9 +234,9 @@ module.exports = function registerDigSiteQuest(api) {
     inventory.setItem(slot, new Item(EMPTY_TRAY, 1));
     if (reward && (reward[1] !== ItemIdentifiers.SPECIAL_CUP ||
         (!quest.isComplete(player) && !held(player, ItemIdentifiers.SPECIAL_CUP)))) {
-      const [, id, text] = reward;
+      const [, id, text, boxId = id] = reward;
       inventory.adds(id, id === ItemIdentifiers.COINS ? 1 + Math.floor(Math.random() * 10) : 1);
-      showItem(player, id, text);
+      showItem(player, boxId, text);
     } else {
       inventory.refreshItems();
       showItem(player, MUD_TRAY, "The tray contains only plain mud.");

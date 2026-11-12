@@ -1024,12 +1024,12 @@ test('Pandemonium completion extras survive stack, full and one-slot inventories
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 26, 'existing stack gains all 25 coupons with no free slot');
   assert.equal(countGround(31964).length, 2, 'both repair kits drop rather than being lost');
-  assert.equal(countGround(31803).length, 0, 'no spyglass: Chartin\' Charles hands it out on live');
+  assert.equal(countGround(31803).length, 1, 'the Wiki spyglass drops rather than being lost (Ours: until Charles hands it out)');
   assert.equal(quest.complete(h.player), false, 'completion reward is once');
   h.relog();
   assert.equal(quest.complete(h.player), false, 'relog completion is not rewarded again');
   assert.equal(inventory.getAmount(32083), 26);
-  assert.equal(ground().length, 2);
+  assert.equal(ground().length, 3);
 
   ({ h, inventory, quest } = make(1));
   assert.equal(quest.complete(h.player), true);
@@ -1040,7 +1040,7 @@ test('Pandemonium completion extras survive stack, full and one-slot inventories
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 25);
   assert.equal(inventory.getAmount(31964), 2, 'repair kits are granted one at a time');
-  assert.equal(inventory.getAmount(31803), 0);
+  assert.equal(inventory.getAmount(31803), 1, 'the spyglass is granted on completion');
   assert.equal(ground().length, 0);
 
   ({ h, inventory, quest } = make(0));

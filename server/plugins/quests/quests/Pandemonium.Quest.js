@@ -23,7 +23,9 @@
  *
  * Rewards (OSRS Wiki): 1 Quest point, 300 Sailing XP (plus 100 on delivering the cargo), access to
  * Sailing and The Pandemonium, a raft, 25 sawmill coupon (wood plank) and 2 repair kits (in the
- * raft's cargo hold). The Wiki's spyglass is Chartin' Charles's hand-out on live, not this quest's.
+ * raft's cargo hold) and a spyglass. Ours: live has Chartin' Charles hand the spyglass out (rsprox 242,
+ * 20261105T101904), not this quest; the Wiki lists it as a reward and Charles's hand-out is not
+ * implemented, so onReward grants it until it is.
  *
  * The intro HUD (345) with its step text (clientscript 627), the hint arrows, the crew's overhead
  * lines on the voyage and the quest's item boxes follow the rev 242 capture.
@@ -111,6 +113,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const CRATE_OF_SHIP_PARTS_ITEM_ID = ItemIdentifiers.CRATE_OF_SHIP_PARTS_7; // 32807, quest crate
   const SAWMILL_COUPON_ITEM_ID = ItemIdentifiers.SAWMILL_COUPON_WOOD_PLANK_; // 32083
   const REPAIR_KIT_ITEM_ID = ItemIdentifiers.REPAIR_KIT; // 31964
+  const SPYGLASS_ITEM_ID = ItemIdentifiers.SPYGLASS; // 31803
   // Tutorial-box icons (rsprox 242: objectbox models).
   const SHIPWRIGHT_ICON_ITEM_ID = 32916; // shipwright_icon_dummy
   const PORT_TASK_ICON_ITEM_ID = 32913; // port_task_board_icon_dummy
@@ -1929,6 +1932,8 @@ module.exports = function registerPandemoniumQuest(api) {
     // Jim stows the kits in the raft's hold first (stage 44's dialogue); a completion that never
     // went through it still gets them.
     stowCargoHoldGifts(player);
+    // Ours: the Wiki's spyglass reward, kept until Chartin' Charles's hand-out exists.
+    inventory.forceAdd(player, new Item(SPYGLASS_ITEM_ID, 1));
     player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
   }
 

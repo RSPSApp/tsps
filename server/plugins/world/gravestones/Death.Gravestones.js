@@ -6,7 +6,10 @@
  *   them for the killer as before, and Ultimate Ironmen drop everything on the floor;
  * - with "Food/Potions can form supply piles on death" on (gravestone_supplypiles_disabled 0),
  *   lost food and potions are dropped where the player died instead: "Some supplies have been
- *   dropped where you died.";
+ *   dropped where you died."; not in a private area (an instance: the Colosseum, Doom), which goes
+ *   with its run, so there they go to the grave with the rest (Wiki: Fortis Colosseum, "All
+ *   unprotected items are moved to the grave"; rsprox 238/04127, a Colosseum death holding an
+ *   anglerfish, makes no pile and no message);
  * - in the Wilderness "food, potions, and phoenix necklaces cannot be sent to a grave or dropped,
  *   and are instead deleted", and an existing grave moves to the new death.
  * World config `Gravestones:enabled` (default true) turns graves off: lost items fall to the
@@ -39,7 +42,7 @@ function takeDeathDrops(event) {
   const { player, killer, location } = event;
   if (!makesGrave(player, killer)) return;
   const wilderness = Common.core().Wilderness.isIn(player);
-  const piles = !wilderness && Common.getVarbit(player, "supplyPilesDisabled") !== 1;
+  const piles = !wilderness && !player.getPrivateArea?.() && Common.getVarbit(player, "supplyPilesDisabled") !== 1;
   const lost = [...event.items, ...event.untradeables];
   const toGrave = [];
   const toFloor = [];

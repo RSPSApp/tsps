@@ -195,8 +195,9 @@ function drink({ player }) {
       startDrinking(player);
     }
     dose.potion.effect(player);
-    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030).
-    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, MESSAGE.DRINK(store.name));
+    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030), with each
+    // potion's own recorded drink line ("restore prayer potion", "divine combat potion": 238/04242.txt:42626).
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, Potions.drinkLine(store.itemId) ?? MESSAGE.DRINK(store.name));
     api.emitCustomEvent("potions:drunk", {
       player,
       itemId: store.itemId,

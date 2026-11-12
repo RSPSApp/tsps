@@ -307,9 +307,10 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
 
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
-  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message.
+  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message;
+  // a Prayer potion's line is its own recorded one (238/04242.txt:42626, "restore prayer potion").
   assert.deepEqual(f.messages, [
-    "spam: You drink some of your prayer potion.",
+    "spam: You drink some of your restore prayer potion.",
     "You need more than 10 hitpoints to survive the power of a divine potion.",
     "spam: You drink some of your energy potion.",
   ]);

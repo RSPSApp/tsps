@@ -52,3 +52,24 @@ test('anti-venom+ and extended anti-venom+: immunity from venom', t => {
     assert.deepEqual(f.lines, [[ChatType.SPAM, 'It grants you immunity from venom.']], String(id));
   }
 });
+
+// rsprox: each potion's own drink line first, then its effect's lines, then the doses left
+// ("You have 3 doses of potion left.", "You have 1 dose of potion left.") or "You have finished your potion."
+test('a drink sends its recorded line, the effect, then the doses left', t => {
+  const { Item } = require('../dist/game/model/Item');
+  const drinkFrom = (id) => {
+    const f = drinker(t);
+    t.mock.method(f.p, 'performAnimation', () => {});
+    f.p.getInventory().setItem(0, new Item(id, 1));
+    const item = f.p.getInventory().getItems()[0];
+    assert.equal(PluginManager.emitItemAction({ player: f.p, item, itemId: id, slot: 0, clickType: 1, handled: false }), true);
+    return f.lines;
+  };
+  assert.deepEqual(drinkFrom(I.PRAYER_POTION_4_), [
+    [ChatType.SPAM, 'You drink some of your restore prayer potion.'], [ChatType.SPAM, 'You have 3 doses of potion left.']]);
+  assert.deepEqual(drinkFrom(I.ANTI_VENOM_2_), [
+    [ChatType.SPAM, 'You drink some of your antivenom potion.'], [ChatType.SPAM, 'It grants you immunity from poison.'],
+    [ChatType.SPAM, 'You have 1 dose of potion left.']]);
+  assert.deepEqual(drinkFrom(I.SUPER_ATTACK_1_), [
+    [ChatType.SPAM, 'You drink some of your attack potion.'], [ChatType.SPAM, 'You have finished your potion.']]);
+});

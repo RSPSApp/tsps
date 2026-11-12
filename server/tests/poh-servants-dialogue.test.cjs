@@ -325,3 +325,25 @@ test("an errand is refused while the tea is made, so the tea is not lost", (t) =
   f.clear(); returnNow(t, f);
   assert.deepEqual(lines(f)[0], "Tea's up, guv. You want milk?");
 });
+
+test("a dinner waiting on the table takes no second dinner order: one charge, one plate", (t) => {
+  const dining = { roomKey: "DINING_ROOM", furniture: { t: "WOOD_DINING_TABLE" } };
+  const f = inHouse(t, { id: N.RICK, pay: 16 }, [dining, KITCHEN()]);
+  const House = require("../plugins/skills/construction/House.Construction");
+  let seated = false;
+  t.mock.method(House, "isSeatedForDinner", () => seated);
+  f.house.getRoomPositionAt = () => ({});
+  f.house.getRoom = () => dining;
+  const orderDinner = () => { talkTo(f.p, f.npc, N.RICK); f.next(); f.choose(1); f.choose(2); f.next(); };
+  orderDinner();
+  assert.equal(f.varbits.get(PAY), 14);
+  returnNow(t, f);
+  f.clear(); talkTo(f.p, f.npc, N.RICK); f.next(); f.choose(1); f.choose(2);
+  assert.ok(!lines(f).includes("I'll rustle up something tasty."), "no second dinner is taken");
+  assert.equal(f.varbits.get(PAY), 14);
+  seated = true;
+  Servants.processServant(f.p);
+  assert.equal(f.p.getInventory().getAmount(I.SHRIMPS), 1);
+  orderDinner();
+  assert.equal(f.varbits.get(PAY), 12, "once eaten, dinner can be asked for again");
+});

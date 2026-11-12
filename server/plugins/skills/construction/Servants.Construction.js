@@ -551,13 +551,14 @@ function hasDiningTable(save) { return rooms(save).some(r => r.roomKey === "DINI
 /**
  * While a meal is being made the servant works in the kitchen: no second meal or errand is
  * taken, and talking or calling waits until it is done (ours: a call says it is not back yet).
+ * A dinner left on the table takes no second dinner until it is eaten.
  *
  * Tea and dinner: the servant agrees, takes its pay and then finds out whether the kitchen is
  * good enough (dinner checks the dining table first, before any pay). Drinks: the player asks,
  * and without a barrel the servant says so.
  */
 function serve(player, runtime, kind) {
-  if (!present(player, runtime) || runtime.meal) return;
+  if (!present(player, runtime) || runtime.meal || (kind === "dinner" && runtime.table)) return;
   const save = runtime.house.save, def = definition(save), servant = save.servant;
   const refuse = (situation, fallback) => {
     const steps = [npcSays(def, situation)];
@@ -581,7 +582,7 @@ function serve(player, runtime, kind) {
 }
 function prepare(player, runtime, kind) {
   const save = runtime.house.save, room = kitchenFor(save, kind);
-  if (!present(player, runtime) || !room || runtime.meal) return;
+  if (!present(player, runtime) || !room || runtime.meal || (kind === "dinner" && runtime.table)) return;
   const def = definition(save), kitchen = keys(room);
   const tier = kitchen.includes("TEAK_SHELVES_2") ? 2 : kitchen.some(k => ["WOODEN_SHELVES_3", "OAK_SHELVES_2", "TEAK_SHELVES_1"].includes(k)) ? 1 : 0;
   const itemId = kind === "tea" ? TEAS[tier] : kind === "dinner" ? def.food : DRINKS[kitchen.find(k => DRINKS[k])];

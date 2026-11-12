@@ -1087,33 +1087,34 @@ function registerPlugin(file) {
 
 /**
  * Every dock's shipwright: the cache names each by its port (`sailing_shipwright_<dock>`), and
- * where live captures add them, they stand still on that tile facing that way. Shipwright Sarah
- * (Port Khazard) has no capture, so she has no spawn.
+ * where live captures add them, they stand still on that tile facing that way (Direction.ts:
+ * 0 north-west, 1 north, 3 west, 6 south). Shipwright Sarah (Port Khazard) has no capture, so
+ * she has no spawn.
  */
 const SHIPWRIGHTS = {
-  the_pandemonium: ["Junior Jim", 14972, 3058, 2979],
-  port_sarim: ["Shipwright Sam", 15363, 3024, 3204],
-  musa_point: ["Shipwright Sally", 15364, 2946, 3148],
-  catherby: ["Shipwright Sophie", 15365, 2805, 3428],
-  brimhaven: ["Shipwright Steve", 15366, 2769, 3228],
+  the_pandemonium: ["Junior Jim", 14972, 3058, 2979, 6],
+  port_sarim: ["Shipwright Sam", 15363, 3024, 3204, 1],
+  musa_point: ["Shipwright Sally", 15364, 2946, 3148, 6],
+  catherby: ["Shipwright Sophie", 15365, 2805, 3428, 3],
+  brimhaven: ["Shipwright Steve", 15366, 2769, 3228, 6],
   port_khazard: ["Shipwright Sarah", 15367],
-  lands_end: ["Shipwright Sasha", 15368, 1510, 3410],
-  port_piscarilius: ["Shipwright Spencer", 15369, 1822, 3681],
-  civitas_illa_fortis: ["Shipwright Sennia", 15370, 1780, 3125],
-  rellekka: ["Shipwright Sigrun", 15371, 2638, 3686],
-  aldarin: ["Shipwright Silas", 15372, 1444, 2969],
-  corsair_cove: ["Shipwright Soraya", 15373, 2562, 2851],
-  port_roberts: ["Shipwright Scott", 15374, 1883, 3296],
-  red_rock: ["Shipwright Sylvia", 15375, 2804, 2523],
-  deepfin_point: ["Shipwright Sornik", 15376, 1937, 2758],
-  prifddinas: ["Shipwright Silrien", 15377, 2173, 3334],
+  lands_end: ["Shipwright Sasha", 15368, 1510, 3410, 1],
+  port_piscarilius: ["Shipwright Spencer", 15369, 1822, 3681, 3],
+  civitas_illa_fortis: ["Shipwright Sennia", 15370, 1780, 3125, 0],
+  rellekka: ["Shipwright Sigrun", 15371, 2638, 3686, 6],
+  aldarin: ["Shipwright Silas", 15372, 1444, 2969, 6],
+  corsair_cove: ["Shipwright Soraya", 15373, 2562, 2851, 1],
+  port_roberts: ["Shipwright Scott", 15374, 1883, 3296, 3],
+  red_rock: ["Shipwright Sylvia", 15375, 2804, 2523, 6],
+  deepfin_point: ["Shipwright Sornik", 15376, 1937, 2758, 3],
+  prifddinas: ["Shipwright Silrien", 15377, 2173, 3334, 3],
 };
 
 test("every port with a shipwright offers Buy-boat, Customise-boat and Recover-boat, and they stand there", () => {
   const shipwright = registerPlugin("Shipwright.Sailing");
   const shipyard = registerPlugin("Shipyard.Sailing");
   const spawns = require("../data/definitions/npc-spawns.json");
-  for (const [dockId, [name, id, x, y]] of Object.entries(SHIPWRIGHTS)) {
+  for (const [dockId, [name, id, x, y, direction]] of Object.entries(SHIPWRIGHTS)) {
     assert.equal(Sailing.getDock(dockId)?.shipwright, name, `${dockId}'s shipwright`);
     assert.deepEqual(Object.keys(shipwright.npcs[name]), ["Buy-boat", "Recover-boat"], name);
     assert.deepEqual(Object.keys(shipyard.npcs[name]), ["Customise-boat"], name);
@@ -1122,7 +1123,8 @@ test("every port with a shipwright offers Buy-boat, Customise-boat and Recover-b
       assert.equal(placed.length, 0, `${name} has no captured spawn`);
       continue;
     }
-    assert.deepEqual(placed.map((spawn) => [spawn.x, spawn.y, spawn.level]), [[x, y, 0]], `${name} stands at ${dockId}`);
+    assert.deepEqual(placed.map((spawn) => [spawn.x, spawn.y, spawn.level, spawn.direction, spawn.wanderRadius]),
+      [[x, y, 0, direction, 0]], `${name} stands still at ${dockId}, facing the captured way`);
   }
 });
 

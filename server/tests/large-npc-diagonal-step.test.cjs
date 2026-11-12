@@ -49,8 +49,9 @@ test('a larupia follows the route finder round the Feldip rocks instead of stopp
   assert.equal(npc.getSize(), 2);
   PathFinder.calculateWalkRoute(npc, 2534, 2914);
   const queue = npc.getMovementQueue();
-  for (let i = 0; i < 4; i++) queue.process();
-  assert.notDeepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [2541, 2906], 'it moved off the corner');
+  queue.process();
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [2540, 2907], 'its first step is the planned north-west one');
+  for (let i = 0; i < 3; i++) queue.process();
   assert.equal(queue.isStepBlocked(), false);
 });
 

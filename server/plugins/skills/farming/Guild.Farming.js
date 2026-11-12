@@ -187,10 +187,10 @@ const DEATH_CONTAINERS = [
 function deathContainers(query) {
     query.containers.push(...DEATH_CONTAINERS);
 }
-/** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 /** An unnoted grimy normal herb: the only items a herb sack takes. */
 const isSackHerb = id => [...Data.CROPS.values()].some(c => c.type === "HERB" && c.produce === id)
     && !!core.CacheDefinitions.getItem(id).name?.startsWith("Grimy ");
+/** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
 function storeRoom(player, container, id) {
     const kind = containerKind(container);
     if (!kind) return 0;

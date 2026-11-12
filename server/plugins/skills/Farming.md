@@ -221,7 +221,8 @@ in your inventory for that." after its Emptied lines (captures 3911, 4300, 4302,
 
 Not covered (no capture or Wiki line): a herb used on the sack when it has room (no line here), the closed sack's own
 recordings (only the open sack is recorded; the two share these lines here), live's one-tick delay before Check's
-lines, and what a sack does below 58 Herblore.
+lines, what a sack does below 58 Herblore (here Fill finds no room), a sack used on a seed box (here the spoil line),
+and a bank Empty when the bank has no room (silent here).
 
 An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
 as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room

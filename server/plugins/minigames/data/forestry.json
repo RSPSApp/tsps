@@ -47,7 +47,7 @@
     "_feed": "Units per nutrition, as the recorded bark and XP scale (10/20/40/50/60/70/100 -> 1/2/4/5/6/7/12); bark is units less 0-1 (recorded 3, 4, 6-7, 11-12; Wiki 1-12). XP at 100% (Wiki): Woodcutting 1.9-2.2 x level, Farming 0.6-0.8 x level, scaled by units/12.",
     "units": { "10": 1, "20": 2, "40": 4, "50": 5, "60": 6, "70": 7, "100": 12 },
     "xpAtFull": { "woodcutting": [1.9, 2.2], "farming": [0.6, 0.8] },
-    "_lump": "Wiki: bonus bark by average nutrition; recorded 177, 162, 191. Bonus XP is calibrated (the Wiki's formula is garbled): 50 x level x average nutrition. Leaves: Wiki 15-20 of the tree's tier.",
+    "_lump": "Wiki: bonus bark by average nutrition; recorded 177, 162, 191. Bonus XP is calibrated (the Wiki's formula is garbled): 50 x level x average nutrition. Leaves: 15-20 of a random tier (Wiki: Forestry, Struggling Sapling).",
     "lump": [[70, 180, 200], [50, 140, 180], [40, 100, 140], [0, 60, 100]],
     "bonusXpPerLevel": 50,
     "leaves": [15, 20]
@@ -64,7 +64,8 @@
     "wave": [2, 4],
     "waveTicks": [21, 29],
     "sinkTicks": 7,
-    "lifeTicks": 199,
+    "_lifeTicks": "Wiki (Rising roots): \"The length of this event is one minute and 33 seconds\" (155 ticks); recorded 199 on a Leagues world (227/01850).",
+    "lifeTicks": 155,
     "chopFirst": 2,
     "chopTicks": 4,
     "barkDelay": 1,

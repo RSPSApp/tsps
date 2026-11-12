@@ -68,16 +68,13 @@ function fuseAccuracy(attacker, target, attackRoll) {
   return fuse ? Math.floor((attackRoll * FUSE_ACCURACY[fuse][band]) / 100) : null;
 }
 
-/** Chinchompas given back while the stack is not wielded: to the pack, or the floor when it is full. */
-function giveBack(player, item) {
-  const inventory = player.getInventory();
-  if (inventory.getAddableAmount(item) >= item.getAmount()) inventory.add(item, true);
-  else core.ItemOnGroundManager.registers(player, item);
-}
-
-/** One chinchompa per throw, gone for good: no floor drop, no Ava's recovery. */
-function consumeChinchompa(player, pos, amount, delayTicks = 0) {
-  const { Equipment, Flag, Item, Task, TaskManager, WeaponInterfaceManager } = core;
+/**
+ * One chinchompa per throw, gone for good: no floor drop, no Ava's recovery. Paid as it leaves the hand, as worn ammo
+ * is (CombatFactory.decrementAmmo, rsprox_transcripts/237/01156.txt): moving the stack mid-flight (unwield, bank,
+ * drop, trade) cannot make the throw free. Nothing is left to do on landing, so the flight time is not needed.
+ */
+function consumeChinchompa(player, _pos, amount) {
+  const { Equipment, Flag, Item, WeaponInterfaceManager } = core;
   const weapon = wieldedChinchompa(player);
   if (!weapon) {
     return false;
@@ -88,48 +85,18 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const thrown = amount - Math.min(amount, Math.max(0, saving.saved | 0));
   const extra = Math.max(0, saving.extra | 0);
-  // Fixed at the throw: paying from the pack can empty this very object in place (an unwield moves it there).
-  const weaponId = weapon.getId();
-  const meta = JSON.stringify(weapon.getMeta() ?? null);
-  const same = (item) => item?.getId() === weaponId && JSON.stringify(item.getMeta() ?? null) === meta;
-  const apply = () => {
-    if (thrown <= 0 && extra <= 0) {
-      return;
-    }
-    const worn = player.getEquipment().get(Equipment.WEAPON_SLOT);
-    // Re-wielding mid-flight wields a copy, and unwielding puts the stack in the pack: the throw is paid from the
-    // same chinchompas wherever they are now. Another weapon swapped in is left alone.
-    if (worn !== weapon && !same(worn)) {
-      const inventory = player.getInventory();
-      const slot = inventory.getItems().findIndex(same);
-      if (slot >= 0 && thrown > 0) inventory.deleteAtSlot(slot, Math.min(thrown, inventory.getItems()[slot].getAmount()));
-      if (extra > 0) giveBack(player, new Item(weaponId, extra, weapon.getMeta()));
-      return;
-    }
-    if (thrown > 0) worn.decrementAmountBy(thrown);
-    if (extra > 0) worn.incrementAmountBy(extra);
-    if (worn.getAmount() <= 0) {
-      player.sendMessage("You have run out of ammunition!");
-      player.getEquipment().set(Equipment.WEAPON_SLOT, new Item(-1));
-      WeaponInterfaceManager.assign(player);
-      player.getUpdateFlag().flag(Flag.APPEARANCE);
-    }
-    player.getEquipment().refreshItems();
-  };
-  if (delayTicks > 0) {
-    TaskManager.submit(new (class extends Task {
-      constructor() {
-        super(delayTicks);
-      }
-
-      execute() {
-        apply();
-        this.stop();
-      }
-    })());
-  } else {
-    apply();
+  if (thrown <= 0 && extra <= 0) {
+    return true;
   }
+  if (thrown > 0) weapon.decrementAmountBy(thrown);
+  if (extra > 0) weapon.incrementAmountBy(extra);
+  if (weapon.getAmount() <= 0) {
+    player.sendMessage("You have run out of ammunition!");
+    player.getEquipment().set(Equipment.WEAPON_SLOT, new Item(-1));
+    WeaponInterfaceManager.assign(player);
+    player.getUpdateFlag().flag(Flag.APPEARANCE);
+  }
+  player.getEquipment().refreshItems();
   return true;
 }
 

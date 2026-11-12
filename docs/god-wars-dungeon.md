@@ -47,7 +47,8 @@ This needs a generic core hook: `Area.npcAggression(player, npc)` returns false 
 
 | Step | What happens | Source |
 | --- | --- | --- |
-| Boulder, crack | Troll Stronghold (Dad defeated); the boulder needs 60 Strength or Agility. | Wiki |
+| Boulder | Troll Stronghold (Dad defeated); 60 Strength or Agility. | Wiki |
+| Little crack | Troll Stronghold (Dad defeated) and 60 Agility, no XP. From the op: +1 the screen fades out (`fade_overlay` 174, script 948 `[0, 255, 0, 0, 50]`) and the health overlay is hidden, +3 `godwars_human_crawling` (7041), +6 the teleport from (2899, 3713) to (2904, 3720), +7 the fade overlay closes. No message. The north crack (2904, 3719) mirrors it back to (2899, 3713); not captured. The refusal below 60 Agility is live's "You need an Agility level of 60 to do that." from other checks; not captured here. | rsprox captures 224/01461 t167-174, 234/00801 t374-381, 234/03279 t1944-1951 (league); Wiki |
 | Hole | The first visit ties a rope (varbit `godwars_entrance_rope` 3966, kept for good). After that: "You climb down the rope.", the ladder animation (828), the move to (2882, 5311, 2) a tick later. | capture |
 | Rope back up | Back to the surface by the hole. | |
 

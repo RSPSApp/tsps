@@ -73,6 +73,8 @@ function fakePlayer() {
       setCurrentLevels: (skill, level) => { player.levels[skill.getName()] = level; },
     }),
     varbits: new Map(),
+    loggedOut: 0,
+    getSession: () => ({ logout: () => { player.loggedOut++; } }),
     getPacketSender: () => ({ sendSkill: (skill) => player.sent.push(skill.getName()), sendVarbit: (id, value) => player.varbits.set(id, value) }),
     getCombat: () => ({ reset() {}, getHitQueue: () => ({ clear: () => { player.queue = 0; } }) }),
     getInventory: () => ({
@@ -102,6 +104,48 @@ test('logout mid-wave: the first click asks to pause (in red, varbit 1548), a se
   hooks.canLogout(second);
   assert.equal(second.allow, true, 'the second click logs out, restarting this wave');
   assert.equal(player.attributes['tzhaar:fight-cave-wave'], 1, 'the saved wave is the one logged out in');
+});
+
+test('with Jad down every logout click waits for the exit, which pays the cape and Tokkul, then logs out (#4704 review)', (t) => {
+  let cycle = 0;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  const spawned = [];
+  spawnNpc = ({ id, x, y }) => { const npc = core.NPC.create(id, loc(x, y)); spawned.push(npc); return npc; };
+  const player = fakePlayer();
+  player.attributes['tzhaar:fight-cave-wave'] = 63;
+  player.moveTo(loc(2400, 5088));
+  hooks.login({ player });
+  let jad = null;
+  for (let i = 0; i < 20 && !jad; i++) { cycle++; hooks.process({ player }); jad = spawned.find((npc) => npc.getId() === core.NpcIdentifiers.TZTOK_JAD); }
+  assert.ok(jad, 'Jad spawns on wave 63');
+  jad.setHitpoints(0);
+  cycle++; hooks.process({ player });
+  for (const click of [1, 2, 3]) {
+    const event = { player, allow: true };
+    hooks.canLogout(event);
+    assert.equal(event.allow, false, `click ${click} waits for the exit`);
+  }
+  assert.equal(player.attributes['tzhaar:fight-cave-wave'], 63);
+  for (let i = 0; i < 10; i++) { cycle++; hooks.process({ player }); }
+  assert.ok(player.inventory.some(([id]) => id === core.ItemIdentifiers.FIRE_CAPE), 'the Fire cape is paid');
+  assert.ok(player.inventory.some(([id]) => id === core.ItemIdentifiers.TOKKUL), 'and the Tokkul');
+  assert.equal(player.attributes['tzhaar:fight-cave-wave'], null, 'no wave left to resume');
+  assert.equal(player.loggedOut, 1, 'then the requested logout');
+  assert.equal(player.varbits.get(1548), 0);
+});
+
+test('a logout request cleared by leaving the cave resets varbit 1548 (#4704 review)', (t) => {
+  let cycle = 0;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  spawnNpc = ({ id, x, y }) => core.NPC.create(id, loc(x, y));
+  const player = fakePlayer();
+  hooks.enter({ player });
+  for (let i = 0; i < 6; i++) { cycle++; hooks.process({ player }); }
+  hooks.canLogout({ player, allow: true });
+  assert.equal(player.varbits.get(1548), 1);
+  hooks.leave({ player });
+  assert.equal(player.varbits.get(1548), 0);
+  assert.equal(player.loggedOut, 0, 'leaving is not a logout');
 });
 
 test('clearing wave 2 while its monsters are idle spawns wave 3 and continues past its split', (t) => {

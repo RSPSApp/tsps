@@ -219,8 +219,9 @@ function processRun({ player }) {
   const cycle = core.World.getProcessCycle();
   if (session.exitAt !== -1) {
     if (cycle >= session.exitAt) {
+      const logout = session.logoutRequested;
       finishRun(player, FINAL_WAVE, true);
-      if (session.logoutRequested) player.getSession().logout();
+      if (logout) player.getSession().logout();
     }
     return;
   }
@@ -266,6 +267,11 @@ function finishRun(player, wavesCleared, wonJad) {
   player.setAttribute(ATTR_WAVE, null);
   player.setAttribute(ATTR_ROTATION, null);
   if (session) {
+    // A pending logout request ends with the run (death, the exit, Jad's win), so its varbit goes too.
+    if (session.logoutRequested) {
+      session.logoutRequested = false;
+      player.getPacketSender().sendVarbit(LOGOUT_VARBIT, 0);
+    }
     rescueGroundItems(player, session.area);
     session.area.leave(player, false);
     if (player.getArea() === session.area) player.setArea(null);
@@ -348,11 +354,12 @@ function noTeleportOut(event) {
 // the next wave saved; between waves it goes straight through. A second click in the same wave
 // logs out at once (Wiki: "clicking the logout button twice during the same wave"; rsprox
 // 236/03959.txt:5305-5348 logs out the tick after it), and like a dropped connection it restarts
-// the wave it happened in.
+// the wave it happened in. Once Jad is down there is no wave left to repeat: every click waits
+// for the exit, which pays the run and then logs out.
 function holdLogout(event) {
   const session = sessions.get(event.player);
   if (!session || (session.nextWaveAt !== -1 && session.exitAt === -1)) return;
-  if (session.logoutRequested) return;
+  if (session.logoutRequested && session.exitAt === -1) return;
   session.logoutRequested = true;
   event.player.getPacketSender().sendVarbit(LOGOUT_VARBIT, 1);
   event.allow = false;

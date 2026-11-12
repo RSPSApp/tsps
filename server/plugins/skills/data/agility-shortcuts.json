@@ -2241,12 +2241,12 @@
       "between": {
         "ends": [[1475,3687,0],[1470,3687,0]],
         "cross": {
-          "forward": [{"use":"climbOver","args":["to","CLIMB_ROCKS",2]}],
-          "back": [{"use":"climbOver","args":["to","CLIMB_WALL",2]}]
+          "forward": [{"render":"CLIMB_WALL"},{"walk":[[1474,3687],[1473,3687],[1472,3687],[1471,3687],[1470,3687]]},{"render":null}],
+          "back": [{"use":"crawlDown","args":[[1469,3687],"to","west"]}]
         }
       },
-      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. Locs and walkable ends checked in osrs-241_2026-10-20.",
-      "unverified": "climb animation and duration (no live capture)"
+      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. rsprox 231/00725 (and 00726): west to east faces west (tick 237, face_angle 512), then one exact move east over 4 ticks (delay2 120, angle 512: backwards, down the rocks) with sequence 1148 (tick 238); east to west is a 5-tick walk, a tile a tick, with an appearance change at each end (ticks 743-747).",
+      "unverified": "the east-to-west render animation: the recording shows only that the appearance changes; 737 (human_climbing) is the climbing walk used for the other rock climbs (crawlUp)"
     },
     {
       "name": "Handholds (Lizardman Canyon, west)",

@@ -687,9 +687,8 @@ function applyPreset(player, preset) {
       // custom preset take nothing from the bank and spawn a plain copy (free preset items became tradeable ones).
       const inventoryAmt = realAmount(player.getInventory(), item.getId());
       const equipmentAmt = realAmount(player.getEquipment(), item.getId());
-      const bankAmt = player
-        .getBank(Bank.getTabForItem(player, item.getId()))
-        .getAmount(item.getId());
+      // A preset copy in the bank (::maxgear banks worn items unchecked, or an older save) is not a real one either.
+      const bankAmt = realAmount(player.getBank(Bank.getTabForItem(player, item.getId())), item.getId());
       const totalAmt = inventoryAmt + equipmentAmt + bankAmt;
       const presetAmt = preset.getAmount(item.getId());
 
@@ -727,7 +726,9 @@ function applyPreset(player, preset) {
     const parts = [];
     let needed = item.getAmount();
     while (needed > 0) {
-      const slot = bank.getItems().findIndex((candidate) => candidate?.getId() === item.getId() && candidate.getAmount() > 0);
+      // Real stacks only: a preset copy in the bank stays there, and is never given back as a plain item.
+      const slot = bank.getItems().findIndex((candidate) => candidate?.getId() === item.getId() && candidate.getAmount() > 0
+        && !candidate.isPresetItem?.());
       if (slot < 0) break;
       const real = bank.getItems()[slot];
       const taken = Math.min(needed, real.getAmount());

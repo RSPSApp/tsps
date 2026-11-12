@@ -203,7 +203,7 @@ the click on an adjacent chest:
 | 2 | `human_openchest` and sound 52 (delay 10), "You manage to unlock the chest." | sound 2402, "You fail to picklock the chest.", `busy` 0 | as failed (no `busy` 0), plus `human_castteleport`, `teleport_casting` (height 92), area sound 200 |
 | 3 | "You steal some loot from the chest.", the loot, the XP, the chest open | | |
 | 4 | sound 51 (delay 15) | | "You have activated a trap on the chest." |
-| 5 | the chest closed, `busy` 0 | | `busy` 0, teleport to a random tile of 2321-2327, 2930-2936 |
+| 5 | the chest closed, `busy` 0 | | `busy` 0, teleport to a random walkable tile of 2321-2327, 2930-2936 (the 55 landings, on 33 tiles, all fall in it; 2321,2930 and 2321,2931 are blocked) |
 
 The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another player's loot can open the chest during
 an attempt without stopping it (91, 95). Every line is spam.

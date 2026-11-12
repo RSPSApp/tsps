@@ -16,7 +16,7 @@
  * - Failed, 2: sound 2402, "You fail to picklock the chest.", busy 0.
  * - Trapped, 2: as failed, plus human_castteleport, teleport_casting (height 92) and area sound 200 (range
  *   10); 4: "You have activated a trap on the chest."; 5: busy 0 and the player teleported (sequence -1) to a
- *   random tile of 2321-2327, 2930-2936 (the 55 landings fill that square).
+ *   random walkable tile of 2321-2327, 2930-2936 (the 55 landings, on 33 tiles, all fall in that square).
  *
  * Ours: whether a whole loot fits is checked when it lands (the Wiki's "nothing whenever the player only has one
  * free inventory slot, when two unstackable items would be awarded", applied to any loot that does not fit), and
@@ -171,10 +171,21 @@ function openChest(object) {
   }));
 }
 
+/** The square's walkable tiles (2321,2930 and 2321,2931 hold a solid object; no landing in the captures is there). */
+function trapTiles() {
+  const tiles = [];
+  for (let x = TRAP_AREA.minX; x <= TRAP_AREA.maxX; x++) {
+    for (let y = TRAP_AREA.minY; y <= TRAP_AREA.maxY; y++) {
+      if (!core.RegionManager.blocked(new core.Location(x, y, 0), null)) tiles.push([x, y, 0]);
+    }
+  }
+  return tiles;
+}
+
 function trapTile() {
-  const x = TRAP_AREA.minX + Math.floor(random() * (TRAP_AREA.maxX - TRAP_AREA.minX + 1));
-  const y = TRAP_AREA.minY + Math.floor(random() * (TRAP_AREA.maxY - TRAP_AREA.minY + 1));
-  return [x, y, 0];
+  const tiles = trapTiles();
+  if (tiles.length === 0) return [TRAP_AREA.maxX, TRAP_AREA.maxY, 0];
+  return tiles[Math.floor(random() * tiles.length)];
 }
 
 function steps(player, object, outcome) {

@@ -170,6 +170,19 @@ test("a sprung trap: the teleport cast with the fail line, the trap line at 4, l
   assert.deepEqual(f.varbits, [[1, 1], [5, 0]]);
 });
 
+test("a sprung trap never lands on the square's blocked tiles (2321,2930 and 2321,2931)", async (t) => {
+  for (const pick of [0, 0.999]) {
+    const f = actor(t);
+    rolls(t, [0.99, 0.0, pick]); // fails, springs, the first or last walkable tile
+    await picklock(f);
+    ticks(f, 6);
+    Soul().setRandom(null);
+    const at = f.player.getLocation();
+    assert.equal(core.RegionManager.blocked(at, null), false, `landed on a blocked tile ${at.getX()}, ${at.getY()}`);
+    assert.ok(at.getX() >= 2321 && at.getX() <= 2327 && at.getY() >= 2930 && at.getY() <= 2936);
+  }
+});
+
 test("below 28 Thieving nothing is attempted (Wiki level)", async (t) => {
   const f = actor(t, { thieving: 27 });
   await picklock(f);

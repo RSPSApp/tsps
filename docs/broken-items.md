@@ -12,6 +12,7 @@ Untradeable combat items (fire capes, defenders, Void, Fighter torso and others)
   - Items Perdu can lock (infernal capes, Void, Fighter torso, ancient sceptres, Dizana's max cape) are lost unless locked. The killer still gets the repair cost.
   - Locked `(l)` items become `(l) (mangled)`, and the killer gets 500,000 coins.
   - Items Perdu can't lock break, as they do below level 20.
+- **Dizana's max cape's stored ammo** follows the quiver's rule (Wiki: Dizana's quiver, locking applies to "its max cape variant"). On a Wilderness death up to level 20, or above it unlocked, the ammo drops where the player died; a locked cape above 20 loses it. `Death.BrokenItems.js` emits `broken-items:pvp-death` { player, killer, item, location } before an item breaks, so `DizanasQuiver.plugin.js` sees the cape before it changes; a Wilderness death to an NPC reaches the quiver's own death hook.
 - **Locks from before the Trouver rework:** a fire cape (l) and other `(l)` items Perdu no longer locks break into the plain `(broken)` form.
 
 Before this, every kept item with a broken form came back broken after **any** death, PvM included, and the killer got nothing.

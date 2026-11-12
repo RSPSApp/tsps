@@ -202,3 +202,146 @@ test("submitted poses and sounds match unthrottled legacy/skeletal/smoothed anim
         assert.deepEqual(actualSounds, expectedSounds);
     }
 });
+
+// #4693: use real scene construction, active cache models/frames and the shared
+// geometry submission seam. This is native geometry proof, not rendered orbs.
+function spiritTreeScene(loader: LocModelLoader, info: any, overrides: (number | undefined)[] = [undefined],
+    id = 1293, randomStart?: boolean) {
+    const { Scene } = require("../rs/scene/Scene");
+    const { SceneBuilder, LocLoadType } = require("../rs/scene/SceneBuilder");
+    const scene = new Scene(1, 24, 12);
+    const builder = new SceneBuilder(info, {}, {}, {}, loader.locTypeLoader, loader, new Map());
+    const locs = overrides.map((override, i) => {
+        const x = 1 + i * 5;
+        builder.addLoc(scene, 0, x, 1, id, 10, 0, undefined, LocLoadType.NO_MODELS, override, randomStart);
+        const loc = scene.tiles[0][x][1].locs[0];
+        assert.ok(loc, "the actual SceneBuilder creates the map entity");
+        return { entity: loc.entity, sceneLoc: loc, level: 0, sceneX: loc.x, sceneZ: loc.y,
+            heightOffset: loc.height, priority: 0, contourGround: 0, interactType: 1, interactId: id, lowDetail: false };
+    });
+    return { scene, locs };
+}
+
+function submitTreeScene(loader: LocModelLoader, vars: any, setup: ReturnType<typeof spiritTreeScene>, smooth = false) {
+    const { SceneBuffer } = require("../render/buffer/SceneBuffer");
+    const buffer = new SceneBuffer(loader.textureLoader, new Map(), 4096);
+    const models: any[] = [], doors: any[] = [];
+    const groups: any[] = [...addLocEntities(false, loader, vars, setup.scene, models, doors,
+        buffer, setup.locs, smooth)];
+    const submitted = buffer.addLocAnimatedGroups(groups);
+    return { groups, submitted, buffer, models, doors };
+}
+
+function nativeLocLoaders() {
+    const { info, cache } = createCacheVm();
+    const factory = getCacheLoaderFactory(info, cache);
+    const loader = new LocModelLoader(factory.getLocTypeLoader(), factory.getModelLoader(), factory.getTextureLoader(),
+        factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
+    const { VarManager } = require("../rs/config/vartype/VarManager");
+    const vars = new VarManager(factory.getVarBitTypeLoader());
+    return { info, loader, vars };
+}
+
+test("Tree Gnome orbs: ordinary scene construction submits the completed variant's default sequence", () => {
+    const { info, loader, vars } = nativeLocLoaders();
+    assert.equal(info.game, "oldschool"); assert.equal(info.revision, 242);
+    const parent = loader.locTypeLoader.load(1293);
+    assert.equal(parent.transformVarbit, 598); assert.equal(parent.seqId, 332);
+    const setup = spiritTreeScene(loader, info);
+    assert.equal(setup.locs[0].entity.seqId, 332, "the map entity begins with the parent's idle");
+    for (const value of [0, 1]) {
+        vars.setVarbit(598, value);
+        const idle = submitTreeScene(loader, vars, setup);
+        assert.equal(idle.submitted[0].seqId, 332);
+        assert.equal(idle.groups[0].locs[0].interactId, 26259);
+    }
+    vars.setVarbit(598, 2);
+    assert.equal(parent.transform(vars, loader.locTypeLoader)?.id, 26261);
+    assert.equal(loader.locTypeLoader.load(26261).seqId, 333);
+    for (const smooth of [false, true]) {
+        const after = submitTreeScene(loader, vars, setup, smooth);
+        assert.equal(after.submitted.length, 1);
+        assert.equal(after.submitted[0].seqId, 333,
+            "TREE_GNOME_ORBS4693_TRANSFORMED_DEFAULT: completed mesh must bake and submit its own sequence");
+        assert.equal(after.groups[0].locs[0].interactId, 26261);
+        assert.equal(after.submitted[0].randomStart, loader.locTypeLoader.load(26261).seqRandomStart);
+        assert.ok(after.buffer.vertexCount() > 0, "actual cached geometry was baked");
+        assert.ok(after.groups[0].anim.frames.every((range: number[]) => range[1] > 0), "each actual sequence frame submits geometry");
+        const freshLogin = submitTreeScene(loader, vars, spiritTreeScene(loader, info), smooth);
+        assert.equal(freshLogin.submitted[0].seqId, 333, "fresh completed login/map reload has the same selected sequence");
+        assert.deepEqual(freshLogin.groups[0].anim.frames, after.groups[0].anim.frames);
+        assert.deepEqual(freshLogin.buffer.indices, after.buffer.indices);
+    }
+    const completed = loader.locTypeLoader.load(26261);
+    const moving = [0, 4].map(frame => loader.getModelAnimated(completed, 10, 0, 333, frame)!);
+    assert.ok(moving.every(Boolean));
+    assert.notDeepEqual([moving[0].verticesX, moving[0].verticesY, moving[0].verticesZ],
+        [moving[1].verticesX, moving[1].verticesY, moving[1].verticesZ], "active sequence moves actual model vertices (not visible-orb count proof)");
+});
+
+test("Tree Gnome orbs: equal-id packet override, explicit stop and override expiry stay distinct from defaults", () => {
+    const { info, loader, vars } = nativeLocLoaders(); vars.setVarbit(598, 2);
+    // One ordinary default, an explicit packet equal to the parent default, and
+    // an explicit stop coexist on the same selected model in one geometry build.
+    const setup = spiritTreeScene(loader, info, [undefined, 332, -1], 1293, false);
+    const built = submitTreeScene(loader, vars, setup);
+    assert.deepEqual(built.submitted.map((entry: any) => entry.seqId), [333, 332]);
+    assert.equal(built.groups.length, 2, "different effective sequences cannot share baked geometry");
+    assert.deepEqual(setup.locs.map(loc => loc.entity.seqOverride), [undefined, 332, -1]);
+    assert.ok(built.submitted.every((entry: any) => entry.randomStart === false), "explicit random-start override is retained");
+    assert.equal(built.models.length, 1, "-1 submits a static model instead of falling back to the variant animation");
+    assert.equal(built.models[0].interactId, 26261);
+    const restored = submitTreeScene(loader, vars, spiritTreeScene(loader, info));
+    assert.equal(restored.submitted[0].seqId, 333, "rebuild after packet override expiry restores the selected default");
+    const unrelated = submitTreeScene(loader, vars, spiritTreeScene(loader, info, [undefined], 26260));
+    assert.equal(unrelated.submitted[0].seqId, 332, "an untransformed tree keeps its own idle");
+});
+
+test("multiloc defaults: static, random-sequence and random-start variants preserve explicit stops", () => {
+    const { info, loader, vars } = nativeLocLoaders();
+    const nativeTypes = loader.locTypeLoader;
+    const source = nativeTypes.load(26261);
+    const copy = (fields: any) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, fields);
+    // Explicit synthetic config shapes over the actual cache model/sequence loaders.
+    // These do not assert that the active cache has these artificial loc ids.
+    const parent = copy({ id: 900001, seqId: 332, seqRandomStart: true,
+        transforms: [900002, 900002], transformVarbit: -1, transformVarp: 42 });
+    const variant = copy({ id: 900002, seqId: -1, seqRandomStart: false, transforms: undefined, randomSeqIds: undefined });
+    const fixtureTypes: any = { load: (id: number) => id === parent.id ? parent : id === variant.id ? variant : nativeTypes.load(id) };
+    const fixture = new LocModelLoader(fixtureTypes, loader.modelLoader, loader.textureLoader,
+        loader.seqTypeLoader, loader.seqFrameLoader, loader.skeletalSeqLoader);
+    vars.setVarp(42, 0);
+    const staticVariant = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [undefined], parent.id));
+    assert.equal(staticVariant.groups.length, 0); assert.equal(staticVariant.models.length, 1,
+        "an unanimated selected variant does not inherit the parent's sequence");
+    variant.randomSeqIds = [333, 332];
+    const random = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [undefined], parent.id));
+    assert.equal(random.submitted[0].seqId, 333, "selected random-sequence list follows existing first-entry policy");
+    assert.equal(random.submitted[0].randomStart, false, "selected variant owns default random-start policy");
+    const stopped = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [-1], parent.id));
+    assert.equal(stopped.groups.length, 0); assert.equal(stopped.models.length, 1);
+    parent.transforms = undefined; parent.seqId = -1; parent.randomSeqIds = [332];
+    const stoppedRandom = spiritTreeScene(fixture, info, [-1], parent.id);
+    assert.equal(stoppedRandom.locs[0].entity.seqId, -1, "explicit stop suppresses parent random fallback too");
+    const submittedStop = submitTreeScene(fixture, vars, stoppedRandom);
+    assert.equal(submittedStop.groups.length, 0); assert.equal(submittedStop.models.length, 1);
+});
+
+test("prepared ropes: SceneBuilder keeps an explicit stop static while the default remains prepared", () => {
+    const { info, loader, vars } = nativeLocLoaders();
+    for (const id of [23131, 23132]) {
+        const setup = spiritTreeScene(loader, info, [undefined, -1], id);
+        const built = submitTreeScene(loader, vars, setup);
+        assert.equal(built.groups.length, 1);
+        assert.equal(built.groups[0].locs.length, 1, "only the default rope is prepared for a later packet");
+        assert.equal(built.submitted[0].seqId, 497);
+        assert.ok(built.submitted[0].preparedOrigin, "default keeps the original rest/swing/expiry path");
+        assert.ok(built.groups[0].anim.baseFrame !== undefined, "default has actual baked rest geometry");
+        assert.equal(built.models.length, 1, "explicit -1 contributes only a static cache model");
+        assert.equal(built.models[0].interactId, id);
+        assert.equal(built.models[0].entity.seqOverride, -1);
+        assert.equal(built.models[0].preparedOrigin, undefined);
+        assert.ok(!built.groups.some((group: any) => group.locs.some((loc: any) => loc.sceneLoc === setup.locs[1].sceneLoc)),
+            "the stopped rope has neither an animated group nor a prepared origin");
+    }
+});

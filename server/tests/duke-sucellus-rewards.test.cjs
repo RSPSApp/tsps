@@ -12,10 +12,8 @@ function fixture(t) {
   // Player/HitQueue, NPC lethal-damage path and canonical loot consumer are real.
   h.api.getItemOnGroundManager = () => ({});
   Drops.register(h.api);
-  // The imported table carries the ordered Forgotten Four chain; its state provider is the saved-state plugin's
-  // contract (here: no saved state, no kill count, commit accepted).
-  h.api.onCustomEvent('npc-drops:reward-state', event => { if (event.domain === 'forgotten_four') { event.state = {}; event.killCount = 0; event.handled = true; } });
-  h.api.onCustomEvent('npc-drops:reward-state-commit', event => { event.committed = true; });
+  // The imported table carries the ordered Forgotten Four chain, so the real state plugin is registered too.
+  require('../plugins/npcs/ForgottenFourRewards.plugin').register(h.api);
   const s = h.enter();
   s.fight.wake();
   s.fight.nextAttack = Infinity;

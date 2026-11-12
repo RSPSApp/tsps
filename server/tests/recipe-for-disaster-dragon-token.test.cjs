@@ -11,6 +11,7 @@ const { before, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+const { Location } = require("../dist/game/model/Location");
 
 const DRAGON_TOKEN = 7478;
 const BLACK_DRAGON_TABLE = "black_dragon";
@@ -56,3 +57,23 @@ test("other quest-gated rows are left to their own quest plugins", () => {
 // with a stand-in NPC makes every other plugin's death hook throw. It is the pre-existing code path
 // this change leaves alone; what these tests pin is that the table no longer supplies a second,
 // ungated source.
+
+test("a black dragon kill through the real NpcDrops and Recipe for Disaster plugins never drops the token", (t) => {
+  const Drops = require("../plugins/npcs/NpcDrops.plugin");
+  Drops.__internals.loadDrops();
+  const dump = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../data/definitions/npc-drops.json"), "utf8"));
+  const npcId = Number(Object.entries(dump.npcs).find(([, npc]) => npc.tables.includes(BLACK_DRAGON_TABLE))[0]);
+  const table = Drops.__internals.tablesByNpc.get(npcId).find((candidate) => candidate.table_id === BLACK_DRAGON_TABLE);
+  const player = { getEquipment: () => ({ get: () => null, getItems: () => [] }), getAttribute: () => undefined };
+  const npc = {
+    getId: () => npcId,
+    getLocation: () => new Location(2800, 3100, 0),
+    getCurrentDefinition: () => ({ getName: () => "Black dragon", getCombatLevel: () => 247 }),
+  };
+  t.mock.method(Math, "random", () => 0.999999);
+  let tokens = 0;
+  for (let kill = 0; kill < 20; kill++) {
+    tokens += Drops.__internals.rollTable(table, player, npc).filter((drop) => drop.itemId === DRAGON_TOKEN).length;
+  }
+  assert.equal(tokens, 0, "the guaranteed row is declined by the Recipe for Disaster plugin, not rolled by the table");
+});

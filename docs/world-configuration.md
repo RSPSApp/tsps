@@ -639,6 +639,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PhoenixNecklace` | PhoenixNecklace | items | yes | Makes a worn Phoenix necklace heal 30% of Hitpoints and break when a hit leaves the wearer at 20% or less, except where food is banned. (members only) |
 | `Potions` | Potions | items | yes | Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers. |
 | `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
+| `QuestRewardLamps` | QuestRewardLamps | items | yes | The antique lamps from Shield of Arrav, Ernest the Chicken, Romeo & Juliet, Black Knights' Fortress and Demon Slayer: rub for their experience. |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |
 | `RevenantWeapons` | RevenantWeapons | items | yes | Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling. (members only) |
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |

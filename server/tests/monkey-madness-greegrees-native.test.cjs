@@ -32,6 +32,21 @@ before(async () => {
   const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
   mm1 = quests.find(q => q.key === 'monkey_madness_i'); mm2 = quests.find(q => q.key === 'monkey_madness_ii');
   assert.ok(mm1 && mm2);
+  const objects = [
+    ['mm_small_ninja_monkey_bones',3179],['mm_medium_ninja_monkey_bones',3180],
+    ['mm_normal_gorilla_monkey_bones',3181],['mm_bearded_gorilla_monkey_bones',3182],
+    ['mm_normal_monkey_bones',3183],['mm_small_zombie_monkey_bones',3185],
+    ['mm_large_zombie_monkey_bones',3186],['tbwt_monkey_corpse',3166],['mm_ancient_monkey_skull',4034],
+    ['mm_monkey_talisman',4023],['mm_monkey_greegree_for_small_ninja_monkey',4024],
+    ['mm_monkey_greegree_for_medium_ninja_monkey',4025],['mm_monkey_greegree_for_normal_gorilla',4026],
+    ['mm_monkey_greegree_for_bearded_gorilla',4027],['mm_monkey_greegree_for_ancient_monkey_skull',4028],
+    ['mm_monkey_greegree_for_small_zombie_monkey',4029],['mm_monkey_greegree_for_large_zombie_monkey',4030],
+    ['mm_monkey_greegree_for_normal_monkey',4031],['mm2_kruk_remains',19523],['mm2_kruk_greegree',19525],
+  ];
+  for(const [name,id] of objects){assert.equal(core.CacheDefinitions.getObjId(name),id,name);assert.equal(core.ItemDefinition.forId(id).isNoted(),false);}
+  assert.equal(core.ItemDefinition.forId(3184).isNoted(),true);
+  assert.equal(core.ItemDefinition.forId(3184).getNoteId(),3183);
+
   const data = JSON.parse(fs.readFileSync(path.resolve(__dirname,'../data/definitions/npc-spawns.json')));
   function worldNpc(id,x,y,z) {
     assert.ok(data.some(row => row.id===id && row.x===x && row.y===y && row.level===z), 'canonical world spawn row');
@@ -55,11 +70,6 @@ function actor(t,stage=9,mm2stage=0,npc=tunnel) {
   c.player=p; session.setPlayer(p); session.setTurnPacketProcessor(()=>c.processTurnPackets());
   p.setUsername('gg'+(Date.now()%1000000)+(++serial)); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
   p.setAttribute('bot-skip-persistence',true); assert.equal(core.World.getPlayers().add(p),true);
-  mm1.setStage(p,stage); mm2.setStage(p,mm2stage); p.setAttribute(GARKOR,true);
-  const pos=npc.getLocation();p.moveTo(new core.Location(pos.getX()+1,pos.getY(),pos.getZ()));p.needsPlacement=false;
-  assert.equal(p.getProfile(),MAIN_PROFILE); assert.equal(p.getPrivateArea(),null); assert.ok(p.getHitpoints()>0);
-  assert.equal(p.busy(),false); assert.equal(p.isRegistered(),true);
-  const messages=[],send=p.sendMessage.bind(p);p.sendMessage=s=>{messages.push(s);return send(s);};
   t.after(()=>{
     const index=p.getIndex();
     PM.emitPlayerDisconnect({player:p,username:p.getUsername()});PM.emitPlayerLogout({player:p,username:p.getUsername()});
@@ -67,12 +77,28 @@ function actor(t,stage=9,mm2stage=0,npc=tunnel) {
     core.TaskManager.cancelTasks(p);core.TaskManager.cancelTasks(index);core.World.getPlayers().remove(p);
     assert.equal(p.isRegistered(),false);assert.equal(core.TaskManager.hasActiveTask(p),false);assert.equal(core.TaskManager.hasActiveTask(index),false);
   });
+  mm1.setStage(p,stage); mm2.setStage(p,mm2stage); p.setAttribute(GARKOR,true);
+  const pos=npc.getLocation();p.moveTo(new core.Location(pos.getX()+1,pos.getY(),pos.getZ()));settlePlacement(p);
+  assert.equal(core.RegionManager.blocked(p.getLocation(),null),false,'ordinary standing tile is walkable');
+  assert.equal(p.getProfile(),MAIN_PROFILE); assert.equal(p.getPrivateArea(),null); assert.ok(p.getHitpoints()>0);
+  assert.equal(p.busy(),false); assert.equal(p.isRegistered(),true);
+  const messages=[],send=p.sendMessage.bind(p);p.sendMessage=s=>{messages.push(s);return send(s);};
+
   return {p,c,npc,messages};
 }
 function amount(f,id){return f.p.getInventory().getAmount(id);}
 function add(f,id,n=1){f.p.getInventory().add(new core.Item(id,n),true);assert.ok(amount(f,id)>=n);}
 function position(f){const l=f.p.getLocation();return [l.getX(),l.getY(),l.getZ()];}
-function turn(){core.World.process();core.TaskManager.process();}
+function turn(){core.World.process();}
+function settlePlacement(player){
+  assert.equal(player.isRegistered(),true);
+  assert.equal(player.isNeedsPlacement(),true,'placement starts pending after real move/login');
+  const start=core.World.getProcessCycle();
+  for(let i=0;i<4 && player.isNeedsPlacement();i++)turn();
+  assert.ok(core.World.getProcessCycle()>start,'ordinary World update ran');
+  assert.equal(player.isRegistered(),true,'player remains registered through update');
+  assert.equal(player.isNeedsPlacement(),false,'World naturally clears placement before input');
+}
 async function input(f,packet){await f.c.dispatch([packet]);for(let i=0;i<4;i++)turn();}
 function current(f){return f.p.getDialogueManager().getCurrent();}
 function options(f){return MultiChatboxPrompt.getPending(f.p)?.options ?? current(f)?.getOptions?.() ?? [];}
@@ -86,14 +112,24 @@ async function advance(f){
 }
 async function drain(f,max=160){for(let i=0;i<max && f.p.getDialogueManager().isActive();i++){assert.equal(options(f).length,0,'unexpected menu while draining');await advance(f);}assert.equal(f.p.getDialogueManager().isActive(),false,'dialogue finished within bound');assert.equal(options(f).length,0,'no unexpected remaining menu');}
 async function choose(f,label){const opts=options(f),n=opts.findIndex(o=>(typeof o==='string'?o:o.getText?.() ?? o.text)===label);assert.ok(n>=0,`ordinary option ${label}; current text=${text(f)} options=${JSON.stringify(opts)}`);await input(f,{type:'dialogue_continue',widgetId:(219<<16)|1,childIndex:n+1});}
-async function talk(f){const d=f.npc.getCurrentDefinition(f.p);assert.ok(d);assert.equal(d.getName(),'Zooknock');const op=d.getActions().indexOf('Talk-to')+1;assert.ok(op>0);await input(f,{type:'npc_option',index:f.npc.getIndex(),clickType:op});}
+async function talk(f){
+  const d=f.npc.getCurrentDefinition(f.p);assert.ok(d);assert.equal(d.getName(),'Zooknock');const op=d.getActions().indexOf('Talk-to')+1;assert.ok(op>0);
+  assert.equal(f.p.isNeedsPlacement(),false);let reached=0;const emit=PM.emitNpcInteraction;
+  PM.emitNpcInteraction=function(e){if(e.player===f.p){reached++;assert.equal(e.npc,f.npc);assert.equal(e.npcId,d.getId());assert.equal(e.clickType,op);}return emit.call(this,e);};
+  try{await input(f,{type:'npc_option',index:f.npc.getIndex(),clickType:op});assert.equal(reached,1,'ordinary NPC input reaches exact resolved actor once');}finally{PM.emitNpcInteraction=emit;}
+}
 async function request(f,yes=true){
   await talk(f);assert.ok(options(f).length>0,'repeat Talk-to opens the material-request menu without teleport');
   await choose(f,'Can you make another monkey talisman?');
   for(let i=0;i<8 && !options(f).length;i++)await advance(f);
   await choose(f,yes?'Yes':'No');await drain(f);
 }
-async function use(f,id){const slot=f.p.getInventory().getSlotForItemId(id);assert.ok(slot>=0);await input(f,{type:'item_on_npc',targetIndex:f.npc.getIndex(),itemId:id,slot,widgetId:149<<16});}
+async function use(f,id){
+  const inv=f.p.getInventory(),slot=inv.getSlotForItemId(id),item=inv.getItems()[slot];assert.ok(slot>=0);assert.equal(item.getId(),id);
+  assert.equal(f.p.isNeedsPlacement(),false);let reached=0;const emit=PM.emitItemOnNpc;
+  PM.emitItemOnNpc=function(e){if(e.player===f.p){reached++;assert.equal(e.target,f.npc);assert.equal(e.npcId,f.npc.getContentId(f.p));assert.equal(e.item,item);assert.equal(e.slot,slot);assert.equal(e.itemId,id);}return emit.call(this,e);};
+  try{await input(f,{type:'item_on_npc',targetIndex:f.npc.getIndex(),itemId:id,slot,widgetId:149<<16});assert.equal(reached,1,'ordinary item input reaches exact actor and physical selected slot once');}finally{PM.emitItemOnNpc=emit;}
+}
 async function exchange(f,remains,talismanFirst=false){await use(f,talismanFirst?4023:remains);await drain(f);await use(f,talismanFirst?remains:4023);await drain(f);}
 
 // Existing unaffected positive is reached through the same real actor/input machinery.
@@ -131,7 +167,7 @@ for(const first of [3179,4023])test(`partial ${first} handover survives close/sa
   assert.equal(f.p.getDialogueManager().isActive(),false);
   assert.equal(amount(f,3179),1);assert.equal(amount(f,4023),1,'offered items retained before handback');
   f.p.closeInterruptibleInterfaces();const saved=PlayerSave.fromPlayer(f.p);PM.emitPlayerLogout({player:f.p,username:f.p.getUsername()});
-  const g=actor(t);saved.applyToPlayer(g.p);PM.emitPlayerLogin({player:g.p,username:g.p.getUsername(),isNewAccount:false});g.p.needsPlacement=false;
+  const g=actor(t);saved.applyToPlayer(g.p);g.p.onLogin();PM.emitPlayerLogin({player:g.p,username:g.p.getUsername(),isNewAccount:false});settlePlacement(g.p);
   await use(g,first===3179?4023:3179);await drain(g);assert.equal(amount(g,4024),1);assert.equal(amount(g,3179),0);assert.equal(amount(g,4023),0);
   await input(g,{type:'dialogue_continue',widgetId:(193<<16)|0,childIndex:0});assert.equal(amount(g,4024),1);
 });
@@ -148,7 +184,7 @@ for(const first of [3183,4023])test(`initial MM1 both-order/restarted scene ${fi
   for(let i=0;i<25 && amount(f,4031)===0;i++)await advance(f);
   assert.equal(amount(f,4031),1);assert.equal(amount(f,3183),0);assert.equal(amount(f,4023),0);assert.equal(mm1.getStage(f.p),7);
   const saved=PlayerSave.fromPlayer(f.p);PM.emitPlayerLogout({player:f.p,username:f.p.getUsername()});
-  const g=actor(t,7);saved.applyToPlayer(g.p);PM.emitPlayerLogin({player:g.p,username:g.p.getUsername(),isNewAccount:false});g.p.needsPlacement=false;
+  const g=actor(t,7);saved.applyToPlayer(g.p);g.p.onLogin();PM.emitPlayerLogin({player:g.p,username:g.p.getUsername(),isNewAccount:false});settlePlacement(g.p);
   await talk(g);await drain(g);assert.equal(amount(g,4031),1);assert.equal(mm1.getStage(g.p),8);
 });
 test('legacy consumed initial credits recover with a full bag refusal and no guessed refund or duplicate reward',async t=>{

@@ -92,7 +92,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation() {},
+    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -576,13 +576,15 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
   RegionManager.init();
   RegionManager.loadMapFiles(1470, 3687);
-  for (const [upperLoc, lowerLoc, upper, lower] of [
-    [[1474, 3687, 0], [1471, 3687, 0], [1475, 3687, 0], [1470, 3687, 0]],
-    [[1459, 3690, 0], [1457, 3690, 0], [1460, 3690, 0], [1456, 3690, 0]],
+  // The east pair as recorded (rsprox 231/00725 ticks 238 and 743-747): east to west walks a tile a tick with
+  // the climbing render; west to east is one 4-tick move with sequence 1148. The west pair has no recording.
+  for (const [upperLoc, lowerLoc, upper, lower, recorded] of [
+    [[1474, 3687, 0], [1471, 3687, 0], [1475, 3687, 0], [1470, 3687, 0], true],
+    [[1459, 3690, 0], [1457, 3690, 0], [1460, 3690, 0], [1456, 3690, 0], false],
   ]) {
     for (const [id, at, from, to, animation] of [
-      [27362, upperLoc, upper, lower, "human_climbing_down"],
-      [42009, lowerLoc, lower, upper, "human_climbing"],
+      [27362, upperLoc, upper, lower, recorded ? null : "human_climbing_down"],
+      [42009, lowerLoc, lower, upper, recorded ? "death_human_climbing_down" : "human_climbing"],
     ]) {
       const object = MapObjects.get(id, new Location(...at), null);
       assert.ok(object, `the active map places handholds ${id} at ${at}`);
@@ -597,7 +599,8 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
         "routing stays on this side of the clipped cliff");
       assert.notEqual(operate(player, id, at), false);
       assert.deepEqual(tileOf(player), to);
-      assert.ok(player.state.animations.includes(CacheDefinitions.getSeqId(animation)));
+      if (animation) assert.ok(player.state.animations.includes(CacheDefinitions.getSeqId(animation)), animation);
+      else assert.equal(player.state.renders?.[0], CacheDefinitions.getSeqId("human_climbing"), "the climbing walk render");
       assert.equal(player.state.xp, 0, "a canyon entrance does not award Agility XP");
       assert.equal(player.state.blocked, false, "finishing the climb releases movement");
     }

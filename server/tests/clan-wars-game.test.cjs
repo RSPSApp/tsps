@@ -2070,11 +2070,12 @@ for(const victimIndex of [0,1]) test(`native Quarry side ${victimIndex} death me
   await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
   assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
   assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
-  const deadline=game.returnAt.get(victim);
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
   await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3424,5087]:[3423,5088],'Exit');
   if(delay) {
     assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
-    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(victim),deadline);assert.ok(deadline>C.now());
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
     tick(deadline-C.now());
     await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3424,5087]:[3423,5088],'Exit');
   }

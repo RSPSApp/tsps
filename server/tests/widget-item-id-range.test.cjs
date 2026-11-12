@@ -50,6 +50,62 @@ test('native widget suboperations preserve high item IDs and the existing empty-
   }
 });
 
+// The client writes these item fields with writeShort(itemId ?? -1): 65535 is "no item", 32768-65534 are real ids.
+const HIGH_ITEM_IDS = [0, 32767, 32768, 32926, 65534, 65535];
+
+test('legacy WIDGET_ACTION keeps high item IDs and the no-item sentinel', () => {
+  for (const itemId of HIGH_ITEM_IDS) {
+    const body = Buffer.concat([
+      Buffer.from([0, 149, 0, 0, 0, 149, 0, 0]), // widget 149:0, group 149, child 0
+      Buffer.from('Use\0\0', 'latin1'), // option, empty target
+      Buffer.from([1, 1, 0, 0, 0, 0, 0]), // opId, buttonNum, cursor x/y, primary
+      Buffer.from([0, 2, itemId >> 8, itemId & 0xff]), // slot 2, item
+    ]);
+    const actual = decodeClientPacket(Buffer.concat([Buffer.from([251, body.length]), body]));
+    assert.equal(actual.type, 'widget_action');
+    assert.equal(actual.slot, 2);
+    assert.equal(actual.itemId, itemId === 65535 ? undefined : itemId, `item ${itemId}`);
+  }
+});
+
+test('TRADE_ACTION keeps high item IDs and the no-item sentinel', () => {
+  for (const itemId of HIGH_ITEM_IDS) {
+    const body = Buffer.from([0, 0, 3, 0, 0, 0, 5, itemId >> 8, itemId & 0xff]); // offer, slot 3, quantity 5
+    const actual = decodeClientPacket(Buffer.concat([Buffer.from([180, body.length]), body]));
+    assert.equal(actual.type, 'trade_action');
+    assert.deepEqual([actual.action, actual.slot, actual.quantity], ['offer', 3, 5]);
+    assert.equal(actual.itemId, itemId === 65535 ? undefined : itemId, `item ${itemId}`);
+  }
+});
+
+test('IF_BUTTONT keeps a high source item ID and -1 for no item', () => {
+  for (const itemId of HIGH_ITEM_IDS) {
+    const bytes = Buffer.alloc(17);
+    bytes[0] = 90;
+    bytes.writeUInt16BE(itemId, 13); // after target widget/slot and source widget/slot
+    const actual = decodeClientPacket(bytes);
+    assert.equal(actual.type, 'widget_target');
+    assert.equal(actual.sourceItemId, itemId === 65535 ? -1 : itemId, `item ${itemId}`);
+  }
+});
+
+test('IF_TRIGGEROPLOCAL keeps a high item ID and -1 for no item', () => {
+  for (const itemId of HIGH_ITEM_IDS) {
+    const bytes = Buffer.alloc(17);
+    bytes[0] = 30;
+    bytes.writeUInt16BE(14, 1);
+    bytes.writeUInt16BE(12, 3);
+    bytes.writeInt32LE(1, 5); // opcodeParam
+    bytes.writeUInt16LE(4, 9); // child
+    bytes.writeInt32LE(WIDGET, 11);
+    bytes.writeUInt16LE(itemId, 15);
+    const actual = decodeClientPacket(bytes);
+    assert.equal(actual.type, 'local_trigger');
+    assert.equal(actual.childIndex, 4);
+    assert.equal(actual.itemId, itemId === 65535 ? -1 : itemId, `item ${itemId}`);
+  }
+});
+
 test('a matching unresolved backpack action reports once, while stale slots and other widgets stay quiet', async t => {
   require('../dist/Server').Server.installProductionPathResolver();
   const { CachePipeline } = require('../dist/game/cache/CachePipeline');

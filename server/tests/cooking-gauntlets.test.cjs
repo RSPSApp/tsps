@@ -60,8 +60,8 @@ test("the Wiki's stop-burn levels, and the foods that stop burning sooner on a r
     assert.equal(Cooking._test.stopBurnLevel(player(1), food(raw), FIRE), level, `${raw} on a fire`);
     assert.equal(Cooking._test.stopBurnLevel(player(1), food(raw), RANGE), level, `${raw} on a range`);
   }
-  // Swordfish: 80 on ranges, 86 on fires. Monkfish: 90 / 92, and 86 with gauntlets: the Wiki's monkfish chart has
-  // one gauntlets line for a fire and a range (its page's text gives 88 on a fire).
+  // Swordfish: 80 on ranges, 86 on fires. Monkfish: 90 / 92, and 86 with gauntlets on either: the Wiki's monkfish
+  // chart has one gauntlets line, and the Cooking gauntlets page's table gives 86 for "a fire or normal range".
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_SWORDFISH), RANGE), 80);
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_SWORDFISH), FIRE), 86);
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_MONKFISH), RANGE), 90);

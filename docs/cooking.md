@@ -39,8 +39,11 @@ highest). Every charted food stops burning by 150 on every cooker.
   keep a `stopBurn` level and the old straight line from a 42% burn chance at their level to none
   at `stopBurn`.
 - **Hunters' Rumours.** Graahk, kyatt and pyre fox need 25 rumours, the sunlight and moonlight
-  antelope and the dashing kebbit 50 (Wiki: Hunter meat). The refusal line is ours; the Wiki gives
-  none.
+  antelope and the dashing kebbit 50 (Wiki: Hunters' Rumours, its rewards table). The refusal
+  line is ours; the Wiki gives none. Bots pick their food through `canCookFood`, so they skip
+  meat their rumours, or a quest gate such as karambwanji's, don't allow.
+- **The Mess's clay oven** cooks ordinary food as well as servery food (Wiki: Clay oven, which
+  "acts like a regular range"); only servery food is limited to it.
 
 ## Sources
 

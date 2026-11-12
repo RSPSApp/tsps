@@ -54,12 +54,14 @@ function createCookAction(spec, world) {
     lastUseAt: 0, failedUses: 0, lastTargetKey: null, avoid: new Map(), chopping: false, moved: false, position: null,
   }));
 
-  /** The first raw item in the inventory the bot has the Cooking level for. */
+  /**
+   * The first raw item in the inventory the bot may cook: the Cooking level, and the quest and
+   * Hunters' Rumours gates the cooking plugin applies.
+   */
   function rawToCook(player) {
-    const level = player.getSkillManager().getCurrentLevel(world.core.Skill.COOKING);
     for (const [slot, item] of player.getInventory().getItems().entries()) {
       const cookable = item ? Cooking.COOKABLE_BY_RAW?.get(item.getId()) : null;
-      if (cookable && cookable.level <= level && !cookable.rangeOnly) return { item, slot };
+      if (cookable && !cookable.rangeOnly && Cooking.canCookFood(player, cookable)) return { item, slot };
     }
     return null;
   }

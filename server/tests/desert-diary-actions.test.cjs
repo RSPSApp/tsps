@@ -251,6 +251,8 @@ test("Nardah's cache Clay Oven cooks a wild pie through both gameplay interactio
   // Supply the local map placement; dispatch, cache definitions, inventory and the cooking loop are real.
   t.mock.method(core.MapObjects, "get", (id) => id === oven.getId() ? oven : null);
   t.mock.method(oven, "isWithinInteractionDistance", () => true);
+  // Wiki (Wild pie): at level 99 a clay oven still burns 33 in 256; a high roll always cooks.
+  t.mock.method(Math, "random", () => 0.999);
   let index = 4000;
   for (const interaction of ["use", "cook"]) {
     const player = new Player(null, new core.Location(3433, 2884, 0));

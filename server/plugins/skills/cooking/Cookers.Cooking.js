@@ -254,17 +254,38 @@ function canCook(player, object, cookable) {
     Common.mesbox(player, `You need a Cooking level of ${requiredLevel} to cook ${withArticle(cookable)}.`);
     return false;
   }
-  if (cookable.duringQuest && !questInProgress(player, cookable.duringQuest)) {
+  if (!duringQuestMet(player, cookable)) {
     // Wiki (Karambwanji): raw karambwanji cook only during Tai Bwo Wannai Trio.
     player.sendMessage(NOT_USEFUL_MESSAGE);
     return false;
   }
-  if (cookable.rumours && rumoursCompleted(player) < cookable.rumours) {
+  if (!rumoursMet(player, cookable)) {
     // Wiki (Hunter meat): the better meats need Hunters' Rumours; the line is ours, the Wiki has none.
     Common.mesbox(player, `You need to have completed ${cookable.rumours} Hunters' Rumours to cook ${withArticle(cookable)}.`);
     return false;
   }
   return true;
+}
+
+/** The Wiki's quest gate: a `duringQuest` food cooks only while that quest is under way. */
+function duringQuestMet(player, cookable) {
+  return !cookable.duringQuest || questInProgress(player, cookable.duringQuest);
+}
+
+/** The Wiki's Hunters' Rumours gate: 25 for graahk, kyatt and pyre fox, 50 for the antelopes and dashing kebbit. */
+function rumoursMet(player, cookable) {
+  return !cookable.rumours || rumoursCompleted(player) >= cookable.rumours;
+}
+
+/**
+ * Whether the player may cook this food anywhere, without messages: a members' world, the
+ * Cooking level and the quest and rumour gates. Bots pick their food with it; canCook adds the
+ * cooker's own checks and tells a player why not.
+ */
+function canCookFood(player, cookable) {
+  const requiredLevel = untrainedKarambwan(player, cookable) ? 1 : cookable.level;
+  return availableOnWorld(cookable) && Common.level(player) >= requiredLevel
+    && duringQuestMet(player, cookable) && rumoursMet(player, cookable);
 }
 
 /** Whether the quest is started and not yet complete. */
@@ -642,7 +663,7 @@ function attachCookers(api) {
 }
 
 module.exports = Object.assign(attachCookers, {
-  isCookingActive, isCooker, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
+  isCookingActive, isCooker, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
   _test: {
     startCooking, offerCook, cookOne, isSuccess, successChance, stopBurnLevel, successMessage, burnMessage, cookAnimationFor,
     cookableFor, canCook, activeSessions,

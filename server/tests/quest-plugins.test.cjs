@@ -10,6 +10,7 @@ before(async () => {
 
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const apiMethods = new Set(Object.keys(PluginManager.createApi('QuestTest')));
+const questTestButtons = new Map();
 const noopPacketSender = new Proxy({}, { get: (_target, key) => key === 'getVarbit' ? () => 0 : () => noopPacketSender });
 
 test('quest event names register and dispatch through the production API', () => {
@@ -93,6 +94,9 @@ function mockApi() {
   const noop = () => {};
   const base = {
     core: PluginManager.getCoreApi(),
+    onInterfaceActionButton: (ids, handler) => {
+      for (const id of Array.isArray(ids) ? ids : [ids]) questTestButtons.set(id, handler);
+    },
     onNpcDialogueVariant: (h) => handlers.variant.push(h),
     onNpcDialogueCondition: (h) => handlers.condition.push(h),
     onObjectInteraction: (target, actions) => {
@@ -23874,4 +23878,282 @@ test('RFD Murphy leaves at-sea and wreck copies to their own dialogue handlers',
   for (const npcId of [core.NpcIdentifiers.MURPHY_2, core.NpcIdentifiers.MURPHY_3, core.NpcIdentifiers.MURPHY_4]) {
     assert.equal(variant({ player, npcId, pages: [{ page: 'Recipe for Disaster/Freeing Pirate Pete' }] }), null);
   }
+});
+
+// Font advances are the first 256 bytes of the native p12_full metrics, as read
+// by client/rs/font/BitmapFont.ts. Ignoring its nonpositive kerning gives an upper
+// bound. Matching cache242 questjournal.if3: 431px scroll minus 16px text layer.
+let rfdFontAdvances;
+function rfdJournalTextWidth(line) {
+  if (!rfdFontAdvances) {
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    const { CacheIndexDat2 } = require('../dist/game/cache/codec/rs/cache/CacheIndex');
+    const { IndexType } = require('../dist/game/cache/codec/rs/cache/IndexType');
+    const cache = PluginManager.getCoreApi().CacheDefinitions;
+    const fontId = cache.getSpriteId('p12_full');
+    assert.ok(Number.isInteger(fontId), 'native p12_full font identity');
+    const metrics = CacheIndexDat2.fromStore(IndexType.DAT2.fonts, CachePipeline.getStore()).getFile(fontId, 0)?.data;
+    assert.ok(metrics?.length >= 256, 'native font metrics, not a guessed monospace width');
+    rfdFontAdvances = Array.from(metrics.slice(0, 256), x => x & 255);
+    assert.ok(rfdFontAdvances[87] > 0, 'W has a real native advance');
+  }
+  return [...line.replace(/<[^>]*>/g, '')].reduce((sum, c) => sum + rfdFontAdvances[c.charCodeAt(0)], 0);
+}
+
+// The native row selects the journal independently of the combined gameplay quest.
+// Checkpoints below seed existing saved stages; they do not simulate playing the quest.
+function rfdJournalFixture({ stage = 4, flags = 0, attributes = {}, inventory = [] } = {}) {
+  const { api } = mockApi();
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const Q = require('../plugins/quests/QuestRuntime');
+  const quest = Q.getRegisteredQuests().findLast(q => q.key === 'recipe_for_disaster');
+  for (const key of ['desert_treasure_i', 'horror_from_the_deep']) {
+    if (!Q.getRegisteredQuests().some(q => q.key === key)) Q.registerQuest(api, { key, name: key, completionValue: 2 });
+  }
+  const attrs = new Map(Object.entries({
+    'quest.recipe_for_disaster.stage': stage, 'recipe-for-disaster:rescues': flags,
+    'recipe-for-disaster:feast-seen': true, 'quest.points': 200,
+    'quest.desert_treasure_i.stage': 100, 'quest.horror_from_the_deep.stage': 100,
+    ...attributes,
+  }));
+  const strings = new Map(), configs = new Map(), interfaces = [], scripts = [];
+  const sender = new Proxy({
+    sendString: (text, uid) => strings.set(uid, text),
+    sendInterfaceScript: (id, args) => scripts.push([id, args]),
+    sendConfig: (id, value) => configs.set(id, value),
+    sendSubInterface: (uid, group) => interfaces.push(group),
+  }, { get: (target, key) => target[key] ?? (() => sender) });
+  const player = {
+    getAttribute: key => attrs.get(key),
+    getInventory: () => ({ getAmount: id => inventory.includes(id) ? 1 : 0 }),
+    getPacketSender: () => sender,
+  };
+  const { metadata } = require('../plugins/quests/QuestList.QuestRuntime');
+  const rows = [...metadata(api.core.CacheDefinitions).values()];
+  const open = (name, opId = 2) => {
+    const row = rows.find(row => row.displayname?.[0] === name);
+    assert.ok(row, `actual cache row ${name}`);
+    strings.clear(); configs.clear(); interfaces.length = 0; scripts.length = 0;
+    const before = [...attrs];
+    const click = questTestButtons.get((399 << 16) | 7);
+    assert.equal(typeof click, 'function', 'native row handler was registered');
+    click({ player, slot: row.id[0], opId });
+    assert.deepEqual([...attrs], before, 'reading a journal must not change gameplay state');
+    assert.ok(interfaces.includes(opId === 1 || stage === 0 ? 782 : 119));
+    assert.equal(configs.get(3679), row.rowId, 'latest journal is the clicked DB row');
+    if (opId === 2 && stage > 0) assert.equal(strings.get((119 << 16) | 5), `<col=7f0000>${name}</col>`);
+    const lines = Array.from({ length: configs.get(4398) ?? 0 }, (_, i) => strings.get((119 << 16) | (11 + i)));
+    for (const line of lines) assert.ok(rfdJournalTextWidth(line) <= 415, `p12_full text fits native 415px line: ${line}`);
+    assert.ok(lines.length <= 210, 'native line widget capacity');
+    return { row, lines, scripts: [...scripts], interfaces: [...interfaces], text: lines.join(' ').replace(/<[^>]*>/g, ''), title: strings.get((119 << 16) | 5) };
+  };
+  return { api, Q, quest, player, attrs, strings, configs, open };
+}
+
+const rfdJournalCases = [
+  ['Mountain Dwarf', 'dwarf', 1, 60, [[10, /Rohak/], [20, /Asgoldian ale/], [30, /price/], [40, /bowl of water/], [50, /cool the dwarven rock cake/]]],
+  ['Wartface & Bentnoze', 'goblin', 2, 40, [[5, /Goblin Village/], [10, /charcoal/], [15, /talk to the Goblin Cook/], [30, /spicy maggots/], [35, /use the slop/]]],
+  ['Pirate Pete', 'pirate', 4, 110, [[10, /Cook how/], [20, /ground kelp/], [30, /wear it/], [40, /talk to Nung/], [50, /five mudskipper hides/], [60, /talk to him again/], [70, /three bronze wires/], [80, /giant crab meat/], [90, /cook the fishcake/], [100, /use a cooked fishcake/]]],
+  ['Lumbridge Guide', 'guide', 8, 5, [[1, /Wizard Traiborn/], [2, /answer his questions/], [3, /bake the cake/], [4, /use the cake/]]],
+  ['Evil Dave', 'evil-dave', 16, 5, [[1, /Doris's basement/], [2, /ask Doris/], [3, /cat can catch hell-rats/], [4, /that mixture of spices/]]],
+  ['Skrach Uglogwee', 'skrach', 32, 170, [[10, /Rantz in the Feldip Hills/], [20, /meet him by the coast/], [30, /follow him to the coast/], [40, /axe on the tree/], [50, /hollow out/], [60, /talk to Rantz again/], [70, /firing an arrow/], [80, /take the ogre boat back/], [90, /ogre boat/], [100, /balloon toad/], [110, /bellows contain/], [120, /inflated a toad/], [130, /collected a rock/], [140, /place a balloon toad/], [150, /hunt the jubbly/], [160, /use cooked jubbly/]]],
+  ['Sir Amik Varze', 'amik', 64, 20, [[5, /Cook for the recipe/], [10, /Evil Chicken's egg/]]],
+  ['King Awowogei', 'awowogei', 128, 50, [[5, /three wise monkeys/], [10, /banana and monkey nuts/], [15, /large snake corpse/], [20, /stuff the snake/], [30, /zombie monkey/], [40, /use the cooked stuffed snake/]]],
+];
+for (const [name, key, flag, end, checkpoints] of rfdJournalCases) {
+  test(`RFD native journal ${name}: uninspected, each saved step, freed and parent completion`, () => {
+    const f = rfdJournalFixture();
+    const rowName = `Recipe for Disaster - ${name}`;
+    assert.match(f.open(rowName).text, /I need to inspect/);
+    assert.doesNotMatch(f.open(rowName).text, /QUEST COMPLETE/);
+    for (const [stage, expected] of checkpoints) {
+      f.attrs.set(`recipe-for-disaster:${key}-stage`, stage);
+      const result = f.open(rowName);
+      assert.match(result.text, expected, `${name} stage ${stage}: current instruction`);
+      assert.doesNotMatch(result.lines.at(-1), /<str>/, 'current work is not crossed out');
+      assert.doesNotMatch(result.text, /I need to inspect/, 'active steps do not invent completed history');
+      assert.ok(result.lines.every(line => line.replace(/<[^>]*>/g, '').length <= 58), 'native line budget');
+      assert.doesNotMatch(result.text, /QUEST COMPLETE/);
+    }
+    f.attrs.set(`recipe-for-disaster:${key}-stage`, 0);
+    f.attrs.set('recipe-for-disaster:rescues', flag);
+    assert.match(f.open(rowName).text, /QUEST COMPLETE/);
+    assert.ok(f.open(rowName).lines.some(line => line.startsWith('<str>I freed')));
+    // A sibling row is still active, independently of this one's completion.
+    const sibling = rfdJournalCases.find(entry => entry[0] !== name)[0];
+    assert.doesNotMatch(f.open(`Recipe for Disaster - ${sibling}`).text, /QUEST COMPLETE/);
+    f.attrs.set('recipe-for-disaster:rescues', 0);
+    f.attrs.set('quest.recipe_for_disaster.stage', 5);
+    assert.match(f.open(rowName).text, /QUEST COMPLETE/);
+    f.attrs.set('quest.recipe_for_disaster.stage', 4);
+    f.attrs.set(`recipe-for-disaster:${key}-stage`, end);
+    assert.match(f.open(rowName).text, /QUEST COMPLETE/);
+  });
+}
+
+test('RFD journals retain legacy progress without exposing Evil Dave hidden spice amounts', () => {
+  const f = rfdJournalFixture({ attributes: {
+    'recipe-for-disaster:pirate-state': 8,
+    'recipe-for-disaster:evil-dave-state': 3,
+    'recipe-for-disaster:evil-dave-recipe': { red: 3, yellow: 2, brown: 1, orange: 3 },
+  } });
+  assert.match(f.open('Recipe for Disaster - Pirate Pete').text, /needle and three bronze wires/);
+  const dave = f.open('Recipe for Disaster - Evil Dave').text;
+  assert.match(dave, /cat can catch hell-rats/);
+  assert.doesNotMatch(dave, /red:|yellow:|orange:|brown:/);
+});
+
+test('RFD intro journal lists actual banquet ingredients and completes before rescues', () => {
+  const f = rfdJournalFixture({ stage: 1 });
+  const row = "Recipe for Disaster - Another Cook's Quest";
+  assert.match(f.open(row).text, /eye of newt/);
+  assert.match(f.open(row).text, /greenman's ale/);
+  assert.match(f.open(row).text, /rotten tomato/);
+  assert.match(f.open(row).text, /Dirty Blast/);
+  f.attrs.set('quest.recipe_for_disaster.stage', 4);
+  assert.match(f.open(row).text, /QUEST COMPLETE/);
+  assert.doesNotMatch(f.open('Recipe for Disaster').text, /QUEST COMPLETE/);
+  const ready = rfdJournalFixture({ stage: 1, inventory: [f.api.core.ItemIdentifiers.EYE_OF_NEWT, f.api.core.ItemIdentifiers.GREENMANS_ALE,
+    f.api.core.ItemIdentifiers.ROTTEN_TOMATO, f.api.core.ItemIdentifiers.DIRTY_BLAST] });
+  assert.match(ready.open(row).text, /I have all the ingredients/);
+  assert.ok(ready.open(row).lines.some(line => line.includes('<str>an eye of newt')));
+});
+
+test('RFD parent and finale journals distinguish remaining rescues, prerequisites, portal and final completion', () => {
+  const f = rfdJournalFixture();
+  for (const name of ['Recipe for Disaster', 'Recipe for Disaster - Culinaromancer']) {
+    assert.match(f.open(name).text, /free 8 council members/);
+    f.attrs.set('recipe-for-disaster:rescues', 127);
+    assert.match(f.open(name).text, /free 1 council member\./);
+    f.attrs.set('recipe-for-disaster:rescues', 255);
+    f.attrs.set('quest.points', 174);
+    assert.match(f.open(name).text, /175 quest points/);
+    assert.doesNotMatch(f.open(name).text, /still need to free/);
+    f.attrs.set('quest.points', 200);
+    f.attrs.set('quest.desert_treasure_i.stage', 0);
+    assert.match(f.open(name).text, /Desert Treasure I completed/);
+    f.attrs.set('quest.desert_treasure_i.stage', 100);
+    assert.match(f.open(name).text, /through the portal and defeat him/);
+    f.attrs.set('recipe-for-disaster:culinaromancer-wave', -1);
+    assert.match(f.open(name).text, /through the portal/);
+    f.attrs.set('recipe-for-disaster:culinaromancer-wave', 3);
+    assert.match(f.open(name).text, /through the portal/);
+    f.attrs.set('recipe-for-disaster:culinaromancer-defeated', true);
+    assert.match(f.open(name).text, /speak to Aris to finish/);
+    f.attrs.set('quest.recipe_for_disaster.stage', 5);
+    assert.match(f.open(name).text, /QUEST COMPLETE/);
+    f.attrs.set('quest.recipe_for_disaster.stage', 4);
+    f.attrs.set('recipe-for-disaster:rescues', 0);
+    f.attrs.delete('recipe-for-disaster:culinaromancer-defeated');
+  }
+});
+
+test('RFD native View info always opens the row overview, including started and complete saves', () => {
+  const names = ["Recipe for Disaster - Another Cook's Quest", 'Recipe for Disaster - Culinaromancer',
+    ...rfdJournalCases.map(([name]) => `Recipe for Disaster - ${name}`)];
+  for (const stage of [0, 4, 5]) {
+    const f = rfdJournalFixture({ stage });
+    for (const name of names) {
+      for (const op of stage === 0 ? [1, 2] : [1]) {
+        const result = f.open(name, op);
+        assert.ok(result.interfaces.includes(782));
+        assert.equal(result.interfaces.includes(119), false, 'overview does not reveal the current journal');
+        const setup = result.scripts.find(([id]) => id === 6821);
+        assert.ok(setup, 'native overview setup script carries the start sentence');
+        assert.ok(setup[1].some(arg => typeof arg === 'string' && /Cook|dining room/.test(arg)), name);
+        assert.equal(f.attrs.get('quest.recipe_for_disaster.stage'), stage, 'View info does not reset the real quest');
+      }
+    }
+  }
+});
+
+test('RFD journal independent Skrach supplies do not fabricate earlier completed objectives', () => {
+  const f = rfdJournalFixture({ attributes: { 'recipe-for-disaster:skrach-stage': 130 } });
+  const result = f.open('Recipe for Disaster - Skrach Uglogwee');
+  assert.match(result.text, /collected a rock/);
+  assert.doesNotMatch(result.text, /inflated a toad|bellows contain|hollow out/);
+  assert.equal(result.lines.some(line => line.includes('<str>')), false);
+});
+
+test('RFD Amik journal follows existing clue, kill, token and prepared food state', () => {
+  const key = 'Recipe for Disaster - Sir Amik Varze';
+  const f = rfdJournalFixture({ attributes: { 'recipe-for-disaster:amik-stage': 10 } });
+  assert.match(f.open(key).text, /ask the Wise Old Man/);
+  f.attrs.set('recipe-for-disaster:amik-wom-briefed', 1);
+  assert.match(f.open(key).text, /offer raw chicken/);
+  f.attrs.set('recipe-for-disaster:amik-chicken-dead', true);
+  assert.match(f.open(key).text, /I defeated the Evil Chicken/);
+  f.attrs.set('recipe-for-disaster:amik-dragon-drop', true);
+  assert.match(f.open(key).text, /I obtained a dragon token/);
+  const prepared = rfdJournalFixture({ attributes: { 'recipe-for-disaster:amik-stage': 10 }, inventory: [f.api.core.ItemIdentifiers.BRULEE_3] });
+  assert.match(prepared.open(key).text, /rub a dragon token/);
+  const cooked = rfdJournalFixture({ attributes: { 'recipe-for-disaster:amik-stage': 10 }, inventory: [f.api.core.ItemIdentifiers.BRULEE_SUPREME] });
+  assert.match(cooked.open(key).text, /use the creme brulee supreme/);
+});
+
+
+test('RFD Skrach journal distinguishes setting bait from obtaining raw jubbly at shared stage 150', () => {
+  const attributes = { 'recipe-for-disaster:skrach-stage': 150 };
+  const bait = rfdJournalFixture({ attributes });
+  assert.match(bait.open('Recipe for Disaster - Skrach Uglogwee').text, /hunt the jubbly/);
+  const meat = rfdJournalFixture({ attributes, inventory: [bait.api.core.ItemIdentifiers.RAW_JUBBLY] });
+  assert.match(meat.open('Recipe for Disaster - Skrach Uglogwee').text, /cook the raw jubbly/);
+  assert.doesNotMatch(meat.open('Recipe for Disaster - Skrach Uglogwee').text, /hunt the jubbly/);
+});
+
+
+test('RFD parent journal counts legacy numeric completion consistently with its child without migrating flags', () => {
+  const f = rfdJournalFixture({ attributes: { 'recipe-for-disaster:pirate-stage': 110 } });
+  assert.match(f.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  assert.match(f.open('Recipe for Disaster').text, /free 7 council members/);
+  assert.match(f.open('Recipe for Disaster - Culinaromancer').text, /free 7 council members/);
+  assert.equal(f.attrs.get('recipe-for-disaster:rescues'), 0);
+  for (const [, key, , end] of rfdJournalCases) f.attrs.set(`recipe-for-disaster:${key}-stage`, end);
+  for (const name of ['Recipe for Disaster', 'Recipe for Disaster - Culinaromancer']) {
+    const result = f.open(name);
+    assert.match(result.text, /rescue journals are complete/);
+    assert.match(result.text, /finish the council's rescue at the banquet/);
+    assert.doesNotMatch(result.text, /free 0|through the portal and defeat him|QUEST COMPLETE/);
+  }
+  assert.equal(f.attrs.get('recipe-for-disaster:rescues'), 0, 'no invented flag migration or mechanics change');
+});
+
+
+test('RFD parent journal lists all council names once with truthful complete or pending status', () => {
+  const labels = rfdJournalCases.map(([name]) => name === 'Wartface & Bentnoze' ? 'Goblin generals (Wartface & Bentnoze)' : name);
+  const checkMembers = (f, completed) => {
+    const result = f.open('Recipe for Disaster');
+    assert.match(result.text, /Council members:/);
+    for (const [i, label] of labels.entries()) {
+      assert.equal(result.text.split(label).length - 1, 1, `${label} appears once`);
+      assert.ok(result.text.includes(`${label}: ${completed(i) ? 'rescue complete' : 'still needs rescuing'}.`), label);
+    }
+    assert.doesNotMatch(f.open('Recipe for Disaster - Culinaromancer').text, /Council members:/, 'finale child retains its own guidance');
+    return result;
+  };
+  const zero = rfdJournalFixture();
+  checkMembers(zero, () => false);
+  const mixed = rfdJournalFixture({ flags: 85 });
+  const before = [...mixed.attrs];
+  checkMembers(mixed, i => Boolean(85 & rfdJournalCases[i][2]));
+  assert.deepEqual([...mixed.attrs], before, 'informational rendering never awards or migrates rescues');
+  const legacy = rfdJournalFixture({ attributes: { 'recipe-for-disaster:pirate-stage': 110 } });
+  checkMembers(legacy, i => i === 2);
+  assert.match(legacy.open('Recipe for Disaster').text, /free 7 council members/);
+  assert.match(legacy.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  assert.equal(legacy.attrs.get('recipe-for-disaster:rescues'), 0);
+  for (const [, key, , end] of rfdJournalCases) legacy.attrs.set(`recipe-for-disaster:${key}-stage`, end);
+  assert.match(checkMembers(legacy, () => true).text, /finish the council's rescue at the banquet/);
+  assert.equal(legacy.attrs.get('recipe-for-disaster:rescues'), 0);
+  const freed = rfdJournalFixture({ flags: 255 });
+  assert.match(checkMembers(freed, () => true).text, /through the portal and defeat him/);
+  freed.attrs.set('quest.points', 174);
+  assert.match(checkMembers(freed, () => true).text, /175 quest points/);
+  freed.attrs.set('quest.recipe_for_disaster.stage', 5);
+  assert.match(checkMembers(freed, () => true).text, /QUEST COMPLETE/);
+  const intro = rfdJournalFixture({ stage: 1 });
+  assert.doesNotMatch(intro.open('Recipe for Disaster').text, /Council members:/, 'the banquet introduction remains separate');
+  // Reopen the long parent after a short child journal; only the new active lines count.
+  assert.match(mixed.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  checkMembers(mixed, i => Boolean(85 & rfdJournalCases[i][2]));
 });

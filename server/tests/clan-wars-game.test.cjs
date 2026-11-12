@@ -518,3 +518,36 @@ test('kill-target late join and channel-leave death credit use real channel even
   tick(2); assert.deepEqual(game.kills,[0,1],'channel event and polling cannot double count');
   assert.equal(C.matches.has(extra),false); assert.equal(game.phase,'combat');
 });
+
+
+test('kill-target finish protects two queued production death tasks before the second dying event', async () => {
+  const a=actor(), b=actor(); channel(a); channel(b);
+  const game=await negotiate(a,b,1,1); await join(a); await join(b);
+  core.World.processCycle=game.starts; game.tick();
+  // Seed the immediately-before-target state for the concurrent death boundary.
+  // The separate full-match case reaches the actual 25-kill target without seeding scores.
+  game.kills[1]=24;
+  for (const [i,p] of [a,b].entries()) {
+    p.getInventory().add(new core.Item(995,41+i,{qa:`pending-${i}`}),false);
+    p.getCombat().addDamage(i===0?b:a,10);
+  }
+  a.setHitpoints(0); b.setHitpoints(0);
+  assert.equal(a.isDyingReturn(),true); assert.equal(b.isDyingReturn(),true);
+  assert.equal(Match.dying.size,0,'both tasks are queued before either emits dying');
+  tick();
+  assert.equal(game.phase,'over','the first queued death reaches the target');
+  for (const p of [a,b]) {
+    assert.equal(Match.dying.has(p),true,'cleanup retains both current and not-yet-started safe deaths');
+    const reward={victim:p,allow:true}; PM.emitCustomEvent('pvp:count-stats',reward);
+    assert.equal(reward.allow,false);
+    assert.equal(PM.emitShouldDropItemsOnDeath(p,null),false);
+  }
+  tick(4);
+  for (const [i,p] of [a,b].entries()) {
+    assert.equal(Match.dying.has(p),false);
+    assert.equal(p.getInventory().getAmount(995),41+i);
+    assert.deepEqual(p.getInventory().getValidItems().find(x=>x.getId()===995).getMeta(),{qa:`pending-${i}`});
+    assert.equal(p.getPrivateArea(),null);
+    assert.deepEqual([p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()],C.RETURN);
+  }
+});

@@ -185,6 +185,11 @@ class Game {
   }
   finish(winner) {
     if (this.phase === "over") return;
+    // Lethal hits enqueue death tasks before those tasks emit player:dying. A
+    // target reached by the first task must also protect the other queued deaths.
+    for (const [player, side] of this.members) {
+      if (player.isDyingReturn() && !dying.has(player)) dying.set(player, { game: this, side });
+    }
     this.phase = "over";
     this.task.stop();
     active.delete(this);

@@ -7,7 +7,8 @@
  * A crystal used on a crystal helm, body or legs, or on a corrupted blade of Saeldor or bow of
  * Faerdhinen, asks "Are you sure you wish to recolour your <item>?" (Yes / No). Yes uses up the
  * crystal and turns the item into that clan's colour in the same slot, keeping its charges, with
- * animation 'human_xbow_enchant_arrowtip', sound 144 and an item box of the new item and the crystal.
+ * animation 'human_xbow_enchant_arrowtip', graphic 'xbows_enchanting_tips_spot', sound 144 and an item
+ * box of the new item and the crystal.
  * Armour's own colour is Meilyr's and the weapons' Hefin's, so those crystals turn any colour back.
  */
 const CLANS = ["ithell", "iorwerth", "trahaearn", "cadarn", "crwys", "meilyr", "hefin", "amlodd"];
@@ -18,6 +19,7 @@ const WEAPON_BASE_CLAN = "hefin";
 /** Kept in the families so a Deadman piece can be recoloured; no crystal gives this colour. */
 const DEADMAN = "deadman";
 const RECOLOUR_SEQUENCE = "human_xbow_enchant_arrowtip";
+const RECOLOUR_GRAPHIC = "xbows_enchanting_tips_spot";
 const RECOLOUR_SOUND = 144;
 
 let core = null;
@@ -84,6 +86,8 @@ function recolour(player, { crystal, target, clan }, name = nameOf(target.getId(
   inventory.refreshItems();
   const sequence = core.CacheDefinitions.getSeqId?.(RECOLOUR_SEQUENCE);
   if (sequence != null) player.performAnimation(new core.Animation(sequence));
+  const graphic = core.CacheDefinitions.getSpotanimId?.(RECOLOUR_GRAPHIC);
+  if (graphic != null) player.performGraphic(new core.Graphic(graphic));
   player.getPacketSender().sendSound(RECOLOUR_SOUND, 1, 0);
   const text = `You use the crystal to colour your ${name}.`;
   player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);

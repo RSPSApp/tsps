@@ -25,13 +25,14 @@ const obj = (name) => CacheDefinitions.getObjId(name);
 function createPlayer(items) {
   const player = {
     items: [...items],
-    boxes: [], sounds: [], animations: [], dialogues: [],
+    boxes: [], sounds: [], animations: [], graphics: [], dialogues: [],
     getInventory: () => ({
       getItems: () => player.items,
       deleteItem: (item, slot) => { if (player.items[slot] === item) player.items[slot] = null; },
       refreshItems() {},
     }),
     performAnimation: (animation) => player.animations.push(animation.getId()),
+    performGraphic: (graphic) => player.graphics.push(graphic.getId()),
     getPacketSender: () => ({
       sendSound: (id) => player.sounds.push(id),
       sendTypedMessage: (_type, text) => player.boxes.push(text),
@@ -65,6 +66,8 @@ test("a clan crystal on a crystal helm asks first, then recolours it in place ke
   assert.equal(player.items[1], null, "the crystal is used up");
   assert.deepEqual(player.sounds, [144]);
   assert.deepEqual(player.animations, [CacheDefinitions.getSeqId("human_xbow_enchant_arrowtip")]);
+  assert.deepEqual(player.graphics, [CacheDefinitions.getSpotanimId("xbows_enchanting_tips_spot")]);
+  assert.equal(player.graphics[0], 759);
   assert.deepEqual(player.boxes, ["You use the crystal to colour your Crystal helm."]);
   const [box] = player.dialogues[0];
   assert.deepEqual(box.getItemIds(), [obj("crystal_helmet_iorwerth"), obj("prif_clan_crystal_iorwerth")]);

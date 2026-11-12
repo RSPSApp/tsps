@@ -46,7 +46,10 @@ module.exports = function createWitness(api) {
   /** The player's witness; a save already past asking around keeps Bob. */
   function of(player, askedAround, exclude = []) {
     let index = Number(player.getAttribute(WITNESS_ATTRIBUTE)) || 0;
-    if (index < 1 || index > WITNESSES.length) {
+    // Still asking around, nobody has told the player anything yet: a witness who can't answer now
+    // (Father Aereck once The Restless Ghost is under way) is swapped for another.
+    const unavailable = !askedAround && exclude.includes(WITNESSES[index - 1]?.npcId);
+    if (index < 1 || index > WITNESSES.length || unavailable) {
       if (askedAround) player.setAttribute(WITNESS_ATTRIBUTE, LEGACY_WITNESS);
       else pick(player, exclude);
       index = Number(player.getAttribute(WITNESS_ATTRIBUTE));

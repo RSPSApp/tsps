@@ -3970,6 +3970,10 @@ test('Lost Tribe witness: Hans tells what he saw as live did, the others answer 
   church.talk(aereck);
   assert.doesNotMatch(String(MultiChatboxPrompt.getPending(church.player)?.options ?? ''), /castle cellar/);
   church.player.closeInterruptibleInterfaces();
+  church.player.setAttribute(LT_WITNESS, 4);
+  church.talk(hans);
+  assert.notEqual(church.player.getAttribute(LT_WITNESS), 4, 'a saved Aereck witness is swapped while still asking around');
+  church.player.closeInterruptibleInterfaces();
   for (let n = 0; n < 40; n++) {
     church.player.setAttribute(LT_WITNESS, 0);
     church.quest.setStage(church.player, 0);

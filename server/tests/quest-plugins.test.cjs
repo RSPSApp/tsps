@@ -21876,6 +21876,31 @@ test('The Lost Tribe reads its symbol book and advances only when the reader clo
   assert.equal(varbits.get(532), 6);
 });
 
+test('The Lost Tribe guide dialogue preserves the treaty checkpoint without an immediate teleport', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const attrs = new Map([['quest.the_lost_tribe.stage', 10]]);
+  const destinations = [];
+  const player = {
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    moveTo: at => destinations.push([at.getX(), at.getY(), at.getZ()]),
+  };
+  const actions = handlers.custom.get('npc-dialogue:action');
+  for (const action of actions) action({ player, stepId: 'm471ps', kind: 'message' });
+  assert.equal(attrs.get('quest.the_lost_tribe.stage'), 11);
+  assert.deepEqual(destinations, [], 'the guide travel plugin owns the delayed crossing');
+});
+
+test('The Lost Tribe Mistag dialogue leaves movement to the guide crossing', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/LostTribe.Quest')(api);
+  const destinations = [];
+  const player = { getAttribute: () => 9, moveTo: at => destinations.push([at.getX(), at.getY(), at.getZ()]) };
+  for (const action of handlers.custom.get('npc-dialogue:action')) action({ player, stepId: 'yWjjdW', kind: 'message' });
+  assert.deepEqual(destinations, [], 'Mistag dialogue cannot send the player to the surface');
+});
+
 test('The Lost Tribe login recovers the saved treaty scene exit', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/LostTribe.Quest')(api);

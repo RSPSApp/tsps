@@ -3746,6 +3746,24 @@ test('Legends guard still refuses an ineligible player after the RFD opening', a
   assert.equal(rfdSavedProgress(player), before);
 });
 
+test('Lost Tribe Mistag dialogue returns through the tunnel after the captured fade', async t => {
+  const f = fixture(t), { player } = f;
+  registeredQuest('the_lost_tribe').setStage(player, 9);
+  player.setLocation(new core.Location(3318, 9616, 0));
+  f.npc = core.NPC.create(core.NpcIdentifiers.MISTAG_3, new core.Location(3319, 9616, 0));
+  PM.emitNpcInteraction({ player, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  for (let n = 0; n < 10 && !MultiChatboxPrompt.getPending(player); n++) await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(player)?.options ?? [];
+  const option = options.indexOf('Can you show me the way out of the mines?');
+  assert.ok(option >= 0, 'the real quest dialogue offers the return route');
+  await choose(f, option + 1);
+  for (let n = 0; n < 8 && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3318, 9616], 'the crossing does not move on the message tick');
+  for (let n = 0; n < 3; n++) core.TaskManager.process();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3235, 9610]);
+  for (let n = 0; n < 3; n++) core.TaskManager.process();
+});
+
 function lostTribeSilverwareFixture(t, { ham = 2, stage = 9, contact = 2, silverware = true } = {}) {
   const f = fixture(t);
   f.quest = registeredQuest('the_lost_tribe');

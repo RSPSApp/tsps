@@ -159,8 +159,6 @@ module.exports = function registerLostTribeQuest(api) {
   const HAM_LADDER_TILE = "3118,9643,0";
   const HAM_HIDEOUT_LANDING = { x: 3119, y: 9643 };
   const HAM_SURFACE_LANDING = { x: 3119, y: 3244 };
-  const LUMBRIDGE_LANDING = { x: 3209, y: 3214 };
-  const MISTAG_LANDING = { x: 3319, y: 9616 };
 
   const HAM_ROBE_SET = [
     ItemIdentifiers.HAM_HOOD, // 4302
@@ -176,13 +174,11 @@ module.exports = function registerLostTribeQuest(api) {
   const NO_TREATY_CONDITION_ID = "cXIAOU";
   const DRAGON_SLAYER_CONDITION_ID = "PbfBX1";
   const RUNE_MYSTERIES_CONDITION_ID = "We9PoA";
-  /** Kazgar's water-mill option needs Death to the Dorgeshuun, which this server lacks. */
+  /** Kazgar's nested water-mill option ("After Death to the Dorgeshuun" on the transcript). */
   const WATERMILL_OPTION_CONDITION_ID = "UEIaPX";
   // Action / message step ids.
   const TAKE_BOOK_ACTION_ID = "ThLyr1";
   const READ_PAGES_ACTION_ID = "8WepSb";
-  const WAY_OUT_ACTION_ID = "yWjjdW";
-  const POST_QUEST_WAY_OUT_ACTION_ID = "uzpbCL";
   const ROBES_FOUND_ACTION_ID = "RCYXcm";
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
@@ -642,7 +638,7 @@ module.exports = function registerLostTribeQuest(api) {
     if (stepId === KEY_CONDITION_ID) return held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_KEY_CONDITION_ID) return !held(player, ItemIdentifiers.KEY_10);
     if (stepId === NO_TREATY_CONDITION_ID) return !held(player, ItemIdentifiers.PEACE_TREATY);
-    if (stepId === WATERMILL_OPTION_CONDITION_ID) return false;
+    if (stepId === WATERMILL_OPTION_CONDITION_ID) return hasQuest(player, "death_to_the_dorgeshuun");
     // Unknown condition: leave it for the owning plugin (null = unanswered).
     return null;
   }
@@ -738,14 +734,7 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === KAZGAR_ESCORT_ACTION_ID) {
-      if (quest.getStage(player) >= STAGE_TREATY) {
-        if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
-        player.moveTo(new Location(MISTAG_LANDING.x, MISTAG_LANDING.y, 0));
-      }
-      return;
-    }
-    if (stepId === WAY_OUT_ACTION_ID || stepId === POST_QUEST_WAY_OUT_ACTION_ID) {
-      player.moveTo(new Location(LUMBRIDGE_LANDING.x, LUMBRIDGE_LANDING.y, 0));
+      if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {

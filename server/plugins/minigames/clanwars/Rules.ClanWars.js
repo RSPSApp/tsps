@@ -111,7 +111,7 @@ function summary(rules) {
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
     `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
-    "Food and drinks are consumed normally. Powered staves and Vesta's blighted longsword are not enabled.",
+    `${rules.food || rules.drinks ? "Allowed food" : "Food"} and drinks are consumed normally. Powered staves and Vesta's blighted longsword are not enabled.`,
   ].join("<br>");
 }
 

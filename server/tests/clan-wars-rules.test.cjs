@@ -162,3 +162,14 @@ test("unsupported or malformed restriction choices cannot enter an otherwise val
     }
   }
 });
+
+test('Sylvan and Plateau arena rules retain supported modes and reject other layouts', () => {
+  for (const arena of [1, 2]) for (const mode of [0, 1, 8, 16, 20]) {
+    const rules = { ...Rules.create(2, mode), arena };
+    assert.equal(Rules.validate(rules), true);
+    assert.match(Rules.summary(rules), new RegExp(arena === 1 ? 'Plateau' : 'Sylvan Glade'));
+  }
+  for (const arena of [-1, 0, 3, 13, 14, 1.5, '2']) {
+    assert.equal(Rules.validate({ ...Rules.create(), arena }), false);
+  }
+});

@@ -22,6 +22,7 @@ const GuildData = require("../plugins/skills/woodcutting/GuildData.Woodcutting")
 const core = PluginManager.getCoreApi();
 const events = [];
 const placed = [];
+const removed = [];
 const api = new Proxy({
   core,
   getTaskManager: () => TaskManager,
@@ -42,13 +43,20 @@ before(async () => {
   EntTrunk.attach(api, helpers);
   Shrine.attach(api);
   DATA = GuildData.load(core);
+  const mapObjectsGet = core.MapObjects.get;
+  core.MapObjects.get = (id, location) => {
+    const half = DATA.gates.pairs.flatMap((pair) => pair.halves.map((entry) => ({ pair, entry })))
+      .find(({ pair, entry }) => entry.id === id && pair.x === location.getX() && entry.y === location.getY());
+    return half ? new core.GameObject(id, location.clone(), 0, DATA.gates.face, null) : mapObjectsGet.call(core.MapObjects, id, location, null);
+  };
   core.ObjectManager.register = (object) => placed.push({ id: object.getId(), x: object.getLocation().getX(), y: object.getLocation().getY(), face: object.getFace() });
-  core.ObjectManager.deregister = (object) => placed.push({ removed: object.getId() });
+  core.ObjectManager.deregister = (object) => removed.push({ id: object.getId(), x: object.getLocation().getX(), y: object.getLocation().getY() });
 });
 
 beforeEach(() => {
   events.length = 0;
   placed.length = 0;
+  removed.length = 0;
 });
 
 function createPlayer(x, y, { level = 99, items = [], axe = true, npcs = [] } = {}) {
@@ -165,12 +173,16 @@ test("as captured: the east gate - refused below 60; at 60 the gates open, the g
     { id: 38848, x: 1657, y: 3504, face: 2 }, { id: 28854, x: 1658, y: 3504, face: 3 },
     { id: 38848, x: 1657, y: 3505, face: 2 }, { id: 28853, x: 1658, y: 3505, face: 1 },
   ]);
+  assert.deepEqual(removed.slice(0, 2), [
+    { id: 28852, x: 1657, y: 3504 }, { id: 28851, x: 1657, y: 3505 },
+  ], "the original closed map leaves are despawned before the open overlay is added");
   assert.ok(player.log.includes("sound 62"));
   assert.deepEqual(said, ["Welcome to the Woodcutting Guild, adventurer."]);
   assert.equal(player.getLocation().getX(), 1657, "one step in");
   assert.deepEqual(events.map((event) => event.task), ["enter-the-woodcutting-guild"]);
   runTicks(2);
-  assert.deepEqual(placed.slice(-4).map((entry) => entry.removed ?? entry.id), [28854, 28853, 28852, 28851]);
+  assert.deepEqual(removed.slice(-4).map((entry) => entry.id), [38848, 28854, 38848, 28853]);
+  assert.deepEqual(placed.slice(-2).map((entry) => entry.id), [28852, 28851], "the original leaves are restored after closing");
 });
 
 test("leaving needs no level, and the west gate opens inwards", () => {
@@ -184,6 +196,27 @@ test("leaving needs no level, and the west gate opens inwards", () => {
   runTicks(2);
   assert.equal(west.getLocation().getX(), 1563);
   assert.ok(placed.some((entry) => entry.id === 28853 && entry.x === 1563));
+});
+
+test("overlapping players share one opening and one close task", () => {
+  // Finish any close task left by the preceding gate test before counting this run.
+  runTicks(5);
+  placed.length = 0;
+  removed.length = 0;
+  const first = createPlayer(1658, 3505);
+  const second = createPlayer(1658, 3504);
+  gate(first, 1657, 3505);
+  gate(second, 1657, 3504, 28852);
+
+  runTicks();
+  assert.equal(placed.length, 4, "only one pair of temporary gates is placed");
+  assert.equal(removed.length, 2, "the original leaves are despawned once");
+
+  runTicks(2);
+  assert.equal(removed.length, 6, "the one close task removes the four overlays once");
+  assert.equal(placed.length, 6, "the original leaves are restored once");
+  assert.equal(first.getLocation().getX(), 1657);
+  assert.equal(second.getLocation().getX(), 1657);
 });
 
 test("as captured: the cave, the vine and the roots", () => {

@@ -229,3 +229,40 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.
 - The meat pouch's refusal at Emerald Benedict, Eniola and Odovacar and inside Mor Ul Rek (Wiki).
+
+## Huntsman's kit
+
+The kit's View, Fill and Empty actions use native interfaces 871 and 872 and inventory
+855. It holds 32 different item IDs in stable slots; withdrawing the last item from a
+slot leaves a gap. Empty starts at the last slot and moves what fits into inventory.
+The native 1/5/X/All controls apply to both item grids, and dragging swaps slots.
+Equipment must be withdrawn before Hunter can use it. The kit's player-owned contents
+persist through banking, save/load, death and reclamation, including Wilderness PvP;
+confirmed destruction clears them. A kit awaiting grave, Death's Office or item-retrieval
+reclamation counts as owned when opening loot sacks. Pending sack rewards recheck kit
+ownership at delivery while retaining every other reward roll.
+
+The eligibility list in `server/plugins/items/data/huntsmans-kit.json` uses canonical
+cache gamevals, excluding notes, placeholders and unrelated same-name quest items.
+The current Wiki's insect net names refer to cache242's butterfly net IDs. Both
+imp-in-a-box charge variants, normal and worn camouflage pieces, Guild hunter clothing,
+charged/empty Horns of Plenty, gryphon feathers and net traps are included. Metadata and
+preset items stay physical so storing them cannot discard their properties. Amounts
+are bounded by the server's signed-int inventory representation; this is a conservation
+safeguard, not a claim that retail imposes that per-ID limit. The Wiki does not specify
+one. The separate Verity kit exchange is outside this action/storage implementation.
+
+Behavior source: [Wiki revision 15400877](https://oldschool.runescape.wiki/w/Huntsman%27s_kit?oldid=15400877).
+Cache reference: [242 dump 853150e3f75e1463391b470f98caf5d3bf796339](https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339).
+That cache defines 33 display slots; the supported storage slots remain 0–31.
+Inspected RSProx recordings 1206 (revision238.1, physical lines1990–2190) and 1207
+(revision238.1, lines11530–11635) show View opening 871/872 with inventory855 and
+flags for slots0–31, followed by one-unit net/rope withdrawals and deposits with
+matching physical/kit updates. The initial stored list has an interior empty slot.
+These historical observations support the input, conservation and stable-slot checks;
+they do not prove arbitrary quantity limits, death behavior, Fill/Empty messages or a
+rendered current client. Native cache and gameplay validation use
+`node --test --test-concurrency=1 tests/huntsmans-kit-native.test.cjs` after the server build.
+The fixture supplies items and positions, drives decoded `ClientConnection` inputs and
+real `World` turns, and uses actual save/death/grave services. It does not claim natural
+loot-sack acquisition or a rendered client playthrough.

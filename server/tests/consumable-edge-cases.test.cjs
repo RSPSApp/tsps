@@ -472,9 +472,47 @@ test("Preserve stretches the boost cycle to 90 seconds once it has been on for 1
   assert.equal(player.levels.get(Skill.ATTACK), 109, "then the stretched cycle decays it");
 
   notePreserveActivated({ player, prayerId: PrayerHandler.PRESERVE });
+  // Its last warm moment was over 13 seconds ago, so the turn-off grace below does not apply either.
+  player.setAttribute("potions:preserve-warm-at", Date.now() - 14_000);
   player.setAttribute("potions:boost-cycle", Date.now() - 1);
   processBoostDecay(player);
   assert.equal(player.levels.get(Skill.ATTACK), 108, "Preserve switched on under 15 seconds ago does not stretch it");
+});
+
+// Wiki (Preserve): "Players can turn off Preserve when there are less than 13 seconds left until the next buff
+// drain, and still keep the full effect."
+test("Preserve turned off under 13 seconds before the cycle ends still stretches it; earlier does not", () => {
+  const { PrayerHandler } = core;
+  for (const [secondsLeft, stretched] of [[12, true], [14, false]]) {
+    const player = createPlayer({ base: 99, current: 99 });
+    player.levels.set(Skill.ATTACK, 110);
+    player.prayerActive[PrayerHandler.PRESERVE] = true;
+    player.setAttribute("potions:preserve-since", Date.now() - 20_000);
+    player.setAttribute("potions:boost-cycle", Date.now() + secondsLeft * 1000);
+    processBoostDecay(player); // a tick with Preserve on and warm
+    player.prayerActive[PrayerHandler.PRESERVE] = false;
+    // The cycle ends secondsLeft later: move it to now, keeping the gap since Preserve was warm.
+    player.setAttribute("potions:preserve-warm-at", Number(player.getAttribute("potions:preserve-warm-at")) - secondsLeft * 1000);
+    const cycleEnd = Date.now() - 1;
+    player.setAttribute("potions:boost-cycle", cycleEnd);
+    processBoostDecay(player);
+    assert.equal(player.levels.get(Skill.ATTACK), stretched ? 110 : 109, `turned off with ${secondsLeft} seconds left`);
+    if (stretched) assert.equal(player.getAttribute("potions:boost-cycle"), cycleEnd + 30_000);
+  }
+});
+
+test("the boost drain timer counts a Preserve turned off under 13 seconds before the cycle ends", () => {
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  player.levels.set(Skill.ATTACK, 110);
+  player.setAttribute("potions:preserve-warm-at", Date.now() - 1_000);
+  player.setAttribute("potions:boost-cycle", Date.now() + 10_000 - 100);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 150, 67], "17 ticks left plus Preserve's 50");
+  player.setAttribute("potions:preserve-warm-at", Date.now() - 5_000);
+  sendBoostDrainTimer({ player });
+  assert.deepEqual(scripts.pop(), [4518, 100, 17], "turned off 15 seconds before the cycle ends: no stretch");
 });
 
 test("the modified stats overlay's boost drain timer shows the ticks left in the boost cycle", () => {

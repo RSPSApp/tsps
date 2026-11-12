@@ -34,6 +34,11 @@ assert.deepEqual(
     withStackedIf1ButtonEntries(tanOne, derive(tanOne), [other, if3, background, tanOne], derive).map((entry) => entry.option),
     ["Tan 1", "Cancel"],
 );
+// A button reached twice (the same interface mounted twice) adds its option once.
+assert.deepEqual(
+    withStackedIf1ButtonEntries(tanOne, derive(tanOne), [softLeather[0], ...hits], derive).map((entry) => entry.option),
+    ["Tan 1", "Tan 5", "Tan X", "Tan All", "Cancel"],
+);
 // Only an IF1 button's menu takes stacked buttons in.
 const if3Widget = { uid: (324 << 16) | 200, isIf3: true, actions: ["Open"], flags: 1 << 1 };
 assert.equal(withStackedIf1ButtonEntries(if3Widget, derive(if3Widget), hits, derive).length, derive(if3Widget).length);

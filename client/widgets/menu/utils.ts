@@ -510,10 +510,11 @@ export function withStackedIf1ButtonEntries<T extends { option?: unknown }>(
     if (!isIf1MenuButton(chosen)) return entries;
     const group = (chosen.uid ?? 0) >>> 16;
     const stacked: Array<T & { widget: any }> = [];
+    const seen = new Set<number>([chosen.uid]);
     for (let i = hits.length - 1; i >= 0; i--) {
         const hit = hits[i];
-        if (!hit || hit === chosen || hit.uid === chosen.uid || (hit.uid ?? 0) >>> 16 !== group) continue;
-        if (!isIf1MenuButton(hit)) continue;
+        if (!hit || seen.has(hit.uid) || (hit.uid ?? 0) >>> 16 !== group || !isIf1MenuButton(hit)) continue;
+        seen.add(hit.uid);
         for (const entry of deriveEntries(hit) || []) {
             const option = String(entry?.option ?? "").trim().toLowerCase();
             if (option && option !== "cancel" && option !== "examine") stacked.push({ ...entry, widget: hit });

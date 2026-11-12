@@ -106,6 +106,12 @@ function later(player, ticks, fn) {
   core.TaskManager.submit(own.task);
 }
 
+function interfaceOpen(player) {
+  const sender = player.getPacketSender?.();
+  return player.getDialogueManager?.()?.isActive?.() === true || sender?.hasInterruptibleInterface?.() === true
+    || sender?.hasInputPrompt?.() === true;
+}
+
 function lowestTier(player, itemId) {
   const { ItemStatementDialogue, DialogueChainBuilder } = core;
   const chain = new DialogueChainBuilder();
@@ -140,7 +146,12 @@ function cast(player, spellName, slot, itemId, clicked) {
   const now = core.World.getProcessCycle();
   const own = state(player);
   if (now < own.readyAt) {
-    later(player, own.readyAt - now, () => cast(player, spellName, slot, itemId, clicked));
+    later(player, own.readyAt - now, () => {
+      // A click waiting for the cast is dropped if a dialogue, menu or prompt opened meanwhile (as core's queued
+      // alch): under a hand-in's dialogue it would convert the item the dialogue had checked.
+      if (clicked && interfaceOpen(player)) return;
+      cast(player, spellName, slot, itemId, clicked);
+    });
     return;
   }
   const inventory = player.getInventory();

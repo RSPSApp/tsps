@@ -520,7 +520,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Commands` | Commands | interface | yes | A searchable in-game list of the commands available to the player, opened with ::commands. |
 | `CustomCharacterSummary` | CustomCharacterSummary | interface | no | Our own Character Summary tab for the side journal. Off unless the world turns it on; needs SideJournalDefaults. |
 | `CustomShops` | CustomShops | interface | yes | A ::shops interface for browsing this server's custom shops, loaded from custom-shops.json. |
-| `DestroyItem` | DestroyItem | interface | yes | The destroy-item confirmation and its 1/Y and 2/N keys, with the destroy sound and a warning for the item. |
+| `DestroyItem` | DestroyItem | interface | yes | The destroy-item confirmation and its 1/Y and 2/N keys, with the destroy sound and each item's own warning; other options (Uncharge, Dismantle) can ask on it too. |
 | `DuelStaking` | DuelStaking | interface | yes | Adds the staking interface and item stakes to duels. The Duel Arena itself is a separate plugin. |
 | `Emotes` | Emotes | interface | yes | Emotes tab: plays the emote animations, locks emotes until earned, and restores unlocked emotes at login. |
 | `EquipmentStats` | EquipmentStats | interface | yes | Equipment stats screen opened from the worn-items tab, with the inventory beside it, so gear can be compared and swapped. |
@@ -680,7 +680,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `WarpedSceptre` | WarpedSceptre | items | yes | Adds the warped sceptre as a chargeable powered weapon fed with chaos and earth runes, including its cast animation and Magic level check. (members only) |
 | `Waterskins` | Waterskins | items | yes | Lets players fill waterskins from a Kharidian cactus or by pouring in a bucket, bowl, jug or vial of water, for desert heat. (members only) |
 | `WeaponPoison` | WeaponPoison | items | yes | Lets weapon poison coat melee weapons, darts and arrows, and a cleaning cloth strip the poison off again. (members only) |
-| `WebweaverBow` | WebweaverBow | items | yes | Adds the webweaver bow: activation and charging with revenant ether, and its damage bonus including an imbued Slayer helmet on task. (members only) |
+| `WebweaverBow` | WebweaverBow | items | yes | Adds the webweaver bow: activation and charging with revenant ether, Uncharge and Dismantle, and its damage bonus including an imbued Slayer helmet on task. (members only) |
 | `WildernessChests` | WildernessChests | items | yes | Adds the Wilderness diary chests: the Muddy chest in the Lava Maze (muddy key) and the Rogues' chest in Rogues' Castle, with their loot. |
 | `WornWeights` | WornWeights | items | yes | Makes boots of lightness, penance gloves and spotted and spottier capes weigh their lighter worn weight in the equipment panel and for run-energy drain. |
 | `ZoryasTome` | ZoryasTome | items | yes | Adds Zorya's tome from the Fractured Archive: a powered tome charged with astral and nature runes, plus its Zorya's flow special attack. (members only) |
@@ -847,7 +847,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Hunter` | Hunter | skills | yes | Hunter: traps, birdhouses, crabs, drift nets, implings, rumours, tracking, aerial fishing and herbiboar. (members only) |
 | `Mining` | Mining | skills | yes | Mining: rocks and ores with pickaxes, respawn timers and depleted rocks, plus events other content uses for pickaxe and ore checks. |
 | `Prayer` | Prayer | skills | yes | Burying bones and scattering demonic ashes for Prayer XP, with events other plugins use to bury, offer or restore prayer. |
-| `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls. (members only) |
+| `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might. (members only) |
 | `RalosRise` | RalosRise | skills | yes | Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl. (members only) |
 | `Reanimation` | Reanimation | skills | yes | Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell. (members only) |
 | `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals. |

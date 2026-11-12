@@ -243,6 +243,14 @@ export class MagicCombatMethod extends CombatMethod {
             return false;
         }
 
+        // An autocast keeps the spell's own target rule (Wiki: Crumble Undead, the demonbanes); the
+        // spell-on-target packets check it before combat, so only the autocast is new here.
+        if (!character.getCombat().getCastSpell().canCastOnTarget(character, target)) {
+            character.getCombat().setCastSpell(null);
+            character.getCombat().reset();
+            return false;
+        }
+
         return character.getCombat().getCastSpell().canCast(character.getAsPlayer(), true);
     }
 

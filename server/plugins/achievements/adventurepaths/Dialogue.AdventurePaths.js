@@ -6,6 +6,9 @@ const Items = require("./Items.AdventurePaths");
 const Interface = require("./Interface.AdventurePaths");
 const Data = require("./Data.AdventurePaths");
 const isJon = (request) => request.definition?.getName() === "Adventurer Jon";
+// Talk-to pays a carried voucher's rewards before the conversation starts, so a recipient's
+// "carrying a voucher and hasn't received their reward" branch never plays.
+const VOUCHER_UNPAID = "if the player is carrying a combat path voucher and hasn't received their reward:";
 function variant(request) {
     if (!isJon(request)) return null;
     if (!Common.eligible(request.player))
@@ -31,6 +34,7 @@ function capacity(player) {
     return { total: offers.length, fitted };
 }
 function condition(request) {
+    if (String(request.text ?? "").toLowerCase() === VOUCHER_UNPAID) return false;
     if (!isJon(request)) return null;
     const { player } = request,
         text = request.text.toLowerCase();

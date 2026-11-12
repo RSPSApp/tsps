@@ -320,4 +320,33 @@ function takePlain(inventory, id, amount) {
   });
 }
 
-module.exports = { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };
+/**
+ * The revenant ether weapons' Uncharge and Dismantle ask on the destroy prompt first (DestroyItem's
+ * "destroy-item:confirm"); Yes does the action without a chat message.
+ */
+const ETHER_PROMPT = Object.freeze({
+  UNCHARGE_QUESTION: "Are you sure you want to uncharge it?",
+  UNCHARGE_NOTE: "If you uncharge this weapon, all the revenant ether will be returned to your inventory.",
+  DISMANTLE_QUESTION: "Are you sure you want to dismantle this weapon?",
+  ETHER_NOTE: "Your weapon will be broken down for <col=ef1020>7500 Revenant ether</col>.",
+  COMPONENTS_NOTE: "You will receive its components back.",
+});
+/** The destroy sound, which a confirmed Uncharge plays too. */
+const UNCHARGE_SOUND = 2381;
+
+function askFirst(api, player, item, question, note, confirm) {
+  const slot = player.getInventory().getItems().indexOf(item);
+  api.emitCustomEvent("destroy-item:confirm", { player, item, slot, question, note, confirm });
+}
+
+/** Dismantling for ether: the weapon's objectbox (`text`, wrapped as live sends it) first, then the prompt. */
+function dismantleForEther(api, player, item, text, confirm) {
+  const core = api.core;
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
+  const chain = new core.DialogueChainBuilder()
+    .add(new core.ItemStatementDialogue(0, item.getId(), text))
+    .add(new core.ActionDialogue(1, { execute: () => askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.ETHER_NOTE, confirm) }));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+module.exports = { ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther, definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };

@@ -177,11 +177,20 @@ function modifyHit(event) {
  * Nothing in a run is safe, and the grave stands in the lobby (Wiki, Doom of Mokhaiotl: "Their grave is also located there. All
  * unprotected items are moved to the grave"). Tradeables went to the lobby floor here instead, and untradeables to a
  * grave at the world spawn (an instance that names no grave tile): one death split in two.
+ * The fee is 75% off "until they have completed 20 delves" (Wiki, Doom of Mokhaiotl): every level's
+ * completions in the records.
  */
+const DISCOUNTED_DELVES = 20;
+
+function completedDelves(player) {
+  return Object.values(Records.personal(player).completions).reduce((sum, n) => sum + (Number(n) || 0), 0);
+}
+
 function graveInLobby(request) {
   if (!Run.runOf(request.player)) return;
   const at = Shared.loc(Shared.TILES.RESPAWN);
   request.tile = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  if (completedDelves(request.player) < DISCOUNTED_DELVES) request.feeMultiplier = 0.25;
 }
 
 function dieInRun(event) {

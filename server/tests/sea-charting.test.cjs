@@ -907,6 +907,43 @@ test("a drink crate: no crowbar, the drink, already holding one (rsprox 907, 948
   }
 });
 
+test("with a full inventory the weather troll keeps her station and the crate its drink", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = captain();
+  player.questsDone = new Set(["prying_times"]);
+  atTheHelm(player);
+  const spot = common.spotByKey("weather_troll_rimmington_strait");
+  const troll = { getLocation: () => new Location(spot.location[0], spot.location[1], 0) };
+  const crate = common.spotByKey("drink_crate_mango_gin");
+  try {
+    player.getInventory().add(new Item(ITEM_CROWBAR, 1), true);
+    while (player.getInventory().getFreeSlots() > 0) player.getInventory().add(new Item(1351, 1), true);
+    player.chain = null;
+
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 0);
+    assert.equal(player.getAttribute("charting:weather-station"), undefined);
+    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
+    assert.equal(dialogueTexts(player).length, 0);
+
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 0);
+    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
+    assert.equal(dialogueTexts(player).length, 0);
+    assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
+
+    // The last slot free: both hand over as usual.
+    player.getInventory().delete(1351, 1);
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 1);
+    player.getInventory().delete(1351, 1);
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 1);
+  } finally {
+    leave(player);
+  }
+});
+
 test("drinking a crate's drink charts it, with its own lines (rsprox 907)", () => {
   const player = captain();
   player.questsDone = new Set(["prying_times"]);

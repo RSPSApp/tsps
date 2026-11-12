@@ -130,11 +130,17 @@ test("the selector's recorded refusals, and no line when it opens", (t) => {
 });
 
 // rsprox_transcripts/234/00843.txt tick 465: Water Wave autocast on a bladed staff, then the defensive autocast
-// button on the Ancient book: the refusal line and autocast_set, autocast_defmode and autocast_spell go to 0.
-test("the Ancient refusal turns an existing autocast off", (t) => {
+// button on the Ancient book: the refusal line, autocast_set, autocast_defmode and autocast_spell go to 0, and
+// com_mode returns to the style chosen before autocasting (4 -> 3 -> 1; also 237/01108.txt tick 6692).
+test("the Ancient refusal turns an existing autocast off and restores the earlier style", (t) => {
   const I = core.ItemIdentifiers, S = core.CombatSpells;
   const f = wielding(t, I.STAFF_OF_THE_DEAD);
-  assert.equal(choose(f.p, 14), S.WATER_WAVE);
+  assert.equal(WeaponInterfaceManager.changeCombatStyle(f.p, 1), true);
+  Autocasting.handleWidgetAction(f.p, 593, 23);
+  Autocasting.handleWidgetAction(f.p, 201, 1, 14);
+  assert.equal(f.p.getCombat().getAutocastSpell(), S.WATER_WAVE);
+  const comMode = () => f.p.getPacketSender().getVarp(43);
+  assert.equal(comMode(), 4);
   const messages = [], varbits = [];
   t.mock.method(f.p, "sendMessage", (line) => messages.push(line));
   const sendVarbit = f.p.getPacketSender().sendVarbit.bind(f.p.getPacketSender());
@@ -143,7 +149,10 @@ test("the Ancient refusal turns an existing autocast off", (t) => {
   Autocasting.handleWidgetAction(f.p, 593, 23);
   assert.deepEqual(messages, ["You cannot autocast Ancient Magicks with that."]);
   assert.equal(f.p.getCombat().getAutocastSpell(), null);
-  assert.deepEqual(varbits, [[275, 0], [276, 0], [2668, 0]]);
+  assert.deepEqual(varbits.slice(0, 3), [[275, 0], [276, 0], [2668, 0]]);
+  assert.ok(varbits.every(([, value]) => value === 0), "only clears");
+  assert.equal(comMode(), 1, "com_mode back to the earlier style");
+  assert.equal(f.p.getFightType().getChildId(), 1, "the server fight type too");
 });
 
 test("a refusal with no autocast set sends no autocast varbits", (t) => {
@@ -153,4 +162,35 @@ test("a refusal with no autocast set sends no autocast varbits", (t) => {
   t.mock.method(f.p.getPacketSender(), "sendVarbit", (id, value) => { varbits.push([id, value]); return f.p.getPacketSender(); });
   Autocasting.handleWidgetAction(f.p, 593, 28);
   assert.deepEqual(varbits, []);
+});
+
+// Cache scripts 243 (autocast_spellpos) and 4512/its Ancient and Arceuus forms: each selector list places only its own
+// slots, so a click on any other slot (a modified client) sets nothing.
+test("a selector click outside the weapon's list sets no autocast", (t) => {
+  const I = core.ItemIdentifiers, B = core.MagicSpellbook;
+  for (const [weapon, book, slot] of [
+    [I.STAFF_OF_FIRE, B.NORMAL, 17], // Crumble Undead: not in the standard list
+    [I.STAFF_OF_FIRE, B.NORMAL, 18], // Magic Dart
+    [I.SLAYERS_STAFF, B.NORMAL, 1], // Wind Strike: the slayer's staff lists waves, surges, Crumble Undead and Magic Dart
+    [I.VOID_KNIGHT_MACE, B.NORMAL, 18],
+    [I.STAFF_OF_FIRE, B.NORMAL, 31], // an Ancient slot on the standard book
+    [I.STAFF_OF_FIRE, B.NORMAL, 53], // an Arceuus slot
+  ]) {
+    assert.equal(choose(wielding(t, weapon, book).p, slot), null, `${weapon} book ${book} slot ${slot}`);
+  }
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 17), core.CombatSpells.CRUMBLE_UNDEAD);
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 18), core.CombatSpells.MAGIC_DART);
+  assert.equal(choose(wielding(t, I.STAFF_OF_FIRE).p, 16), core.CombatSpells.FIRE_WAVE);
+});
+
+// A forged autocast click on the Ancient book with a standard staff: the selector refuses to open, and a slot click
+// for a standard spell must not set it either (the list for the Ancient book is the Ancient one).
+test("a forged standard slot on the Ancient book sets no autocast", (t) => {
+  const I = core.ItemIdentifiers;
+  for (const weapon of [I.STAFF_OF_FIRE, I.STAFF_OF_THE_DEAD]) {
+    const f = wielding(t, weapon, core.MagicSpellbook.ANCIENT);
+    t.mock.method(f.p, "sendMessage", () => {});
+    Autocasting.handleWidgetAction(f.p, 201, 1, 16);
+    assert.equal(f.p.getCombat().getAutocastSpell(), null, `${weapon}`);
+  }
 });

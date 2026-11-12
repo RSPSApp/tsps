@@ -49,7 +49,8 @@ const HELM_LOOP_TICKS = 10;
  * Each sail step has its own sound: from rest, setting the sails (half) and raising them straight
  * to full; raising and lowering the speed; un-setting them from half and from full. Reversing,
  * and stopping a reversing boat, are silent. Ours: button 0's Set sails, straight to full from
- * rest, takes the raise-to-full sound of the sail cloth's Set and of a heading's first full sail.
+ * rest, takes the raise-to-full sound of the sail cloth's Set and of a heading's first full sail;
+ * the cloth's Un-set and button 0 from half sail take the panel's un-set-from-half sound.
  */
 const SOUND_SAILS_SET = 10832;
 const SOUND_SAILS_SET_FULL = 11089;

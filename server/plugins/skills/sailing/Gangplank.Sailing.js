@@ -8,7 +8,7 @@
 //
 // Every refusal is a message box on the click's tick, before any fade: no boat here, the boat
 // docked at another port or lost at sea, the boat too far from the dock to disembark, or the
-// port's Sailing level. A port's gangplank answers a
+// port's Sailing level (lost at sea: beside the shipwright icon). A port's gangplank answers a
 // click from the deck however far off the boat is; other gangplanks (a ship's Cross) don't.
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -18,6 +18,7 @@ const { World } = require("../../../src/main/typescript/elvarg/game/World");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
+const { ItemStatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ItemStatementDialogue");
 const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { content, boatType, dockAtGangplank, dockAtBuoy, fade, playSound, spam } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
@@ -31,6 +32,8 @@ const SCRIPT_NAME_INPUT = 109;
 const BOAT_TABLE = 166;
 /** Ours: a port's gangplank is used from a deck anywhere in view, so a boat too far off hears why. */
 const GANGPLANK_DECK_REACH = 64;
+/** shipwright_icon_dummy: the object box's icon beside the lost-at-sea refusal. */
+const SHIPWRIGHT_ICON = 32916;
 const TOO_FAR = "The boat isn't close enough for you to be able to disembark here.";
 
 /** Boarding somebody else's boat, as captured (rsprox 697). The first is a plain game message, the rest message boxes. */
@@ -79,7 +82,7 @@ function boardBoat({ player, location }) {
 function boardSlot(api, player, dock, slot) {
   const refusal = Sailing.boardRefusal(player, dock.id, slot);
   if (refusal) {
-    messageBox(player, refusal);
+    boardingRefused(player, refusal);
     return;
   }
   fade(player, true);
@@ -91,7 +94,7 @@ function boardSlot(api, player, dock, slot) {
     const refused = Sailing.board(player, dock.id, slot);
     if (refused) {
       fade(player, false);
-      messageBox(player, refused);
+      boardingRefused(player, refused);
       return;
     }
     playSound(player, SOUND_BOARD_BOAT);
@@ -107,10 +110,16 @@ function playerCapacity(owned) {
   return (column === null ? undefined : row?.int(column, 0)) || 1;
 }
 
-/** A message box, with its line in the chat as live sends it (a mesbox message). */
-function messageBox(player, text) {
+/** A message box, with its line in the chat as live sends it (a mesbox message); with `itemId`, the object box. */
+function messageBox(player, text, itemId) {
   player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  const box = itemId === undefined ? new StatementDialogue(0, text) : new ItemStatementDialogue(0, itemId, text);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box));
+}
+
+/** A boat lost at sea is refused beside the shipwright icon, the rest in a plain message box. */
+function boardingRefused(player, refusal) {
+  messageBox(player, refusal, refusal === Sailing.LOST_AT_SEA ? SHIPWRIGHT_ICON : undefined);
 }
 
 /**

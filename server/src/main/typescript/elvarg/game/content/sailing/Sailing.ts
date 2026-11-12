@@ -60,6 +60,9 @@ interface ActiveInstance {
  * recovery by a shipwright.
  */
 export class Sailing {
+    /** Boarding a boat that is lost at sea: live shows it beside the shipwright icon. */
+    public static readonly LOST_AT_SEA = "You cannot board your boat as it is lost at sea. You'll need to speak to a shipwright"
+        + " to recover it. To find a shipwright, just look for the relevant icon on your map.";
     private static readonly types = new Map<string, BoatSpec>();
     private static readonly docks = new Map<string, SailingDock>();
     private static readonly instances = new Map<Boat, ActiveInstance>();
@@ -233,10 +236,7 @@ export class Sailing {
         }
         if (Sailing.boatToBoard(player, dockId)) return null;
         const boat = Sailing.activeBoat(player) ?? player.getSailing().boats[0];
-        if (boat?.location.kind === "sunk") {
-            return "You cannot board your boat as it is lost at sea. You'll need to speak to a shipwright to recover it."
-                + " To find a shipwright, just look for the relevant icon on your map.";
-        }
+        if (boat?.location.kind === "sunk") return Sailing.LOST_AT_SEA;
         const elsewhere = boat?.location.kind === "docked" ? Sailing.docks.get(boat.location.dock) : undefined;
         if (elsewhere) return `You cannot board your boat as it is currently docked at ${elsewhere.theName ?? elsewhere.id}.`;
         return "There isn't a boat here for you to board.";

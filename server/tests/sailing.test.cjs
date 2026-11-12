@@ -1221,6 +1221,21 @@ test("Board refuses on the click with a message box, before any fade", () => {
   clearTasks();
 });
 
+test("Board with the boat lost at sea refuses beside the shipwright icon (rsprox 985)", () => {
+  clearTasks();
+  const plugin = registerPlugin("Gangplank.Sailing");
+  const pandemonium = content().docks.find((dock) => dock.id === "the_pandemonium");
+  const player = sailor();
+  Sailing.giveBoat(player, "raft", "the_pandemonium");
+  player.getSailing().boats[0].location = { kind: "sunk" };
+  plugin.objects.Gangplank.Board({ player, location: pandemonium.gangplank });
+  const box = player.boxes[0].getDialogues().get(0);
+  assert.equal(box.getItemId(), 32916, "shipwright_icon_dummy");
+  assert.equal(box.getText(), Sailing.LOST_AT_SEA);
+  assert.equal(player.messages.at(-1), `spam: ${Sailing.LOST_AT_SEA}`);
+  clearTasks();
+});
+
 test("Disembark with the boat too far from the dock is refused with live's message box (rsprox 901)", () => {
   clearTasks();
   const hooks = {};

@@ -212,10 +212,21 @@ class Game {
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
     }
     if (this.phase === "combat") {
-      // Jail and pending safe deaths retain their roster slot in respawning modes.
-      // A temporary lack of living fighters must not end a 1v1 after its first kill.
-      const sides = new Set((Rules.respawns(this.rules) ? this.members : this.fighters).values());
-      if (sides.size < 2) return this.finish(sides.size ? [...sides][0] : null);
+      if (Rules.respawns(this.rules)) {
+        // Jail and pending safe deaths retain their roster slot. A temporary lack
+        // of living fighters must not end a respawning 1v1 after its first kill.
+        const sides = new Set(this.members.values());
+        if (sides.size < 2) return this.finish(sides.size ? [...sides][0] : null);
+      } else {
+        // Wiki/enum928: Kill all loses at zero; Ignore 5 loses at five or fewer.
+        // Sample both sides together only in combat (including its first tick).
+        // Both-low as a neutral draw and this phase boundary are explicit policies.
+        const counts = [0, 0];
+        for (const side of this.fighters.values()) counts[side]++;
+        const limit = Rules.STRAGGLER_LIMITS[this.rules.stragglers];
+        const lost = counts.map((count) => count <= limit);
+        if (lost[0] || lost[1]) return this.finish(lost[0] ? lost[1] ? null : 1 : 0);
+      }
     }
     for (const player of this.members.keys()) {
       C.bit(player, "clanwars_countdown", this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0);

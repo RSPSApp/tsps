@@ -51,7 +51,8 @@ powered staves and Vesta's blighted longsword are not enabled by these terms.
 Death keeps the real inventory and equipment, including metadata. No kit or item
 snapshot is reconstructed. Food, drink and weapon charges are consumed normally.
 A defeated fighter goes to the map's jail if the battle is still running. In Last
-Team Standing, the team with no fighters loses. Result screens return remaining participants to the lobby.
+Team Standing's Kill-all setting, the team with no fighters loses. The negotiated
+Ignore-5 variant described below ends at five or fewer. Result screens return remaining participants to the lobby.
 There are no stakes, prizes, blood-money rewards, Elo changes or ordinary PvP streak
 changes. The existing PvP statistics/reward query is vetoed throughout a match death,
 including when the battle finishes before the death callback completes.
@@ -339,6 +340,8 @@ The return is refused before the deadline and permitted at it, subject to the
 existing mode, channel, health, busy, area and cap checks. Jailed fighters retain
 their cap slot. Last Team Standing still closes entry and return when combat
 starts; the delay option does not reopen it. Timed expiry still takes precedence.
+The LTS confirmation explicitly says that the selected 60-second delay cannot
+reopen entry after combat begins, addressing the wording note from PR #4671.
 Viewing relinquishes ownership through the existing return route, and successful
 return applies the agreed prayer/special preparation. Finish clears all account
 deadlines; a late completed death callback cannot repopulate a closed game or
@@ -358,3 +361,62 @@ only permitted supplies, including explicitly disabled food and drinks together,
 addressing the wording note from PR #4665. Exact retail phase timing, client
 rendering, natural combat RNG and a full login/logout traversal remain unproven;
 actual runtime results belong to the PR evidence.
+
+
+## Last Team Standing: Ignore 5
+
+Wiki Clan Wars revision 15379109 and pinned revision-242 enums 927/928 describe
+Stragglers as Kill 'em all (value 0, lose with no fighters) or Ignore 5 (value 1,
+lose with five or fewer). Interface 91 uses container 13, frame 14 and scrollbox
+15. Scripts 576/581 create option rectangles at subchild `3 * value`, so its
+native rows are 0/3, unlike the small dropdowns' `value + 1`. Script 579 calls
+573 to change the optimistic stragglers varbit. Both rows transmit and refusals
+resynchronize the authoritative offer.
+
+This delivery supports Ignore 5 only in Last Team Standing on the existing melee
+Plateau route. That is a bounded implementation scope, not a claim that retail
+restricts the setting to this mode. Selecting Ignore 5 in a respawning mode, or
+switching from an Ignore-5 offer to a respawning mode, is refused without changing
+the offer revision or acceptance state. Captains can choose Kill 'em all before
+switching mode. Valid changes preserve every other term, clear acceptance, keep
+the usual change delay, and reach both captain and member confirmations.
+
+No stragglers check ends a match during preparation. On each active match tick,
+including the first combat tick after the wall falls, one paired snapshot counts
+the two sides' fighters. Kill-all uses zero as before; Ignore-5 uses five. Exactly
+one side at or below the limit loses to the other; if both are at or below it, the
+battle ends without a winner. The neutral result for both-low teams, the first
+combat evaluation for already-small teams and this callback/tick sampling are
+explicit TSPS policies without a team recording establishing exact retail phase
+ordering. There is no invented minimum roster or cap restriction: a selected
+1v1 or 5v5 Ignore-5 battle can therefore reach that neutral result at combat start.
+
+Jailed, viewing and dying participants are not fighters. The existing No-penalty
+channel-leave term does not award a departure kill, but removal still reduces the
+LTS fighter count. Respawning modes retain their existing member-roster cleanup:
+jailed and pending-death members retain their roster slots, and a temporary lack
+of living fighters does not apply this LTS threshold. No kill-target credit,
+reward, item reconstruction or new combat method is added by the variant.
+
+The threshold uses the existing whole-match finish path, including channel
+reservations, HUD values, viewing ownership, task and instance cleanup. Pending
+safe deaths retain their own item/bone/reward protection until the final callback;
+that callback returns to the lobby and cannot recreate an ended-match deadline.
+The related mode-aware confirmation change states that an LTS rejoining delay
+cannot reopen combat entry, preserving the original wording-note custody from
+PR #4671 without changing timer or eligibility behavior.
+
+The existing fixture adds ordinary native 0/3 negotiation and mixed-term
+confirmation, bidirectional unsupported-combination refusal with actual sender
+resynchronization observations, and concurrent native portal/confirmation
+batches. Twelve sequential fixture joins would exceed the real 200-tick
+preparation, so enrollment uses real pending entry and confirmation packets in
+parallel, with roster/fighter/area checks before combat; it does not seed match
+membership, extend preparation or rewind the clock. It compares real six-versus-six
+death to five under both settings, checks both-small native caps, paired real
+lethal hits, No-penalty departure, safe metadata across finish/late callbacks and
+a second match. A seven-versus-seven case first creates an actual jailed viewing
+owner, then reaches the threshold and checks camera and instance cleanup.
+Supplied levels, scene placement and pre-rolled damage remain explicit setup;
+client rendering, natural combat RNG and exact retail phase timing are not
+established. Actual runtime outcomes belong to the PR evidence.

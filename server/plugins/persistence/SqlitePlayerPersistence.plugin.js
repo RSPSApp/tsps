@@ -585,7 +585,7 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     const amount = this.toNumber(value.amount, id > 0 ? 1 : 0);
     const meta =
       value.meta && typeof value.meta === "object" && !Array.isArray(value.meta)
-        ? Item.cloneMeta(value.meta)
+        ? Item.migrateSavedMeta(Item.cloneMeta(value.meta))
         : null;
     return new Item(id, amount, meta);
   }

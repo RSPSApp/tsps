@@ -26,6 +26,8 @@ type WidgetMenuEntryInput = {
     forceLeftClick?: boolean;
     /** Submenu entry texts for this op (widget.submenuActions[opIndex-1]) */
     subOptions?: string[];
+    /** The widget this entry clicks, when it isn't the menu's own (stacked IF1 buttons) */
+    widget?: any;
 };
 
 function isWidgetInspectOperation(entry: WidgetMenuEntryInput, option = entry.option): boolean {
@@ -367,14 +369,15 @@ export function widgetEntriesToSimple(
             try {
                 // widget ops on item containers need slot/itemId.
                 // Dynamic CC_CREATE children store slot index in `childIndex`.
+                const widget = e.widget ?? chosenWidget;
                 const fallbackSlot =
-                    typeof chosenWidget?.childIndex === "number"
-                        ? chosenWidget.childIndex | 0
+                    typeof widget?.childIndex === "number"
+                        ? widget.childIndex | 0
                         : undefined;
                 const fallbackItemId =
-                    typeof chosenWidget?.itemId === "number" ? chosenWidget.itemId | 0 : undefined;
+                    typeof widget?.itemId === "number" ? widget.itemId | 0 : undefined;
                 hook({
-                    widget: chosenWidget,
+                    widget,
                     option,
                     target,
                     source: clickCtx?.source ?? "menu",
@@ -432,8 +435,8 @@ export function widgetEntriesToSimple(
             targetType: target ? MenuTargetType.ITEM : MenuTargetType.NONE,
             opcode: e.opcode,
             identifier: e.opIndex ?? (e.opcode === 25 ? 0 : 1),
-            param0: e.widgetAction?.slot ?? chosenWidget?.childIndex ?? -1,
-            param1: chosenWidget?.uid ?? -1,
+            param0: e.widgetAction?.slot ?? (e.widget ?? chosenWidget)?.childIndex ?? -1,
+            param1: (e.widget ?? chosenWidget)?.uid ?? -1,
             itemId: resolveWidgetItemId(e) ?? -1,
             forceLeftClick: e.forceLeftClick,
             onClick: buildOnClick(e, e.option, target),

@@ -314,9 +314,10 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
 
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
-  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message.
+  // rsprox 238/04242.txt:61023-61030: the drink lines are spam, the divine refusal a game message;
+  // a Prayer potion's line is its own recorded one (238/04242.txt:42626, "restore prayer potion").
   assert.deepEqual(f.messages, [
-    "spam: You drink some of your prayer potion.",
+    "spam: You drink some of your restore prayer potion.",
     "You need more than 10 hitpoints to survive the power of a divine potion.",
     "spam: You drink some of your energy potion.",
   ]);
@@ -773,6 +774,17 @@ test("legacy name-key insertion order survives canonical numeric keys and later 
   t.mock.method(Potions.doseOf(I.PRAYER_POTION_4_).potion, "effect", () => effects.push("prayer"));
   itemAction(f, BARREL_NAME, "Drink", 27);
   assert.deepEqual(effects, ["energy", "prayer"]);
+});
+
+// rsprox 234/00799.txt:54610, drinking from the inventory: the drink line, then the effect's own line. The barrel
+// keeps that order for each stored potion.
+test("a stored anti-venom's drink line comes before its immunity line", (t) => {
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  seed(f.player, { "Anti-venom": { itemId: I.ANTI_VENOM_4_, name: "anti-venom", doses: 4, slot: 0 } });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.deepEqual(f.messages, ["spam: You drink some of your antivenom potion.", "spam: It grants you immunity from poison."]);
 });
 
 test("a destroy prompt left open or walked away from never takes the barrel's Yes (real PacketSender)", () => {

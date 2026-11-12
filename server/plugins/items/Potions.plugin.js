@@ -20,6 +20,8 @@ const { HitMask } = require("../../src/main/typescript/elvarg/game/content/comba
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers: Items } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const CameraShake = require("../interface/CameraShake.plugin");
+/** Each potion's recorded drink line, by its cache name without the dose (data/potion-drink-lines.json). */
+const DRINK_LINES = require("./data/potion-drink-lines.json").lines;
 const {
   DragonfireProtectionTier,
   processDragonfireProtection,
@@ -1011,6 +1013,8 @@ registerPotion({
   chains: [doseChain("RANK_FROTHY_POTION_4_", "RANK_FROTHY_POTION_3_", "RANK_FROTHY_POTION_2_", "RANK_FROTHY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rank frothy potion. You feel oddly powerful."] },
   effect: applyRankFrothyPotion,
 });
 registerPotion({
@@ -1018,6 +1022,8 @@ registerPotion({
   chains: [doseChain("FOUL_CHUNKY_POTION_4_", "FOUL_CHUNKY_POTION_3_", "FOUL_CHUNKY_POTION_2_", "FOUL_CHUNKY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the foul chunky potion. You feel oddly reinvigorated."] },
   effect: applyFoulChunkyPotion,
 });
 registerPotion({
@@ -1025,6 +1031,8 @@ registerPotion({
   chains: [doseChain("RANCID_SLIMY_POTION_4_", "RANCID_SLIMY_POTION_3_", "RANCID_SLIMY_POTION_2_", "RANCID_SLIMY_POTION_1_")],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You drink the rancid slimy potion. You feel oddly robust."] },
   effect: applyRancidSlimyPotion,
 });
 registerPotion({
@@ -1032,6 +1040,8 @@ registerPotion({
   chains: [[Items.JAR_OF_CONGEALED_BLOOD]],
   emptyItemId: null,
   area: "vampyrium",
+  // Its one recorded spam line, and nothing after it: no doses left or finished line (rsprox 239/04272.txt).
+  drink: { messages: () => ["You eat the congealed blood. It tastes better than expected and leaves you feeling fully refreshed."] },
   effect: applyJarOfCongealedBlood,
 });
 registerPotion({
@@ -1777,24 +1787,34 @@ function handlePotionDrink(player, itemId, slot) {
     && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
   const replacement = smashVial ? NO_EMPTY_ITEM : entry.replacementId;
   inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
-  entry.potion.effect(player);
-
   // Live sends the drink lines as spam (filterable): rsprox has "You drink some of your goading
   // potion." and its doses-left lines, the beer and cider lines, "You have finished your potion."
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
+  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
+  if (line) spam(line);
+  entry.potion.effect(player);
+
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) {
       if (message?.game === true) player.sendMessage(message.text);
       else spam(String(message?.text ?? message));
     }
   } else if (smashVial) {
+    // The finished line, then the smash (rsprox 236/03932.txt:72353-72354, 237/01104.txt:464410; 62 recorded).
+    spam("You have finished your potion.");
     spam("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     // The gourd line is not captured; it stays a game message.
     if (entry.potion.area === "chambers-of-xeric") player.sendMessage("You have finished your potion. The gourd vial disintegrates.");
     else spam("You have finished your potion.");
+  } else {
+    // rsprox: "You have 3 doses of potion left." / "You have 1 dose of potion left." (5,000+ recorded, spam).
+    const left = dosesOf(entry.replacementId);
+    if (left > 0) spam(`You have ${left} ${left === 1 ? "dose" : "doses"} of potion left.`);
   }
   pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
@@ -2084,8 +2104,22 @@ function answerDoseFamily(request) {
   request.family = { byDose: [...family.byDose], doses: family.doses, max: family.max };
 }
 
+/** The recorded "You drink some of ..." line for a potion item, or null where none is recorded. */
+function drinkLine(itemId) {
+  const name = pluginApi?.core?.CacheDefinitions?.getItem?.(itemId)?.name;
+  return name ? DRINK_LINES[name.replace(/\(\d+\)$/, "")] ?? null : null;
+}
+
+/** The doses a potion item holds, from its name's "(N)"; 0 when it has none. */
+function dosesOf(itemId) {
+  const name = pluginApi?.core?.CacheDefinitions?.getItem?.(itemId)?.name ?? "";
+  const match = /\((\d+)\)$/.exec(name);
+  return match ? Number(match[1]) : 0;
+}
+
 module.exports = {
   name: "Potions",
+  drinkLine,
   description: "Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers.",
   isPotionItem(itemId) {
     return POTION_BY_ITEM_ID.has(itemId);

@@ -245,9 +245,12 @@ function drink({ player }) {
       started = true;
       startDrinking(player);
     }
+    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030), with each
+    // potion's own recorded drink line ("restore prayer potion", "divine combat potion": 238/04242.txt:42626).
+    // It comes before the effect's own lines, as drinking from the inventory does (234/00799.txt:54610:
+    // "You drink some of your antivenom potion.", then "It grants you immunity from poison.").
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, Potions.drinkLine(store.itemId) ?? MESSAGE.DRINK(store.name));
     dose.potion.effect(player);
-    // A spam (filterable) line, as live sends it (rsprox 238/04242.txt:61023, :61026, :61030).
-    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, MESSAGE.DRINK(store.name));
     api.emitCustomEvent("potions:drunk", {
       player,
       itemId: store.itemId,

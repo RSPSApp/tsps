@@ -108,9 +108,11 @@ no other channel; otherwise they are told to use `::group chat`. Its chat is ord
 (`/`), and its members get the client's friends-chat minimap dot. Leaving or being kicked takes the
 player out, and disbanding ends the channel. When a leader joins an activity channel, members in no
 channel or in the group's own follow; anyone in another channel is told where the group went, and
-nobody is moved out of a channel they chose. In it the leader holds the Owner rank and members
-Recruit (a system channel's `rankOf`), which is what Chambers of Xeric reads: a group in its channel
-can make a CoX party at the recruiting board, its leader leading it, with no CoX change.
+nobody is moved out of a channel they chose. A leader's return to an activity channel at login (the
+rejoin of their last channel) brings nobody, as members may have chosen another channel meanwhile.
+In the group's channel the leader holds the Owner rank and members Recruit (a system channel's
+`rankOf`), which is what Chambers of Xeric reads: a group in its channel can make a CoX party at
+the recruiting board, its leader leading it, with no CoX change.
 
 ## Activities and group size
 
@@ -160,7 +162,7 @@ attribute is not membership. A member's click is sent as `grouping:storage`; the
 | `grouping:members` | request | `{ player, activity?, maxSize? }` → `groupId` (0 for none), `leader` (online, else null), `isLeader`, `members` (online, leader first; `[player]` without a group), `size` (every member), `max`, `fits`, `message` |
 | `grouping:same-group` | request | `{ player, other }` → `same` |
 | `friends-chat:system-channel` | request (FriendsList) | `{ key, channel }`: runs a channel no player owns, `channel` `{ ownerName, channelName, entryRank?, talkRank?, kickRank?, admits?(player), rankOf?(player) }`, or ends it with `null` |
-| `friends-chat:joined` | emitted (FriendsList) | `{ player, channelKey }` when a player joins a chat-channel |
+| `friends-chat:joined` | emitted (FriendsList) | `{ player, channelKey, rejoin }` when a player joins a chat-channel; `rejoin` is true for the return to their last channel at login |
 
 A snapshot is `{ id, profile, cap, leader, members: [{ account, name, role, online, joined }],
 invites: [{ account, name, expires }] }`.

@@ -30,9 +30,12 @@ function announceLeave(player, channelKey) {
   pluginApi?.emitCustomEvent("friends-chat:left", { player, channelKey });
 }
 
-/** "friends-chat:joined" ({ player, channelKey }): the counterpart of "friends-chat:left". */
-function announceJoin(player, channelKey) {
-  pluginApi?.emitCustomEvent("friends-chat:joined", { player, channelKey });
+/**
+ * "friends-chat:joined" ({ player, channelKey, rejoin }): the counterpart of "friends-chat:left".
+ * `rejoin` is true for the return to the player's last channel at login, not a join they made.
+ */
+function announceJoin(player, channelKey, { rejoin = false } = {}) {
+  pluginApi?.emitCustomEvent("friends-chat:joined", { player, channelKey, rejoin });
 }
 
 /**

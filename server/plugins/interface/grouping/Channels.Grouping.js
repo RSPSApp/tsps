@@ -141,9 +141,12 @@ function onGroupChanged(event) {
   else if (event.type === "left" || event.type === "kicked") leaveGroupChannel(playerFor(event, event.target), key);
 }
 
-/** "friends-chat:joined": a leader joining an activity channel brings their group along. */
-function onChannelJoined({ player, channelKey }) {
-  if (!activityKeys.has(channelKey)) return;
+/**
+ * "friends-chat:joined": a leader joining an activity channel brings their group along. Their return
+ * to it at login (a rejoin) brings nobody: members may have chosen another channel meanwhile.
+ */
+function onChannelJoined({ player, channelKey, rejoin }) {
+  if (rejoin || !activityKeys.has(channelKey)) return;
   const me = Members.identify(player);
   const group = me && Store.groupOf(me.profile, me.account);
   if (!group || group.leader !== me.account) return;

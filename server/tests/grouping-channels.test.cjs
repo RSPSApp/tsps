@@ -265,6 +265,29 @@ test("the Grouping tab's Join puts you in the activity channel; a leader's bring
   assert.match(alice.texts(), /The channel you tried to join does not exist\./);
 });
 
+test("a leader back in an activity channel at login brings nobody; only a join they make does", () => {
+  const alice = login(player("Alice"));
+  const bob = login(player("Bob"));
+  group(alice, "invite", "Bob");
+  group(bob, "accept");
+  const groupChannel = Channels.groupKey(Store.groupOf("main", alice.getLongUsername()));
+  tabJoin(alice, ACTIVITY_CHANNELS.get(22));
+  assert.equal(channelOf(bob)?.key, "osrs star cc");
+  group(bob, "chat");
+  assert.equal(channelOf(bob)?.key, groupChannel);
+
+  // Alice relogs: the login rejoin puts her back in Stars, and Bob stays where he chose to be.
+  const relations = alice.getRelations();
+  logout(alice);
+  const back = player("Alice");
+  back.getRelations = () => relations;
+  const heard = bob.lines.length;
+  login(back);
+  assert.equal(channelOf(back)?.key, "osrs star cc", "the leader is back in Stars");
+  assert.equal(channelOf(bob)?.key, groupChannel, "Bob stays in the group's channel");
+  assert.doesNotMatch(bob.lines.slice(heard).join("\n"), new RegExp(Channels.MESSAGE.BROUGHT));
+});
+
 test("a group's channel outlives a restart: registered at startup, rejoined at login", () => {
   const alice = login(player("Alice"));
   const bob = login(player("Bob"));

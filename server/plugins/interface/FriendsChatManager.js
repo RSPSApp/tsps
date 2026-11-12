@@ -200,7 +200,7 @@ class FriendsChatManager {
         const lastOwner = player.getRelations().getFriendsChatLastOwner();
         if (lastOwner) {
             this.notification(player, "Attempting to join chat-channel...");
-            this.join(player, lastOwner, true);
+            this.join(player, lastOwner, true, { rejoin: true });
         }
     }
     static onLogout(player) {
@@ -470,7 +470,11 @@ class FriendsChatManager {
             this.join(player, system ? system.key : DisplayNames.resolve(String(rawOwnerName ?? "")) ?? "", true);
         });
     }
-    static join(player, rawOwnerName, notify) {
+    /**
+     * Puts a player in a chat-channel. `rejoin` marks the return to their last channel at login, which
+     * `memberAdded` passes on so a listener can tell it from a join the player made.
+     */
+    static join(player, rawOwnerName, notify, { rejoin = false } = {}) {
         const ownerName = this.systemOwner(rawOwnerName) ?? accountName(rawOwnerName);
         if (!ownerName) {
             if (notify)
@@ -539,7 +543,7 @@ class FriendsChatManager {
             this.notification(player, "To talk, start each line of chat with the / symbol.");
         }
         this.broadcastChannel(ownerName.key);
-        this.memberAdded?.(player, ownerName.key);
+        this.memberAdded?.(player, ownerName.key, { rejoin });
         return true;
     }
     static leave(player, notify) {

@@ -307,6 +307,18 @@ data `panels`):
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
 
+**Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
+(656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: mid-teleport, a forced
+move such as an agility obstacle, or content holding movement) with the game message "Please finish
+what you are doing first." and open nothing, through the plugin API's `refuseWhileBusy`, which the
+interface-click packet checks before any handler. Live refused them that way during a Royal seed pod
+teleport and on its landing tick (237/01149), an agility shortcut (227/01723), a stall theft
+(237/01148) and a box trap check (237/01108), plus a few unclear states (227/00075, 00552, 01710,
+01757, 01768). Ours: stall thefts and trap checks don't lock the player here, and the unclear states
+aren't matched, so those clicks still open. Summary, Info and Rank have no captured refusal and are
+not gated. The same line answers other interfaces (the account tab's bond and inbox buttons, settings
+buttons), which this does not cover yet.
+
 ### Ranks
 
 `league/Rank.LeagueMode.js`, data `league-ranks.json`: seven ranks a league (Bronze to Dragon) at

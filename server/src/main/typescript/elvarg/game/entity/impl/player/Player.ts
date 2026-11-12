@@ -815,6 +815,14 @@ export class Player extends Mobile {
         }
     }
 
+    /**
+     * Held by an action that locks the player in place: a teleport, a forced move (agility obstacles), or content
+     * that blocks movement while it plays out. A spell freeze is not a lock.
+     */
+    isLocked(): boolean {
+        return this.isTeleportingReturn() || this.forceMovement != null || this.getMovementQueue().isMovementBlocked();
+    }
+
     busy(): boolean {
         if (this.interfaceId > 0) {
             return true;

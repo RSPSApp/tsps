@@ -87,7 +87,7 @@
     {"raw":"raids_bat5_raw","cooked":"raids_bat5_cooked","burnt":"raids_bat_burnt","level":75,"xp":25,"stopBurn":85,"name":"murng bat"},
     {"raw":"raids_bat6_raw","cooked":"raids_bat6_cooked","burnt":"raids_bat_burnt","level":90,"xp":28,"stopBurn":97,"name":"psykk bat"},
     {"raw":"raw_crunchies","cooked":"half_baked_crunchy","burnt":"burnt_crunchies","level":1,"xp":30,"stopBurn":38,"name":"raw crunchies","gnomeTutorial":true,"rangeOnly":true},
-    {"raw":9576,"cooked":"drunk_dragon","burnt":"drunk_dragon","level":32,"xp":130,"stopBurn":1,"name":"mixed dragon","gnomeTutorial":true,"rangeOnly":true,"firstCookTicks":1},
+    {"raw":9576,"cooked":"drunk_dragon","burnt":"drunk_dragon","level":32,"xp":130,"stopBurn":38,"failsWithoutBurning":true,"name":"mixed dragon","gnomeTutorial":true,"rangeOnly":true,"firstCookTicks":1},
     {"raw":9581,"cooked":9582,"burnt":"burnt_crunchies","level":10,"xp":0,"stopBurn":38,"name":"half made toad crunchy","gnomeTutorial":true,"rangeOnly":true,"returnItem":"crunchy_tray"},
     {"raw":9577,"cooked":9578,"burnt":"burnt_crunchies","level":16,"xp":0,"stopBurn":38,"name":"half made chocchip crunchy","gnomeTutorial":true,"rangeOnly":true,"returnItem":"crunchy_tray"},
     {"raw":"raw_batta","cooked":"half_baked_batta","burnt":"burnt_batta","level":1,"xp":30,"stopBurn":38,"name":"raw batta","gnomeTutorial":true,"rangeOnly":true},

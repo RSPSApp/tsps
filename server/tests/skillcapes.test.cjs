@@ -339,6 +339,48 @@ test("the Magic cape menu leaves out the current spellbook and counts what is le
   assert.deepEqual(prompts[0].options, ["Ancient", "Lunar", "Arceuus", "Cancel"]);
 });
 
+// rsprox 232/03139 (normal world): after the fifth change of the day the max cape's Spellbook
+// option opens the message box, not the menu; its Check sub-option still gives the 5/5 line.
+test("with five changes used, the Spellbook option (max or Magic cape) shows the limit box, no menu", (t) => {
+  const boxes = [];
+  t.mock.method(Capes, "messageBox", (_player, text) => boxes.push(text));
+  for (const capeItem of [obj("skillcape_max"), obj("skillcape_magic")]) {
+    prompts.length = 0;
+    boxes.length = 0;
+    const p = player({ ninetyNines: ["ALL"], inventory: [capeItem] });
+    p.getSpellbook = () => core.MagicSpellbook.NORMAL;
+    for (let i = 0; i < 5; i++) Capes.useDaily(p, "spellbook");
+    const event = { player: p, itemId: capeItem, option: "Spellbook", clickType: 3 };
+    if (capeItem === obj("skillcape_max")) MaxCape._test.maxCapeOption(event);
+    else Options._test.capeOption(event);
+    assert.equal(event.handled, true);
+    assert.deepEqual(prompts, []);
+    assert.deepEqual(boxes, ["You may only switch spellbooks five times per day. Try again tomorrow."]);
+  }
+  const p = player({ ninetyNines: ["ALL"] });
+  for (let i = 0; i < 5; i++) Capes.useDaily(p, "spellbook");
+  Options.checkSpellbook(p);
+  assert.deepEqual(p.messages, ["<col=ef1020>You have changed your spellbook 5/5 times today.</col>"]);
+});
+
+// rsprox 235/03448 (normal world): a player without every 99 picking a Teleports entry gets the box.
+test("the max cape's Teleports need every skill at 99", (t) => {
+  const boxes = [];
+  t.mock.method(Capes, "messageBox", (_player, text) => boxes.push(text));
+  const goTo = t.mock.method(Teleports, "goTo", () => {});
+  const openMenu = t.mock.method(Teleports, "openMenu", () => {});
+  const p = player({ ninetyNines: ["MAGIC"], inventory: [obj("skillcape_max")] });
+  for (const event of [
+    { player: p, itemId: obj("skillcape_max"), option: "Teleports", clickType: 3 },
+    { player: p, itemId: obj("skillcape_max"), option: "Teleports", clickType: 3, subOpId: 1 },
+  ]) MaxCape._test.maxCapeOption(event);
+  assert.deepEqual(boxes, Array(2).fill("You need to have level 99 in all of the skills to use this."));
+  assert.equal(goTo.mock.callCount() + openMenu.mock.callCount(), 0);
+  const maxed = player({ ninetyNines: ["ALL"], inventory: [obj("skillcape_max")] });
+  MaxCape._test.maxCapeOption({ player: maxed, itemId: obj("skillcape_max"), option: "Teleports", clickType: 3 });
+  assert.equal(openMenu.mock.callCount(), 1);
+});
+
 test("the max cape and Agility cape swap to their worn ids and back", () => {
   const { normalise } = WornVariants._test;
   const p = player({ cape: obj("skillcape_max"), inventory: [obj("skillcape_agility_worn")] });

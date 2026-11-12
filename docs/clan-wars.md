@@ -213,8 +213,8 @@ keep this battle visible without exposing other instances.
 
 Closing the native interface restores the saved jail position, appearance
 visibility, fixed-view-distance configuration, movement and targetability guards,
-and supported server camera mode. Known follow and target modes are snapshotted;
-an in-flight camera scene is refused without changing it because its actual
+and supported server camera mode. Known follow and untimed target modes are snapshotted;
+a timed target glide or other in-flight camera scene is refused without changing it because its actual
 client interpolation/yaw/pitch is not observable or resumable by this server.
 The close, replacement-modal, jail-return, removal, death and match-finish routes
 relinquish viewing ownership before resetting anything, so reentrant cleanup

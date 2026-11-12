@@ -1198,7 +1198,10 @@ export class PacketSender {
   sendCameraTarget(
     target: { x: number; y: number; level: number; cycles?: number } | { player: number } | { npc: number } | { worldEntity: number },
   ): this {
-    this.cameraState = { mode: "target", target: { ...target } };
+    // A timed tile target interpolates from client-only camera coordinates.
+    // Keep it controlled until an explicit reset or untimed target replaces it.
+    this.cameraState = "cycles" in target && target.cycles !== undefined && target.cycles > 0
+      ? { mode: "controlled" } : { mode: "target", target: { ...target } };
     this.player.getSession().sendClientPacket(encodeCameraTarget(target));
     return this;
   }

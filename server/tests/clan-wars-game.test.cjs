@@ -1034,6 +1034,16 @@ test('native orb refuses an active camera scene and invalid viewing controls can
   assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'},'refusal preserves the existing cinematic');
   assert.ok(messages.some(message=>message.includes('Finish your current camera scene')));
   viewer.getPacketSender().sendCameraReset();
+  viewer.getPacketSender().sendCameraTarget({ x:viewer.getLocation().getX(), y:viewer.getLocation().getY(), level:viewer.getLocation().getZ(), cycles:50 });
+  messages.length = 0;
+  const beforeGlide = position(viewer);
+  await openView(viewer,game,false);
+  assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.deepEqual(position(viewer),beforeGlide,'refusal does not relocate an interpolating camera target');
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'});
+  assert.ok(messages.some(message=>message.includes('Finish your current camera scene')));
+  viewer.getPacketSender().sendCameraReset();
   await openView(viewer,game);
   const before = position(viewer), camera = viewer.getPacketSender().getCameraState();
   await click(viewer,'clanwars_view:sw',2);

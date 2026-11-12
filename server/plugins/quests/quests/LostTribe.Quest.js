@@ -159,8 +159,6 @@ module.exports = function registerLostTribeQuest(api) {
   const HAM_LADDER_TILE = "3118,9643,0";
   const HAM_HIDEOUT_LANDING = { x: 3119, y: 9643 };
   const HAM_SURFACE_LANDING = { x: 3119, y: 3244 };
-  const LUMBRIDGE_LANDING = { x: 3209, y: 3214 };
-  const MISTAG_LANDING = { x: 3319, y: 9616 };
 
   const HAM_ROBE_SET = [
     ItemIdentifiers.HAM_HOOD, // 4302
@@ -181,8 +179,6 @@ module.exports = function registerLostTribeQuest(api) {
   // Action / message step ids.
   const TAKE_BOOK_ACTION_ID = "ThLyr1";
   const READ_PAGES_ACTION_ID = "8WepSb";
-  const WAY_OUT_ACTION_ID = "yWjjdW";
-  const POST_QUEST_WAY_OUT_ACTION_ID = "uzpbCL";
   const ROBES_FOUND_ACTION_ID = "RCYXcm";
   const SILVERWARE_FOUND_ACTION_ID = "EMSHq8";
   const TREATY_SIGNED_ACTION_ID = "N5kpDk";
@@ -738,14 +734,7 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === KAZGAR_ESCORT_ACTION_ID) {
-      if (quest.getStage(player) >= STAGE_TREATY) {
-        if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
-        player.moveTo(new Location(MISTAG_LANDING.x, MISTAG_LANDING.y, 0));
-      }
-      return;
-    }
-    if (stepId === WAY_OUT_ACTION_ID || stepId === POST_QUEST_WAY_OUT_ACTION_ID) {
-      player.moveTo(new Location(LUMBRIDGE_LANDING.x, LUMBRIDGE_LANDING.y, 0));
+      if (quest.getStage(player) === STAGE_TREATY) quest.setStage(player, STAGE_ESCORTED);
       return;
     }
     if (stepId === CUTSCENE_START_ACTION_ID) {

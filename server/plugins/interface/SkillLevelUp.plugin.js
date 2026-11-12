@@ -244,8 +244,10 @@ function showSkillPopup(player, skill, oldLevel, newLevel, boxed) {
   const state = pending.get(player);
   if (state) state.current = { skill, from: oldLevel, to: newLevel, boxed };
   const name = skill.getName();
-  openPopup(player, SKILL_LAYERS[skill.getIndex()],
-    `Congratulations, you just advanced a ${name} level.`, `Your ${name} level is now ${newLevel}.`);
+  // As recorded: "an Agility level" (10), "an Attack level" (3); "Your Hitpoints are now N." (18).
+  const article = /^[AEIOU]/i.test(name) ? "an" : "a";
+  const now = name === "Hitpoints" ? `Your Hitpoints are now ${newLevel}.` : `Your ${name} level is now ${newLevel}.`;
+  openPopup(player, SKILL_LAYERS[skill.getIndex()], `Congratulations, you just advanced ${article} ${name} level.`, now);
 }
 
 function openCombatPopup(player, from) {

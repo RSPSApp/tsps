@@ -1429,3 +1429,18 @@ test("price checking quantities and closing returns every item", () => {
   }
 });
 
+
+test("Bank.contains counts the item in every tab, past a placeholder and across metadata stacks", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(LAVA_BATTLESTAFF, 0), false);
+  player.getBank(2).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  player.getBank(3).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 9 }), false);
+
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 1)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 2)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF_NOTE, 2)), true, "a note asks for the item it notes");
+  // The search tab holds copies of what the other tabs hold; they are not counted again.
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+});

@@ -15,6 +15,13 @@ const hooks = {};
 const events = {};
 let cycle = 100;
 const ground = [];
+// The destroy prompt's Uncharge/Dismantle requests; each is answered Yes unless `answer` is set false.
+const prompts = [];
+let answer = true;
+events["destroy-item:confirm"] = (request) => {
+  prompts.push(request);
+  if (answer) request.confirm(request.player, request.item);
+};
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -35,9 +42,11 @@ function player() {
   const p = new Player(null);
   p.setUsername("webweaver-test");
   const messages = [];
-  const sender = new Proxy({}, { get: (_, key) => key === "sendEnterAmountPrompt"
+  const sender = new Proxy({}, { get: (own, key) => own[key] ?? (key === "sendEnterAmountPrompt"
     ? (text) => { p.prompt = text; }
-    : () => sender });
+    : () => sender) });
+  p.sounds = [];
+  sender.sendSound = (id) => { p.sounds.push(id); return sender; };
   p.getPacketSender = () => sender;
   p.sendMessage = (message) => messages.push(message);
   p.setEnteredAmountAction = (action) => { p.amountAction = action; };
@@ -225,7 +234,7 @@ test("a charged bow without a paid deposit (shop, spawn, older save) refunds onl
     assert.equal(B.chargesOf(item), 0);
     assert.equal(item.getMetaValue(B.DEPOSIT_META), undefined);
     assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), charges);
-    assert.equal(p.messages.at(-1), charges ? "You uncharge your bow, regaining 5 revenant ether." : "You uncharge your bow.");
+    assert.deepEqual(p.messages, [], "no chat message");
   }
 });
 
@@ -310,4 +319,77 @@ test("the actual death producer drops an unprotected bow and ether, keeps only a
   assert.equal(item.getId(), I.WEBWEAVER_BOW);
   assert.equal(B.chargesOf(item), 10);
   assert.equal(ground.length, 0);
+});
+
+test("Uncharge asks on the destroy prompt first; Yes returns the ether with the destroy sound", () => {
+  const p = player();
+  const item = bow(p, 40);
+  prompts.length = 0;
+  answer = false;
+  assert.equal(B.uncharge({ player: p, item }), true);
+  answer = true;
+  assert.deepEqual([prompts[0].question, prompts[0].note, prompts[0].slot],
+    ["Are you sure you want to uncharge it?", "If you uncharge this weapon, all the revenant ether will be returned to your inventory.", 0]);
+  assert.equal(item.getId(), I.WEBWEAVER_BOW, "nothing changes before Yes");
+  prompts[0].confirm(p, item);
+  assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1040);
+  assert.deepEqual(p.sounds, [2381]);
+  assert.deepEqual(p.messages, []);
+});
+
+test("Dismantle on the (u) asks, then splits it into Craw's bow (u) and the Fangs of Venenatis", () => {
+  const p = player();
+  const item = bow(p, null);
+  prompts.length = 0;
+  answer = false;
+  assert.equal(B.dismantle({ player: p, item }), true);
+  answer = true;
+  assert.deepEqual([prompts[0].question, prompts[0].note], ["Are you sure you want to dismantle this weapon?", "You will receive its components back."]);
+  assert.equal(item.getId(), I.WEBWEAVER_BOW_U_, "No keeps the bow");
+  prompts[0].confirm(p, item);
+  assert.equal(item.getId(), I.CRAWS_BOW_U_);
+  assert.equal(p.getInventory().getAmount(I.FANGS_OF_VENENATIS), 1);
+  assert.deepEqual(p.messages, []);
+  assert.equal(B.dismantle({ player: p, item: bow(p, 5) }), false, "a charged bow has no Dismantle");
+});
+
+test("a preset Webweaver bow (u) is not dismantled into a plain Fangs of Venenatis", () => {
+  const p = player();
+  const item = bow(p, null);
+  item.setMetaValue(core.Item.PRESET_META, true);
+  prompts.length = 0;
+  assert.equal(B.dismantle({ player: p, item }), true);
+  assert.equal(prompts.length, 0);
+  assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+  assert.equal(p.getInventory().getAmount(I.FANGS_OF_VENENATIS), 0);
+  assert.equal(p.messages.at(-1), "Preset items cannot be used for this.");
+});
+
+test("a bow never paid for keeps that mark through Dismantle, so Craw's bow (u) gives no 7,500 ether", () => {
+  const Weapons = require("../plugins/items/RevenantWeapons.plugin");
+  const crawActions = {};
+  Weapons.register({
+    core,
+    onItemOnItem() {},
+    onItemAction: (name, options) => { crawActions[name] = options; },
+    onCustomEvent() {},
+    registerRangedAmmoHandler() {},
+    registerRangedCombatModifier() {},
+    registerMeleeHitModifier() {},
+    registerMeleeAttackAccuracyModifier() {},
+    onPlayerDeathItemDrop() {},
+    emitCustomEvent: (name, request) => events[name]?.(request),
+  });
+  const p = player();
+  const item = bow(p, 10, false, false);
+  B.uncharge({ player: p, item });
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 10);
+  B.dismantle({ player: p, item });
+  assert.equal(item.getId(), I.CRAWS_BOW_U_);
+  crawActions["Craw's bow (u)"].Dismantle({ player: p, item });
+  if (p.getDialogueManager().isActive()) p.getDialogueManager().advance();
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 10, "no ether from dismantling");
+  assert.equal(p.getInventory().getAmount(I.CRAWS_BOW_U_), 1, "the bow is kept");
+  assert.equal(p.messages.at(-1), "Your bow was never activated with ether, so it cannot be dismantled.");
 });

@@ -296,3 +296,32 @@ test("dinner waits on the table until a seated diner has room for it", (t) => {
   Servants.processServant(f.p);
   assert.equal(f.p.getInventory().getAmount(I.SHRIMPS), 1, "served once there is room");
 });
+
+const KITCHEN = () => ({ roomKey: "KITCHEN", furniture: { a: "WOODEN_LARDER", b: "WOODEN_SHELVES_1", c: "FIREPIT_WITH_HOOK", d: "PUMP_AND_DRAIN" } });
+/** Rick takes a tea order: Serve... -> Tea, and the line continued. */
+function orderTea(f) {
+  talkTo(f.p, f.npc, N.RICK); f.next(); f.choose(1); f.choose(1); f.next();
+}
+
+test("while the tea is made no second order is taken: one charge, one cup", (t) => {
+  const f = inHouse(t, { id: N.RICK, pay: 16 }, [KITCHEN()]);
+  orderTea(f);
+  assert.equal(f.varbits.get(PAY), 15);
+  f.clear(); talkTo(f.p, f.npc, N.RICK);
+  assert.deepEqual(f.log, [], "the servant is busy in the kitchen");
+  returnNow(t, f);
+  assert.deepEqual(lines(f)[0], "Tea's up, guv. You want milk?");
+  f.next(); f.choose(1); f.next();
+  assert.equal(f.p.getInventory().getAmount(I.CUP_OF_TEA_9 + 1), 1);
+  assert.equal(f.varbits.get(PAY), 15, "charged once");
+});
+
+test("an errand is refused while the tea is made, so the tea is not lost", (t) => {
+  const f = inHouse(t, { id: N.RICK, pay: 16 }, [KITCHEN()]);
+  f.p.getBank(0).add(new core.Item(I.PLANK, 5), false);
+  orderTea(f);
+  assert.equal(Servants.startServantTask(f.p, { kind: "fetch", itemId: I.PLANK, amount: 1 }), false);
+  assert.equal(f.varbits.get(PAY), 15);
+  f.clear(); returnNow(t, f);
+  assert.deepEqual(lines(f)[0], "Tea's up, guv. You want milk?");
+});

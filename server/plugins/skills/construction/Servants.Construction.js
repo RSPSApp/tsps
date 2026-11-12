@@ -218,7 +218,7 @@ function callServant(player) {
   if (!hasBellPull(runtime.house.save)) {
     player.sendMessage("You need a bell-pull in your dining room to call your servant."); return;
   }
-  if (runtime.due !== undefined) { player.sendMessage(LINES.messages.notBack); return; }
+  if (runtime.due !== undefined || runtime.meal) { player.sendMessage(LINES.messages.notBack); return; }
   spawn(player, runtime);
   if (!runtime.npc) return;
   runtime.npc.getMovementQueue().reset();
@@ -240,7 +240,7 @@ function callServantFromOptions(player) {
     player.sendMessage("You need a bell pull in your house to be able to call your servant like this."); return false;
   }
   const runtime = ownerContext(player);
-  if (runtime?.due !== undefined) { player.sendMessage(LINES.messages.notBack); return false; }
+  if (runtime?.due !== undefined || runtime?.meal) { player.sendMessage(LINES.messages.notBack); return false; }
   if (!runtime) { player.sendMessage("You need a hired servant and two bedrooms with beds in your own house."); return false; }
   player.sendMessage(LINES.messages.onTheWay);
   callServant(player);
@@ -309,7 +309,7 @@ function handOver(player, runtime, asked = false) {
 }
 function startServantTask(player, task) {
   const runtime = ownerContext(player), save = House.houseStateFor(player), servant = save.servant, def = definition(save);
-  if (!runtime || !servant || !def || runtime.due !== undefined || runtime.guide) return false;
+  if (!runtime || !servant || !def || runtime.due !== undefined || runtime.guide || runtime.meal) return false;
   if (!Number.isSafeInteger(task.amount) || task.amount < 1 || !Number.isSafeInteger(task.itemId) || task.itemId < 1) return false;
   if (!payFromMoneyBag(player)) return false;
   if (servant.cargo) return false;
@@ -351,7 +351,6 @@ function startServantTask(player, task) {
   servant.cargo = { itemId: output, amount, bank: task.kind === "bank", meta: Item.cloneMeta(task.meta) };
   servant.lastTask = { ...task, amount };
   charge(servant, ERRAND_COST);
-  runtime.meal = undefined;
   runtime.due = World.getProcessCycle() + def.ticks;
   removeNpc(runtime);
   persist(player);
@@ -443,7 +442,7 @@ function taskLabel(task) {
  */
 function ownerTalk(player, runtime, rang = false) {
   const save = runtime.house.save, servant = save.servant, def = definition(save);
-  if (!def || !servant || !runtime.npc) return;
+  if (!def || !servant || !runtime.npc || runtime.meal) return;
   if (payLeft(servant) === 0 && !payFromMoneyBag(player)) { demandWage(player, runtime); return; }
   if (servant.cargo && !servant.cargo.bank) { handOver(player, runtime, true); return; }
   const last = servant.lastTask;
@@ -550,12 +549,15 @@ function kitchenFor(save, kind) {
 }
 function hasDiningTable(save) { return rooms(save).some(r => r.roomKey === "DINING_ROOM" && keys(r).some(k => /TABLE/.test(k))); }
 /**
+ * While a meal is being made the servant works in the kitchen: no second meal or errand is
+ * taken, and talking or calling waits until it is done (ours: a call says it is not back yet).
+ *
  * Tea and dinner: the servant agrees, takes its pay and then finds out whether the kitchen is
  * good enough (dinner checks the dining table first, before any pay). Drinks: the player asks,
  * and without a barrel the servant says so.
  */
 function serve(player, runtime, kind) {
-  if (!present(player, runtime)) return;
+  if (!present(player, runtime) || runtime.meal) return;
   const save = runtime.house.save, def = definition(save), servant = save.servant;
   const refuse = (situation, fallback) => {
     const steps = [npcSays(def, situation)];
@@ -579,7 +581,7 @@ function serve(player, runtime, kind) {
 }
 function prepare(player, runtime, kind) {
   const save = runtime.house.save, room = kitchenFor(save, kind);
-  if (!present(player, runtime) || !room) return;
+  if (!present(player, runtime) || !room || runtime.meal) return;
   const def = definition(save), kitchen = keys(room);
   const tier = kitchen.includes("TEAK_SHELVES_2") ? 2 : kitchen.some(k => ["WOODEN_SHELVES_3", "OAK_SHELVES_2", "TEAK_SHELVES_1"].includes(k)) ? 1 : 0;
   const itemId = kind === "tea" ? TEAS[tier] : kind === "dinner" ? def.food : DRINKS[kitchen.find(k => DRINKS[k])];
@@ -618,7 +620,7 @@ function itemOnServant(event) {
   if (!runtime || event.target !== runtime.npc) return;
   event.handled = true;
   const item = player.getInventory().getItems()[event.slot];
-  if (!item || item.getId() !== event.itemId || runtime.due !== undefined) return;
+  if (!item || item.getId() !== event.itemId || runtime.due !== undefined || runtime.meal) return;
   const save = runtime.house.save, def = definition(save), input = item.getDefinition();
   if (payLeft(save.servant) === 0 && !payFromMoneyBag(player)) { demandWage(player, runtime); return; }
   if (isBones(input.unNote())) { converse(player, [npcSays(def, "bones")]); return; }
@@ -767,21 +769,23 @@ function processServant(player) {
   if (runtime.due !== undefined) return;
   if (runtime.meal && cycle >= runtime.meal.ready && runtime.npc) {
     const meal = runtime.meal;
-    if (meal.kind === "dinner") {
-      // Dinner waits on the table until someone seated there has room for it.
-      const diners = runtime.house.getPlayers().filter(p => {
-        const pos = runtime.house.getRoomPositionAt(p.getLocation());
-        return pos && runtime.house.getRoom(pos)?.roomKey === "DINING_ROOM" && House.isSeatedForDinner(p)
-          && p.getInventory().getFreeSlots() > 0;
-      });
-      for (const diner of diners) diner.getInventory().adds(meal.itemId, 1);
-      if (diners.length) runtime.meal = undefined;
-    } else {
-      runtime.meal = undefined;
+    runtime.meal = undefined;
+    if (meal.kind === "dinner") runtime.table = meal.itemId;
+    else {
       runtime.npc.getMovementQueue().reset();
       runtime.npc.moveTo(player.getLocation().clone());
       offerMeal(player, runtime, meal);
     }
+  }
+  if (runtime.table) {
+    // Dinner waits on the table until someone seated there has room for it.
+    const diners = runtime.house.getPlayers().filter(p => {
+      const pos = runtime.house.getRoomPositionAt(p.getLocation());
+      return pos && runtime.house.getRoom(pos)?.roomKey === "DINING_ROOM" && House.isSeatedForDinner(p)
+        && p.getInventory().getFreeSlots() > 0;
+    });
+    for (const diner of diners) diner.getInventory().adds(runtime.table, 1);
+    if (diners.length) runtime.table = undefined;
   }
   const servant = runtime.house.save.servant;
   if (servant?.cargo && !servant.cargo.bank) runtime.npc?.setFollowing(player);

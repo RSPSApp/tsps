@@ -100,3 +100,32 @@ test('the lost perfected whistle option is offered only to a player who lost one
   const Whistle = require('../plugins/world/quetzals/Whistle.Quetzals');
   assert.equal(Whistle.chargesOf(lost.player, Whistle.whistleOf(whistle)), 0, 'no charges left');
 });
+
+// Review on #4746: "If the player has claimed the free whistle blueprint:" gates the 500-coin option.
+test('after the free claim, "more whistles" sells a blueprint for 500 coins, and refuses 499', async (t) => {
+  const MORE = 'How do I get my hands on more whistles?';
+  const unclaimed = harness(t, { completed: 0 });
+  await unclaimed.talk();
+  assert.equal((await unclaimed.menu())?.includes(MORE), false, 'not offered before the free claim');
+
+  const f = harness(t, { completed: 10 });
+  f.player.setAttribute('quetzals:free-blueprint-claimed', true);
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 1000), false);
+  await f.talk();
+  await f.choose(MORE);
+  await f.choose('Yes.');
+  await f.finish();
+  const blueprint = obj('hg_whistle_blueprint_1');
+  assert.equal(f.player.getInventory().getAmount(blueprint), 1);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 500, '500 coins taken, once');
+
+  const poor = harness(t, { completed: 10 });
+  poor.player.setAttribute('quetzals:free-blueprint-claimed', true);
+  poor.player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 499), false);
+  await poor.talk();
+  await poor.choose(MORE);
+  await poor.choose('Yes.');
+  await poor.finish();
+  assert.equal(poor.player.getInventory().getAmount(blueprint), 0, 'refused');
+  assert.equal(poor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 499);
+});

@@ -120,6 +120,9 @@ function answer({ player, definition, text }) {
   if (definition?.getName?.() !== PITRI) return null;
   const value = String(text).toLowerCase();
   const whistle = chargeableWhistle(player);
+  // "If the player has claimed the free whistle blueprint:" (the 500-coin "more whistles" option)
+  // before the broader match, which is "has completed 10 rumours and has not claimed ...".
+  if (value.includes("has claimed the free whistle blueprint")) return player.getAttribute(BLUEPRINT_CLAIMED_ATTRIBUTE) === true;
   if (value.includes("free whistle blueprint")) return freeBlueprintDue(player);
   if (value.includes("lost their perfected whistle")) return lostPerfectedWhistle(player);
   if (value.includes("not completed 10 rumours")) return rumoursCompleted(player) < Common.data.freeBlueprintRumours;

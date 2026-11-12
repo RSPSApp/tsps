@@ -3066,7 +3066,13 @@ const FALADOR_LANDINGS=[[3472,4759,0],[3512,4759,0]];
 const FALADOR_JAILS=[[3461,4760,0],[3469,4745,0]];
 const faladorReachable=(game,from,to)=>layoutReachable(game,from,to,FALADOR_ORIGIN);
 // Existing native helpers are already area-relative and identity-aware.
-const faladorObject=lumbridgeObject, faladorWalk=lumbridgeWalk;
+const faladorObject=lumbridgeObject;
+async function faladorWalk(p,game,xy) {
+  const at=game.area.at([...xy,0]);assert.ok(Math.abs(p.getLocation().getX()-at.getX())<64&&Math.abs(p.getLocation().getY()-at.getY())<64,'ordinary click in RSMOD search window');
+  await wire(p,walkClickFrame(at));
+  for(let ticks=0;ticks<80&&!p.getLocation().equals(at);ticks++)tick();
+  assert.deepEqual(position(p),[at.getX(),at.getY(),0],'processed ordinary walk reaches exact endpoint within bounded ticks');
+}
 function faladorMasks(area) {const masks=[];for(let y=0;y<64;y++)for(let x=0;x<128;x++)masks.push(area.getClip(area.tile(x,y,0)));return masks;}
 function faladorTemplate() {
   const area=new core.TemplatedInstanceArea(16,8);

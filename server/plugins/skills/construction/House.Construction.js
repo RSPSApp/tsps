@@ -681,8 +681,8 @@ function isSeated(player) {
 
 function toggleBuildingMode(player, house, on) {
   if (house.buildingMode === on) return;
-  if (isSeated(player)) { player.sendMessage("You cannot enter or leave building mode while sitting down."); return; }
   closeHouseOptions(player);
+  if (isSeated(player)) { player.sendMessage("You cannot enter or leave building mode while sitting down."); return; }
   enterHouse(player, on, null, "options");
 }
 

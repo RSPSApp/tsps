@@ -119,6 +119,31 @@ test("building mode is refused with guests in the house or a follower out, and t
   assert.equal(House.isBuildingMode(f.p), false);
 });
 
+test("building mode is refused while sitting on a chair, and the panel closes", (t) => {
+  const f = actor(t);
+  f.p.getAttribute("construction:house").rooms[1][4][5].furniture.CHAIR_1 = "OAK_CHAIR";
+  assert.equal(House.enterHouse(f.p, false), true);
+  const house = House.houseFor(f.p);
+  const chair = house.furnitureObjects.find(object => {
+    const at = object.getLocation();
+    return house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, object.getId(), object.getType())?.buildableKey === "OAK_CHAIR";
+  });
+  assert.ok(chair, "the chair was built in the parlour");
+  // The tile in front of the chair, as the chair code works it out.
+  const [dx, dy] = (chair.getType() === 11 ? [[-1, -1], [-1, 1], [1, 1], [1, -1]] : [[0, -1], [-1, 0], [0, 1], [1, 0]])[chair.getFace() & 3];
+  const at = chair.getLocation();
+  f.p.moveTo(at.transform(dx, dy)); f.p.setNeedsPlacement(false);
+  const definition = ObjectDefinition.forPlayer(chair.getId(), f.p) ?? ObjectDefinition.forId(chair.getId());
+  const option = definition.getInteractions().findIndex(o => o?.toLowerCase() === "sit-on");
+  assert.ok(option >= 0, "the chair has Sit-on");
+  PM.emitObjectInteraction({ player: f.p, object: chair, objectId: chair.getId(), definition, clickType: option + 1,
+    location: { x: at.getX(), y: at.getY(), z: at.getZ() }, sourceLocation: f.p.getLocation(), handled: false });
+  openPanel(f);
+  assert.deepEqual(press(f, 5), ["You cannot enter or leave building mode while sitting down."]);
+  assert.equal(closed(f), true);
+  assert.equal(House.isBuildingMode(f.p), false);
+});
+
 test("Expel Guests reports what it did and closes the panel", (t) => {
   const f = actor(t);
   assert.equal(House.enterHouse(f.p, false), true);

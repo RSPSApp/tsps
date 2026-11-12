@@ -3,6 +3,7 @@
 const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, catchExchange, xp, begin, hide, chance } = C;
 const tables = require("../data/impling-loot.json");
+const Matthias = require("./Matthias.Hunter");
 const falcons = new Map();
 const caught = new Map();
 // Players wearing a falconer's glove, so leaving the falconry grounds is checked for them only.
@@ -47,7 +48,8 @@ function hire({ player }) {
   if ([E.WEAPON_SLOT, E.SHIELD_SLOT, E.HANDS_SLOT].some(slot => player.getEquipment().get(slot).getId() > 0)) {
     player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return true;
   }
-  if (!exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
+  // Wiki (Falconry): an investor borrows falcons without the 500-coin fee.
+  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
   gloves(player, I.FALCONERS_GLOVE_2);
   H.players.add(player);
   player.sendMessage("Matthias lends you a falcon. Catch a kebbit, then retrieve the falcon and its prey.");

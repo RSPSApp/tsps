@@ -2812,6 +2812,8 @@ test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t 
   const f = fixture(t), quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
   const priest = quests.find(q => q.key === 'priest_in_peril'), nature = quests.find(q => q.key === 'nature_spirit');
   priest.setStage(f.player, priest.completionValue);
+  // Kept: without it Drezel answers the lost-dagger branch of his post-quest page first.
+  f.player.getInventory().adds(core.ItemIdentifiers.WOLFBANE, 1);
   const npcId = core.NpcIdentifiers.DREZEL, npc = core.NPC.create(npcId, new core.Location(3440, 9897));
   assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
   const lines = [];

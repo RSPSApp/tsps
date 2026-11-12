@@ -10,8 +10,8 @@
  * Saved stages (quest.priest_in_peril.stage): 10 started, 20 guardian killed,
  * 30 told King Roald, 40 met Drezel, 43 cell unlocked, 46 vampyre sealed,
  * 50 asked to meet in the mausoleum, 55 repairing the barrier, 60 complete.
- * Live sends 60 at "Quest complete!" and 61 once Drezel blesses the player at the end of
- * the same conversation (AWAITING_BLESSING_ATTRIBUTE holds the gap).
+ * Live sends 60 with the last essence and 61 once Drezel blesses the player at the end of
+ * the same conversation (AWAITING_BLESSING_ATTRIBUTE holds the gap after completion).
  * The client sees OSRS's own varp 302 values (see wireValue); saves made before
  * 43/46/55 existed keep their meaning (an old 50 had the vampyre sealed).
  */
@@ -63,13 +63,13 @@ module.exports = function registerPriestInPerilQuest(api) {
    * Varp 302 as live OSRS sends it (Quest Helper's PriestInPeril steps; the cache's
    * transforms key on the same values): 1 started, 2 agreed to kill the dog,
    * 3 dog killed, 4 King told, 5 met Drezel, 6 cell unlocked, 7 coffin sealed,
-   * 8 meet in the mausoleum, 10-59 essence (60 minus the essence still owed), 60 complete,
-   * 61 blessed for Morytania (capture 2026-11-02: 60 at "Quest complete!", 61 at tick 13629).
+   * 8 meet in the mausoleum, 10-60 essence (60 minus the essence still owed: 60 with the last
+   * hand-in, capture 2026-11-02 tick 13457), 60 complete, 61 blessed for Morytania (tick 13629).
    * The guardian 3487 shows at 0-2, the cell Drezel at 4-8, the mausoleum Drezel at 8-61.
    */
   function wireValue(stage, player) {
     if (stage >= STAGE_COMPLETE) return awaitingBlessing(player) ? 60 : 61;
-    if (stage >= STAGE_REPAIRING_BARRIER) return 10 + Math.min(ESSENCE_REQUIRED - 1, essenceHandedIn(player));
+    if (stage >= STAGE_REPAIRING_BARRIER) return 10 + Math.min(ESSENCE_REQUIRED, essenceHandedIn(player));
     if (stage >= STAGE_MEET_IN_MAUSOLEUM) return 8;
     if (stage >= STAGE_VAMPYRE_SEALED) return 7;
     if (stage >= STAGE_CELL_UNLOCKED) return 6;
@@ -622,7 +622,7 @@ module.exports = function registerPriestInPerilQuest(api) {
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
     if (quest.getStage(player) === STAGE_REPAIRING_BARRIER && essenceHandedIn(player) >= ESSENCE_REQUIRED) {
-      // Set first, so completing sends 60; the blessing a few lines on sends 61.
+      // Set first, so completing keeps 60; the blessing a few lines on sends 61.
       player.setAttribute(AWAITING_BLESSING_ATTRIBUTE, true);
       quest.complete(player);
     }

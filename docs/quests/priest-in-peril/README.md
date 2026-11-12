@@ -37,10 +37,11 @@ Newest first.
   - Blessed water on the coffin now plays throw_bucketofwater (1077), and
     priestperil_coffin_spell (272) on 3413,3486,2 and 3413,3487,2 with delay 34. It also plays
     synth 1733 with delay 30 (tick 11568).
-  - Varp 302 went straight to 61. Live sends 60 at "Quest complete!" and 61 when Drezel's
-    "Drezel blesses you..." message plays later in the same conversation (tick 13629). The
-    gap is kept in `priest-in-peril:awaiting-blessing`. Saves completed before this have no
-    such flag and stay at 61.
+  - Varp 302 went straight to 61, and the hand-in capped at 59. Live climbs to 60 with the
+    last essence (tick 13457), stays at 60 through "Quest complete!", and goes to 61 when
+    Drezel's "Drezel blesses you..." message plays later in the same conversation (tick 13629).
+    The gap after completion is kept in `priest-in-peril:awaiting-blessing`. Saves completed
+    before this have no such flag and stay at 61.
     **Ours:** someone who walks off in that gap gets the final conversation back from the step
     after "Quest complete!" when they next talk to the mausoleum Drezel. The Holy barrier still
     opens on completion. Neither case is captured.

@@ -411,8 +411,9 @@ test('the route sends live varp 302 values from start to completion', () => {
   assert.equal(h.talk(N.DREZEL, MAUSOLEUM), 'giving-drezel-the-last-of-the-essence');
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '4daSZa', kind: 'message' });
   assert.equal(player.inventory.getAmount(I.PURE_ESSENCE), 3, 'only the 22 still owed are taken');
+  assert.equal(h.wire(), 60, 'the last essence takes varp 302 to 60 (capture tick 13457)');
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
-  assert.equal(h.wire(), 60, 'live sends 60 at "Quest complete!"');
+  assert.equal(h.wire(), 60, 'and "Quest complete!" keeps it there');
   assert.ok(h.quest.isComplete(player));
   assert.deepEqual(player.xp, [[core.Skill.PRAYER.getIndex(), 1406]]);
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);

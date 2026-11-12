@@ -174,6 +174,19 @@ test("Tumeken's shadow: with both held only the plain runes pay, and Uncharge re
   assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 500);
 });
 
+test("Tumeken's shadow: aether runes count as soul runes, after the plain soul runes (Wiki)", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, new core.Item(I.SOUL_RUNE, 3));
+  f.inv.setItem(2, new core.Item(I.AETHER_RUNE, 7));
+  f.inv.setItem(3, new core.Item(I.CHAOS_RUNE, 50));
+  await useOnEye(f, 2, I.AETHER_RUNE);
+  assert.equal(f.messages.at(-1), "You apply 5 charges to your Tumeken's shadow.");
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 0, "the soul runes first");
+  assert.equal(amount(f.inv, I.AETHER_RUNE, false), 0, "then 7 aether runes: 10 souls, 5 charges");
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 25);
+});
+
 // Warped sceptre: 2 chaos and 5 earth runes a charge, through an amount prompt; Uncharge asks Yes/No.
 test("Warped sceptre: preset chaos and earth runes are refused", async (t) => {
   const f = actor(t);

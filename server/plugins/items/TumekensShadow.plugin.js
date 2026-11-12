@@ -137,7 +137,11 @@ function setCharges(player, item, charges) {
   player.getInventory().refreshItems();
 }
 
-/** Two soul runes and five chaos runes a charge, as many as the inventory affords. */
+/**
+ * Two soul runes and five chaos runes a charge, as many as the inventory affords. Aether runes
+ * count as soul runes (Wiki: "Aether runes can be used in place of soul runes"); plain soul runes
+ * go first, and Uncharge refunds soul runes either way.
+ */
 function chargeShadow(event) {
   const { player } = event;
   const I = ids();
@@ -156,7 +160,7 @@ function chargeShadow(event) {
     return true;
   }
   const batches = (count) => Math.min(
-    Math.floor(count(I.SOUL_RUNE) / SOULS_PER_CHARGE),
+    Math.floor((count(I.SOUL_RUNE) + count(I.AETHER_RUNE)) / SOULS_PER_CHARGE),
     Math.floor(count(I.CHAOS_RUNE) / CHAOS_PER_CHARGE),
     MAX_CHARGES - current,
   );
@@ -169,7 +173,9 @@ function chargeShadow(event) {
     player.sendMessage("You need two soul runes and five chaos runes for each charge.");
     return true;
   }
-  takePlain(inventory, I.SOUL_RUNE, affordable * SOULS_PER_CHARGE);
+  const souls = Math.min(plainAmount(inventory, I.SOUL_RUNE), affordable * SOULS_PER_CHARGE);
+  if (souls > 0) takePlain(inventory, I.SOUL_RUNE, souls);
+  if (affordable * SOULS_PER_CHARGE > souls) takePlain(inventory, I.AETHER_RUNE, affordable * SOULS_PER_CHARGE - souls);
   takePlain(inventory, I.CHAOS_RUNE, affordable * CHAOS_PER_CHARGE);
   setCharges(player, shadow, current + affordable);
   player.sendMessage(current === 0
@@ -239,7 +245,7 @@ module.exports = {
     pluginApi.registerCombatMethodResolver(staff.resolver);
     pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.registerBonusProvider({ apply: shadowBonuses });
-    for (const rune of ["Soul rune", "Chaos rune"]) {
+    for (const rune of ["Soul rune", "Aether rune", "Chaos rune"]) {
       pluginApi.onItemOnItem(rune, "Tumeken's shadow", chargeShadow);
       pluginApi.onItemOnItem(rune, "Tumeken's shadow (uncharged)", chargeShadow);
     }

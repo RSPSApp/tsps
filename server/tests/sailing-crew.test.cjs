@@ -886,6 +886,7 @@ test("clearing a slot aboard: off the side panel at once, off the deck when crew
     assert.equal(player.varbits.get(VARBIT.VISIBLE_JIM), 2, "not back at the Pandemonium while the boat sails");
     closeCrewManagement(player);
     assert.ok(!jim.npc.isRegistered(), "gone from the deck as crew management closes");
+    assert.equal(BoatManager.getDeck(boat).getNpcs().includes(jim.npc), false, "and off the deck's NPCs");
     assert.equal(common.crewAboard(boat).length, 1);
   } finally {
     Sailing.disembark(player, "the_pandemonium");

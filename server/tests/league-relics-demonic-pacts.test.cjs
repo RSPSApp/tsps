@@ -1673,6 +1673,25 @@ test("Transmute: Convergence goes a tier down; loose items convert in place: 10 
   assert.equal(player.sent.messages.length, messages + 1);
 });
 
+test("Transmute: a click waiting for the cast is dropped under a dialogue opened meanwhile; without one it converts", (t) => {
+  const tick = withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  for (const dialogue of [true, false]) {
+    inventory.resetItems();
+    tick(5);
+    inventory.adds(I.UNCUT_DIAMOND, 1);
+    inventory.adds(I.UNCUT_RUBY, 1);
+    castOn(player, "Alchemic Convergence", 0);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), 2, "the first cast");
+    castOn(player, "Alchemic Convergence", 1); // during the cast: it waits
+    if (dialogue) player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Craft a scarab emblem?")));
+    tick(5);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), dialogue ? 2 : 0, dialogue ? "not converted under the dialogue" : "the waiting click converts both rubies held");
+    player.getDialogueManager().reset();
+  }
+});
+
 test("Transmute: an item no row has, and the lowest tier, as recorded; a stackable stack (runes) moves 10", (t) => {
   withClock(t);
   const player = cases(TRANSMUTE).relic;

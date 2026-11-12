@@ -77,3 +77,35 @@ test("High Alchemy aimed at another interface's slot alches nothing and leaves t
     }
   }
 });
+
+// A second alch clicked during the 5-tick cast delay waits as a task. Opened after it was queued, a dialogue (the
+// "Craft a scarab emblem?" hand-in) was still open when it fired, so the checked item was alched under it and the
+// menu still paid. The waiting cast is dropped when a dialogue or prompt is open as it fires.
+test("an alch queued before a dialogue opens doesn't fire under it", async (t) => {
+  const spell = core.CacheDefinitions.getSpellByName("High Level Alchemy");
+  for (const dialogue of [false, true]) {
+    const { p, send } = connected(t);
+    p.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99).setCurrentLevel(core.Skill.MAGIC, 99, false);
+    const inv = p.getInventory();
+    inv.setItem(0, new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1));
+    inv.setItem(1, new core.Item(core.ItemIdentifiers.IRON_BAR, 1));
+    inv.setItem(2, new core.Item(core.ItemIdentifiers.NATURE_RUNE, 2));
+    inv.setItem(3, new core.Item(core.ItemIdentifiers.FIRE_RUNE, 10));
+    const cast = (slot, itemId) => send({ type: "widget_target", targetWidgetId: 149 << 16, targetSlot: slot, targetItemId: itemId,
+      sourceWidgetId: spell.widgetId, sourceSlot: -1, sourceItemId: spell.itemId });
+    await cast(0, core.ItemIdentifiers.BRONZE_DAGGER);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.BRONZE_DAGGER), 0, "the first alch is cast");
+    await cast(1, core.ItemIdentifiers.IRON_BAR);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.IRON_BAR), 1, "the second waits for the cast delay");
+    if (dialogue) p.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Craft a scarab emblem?")));
+    for (let i = 0; i < 6; i++) { core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process(); }
+    if (dialogue) {
+      assert.equal(inv.getAmount(core.ItemIdentifiers.IRON_BAR), 1, "the bar is not alched under the dialogue");
+      assert.equal(inv.getAmount(core.ItemIdentifiers.NATURE_RUNE), 1, "and no second rune is taken");
+      assert.equal(p.getDialogueManager().isActive(), true, "the dialogue stays open");
+      assert.equal(p.getAttribute("magic:alchemy-queued") ?? null, null, "nothing is left waiting");
+    } else {
+      assert.equal(inv.getAmount(core.ItemIdentifiers.IRON_BAR), 0, "control: without a dialogue the queued alch casts");
+    }
+  }
+});

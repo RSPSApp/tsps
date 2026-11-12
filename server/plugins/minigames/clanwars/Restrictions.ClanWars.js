@@ -35,6 +35,21 @@ function noSpecial(event) {
   event.disabled = true;
   event.message = "Special attacks are disabled in this Clan Wars battle.";
 }
+// Rev242 clanwars_setup magic choices: All spellbooks, Standard spells, Classic F2P, Binding only, Disabled.
+const MAGIC_DISABLED = 4;
+/**
+ * Magic Disabled (Wiki: "No magical combat is allowed"): combat spells are refused by the arena's canAttack, but
+ * Lunar, Ancient and Arceuus spells cast on oneself or a teammate (Vengeance, Vengeance Other, Heal Other, thralls)
+ * never reach it. The Wiki's "Standard spells" choice already allows only the standard spellbook, so the stricter
+ * Disabled refuses every other book, in staging too (a Vengeance cast there reflects in the battle).
+ */
+function noSpellbookMagic(event) {
+  const game = gameOf(event.player);
+  if (!game || game.rules.magic !== MAGIC_DISABLED || event.spellbook === C.core.MagicSpellbook.NORMAL) return;
+  event.disabled = true;
+  // No capture of the live refusal; worded as the plugin's other restriction messages.
+  event.player.sendMessage("Magic is disabled in this Clan Wars battle.");
+}
 function prepare(player, rules) {
   const { PrayerData, PrayerHandler, CombatSpecial } = C.core;
   // Activation checks do not revisit prayers already active on entry.
@@ -52,5 +67,6 @@ function attach(api) {
   api.onCanDrink(canDrink);
   api.onPrayerDisabled(noPrayer);
   api.onSpecialAttackDisabled(noSpecial);
+  api.onSpellDisabled(noSpellbookMagic);
 }
 module.exports = { prepare, attach };

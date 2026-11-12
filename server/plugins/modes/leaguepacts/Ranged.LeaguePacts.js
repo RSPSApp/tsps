@@ -138,7 +138,10 @@ function prayerPercents(player) {
   const { PrayerHandler } = core;
   if (PrayerHandler.isActivated(player, PrayerHandler.SHARP_EYE)) return { accuracy: 105, damage: 105 };
   if (PrayerHandler.isActivated(player, PrayerHandler.HAWK_EYE)) return { accuracy: 110, damage: 110 };
-  if (PrayerHandler.isActivated(player, PrayerHandler.EAGLE_EYE)) return { accuracy: 115, damage: 115 };
+  if (PrayerHandler.isActivated(player, PrayerHandler.EAGLE_EYE)) {
+    // Deadeye (Eagle Eye's slot after its scroll): 18% accuracy and strength (Wiki).
+    return PrayerHandler.deadeyeActive(player) ? { accuracy: 118, damage: 118 } : { accuracy: 115, damage: 115 };
+  }
   if (PrayerHandler.isActivated(player, PrayerHandler.RIGOUR)) return { accuracy: 120, damage: 123 };
   return null;
 }

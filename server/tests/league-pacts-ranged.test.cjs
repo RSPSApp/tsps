@@ -226,6 +226,18 @@ test("ranged prayers are 30% more effective: Rigour's 20% accuracy and 23% stren
   assert.equal(EquipmentEffects.applyCombatEffectiveLevelModifiers(pacts, 1000, { combatType: core.CombatType.MELEE, purpose: "accuracy" }), 1000, "ranged only");
 });
 
+test("buffed ranged prayers boost Deadeye's 18%, not Eagle Eye's 15%, once its scroll is read", () => {
+  const [pacts] = pair("prayers", nodesOf("talent_buffed_ranged_prayers"));
+  stub(core.PrayerHandler, "isActivated", (player, prayer) => prayer === core.PrayerHandler.EAGLE_EYE);
+  const level = (purpose) => EquipmentEffects.applyCombatEffectiveLevelModifiers(pacts, 1000, { combatType: RANGED(), purpose });
+  stub(core.PrayerHandler, "deadeyeActive", () => false);
+  assert.equal(level("accuracy"), 1000 + Math.floor(99 * 1.195) - Math.floor(99 * 1.15), "Eagle Eye");
+  stub(core.PrayerHandler, "deadeyeActive", () => true);
+  for (const purpose of ["accuracy", "damage"]) {
+    assert.equal(level(purpose), 1000 + Math.floor(99 * 1.234) - Math.floor(99 * 1.18), `Deadeye ${purpose}`);
+  }
+});
+
 test("thrown weapons: +60 ranged accuracy and 80% of the melee strength as ranged strength, the atlatl included", () => {
   const [pacts, main] = pair("thrown-bonus", [...nodesOf("talent_thrown_weapon_accuracy"), ...nodesOf("talent_thrown_weapon_melee_str_scale")]);
   const bonuses = (player) => {

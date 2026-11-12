@@ -134,7 +134,7 @@ export class DamageFormulas {
         } else if (PrayerHandler.isActivated(player, PrayerHandler.HAWK_EYE)) {
             return 110;
         } else if (PrayerHandler.isActivated(player, PrayerHandler.EAGLE_EYE)) {
-            return 115;
+            return PrayerHandler.deadeyeActive(player) ? 118 : 115; // Wiki: Deadeye
         } else if (PrayerHandler.isActivated(player, PrayerHandler.RIGOUR)) {
             return 123;
         }
@@ -404,7 +404,7 @@ export class DamageFormulas {
             return 40;
         }
         if (PrayerHandler.isActivated(player, PrayerHandler.MYSTIC_MIGHT)) {
-            return 20;
+            return PrayerHandler.mysticVigourActive(player) ? 30 : 20; // Wiki: Mystic Vigour +3%
         }
         if (PrayerHandler.isActivated(player, PrayerHandler.MYSTIC_LORE)) {
             return 10;

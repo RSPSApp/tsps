@@ -166,6 +166,12 @@ function sendToolUnlocks(player) {
   }
 }
 
+/** Whether the hold carries anything a shipwright's recovery loses. */
+function holdsLostOnRecovery(boat) {
+  const categories = content().cargo.categories;
+  return (boat?.cargo ?? []).some((slot) => slot && categories[categoryOf(slot.id)]?.lostOnRecovery);
+}
+
 /** Drops what a shipwright's recovery loses (salvage, courier crates, fish). */
 function dropLostOnRecovery(boat) {
   const categories = content().cargo.categories;
@@ -192,4 +198,5 @@ module.exports = {
   take,
   fitInto,
   dropLostOnRecovery,
+  holdsLostOnRecovery,
 };

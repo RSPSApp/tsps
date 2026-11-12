@@ -23,7 +23,9 @@ function disabled(event) {
     event.player.sendMessage('Your target is already held by a magical force.');
     event.disabled = true;
   } else if (timers.has(core.TimerKey.FREEZE_IMMUNITY)) {
-    event.player.sendMessage('Your target is currently immune to that spell.');
+    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. The
+    // recorded "Your target is ..." line is Enfeeble's on a curse-immune NPC (227/00095.txt:81131).
+    event.player.sendMessage('The target is currently immune to that spell.');
     event.disabled = true;
   }
 }

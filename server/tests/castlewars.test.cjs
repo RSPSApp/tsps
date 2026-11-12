@@ -735,6 +735,28 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   const after = { player: ending, shouldDrop: null };
   deathPolicy(after);
   assert.equal(after.shouldDrop, null, 'a later lobby death follows the world rules');
+
+});
+
+test('a mark whose death never reached the death hook does not keep a later death outside Castle Wars safe', () => {
+  let deathPolicy;
+  let beforeDeath;
+  const deathApi = PluginManager.createApi('Castle Wars stale death mark');
+  const island = { ...game };
+  Areas({
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
+    onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
+    onPlayerDeath() {},
+  }, island);
+  let area = island.gameArea;
+  const player = { getArea: () => area };
+  beforeDeath({ player }); // a death in the game that another death hook handled first
+  area = island.lobbyArea;
+  beforeDeath({ player }); // a later death in the lobby
+  const later = { player, shouldDrop: null };
+  deathPolicy(later);
+  assert.equal(later.shouldDrop, null, 'the world rules, not an old mark');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {

@@ -321,8 +321,10 @@ function friendlyFireVerdict(attackerMobile, targetMobile) {
  */
 const dyingInCastleWars = new WeakSet();
 
+/** Every death starts here, so one begun outside drops a mark an earlier death left (handled first, or never finished). */
 function rememberDying(event) {
   if (game.castleWarsAreas.has(event.player?.getArea?.())) dyingInCastleWars.add(event.player);
+  else if (event.player) dyingInCastleWars.delete(event.player);
 }
 
 function respawnInStartRoom(event) {

@@ -38,6 +38,11 @@ const CAMERA_RATES = { rate: 232, rate2: 100 };
 /** Live's quest instances copy 13 x 13 chunks (104 x 104 tiles) of every plane. */
 const INSTANCE_CHUNKS = 13;
 const PLANES = 4;
+/** Toplevel 161's side-tab slots and the groups they hold (a cutscene closes these; Making History, Vale Totems). */
+const TOPLEVEL = 161;
+const COMBAT_TAB = [76, 593];
+const MAGIC_TAB = 82;
+const TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [87, 116], [88, 216]];
 
 function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   const {
@@ -46,6 +51,8 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   } = api.core;
   const scenes = new Map();
   const playerKeys = new WeakMap();
+  /** The tab slots hideTabs found mounted, per player. */
+  const hiddenTabs = new WeakMap();
 
   /** A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi, allowSummonPet, barsFollowers }) answer for its area. */
   function sceneRules(Base) {
@@ -167,10 +174,11 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     if (key) TaskManager.cancelTasks(key);
   }
 
-  function fade(player, out) {
+  /** `cycles` is how long script 948 takes (client cycles); most captured scenes take 50. */
+  function fade(player, out, cycles = FADE_CYCLES) {
     const sender = player.getPacketSender();
     const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
-      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES] }],
+      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, cycles] : [0, 0, 0, 255, cycles] }],
     });
     if (!out) TaskManager.submit(new CountdownTask(player, 3, () => sender.closeSubInterfaceMount(mount)));
   }
@@ -193,6 +201,35 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
       player.getPacketSender().sendHideNpcOps(cinematic === 1);
       player.getPacketSender().sendHideObjOps(cinematic === 1);
     }
+  }
+
+  /** The side tabs a captured cutscene closes as it starts: combat, stats, journal, inventory, worn, prayer, magic, settings, emotes. */
+  function hideTabs(player) {
+    const sender = player.getPacketSender();
+    const mounted = new Set();
+    for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) {
+      const uid = (TOPLEVEL << 16) | slot;
+      if (sender.getSubInterfaceAt?.(uid)) mounted.add(slot);
+      sender.closeSubInterface(uid);
+    }
+    hiddenTabs.set(player, mounted);
+  }
+
+  /**
+   * The tabs hideTabs closed go back, each with its login setup: the client drops a closed tab's op events, so without it
+   * the inventory's item options did nothing until a relog (see Scenes.ValeTotems). A tab that was not up stays down.
+   */
+  function restoreTabs(player) {
+    const mounted = hiddenTabs.get(player);
+    hiddenTabs.delete(player);
+    if (!mounted?.size) return;
+    const sender = player.getPacketSender();
+    const spellbook = player.getSpellbook().getInterfaceId();
+    if (mounted.has(COMBAT_TAB[0])) sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
+    if (mounted.has(MAGIC_TAB)) sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
+    for (const [slot, group] of TABS) if (mounted.has(slot)) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
+    player.getInventory().refreshItems();
+    player.getEquipment().refreshItems();
   }
 
   /** An empty chatbox the player cannot continue: the capture's held moments. */
@@ -321,7 +358,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
 
   return {
     CAMERA_RATES, later, cancel, fade, closeFade, controls, hold, face, camera, open, get, actor, removeActor, loc, end,
-    chatOpen, place, walk, toSource,
+    chatOpen, place, walk, toSource, tileFor, hideTabs, restoreTabs,
   };
 }
 

@@ -444260,9 +444260,36 @@
                                           "text": "But green too much like skin. Nearly make you look naked!"
                                         },
                                         {
-                                          "type": "jump",
-                                          "reference": "previous",
-                                          "id": "VKa_6b"
+                                          "type": "choice",
+                                          "options": [
+                                            {
+                                              "text": "Why are you arguing about the colour of your armour?",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-0e7d80c33faa9aaa"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "Do you want me to pick an armour colour for you?",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-f8a9ac04bf855df0"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "I'll leave you to it.",
+                                              "steps": [
+                                                {
+                                                  "type": "call",
+                                                  "branch": "jump-aff70d22fc752ac8"
+                                                }
+                                              ]
+                                            }
+                                          ]
                                         }
                                       ]
                                     },
@@ -445535,9 +445562,36 @@
           "text": "But green too much like skin. Nearly make you look naked!"
         },
         {
-          "type": "jump",
-          "reference": "previous",
-          "id": "VKa_6b"
+          "type": "choice",
+          "options": [
+            {
+              "text": "Why are you arguing about the colour of your armour?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-0e7d80c33faa9aaa"
+                }
+              ]
+            },
+            {
+              "text": "Do you want me to pick an armour colour for you?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-f8a9ac04bf855df0"
+                }
+              ]
+            },
+            {
+              "text": "I'll leave you to it.",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "jump-aff70d22fc752ac8"
+                }
+              ]
+            }
+          ]
         }
       ],
       "jump-f8a9ac04bf855df0": [
@@ -445896,9 +445950,36 @@
                   "text": "But green too much like skin. Nearly make you look naked!"
                 },
                 {
-                  "type": "jump",
-                  "reference": "previous",
-                  "id": "VKa_6b"
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Why are you arguing about the colour of your armour?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-0e7d80c33faa9aaa"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Do you want me to pick an armour colour for you?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-f8a9ac04bf855df0"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I'll leave you to it.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-aff70d22fc752ac8"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },

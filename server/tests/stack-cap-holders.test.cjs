@@ -118,6 +118,30 @@ holderCases("Zulrah's priestess", ZULRAH_HELD, (_t, f) => Shrine.collect({ playe
 holderCases("Nightmare's Shura", NIGHTMARE_HELD, (t, f) => npcOption(t, f, SHURA, "Collect"), { holder: "shura" });
 holderCases("the Voice of Yama", YAMA_HELD, (t, f) => npcOption(t, f, YamaCommon.data.npcs.voiceVariants[0], "Talk-to"));
 
+/** The same with a held stack that carries meta (charges), going onto a stack with the same meta. */
+function metaCases(name, attribute, collect, extra = {}) {
+  test(`${name}: a held stack with meta keeps what its stack can't hold`, async (t) => {
+    const META = { charges: 7 };
+    const f = actor(t);
+    f.inv.setItem(0, new core.Item(I.DEATH_RUNE, NEAR_CAP, { ...META }));
+    f.p.setAttribute(attribute, { ...extra, items: [[I.DEATH_RUNE, STORED, { ...META }]], paid: true });
+    await collect(t, f);
+    assert.equal(f.inv.getAmount(I.DEATH_RUNE), MAX_STACK_AMOUNT, "the stack fills");
+    assert.equal(heldRunes(f, attribute), STORED - 5, "the holder keeps the rest");
+    assert.deepEqual(f.p.getAttribute(attribute).items[0][2], META, "with its meta");
+
+    const full = actor(t);
+    for (let slot = 0; slot < 28; slot++) full.inv.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+    full.p.setAttribute(attribute, { ...extra, items: [[I.DEATH_RUNE, STORED, { ...META }]], paid: true });
+    await collect(t, full);
+    assert.equal(full.inv.getAmount(I.DEATH_RUNE), 0, "a full inventory takes nothing");
+    assert.equal(heldRunes(full, attribute), STORED, "and the holder keeps it all");
+  });
+}
+
+metaCases("Nightmare's Shura", NIGHTMARE_HELD, (t, f) => npcOption(t, f, SHURA, "Collect"), { holder: "shura" });
+metaCases("the Voice of Yama", YAMA_HELD, (t, f) => npcOption(t, f, YamaCommon.data.npcs.voiceVariants[0], "Talk-to"));
+
 test("Soul Wars rewards: a stack that can't take the batch costs no tokens", (t) => {
   const start = (held) => {
     const f = actor(t);

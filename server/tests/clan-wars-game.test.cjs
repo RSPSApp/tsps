@@ -138,9 +138,14 @@ function channel(owner, members = []) {
   for (const member of members) assert.equal(FC.join(member, owner.getUsername(), false), true);
   assert.equal(C.captain(owner).rankOf(owner), 7);
 }
-async function negotiate(a, b, cap = null, mode = 0, restrictions = null) {
+async function negotiate(a, b, cap = null, mode = 0, restrictions = null, arena = 1) {
   await challenge(a, b); await challenge(b, a);
   assert.equal(a.getInterfaceId(), C.group('clanwars_setup'));
+  if (arena !== 1) {
+    await click(a, 'clanwars_setup:arena', arena * 3);
+    assert.equal(C.negotiations.get(a).rules.arena, arena, 'native arena selection must reach the server offer');
+    tick(9);
+  }
   if (cap !== null) { await click(a, 'clanwars_setup:dropdown_playercap', cap + 1); tick(9); }
   if (mode) {
     await click(a, 'clanwars_setup:wincondition', mode * 3);
@@ -433,11 +438,11 @@ test('independent: actual Plateau clipping separates staging and jail', async ()
 
 // These tests seed scene placement and pre-rolled melee damage. Negotiation, attack
 // input, hit/death tasks, portal dispatch, inventories and instance cleanup are real.
-async function lethalMelee(killer, victim, game, runDeathTick = true) {
+async function lethalMelee(killer, victim, game, runDeathTick = true, combatTiles = [[3293,4955,0],[3294,4955,0]]) {
   const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
   const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
-  killer.moveTo(game.area.at([3293, 4955, 0]));
-  victim.moveTo(game.area.at([3294, 4955, 0]));
+  killer.moveTo(game.area.at(combatTiles[0]));
+  victim.moveTo(game.area.at(combatTiles[1]));
   for (const p of [killer, victim]) { p.setNeedsPlacement(false); p.resetUpdating(); AreaManager.process(p); }
   assert.equal(CombatFactory.canAttackByPolicy(killer, victim, CombatFactory.MELEE_COMBAT), CanAttackResponse.CAN_ATTACK);
   const frame = Buffer.alloc(4); frame[0] = 44; frame[1] = 128; frame.writeUInt16BE(victim.getIndex(), 2);
@@ -1764,4 +1769,196 @@ test('Ignore 5 threshold finish restores an actual jailed viewing owner and rele
   const { encodeCameraReset }=require('../dist/net/protocol/ClientProtocol');
   assert.ok(viewer.nativePackets.some(frame=>frame.equals(encodeCameraReset())),'real threshold cleanup emitted a camera reset');
   tick(4);assert.equal(Match.dying.size,0);
+});
+
+// G: setup through ordinary packets; coordinates below are explicit TSPS choices.
+const SYLVAN_LANDINGS = [[3424,5000,0],[3424,5048,0]];
+const SYLVAN_JAILS = [[3423,5020,0],[3424,5027,0]];
+function sylvanObjects(game, gameval) {
+  const id = core.CacheDefinitions.getLocId(gameval), objects = [];
+  assert.ok(Number.isInteger(id), `active cache defines ${gameval}`);
+  for (let x=0;x<8;x++) for (let y=0;y<8;y++) {
+    objects.push(...game.area.getChunkObjects(0,x,y).filter(o => o.getId() === id));
+  }
+  return objects;
+}
+function sylvanReachable(game, from, to) {
+  const queue=[from.slice(0,2)], seen=new Set([from.slice(0,2).join(',')]);
+  for(let i=0;i<queue.length;i++) {
+    const [x,y]=queue[i]; if(x===to[0] && y===to[1]) return true;
+    for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) {
+      if(!dx&&!dy) continue;
+      const nx=x+dx,ny=y+dy,key=`${nx},${ny}`;
+      if(nx<3392||nx>3455||ny<4992||ny>5055||seen.has(key)) continue;
+      if(core.RegionManager.canMovestart(game.area.at([x,y,0]),game.area.at([nx,ny,0]),1,1,game.area)) {
+        seen.add(key);queue.push([nx,ny]);
+      }
+    }
+  } return false;
+}
+async function sylvanObjectInput(player, game, gameval, sourceXY, action) {
+  const object=sylvanObjects(game,gameval).find(o => {
+    const at=o.getLocation();
+    return at.getX()===game.area.at([sourceXY[0],sourceXY[1],0]).getX()
+      && at.getY()===game.area.at([sourceXY[0],sourceXY[1],0]).getY();
+  });
+  assert.ok(object, 'actual mapped owned object exists at observed source coordinate');
+  assert.equal(object.getPrivateArea(),game.area);
+  const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+  assert.equal(MapObjects.getPrivateArea(player,object.getId(),object.getLocation()),object);
+  const op=object.getDefinition().getInteractions().findIndex(x => x?.toLowerCase()===action.toLowerCase())+1;
+  assert.ok(op>0);
+  const {ObjectActionPacketListener}=require('../dist/net/packet/impl/ObjectActionPacketListener');
+  const at=object.getLocation();
+  new ObjectActionPacketListener().executeAction(player,object.getId(),at.getX(),at.getY(),op);
+  tick(20);
+  return object;
+}
+
+test('native Sylvan selection and Plateau reselection reset agreement and refuse other arena rows', async () => {
+  const a=actor(),b=actor();channel(a);channel(b);
+  await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');
+  const s=C.negotiations.get(a);assert.equal(s.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',6);
+  assert.equal(s.rules.arena,2,'native Sylvan arena option is offered');
+  assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Sylvan Glade/);
+  tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',3);assert.equal(s.rules.arena,1);assert.equal(s.accepted.size,0);
+  for(const slot of [0,1,2,9,39,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,1);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);
+  }
+});
+
+test('native Sylvan bridge mapping, both-end diagonal staging isolation and exact tree clip restoration', async () => {
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,2);
+  await join(a);await join(b);
+  for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,SYLVAN_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let plane=0;plane<2;plane++) for(let x=0;x<8;x++) for(let y=0;y<8;y++) {
+      reference.setChunk(plane,x,y,{sourceChunkX:424+x,sourceChunkY:624+y,sourcePlane:plane,rotation:0});
+      assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const definition=core.CacheDefinitions.getObject(core.CacheDefinitions.getLocId('clanwars_barrier_elfwood'));
+    assert.deepEqual([definition.sizeX,definition.sizeY],[1,1]);
+    assert.ok(game.walls.length>0);assert.ok(game.walls.every(o=>o.getPrivateArea()===game.area&&o.getType()===10&&o.getFace()===0));
+    assert.ok(game.walls.every(o=>(game.area.getClip(o.getLocation())&0x100)!==0),'native registration adds solid barrier clipping after the lazy grid exists');
+    const stagedWalls=game.walls.slice(), {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of stagedWalls) {
+      assert.equal(MapObjects.getPrivateArea(a,wall.getId(),wall.getLocation()),wall,'native resolver sees the exact registered barrier');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wall.getId()).length,1,'one runtime registration per barrier');
+    }
+    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),false,'all eight directions including both barrier ends refuse crossing');
+    for(const side of [0,1]) assert.equal(sylvanReachable(game,SYLVAN_JAILS[side],SYLVAN_LANDINGS[side]),false);
+    for(const x of [3444,3445,3446,3450,3451]) assert.equal(game.walls.some(o=>o.getLocation().getX()===game.area.at([x,5023,0]).getX()),false,'mapped solid trees receive no overlay barrier');
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3392,5000,0]),game.area.at([3391,5000,0]),1,1,game.area),false,'unmapped footprint refuses exit');
+    const walker=[a,b].find(p=>game.members.get(p)===0);
+    const open=game.area.at([3425,5000,0]), across=game.area.at(SYLVAN_LANDINGS[1]);
+    await wire(walker,sylvanWalkFrame(open));
+    assert.deepEqual(position(walker),[open.getX(),open.getY(),0],'ordinary decoded walk queues and reaches open tile');
+    await wire(walker,sylvanWalkFrame(across));tick(60);
+    assert.equal(game.phase,'staging','walk checks fit within unchanged preparation');
+    assert.ok(walker.getLocation().getY()<game.area.at([3424,5023,0]).getY(),'ordinary queued movement cannot cross staging wall');
+    const before={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of stagedWalls) {
+      assert.equal(MapObjects.getPrivateArea(a,wall.getId(),wall.getLocation()),null,'removed barriers leave no native resolver entry');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false,'removed runtime barrier identity is gone');
+      assert.equal(game.area.getObjects().includes(wall),false,'area detaches the exact removed barrier');
+    }
+    const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'all4096 masks including directional/projectile/tree bits restored exactly');
+    assert.equal(after[(5023-4992)*64+3414-3392],0x4020,'known directional/projectile fence bits survive');
+    assert.equal(sylvanReachable(game,SYLVAN_LANDINGS[0],SYLVAN_LANDINGS[1]),true);
+    await wire(walker,sylvanWalkFrame(across));tick(80);
+    assert.deepEqual(position(walker),[across.getX(),across.getY(),0],'same native crossing reaches destination after barriers disappear');
+    console.log('SYLVAN_MOVEMENT_QUALIFICATION '+JSON.stringify({staging:before,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    const tree=game.area.at([3408,5020,0]);assert.equal(game.area.getClip(tree)&0x20100,0x20100,'mapped tree keeps walking and projectile obstruction');
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3407,5020,0]),tree,1,1,game.area),false);
+    assert.equal(core.RegionManager.canProjectileAttackReturn(game.area.at([3407,5020,0]),game.area.at([3409,5020,0]),1,game.area),false,'actual native ray is occluded by copied tree');
+    assert.equal(core.RegionManager.canProjectileAttackReturn(game.area.at([3424,5000,0]),game.area.at([3425,5000,0]),1,game.area),true,'open ray control remains visible');
+  } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
+});
+function sylvanWalkFrame(at) {
+  // Existing click-teleport fixture's literal MOVE_GAMECLICK encoding, plain click.
+  const add=value=>[(value>>8)&255,((value&255)+128)&255];
+  return Buffer.from([16,...add(at.getY()),0,...add(at.getX()),128,0]);
+}
+function positionAt(game, source) {const at=game.area.at(source);return [at.getX(),at.getY(),at.getZ()];}
+
+for(const mode of [0,1,16]) test(`native Sylvan mode ${mode} retains combat restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},2);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);
+  core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');
+  a.moveTo(game.area.at([3400,5020,0]));b.moveTo(game.area.at([3401,5020,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,SYLVAN_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Sylvan side ${victimIndex} safe defeat, owned orb model and jail return`,async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);
+  const game=await negotiate(a,b,null,1,null,2);await join(a);await join(b);
+  core.World.processCycle=game.starts-1;tick();
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,77).setMeta({qa:'sylvan'}));
+  await lethalMelee(killer,victim,game,true,[[3400,5020,0],[3401,5020,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,SYLVAN_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),77);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'sylvan'});
+  const scripts=scriptCalls(victim);
+  const orbXY=side===0?[3423,5022]:[3424,5025];
+  // Start at the actual completed death jail landing; native object routing owns approach.
+  await sylvanObjectInput(victim,game,'clanwars_viewing_start_elfwood',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(victim),true);
+  const approached=viewingUnit().active.get(victim).location, orbAt=game.area.at([...orbXY,0]);
+  assert.ok(Math.max(Math.abs(approached.getX()-orbAt.getX()),Math.abs(approached.getY()-orbAt.getY()))<=1,'actual jail landing routes to orb before opening camera');
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9754),'viewing uses actual elfwood orb model');
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  const portalXY=side===0?[3424,5017]:[3423,5029];
+  // Continue from restored orb approach position; no adjacency seed hides portal routing.
+  await sylvanObjectInput(victim,game,'clanwars_prisonportal_elfwood',portalXY,'Exit');
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);
+  assert.deepEqual(position(victim),positionAt(game,SYLVAN_LANDINGS[side]));
+});
+
+test('native Sylvan and Plateau coexist and refuse foreign exit or viewing objects',async()=>{
+  const a=actor(),b=actor(),c=actor(),d=actor();channel(a);channel(b);channel(c);channel(d);
+  const glade=await negotiate(a,b,null,1,null,2);await join(a);await join(b);
+  const plateau=await negotiate(c,d);await join(c);await join(d);
+  assert.notEqual(glade.area,plateau.area);assert.equal(plateau.walls.length,52,'Plateau keeps original registrations');
+  const foreign=sylvanObjects(plateau,'clanwars_exitportal_darkrock_s')[0];assert.ok(foreign);
+  assert.equal(Match.forfeit({player:a,object:foreign}),false);assert.equal(C.matches.get(a),glade);
+  const wrong=sylvanObjects(glade,'clanwars_viewing_elfwood')[0];assert.ok(wrong);
+  assert.equal(viewingUnit().use({player:a,object:wrong}),false);
+  assert.equal(Match.exit({player:a,object:wrong}),false);assert.equal(C.matches.get(a),glade);
+  for(const p of [a,b]) {
+    const side=glade.members.get(p),xy=side===0?[3422,4996]:[3421,5051];
+    p.moveTo(glade.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
+    await sylvanObjectInput(p,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
+    assert.equal(C.matches.has(p),false);lobby(p);
+  }
+  assert.equal(glade.members.size,0);assert.equal(glade.phase,'staging','empty staging retains its existing preparation lifetime');
+  const remaining=glade.starts-C.now();assert.ok(remaining>0);tick(remaining);
+  assert.equal(glade.area.isDestroyed(),true);assert.equal(plateau.phase,'staging');assert.equal(C.matches.get(c),plateau);
+});
+
+
+test('native Sylvan Ignore5 preserves six-fighter starts and real five-fighter defeat',async()=>{
+  const a=actor(true),b=actor(true),allies=Array.from({length:5},()=>actor(true)),enemies=Array.from({length:5},()=>actor(true));
+  for(const p of [a,...allies,b,...enemies]) ruleStats(p);
+  channel(a,allies);channel(b,enemies);
+  const game=await negotiate(a,b,3,0,{stragglers:1},2);
+  await batchJoin([a,...allies,b,...enemies],game);
+  assert.equal(game.fighters.size,12);core.World.processCycle=game.starts-1;tick();assert.equal(game.phase,'combat');
+  await lethalMelee(b,allies[0],game,true,[[3400,5020,0],[3401,5020,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of [a,...allies,b,...enemies]) lobby(p);
+  assert.equal(game.area.isDestroyed(),true);
 });

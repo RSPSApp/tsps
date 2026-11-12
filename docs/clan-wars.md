@@ -28,9 +28,9 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau or Sylvan Glade**;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat and arena controls are hidden;
+The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -420,3 +420,40 @@ owner, then reaches the threshold and checks camera and instance cleanup.
 Supplied levels, scene placement and pre-rolled damage remain explicit setup;
 client rendering, natural combat RNG and exact retail phase timing are not
 established. Actual runtime outcomes belong to the PR evidence.
+
+
+## Sylvan Glade alongside Plateau
+
+The arena scrollbox offers Plateau (1) and Sylvan Glade (2). Changing the arena
+invalidates both setup acceptances, and the confirmation names the selected map.
+Other arena rows are refused and reset to the agreed server offer. Both layouts use
+the existing melee modes, restrictions, safe deaths and membership rules.
+
+Sylvan copies revision-242 region 13646, source rectangle 3392..3455 / 4992..5055,
+with source planes 0 and 1 mapped to corresponding instance planes. This rectangle
+is our bounded template footprint, not a claim about official arena extents. Raw
+plane-1 jail locs sit above bridge tiles: their terrain settings are [1, 2], so the
+normal template bridge rules place their owned objects and collision on effective
+plane 0. Copying only source plane 0 would omit those jail objects. Planes 2 and 3
+are not mapped.
+
+These exact player placements are implementation choices checked against that map,
+not recorded retail spawns: south/north landings are (3424,5000,0) and
+(3424,5048,0); jails are (3423,5020,0) and (3424,5027,0). The preparation wall uses
+elfwood barriers at y=5023, x=3396..3419 and 3428..3451. Its row and type-10 face-0
+placement are our choices. Solid mapped trees already close some tiles; those tiles
+receive no temporary overlay, preserving their collision when barriers disappear.
+Plateau retains its original 52 barrier registrations.
+
+The mapped south/north jail orbs are (3423,5022) / (3424,5025), with Exit portals
+at (3424,5017) / (3423,5029), all effective plane 0. Native viewing uses the elfwood
+orb model 9754. Both jail exit and Forfeit handlers require the selected layout's
+actual owned instance object. Copied trees retain walking and projectile obstruction;
+this does not enable ranged combat.
+
+Sources: [Wiki Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109),
+[viewing orb revision 15201300](https://oldschool.runescape.wiki/w/Viewing_orb_(Clan_Wars)?oldid=15201300),
+[prison portal revision 15201299](https://oldschool.runescape.wiki/w/Portal_(Clan_Wars)?oldid=15201299),
+and [cache-242 definitions and interfaces](https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339).
+Raw cache loc planes and bridge-aware template settings were inspected separately;
+source inspection does not establish rendered-client behavior or retail spawn/timing equivalence.

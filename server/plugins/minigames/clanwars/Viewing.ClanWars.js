@@ -2,20 +2,13 @@
  * Quarter-map camera positions are our presentation choice, not recorded retail coordinates.
  */
 const C = require("./Common.ClanWars");
+const Layout = require("./Layout.ClanWars");
 const active = new Map();
 const BUTTONS = ["central", "sw", "se", "nw", "ne"];
 const FRACTIONS = [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]];
 const OP1 = 1 << 1;
-const ORB_MODEL = 9752; // Rev242 clanwars_viewing_start_darkrock model.
-
 function ownedOrb(game, object) {
-  if (!object || object.getId() !== C.core.CacheDefinitions.getLocId("clanwars_viewing_start_darkrock")) return false;
-  // The native resolver and the template share these exact cached objects. A
-  // matching name/id elsewhere is not authority to view this private match.
-  for (let x = 0; x < game.area.widthChunks; x++) for (let y = 0; y < game.area.heightChunks; y++) {
-    if (game.area.getChunkObjects(0, x, y).includes(object)) return true;
-  }
-  return false;
+  return Layout.owns(game, object, [game.layout.orb]);
 }
 
 function admitted(player, game) {
@@ -50,7 +43,7 @@ function use({ player, object }) {
   const state = { game, camera, location: player.getLocation().clone(),
     fixedDistance: player.getFixedViewDistance(), hidden: player.isAppearanceHidden(),
     blocked: player.getMovementQueue().isMovementBlocked(), untargetable: player.isUntargetable(),
-    model: ORB_MODEL };
+    model: game.layout.orbModel };
   active.set(player, state);
   game.viewers.add(player);
   player.getMovementQueue().reset().setBlockMovement(true);

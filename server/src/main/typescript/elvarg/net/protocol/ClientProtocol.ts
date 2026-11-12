@@ -1102,6 +1102,8 @@ export const ChatType = {
   FRIENDS_CHAT_NOTIFICATION: 11,
   /** Filtered out with "Filter: on" (the Game tab's filter). */
   SPAM: 105,
+  /** A trade/duel status line ("Sending trade offer...", "Accepted trade."; rsprox `type=trade`, RuneLite TRADE). */
+  TRADE: 102,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
   NPC_SAY: 116,
   /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */

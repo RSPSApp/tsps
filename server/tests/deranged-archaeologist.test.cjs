@@ -175,3 +175,32 @@ test('a ranged book flies 5 cycles a tile and its hit lands with it (#1862)', ()
     assert.equal(hit.getDelay(), Projectile.ticksToLand(end), `${tiles} tiles`);
   }
 });
+
+test("the special's timing as recorded: burst books 4 ticks after the first impact, the next attack 3 ticks on", (t) => {
+  // rsprox 227/00080.txt (Leagues V): "Learn to Read!" at 28, impacts at 32 and 36, the next book at 31.
+  const tasks = [];
+  const core = {
+    ...Core,
+    TaskManager: { submit: (task) => tasks.push(task) },
+    Projectile: class { sendProjectile() {} },
+  };
+  t.mock.method(Misc, 'getRandom', () => 0);
+  const Method = Plugin._test.combatClass(core);
+  const method = new Method();
+  const { character, attributes } = fakeSides(3683, 3706);
+  let attackDelay = null;
+  character.getSize = () => 1;
+  character.getCombat = () => ({ setAttackDelay: (ticks) => { attackDelay = ticks; } });
+  character.getPrivateArea = () => null;
+  character.getPlayersWithinDistance = () => [];
+  attributes.set('deranged-archaeologist:special-ready-cycle', 0);
+  const target = { getLocation: () => new Location(3688, 3706, 0), getSize: () => 1, isRegistered: () => true };
+  method.start(character, target);
+  assert.equal(method.attack, Attack.SPECIAL);
+  assert.equal(attackDelay, 3, 'the next attack 3 ticks after the shout');
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].getDelay(), 4, 'the first books explode 4 ticks after the shout');
+  tasks[0].execute();
+  assert.equal(tasks.length, 2);
+  assert.equal(tasks[1].getDelay(), 4, 'the burst books 4 ticks after the first impact');
+});

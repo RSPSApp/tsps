@@ -12,9 +12,9 @@
  *   sound 2186 under each strike; clouds grow at +6, charge at +11, Tempoross casts
  *   (`fsb_lightening_cast`) at +13, the clouds strike at +15 (NPC 10581,
  *   sound 4433) and at +16 each strike tile burns: Fire NPC 8643, spotanim 1840, loc 37582,
- *   sound 159. A fire spreads 40 ticks later with projectile 1839, and keeps spreading until it
- *   is doused or a wave puts it out (Wiki). Captures 552 and 1858 saw two spreads, which reads as
- *   the recording ending rather than a cap; the Wiki wins here (#2730).
+ *   sound 159. A fire spreads 40 ticks later with projectile 1839. Wiki (Fire (Tempoross Cove)):
+ *   "Each fire can spread twice before stabilising", each new fire counting its own two (#2730's
+ *   bug was a child inheriting its parent's count); captures 552 and 1858 also saw two.
  * - torrent: seq 8903, spotanim 1841 at Tempoross and projectile 1842 to a cannon, which is
  *   disabled from +6 for 24 ticks.
  * The attacks first come ~49 ticks after Tempoross surfaces, then every 50-55 ticks, wave and
@@ -37,6 +37,8 @@ const L = F.lightningTicks;
 /** The template's bounds, for the flood fill below. */
 const TEMPLATE = { minX: 3008, maxX: 3071, minY: 2816, maxY: 2879 };
 const FIRE_SIZE = 2;
+/** Wiki (Fire (Tempoross Cove)): "Each fire can spread twice before stabilising". */
+const MAX_SPREADS = 2;
 const SPREAD_STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
 
 class Attacks {
@@ -220,7 +222,7 @@ class Attacks {
     Shared.graphic(npc, GFX.FIRE_SPAWN);
     const loc = this.cove.placeLoc(LOC.FIRE_VISUALS, [x, y], { face: Shared.randomInt(0, 3) });
     this.cove.areaSound(SOUND.FIRE, this.cove.tile([x, y, 0]), 5);
-    this.fires.set(`${x},${y}`, { npc, loc, x, y, spreadAt: this.fight.ticks + F.fireSpreadTicks });
+    this.fires.set(`${x},${y}`, { npc, loc, x, y, spreads: 0, spreadAt: this.fight.ticks + F.fireSpreadTicks });
   }
 
   extinguish(fire) {
@@ -252,10 +254,11 @@ class Attacks {
     if (this.fires.size === 0) return;
     const now = this.fight.ticks;
     for (const fire of [...this.fires.values()]) {
-      if (now < fire.spreadAt) continue;
+      if (now < fire.spreadAt || (fire.spreads ?? 0) >= MAX_SPREADS) continue;
       fire.spreadAt = now + F.fireSpreadTicks;
       const step = Shared.pick(SPREAD_STEPS.filter(([dx, dy]) => this.burnable([fire.x + dx, fire.y + dy])));
       if (!step) continue;
+      fire.spreads = (fire.spreads ?? 0) + 1;
       const to = [fire.x + step[0], fire.y + step[1]];
       this.cove.projectile(GFX.FIRE_SPREAD, this.cove.tile([fire.x, fire.y, 0]), this.cove.tile([...to, 0]), {
         cycles: 60, startHeight: 1, endHeight: 0, slope: 30,

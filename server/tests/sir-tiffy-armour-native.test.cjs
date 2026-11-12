@@ -10,22 +10,26 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
 const Runtime = require("../plugins/quests/QuestRuntime");
 const INITIATE = 1172, PROSELYTE = 1280;
 const ARMOUR = [[5574, "Initiate sallet", "basic_tk_helm", 6000],
   [5575, "Initiate hauberk", "basic_tk_body", 10000],
   [5576, "Initiate cuisse", "basic_tk_legs", 8000]];
-let core, tiffy, spawned = false, serial = 0, oldError, oldSubmit;
+let core, tiffy, spawned = false, serial = 0, oldError, oldWarn, oldSubmit;
 const errors = [], tasks = new Set();
 before(async () => {
   oldError = console.error;
+  oldWarn = console.warn;
   console.error = (...args) => { errors.push(args.map(String).join(" ")); oldError(...args); };
+  console.warn = (...args) => { if (/\[plugins\].*hook.*(?:failed|threw)/.test(args.map(String).join(" "))) errors.push(args.map(String).join(" ")); oldWarn(...args); };
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins")); core = PM.getCoreApi();
   oldSubmit = core.TaskManager.submit;
   core.TaskManager.submit = function(task, ...args) { tasks.add(task); return oldSubmit.call(this, task, ...args); };
   core.RegionManager.init(); core.RegionManager.loadMapFiles(2997, 3373);
   PM.emitServerStartup({});
+  assert.equal(new ShopDefinitionLoader().load(), true); core.ShopManager.initialize();
   const row = require("../data/definitions/npc-spawns.json").find(r => r.id === 4687);
   assert.deepEqual([row.x, row.y, row.level], [2997, 3373, 0], "canonical seated Tiffy spawn");
   tiffy = [...core.World.getNpcs()].find(n => n.getId() === row.id && n.getLocation().getX() === row.x && n.getLocation().getY() === row.y);
@@ -38,7 +42,7 @@ after(() => {
     PM.emitServerShutdown({});
     for (const task of tasks) if (task.isRunning()) task.stop();
     assert.deepEqual(errors, [], "no swallowed engine/plugin errors");
-  } finally { console.error = oldError; if (core) core.TaskManager.submit = oldSubmit; }
+  } finally { console.error = oldError; console.warn = oldWarn; if (core) core.TaskManager.submit = oldSubmit; }
 });
 function quest(key) { const q = Runtime.getRegisteredQuests().find(q => q.key === key); assert.ok(q, key); return q; }
 function seed(p, key, stage) { const q = quest(key); q.setStage(p, stage ?? q.completionValue); assert.equal(q.getStage(p), stage ?? q.completionValue); }

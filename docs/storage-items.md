@@ -264,5 +264,9 @@ they do not prove arbitrary quantity limits, death behavior, Fill/Empty messages
 rendered current client. Native cache and gameplay validation use
 `node --test --test-concurrency=1 tests/huntsmans-kit-native.test.cjs` after the server build.
 The fixture supplies items and positions, drives decoded `ClientConnection` inputs and
-real `World` turns, and uses actual save/death/grave services. It does not claim natural
-loot-sack acquisition or a rendered client playthrough.
+real `World` turns, and uses actual save/death/grave services. Skulled PvM cases explicitly
+assert that the kit reached a grave before reclaiming it. Unique-ownership checks use
+actual grave expiration into Death's Office and supplied Mimic retrieval state through
+its real query consumer; they do not claim a natural boss fight. Uncaptured refusal
+wording and the signed-int safety ceiling are TSPS choices. The fixture does not claim
+natural loot-sack acquisition or a rendered client playthrough.

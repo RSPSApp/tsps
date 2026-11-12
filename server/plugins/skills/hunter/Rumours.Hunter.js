@@ -192,7 +192,8 @@ function success({player,npcId,method,creature}) {
   player.getPacketSender().sendSound(PART_SOUND,1,0);
 }
 function owns(player,id) {
-  if(player.getInventory().contains(id)||C.hasTool(player,id)||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>tab===H.core.Bank.BANK_SEARCH_TAB_INDEX?null:player.getBank(tab)).some(bank=>bank?.contains(id)))return true;
+  // A zero-count bank placeholder/search mirror is not another owned kit.
+  if(player.getInventory().getAmount(id)>0||player.getEquipment().getAmount(id)>0||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>tab===H.core.Bank.BANK_SEARCH_TAB_INDEX?null:player.getBank(tab)).some(bank=>bank?.getAmount(id)>0))return true;
   // A reclaimable kit is still owned; receiving another must not duplicate it on retrieval.
   const grave={player,grave:null,office:[]};H.api.emitCustomEvent("gravestones:state",grave);
   if([...(grave.grave?.items??[]),...grave.office].some(item=>item?.id===id&&item.amount>0))return true;

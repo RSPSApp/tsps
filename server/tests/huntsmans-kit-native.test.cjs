@@ -141,6 +141,7 @@ test("32 different types fit; a 33rd stays physical while an existing type can s
 });
 
 test("quantity buttons and direct 1/5/X/All operations preserve units in both grids", async t => {
+  assert.equal(core.ItemDefinition.forId(10008).isStackable(), true, "cache-owned stackability wins over legacy JSON");
   const f = actor(t); kit(f); add(f, 10008, 30); await view(f);
   await button(f, 5); await grid(f, SIDE, slot(f, 10008), 10008); assert.equal(stored(f, 10008), 5);
   await button(f, 6); await grid(f, SIDE, slot(f, 10008), 10008);
@@ -150,6 +151,13 @@ test("quantity buttons and direct 1/5/X/All operations preserve units in both gr
   await grid(f, GROUP, 0, 10008, 3); assert.equal(amount(f, 10008), 6);
   await grid(f, GROUP, 0, 10008, 4); await input(f, { type: "dialogue_amount", amount: 4 }); assert.equal(amount(f, 10008), 10);
   await grid(f, GROUP, 0, 10008, 5); assert.equal(amount(f, 10008), 30); assert.equal(stored(f, 10008), 0);
+  const rope = actor(t); kit(rope);
+  assert.equal(core.ItemDefinition.forId(954).isStackable(), false);
+  add(rope, 954, 20); await view(rope);
+  await grid(rope, SIDE, slot(rope, 954), 954, 3); assert.equal(stored(rope, 954), 5); assert.equal(amount(rope, 954), 15);
+  await grid(rope, SIDE, slot(rope, 954), 954, 4); await input(rope, { type: "dialogue_amount", amount: 7 });
+  assert.equal(stored(rope, 954), 12); assert.equal(amount(rope, 954), 8);
+  await grid(rope, SIDE, slot(rope, 954), 954, 5); assert.equal(stored(rope, 954), 20); assert.equal(amount(rope, 954), 0);
 });
 
 test("holes survive withdrawal, drag swaps native slots, and Empty starts from the last slot", async t => {
@@ -184,6 +192,11 @@ test("wrong IDs, unsupported ops, stale interfaces and stale amount replies cann
   await input(f, { type: "dialogue_amount", amount: 2 }); assert.equal(stored(f, 954), 3);
   await view(f); await grid(f, GROUP, 0, 954, 4); await grid(f, GROUP, 0, 954, 2);
   await input(f, { type: "dialogue_amount", amount: 2 }); assert.equal(stored(f, 954), 2, "intervening storage change invalidates old prompt");
+  await grid(f, GROUP, 32, 954); assert.equal(stored(f, 954), 2, "extra cache display slot cannot be used as storage");
+  const physical = slot(f, 954); await grid(f, SIDE, physical, 954, 4);
+  await input(f, { type: "widget_drag", sourceWidgetId: SIDE << 16, targetWidgetId: SIDE << 16, sourceSlot: physical, targetSlot: 27 });
+  assert.equal(f.p.getInventory().getItems()[27].getId(), 954);
+  await input(f, { type: "dialogue_amount", amount: 1 }); assert.equal(stored(f, 954), 2, "moved clicked source invalidates old deposit prompt");
 });
 
 test("actual JSON save/load and banking preserve contents without providing stored tools to Hunter", async t => {
@@ -213,12 +226,14 @@ test("normal and Wilderness PvM/PvP death and reclaim preserve kit contents", as
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
   for (const [wild, pvp] of [[false,false],[true,false],[true,true]]) {
     const f = actor(t), killer = pvp ? actor(t).p : null; kit(f); add(f, 954, 2); await action(f, "Fill");
-    if (wild) { f.p.moveTo(new core.Location(3094, 3525, 0)); for (let n=0;n<4&&f.p.isNeedsPlacement();n++) turn(); assert.equal(core.Wilderness.isIn(f.p), true); }
+    if (wild) { core.RegionManager.loadMapFiles(3094, 3525); f.p.moveTo(new core.Location(3094, 3525, 0)); for (let n=0;n<4&&f.p.isNeedsPlacement();n++) turn(); assert.equal(f.p.isNeedsPlacement(), false); assert.equal(core.Wilderness.isIn(f.p), true); }
+    PM.emitCustomEvent("gravestones:met-death", { player: f.p });
     f.p.setSkullType(core.SkullType.WHITE_SKULL); f.p.setSkullTimer(100);
     const kept = PlayerDeathTask.dropItems(f.p, killer, f.p.getLocation());
     assert.equal(stored(f, 954), 2); assert.equal(amount(f, 954), 0);
     PlayerDeathTask.returnKeptItems(f.p, kept);
-    if (amount(f, KIT) === 0) {
+    if (!pvp) {
+      assert.equal(amount(f, KIT), 0, "skulled PvM must actually lose this unprotected kit to a grave");
       const q = { player:f.p, grave:null,office:[] }; PM.emitCustomEvent("gravestones:state",q);
       assert.ok(q.grave?.items.some(x=>x.id===KIT), "lost kit is reclaimable in the actual grave");
       // Use actual grave take operation, without a second synthetic copy of the kit.
@@ -248,6 +263,37 @@ test("loot sacks suppress a second kit both initially and after an earlier full-
     add(f,sack); Rumours.state(f.p).enhanced=true;
     const restore=forceKitRolls(); try { await action(f,"Open",sack); } finally { restore(); }
     assert.equal(amount(f,KIT)+(f.p.getBank(0).getAmount(KIT)),1); assert.equal(amount(f,sack),0);
+  }
+  for (const placeholder of [KIT, 29310]) {
+    const absent = actor(t); absent.p.getBank(0).setItem(0, new core.Item(placeholder, 0));
+    absent.p.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).setItem(0, new core.Item(KIT, 1));
+    add(absent, sack); Rumours.state(absent.p).enhanced = true;
+    const restore = forceKitRolls(); try { await action(absent, "Open", sack); } finally { restore(); }
+    assert.equal(amount(absent, KIT), 1, "zero placeholder and search mirror do not suppress legitimate kit reward");
+  }
+  for (const location of ["grave", "office", "retrieval"]) {
+    const owned = actor(t);
+    if (location === "retrieval") {
+      // Supplied deathbank state exercises its real read-only query consumer, not a boss fight.
+      const Mimic = require("../plugins/bosses/mimic/Retrieval.Mimic");
+      owned.p.setAttribute(Mimic.ATTR, { items: [{ id: KIT, amount: 1 }], paid: false });
+      const q = { player: owned.p, items: [] }; PM.emitCustomEvent("item-retrieval:items", q);
+      assert.ok(q.items.some(x => x.itemId === KIT && x.amount === 1));
+    } else {
+      kit(owned); PM.emitCustomEvent("gravestones:met-death", { player: owned.p });
+      owned.p.setSkullType(core.SkullType.WHITE_SKULL); owned.p.setSkullTimer(100);
+      const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+      const kept = PlayerDeathTask.dropItems(owned.p, null, owned.p.getLocation());
+      PlayerDeathTask.returnKeptItems(owned.p, kept);
+      assert.equal(amount(owned, KIT), 0, "real death moves kit out of physical ownership");
+      if (location === "office") PM.emitCustomEvent("gravestones:expire", { player: owned.p });
+      const q = { player: owned.p, grave: null, office: [] }; PM.emitCustomEvent("gravestones:state", q);
+      assert.ok((location === "grave" ? q.grave?.items : q.office)?.some(x => x?.id === KIT && x.amount === 1), location);
+    }
+    add(owned, sack); Rumours.state(owned.p).enhanced = true;
+    const restore = forceKitRolls(); try { await action(owned, "Open", sack); } finally { restore(); }
+    assert.equal(amount(owned, sack), 0, "ordinary sack opening reached delivery");
+    assert.equal(amount(owned, KIT), 0, `${location} ownership suppresses duplicate kit award`);
   }
   const f=actor(t); add(f,sack); Rumours.state(f.p).enhanced=true;
   while(f.p.getInventory().getFreeSlots())add(f,1511);

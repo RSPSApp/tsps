@@ -26,7 +26,7 @@ function ids() {
   return eligible;
 }
 function kitId() { return Storage.core.ItemIdentifiers.HUNTSMANS_KIT; }
-function carried(player) { return player.getInventory().getValidItems().some(item => item.getId() === kitId()); }
+function carried(player) { return player.getInventory().getValidItems().some(item => item.getId() === kitId() && item.getAmount() > 0); }
 function contents(player) {
   const saved = player.getAttribute(CONTENTS_ATTRIBUTE);
   return Array.from({ length: CAPACITY }, (_, slot) => {
@@ -43,7 +43,7 @@ function update(player, slots) {
 }
 function isOpen(player) {
   const session = sessions.get(player);
-  return !!session && player.getInterfaceId() === MAIN && session.kit.getId() === kitId()
+  return !!session && player.getInterfaceId() === MAIN && session.kit.getId() === kitId() && session.kit.getAmount() > 0
     && player.getInventory().getValidItems().includes(session.kit)
     && player.getPacketSender().getSubInterfaceAt(MAIN_TARGET) === session.mount;
 }
@@ -78,11 +78,20 @@ function deposit(player, item, requested) {
   let slot = slots.findIndex(entry => entry?.id === id);
   if (slot < 0) slot = slots.findIndex(entry => entry === null);
   if (slot < 0) { player.sendMessage("Your huntsman's kit is full."); return; }
-  const amount = Math.min(requested, item.getAmount(), MAX_AMOUNT - (slots[slot]?.amount ?? 0));
+  // 5/X/All also cover unstackable items across physical inventory slots. Only plain
+  // copies join the store: same-ID metadata/preset neighbours keep their properties.
+  const matching = player.getInventory().getValidItems().filter(entry => entry.getId() === id && plain(entry));
+  const available = matching.reduce((sum, entry) => sum + entry.getAmount(), 0);
+  const amount = Math.min(requested, available, MAX_AMOUNT - (slots[slot]?.amount ?? 0));
   if (!Number.isInteger(amount) || amount <= 0) return;
   slots[slot] = { id, amount: (slots[slot]?.amount ?? 0) + amount };
-  // Remove from the clicked physical stack only, preserving any same-ID metadata neighbours.
-  player.getInventory().deleteAtSlot(player.getInventory().getItems().indexOf(item), amount);
+  let left = amount;
+  for (const entry of matching) {
+    const take = Math.min(left, entry.getAmount());
+    player.getInventory().deleteAtSlot(player.getInventory().getItems().indexOf(entry), take);
+    left -= take;
+    if (left === 0) break;
+  }
   update(player, slots);
   player.getInventory().refreshItems();
 }
@@ -131,7 +140,7 @@ function click(event) {
   const move = amount => {
     if (!isOpen(player) || sessions.get(player) !== session || (versions.get(player) ?? 0) !== version || !Number.isInteger(amount) || amount <= 0) return;
     if (groupId === MAIN) withdraw(player, slot, amount);
-    else deposit(player, item, amount);
+    else if (player.getInventory().getItems()[slot] === item) deposit(player, item, amount);
   };
   if (selected === 3) {
     player.setEnteredAmountAction({ execute: move });

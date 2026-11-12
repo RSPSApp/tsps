@@ -86,7 +86,8 @@ test("the registered Cure Me handler casts with its own animation and graphic", 
     onSpellCast: (handler) => { castSelf = handler; },
     onCustomEvent() {},
   });
-  const player = caster({ isVenomed: () => false });
+  // cure() reads and writes the poison state (venom turning to poison), as on a Player.
+  const player = caster({ isVenomed: () => false, getPoisonDamage: () => 0, setPoisonDamage() {}, setVenomed() {} });
   const event = { player, spellName: "Cure Me", opId: 1, handled: false };
   castable(() => castSelf(event));
   assert.equal(event.handled, true);

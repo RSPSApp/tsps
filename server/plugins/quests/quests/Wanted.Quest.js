@@ -35,11 +35,25 @@
  * the current destination and their *complete bits carry visited stops, so the
  * helper and the client see the same route. The clue received at a stop points
  * at the next one: random items at 1/3/5, blue cape at 2, bone spear at 4 and
- * 20 noted essence at 6.
+ * 20 noted pure essence at 6.
  *
- * Source: OSRS Wiki "Wanted!" and "Transcript:Wanted!"; cache ids from the
- * generated identifiers and scripts/lookup-gameval.ts. Rewards per the Wiki:
- * 1 Quest point, 5,000 Slayer XP and access to the White Knights' armoury.
+ * Every scan that finds Solus, and the rune essence mine finale, is a scene
+ * played by ../wanted/Scenes.Wanted.js from the user's whole-quest RSProx
+ * capture ("Wanted!", rev 242.1, 2026-11-12; ticks cited there and in
+ * docs/quests/wanted/README.md). From that capture, here: varbit 1051 steps
+ * 1/2/3 through Tiffy's briefing and 6/7 as Tiffy starts on the orb; the
+ * mage's price is taken with "I have your essences" (hint varbit 2) and 1051
+ * moves to 9 on Savant's closing line; the Canifis call comes a tick after the
+ * player enters Canifis and sets mission 1 on "So I should try a scan here in
+ * Canifis?"; a scan before the hunt only says "There is nothing nearby to
+ * scan.", after Solus "You have nothing to scan for...", and Contact after
+ * completion "Your Comm Orb remains dark."; the mine's scene starts with a
+ * wizard's teleport there (runecrafting:essence-teleport), not a scan.
+ *
+ * Source: the capture above, then OSRS Wiki "Wanted!" and "Transcript:Wanted!";
+ * cache ids from the generated identifiers and scripts/lookup-gameval.ts.
+ * Rewards per the Wiki and the capture's scroll: 1 Quest point, 5,000 Slayer XP
+ * and access to the White Knight Armoury.
  * Start requires 32 quest points, The Lost Tribe, Recruitment Drive and Priest
  * in Peril. Rune Mysteries is a transitive prerequisite of The Lost Tribe.
  * Wanted's mage leg needs only the genuine partial Abyss discovery (492>=1):
@@ -48,24 +62,20 @@
  * support this first meeting during Wanted; no miniquest completion is granted.
  *
  * Gaps / approximations:
- *   - The transcript's generic toy-horsey clue has no colour, so the brown base
- *     toy horsey (2520) is the handed-over item.
+ *   - The capture's toy horsey is the grey one (2526); whether live picks a
+ *     colour is uncaptured.
  *   - The CommOrb "Playback" log plays only the two Solus observation records;
  *     the dossiers are wiki sub-pages the transcript dump could not expand.
  *   - The Black Knight kill that intimidates Daquarius counts anywhere, not
  *     only inside his Taverley room (the wiki's leave-the-room rule is not
  *     modelled).
- *   - The second and fourth scans teleport the player to Camelot / outside
- *     Falador Castle but Solus deals no damage (no death edge case).
  *   - Solus's hat is only received when there is inventory room, per the wiki.
- *   - OSRS loops Asgarnian ale if the player accepts the squireship; here either
- *     reply ("Yes please!" / "No, not right now...") at the offer advances to
- *     the crisis plan, with Tiffy playing his "after agreeing to be Amik's
- *     squire" variant when the player accepted. A completed player falls
- *     through to Sir Tiffy's own transcript page.
+ *   - The decline branch at Sir Amik is uncaptured (the run accepted the
+ *     squireship): its wire values are the Quest Helper keys.
+ *   - A completed player falls through to Sir Tiffy's own transcript page.
  */
 module.exports = function registerWantedQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, Skill } = api.core;
+  const { ItemIdentifiers, NpcIdentifiers, Skill } = api.core;
   const { loadTranscripts, refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Wanted!";
@@ -76,6 +86,7 @@ module.exports = function registerWantedQuest(api) {
   const VARBIT_DAQUARIUS = 1055;
   const VARBIT_MAGE = 1056;
   const VARBIT_EXPOSITION = 1058;
+  const VARBIT_SUMMONED_KNIGHT_DEAD = 1057; // wanted_black_knight_dead, set as Solus's knight dies (tick 4012)
   const VARP_ABYSS_DISCOVERY = 492;
 
   const LOST_TRIBE_QUEST_KEY = "the_lost_tribe";
@@ -196,9 +207,6 @@ module.exports = function registerWantedQuest(api) {
   const WILDERNESS_MAGE_NPC_ID = NpcIdentifiers.MAGE_OF_ZAMORAK; // 2580
   const VARROCK_MAGE_NPC_ID = NpcIdentifiers.MAGE_OF_ZAMORAK_3; // 2582
   const SAVANT_NPC_ID = NpcIdentifiers.SAVANT; // 4931
-  const SOLUS_DELLAGAR_NPC_ID = NpcIdentifiers.SOLUS_DELLAGAR; // 4930
-  const SOLUS_DELLAGAR_FIGHT_NPC_ID = NpcIdentifiers.SOLUS_DELLAGAR_3; // 4962
-  const BLACK_KNIGHT_SUMMONED_NPC_ID = NpcIdentifiers.BLACK_KNIGHT_6; // 4959
   const TAVERLEY_BLACK_KNIGHT_IDS = new Set([
     NpcIdentifiers.BLACK_KNIGHT_2, // 516
     NpcIdentifiers.BLACK_KNIGHT_3, // 517
@@ -213,14 +221,16 @@ module.exports = function registerWantedQuest(api) {
   const MOLTEN_GLASS_ITEM_ID = ItemIdentifiers.MOLTEN_GLASS; // 1775
   const RUNE_ESSENCE_ITEM_ID = ItemIdentifiers.RUNE_ESSENCE; // 1436
   const PURE_ESSENCE_ITEM_ID = ItemIdentifiers.PURE_ESSENCE; // 7936
-  const NOTED_RUNE_ESSENCE_ITEM_ID = ItemIdentifiers.RUNE_ESSENCE_2; // 1437, noted
+  // The sixth stop hands over 20 noted pure essence (cert_blankrune_high 7937; the box shows 7936, tick 4012).
+  const NOTED_PURE_ESSENCE_ITEM_ID = 7937; // cert_blankrune_high
   const FREMENNIK_PURPLE_CLOAK_ITEM_ID = ItemIdentifiers.FREMENNIK_PURPLE_CLOAK; // 3785
   const BLUE_CAPE_ITEM_ID = ItemIdentifiers.BLUE_CAPE; // 1021
   const BLUE_WIZARD_HAT_ITEM_ID = ItemIdentifiers.BLUE_WIZARD_HAT; // 579
   const BONE_SPEAR_ITEM_ID = ItemIdentifiers.BONE_SPEAR; // 5016
   const CASTLE_WARS_TICKET_ITEM_ID = ItemIdentifiers.CASTLE_WARS_TICKET; // 4067
   const BANANA_ITEM_ID = ItemIdentifiers.BANANA; // 1963
-  const BROWN_TOY_HORSEY_ITEM_ID = ItemIdentifiers.BROWN_TOY_HORSEY; // 2520 (colour-agnostic clue)
+  // The capture's Draynor clue was the grey horsey (horsey_grey 2526, tick 2532); whether live picks a colour is uncaptured.
+  const GREY_TOY_HORSEY_ITEM_ID = 2526; // horsey_grey
   const GOBLIN_MAIL_ITEM_ID = ItemIdentifiers.GOBLIN_MAIL; // 288
   const BEAR_FUR_ITEM_ID = ItemIdentifiers.BEAR_FUR; // 948
   const CREAM_HAT_ITEM_ID = ItemIdentifiers.CREAM_HAT; // 662
@@ -249,6 +259,7 @@ module.exports = function registerWantedQuest(api) {
   const V_TIFFY_DONE = "completing-the-quest-talking-to-tiffy";
   const V_AMIK_FIRST = "falador-castle-first-visit-to-sir-amik";
   const V_AMIK_REFUSED = "falador-castle-first-visit-to-sir-amik-talking-to-sir-amik-after-refusing-to-become-his-squire";
+  const V_AMIK_SQUIRE = "falador-castle-first-visit-to-sir-amik-talking-to-sir-amik-after-becoming-his-squire";
   const V_AMIK_SECOND = "falador-castle-second-visit-to-sir-amik";
   const V_AMIK_MISSION = "falador-castle-second-visit-to-sir-amik-talking-to-sir-amik-after-agreeing-to-go-after-solus";
   const V_AMIK_DONE = "completing-the-quest-talking-to-sir-amik";
@@ -261,15 +272,7 @@ module.exports = function registerWantedQuest(api) {
   const V_SAVANT_CANIFIS_CALL = "approaching-canifis";
   const V_SAVANT_FAILING = "approaching-canifis-failing-scans";
   const V_SAVANT_HINT = "approaching-canifis-talking-to-savant-again";
-  const V_SCAN_CANIFIS = "approaching-canifis-scanning-in-canifis";
-  const V_SCAN_SECOND = "scanning-the-second-location";
-  const V_SCAN_CHAMPIONS = "scanning-at-champion-s-guild";
-  const V_SCAN_FOURTH = "scanning-the-fourth-location";
-  const V_SCAN_DORGESHUUN = "scanning-in-dorgeshuun-mines";
-  const V_SCAN_SIXTH = "scanning-the-sixth-location";
-  const V_SCAN_SIXTH_DONE = "scanning-the-sixth-location-after-the-black-knight-is-defeated";
-  const V_SCAN_FINAL = "rune-essence-mine-ending-the-hunt";
-  const V_SCAN_FINAL_DONE = "rune-essence-mine-ending-the-hunt-after-defeating-solus";
+  const V_SAVANT_HINT_CANIFIS = "approaching-canifis-talking-to-savant-again-afterwards";
   const V_SAVANT_HAT = "rune-essence-mine-ending-the-hunt-communicating-with-savant-after-defeating-solus";
   const V_DAQUARIUS = "lord-daquarius";
   const V_DAQUARIUS_BEFORE = "lord-daquarius-talking-to-lord-daquarius-again-before-killing-any-knights";
@@ -283,7 +286,8 @@ module.exports = function registerWantedQuest(api) {
   const START_HOOK = "quest:wanted:start";
 
   const ZONE_LEVEL_0_ONLY = [0];
-  const CANIFIS_ZONE = { minX: 3455, maxX: 3530, minY: 3455, maxY: 3520, levels: ZONE_LEVEL_0_ONLY };
+  // The call came with the player on 3457,3484, a tick after 3455 (capture ticks 2327-2329): the edge is 3456 or 3457.
+  const CANIFIS_ZONE = { minX: 3456, maxX: 3530, minY: 3455, maxY: 3520, levels: ZONE_LEVEL_0_ONLY };
   const RELLEKKA_ZONE = { minX: 2630, maxX: 2700, minY: 3635, maxY: 3690, levels: ZONE_LEVEL_0_ONLY };
   const CHAMPIONS_GUILD_ZONE = { minX: 3185, maxX: 3206, minY: 3351, maxY: 3371, levels: ZONE_LEVEL_0_ONLY };
   const WIZARDS_TOWER_ZONE = { minX: 3098, maxX: 3120, minY: 3153, maxY: 3178, levels: [0, 1, 2] };
@@ -309,8 +313,6 @@ module.exports = function registerWantedQuest(api) {
   const YANILLE_PUB_ZONE = { minX: 2548, maxX: 2557, minY: 3077, maxY: 3082, levels: ZONE_LEVEL_0_ONLY };
   const LUMBRIDGE_SWAMP_CAVES_ZONE = { minX: 3216, maxX: 3239, minY: 9540, maxY: 9555, levels: ZONE_LEVEL_0_ONLY };
 
-  const CAMELOT_TILE = { x: 2757, y: 3477, z: 0 };
-  const FALADOR_CASTLE_OUTSIDE_TILE = { x: 2977, y: 3338, z: 0 };
 
   // Each entry describes the destination (QH mission id), the zone to scan in,
   // the clue item that points there, and the transcript condition/message ids
@@ -319,34 +321,27 @@ module.exports = function registerWantedQuest(api) {
     [MISSION_CANIFIS]: { name: "Canifis", zone: CANIFIS_ZONE },
     [MISSION_CHAMPIONS_GUILD]: { name: "Champions' Guild", zone: CHAMPIONS_GUILD_ZONE, clueItem: BLUE_CAPE_ITEM_ID },
     [MISSION_DORGESHUUN_MINE]: { name: "Dorgesh-Kaan mine", zone: DORGESHUUN_MINE_ZONE, clueItem: BONE_SPEAR_ITEM_ID },
-    [MISSION_RUNE_ESSENCE_MINE]: { name: "Rune essence mine", zone: RUNE_ESSENCE_MINE_ZONE, clueItem: NOTED_RUNE_ESSENCE_ITEM_ID, clueAmount: 20 },
-    [MISSION_MUSA_POINT]: { name: "Musa Point", zone: MUSA_POINT_ZONE, clueItem: BANANA_ITEM_ID, firstCondition: "j5Pacg", firstStep: "NZOIUt", recapCondition: "HFiKqm" },
-    [MISSION_DRAYNOR_MARKET]: { name: "Draynor Market", zone: DRAYNOR_MARKET_ZONE, clueItem: BROWN_TOY_HORSEY_ITEM_ID, firstCondition: "fvpmF5", firstStep: "DjOVBv", recapCondition: "LDNa0G" },
-    [MISSION_GOBLIN_VILLAGE]: { name: "Goblin Village", zone: GOBLIN_VILLAGE_ZONE, clueItem: GOBLIN_MAIL_ITEM_ID, firstCondition: "xsrPZk", firstStep: "s_gm2c", recapCondition: "VfLdkk" },
-    [MISSION_ARDOUGNE_MARKET]: { name: "Ardougne Market", zone: ARDOUGNE_MARKET_ZONE, clueItem: BEAR_FUR_ITEM_ID, firstCondition: "TgXuG7", firstStep: "sjgyQZ", recapCondition: "CXVORn" },
-    [MISSION_GRAND_TREE]: { name: "Grand Tree", zone: GRAND_TREE_ZONE, clueItem: CREAM_HAT_ITEM_ID, firstCondition: "ORbz7w", firstStep: "YCBBF7", recapCondition: "54UVrf" },
-    [MISSION_SCORPIUS_SHRINE]: { name: "Shrine of Scorpius", zone: SCORPIUS_SHRINE_ZONE, clueItem: UNHOLY_SYMBOL_ITEM_ID, firstCondition: "A4f-N_", firstStep: "f3dlmQ", recapCondition: "ZjlBeQ" },
-    [MISSION_ALI_MORRISANE]: { name: "Ali Morrisane", zone: ALI_MORRISANE_ZONE, clueItem: FAKE_BEARD_ITEM_ID, firstCondition: "HZgS0z", firstStep: "X-jLCw", recapCondition: "7vXk1y" },
-    [MISSION_WIZARDS_TOWER]: { name: "Wizards' Tower", zone: WIZARDS_TOWER_ZONE, clueItem: BLUE_WIZARD_HAT_ITEM_ID, firstCondition: "YnbS1i", firstStep: "VTgt8I", recapCondition: "A8CgM8" },
-    [MISSION_BRIMHAVEN_PUB]: { name: "Brimhaven pub", zone: BRIMHAVEN_PUB_ZONE, clueItem: RIGHT_EYE_PATCH_ITEM_ID, firstCondition: "CAIvwn", firstStep: "yzrPqL", recapCondition: "ISP8Fl" },
-    [MISSION_CASTLE_WARS]: { name: "Castle Wars", zone: CASTLE_WARS_ZONE, clueItem: CASTLE_WARS_TICKET_ITEM_ID, firstCondition: "DPRk5N", firstStep: "yCYScL", recapCondition: "DjhHrd" },
-    [MISSION_RELLEKKA]: { name: "Rellekka", zone: RELLEKKA_ZONE, clueItem: FREMENNIK_PURPLE_CLOAK_ITEM_ID, firstCondition: "Xhbln-", firstStep: "WB1yMP", recapCondition: "z3YtI9" },
-    [MISSION_MCGRUBORS_WOOD]: { name: "McGrubor's Wood", zone: MCGRUBORS_WOOD_ZONES, clueItem: RED_VINE_WORM_ITEM_ID, firstCondition: "ErFows", firstStep: "o_opbE", recapCondition: "bUhFQQ" },
-    [MISSION_SLAYER_TOWER]: { name: "Slayer Tower", zone: SLAYER_TOWER_ZONE, clueItem: EARMUFFS_ITEM_ID, firstCondition: "jdDxg7", firstStep: "Cv9NjI", recapCondition: "wtbH4I" },
-    [MISSION_YANILLE_PUB]: { name: "Yanille pub", zone: YANILLE_PUB_ZONE, clueItem: GREENMANS_ALE_ITEM_ID, firstCondition: "WhEdiy", firstStep: "sH7QJd", recapCondition: "4znMoL" },
-    [MISSION_LUMBRIDGE_SWAMP]: { name: "Lumbridge Swamp Caves", zone: LUMBRIDGE_SWAMP_CAVES_ZONE, clueItem: GIANT_FROG_LEGS_ITEM_ID, firstCondition: "2ZR-Ny", firstStep: "idUV-w", recapCondition: "JAC5WU" },
+    [MISSION_RUNE_ESSENCE_MINE]: { name: "Rune essence mine", zone: RUNE_ESSENCE_MINE_ZONE, clueItem: NOTED_PURE_ESSENCE_ITEM_ID, clueAmount: 20, boxItem: PURE_ESSENCE_ITEM_ID },
+    [MISSION_MUSA_POINT]: { name: "Musa Point", zone: MUSA_POINT_ZONE, clueItem: BANANA_ITEM_ID, firstCondition: "j5Pacg", recapCondition: "HFiKqm" },
+    [MISSION_DRAYNOR_MARKET]: { name: "Draynor Market", zone: DRAYNOR_MARKET_ZONE, clueItem: GREY_TOY_HORSEY_ITEM_ID, firstCondition: "fvpmF5", recapCondition: "LDNa0G" },
+    [MISSION_GOBLIN_VILLAGE]: { name: "Goblin Village", zone: GOBLIN_VILLAGE_ZONE, clueItem: GOBLIN_MAIL_ITEM_ID, firstCondition: "xsrPZk", recapCondition: "VfLdkk" },
+    [MISSION_ARDOUGNE_MARKET]: { name: "Ardougne Market", zone: ARDOUGNE_MARKET_ZONE, clueItem: BEAR_FUR_ITEM_ID, firstCondition: "TgXuG7", recapCondition: "CXVORn" },
+    [MISSION_GRAND_TREE]: { name: "Grand Tree", zone: GRAND_TREE_ZONE, clueItem: CREAM_HAT_ITEM_ID, firstCondition: "ORbz7w", recapCondition: "54UVrf" },
+    [MISSION_SCORPIUS_SHRINE]: { name: "Shrine of Scorpius", zone: SCORPIUS_SHRINE_ZONE, clueItem: UNHOLY_SYMBOL_ITEM_ID, firstCondition: "A4f-N_", recapCondition: "ZjlBeQ" },
+    [MISSION_ALI_MORRISANE]: { name: "Ali Morrisane", zone: ALI_MORRISANE_ZONE, clueItem: FAKE_BEARD_ITEM_ID, firstCondition: "HZgS0z", recapCondition: "7vXk1y" },
+    [MISSION_WIZARDS_TOWER]: { name: "Wizards' Tower", zone: WIZARDS_TOWER_ZONE, clueItem: BLUE_WIZARD_HAT_ITEM_ID, firstCondition: "YnbS1i", recapCondition: "A8CgM8" },
+    [MISSION_BRIMHAVEN_PUB]: { name: "Brimhaven pub", zone: BRIMHAVEN_PUB_ZONE, clueItem: RIGHT_EYE_PATCH_ITEM_ID, firstCondition: "CAIvwn", recapCondition: "ISP8Fl" },
+    [MISSION_CASTLE_WARS]: { name: "Castle Wars", zone: CASTLE_WARS_ZONE, clueItem: CASTLE_WARS_TICKET_ITEM_ID, firstCondition: "DPRk5N", recapCondition: "DjhHrd" },
+    [MISSION_RELLEKKA]: { name: "Rellekka", zone: RELLEKKA_ZONE, clueItem: FREMENNIK_PURPLE_CLOAK_ITEM_ID, firstCondition: "Xhbln-", recapCondition: "z3YtI9" },
+    [MISSION_MCGRUBORS_WOOD]: { name: "McGrubor's Wood", zone: MCGRUBORS_WOOD_ZONES, clueItem: RED_VINE_WORM_ITEM_ID, firstCondition: "ErFows", recapCondition: "bUhFQQ" },
+    [MISSION_SLAYER_TOWER]: { name: "Slayer Tower", zone: SLAYER_TOWER_ZONE, clueItem: EARMUFFS_ITEM_ID, firstCondition: "jdDxg7", recapCondition: "wtbH4I" },
+    [MISSION_YANILLE_PUB]: { name: "Yanille pub", zone: YANILLE_PUB_ZONE, clueItem: GREENMANS_ALE_ITEM_ID, firstCondition: "WhEdiy", recapCondition: "4znMoL" },
+    [MISSION_LUMBRIDGE_SWAMP]: { name: "Lumbridge Swamp Caves", zone: LUMBRIDGE_SWAMP_CAVES_ZONE, clueItem: GIANT_FROG_LEGS_ITEM_ID, firstCondition: "2ZR-Ny", recapCondition: "JAC5WU" },
   };
 
-  const FIRST_RUN_CONDITION_MISSION = new Map();
-  const FIRST_RUN_STEP_MISSION = new Map();
   const RECAP_CONDITION_MISSION = new Map();
   for (const [id, definition] of Object.entries(MISSION_DEFINITIONS)) {
-    const mission = Number(id);
-    if (definition.firstCondition) {
-      FIRST_RUN_CONDITION_MISSION.set(definition.firstCondition, mission);
-      FIRST_RUN_STEP_MISSION.set(definition.firstStep, mission);
-    }
-    if (definition.recapCondition) RECAP_CONDITION_MISSION.set(definition.recapCondition, mission);
+    if (definition.recapCondition) RECAP_CONDITION_MISSION.set(definition.recapCondition, Number(id));
   }
   // Recaps of the predetermined clues and the cake/fur variants that also point
   // at Ardougne Market.
@@ -354,22 +349,6 @@ module.exports = function registerWantedQuest(api) {
   RECAP_CONDITION_MISSION.set("pLYUGv", MISSION_DORGESHUUN_MINE);
   RECAP_CONDITION_MISSION.set("lTnXsm", MISSION_RUNE_ESSENCE_MINE);
   RECAP_CONDITION_MISSION.set("uEBRbB", MISSION_ARDOUGNE_MARKET);
-
-  const FIXED_CLUE_BY_STEP = {
-    qUGLsM: { position: POSITION_SECOND, next: MISSION_CHAMPIONS_GUILD, itemId: BLUE_CAPE_ITEM_ID },
-    mdADDD: { position: POSITION_FOURTH, next: MISSION_DORGESHUUN_MINE, itemId: BONE_SPEAR_ITEM_ID },
-    "3AZ4ZV": { position: POSITION_SIXTH, next: MISSION_RUNE_ESSENCE_MINE, itemId: NOTED_RUNE_ESSENCE_ITEM_ID, amount: 20 },
-  };
-
-  const SCAN_VARIANT_BY_POSITION = {
-    [POSITION_CANIFIS]: V_SCAN_CANIFIS,
-    [POSITION_SECOND]: V_SCAN_SECOND,
-    [POSITION_CHAMPIONS_GUILD]: V_SCAN_CHAMPIONS,
-    [POSITION_FOURTH]: V_SCAN_FOURTH,
-    [POSITION_DORGESHUUN_MINE]: V_SCAN_DORGESHUUN,
-    [POSITION_SIXTH]: V_SCAN_SIXTH,
-    [POSITION_RUNE_ESSENCE_MINE]: V_SCAN_FINAL,
-  };
 
   const MISSION_ATTRIBUTE = "quest.wanted.mission";
   const DESTINATION_ATTRIBUTE = "wanted:destination";
@@ -390,15 +369,23 @@ module.exports = function registerWantedQuest(api) {
   ];
 
   let quest;
+  const Scenes = require("../wanted/Scenes.Wanted")(api, {
+    advance: sceneAdvance,
+    clue: sceneClue,
+    knight: (player, knight) => {
+      // A rescan after a death or logout summons a new knight; the old one must not linger.
+      const stale = summonedKnightByPlayer.get(player);
+      if (stale && stale !== knight && stale.isRegistered?.() !== false) api.removeNpc(stale);
+      summonedKnightByPlayer.set(player, knight);
+    },
+    fight: (player, solus) => solusByPlayer.set(player, solus),
+  });
   /** Player -> owner-only quest spawns. */
   const summonedKnightByPlayer = new Map();
   const solusByPlayer = new Map();
   /** Player -> "buy" | "make" for the current CommOrb purchase conversation. */
   const orbPathByPlayer = new Map();
-  /** Players whose squireship entail branch still needs the Yes/No offer. */
-  const squirePromptPlayers = new Set();
   const otherMageTopics = new WeakSet();
-  let clueTailCache = null;
 
   function wantedVariant(variant) {
     return { page: PAGE, variant };
@@ -665,7 +652,22 @@ module.exports = function registerWantedQuest(api) {
     syncMageInvitation(player);
   }
 
+  /**
+   * Live steps varbit 1051 inside some conversations where this plugin keeps one durable stage:
+   * 1, 2, 3 through Tiffy's briefing (capture ticks 282, 296, 321) and 6 to 7 as Tiffy starts on
+   * the CommOrb (tick 977). These hold until the next stage change or a relog.
+   */
+  const wireOverride = new WeakMap();
+
+  function setWireOverride(player, value) {
+    wireOverride.set(player, { stage: quest.getStage(player), value });
+    writeVarbit(player, VARBIT_WANTED_MAIN, value);
+  }
+
   function wireStage(stage, player) {
+    const override = player ? wireOverride.get(player) : null;
+    if (override && override.stage === stage) return override.value;
+    if (override) wireOverride.delete(player);
     const value = Number.isInteger(stage) ? stage : 0;
     if (value <= 0) return 0;
     if (value >= STAGE_COMPLETE) return WIRE_COMPLETE;
@@ -695,10 +697,6 @@ module.exports = function registerWantedQuest(api) {
     );
   }
 
-  function teleport(player, tile) {
-    player.moveTo(new Location(tile.x, tile.y, tile.z));
-  }
-
   /** Gives one clue; a full inventory still lets the trail advance. */
   function grantClueItem(player, itemId, amount = 1) {
     const inventory = player.getInventory();
@@ -709,58 +707,14 @@ module.exports = function registerWantedQuest(api) {
     inventory.adds(itemId, amount);
   }
 
-  /** The item-branch list (conditions onward) of the Canifis scan variant. */
-  function clueBranchSteps() {
-    if (clueTailCache) return clueTailCache;
-    const data = loadTranscripts(api);
-    const raw = data?.[PAGE]?.variants?.[V_SCAN_CANIFIS];
-    if (!Array.isArray(raw)) return [];
-    const index = raw.findIndex((step) => step.type === "condition");
-    clueTailCache = index >= 0 ? raw.slice(index) : [];
-    return clueTailCache;
-  }
-
   function clearFightSpawns(player) {
     const knight = summonedKnightByPlayer.get(player);
     if (knight) {
-      api.removeNpc(knight);
+      if (knight.isRegistered?.() !== false) api.removeNpc(knight);
       summonedKnightByPlayer.delete(player);
     }
-    const solus = solusByPlayer.get(player);
-    if (solus) {
-      api.removeNpc(solus);
-      solusByPlayer.delete(player);
-    }
-  }
-
-  function spawnSummonedKnight(player) {
-    if (summonedKnightByPlayer.has(player)) return;
-    const location = player.getLocation();
-    const npc = api.spawnNpc({
-      id: BLACK_KNIGHT_SUMMONED_NPC_ID,
-      x: location.getX() + 1,
-      y: location.getY(),
-      z: location.getZ(),
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) summonedKnightByPlayer.set(player, npc);
-  }
-
-  function spawnSolus(player) {
-    if (solusByPlayer.has(player)) return;
-    const location = player.getLocation();
-    const npc = api.spawnNpc({
-      id: SOLUS_DELLAGAR_FIGHT_NPC_ID,
-      x: location.getX() + 1,
-      y: location.getY(),
-      z: location.getZ(),
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) solusByPlayer.set(player, npc);
+    // The finale's Solus is a scene actor: the scene removes him.
+    solusByPlayer.delete(player);
   }
 
   // ==========================================================================
@@ -778,7 +732,8 @@ module.exports = function registerWantedQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return null;
     if (stage === STAGE_STARTED) return V_AMIK_FIRST;
-    if (stage === STAGE_DECLINED) return V_AMIK_REFUSED;
+    // Squire Amik: he wants an Asgarnian Ale (capture ticks 641-673, straight after the offer and on every visit).
+    if (stage === STAGE_DECLINED) return squireJoke(player) ? V_AMIK_SQUIRE : V_AMIK_REFUSED;
     if (stage === STAGE_CRISIS) return V_AMIK_SECOND;
     if (stage < STAGE_DEFEATED) return V_AMIK_MISSION;
     return V_AMIK_DONE;
@@ -885,6 +840,7 @@ module.exports = function registerWantedQuest(api) {
     const { player, npc, npcId, definition, clickType } = event;
     if (npcId !== VARROCK_MAGE_NPC_ID || otherMageTopics.has(player)) return;
     if (definition.getActions()[clickType - 1] !== "Talk-to") return;
+    if (quest.getStage(player) === STAGE_MAGE_DEAL && magePaid(player)) quest.setStage(player, STAGE_EAST);
     const stage = quest.getStage(player);
     if (stage < STAGE_FUR || stage > STAGE_MAGE_DEAL) return;
     // Temple of the Eye claims this same Talk-to, even after completion.
@@ -954,12 +910,8 @@ module.exports = function registerWantedQuest(api) {
     if (npcId === SAVANT_NPC_ID && stepId === "6G5sML") {
       return !hasHat(player) && !bankHasHat(player);
     }
-    if (npcId === SOLUS_DELLAGAR_NPC_ID || npcId === SAVANT_NPC_ID) {
-      // A scan's clue branch is chosen from the pending next destination; the
-      // Current Assignment recap describes the destination already being hunted.
-      if (FIRST_RUN_CONDITION_MISSION.has(stepId)) {
-        return FIRST_RUN_CONDITION_MISSION.get(stepId) === getPendingDestination(player);
-      }
+    if (npcId === SAVANT_NPC_ID) {
+      // The Current Assignment recap describes the destination being hunted.
       if (RECAP_CONDITION_MISSION.has(stepId)) {
         return RECAP_CONDITION_MISSION.get(stepId) === getDestination(player);
       }
@@ -975,6 +927,7 @@ module.exports = function registerWantedQuest(api) {
     if (!player || npcId !== SIR_TIFFY_CASHIEN_NPC_ID) return;
     if (hook !== START_HOOK || quest.getStage(player) !== 0) return;
     if (!meetsRequirements(player)) return;
+    wireOverride.set(player, { stage: STAGE_STARTED, value: 1 });
     quest.setStage(player, STAGE_STARTED);
   }
 
@@ -1021,19 +974,61 @@ module.exports = function registerWantedQuest(api) {
     player.getInventory().adds(SOLUSS_HAT_ITEM_ID, 1);
   }
 
+  /**
+   * The essence goes with "I have your essences right here, take them." and the mage's hint varbit
+   * goes to 2 (tick 2030); varbit 1051 moves to 9 only with Savant's "Wow, that's some good
+   * thinking" at the end of the talk (tick 2053, handleLine). Paid and gone before that line, the
+   * next Talk-to finishes it (talkToMage).
+   */
   function takeEssencePrice(player) {
-    if (quest.getStage(player) !== STAGE_MAGE_DEAL) return;
+    if (quest.getStage(player) !== STAGE_MAGE_DEAL || magePaid(player)) return;
     if (hasItem(player, PURE_ESSENCE_ITEM_ID, 20)) {
       player.getInventory().deleteNumber(PURE_ESSENCE_ITEM_ID, 20);
     } else if (hasItem(player, RUNE_ESSENCE_ITEM_ID, 20)) {
       player.getInventory().deleteNumber(RUNE_ESSENCE_ITEM_ID, 20);
+    } else {
+      return;
     }
-    quest.setStage(player, STAGE_EAST);
+    earnInvestigation(player, MAGE_HINT_ATTRIBUTE, VARBIT_MAGE, 2);
+  }
+
+  function magePaid(player) {
+    return (Number(player.getAttribute(MAGE_HINT_ATTRIBUTE)) || 0) >= 2;
+  }
+
+  /** Lines a varbit rides on (capture ticks in the comments). */
+  const WIRE_LINES = [
+    { npcId: SIR_TIFFY_CASHIEN_NPC_ID, stage: STAGE_STARTED, text: "I guess... I don't really like blindly following orders though...", value: 2 }, // 296
+    { npcId: SIR_TIFFY_CASHIEN_NPC_ID, stage: STAGE_STARTED, text: "Okaaaay....", value: 3 }, // 321
+    { npcId: SIR_TIFFY_CASHIEN_NPC_ID, stage: STAGE_MISSION, prefix: "Well old ", includes: "we will need to equip you for the task", value: 7 }, // 977
+  ];
+
+  function wireLine(player, npcId, text) {
+    const stage = quest.getStage(player);
+    for (const line of WIRE_LINES) {
+      if (line.npcId !== npcId || line.stage !== stage) continue;
+      if (line.text ? text !== line.text : !(text.startsWith(line.prefix) && text.includes(line.includes))) continue;
+      setWireOverride(player, line.value);
+    }
   }
 
   function handleLine(event) {
     const { player, npcId, text } = event;
     if (!player || typeof text !== "string") return;
+    wireLine(player, npcId, text);
+    // Squire Amik goes straight on to the Asgarnian Ale errand (capture ticks 639-661).
+    if (npcId === SIR_AMIK_VARZE_NPC_ID && text === "As you wish, from this day forth you are my Squire!"
+      && quest.getStage(player) === STAGE_DECLINED && squireJoke(player)) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        startTranscript(api, player, npcId, PAGE, V_AMIK_SQUIRE, undefined, event.npc);
+      };
+    }
+    if (npcId === SAVANT_NPC_ID && text === "So I should try a scan here in Canifis?" && quest.getStage(player) === STAGE_HUNT
+      && getPosition(player) === POSITION_CANIFIS) writeVarbit(player, MISSION_VARBIT[MISSION_CANIFIS], 1); // tick 2409
+    if (npcId === VARROCK_MAGE_NPC_ID && quest.getStage(player) === STAGE_MAGE_DEAL
+      && text.startsWith("Wow, that's some good thinking")) quest.setStage(player, STAGE_EAST); // tick 2053
     if (npcId === WILDERNESS_MAGE_NPC_ID && quest.getStage(player) >= STAGE_FUR
       && quest.getStage(player) <= STAGE_MAGE_DEAL && text.startsWith("This isn't the place to talk. Visit me in Varrock's Chaos Temple")) {
       const previous = event.after;
@@ -1069,61 +1064,11 @@ module.exports = function registerWantedQuest(api) {
     }
   }
 
-  /**
-   * The entail branch of the squireship offer is parser-split from the Yes/No
-   * node (a "shows other options" marker sits between them). The central runtime
-   * now skips that marker, but if the flattened queue ever ends before the node
-   * this fallback re-offers it once the chatbox is clear, so stage 1 -> 2 is
-   * always reachable. Picking either reply (transcript node or fallback prompt)
-   * runs through applySquireReply.
-   */
+  /** The squireship offer's reply ("Yes please!" / "No, not right now..."), from the menu or after the entail talk. */
   function applySquireReply(player, accepted) {
-    squirePromptPlayers.delete(player);
     if (quest.getStage(player) !== STAGE_STARTED) return;
     setSquireJoke(player, accepted);
     quest.setStage(player, STAGE_DECLINED);
-  }
-
-  function openSquirePrompt(player) {
-    if (quest.getStage(player) !== STAGE_STARTED) return;
-    api.sendMultiChatboxPrompt(
-      player,
-      "Select an Option",
-      "Yes please!",
-      () => applySquireReply(player, true),
-      "No, not right now...",
-      () => applySquireReply(player, false)
-    );
-  }
-
-  /** Runs done once the player's chatbox is clear (no dialogue, no prompt). */
-  function waitForChatbox(player, done) {
-    if (player.isRegistered?.() === false) return;
-    const { CountdownTask, TaskManager, MultiChatboxPrompt } = api.core;
-    if (!CountdownTask || !TaskManager) {
-      done();
-      return;
-    }
-    TaskManager.submit(
-      new CountdownTask(player, 1, () => {
-        if (player.isRegistered?.() === false) return;
-        const prompt = MultiChatboxPrompt?.getPending?.(player) ?? null;
-        if (player.getDialogueManager?.()?.isActive?.() === true || prompt !== null) {
-          waitForChatbox(player, done);
-          return;
-        }
-        done();
-      })
-    );
-  }
-
-  function armSquireFallback(player) {
-    squirePromptPlayers.add(player);
-    waitForChatbox(player, () => {
-      if (!squirePromptPlayers.has(player)) return;
-      squirePromptPlayers.delete(player);
-      openSquirePrompt(player);
-    });
   }
 
   function handleChoice(event) {
@@ -1132,12 +1077,6 @@ module.exports = function registerWantedQuest(api) {
     const text = option.toLowerCase();
     if (npcId === SIR_AMIK_VARZE_NPC_ID) {
       if (quest.getStage(player) === STAGE_STARTED) {
-        if (text.includes("what does being a squire entail")) {
-          armSquireFallback(player);
-          return;
-        }
-        // The squireship offer: either reply moves on to the crisis plan (OSRS
-        // loops Asgarnian ale for "Yes please!"; see the header gap).
         if (text.includes("yes please")) {
           applySquireReply(player, true);
         } else if (text.includes("no, not right now")) {
@@ -1176,19 +1115,6 @@ module.exports = function registerWantedQuest(api) {
     if (text === "something else." && event.npc) openOtherMageTopics(event);
   }
 
-  function handleClueReference(event) {
-    const { player, stepId } = event;
-    if (stepId !== "BO-ZlI" && stepId !== "WF7PuA") return;
-    if (quest.getStage(player) !== STAGE_HUNT) return;
-    const position = getPosition(player);
-    if (stepId === "BO-ZlI" && position !== POSITION_CHAMPIONS_GUILD) return;
-    if (stepId === "WF7PuA" && position !== POSITION_DORGESHUUN_MINE) return;
-    const tail = clueBranchSteps();
-    if (!tail.length) return;
-    event.handled = true;
-    event.steps = tail;
-  }
-
   function handleDialogueAction(event) {
     const { player, npcId, stepId } = event;
     if (!player) return;
@@ -1203,30 +1129,6 @@ module.exports = function registerWantedQuest(api) {
           ?.find((option) => option.text === "Do you have any jobs for me yet?")?.steps ?? [], event.npc);
       return;
     }
-    if (stepId === "WqZIre") { // "The player is teleported to Camelot."
-      event.handled = true;
-      teleport(player, CAMELOT_TILE);
-      return;
-    }
-    if (stepId === "uq8DV_") { // "The player wakes up outside Falador Castle."
-      event.handled = true;
-      teleport(player, FALADOR_CASTLE_OUTSIDE_TILE);
-      return;
-    }
-    if (stepId === "CfRFgE") { // "A Black Knight appears."
-      event.handled = true;
-      spawnSummonedKnight(player);
-      return;
-    }
-    if (stepId === "UK6zld") { // the rangers fall; the weakened Solus turns on the player
-      event.handled = true;
-      spawnSolus(player);
-      return;
-    }
-    if (stepId === "BO-ZlI" || stepId === "WF7PuA") {
-      handleClueReference(event);
-      return;
-    }
     if (npcId === SIR_AMIK_VARZE_NPC_ID && stepId === "iDVsvn") { // "Congratulations! Quest complete!"
       event.handled = true;
       if (quest.getStage(player) >= STAGE_DEFEATED && hasHat(player) && !quest.isComplete(player)) {
@@ -1235,33 +1137,17 @@ module.exports = function registerWantedQuest(api) {
       }
       return;
     }
-    if (FIRST_RUN_STEP_MISSION.has(stepId)) {
-      if (quest.getStage(player) !== STAGE_HUNT) return;
-      const position = getPosition(player);
-      if (
-        position !== POSITION_CANIFIS &&
-        position !== POSITION_CHAMPIONS_GUILD &&
-        position !== POSITION_DORGESHUUN_MINE
-      ) return;
-      const mission = FIRST_RUN_STEP_MISSION.get(stepId);
-      if (getPendingDestination(player) !== mission) return;
-      const definition = MISSION_DEFINITIONS[mission];
-      grantClueItem(player, definition.clueItem, definition.clueAmount || 1);
-      advanceTrail(player, position, mission);
-      return;
-    }
-    const fixedClue = FIXED_CLUE_BY_STEP[stepId];
-    if (fixedClue) {
-      if (quest.getStage(player) !== STAGE_HUNT || getPosition(player) !== fixedClue.position) return;
-      grantClueItem(player, fixedClue.itemId, fixedClue.amount || 1);
-      advanceTrail(player, fixedClue.position, fixedClue.next);
-    }
   }
 
   // ==========================================================================
   // CommOrb (Scan / Contact / Playback)
   // ==========================================================================
 
+  /**
+   * Entering Canifis after the mage's lead: Savant's low-level scan call, a tick after the step in
+   * (capture tick 2329, the player on 3457,3484 since tick 2328). The Canifis mission varbit comes
+   * with "So I should try a scan here in Canifis?" (tick 2409; see handleLine).
+   */
   function beginHunt(player) {
     if (quest.getStage(player) !== STAGE_EAST) return;
     quest.setStage(player, STAGE_HUNT);
@@ -1270,58 +1156,107 @@ module.exports = function registerWantedQuest(api) {
     setPendingDestination(player, 0);
     setCompletedMissions(player, 0);
     for (let mission = 1; mission <= MISSION_LUMBRIDGE_SWAMP; mission++) {
-      writeVarbit(player, MISSION_VARBIT[mission], mission === MISSION_CANIFIS ? 1 : 0);
+      writeVarbit(player, MISSION_VARBIT[mission], 0);
       writeVarbit(player, MISSION_VARBIT[mission] + 1, 0);
     }
-    startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_CANIFIS_CALL);
+    later(player, 1, () => startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_CANIFIS_CALL));
   }
 
-  function triggerMission(player, position) {
-    // Positions 1/3/5 hand over a random clue; choose (or reuse) its destination
-    // before the transcript's clue conditions are answered.
-    if (
-      position === POSITION_CANIFIS ||
-      position === POSITION_CHAMPIONS_GUILD ||
-      position === POSITION_DORGESHUUN_MINE
-    ) {
-      ensurePendingDestination(player);
+  function later(player, ticks, callback) {
+    const { CountdownTask, TaskManager } = api.core;
+    TaskManager.submit(new CountdownTask(player, ticks, () => {
+      if (player.isRegistered?.() !== false) callback();
+    }));
+  }
+
+  /** The mission the scene at `position` points at next: a random one at 1/3/5, fixed otherwise. */
+  function nextMission(player, position) {
+    if (position === POSITION_CANIFIS || position === POSITION_CHAMPIONS_GUILD || position === POSITION_DORGESHUUN_MINE) {
+      return ensurePendingDestination(player);
     }
-    const variant = SCAN_VARIANT_BY_POSITION[position];
-    if (!variant) return;
+    return {
+      [POSITION_SECOND]: MISSION_CHAMPIONS_GUILD,
+      [POSITION_FOURTH]: MISSION_DORGESHUUN_MINE,
+      [POSITION_SIXTH]: MISSION_RUNE_ESSENCE_MINE,
+    }[position] ?? 0;
+  }
+
+  function triggerMission(player, position, destination) {
+    const next = nextMission(player, position);
+    const definition = MISSION_DEFINITIONS[next];
+    Scenes.playScan(player, position, {
+      mission: destination,
+      next,
+      clueStep: definition?.firstCondition ?? null,
+      boxItem: definition?.boxItem ?? definition?.clueItem ?? -1,
+    });
+  }
+
+  /** The scene's trail step: the visited mission is complete and the next one set (or Solus beaten). */
+  function sceneAdvance(player, position, next) {
+    if (quest.getStage(player) !== STAGE_HUNT || getPosition(player) !== position) return;
     if (position === POSITION_RUNE_ESSENCE_MINE) {
-      if (solusByPlayer.has(player)) {
-        player.sendMessage("Solus is right here - finish him!");
-        return;
-      }
-      startTranscript(api, player, SAVANT_NPC_ID, PAGE, variant);
+      if (killerHasRoom(player)) player.getInventory().adds(SOLUSS_HAT_ITEM_ID, 1);
+      else player.sendMessage("You have no room for Solus's hat.");
+      completeMission(player, MISSION_RUNE_ESSENCE_MINE);
+      quest.setStage(player, STAGE_DEFEATED);
       return;
     }
-    startTranscript(api, player, SOLUS_DELLAGAR_NPC_ID, PAGE, variant);
+    if (position === POSITION_SIXTH) writeVarbit(player, VARBIT_SUMMONED_KNIGHT_DEAD, 1);
+    advanceTrail(player, position, next || nextMission(player, position));
+  }
+
+  function killerHasRoom(player) {
+    return !player.getInventory().isFull();
+  }
+
+  /** The item box's clue: the item pointing at the scene's next destination (some scenes move the trail first). */
+  function sceneClue(player, position, next) {
+    if (quest.getStage(player) !== STAGE_HUNT) return;
+    const definition = MISSION_DEFINITIONS[next || nextMission(player, position)];
+    if (definition?.clueItem) grantClueItem(player, definition.clueItem, definition.clueAmount || 1);
+  }
+
+  /** A failed scan: one of Savant's ten answers, two ticks after the scan (capture ticks 2578-2580). */
+  function failScan(player) {
+    later(player, 2, () => startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_FAILING));
   }
 
   function handleScan(player) {
     const stage = quest.getStage(player);
-    if (stage === STAGE_EAST) {
-      if (inZone(player, CANIFIS_ZONE)) beginHunt(player);
-      else startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_FAILING);
+    if (Scenes.active(player)) return;
+    // Before the hunt the orb only answers (capture ticks 1037-1038 and 2085, wire 8 and 9).
+    if (stage === STAGE_EAST && inZone(player, CANIFIS_ZONE)) {
+      beginHunt(player);
       return;
     }
-    if (stage !== STAGE_HUNT) {
-      player.sendMessage("You have no Solus trail to scan for right now.");
+    if (stage < STAGE_HUNT) {
+      player.sendMessage("There is nothing nearby to scan.");
+      return;
+    }
+    Scenes.playScanEffect(player);
+    if (stage > STAGE_HUNT) {
+      // Solus beaten: the scan still plays, then this (capture ticks 4326-4329, 4538-4540).
+      later(player, 2, () => player.sendMessage("You have nothing to scan for..."));
       return;
     }
     const state = ensureHuntState(player);
     const zone = MISSION_DEFINITIONS[state.destination]?.zone;
-    if (zone && inZone(player, zone)) {
-      triggerMission(player, state.position);
+    // The mine's scene comes with the teleport into it (claimEssenceTeleport), never from a scan.
+    if (state.position !== POSITION_RUNE_ESSENCE_MINE && zone && inZone(player, zone)) {
+      triggerMission(player, state.position, state.destination);
       return;
     }
-    startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_FAILING);
+    failScan(player);
   }
 
   function handleContact(player) {
     const stage = quest.getStage(player);
-    if (quest.isComplete(player)) return;
+    if (quest.isComplete(player)) {
+      player.sendMessage("Your Comm Orb remains dark."); // capture tick 4542
+      return;
+    }
+    if (Scenes.active(player)) return;
     if (stage < STAGE_MISSION) {
       player.sendMessage("You have no Temple Knight contact to reach yet.");
       return;
@@ -1340,8 +1275,9 @@ module.exports = function registerWantedQuest(api) {
       return;
     }
     if (stage === STAGE_HUNT) {
-      ensureHuntState(player);
-      startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_HINT);
+      const { destination } = ensureHuntState(player);
+      // Still on Canifis: the fur clue's recap (capture tick 2422); afterwards the clue item's.
+      startTranscript(api, player, SAVANT_NPC_ID, PAGE, destination === MISSION_CANIFIS ? V_SAVANT_HINT_CANIFIS : V_SAVANT_HINT);
       return;
     }
     startTranscript(api, player, SAVANT_NPC_ID, PAGE, V_SAVANT_HAT);
@@ -1400,33 +1336,35 @@ module.exports = function registerWantedQuest(api) {
 
   function handleNpcDeath(event) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
-    if (!killer) return;
     const npc = event.npc;
-    if (npc === summonedKnightByPlayer.get(killer)) {
-      summonedKnightByPlayer.delete(killer);
-      if (quest.getStage(killer) === STAGE_HUNT && getPosition(killer) === POSITION_SIXTH) {
-        startTranscript(api, killer, SAVANT_NPC_ID, PAGE, V_SCAN_SIXTH_DONE);
+    for (const [owner, knight] of summonedKnightByPlayer) {
+      if (npc !== knight) continue;
+      summonedKnightByPlayer.delete(owner);
+      if (quest.getStage(owner) === STAGE_HUNT && getPosition(owner) === POSITION_SIXTH) {
+        Scenes.knightDefeated(owner, MISSION_DEFINITIONS[MISSION_RUNE_ESSENCE_MINE].boxItem, MISSION_RUNE_ESSENCE_MINE);
       }
       return;
     }
-    if (npc === solusByPlayer.get(killer)) {
-      solusByPlayer.delete(killer);
-      if (quest.getStage(killer) === STAGE_HUNT && getPosition(killer) === POSITION_RUNE_ESSENCE_MINE) {
-        if (killer.getInventory().isFull()) {
-          killer.sendMessage("You have no room for Solus's hat.");
-        } else {
-          killer.getInventory().adds(SOLUSS_HAT_ITEM_ID, 1);
-        }
-        completeMission(killer, MISSION_RUNE_ESSENCE_MINE);
-        quest.setStage(killer, STAGE_DEFEATED);
-        startTranscript(api, killer, SAVANT_NPC_ID, PAGE, V_SCAN_FINAL_DONE);
-      }
+    for (const [owner, solus] of solusByPlayer) {
+      if (npc !== solus) continue;
+      solusByPlayer.delete(owner);
+      if (quest.getStage(owner) === STAGE_HUNT && getPosition(owner) === POSITION_RUNE_ESSENCE_MINE) Scenes.finaleWon(owner);
       return;
     }
+    if (!killer) return;
     if (TAVERLEY_BLACK_KNIGHT_IDS.has(event.npcId) && quest.getStage(killer) === STAGE_DAQUARIUS && !blackKnightDead(killer)) {
       setBlackKnightDead(killer, true);
       startTranscript(api, killer, LORD_DAQUARIUS_NPC_ID, PAGE, V_DAQUARIUS_STOP);
     }
+  }
+
+  /** Aubury (or another mine wizard) at the hunt's last stop: the mine's scene instead of the mine. */
+  function handleEssenceTeleport(event) {
+    const { player } = event;
+    if (!player || quest.getStage(player) !== STAGE_HUNT) return;
+    const { position } = ensureHuntState(player);
+    if (position !== POSITION_RUNE_ESSENCE_MINE || Scenes.active(player)) return;
+    Scenes.claimEssenceTeleport(event, event.from);
   }
 
   function handleCanifisZoneEnter({ player }) {
@@ -1444,12 +1382,13 @@ module.exports = function registerWantedQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    Scenes.abort(player);
     clearFightSpawns(player);
     orbPathByPlayer.delete(player);
-    squirePromptPlayers.delete(player);
   }
 
   function handlePlayerDeath({ player }) {
+    Scenes.abort(player);
     clearFightSpawns(player);
   }
 
@@ -1617,7 +1556,9 @@ module.exports = function registerWantedQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.SLAYER.getIndex(), amount: 5000, label: "Slayer" }],
-    otherRewards: ["Access to the White Knights' armoury (white equipment from Sir Vyvin)"],
+    // The scroll as captured (tick 4479): Solus's hat as the model, the armoury over two lines.
+    otherRewards: ["Access to the", "White Knight Armoury"],
+    scrollItemId: SOLUSS_HAT_ITEM_ID,
     buildJournal,
     onReward: grantReward,
   });
@@ -1636,8 +1577,10 @@ module.exports = function registerWantedQuest(api) {
   api.onItemAction(handleCommorbAction);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(CANIFIS_ZONE, handleCanifisZoneEnter);
+  api.onCustomEvent("runecrafting:essence-teleport", handleEssenceTeleport);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
   api.onPlayerLogout(handleLogout);
-  api.onPlayerDeath(handlePlayerDeath);
+  // An observer of every death: onPlayerDeath stops at the first hook that takes the death (Death's office).
+  api.onCustomEvent("player:died", handlePlayerDeath);
 };

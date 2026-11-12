@@ -773,7 +773,11 @@ function teleportToEssenceMine(player, wizard) {
   const wizardName = wizard?.getCurrentDefinition?.(player)?.getName();
   player.setAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
   player.getPacketSender().sendInterfaceRemoval();
-  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), {}, undefined, () => {
+  // A quest may take the arrival over (Wanted!'s last stop is an instanced scene): it adds `steps`
+  // for the teleport's ticks and a `land` that replaces the move into the mine.
+  const claim = { player, wizard, from: [at.getX(), at.getY(), at.getZ()], steps: {}, land: null };
+  pluginApi.emitCustomEvent("runecrafting:essence-teleport", claim);
+  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), claim.steps, undefined, () => {
     if (wizardName === "Archmage Sedridor") {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
     } else if (wizardName === "Wizard Cromperty") {
@@ -783,7 +787,7 @@ function teleportToEssenceMine(player, wizard) {
     } else if (wizardName === "Aubury") {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_ESSENCE_TELEPORT_TASK });
     }
-  });
+  }, typeof claim.land === "function" ? claim.land : undefined);
   if (wizard) {
     wizard.forceChat?.(ESSENCE_TELEPORT_LINE);
     wizard.setPositionToFace?.(at);
@@ -801,10 +805,11 @@ function teleportToEssenceMine(player, wizard) {
  * the core's teleports hold them (TeleportHandler): movement blocked, untargetable and
  * teleporting until the landing. The landing emits "teleport:landed" with where the travel began,
  * as the core's teleports do. A death (dying, or the respawn's onPlayerDeath), a logout or a later
- * travel cancels it; `onRelease` runs whenever the hold ends, landed or not. A death leaves the
- * movement and targeting holds to the death sequence, which resets them on respawn.
+ * travel cancels it; `onRelease` runs whenever the hold ends, landed or not.
+ * A death leaves the movement and targeting holds to the death sequence, which resets them on
+ * respawn. `land`, when given, replaces the move to `destination` and its "teleport:landed".
  */
-function travel(player, ticks, destination, steps = {}, onRelease = undefined, onLanded = undefined) {
+function travel(player, ticks, destination, steps = {}, onRelease = undefined, onLanded = undefined, land = undefined) {
   const { Task } = pluginApi.core;
   const token = { from: player.getLocation?.()?.clone?.() ?? null, fromInstance: player.getPrivateArea?.() != null, onRelease };
   player.setAttribute(TRAVEL_ATTRIBUTE, token);
@@ -831,6 +836,12 @@ function travel(player, ticks, destination, steps = {}, onRelease = undefined, o
       steps[tick]?.();
       if (tick < ticks) return;
       releaseTravel(player, token);
+      if (land) {
+        land();
+        onLanded?.();
+        this.stop();
+        return;
+      }
       player.moveTo(destination);
       const landed = player.getLocation?.();
       if (landed?.getX?.() === destination.getX() && landed?.getY?.() === destination.getY() && landed?.getZ?.() === destination.getZ()) {

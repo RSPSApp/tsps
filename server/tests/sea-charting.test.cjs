@@ -758,8 +758,10 @@ function dived(player, from = 0) {
 }
 
 /** Diving gear on, the riddle asked: answers go in as the item search and count prompts would. */
+const riddledPlayers = [];
 function riddled(uid) {
   const player = captain();
+  riddledPlayers.push(player);
   const spot = common.spotsOfType("mermaid_guide").find((each) => each.uid === uid);
   const npc = mermaidAt(spot);
   player.getEquipment = () => ({ contains: (id) => id === 7534 || id === 7535 });
@@ -774,6 +776,9 @@ function riddled(uid) {
   const counts = () => player.sent.filter(([key]) => key === "sendEnterAmountPrompt").map(([, title]) => title);
   return { player, spot, prompts, riddle, titles, counts };
 }
+
+/** Riddled divers leave their boats even when a test fails part way. */
+test.afterEach(() => { for (const player of riddledPlayers.splice(0)) leave(player); });
 
 test("a mermaid takes any of an answer's alternatives, and Selina's coal riddle only coal (rsprox 944, the Wiki)", () => {
   // Selina, the Ooglog Channel: one answer; charcoal is wrong, coal right (rsprox 944).

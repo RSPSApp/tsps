@@ -128,7 +128,8 @@ function ask(player, npc, spot, given) {
       submit({ id });
       return;
     }
-    const name = common.core().ItemDefinition.forId(id).getName();
+    const name = common.core().ItemDefinition.forId(id)?.getName?.();
+    if (!name) return;
     player.setEnteredAmountAction({ acceptsZero: true, execute: (count) => submit({ id, count: Math.floor(Number(count) || 0) }) });
     player.getPacketSender().sendEnterAmountPrompt(`${name}: How many should there be?`);
   } });

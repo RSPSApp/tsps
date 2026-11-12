@@ -1687,12 +1687,16 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
         getArea: () => currentArea,
         getAudioSettings: () => audio,
       });
-      player.getPacketSender().sendSong = (id) => {
-        songs.push(id);
-        MusicPlugin._test.onTrackPlayed({ player, trackId: id });
-      };
       const session = new PlayerSession({ isOpen: true });
       session.setPlayer(player);
+      player.getSession = () => session;
+      const packets = [];
+      const transport = t.mock.method(session, 'sendClientPacket', (packet) => (packets.push(packet), true));
+      const nativeSender = new PacketSender(player);
+      player.getPacketSender().sendSong = (id, fades) => {
+        songs.push(id);
+        return nativeSender.sendSong(id, fades);
+      };
       // Keep this test at the real music-flush boundary, before unrelated scene synchronization.
       const flushMusic = (tick) => {
         let checks = 0;
@@ -1705,6 +1709,8 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
       try {
         flushMusic(0);
         assert.deepEqual(songs, [280], 'Area mode plays Sign Here on first entry');
+        const { encodePlaySong } = require('../dist/net/protocol/ClientProtocol');
+        assert.deepEqual(packets[0], encodePlaySong(280), 'the actual native song packet was accepted by the recording transport');
         assert.ok(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE).includes(280), 'entry persisted the unlock');
         const slot = catalog.slotByTrackId[280];
         assert.ok(player.configs.some(([varp, value]) => varp === slot.varp && (value & (1 << slot.bit)) !== 0), 'native unlock bit was sent');
@@ -1723,7 +1729,7 @@ test('Leagues VI Yama lair entry unlocks and plays Sign Here through the registe
         songs.length = 0;
         flushMusic(4);
         assert.deepEqual(songs, [], 'Single mode does not force area playback');
-      } finally { eventMock.mock.restore(); }
+      } finally { eventMock.mock.restore(); transport.mock.restore(); }
     }
   } finally { AreaManager.areas = previous; }
 });

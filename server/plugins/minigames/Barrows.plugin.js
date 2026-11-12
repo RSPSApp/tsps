@@ -26,7 +26,8 @@ const REGION_ID = 14231;
 const ATTRIBUTE = "barrows";
 const DIG_ANIMATION = new Animation(830);
 const OVERLAY_ID = 24;
-const OVERLAY_HUD_UID = (161 << 16) | 8;
+// The face needs the full-screen atmosphere slot, not the smaller HUD slot (226/01694).
+const OVERLAY_HUD_UID = (161 << 16) | 1;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
 const REWARDS_ID = 155;
 const REWARDS_INVENTORY = 141;
@@ -55,7 +56,13 @@ const DOOR_LINKS = [
   [477, 3, 4], [478, 4, 5], [479, 3, 6], [480, 4, 7],
   [481, 5, 8], [482, 6, 7], [483, 7, 8], [484, 6, 8],
 ];
-const HILTS = new Set([Items.GHOMMALS_HILT_2, Items.GHOMMALS_HILT_3, Items.GHOMMALS_HILT_4, Items.GHOMMALS_HILT_5, Items.GHOMMALS_HILT_6]);
+const HILTS = new Set([Items.GHOMMALS_HILT_2, Items.GHOMMALS_HILT_3, Items.GHOMMALS_HILT_4, Items.GHOMMALS_HILT_5, Items.GHOMMALS_HILT_6,
+  Items.GHOMMALS_AVERNIC_DEFENDER_5, Items.GHOMMALS_AVERNIC_DEFENDER_5_L_, Items.GHOMMALS_AVERNIC_DEFENDER_6, Items.GHOMMALS_AVERNIC_DEFENDER_6_L_]);
+// The pairs are the ordinary and alternate face models seen in rsprox captures 1694 and 4057.
+// Ours: the 1/4 alternate probability approximates the observed frequency; the exact odds are unknown.
+const PRAYER_FACES = [[6737, 29228], [6738, 29225], [6739, 29224], [6740, 29226], [6741, 29227], [6742, 29223]];
+const PRAYER_FACE_SCRIPT = 894; // barrows_nodnod: component, model
+const PRAYER_FACE_FIRST_COMPONENT = 6;
 // These model sequences and options are present in the current cache's model archive.
 const PUZZLES = [
   { sequence: [6716, 6717, 6718], options: [6713, 6714, 6715] },
@@ -746,6 +753,14 @@ function drainPrayer(player, run) {
   // before the Prayer drop (rsprox_transcripts/236/03929.txt tick 388, 237/01107.txt:93512). Older recordings
   // (226/01694.txt) have no line.
   player.sendMessage(PRAYER_DRAINED);
+  // A defeated brother's face accompanies the drain; none after looting (normal-world 1694,
+  // plus repeated observations in Leagues recording 4057).
+  if (!run.looted && run.killed.length) {
+    const brother = run.killed[randomInt(0, run.killed.length - 1)];
+    const models = PRAYER_FACES[brother];
+    if (models) player.getPacketSender().sendInterfaceScript(PRAYER_FACE_SCRIPT,
+      [(OVERLAY_ID << 16) | (PRAYER_FACE_FIRST_COMPONENT + brother), models[randomInt(0, 3) === 0 ? 1 : 0]]);
+  }
   skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
   skills.updateSkill(Skill.PRAYER);
 }
@@ -779,7 +794,9 @@ function processPlayer({ player }) {
     // Each entry into a crypt restarts the drain's 30 ticks (rsprox_transcripts/226/01694.txt: in at ticks 8801, 8868,
     // 8916, 8966 and 9046, drained at 8831, 8898, 8946, 8996 and 9076).
     // One more than the interval: this same tick's drainPrayer call below counts the first one down.
-    if (phase === "crypt" && run) run.prayerTicks = PRAYER_DRAIN_TICKS + 1;
+    if (run && (phase === "crypt" || (phase === "tunnels" && state.phase !== "crypt" && state.phase !== "tunnels"))) {
+      run.prayerTicks = PRAYER_DRAIN_TICKS + 1;
+    }
     if (run?.looted) syncLootedShake(player, state.phase, phase);
     state.phase = phase;
     syncMinimap(player, phase);

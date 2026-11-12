@@ -169,7 +169,16 @@ test('Sylvan and Plateau arena rules retain supported modes and reject other lay
     assert.equal(Rules.validate(rules), true);
     assert.match(Rules.summary(rules), new RegExp(arena === 1 ? 'Plateau' : 'Sylvan Glade'));
   }
-  for (const arena of [-1, 0, 3, 13, 14, 1.5, '2']) {
+  for (const arena of [-1, 0, 4, 13, 14, 1.5, '2']) {
     assert.equal(Rules.validate({ ...Rules.create(), arena }), false);
   }
+});
+
+
+test('Quarry is a bounded third arena for existing modes while other arenas stay refused', () => {
+  for (const mode of [0,1,8,16,20]) {
+    const rules={...Rules.create(3,mode),arena:3};
+    assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Forsaken Quarry/);
+  }
+  assert.equal(Rules.validate({...Rules.create(),arena:4}),false);
 });

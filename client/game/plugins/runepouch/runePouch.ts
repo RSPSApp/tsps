@@ -94,7 +94,7 @@ export function layoutPouch(runes: PouchRune[]): PouchLayout {
     return layout;
 }
 
-/** RuneLite's tooltip: "<amount> <yellow rune name>" a line. */
+/** RuneLite's tooltip: "<amount> <yellow rune name>" a line, with no break after the last. */
 export function tooltipText(runes: PouchRune[], runeName: (type: number) => string | undefined): string {
-    return runes.map((rune) => `${rune.amount} <col=ffff00>${runeName(rune.type) ?? "Unknown"}</col></br>`).join("");
+    return runes.map((rune) => `${rune.amount} <col=ffff00>${runeName(rune.type) ?? "Unknown"}</col>`).join("</br>");
 }

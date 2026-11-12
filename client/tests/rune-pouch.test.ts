@@ -48,11 +48,14 @@ assert.deepEqual(clipOf(manager, { parentUid: 7 }, 12), { x: 0, y: 50, w: 300, h
 assert.ok(clipOf(manager, { parentUid: -1 }, 149).w > 1e6, "unclipped when nothing clips it");
 
 // --- Tooltip text -----------------------------------------------------------------------------
-assert.equal(tooltipText([{ type: 1, amount: 50 }], () => "Air rune"), "50 <col=ffff00>Air rune</col></br>");
+assert.equal(tooltipText([{ type: 1, amount: 50 }], () => "Air rune"), "50 <col=ffff00>Air rune</col>",
+    "one rune is one tooltip line: no break after the last");
 
 // --- The plugin against a fake client ---------------------------------------------------------
 const AIR = 556, NATURE = 561;
 const pouchWidget = { uid: (149 << 16) | 0, itemId: 12791, itemQuantity: 1, parentUid: -1, _absX: 100, _absY: 200, _absWidth: 36, _absHeight: 32 };
+/** Parents an item's clip is cut by (a scrolled bank's view, in the clipping check). */
+const widgetsByUid = new Map<number, any>();
 const client: any = {
     gameState: GameState.LOGGED_IN,
     menuOpen: false,
@@ -62,6 +65,7 @@ const client: any = {
     objTypeLoader: { load: (id: number) => ({ name: id === AIR ? "Air rune" : "Nature rune" }) },
     widgetManager: {
         getWidgetsForGroup: (group: number) => (group === 149 ? [pouchWidget] : []),
+        getWidgetByUid: (uid: number) => widgetsByUid.get(uid),
         isEffectivelyHidden: () => false,
     },
 };
@@ -74,7 +78,7 @@ async function pluginChecks(): Promise<void> {
     setPouch([[1, 500], [10, 2000]]);
 
     assert.deepEqual(plugin.pouches().map(({ x, y }) => [x, y]), [[100, 200]], "the pouch in the inventory");
-    assert.deepEqual(tooltips.getTooltips().map((t) => t.text), ["500 <col=ffff00>Air rune</col></br>2000 <col=ffff00>Nature rune</col></br>"],
+    assert.deepEqual(tooltips.getTooltips().map((t) => t.text), ["500 <col=ffff00>Air rune</col></br>2000 <col=ffff00>Nature rune</col>"],
         "hovering the pouch shows its runes (Both, the default)");
     client.inputManager.mouseX = 10;
     assert.equal(tooltips.getTooltips().length, 0, "no tooltip off the pouch");
@@ -84,16 +88,18 @@ async function pluginChecks(): Promise<void> {
     for (const id of [AIR, NATURE]) (plugin as any).textureSizes.set(`runepouch:rune:${id}`, { w: 24, h: 24 });
     const drawn = () => {
         const calls: string[] = [];
+        const textures: any[][] = [];
+        const bars: any[][] = [];
         const renderer: any = {
             canvas: { width: 800, height: 600 },
             getTexture: () => ({}),
             createTextureFromCanvas: () => undefined,
-            drawTexture: () => calls.push("icon"),
-            drawRect: () => calls.push("bar"),
+            drawTexture: (...args: any[]) => { calls.push("icon"); textures.push(args); },
+            drawRect: (...args: any[]) => { calls.push("bar"); bars.push(args); },
             deleteTexture: () => true,
         };
         const rects = plugin.widgetOverlay.draw({ renderer, fontLoader: () => undefined } as any);
-        return { calls, rects };
+        return { calls, rects, textures, bars };
     };
     let result = drawn();
     // The list starts a pixel above and left of the item (RuneLite's layout): those pieces must
@@ -106,6 +112,25 @@ async function pluginChecks(): Promise<void> {
     setPouch([[1, 500], [10, 2000]]);
     assert.notEqual(plugin.widgetOverlay.signature(), "");
 
+    // A scrolled bank's view cutting through the first rune's icon: the part inside still draws,
+    // through texture coordinates (Item Rarity's way), rather than the whole icon vanishing.
+    const whole = drawn().textures[0];
+    widgetsByUid.set(7, { uid: 7, parentUid: -1, _absX: 0, _absY: 205, _absWidth: 800, _absHeight: 400 });
+    pouchWidget.parentUid = 7;
+    const [x, y, w, h, uScale, vScale, , , , , , uOffset, vOffset] = drawn().textures[0].slice(1);
+    assert.equal(y, 205, "drawn from the view's top edge");
+    assert.equal(x, whole[1]);
+    assert.equal(w, whole[3]);
+    assert.ok(h > 0 && h < whole[4], "only the visible part of the icon");
+    assert.equal(uScale, 1);
+    assert.equal(uOffset, 0);
+    assert.ok(Math.abs(vScale - h / whole[4]) < 1e-9 && Math.abs(vOffset - (205 - whole[2]) / whole[4]) < 1e-9,
+        "the texture's lower part, scaled to the visible height");
+    widgetsByUid.set(7, { uid: 7, parentUid: -1, _absX: 0, _absY: 300, _absWidth: 800, _absHeight: 400 });
+    assert.deepEqual(drawn().textures, [], "an icon wholly outside the view draws nothing");
+    widgetsByUid.delete(7);
+    pouchWidget.parentUid = -1;
+
     config.setConfiguration("runepouch", "runePouchOverlayMode", RunePouchOverlayMode.INVENTORY);
     assert.equal(tooltips.getTooltips().length, 0, "Inventory mode: no tooltip");
     config.setConfiguration("runepouch", "runePouchOverlayMode", RunePouchOverlayMode.MOUSE_HOVER);
@@ -116,6 +141,10 @@ async function pluginChecks(): Promise<void> {
 
     setPouch([]);
     assert.equal(tooltips.getTooltips().length, 0, "an empty pouch has no tooltip");
+    assert.equal(plugin.widgetOverlay.signature(), "", "an empty pouch draws nothing, so scrolling it redraws nothing");
+    pouchWidget._absY = 150;
+    assert.equal(plugin.widgetOverlay.signature(), "", "nor when it moves");
+    pouchWidget._absY = 200;
     assert.deepEqual(drawn().rects, [], "nor anything on it");
 
     await plugin.stop();

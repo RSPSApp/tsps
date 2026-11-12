@@ -64,9 +64,12 @@ export class RunePouchPlugin extends Plugin {
         drawBeforeMenu: true,
         signature: () => {
             if (this.mode() === RunePouchOverlayMode.MOUSE_HOVER) return "";
+            // An empty pouch draws nothing, so its position (which a scrolled bank changes) mustn't redraw.
+            const runes = this.runes();
+            if (runes.length === 0) return "";
             const pouches = this.pouches();
             if (pouches.length === 0) return "";
-            return JSON.stringify([this.runes(), pouches, this.fontColor()]);
+            return JSON.stringify([runes, pouches, this.fontColor()]);
         },
         draw: (context) => this.draw(context),
     };
@@ -193,15 +196,21 @@ export class RunePouchPlugin extends Plugin {
         const rects: Box[] = [];
         for (const pouch of pouches) {
             const s = pouch.w / ITEM_WIDTH;
-            // The GL renderer has no clip, so a piece a scrolled bank cuts shows only whole.
+            // The GL renderer has no clip: icons and bars draw only their part inside the interface's
+            // area (Item Rarity's texture-coordinate cut); a count a scrolled bank cuts shows only whole.
             const shown = (box: Box) => inside(box, pouch.clip);
             for (const icon of layout.icons) {
                 const box = { x: pouch.x + icon.x * s, y: pouch.y + icon.y * s, w: icon.w * s, h: icon.h * s };
-                const texture = shown(box) ? this.runeTexture(context, icon.type) : undefined;
+                if (area(intersect(box, pouch.clip)) <= 0) continue;
+                const texture = this.runeTexture(context, icon.type);
                 if (!texture) continue;
                 const fit = Math.min(box.w / texture.w, box.h / texture.h);
-                const w = texture.w * fit, h = texture.h * fit;
-                renderer.drawTexture(texture.tex, box.x + (box.w - w) / 2, box.y + (box.h - h) / 2, w, h);
+                const image = { x: box.x + (box.w - texture.w * fit) / 2, y: box.y + (box.h - texture.h * fit) / 2, w: texture.w * fit, h: texture.h * fit };
+                const visible = intersect(image, pouch.clip);
+                if (area(visible) <= 0) continue;
+                renderer.drawTexture(texture.tex, visible.x, visible.y, visible.w, visible.h,
+                    visible.w / image.w, visible.h / image.h, 0, undefined, false, false, 1,
+                    (visible.x - image.x) / image.w, (visible.y - image.y) / image.h);
             }
             for (const text of layout.texts) {
                 const box = { x: pouch.x + text.x * s, y: pouch.y + (text.baseline - ascent) * s, w: (ITEM_WIDTH - text.x + 2) * s, h: (ascent + 4) * s };
@@ -210,7 +219,8 @@ export class RunePouchPlugin extends Plugin {
             }
             for (const bar of layout.bars) {
                 const box = { x: pouch.x + bar.x * s, y: pouch.y + bar.y * s, w: bar.w * s, h: bar.h * s };
-                if (box.h > 0 && shown(box)) renderer.drawRect(box.x, box.y, box.w, box.h, bar.color === "red" ? RED : GREEN);
+                const visible = intersect(box, pouch.clip);
+                if (area(visible) > 0) renderer.drawRect(visible.x, visible.y, visible.w, visible.h, bar.color === "red" ? RED : GREEN);
             }
             // What the pieces cover: the item and a couple of pixels around it, within its interface.
             const covered = intersect({ x: pouch.x - 2 * s, y: pouch.y - 2 * s, w: pouch.w + 4 * s, h: pouch.h + 4 * s }, pouch.clip);

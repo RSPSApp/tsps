@@ -14,6 +14,8 @@
  */
 
 const OrderedRewards = require("./OrderedRewards.NpcDrops");
+const SeedCategories = require("./SeedCategories.NpcDrops");
+const RollCounts = require("./RollCounts.NpcDrops");
 const fs = require("fs");
 const path = require("path");
 
@@ -54,6 +56,14 @@ const LOOTING_BAG = "Looting bag";
 const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinchompa"]);
 
 /**
+ * Rows the Wiki gates behind a quest that the dump may describe only in prose. Dragon token: "only
+ * dropped during the Sir Amik Varze subquest of Recipe for Disaster" (the Recipe for Disaster plugin
+ * answers `npc-drops:quest-item` for it by item id and hands the token out itself).
+ */
+const QUEST_REQUIREMENT_BY_ITEM = new Map([
+  [7478, { key: "quest_recipefordisasterfreeingsiramikvarze", mode: "RequiresDuring" }],
+]);
+/**
  * The dumper's quest condition for a row, still free text until the export carries it as a
  * field: "Quest requirement: WikiQuestDropRequirement(questKey=..., mode=...)".
  */
@@ -93,6 +103,8 @@ function lootingBagDrops(npc) {
 const tablesByNpc = new Map();
 /** shared table name -> [{ itemId, quantity, weight }] */
 const sharedTables = new Map();
+/** shared table name -> { multiplier, categories: [{ maximum_exclusive, entries }] } for tables the Wiki splits by combat level */
+const sharedCategories = new Map();
 
 let itemOnGroundManager = null;
 let pluginApi = null;
@@ -267,6 +279,9 @@ function questRequirement(entry) {
       break;
     }
   }
+  // The dump names a quest only when its title is a known quest page, so a Wiki gate on a subquest
+  // can arrive as prose alone. These items are gated by id, whatever the note says.
+  requirement ??= QUEST_REQUIREMENT_BY_ITEM.get(entry.item_id) ?? null;
   return entry.quest_requirement = requirement;
 }
 
@@ -425,6 +440,7 @@ function correctAlchemicalHydra(table) {
 function loadDrops() {
   tablesByNpc.clear();
   sharedTables.clear();
+  sharedCategories.clear();
   bossUniqueItemIds = null;
   unusableSubtableRows = 0;
 
@@ -480,9 +496,9 @@ function loadDrops() {
   }
   const tableCount = Object.keys(tableById).length;
 
-  for (const [name, table] of Object.entries(subtables)) {
+  const sharedRows = (rows) => {
     const entries = [];
-    for (const entry of table.entries || []) {
+    for (const entry of rows || []) {
       const rarity = parseSharedRarity(entry.rarity_raw);
       if (!rarity) {
         unusableSubtableRows++;
@@ -506,6 +522,21 @@ function loadDrops() {
         unusableSubtableRows++;
       }
     }
+    return entries;
+  };
+
+  for (const [name, table] of Object.entries(subtables)) {
+    if (SeedCategories.validCategories(table)) {
+      // Each category is its own pool with its own denominator, selected per kill by combat level.
+      const categories = table.categories.map((category) => ({
+        maximum_exclusive: category.maximum_exclusive,
+        entries: sharedRows(category.entries),
+      }));
+      sharedCategories.set(name, { multiplier: table.combat_level_multiplier, categories });
+      sharedTables.set(name, categories.flatMap((category) => category.entries));
+      continue;
+    }
+    const entries = sharedRows(table.entries);
     if (entries.length > 0) {
       sharedTables.set(name, entries);
     }
@@ -726,12 +757,15 @@ function locationTalisman(player) {
 }
 
 /** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
-function rollSharedTable(name, player, depth = 0, { ringOfWealth = true } = {}) {
+function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatLevel = null } = {}) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
   }
-  const entries = sharedTables.get(name);
+  const split = sharedCategories.get(name);
+  const entries = split
+    ? SeedCategories.select(split.categories, split.multiplier, combatLevel, randomInt).entries
+    : sharedTables.get(name);
   if (!entries || entries.length === 0) {
     return [];
   }
@@ -754,7 +788,7 @@ function rollSharedTable(name, player, depth = 0, { ringOfWealth = true } = {}) 
         if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
           return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
         }
-        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth });
+        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth, combatLevel });
       }
       const [min, max] = entry.quantity;
       return [{
@@ -772,7 +806,12 @@ function resolveEntry(entry, player, context = null) {
     return [];
   }
   if (entry.shared_table) {
-    return rollSharedTable(entry.shared_table, player);
+    // A row the Wiki gives several rolls of its shared table (the spectres' herb roll) rolls it that many times.
+    const drops = [];
+    for (let roll = RollCounts.pick(entry.roll_count_weights, randomInt); roll > 0; roll--) {
+      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null }));
+    }
+    return drops;
   }
   if (!Number.isInteger(entry.item_id)) {
     return [];
@@ -902,8 +941,14 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
  * Plugins fill source-stated conditions for this kill. `handledItemIds` contains
  * rewards already owned by a quest/encounter handler, including bundled/shared loot.
  */
+/** The killed NPC's combat level, which picks the general seed table's subtable; null when unknown. */
+function npcCombatLevel(npc) {
+  const level = Number((npc?.getCurrentDefinition?.() ?? npc?.getDefinition?.())?.getCombatLevel?.());
+  return Number.isSafeInteger(level) && level > 0 ? level : null;
+}
+
 function killContext(player, npc) {
-  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set() };
+  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set(), combatLevel: npcCombatLevel(npc) };
   pluginApi?.emitCustomEvent("npc-drops:context", { player, npc, npcId: npc?.getId?.() ?? null, context });
   return context;
 }
@@ -1035,7 +1080,7 @@ function extraRolls(event) {
 function rollSharedRequest(event) {
   ensureDropsLoaded?.();
   if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
-  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false }));
+  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false, combatLevel: Number.isSafeInteger(event.combatLevel) ? event.combatLevel : null }));
 }
 
 let ensureDropsLoaded = null;
@@ -1234,8 +1279,8 @@ module.exports = {
 
     api.log("registered", { lazy: true });
   },
-  _test: { loadDrops, tablesByNpc, sharedTables, rollSharedTable, rollSharedRequest },
+  _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

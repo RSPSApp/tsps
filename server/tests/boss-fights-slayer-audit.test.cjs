@@ -150,16 +150,18 @@ function player() {
 
 const lair = { contains: () => true, players: () => [] };
 
-test("the wrong vent empowers the Hydra to the Wiki's 52, the right one clears it", () => {
+test("the wrong vent empowers the serpentine Hydra to the Wiki's 26 (17x2 -> 26x2), the right one clears it", () => {
   // Serpentine wants the red vent (1371, 10263); the green one (1371, 10272) is the wrong one.
   const npc = hydraAt(1371, 10272);
   const fight = new Fight.Fight(lair, npc);
   const watcher = player();
   assert.equal(fight.shielded, true);
-  assert.equal(fight.maxHit(), 35);
+  assert.equal(fight.maxHit(), 17);
+  assert.equal(fight.hitCount(), 2);
   fight.eruptVents([watcher]);
   assert.equal(fight.empowered, true);
-  assert.equal(fight.maxHit(), 52);
+  assert.equal(fight.maxHit(), 26);
+  assert.equal(fight.hitCount(), 2);
   assert.equal(fight.shielded, true, "a wrong vent does not drop the damage reduction");
   assert.ok(watcher.messages.some((text) => text.includes("empowering")));
 });
@@ -171,7 +173,7 @@ test("the right vent drops the shield and roars; a phase change clears the empow
   fight.eruptVents([watcher]);
   assert.equal(fight.shielded, false);
   assert.equal(fight.empowered, false);
-  assert.equal(fight.maxHit(), 35);
+  assert.equal(fight.maxHit(), 17);
   assert.deepEqual(npc.chats, ["Roaaaaaaaaaaar!"]);
   assert.ok(watcher.messages.some((text) => text.includes("neutralise")));
 
@@ -180,7 +182,8 @@ test("the right vent drops the shield and roars; a phase change clears the empow
   assert.equal(fight.phase, 1);
   assert.equal(fight.shielded, true, "each phase reapplies the reduction");
   assert.equal(fight.empowered, false);
-  assert.equal(fight.maxHit(), 35);
+  assert.equal(fight.maxHit(), 35, "the electric phase's default");
+  assert.equal(fight.hitCount(), 1);
 });
 
 test("enraged takes the max hit to 55 whatever the vents did", () => {

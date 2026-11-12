@@ -74,6 +74,8 @@ From the captures:
 | Bow string on an unstrung bow | skillmulti mode 10, "How many would you like to string?", offering what can be made. Nothing on the choice; a bow a tick later and one every 2, each with `stringing_*` and "You add a string to the bow.". A single bow is strung a tick after the click, with no menu. |
 | Crossbow string on the only unstrung crossbow | No menu; on the next tick `xbows_stringing_crossbow_*` and "You add a string to the crossbow.". |
 | Limbs on a stock | Without a hammer: "You'll need a hammer to do that.". With one, on the next tick: `xbows_fletching_*`, synth sound 2922, "You attach the stock to the limbs and create an unstrung crossbow.". |
+| Mith grapple tip on a mithril bolt | No menu. A tick after the click: `human_fletching_add_bolt_tips_mithril`, synth sound 2605, "You add a grapple tip to a mithril bolt.", the tip and one bolt out, the mith grapple in, 11 XP (recording 801, ticks 594-595, an event world paying 15 times: 165). |
+| Rope on the mith grapple | No menu and no animation. A tick after the click: synth sound 2605, "You attach a rope to the mithril grapple.", the grapple and rope out, the roped grapple in, no XP (recording 801, ticks 617-618). |
 
 Every Fletching line is a spam (filterable) message. Every capture of darts and bolts was on Leagues worlds, where a click made 20 or 30. The main game makes one set of 10 per click (Wiki, Darts and Bolts).
 
@@ -86,7 +88,7 @@ From the Wiki recipes:
 - **Darts and bolts in Make-X:** 2 ticks.
 - **Ogre arrow shafts and wolfbone tips:** 2 to 6 per log or bone.
 
-No capture covers javelin timing, the spool or the Varlamore and Sailing recipes, nor messages for the other knife products, crossbows, ogre arrows or kebbit and antler bolts. Their timing follows the Wiki, and the spool's messages are our own. Where no animation is recorded, the generic `human_fletching` plays.
+No capture covers javelin timing, the spool or the Varlamore and Sailing recipes, nor messages for the other knife products, crossbows, ogre arrows or kebbit and antler bolts. Their timing follows the Wiki, and the spool's messages are our own. Where no animation is recorded, the generic `human_fletching` plays; a recipe recorded with none (the grapple's rope) sets `"animation": false`. Two grapple tips at once open the generic make menu: no capture shows more than one tip held.
 
 ## Testing
 
@@ -97,7 +99,7 @@ No capture covers javelin timing, the spool or the Varlamore and Sailing recipes
 - instant and Make-X darts;
 - feathers;
 - gem tips and tipping;
-- the captured tick, message, sound and menu of knife cuts, shields, menu stringing, arrows, tipping and gem bolt tips;
+- the captured tick, message, sound and menu of knife cuts, shields, menu stringing, arrows, tipping, gem bolt tips and the mith grapple;
 - the Broader Fletching and quest gates;
 - the spool;
 - the fletching knife's timing;

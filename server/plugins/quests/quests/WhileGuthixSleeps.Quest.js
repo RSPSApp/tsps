@@ -139,13 +139,30 @@ module.exports = function registerWhileGuthixSleeps(api) {
     player.moveTo(new Location(2914,3450,objectId===TAVERLEY_UP?1:0));return true;
   }
   function replace(player,id,tile,type=10,face=0){const area=player.getPrivateArea();if(!area)throw Error('Quest scenery must belong to a private area');let old=api.core.ObjectManager.objectsAt(new Location(...tile)).find(o=>o.getPrivateArea()===area&&o.getType()===type);if(!old){const placed=(api.core.MapObjects.mapObjects.get(api.core.MapObjects.getHash(...tile))||[]).find(o=>o.getType()===type);if(placed)old=new api.core.GameObject(placed.getId(),placed.getLocation(),type,placed.getFace(),area);}if(old)api.core.ObjectManager.deregister(old,true);const o=new api.core.GameObject(id,new Location(...tile),type,face,area);api.core.ObjectManager.register(o,true);return o;}
+  const BROAV_SCENT_TICKS=7;
+  const sniffing=new WeakSet();
   function track(event){
     const {player,itemId,target:npc}=event;
     if(itemId!==DIRTY_SHIRT||npc?.getId()!==BROAV||npc.getOwner?.()!==player)return false;
     event.handled=true;
     const p=player.getLocation();
     if(Math.abs(p.getX()-2519)>15||Math.abs(p.getY()-3249)>15){player.sendMessage('The broav cannot pick up a scent here. Try the ruined building near the battlefield.');return true;}
-    npc.getMovementQueue().addSteps(new Location(2519,3248,0));player.getInventory().deleteNumber(DIRTY_SHIRT,1);player.setAttribute(TRAIL_ATTRIBUTE,1);player.sendMessage('Your broav follows the scent towards the broken table and squeals.');player.getPacketSender().sendVarbit(10840,1);return true;
+    if(val(player,TRAIL_ATTRIBUTE)||sniffing.has(player))return true;
+    // rsprox 226/01698.txt:32945-33145: the sniff line with wgs_player_gives_clothes and wgs_broav_clothes_scent, then 7 ticks
+    // later "The broav seems to have found something interesting..." with the table varbit. The shirt is kept until the descent.
+    npc.getMovementQueue().addSteps(new Location(2519,3248,0));
+    const {Animation,CacheDefinitions,TaskManager,CountdownTask}=api.core;
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId('wgs_player_gives_clothes')));
+    npc.performAnimation?.(new Animation(CacheDefinitions.getSeqId('wgs_broav_clothes_scent')));
+    player.sendMessage('You let the broav sniff the dirty shirt...');
+    sniffing.add(player);
+    TaskManager.submit(new CountdownTask(player,BROAV_SCENT_TICKS,()=>{
+      sniffing.delete(player);
+      if(val(player,TRAIL_ATTRIBUTE))return;
+      player.setAttribute(TRAIL_ATTRIBUTE,1);player.getPacketSender().sendVarbit(10840,1);
+      player.sendMessage('The broav seems to have found something interesting...');
+    }));
+    return true;
   }
   function table({player,objectId,definition}){
     objectId=definition?.id??objectId;
@@ -153,7 +170,8 @@ module.exports = function registerWhileGuthixSleeps(api) {
     if(!val(player,TRAIL_ATTRIBUTE))return true;
     if(objectId===BROKEN_TABLE){player.setAttribute(TRAIL_ATTRIBUTE,2);player.getPacketSender().sendVarbit(10840,2);player.sendMessage('You find a trapdoor underneath the broken table.');}
     if(objectId===CLOSED_TABLE){player.setAttribute(TRAIL_ATTRIBUTE,3);player.getPacketSender().sendVarbit(10840,3);}
-    if(objectId===OPEN_TABLE){advance(player,100);api.emitCustomEvent('wgs:enter-movario',{player});}
+    // The dirty shirt leaves the inventory at the descent (226/01698.txt, tick 1416).
+    if(objectId===OPEN_TABLE){player.getInventory().deleteNumber(DIRTY_SHIRT,1);advance(player,100);api.emitCustomEvent('wgs:enter-movario',{player});}
     return true;
   }
   function login({player}){player.getPacketSender().sendVarbit(10840,val(player,TRAIL_ATTRIBUTE));}

@@ -916,13 +916,15 @@ test('While Guthix Sleeps only tracks a shirt through the player’s own broav',
   const player = { getLocation: () => new api.core.Location(2519,3249,0),
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key,value),
     getInventory: () => ({ deleteNumber() {} }),
-    sendMessage() {}, getPacketSender: () => ({ sendVarbit() {} }) };
+    sendMessage() {}, performAnimation() {}, getPacketSender: () => ({ sendVarbit() {} }) };
   const npc = { getId: () => 13518, getOwner: () => player,
     getMovementQueue: () => ({ addSteps: location => moves.push(location) }) };
   const event = { player, itemId:29521, target:npc };
   assert.equal(handlers.at(-1)({...event,target:{...npc,getOwner:()=>({})}}),false);
   assert.equal(handlers.at(-1)(event),true);
   assert.equal(event.handled,true);
+  // The find comes 7 ticks after the sniff (rsprox 226/01698.txt:32945-33145).
+  for (let i = 0; i < 7; i++) api.core.TaskManager.process();
   assert.equal(attributes.get('while-guthix-sleeps:broav-trail'),1);
   assert.equal(moves.length,1);
 });

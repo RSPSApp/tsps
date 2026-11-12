@@ -164,8 +164,15 @@ test('the trained-broav handoff consumes the unconscious broav and records the t
   p.setLocation(2519, 3249, 0);
   const tracked = useItemOnNpc(h, p, I.DIRTY_SHIRT, npc);
   assert.equal(tracked, true, 'the dirty shirt is owned by the quest handler on the owner broav');
+  // rsprox 226/01698.txt:32945-33145: the sniff line, then 7 ticks later the find and the table varbit.
+  assert.ok(p.messages.includes('You let the broav sniff the dirty shirt...'), p.messages.join(' | '));
+  assert.equal(p.attrs.get('while-guthix-sleeps:broav-trail') ?? 0, 0, 'not found yet');
+  for (let i = 0; i < 6; i++) core.TaskManager.process();
+  assert.equal(p.attrs.get('while-guthix-sleeps:broav-trail') ?? 0, 0, 'still sniffing after 6 ticks');
+  core.TaskManager.process();
   assert.equal(p.attrs.get('while-guthix-sleeps:broav-trail'), 1);
-  assert.equal(p.items.get(I.DIRTY_SHIRT) ?? 0, 0, 'the dirty shirt is consumed by the scent');
+  assert.ok(p.messages.includes('The broav seems to have found something interesting...'));
+  assert.equal(p.items.get(I.DIRTY_SHIRT), 1, 'the shirt is kept until the descent');
   assert.ok(p.log.some(entry => entry[0] === 'sendVarbit' && entry[1] === 10840 && entry[2] === 1));
   assert.deepEqual([steps.at(-1).getX(), steps.at(-1).getY(), steps.at(-1).getZ()], [2519, 3248, 0], 'the broav follows the scent to the broken table');
 

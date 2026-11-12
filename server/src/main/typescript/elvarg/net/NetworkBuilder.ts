@@ -52,6 +52,7 @@ import {
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
+  WORLD_MAP_KEYBOARD_CLOSE_WIDGET_ID,
   isWorldMapOrbWidget,
 } from "./protocol/WorldMapProtocol";
 import { ObjectActionPacketListener } from "./packet/impl/ObjectActionPacketListener";
@@ -986,7 +987,8 @@ export class ClientConnection {
               : EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
             if (isWorldMapOrbWidget(actionPacket.widgetId) && actionPacket.buttonNum === 2) {
               this.player.getPacketSender().toggleWorldMap();
-            } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID) {
+            } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID ||
+              actionPacket.widgetId === WORLD_MAP_KEYBOARD_CLOSE_WIDGET_ID) {
               this.player.getPacketSender().closeWorldMap();
             } else if (equipmentSlot >= 0) {
               const item = this.player.getEquipment().getItems()[equipmentSlot];

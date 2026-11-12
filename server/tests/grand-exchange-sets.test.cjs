@@ -11,7 +11,9 @@ const { Item } = require('../dist/game/model/Item');
 
 const MAIN = 451;
 const SIDE = 430;
-const PACK = (MAIN << 16) | 3;
+// itemsets:itemlist (451:2) holds the set list; 451:3 is its scrollbar.
+const PACK = (MAIN << 16) | 2;
+const SCROLLBAR = (MAIN << 16) | 3;
 const UNPACK = SIDE << 16;
 const MAX_STACK = 0x7fffffff;
 // Op 1 and Examine (op 10), as live enables on both lists.
@@ -115,6 +117,7 @@ test('Sets actions open the native main and side interfaces with their own opera
   const lastSlot = Math.max(...recipes().map((recipe) => recipe.slot));
   assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === PACK && first === 0 && last === lastSlot && flags === OP1_AND_EXAMINE));
   assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === UNPACK && first === 0 && last === 27 && flags === OP1_AND_EXAMINE));
+  assert.ok(!p.calls.some(([name, uid]) => name === 'sendInterfaceFlagsRange' && uid === SCROLLBAR), 'the scrollbar takes no item ops');
   assert.ok(p.calls.some(([name]) => name === 'sendItemContainer'), 'the real inventory is refreshed');
 });
 

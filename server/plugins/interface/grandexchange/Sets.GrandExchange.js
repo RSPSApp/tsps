@@ -1,6 +1,7 @@
 /** Native itemsets (451) / itemsets_side (430); recipes come from cache enums 1033/1034. */
 const SETS = 451;
-const MAIN_ITEMS = (SETS << 16) | 3;
+// itemsets:itemlist, the layer script 822 fills with the set list.
+const MAIN_ITEMS = (SETS << 16) | 2;
 const SIDE = 430;
 // The exchange's own screens, closed when item sets open over them.
 const GE_OFFERS = 465;

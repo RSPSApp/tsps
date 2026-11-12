@@ -13,11 +13,11 @@ travel:
 
 # Watchtower
 
-No native playthrough recorded; natural completion pending.
+No natural end-to-end playthrough recorded. Checkpoint-native verification is recorded below.
 
 ## Findings
 
-- **In progress (#4412):** mapless skavid entrances follow a fixed circuit between
+- **Fixed (#4412):** mapless skavid entrances follow a fixed circuit between
   surface caves. Four successive entries from the cave south of Grew reach the
   eastern side near Toban; repeatedly clicking one cave is not an attempt counter.
   Mapless transport needs no light. With a map, the existing light requirement
@@ -69,11 +69,33 @@ real players/sessions, cache objects, ordinary object/item/NPC/dialogue packets
 and task/movement ticks. Quest stages, inventories and NPC positions are seeded
 checkpoints. Forced walkout/death and a modeled in-copy login checkpoint test
 recovery; they do not establish natural quest traversal, a rendered client,
-audio, disk-save round trips or a running-server restart. Runtime results are
-pending; source and syntax checks alone are not gameplay proof.
+audio, disk-save round trips or a running-server restart. The final checkpoint-native
+result is recorded below; source and syntax checks alone are not gameplay proof.
 
 - **fixed** The battlement guards (OGRE_GUARD_6) and the southern guards (OGRE_GUARD_7) had swapped roles; the rock cake is handed over and the battlement (2507, 3011-3012) is climbed both ways. The broken bridge takes its 20-coin toll only at the gap's south take-off (2530, 3026), jumps north to 2530, 3029, and returns south for free; the east-gate guards, which share the bridge guard's id, no longer offer the toll. Feeding cave nightshade to an enclave guard lets the player run past once. Exact jump and climb timing is not capture-verified. [Quick guide](https://oldschool.runescape.wiki/w/Watchtower/Quick_guide). Fixed in #3796.
 
 ## Runs
 
-No run yet.
+No natural end-to-end run yet.
+
+At `e3c7aa411442be15fb983ec2553dbd8108ce1200`, Linux x64 / Node 22.17.0 with
+`osrs-242_2026-11-03` (OpenRS2 cache 2757), after the native dependency/build/cache preparation:
+
+```sh
+cd server
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/quest-scene-return-state.test.cjs
+```
+
+One completed run passed **22/22** cases: all twelve Watchtower cases and ten existing
+shared-scene controls, with no failures, skips, cancellations or TODOs. This includes
+all cave/return routes, mapped-light and nightshade gates, assembly delivery/full-bag
+retry, private actors and bystanders, and close/walkout/logout/login-checkpoint/death
+recovery. The stated seeded-input, visual and persistence limits still apply.
+
+The causal baseline at `7e1fa175992ad5e83c3d8643f97ce5022788eb01` reached the ordinary
+targets and failed at missing movement/scenes. Its two initial-placement fixture
+failures and all later unreached assertions remain distinct from those causal reds.
+An earlier after run passed 21/22 but threw on the decorative hole's canonical null
+action list after the actual return checks passed. The final fixture accepts null
+as no actions while retaining its no-operations assertion; the 22/22 result above is
+a single completed run, not an aggregation of these earlier outcomes.

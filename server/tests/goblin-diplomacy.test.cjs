@@ -170,15 +170,29 @@ test("under way, a talk opens with a start opening and then live's menu, the han
   assert.deepEqual(menu, ["I have some blue armour here.", "Why are you arguing about the colour of your armour?",
     "Wouldn't you prefer peace?", "I'll leave you to it."], JSON.stringify(carried.said));
   // Ours: an answer comes back to this menu; the pre-quest menus would offer to start the quest again.
-  for (const question of ["Why are you arguing about the colour of your armour?", "Wouldn't you prefer peace?"]) {
+  for (const [question, answer] of [["Why are you arguing about the colour of your armour?", "We decide to celebrate goblin new century by changing colour of our armour. Brown get boring after a bit. We want change."],
+    ["Wouldn't you prefer peace?", "Goblins not so good at peace. Maybe peace be okay though, as long as it peace wearing green armour."]]) {
     await choose(carried, question);
+    const from = carried.said.length - 1;
     assert.deepEqual(await untilMenu(carried), menu, question);
+    const lines = carried.said.slice(from).map((line) => line.text);
+    assert.equal(lines[0], question, "the player asks it");
+    assert.ok(lines.includes(answer), `${question} is answered: ${JSON.stringify(lines)}`);
   }
 
   const without = actor(t, { stage: STAGE.blueRejected });
   ticks(without, 2);
   await talk(without);
   assert.deepEqual(await untilMenu(without), ["Why are you arguing about the colour of your armour?", "Wouldn't you prefer peace?", "I'll leave you to it."]);
+});
+
+test("brown accepted (the tick before completion) has no fitting to start, even with goblin mail", async (t) => {
+  const f = actor(t, { stage: 5, items: [core.ItemIdentifiers.GOBLIN_MAIL] });
+  ticks(f, 2);
+  await talk(f);
+  const options = await untilMenu(f);
+  assert.ok(!options.some((option) => option.startsWith("I have some")), JSON.stringify(options));
+  assert.equal(sceneArea(f), null);
 });
 
 test("before the quest, the answer to \"Wouldn't you prefer peace?\" returns to the menu without it (capture ticks 126, 138)", async (t) => {

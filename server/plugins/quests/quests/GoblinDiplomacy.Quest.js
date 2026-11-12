@@ -253,6 +253,11 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const SCENE_ENDS = new Set(["C7D_Q0", "0v3cKx", COMPLETE_MESSAGE_STEP_ID]);
   const SCENE_CHANGES = new Set(["7xpvaw", "UNwweE"]);
 
+  /** A stage with a fitting to play: orange, blue or brown wanted. Brown accepted (the tick before completion) has none. */
+  function fittingStage(player) {
+    return Boolean(GRUBFOOT_LOOKS[quest.getStage(player)]);
+  }
+
   function armourFor(player) {
     const stage = quest.getStage(player);
     return stage === STAGE_STARTED ? ORANGE_GOBLIN_MAIL_ITEM_ID : stage === STAGE_ORANGE_REJECTED ? BLUE_GOBLIN_MAIL_ITEM_ID : GOBLIN_MAIL_ITEM_ID;
@@ -315,7 +320,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
 
   function handleItemOnNpc(event) {
     if (!GENERAL_IDS.has(event.npcId) || ![ORANGE_GOBLIN_MAIL_ITEM_ID, BLUE_GOBLIN_MAIL_ITEM_ID, GOBLIN_MAIL_ITEM_ID].includes(event.itemId)) return;
-    if (quest.getStage(event.player) < STAGE_STARTED || quest.isComplete(event.player)) return;
+    if (!fittingStage(event.player)) return;
     event.handled = true;
     if (!has(event.player, event.itemId)) return;
     playArmour(event.player, event.npcId, event.itemId);
@@ -328,7 +333,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
    */
   function handleGeneralTalk(event) {
     const { player, npcId } = event;
-    if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return false;
+    if (!fittingStage(player)) return false;
     event.handled = true;
     const variants = loadTranscripts(api)[PAGE_GOBLIN_DIPLOMACY].variants;
     const intros = variants[VARIANT_START_GENERALS][0].options;
@@ -363,7 +368,11 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
 
   /** A question's answer: its lines, up to the menu the transcript follows them with. */
   function answerOf(steps, branches) {
-    const body = steps.length === 1 && steps[0].type === "call" ? branches[steps[0].branch] : steps;
+    let body = steps;
+    // An option's steps can be a call to the shared branch, or a jump that wraps one.
+    while (body.length === 1 && (body[0].type === "call" || (body[0].type === "jump" && body[0].steps?.length === 1))) {
+      body = body[0].type === "call" ? branches[body[0].branch] : body[0].steps;
+    }
     const end = body.findIndex(step => step.type === "choice" || step.type === "jump" || step.type === "call");
     return end < 0 ? body : body.slice(0, end);
   }
@@ -412,7 +421,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   function startScene(event) {
     const { player, npcId } = event;
     event.handled = true;
-    if (fittings.has(player) || !has(player, armourFor(player))) { event.end = true; return; }
+    if (fittings.has(player) || !fittingStage(player) || !has(player, armourFor(player))) { event.end = true; return; }
     const stage = quest.getStage(player);
     const at = player.getLocation();
     const fitting = { stage, npcId, variant: armourVariant(player), exit: [at.getX(), at.getY(), at.getZ()], scene: null, grubfoot: null };

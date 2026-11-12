@@ -244,7 +244,7 @@ ownership at delivery while retaining every other reward roll.
 
 The eligibility list in `server/plugins/items/data/huntsmans-kit.json` uses canonical
 cache gamevals, excluding notes, placeholders and unrelated same-name quest items.
-The current Wiki's insect net names refer to cache242's butterfly net IDs. Both
+The current Wiki's insect net names refer to cache 242's butterfly net IDs. Both
 imp-in-a-box charge variants, normal and worn camouflage pieces, Guild hunter clothing,
 charged/empty Horns of Plenty, gryphon feathers and net traps are included. Metadata and
 preset items stay physical so storing them cannot discard their properties. Amounts
@@ -255,13 +255,16 @@ one. The separate Verity kit exchange is outside this action/storage implementat
 Behavior source: [Wiki revision 15400877](https://oldschool.runescape.wiki/w/Huntsman%27s_kit?oldid=15400877).
 Cache reference: [242 dump 853150e3f75e1463391b470f98caf5d3bf796339](https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339).
 That cache defines 33 display slots; the supported storage slots remain 0–31.
-Inspected RSProx recordings 1206 (revision238.1, physical lines1990–2190) and 1207
-(revision238.1, lines11530–11635) show View opening 871/872 with inventory855 and
-flags for slots0–31, followed by one-unit net/rope withdrawals and deposits with
+Inspected RSProx recordings 1206 (revision 238.1, physical lines 1990–2190) and 1207
+(revision 238.1, lines 11530–11635) show View opening 871/872 with inventory855 and
+flags for slots 0–31, followed by one-unit net/rope withdrawals and deposits with
 matching physical/kit updates. The initial stored list has an interior empty slot.
 These historical observations support the input, conservation and stable-slot checks;
 they do not prove arbitrary quantity limits, death behavior, Fill/Empty messages or a
-rendered current client. Native cache and gameplay validation use
+rendered current client. These line numbers identify the inspected decoded exports:
+1206 SHA-256 `7c47d3989aac8bc9ce3c73461666f6aed6f127b95d10e8ba60d040d15f98a0e7`;
+1207 SHA-256 `6575be6ca7fc3d7c35e292658f929ce0fe3adb855e0df01544f8d271ffe3e144`.
+Their supplied decoder build and capture dates are unknown. Native cache and gameplay validation use
 `node --test --test-concurrency=1 tests/huntsmans-kit-native.test.cjs` after the server build.
 The fixture supplies items and positions, drives decoded `ClientConnection` inputs and
 real `World` turns, and uses actual save/death/grave services. Skulled PvM cases explicitly
@@ -270,3 +273,11 @@ actual grave expiration into Death's Office and supplied Mimic retrieval state t
 its real query consumer; they do not claim a natural boss fight. Uncaptured refusal
 wording and the signed-int safety ceiling are TSPS choices. The fixture does not claim
 natural loot-sack acquisition or a rendered client playthrough.
+
+For an inventory check, carry a kit, several ropes and a small fishing net. View opens
+the native kit; Fill stores the eligible inventory. Withdraw 1/5/X/All from the grid,
+leave an interior gap, then Empty with one free inventory slot to check reverse-slot
+order. Stored tools are unavailable until withdrawn. The maintained native fixture
+passed 13 cases; the separate existing storage and Hunter-rumour suites passed 21
+and 14 cases. Those latter suites include component/unit controls, rather than 35
+additional native playthroughs.

@@ -156,7 +156,8 @@ function activate(player, index, to, chosen) {
         traveller.sendMessage(data.messages.teleblocked);
         continue;
       }
-      traveller.sendMessage(chosen ? data.messages.chosen : data.messages.random);
+      // Spam, as all 9 recorded arrivals are (e.g. 236/03931.txt:45746); the random line, unrecorded, alike.
+      traveller.getPacketSender().sendTypedMessage(core.ChatType.SPAM, chosen ? data.messages.chosen : data.messages.random);
       const from = traveller.getLocation?.()?.clone?.() ?? null;
       const landing = randomTile(destination);
       traveller.moveTo(landing);

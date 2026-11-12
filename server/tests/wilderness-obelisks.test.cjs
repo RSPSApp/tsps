@@ -67,6 +67,7 @@ function fakePlayer(at, { teleblocked = false } = {}) {
       sendClientScript: (id, ...args) => player.log.push(`script ${id} ${JSON.stringify(args)}`),
       sendVarbit: (id, value) => player.log.push(`varbit ${id}=${value}`),
       sendInterfaceScript() {}, sendSubInterface: (uid, id) => player.log.push(`open ${id}`), closeSubInterface() {}, sendInterfaceFlagsRange() {},
+      sendTypedMessage: (type, m) => player.log.push(`${type === core.ChatType.SPAM ? "spam" : "message"} ${m}`),
     }),
   };
   players.push(player);
@@ -110,7 +111,8 @@ test("Teleport to Destination plays the recorded sequence and lands on the chose
   tick(1);
   assert.equal(player.log.some((line) => line.startsWith("move")), false);
   tick(1);
-  assert.ok(player.log.includes("message Ancient magic teleports you to a place within the wilderness!"));
+  // rsprox 236/03931.txt:45746: spam.
+  assert.ok(player.log.includes("spam Ancient magic teleports you to a place within the wilderness!"));
   const at = player.getLocation();
   assert.ok(at.getX() >= 3306 && at.getX() <= 3308 && at.getY() >= 3915 && at.getY() <= 3917, "on level 50's pad");
 });
@@ -125,7 +127,7 @@ test("everyone on the pad goes; a Tele Blocked player stays and is told; someone
   T.activate(activator, 0, 1, false);
   tick(13);
   for (const traveller of [activator, rider]) {
-    assert.ok(traveller.log.includes("message Ancient magic teleports you somewhere in the Wilderness!"));
+    assert.ok(traveller.log.includes("spam Ancient magic teleports you somewhere in the Wilderness!"));
     assert.ok(traveller.getLocation().getY() > 3660, "at level 19");
   }
   assert.ok(blocked.log.includes("message A magical spell is blocking you from teleporting."));

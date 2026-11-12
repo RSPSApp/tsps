@@ -1217,8 +1217,8 @@ function useMaterials(player, buildable, materials) {
 }
 
 /**
- * The hammer: the piece's build animation with synth 938. Pieces bought with coins alone, and the
- * oubliette's floor pieces, are prayed into place instead (`buildSound: false`): no hammer sound.
+ * The hammer: the piece's build animation with synth 938. The guards and the oubliette's floor
+ * pieces are prayed into place instead (`buildSound: false`): no hammer sound.
  */
 function hammer(player, animationId = BUILD_ANIMATION, sound = true) {
   if (animationId >= 0) player.performAnimation(new Animation(animationId));

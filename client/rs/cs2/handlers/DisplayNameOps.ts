@@ -22,6 +22,9 @@ const SHAPES: Record<Request, Array<"int" | "string" | "boolean">> = {
 
 const latest = new Map<Request, unknown[]>();
 let listening = false;
+/** The status reply's seconds-left slot, and when that reply arrived: the session clock counts down from it. */
+const STATUS_SECONDS_LEFT = 5;
+let statusReceivedAt = 0;
 
 function neutral(request: Request): unknown[] {
     return SHAPES[request].map((type) => (type === "string" ? "" : 0));
@@ -35,6 +38,17 @@ export function acceptDisplayNameReply(data: unknown): void {
     const values = neutral(request);
     reply.result.slice(0, values.length).forEach((value, index) => { values[index] = value; });
     latest.set(request, values);
+    if (request === "status") statusReceivedAt = Date.now();
+}
+
+/**
+ * The seconds left now. script10200 draws the session timer from displaynames_status_result every tick, and
+ * script10202 only ends the session when it reaches 0, so it must fall as time passes, not stay at the reply's value.
+ */
+function statusSecondsLeft(value: unknown): number {
+    const seconds = Number(value) | 0;
+    if (seconds <= 0) return seconds;
+    return Math.max(0, seconds - Math.floor((Date.now() - statusReceivedAt) / 1000));
 }
 
 /** Forget every reply (a new login starts with no session). */
@@ -67,6 +81,7 @@ function pushResult(ctx: any, op: Request): void {
         const value = values[index];
         if (type === "string") ctx.pushString(String(value ?? ""));
         else if (type === "boolean") ctx.pushInt(value ? 1 : 0);
+        else if (op === "status" && index === STATUS_SECONDS_LEFT) ctx.pushInt(statusSecondsLeft(value));
         else ctx.pushInt(Number(value) | 0);
     });
 }

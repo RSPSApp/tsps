@@ -68,6 +68,15 @@ const layouts = Object.freeze({
     orb: "clanwars_viewing_start_greyrock", orbModel: 9755,
     jailPortal: "clanwars_prisonportal_swamp",
     exits: Object.freeze(["clanwars_exitportal_smallwood_s", "clanwars_exitportal_smallwood_n"]) }),
+  13: Object.freeze({ name: "Falador Park", origin: Object.freeze([3456, 4736]), width: 16, height: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3472, 4759), tile(3512, 4759)]),
+    jails: Object.freeze([tile(3461, 4760), tile(3469, 4745)]),
+    barrier: "clanwars_barrier_elfwood", barrierAxis: "x", barrierX: 3496,
+    barrierFace: 1, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([4743, 4767])]),
+    orb: "clanwars_viewing_start_elfwood", orbModel: 9754,
+    jailPortal: "clanwars_prisonportal_elfwood",
+    exits: Object.freeze(["clanwars_exitportal_smallwood_s"]) }),
 });
 function get(id) { return Object.prototype.hasOwnProperty.call(layouts, id) ? layouts[id] : null; }
 function owns(game, object, gamevals) {

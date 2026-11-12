@@ -840499,7 +840499,12 @@
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Well, a top-notch fellow like yourself is just the right sort we've been seeking for our organisation."
+          "text": "Well, a top-notch adventurer like yourself is just the right sort we've been seeking for our organisation."
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Tiffy Cashien",
+          "text": "So, are you ready to begin testing?"
         },
         {
           "type": "choice",

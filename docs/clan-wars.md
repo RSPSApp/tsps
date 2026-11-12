@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle or Wasteland**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park or Wasteland**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -678,6 +678,53 @@ metadata, viewing, delayed return, both Forfeit footprints and prior-layout cont
 Coverage descriptions are source intent; observed outcomes and failure history belong
 to the PR evidence. Supplied setup, controlled RNG, native listener versus decoded
 packet boundaries, inert transport and unrendered client/session limits remain explicit.
+
+
+## Falador Park
+
+Falador Park (arena 13, native slot 39) supports the same melee modes, restrictions,
+late entry, Ignore 5 and safe deaths alongside the seven existing layouts. The
+[pinned Wiki](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+describes sealed park entrances, two holding cells and choppable regular trees.
+The bounded copy uses regions 13898 and 14154, source 3456..3583 / 4736..4799,
+sixteen by eight chunks, mapping source planes 0/1 to matching instance planes;
+source 2/3 remain unmapped. The adjacent eastern region supplies real wall/window
+clipping at x=3520, closing the old single-region observation edge. This is a
+bounded TSPS copy, not a retail arena extent or allowed-floor claim.
+
+Explicit TSPS west/east landings are (3472,4759)/(3512,4759), with holding cells
+(3461,4760)/(3469,4745). Elfwood preparation barriers use type 10 face 1 at x=3496,
+y=4743..4767, skipping two blocked tiles. The 23 real walls partition the starts;
+removal must restore all 8192 original ground collision masks before deliberate
+resource or door mutations. The existing match lifetime and old configurations
+are unchanged.
+
+Both cells have active elfwood viewing orbs 26745 (model 9754) and Exit portals
+26739; inactive 26746 copies are distinct. Both Forfeit locs are 7819: (3469,4763)
+face 1 rotates its footprint to 1x2, while (3482,4749) face 0 is 2x1. Both are west
+of the preparation partition; no symmetric preparation exit placement is promised.
+After removal the connected park provides ordinary approaches for both teams.
+Selected private-template identity is required for every match action.
+
+Four regular Trees at (3474,4766), (3478,4766), (3482,4766) and (3486,4766) have
+park cardinal approaches. They retain canonical Woodcutting log outputs, depletion,
+stumps and respawn, including the inherited destroyed-private-area task guard.
+Other copied Trees and Oaks are not assumed usable by name or corner adjacency.
+The actual Close door at (3515,4755) retains canonical Door Close/Open behavior.
+Ground Staircase 24079 and Furnace 24009 are in a separate source component;
+Range 26181 is in another isolated room. An actual upper Climb-down copy exists.
+Their presence does not grant park access, and no Lumbridge ground-floor policy
+or new blanket climb restriction is imposed. Source seals and actual native
+object reach govern access; no object is manually registered to manufacture use.
+
+Existing fixtures must establish native offers, both safe deaths and owned orb/Exit
+routes, rotated Forfeit approaches, full barrier identity/restoration and the same
+short queued crossing before/after removal, canonical Door mutation with seals,
+park refusal of isolated/upper props, four actual Tree outputs and lifecycle
+isolation, modes/restrictions and eight-layout controls. These are coverage intent;
+actual outcomes, commands and failure history belong to the PR evidence. Source
+floods, supplied combat/checkpoints, controlled RNG, native listener versus decoded
+packet paths and unrendered/inert transport limits remain separately attributed.
 
 ## Wasteland
 

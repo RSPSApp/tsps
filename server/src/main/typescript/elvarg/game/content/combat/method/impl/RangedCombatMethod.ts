@@ -155,7 +155,7 @@ export class RangedCombatMethod extends CombatMethod {
         Sounds.sendSound(character, this.fireSound(character) ?? profile?.fireSound ?? Sound.SHOOT_ARROW);
 
         if (character.isPlayer()) {
-            // The shot's ammo is consumed when its hit lands, like the hitsplat.
+            // The shot is paid now; the ammo that falls lands with the hit.
             const flightTicks = Math.max(1, ...hitDelays);
             CombatFactory.decrementAmmo(character.getAsPlayer(), target.getLocation(), profile?.ammoRequired ?? 1, flightTicks);
         }

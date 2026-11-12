@@ -1749,9 +1749,8 @@ export class CombatFactory {
     }
 
     /**
-     * @param delayTicks the shot's flight time in ticks. The outcome is rolled now but the
-     *   count and the floor drop only apply when the projectile lands, so the quiver matches
-     *   the hitsplat instead of emptying at the bowstring.
+     * @param delayTicks the shot's flight time in ticks. The shot is rolled and paid now, as the
+     *   worn count drops on the firing tick; only the floor drop waits until the projectile lands.
      */
     public static decrementAmmo(player: Player, pos: Location, amount: number, delayTicks = 0) {
         // Get the ranged weapon data
@@ -1860,66 +1859,44 @@ export class CombatFactory {
             // Otherwise the device recovered it before it hit the floor.
         }
 
-        // Fixed at the shot: paying from the pack can empty this very object in place (an unequip moves it there).
+        // Paid at the shot: the slot drops on the tick the arrow leaves (rsprox_transcripts/237/01156.txt: the
+        // worn count falls with the projectile; rsprox_transcripts/227/00096.txt:101682: the last bolt clears the
+        // slot on its firing tick). Only the floor drop waits for the landing, so moving the stack mid-flight
+        // (unequip, bank, drop, quiver) cannot make the shot free.
         const ammoId = ammoItem.getId();
         const firedMeta = ammoItem.getMeta();
-        const ammoMeta = JSON.stringify(firedMeta ?? null);
-        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoId
-            && JSON.stringify(item.getMeta() ?? null) === ammoMeta;
-        const apply = () => {
-            const consumed = lost + dropped;
-            const worn = player.getEquipment().get(slot);
-            if (worn !== ammoItem && !sameAmmo(worn)) {
-                // Unequipping mid-flight puts this stack in the pack, and re-equipping wears a copy: the shot is
-                // still paid from the same ammo. A different stack swapped in is left alone.
-                const inventory = player.getInventory();
-                const at = inventory.getItems().findIndex(sameAmmo);
-                if (extra > 0) {
-                    // The stack is gone from the slot: what comes back goes to the pack (the floor if it is full).
-                    const back = new Item(ammoId, extra, firedMeta);
-                    if (inventory.getAddableAmount(back) >= extra) inventory.add(back, true);
-                    else ItemOnGroundManager.registers(player, back);
-                }
-                if (at < 0 || consumed <= 0) {
-                    return;
-                }
-                const paid = Math.min(consumed, inventory.getItems()[at].getAmount());
-                inventory.deleteAtSlot(at, paid);
-                if (dropped > 0 && pos) {
-                    ItemOnGroundManager.registerLocation(player, new Item(ammoId, Math.min(dropped, paid), firedMeta), pos);
-                }
-                return;
-            }
+        const paid = Math.min(lost + dropped, ammoItem.getAmount());
+        const landed = Math.min(dropped, paid);
+        if (paid > 0) {
+            ammoItem.decrementAmountBy(paid);
+        }
+        if (extra > 0) {
+            ammoItem.incrementAmountBy(extra);
+        }
 
-            if (dropped > 0 && pos) {
+        // If we are at 0 ammo remove the item from the equipment completely.
+        if (ammoItem.getAmount() <= 0) {
+            // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
+            // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
+            // keep theirs: no recording shows the last one go.
+            if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
+            player.getEquipment().set(slot, new Item(-1));
+
+            if (slot == Equipment.WEAPON_SLOT) {
+                WeaponInterfaceManager.assign(player);
+                player.getUpdateFlag().flag(Flag.APPEARANCE);
+            }
+        }
+
+        // Refresh the equipment interface.
+        player.getEquipment().refreshItems();
+
+        const apply = () => {
+            if (landed > 0 && pos) {
                 // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
                 // and comes back as preset ammo, owner-only like any untradeable ground item.
-                ItemOnGroundManager.registerLocation(player, new Item(worn.getId(), dropped, worn.getMeta()), pos);
+                ItemOnGroundManager.registerLocation(player, new Item(ammoId, landed, firedMeta), pos);
             }
-
-            if (consumed > 0) {
-                worn.decrementAmountBy(consumed);
-            }
-            if (extra > 0) {
-                worn.incrementAmountBy(extra);
-            }
-
-            // If we are at 0 ammo remove the item from the equipment completely.
-            if (worn.getAmount() == 0) {
-                // The last arrow or bolt goes without a line (rsprox_transcripts/227/00096.txt:101682: the slot
-                // clears, and only the next attempt says "There is no ammo left in your quiver."). Thrown weapons
-                // keep theirs: no recording shows the last one go.
-                if (slot == Equipment.WEAPON_SLOT) player.sendMessage("You have run out of ammunition!");
-                player.getEquipment().set(slot, new Item(-1));
-
-                if (slot == Equipment.WEAPON_SLOT) {
-                    WeaponInterfaceManager.assign(player);
-                    player.getUpdateFlag().flag(Flag.APPEARANCE);
-                }
-            }
-
-            // Refresh the equipment interface.
-            player.getEquipment().refreshItems();
         };
 
         if (delayTicks > 0) {

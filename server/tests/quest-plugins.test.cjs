@@ -23940,7 +23940,7 @@ const rfdJournalCases = [
   ['Pirate Pete', 'pirate', 4, 110, [[10, /Cook how/], [20, /ground kelp/], [30, /wear it/], [40, /talk to Nung/], [50, /five mudskipper hides/], [60, /talk to him again/], [70, /three bronze wires/], [80, /giant crab meat/], [90, /cook the fishcake/], [100, /use a cooked fishcake/]]],
   ['Lumbridge Guide', 'guide', 8, 5, [[1, /Wizard Traiborn/], [2, /answer his questions/], [3, /bake the cake/], [4, /use the cake/]]],
   ['Evil Dave', 'evil-dave', 16, 5, [[1, /Doris's basement/], [2, /ask Doris/], [3, /cat can catch hell-rats/], [4, /that mixture of spices/]]],
-  ['Skrach Uglogwee', 'skrach', 32, 170, [[10, /Rantz in the Feldip Hills/], [20, /meet him by the coast/], [30, /follow him to the coast/], [40, /axe on the tree/], [50, /hollow out/], [60, /talk to Rantz again/], [70, /firing an arrow/], [80, /take the ogre boat back/], [90, /ogre boat/], [100, /balloon toad/], [110, /bellows contain/], [120, /inflated a toad/], [130, /collected a rock/], [140, /place a balloon toad/], [150, /raw jubbly/], [160, /use cooked jubbly/]]],
+  ['Skrach Uglogwee', 'skrach', 32, 170, [[10, /Rantz in the Feldip Hills/], [20, /meet him by the coast/], [30, /follow him to the coast/], [40, /axe on the tree/], [50, /hollow out/], [60, /talk to Rantz again/], [70, /firing an arrow/], [80, /take the ogre boat back/], [90, /ogre boat/], [100, /balloon toad/], [110, /bellows contain/], [120, /inflated a toad/], [130, /collected a rock/], [140, /place a balloon toad/], [150, /hunt the jubbly/], [160, /use cooked jubbly/]]],
   ['Sir Amik Varze', 'amik', 64, 20, [[5, /Cook for the recipe/], [10, /Evil Chicken's egg/]]],
   ['King Awowogei', 'awowogei', 128, 50, [[5, /three wise monkeys/], [10, /banana and monkey nuts/], [15, /large snake corpse/], [20, /stuff the snake/], [30, /zombie monkey/], [40, /use the cooked stuffed snake/]]],
 ];
@@ -24077,4 +24077,31 @@ test('RFD Amik journal follows existing clue, kill, token and prepared food stat
   assert.match(prepared.open(key).text, /rub a dragon token/);
   const cooked = rfdJournalFixture({ attributes: { 'recipe-for-disaster:amik-stage': 10 }, inventory: [f.api.core.ItemIdentifiers.BRULEE_SUPREME] });
   assert.match(cooked.open(key).text, /use the creme brulee supreme/);
+});
+
+
+test('RFD Skrach journal distinguishes setting bait from obtaining raw jubbly at shared stage 150', () => {
+  const attributes = { 'recipe-for-disaster:skrach-stage': 150 };
+  const bait = rfdJournalFixture({ attributes });
+  assert.match(bait.open('Recipe for Disaster - Skrach Uglogwee').text, /hunt the jubbly/);
+  const meat = rfdJournalFixture({ attributes, inventory: [bait.api.core.ItemIdentifiers.RAW_JUBBLY] });
+  assert.match(meat.open('Recipe for Disaster - Skrach Uglogwee').text, /cook the raw jubbly/);
+  assert.doesNotMatch(meat.open('Recipe for Disaster - Skrach Uglogwee').text, /hunt the jubbly/);
+});
+
+
+test('RFD parent journal counts legacy numeric completion consistently with its child without migrating flags', () => {
+  const f = rfdJournalFixture({ attributes: { 'recipe-for-disaster:pirate-stage': 110 } });
+  assert.match(f.open('Recipe for Disaster - Pirate Pete').text, /QUEST COMPLETE/);
+  assert.match(f.open('Recipe for Disaster').text, /free 7 council members/);
+  assert.match(f.open('Recipe for Disaster - Culinaromancer').text, /free 7 council members/);
+  assert.equal(f.attrs.get('recipe-for-disaster:rescues'), 0);
+  for (const [, key, , end] of rfdJournalCases) f.attrs.set(`recipe-for-disaster:${key}-stage`, end);
+  for (const name of ['Recipe for Disaster', 'Recipe for Disaster - Culinaromancer']) {
+    const result = f.open(name);
+    assert.match(result.text, /rescue journals are complete/);
+    assert.match(result.text, /finish the council's rescue at the banquet/);
+    assert.doesNotMatch(result.text, /free 0|through the portal and defeat him|QUEST COMPLETE/);
+  }
+  assert.equal(f.attrs.get('recipe-for-disaster:rescues'), 0, 'no invented flag migration or mechanics change');
 });

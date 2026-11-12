@@ -67,7 +67,7 @@ module.exports = {
     [120, "I have inflated a toad. I need a rock and a ball of wool to make balloon bait."],
     [130, "I have collected a rock. I need to make a balloon toad with swamp gas and a ball of wool."],
     [140, "I should place a balloon toad as bait, then hunt the jubbly that it attracts."],
-    [150, "I need to cook the raw jubbly on Rantz's spit roast."],
+    [150, "I should hunt the jubbly attracted by my balloon toad, then cook its meat on Rantz's spit roast."],
     [160, "I need to use cooked jubbly on Skrach Uglogwee in the dining room."],
     [170, "I freed Skrach Uglogwee with cooked jubbly."],
   ],

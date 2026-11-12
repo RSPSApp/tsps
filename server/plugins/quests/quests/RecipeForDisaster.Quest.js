@@ -3597,7 +3597,15 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (stage(player) < STAGE_OPENING_COMPLETE) return ["I must help the Cook prepare the banquet before I can face the Culinaromancer."];
     if (player.getAttribute(FEAST_PENDING_ATTRIBUTE)) return ["I should enter the dining room in Lumbridge Castle to attend the banquet."];
     if (flags(player) !== ALL_RESCUES) {
-      const remaining = RESCUES.filter(rescue => !hasFlag(player, rescue.flag)).length;
+      const remaining = [...journalStages].filter(([name, read]) => {
+        const steps = rescueJournals[name];
+        return read(player) < steps[steps.length - 1][0];
+      }).length;
+      if (remaining === 0) {
+        // Old saves can have completed numeric child stages without rescue flags.
+        // Report those journals honestly without opening a mechanically gated portal.
+        return ["All eight council members' rescue journals are complete.", "", "I still need to finish the council's rescue at the banquet before I can follow the Culinaromancer through the portal."];
+      }
       return ["Aris has protected the council from the Culinaromancer by freezing time.", "", `I still need to free ${remaining} council member${remaining === 1 ? "" : "s"}. I should inspect the guests in the dining room to learn how to help them.`];
     }
     const lines = ["<str>I freed all eight members of the Lumbridge council.</str>", ""];
@@ -3665,6 +3673,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       // Supply-gathering stages can advance independently: lower numbers do not
       // prove that every earlier objective was completed.
       const lines = [complete ? `<str>${current[1]}</str>` : current[1]];
+      if (!complete && child === "Skrach Uglogwee" && progress === 150 && has(player, ItemIdentifiers.RAW_JUBBLY)) {
+        lines[0] = "I need to cook the raw jubbly on Rantz's spit roast.";
+      }
       if (!complete && child === "Sir Amik Varze" && progress >= 10) lines.push("", ...amikJournalDetails(player));
       if (complete) lines.push("", "<col=ff0000>QUEST COMPLETE!</col>");
       return lines;

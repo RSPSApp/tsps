@@ -781,7 +781,9 @@ module.exports = function registerOneSmallFavourQuest(api) {
 
   function brewGuthixRest(player) {
     if (!knowsGuthixRest(player)) {
-      player.sendMessage(GUTHIX_REST_LOCKED_MESSAGE);
+      // Wiki (Guthix rest): "If players attempt to make Guthix rest before starting One Small Favour, they will receive a
+      // message in their chatbox stating, 'You have no idea what effect this would have.'" Once started, the old line.
+      player.sendMessage(quest.getStage(player) === 0 ? "You have no idea what effect this would have." : GUTHIX_REST_LOCKED_MESSAGE);
       return;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 18) {

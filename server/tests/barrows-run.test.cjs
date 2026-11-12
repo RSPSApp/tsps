@@ -75,13 +75,14 @@ function player() {
   subjects.add(subject);
   subject.setUsername("barrows-run");
   subject.setRegistered(true);
-  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null, camera: [] };
+  const sent = { messages: [], spam: [], varbits: new Map(), rewards: null, camera: [], scripts: [], mounts: [] };
   subject.collected = [];
   const sender = new Proxy({}, {
     get: (target, key) => (key === "sendVarbit" ? (id, value) => (sent.varbits.set(id, value), sender)
       : key === "sendMessage" ? (text) => (sent.messages.push(text), sender)
       : key === "sendTypedMessage" ? (type, text) => (sent.spam.push(text), sender)
-      : key === "sendInterfaceScript" ? (_id, _args, _a, _b, inventories) => (sent.rewards = inventories, sender)
+      : key === "sendInterfaceScript" ? (id, args, _a, _b, inventories) => (sent.scripts.push([id, args]), sent.rewards = inventories ?? sent.rewards, sender)
+      : key === "sendSubInterface" ? (...args) => (sent.mounts.push(args), sender)
       : key === "sendCameraShake" ? (...shake) => (sent.camera.push(shake), sender)
       : key === "sendCameraReset" ? () => (sent.camera.push("reset"), sender)
       : key === "getVarbit" ? (id) => sent.varbits.get(id) ?? 0
@@ -213,6 +214,80 @@ test("Barrows: the Prayer drain lands 30 ticks after each entry into a crypt, wi
   assert.equal(ticksToDrain(), 30, "back in: a fresh 30 ticks, not the 18 that were left");
   assert.equal(drainLines(), 2, "one line per drain");
   assert.ok(!subject.sent.messages.some((m) => /drains your Prayer/.test(m)), "the old text is gone");
+});
+
+test("Barrows: defeated brothers appear on the drain tick, on the atmosphere overlay; looting and leaving stop the faces", () => {
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, new Location(3557, 9703, 3));
+  assert.ok(subject.sent.mounts.some(([uid, group]) => uid === ((161 << 16) | 1) && group === 24));
+  const run = subject.getAttribute("barrows");
+  const faceScripts = () => subject.sent.scripts.filter(([id]) => id === 894);
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 91);
+  assert.equal(faceScripts().length, 0, "there is no face before a brother is defeated");
+  run.killed = [1];
+  for (let i = 0; i < 29; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 0);
+  Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 82);
+  assert.equal(faceScripts().length, 1);
+  assert.equal(faceScripts()[0][1][0], (24 << 16) | 7);
+  assert.ok([6738, 29225].includes(faceScripts()[0][1][1]));
+  run.looted = true;
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 1, "looted runs do not show a brother");
+  arrive(subject, SURFACE);
+  for (let i = 0; i < 40; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(faceScripts().length, 1);
+});
+
+test("Barrows: tunnel entry starts a fresh countdown and protected hilts suppress drain and faces", () => {
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, CHEST_ROOM);
+  const run = subject.getAttribute("barrows");
+  run.killed = [2, 3, 4];
+  for (let i = 0; i < 29; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 99);
+  Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 88);
+  for (const id of [core.ItemIdentifiers.GHOMMALS_HILT_2, core.ItemIdentifiers.GHOMMALS_HILT_6,
+    core.ItemIdentifiers.GHOMMALS_AVERNIC_DEFENDER_5, core.ItemIdentifiers.GHOMMALS_AVERNIC_DEFENDER_6_L_]) {
+    subject.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(id));
+    const scripts = subject.sent.scripts.length;
+    const messages = subject.sent.messages.length;
+    for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 88, `protected by ${id}`);
+    assert.equal(subject.sent.scripts.length, scripts);
+    assert.equal(subject.sent.messages.length, messages);
+  }
+  subject.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.GHOMMALS_HILT_1));
+  for (let i = 0; i < 30; i++) Barrows._test.processPlayer({ player: subject });
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 77, "hilt 1 does not protect");
+});
+
+test("Barrows: each slain brother selects his own captured face models", () => {
+  const models = [[6737, 29228], [6738, 29225], [6739, 29224], [6740, 29226], [6741, 29227], [6742, 29223]];
+  const subject = player();
+  const skills = subject.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99).setCurrentLevel(core.Skill.PRAYER, 99);
+  arrive(subject, CHEST_ROOM);
+  const run = subject.getAttribute("barrows");
+  const random = Math.random;
+  try {
+    for (let brother = 0; brother < models.length; brother++) {
+      run.killed = [brother];
+      for (const [rng, expected] of [[0.5, models[brother][0]], [0, models[brother][1]]]) {
+        skills.setCurrentLevel(core.Skill.PRAYER, 99);
+        Math.random = () => rng;
+        for (let tick = 0; tick < 30; tick++) Barrows._test.processPlayer({ player: subject });
+        assert.deepEqual(subject.sent.scripts.filter(([id]) => id === 894).at(-1), [894, [(24 << 16) | (6 + brother), expected]]);
+      }
+    }
+  } finally { Math.random = random; }
 });
 
 // rsprox_transcripts/227/00086.txt:233214-233215 (546 times over the recordings): the tunnel's brother rising at the

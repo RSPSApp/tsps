@@ -852,6 +852,15 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     return true;
   }
 
+  // MM1 asks before opening a paid tunnel exchange. Keep the quest's Talk-to
+  // ownership here; item-on-NPC dispatch runs every hook even after handled.
+  function answerZooknockOwnership(event) {
+    if (!ZOOKNOCK_IDS.has(event.npcId)) return;
+    const stage = stageOf(event.player);
+    event.owned = stage === STAGE_KRUK_KILLED || stage >= STAGE_ZOOKNOCK_SAVED
+      || (stage >= STAGE_GREE_GREE && !hasKrukGreegree(event.player));
+  }
+
   function handleZooknockTalk(event) {
     const { player, npcId } = event;
     const stage = stageOf(player);
@@ -2117,6 +2126,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     onReward: grantReward,
   });
 
+  api.onCustomEvent("monkey-madness-ii:zooknock-ownership", answerZooknockOwnership);
   api.onNpcDialogueVariant(selectNarnodeVariant);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);

@@ -243,10 +243,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const SQUAD_SIGIL_ITEM = ItemIdentifiers._10TH_SQUAD_SIGIL; // 4035
   const MONKEY_ITEM = ItemIdentifiers.MONKEY; // 4033, the zoo monkey in the backpack
   const MONKEY_CORPSE_ITEM = ItemIdentifiers.MONKEY_CORPSE; // 3166
-  const MONKEY_BONES_ITEMS = new Set([
-    ItemIdentifiers.MONKEY_BONES, // 3183
-    ItemIdentifiers.MONKEY_BONES_6, // 3184
-  ]);
+
   const BANANA_ITEM = ItemIdentifiers.BANANA; // 1963
   const GOLD_BAR_ITEM = ItemIdentifiers.GOLD_BAR; // 2357
   const BALL_OF_WOOL_ITEM = ItemIdentifiers.BALL_OF_WOOL; // 1759
@@ -453,6 +450,10 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const arenaNpcs = new Map();
 
   let quest;
+  const exchanges = require("./Greegrees.MonkeyMadnessI")(api, {
+    stageOf, setStage, startTranscript, talismanGiven: TALISMAN_GIVEN_ATTRIBUTE,
+    remainsGiven: REMAINS_GIVEN_ATTRIBUTE, garkorAsked: player => flag(player, GARKOR_ASKED_ATTRIBUTE),
+  });
 
   // ==========================================================================
   // Small state helpers
@@ -776,6 +777,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
 
   function selectZooknockVariant({ npcId, player }) {
     if (!ZOOKNOCK_IDS.has(npcId)) return null;
+    if (exchanges.owns({ player, npcId }) && stageOf(player) >= STAGE_CHAPTERS) return "chapter-3-talking-to-zooknock";
     const stage = stageOf(player);
     if (stage >= STAGE_CHAPTERS) {
       if (flag(player, DEMON_KILLED_ATTRIBUTE)) return "chapter-4-talking-to-zooknock";
@@ -1021,6 +1023,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // (setting it suppresses the default sendMessage); action steps set it so the
   // runtime continues in one place.
   function handleAction(event) {
+    if (exchanges.action(event)) return;
     const { player, stepId } = event;
     if (!DIALOGUE_NPC_IDS.has(event.npcId)) return;
     switch (stepId) {
@@ -1143,25 +1146,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         player.setAttribute(CHILD_TOY_GIVEN_ATTRIBUTE, true);
         addItem(player, MONKEY_TALISMAN_ITEM);
         return;
-      case "RiFs2s": // hand Zooknock the monkey talisman (message)
-        if (hasItem(player, MONKEY_TALISMAN_ITEM) && !flag(player, TALISMAN_GIVEN_ATTRIBUTE)) {
-          player.getInventory().deleteNumber(MONKEY_TALISMAN_ITEM, 1);
-          player.setAttribute(TALISMAN_GIVEN_ATTRIBUTE, true);
-        }
-        return;
-      case "uDWMj-": // hand Zooknock the monkey remains (message)
-        deleteMonkeyRemains(player);
-        player.setAttribute(REMAINS_GIVEN_ATTRIBUTE, true);
-        return;
-      case "-wRWky": // the talisman comes back glowing: the greegree (message)
-        if (!hasItem(player, KARAMJAN_GREEGREE_ITEM)) addItem(player, KARAMJAN_GREEGREE_ITEM);
-        player.setAttribute(TALISMAN_GIVEN_ATTRIBUTE, false);
-        player.setAttribute(REMAINS_GIVEN_ATTRIBUTE, false);
-        return;
-      case "hOYpYN": // "Meanwhile, somewhere far below the Ape Atoll..."
-        event.handled = true;
-        if (stageOf(player) < STAGE_CHAPTERS) setStage(player, STAGE_CHAPTERS);
-        return;
       case "AhUbiz": // Kruk takes the envoy to Awowogei's throne room
         event.handled = true;
         player.moveTo(THRONE_ROOM);
@@ -1209,19 +1193,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     }
   }
 
-  function deleteMonkeyRemains(player) {
-    for (const itemId of MONKEY_BONES_ITEMS) {
-      if (hasItem(player, itemId)) {
-        player.getInventory().deleteNumber(itemId, 1);
-        return true;
-      }
-    }
-    if (hasItem(player, MONKEY_CORPSE_ITEM)) {
-      player.getInventory().deleteNumber(MONKEY_CORPSE_ITEM, 1);
-      return true;
-    }
-    return false;
-  }
+
 
   function spawnArenaNpc(player, id, tile) {
     return api.spawnNpc({
@@ -1287,6 +1259,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // ==========================================================================
 
   function handleChoice(event) {
+    exchanges.choice(event);
     const { player, npcId, option } = event;
     if (!DIALOGUE_NPC_IDS.has(npcId) && npcId !== AWOWOGEI_CHATHEAD_ID) return;
     if (NARNODE_IDS.has(npcId) && option === "No.") {
@@ -1319,6 +1292,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   }
 
   function handleLine(event) {
+    exchanges.line(event);
     const { player, npcId, text } = event;
     if (!DIALOGUE_NPC_IDS.has(npcId)) return;
     if (CARANOCK_IDS.has(npcId) && stageOf(player) === STAGE_STARTED
@@ -1400,56 +1374,20 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // Items
   // ==========================================================================
 
-  function isMonkeyRemains(itemId) {
-    return MONKEY_BONES_ITEMS.has(itemId) || itemId === MONKEY_CORPSE_ITEM;
-  }
-
   function handleItemOnNpc(event) {
     const { player, npcId, itemId } = event;
-    if (!ZOOKNOCK_IDS.has(npcId)) return;
-    if (!flag(player, GARKOR_ASKED_ATTRIBUTE)) {
+    if (event.handled || !exchanges.owns(event)) return;
+    if (exchanges.item(event)) return;
+    if (!flag(player, GARKOR_ASKED_ATTRIBUTE)) return;
+    const variants = new Map([
+      [MAMULET_MOULD_ITEM, "chapter-2-monkey-amulet-using-the-monkey-amulet-mould-on-zooknock"],
+      [MONKEY_DENTURES_ITEM, "chapter-2-monkey-amulet-using-the-monkey-dentures-on-zooknock"],
+      [GOLD_BAR_ITEM, "chapter-2-monkey-amulet-using-the-gold-bar-on-zooknock"],
+    ]);
+    const variant = variants.get(itemId);
+    if (variant) {
       event.handled = true;
-      player.sendMessage("Zooknock is busy working on his tunnel.");
-      return;
-    }
-    if (itemId === MAMULET_MOULD_ITEM) {
-      event.handled = true;
-      startTranscript(api, player, npcId, PAGE, "chapter-2-monkey-amulet-using-the-monkey-amulet-mould-on-zooknock");
-      return;
-    }
-    if (itemId === MONKEY_DENTURES_ITEM) {
-      event.handled = true;
-      startTranscript(api, player, npcId, PAGE, "chapter-2-monkey-amulet-using-the-monkey-dentures-on-zooknock");
-      return;
-    }
-    if (itemId === GOLD_BAR_ITEM) {
-      event.handled = true;
-      startTranscript(api, player, npcId, PAGE, "chapter-2-monkey-amulet-using-the-gold-bar-on-zooknock");
-      return;
-    }
-    if (itemId === MONKEY_TALISMAN_ITEM) {
-      event.handled = true;
-      if (flag(player, REMAINS_GIVEN_ATTRIBUTE)) {
-        // The after-both page has no hand-over message: the talisman used here
-        // is the one Zooknock returns as the greegree, so consume it now.
-        player.getInventory().deleteNumber(MONKEY_TALISMAN_ITEM, 1);
-        startTranscript(api, player, npcId, PAGE, "chapter-2-creating-the-monkey-gree-gree-after-using-both-items-on-zooknock");
-        return;
-      }
-      startTranscript(api, player, npcId, PAGE, "chapter-2-creating-the-monkey-gree-gree-using-the-monkey-talisman-on-zooknock-first");
-      return;
-    }
-    if (isMonkeyRemains(itemId)) {
-      event.handled = true;
-      if (flag(player, TALISMAN_GIVEN_ATTRIBUTE)) {
-        // The after-both page has no "hand Zooknock the remains" message, so
-        // the remains just handed over have to be deleted here.
-        deleteMonkeyRemains(player);
-        startTranscript(api, player, npcId, PAGE, "chapter-2-creating-the-monkey-gree-gree-after-using-both-items-on-zooknock");
-        return;
-      }
-      startTranscript(api, player, npcId, PAGE, "chapter-2-creating-the-monkey-gree-gree-using-the-monkey-remains-on-zooknock-first");
-      return;
+      startTranscript(api, player, npcId, PAGE, variant, undefined, event.target);
     }
   }
 
@@ -1770,6 +1708,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       return true;
     }
     if (option !== "Talk-to") return false;
+    if (exchanges.talk(event)) return true;
 
     if (NARNODE_IDS.has(npcId) && stageOf(player) === STAGE_ORDERS) {
       // The dump splits "still have the orders" / "lost the orders" with an END

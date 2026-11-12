@@ -272,7 +272,7 @@ function click(event) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
         && Layout.get(slot / 3)) return changeRules(session, player, "arena", slot / 3);
-      player.sendMessage("Only Plateau, Sylvan Glade and Forsaken Quarry are supported.");
+      player.sendMessage("Only Plateau, Sylvan Glade, Forsaken Quarry and Soggy Swamp are supported.");
     }
     if (clicked("clanwars_setup:stragglers")) {
       const slot = event.slot ?? event.action;

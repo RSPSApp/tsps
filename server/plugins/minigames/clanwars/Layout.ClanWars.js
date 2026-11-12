@@ -27,6 +27,14 @@ const layouts = Object.freeze({
     orb: "clanwars_viewing_start_greyrock", orbModel: 9755,
     jailPortal: "clanwars_prisonportal_darkrock",
     exits: Object.freeze(["clanwars_exitportal_greyrock_s", "clanwars_exitportal_greyrock_n"]) }),
+  6: Object.freeze({ name: "Soggy Swamp", origin: Object.freeze([3392, 4928]), size: 8,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3409, 4934), tile(3439, 4985)]),
+    jails: Object.freeze([tile(3396, 4932), tile(3451, 4987)]),
+    barrier: "clanwars_barrier_swamp", barrierY: 4959, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3395, 3452])]),
+    orb: "clanwars_viewing_start_swamp", orbModel: 9753,
+    jailPortal: "clanwars_prisonportal_swamp",
+    exits: Object.freeze(["clanwars_exitportal_swamp_s", "clanwars_exitportal_swamp_n"]) }),
 });
 function get(id) { return Object.prototype.hasOwnProperty.call(layouts, id) ? layouts[id] : null; }
 function owns(game, object, gamevals) {

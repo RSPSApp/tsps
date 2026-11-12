@@ -83,6 +83,10 @@ test("Venerate opens a menu of the other three books; a pick switches with the n
   p.getDialogueManager().reset?.();
   Altars.venerateOccultAltar({ player: p, objectId: 29150 });
   assert.deepEqual(MultiChatboxPrompt.getPending(p).options, ["Standard", "Lunar", "Arceuus"], "on the Ancients");
+  p.setSpellbook(core.MagicSpellbook.NORMAL);
+  MultiChatboxPrompt.selectOption(p, 0);
+  assert.equal(p.getSpellbook(), core.MagicSpellbook.NORMAL);
+  assert.equal(sent.sounds.length, 1, "a pick of the book now in use plays nothing");
 });
 
 test("the occult altar still refuses a locked book, and Lunar's Defence, with nothing played", (t) => {

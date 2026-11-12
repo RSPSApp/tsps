@@ -89,8 +89,8 @@ function handleJaldraochtAltar(player) {
   if (player.getSpellbook() === MagicSpellbook.ANCIENT) {
     MagicSpellbook.changeSpellbook(player, MagicSpellbook.NORMAL, false, "You feel a strange drain upon your memory...");
   } else {
-    MagicSpellbook.changeSpellbook(player, MagicSpellbook.ANCIENT, false, "You feel a strange wisdom fill your mind...");
-    api.emitCustomEvent("diary:task", {
+    const switched = MagicSpellbook.changeSpellbook(player, MagicSpellbook.ANCIENT, false, "You feel a strange wisdom fill your mind...");
+    if (switched) api.emitCustomEvent("diary:task", {
       player,
       diary: "desert",
       task: JALDRAOCHT_ALTAR_TASK,
@@ -250,7 +250,11 @@ function venerateOccultAltar({ player }) {
   const current = player.getSpellbook();
   const pairs = OCCULT_ALTAR_BOOKS
     .filter((entry) => entry.book() !== current)
-    .flatMap((entry) => [entry.name, (who) => switchAtOccultAltar(who ?? player, entry.book(), true)]);
+    .flatMap((entry) => [entry.name, (who) => {
+      const chooser = who ?? player;
+      // The book in use since the menu opened (another switch meanwhile): nothing to do.
+      if (chooser.getSpellbook() !== entry.book()) switchAtOccultAltar(chooser, entry.book(), true);
+    }]);
   player.getPacketSender().sendTab(MAGIC_TAB);
   api.sendMultiChatboxPrompt(player, "Select an option", ...pairs);
   return true;

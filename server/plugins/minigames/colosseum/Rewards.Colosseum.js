@@ -216,36 +216,44 @@ function take(player, entry, amount, destination) {
   if (wanted === 0) return 0;
   if (destination === "bank") {
     const bank = bankFor(player, entry.id);
-    if (!bank) {
-      player.sendMessage("You need more space in your bank.");
-      return 0;
-    }
-    const banked = bank.getAddableAmount(new Item(entry.id, wanted));
-    if (banked <= 0) {
-      player.sendMessage("You need more space in your bank.");
-      return 0;
-    }
+    const banked = bank ? bank.getAddableAmount(new Item(entry.id, wanted)) : 0;
+    if (banked <= 0) return 0;
     bank.add(new Item(entry.id, banked), false);
     return banked;
   }
   const inventory = player.getInventory();
   const moved = inventory.getAddableAmount(new Item(entry.id, wanted));
-  if (moved <= 0) {
-    player.sendMessage("You don't have enough inventory space.");
-    return 0;
-  }
+  if (moved <= 0) return 0;
   inventory.add(new Item(entry.id, moved), false);
   inventory.refreshItems();
   return moved;
 }
 
+const TAKE_ALL_REFUSAL = {
+  bank: "Your bank cannot hold your items.",
+  inventory: "You don't have enough space to take anything.",
+};
+
+/**
+ * Takes or banks everything that fits, with one line if nothing does.
+ * Bank-all on an empty chest: "You have nothing to deposit." Either way the value line is resent.
+ */
 function takeAll(player, destination) {
   if (player.getInterfaceId() !== CHEST_INTERFACE) return;
   const rewards = rewardsOf(player);
   if (!rewards) return;
-  for (const entry of [...rewards]) {
-    entry.amount -= take(player, entry, entry.amount, destination);
-    if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
+  if (rewards.length === 0) {
+    if (destination === "bank") player.sendMessage("You have nothing to deposit.");
+  } else {
+    let moved = 0;
+    for (const entry of [...rewards]) {
+      const taken = take(player, entry, entry.amount, destination);
+      moved += taken;
+      entry.amount -= taken;
+      if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
+    }
+    // Ours: when only some of the rewards fit, the rest stay in the chest without a line.
+    if (moved === 0) player.sendMessage(TAKE_ALL_REFUSAL[destination]);
   }
   refreshChest(player, rewards);
 }
@@ -282,7 +290,9 @@ function clickItem(event) {
   const op = event.opId ?? event.action;
   const withdraw = (amount) => {
     if (player.getInterfaceId() !== CHEST_INTERFACE || rewardsOf(player) !== rewards || !rewards.includes(entry) || !Number.isSafeInteger(amount) || amount <= 0) return;
-    entry.amount -= take(player, entry, amount, "inventory");
+    const moved = take(player, entry, amount, "inventory");
+    if (moved === 0) player.sendMessage("You don't have enough inventory space to take any.");
+    entry.amount -= moved;
     if (entry.amount <= 0) rewards.splice(rewards.indexOf(entry), 1);
     refreshChest(player, rewards);
   };

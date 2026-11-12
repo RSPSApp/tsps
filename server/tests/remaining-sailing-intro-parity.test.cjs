@@ -973,6 +973,7 @@ test('stage 28 shipyard UI build: Jim provides the raft cargo hold\'s materials 
     assert.equal(h.messages.includes("You don't have the materials needed to build that."), false, 'no materials refusal');
     assert.equal(BoatFacilities.facilityAt(raft, 0), hold, 'the cargo hold is built');
     assert.equal(quest.getStage(h.player), 30, 'the real built cargo hold advances stage 28 to 30');
+    assert.deepEqual(h.xp, [], 'Jim\'s hold gives no Construction XP (rsprox 242)');
     for (const handler of h.hooks.interfaceClicks) handler(event);
     assert.equal(quest.getStage(h.player), 30, 'duplicate UI events keep stage 30');
 

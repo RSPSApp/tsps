@@ -171,7 +171,8 @@ function buildOnHotspot(player, visit, facility) {
   }
   facilities.setFacility(boat, hotspot, facility);
   closeCustomisation(player);
-  const xp = facilityXp(requirements.name);
+  // A build someone else provides gives no XP (Pandemonium's hold: no stat update, rsprox 242 tick 3581).
+  const xp = cost.provided ? 0 : facilityXp(requirements.name);
   if (xp > 0) player.getSkillManager().addExperience(Skill.CONSTRUCTION, xp, true);
   player.performAnimation(new Animation(SEQ_BUILD));
   playSound(player, SOUND_BUILD);

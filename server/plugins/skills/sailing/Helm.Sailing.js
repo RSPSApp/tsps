@@ -461,7 +461,10 @@ const ESCAPE_WARNING_BOX = "Escaping your boat while out at sea will result in i
 const ESCAPE_QUESTION = "Accept that your boat will be lost at sea?";
 const ESCAPE_YES = "Yes, escape from it.";
 const ESCAPE_NO = "No, stay on the boat.";
-/** Live's line for leaving a boat at sea (a teleport); Escape leaves it the same way. */
+/**
+ * Live's line for leaving a boat at sea (a teleport); Escape leaves it the same way. Ours: the
+ * cargo half is added when the hold has anything a recovery loses.
+ */
 const ABANDONED = "You abandon your boat, resulting in it becoming lost at sea.";
 const ABANDONED_CARGO = " The contents of your cargo hold are lost with it.";
 

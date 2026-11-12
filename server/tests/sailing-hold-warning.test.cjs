@@ -42,6 +42,7 @@ function player(vars = {}) {
     sendSubInterface() { return sender; },
     sendInterfaceRemoval() { return sender; },
     closeChatboxFor: () => true,
+    sendTypedMessage(_type, m) { log.messages.push(m); return sender; },
   };
   return {
     log, vars,
@@ -63,7 +64,8 @@ function aboard(t, p, hold) {
   t.mock.method(Sailing, 'instanceAboard', () => ({}));
   t.mock.method(Sailing, 'activeBoat', () => boat);
   t.mock.method(Sailing, 'lastPortOf', () => 'musa_point');
-  t.mock.method(Sailing, 'boatNearDock', () => true);
+  const near = { value: true };
+  t.mock.method(Sailing, 'boatNearDock', () => near.value);
   t.mock.method(Sailing, 'disembark', (_p, dock) => { left.push(dock); return null; });
   const submitted = [];
   t.mock.method(TaskManager, 'submit', (task) => submitted.push(task));
@@ -73,7 +75,7 @@ function aboard(t, p, hold) {
     settings.push([payload.settingId, payload.value]);
     payload.player.vars[HoldWarning.DONT_ASK_VARBIT] = payload.value;
   });
-  return { boat, left, submitted, settings };
+  return { boat, left, submitted, settings, near };
 }
 
 test('Disembark with a crate for this port in the hold asks with the captured title and options', (t) => {
@@ -90,6 +92,16 @@ test('Disembark with a crate for this port in the hold asks with the captured ti
   assert.equal(submitted.length, 0, '"Remain on the boat." stays aboard');
   options.execute(1);
   assert.equal(submitted.length, 1, '"Disembark anyway." leaves (the fade starts)');
+});
+
+test('a boat that sailed off while the question was open is too far at the answer', (t) => {
+  const p = player();
+  const { submitted, near } = aboard(t, p, [{ id: task.crate, amount: 1 }]);
+  disembark({ player: p, location: MUSA_GANGPLANK });
+  near.value = false;
+  p.log.dialogues[0][0].execute(1);
+  assert.equal(submitted.length, 0, 'no fade, still aboard');
+  assert.equal(p.log.messages.at(-1), "The boat isn't close enough for you to be able to disembark here.");
 });
 
 test("'don't ask again' saves the row (varbit 18144 = 1); later disembarks don't ask", (t) => {

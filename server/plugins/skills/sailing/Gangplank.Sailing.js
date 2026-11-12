@@ -236,8 +236,11 @@ function disembarkBoat({ player, location }) {
     messageBox(player, refusal);
     return;
   }
+  // Checked again at the answer: the boat may have sailed off while the question was open.
   const leave = () => {
-    if (Sailing.instanceAboard(player)) leaveBoat(player, dock, docked);
+    if (!Sailing.instanceAboard(player)) return;
+    if (!Sailing.boatNearDock(player, dock.id)) messageBox(player, TOO_FAR);
+    else leaveBoat(player, dock, docked);
   };
   if (holdWarning.warn(player, Sailing.activeBoat(player), dock.id, leave)) return;
   leaveBoat(player, dock, docked);

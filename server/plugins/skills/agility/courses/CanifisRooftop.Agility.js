@@ -28,6 +28,7 @@ module.exports = {
   key: "canifis",
   name: "Canifis Rooftop",
   helper: 10, // the Agility helper's course (enum 3507: "Canifis Rooftops")
+  lootSource: 25, // the loot tracker's source (enum 4976)
   lapXp: 240,
   petBase: 36842, // Giant squirrel base chance (Wiki)
   diaryTask: {

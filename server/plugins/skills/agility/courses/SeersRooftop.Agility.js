@@ -11,6 +11,7 @@ module.exports = {
   key: "seers",
   name: "Seers' Village Rooftop",
   helper: 15, // the Agility helper's course (enum 3507: "Seers' Village Rooftops")
+  lootSource: 27, // the loot tracker's source (enum 4976)
   lapXp: 570,
   petBase: 35205, // Giant squirrel base chance (Wiki)
   // Kandarin Diary hard: "Complete a lap of the Seers' Village agility course."

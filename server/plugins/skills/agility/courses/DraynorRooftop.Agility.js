@@ -13,6 +13,7 @@ module.exports = {
   key: "draynor",
   name: "Draynor Village Rooftop",
   helper: 3, // the Agility helper's course (enum 3507: "Draynor Village Rooftops")
+  lootSource: 22, // the loot tracker's source (enum 4976)
   lapXp: 120,
   petBase: 33005, // Giant squirrel base chance (Wiki)
   diaryTask: {

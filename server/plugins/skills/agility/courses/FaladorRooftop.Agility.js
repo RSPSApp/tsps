@@ -56,6 +56,7 @@ module.exports = {
   key: "falador",
   name: "Falador Rooftop",
   helper: 12, // the Agility helper's course (enum 3507: "Falador Rooftops")
+  lootSource: 26, // the loot tracker's source (enum 4976)
   lapXp: 586,
   petBase: 26806, // Giant squirrel base chance (Wiki)
   // Falador Diary hard: "Complete a lap of the Falador rooftop agility course."

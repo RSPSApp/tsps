@@ -48,6 +48,8 @@ const YANILLE_GRAPPLE_CROSSINGS = [
 const HIGHLIGHTED_COURSE_VARBIT = 13140;
 const START_LAP_SCRIPT = 5173;
 const END_LAP_SCRIPT = 5174;
+/** The loot tracker's category for an Agility course (rsprox: every rooftop lap's script 7197). */
+const LOOT_TRACKER_CATEGORY = 5;
 const ADD_XP_SCRIPT = 5175;
 /** The lap clock counts game ticks; the client only reads differences. From 2024 so it fits an int. */
 const LAP_CLOCK_EPOCH_MS = Date.UTC(2024, 0, 1);
@@ -312,7 +314,7 @@ function completeLap(player, course) {
   const laps = { ...getLaps(player) };
   laps[course.key] = (laps[course.key] ?? 0) + Math.max(1, reward.count | 0);
   player.setAttribute(LAPS_ATTRIBUTE, laps);
-  rollMarkOfGrace(player, course);
+  const found = rollMarkOfGrace(player, course);
   if (reward.xp > 0) {
     addAgilityXp(player, reward.xp, course);
   }
@@ -331,6 +333,10 @@ function completeLap(player, course) {
   if (course.helper != null) {
     player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, 0);
     player.getPacketSender().sendClientScript(END_LAP_SCRIPT, lapClock(), Math.max(1, reward.count | 0) - 1);
+  }
+  // The lap goes in the loot tracker after the helper's end, with what spawned for it (rsprox: 7197, then 7198).
+  if (course.lootSource != null) {
+    pluginApi.emitCustomEvent("loot-tracker:add", { player, source: course.lootSource, category: LOOT_TRACKER_CATEGORY, items: found });
   }
   pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key], count: Math.max(1, reward.count | 0) });
   // The giant squirrel rolls once per completed course.
@@ -384,11 +390,12 @@ function diaryBonusChance(player, bonuses) {
   return bonus ? bonus.chance : 0;
 }
 
+/** Rolls the lap's mark of grace (see MARK_COOLDOWN_ATTRIBUTE) and returns what spawned, [] for nothing. */
 function rollMarkOfGrace(player, course) {
   const marks = course.marks;
-  if (!marks || marks.tiles.length === 0) return;
+  if (!marks || marks.tiles.length === 0) return [];
   const minute = clockMinute();
-  if (minute < (player.getAttribute(MARK_COOLDOWN_ATTRIBUTE) ?? 0)) return;
+  if (minute < (player.getAttribute(MARK_COOLDOWN_ATTRIBUTE) ?? 0)) return [];
   let chance = marks.chance ?? MARK_LAP_CHANCE;
   const unboosted = player.getSkillManager().getMaxLevel(core.Skill.AGILITY);
   if (marks.overlevelPenalty !== false && unboosted >= marks.level + MARK_OVERLEVEL_THRESHOLD) {
@@ -398,7 +405,7 @@ function rollMarkOfGrace(player, course) {
   const request = { player, course: course.key, chance };
   pluginApi.emitCustomEvent("agility:mark-chance", request);
   if (Number.isFinite(request.chance)) chance = request.chance;
-  if (Math.random() >= chance && Math.random() >= diaryBonusChance(player, marks.rerolls)) return;
+  if (Math.random() >= chance && Math.random() >= diaryBonusChance(player, marks.rerolls)) return [];
   const short = Math.random() < diaryBonusChance(player, marks.shortCooldown);
   player.setAttribute(MARK_COOLDOWN_ATTRIBUTE, minute + (short ? MARK_SHORT_COOLDOWN_MINUTES : MARK_COOLDOWN_MINUTES));
   const tile = marks.tiles[Math.floor(Math.random() * marks.tiles.length)];
@@ -412,6 +419,7 @@ function rollMarkOfGrace(player, course) {
     ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount), position,
       player.getPrivateArea(), { goesGlobal: false, despawnDelay: MARK_DESPAWN_TICKS });
   }
+  return spawn.items;
 }
 
 /** The player's course marks on the floor; dropped marks go public and age as usual. */

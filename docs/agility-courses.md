@@ -23,6 +23,20 @@ From rsprox captures (Varrock 339 and 3154, main game; the other courses' League
 - The varbit is not course-only: enum 3507 also lists the Brimhaven Agility Arena (id 2), and the
   arena plugin holds it at 2 while the player is inside (see [Brimhaven Agility Arena](#brimhaven-agility-arena)).
 
+## The loot tracker
+
+Every lap goes in the client's loot tracker with what spawned for it, through
+`plugins/interface/LootTracker.plugin.js` ("loot-tracker:add"): cache script 7197
+(`loottracker_sourceadd`) with the course's `lootSource` (enum 4976: 22 "Draynor Rooftop Course",
+27 "Seers' Village Rooftop Course" ...), the player's next key and category 5, then 7198
+(`loottracker_lootadd`) with a mark of grace and 1 when one spawned. From the main-game captures of
+rev 241 and 242 (20261109T090342-d73fc6a, 20261108T062407-ae5c1f1, 20261027T185126-57eba26,
+20261024T001512-d0ad0dc and more): all 1,976 Seers', Draynor, Falador and Varrock laps sent 7197
+after the helper's lap end, and the 427 marks 7198 with it, under the same key. The key counts up
+by one an entry, whatever the source (a farming harvest's entry takes the next one), and carries on
+across sessions, so it is kept with the player. Only those four courses are captured; the others
+use their enum 4976 source with the same category. The Barbarian Outpost has no source in the enum.
+
 ## Rooftop timing
 
 The captures' patterns, counted from the tick the player arrives (the runner's steps start the

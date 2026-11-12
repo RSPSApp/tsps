@@ -405,6 +405,7 @@ module.exports = {
   key: "pyramid",
   name: "Agility Pyramid",
   helper: 6, // the Agility helper's course (enum 3507: "Agility Pyramid")
+  lootSource: 17, // the loot tracker's source (enum 4976)
   lapXp: 0,
   // Each floor has its own mix of the obstacles; the lap runs from the stairs to the doorway.
   anyOrder: true,

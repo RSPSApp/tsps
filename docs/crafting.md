@@ -87,7 +87,7 @@ Recording ids refer to the capture database at https://rsprox.net/database.
   ticks 22092-22094): a gem used on a silver sickle (b) opens the chat menu "Craft a ruby sickle?" with
   "Yes." and "No.". On Yes, that tick: "You embed the ruby into the sickle." as a mesbox line and
   an item box with the new sickle, the gem's cutting animation (887 ruby, 886 diamond), sound 2586
-  and the Crafting XP; the gem and the sickle go and the new sickle takes the first freed slot.
+  and the Crafting XP; the gem and the sickle go and the new sickle takes the first empty slot (the gem's, in all three).
   The quest that wants the sickle allows it (`crafting:gem-sickle-allowed`, answered by Sins of the
   Father from Vertida's logs to the flail, A Taste of Hope once started, The Blood Moon Rises in its
   preparations).

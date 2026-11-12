@@ -5,7 +5,7 @@
  * tick 22094): the use opens a Yes/No chat menu, "Craft a ruby sickle?". On Yes, the same tick
  * sends "You embed the ruby into the sickle." as a mesbox line and an item box (objectbox 193)
  * with the new sickle, the gem's cutting animation, sound 2586 and the Crafting XP; the gem and
- * the sickle go and the sickle (b) takes the freed slot.
+ * the sickle go and the new sickle takes the first empty slot.
  *
  * Wiki (Emerald/Ruby/Diamond sickle (b)): 20/26/32 Crafting XP, a chisel needed. The quest that
  * asks for the sickle decides when it can be made: this unit asks ("crafting:gem-sickle-allowed",
@@ -14,6 +14,8 @@
 const Shared = require("./Shared.Crafting");
 
 const GEM_SICKLE_ALLOWED_EVENT = "crafting:gem-sickle-allowed";
+/** After the craft, for the quest that wanted it: { player, product }. */
+const GEM_SICKLE_MADE_EVENT = "crafting:gem-sickle-made";
 const SILVER_SICKLE_B = "Silver sickle (b)";
 const GEM_CUTTING_SOUND = 2586;
 
@@ -79,7 +81,8 @@ function craft(player, recipe, gemId, sickleId) {
   inventory.adds(recipe.product, 1);
   Shared.animate(player, recipe.animation, recipe.sound);
   Shared.addCraftingXp(player, recipe.xp);
-  Shared.produced(player, recipe.product, 1, recipe.xp, "gem-sickle", [[gemId, 1], [sickleId, 1]]);
+  // Not "skills:produced": a quest item, so no league relic doubles it.
+  Shared.getApi().emitCustomEvent(GEM_SICKLE_MADE_EVENT, { player, product: recipe.product });
   const text = `You embed the ${recipe.name} into the sickle.`;
   const { ChatType, DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = Shared.getCore();
   player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
@@ -95,4 +98,5 @@ function attach(api) {
 
 module.exports = attach;
 module.exports.GEM_SICKLE_ALLOWED_EVENT = GEM_SICKLE_ALLOWED_EVENT;
+module.exports.GEM_SICKLE_MADE_EVENT = GEM_SICKLE_MADE_EVENT;
 module.exports._test = { useGemOnSickle, craft, data };

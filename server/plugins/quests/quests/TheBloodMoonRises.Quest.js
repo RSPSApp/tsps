@@ -8649,8 +8649,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   }
 
   /** A diamond sickle made: the preparations' helper varbits follow the inventory, as after any prep recipe. */
-  function diamondSickleMade({ player, itemId }) {
-    if (itemId === PREP.diamondSickle && !quest.isComplete(player) && stage(player) === STAGE.PREPARATIONS) {
+  function diamondSickleMade({ player, product }) {
+    if (product === PREP.diamondSickle && !quest.isComplete(player) && stage(player) === STAGE.PREPARATIONS) {
       quest.setStage(player, STAGE.PREPARATIONS);
     }
   }
@@ -8885,7 +8885,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onItemOnItem(handleAncientShieldAssembly);
   api.onItemOnItem(handlePrepItemOnItem);
   api.onCustomEvent("crafting:gem-sickle-allowed", allowDiamondSickle);
-  api.onCustomEvent("skills:produced", diamondSickleMade);
+  api.onCustomEvent("crafting:gem-sickle-made", diamondSickleMade);
   api.onItemOnItem(handleBloodHuntItemOnItem);
   api.onItemOnNpc(feedSafalaan);
   api.onItemAction("Dusty book", { Read: readDustyBook });

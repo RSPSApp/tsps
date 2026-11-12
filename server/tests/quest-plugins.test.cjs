@@ -2692,7 +2692,7 @@ test('Blood Moon Hallowed preparations make the stew, upgraded flail and stakes 
   handlers.custom.get('crafting:gem-sickle-allowed').forEach(handler => handler(sickleRequest));
   assert.equal(sickleRequest.allowed, true, 'the preparations allow the diamond sickle');
   inventory.deleteNumber(ids.SILVER_SICKLE_B_, 1); inventory.deleteNumber(ids.DIAMOND, 1); inventory.adds(ids.DIAMOND_SICKLE_B_, 1);
-  handlers.custom.get('skills:produced').forEach(handler => handler({ player, itemId: ids.DIAMOND_SICKLE_B_ }));
+  handlers.custom.get('crafting:gem-sickle-made').forEach(handler => handler({ player, product: ids.DIAMOND_SICKLE_B_ }));
   interact('Chest', 3175, 7836);
   use(ids.DIAMOND_SICKLE_B_, ids.ENCHANT_DIAMOND);
   use(ids.ENCHANTED_DIAMOND_SICKLE_B_, ids.BLISTERWOOD_LOGS); choose(1);

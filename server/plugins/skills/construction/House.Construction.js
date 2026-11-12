@@ -1719,6 +1719,7 @@ function attach(api) {
   Tea.attachTea(api);
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
+  Storage.attachStorage(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);

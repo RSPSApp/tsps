@@ -88,15 +88,34 @@ test("the basement is dark: varbit 278 and the darkness overlay (97) while insid
   assert.ok(area.getBoundaries()[0].inside(new core.Location(3412, 9932, 3)));
 });
 
+test("a light source lifts the basement's dim (Wiki), and putting it out brings it back", () => {
+  const p = player();
+  let carried = [];
+  p.getInventory = () => ({ getItems: () => carried });
+  p.getEquipment = () => ({ getItems: () => [] });
+  T.updateDarkness(p);
+  assert.ok(p.log.includes("sendVarbit 278,1"), "dim without a light");
+  p.log.length = 0;
+  T.updateDarkness(p);
+  assert.deepEqual(p.log, [], "sent only on a change");
+  carried = [new core.Item(core.ItemIdentifiers.LIT_TORCH, 1)];
+  T.updateDarkness(p);
+  assert.ok(p.log.includes("sendVarbit 278,0") && p.log.some((l) => l.startsWith("closeSubInterface")), "a lit torch lifts it");
+  p.log.length = 0;
+  carried = [];
+  T.updateDarkness(p);
+  assert.ok(p.log.includes("sendVarbit 278,1"), "dim again once it's gone");
+});
+
 test("the ivy and windows are agility shortcuts with the captured steps and the Wiki's levels", () => {
   const O = core.ObjectIdentifiers;
   const find = (id, z) => SHORTCUTS.find((s) => [].concat(s.object).includes(id) && (!s.at || s.at[2] === z));
   const anims = (steps) => steps.map((s) => s.anim).filter((a) => a != null);
   const ivy = find(O.IVY, 0);
-  assert.deepEqual([ivy.level, ivy.xp], [81, 0], "81 (Wiki); no XP (captured)");
+  assert.deepEqual([ivy.level, ivy.xp], [81, 3], "81 and 3 XP (Wiki; rsprox 237/04000.txt:8985)");
   assert.deepEqual(anims(ivy.steps), [828, 4435, 2757, 2588]);
   const down = find(O.BROKEN_WINDOW_2, 2);
-  assert.deepEqual([down.level, down.xp], [81, 0]);
+  assert.deepEqual([down.level, down.xp], [81, 3], "3 XP back down too (rsprox 237/04000.txt:14145)");
   assert.deepEqual(anims(down.steps), [741, 7142, 740, -1]);
   const window = find(O.BROKEN_WINDOW_3, 0);
   assert.deepEqual([window.level, window.xp], [18, 3]);

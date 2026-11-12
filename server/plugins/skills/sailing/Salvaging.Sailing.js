@@ -44,6 +44,8 @@ const VARBIT_AT_FACILITY0 = 19193;
 const AT_FACILITY_HOTSPOTS = 11;
 /** How far (tiles) from the hook a wreck can be: about 8 in OSRS, as played. */
 const HOOK_RANGE = 8;
+/** How far (tiles) from the boat a wreck can be inspected. */
+const WRECK_INSPECT_REACH = 32;
 /** Ticks from the cast until the hook settles, and until its first roll (captured: settled at 3, salvage at 10). */
 const SETTLE_TICKS = 3;
 const FIRST_ROLL_TICKS = 6;
@@ -460,8 +462,9 @@ module.exports = {
     api.onServerStartup(startShipwrecks);
     api.onObjectInteraction(deployHook);
     api.onObjectInteraction(inspectWreck);
-    // Raised wrecks are inspected from the boat's deck.
-    api.setUsableFromDeck?.(Object.values(salvageData().wrecks).map((type) => type.active));
+    // Raised wrecks are inspected from the boat's deck, the helm included, as far off as they
+    // are drawn. Ours: the reach is the scene's view distance.
+    api.setDeckReach?.(Object.values(salvageData().wrecks).map((type) => type.active), WRECK_INSPECT_REACH);
     api.onObjectInteraction("Salvaging station", { "Sort-salvage": sortSalvage });
     api.onPlayerLogout(forgetSession);
   },

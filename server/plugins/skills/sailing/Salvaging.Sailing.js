@@ -130,36 +130,48 @@ function inventoryFull(player, type) {
   messageBox(player, `Your inventory is too full to hold any more ${type.salvageName.toLowerCase()}.`);
 }
 
+/** Ends the player's session; `animation` replaces theirs, unless null. */
 function stop(player, animation = Animation.DEFAULT_RESET_ANIMATION) {
   const session = sessions.get(player);
   if (!session) return;
   sessions.delete(player);
   session.task.stop();
   if (session.hotspot !== undefined) setVarbit(player, VARBIT_AT_FACILITY0 + session.hotspot, 0);
-  player.performAnimation(animation);
+  if (animation) player.performAnimation(animation);
 }
 
 /**
  * Ends a salvage and winds the hook back in: with the player's reset at once when the wreck
- * sinks, otherwise a moment later, unless the player is working the hook again by then.
+ * sinks, otherwise a moment later.
  */
 function stopSalvaging(player, session, sunk = false) {
-  const { boat, hook, anims } = session;
   if (sunk) {
-    stop(player, new Animation(anims.reset));
-    animateDeckLoc(player, boat, hook, anims.locReset);
+    stop(player, new Animation(session.anims.reset));
+    animateDeckLoc(player, session.boat, session.hook, session.anims.locReset);
     return;
   }
   stop(player);
+  windInLater(player, session);
+}
+
+/** The hook's reset, unless someone is working it again by then. */
+function windInLater(player, { boat, hook, anims }) {
   later(player, HOOK_RESET_TICKS, () => {
-    if (!player.isRegistered?.() || BoatManager.getBoatAboard(player) !== boat) return;
-    if (sessions.get(player)?.hook === hook) return;
+    if (!player.isRegistered?.() || hookInUse(boat, hook)) return;
     animateDeckLoc(player, boat, hook, anims.locReset);
   });
 }
 
+function hookInUse(boat, hook) {
+  for (const session of sessions.values()) if (session.boat === boat && session.hook === hook) return true;
+  return false;
+}
+
+/** Starts a session, ending the player's last one; a hook they were working winds back in. */
 function begin(player, session, tick) {
-  stop(player);
+  const previous = sessions.get(player);
+  stop(player, null);
+  if (previous?.hook) windInLater(player, previous);
   session.task = new (class extends Task {
     constructor() { super(1, player); }
     execute() {
@@ -257,14 +269,17 @@ function deployHook(event) {
 function salvageTick(player, session) {
   const { boat, hook, wreck } = session;
   if (moved(player) || BoatManager.getBoatAboard(player) !== boat) return stopSalvaging(player, session);
-  // The reel-in that fills the inventory ends the salvage on the next tick.
-  if (session.full) {
-    inventoryFull(player, shipwrecks.wreckType(wreck.type));
-    return stopSalvaging(player, session);
-  }
   if (wreck.generation !== session.generation) {
     player.sendMessage(SUNK);
     return stopSalvaging(player, session, true);
+  }
+  // The reel-in that fills the inventory ends the salvage on the next tick.
+  if (session.full) {
+    session.full = false;
+    if (!hasFreeSlot(player)) {
+      inventoryFull(player, shipwrecks.wreckType(wreck.type));
+      return stopSalvaging(player, session);
+    }
   }
   const at = hookTile(boat, hook);
   if (shipwrecks.distanceTo(wreck, at.x, at.y) > HOOK_RANGE || wreck.z !== at.level) return stopSalvaging(player, session);

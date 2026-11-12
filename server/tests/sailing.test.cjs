@@ -3134,9 +3134,19 @@ test("salvaging stops the tick after the inventory fills, and the hook winds in 
     h.steps.pending = 1;
     tick();
     h.steps.pending = 0;
+    h.player.getInventory().delete(1351, 1);
+    const recast = h.locAnims.length;
     deploy();
+    tick(4);
+    assert.deepEqual(h.locAnims.slice(recast), [13573, 13574, 13574], "the cast, then the idle from the settle");
+    assert.equal(h.animation(), 13577);
+
+    // A salvage the player leaves for another action winds the hook in too, and the new
+    // action keeps its own animation.
+    salvaging.objects["Salvaging station"]["Sort-salvage"]({ player: h.player });
+    assert.equal(h.animation(), 13599, "sorting");
     tick(2);
-    assert.notEqual(h.locAnims.at(-1), 13575);
+    assert.equal(h.locAnims.at(-1), 13575);
   } finally {
     BoatManager.dispose(boat);
     clearTasks();

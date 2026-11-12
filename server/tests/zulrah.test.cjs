@@ -594,6 +594,42 @@ test('a second shrine death before collecting loses the first death items (Wiki:
   fight.end();
 });
 
+// Wiki (Zulrah): held items are "permanently lost if the player dies an unsafe death before reclaiming them". A death
+// with nothing to drop never reaches the item-drop hook, so the hold from an earlier death survived it.
+test('an unsafe death with nothing to drop still loses what she held; a safe one keeps it', () => {
+  const died = (player, itemsLost) => {
+    hooks.death.forEach((handler) => handler({ player, itemsLost, handled: false }));
+    (hooks.custom['player:died'] ?? []).forEach((handler) => handler({ player, itemsLost }));
+  };
+  const { player, fight } = startedFight();
+  player.location = new Location(2268, 3070, 0);
+  player.setAttribute(Shared.ATTR.RETRIEVAL, { items: [[11802, 1]], paid: false }); // from an earlier death
+  const before = player.messages.length;
+  died(player, true); // at the shrine, empty-handed
+  assert.equal(player.getAttribute(Shared.ATTR.RETRIEVAL), null, 'lost at the shrine');
+  assert.equal(player.messages.slice(before).some((m) => /has retrieved some of your items/.test(m)), false, 'nothing new announced');
+  fight.end();
+
+  const elsewhere = fakePlayer();
+  elsewhere.setAttribute(Shared.ATTR.RETRIEVAL, { items: [[4151, 1]], paid: false });
+  died(elsewhere, false); // a safe death (a minigame)
+  assert.deepEqual(elsewhere.getAttribute(Shared.ATTR.RETRIEVAL).items, [[4151, 1]], 'a safe death keeps them');
+  died(elsewhere, true); // an unsafe one elsewhere, empty-handed
+  assert.equal(elsewhere.getAttribute(Shared.ATTR.RETRIEVAL), null, 'lost elsewhere');
+});
+
+test("a shrine death's own items stay held through the death that took them", () => {
+  const { Item } = PluginManager.getCoreApi();
+  const { player, fight } = startedFight();
+  player.location = new Location(2268, 3070, 0);
+  hooks.drops.forEach((handler) => handler({ player, item: new Item(4151, 1), dropEligible: true, shouldDropItems: true, handled: false }));
+  hooks.death.forEach((handler) => handler({ player, itemsLost: true, handled: false }));
+  (hooks.custom['player:died'] ?? []).forEach((handler) => handler({ player, itemsLost: true }));
+  assert.deepEqual(player.getAttribute(Shared.ATTR.RETRIEVAL).items, [[4151, 1]]);
+  assert.match(player.messages.at(-1), /Priestess Zul-Gwenwynig has retrieved some of your items/);
+  fight.end();
+});
+
 test('the boat asks first; Quick-Board goes straight to the shrine', () => {
   const player = fakePlayer();
   player.setAttribute('zulrah:access', 3);

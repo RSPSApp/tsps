@@ -26,6 +26,30 @@ records the 2026-11-01 run; the quest needs a whole run on the merged code.
 
 Newest first.
 
+- **fixed (live capture)** Five gaps against rev 241 recording 2026-11-02 (rsprox captures), found
+  while comparing with another server's Priest in Peril:
+  - The iron key stayed in the inventory after unlocking the cell. Live uses it up: tick 11429
+    clears its slot along with "You use the key to unlock the cell gate." and synth 2419.
+  - Drezel's blessings showed nothing. Live plays heal_casting (84) on the player at height
+    120, Drezel's human_castentangle (710) and synth 166. That happens for the water (tick 11453)
+    and for the player (tick 13629).
+  - Filling a bucket at the well now plays human_pickuptable (832) and synth 2615 (tick 11068).
+  - Blessed water on the coffin now plays throw_bucketofwater (1077), and
+    priestperil_coffin_spell (272) on 3413,3486,2 and 3413,3487,2 with delay 34. It also plays
+    synth 1733 with delay 30 (tick 11568).
+  - Varp 302 went straight to 61. Live sends 60 at "Quest complete!" and 61 when Drezel's
+    "Drezel blesses you..." message plays later in the same conversation (tick 13629). The
+    gap is kept in `priest-in-peril:awaiting-blessing`. Saves completed before this have no
+    such flag and stay at 61.
+    **Ours:** someone who walks off in that gap gets the final conversation back from the step
+    after "Quest complete!" when they next talk to the mausoleum Drezel. The Holy barrier still
+    opens on completion. Neither case is captured.
+  - Drezel's post-quest page starts with "If the player has lost their wolfbane dagger:".
+    Nothing answered it, so the runtime took that first branch for everyone. It is now
+    answered from the inventory, equipment and banks (both Wolfbane ids), along with its
+    inventory-full pair, and its "receive" step gives one dagger back.
+  Covered by `tests/priest-in-peril.test.cjs`.
+
 - **fixed (live capture, issue 4130)** The temple's large doors and Drezel's cell gate teleported
   the player across. Live opens them like doors (rev 241 recording 2026-11-02 ticks 10840-10847 in
   and 10980-10982 out; for the cell, recording 2026-10-17 ticks 1311-1317 and rsprox.net #365):

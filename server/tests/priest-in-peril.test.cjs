@@ -58,6 +58,10 @@ function makePlayer() {
   const interfaces = [];
   const strings = [];
   const itemsOnInterfaces = [];
+  const anims = [];
+  const graphics = [];
+  const sounds = [];
+  const tileGraphics = [];
   let location = new core.Location(3415, 3489, 2);
   const sender = new Proxy({
     sendConfig(id, value) { if (id === VARP) configs.push(value); return sender; },
@@ -65,6 +69,11 @@ function makePlayer() {
     sendInterface(id) { interfaces.push(id); return sender; },
     sendString(text, uid) { strings.push([uid, text]); return sender; },
     sendItemOnInterfaces(uid, itemId, amount) { itemsOnInterfaces.push([uid, itemId, amount]); return sender; },
+    sendSoundEffect(id, _loop, delay) { sounds.push([id, delay]); return sender; },
+    sendGlobalGraphic(graphic, at) {
+      tileGraphics.push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]);
+      return sender;
+    },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   const inventory = {
     capacity: Infinity,
@@ -85,6 +94,9 @@ function makePlayer() {
   };
   return {
     attrs, items, configs, xp, statements, interfaces, strings, itemsOnInterfaces, inventory,
+    anims, graphics, sounds, tileGraphics,
+    performAnimation: (animation) => anims.push(animation.getId?.() ?? animation.id),
+    performGraphic: (graphic) => graphics.push([graphic.id, graphic.height]),
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -146,9 +158,9 @@ function harness({ shieldOfArrav = false } = {}) {
     }
     return null;
   };
-  h.condition = (text) => {
+  h.condition = (text, npcId) => {
     for (const handler of conditions) {
-      const value = handler({ player, text });
+      const value = handler({ player, text, npcId });
       if (typeof value === 'boolean') return value;
     }
     return null;
@@ -169,6 +181,10 @@ function harness({ shieldOfArrav = false } = {}) {
 }
 
 const lastPlayed = () => played.at(-1);
+const drezelActor = () => {
+  const anims = [];
+  return { anims, performAnimation: (animation) => anims.push(animation.getId()) };
+};
 const CELL_GATE = [O.CELL_GATE_7, 3415, 3489, 2];
 const COFFIN = [O.COFFIN_7, 3413, 3486, 2];
 const WELL = [O.WELL_6, 3423, 9890, 0];
@@ -344,6 +360,9 @@ test('the route sends live varp 302 values from start to completion', () => {
   player.inventory.adds(I.BUCKET);
   assert.ok(h.useOn(I.BUCKET, ...WELL));
   assert.equal(player.inventory.getAmount(I.MURKY_WATER), 1);
+  // Capture 2026-11-02 tick 11068: human_pickuptable and synth 2615.
+  assert.deepEqual(player.anims.splice(0), [832]);
+  assert.deepEqual(player.sounds.splice(0), [[2615, 0]]);
   assert.equal(h.talk(N.DREZEL), 'talking-to-drezel-with-the-iron-key');
 
   player.moveTo(new core.Location(3415, 3489, 2));
@@ -351,18 +370,29 @@ test('the route sends live varp 302 values from start to completion', () => {
   assert.equal(h.wire(), 6);
   assert.equal(lastPlayed().variant, 'talking-to-drezel-with-the-iron-key-unlocking-drezel-s-cell');
   assert.equal(player.getLocation().getX(), 3415, 'unlocking leaves the player outside the cell, as captured');
+  assert.equal(player.inventory.getAmount(I.IRON_KEY), 0, 'the unlock uses the iron key up (tick 11429)');
+  assert.deepEqual(player.sounds.splice(0), [[2419, 0]]);
   assert.equal(h.condition('If the player has murky water:'), true);
   assert.equal(h.condition("If the player doesn't have murky water:"), false);
   // The condition follows the blessing message: the first blessing still plays his lines.
-  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'feQ9cD', kind: 'message' });
+  const cellDrezel = drezelActor();
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, npc: cellDrezel, stepId: 'feQ9cD', kind: 'message' });
   assert.equal(player.inventory.getAmount(I.MURKY_WATER), 0);
   assert.equal(player.inventory.getAmount(I.BLESSED_WATER), 1);
+  // Tick 11453: heal_casting on the player at 120, Drezel's human_castentangle, synth 166.
+  assert.deepEqual(player.graphics.splice(0), [[84, 120]]);
+  assert.deepEqual(cellDrezel.anims, [710]);
+  assert.deepEqual(player.sounds.splice(0), [[166, 0]]);
   assert.equal(h.condition('First time blessing water:'), true);
   assert.equal(h.talk(N.DREZEL), 'talking-to-drezel-with-the-iron-key-talking-to-drezel-with-blessed-water');
 
   assert.ok(h.useOn(I.BLESSED_WATER, ...COFFIN));
   assert.equal(h.wire(), 7);
   assert.equal(player.inventory.getAmount(I.BLESSED_WATER), 0);
+  // Tick 11568: throw_bucketofwater, the coffin spell on both tiles at 34, synth 1733 at 30.
+  assert.deepEqual(player.anims.splice(0), [1077]);
+  assert.deepEqual(player.tileGraphics.splice(0), [[272, 34, 3413, 3486, 2], [272, 34, 3413, 3487, 2]]);
+  assert.deepEqual(player.sounds.splice(0), [[1733, 30]]);
   assert.equal(h.talk(N.DREZEL), 'after-drezel-is-freed-and-the-vampyre-is-sealed');
   assert.equal(h.wire(), 8);
   assert.equal(h.talk(N.DREZEL, MAUSOLEUM), 'repairing-the-barrier');
@@ -382,10 +412,20 @@ test('the route sends live varp 302 values from start to completion', () => {
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '4daSZa', kind: 'message' });
   assert.equal(player.inventory.getAmount(I.PURE_ESSENCE), 3, 'only the 22 still owed are taken');
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
-  assert.equal(h.wire(), 61);
+  assert.equal(h.wire(), 60, 'live sends 60 at "Quest complete!"');
   assert.ok(h.quest.isComplete(player));
   assert.deepEqual(player.xp, [[core.Skill.PRAYER.getIndex(), 1406]]);
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
+  const mausoleumDrezel = drezelActor();
+  player.graphics.length = 0;
+  player.sounds.length = 0;
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, npc: mausoleumDrezel, stepId: 'R9VGgf', kind: 'message' });
+  assert.equal(h.wire(), 61, 'and 61 once Drezel blesses the player (tick 13629)');
+  assert.deepEqual(player.graphics.splice(0), [[84, 120]]);
+  assert.deepEqual(mausoleumDrezel.anims, [710]);
+  assert.deepEqual(player.sounds.splice(0), [[166, 0]]);
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, npc: mausoleumDrezel, stepId: 'R9VGgf', kind: 'message' });
+  assert.deepEqual(mausoleumDrezel.anims, [710], 'a replayed blessing does nothing more');
 
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
   assert.equal(player.xp.length, 1, 'a repeat completion action pays nothing');
@@ -418,7 +458,8 @@ test('an interrupted final hand-in resumes the completion without more essence',
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
 
   h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
-  assert.notDeepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true }, 'after completion Drezel is back to normal');
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'R9VGgf', kind: 'message' });
+  assert.notDeepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true }, 'once blessed Drezel is back to normal');
   assert.equal(player.xp.length, 1, 'the resumed completion pays once');
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
 });
@@ -712,4 +753,63 @@ test('the two voices behind the temple door wear the monks\' chat heads, as capt
   assert.equal(line('Drezel').speakerId, undefined, 'other speakers keep their own head');
   assert.equal(h.emit('npc-dialogue:line', { npcId: N.KING_ROALD, step: { speaker: 'Mysterious Voice' } }).speakerId,
     undefined, 'only the door conversation');
+});
+
+test('walking off before the blessing keeps varp 60 and resumes after "Quest complete!"', () => {
+  const h = harness();
+  const { player } = h;
+  h.player.setAttribute(STAGE, 55);
+  h.player.setAttribute('priest-in-peril:essence-handed-in', 50);
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
+  assert.equal(h.wire(), 60);
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true });
+  const { variant, steps } = lastPlayed();
+  assert.equal(variant, 'giving-drezel-the-last-of-the-essence');
+  assert.ok(!steps.some((step) => step.id === '5wj46V'), 'the completion is not replayed');
+  assert.equal(steps[0].player, 'So can I pass through that barrier now?');
+  assert.ok(steps.some((step) => step.id === 'R9VGgf'), 'the blessing is still ahead');
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'R9VGgf', kind: 'message' });
+  assert.equal(h.wire(), 61);
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { page: 'Drezel', variant: 'standard-dialogue-after-priest-in-peril' });
+  // The barrier never waited on the blessing (user decision: completion opens it).
+  assert.ok(h.quest.isComplete(player));
+});
+
+test('a save completed before the blessing step existed sends 61', () => {
+  const h = harness();
+  h.player.setAttribute(STAGE, 60);
+  assert.equal(h.quest.varpValue(60, h.player), 61);
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { page: 'Drezel', variant: 'standard-dialogue-after-priest-in-peril' });
+});
+
+test('post-quest Drezel returns a lost Wolfbane, and only a lost one', () => {
+  const h = harness();
+  const { player } = h;
+  const lost = 'If the player has lost their wolfbane dagger:';
+  assert.equal(h.condition(lost, N.DREZEL), null, 'not before the quest is complete');
+  h.player.setAttribute(STAGE, 60);
+  player.inventory.adds(I.WOLFBANE);
+  assert.equal(h.condition(lost, N.DREZEL), false, 'carried');
+  player.inventory.deleteNumber(I.WOLFBANE);
+  player.getEquipment = () => ({ getAmount: (id) => (id === I.WOLFBANE ? 1 : 0) });
+  assert.equal(h.condition(lost, N.DREZEL), false, 'worn');
+  player.getEquipment = () => ({ getAmount: () => 0 });
+  player.getBanks = () => [{ contains: (id) => id === I.WOLFBANE_2 }];
+  assert.equal(h.condition(lost, N.DREZEL), false, 'banked');
+  player.getBanks = () => [];
+  assert.equal(h.condition(lost, N.DREZEL), true);
+  assert.equal(h.condition(lost, 1234), null, 'another speaker is left alone');
+
+  player.inventory.capacity = 0;
+  assert.equal(h.condition("If the player's inventory is full:", N.DREZEL), true);
+  assert.equal(h.condition("If the player's inventory isn't full:", N.DREZEL), false);
+  player.inventory.capacity = Infinity;
+  assert.equal(h.condition("If the player's inventory is full:", N.DREZEL), false);
+  assert.equal(h.condition("If the player's inventory isn't full:", N.DREZEL), true);
+
+  const receive = h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'cb-Z4u', action: 'receive' });
+  assert.ok(receive.handled);
+  assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'cb-Z4u', action: 'receive' });
+  assert.equal(player.inventory.getAmount(I.WOLFBANE), 1, 'one dagger at a time');
 });

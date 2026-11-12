@@ -27,7 +27,7 @@ const DISCIPLE_RANGE = 16;
 
 const MESSAGE = Object.freeze({
   UNLOCK: "You unlock the door.",
-  ALREADY_UNLOCKED: "The door is already unlocked.",
+  ALREADY_UNLOCKED: "The door is already unlocked.", // Transcript:Ghosts Ahoy; not in the capture
   COFFIN_OPENS: "The coffin creaks open...",
   COFFIN_CLOSE: "You close the coffin.",
   ROBES: "You take the Robes of Necrovarus from the remains of his mortal body.",

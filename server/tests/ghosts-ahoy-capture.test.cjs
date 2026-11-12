@@ -360,6 +360,15 @@ test('Runedraw: the board, Robin\'s draws, the wins that move the bow and the si
   });
 });
 
+test('the bedsheet dipped in ectoplasm turns green, the bucket comes back (tick 1498)', (t) => {
+  const p = actor(t, { stage: 4 });
+  give(p, I().BEDSHEET);
+  give(p, I().BUCKET_OF_SLIME);
+  assert.equal(useItemOnItem(p, I().BUCKET_OF_SLIME, I().BEDSHEET), true);
+  assert.ok(has(p, I().BEDSHEET_2) && has(p, I().BUCKET) && !has(p, I().BEDSHEET) && !has(p, I().BUCKET_OF_SLIME));
+  assert.ok(messages.get(p).includes('You dip the bedsheet in the bucket of ectoplasm.'));
+});
+
 test('villagers: a ghost asked once has had its say, the bribe is 2 and the tenth signature has its own box', (t) => {
   const p = actor(t, { x: 3661, y: 3497, stage: 4 });
   p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));

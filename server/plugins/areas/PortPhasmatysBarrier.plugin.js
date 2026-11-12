@@ -281,7 +281,7 @@ function guardBarrier(player) {
   return best;
 }
 
-/** The guard's "here's 2 Ectotokens" (s_ymV_): the toll, then through the barrier beside him. */
+/** The guard's "here's 2 Ectotokens" (XeyqNB): the toll, then through the barrier beside him. */
 function guardAction(event) {
   if (!isGuard(event.npcId)) return;
   if (event.stepId === FREE_MESSAGE_STEP) {

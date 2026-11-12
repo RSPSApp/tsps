@@ -1066,6 +1066,17 @@ module.exports = function registerGhostsAhoyQuest(api) {
       event.handled = true;
       return;
     }
+    // The bedsheet in the ectoplasm (tick 1498): spam line, the empty bucket back.
+    if (pair.has(ids.BEDSHEET) && pair.has(I.BUCKET_OF_SLIME)) {
+      const inventory = player.getInventory();
+      inventory.deleteNumber(ids.BEDSHEET, 1);
+      inventory.deleteNumber(I.BUCKET_OF_SLIME, 1);
+      inventory.adds(ids.GREEN_BEDSHEET, 1);
+      inventory.adds(ids.BUCKET, 1);
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You dip the bedsheet in the bucket of ectoplasm.");
+      event.handled = true;
+      return;
+    }
     if (pair.has(ids.BEDSHEET) && (pair.has(ids.BUCKET_OF_MILK) || pair.has(I.BUCKET_OF_WATER))) {
       player.sendMessage("Nothing interesting happens.");
       event.handled = true;

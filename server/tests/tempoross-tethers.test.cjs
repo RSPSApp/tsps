@@ -82,6 +82,17 @@ test("queued walks and repeated continuous input cannot move a tethered player",
   assert.ok(messages.every((message) => message === "You must untether yourself to move away."));
 });
 
+test("a click in the same tick as a refused walk keeps the tether and can't reach (rsprox 227/01858.txt tick 4744)", () => {
+  const { player, tethers, site, messages } = fixture();
+  assert.equal(worldInput(player, "move").handled, true);
+  assert.equal(worldInput(player, "npc_option").handled, true);
+  assert.equal(tethers.siteOf(player), site, "still tethered");
+  assert.deepEqual(messages, ["You must untether yourself to move away.", "I can't reach that!"]);
+  core.World.processCycle++;
+  assert.equal(worldInput(player, "npc_option").handled, false, "a later click untethers (227/00552.txt tick 16915)");
+  assert.equal(tethers.siteOf(player), null);
+});
+
 test("manual untether and other action routing release the lock first", () => {
   for (const type of ["object_option", "npc_option", "inventory_action"]) {
     const { player, tethers, queue } = fixture();

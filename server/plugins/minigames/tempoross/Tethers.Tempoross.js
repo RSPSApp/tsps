@@ -184,20 +184,36 @@ function repairSite(event) {
   return true;
 }
 
+/** Player -> the cycle a walk was refused on, while tethered. */
+const refusedWalkAt = new WeakMap();
+
 /** Walking off while tethered is refused; clicking something else untethers instead. */
 function walkWhileTethered(event) {
   const { player } = event;
   if (!coveOf(player)?.fight?.tethers.siteOf(player)) return;
   event.handled = true;
   player.getMovementQueue().reset();
+  refusedWalkAt.set(player, Shared.core().World.getProcessCycle());
   player.sendMessage("You must untether yourself to move away.");
 }
 
-/** Reject walks before routing; other actions let go before their route can move the player. */
+/**
+ * Reject walks before routing; other actions let go before their route can move the player
+ * (rsprox 227/00552.txt tick 16915: a crate click untethers, then "You untether yourself from the
+ * mast."). A click in the same tick as a refused walk keeps the tether and can't reach (227/01858.txt
+ * tick 4744: move_gameclick, the crate, "You must untether yourself to move away.", "I can't reach that!").
+ */
 function inputWhileTethered(event) {
-  if (!coveOf(event.player)?.fight?.tethers.siteOf(event.player)) return;
-  if (event.packet.type === "move" || event.packet.type === "world_map_click") walkWhileTethered(event);
-  else untetherFor(event.player);
+  const { player } = event;
+  if (!coveOf(player)?.fight?.tethers.siteOf(player)) return;
+  if (event.packet.type === "move" || event.packet.type === "world_map_click") {
+    walkWhileTethered(event);
+  } else if (refusedWalkAt.get(player) === Shared.core().World.getProcessCycle()) {
+    event.handled = true;
+    player.sendMessage("I can't reach that!");
+  } else {
+    untetherFor(player);
+  }
 }
 
 function attachTethers(api) {

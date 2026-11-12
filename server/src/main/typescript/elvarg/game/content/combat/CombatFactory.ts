@@ -1068,11 +1068,14 @@ export class CombatFactory {
                 let poisonType: PoisonType | undefined;
                 let rangedPoison = false;
                 let applyPoison = false;
+                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn.
+                const fired = resolvedHit.getFiredRangedShot?.() ?? null;
+                const weaponInterface = fired ? fired.weaponInterface : playerAttacker.getWeapon();
                 const thrownRangedWeapon =
-                    playerAttacker.getWeapon() == WeaponInterfaces.DART ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.KNIFE ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.THROWNAXE ||
-                    playerAttacker.getWeapon() == WeaponInterfaces.JAVELIN;
+                    weaponInterface == WeaponInterfaces.DART ||
+                    weaponInterface == WeaponInterfaces.KNIFE ||
+                    weaponInterface == WeaponInterfaces.THROWNAXE ||
+                    weaponInterface == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
                     const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
@@ -1081,8 +1084,9 @@ export class CombatFactory {
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
-                    poisonType = CombatPoisonData.getPoisonType(
-                        playerAttacker.getEquipment().get(
+                    poisonType = CombatPoisonData.getPoisonType(fired
+                        ? (thrownRangedWeapon ? fired.weapon : fired.ammo)
+                        : playerAttacker.getEquipment().get(
                             thrownRangedWeapon ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT
                         )
                     );

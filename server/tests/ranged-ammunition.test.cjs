@@ -565,7 +565,7 @@ function fireNativeArrow(player, rollValue) {
   const target = NPC.create(NpcIdentifiers.MAN, new Location(3204, 3200));
   const method = new RangedCombatMethod();
   assert.equal(method.canAttack(player, target), true);
-  roll(rollValue, () => method.start(player, target));
+  roll(rollValue, () => { method.start(player, target); method.hits(player, target); method.finished(player, target); });
   assert.deepEqual(drops, [], 'nothing lands on the floor at launch');
   for (let tick = 0; tick < 3; tick++) TaskManager.process();
   return method;

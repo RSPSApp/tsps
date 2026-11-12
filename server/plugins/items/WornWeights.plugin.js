@@ -1,14 +1,17 @@
 "use strict";
 
 /**
- * Items that weigh less once worn (Wiki: Boots of lightness, Penance gloves; Weight). The cache keeps the worn weight on
- * a separate item - boots of lightness 88 weigh 0.34 kg and 89 -4.535 kg, penance gloves 10553 / 10554 the same - and
+ * Items that weigh less once worn (Wiki: Boots of lightness, Penance gloves, Spotted cape, Spottier cape; Weight). The
+ * cache keeps the worn weight on a separate item - boots of lightness 88 weigh 0.34 kg and 89 -4.535 kg, penance gloves
+ * 10553 / 10554 the same, spotted cape 10069 0.453 kg and 10073 -2.267 kg, spottier cape 10071 / 10074 -4.535 kg - and
  * nothing swaps the id on equip, so the worn total used the inventory weight. Answering "equipment:weights" gives the
  * equipment panel, the run-energy packet and the drain the worn weight (as GracefulOutfit does for graceful).
  */
 const WORN_WEIGHT_ID = new Map([
   [88, 89], // Boots of lightness
   [10553, 10554], // Penance gloves
+  [10069, 10073], // Spotted cape
+  [10071, 10074], // Spottier cape
 ]);
 
 let core;
@@ -26,7 +29,7 @@ function addWornWeights(request) {
 
 module.exports = {
   name: "WornWeights",
-  description: "Makes boots of lightness and penance gloves weigh their lighter worn weight in the equipment panel and for run-energy drain.",
+  description: "Makes boots of lightness, penance gloves and spotted and spottier capes weigh their lighter worn weight in the equipment panel and for run-energy drain.",
   register(api) {
     core = api.core;
     api.onCustomEvent("equipment:weights", addWornWeights);

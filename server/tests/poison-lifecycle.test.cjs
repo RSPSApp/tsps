@@ -13,7 +13,7 @@ function player(t,venom=false){
  t.mock.method(p,'isPlayerBot',()=>true);
  t.mock.method(p.getTrading(),'closeTrade',()=>{});
  t.mock.method(p.getRelations(),'updateLists',()=>{});
- const sender=new Proxy({},{get:(_,key)=>key==='hasInterruptibleInterface'?()=>false:()=>sender});
+ const sender=new Proxy({},{get:(_,key)=>key==='hasInterruptibleInterface'?()=>false:key==='getVarp'?()=>0:()=>sender});
  t.mock.method(p,'getPacketSender',()=>sender);
  t.after(()=>{p.setRegistered(false);CombatPoisonEffect.suspend(p);TaskManager.cancelTasks(p);});return p;
 }

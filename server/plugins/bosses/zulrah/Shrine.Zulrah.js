@@ -267,9 +267,22 @@ function holdForPriestess(event) {
   event.handled = true;
 }
 
+/** Whether what she holds came from the death being handled now (its items were taken this cycle). */
+function heldFromThisDeath(player) {
+  return heldItems(player) != null && heldDeathCycle.get(player) === Shared.core().World.getProcessCycle();
+}
+
+/**
+ * Any unsafe death that gave her nothing new loses what she held: one with nothing to drop never reaches
+ * holdForPriestess, which only sees items. "player:died" reaches every observer, after the drops.
+ */
+function loseUnclaimed({ player, itemsLost }) {
+  if (itemsLost && heldItems(player) && !heldFromThisDeath(player)) player.setAttribute(Shared.ATTR.RETRIEVAL, null);
+}
+
 function announceHeld({ player }) {
   if (!Shared.inShrine(player.getLocation()) && !Fight.fightOf(player)) return;
-  if (heldItems(player)) player.sendMessage("Priestess Zul-Gwenwynig has retrieved some of your items. You can collect them from her at the pier in Zul-Andra.");
+  if (heldFromThisDeath(player)) player.sendMessage("Priestess Zul-Gwenwynig has retrieved some of your items. You can collect them from her at the pier in Zul-Andra.");
 }
 
 /** The fee: free for the first 50 kills, then 100,000 coins once per death (Wiki). */
@@ -469,6 +482,7 @@ module.exports = function registerZulrahShrine(api) {
   api.onCanAttack(onlyWhenSurfaced);
   api.onPlayerDeathItemDrop(holdForPriestess);
   api.onPlayerDeath(announceHeld);
+  api.onCustomEvent("player:died", loseUnclaimed);
 };
 
 module.exports.board = board;
@@ -478,6 +492,7 @@ module.exports.talkTo = talkTo;
 module.exports.returnFromShrine = returnFromShrine;
 module.exports.capDamage = capDamage;
 module.exports.holdForPriestess = holdForPriestess;
+module.exports.loseUnclaimed = loseUnclaimed;
 module.exports.onZulrahDeath = onZulrahDeath;
 module.exports.lootUnderPlayer = lootUnderPlayer;
 module.exports.onlyWhenSurfaced = onlyWhenSurfaced;

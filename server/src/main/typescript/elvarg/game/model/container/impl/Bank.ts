@@ -1082,19 +1082,8 @@ export class Bank extends ItemContainer {
                             if (empty) {
                                 return true;
                             }
-                            let items: Item[] = player.getBank(bankId).getValidItems();
-                            if (player.getBank(0).getFreeSlots() < items.length) {
-                                player.sendMessage("You don't have enough free slots in your Main tab to do that.");
-                                return true;
-                            }
-                            let noteWithdrawal: boolean = player.withdrawAsNote();
-                            player.setNoteWithdrawal(false);
-                            for (let item of items) {
-                                player.getBank(bankId).switchsItem(player.getInventory(), item.clone(), player.getBank(bankId).getSlotForItemId(item.getId()), false, false);
-                            }
-                            player.setNoteWithdrawal(noteWithdrawal);
-                            this.reconfigureTabs(player);
-                            player.getBank(player.getCurrentBankTab()).refreshItems();
+                            // The same collapse as the tab menu: each stack moves to the main tab as it is.
+                            Bank.collapseTab(player, bankId);
                         } else {
                             if (!empty || bankId === 0) {
                                 player.setCurrentBankTab(bankId);

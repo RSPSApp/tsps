@@ -670,6 +670,21 @@ test("collapsing a tab moves its items and placeholders into the main tab and sh
   assert.deepEqual(player.getBank(0).getValidItems()[0].getMeta(), { charges: 1200 });
 });
 
+test("the old tab-button collapse keeps each stack's own count and metadata, and moves them to the main tab", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 1200 }), false);
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 5 }), false);
+  player.getBank(1).add(new Item(995, 300), false);
+
+  // Button 50070 + 4 * tab with action 1 is the old tab-button collapse.
+  assert.equal(Bank.handleButton(player, 50070 + 4, 1), true);
+
+  assert.deepEqual(player.getInventory().getValidItems(), []);
+  assert.deepEqual(player.getBank(0).getValidItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]),
+    [[TRIDENT, 1, { charges: 1200 }], [TRIDENT, 1, { charges: 5 }], [995, 300, null]]);
+  assert.deepEqual(player.getBank(1).getValidItems(), []);
+});
+
 test("removing placeholders from a tab leaves other tabs' placeholders", () => {
   const player = createPlayer();
   player.getBank(1).add(new Item(LAVA_BATTLESTAFF, 0), false);

@@ -81,13 +81,14 @@ and ancestral ground respawn also recognize stored ownership; their existing rul
 for physical bank copies are unchanged. Brass and weapon-store door messages prefer
 a carried physical key when both forms are present.
 
-`node --test --test-concurrency=1 tests/steel-key-ring-native.test.cjs` (after the normal
-server build and cache preparation) exercises decoded inventory/use/pause-button inputs
-through ClientConnection and World, with supplied quest completion, materials and placement.
-It checks empty/nonempty state, all thirteen keys, conservation/refusals, stale callbacks,
-JSON save/load, drop loss/banked duplicates and the existing brass door. This fixture does
-not establish natural quest traversal or client rendering. Runtime results are recorded
-separately; source and fixture existence alone is not a passing test claim.
+The original nine cases in `tests/steel-key-ring-native.test.cjs` exercise decoded
+inventory/use/pause-button inputs through ClientConnection and World, with supplied
+quest completion, materials and placement. They cover empty/nonempty state, all thirteen
+keys, conservation/refusals, stale callbacks, JSON save/load, drop loss/banked duplicates,
+death item processing and the brass/weapon-store routes. Two additional cases invoke
+existing merchant condition/action and free-recovery producers with supplied quest
+states; these are not complete dialogue or decoded-packet route tests. The fixture
+does not establish natural quest traversal or client rendering.
 
 ## Reproducing the verification
 
@@ -106,3 +107,39 @@ node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap t
 ```
 
 At source `c1bd369b5e7da21208e7f767dd2924c7bf275fee`, the corrected native fixture passed 9/9 and the configuration checks passed 4/4. Both document generations matched; the exact generated document SHA-256 is `8058a78dd940172c4a08fecd88eeb4caef8912ede336d7b735091c98c4e3e92f`. Only that declared generated document changed during the run; all other source, compiled output and cache identities were preserved. These are separate native and documentation checks, not a full repository suite. The PR retains the earlier failed/diagnostically qualified runs and the unrelated Tourist Trap fixture failures.
+
+
+## Maintainer correction verification
+
+Review [5881707962](https://github.com/RSPSApp/tsps/pull/4786#pullrequestreview-5881707962)
+identified the ambiguous decoded-export citation, recorded interface text and the
+Making History paid-replacement side effect. Correction source
+`b8899ce3c37ef1fd4150065d85eacacfca565b37` contains the fixes described above, including
+the free-recovery and physical-message-priority nits. The same Linux/Node/Yarn/native
+and cache preparation, build and ensure-cache commands above were used again. This
+focused run did not regenerate documentation or replay the old baseline/Tourist suites.
+Its literal test command arguments were:
+
+```sh
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/steel-key-ring-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/taverley-dungeon.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/making-history-dron-wrong-answers.test.cjs
+```
+
+The run completed on 2026-11-12 at **21:07:23.317 UTC**: native fixture **11/11**,
+existing Taverley **6/6**, existing Making History Dron **1/1**, all exit 0. The two
+new producer matrices check carried/banked stored ownership, absent/physical/banked
+physical keys, search/zero placeholders, stale contents, delayed purchase ownership,
+coin/key conservation, refusal guards, and recovery after actual loss. The original
+cases also check the seven recorded UI pairs/highlights, cache-named chat and physical
+message priority. This is eighteen checks across three scopes, not eighteen full native
+routes or a complete merchant/quest playthrough.
+
+All **8512 original source paths**, compiled output and **28 cache files** retained
+their identities (`sealsValid=true`, `sealsUnchanged=true`, no declared output).
+The raw output has no engine/plugin-hook errors; normal SQLite experimental warnings,
+a slow-task diagnostic and expected Pets drop logs remain. Process-group and terminal
+receipts do not prove the absence of escaped descendants. The earlier failed and
+qualified runs remain disclosed in the PR; this correction does not make them green.
+A later update to this authored document adds the result record only; it does not
+change the tested production/native fixture or the exact generated configuration doc.

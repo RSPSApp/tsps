@@ -3,11 +3,16 @@
  * Magic combat tutor sets it too). While it is on, runes picked up from the ground or made by
  * Runecrafting go into the carried pouch when it already holds that rune and has room for all
  * of them (cache row text; Wiki: Rune pouch). Otherwise they go to the inventory as usual.
+ *
+ * Runes from pickpocketing and Hallowed Sepulchre coffins go into the pouch the same way whatever
+ * the setting; those from looting Sailing creatures only while it is on (Wiki: Rune pouch,
+ * changes of 25 February and 6 May 2026). Their sources ask through `rune-pouch:gather`.
  */
 const Pouch = require("./Common.RunePouch");
 const { takeInto } = require("../TakeInto");
 
 const TOGGLE_VARBIT = "take_runes_toggle";
+const GATHER_EVENT = "rune-pouch:gather";
 
 let api;
 
@@ -43,10 +48,26 @@ function crafted(event) {
   player.getInventory().refreshItems();
 }
 
+/**
+ * `rune-pouch:gather` `{ player, itemId, amount, stored, runePicking? }`: the whole amount goes
+ * into the pouch slot already holding that rune when it has room for all of it, and `stored`
+ * says how many did; the source adds the rest to the inventory. `runePicking` limits it to while
+ * the Rune-picking setting is on. Ours: a stack that doesn't fit whole stays in the inventory,
+ * as with picking up.
+ */
+function gather(request) {
+  const { player, itemId } = request;
+  const amount = Math.floor(Number(request.amount));
+  if (!(amount > 0) || !Pouch.isRune(itemId) || (request.runePicking && !enabled(player))) return;
+  if (matchingRoom(player, itemId) < amount) return;
+  request.stored = Pouch.refill(player, itemId, amount);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   api.onGroundItemPickup(pickup);
   api.onCustomEvent("runecrafting:success", crafted);
+  api.onCustomEvent(GATHER_EVENT, gather);
 };
 
-Object.assign(module.exports, { TOGGLE_VARBIT, matchingRoom });
+Object.assign(module.exports, { TOGGLE_VARBIT, GATHER_EVENT, matchingRoom, gather });

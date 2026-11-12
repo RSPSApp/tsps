@@ -271,7 +271,7 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   assert.equal(quest.getStage(h.player), 12, 'stopping the boat at the wreck arrives');
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 12, 'the explanation replays at 12');
-  h.line(h.core.NpcIdentifiers.WILL, '*sigh*');
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
   assert.equal(quest.getStage(h.player), 14, 'live sets 14 on the explanation\'s last line');
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(quest.getStage(h.player), 14, 'the cup popup precedes the actual shore finish');
@@ -337,10 +337,10 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   raft.cargo = [];
   h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Oh, and while we're on about charting, I've also chucked some useful bits and bobs in your cargo hold.");
   assert.equal(h.varbits.get(18316), 1, 'received_repairkits as Jim mentions the cargo hold');
-  assert.deepEqual(raft.cargo.filter(Boolean).map((slot) => slot.id).sort(), [31803, 31964, 31964],
-    'two repair kits and the spyglass in the raft\'s hold');
+  assert.deepEqual(raft.cargo.filter(Boolean).map((slot) => slot.id).sort(), [31964, 31964],
+    'the two repair kits in the raft\'s hold, no spyglass (rsprox 242 hold 963)');
   h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Oh, and while we're on about charting, I've also chucked some useful bits and bobs in your cargo hold.");
-  assert.equal(raft.cargo.filter(Boolean).length, 3, 'a replayed line gives them once');
+  assert.equal(raft.cargo.filter(Boolean).length, 2, 'a replayed line gives them once');
   assert.equal(h.attrs.get('pandemonium:cargo-hold-gifts'), true);
   h.line(h.core.NpcIdentifiers.JUNIOR_JIM_2, "Don't mention it, mate.");
   assert.equal(quest.getStage(h.player), 46);
@@ -392,7 +392,7 @@ test('Pandemonium shows the live intro HUD steps, crew lines and stop-to-arrive 
     h.api.emitCustomEvent('sailing:set-supplied-sails', { player: h.player, boat: ship.boat, mode: 'stop', accepted: false });
     assert.equal(quest.getStage(h.player), 12, 'live arrives six tiles short of the wreck root, on the stop');
     assert.equal(steps().at(-1), 0);
-    h.line(h.core.NpcIdentifiers.WILL, '*sigh*');
+    h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
     assert.equal(quest.getStage(h.player), 14);
     assert.equal(steps().at(-1), 7, 'the hook step');
     assert.deepEqual(h.hints.at(-1), [new h.core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 2, 0), 3, 90, 0]);
@@ -420,6 +420,18 @@ test('Pandemonium Jim tutorial boxes, Old Grog and the version 2 stage migration
   const departs = h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, stepId: 'C5l2Ww', kind: 'message' });
   assert.deepEqual(departs.box, { statement: true, holdTicks: 4 }, 'Old Grog departs: a held message box');
 
+  // Finding: a teleport out of the shipyard (any visit end) closes the HUD and its arrow.
+  h.api.emitCustomEvent('sailing:shipyard-visit-ended', { player: h.player, questVisit: true });
+  quest.setStage(h.player, 28);
+  const { Sailing: SailingCore } = require('../dist/game/content/sailing/Sailing');
+  SailingCore.giveBoat(h.player, 'raft', 'the_pandemonium');
+  h.action(h.core.NpcIdentifiers.JUNIOR_JIM_2, 'TIfJ86');
+  assert.ok(h.scripts.some((entry) => entry.uid === ((161 << 16) | 8) && entry.id === 345), 'the shipyard HUD opened');
+  const before = h.scripts.filter((entry) => entry.close === ((161 << 16) | 8)).length;
+  h.api.emitCustomEvent('sailing:shipyard-visit-ended', { player: h.player, questVisit: true });
+  assert.equal(h.scripts.filter((entry) => entry.close === ((161 << 16) | 8)).length, before + 1, 'HUD closed on leaving');
+  assert.deepEqual(h.hints.at(-1), ['clear']);
+
   const grog = h.hooks.named.get('Old Grog')['Talk-to'];
   quest.setStage(h.player, 44);
   assert.equal(grog({ player: h.player, npc: null }), false, 'Grog waits until Jim is told');
@@ -429,8 +441,7 @@ test('Pandemonium Jim tutorial boxes, Old Grog and the version 2 stage migration
   quest.setStage(h.player, 48);
   assert.equal(h.variant(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE), 'talking-to-steve-talking-to-steve-again-after-old-grog-departs');
 
-  const { Sailing } = require('../dist/game/content/sailing/Sailing');
-  const raft = Sailing.giveBoat(h.player, 'raft', 'the_pandemonium');
+  const raft = h.sailing.boats.find((boat) => boat.type === 'raft');
   require('../plugins/skills/sailing/BoatFacilities.Sailing').setFacility(raft, 0, 8462);
   raft.cargo = [{ id: h.core.ItemIdentifiers.CRATE_OF_SHIP_PARTS_7, amount: 1 }];
   const HoldWarning = require('../plugins/skills/sailing/porttasks/HoldWarning.PortTasks');
@@ -847,7 +858,7 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   // Stage 12 still has to hear Will out (live: its "*sigh*" sets 14) before the hook salvages.
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 12);
-  h.line(h.core.NpcIdentifiers.WILL, '*sigh*');
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: '*sigh*', pages: [{ page: 'Pandemonium', variants: ['reaching-the-salvaging-point'] }] }).before?.();
   assert.equal(quest.getStage(h.player), 14);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(quest.getStage(h.player), 14, 'the item popup cannot skip the shore scene');
@@ -1013,31 +1024,29 @@ test('Pandemonium completion extras survive stack, full and one-slot inventories
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 26, 'existing stack gains all 25 coupons with no free slot');
   assert.equal(countGround(31964).length, 2, 'both repair kits drop rather than being lost');
-  assert.equal(countGround(31803).length, 1, 'spyglass drops rather than being lost');
+  assert.equal(countGround(31803).length, 0, 'no spyglass: Chartin\' Charles hands it out on live');
   assert.equal(quest.complete(h.player), false, 'completion reward is once');
   h.relog();
   assert.equal(quest.complete(h.player), false, 'relog completion is not rewarded again');
   assert.equal(inventory.getAmount(32083), 26);
-  assert.equal(ground().length, 3);
+  assert.equal(ground().length, 2);
 
   ({ h, inventory, quest } = make(1));
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 25, 'one free slot holds the coupon stack');
   assert.equal(countGround(31964).length, 2);
-  assert.equal(countGround(31803).length, 1);
 
   ({ h, inventory, quest } = make(4));
   assert.equal(quest.complete(h.player), true);
   assert.equal(inventory.getAmount(32083), 25);
   assert.equal(inventory.getAmount(31964), 2, 'repair kits are granted one at a time');
-  assert.equal(inventory.getAmount(31803), 1);
+  assert.equal(inventory.getAmount(31803), 0);
   assert.equal(ground().length, 0);
 
   ({ h, inventory, quest } = make(0));
   assert.equal(quest.complete(h.player), true);
   assert.ok(couponGround() >= 24, 'the quest-specific 24 coupons are not silently lost');
   assert.equal(countGround(31964).length, 2);
-  assert.equal(countGround(31803).length, 1);
   clearGround();
 });
 

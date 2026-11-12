@@ -157,6 +157,8 @@ function endVisit(player) {
   sendToolUnlocks(player);
   clearBoatVarps(player);
   player.getPacketSender().sendTabInterface(0, 0);
+  // Every way out (the portal, a teleport, logging out) ends the visit here.
+  pluginApi.emitCustomEvent("sailing:shipyard-visit-ended", { player, questVisit: visit.questVisit === true });
 }
 
 /** A copy of the player's tile, kept while they move on. */

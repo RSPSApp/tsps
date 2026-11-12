@@ -28,6 +28,7 @@ cargo hold (#4406), the shipyard and finale now follow that capture. Open items 
   salvaging!". Both are osrsreboxed-db corrections.
 - **open** Boarding the tutorial ship unlocks Set Sail/All Aboard; live unlocks Crest of a Wave,
   High Seas, Jolly R and Sea Shanty (its ship sits in a different map square). General Sailing.
+- **open** Chartin' Charles doesn't hand out the spyglass yet; this quest no longer gives one.
 - **fixed** Junior Jim didn't provide the cargo hold's materials at stage 28. #4406
 
 ## Capture facts (rsprox 242, 20261104T121356-9573646)
@@ -81,8 +82,10 @@ Stages, varbit 18314, and the line each arrives with (Quest Helper's steps agree
   (picked up, delivered), and Jim's tutorials: shipwright icon 32916, port task board 32913 with
   camera 3063,2985,640 to 3058,2986,280 and an arrow at 3058,2986 centre 140, log 31986 with camera
   3042,2991,720 to 3046,2998,120 and an arrow at 3046,2997 north 110.
-- **Rewards**: Jim puts the two repair kits (31964) and the spyglass in the raft's cargo hold with
-  varbit 18316 when he says so; the completion adds the 25 sawmill coupons. Sailing reaches level 2
+- **Rewards**: Jim puts the two repair kits (31964) in the raft's cargo hold with varbit 18316 when
+  he says so (the hold later holds just the kits); the completion adds the 25 sawmill coupons. The
+  spyglass the Wiki lists comes from Chartin' Charles McAtless ("Charles thrusts a spyglass into
+  your hands.", rsprox 242 20261105T101904), not from Jim. Sailing reaches level 2
   at the delivery (100 XP) and level 5 at completion (Wiki: 300 XP).
 
 ## Runs

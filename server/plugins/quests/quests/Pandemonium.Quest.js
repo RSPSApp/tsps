@@ -22,8 +22,8 @@
  * 18316 received-repair-kits (Jim stows them in the raft's hold at 44).
  *
  * Rewards (OSRS Wiki): 1 Quest point, 300 Sailing XP (plus 100 on delivering the cargo), access to
- * Sailing and The Pandemonium, a raft, 25 sawmill coupon (wood plank), 2 repair kits and a
- * spyglass (in the raft's cargo hold).
+ * Sailing and The Pandemonium, a raft, 25 sawmill coupon (wood plank) and 2 repair kits (in the
+ * raft's cargo hold). The Wiki's spyglass is Chartin' Charles's hand-out on live, not this quest's.
  *
  * The intro HUD (345) with its step text (clientscript 627), the hint arrows, the crew's overhead
  * lines on the voyage and the quest's item boxes follow the rev 242 capture.
@@ -111,7 +111,6 @@ module.exports = function registerPandemoniumQuest(api) {
   const CRATE_OF_SHIP_PARTS_ITEM_ID = ItemIdentifiers.CRATE_OF_SHIP_PARTS_7; // 32807, quest crate
   const SAWMILL_COUPON_ITEM_ID = ItemIdentifiers.SAWMILL_COUPON_WOOD_PLANK_; // 32083
   const REPAIR_KIT_ITEM_ID = ItemIdentifiers.REPAIR_KIT; // 31964
-  const SPYGLASS_ITEM_ID = ItemIdentifiers.SPYGLASS; // 31803
   // Tutorial-box icons (rsprox 242: objectbox models).
   const SHIPWRIGHT_ICON_ITEM_ID = 32916; // shipwright_icon_dummy
   const PORT_TASK_ICON_ITEM_ID = 32913; // port_task_board_icon_dummy
@@ -1140,7 +1139,7 @@ module.exports = function registerPandemoniumQuest(api) {
           introHint(player, HINT.HELM, deckArrow(scene.boat, ARROW_HELM));
         }
       };
-    } else if (text === SIGH_LINE && stage === STAGE_ARRIVED) {
+    } else if (text === SIGH_LINE && stage === STAGE_ARRIVED && variants.includes(WILL_ARRIVAL_VARIANT)) {
       advance([STAGE_ARRIVED], STAGE_SALVAGE_READY, () => {
         const scene = tutorialScene(player);
         if (scene) introHint(player, HINT.HOOK, deckArrow(scene.boat, ARROW_HOOK));
@@ -1169,8 +1168,8 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   /**
-   * Jim's repair kits and spyglass go in the raft's cargo hold, with varbit 18316, when he says so
-   * (rsprox 242: the two kits are in hold 963 later). What the hold can't take goes to the player.
+   * Jim's repair kits go in the raft's cargo hold, with varbit 18316, when he says so (rsprox 242:
+   * the two kits are in hold 963 later). What the hold can't take goes to the player.
    */
   function stowCargoHoldGifts(player) {
     if (player.getAttribute(CARGO_GIFTS_ATTRIBUTE) === true) return;
@@ -1178,7 +1177,9 @@ module.exports = function registerPandemoniumQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
     const raft = questRaft(player);
     const Item = api.core.Item;
-    for (const [itemId, amount] of [[REPAIR_KIT_ITEM_ID, REPAIR_KITS], [SPYGLASS_ITEM_ID, 1]]) {
+    // Only the kits: live's hold has the two kits and no spyglass, which Chartin' Charles hands
+    // out instead (rsprox 242, 20261104T150914 hold 963; 20261105T101904 "Charles thrusts a spyglass").
+    for (const [itemId, amount] of [[REPAIR_KIT_ITEM_ID, REPAIR_KITS]]) {
       const stored = raft ? Cargo.store(raft, itemId, amount) : 0;
       for (let i = stored; i < amount; i++) player.getInventory().forceAdd(player, new Item(itemId, 1));
     }
@@ -1323,7 +1324,10 @@ module.exports = function registerPandemoniumQuest(api) {
       case BACK_TO_PANDEMONIUM_ACTION_ID:
         event.handled = true;
         // Already on the docks (back through the portal), Jim just carries on.
-        if (Shipyard.visitedBoat(player) === undefined) return;
+        if (Shipyard.visitedBoat(player) === undefined) {
+          endShipyardTutorial(player);
+          return;
+        }
         teleportAfterDialogue(player, PANDEMONIUM_LANDING_TILE, () => endShipyardTutorial(player));
         return;
       case OPEN_SHOP_ACTION_ID:
@@ -1397,7 +1401,8 @@ module.exports = function registerPandemoniumQuest(api) {
       case OLD_GROG_DEPARTS_MESSAGE_ID:
         // rsprox 242: a blank-continue message box for four ticks, then its continue.
         event.box = { statement: true, holdTicks: 4 };
-        removeOldGrog(player);
+        // Live removes him during the hold, between the box and its continue.
+        Scenes.later(player, 3, () => removeOldGrog(player));
         if (quest.getStage(player) < STAGE_GROG_DONE) quest.setStage(player, STAGE_GROG_DONE);
         return;
       default:
@@ -1426,7 +1431,7 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function takeFromCrate(event, variant) {
     const stage = quest.getStage(event.player);
-    if (stage < STAGE_CUP_OFFERED || stage >= STAGE_HOLD_BUILT) return;
+    if (stage < STAGE_CUP_GIVEN || stage >= STAGE_HOLD_BUILT) return;
     event.handled = true;
     startTranscript(api, event.player, JIM_NPC_ID, PAGE, variant);
   }
@@ -1434,7 +1439,7 @@ module.exports = function registerPandemoniumQuest(api) {
   function modifySchematics(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_CUP_OFFERED && stage < STAGE_HOLD_BUILT) {
+    if (stage >= STAGE_CUP_GIVEN && stage < STAGE_HOLD_BUILT) {
       event.handled = true;
       startTranscript(api, player, JIM_NPC_ID, PAGE, JIM_SCHEMATICS_BEFORE_VARIANT);
       return;
@@ -1917,8 +1922,8 @@ module.exports = function registerPandemoniumQuest(api) {
     // registerQuest adds the first coupon; top the stack up to 25. forceAdd merges the
     // stackable coupons and drops overflow instead of silently losing the quest rewards.
     inventory.forceAdd(player, new Item(SAWMILL_COUPON_ITEM_ID, SAWMILL_COUPONS - 1));
-    // Jim stows the kits and the spyglass in the raft's hold first (stage 44's dialogue); a
-    // completion that never went through it still gets them.
+    // Jim stows the kits in the raft's hold first (stage 44's dialogue); a completion that never
+    // went through it still gets them.
     stowCargoHoldGifts(player);
     player.getPacketSender().sendVarbit(VARBIT_RECEIVED_REPAIR_KITS, 1);
   }
@@ -1958,6 +1963,7 @@ module.exports = function registerPandemoniumQuest(api) {
   api.onCustomEvent("sailing:facility-cost", handleFacilityCost);
   api.onCustomEvent("sailing:facility-built", handleFacilityBuilt);
   api.onCustomEvent("sailing:shipyard-exited", handleShipyardExited);
+  api.onCustomEvent("sailing:shipyard-visit-ended", ({ player }) => endShipyardTutorial(player));
   api.onCustomEvent("port-tasks:hold-warning", questCargoWarning);
   api.onCustomEvent("sailing:gust", handleTutorialGust);
   api.onCustomEvent("sailing:trimmed", handleTrimmed);

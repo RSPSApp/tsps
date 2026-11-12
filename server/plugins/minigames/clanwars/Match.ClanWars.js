@@ -3,9 +3,10 @@
  * preparation, safe deaths and jail. Respawning modes permit late entry and jail return.
  * No rewards or inventory snapshots.
  * Uncaptured cleanup policy: withdrawal/disconnect eliminates; both empty cancels without a
- * winner. Landing/wall placement is chosen from the active Plateau map, not a recording.
+ * winner. Landing/wall placement is chosen from the active arena maps, not a recording.
  */
 const C = require("./Common.ClanWars");
+const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
@@ -14,10 +15,6 @@ const PREPARATION_TICKS = 200;
 const REJOIN_DELAY_TICKS = 100;
 // Rev242 varbits4290/4291 are 16 bits; HUD script595 renders this value as "Lots!".
 const MAX_HUD_KILLS = 65535;
-const ORIGIN = [3264, 4928];
-const SIZE = 8;
-const LANDINGS = [[3293, 4933, 0], [3293, 4986, 0]];
-const JAILS = [[3323, 4943, 0], [3323, 4976, 0]];
 const active = new Set();
 const dying = new Map();
 const joining = new Map();
@@ -27,15 +24,16 @@ function arenaClass() {
   if (Arena) return Arena;
   Arena = class ClanWarsArena extends C.core.TemplatedInstanceArea {
     constructor(game) {
-      super(SIZE, SIZE);
+      super(game.layout.size, game.layout.size);
       this.pluginName = "ClanWars";
       this.game = game;
-      for (let x = 0; x < SIZE; x++) for (let y = 0; y < SIZE; y++) {
-        this.setChunk(0, x, y, { sourceChunkX: ORIGIN[0] / 8 + x,
-          sourceChunkY: ORIGIN[1] / 8 + y, sourcePlane: 0, rotation: 0 });
+      const { size, origin, planes } = game.layout;
+      for (const plane of planes) for (let x = 0; x < size; x++) for (let y = 0; y < size; y++) {
+        this.setChunk(plane, x, y, { sourceChunkX: origin[0] / 8 + x,
+          sourceChunkY: origin[1] / 8 + y, sourcePlane: plane, rotation: 0 });
       }
     }
-    at(tile) { return this.tile(tile[0] - ORIGIN[0], tile[1] - ORIGIN[1], tile[2]); }
+    at(tile) { return this.tile(tile[0] - this.game.layout.origin[0], tile[1] - this.game.layout.origin[1], tile[2]); }
     getName() { return "Clan Wars"; }
     isMulti() { return true; }
     canAttack(attacker, target, method) {
@@ -78,6 +76,8 @@ function hud(game, player) {
 class Game {
   constructor(session) {
     this.rules = Object.freeze({ ...session.rules });
+    this.layout = Layout.get(this.rules.arena);
+    if (!this.layout) throw new Error("Unsupported Clan Wars arena");
     this.channelKeys = session.channelKeys.slice();
     this.members = new Map();
     this.fighters = new Map();
@@ -90,10 +90,14 @@ class Game {
     this.ends = null;
     this.area = new (arenaClass())(this);
     this.walls = [];
-    const wallId = C.core.CacheDefinitions.getLocId("clanwars_barrier_darkrock");
+    const wallId = C.core.CacheDefinitions.getLocId(this.layout.barrier);
     if (wallId == null) throw new Error("Missing Clan Wars barrier");
-    for (let x = 3268; x <= 3319; x++) {
-      const wall = new C.core.GameObject(wallId, this.area.at([x, 4959, 0]), 10, 0, this.area);
+    for (const [start, end] of this.layout.barrierRanges) for (let x = start; x <= end; x++) {
+      const at = this.area.at([x, this.layout.barrierY, 0]);
+      // Solid template trees already close these tiles. Overlaying them would
+      // clear shared loc bits when the temporary barrier is deregistered.
+      if (this.layout.barrierSkipBlocked && C.core.RegionManager.blocked(at, this.area)) continue;
+      const wall = new C.core.GameObject(wallId, at, 10, 0, this.area);
       C.core.ObjectManager.register(wall, false);
       this.walls.push(wall);
     }
@@ -120,7 +124,7 @@ class Game {
     player.getCombat().reset();
     Restrictions.prepare(player, this.rules);
     this.area.enter(player);
-    player.moveTo(this.area.at(LANDINGS[side]));
+    player.moveTo(this.area.at(this.layout.landings[side]));
     player.getPacketSender().sendPlayerOption(1, "Attack", true);
     hud(this, player);
     return true;
@@ -181,7 +185,7 @@ class Game {
     this.fighters.set(player, side);
     player.getCombat().reset();
     Restrictions.prepare(player, this.rules);
-    player.moveTo(this.area.at(LANDINGS[side]));
+    player.moveTo(this.area.at(this.layout.landings[side]));
     hud(this, player);
     return true;
   }
@@ -368,14 +372,19 @@ function died(event) {
   if (state.game.phase === "over" || !state.game.members.has(event.player)) event.player.moveTo(C.location(C.RETURN));
   else {
     state.game.jailed.add(event.player);
-    event.player.moveTo(state.game.area.at(JAILS[state.side]));
+    event.player.moveTo(state.game.area.at(state.game.layout.jails[state.side]));
     hud(state.game, event.player);
   }
 }
 function leave({ player }) { const game = C.matches.get(player); if (!game) return false; game.remove(player, false); return true; }
+function forfeit(event) {
+  const game = C.matches.get(event.player);
+  if (!game || !Layout.owns(game, event.object, game.layout.exits)) return false;
+  return leave(event);
+}
 function exit(event) {
   const game = C.matches.get(event.player);
-  if (!game) return false;
+  if (!game || !Layout.owns(game, event.object, [game.layout.jailPortal])) return false;
   if (game.jailed.has(event.player) && Rules.respawns(game.rules)) {
     if (!game.rejoin(event.player)) event.player.sendMessage("You cannot rejoin this battle now.");
     return true;
@@ -410,4 +419,4 @@ function attach(api) {
   api.persistAttribute(C.IN_MATCH_ATTRIBUTE, false);
   api.onServerShutdown(shutdown);
 }
-module.exports = { start, enter, leave, exit, attach, shutdown, active, dying };
+module.exports = { start, enter, leave, forfeit, exit, attach, shutdown, active, dying };

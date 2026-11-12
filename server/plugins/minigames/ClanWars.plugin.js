@@ -32,7 +32,7 @@ module.exports = {
   register(api) {
     attach(api);
     api.onObjectInteraction("Challenge portal", { Enter: Match.enter, Join: Match.enter, "Disable-XP": toggleXp });
-    api.onObjectInteraction("Exit portal", { Forfeit: Match.leave });
+    api.onObjectInteraction("Exit portal", { Forfeit: Match.forfeit });
     api.onObjectInteraction("Portal", { Exit: Match.exit });
     api.onObjectInteraction("Viewing orb", { Use: Viewing.use });
     api.onCanGainExperience(blockXp);

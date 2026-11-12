@@ -12,6 +12,7 @@
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
  * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
  */
+const Layout = require("./Layout.ClanWars");
 const OFFERED_RULES = Object.freeze({
   wincondition: 0,
   arena: 1,
@@ -64,6 +65,8 @@ function validate(rules) {
     if (!descriptor || !("value" in descriptor) || !Number.isInteger(descriptor.value)) return false;
     if (key === "playercap") {
       if (descriptor.value < 0 || descriptor.value >= TEAM_CAPS.length) return false;
+    } else if (key === "arena") {
+      if (!Layout.get(descriptor.value)) return false;
     } else if (key === "wincondition") {
       if ((descriptor.value < 0 || descriptor.value >= KILL_TARGETS.length)
         && !TIME_LIMIT_MINUTES[descriptor.value]) return false;
@@ -99,14 +102,15 @@ function respawns(rules) { return killTarget(rules) > 0 || timeLimitTicks(rules)
 /** Server-written confirmation text; wording is ours, mechanics are from the sources above. */
 function summary(rules) {
   if (!validate(rules)) return null;
+  const arena = Layout.get(rules.arena).name;
   const cap = teamCap(rules);
   const capText = rules.playercap === 0 ? "Uncapped (maximum 100 fighters per team)" : `${cap} v ${cap}`;
   const target = killTarget(rules);
   const minutes = TIME_LIMIT_MINUTES[rules.wincondition];
   const respawning = respawns(rules);
   return [
-    minutes ? `Most kills in ${minutes} minutes on Plateau.`
-      : target ? `First to ${target.toLocaleString("en-US")} kills on Plateau.` : "Last team standing on Plateau.",
+    minutes ? `Most kills in ${minutes} minutes on ${arena}.`
+      : target ? `First to ${target.toLocaleString("en-US")} kills on ${arena}.` : `Last team standing on ${arena}.`,
     `Team cap: ${capText}.`,
     "Safe deaths: you keep your items. No prizes or stakes.",
     respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle."

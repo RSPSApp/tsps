@@ -76,7 +76,10 @@
       "thresholds": [90, 200, 400],
       "areas": [1, 2, 3, 4, 5, 6, 7, 8, 11, 20, 21],
       "spotanimPrefix": "league_5_area_unlock_emote_spotanim_",
-      "overrides": [{ "rect": [17, 53, 19, 53], "area": 21 }],
+      "overrides": [
+        { "rect": [17, 53, 19, 53], "area": 21 },
+        { "_comment": "The Dagannoth Kings' lair below Waterbirth Island, on no surface square and so open to everyone otherwise: Raging Echoes had the Kings as the Fremennik echo boss, and a live capture (227, 13 Dec 2024) completes 'Use the special attack of a Dragon Axe in the Fremennik Province' at 2926, 4375.", "rect": [45, 68, 45, 69], "area": 8 }
+      ],
       "teleportCast": {
         "steps": [
           { "tick": 1, "animation": 11875, "graphic": 3180 },

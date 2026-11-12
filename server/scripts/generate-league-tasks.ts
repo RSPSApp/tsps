@@ -20,15 +20,27 @@
 // instead of fetching, so a run can be repeated offline; `--check` regenerates and fails when the
 // committed file differs. The output is deterministic: the same inputs give an identical file.
 //
+// A past league with an era cache (`era`: Trailblazer Reloaded, Raging Echoes) takes each task's
+// name, description, category and area from the cache Jagex served during that league, fetched from
+// the OpenRS2 Archive by scripts/league-era-cache.ts and pinned by its OpenRS2 id: the text and
+// filters the client showed then. The Wiki row and the era task join by the Wiki's id, which is the
+// task struct's id (param 873); Trailblazer Reloaded's 1522 is on two tasks there too, told apart by
+// name. Every Wiki row needs its era task and every era task its row; the tiers must agree, and the
+// era's tier points (enum 2671 then) must be the league's. The Wiki still gives everything else: the
+// tier, requirements, the trigger (derived from the Wiki's name and description, which keep details
+// the in-game text drops; the in-game text's trigger replaces it where it only adds a restriction, see
+// `stricterTrigger`) and the string id (the Wiki name's slug, which saves hold, so a task the cache
+// spells differently keeps its id). Categories are recorded as `categorySource: "era"`.
+//
 // What the Wiki gives: name, description, requirements, tier, region and the Wiki's own task id. What
 // the cache (rev 241) gives: the tasks its own list shows (enum 5950's rows of DB table 118
 // `action`), read here for a task's category (column 35: 1 Skill, 2 Combat, 3 Quest, 4 Achievement,
 // 5 Minigame, 6 Other) and for the area ids the client's area enum (3412) uses, learned by matching
-// rows to Wiki rows by name. A task the cache's list does not have by name takes its category from
-// the rules in `ruleCategory`, recorded as `categorySource: "rule"`. Tier points: Easy 10, Medium 40
-// (Trailblazer Reloaded) / 30 (Raging Echoes), Hard 80, Elite 200, Master 400 - the Wiki rows show the
-// first two and the pages' per-area totals reproduce the rest exactly; Raging Echoes' match cache enum
-// 2671.
+// rows to Wiki rows by name. A league without an era cache takes the category of the task the cache's
+// list has by name, else one from the rules in `ruleCategory` (`categorySource: "cache"` / `"rule"`).
+// Tier points: Easy 10, Medium 40 (Trailblazer Reloaded) / 30 (Raging Echoes), Hard 80, Elite 200,
+// Master 400 - the Wiki rows show the first two and the pages' per-area totals reproduce the rest
+// exactly; both match their era caches' enum 2671.
 //
 // Triggers (`trigger` on a task) are derived from the task name and checked before they are written:
 // a kill only when the cache has an NPC of that exact name, a quest only when plugins/quests/quests
@@ -38,6 +50,7 @@ import fs = require("fs");
 import path = require("path");
 import { CachePipeline } from "../src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheDefinitions } from "../src/main/typescript/elvarg/game/cache/CacheDefinitions";
+import { EraCache, EraLeague, EraTask, eraLeague } from "./league-era-cache";
 
 const OUTPUT = path.resolve(__dirname, "../plugins/modes/data/league-tasks.json");
 const QUESTS_DIR = path.resolve(__dirname, "../plugins/quests/quests");
@@ -92,11 +105,22 @@ const POINTS_ENUM = 2671;
 /**
  * A league's sources. `fromCache`: the cache's own task list is this league's (the current league),
  * so the tasks, their order and their tier points are read from it; `points` is then filled in.
+ * `era`: a past league's own cache (scripts/league-era-cache.ts), for its tasks' in-game text,
+ * category and area. Each is the last OpenRS2 cache of the league's run whose task list is the
+ * league's final one (docs/leagues.md, Tasks):
+ * - Trailblazer Reloaded (15 Nov 2023 - 10 Jan 2024): 1642, 12 Dec 2023, build 218. The list last
+ *   changed between 15 Nov (1605: 1482 tasks, among them "Kill a creature in Mount Quidamortem") and
+ *   6 Dec (1637); 1637, 1642 and 1677 (10 Jan 2024, the last day) are identical, and no cache lies
+ *   between 1642 and 1677.
+ * - Raging Echoes (27 Nov 2024 - 22 Jan 2025): 2023, 15 Jan 2025, build 228. Three descriptions changed
+ *   between 27 Nov (1974) and 10 Dec (1984); 1984, 2018, 2023 and 2028 (22 Jan, the last day) are
+ *   identical.
+ * The tier is param 1852 in Trailblazer Reloaded's task structs, 2044 in Raging Echoes' (876 before).
  */
-interface League { type: number; key: string; name: string; page: string; template: string; points: Record<number, number>; fromCache?: boolean }
+interface League { type: number; key: string; name: string; page: string; template: string; points: Record<number, number>; fromCache?: boolean; era?: EraCache }
 const LEAGUES: League[] = [
-  { type: 4, key: "trailblazer-reloaded", name: "Trailblazer Reloaded", page: "Trailblazer_Reloaded_League/Tasks", template: "TRLTaskRow", points: { 1: 10, 2: 40, 3: 80, 4: 200, 5: 400 } },
-  { type: 5, key: "raging-echoes", name: "Raging Echoes", page: "Raging_Echoes_League/Tasks", template: "RELTaskRow", points: { 1: 10, 2: 30, 3: 80, 4: 200, 5: 400 } },
+  { type: 4, key: "trailblazer-reloaded", name: "Trailblazer Reloaded", page: "Trailblazer_Reloaded_League/Tasks", template: "TRLTaskRow", points: { 1: 10, 2: 40, 3: 80, 4: 200, 5: 400 }, era: { openrs2: 1642, date: "2023-12-12", tierParam: 1852 } },
+  { type: 5, key: "raging-echoes", name: "Raging Echoes", page: "Raging_Echoes_League/Tasks", template: "RELTaskRow", points: { 1: 10, 2: 30, 3: 80, 4: 200, 5: 400 }, era: { openrs2: 2023, date: "2025-01-15", tierParam: 2044 } },
   { type: 6, key: "demonic-pacts", name: "Demonic Pacts", page: "Demonic_Pacts_League/Tasks", template: "DPLTaskRow", points: {}, fromCache: true },
 ];
 
@@ -104,7 +128,7 @@ interface WikiRow { name: string; description: string; s: string; other: string;
 interface Trigger { kind: string; [key: string]: unknown }
 interface Task {
   id: string; wikiId: number; name: string; description: string; tier: number; points: number; area: number;
-  category: number; categorySource: "cache" | "rule"; requirements: string; skills: Array<{ skill: string; level: number }>;
+  category: number; categorySource: "cache" | "rule" | "era"; requirements: string; skills: Array<{ skill: string; level: number }>;
   /** The cache's list position (its completion bit), for a league whose list is the cache's. */
   position?: number;
   /** Completing it awards a Demonic Pact point (the Wiki's `pactTask=yes`). */
@@ -727,6 +751,9 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "keldagrim", names: ["Keldagrim"], page: "Keldagrim", server: { rects: [[2790, 10100, 2940, 10215]], from: "the Keldagrim plugin's city zone" } },
   { key: "port-phasmatys", names: ["Port Phasmatys"], page: "Port_Phasmatys", flood: { cap: 3000 } },
   { key: "lunar-isle", names: ["Lunar Isle"], page: "Lunar_Isle", flood: { cap: 8000, bbox: true } },
+  // Waterbirth Island: the page's pin is a wall, so the island round a floor tile beside it (its box
+  // holds the snape grass a capture picked up at 2553,3754).
+  { key: "waterbirth-island", names: ["Waterbirth Island"], page: "Waterbirth_Island", flood: { from: [2523, 3740, 0], cap: 3000, bbox: true } },
   { key: "slepe", names: ["Slepe"], page: "Slepe", slayerArea: "Slepe" },
   { key: "harmony-island", names: ["Harmony Island"], page: "Harmony_Island", flood: { cap: 3000, bbox: true } },
   { key: "mos-le-harmless", names: ["Mos Le'Harmless"], page: "Mos_Le'Harmless", flood: { cap: 15000, bbox: true } },
@@ -1253,10 +1280,15 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
     }
   }
-  // A deed its plugin emits an event of its own for ("Worship the Ectofuntus", "Fill a Large Pouch").
+  // A deed its plugin emits an event of its own for ("Worship the Ectofuntus", "Fill a Large Pouch"),
+  // in the league area a trailing "in the Fremennik Province" names (Raging Echoes' in-game "Use the
+  // special attack of a Dragon Axe in the Fremennik Province").
+  const deedArea = leagueAreaOf(description.replace(/\.$/, ""));
   for (const deed of DEEDS) {
     const named = deed.name.exec(name);
-    if (!named || !(match = deed.description.exec(description))) continue;
+    if (!named) continue;
+    const inArea = !deed.description.test(description) && deedArea.area !== null;
+    if (!(match = deed.description.exec(inArea ? deedArea.text : description))) continue;
     const trigger: Trigger = { kind: "deed", event: deed.event, count: 1 };
     if (deed.items) {
       const listed = deed.items(match).map((each) => itemNamed(each, items));
@@ -1264,6 +1296,7 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       trigger.items = listed;
     }
     if (deed.where) trigger.where = deed.where;
+    if (inArea) trigger.area = deedArea.area!;
     return { trigger };
   }
   // "Help the Spirit Anglers defeat Tempoross": Tempoross subdued (the minigame's tempoross:subdued;
@@ -1899,9 +1932,15 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
     const { count, subject } = countAndSubject(taken[1]);
     const item = itemNamed(subject, items);
     if (!item) return {};
+    // The Wiki's "(actually on Waterbirth Island)" is where the task really is: Raging Echoes'
+    // "Pick up Snapegrass from Lunar Isle" completed on Waterbirth Island's snape grass (rsprox.net
+    // capture 1710: picked up at 2553,3754).
+    const actually = /\(actually (?:on|in|at) ([^)]+)\)/i.exec(description);
+    const place = actually ? placeNamed(actually[1].trim()) : spot.place;
+    if (actually && !place) return {};
     const trigger: Trigger = { kind: "take", items: [item], source: match[1].toLowerCase() === "telegrab" ? "telegrab" : "pickup", count };
     if (area !== null) trigger.area = area;
-    if (spot.place) trigger.place = spot.place;
+    if (place) trigger.place = place;
     return { trigger };
   }
   // "Pick 6 flax", "Pick some Sweetcorn from a Field": that crop picked from a field (the server's
@@ -1951,11 +1990,16 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
   if (/^Burn Some Food$/i.test(name)) return { trigger: { kind: "burn-food", count: 1 } };
   if ((match = /^Burn (.+)$/i.exec(name))) {
     const named = countAndSubject(match[1]);
-    const said = countAndSubject(clean(description).replace(/^Burn /i, ""));
+    // A trailing league area is where they burn (Raging Echoes' in-game "Burn 200 Redwood Logs in Kourend").
+    const { area, text: unplaced } = leagueAreaOf(clean(description));
+    const said = countAndSubject(unplaced.replace(/^Burn /i, ""));
     // Pyre logs go on a funeral pyre (the Shades of Mort'ton minigame), not a plain fire.
     if (CONDITION.test(clean(description)) || PLACE.test(said.subject) || /coloured|firelighter|pyre/i.test(description)) return {};
     const logs = [said.subject, named.subject].map((subject) => itemNamed(subject, items)).find((item) => item && /logs$/i.test(item));
-    return logs ? { trigger: { kind: "burn", items: [logs], count: named.count } } : {};
+    if (!logs) return {};
+    const trigger: Trigger = { kind: "burn", items: [logs], count: named.count };
+    if (area !== null) trigger.area = area;
+    return { trigger };
   }
   // "Bury 6 bones" ("Bury 6 Remains of any kind"): any bones; "Bury Some Wyvern or Dragon Bones"
   // ("either some wyvern bones or some dragon bones"): any of those; a place is no plain count.
@@ -2032,17 +2076,22 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
   // "Equip a Full God Dragonhide/Rune/Vestment Set": the pieces the Wiki aligns to one god, one whole
   // set of one god worn at once (each god's coif, body, chaps and bracers; full helm, platebody,
   // legs or skirt and kiteshield; or robe top, legs, mitre, cloak, stole and crozier, as the cache
-  // names them). The gods are the six the cache gives those sets for.
+  // names them). The gods are the six the cache gives those sets for. A piece the Wiki says the task
+  // does not need is left out: Raging Echoes' "(does not require a kiteshield)", which a live
+  // recording bears out (rsprox.net 1862, 9 Dec 2024: completed in a Saradomin full helm, platebody
+  // and plateskirt with no shield), and "(does not require a Crozier)".
   if (/^Equip /i.test(name) && /all pieces aligned to the same god/i.test(description)) {
     const gods = ["Saradomin", "Zamorak", "Guthix", "Armadyl", "Bandos", "Ancient"];
-    const wornPieces = (pieces: string[]) => pieces.map((piece) => wornItemOf(piece, items)).filter((piece): piece is string => !!piece);
+    const notNeeded = /\((?:does not|doesn't) requires? (?:an? )?([a-z' ]+)\)/i.exec(description)?.[1].trim().toLowerCase();
+    const needed = (piece: string) => !notNeeded || !piece.toLowerCase().endsWith(notNeeded);
+    const wornPieces = (pieces: string[]) => pieces.filter(needed).map((piece) => wornItemOf(piece, items)).filter((piece): piece is string => !!piece);
     const eitherOf = (pieces: string[]): string | string[] | null => {
       const worn = wornPieces(pieces);
       return worn.length === 1 ? worn[0] : worn.length > 1 ? worn : null;
     };
     const sets = gods.map((god) => {
       if (/dragonhide/i.test(name)) return wornPieces([`${god} coif`, `${god} d'hide body`, `${god} chaps`, `${god} bracers`]);
-      if (/\brune\b/i.test(name)) return [wornItemOf(`${god} full helm`, items), wornItemOf(`${god} platebody`, items), eitherOf([`${god} platelegs`, `${god} plateskirt`]), wornItemOf(`${god} kiteshield`, items)].filter((piece): piece is string | string[] => !!piece);
+      if (/\brune\b/i.test(name)) return [...wornPieces([`${god} full helm`, `${god} platebody`]), eitherOf([`${god} platelegs`, `${god} plateskirt`]), ...wornPieces([`${god} kiteshield`])].filter((piece): piece is string | string[] => !!piece);
       if (/vestment/i.test(name)) return wornPieces(["robe top", "robe legs", "mitre", "cloak", "stole", "crozier"].map((part) => `${god} ${part}`));
       return [];
     });
@@ -2306,6 +2355,103 @@ function ruleCategory(name: string, trigger?: Trigger): number {
   return CATEGORY.other;
 }
 
+// ---- a past league's era cache --------------------------------------------------------------------
+
+/** The catalog's categories (enum 3411's names, the same since Trailblazer). */
+const CATEGORY_NAMES: Record<number, string> = { 1: "Skill", 2: "Combat", 3: "Quest", 4: "Achievement", 5: "Minigame", 6: "Other" };
+
+/**
+ * The era cache's category and area ids as the catalog and the client use them now.
+ * - Category: the era's enum 3411 must name the id as the catalog does (1 Skill, 2 Combat, 3 Quest,
+ *   4 Achievement, 5 Minigame, 6 Other), so it is kept.
+ * - Area: an era id keeps its number when the current area enum (3412) names it the same, else it
+ *   takes the one current id of that name; either way it must be one of the catalog's areas (the
+ *   Wiki regions' ids the list filters by). Trailblazer Reloaded's and Raging Echoes' ids all keep
+ *   their numbers: Kourend & Kebos is 10 in both (the current enum names 20 so too, which their tasks
+ *   do not use).
+ */
+function eraIds(league: League, era: EraLeague, areas: Record<string, number>) {
+  const current = CacheDefinitions.getEnumValues(AREA_ENUM);
+  const catalogAreas = new Set(Object.values(areas));
+  const category = (id: number) => {
+    if (!CATEGORY_NAMES[id] || era.categories.get(id) !== CATEGORY_NAMES[id]) {
+      throw new Error(`${league.key}: era category ${id} is "${era.categories.get(id)}", the catalog's "${CATEGORY_NAMES[id]}"`);
+    }
+    return id;
+  };
+  const area = (id: number) => {
+    const name = era.areas.get(id);
+    if (name === undefined) throw new Error(`${league.key}: the era's area enum has no ${id}`);
+    const named = [...current.entries()].filter(([, value]) => value === name).map(([key]) => key);
+    const mapped = current.get(id) === name ? id : named.length === 1 ? named[0] : undefined;
+    if (mapped === undefined || !catalogAreas.has(mapped)) {
+      throw new Error(`${league.key}: era area ${id} "${name}" is no catalog area (enum ${AREA_ENUM} now: ${named.join("/") || "no such name"})`);
+    }
+    return mapped;
+  };
+  return { category, area };
+}
+
+const sameName = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * The trigger derived from the in-game text when it is the Wiki's with a restriction added, else
+ * undefined. The in-game text is Jagex's own statement of the task, so where it says more than the
+ * Wiki's ("Reach level 10 in any skill (not including Agility and Hitpoints)", "... in the Fremennik
+ * Province") the task asks for that. Only the restrictions a trigger keeps count: more skills
+ * `excluding`, or an `area` / `place` the Wiki's trigger has none of; every other field must be the
+ * same, so a looser or different reading of the in-game text never replaces the Wiki's.
+ */
+/**
+ * In-game text the live league did not follow, by league type and Wiki id: the Wiki's trigger stays.
+ * Raging Echoes' "Achieve Your First Level 5" and "... 10" still say "(not including Agility, ...)",
+ * the text their task structs (2648, 2649) have carried since the Trailblazer cache (2020), but a
+ * Leagues V character's first level 10 was Agility 10 and completed the task (rsprox.net capture
+ * 20241209T063558, 9 Dec 2024: Thieving 5, Woodcutting 3, Firemaking 3, then Agility 2 to 10 and the
+ * task in the same tick). Raging Echoes started no one at Agility 10; the Wiki leaves Agility out of
+ * both exclusions. No capture shows a first level 5 in Agility; level 5 follows level 10's evidence.
+ */
+const STALE_IN_GAME_TEXT: Record<number, number[]> = { 5: [192, 193] };
+
+function stricterTrigger(wiki: Trigger | undefined, shown: Trigger | undefined): Trigger | undefined {
+  if (!wiki || !shown || wiki.kind !== shown.kind) return undefined;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  let stricter = false;
+  for (const key of new Set([...Object.keys(wiki), ...Object.keys(shown)])) {
+    if (same(wiki[key], shown[key])) continue;
+    if (key === "excluding" && Array.isArray(shown[key])) {
+      const wikiList = (wiki[key] ?? []) as unknown[];
+      if (!wikiList.every((each) => (shown[key] as unknown[]).includes(each))) return undefined;
+      stricter = true;
+    } else if ((key === "area" || key === "place") && wiki.area === undefined && wiki.place === undefined && shown[key] !== undefined) {
+      stricter = true;
+    } else return undefined;
+  }
+  return stricter ? shown : undefined;
+}
+
+/**
+ * Each Wiki row's era task, in the rows' order: by the Wiki's id, the task struct's id (param 873),
+ * and by name where two tasks share an id. Every row has one and every era task is on one row, with
+ * the same tier.
+ */
+function eraTasksOf(league: League, era: EraLeague, wikiRows: WikiRow[]): EraTask[] {
+  const byId = groupBy(era.tasks, (task) => String(task.id));
+  const used = new Set<EraTask>();
+  const joined = wikiRows.map((row) => {
+    const candidates = byId.get(String(row.id)) ?? [];
+    const task = candidates.length === 1 ? candidates[0] : candidates.find((each) => sameName(each.name, plain(row.name)));
+    if (!task) throw new Error(`${league.key}: the era cache (OpenRS2 ${league.era!.openrs2}) has no task ${row.id} for "${plain(row.name)}"`);
+    if (used.has(task)) throw new Error(`${league.key}: era task ${task.id} "${task.name}" is on two Wiki rows`);
+    used.add(task);
+    if (TIERS[row.tier] !== task.tier) throw new Error(`${league.key}: "${plain(row.name)}" is ${row.tier} on the Wiki, tier ${task.tier} in the era cache`);
+    return task;
+  });
+  const missing = era.tasks.filter((task) => !used.has(task));
+  if (missing.length) throw new Error(`${league.key}: era tasks without a Wiki row: ${missing.map((task) => `${task.id} "${task.name}"`).join("; ")}`);
+  return joined;
+}
+
 // ---- the cache's own league -----------------------------------------------------------------------
 
 /**
@@ -2360,7 +2506,7 @@ function summarise(league: League, tasks: Task[], duplicateWikiIds: string[], un
   const triggers = new Map<string, number>();
   for (const task of tasks) if (task.trigger) triggers.set(task.trigger.kind, (triggers.get(task.trigger.kind) ?? 0) + 1);
   const pacts = tasks.filter((task) => task.pactTask).length;
-  report.push(`${league.name}: ${tasks.length} tasks (${perTier}); ${tasks.reduce((sum, task) => sum + task.points, 0)} points; category from cache ${tasks.filter((task) => task.categorySource === "cache").length}, by rule ${tasks.filter((task) => task.categorySource === "rule").length}${pacts ? `; pact tasks ${pacts}` : ""}`);
+  report.push(`${league.name}: ${tasks.length} tasks (${perTier}); ${tasks.reduce((sum, task) => sum + task.points, 0)} points; category from cache ${tasks.filter((task) => task.categorySource === "cache").length}, by rule ${tasks.filter((task) => task.categorySource === "rule").length}, from the era cache ${tasks.filter((task) => task.categorySource === "era").length}${pacts ? `; pact tasks ${pacts}` : ""}`);
   report.push(`  triggers: ${[...triggers.entries()].map(([kind, count]) => `${kind} ${count}`).join(", ") || "none"}; without one ${tasks.filter((task) => !task.trigger).length}`);
   if (duplicateWikiIds.length) report.push(`  Wiki ids used twice (the Wiki's error, kept as is): ${duplicateWikiIds.join("; ")}`);
   if (unmapped.length) report.push(`  kill tasks without a matching cache NPC (${unmapped.length}): ${unmapped.join(" | ")}`);
@@ -2627,6 +2773,16 @@ async function main() {
     rows.set(league, templateCalls(wikitext, league.template).map(parseRow));
   }
   const areas = areaIds(cache, rows);
+  // The past leagues' own caches (OpenRS2, pinned), whose tier points must be the league's.
+  const eras = new Map<League, EraLeague>();
+  for (const league of LEAGUES) {
+    if (!league.era) continue;
+    const era = await eraLeague(league.type, league.era);
+    for (const [tier, points] of Object.entries(league.points)) {
+      if (era.points[Number(tier)] !== points) throw new Error(`${league.key}: tier ${tier} is ${points} points, ${era.points[Number(tier)]} in the era cache`);
+    }
+    eras.set(league, era);
+  }
   for (const page of new Set(PLACE_DEFS.map((def) => def.page))) placePages.set(page, await placePageOf(page, options));
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
@@ -2688,10 +2844,10 @@ async function main() {
   resolvePlaces();
 
   const output: Record<string, unknown> = {
-    $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks pages and the rev 241 cache; never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470): its `position` where the league is `fromCache` (Demonic Pacts, whose list is the cache's own, in the cache's order; `pactTask` marks the tasks that award a pact point), else its index; saves hold the string ids. `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",
+    $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks pages, the rev 241 cache and each past league's own cache from the OpenRS2 Archive (`eraCache`); never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470): its `position` where the league is `fromCache` (Demonic Pacts, whose list is the cache's own, in the cache's order; `pactTask` marks the tasks that award a pact point), else its index; saves hold the string ids (the Wiki name's slug). A league with an `eraCache` shows its tasks' name, description, category and area as that cache has them (`categorySource: \"era\"`); otherwise `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",
     points: Object.fromEntries(LEAGUES.map((league) => [league.type, league.points])),
     tiers: TIER_NAMES.slice(1),
-    categories: { 1: "Skill", 2: "Combat", 3: "Quest", 4: "Achievement", 5: "Minigame", 6: "Other" },
+    categories: CATEGORY_NAMES,
     areas,
     leagues: {} as Record<string, unknown>,
   };
@@ -2711,7 +2867,13 @@ async function main() {
     const unmapped: string[] = [];
     const seenIds = new Map<number, string>();
     const duplicateWikiIds: string[] = [];
-    for (const row of wikiRows) {
+    const era = eras.get(league);
+    const eraTasks = era ? eraTasksOf(league, era, wikiRows) : [];
+    const eraId = era ? eraIds(league, era, areas) : undefined;
+    const fromEra = { name: 0, description: 0, area: 0, category: 0 };
+    const restricted: string[] = [];
+    const staleKept: string[] = [];
+    for (const [index, row] of wikiRows.entries()) {
       const tier = TIERS[row.tier];
       if (!tier) throw new Error(`${league.key}: unknown tier "${row.tier}" on ${row.name}`);
       if (!(row.region in areas)) throw new Error(`${league.key}: unknown region "${row.region}" on ${row.name}`);
@@ -2728,8 +2890,29 @@ async function main() {
         category: fromCache?.category ?? ruleCategory(name, derived.trigger), categorySource: fromCache ? "cache" : "rule",
         requirements, skills: skillsOf(row.s),
       };
-      if (derived.trigger) task.trigger = derived.trigger;
+      const shown = eraTasks[index];
+      let trigger = derived.trigger;
+      if (shown && eraId) {
+        // The client shows the era's text, category and area; the id stays the Wiki name's slug.
+        const eraTask = { name: shown.name, description: shown.description, area: eraId.area(shown.area), category: eraId.category(shown.category) };
+        for (const field of ["name", "description", "area", "category"] as const) if (eraTask[field] !== task[field]) fromEra[field]++;
+        Object.assign(task, eraTask);
+        task.categorySource = "era";
+        // The trigger is the Wiki's, unless the in-game text adds a restriction to it.
+        const stricter = stricterTrigger(trigger, deriveTrigger(shown.name, shown.description.replace(/\u00a0/g, " "), names).trigger);
+        if (stricter && STALE_IN_GAME_TEXT[league.type]?.includes(row.id)) staleKept.push(task.id);
+        else if (stricter) {
+          restricted.push(`${task.id} ${JSON.stringify(trigger)} -> ${JSON.stringify(stricter)}`);
+          trigger = stricter;
+        }
+      }
+      if (trigger) task.trigger = trigger;
       tasks.push(task);
+    }
+    if (era) {
+      report.push(`${league.key}: era cache OpenRS2 ${league.era!.openrs2} (${league.era!.date}), ${era.tasks.length} tasks; its text differs from the Wiki's in ${fromEra.name} names and ${fromEra.description} descriptions, its area from the Wiki region's in ${fromEra.area}, its category from the rev 241 list's or the rule's in ${fromEra.category}`);
+      if (restricted.length) report.push(`  triggers the in-game text restricts (${restricted.length}): ${restricted.join("; ")}`);
+      if (staleKept.length) report.push(`  in-game restrictions the live league did not follow, Wiki trigger kept: ${staleKept.join(", ")}`);
     }
     // Ids are unique within a league: a repeated name takes its area, then its Wiki id.
     const regionOf = new Map(tasks.map((task, index) => [task, wikiRows[index].region]));
@@ -2744,7 +2927,8 @@ async function main() {
     tasks.sort((a, b) => a.tier - b.tier || a.area - b.area || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) || a.wikiId - b.wikiId);
     if (tasks.length > 1984) throw new Error(`${league.key}: ${tasks.length} tasks exceed the client's 1984 completion bits`);
     (output.leagues as Record<string, unknown>)[league.type] = {
-      key: league.key, name: league.name, source: `https://oldschool.runescape.wiki/w/${league.page}`, tasks,
+      key: league.key, name: league.name, source: `https://oldschool.runescape.wiki/w/${league.page}`,
+      ...(league.era ? { eraCache: { openrs2: league.era.openrs2, date: league.era.date } } : {}), tasks,
     };
     summarise(league, tasks, duplicateWikiIds, unmapped, report);
   }

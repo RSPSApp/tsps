@@ -1623,19 +1623,49 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   (`yarn generate:league-tasks [--from <dir>] [--save <dir>] [--check]`) from the Wiki's
   Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks
   pages (one `{{TRLTaskRow}}` / `{{RELTaskRow}}` / `{{DPLTaskRow}}` template per task in the raw wikitext: name, description, requirements, tier,
-  region, the Wiki's id) and the rev 241 cache; never edit it by hand, change the generator and
-  re-run it (same inputs, identical file; `--check` fails when the committed file is stale). A
-  task has a stable string id (its name's slug; saves hold ids, so the list order is free to
-  change), `wikiId`, tier 1-5, points (Easy 10, Medium 40 Trailblazer Reloaded / 30 Raging
-  Echoes, Hard 80, Elite 200, Master 400: the Wiki rows show the first two, the pages' per-area
-  totals reproduce the rest, and Raging Echoes' match cache enum 2671), the client's area id
-  (enum 3412: Global 0, Misthalin 1 ... Kourend 10, Wilderness 11, Varlamore 21), a category (enum
-  3411: 1 Skill, 2 Combat, 3 Quest, 4 Achievement, 5 Minigame, 6 Other) and, where derivable, a
-  `trigger`. The Wiki has no category: a task the cache's own list has by name (enum 5950's rows
-  of DB table 118 `action`, column 35: most of Raging Echoes and the Trailblazer Reloaded tasks
-  that share a name) takes the cache's, the rest a rule in the generator (`categorySource:
-  "rule"`, ours). The Wiki's Trailblazer Reloaded id 1522 is on two tasks (The Frozen Door,
-  Defeat Vardorvis); kept as the Wiki has it.
+  region, the Wiki's id), the rev 241 cache and each past league's era cache (below); never edit
+  it by hand, change the generator and re-run it (same inputs, identical file; `--check` fails
+  when the committed file is stale). A task has a stable string id (the Wiki name's slug; saves
+  hold ids, so the list order is free to change), `wikiId`, tier 1-5, points (Easy 10, Medium 40
+  Trailblazer Reloaded / 30 Raging Echoes, Hard 80, Elite 200, Master 400: the Wiki rows show the
+  first two, the pages' per-area totals reproduce the rest, and each era cache's enum 2671 agrees),
+  the client's area id (enum 3412: Global 0, Misthalin 1 ... Kourend 10, Wilderness 11, Varlamore
+  21), a category (enum 3411: 1 Skill, 2 Combat, 3 Quest, 4 Achievement, 5 Minigame, 6 Other) and,
+  where derivable, a `trigger`.
+- **Era caches** (`eraCache` on a league; `scripts/league-era-cache.ts`). A past league's task list
+  is in the caches Jagex served during it, not in ours: enum 2670 gives the league's struct, its
+  param 868 the list enum (position -> task struct), and a task struct its id (873, the Wiki's id),
+  name (874), description (875), category (1016, enum 3411) and area (1017, enum 3412); the tier is
+  param 1852 for Trailblazer Reloaded, 2044 for Raging Echoes, and a missing param reads its default
+  (Trailblazer Reloaded's "Equip a Full Angler's Outfit" has no area: Global). The generator fetches
+  only the config reference table and the enum, param and struct groups of a cache pinned by its
+  OpenRS2 id (`/caches/runescape/<id>/archives/<archive>/groups/<group>.dat`, CRC-checked against
+  the reference table) into `server/era-caches/` (gitignored), and takes each task's name,
+  description, category and area from it (`categorySource: "era"`): the text and filters the
+  client showed. The Wiki keeps the tier (which must agree), requirements and the id, so a task the
+  game spells differently ("Pickpocket a HAM Member", the Wiki's "H.A.M.") keeps its saved id. The
+  trigger is derived from the Wiki's text, which keeps details the in-game text drops, and is
+  derived again from the in-game text: where that one is the Wiki's with a restriction added (more
+  skills excluded, or a league area or place the Wiki's has none of) the task asks for it, since the
+  in-game text is Jagex's own statement of the task ("Use the special attack of a Dragon Axe in the
+  Fremennik Province", "Burn 200 Redwood Logs in Kourend", "Fletch a Redwood Shield in Kourend",
+  Raging Echoes; the report lists them). Text the live league did not follow is listed in the
+  generator (`STALE_IN_GAME_TEXT`) and keeps the Wiki's trigger: Raging Echoes' first level 5 and 10
+  still say "(not including Agility, ...)" from the Trailblazer cache, but a Leagues V capture
+  (rsprox.net 20241209T063558) completed the first level 10 on Agility 10. Two Wiki remarks the
+  captures bear out shape the trigger too: "(does not require a kiteshield / Crozier)" leaves that
+  piece out of a god set (a Leagues V capture completed the rune set without a shield), and
+  "(actually on Waterbirth Island)" is the place ("Pick up Snapegrass from Lunar Isle" completed at
+  2553,3754). Category ids are
+  the same since Trailblazer; an era area id keeps its number where today's enum 3412 names it the
+  same (all of these do; Kourend & Kebos is 10). The pinned cache is the league's last whose list
+  is final: Trailblazer Reloaded 1642 (12 Dec 2023; its list last changed by 6 Dec, and 1677 on the
+  last day is the same), Raging Echoes 2023 (15 Jan 2025; three descriptions changed by 10 Dec, and
+  2028 on the last day is the same). Twisted and Trailblazer can plug in the same way (their tier is
+  param 876; Twisted's task structs have no category or area, so it needs its own). The Demonic Pacts task of the same name, or
+  a rule, would give 241 Trailblazer Reloaded and 119 Raging Echoes tasks another category (the
+  generator reports the counts). The Trailblazer Reloaded id 1522 is on two tasks (The Frozen Door,
+  Defeat Vardorvis) on the Wiki and in the cache alike, told apart by name.
 - **Demonic Pacts' catalog is the cache's own list** (`fromCache: true`): this cache (rev 241) is
   the Demonic Pacts cache, so its task enum 5950 and table 118 rows are that league's. The
   generator reads them in position order: name, description, tier, area and category as the client

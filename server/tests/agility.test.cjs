@@ -28,7 +28,11 @@ const taskManager = {
   },
 };
 
+/** Ticks played so far, for timing checks. */
+let ticksPlayed = 0;
+
 function tick() {
+  ticksPlayed++;
   for (const task of tasks.splice(0)) {
     if (task.tick()) tasks.push(task);
   }
@@ -593,12 +597,23 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
       assert.equal(RegionManager.blocked(new Location(...from), null), false, "approach is walkable");
       assert.equal(RegionManager.blocked(new Location(...to), null), false, "landing is walkable");
       const player = createPlayer(...from, 1);
+      const moves = [];
+      const setForceMovement = player.setForceMovement;
+      player.setForceMovement = (value) => { if (value) moves.push(value.getDirection()); return setForceMovement(value); };
       const route = { player, object, objectId: id, clickType: 1, destination: null };
       hooks.route.forEach(handler => handler(route));
       assert.deepEqual([route.destination.x, route.destination.y, route.destination.z], from,
         "routing stays on this side of the clipped cliff");
+      const startTick = ticksPlayed;
       assert.notEqual(operate(player, id, at), false);
+      const ticks = ticksPlayed - startTick;
       assert.deepEqual(tileOf(player), to);
+      if (recorded && id === 42009) {
+        // rsprox 231/00725 ticks 237-238: facing west (512) a tick, then the 4-tick move east, still facing west
+        // (exactmove angle 512, ForceMovement direction 3).
+        assert.deepEqual(moves, [3], "one exact move, facing west");
+        assert.equal(ticks, 5, "the 1-tick facing lead-in, then the 4-tick move");
+      }
       if (animation) assert.ok(player.state.animations.includes(CacheDefinitions.getSeqId(animation)), animation);
       else assert.equal(player.state.renders?.[0], CacheDefinitions.getSeqId("human_climbing"), "the climbing walk render");
       assert.equal(player.state.xp, 0, "a canyon entrance does not award Agility XP");

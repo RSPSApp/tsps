@@ -93,6 +93,7 @@ function setup(options = {}) {
       items[slot] = left > 0 ? new core.Item(id, left) : new core.Item(-1, 0);
     },
     clear() { items = Array.from({ length: 28 }, () => new core.Item(-1, 0)); },
+    refreshItems() {},
   };
   const packet = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return packet; },
@@ -118,7 +119,7 @@ function setup(options = {}) {
   /** Like fire, but the handlers' changes to the payload stay visible to the caller. */
   const emit = (name, payload) => { payload.player ??= player; api.emitCustomEvent(name, payload); return payload; };
   return {
-    core, quest, player, attrs, configs, varbits, inventory, messages, typed, hooks, tasks, spawned, areas, sounds, persisted,
+    api, core, quest, player, attrs, configs, varbits, inventory, messages, typed, hooks, tasks, spawned, areas, sounds, persisted,
     fire, emit,
     xp, jingles: () => jingles,
     variant(npcId) {
@@ -292,15 +293,36 @@ test('mandatory route: pay, milk, seasoned sardine, one random Lumber Yard crate
   assert.equal(h.configs.get(180), 6, 'login replays the completed varp');
 });
 
-test('bottomless milk bucket advances the milk leg without being consumed', () => {
+test('bottomless milk bucket advances the milk leg for one use, not the whole bucket', () => {
   const h = setup();
   const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({ onServerStartup: (fn) => fn() }, {
+    get: (target, key) => target[key] ?? h.api[key],
+  }));
   h.quest.setStage(h.player, 2); // fixture: the boys have already been paid.
   h.inventory.adds(I.BOTTOMLESS_MILK_BUCKET, 1);
+  const bucket = h.inventory.getItems().find((item) => item.getId() === I.BOTTOMLESS_MILK_BUCKET);
+  bucket.setMetaValue('bottomless-milk', { uses: 2, type: I.BUCKET_OF_MILK });
   h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.inventory.getAmount(I.BOTTOMLESS_MILK_BUCKET), 1);
+  assert.equal(bucket.getMetaValue('bottomless-milk').uses, 1, 'one use is spent');
   assert.equal(h.inventory.getAmount(I.BUCKET), 0);
+});
+
+test('a bottomless bucket of another kind of milk does not count as milk for Fluffs', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({ onServerStartup: (fn) => fn() }, {
+    get: (target, key) => target[key] ?? h.api[key],
+  }));
+  h.quest.setStage(h.player, 2);
+  h.inventory.adds(I.BOTTOMLESS_MILK_BUCKET, 1);
+  h.inventory.getItems().find((item) => item.getId() === I.BOTTOMLESS_MILK_BUCKET)
+    .setMetaValue('bottomless-milk', { uses: 4, type: I.CHOCOLATEY_MILK });
+  h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
+  assert.equal(h.quest.getStage(h.player), 2, 'chocolatey milk is not what Fluffs wants');
+  assert.equal(h.messages.at(-1), 'Fluffs is not interested right now.');
 });
 
 test('completion waits until all advertised reward items fit', () => {

@@ -76,7 +76,7 @@ function superiorRewards(rewards) {
   const own = { player, npc, npcId: npc.getId?.(), rolls: 1 };
   api.emitCustomEvent("npc-drops:table-rolls", own);
   const total = variant ? effect.variantRolls : effect.superiorRolls;
-  rewards.extraRolls = Math.max(rewards.extraRolls, Math.max(0, total - Math.max(1, own.rolls)));
+  rewards.extraRolls = Math.max(rewards.extraRolls, Math.max(0, total - (Number.isInteger(own.rolls) ? Math.max(1, own.rolls) : 1)));
   if (variant) {
     rewards.uniqueBoost *= effect.variantUniqueBoost;
     const drop = rollTable();

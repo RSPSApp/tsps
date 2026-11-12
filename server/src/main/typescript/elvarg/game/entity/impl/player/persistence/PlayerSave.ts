@@ -747,9 +747,12 @@ export class PlayerSave {
         playerSave.rights = player.getRights();
         playerSave.donatorRights = player.getDonatorRights();
         playerSave.position = player.getLocation()?.clone?.() ?? new Location(3089, 3524, 0);
-        playerSave.spellBook = player.getSpellbook();
+        // A Spellbook Swap is never saved, so a save taken during one stores the Lunar book it returns to
+        // (changing back also clears the autocast), not the swapped book with no swap left to end it.
+        const swapping = !!player.getAttribute("lunar:spellbook-swap");
+        playerSave.spellBook = swapping ? MagicSpellbook.LUNAR : player.getSpellbook();
         playerSave.fightType = player.getFightType();
-        playerSave.autocastSpellId = player.getCombat().getAutocastSpell()?.spellId?.() ?? -1;
+        playerSave.autocastSpellId = swapping ? -1 : player.getCombat().getAutocastSpell()?.spellId?.() ?? -1;
         playerSave.autoRetaliate = player.autoRetaliateReturn();
         playerSave.audioSettings = { ...player.getAudioSettings() };
         playerSave.hasVengeance = player.hasVengeanceReturn();

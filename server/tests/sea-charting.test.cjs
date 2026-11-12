@@ -729,13 +729,105 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
       if (syntax && answer === 1955) [...player.chain.getDialogues().values()].at(-1).execute?.() ?? [...player.chain.getDialogues().values()].at(-1).action?.execute?.();
       syntax.execute(String(answer));
     }
-    assert.match(dialogueTexts(player).join(), /The mermaid, satisfied with your answer/);
-    tick(10);
+    // The box opens with no continue while she dives (rsprox 944): an empty continue line, no events.
+    assert.ok(dived(player));
+    assert.deepEqual(player.sent.filter(([key]) => key === "sendString").slice(-1)[0].slice(1, 2), [""]);
+    assert.equal(player.sent.filter(([key]) => key === "sendInterfaceFlagsRange").at(-1).at(-1), 0);
+    assert.doesNotMatch(dialogueTexts(player).join(), /satisfied with your answer|There you go/);
+    tick(1);
+    assert.equal(player.varbits.get(6719), 2); // minimap_state: off a tick after the fade out
+    tick(7);
+    assert.equal(player.varbits.get(6719), 0);
+    assert.equal(spotBit(player, spot), 0);
+    tick(2);
     assert.equal(spotBit(player, spot), 1);
     assert.deepEqual(player.xp, [175]);
-    assert.match(dialogueTexts(player).join(), /There you go. Hope the dive got you everything you needed!/);
+    assert.ok(player.sent.some(([key, uid]) => key === "closeSubInterface" && uid === ((161 << 16) | 1)));
+    // Then the same box to continue, and only after it her closing line.
+    const steps = [...player.chain.getDialogues().values()].map((step) => JSON.stringify(step));
+    assert.match(steps[0], /The mermaid, satisfied with your answer/);
+    assert.match(steps[1], /There you go. Hope the dive got you everything you needed!/);
   } finally {
     leave(player);
+  }
+});
+
+/** The dive text sent as the message box, since the last check. */
+function dived(player, from = 0) {
+  return player.sent.slice(from).some(([key, text]) => key === "sendString" && /^The mermaid, satisfied with your answer/.test(text));
+}
+
+/** Diving gear on, the riddle asked: answers go in as the item search and count prompts would. */
+function riddled(uid) {
+  const player = captain();
+  const spot = common.spotsOfType("mermaid_guide").find((each) => each.uid === uid);
+  const npc = mermaidAt(spot);
+  player.getEquipment = () => ({ contains: (id) => id === 7534 || id === 7535 });
+  const prompts = { syntax: null, amount: null };
+  player.setEnteredSyntaxAction = (action) => { prompts.syntax = action; };
+  player.setEnteredAmountAction = (action) => { prompts.amount = action; };
+  const lastStep = () => [...player.chain.getDialogues().values()].at(-1);
+  const riddle = () => { const step = lastStep(); (step.execute ?? step.action.execute).call(step.action ?? step); };
+  mermaid.dive({ player, npc });
+  riddle();
+  const titles = () => player.sent.filter(([key, id]) => key === "sendInterfaceScript" && id === 750).map(([, , args]) => args[0]);
+  const counts = () => player.sent.filter(([key]) => key === "sendEnterAmountPrompt").map(([, title]) => title);
+  return { player, spot, prompts, riddle, titles, counts };
+}
+
+test("a mermaid takes any of an answer's alternatives, and Selina's coal riddle only coal (rsprox 944, the Wiki)", () => {
+  // Selina, the Ooglog Channel: one answer; charcoal is wrong, coal right (rsprox 944).
+  const coal = riddled(126);
+  assert.deepEqual(coal.titles(), ["Submit your answer to the mermaid's puzzle:"]);
+  coal.prompts.syntax.execute("973");
+  assert.match(dialogueTexts(coal.player).join(), /I don't think that's right... You should try again./);
+  coal.riddle();
+  coal.prompts.syntax.execute("453");
+  assert.ok(dived(coal.player));
+  leave(coal.player);
+
+  // The Wiki's alternatives: grimy tarromin, a light bow tie, a teak plank, a rune med helm.
+  for (const [uid, ids] of [[350, [203]], [324, [19985]], [312, [8780]], [45, [1103, 1147]], [128, [213]]]) {
+    const each = riddled(uid);
+    for (const id of ids) each.prompts.syntax.execute(String(id));
+    assert.ok(dived(each.player), String(uid));
+    leave(each.player);
+  }
+});
+
+test("a mermaid's quantity riddle asks how many of each item (rsprox 940, 948)", () => {
+  // Gloria, Catherby: 5 cabbage seeds.
+  const seeds = riddled(46);
+  seeds.prompts.syntax.execute("5324");
+  assert.deepEqual(seeds.counts(), ["Cabbage seed: How many should there be?"]);
+  assert.ok(!dived(seeds.player));
+  seeds.prompts.amount.execute(4);
+  assert.match(dialogueTexts(seeds.player).join(), /I don't think that's right/);
+  seeds.riddle();
+  seeds.prompts.syntax.execute("5324");
+  seeds.prompts.amount.execute(5);
+  assert.ok(dived(seeds.player));
+  leave(seeds.player);
+
+  // Gloria's ring of returning: six items, three air runes, in the order given.
+  const ring = riddled(321);
+  for (const [id, count] of [[442, 1], [1755, 1], [1627, 1], [1592, 1], [564, 1], [556, 3]]) {
+    ring.prompts.syntax.execute(String(id));
+    ring.prompts.amount.execute(count);
+  }
+  assert.equal(ring.titles().at(-1), "Submit your sixth answer to the mermaid's puzzle:");
+  assert.equal(ring.counts().at(-1), "Air rune: How many should there be?");
+  assert.ok(dived(ring.player));
+  leave(ring.player);
+});
+
+test("every mermaid answer is a real item, and counts only where the riddle asks for quantities", () => {
+  const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+  for (const spot of common.spotsOfType("mermaid_guide")) {
+    const { answers, counts, riddle } = spot.mermaid;
+    for (const id of answers.flat()) assert.notEqual(ItemDefinition.forId(id)?.getName?.() ?? "null", "null", `${spot.key} ${id}`);
+    assert.equal(Boolean(counts), /quantity/.test(riddle.at(-1)), spot.key);
+    if (counts) assert.equal(counts.length, answers.length, spot.key);
   }
 });
 

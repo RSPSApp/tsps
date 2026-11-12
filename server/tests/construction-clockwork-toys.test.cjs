@@ -57,6 +57,8 @@ function newPlayer(t, name) {
   const sendVarbit = sender.sendVarbit.bind(sender);
   sender.sendVarbit = (varbit, value, ...rest) => (seen.varbits.push([varbit, value]), sendVarbit(varbit, value, ...rest));
   player.sendMessage = (message) => seen.messages.push(message);
+  const sendTyped = sender.sendTypedMessage.bind(sender);
+  sender.sendTypedMessage = (type, message, ...rest) => (seen.typed = [...(seen.typed ?? []), [type, message]], sendTyped(type, message, ...rest));
   t.after(() => {
     for (const [npc, entry] of [...Toys.released]) if (entry.owner === player) { Toys.released.delete(npc); entry.task.stop(); if (npc.isRegistered()) PM.removeNpc(npc); }
     try { House.releaseHouse(player, true); } finally { core.TaskManager.cancelTasks(player); core.World.getPlayers().remove(player); }
@@ -102,7 +104,7 @@ test("Wind turns each toy into its wound form, with the recorded message and sou
     assert.equal(click(player, id[`poh_toy_${kind}_unwound`], "Wind").handled, true);
     assert.equal(player.getInventory().getAmount(id[`poh_toy_${kind}_unwound`]), 0);
     assert.equal(player.getInventory().getAmount(id[`poh_toy_${kind}_wound`]), 1);
-    assert.equal(seen.messages.at(-1), `You wind up the ${kind}.`);
+    assert.deepEqual(seen.typed.at(-1), [core.ChatType.SPAM, `You wind up the ${kind}.`], "a spam-filtered line");
     assert.equal(seen.sounds.at(-1), 989);
   }
 });
@@ -197,4 +199,15 @@ test("A toy whose owner logs out goes back to their inventory", (t) => {
   PM.emitPlayerLogout({ player, username: player.getUsername() });
   assert.equal(npc.isRegistered(), false);
   assert.equal(player.getInventory().getAmount(id.poh_toy_doll_unwound), 1);
+});
+
+test("A toy whose NPC vanishes mid-walk goes back to its owner", (t) => {
+  const { player } = ownerInHouse(t);
+  player.getInventory().adds(id.poh_toy_soldier_wound, 1);
+  click(player, id.poh_toy_soldier_wound, "Release");
+  const [npc, entry] = onlyToy(player);
+  PM.removeNpc(npc);
+  entry.task.execute();
+  assert.equal(Toys.released.has(npc), false);
+  assert.equal(player.getInventory().getAmount(id.poh_toy_soldier_unwound), 1);
 });

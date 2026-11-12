@@ -1,6 +1,6 @@
 "use strict";
 
-const { Animation, CountdownTask, Item, ItemOnGroundManager, PluginManager, RegionManager, Sounds, Task, TaskManager } = require("./Core.Construction");
+const { Animation, ChatType, CountdownTask, Item, ItemOnGroundManager, PluginManager, RegionManager, Sounds, Task, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -64,7 +64,7 @@ function wind({ player, itemId, slot }) {
   const at = slotOf(inventory, itemId, slot);
   if (at < 0) return true;
   inventory.setItem(at, new Item(toy.woundId, 1)).refreshItems();
-  player.sendMessage(`You wind up the ${toy.kind}.`);
+  player.getPacketSender().sendTypedMessage(ChatType.SPAM, `You wind up the ${toy.kind}.`);
   player.getPacketSender().sendSound(WIND_SOUND, 1, 0);
   return true;
 }
@@ -133,7 +133,7 @@ function canStep(entity, from, [dx, dy]) {
 
 class ToyWalk extends Task {
   constructor(npc, toy, owner, heading) {
-    super(1, npc.getIndex(), false);
+    super(1, npc, false);
     this.npc = npc;
     this.toy = toy;
     this.owner = owner;
@@ -145,7 +145,8 @@ class ToyWalk extends Task {
 
   execute() {
     const { npc, toy, owner } = this;
-    if (released.get(npc)?.task !== this || !npc.isRegistered()) return this.stop();
+    if (released.get(npc)?.task !== this) return this.stop();
+    if (!npc.isRegistered()) return returnToOwner(npc);
     if (!owner.isRegistered?.() || owner.getPrivateArea() !== npc.getPrivateArea()) return returnToOwner(npc);
     this.ticks++;
     if (this.falling) return settle(npc, this);

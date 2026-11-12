@@ -1,7 +1,7 @@
 # Clockwork toys
 
 The toy soldier, toy doll and toy mouse made at the workshop crafting table
-(`plugins/skills/construction/ClockworkToys.Construction.js`).
+(`plugins/skills/construction/ClockworkToys.Construction.js`). At First Light's toy mouse uses the same Wind; that quest used to have its own Wind handler, without the sound or the spam channel.
 
 ## Live behaviour (rsprox captures)
 

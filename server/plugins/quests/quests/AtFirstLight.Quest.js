@@ -728,14 +728,6 @@ module.exports = function registerAtFirstLightQuest(api) {
     }
   }
 
-  function handleWindToyMouse(event) {
-    if (event.itemId !== TOY_MOUSE_ITEM_ID) return;
-    event.handled = true;
-    event.player.getInventory().deleteNumber(TOY_MOUSE_ITEM_ID, 1);
-    event.player.getInventory().adds(WOUND_TOY_MOUSE_ITEM_ID, 1);
-    event.player.sendMessage("You wind up the mouse.");
-  }
-
   function handleReadReport(event) {
     if (event.itemId !== FOXS_REPORT_ITEM_ID) return;
     event.handled = true;
@@ -905,7 +897,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
-  api.onItemAction("Toy mouse", { Wind: handleWindToyMouse });
+  // Wind on the toy mouse: construction/ClockworkToys.Construction.js (all clockwork toys).
   api.onItemAction("Fox's report", { Read: handleReadReport });
   api.onCustomEvent("player:bootstrap-complete", syncVars);
   api.onPlayerLogin(handleLogin);

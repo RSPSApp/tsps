@@ -712,6 +712,41 @@ test('pads: a forward pad pushes the player on the way they were going, a backwa
   assert.fail('no direction let the pad push');
 });
 
+// Wiki (Strange Tile): "temporarily immune to attacks for a few seconds after being teleported" (5 ticks assumed).
+test('pads: after a push the player is immune to trap hits for 5 ticks', () => {
+  const { p, run } = trapFloor(2, 0, [2532, 5984, 2]);
+  const pad = run.traps.pads.find((x) => x.forward);
+  run.traps.lastMove = [0, 0];
+  const random = Math.random;
+  Math.random = () => 0.99;
+  try {
+    let pushed = false;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      run.traps.prev = [pad.tile[0] - dx, pad.tile[1] - dy, pad.tile[2]];
+      p.moveTo(run.area.at(pad.tile));
+      run.traps.pendingPad = null;
+      pad.last = run.traps.tick + 1;
+      Traps.tick(run);
+      Traps.tick(run);
+      if (run.area.templateOf(p.getLocation()).join() !== pad.tile.join()) { pushed = true; break; }
+    }
+    assert.ok(pushed, 'a pad pushed the player');
+    const here = run.area.templateOf(p.getLocation());
+    const hitsBefore = p.hits.length;
+    run.traps.pendingHit = [1, here];
+    Traps.tick(run);
+    assert.equal(p.hits.length, hitsBefore, 'no hit during the immunity');
+    assert.equal(run.traps.pendingHit, null, 'the hit on its way is dropped');
+    while (run.traps.tick < run.traps.immuneUntil) Traps.tick(run);
+    run.traps.pendingHit = [1, here];
+    Traps.tick(run);
+    assert.ok(p.hits.length > hitsBefore, 'hits land again once it ends');
+  } finally {
+    Math.random = random;
+    run.finish();
+  }
+});
+
 test('a hit picks the nearest recorded zone, and floor 3 layout B uses the west landing', () => {
   const { run } = trapFloor(3, 1, [2396, 5856, 2]);
   assert.deepEqual(Traps.checkpoint(run, [2400, 5840, 1]), [2398, 5828, 1]);

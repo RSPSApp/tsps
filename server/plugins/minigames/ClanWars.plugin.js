@@ -1,4 +1,4 @@
-/** Bounded legacy chat-channel melee-only Last Team Standing. See docs/clan-wars.md. */
+/** Bounded legacy chat-channel melee-only Last Team Standing and kill-target battles. See docs/clan-wars.md. */
 const C = require("./clanwars/Common.ClanWars");
 const Match = require("./clanwars/Match.ClanWars");
 const Negotiation = require("./clanwars/Negotiation.ClanWars");
@@ -24,12 +24,12 @@ function attach(api) {
 }
 module.exports = {
   name: "ClanWars",
-  description: "Adds a bounded Clan Wars: a legacy chat-channel, melee-only Last Team Standing played through the challenge and exit portals.",
+  description: "Adds a bounded Clan Wars: a legacy chat-channel, melee-only Last Team Standing and kill-target battles played through the challenge and exit portals.",
   register(api) {
     attach(api);
     api.onObjectInteraction("Challenge portal", { Enter: Match.enter, Join: Match.enter, "Disable-XP": toggleXp });
     api.onObjectInteraction("Exit portal", { Forfeit: Match.leave });
-    api.onObjectInteraction("Portal", { Exit: Match.leave });
+    api.onObjectInteraction("Portal", { Exit: Match.exit });
     api.onCanGainExperience(blockXp);
   },
 };

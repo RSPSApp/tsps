@@ -53,13 +53,14 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   // lightness the low 7) identifies the visible forms: 983 neutral white,
   // 984 hue 42 blue, 985 hue 0 red, 986 hue 5 orange, 987 hue 21 green,
   // 988 hue 7 brown. Spell IDs below are CombatSpell.spellId() values.
+  // Overheads: Transcript:Horror_from_the_Deep, "When dagannoth mother changes to <colour>".
   const MOTHER_PHASES = [
-    { colour: "white", weakness: "air", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_4 },
-    { colour: "blue", weakness: "water", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_5 },
-    { colour: "orange", weakness: "melee", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_7 },
-    { colour: "brown", weakness: "earth", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_9 },
-    { colour: "red", weakness: "fire", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_6 },
-    { colour: "green", weakness: "ranged", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_8 },
+    { colour: "white", weakness: "air", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_4, overhead: "Tktktktktktkt" },
+    { colour: "blue", weakness: "water", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_5, overhead: "Krrrrrrk" },
+    { colour: "orange", weakness: "melee", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_7, overhead: "Chkhkhkhkhk" },
+    { colour: "brown", weakness: "earth", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_9, overhead: "Krrrrrrssssssss" },
+    { colour: "red", weakness: "fire", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_6, overhead: "Sssssrrrkkkkk" },
+    { colour: "green", weakness: "ranged", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_8, overhead: "Krkrkrkrkrkrkrkr" },
   ];
   const ELEMENTAL_SPELLS = new Map([
     [1152, "air"], [1160, "air"], [1172, "air"], [1183, "air"], [21876, "air"],
@@ -100,6 +101,9 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   // The cache carries the lighthouse twice; all four landings are the quest map's.
   const BASEMENT_LANDING = new Location(2519, 9995, 0);
+  // The quest transcript page (npc-dialogues.json "Horror from the Deep") and its post-kill variant.
+  const PAGE = "Horror from the Deep";
+  const MOTHER_KILLED_VARIANT = "upon-killing-the-dagannoth-mother";
   const LIGHTHOUSE_LANDING = new Location(2508, 3645, 0);
   const FOYER_LANDING = new Location(2515, 10005, 0);
   const DUNGEON_LANDING = new Location(2515, 4632, 0);
@@ -583,6 +587,12 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
       if (bossesByPlayer.get(owner) === event.npc) bossesByPlayer.delete(owner);
       if (quest.getStage(owner) >= STAGE_DEFEATED_DAGANNOTH && !quest.isComplete(owner)) {
         quest.complete(owner);
+        // Transcript: "(The player is teleported to outside the strange wall.)", then the player and Jossik's lines.
+        // No recording gives the tile: the one west of the far strange wall (4545 at 2516,3627), where it is entered from.
+        owner.moveTo(new Location(2514, 3627, 0));
+        // The variant's first two steps are the completion and the teleport, done here; the rest is the spoken lines.
+        require("../QuestRuntime").startTranscript(api, owner, JOSSIK_DUNGEON_ID, PAGE, MOTHER_KILLED_VARIANT,
+          (steps) => steps.filter((step) => step.type !== "action"));
       }
       return;
     }
@@ -634,6 +644,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
         state.ticks = 0;
         state.phase = (state.phase + 1) % MOTHER_PHASES.length;
         state.npc.setNpcTransformationId?.(MOTHER_PHASES[state.phase].npcId);
+        state.npc.forceChat?.(MOTHER_PHASES[state.phase].overhead);
         player.sendMessage(`The Dagannoth changes to ${MOTHER_PHASES[state.phase].colour}...`);
       }
     }

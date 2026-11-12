@@ -55,3 +55,19 @@ test("confirmation describes safe last-standing entry cutoff and supplies withou
   assert.match(summary, /Powered staves and Vesta's blighted longsword are not enabled/);
   assert.match(Rules.summary(Rules.create()), /maximum 100 fighters per team/);
 });
+
+
+test("revision 242 kill targets preserve fixed melee terms and reject deferred native modes", () => {
+  const targets = [25,50,100,200,500,1000,5000,10000];
+  for (let mode=1; mode<=8; mode++) {
+    const rules=Rules.create(3,mode);
+    assert.equal(Rules.validate(rules),true);
+    assert.equal(Rules.killTarget(rules),targets[mode-1]);
+    assert.equal(Rules.teamCap(rules),10);
+    assert.equal(rules.ranged,1); assert.equal(rules.magic,4);
+    assert.match(Rules.summary(rules),/First to .* kills on Plateau/);
+    assert.match(Rules.summary(rules),/Joining and rejoining remain open/);
+    assert.match(Rules.summary(rules),/Food and drinks are consumed normally/);
+  }
+  for (const mode of [-1,9,16,23,24,1.5,"1",null,NaN]) assert.equal(Rules.create(0,mode),null);
+});

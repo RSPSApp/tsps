@@ -95,10 +95,12 @@ module.exports = function registerRatcatchersQuest(api) {
   const MANSION_RAT_NW_NPC_ID = 6224;
   const MANSION_RAT_SE_1_NPC_ID = 6226;
   const MANSION_RAT_SE_2_NPC_ID = 6225;
+  // Each bit is the varbit that hides that rat's multinpc (osrs-dumps dump.npc): vc_partyrat_multi2 (6225) uses
+  // vc_raton_off2 (1425) and vc_partyrat_multi3 (6226) uses vc_raton_off3 (1426).
   const MANOR_UPPER_RAT_FLAGS = new Map([
     [MANSION_RAT_NW_NPC_ID, 1 << 0], // (2832,5098,1), north-west room
-    [MANSION_RAT_SE_1_NPC_ID, 1 << 1], // (2858,5087,1), south-east room
-    [MANSION_RAT_SE_2_NPC_ID, 1 << 2], // (2861,5093,1), south-east room
+    [MANSION_RAT_SE_2_NPC_ID, 1 << 1], // 6225 (2861,5093,1), south-east room
+    [MANSION_RAT_SE_1_NPC_ID, 1 << 2], // 6226 (2858,5087,1), south-east room
   ]);
 
   const STAGE_STARTED = 1;

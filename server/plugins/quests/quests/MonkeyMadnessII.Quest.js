@@ -1491,6 +1491,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       api.sendMultiChatboxPrompt(player, "Enter the hidden trapdoor?", "Yes.", () => {
         player.moveTo(DUNGEON_ENTRY);
         player.sendMessage("You enter the Ape Atoll dungeon.");
+        // Wiki (Monkey Madness II): entering Kruk's Dungeon to find Kruk, the greegree will "wrench itself from your
+        // hands", dropping to the ground with a full inventory. The later Kruk-greegree entry needs it worn.
+        if (stage === STAGE_ARCHER_ASKED) api.emitCustomEvent("greegree:wrench-off", { player });
       }, "No.", () => player.getPacketSender().sendInterfaceRemoval());
       return;
     }

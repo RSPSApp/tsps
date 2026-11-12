@@ -1,6 +1,7 @@
 /**
- * Wiki-backed legacy-channel Last Team Standing: 120s preparation, safe deaths, jail,
- * no late entry, and loss when a side has no fighters. No rewards or inventory snapshots.
+ * Wiki-backed legacy-channel LTS and First-to-X kills: two-minute preparation, safe
+ * deaths and jail. Kill-target battles permit late entry and unrestricted jail return.
+ * No rewards or inventory snapshots.
  * Uncaptured cleanup policy: withdrawal/disconnect eliminates; both empty cancels without a
  * winner. Landing/wall placement is chosen from the active Plateau map, not a recording.
  */
@@ -54,7 +55,9 @@ function arenaClass() {
 
 function hud(game, player) {
   C.bit(player, "clanwars_useclansystem", 0);
-  C.bit(player, "clanwars_wincondition", 0);
+  C.bit(player, "clanwars_wincondition", game.rules.wincondition);
+  C.bit(player, "clanwars_kills_1", game.kills[0]);
+  C.bit(player, "clanwars_kills_2", game.kills[1]);
   C.bit(player, "clanwars_myteam", game.members.get(player) + 1);
   C.bit(player, "clanwars_players_1", [...game.fighters.values()].filter((side) => side === 0).length);
   C.bit(player, "clanwars_players_2", [...game.fighters.values()].filter((side) => side === 1).length);
@@ -69,6 +72,8 @@ class Game {
     this.channelKeys = session.channelKeys.slice();
     this.members = new Map();
     this.fighters = new Map();
+    this.jailed = new Set();
+    this.kills = [0, 0];
     this.phase = "staging";
     this.starts = C.now() + PREPARATION_TICKS;
     this.area = new (arenaClass())(this);
@@ -89,9 +94,9 @@ class Game {
   enter(player) {
     const channel = C.channel(player);
     const side = this.channelKeys.indexOf(channel?.key);
-    if (side < 0 || this.phase !== "staging" || C.now() >= this.starts || this.members.has(player)
+    if (side < 0 || !this.canJoin() || dying.has(player) || this.members.has(player)
       || C.matches.has(player) || !C.inLobby(player) || player.getHitpoints() <= 0 || player.busy()) return false;
-    if ([...this.fighters.values()].filter((team) => team === side).length >= Rules.teamCap(this.rules)) {
+    if ([...this.members.values()].filter((team) => team === side).length >= Rules.teamCap(this.rules)) {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
     }
@@ -106,9 +111,40 @@ class Game {
     hud(this, player);
     return true;
   }
+  canJoin() {
+    return this.phase === "staging" && C.now() < this.starts
+      || this.phase === "combat" && Rules.killTarget(this.rules) > 0;
+  }
+  score(side) {
+    if (this.phase !== "combat" || !Rules.killTarget(this.rules)) return;
+    this.kills[side]++;
+    if (this.kills[side] >= Rules.killTarget(this.rules)) this.finish(side);
+  }
+  rejoin(player) {
+    if (this.phase !== "combat" || !Rules.killTarget(this.rules) || !this.jailed.has(player)
+      || dying.has(player) || player.getHitpoints() <= 0 || player.busy()
+      || player.getArea() !== this.area
+      || C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) return false;
+    const side = this.members.get(player);
+    this.jailed.delete(player);
+    this.fighters.set(player, side);
+    player.getCombat().reset();
+    player.moveTo(this.area.at(LANDINGS[side]));
+    hud(this, player);
+    return true;
+  }
+  channelLeft(player) {
+    const side = this.members.get(player);
+    if (side == null) return;
+    // Fixed leavingcc=0: a fighter leaving the channel counts as an opposing kill.
+    // A fighter already in a death callback or jail is not a second death.
+    if (this.fighters.has(player)) this.score(1 - side);
+    this.remove(player, false);
+  }
   tick() {
     for (const player of this.members.keys()) {
-      if (C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) this.remove(player, false);
+      if (C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) this.channelLeft(player);
+      if (this.phase === "over") return;
     }
     if (this.phase === "staging" && C.now() >= this.starts) {
       this.phase = "combat";
@@ -117,11 +153,15 @@ class Game {
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
     }
     if (this.phase === "combat") {
-      const sides = new Set(this.fighters.values());
+      // Jail and pending safe deaths retain their roster slot in respawning modes.
+      // A temporary lack of living fighters must not end a 1v1 after its first kill.
+      const sides = new Set((Rules.killTarget(this.rules) ? this.members : this.fighters).values());
       if (sides.size < 2) return this.finish(sides.size ? [...sides][0] : null);
     }
     for (const player of this.members.keys()) {
       C.bit(player, "clanwars_countdown", this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0);
+      C.bit(player, "clanwars_kills_1", this.kills[0]);
+      C.bit(player, "clanwars_kills_2", this.kills[1]);
       C.bit(player, "clanwars_players_1", [...this.fighters.values()].filter((team) => team === 0).length);
       C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
     }
@@ -129,14 +169,20 @@ class Game {
   eliminate(player) { this.fighters.delete(player); player.getCombat().reset(); }
   remove(player, logout) {
     if (!this.members.has(player)) return;
+    // A lethal hit queues its task before player:dying. Preserve safe-death
+    // ownership before any departure deletes membership, including match finish.
+    if (player.isDyingReturn() && !dying.has(player)) {
+      dying.set(player, { game: this, side: this.members.get(player) });
+    }
     this.eliminate(player);
+    this.jailed.delete(player);
     this.members.delete(player);
     C.matches.delete(player);
     player.setAttribute(C.IN_MATCH_ATTRIBUTE, false);
     player.getPacketSender().closeSubInterface(C.uid("toplevel_osrs_stretch:overlay_hud"));
     player.getPacketSender().sendPlayerOption(1, "", true);
     C.bit(player, "clanwars_accept", 0);
-    for (const name of ["clanwars_myteam", "clanwars_countdown", "clanwars_players_1", "clanwars_players_2"]) C.bit(player, name, 0);
+    for (const name of ["clanwars_myteam", "clanwars_wincondition", "clanwars_countdown", "clanwars_players_1", "clanwars_players_2", "clanwars_kills_1", "clanwars_kills_2"]) C.bit(player, name, 0);
     // Remove ownership before moving so Area.leave can safely re-enter without recursion.
     this.area.leave(player, logout);
     if (logout) player.setLocation(C.location(C.RETURN));
@@ -189,7 +235,7 @@ function enter({ player }) {
 function joinClicked(event) {
   const game = joining.get(event.player);
   if (!game || event.groupId !== C.group("clanwars_confirm")) return;
-  if (C.negotiations.has(event.player) || game.phase !== "staging" || !active.has(game)) {
+  if (C.negotiations.has(event.player) || !game.canJoin() || !active.has(game)) {
     joining.delete(event.player);
     return;
   }
@@ -203,9 +249,16 @@ function joinClicked(event) {
 function joinClosed({ player, interfaceId }) {
   if (interfaceId === C.group("clanwars_confirm")) joining.delete(player);
 }
-function dyingStarts({ player }) {
+function dyingStarts({ player, killer }) {
   const game = C.matches.get(player);
-  if (game) { dying.set(player, { game, side: game.members.get(player) }); game.eliminate(player); }
+  if (!game || dying.has(player) || !game.fighters.has(player)) return;
+  const side = game.members.get(player);
+  const scoringSide = game.members.get(killer);
+  dying.set(player, { game, side });
+  game.eliminate(player);
+  // Use the death task's captured damage owner, before its reset, and require an
+  // opposing participant still owned by this match. Unattributed deaths award no guessed kill.
+  if (scoringSide != null && scoringSide !== side) game.score(scoringSide);
 }
 function keepItems(event) {
   if (C.matches.has(event.player) || dying.has(event.player)) event.shouldDrop = false;
@@ -217,9 +270,23 @@ function died(event) {
   dying.delete(event.player);
   event.handled = true;
   if (state.game.phase === "over" || !state.game.members.has(event.player)) event.player.moveTo(C.location(C.RETURN));
-  else event.player.moveTo(state.game.area.at(JAILS[state.side]));
+  else {
+    state.game.jailed.add(event.player);
+    event.player.moveTo(state.game.area.at(JAILS[state.side]));
+    hud(state.game, event.player);
+  }
 }
 function leave({ player }) { const game = C.matches.get(player); if (!game) return false; game.remove(player, false); return true; }
+function exit(event) {
+  const game = C.matches.get(event.player);
+  if (!game) return false;
+  if (game.jailed.has(event.player) && Rules.killTarget(game.rules)) {
+    if (!game.rejoin(event.player)) event.player.sendMessage("You cannot rejoin this battle now.");
+    return true;
+  }
+  return leave(event);
+}
+function channelLeft({ player }) { C.matches.get(player)?.channelLeft(player); }
 function gone({ player }) { joining.delete(player); C.matches.get(player)?.remove(player, true); }
 function recover({ player }) {
   if (player.getAttribute(C.IN_MATCH_ATTRIBUTE) !== true) return;
@@ -240,10 +307,11 @@ function attach(api) {
   api.onCustomEvent("pvp:count-stats", noPvpRewards);
   api.onShouldDropItemsOnDeath(keepItems);
   api.onPlayerDeath(died);
+  api.onCustomEvent("friends-chat:left", channelLeft);
   api.onPlayerDisconnect(gone);
   api.onPlayerLogout(gone);
   api.onPlayerLogin(recover);
   api.persistAttribute(C.IN_MATCH_ATTRIBUTE, false);
   api.onServerShutdown(shutdown);
 }
-module.exports = { start, enter, leave, attach, shutdown, active, dying };
+module.exports = { start, enter, leave, exit, attach, shutdown, active, dying };

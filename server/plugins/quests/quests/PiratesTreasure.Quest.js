@@ -453,6 +453,14 @@ module.exports = function registerPiratesTreasureQuest(api) {
     event.allow = false;
   }
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.COOKING, 800, "Cooking"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
   quest = registerQuest(api, {
     key: "pirates_treasure",
     name: "Pirate's Treasure",
@@ -460,11 +468,13 @@ module.exports = function registerPiratesTreasureQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemId: CASKET_ITEM_ID,
     scrollItemId: CASKET_ITEM_ID,
     completionJingleId: 153,
     rewardItemLabel: "One-Eyed Hector's Treasure",
     buildJournal,
+    onReward: grantCompletionXp,
   });
 
   api.persistAttribute(EMPLOYMENT_ATTRIBUTE);

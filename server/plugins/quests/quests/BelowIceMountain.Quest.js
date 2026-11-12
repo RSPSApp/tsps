@@ -1968,6 +1968,19 @@ module.exports = function registerBelowIceMountainQuest(api) {
   // Registration
   // ==========================================================================
 
+  // The 3 November 2026 update's quest XP (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  const COMPLETION_XP = [[api.core.Skill.MINING, 1200, "Mining"]];
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    grantReward(player, completed, options);
+    grantCompletionXp(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "below_ice_mountain",
     name: "Below Ice Mountain",
@@ -1977,6 +1990,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
     rewardItemId: COINS_ITEM_ID,
     rewardItemLabel: "2,000 Coins",
     scrollItemId: STEAK_SANDWICH_ITEM_ID,
@@ -1984,7 +1998,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     // The capture's scroll wraps this reward over two rows and lists nothing else (2253).
     otherRewards: ["Access to the Ruins of", "Camdozaal"],
     buildJournal,
-    onReward: grantReward,
+    onReward: rewardOnCompletion,
   });
 
   api.persistAttribute(CHECKAL_ATTRIBUTE, 0);

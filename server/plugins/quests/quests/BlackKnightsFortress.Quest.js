@@ -713,6 +713,18 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
   pluginApi = api;
   ObstacleRunner.init(api);
+  // The 3 November 2026 update's quest XP: lamps (plugins/items/QuestRewardLamps.plugin.js) (Wiki: Update:Quest Month Kick Off, TFA Tweaks & More),
+  // paid on completion; held back for a completion not played through (experience: false).
+  function grantCompletionLamps(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    api.emitCustomEvent("quest-lamps:give", { player, lamp: "BLACK_KNIGHTS_FORTRESS", count: 2 });
+  }
+
+  function rewardOnCompletion(player, completed, options) {
+    reward(player, completed, options);
+    grantCompletionLamps(player, completed, options);
+  }
+
   quest = registerQuest(api, {
     key: "black_knights_fortress",
     name: "Black Knights' Fortress",
@@ -720,11 +732,12 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     startedValue: STAGE_INVESTIGATE,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,
+    otherRewards: ["2 antique lamps giving 1,000 combat XP each"],
     completionJingleId: 152,
     scrollItemId: COINS_ITEM_ID,
     rewardItemLabel: "2,500 Coins",
     buildJournal,
-    onReward: reward,
+    onReward: rewardOnCompletion,
   });
 
   api.onNpcDialogueVariant(selectVariant);

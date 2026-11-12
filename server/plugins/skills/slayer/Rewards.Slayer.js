@@ -165,17 +165,27 @@ function cancelCost(player) {
   return CANCEL_COST[State.varbit(player, "slayer_master")] ?? CANCEL_COST.default;
 }
 
-function cancel(player) {
-  if (!Tasks.current(player)) return;
-  if (!spend(player, costOf(player, "cancel", cancelCost(player)), "cancel your task")) return;
-  Tasks.clear(player);
-  refreshTask(player);
-  player.sendMessage("Your task has been cancelled.");
+/** What cancelling the current task costs this player now. */
+function cancelPrice(player) {
+  return costOf(player, "cancel", cancelCost(player));
 }
 
-/** "slayer:cancel-task" { player }: Mortimer's "Can I cancel that task?". */
-function cancelEvent({ player }) {
-  if (player) cancel(player);
+/** Cancels the task for its price; `quiet` leaves the line to the master who says it. */
+function cancel(player, { quiet = false } = {}) {
+  if (!Tasks.current(player)) return false;
+  if (!spend(player, cancelPrice(player), "cancel your task")) return false;
+  Tasks.clear(player);
+  refreshTask(player);
+  if (!quiet) player.sendMessage("Your task has been cancelled.");
+  return true;
+}
+
+/**
+ * "slayer:cancel-task" { player, quiet? }: a master's "Can I cancel that task?"; sets
+ * `cancelled` on the request.
+ */
+function cancelEvent(request) {
+  if (request?.player) request.cancelled = cancel(request.player, { quiet: request.quiet === true });
 }
 
 function slotOpen(player, slot) {
@@ -316,6 +326,7 @@ module.exports = {
   unlock,
   extendAll,
   cancel,
+  cancelPrice,
   block,
   blockNow,
   unblock,

@@ -18,7 +18,7 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "arena_container", "stragglers_container", "other_container",
-  "melee", "ranged", "magic", "food", "drinks", "prayer", "specialattacks", "leavingcc", "rejoiningdelay",
+  "melee", "ranged", "magic", "leavingcc", "rejoiningdelay",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -70,6 +70,13 @@ function renderSetup(session) {
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), 0, 71, 0);
       for (let mode = 0; mode < 24; mode++) {
         sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:wincondition"), mode * 3, mode * 3, OP1);
+      }
+      for (const name of Object.keys(Rules.RESTRICTIONS)) {
+        sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
+        // Script2877 creates highlight child0, then option children index+1.
+        // The deferred special row also transmits, so its optimistic bit is reset.
+        const count = name === "prayer" || name === "specialattacks" ? 3 : 2;
+        sender.sendInterfaceFlagsRange(Common.uid(`clanwars_setup:dropdown_${name}`), 1, count, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:dropdown_playercap"), 1, Rules.TEAM_CAPS.length, OP1);
@@ -148,7 +155,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau. Objective modes are unavailable. Choose a mode and team cap, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -179,9 +186,8 @@ function route(event) {
 }
 
 function changeRules(session, player, key, index) {
-  const next = Rules.create(key === "playercap" ? index : session.rules.playercap,
-    key === "wincondition" ? index : session.rules.wincondition);
-  if (!next) return;
+  const next = { ...session.rules, [key]: index };
+  if (!Rules.validate(next)) return;
   if (session.rules[key] === index) {
     sendRules(player, session.rules);
     return;
@@ -247,6 +253,14 @@ function click(event) {
     if (clicked("clanwars_setup:dropdown_playercap")) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 1 && slot <= Rules.TEAM_CAPS.length) return changeRules(session, player, "playercap", slot - 1);
+    }
+    for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
+      if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
+      const slot = event.slot ?? event.action;
+      if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
+      player.sendMessage("That Clan Wars rule option is not supported.");
+      sendRules(player, session.rules);
+      return;
     }
     if (clicked("clanwars_setup:wincondition")) {
       const slot = event.slot ?? event.action;

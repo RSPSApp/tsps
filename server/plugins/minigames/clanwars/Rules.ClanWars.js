@@ -1,13 +1,14 @@
 /**
  * The configuration offered by this bounded melee team-battle implementation, NOT a claim
- * about OSRS's initial/default settings. The team cap and supported battle mode are negotiable.
+ * about OSRS's initial/default settings. The team cap, supported mode and bounded melee restrictions are negotiable.
  *
  * Rev242 enum_374/375: last standing is 0 and closes entry when combat starts;
  * enum_929: Plateau is 1; enum_2340: the cap indices below (not the Wiki's older list).
  * The Wiki's Clan Wars page establishes safe deaths and the 100-fighter per-side limit.
  * Enums 374/376 map modes 1..8 to kill targets; enum1119 maps 16..20 to minutes.
  * Objective modes remain unsupported.
- * Other combat restrictions and modern-clan selection need separate implementation.
+ * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
+ * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
  */
 const OFFERED_RULES = Object.freeze({
   wincondition: 0,
@@ -37,6 +38,13 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 // GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE is 600ms; HUD script213
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
 const TICKS_PER_MINUTE = 100;
+const RESTRICTIONS = Object.freeze({
+  food: Object.freeze([0, 1]),
+  drinks: Object.freeze([0, 1]),
+  prayer: Object.freeze([0, 1, 2]),
+  // "No Staff of the Dead" needs separately qualified variant/effect rules.
+  specialattacks: Object.freeze([0, 2]),
+});
 const RULE_KEYS = Object.freeze(Object.keys(OFFERED_RULES));
 
 /** Refuse incomplete, obsolete or forged configurations rather than silently normalising. */
@@ -54,6 +62,8 @@ function validate(rules) {
     } else if (key === "wincondition") {
       if ((descriptor.value < 0 || descriptor.value >= KILL_TARGETS.length)
         && !TIME_LIMIT_MINUTES[descriptor.value]) return false;
+    } else if (RESTRICTIONS[key]) {
+      if (!RESTRICTIONS[key].includes(descriptor.value)) return false;
     } else if (descriptor.value !== OFFERED_RULES[key]) return false;
   }
   return true;
@@ -96,9 +106,13 @@ function summary(rules) {
     respawning ? "Defeated fighters go to jail and may return to battle. Leaving the chat-channel counts as a death."
       : "The team with no fighters remaining loses. Leaving the chat-channel counts as a death.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
-    "Melee combat only. Ranged and magical combat are disabled. Prayers, food, drinks and melee special attacks are allowed.",
+    "Melee combat only. Ranged and magical combat are disabled.",
+    rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
+      ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
+    `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
+    `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
     "Food and drinks are consumed normally. Powered staves and Vesta's blighted longsword are not enabled.",
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };

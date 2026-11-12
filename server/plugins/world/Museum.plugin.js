@@ -23,8 +23,9 @@
  *   - The natural history quiz (museum/NaturalHistoryQuiz.Museum.js): 2 Kudos per
  *     display case, through AWARD_KUDOS_EVENT.
  *
- * Not implemented: fossil displays, ancient relics and salvaging. They are
- * separate Kudos routes and are not needed for 100.
+ * Not implemented: fossil displays, ancient relics and the hand-in of salvaged relics to
+ * Curator Haig Halen (the salvage lamps can be rubbed). They are separate Kudos routes and are
+ * not needed for 100.
  */
 "use strict";
 
@@ -279,6 +280,15 @@ const REPORT_DISPLAY_VARBITS = new Map([
 const LAMP_MESSAGE = "You receive an old lamp.";
 const GHOSTLY_ROBES = ["GHOSTLY_ROBE", "GHOSTLY_ROBE_2", "GHOSTLY_BOOTS", "GHOSTLY_HOOD", "GHOSTLY_GLOVES", "GHOSTLY_CLOAK"]; // top, bottom, boots, hood, gloves, cloak
 const LAMP_BY_QUEST = new Map([...LAMPS].map(([itemId, lamp]) => [lamp.quest, { itemId, ...lamp }]));
+/**
+ * Curator Haig Halen's lamps for salvaged relics (Wiki: Antique lamp (salvaging)): small, medium
+ * and large, for any skill at or above the lamp's level.
+ */
+const SALVAGE_LAMPS = new Map([
+  [32871, { xp: 5000, minLevel: 30 }], // salvaging_rare_lamp_small
+  [32872, { xp: 10000, minLevel: 40 }], // salvaging_rare_lamp_med
+  [32873, { xp: 15000, minLevel: 50 }], // salvaging_rare_lamp_large
+]);
 
 const TOOL_ITEMS = [
   [ITEM.TROWEL, "trowel"],
@@ -759,7 +769,7 @@ function showMinasMessage(message) {
 }
 
 function rubLamp(event) {
-  const lamp = LAMPS.get(event.itemId);
+  const lamp = LAMPS.get(event.itemId) ?? SALVAGE_LAMPS.get(event.itemId);
   if (!lamp) return false;
   const { player, item, slot } = event;
   if (player.getInventory().get(slot) !== item) return true;
@@ -792,7 +802,7 @@ function grantLampExperience(player, request, skill, name = skill.getName()) {
     return null;
   }
   inventory.deleteAtSlot(request.slot, 1);
-  return `<col=0000ff>Your wish has been granted!</col> You have been awarded ${request.lamp.xp.toLocaleString("en-GB")} ${name} experience!`;
+  return `<col=0000ff>Your wish has been granted!</col><br>You have been awarded ${request.lamp.xp.toLocaleString("en-GB")} ${name} experience!`;
 }
 
 function answerGetKudos(request) {

@@ -28,6 +28,9 @@ const PART_VARBITS = {
   keel: VARBIT.SIDEPANEL_FACILITY_KEEL,
   hull: VARBIT.SIDEPANEL_FACILITY_HULL,
   trim: VARBIT.SIDEPANEL_FACILITY_TRIM,
+  /** `sailing_sidepanel_facility_flag` and `_brazier`. */
+  flag: 19169,
+  brazier: 19170,
 };
 /** The sidepanel's resistance varbits, by stat. */
 const RESISTANCE_VARBITS = {
@@ -35,6 +38,8 @@ const RESISTANCE_VARBITS = {
   rapidResistance: VARBIT.SIDEPANEL_BOAT_RAPIDRESISTANCE,
   fetidWaterResistance: VARBIT.SIDEPANEL_BOAT_FETIDWATER_RESISTANT,
   crystalFleckedResistance: VARBIT.SIDEPANEL_BOAT_CRYSTALFLECKED_RESISTANT,
+  /** `sailing_sidepanel_boat_icyseas_resistant`: set by the eternal brazier. */
+  icySeasResistance: 19255,
 };
 const STAT_VARBITS = {
   hitpoints: [VARBIT.SIDEPANEL_BOAT_HP_MAX, VARBIT.SIDEPANEL_BOAT_HP],

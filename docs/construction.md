@@ -418,6 +418,52 @@ so `House` keeps `visitedKourend` / `visitedVarlamore` in the house save from
 because both regions span hundreds of map squares, the case `docs/agents/areas.md` gives it for;
 the estate agent also accepts either varbit if a quest ever sets it.
 
+### Servants
+
+`Servants` speaks each servant's own lines, kept in `data/servants.json` by the cache name of
+the NPC (`poh_servant_dogsbody` Rick, `_waiter_woman` Maid, `_cook_woman` Cook,
+`_maitre_d_man` Butler, `_demon` Demon butler) and the situation. A situation a servant has
+no line for is left out and the flow goes on without it; the file's `_wiki` lists name the
+lines that come from the Wiki transcripts rather than captures.
+
+From rsprox recordings 303-311 and 2930-2947 (all revision 230), except where a line says
+Wiki:
+
+- Guild: greeting, then "What can you do?" / "Tell me about your previous jobs" / "You're
+  hired!". The level refusal is the servant's line (Wiki). A missing second bedroom is a
+  message box; so is "You already have a servant." (Wiki, a `tbox` like the bedroom line). With
+  no coins and a money bag built, the player says "...you should find some in a bag in the
+  bedroom. How's that?" and the servant refuses; without a bag the player's line is the Wiki's
+  "...can I owe you? I'm good for it, honest.". The Chief servant's first option is "Tell me
+  about servants." or, with a servant, "I'd like to dismiss my servant, please.".
+- While tea or drinks are being made the servant works in the kitchen (recording 2931): no
+  second order or errand is taken. Ours: Talk-to does nothing then, and a call says "The
+  servant is not back yet.". Dinner frees the servant once it is on the table.
+- `poh_servant_pay` is 16 on hire; an errand takes 2, tea 1, dinner 2, sending held items
+  back 1, drinks nothing. Tea is charged before the kitchen check (Rick still says he can't
+  work without the equipment); dinner checks the dining table first. At 0 the servant asks
+  for the wage on its return and on every talk; a money bag holding the wage pays it on the
+  return with "Your servant takes some payment from the money bag. N coins remain.".
+- `poh_servant_lasttasktype`: 1 bank, 2 un-note, 3 fetch, 4 sawmill. Talk-to offers
+  "Repeat last task?" with "<kind>: N x <item>" while the item is still where the task takes
+  it from; else the servant's greeting (or "You rang" from the bell) and the menu
+  "Serve... / Go to the bank... / Go to the sawmill... / Greet guests / You're fired".
+- Fetch: the player's line, the bank PIN if not yet entered, the servant's reply, then the
+  pages "Wooden planks..Mahogany planks", "Soft clay..Cloth", "Gold leaf..Magic housing
+  stone", each ending in "More..." (the last back to the first).
+- An item used on the servant: bones are refused in the servant's words; notes ask
+  "Yes / No, just take it to the bank. / No, never mind."; logs on a sawmill servant
+  "Sawmill / Bank / Never mind"; anything else "Yes / No". A full bank is answered before the
+  amount, an amount of 0 after it. Sawmill: the servant names the fee, then
+  "Convert the planks for N coins?".
+- Tea is offered 40 ticks after it was asked for, with "Yes please / No thanks / Actually I
+  don't want any"; drinks with "Yes please / No thanks / Something else". Ours: drinks after
+  27 ticks.
+
+Not covered by either source: the Maid's and Cook's in-house greeting and "You rang", the
+wage demand of Rick, the Maid and the Cook, a full-inventory line other than the Demon
+butler's, guests' conversations with the servant, and the Butler's guest greeting.
+
 ## Not done yet
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).

@@ -293,10 +293,13 @@ test("a teleport spell aboard your own boat asks first with the warning on, and 
   };
   let request = ask();
   assert.equal(request.cast, 0);
-  assert.deepEqual(MultiChatboxPrompt.getPending(f.p), { title: TeleportWarning.QUESTION, options: [TeleportWarning.YES, TeleportWarning.NO] });
-  choose(f.p, 2);
+  f.p.getDialogueManager().advance(); // the message box first, as live
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p),
+    { title: TeleportWarning.QUESTION, options: [TeleportWarning.YES, TeleportWarning.YES_DONT_ASK, TeleportWarning.NO] });
+  choose(f.p, 3);
   assert.equal(request.cast, 0, "no: stays aboard");
   request = ask();
+  f.p.getDialogueManager().advance();
   choose(f.p, 1);
   assert.equal(request.cast, 1, "yes: the teleport goes ahead");
 
@@ -326,6 +329,7 @@ test("the boat warning follows a Wilderness warning the spell also has", (t) => 
   assert.equal(request.handled, true, "the Wilderness warning asks");
   assert.notEqual(MultiChatboxPrompt.getPending(f.p)?.title, TeleportWarning.QUESTION);
   choose(f.p, 1);
+  f.p.getDialogueManager().advance(); // the boat warning's message box
   assert.equal(MultiChatboxPrompt.getPending(f.p)?.title, TeleportWarning.QUESTION, "then the boat warning");
   choose(f.p, 1);
   assert.equal(request.cast, 1);

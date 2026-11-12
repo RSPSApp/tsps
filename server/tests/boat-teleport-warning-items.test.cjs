@@ -69,7 +69,13 @@ function actor(t, { aboard = true, warning = true } = {}) {
   return { t, p, conn, messages, state, teleports };
 }
 
-const pending = (f) => MultiChatboxPrompt.getPending(f.p);
+/** Whether the boat warning's message box is up (it comes before the question, as live). */
+const boatBox = (f) => f.p.getDialogueManager().getCurrent()?.text === TeleportWarning.TEXT_BOX;
+/** The pending question, past the boat warning's message box (continued, as the player does). */
+const pending = (f) => {
+  if (boatBox(f)) f.p.getDialogueManager().advance();
+  return MultiChatboxPrompt.getPending(f.p);
+};
 const choose = (f, index) => MultiChatboxPrompt.handleInterfaceActionClick({ player: f.p, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, slot: index });
 const settle = (ticks = 12) => { for (let i = 0; i < ticks; i++) core.TaskManager.process(); };
 const carried = (f) => [...f.p.getInventory().getItems(), ...f.p.getEquipment().getItems()]
@@ -282,7 +288,7 @@ for (const teleport of CASES) {
     assert.equal(pending(f)?.title, TeleportWarning.QUESTION, `the warning (${f.messages.join(" | ")})`);
     assert.equal(went(), false, "not gone yet");
     assert.equal(carried(f), before, "nothing used up yet");
-    choose(f, 2);
+    choose(f, 3);
     settle();
     assert.equal(went(), false, "no: stays aboard");
     assert.equal(carried(f), before, "no: nothing used up");
@@ -406,6 +412,7 @@ test("a teleport item that is used up (a scroll) and gone by the yes stays, and 
   const f = actor(t);
   give(f, I.NARDAH_TELEPORT);
   use(f, I.NARDAH_TELEPORT, "Teleport");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
   f.p.getInventory().deleteNumber(I.NARDAH_TELEPORT, 1);
   choose(f, 1);
   assert.equal(f.teleports.length, 0);
@@ -502,13 +509,14 @@ test("aboard a real boat at sea: a tablet asks; no keeps the boat and the tablet
   give(f, I.VARROCK_TELEPORT);
   use(f, I.VARROCK_TELEPORT, "Break");
   assert.equal(pending(f)?.title, TeleportWarning.QUESTION, f.messages.join(" | ") + " busy=" + f.p.busy() + " status=" + f.p.status + " iface=" + f.p.getInterfaceId?.());
-  choose(f, 2);
+  choose(f, 3); // No, stay on the boat.
   settle();
   assert.ok(core.Sailing.instanceAboard(f.p), "no: still aboard");
   assert.notEqual(owned(f).location.kind, "sunk");
   assert.equal(f.p.getInventory().getAmount(I.VARROCK_TELEPORT), 1, "no: the tablet kept");
 
   use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
   choose(f, 1);
   settle();
   assert.equal(core.Sailing.instanceAboard(f.p), undefined, "yes: off the boat");
@@ -534,7 +542,7 @@ test("aboard a real boat at sea, an item teleport (glory) asks before it goes", 
   use(f, I.AMULET_OF_GLORY_4_, "Rub");
   pick(f, /^Edgeville/);
   assert.equal(pending(f)?.title, TeleportWarning.QUESTION);
-  choose(f, 2);
+  choose(f, 3); // No, stay on the boat.
   settle();
   assert.ok(core.Sailing.instanceAboard(f.p), "no: still aboard");
   assert.equal(f.p.getInventory().contains(I.AMULET_OF_GLORY_4_), true, "no charge used");
@@ -650,4 +658,41 @@ test("row 471 is ticked while varbit 16620 is 0 (struct param 1084): a new accou
   use(unticked, I.VARROCK_TELEPORT, "Break");
   assert.notEqual(pending(unticked)?.title, TeleportWarning.QUESTION);
   assert.equal(unticked.teleports.length, 1, "unticked: goes at once");
+});
+
+// ---------------------------------------------------------------- the warning as live shows it
+
+test("the warning is live's: the message box (and its mesbox line) first, then the question with its three options", (t) => {
+  const f = actor(t);
+  const mesbox = [];
+  t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (type, text) => { mesbox.push([type, text]); return f.p.getPacketSender(); });
+  give(f, I.VARROCK_TELEPORT);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(boatBox(f), true, "the message box first");
+  assert.equal(MultiChatboxPrompt.getPending(f.p), null, "no question until it is continued");
+  assert.deepEqual(mesbox, [[core.ChatType.MESBOX, TeleportWarning.TEXT]], "its mesbox chat line");
+  f.p.getDialogueManager().advance();
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p), {
+    title: "Accept that your boat will be lost at sea?",
+    options: ["Yes, teleport away from it.", "Yes, teleport away and don't ask this again.", "No, stay on the boat."],
+  });
+  assert.equal(f.teleports.length, 0);
+});
+
+test("\"Yes, teleport away and don't ask this again.\" teleports and unticks the row, so the next teleport aboard doesn't ask", (t) => {
+  const f = actor(t);
+  give(f, I.VARROCK_TELEPORT, 2);
+  use(f, I.VARROCK_TELEPORT, "Break");
+  pending(f);
+  choose(f, 2);
+  assert.equal(f.teleports.length, 1, "it goes");
+  assert.equal(f.p.getPacketSender().getVarbit(TeleportWarning.WARNING_VARBIT), 1, "row 471 unticked");
+  assert.equal(TeleportWarning.warns(f.p), false);
+  settle();
+  f.p.needsPlacement = false; // landed: placed, as the next world tick would
+  f.state.aboard = true;
+  use(f, I.VARROCK_TELEPORT, "Break");
+  assert.equal(boatBox(f), false);
+  assert.notEqual(MultiChatboxPrompt.getPending(f.p)?.title, TeleportWarning.QUESTION);
+  assert.equal(f.teleports.length, 2, "the next one goes at once");
 });

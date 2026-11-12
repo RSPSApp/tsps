@@ -152,6 +152,22 @@ function dockNear(player, range) {
   return best;
 }
 
+/**
+ * A random unblocked tile within one of `origin` (`withOrigin` lets it be `origin` itself), or
+ * `origin` when every one is blocked. `regions` is the plugin api's region manager.
+ */
+function tileBeside(regions, origin, privateArea, withOrigin) {
+  const tiles = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0 && !withOrigin) continue;
+      const tile = new Location(origin.getX() + dx, origin.getY() + dy, origin.getZ());
+      if (!regions?.blocked(tile, privateArea)) tiles.push(tile);
+    }
+  }
+  return tiles.length > 0 ? tiles[Math.floor(Math.random() * tiles.length)] : origin;
+}
+
 function dockById(id) {
   return content().docks.find((dock) => dock.id === id);
 }
@@ -330,6 +346,7 @@ module.exports = {
   suppliedBoatProfile,
   boatAnim,
   dockById,
+  tileBeside,
   boatName,
   randomBoatName,
   dockAtGangplank,

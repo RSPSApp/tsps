@@ -14,7 +14,7 @@ const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/T
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
-const { VARBIT, content, boatType, setVarbit, fade } = require("./SailingContent.Sailing");
+const { VARBIT, content, boatType, setVarbit, fade, tileBeside } = require("./SailingContent.Sailing");
 const { describeBoat, boatVarps, clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS } = require("./Sidepanel.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { sendToolUnlocks } = require("./Cargo.Sailing");
@@ -153,8 +153,11 @@ function enterShipyard(player, dock, slot) {
 
 /** Puts the player in the shipyard with the boat in `slot` shown. */
 function beginVisit(player, dock, slot) {
+  // Where the player stood with the shipwright: the portal's Exit brings them back beside it.
+  const here = player.getLocation();
+  const from = new Location(here.getX(), here.getY(), here.getZ());
   player.moveTo(new Location(SHIPYARD.arrival.x, SHIPYARD.arrival.y, SHIPYARD.arrival.z));
-  const visit = { slot, dock: dock.id, shown: undefined, aboard: false, hotspot: undefined,
+  const visit = { slot, dock: dock.id, from, shown: undefined, aboard: false, hotspot: undefined,
     sailingIntro: player.getPacketSender().getVarbit(VARBIT.SAILING_INTRO) };
   visits.set(player, visit);
   // Owning a boat means The Pandemonium is done; the customisation refuses every build without
@@ -361,16 +364,21 @@ function aboardVisit(player) {
   return visit?.aboard && visit.shown ? visit : undefined;
 }
 
-/** The Shipyard Portal's Exit: back to the dock the visit started from. */
+/**
+ * The Shipyard Portal's Exit: back to the dock the visit started from, on a random tile within
+ * one of where the player stood with its shipwright.
+ */
 function exitShipyard({ player }) {
-  const dock = content().docks.find((candidate) => candidate.id === visits.get(player)?.dock)
-    ?? content().docks.find((candidate) => candidate.shipyardReturn);
-  const spot = dock?.shipyardReturn;
-  if (!spot) return;
+  const from = visits.get(player)?.from;
+  const fallback = content().docks.find((candidate) => candidate.shipyardReturn)?.shipyardReturn;
+  if (!from && !fallback) return;
   fade(player, true);
   later(player, 1, () => {
+    const spot = from
+      ? tileBeside(pluginApi.getRegionManager?.(), from, null, true)
+      : new Location(fallback.x, fallback.y, fallback.z);
     endVisit(player);
-    player.moveTo(new Location(spot.x, spot.y, spot.z));
+    player.moveTo(spot);
     later(player, 1, () => fade(player, false));
   });
 }
@@ -397,8 +405,9 @@ function visitedBoat(player) {
 
 function forgetVisit({ player }) {
   const visit = visits.get(player);
-  // Saved off the deck, which goes with the visit.
-  if (visit?.aboard) player.setLocation(new Location(SHIPYARD.landing.x, SHIPYARD.landing.y, SHIPYARD.landing.z));
+  // Ours: saved back at the dock the visit started from, as the portal's Exit would leave them.
+  if (visit?.from) player.setLocation(visit.from);
+  else if (visit?.aboard) player.setLocation(new Location(SHIPYARD.landing.x, SHIPYARD.landing.y, SHIPYARD.landing.z));
   if (visit?.shown) BoatManager.dispose(visit.shown);
   visits.delete(player);
 }

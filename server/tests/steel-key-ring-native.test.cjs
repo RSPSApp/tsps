@@ -14,10 +14,11 @@ const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/Play
 const Runtime = require("../plugins/quests/QuestRuntime");
 const RING = 4446, GROUP = 127, BUTTONS = (GROUP << 16) | 1;
 const KEY_IDS = [6792, 2887, 605, 983, 4077, 1590, 6754, 1542, 1839, 6104, 85, 759, 1843];
-let core, serial = 0, oldError, oldWarn, oldSubmit;
+let core, serial = 0, oldError, oldWarn, oldLog, oldSubmit;
 const errors = [], tasks = new Set();
 before(async () => {
-  oldError = console.error; oldWarn = console.warn;
+  oldError = console.error; oldWarn = console.warn; oldLog = console.log;
+  console.log = (...args) => { if (args.some(value => value instanceof Error)) errors.push(args.map(String).join(" ")); oldLog(...args); };
   console.error = (...args) => { errors.push(args.map(String).join(" ")); oldError(...args); };
   console.warn = (...args) => { if (/\[plugins\].*hook.*(?:failed|threw)/.test(args.map(String).join(" "))) errors.push(args.map(String).join(" ")); oldWarn(...args); };
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -32,7 +33,7 @@ after(() => {
     PM.emitServerShutdown({});
     for (const task of tasks) if (task.isRunning()) task.stop();
     assert.deepEqual(errors, [], "no swallowed engine/plugin errors");
-  } finally { console.error = oldError; console.warn = oldWarn; if (core) core.TaskManager.submit = oldSubmit; }
+  } finally { console.error = oldError; console.warn = oldWarn; console.log = oldLog; if (core) core.TaskManager.submit = oldSubmit; }
 });
 function turn() { core.World.process(); }
 function actor(t) {
@@ -195,7 +196,7 @@ test("real PvM and skulled PvP death item processing keeps the ring and keys int
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
   for (const pvp of [false, true]) {
     const f = actor(t), killer = pvp ? actor(t).p : null; ring(f); add(f, 983); await store(f, 983);
-    if (pvp) f.p.setSkullTimer(100);
+    if (pvp) { f.p.setSkullType(core.SkullType.WHITE_SKULL); f.p.setSkullTimer(100); }
     const kept = PlayerDeathTask.dropItems(f.p, killer, f.p.getLocation());
     assert.ok(kept.some(item => item.getId() === RING), "ring is explicitly kept even when no ranked item is protected");
     PlayerDeathTask.returnKeptItems(f.p, kept);

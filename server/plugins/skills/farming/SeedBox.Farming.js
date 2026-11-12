@@ -3,7 +3,8 @@ const core = require("./Core.Farming");
 /**
  * The seed box's contents window (Check/Take on the box), from rsprox captures 1022, 3906, 4222, 4293 and 4295 (rev 235/238):
  * the box's six slots open as `hosidius_seedbox` over `seed_box` with "Withdraw 1/3/4/X/All" on ops 1-5 and an
- * examine on op 10; Close prints "The seed box contains:" and one "N x Seed." line per kind. The `busy` varbit is 1 while it is open.
+ * examine on op 10; Close prints "The seed box contains:" and one "N x Seed." line per kind, or "The seed box is empty." for an
+ * empty box. The `busy` varbit is 1 while it is open.
  */
 const STORED_META = "farming:stored";
 const SLOTS = 6;
@@ -55,9 +56,15 @@ function closed({ player, interfaceId }) {
     if (!session || interfaceId !== group()) return;
     SESSIONS.delete(player);
     player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId("busy"), 0);
-    // Spam, as every recorded close lists them (e.g. "The seed box contains:", "8 x Poison ivy seed.").
+    // Spam, as every recorded close lists them (e.g. "The seed box contains:", "8 x Poison ivy seed.");
+    // an empty box says so instead (rsprox 238/04222.txt:43801, tick 2538).
+    const slots = slotsOf(session.box);
+    if (slots.length === 0) {
+        spam(player, "The seed box is empty.");
+        return;
+    }
     spam(player, "The seed box contains:");
-    for (const [id, count] of slotsOf(session.box)) spam(player, `${count} x ${nameOf(id)}.`);
+    for (const [id, count] of slots) spam(player, `${count} x ${nameOf(id)}.`);
 }
 function withdraw(player, session, id, requested) {
     const stored = session.box.getMetaValue(STORED_META) ?? {}, inventory = player.getInventory();

@@ -108,6 +108,22 @@ test('the window withdraws 1, 3, 4 or all of a kind, examines on op 10 and Close
     core.PluginManager.emitCustomEvent('interface:closed', { player: f.player, interfaceId: core.CacheDefinitions.getInterfaceId('hosidius_seedbox') });
     assert.deepEqual(f.messages, ['spam:The seed box contains:', 'spam:12 x Irit seed.']);
 });
+test('closing an empty seed box window says the box is empty (rsprox 238/04222.txt:43801)', t => {
+    const group = core.CacheDefinitions.getInterfaceId('hosidius_seedbox'), busy = core.CacheDefinitions.getVarbitId('busy');
+    // Emptied through the window, then closed: the recording's close of an empty box lists nothing.
+    const f = fixture(t, { stored: { 'Irit seed': 2 } });
+    f.action('Check');
+    f.click(5, 0, 'Irit seed');
+    f.messages.length = 0;
+    core.PluginManager.emitCustomEvent('interface:closed', { player: f.player, interfaceId: group });
+    assert.deepEqual(f.messages, ['spam:The seed box is empty.']);
+    assert.deepEqual(f.calls.filter(call => call[0] === 'sendVarbit' && call[1] === busy).at(-1).slice(1), [busy, 0], 'busy clears as before');
+    // Opened empty, then closed.
+    const empty = fixture(t);
+    empty.action('Check');
+    core.PluginManager.emitCustomEvent('interface:closed', { player: empty.player, interfaceId: group });
+    assert.deepEqual(empty.messages, ['spam:The seed box is empty.']);
+});
 test('native bank Empty reports the box empty, or that it already was', t => {
     const f = fixture(t, { stored: { 'Irit seed': 3 } });
     f.player.setStatus(core.PlayerStatus.BANKING).setInterfaceId(core.Bank.MAIN_INTERFACE_ID);

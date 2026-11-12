@@ -118,16 +118,6 @@ const SIGNATURES: Signature[] = [
     [7820, "hiscore_getmembercontributedxp_byname", ["string"], ["int"]],
     [7823, "hiscore_getmembername", ["int"], ["string"]],
     [7824, "hiscore_getmemberhiscores", ["int"], []],
-    // Rev 242 display name changes (Jagex account service).
-    [5100, "displaynames_status", [], []],
-    [5101, "displaynames_status_result", [], ["int", "int", "string", "boolean", "int", "int"]],
-    [5102, "displaynames_check", ["string"], []],
-    [5103, "displaynames_check_result", [], ["int", "int", "string", "int", "boolean", "int", "int"]],
-    [5104, "displaynames_claim", ["string"], []],
-    [5105, "displaynames_claim_result", [], ["int", "int", "string", "int"]],
-    [5106, "displaynames_cancel", [], []],
-    [5107, "displaynames_cancel_result", [], ["int", "int", "string"]],
-    [5108, "displaynames_openurl", [], []],
 ];
 
 const ZERO_TYPES = new Set(["int", "boolean", "count"]);

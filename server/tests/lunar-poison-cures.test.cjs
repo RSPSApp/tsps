@@ -30,10 +30,20 @@ function actor(t, x = 3200, y = 3200, z = 0) {
   player.setRegistered(true); player.setSpellbook(core.MagicSpellbook.LUNAR);
   player.setLocation(new core.Location(x, y, z));
   let level = 99, defence = 99;
-  t.mock.method(player, 'getSkillManager', () => ({ getMaxLevel: skill => skill === core.Skill.DEFENCE ? defence : level, getCurrentLevel: () => level,
-    addExperiences: (skill, value) => xp.push(value) }));
-  t.mock.method(player, 'getInventory', () => ({ getAmount: id => amounts.get(id) ?? 0,
-    deletes: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) - item.getAmount()) }));
+  // Levels and XP are faked; Hitpoints and everything else (the skill packet a Hitpoints change sends) stay real.
+  const real = player.getSkillManager();
+  const fake = { getMaxLevel: skill => skill === core.Skill.DEFENCE ? defence : level,
+    getCurrentLevel: skill => skill === core.Skill.HITPOINTS ? real.getCurrentLevel(skill) : level,
+    addExperiences: (skill, value) => xp.push(value) };
+  const skills = new Proxy(fake, { get: (target, key) => key in target ? target[key]
+    : typeof real[key] === 'function' ? real[key].bind(real) : real[key] });
+  t.mock.method(player, 'getSkillManager', () => skills);
+  // Rune amounts are faked; the rest of the inventory (its weight, for the run-energy packet) stays real.
+  const realInventory = player.getInventory();
+  const inventory = new Proxy({ getAmount: id => amounts.get(id) ?? 0,
+    deletes: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) - item.getAmount()) }, { get: (target, key) => key in target
+    ? target[key] : typeof realInventory[key] === 'function' ? realInventory[key].bind(realInventory) : realInventory[key] });
+  t.mock.method(player, 'getInventory', () => inventory);
   for (const id of [core.ItemIdentifiers.ASTRAL_RUNE, core.ItemIdentifiers.COSMIC_RUNE,
     core.ItemIdentifiers.LAW_RUNE, core.ItemIdentifiers.EARTH_RUNE]) amounts.set(id, 100);
   return { player, amounts, xp, level(value) { level = value; }, defence(value) { defence = value; } };
@@ -154,10 +164,16 @@ test('refused, self, distant, dead and different-plane Cure Other targets cost n
 test('other Lunar player spells still reach their existing fallback', async t => {
   const caster = actor(t), target = actor(t, 3201, 3200);
   caster.amounts.set(core.ItemIdentifiers.NATURE_RUNE, 1);
-  caster.player.setRunEnergy(100); target.player.setRunEnergy(0);
+  // Wiki (Energy Transfer): costs 100% special attack and 10 hitpoints; restores all of the target's run energy and special.
+  caster.player.getSkillManager().setCurrentLevels(core.Skill.HITPOINTS, 99);
+  caster.player.setSpecialPercentage(100); caster.player.setRunEnergy(100);
+  target.player.setSpecialPercentage(0); target.player.setRunEnergy(0);
   await cast(t, caster, 'Energy Transfer', [target], target);
-  assert.equal(caster.player.getRunEnergy(), 0);
-  assert.equal(target.player.getRunEnergy(), 50);
+  assert.equal(caster.player.getSpecialPercentage(), 0);
+  assert.equal(caster.player.getHitpoints(), 89);
+  assert.equal(caster.player.getRunEnergy(), 100, "the caster's own run energy stays");
+  assert.equal(target.player.getRunEnergy(), 100);
+  assert.equal(target.player.getSpecialPercentage(), 100);
   assert.deepEqual(caster.xp, [100]);
 });
 

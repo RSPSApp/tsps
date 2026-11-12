@@ -60,7 +60,7 @@ test("::infrun keeps run energy full while running, until it is turned off", () 
 
   const run = (steps) => {
     for (let step = 0; step < steps; step++) {
-      owner.getMovementQueue().drainRunEnergy(); // what each running step costs
+      owner.getMovementQueue().drainRunEnergy(2); // a running step: two tiles (one tile is a walk and drains nothing)
       PluginManager.emitPlayerProcess({ player: owner }); // plugins process after movement in a tick
     }
   };

@@ -310,6 +310,7 @@ test('enrage has a moving 5x5 aura, impact prayer piercing outside and no shadow
   h.step(4);
   h.fight.nextAttack = Infinity;
   assert.equal(h.fight.enraged, true);
+  assert.ok(h.messages.includes("<col=ff289d>The Leviathan focuses on you intensely...</col>"), 'rsprox 227/00100.txt:77699');
   assert.ok(h.fight.hazards.pathfinder);
   h.api.emitCustomEvent('magic:hit-effects', { attacker: h.p, target: h.fight.boss, spell: h.core.CombatSpells.SHADOW_BARRAGE.getSpell() });
   assert.equal(h.fight.stuns, 0);

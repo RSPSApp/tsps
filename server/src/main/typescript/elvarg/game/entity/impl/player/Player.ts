@@ -816,11 +816,12 @@ export class Player extends Mobile {
     }
 
     /**
-     * Held by an action that locks the player in place: a teleport, a forced move (agility obstacles), or content
-     * that blocks movement while it plays out. A spell freeze is not a lock.
+     * Held by an action that locks the player in place: a teleport, a forced move, or an agility obstacle (the
+     * agility runner's "agility.obstacle" attribute). Other movement holds (a spell freeze, a boss's stun, a
+     * cutscene) are not counted.
      */
     isLocked(): boolean {
-        return this.isTeleportingReturn() || this.forceMovement != null || this.getMovementQueue().isMovementBlocked();
+        return this.isTeleportingReturn() || this.forceMovement != null || this.getAttribute("agility.obstacle") != null;
     }
 
     busy(): boolean {

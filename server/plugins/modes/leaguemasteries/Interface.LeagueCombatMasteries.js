@@ -92,6 +92,8 @@ function closed({ player, interfaceId }) {
 
 module.exports = function attach(api) {
   const { group, openButton, clickzones, tabs, confirm: confirmChild, close: closeChild } = ui();
+  // A locked player (mid-teleport, on an obstacle) is told to finish first, and nothing opens.
+  api.refuseWhileBusy(Common.uid(openButton[0], openButton[1]));
   api.onInterfaceActionButton(Common.uid(openButton[0], openButton[1]), open);
   api.onInterfaceActionButton(Common.uid(group, tabs), tab);
   api.onInterfaceActionButton(Common.uid(group, clickzones), view);

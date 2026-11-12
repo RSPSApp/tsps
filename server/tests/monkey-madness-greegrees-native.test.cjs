@@ -15,6 +15,7 @@ const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/Play
 const { MAIN_PROFILE } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 let core, mm1, mm2, tunnel, stronghold, serial=0;
 const spawned = [], errors = [], tasks = new Set();
+const dialogueTraces = new WeakMap();
 let originalError, originalSubmit;
 const variants = [[3179,4024],[3180,4025],[3181,4026],[3182,4027],[3185,4029],[3186,4030],[3183,4031],[3166,4031],[4034,4028]];
 const GARKOR = 'quest.monkey_madness_i.garkor-asked';
@@ -29,6 +30,8 @@ before(async () => {
   core.RegionManager.init();
   for (const [x,y] of [[2804,9145],[2383,3509]]) core.RegionManager.loadMapFiles(x,y);
   PM.emitServerStartup({});
+  const observation = PM.createApi('GreegreeNativeDialogueObservation');
+  observation.onCustomEvent('npc-dialogue:action', observePostquestAction);
   const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
   mm1 = quests.find(q => q.key === 'monkey_madness_i'); mm2 = quests.find(q => q.key === 'monkey_madness_ii');
   assert.ok(mm1 && mm2);
@@ -37,7 +40,8 @@ before(async () => {
     ['mm_normal_gorilla_monkey_bones',3181],['mm_bearded_gorilla_monkey_bones',3182],
     ['mm_normal_monkey_bones',3183],['mm_small_zombie_monkey_bones',3185],
     ['mm_large_zombie_monkey_bones',3186],['tbwt_monkey_corpse',3166],['mm_ancient_monkey_skull',4034],
-    ['mm_monkey_talisman',4023],['mm_monkey_greegree_for_small_ninja_monkey',4024],
+    ['mm_monkey_talisman',4023],['mm_amulet_of_monkey_speak',4021],['mm_sigil',4035],
+    ['mm_monkey_greegree_for_small_ninja_monkey',4024],
     ['mm_monkey_greegree_for_medium_ninja_monkey',4025],['mm_monkey_greegree_for_normal_gorilla',4026],
     ['mm_monkey_greegree_for_bearded_gorilla',4027],['mm_monkey_greegree_for_ancient_monkey_skull',4028],
     ['mm_monkey_greegree_for_small_zombie_monkey',4029],['mm_monkey_greegree_for_large_zombie_monkey',4030],
@@ -105,7 +109,7 @@ function options(f){return MultiChatboxPrompt.getPending(f.p)?.options ?? curren
 function text(f){return current(f)?.getText?.()?.replace(/\s+/g,' ') ?? '';}
 async function advance(f){
   assert.ok(!options(f).length,'explicit option selection required');
-  const group=f.p.getPacketSender().getChatboxGroupId(); assert.ok(group>0);
+  const group=f.p.getPacketSender().getChatboxGroupId(); assert.ok(group>0,JSON.stringify({group,text:text(f),kruk:amount(f,19525),trace:dialogueTraces.get(f.p)??[]}));
   const component = {193:0,229:4,11:4,217:5,231:5}[group];
   assert.ok(Number.isInteger(component),`known native Continue component for group ${group}`);
   await input(f,{type:'dialogue_continue',widgetId:(group<<16)|component,childIndex:group===193?0:-1});
@@ -204,9 +208,11 @@ for(const store of ['carried','banked','equipped'])test(`MM2 stage70 existing ${
 });
 test('MM2 missing Kruk replacement and postquest stronghold page retain ownership over item and Talk routes',async t=>{
   const f=actor(t,9,70);add(f,3179);add(f,4023);await use(f,3179);assert.equal(amount(f,3179),1);await talk(f);assert.equal(amount(f,19525),1);assert.equal(amount(f,4023),1);
-  const g=actor(t,9,195,stronghold);assert.equal(stronghold.getContentId(g.p),7171);add(g,4023);await use(g,4023);assert.equal(amount(g,4023),1);await talk(g);assert.match(text(g),/Good day/);
+  const g=actor(t,9,195,stronghold);const trace=tracePostquest(g,t);assert.equal(stronghold.getContentId(g.p),7171);add(g,4023);await use(g,4023);assert.equal(amount(g,4023),1);await talk(g);assert.match(text(g),/Good day/);
   for(let i=0;i<8&&!options(g).length;i++)await advance(g);await choose(g,'Monkey talisman.');for(let i=0;i<12&&!options(g).length;i++)await advance(g);await choose(g,'Large ninja.');
   for(let i=0;i<12&&amount(g,19525)===0;i++)await advance(g);assert.equal(amount(g,19525),1);assert.equal(amount(g,4023),1);
+  assert.ok(trace.some(e=>e.type==='condition' && e.id==='mmr4it' && e.answer===false));
+  assert.ok(trace.some(e=>e.type==='action' && e.id==='l9BRxu' && e.itemCount===1));
 });
 test('MM2 stage170 aftermath with existing Kruk retains Talk authority and does not accept paid materials',async t=>{
   const f=actor(t,9,170);add(f,19525);add(f,3179);add(f,4023);await use(f,3179);assert.equal(amount(f,3179),1);await talk(f);
@@ -236,4 +242,47 @@ test('closing a permission confirmation before its reply is continued cannot gra
   for(let i=0;i<8&&!options(f).length;i++)await advance(f);await choose(f,'Yes');
   await input(f,{type:'interface_close'});await use(f,3179);await drain(f);await use(f,4023);await drain(f);
   assert.equal(amount(f,4024),0);assert.equal(amount(f,3179),1);assert.equal(amount(f,4023),1);await request(f);await exchange(f,3179);assert.equal(amount(f,4024),1);
+});
+
+function observePostquestAction(e){
+  const trace=dialogueTraces.get(e.player);
+  if(trace && e.npcId===7171)trace.push({type:'action',id:e.stepId,kind:e.kind,itemCount:e.player.getInventory().getAmount(19525)});
+}
+function tracePostquest(f,t){
+  const trace=[];dialogueTraces.set(f.p,trace);const original=PM.emitNpcDialogueCondition;
+  PM.emitNpcDialogueCondition=function(e){const answer=original.call(this,e);if(e.player===f.p)trace.push({type:'condition',id:e.stepId,answer});return answer;};
+  t.after(()=>{PM.emitNpcDialogueCondition=original;console.log('POSTQUEST_TRACE '+JSON.stringify(trace));});return trace;
+}
+const reclaims=[
+  [4024,['Monkey talisman.','Small ninja.']], [4025,['Monkey talisman.','Medium ninja.']],
+  [19525,['Monkey talisman.','Large ninja.']], [4029,['Monkey talisman.','Next.','Small zombie.']],
+  [4030,['Monkey talisman.','Next.','Large zombie.']], [4026,['Monkey talisman.','Next.','Next.','Gorilla.']],
+  [4027,['Monkey talisman.','Next.','Next.','Bearded gorilla.']], [4031,['Monkey talisman.','Next.','Next.','Karamjan monkey.']],
+  [4021,['Monkeyspeak amulet.']], [4035,['10th squad sigil.']],
+];
+async function selectReclaim(f,path){
+  await talk(f);
+  for(const label of path){for(let i=0;i<20&&!options(f).length;i++)await advance(f);await choose(f,label);}
+}
+async function receiveReclaim(f,id){
+  for(let i=0;i<20&&amount(f,id)===0;i++)await advance(f);
+  assert.equal(amount(f,id),1,'canonical handout actually gives the requested item');
+  assert.equal(current(f)?.getItemId?.(),id,'actual item statement presents that output');
+}
+for(const [id,path]of reclaims)test(`post-MM2 canonical reclaim ${id} requires no materials and rejects a carried duplicate`,async t=>{
+  const f=actor(t,9,195,stronghold);add(f,4023);await selectReclaim(f,path);await receiveReclaim(f,id);assert.equal(amount(f,4023),1);
+  await input(f,{type:'interface_close'});await selectReclaim(f,path);await drain(f);
+  assert.equal(amount(f,id),1);assert.equal(amount(f,4023),1);assert.equal(mm2.getStage(f.p),195);
+});
+test('postquest banked duplicate guards include later bank tabs',async t=>{
+  const f=actor(t,9,195,stronghold);f.p.getBank(4).add(new core.Item(4024),false);assert.equal(f.p.getBank(4).getAmount(4024),1);
+  await selectReclaim(f,reclaims[0][1]);await drain(f);assert.equal(amount(f,4024),0);assert.equal(f.p.getBank(4).getAmount(4024),1);
+});
+test('full postquest inventory refuses without charging materials and recovers after space is made',async t=>{
+  const f=actor(t,9,195,stronghold);add(f,4023);while(f.p.getInventory().getFreeSlots()>0)add(f,1511);
+  await selectReclaim(f,reclaims[0][1]);await drain(f);assert.equal(amount(f,4024),0);assert.equal(amount(f,4023),1);assert.ok(f.messages.some(s=>/free inventory slot/.test(s)));
+  f.p.getInventory().deleteNumber(1511,1);await selectReclaim(f,reclaims[0][1]);await receiveReclaim(f,4024);assert.equal(amount(f,4023),1);
+});
+test('postquest duplicate condition rechecks an item received while the player reply is still open',async t=>{
+  const f=actor(t,9,195,stronghold);await selectReclaim(f,reclaims[0][1]);add(f,4024);await drain(f);assert.equal(amount(f,4024),1);
 });

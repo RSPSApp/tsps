@@ -433,7 +433,8 @@ test("the gem's Check gives the task and the streak", () => {
   const player = createPlayer({ points: 20 });
   giveTask(player, 3, "Bloodveld", 44);
   Checks.check(player);
-  assert.equal(player.messages[0], "You're assigned to kill bloodveld; only 44 more to go.");
+  assert.equal(player.messages[0],
+    "<col=ef1020>You're assigned to kill </col>bloodveld<col=ef1020>; only </col>44<col=ef1020> more to go.");
   assert.match(player.messages[1], /currently have a total of <\/col>20 points/);
 });
 

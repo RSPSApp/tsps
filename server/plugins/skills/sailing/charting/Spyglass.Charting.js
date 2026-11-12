@@ -2,13 +2,16 @@
 // uncharted view's hint marker plays that view's camera shots, then charts it. Live, in order:
 //   +0  the helm let go of (from the helm, the rest a tick later), the telescope animation
 //   +1  the screen fades out
-//   +3  the cutscene variables, the minimap off, the view's first shot
+//   +3  the cutscene variables, the minimap off, the view's first shot; the XP drops and every
+//       side tab but Friends, Account, Logout and Music closed, NPC and ground item options hidden
 //   +5  the spyglass overlay (936) fades in; the view's other shots follow
-//   then the overlay fades out, three ticks later the camera and screen come back, and two ticks
-//   after that the view is charted.
+//   then the overlay fades out, three ticks later the camera, the tabs, the options and the
+//   screen come back, and two ticks after that the view is charted. Both screen fades also clear
+//   the NPC health overlay. NPCs can still attack during the view.
 // Anywhere else: "There isn't anything nearby worth looking at." The shots are each view's own, as
 // captured (data/charting.json `view`). Inspect: the spyglass's object box.
 const common = require("./Common.Charting");
+const RandomEventTabs = require("../../../npcs/random-events/Teleports.RandomEvents");
 
 const ITEM_SPYGLASS = 31803;
 const INSPECT = "This spyglass can be used to observe specific points of interest throughout the seas. These observations will then be added to your sea charts.";
@@ -22,6 +25,8 @@ const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const SPYGLASS_OVERLAY = 936; // sailing_spyglass
 const SPYGLASS_FADE_UID = (SPYGLASS_OVERLAY << 16) | 4; // sailing_spyglass:fade
 const SCRIPT_FADE_COMPONENT = 7059;
+const XP_DROPS_UID = (161 << 16) | 9; // toplevel_osrs_stretch:xp_drops
+const XP_DROPS_GROUP = 122;
 const FADE_CYCLES = 50;
 /** Ticks from the telescope to the first shot, the overlay, and from the fade out to the end. */
 const FIRST_SHOT_TICKS = 3;
@@ -76,6 +81,29 @@ function later(player, view, ticks, action) {
 function fadeScreen(player, out) {
   const content = require("../SailingContent.Sailing");
   content.fade(player, out);
+  common.api().emitCustomEvent("boss-hud:reset", { player });
+}
+
+/** Closes the XP drops and the side tabs and hides NPC and ground item options for the view. */
+function lockHud(player) {
+  const sender = player.getPacketSender();
+  sender.sendHideNpcOps(true).sendHideObjOps(true);
+  sender.closeSubInterface(XP_DROPS_UID);
+  RandomEventTabs.hideTabs(player);
+}
+
+/** Everything lockHud took away, with the sailing sidepanel back on the combat tab if it was shown. */
+function unlockHud(player) {
+  const api = common.api();
+  const { getVarbit, VARBIT } = require("../SailingContent.Sailing");
+  const sender = player.getPacketSender();
+  if (player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true) sender.sendSubInterface(XP_DROPS_UID, XP_DROPS_GROUP, 1);
+  // A random event that took the player away during the view keeps its own tabs closed.
+  if (!RandomEventTabs.sessionOf(player)) {
+    RandomEventTabs.restoreTabs(player, api);
+    if (getVarbit(player, VARBIT.SIDEPANEL_VISIBLE) === 1) require("../Panel.Sailing").showSidepanel(player);
+  }
+  sender.sendHideNpcOps(false).sendHideObjOps(false);
 }
 
 function shoot(player, shot) {
@@ -103,7 +131,10 @@ function look(player, spot) {
   player.performAnimation(new (common.core().Animation)(SEQ_TELESCOPE));
   const { shots, fadeOut } = spot.view;
   later(player, view, 1, () => fadeScreen(player, true));
-  later(player, view, FIRST_SHOT_TICKS, () => setCutscene(player, true));
+  later(player, view, FIRST_SHOT_TICKS, () => {
+    setCutscene(player, true);
+    lockHud(player);
+  });
   const byTick = new Map();
   for (const shot of shots) byTick.set(shot[0], [...(byTick.get(shot[0]) ?? []), shot]);
   for (const [dt, list] of byTick) later(player, view, FIRST_SHOT_TICKS + dt, () => list.forEach((shot) => shoot(player, shot)));
@@ -121,10 +152,11 @@ function look(player, spot) {
   });
 }
 
-/** The camera, the cutscene variables and the screen back as they were. */
+/** The camera, the cutscene variables, the HUD and the screen back as they were. */
 function restore(player) {
   setCutscene(player, false);
   player.getPacketSender().sendCameraReset();
+  unlockHud(player);
   fadeScreen(player, false);
 }
 
@@ -138,7 +170,7 @@ function lookThrough({ player }) {
   common.afterHelm(player, () => look(player, spot));
 }
 
-/** A view cut short by logging out leaves nothing behind: the variables aren't saved. */
+/** A view cut short by logging out leaves nothing behind: the variables aren't saved, and a login sends the tabs and options afresh. */
 function onLogout({ player }) {
   viewing.delete(player);
 }

@@ -107,8 +107,9 @@ function actor(t, kind, { rescued = false, full = false } = {}) {
   p.moveTo(new core.Location(2542, 3096, 0)); p.setNeedsPlacement(false);
   const portal = new GameObject(yanillePortal, portalAt, 10, 2, null);
   const definition = ObjectDefinition.forPlayer(yanillePortal, p) ?? ObjectDefinition.forId(yanillePortal);
-  assert.equal(PM.emitObjectInteraction({ player: p, object: portal, objectId: yanillePortal, definition, clickType: 1,
+  assert.equal(PM.emitObjectInteraction({ player: p, object: portal, objectId: yanillePortal, definition, clickType: 2,
     location: { x: 2542, y: 3097, z: 0 }, sourceLocation: { x: 2542, y: 3096, z: 0 }, handled: false }), true);
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process(); // Home loads two ticks later
   const house = House.houseFor(p);
   ownedHouse = house;
   assert.ok(house instanceof Instance.PlayerHouseInstance); assert.equal(house.owner, p);

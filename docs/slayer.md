@@ -307,7 +307,21 @@ its task-kill path now calls.
   - the points line ("You've completed # tasks and received # points, giving you a total of #");
   - the free-task line ("...will need # more before you start receiving Slayer points");
   - the line for masters that give no points.
-- **Gem Check:** the streak line.
+- **Gem, ring and helmet Check** (recordings 1040, 1087, 2960 and 22 other task lines): the task
+  line, red but for the task and its count ("<col=ef1020>You're assigned to kill </col>bats<col=ef1020>;
+  only </col>17<col=ef1020> more to go."), with a Konar area after the task name; then the streak
+  line. With no task, "You need something new to hunt."
+- **Slayer helmet** (recordings 1040, 95, 1864, 4099; 76 for the lock):
+  - assembling: "You combine the items into a Slayer helm." (spam, sound 2241); without the
+    Malevolent masquerade, "You have not unlocked the ability to combine these items.";
+  - a recolour's head on an uncoloured helmet: "Combine the Kbd heads with your helm?" Yes/No, then
+    "You combine the items into a Black slayer helmet (i)." (spam, sound 2241); without its unlock,
+    the mesbox "You must first learn how to do this from a Slayer Master."; on a recoloured helmet,
+    "Nothing interesting happens.";
+  - Disassemble: "You disassemble your Slayer helm." (spam, sound 2241), the mask, the components and
+    the head;
+  - the Soul Wars imbued mask makes the Soul Wars imbued helmet, and its recolours stay Soul Wars
+    copies.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a
@@ -332,12 +346,12 @@ its task-kill path now calls.
   - the task list popup (script 8059);
   - the block confirmation popup (script 4212).
 
-Konar's lines and the gem's task line are the Wiki's.
+Konar's lines are the Wiki's.
 
 ## Ours
 
 - **Below a master's requirements:** the master's line.
-- **Assembling a Slayer helmet without the unlock:** the message.
+- **Slayer helmet:** the full-inventory line for Disassemble.
 - **Drains:** where the Wiki only says "greatly reduced", unprotected drains take 10% of the level
   per hit.
 - **Gem:** its Activate gives the same answer as Check.
@@ -364,5 +378,8 @@ Konar's lines and the gem's task line are the Wiki's.
 - **Mortimer:** Partner Slayer's rules for his tasks; showing modifiers on the gem. His tips are
   the generic line, as for the other masters.
 - **Rewards:** task storage (Store/Unstore), including a stored task's modifier. Picking tasks to block from the task list.
-- **Equipment and monsters:** the gem's Partner and Log, killerwatts, fever spiders,
+- **Slayer helmet:** reinforced goggles in the helmet (assembling leaves them in the inventory, so
+  Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
+  making, reverting and disassembling the Radiant helmet.
+- **Equipment and monsters:** the gem's and helmet's Partner and Log, killerwatts, fever spiders,
   harpie bug swarms and mogres. Zygomites don't regenerate.

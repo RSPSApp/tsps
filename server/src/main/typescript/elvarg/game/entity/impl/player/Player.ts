@@ -1044,6 +1044,17 @@ export class Player extends Mobile {
         return this.fixedViewDistance ?? this.viewDistance;
     }
 
+    public getFixedViewDistance(): number | null { return this.fixedViewDistance; }
+
+    /** Ephemeral appearance visibility; never changes participation or combat policy. */
+    private appearanceHidden = false;
+    public isAppearanceHidden(): boolean { return this.appearanceHidden; }
+    public setAppearanceHidden(hidden: boolean): void {
+        if (this.appearanceHidden === hidden) return;
+        this.appearanceHidden = hidden;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
+    }
+
     /** A view distance kept regardless of the crowd (a spectator watching a room), or null. */
     private fixedViewDistance: number | null = null;
 

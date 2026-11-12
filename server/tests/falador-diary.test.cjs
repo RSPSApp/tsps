@@ -243,7 +243,10 @@ test("zone entry tasks check the guild helmet and credit the rat pits", () => {
   assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3048, 9755), ["enter-the-mining-guild-wearing-a-prospector-helm"]);
   assert.deepEqual(zoneEnter(player(), 3048, 9755), []);
   assert.deepEqual(zoneEnter(player(), 2860, 3546), ["enter-the-warriors-guild"]);
-  assert.deepEqual(zoneEnter(player(), 3018, 3232), ["visit-the-port-sarim-rat-pits"]);
+  // Wiki (Rat Pits): the pit is underground; walking the street over it is no visit.
+  assert.deepEqual(zoneEnter(player(), 3018, 3232), []);
+  assert.deepEqual(zoneEnter(player(), 2962, 9650), ["visit-the-port-sarim-rat-pits"]);
+  assert.deepEqual(zoneEnter(player(), 2976, 9643), ["visit-the-port-sarim-rat-pits"]);
 });
 
 test("the security guard's own hand-out condition gives one book and credits the task", () => {

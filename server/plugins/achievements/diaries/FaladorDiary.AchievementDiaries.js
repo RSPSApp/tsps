@@ -78,7 +78,9 @@ const MINING_GUILD = { minX: 3035, maxX: 3068, minY: 9735, maxY: 9756, levels: [
 const MINING_GUILD_WEST_ENTRANCE = { minX: 3019, maxX: 3019, minY: 9732, maxY: 9732, levels: [0] };
 const MINING_GUILD_SOUTH_ENTRANCE = { minX: 3043, maxX: 3043, minY: 9729, maxY: 9729, levels: [0] };
 const WARRIORS_GUILD = { minX: 2835, maxX: 2876, minY: 3533, maxY: 3560, levels: [0] };
-const PORT_SARIM_RAT_PITS = { minX: 3010, maxX: 3028, minY: 3225, maxY: 3240, levels: [0] };
+// The Rat Pits are underground (Wiki: Rat Pits; the Port Sarim pit about 2976,9643, below the manhole at
+// 3018,3232, which lands at 2962,9650): their map square, not the street above.
+const PORT_SARIM_RAT_PITS = { minX: 2944, maxX: 3007, minY: 9600, maxY: 9663, levels: [0] };
 
 const CRUMBLING_FALADOR_WALL = 24222;
 const DWARVEN_MINE_CREVICE = 16543;

@@ -228,10 +228,13 @@ test("the rusted anvil only works bronze and ignores other items", () => {
   const iron = playerWith(I.IRON_BAR);
   objects.get("Rusted anvil").Smith({ player: iron });
   assert.equal(iron.interfaceId, -1);
+  // Wiki (Rusted anvil): Smith with no bronze bars, then another metal used on it.
+  assert.equal(iron.messages.at(-1), "You need a bronze bar to smith equipment on this anvil.");
   const ironOnAnvil = { player: iron, itemId: I.IRON_BAR, object: rusted };
   itemOnObject(ironOnAnvil);
   assert.equal(ironOnAnvil.handled, true);
   assert.equal(iron.interfaceId, -1);
+  assert.equal(iron.messages.at(-1), "You can only use bronze bars to smith on this anvil.");
   const hammerOnAnvil = { player: iron, itemId: I.HAMMER, object: rusted };
   itemOnObject(hammerOnAnvil);
   assert.equal(hammerOnAnvil.handled, undefined);

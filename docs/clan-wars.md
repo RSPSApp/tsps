@@ -74,7 +74,7 @@ there is no guessed reward or penalty. Cache collision verifies separation and r
 but does not establish official server placement or cleanup policy.
 
 Other arenas, adjustable combat restrictions, King-of-the-Hill/Oddskull
-modes, modern-clan selection, spectating, exact official messages and exact team-specific
+modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
 ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
 restriction avoids introducing an unverified ammunition-return implementation. No dangerous
 or item-loss variant is imported from older RuneScape reference servers.
@@ -190,3 +190,49 @@ checkpoints; they do not claim 65,536 naturally earned kills or retail event ord
 Outgoing native-script argument observations pass through the real packet sender
 and do not establish rendered-client presentation. Runtime outcomes and independent
 acceptance belong to the PR evidence, not these coverage descriptions.
+
+
+## Viewing orbs for jailed members
+
+[Viewing orb (Clan Wars), Wiki revision 15201300](https://oldschool.runescape.wiki/w/Viewing_orb_(Clan_Wars)?oldid=15201300)
+describes Use from post-death waiting areas. Its Plateau anchors are 3323,4956
+and 3323,4963. The pinned revision-242 cache identifies the active orb as LOC
+`clanwars_viewing_start_darkrock` (26741), Use, model 9752. Admission resolves the
+actual object in this match's template; a matching name elsewhere grants no view.
+This does not add a lobby selector or let outsiders watch arbitrary teams.
+
+The native interface is `clanwars_view` (93), with centre, southwest, southeast,
+northwest and northeast controls (components 4–8), and Close (component 3).
+Scripts 562–567 supply the selected orb's presentation; script 29 sends IF_CLOSE.
+They do not supply server camera coordinates. The centre and quarter-map points
+are explicitly chosen within the mapped private Plateau, not claimed as exact
+retail camera placement or rates. The viewer moves to the selected view point
+while remaining a jailed nonfighter, hidden, untargetable and movement-blocked.
+The existing private-area player-sync filter and a temporary wide view radius
+keep this battle visible without exposing other instances.
+
+Closing the native interface restores the saved jail position, appearance
+visibility, fixed-view-distance configuration, movement and targetability guards,
+and supported server camera mode. Known follow and untimed target modes are snapshotted;
+a timed target glide or other in-flight camera scene is refused without changing it because its actual
+client interpolation/yaw/pitch is not observable or resumable by this server.
+Additive shakes and the scripted pitch-unlock constraint do not change that base
+camera mode, so ending them cannot strand an otherwise normal player outside
+viewing. Ending either modifier also cannot release a genuinely controlled shot.
+The reset on leaving viewing clears additive shake/pitch modifiers; they are not
+part of the saved base-mode contract.
+The close, replacement-modal, jail-return, removal, death and match-finish routes
+relinquish viewing ownership before resetting anything, so reentrant cleanup
+cannot close a replacement interface. Death-task movement/targetability locks
+remain owned by the death task, and nonfighter deaths earn no extra kill.
+Visibility is ephemeral, not a saved item/appearance change or NPC disguise.
+
+The existing Clan Wars fixture gains real bound session flushes and production
+visibility-bucket/local-player updates for viewer cases, following the established
+quest-scene-return-state fixture. It uses actual mapped orb Use, native View and
+IF_CLOSE packets, outgoing camera packets and both appearance producers, with
+cache invalidation, two observers, a separate match and restoration controls.
+Jail adjacency, lethal HP and an overlapping-coordinate visibility checkpoint are
+supplied setup. The transport is inert and no rendered-client or natural walking,
+combat RNG, login or camera-angle parity claim follows from these checks. Actual
+runtime outcomes and independent acceptance belong to the PR evidence.

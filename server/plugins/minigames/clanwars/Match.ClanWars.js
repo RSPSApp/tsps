@@ -7,6 +7,7 @@
  */
 const C = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Viewing = require("./Viewing.ClanWars");
 const PREPARATION_TICKS = 200;
 // Rev242 varbits4290/4291 are 16 bits; HUD script595 renders this value as "Lots!".
 const MAX_HUD_KILLS = 65535;
@@ -77,6 +78,7 @@ class Game {
     this.members = new Map();
     this.fighters = new Map();
     this.jailed = new Set();
+    this.viewers = new Set();
     this.kills = [0, 0];
     this.phase = "staging";
     this.starts = C.now() + PREPARATION_TICKS;
@@ -139,10 +141,16 @@ class Game {
     if (target && this.kills[side] >= target) this.finish(side);
   }
   rejoin(player) {
+    const view = Viewing.active.get(player);
+    if (view?.game === this) Viewing.stop(player, false);
     if (this.phase !== "combat" || this.expired() || !Rules.respawns(this.rules) || !this.jailed.has(player)
       || dying.has(player) || player.getHitpoints() <= 0 || player.busy()
       || player.getArea() !== this.area
-      || C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) return false;
+      || C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) {
+      if (view?.game === this && player.getArea() === this.area && this.phase !== "over"
+        && !player.isDyingReturn()) player.moveTo(view.location);
+      return false;
+    }
     const side = this.members.get(player);
     this.jailed.delete(player);
     this.fighters.set(player, side);
@@ -161,6 +169,7 @@ class Game {
   }
   tick() {
     if (this.expire()) return;
+    Viewing.tick(this);
     for (const player of this.members.keys()) {
       if (C.channel(player)?.key !== this.channelKeys[this.members.get(player)]) this.channelLeft(player);
       if (this.phase === "over") return;
@@ -188,7 +197,7 @@ class Game {
       C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
     }
   }
-  eliminate(player) { this.fighters.delete(player); player.getCombat().reset(); }
+  eliminate(player) { Viewing.stop(player); this.fighters.delete(player); player.getCombat().reset(); }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death
@@ -196,6 +205,7 @@ class Game {
     if (player.isDyingReturn() && !dying.has(player)) {
       dying.set(player, { game: this, side: this.members.get(player) });
     }
+    Viewing.stop(player, false);
     this.eliminate(player);
     this.jailed.delete(player);
     this.members.delete(player);
@@ -287,14 +297,15 @@ function joinClosed({ player, interfaceId }) {
 }
 function dyingStarts({ player, killer }) {
   const game = C.matches.get(player);
-  if (!game || dying.has(player) || !game.fighters.has(player)) return;
+  if (!game || dying.has(player) || !game.members.has(player)) return;
+  const wasFighter = game.fighters.has(player);
   const side = game.members.get(player);
   const scoringSide = game.members.get(killer);
   dying.set(player, { game, side });
   game.eliminate(player);
   // Use the death task's captured damage owner, before its reset, and require an
   // opposing participant still owned by this match. Unattributed deaths award no guessed kill.
-  if (scoringSide != null && scoringSide !== side) game.score(scoringSide);
+  if (wasFighter && scoringSide != null && scoringSide !== side) game.score(scoringSide);
 }
 function keepItems(event) {
   if (C.matches.has(event.player) || dying.has(event.player)) event.shouldDrop = false;

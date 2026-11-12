@@ -50,10 +50,17 @@ afterEach(() => {
   assert.deepEqual(errors.splice(0), [], 'production hooks must not swallow errors');
 });
 
-function actor() {
-  const transport = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+function actor(nativeProof = false) {
+  const transport = { kind: nativeProof ? 'tcp' : 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
     send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(transport));
+  if (nativeProof) {
+    const session = p.getSession(); session.setPlayer(p);
+    p.nativeProof = true; p.nativePackets = [];
+    p.setAttribute('bot-skip-persistence', true);
+    const send = session.sendClientPacket.bind(session);
+    session.sendClientPacket = frame => { p.nativePackets.push(Buffer.from(frame)); return send(frame); };
+  }
   const name = `clanqa${++serial}`;
   p.setUsername(name).setLongUsername(core.Misc.stringToLongBigInt(name));
   p.setHostAddress(`192.0.2.${serial}`);
@@ -71,6 +78,20 @@ function actor() {
 }
 function tick(count = 1) {
   for (let i = 0; i < count; i++) {
+    if (actors.some(p => p.nativeProof)) {
+      // The existing quest-scene-return-state fixture uses this production ordering.
+      // Bind real sessions, update real visibility buckets and flush real native frames.
+      core.World.processCycle++; core.TaskManager.process();
+      for (const p of actors) {
+        p.connection.processTurnPackets(); AreaManager.process(p);
+        core.TaskManager.processWalkTo(p.getIndex()); p.getMovementQueue().process();
+      }
+      core.World.rebuildUpdateBuckets();
+      for (const p of actors) core.World.updateLocalPlayers(p);
+      for (const p of actors) p.getSession().flush(core.World.processCycle);
+      for (const p of actors) p.resetUpdating();
+      continue;
+    }
     core.World.processCycle++;
     for (const p of actors) {
       p.getMovementQueue().process();
@@ -416,7 +437,7 @@ async function lethalMelee(killer, victim, game) {
   assert.equal(victim.getHitpoints(), 0, 'real incoming melee hit starts the production death task');
   tick();
 }
-async function jailExit(player, game) {
+async function jailExit(player, game, waitTicks = 15) {
   // The death task moves after this fixture's player updates; complete that
   // ordinary placement update before sending the next object's input.
   tick();
@@ -441,7 +462,7 @@ async function jailExit(player, game) {
     'the native dispatcher resolves this exact mapped instance portal');
   const op = portal.getDefinition().getInteractions().findIndex(option => option?.toLowerCase() === 'exit') + 1;
   new ObjectActionPacketListener().executeAction(player, portal.getId(), at.getX(), at.getY(), op);
-  tick(15);
+  tick(waitTicks);
 }
 
 test('native kill-target negotiation preserves cap, invalidates acceptance and rejects unsupported mode rows', async () => {
@@ -820,4 +841,288 @@ test('timed HUD saturates at native Lots while full server scores and the scorin
   assert.equal(game.phase, 'over'); assert.deepEqual(game.kills, scores, 'deadline callback cannot add a tying kill');
   assert.deepEqual(scripts.filter(([id]) => id === 592).at(-1), [592, 1, 'Your team won the battle.']);
   lobby(a); lobby(b); lobby(extra);
+});
+
+// Viewer cases add the proven scene-return fixture's real session flush/visibility
+// producers to the existing Clan Wars packet/instance harness. Transport remains inert.
+const VIEW_CLOSE_PACKET = 55; // NativeClientPackets.IF_CLOSE, no payload.
+function viewingUnit() { return require('../plugins/minigames/clanwars/Viewing.ClanWars'); }
+async function viewerGame(mode = 0) {
+  const a = actor(true), viewer = actor(true), b = actor(true); channel(a, [viewer]); channel(b);
+  const game = await negotiate(a, b, 2, mode); await join(a); await join(viewer); await join(b);
+  core.World.processCycle = game.starts - 1; tick();
+  viewer.getCombat().addDamage(b, 10); viewer.setHitpoints(0); tick(6);
+  assert.equal(game.jailed.has(viewer), true, 'real queued death has completed into the existing jail');
+  assert.equal(viewer.getHitpoints() > 0, true); assert.equal(Match.dying.has(viewer), false);
+  return { a, viewer, b, game };
+}
+function mappedOrb(viewer, game) {
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  const side = game.members.get(viewer), jail = game.area.at(side === 0 ? [3323,4943,0] : [3323,4976,0]);
+  const id = core.CacheDefinitions.getLocId('clanwars_viewing_start_darkrock');
+  const orbs = [];
+  for (let x=0;x<game.area.widthChunks;x++) for (let y=0;y<game.area.heightChunks;y++) {
+    orbs.push(...game.area.getChunkObjects(0,x,y).filter(object => object.getId() === id));
+  }
+  assert.ok(orbs.length, 'the pinned active orbs exist in this actual Plateau instance');
+  const distance = object => Math.max(Math.abs(object.getLocation().getX()-jail.getX()), Math.abs(object.getLocation().getY()-jail.getY()));
+  const object = orbs.sort((a,b) => distance(a)-distance(b))[0];
+  assert.equal(MapObjects.getPrivateArea(viewer,id,object.getLocation()),object,'native resolver owns this exact mapped orb');
+  assert.equal(object.getDefinition().getName(), 'Viewing orb');
+  assert.equal(object.getDefinition().getInteractions()[0], 'Use');
+  return object;
+}
+async function openView(viewer, game, expectOpen = true) {
+  const object = mappedOrb(viewer, game);
+  // Supplied settled adjacency, not a claim of naturally walking the entire jail.
+  const side = game.members.get(viewer);
+  viewer.moveTo(object.getLocation().transform(0, side === 0 ? -1 : 1)); tick(2);
+  const origin = viewer.getLocation().clone();
+  assert.equal(viewer.isNeedsPlacement(), false);
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  const at = object.getLocation();
+  new ObjectActionPacketListener().executeAction(viewer, object.getId(), at.getX(), at.getY(), 1);
+  tick(4);
+  if (expectOpen) assert.equal(viewer.getInterfaceId(), C.group('clanwars_view'), 'native mapped Viewing orb Use opens the real viewing controls');
+  return origin;
+}
+function position(player) { const at = player.getLocation(); return [at.getX(),at.getY(),at.getZ()]; }
+function hiddenByte(observer, target, force = false) {
+  const payload = observer.getSession().createPlayerView(target, force).appearance;
+  const name = Buffer.from(target.getDisplayName(), 'latin1'), start = payload.indexOf(name);
+  assert.ok(start > 0, 'actual observer appearance carries this actor identity');
+  return { payload, hidden: payload[start + name.length + 4] }; // name NUL, combat byte, total short, hidden byte.
+}
+function restoredViewer(viewer, game, origin) {
+  assert.equal(viewingUnit().active.has(viewer), false);
+  assert.equal(viewer.isAppearanceHidden(), false);
+  assert.equal(viewer.isUntargetable(), false);
+  assert.equal(viewer.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(viewer.getFixedViewDistance(), null);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(), { mode: 'follow' });
+  assert.equal(game.jailed.has(viewer), true);
+  assert.deepEqual(position(viewer), [origin.getX(),origin.getY(),origin.getZ()]);
+}
+
+test('native jail orb opens five actual views, emits camera targets and restores through IF_CLOSE', async () => {
+  const { a, viewer, b, game } = await viewerGame();
+  const calls = scriptCalls(viewer), origin = await openView(viewer, game);
+  assert.equal(viewer.isAppearanceHidden(), true); assert.equal(viewer.isUntargetable(), true);
+  assert.equal(viewer.getMovementQueue().isMovementBlocked(), true); assert.equal(viewer.getFixedViewDistance(), 64);
+  const { encodeCameraTarget, encodeCameraReset } = require('../dist/net/protocol/ClientProtocol');
+  for (const [index, name] of ['central','sw','se','nw','ne'].entries()) {
+    await click(viewer, `clanwars_view:${name}`, index % 2);
+    const fraction = [[.5,.5],[.25,.25],[.75,.25],[.25,.75],[.75,.75]][index];
+    const at = game.area.tile(game.area.widthChunks * 8 * fraction[0], game.area.heightChunks * 8 * fraction[1], 0);
+    assert.deepEqual(position(viewer), [at.getX(),at.getY(),at.getZ()]);
+    assert.deepEqual(calls.filter(([id]) => id === 562).at(-1), [562,index,9752], 'native selection/model matches the pinned orb contract');
+    const expected = encodeCameraTarget({ x:at.getX(), y:at.getY(), level:at.getZ() });
+    assert.ok(viewer.nativePackets.some(frame => frame.equals(expected)), 'real sender emitted this native target packet');
+    assert.equal(viewer.getSession().isTileInScene(at.getX(),at.getY(),at.getZ()), true, 'actual instance scene was rebuilt before viewing');
+  }
+  assert.equal(game.area.canAttack(a,viewer,CombatFactory.MELEE_COMBAT), false);
+  assert.equal(game.area.canAttack(viewer,b,CombatFactory.MELEE_COMBAT), false);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT), true);
+  await wire(viewer, Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer, game, origin);
+  assert.ok(viewer.nativePackets.some(frame => frame.equals(encodeCameraReset())));
+  const at = position(viewer); await click(viewer,'clanwars_view:ne');
+  assert.deepEqual(position(viewer), at, 'stale view input after Close cannot move the player');
+});
+
+test('native viewing sends hidden appearance to two observers and visibility changes invalidate cached payloads', async () => {
+  const { a, viewer, b, game } = await viewerGame();
+  const origin = await openView(viewer, game);
+  for (const p of [a,b]) p.moveTo(game.area.tile(31,31,0));
+  tick(3);
+  for (const observer of [a,b]) {
+    assert.equal(observer.getLocalPlayers().includes(viewer), true, 'real private-area update includes the viewer actor');
+    assert.equal(hiddenByte(observer,viewer).hidden, 1, 'the native appearance byte hides the viewer model/minimap');
+    assert.ok(observer.nativePackets.length, 'the real observer session flushed native packets');
+  }
+  assert.equal(viewer.connection.getPlayerAppearance(viewer).hidden, true, 'initial appearance producer shares the generic visibility state');
+  await wire(viewer, Buffer.from([VIEW_CLOSE_PACKET])); restoredViewer(viewer,game,origin);
+  // Stay in range: this checks the appearance dirty/cache path, not a re-entry cache miss.
+  viewer.moveTo(game.area.tile(32,32,0)); tick(3);
+  const before = hiddenByte(a,viewer); assert.equal(before.hidden,0);
+  viewer.setAppearanceHidden(true);
+  const changed = hiddenByte(a,viewer); assert.equal(changed.hidden,1); assert.notEqual(changed.payload,before.payload);
+  viewer.setAppearanceHidden(false); assert.equal(hiddenByte(a,viewer).hidden,0);
+  tick();
+});
+
+test('viewer restores nondefault prior target, fixed radius, hidden and untargetable state', async () => {
+  const { a,viewer,game } = await viewerGame();
+  await openView(viewer,game); await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  viewer.setAppearanceHidden(true); viewer.setUntargetable(true); viewer.setFixedViewDistance(23);
+  const previous = { player:a.getIndex() }; viewer.getPacketSender().sendCameraTarget(previous);
+  const origin = await openView(viewer,game);
+  previous.player = 2047; // the generic state snapshot must not alias the caller's object.
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  assert.equal(viewer.isAppearanceHidden(),true); assert.equal(viewer.isUntargetable(),true);
+  assert.equal(viewer.getFixedViewDistance(),23); assert.equal(viewer.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'target',target:{player:a.getIndex()}});
+  assert.deepEqual(position(viewer),[origin.getX(),origin.getY(),origin.getZ()]);
+});
+
+for (const departure of ['replacement','rejoin','channel leave','disconnect','finish']) {
+  test(`viewing cleanup restores state before ${departure}`, async () => {
+    const { viewer,game } = await viewerGame(); const origin = await openView(viewer,game);
+    const coins = new core.Item(995,77,{qa:'viewer-preserve'}); viewer.getInventory().add(coins,false);
+    if (departure === 'replacement') {
+      viewer.getPacketSender().sendInterface(C.group('clanwars_setup')); tick(3);
+      restoredViewer(viewer,game,origin);
+      assert.equal(viewer.getInterfaceId(),C.group('clanwars_setup'),'view cleanup cannot close a replacement owner');
+    } else if (departure === 'rejoin') {
+      // The production jail return consumer must also safely handle forced entry while viewing.
+      assert.equal(game.rejoin(viewer),false,'LTS still refuses a jail return'); tick(2);
+      restoredViewer(viewer,game,origin);
+    } else {
+      if (departure === 'channel leave') FC.leave(viewer,false);
+      else if (departure === 'disconnect') PM.emitPlayerDisconnect({player:viewer,username:viewer.getUsername(),source:'viewer-test'});
+      else game.finish(null);
+      tick(2); lobby(viewer);
+      assert.equal(viewingUnit().active.has(viewer),false);
+      assert.equal(viewer.isAppearanceHidden(),false); assert.equal(viewer.isUntargetable(),false);
+      assert.equal(viewer.getMovementQueue().isMovementBlocked(),false); assert.equal(viewer.getFixedViewDistance(),null);
+      assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'follow'});
+    }
+    assert.equal(viewer.getInventory().getAmount(995),77);
+    assert.deepEqual(viewer.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'viewer-preserve'});
+  });
+}
+
+test('respawning viewer can close and use the actual jail Portal Exit to fight again', async () => {
+  const { a,viewer,b,game } = await viewerGame(1); const scores = game.kills.slice();
+  await openView(viewer,game); await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  await jailExit(viewer,game,40);
+  assert.equal(game.fighters.has(viewer),true); assert.equal(game.jailed.has(viewer),false);
+  assert.equal(viewer.isAppearanceHidden(),false); assert.equal(viewer.isUntargetable(),false);
+  assert.equal(viewer.getMovementQueue().isMovementBlocked(),false);
+  assert.equal(game.area.canAttack(viewer,b,CombatFactory.MELEE_COMBAT),true);
+  assert.deepEqual(game.kills,scores,'view/return is not another death or kill');
+  assert.equal(game.members.has(a),true);
+});
+
+test('viewer queued death retains safe ownership and death-task movement/targetability locks', async () => {
+  const { viewer,b,game } = await viewerGame(1); await openView(viewer,game);
+  for (const id of [4151,1127,1079,1163,1201,995]) viewer.getInventory().add(new core.Item(id,id===995?77:1,{qa:`view-death-${id}`}),false);
+  const before = viewer.getInventory().getValidItems().map(i=>({id:i.getId(),n:i.getAmount(),meta:structuredClone(i.getMeta())}));
+  const scores = game.kills.slice(); viewer.getCombat().addDamage(b,10); viewer.setHitpoints(0);
+  tick();
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.equal(Match.dying.has(viewer),true,'real jailed/viewing death receives independent safe ownership');
+  assert.equal(viewer.getMovementQueue().isMovementBlocked(),true,'core death task owns its movement lock');
+  assert.equal(viewer.isUntargetable(),true,'core death task owns targetability until respawn');
+  tick(5);
+  assert.deepEqual(viewer.getInventory().getValidItems().map(i=>({id:i.getId(),n:i.getAmount(),meta:structuredClone(i.getMeta())})),before);
+  assert.deepEqual(game.kills,scores,'a nonfighter death cannot earn an invented kill');
+  assert.equal(game.jailed.has(viewer),true); assert.equal(viewer.isAppearanceHidden(),false);
+  assert.equal(Match.dying.has(viewer),false); assert.equal(viewer.isUntargetable(),false);
+  assert.equal(viewer.getMovementQueue().isMovementBlocked(),false);
+});
+
+test('native orb refuses an active camera scene and invalid viewing controls cannot move an admitted viewer', async () => {
+  const { viewer,game } = await viewerGame();
+  await openView(viewer,game); await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  viewer.getPacketSender().sendCameraMoveTo(viewer.getLocation().getX(),viewer.getLocation().getY(),300,false);
+  const messages = [], original = viewer.sendMessage;
+  viewer.sendMessage = function(message) { messages.push(message); return original.call(this,message); };
+  await openView(viewer,game,false);
+  assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'},'refusal preserves the existing cinematic');
+  assert.ok(messages.some(message=>message.includes('Finish your current camera scene')));
+  viewer.getPacketSender().sendCameraReset();
+  viewer.getPacketSender().sendCameraTarget({ x:viewer.getLocation().getX(), y:viewer.getLocation().getY(), level:viewer.getLocation().getZ(), cycles:50 });
+  messages.length = 0;
+  const beforeGlide = position(viewer);
+  await openView(viewer,game,false);
+  assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.deepEqual(position(viewer),beforeGlide,'refusal does not relocate an interpolating camera target');
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'});
+  assert.ok(messages.some(message=>message.includes('Finish your current camera scene')));
+  viewer.getPacketSender().sendCameraReset();
+  await openView(viewer,game);
+  const before = position(viewer), camera = viewer.getPacketSender().getCameraState();
+  await click(viewer,'clanwars_view:sw',2);
+  await click(viewer,'clanwars_view:com_1');
+  assert.deepEqual(position(viewer),before); assert.deepEqual(viewer.getPacketSender().getCameraState(),camera);
+});
+
+test('viewing admission and native visibility remain isolated to jailed members of the owning match', async () => {
+  const { a,viewer,game } = await viewerGame(); await openView(viewer,game);
+  const object = mappedOrb(a,game), at = object.getLocation();
+  a.moveTo(at.transform(0,game.members.get(a)===0?-1:1)); tick(2);
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  new ObjectActionPacketListener().executeAction(a,object.getId(),at.getX(),at.getY(),1); tick(4);
+  assert.notEqual(a.getInterfaceId(),C.group('clanwars_view'),'a living fighter cannot become a viewer');
+  assert.equal(game.fighters.has(a),true); assert.equal(viewingUnit().active.has(a),false);
+  const other = await viewerGame(); await openView(other.viewer,other.game);
+  assert.notEqual(other.game.area,game.area);
+  assert.equal(viewingUnit().active.get(viewer).game,game);
+  assert.equal(viewingUnit().active.get(other.viewer).game,other.game);
+  // Explicit overlapping-coordinate checkpoint isolates the real private-area filter.
+  // This does not claim that independent instances naturally occupy the same tile.
+  const previous = other.a.getLocation().clone();
+  other.a.setLocation(viewer.getLocation().clone()); other.a.setNeedsPlacement(false);
+  core.World.rebuildUpdateBuckets(); core.World.updateLocalPlayers(viewer);
+  assert.equal(viewer.getLocalPlayers().includes(other.a),false,'viewer cannot receive a different match at an overlapping coordinate');
+  other.a.setLocation(previous); tick(2);
+  const before = position(a); await click(a,'clanwars_view:ne');
+  assert.deepEqual(position(a),before,'another actor cannot reuse the viewer interface authority');
+});
+
+test('a native Attack request while viewing cannot turn the jailed viewer into a fighter', async () => {
+  const { viewer,b,game } = await viewerGame(); const origin = await openView(viewer,game);
+  b.moveTo(game.area.tile(33,32,0)); tick(2);
+  const frame = Buffer.alloc(4); frame[0]=44; frame[1]=128; frame.writeUInt16BE(b.getIndex(),2);
+  await wire(viewer,frame);
+  assert.equal(viewer.getCombat().getTarget(),null,'the real player-option listener cannot begin spectator combat');
+  assert.equal(game.fighters.has(viewer),false); assert.equal(game.jailed.has(viewer),true);
+  if (viewingUnit().active.has(viewer)) await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer,game,origin);
+});
+
+
+test('native orb remains usable after real all-axis stop-shakes and restores its prior target', async () => {
+  const { a,viewer,game } = await viewerGame();
+  const CameraShake = require('../plugins/interface/CameraShake.plugin');
+  viewer.getPacketSender().sendCameraTarget({player:a.getIndex()});
+  // The actual quest cleanup producer stops all five additive shake axes.
+  for (let axis=0;axis<5;axis++) {
+    CameraShake.send(viewer.getPacketSender(),'atmospheric',axis,5,3,8);
+    CameraShake.send(viewer.getPacketSender(),'atmospheric',axis,0);
+  }
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  assert.deepEqual(position(viewer),[origin.getX(),origin.getY(),origin.getZ()]);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'target',target:{player:a.getIndex()}});
+  assert.equal(viewer.isAppearanceHidden(),false);
+});
+
+test('native orb remains usable after scripted pitch unlock is released', async () => {
+  const { viewer,game } = await viewerGame();
+  viewer.getPacketSender().sendCameraUnlock(true).sendCameraUnlock(false);
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer,game,origin);
+});
+
+test('additive shakes do not block viewing or erase an actual controlled camera scene', async () => {
+  const { viewer,game } = await viewerGame();
+  const CameraShake = require('../plugins/interface/CameraShake.plugin');
+  CameraShake.send(viewer.getPacketSender(),'barrows',0,5,2,8);
+  const origin = await openView(viewer,game);
+  await wire(viewer,Buffer.from([VIEW_CLOSE_PACKET]));
+  restoredViewer(viewer,game,origin);
+  const at = viewer.getLocation();
+  viewer.getPacketSender().sendCameraMoveTo(at.getX(),at.getY(),300,false);
+  CameraShake.send(viewer.getPacketSender(),'atmospheric',0,0);
+  viewer.getPacketSender().sendCameraUnlock(false);
+  await openView(viewer,game,false);
+  assert.notEqual(viewer.getInterfaceId(),C.group('clanwars_view'));
+  assert.equal(viewingUnit().active.has(viewer),false);
+  assert.deepEqual(viewer.getPacketSender().getCameraState(),{mode:'controlled'},'ending modifiers cannot relinquish a real scripted shot');
 });

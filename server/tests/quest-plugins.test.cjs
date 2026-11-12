@@ -16161,6 +16161,7 @@ test('Priest in Peril unlocks the mausoleum Holy barrier only after completion',
     getAttribute: () => stage,
     moveTo: (location) => moves.push([location.getX(), location.getY(), location.getZ()]),
     sendMessage: (text) => messages.push(text),
+    getPacketSender: () => ({ sendTypedMessage: (type, text) => messages.push(`${type === api.core.ChatType.SPAM ? 'spam' : type}: ${text}`) }),
   };
   for (stage of [0, 10, 46]) {
     assert.equal(pass({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER }), true);
@@ -16187,7 +16188,7 @@ test('Priest in Peril unlocks the mausoleum Holy barrier only after completion',
   for (stage of [quest.completionValue, quest.completionValue + 1]) {
     assert.equal(pass({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER }), true);
     assert.deepEqual(moves.at(-1), [3423, 3485, 0]);
-    assert.equal(messages.at(-1), 'You pass through the holy barrier.');
+    assert.equal(messages.at(-1), 'spam: You pass through the holy barrier.', 'a spam line (rsprox)');
   }
   const before = [moves.length, messages.length];
   assert.equal(pass({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER_2 }), false,

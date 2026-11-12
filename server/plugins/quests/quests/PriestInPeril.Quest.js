@@ -812,7 +812,8 @@ module.exports = function registerPriestInPerilQuest(api) {
       return true;
     }
     player.moveTo(HOLY_BARRIER_LANDING.clone());
-    player.sendMessage("You pass through the holy barrier.");
+    // rsprox: a spam line in every recording (226/01637.txt:36515, 237/01108.txt:95706, ...).
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You pass through the holy barrier.");
     return true;
   }
 

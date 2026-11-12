@@ -1496,6 +1496,7 @@ for (const leavingcc of [0,1]) {
     if (leavingcc===1) {
       PM.emitPlayerLogout({player:extra,username:extra.getUsername()});
       core.World.getPlayers().remove(extra); extra.setRegistered(false);
+      actors.splice(actors.indexOf(extra),1); // retire this supplied actor from future fixture turns
       entrant=actor(true); entrant.setUsername(extra.getUsername()).setLongUsername(key);
     }
     await wire(entrant,channelFrame('join',a.getUsername())); tick(2);

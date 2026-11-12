@@ -566,7 +566,17 @@ test("Resources: an ironman buys only scrolls of redirection (Wiki: Dom Onion's 
   Common.addPoints(p, 100000);
   button('resources', { player: p, slot: 0, opId: 3 });
   assert.equal(p.inventory.getAmount(1780), 0, 'no flax');
-  assert.ok(p.messages.includes(Common.message('ironmanResource')));
+  // The recorded refusal, byte for byte (rsprox 237/01150.txt:342295).
+  assert.equal(Common.message('ironmanResource'), 'Ironmen can purchase redirection scrolls, but not other resources.');
+  assert.deepEqual(p.messages.filter((m) => m.startsWith('Ironmen')), ['Ironmen can purchase redirection scrolls, but not other resources.']);
+  // The recorded click: the herb box (11738) gets the same line.
+  const herbBox = p.invs[464].findIndex((item) => item.id === 11738);
+  assert.ok(herbBox >= 0, 'the herb box is on the Resources tab');
+  p.messages.length = 0;
+  button('resources', { player: p, slot: herbBox * 2, opId: 2 });
+  assert.equal(p.inventory.getAmount(11738), 0, 'no herb box');
+  assert.deepEqual(p.messages, ['Ironmen can purchase redirection scrolls, but not other resources.']);
+  assert.equal(Common.points(p), 100000, 'no points spent');
   const scroll = p.invs[464].findIndex((item) => item.id === 11740);
   assert.ok(scroll >= 0, 'the scroll is on the Resources tab');
   button('resources', { player: p, slot: scroll * 2, opId: 1 }); // a sub is twice its item's index

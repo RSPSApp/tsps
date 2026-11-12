@@ -203,7 +203,7 @@
     "notStarted": [["npc", "You haven't started that dream I created for you. Can I help you with something?", 568]],
     "changeDream": [["player", "I want to change my dream.", 575], ["npc", "Okay, I've emptied the vial. I have not taken any money from you for that dream, since you never started it.", 568]]
   },
-  "_messages": "Recorded: welcome, nothing, cofferEmpty, cofferHolds, cofferTitle, depositPrompt, startDream, barrel, notComplete. Not recorded (wording mine): withdrawPrompt, noDream, notEnoughCoins, notEnoughQuests, cofferFull, dreamOver, onlyInDream, noBank, overloadLowHp, overloadActive, overloadEnds, barrelHolds, takePrompt, imbued, notEnoughPoints, noRoom, buyX, herbBoxLimit, herbBoxIronman, ironmanResource, barrelFull. Recorded: imbuePrice (sent for a Slayer helmet with 0 points).",
+  "_messages": "Recorded: welcome, nothing, cofferEmpty, cofferHolds, cofferTitle, depositPrompt, startDream, barrel, notComplete. Not recorded (wording mine): withdrawPrompt, noDream, notEnoughCoins, notEnoughQuests, cofferFull, dreamOver, onlyInDream, noBank, overloadLowHp, overloadActive, overloadEnds, barrelHolds, takePrompt, imbued, notEnoughPoints, noRoom, buyX, herbBoxLimit, barrelFull. Recorded: imbuePrice (sent for a Slayer helmet with 0 points); ironmanResource (an ironman buying a herb box, rsprox 237/01150.txt:342294-342295, and used for every resource but the scrolls of redirection).",
   "messages": {
     "welcome": "Welcome to the Nightmare Zone.",
     "nothing": "Nothing interesting happens.",
@@ -233,8 +233,7 @@
     "noRoom": "You don't have enough inventory space.",
     "buyX": "How many would you like to buy?",
     "herbBoxLimit": "You can only buy {limit} herb boxes a day.",
-    "herbBoxIronman": "Ironmen can't buy herb boxes.",
-    "ironmanResource": "Ironmen can only buy scrolls of redirection from this tab.",
+    "ironmanResource": "Ironmen can purchase redirection scrolls, but not other resources.",
     "barrelFull": "That barrel can't hold any more doses."
   }
 }

@@ -335,8 +335,8 @@ test('successful vault exit converts only this run and restores run energy', asy
   assert.equal(f.player.getRunEnergy(), 100);
 });
 
-async function exchange(f, t) {
-  const id = core.CacheDefinitions.getNpcId('camdozaal_ramarno_multi');
+async function ramarnoActor(f, t, gameval = 'camdozaal_ramarno_multi') {
+  const id = core.CacheDefinitions.getNpcId(gameval);
   assert.ok(Number.isInteger(id), 'current cache Ramarno gameval');
   const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id);
   assert.ok(spawn, 'actual generated Ramarno world placement');
@@ -356,6 +356,10 @@ async function exchange(f, t) {
   assert.equal(reached, true, 'engine-qualified reachable perimeter at actual world placement');
   ticks(3);
   assert.equal(f.player.isNeedsPlacement(), false);
+  return npc;
+}
+async function exchange(f, t) {
+  const npc = await ramarnoActor(f, t);
   const op = npc.getCurrentDefinition(f.player).getActions().indexOf('Exchange') + 1;
   assert.ok(op > 0, 'real Ramarno Exchange option');
   let consumerEntries = 0;
@@ -715,13 +719,28 @@ test('ordinary lockbox Open preserves three rolls, one gear maximum, noted quant
 test('Ramarno Talk-to retains Below Ice Mountain and Desert Treasure II transcript authority', async t => {
   const dialogues = require('../plugins/npcs/NpcDialogues.plugin');
   for (const dt2 of [false, true]) {
-    const f = actor(t), npc = await exchange(f, t);
-    f.player.getPacketSender().sendInterfaceRemoval();
+    const f = actor(t);
+    let npc;
     if (dt2) {
       const quest = Runtime.getRegisteredQuests().findLast(q => q.key === 'desert_treasure_ii');
       assert.ok(quest); quest.setStage(f.player, 7);
-    } else f.player.setAttribute('quest.below_ice_mountain.met-ramarno', 0);
-    const original = dialogues.startDialogue, observed = [];
+      npc = await exchange(f, t);
+      f.player.getPacketSender().sendInterfaceRemoval();
+      assert.equal(npc.getContentId(f.player), core.CacheDefinitions.getNpcId('camzodaal_ramarno'));
+    } else {
+      // The unintroduced dwarf exists at the entrance. Do not mix met=0 with
+      // the workshop-only varbit2 spawn used for post-introduction Exchange.
+      f.player.setAttribute('quest.below_ice_mountain.met-ramarno', 0);
+      f.player.getPacketSender().sendVarbit(12068, 0);
+      npc = await ramarnoActor(f, t, 'camdozaal_ramarno_entrance_multi');
+      assert.equal(npc.getContentId(f.player), core.CacheDefinitions.getNpcId('camzodaal_ramarno_entrance'));
+    }
+    const original = dialogues.startDialogue, observed = [], emit = PM.emitNpcInteraction;
+    let consumerEntries = 0;
+    PM.emitNpcInteraction = function(event) {
+      if (event.player === f.player && event.npc === npc) consumerEntries++;
+      return emit.call(this, event);
+    };
     dialogues.startDialogue = function(api, event, steps, branches, context) {
       if (event.player === f.player) observed.push(context?.pages);
       return original.call(this, api, event, steps, branches, context);
@@ -731,10 +750,11 @@ test('Ramarno Talk-to retains Below Ice Mountain and Desert Treasure II transcri
       assert.ok(op > 0);
       await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]);
       for (let i = 0; i < 20 && !observed.length; i++) ticks(1);
-      assert.ok(observed.some(pages => pages?.some(p => p.page === (dt2 ? 'Desert Treasure II - The Fallen Empire' : 'Below Ice Mountain'))));
+      assert.equal(consumerEntries, 1, 'ordinary Talk-to reaches the real NPC consumer exactly once');
+      assert.ok(observed.some(pages => pages?.some(p => p.page === (dt2 ? 'Desert Treasure II - The Fallen Empire' : 'Below Ice Mountain'))), `quest dialogue source context dt2=${dt2}: ${JSON.stringify(observed)}`);
       assert.notEqual(f.player.getInterfaceId(), 685, 'Talk-to is not replaced by the Exchange');
       assert.ok(f.player.getDialogueManager().isActive());
-    } finally { dialogues.startDialogue = original; }
+    } finally { dialogues.startDialogue = original; PM.emitNpcInteraction = emit; }
   }
 });
 

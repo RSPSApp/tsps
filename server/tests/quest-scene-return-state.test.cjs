@@ -62,6 +62,8 @@ function actor(t, scene) {
   const player = new Player(session);
   session.setPlayer(player); // without it flushClient returns at once and no map or loc packet is ever sent
   player.setUsername("scene" + next++);
+  player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
+  assert.notEqual(player.getLongUsername(), 0n, "native fixture has a real login identity");
   player.setAttribute("bot-skip-persistence", true);
   player.setLocation(new core.Location(...scene.start));
   player.needsPlacement = false;
@@ -388,9 +390,8 @@ test("Yarlo: current-cache parlour geometry is available for an isolated demonst
   assert.ok(region, "current cache contains the construction template region");
   const locs = region.chunks[templateChunkKey(0, room.sourceChunkX, room.sourceChunkY)];
   assert.ok(locs.length > 0, "candidate chunk contains real cache locs");
-  console.log("YARLO_PARLOUR_GEOMETRY " + JSON.stringify(locs.map(loc => ({...loc,
-    x: room.sourceChunkX * 8 + (loc.localX & 7), y: room.sourceChunkY * 8 + (loc.localY & 7),
-    name: core.ObjectDefinition.forId(loc.id)?.getName()}))));
+  assert.ok(locs.some(loc => loc.id === 4517 && loc.localX === 4 && loc.localY === 59 && loc.type === 10 && loc.face === 2),
+    "current parlour has the chair hotspot used by the demonstration");
 });
 
 test("Yarlo: Listen replaces the Varrock house map with an isolated room and returns safely", async (t) => {

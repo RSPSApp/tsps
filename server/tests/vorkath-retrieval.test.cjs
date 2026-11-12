@@ -41,6 +41,7 @@ const core = {
   CacheDefinitions: {
     getComponentId: (name) => COMPONENTS[name],
     getVarpId: (name) => VARPS[name],
+    getVarbitId: (name) => (name === "option_item_retrieval_warning_disabled" ? 14700 : -1),
     getItem: (id) => ({ name: id === 3159 ? "Fish barrel" : `item ${id}` }),
   },
   DialogueChainBuilder: class { add(...entries) { this.entries = entries; return this; } },
@@ -55,6 +56,7 @@ const api = {
   onNpcInteraction: (name, ops) => { hooks.npc = { name, ops }; },
   onInterfaceActionButton: (component, fn) => { (hooks.buttons ??= {})[component] = fn; },
   onCustomEvent: (name, fn) => { (hooks.events ??= {})[name] = fn; },
+  onPlayerLogin: (fn) => { hooks.login = fn; },
   emitCustomEvent(name, request) {
     if (name !== "gravestones:pay-fee") return;
     fees.push(request.amount);
@@ -285,4 +287,20 @@ test("a death another plugin handles doesn't leave a stale notice for the next o
   hooks.drops({ player, killer: null, location: CRATER, items: [new Item(4151)], untradeables: [], layout: {} });
   die(player, RELLEKKA, []);
   assert.deepEqual(player.messages, []);
+});
+
+// Wiki (Item Retrieval Service): players "will now be told of this when logging in"; rsprox 234/00833.txt:27.
+test("logging in with items at Torfinn sends the recorded reminder, unless the setting turns it off", () => {
+  const reminder = "<col=ff3045>You have items stored in an item retrieval service. Please visit Torfinn in Rellekka. If you die again before retrieving them, they will be lost.</col>";
+  const player = fakePlayer();
+  hooks.login({ player });
+  assert.deepEqual(player.messages, [], "nothing held: no reminder");
+  player.setAttribute("vorkath:retrieval", { items: [{ id: 11212, amount: 5 }] });
+  const varbits = new Map();
+  player.getPacketSender().getVarbit = (id) => varbits.get(id) ?? 0;
+  hooks.login({ player });
+  assert.deepEqual(player.messages, [reminder]);
+  varbits.set(14700, 1);
+  hooks.login({ player });
+  assert.deepEqual(player.messages, [reminder], "the warning setting off: no reminder");
 });

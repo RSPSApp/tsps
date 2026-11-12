@@ -701,6 +701,21 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
+    // Necrovarus's tomb door in the Temple of Phasmatys once unlocked (Ghosts Ahoy capture
+    // 20261112T092603-5ab63b4 ticks 1691-1693 in, 1711-1713 out): INVISWALL on the door's tile and
+    // the open door on the tile west, sound 56, the player walks across and the door is back two
+    // ticks later. The quest keeps it locked until the bone key is used on it (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_144, 3656, 3514, 1, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3656, 3514, 1, 0],
+        [O.DOOR_145, 3655, 3514, 1, 1],
+      ],
+      crossX: 3656,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 56,
+    }),
     // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
     // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while
     // dragonsecretdoor (2606, 2836,9600 rot 3) becomes dragonsecretdoor_open (25039, 2836,9599 rot 0)

@@ -430070,6 +430070,7 @@
               "options": [
                 {
                   "text": "I would like to enter Port Phasmatys - here's 2 Ectotokens.",
+                  "condition": "If the player has at least 2 Ectotokens:",
                   "steps": [
                     {
                       "player": "I would like to enter Port Phasmatys - here's 2 Ectotokens."
@@ -430077,7 +430078,7 @@
                     {
                       "type": "action",
                       "text": "Player pays 2 ecto-tokens.",
-                      "id": "s_ymV_"
+                      "id": "XeyqNB"
                     },
                     {
                       "type": "end"
@@ -430085,12 +430086,14 @@
                     {
                       "type": "action",
                       "text": "Player goes through the gate.",
-                      "id": "ckKoYZ"
+                      "id": "4mgRym"
                     }
-                  ]
+                  ],
+                  "id": "hFAul2"
                 },
                 {
                   "text": "I'm not paying you Ectotokens just to go through a gate.",
+                  "condition": "If the player has at least 2 Ectotokens:",
                   "steps": [
                     {
                       "player": "I'm not paying you Ectotokens just to go through a gate."
@@ -430101,7 +430104,24 @@
                     {
                       "type": "end"
                     }
-                  ]
+                  ],
+                  "id": "dQ6WYp"
+                },
+                {
+                  "text": "I don't have that many Ectotokens.",
+                  "condition": "If the player has fewer than 2 Ectotokens:",
+                  "steps": [
+                    {
+                      "player": "I don't have that many Ectotokens."
+                    },
+                    {
+                      "npc": "In that case, you need to go to the Temple and earn some. Talk to the disciples - they will tell you how."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "ZBMVXZ"
                 },
                 {
                   "text": "Where can I get Ectotokens?",
@@ -431143,7 +431163,7 @@
                     {
                       "type": "line",
                       "speaker": "Velorina",
-                      "text": "I have a vision of a small wooden shack, the land it was built on the unholy soil of Morytania. I sense the sea is very close, and that there are looms castles to the west and the east."
+                      "text": "I have a vision of a small wooden shack, the land it was built on the unholy soil of Morytania. I sense the sea is very close, and that there looms castles to the west and the east."
                     }
                   ]
                 },
@@ -431420,6 +431440,11 @@
               "type": "line",
               "speaker": "Old crone",
               "text": "All his rituals came from a book written by an ancient sorcerer from the East called Haricanto. Bring me this strange book."
+            },
+            {
+              "type": "line",
+              "speaker": "Old crone",
+              "text": "I cannot read the strange letters of the eastern lands. I will need something to help me translate the book."
             },
             {
               "type": "choice",
@@ -432764,69 +432789,162 @@
       "something-to-translate-the-book-of-haricanto-talking-to-robin": [
         {
           "type": "condition",
+          "text": "If the player has an oak longbow in their inventory:",
+          "steps": [
+            {
+              "player": "Would you sign this oak longbow for me?"
+            },
+            {
+              "type": "line",
+              "speaker": "Robin",
+              "text": "I'm sorry, I don't sign autographs."
+            },
+            {
+              "type": "line",
+              "speaker": "Robin",
+              "text": "While you're here, though, why don't you have a game of Runedraw with me? If you've got 25 gold pieces I've got a bag of runes we can use."
+            }
+          ],
+          "id": "lyGghs"
+        },
+        {
+          "type": "condition",
           "text": "If the player does not have an oak longbow in their inventory:",
           "steps": [
             {
               "type": "line",
               "speaker": "Robin",
               "text": "Hey you, why don't you have a game of Runedraw with me? If you've got 25 gold pieces I've got a bag of runes we can use."
+            }
+          ],
+          "id": "AZZDOx"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have 25 coins:",
+          "steps": [
+            {
+              "player": "I don't have enough money on me for a game of Runedraw at the moment."
             },
             {
-              "type": "condition",
-              "text": "If the player does not have 25 coins:",
-              "steps": [
-                {
-                  "player": "I don't have enough money on me for a game of Runedraw at the moment."
-                },
-                {
-                  "type": "end"
-                }
-              ],
-              "id": "52Y4Rr"
-            },
+              "type": "end"
+            }
+          ],
+          "id": "4sGI8H"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has at least 25 coins:",
+          "steps": [
             {
-              "type": "condition",
-              "text": "If the player has at least 25 coins:",
-              "steps": [
+              "type": "choice",
+              "options": [
                 {
-                  "type": "choice",
-                  "options": [
+                  "text": "Yes, I'll give you a game.",
+                  "steps": [
                     {
-                      "text": "Yes, I'll give you a game.",
+                      "player": "Yes, I'll give you a game."
+                    },
+                    {
+                      "type": "action",
+                      "action": "open_interface",
+                      "target": "Rune-Draw",
+                      "id": "ELEZLT"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player wins:",
                       "steps": [
                         {
-                          "player": "Yes, I'll give you a game."
+                          "type": "message",
+                          "text": "You've won the game of Runedraw!",
+                          "id": "YmLLg7"
                         },
                         {
-                          "type": "action",
-                          "action": "open_interface",
-                          "target": "Rune-Draw",
-                          "id": "1qdKTp"
+                          "player": "So are you going to pay up then? You owe me [#] gold coins!"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Robin",
+                          "text": "How about another game? I'll pay you back with the winnings."
+                        },
+                        {
+                          "player": "What if you lose again?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Robin",
+                          "text": "Er ... we'll deal with that when we come to it."
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Yes, I'll give you a game.",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "DKXbNb",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-3e9eeb0d7e9d1a5f"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "How do you play Runedraw?",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "i9NuBP",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-c54bd6a7ee9d5875"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "No, you didn't pay up the last time you lost.",
+                              "steps": [
+                                {
+                                  "player": "No, you didn't pay up the last time you lost."
+                                },
+                                {
+                                  "type": "end"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "id": "b8dZzm"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player loses:",
+                      "steps": [
+                        {
+                          "type": "message",
+                          "text": "You've lost the game of Runedraw.",
+                          "id": "-Q3ZiP"
                         },
                         {
                           "type": "condition",
-                          "text": "If the player wins:",
+                          "text": "If Robin does not owe the player any coins:",
                           "steps": [
                             {
-                              "type": "message",
-                              "text": "You've won the game of Runedraw!",
-                              "id": "Q_ww9k"
-                            },
-                            {
-                              "player": "So are you going to pay up then? You owe me [#] gold coins!"
+                              "player": "Well done, you beat me."
                             },
                             {
                               "type": "line",
                               "speaker": "Robin",
-                              "text": "How about another game? I'll pay you back with the winnings."
-                            },
-                            {
-                              "player": "What if you lose again?"
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Er ... we'll deal with that when we come to it."
+                              "text": "How about another game?"
                             },
                             {
                               "type": "choice",
@@ -432836,11 +432954,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "iYrVpV",
+                                      "id": "RpWdP2",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-89fea2307231f33d"
+                                          "branch": "jump-3e9eeb0d7e9d1a5f"
                                         }
                                       ]
                                     }
@@ -432851,16 +432969,21 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "reference": "above",
-                                      "id": "6Jxrls"
+                                      "id": "-Bq--m",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "jump-c54bd6a7ee9d5875"
+                                        }
+                                      ]
                                     }
                                   ]
                                 },
                                 {
-                                  "text": "No, you didn't pay up the last time you lost.",
+                                  "text": "No, that doesn't sound fun.",
                                   "steps": [
                                     {
-                                      "player": "No, you didn't pay up the last time you lost."
+                                      "player": "No, that doesn't sound fun."
                                     },
                                     {
                                       "type": "end"
@@ -432870,17 +432993,12 @@
                               ]
                             }
                           ],
-                          "id": "yavzUW"
+                          "id": "PxJuD9"
                         },
                         {
                           "type": "condition",
-                          "text": "If the player loses:",
+                          "text": "If Robin owes the player coins:",
                           "steps": [
-                            {
-                              "type": "message",
-                              "text": "You've lost the game of Runedraw.",
-                              "id": "gtlJxk"
-                            },
                             {
                               "player": "Well done, you beat me. But you still owe me [#] gold pieces."
                             },
@@ -432897,11 +433015,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "G3mCTg",
+                                      "id": "x382Xq",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-89fea2307231f33d"
+                                          "branch": "jump-3e9eeb0d7e9d1a5f"
                                         }
                                       ]
                                     }
@@ -432912,8 +433030,13 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "reference": "above",
-                                      "id": "Hbzf8Z"
+                                      "id": "ucWvOj",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "jump-c54bd6a7ee9d5875"
+                                        }
+                                      ]
                                     }
                                   ]
                                 },
@@ -432922,11 +433045,11 @@
                                   "steps": [
                                     {
                                       "type": "jump",
-                                      "id": "melFQw",
+                                      "id": "Ciye6j",
                                       "steps": [
                                         {
                                           "type": "call",
-                                          "branch": "jump-2379dfc142d531b7"
+                                          "branch": "jump-22247f17331ab065"
                                         }
                                       ]
                                     }
@@ -432935,82 +433058,82 @@
                               ]
                             }
                           ],
-                          "id": "ehle2x"
-                        },
-                        {
-                          "type": "condition",
-                          "text": "If the player wins 100 coins:",
-                          "steps": [
-                            {
-                              "player": "I've had enough of you not paying up - you owe me 100 gold coins. I'm going to tell the ghosts what you're doing."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Please don't do that!!! They will suck the life from my bones!!!"
-                            },
-                            {
-                              "player": "How about you signing my longbow then?"
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Robin",
-                              "text": "Yes, anything!!!"
-                            },
-                            {
-                              "type": "message",
-                              "text": "Robin signs the oak longbow for you.",
-                              "id": "pX0ymv"
-                            },
-                            {
-                              "type": "action",
-                              "action": "receive",
-                              "text": "a Signed oak bow",
-                              "id": "YWXokZ"
-                            }
-                          ],
-                          "id": "u4Yl8o"
+                          "id": "DXMtvO"
                         }
-                      ]
+                      ],
+                      "id": "sy7msq"
                     },
                     {
-                      "text": "How do you play Runedraw?",
+                      "type": "condition",
+                      "text": "If the player wins 100 coins:",
                       "steps": [
                         {
-                          "player": "How do you play Runedraw?"
+                          "player": "I've had enough of you not paying up - you owe me 100 gold coins. I'm going to tell the ghosts what you're doing."
                         },
                         {
                           "type": "line",
                           "speaker": "Robin",
-                          "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+                          "text": "Please don't do that!!! They will suck the life from my bones!!!"
+                        },
+                        {
+                          "player": "How about you signing my longbow then?"
                         },
                         {
                           "type": "line",
                           "speaker": "Robin",
-                          "text": "If a player draws the Death rune then the game is over, and they have lost."
+                          "text": "Yes, anything!!!"
                         },
                         {
-                          "type": "line",
-                          "speaker": "Robin",
-                          "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+                          "type": "message",
+                          "text": "Robin signs the oak longbow for you.",
+                          "id": "y4p5hS"
+                        },
+                        {
+                          "type": "action",
+                          "action": "receive",
+                          "text": "a Signed oak bow",
+                          "id": "exeGvc"
                         }
-                      ]
+                      ],
+                      "id": "4gRzlH"
+                    }
+                  ]
+                },
+                {
+                  "text": "How do you play Runedraw?",
+                  "steps": [
+                    {
+                      "player": "How do you play Runedraw?"
                     },
                     {
-                      "text": "No, that doesn't sound fun.",
-                      "steps": [
-                        {
-                          "player": "No, that doesn't sound fun."
-                        }
-                      ]
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "If a player draws the Death rune then the game is over, and they have lost."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Robin",
+                      "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+                    }
+                  ]
+                },
+                {
+                  "text": "No, that doesn't sound fun.",
+                  "steps": [
+                    {
+                      "player": "No, that doesn't sound fun."
                     }
                   ]
                 }
-              ],
-              "id": "dRrkcd"
+              ]
             }
           ],
-          "id": "AZZDOx"
+          "id": "4W6TSD"
         }
       ],
       "something-to-translate-the-book-of-haricanto-talking-to-robin-talking-to-robin-after-getting-the-bow-signed": [
@@ -433946,6 +434069,16 @@
                   ]
                 },
                 {
+                  "text": "Oppose dialogue 5",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Ghost villager",
+                      "text": "My answer is no."
+                    }
+                  ]
+                },
+                {
                   "text": "Oppose dialogue 4",
                   "steps": [
                     {
@@ -434579,7 +434712,7 @@
         {
           "type": "line",
           "speaker": "Velorina",
-          "text": "You don't need to tell me [player name] - I sensed the removal of Necrovarus's psychic barrier!"
+          "text": "You don't need to tell me [player name]- I sensed the removal of Necrovarus's psychic barrier!"
         },
         {
           "player": "Only happy to help out."
@@ -434751,7 +434884,7 @@
           ]
         }
       ],
-      "jump-89fea2307231f33d": [
+      "jump-3e9eeb0d7e9d1a5f": [
         {
           "player": "Yes, I'll give you a game."
         },
@@ -434759,7 +434892,7 @@
           "type": "action",
           "action": "open_interface",
           "target": "Rune-Draw",
-          "id": "1qdKTp"
+          "id": "ELEZLT"
         },
         {
           "type": "condition",
@@ -434768,7 +434901,7 @@
             {
               "type": "message",
               "text": "You've won the game of Runedraw!",
-              "id": "Q_ww9k"
+              "id": "YmLLg7"
             },
             {
               "player": "So are you going to pay up then? You owe me [#] gold coins!"
@@ -434794,11 +434927,11 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "id": "iYrVpV",
+                      "id": "DKXbNb",
                       "steps": [
                         {
                           "type": "call",
-                          "branch": "jump-89fea2307231f33d"
+                          "branch": "jump-3e9eeb0d7e9d1a5f"
                         }
                       ]
                     }
@@ -434809,8 +434942,13 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "6Jxrls"
+                      "id": "i9NuBP",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-c54bd6a7ee9d5875"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -434828,7 +434966,7 @@
               ]
             }
           ],
-          "id": "yavzUW"
+          "id": "b8dZzm"
         },
         {
           "type": "condition",
@@ -434837,63 +434975,136 @@
             {
               "type": "message",
               "text": "You've lost the game of Runedraw.",
-              "id": "gtlJxk"
+              "id": "-Q3ZiP"
             },
             {
-              "player": "Well done, you beat me. But you still owe me [#] gold pieces."
-            },
-            {
-              "type": "line",
-              "speaker": "Robin",
-              "text": "Err ... how about another game? We can settle up after we've finished playing."
-            },
-            {
-              "type": "choice",
-              "options": [
+              "type": "condition",
+              "text": "If Robin does not owe the player any coins:",
+              "steps": [
                 {
-                  "text": "Yes, I'll give you a game.",
-                  "steps": [
+                  "player": "Well done, you beat me."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Robin",
+                  "text": "How about another game?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
                     {
-                      "type": "jump",
-                      "id": "G3mCTg",
+                      "text": "Yes, I'll give you a game.",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "jump-89fea2307231f33d"
+                          "type": "jump",
+                          "id": "RpWdP2",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3e9eeb0d7e9d1a5f"
+                            }
+                          ]
                         }
                       ]
-                    }
-                  ]
-                },
-                {
-                  "text": "How do you play Runedraw?",
-                  "steps": [
+                    },
                     {
-                      "type": "jump",
-                      "reference": "above",
-                      "id": "Hbzf8Z"
-                    }
-                  ]
-                },
-                {
-                  "text": "No, you didn't pay up the last time you lost.",
-                  "steps": [
-                    {
-                      "type": "jump",
-                      "id": "melFQw",
+                      "text": "How do you play Runedraw?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "jump-2379dfc142d531b7"
+                          "type": "jump",
+                          "id": "-Bq--m",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c54bd6a7ee9d5875"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No, that doesn't sound fun.",
+                      "steps": [
+                        {
+                          "player": "No, that doesn't sound fun."
+                        },
+                        {
+                          "type": "end"
                         }
                       ]
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "PxJuD9"
+            },
+            {
+              "type": "condition",
+              "text": "If Robin owes the player coins:",
+              "steps": [
+                {
+                  "player": "Well done, you beat me. But you still owe me [#] gold pieces."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Robin",
+                  "text": "Err ... how about another game? We can settle up after we've finished playing."
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Yes, I'll give you a game.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "x382Xq",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3e9eeb0d7e9d1a5f"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "How do you play Runedraw?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "ucWvOj",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c54bd6a7ee9d5875"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No, you didn't pay up the last time you lost.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "Ciye6j",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-22247f17331ab065"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "id": "DXMtvO"
             }
           ],
-          "id": "ehle2x"
+          "id": "sy7msq"
         },
         {
           "type": "condition",
@@ -434918,22 +435129,45 @@
             {
               "type": "message",
               "text": "Robin signs the oak longbow for you.",
-              "id": "pX0ymv"
+              "id": "y4p5hS"
             },
             {
               "type": "action",
               "action": "receive",
               "text": "a Signed oak bow",
-              "id": "YWXokZ"
+              "id": "exeGvc"
             },
             {
               "type": "end"
             }
           ],
-          "id": "u4Yl8o"
+          "id": "4gRzlH"
         }
       ],
-      "jump-2379dfc142d531b7": [
+      "jump-c54bd6a7ee9d5875": [
+        {
+          "player": "How do you play Runedraw?"
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "Two players take turns to draw a rune from a bag, which contains ten runes in total. Each rune has a different value: an air rune is worth one point, up to a Nature rune which is worth nine points."
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "If a player draws the Death rune then the game is over, and they have lost."
+        },
+        {
+          "type": "line",
+          "speaker": "Robin",
+          "text": "A player can choose to hold if they wish and not draw any more runes, but this runs the risk of the other player drawing more runes until they have a greater points total and win."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-22247f17331ab065": [
         {
           "player": "No, you didn't pay up the last time you lost."
         },
@@ -743772,7 +744006,7 @@
                   "player": "I'm here about the farmers east of here."
                 },
                 {
-                  "player": "Hello there, just dropping in to thank you again. It all went perfectly. Alice and her husband can communicate again."
+                  "player": "Hello there, just dropping in to thank you again. It all went perfectly. Alice and Malcolm can communicate again."
                 },
                 {
                   "npc": "I can't help but shed a tear about my own family. My sisters are so vile, I refuse to talk to them these days."

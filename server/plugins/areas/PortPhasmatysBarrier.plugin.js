@@ -12,9 +12,18 @@
  * rsprox 231/00378 and 229/00703 (free passage): the player stops beside the barrier, faces it
  * for a tick, then walks through it one tile a tick to the tile beyond, with no message.
  *
+ * Ghosts Ahoy capture 20261112T092603-5ab63b4 (revision 242), at the temple barrier (3659,3508):
+ * - Pay-toll short of 2 Ectotokens: the game message "You don't have enough tokens to pay the
+ *   toll.", then the guard's toll line and his two-option menu (ticks 105-123).
+ * - Paying: the spam line "You pay the 2 ectoken toll to enter Port Phasmatys." (141, 244, 1081).
+ *   Only entering costs: walking out of the town is free (215, 1628). The town is on the side the
+ *   barrier faces.
+ * - From Necrovarus's command on (questvar 7) passage is free (1952).
+ * - Wearing the bedsheet: the message box "You can't pass the barriers of Port Phasmatys while
+ *   wearing the bedsheet." (1621), and no crossing.
+ *
  * Not recorded: Pass before the quest starts the guard's toll conversation (the guard is the one
- * who asks for the toll); the line for having too few ecto-tokens; and whether leaving the town
- * costs the toll too (it does here, as it did before).
+ * who asks for the toll).
  */
 
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
@@ -28,13 +37,20 @@ const VARIANT = {
   AFTER: "standard-dialogue-after-ghosts-ahoy",
 };
 /** Transcript:Ghost guard: the pay step; after the quest, his line and the wail that wave you on. */
-const PAY_STEP = "s_ymV_";
+const PAY_STEP = "XeyqNB";
 const FREE_LINE = "All visitors to Port Phasmatys must pay a toll charge of 2 Ectotokens. However,";
 const FREE_MESSAGE_STEP = "v-Asrg";
 const UNDERSTANDS = "If the player wears either a ghostspeak amulet or the Morytania legs 2 or above:";
 const NOT_UNDERSTANDS = "If the player does not wear either a ghostspeak amulet or the Morytania legs 2 or above:";
 const MAY_NOT_PASS = "The ghostly guards wail at you incomprehensibly, and though you cannot understand their exact words you understand their meaning - you may not pass the barriers of Port Phasmatys.";
-const TOO_FEW_TOKENS = "You need 2 ecto-tokens to pass through the barrier.";
+const TOO_FEW_TOKENS = "You don't have enough tokens to pay the toll.";
+const PAID_TOLL = "You pay the 2 ectoken toll to enter Port Phasmatys.";
+const BEDSHEET_REFUSAL = "You can't pass the barriers of Port Phasmatys while wearing the bedsheet.";
+/** The guard's options with and without the toll in hand (the capture's menu, ticks 108-127). */
+const HAS_TOLL = "If the player has at least 2 Ectotokens:";
+const SHORT_OF_TOLL = "If the player has fewer than 2 Ectotokens:";
+/** Ghosts Ahoy's questvar from which the toll is gone: Necrovarus commanded (capture tick 1952). */
+const FREE_FROM_STAGE = 7;
 /** How far from the player a guard's conversation looks for the barrier's anchor tile. */
 const GUARD_REACH = 3;
 /**
@@ -52,6 +68,24 @@ function questComplete(player) {
   const request = { player, name: QUEST, complete: false };
   api.emitCustomEvent("quest:is-complete", request);
   return request.complete === true;
+}
+
+/** No toll once Necrovarus has been commanded (questvar 7), as live (capture tick 1952). */
+function passFree(player) {
+  const request = { player, name: QUEST, stage: undefined };
+  api.emitCustomEvent("quest:get-stage", request);
+  return questComplete(player) || (Number(request.stage) | 0) >= FREE_FROM_STAGE;
+}
+
+function wearingBedsheet(player) {
+  const { Equipment, ItemIdentifiers: I } = core;
+  const head = player.getEquipment().get(Equipment.HEAD_SLOT)?.getId?.();
+  return head === I.BEDSHEET || head === I.BEDSHEET_2;
+}
+
+function refuseBedsheet(player) {
+  const { DialogueChainBuilder, StatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, BEDSHEET_REFUSAL)));
 }
 
 /** Wearing a ghostspeak amulet, or Morytania legs 2 or better (Transcript:Ghost guard). */
@@ -93,6 +127,19 @@ function startTiles(barrier) {
     : [[x, y - 1], [x + 1, y - 1], [x, y + 1], [x + 1, y + 1]];
 }
 
+/**
+ * Whether a crossing from (x, y) goes into the town: the town is on the side the barrier faces
+ * (face 0 west, 1 north, 2 east, 3 south; the temple barrier faces south, capture ticks 141-142).
+ */
+function entering(barrier, x, y) {
+  switch (barrier.face & 3) {
+    case 0: return x > barrier.x;
+    case 1: return y < barrier.y;
+    case 2: return x < barrier.x;
+    default: return y > barrier.y;
+  }
+}
+
 function barrierOf(object) {
   const at = object.getLocation();
   return { x: at.getX(), y: at.getY(), z: at.getZ(), face: object.getFace() };
@@ -116,14 +163,26 @@ function walkThrough(player, barrier, from = null) {
   return true;
 }
 
-/** Takes the toll and walks through; false (and nothing taken) when it can't. */
+/** The start tile of a crossing from `from` or the player's own tile. */
+function startOf(player, from) {
+  const at = player.getLocation();
+  return from ?? [at.getX(), at.getY()];
+}
+
+/**
+ * Takes the toll and walks through; false (and nothing taken) when it can't. Walking out of the
+ * town costs nothing.
+ */
 function payAndCross(player, barrier, from = null) {
   if (ObstacleRunner.isBusy(player) || !crossingFrom(player, barrier, from)) return false;
+  const [x, y] = startOf(player, from);
+  if (!entering(barrier, x, y)) return walkThrough(player, barrier, from);
   if (!hasToll(player)) {
     player.sendMessage(TOO_FEW_TOKENS);
     return false;
   }
   player.getInventory().deleteNumber(core.ItemIdentifiers.ECTO_TOKEN, TOLL);
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, PAID_TOLL);
   return walkThrough(player, barrier, from);
 }
 
@@ -134,8 +193,14 @@ function isBarrier(event) {
 function pass(event) {
   if (!isBarrier(event)) return false;
   const { player, object } = event;
-  if (questComplete(player)) {
-    walkThrough(player, barrierOf(object));
+  if (wearingBedsheet(player)) {
+    refuseBedsheet(player);
+    return true;
+  }
+  const barrier = barrierOf(object);
+  const at = player.getLocation();
+  if (passFree(player) || (crossing(barrier, at.getX(), at.getY(), at.getZ()) && !entering(barrier, at.getX(), at.getY()))) {
+    walkThrough(player, barrier);
     return true;
   }
   startGuard(player, VARIANT.BEFORE);
@@ -145,15 +210,28 @@ function pass(event) {
 function payToll(event) {
   if (!isBarrier(event)) return false;
   const { player, object } = event;
-  if (questComplete(player)) {
-    walkThrough(player, barrierOf(object));
+  const barrier = barrierOf(object);
+  if (wearingBedsheet(player)) {
+    refuseBedsheet(player);
+    return true;
+  }
+  if (passFree(player)) {
+    walkThrough(player, barrier);
     return true;
   }
   if (!understandsGhosts(player)) {
     player.sendMessage(MAY_NOT_PASS);
     return true;
   }
-  payAndCross(player, barrierOf(object));
+  const at = player.getLocation();
+  const path = crossing(barrier, at.getX(), at.getY(), at.getZ());
+  if (path && entering(barrier, at.getX(), at.getY()) && !hasToll(player)) {
+    // Too few tokens: the message, then the guard asks for his toll (ticks 105-106).
+    player.sendMessage(TOO_FEW_TOKENS);
+    startGuard(player, VARIANT.BEFORE);
+    return true;
+  }
+  payAndCross(player, barrier);
   return true;
 }
 
@@ -174,6 +252,8 @@ function guardCondition({ player, npcId, text }) {
   if (!isGuard(npcId)) return null;
   if (text === UNDERSTANDS) return understandsGhosts(player);
   if (text === NOT_UNDERSTANDS) return !understandsGhosts(player);
+  if (text === HAS_TOLL) return hasToll(player);
+  if (text === SHORT_OF_TOLL) return !hasToll(player);
   return null;
 }
 
@@ -201,7 +281,7 @@ function guardBarrier(player) {
   return best;
 }
 
-/** The guard's "here's 2 Ectotokens" (s_ymV_): the toll, then through the barrier beside him. */
+/** The guard's "here's 2 Ectotokens" (XeyqNB): the toll, then through the barrier beside him. */
 function guardAction(event) {
   if (!isGuard(event.npcId)) return;
   if (event.stepId === FREE_MESSAGE_STEP) {
@@ -236,7 +316,7 @@ function guardLine(request) {
 }
 
 function guardWavesOn(player) {
-  if (!questComplete(player)) return;
+  if (!passFree(player)) return;
   const near = guardBarrier(player);
   if (near) walkThrough(player, near.barrier, near.from);
 }
@@ -259,6 +339,6 @@ module.exports = {
     registry.onCustomEvent("npc-dialogue:action", guardAction);
     registry.onCustomEvent("npc-dialogue:line", guardLine);
   },
-  crossing, pass, payToll, guardVariant, guardCondition, guardAction, guardLine, understandsGhosts,
-  TOLL, MAY_NOT_PASS, TOO_FEW_TOKENS, PAY_STEP, FREE_MESSAGE_STEP, FREE_LINE,
+  crossing, entering, pass, payToll, guardVariant, guardCondition, guardAction, guardLine, understandsGhosts,
+  TOLL, MAY_NOT_PASS, TOO_FEW_TOKENS, PAID_TOLL, BEDSHEET_REFUSAL, PAY_STEP, FREE_MESSAGE_STEP, FREE_LINE,
 };

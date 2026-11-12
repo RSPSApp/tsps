@@ -151,5 +151,6 @@ module.exports = {
       const questApi = forPlayers(api.withProfileLabel?.(`Quests/${quest}`) ?? api);
       require(`./quests/${quest}.Quest`)(questApi);
     }
+    if (api.core.WorldDefinition.isMembersWorld()) require("./SirTiffy.Quests")(api);
   },
 };

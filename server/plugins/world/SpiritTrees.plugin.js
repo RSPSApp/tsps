@@ -68,10 +68,12 @@ function loadTrees() {
   return JSON.parse(fs.readFileSync(file, "utf8")).trees;
 }
 
-function questComplete(player, name) {
+/** The quest is complete, or (with `stage`) has reached that stage, as Poison Waste's chimed tree. */
+function questComplete(player, name, stage) {
   if (!name) return true;
   const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === name);
-  return quest ? quest.isComplete(player) : true;
+  if (!quest) return true;
+  return stage === undefined ? quest.isComplete(player) : quest.isComplete(player) || quest.getStage(player) >= stage;
 }
 
 function hasSkills(player, skills) {
@@ -109,7 +111,7 @@ function destinationsEvent(request) {
 /** Where a tree puts the player, or null when they can't travel there now. */
 function destination(player, tree, grown) {
   if (tree.house) return null;
-  if (!questComplete(player, tree.requires) || !hasSkills(player, tree.skills)) return null;
+  if (!questComplete(player, tree.requires, tree.requiresStage) || !hasSkills(player, tree.skills)) return null;
   if (tree.mooredAt && !(player.getSailing().mooredDocks ?? []).includes(tree.mooredAt)) return null;
   if (tree.grown) {
     const patch = grown.find((candidate) => near(tree.grown, candidate.x, candidate.y, candidate.z, 3));

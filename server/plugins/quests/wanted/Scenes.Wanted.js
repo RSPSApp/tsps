@@ -500,7 +500,7 @@ module.exports = function createWantedScenes(api, hooks) {
 
   /**
    * The Wiki: "It is not necessary to kill the Black Knight; you can simply run away." What live
-   * does then is uncaptured; ours: the knight goes once its owner is gone or 16+ tiles away, and
+   * does then is uncaptured; ours: the knight goes once its owner is gone or more than 16 tiles away, and
    * a rescan at the stop summons a new one.
    */
   function watchKnight(player, knight) {

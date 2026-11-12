@@ -3236,6 +3236,8 @@ for(const y of [5006,5057,5106])test(`native Wasteland concurrent melee starts a
 
 test('native Wasteland source Tree and Mushroom distinguish ordinary walking from native projectile rays',async()=>{
   const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,0);await join(a);await join(b);completePreparation(game);
+  // Disclosed south-landing start checkpoint avoids assuming captain a is assigned south; subsequent local paths are decoded ordinary clicks.
+  a.moveTo(game.area.at(WASTELAND_LANDINGS[0]));tick(2);assert.deepEqual(position(a),positionAt(game,WASTELAND_LANDINGS[0]));
   for(const specimen of [
     {gameval:'wild6_tree_a',xy:[3278,5020],from:[3278,5019],to:[3278,5022],size:2,face:1,type:11,projectile:true},
     {gameval:'wild6_mushrooms_a',xy:[3292,5026],from:[3292,5025],to:[3292,5027],size:1,face:0,type:11,projectile:false},
@@ -3252,6 +3254,8 @@ test('native Wasteland source Tree and Mushroom distinguish ordinary walking fro
 
 test('native Wasteland actionless owned Trees cannot dispatch chopping while canonical world Tree still produces logs and respawns',async t=>{
   resourceRandom(t);const a=actor(true),b=actor(true),world=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,0);await join(a);await join(b);completePreparation(game);
+  // Disclosed south-landing start checkpoint avoids assuming captain a is assigned south; subsequent local paths are decoded ordinary clicks.
+  a.moveTo(game.area.at(WASTELAND_LANDINGS[0]));tick(2);assert.deepEqual(position(a),positionAt(game,WASTELAND_LANDINGS[0]));
   const WC=require('../plugins/skills/Woodcutting.plugin'),I=core.ItemIdentifiers;const skills=a.getSkillManager();skills.setMaxLevel(core.Skill.WOODCUTTING,99);skills.setCurrentLevel(core.Skill.WOODCUTTING,99);give(a,I.BRONZE_AXE,'wasteland-valid-axe');
   const trees=['wild6_tree_a','wild6_tree_b','wild6_tree_c','wild6_fallen_tree'].flatMap(name=>mappedLayoutObjects(game,name));assert.equal(trees.length,134);const before=wastelandMasks(game.area),counts=new Map();
   for(const tree of trees){assert.equal(tree.getPrivateArea(),game.area);assert.equal(core.MapObjects.getPrivateArea(a,tree.getId(),tree.getLocation()),tree);assert.equal(tree.getDefinition().getInteractions().some(Boolean),false);counts.set(tree.getId(),(counts.get(tree.getId())??0)+1);assert.equal(tree.getDefinition().isSolid(),true);}

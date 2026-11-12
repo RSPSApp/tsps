@@ -98,8 +98,11 @@ function unlockHud(player) {
   const { getVarbit, VARBIT } = require("../SailingContent.Sailing");
   const sender = player.getPacketSender();
   if (player.getAttribute(api.core.XPDROPS_ENABLED_ATTRIBUTE) === true) sender.sendSubInterface(XP_DROPS_UID, XP_DROPS_GROUP, 1);
-  RandomEventTabs.restoreTabs(player, api);
-  if (getVarbit(player, VARBIT.SIDEPANEL_VISIBLE) === 1) require("../Panel.Sailing").showSidepanel(player);
+  // A random event that took the player away during the view keeps its own tabs closed.
+  if (!RandomEventTabs.sessionOf(player)) {
+    RandomEventTabs.restoreTabs(player, api);
+    if (getVarbit(player, VARBIT.SIDEPANEL_VISIBLE) === 1) require("../Panel.Sailing").showSidepanel(player);
+  }
   sender.sendHideNpcOps(false).sendHideObjOps(false);
 }
 

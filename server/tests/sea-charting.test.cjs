@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/sea-charting.test.cjs
 // Sailing's sea charting against the cache and the rsprox captures (docs/sea-charting.md).
 const assert = require("node:assert/strict");
-const { before, test } = require("node:test");
+const { after, before, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -426,8 +426,10 @@ test("the crab statue hands over a Medallion fragment (rsprox 944)", () => {
 
 const spyglass = require("../plugins/skills/sailing/charting/Spyglass.Charting");
 // The combat tab's weapon setup needs a whole player; here it only mounts the tab.
-require("../dist/game/content/combat/WeaponInterfaceManager").WeaponInterfaceManager.assign =
-  (player) => player.getPacketSender().sendTabInterface(0, 593);
+const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+const realAssign = WeaponInterfaceManager.assign;
+WeaponInterfaceManager.assign = (player) => player.getPacketSender().sendTabInterface(0, 593);
+after(() => { WeaponInterfaceManager.assign = realAssign; });
 
 test("the spyglass far from any view: nothing to look at (rsprox 907 and others)", () => {
   const player = captain();
@@ -521,6 +523,29 @@ test("a spyglass view locks the tabs, XP drops and world options, then gives the
     assert.equal(combatTab.at(-1), 937, "the sailing sidepanel back on the combat tab");
     assert.deepEqual(hudResets, [player, player], "the fade back in clears it again");
   } finally {
+    leave(player);
+  }
+});
+
+test("a random event that took the player during a view keeps its tabs closed at the view's end", () => {
+  const events = require("../plugins/npcs/random-events/Teleports.RandomEvents");
+  const realSessionOf = events.sessionOf;
+  const player = captain();
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, { fineX: 3104 * 128 + 64, fineY: 3183 * 128 + 64 });
+  tick();
+  try {
+    spyglass.lookThrough({ player });
+    tick(4);
+    events.sessionOf = (each) => (each === player ? { kind: "drill" } : realSessionOf(each));
+    const from = player.sent.length;
+    tick(23);
+    const restored = player.sent.slice(from);
+    assert.ok(restored.some(([key]) => key === "sendCameraReset"), "the view still ends");
+    assert.ok(!restored.some(([key]) => key === "sendTabInterface"), "no tab is re-mounted");
+    assert.deepEqual(restored.filter(([key]) => key === "sendHideNpcOps"), [["sendHideNpcOps", false]]);
+  } finally {
+    events.sessionOf = realSessionOf;
     leave(player);
   }
 });

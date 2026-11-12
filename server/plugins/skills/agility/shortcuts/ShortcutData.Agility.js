@@ -55,7 +55,7 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse",
+  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
@@ -245,6 +245,8 @@ function build(raw, index) {
   if (raw.end != null) entry.end = raw.end;
   if (raw.render != null) entry.render = animation(raw.render, where);
   if (raw.route != null) entry.route = template(raw.route, where);
+  // The last animation plays out after the crossing instead of being reset on landing.
+  if (raw.keepAnimation === true) entry.keepAnimation = true;
   const fail = failOf(raw.fail, where);
   if (fail) entry.fail = fail;
   const requires = requirementsOf(raw.requires, where);

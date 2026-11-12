@@ -687,7 +687,7 @@ test("the underwall tunnels cross in three one-tick legs with the tunnel sound (
       assert.equal(moves[0].tick, 1, "a tick facing the tunnel first");
       assert.deepEqual(moves.map((move) => move.tick), [1, 2, 3], "then one leg a tick");
       assert.equal(ticks - moves[0].tick, 3, "free a tick after the last leg starts");
-      assert.deepEqual(player.state.animations.slice(-4), [2589, 2590, 2591, 65535], "enter, walk, exit, then reset");
+      assert.deepEqual(player.state.animations.slice(-3), [2589, 2590, 2591], "enter, walk, and the exit plays out");
       assert.equal(player.state.xp, 0);
     }
   }

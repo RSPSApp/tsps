@@ -251,6 +251,7 @@
       "name": "Underwall tunnel (Grand Exchange)",
       "object": [16529,16530],
       "level": 21,
+      "keepAnimation": true,
       "between": {"ends":[[3137,3516,0],[3142,3513,0]],"via":[[3138,3516,0],[3141,3513,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {
@@ -316,6 +317,7 @@
       "name": "Underwall tunnel (Falador)",
       "object": [16527,16528],
       "level": 26,
+      "keepAnimation": true,
       "between": {"ends":[[2948,3309,0],[2948,3313,0]],"via":[[2948,3310,0],[2948,3312,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {
@@ -837,6 +839,7 @@
       "name": "Underwall tunnel (Yanille)",
       "object": [16519,16520],
       "level": 16,
+      "keepAnimation": true,
       "between": {"ends":[[2575,3107,0],[2575,3112,0]],"via":[[2575,3108,0],[2575,3111,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
     {

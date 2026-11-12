@@ -170,12 +170,13 @@ export class Trading {
                     initiateTrade = true;
                 }
             }
+            // rsprox 227/00548.txt:3891 (38 recordings): a trade-type line, no name. Answering a pending
+            // request sends it too, on the same tick just before the trade screen (229/02510.txt:3835).
+            this.player.getPacketSender().sendTypedMessage(ChatType.TRADE, "Sending trade offer...");
             if (initiateTrade) {
                 this.player.getTrading().initiateTrade();
                 t_.getTrading().initiateTrade();
             } else {
-                // rsprox 227/00548.txt:3891 (38 recordings): a trade-type line, no name.
-                this.player.getPacketSender().sendTypedMessage(ChatType.TRADE, "Sending trade offer...");
                 // The client shows "<name> wishes to trade with you." and makes it clickable.
                 t_.getSession().sendClientPacket(encodeChatMessage(
                     "trade", "wishes to trade with you.", this.player.getDisplayName(), "",

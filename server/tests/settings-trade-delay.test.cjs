@@ -164,6 +164,9 @@ test("the request and the finished trade send live's trade-type lines (rsprox 22
   assert.deepEqual(alice.typed, [[102, "Sending trade offer..."]]);
   assert.deepEqual(alice.messages, [], "no game message for the request");
   bob.getTrading().requestTrade(alice);
+  // Answering a pending request sends the line too, before the trade screen (rsprox 229/02510.txt:3835, :4682).
+  assert.deepEqual(bob.typed, [[102, "Sending trade offer..."]], "the answering player's line");
+  assert.equal(state(bob), TradeState.TRADE_SCREEN);
   offer(alice, LOBSTER, 1);
   bothAccept(alice, bob);
   assert.equal(state(alice), TradeState.CONFIRM_SCREEN);

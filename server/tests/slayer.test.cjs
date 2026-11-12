@@ -950,6 +950,11 @@ test("Abyssal demons need either quest; partly-done quests only need starting", 
     player.quests.dragon_slayer_i = "not started";
     assert.equal(Tasks.meetsQuests(player, taskId("Blue Dragons")), false);
     assert.equal(Tasks.meetsQuests(player, taskId("Goblins")), true, "no quest");
+    // Wiki (Slayer task/Brine rats): "completion of Olaf's Quest"; only the cavern needs it partly done.
+    player.quests.olafs_quest = "started";
+    assert.equal(Tasks.meetsQuests(player, taskId("Brine Rats")), false, "Olaf's Quest started is not enough");
+    player.quests.olafs_quest = "complete";
+    assert.equal(Tasks.meetsQuests(player, taskId("Brine Rats")), true);
   });
   // No quest plugin answering (a quest tsps doesn't have): the task isn't blocked.
   assert.equal(Tasks.meetsQuests(createPlayer(), taskId("Ghouls")), true);

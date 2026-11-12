@@ -27,9 +27,10 @@
  * Varrock sawmill operator). The generic Old Man Yarlo/Marlo pages remain the fallback outside
  * the quest's stage windows.
  *
- * Known difference: Yarlo's Construction demonstration follows RSProx 3218's beats, camera and
- * message lines but plays in Yarlo's house rather than instantiating the capture's POH template
- * room. Nails bend per nail, with the captured "You accidentally bend a nail." message.
+ * Yarlo's Construction demonstration uses an isolated current-cache parlour. RSProx 3218
+ * (rev 232) establishes an instanced lecture, but its decoded BuildArea does not expose the
+ * exact template. This room mapping is not a claim of historical template or timing equality.
+ * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
 module.exports = function registerDaddysHomeQuest(api) {
   const {
@@ -74,6 +75,7 @@ module.exports = function registerDaddysHomeQuest(api) {
   const FURNITURE_VARBITS = [10563, 10564, 10565, 10566, 10567, 10568, 10569];
   const FURNITURE_ATTRIBUTE = "daddys-home:furniture";
   const CRATE_OPENED_ATTRIBUTE = "daddys-home:crate-opened";
+  const LECTURE_EXIT_ATTRIBUTE = "daddys-home:lecture-exit";
 
   const STAGE_STARTED = 1;
   const STAGE_REMOVE = 2;
@@ -96,7 +98,12 @@ module.exports = function registerDaddysHomeQuest(api) {
   // RSProx 3218 (rev 232): the cutscene's builder variants and the POH demo room.
   const CUTSCENE_BUILDER_PLAIN = NpcIdentifiers.OLD_MAN_YARLO_2; // 10426
   const CUTSCENE_BUILDER_HAMMER = NpcIdentifiers.OLD_MAN_YARLO_3; // 10427
-  const CUTSCENE_BOUNDS = [[3237, 3246, 3391, 3399, 0]];
+  // The same canonical room template Construction uses; current-cache loc geometry is checked
+  // by quest-scene-return-state.test.cjs. Copy only this room, never the Varrock house.
+  const CUTSCENE_ROOM = require("../../skills/construction/data/rooms.json").find(room => room.key === "PARLOUR");
+  const CUTSCENE_X = CUTSCENE_ROOM.sourceChunkX * 8;
+  const CUTSCENE_Y = CUTSCENE_ROOM.sourceChunkY * 8;
+  const CUTSCENE_BOUNDS = [[CUTSCENE_X, CUTSCENE_X + 7, CUTSCENE_Y, CUTSCENE_Y + 7, 0]];
   const CUTSCENE_HOME = new Location(3240, 3395, 0);
   const CUTSCENE_LINES = [
     "As a builder, in your own house, you can create your own rooms full of furniture. A house may start out very basic...",
@@ -180,7 +187,7 @@ module.exports = function registerDaddysHomeQuest(api) {
   const START_MESSAGE = "You've started a new quest: <col=081190>Daddy's Home</col>";
 
   let quest;
-  const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd });
+  const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd, recoveryAttribute: LECTURE_EXIT_ATTRIBUTE });
 
   const inventory = (player) => player.getInventory();
   const has = (player, itemId) => inventory(player).getAmount(itemId) > 0;
@@ -602,10 +609,8 @@ module.exports = function registerDaddysHomeQuest(api) {
   }
 
   /**
-   * Yarlo's Construction demonstration, from RSProx 3218 (rev 232): fade out, the builder
-   * assembling a parlour, the slow camera pan and fourteen messagebox lines. The capture runs
-   * this in the POH template; the server keeps the same beats in Yarlo's own house so the
-   * surrounding map and collision are the ones the player already has.
+   * An isolated parlour demonstration. The existing lecture sequence is retained; the source
+   * tiles below refer to the current cache room and QuestScenes translates them into its copy.
    */
   function playLectureCutscene(player, npcId) {
     if (Scenes.get(player)) return;
@@ -613,20 +618,24 @@ module.exports = function registerDaddysHomeQuest(api) {
     Scenes.hold(player);
     Scenes.controls(player, true, true);
     player.getPacketSender().sendSong(147);
-    const scene = Scenes.open(player, "daddys-home-lecture", CUTSCENE_BOUNDS);
+    const scene = Scenes.open(player, "daddys-home-lecture", CUTSCENE_BOUNDS, {}, {
+      instance: { sourceChunk: [CUTSCENE_ROOM.sourceChunkX, CUTSCENE_ROOM.sourceChunkY], size: 1 },
+      at: [CUTSCENE_X + 3, CUTSCENE_Y + 3, 0],
+      exit: [CUTSCENE_HOME.getX(), CUTSCENE_HOME.getY(), CUTSCENE_HOME.getZ()],
+    });
     scene.npcId = npcId;
     scene.finished = false;
-    player.moveTo(CUTSCENE_HOME);
-    const builder = Scenes.actor(scene, CUTSCENE_BUILDER_PLAIN, [3244, 3392, 0], [3241, 3395]);
-    if (builder) builder.setPositionToFace(new Location(3241, 3395, 0));
+    Scenes.actor(scene, CUTSCENE_BUILDER_PLAIN,
+      [CUTSCENE_X + 5, CUTSCENE_Y + 5, 0], [CUTSCENE_X + 4, CUTSCENE_Y + 3]);
     Scenes.later(scene, 2, () => {
       if (Scenes.get(player) !== scene) return;
       player.getPacketSender().sendJingle(20, 0).sendSong(454);
-      Scenes.camera(player, [3241, 3401, 350], [3241, 3394, 50]);
+      Scenes.camera(player, [CUTSCENE_X + 3, CUTSCENE_Y + 7, 350], [CUTSCENE_X + 3, CUTSCENE_Y + 3, 50]);
       Scenes.fade(player, false);
-      Scenes.loc(scene, { id: 6752, x: 3244, y: 3395, type: 10, face: 2 });
-      Scenes.loc(scene, { id: 6768, x: 3244, y: 3394, type: 10, face: 0 });
-      Scenes.loc(scene, { id: 6780, x: 3241, y: 3392, type: 10, face: 1 });
+      // Chair, west bookcase and fireplace at their actual template hotspots (4517/4521/4523).
+      Scenes.loc(scene, { id: 6752, x: CUTSCENE_X + 4, y: CUTSCENE_Y + 3, type: 10, face: 2 });
+      Scenes.loc(scene, { id: 6768, x: CUTSCENE_X, y: CUTSCENE_Y + 1, type: 10, face: 0 });
+      Scenes.loc(scene, { id: 6780, x: CUTSCENE_X + 3, y: CUTSCENE_Y + 7, type: 10, face: 1 });
     });
     CUTSCENE_LINES.forEach((line, index) => {
       Scenes.later(scene, 8 + index * LECTURE_TICKS, () => {
@@ -655,7 +664,9 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   /** A logout or walk-out during the demonstration still unlocks the building stage. */
   function onCutsceneEnd(player, scene, logout) {
-    if (scene?.name !== "daddys-home-lecture" || scene.finished) return;
+    if (scene?.name !== "daddys-home-lecture") return;
+    Scenes.closeFade(player);
+    if (scene.finished) return;
     if (!logout) player.moveTo(CUTSCENE_HOME);
     quest.setStage(player, STAGE_BUILD);
     sendFurniture(player);

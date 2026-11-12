@@ -177,6 +177,11 @@ function watchtowerNpc(f, id, at) {
   return npc;
 }
 async function useOnNpc(f, itemId, npc) {
+  // World.add calls Player.onLogin, which marks placement pending again after
+  // actor()'s initial setup. Complete that real update phase before sending input;
+  // movement correctly refuses an item route while placement is still pending.
+  if (f.player.isNeedsPlacement()) tick(f);
+  assert.equal(f.player.isNeedsPlacement(), false, "initial placement completed before the ordinary item input");
   const slot = f.player.getInventory().getSlotForItemId(itemId);
   assert.ok(slot >= 0, "ordinary item-on-NPC input has the supplied item");
   observeWatchtowerInputs(f);

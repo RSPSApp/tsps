@@ -46,6 +46,7 @@ module.exports = {
   key: "shayzien-basic",
   name: "Shayzien Basic Agility Course",
   helper: 21, // the Agility helper's course (enum 3507: "Shayzien Agility Course")
+  lootSource: 62, // the loot tracker's source (enum 4976)
   lapXp: 153.5,
   progressVarbit: LOW_PROGRESS_VARBIT,
   petBase: 31804, // Giant squirrel base chance (Wiki)

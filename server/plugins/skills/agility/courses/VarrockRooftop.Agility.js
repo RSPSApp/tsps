@@ -90,6 +90,7 @@ module.exports = {
   key: "varrock",
   name: "Varrock Rooftop",
   helper: 7, // the Agility helper's course (enum 3507: "Varrock Rooftops")
+  lootSource: 24, // the loot tracker's source (enum 4976)
   lapXp: 269.7,
   petBase: 24410, // Giant squirrel base chance (Wiki)
   diaryTask: {

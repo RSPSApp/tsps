@@ -1395,6 +1395,46 @@ test("a mark of grace is rolled when a lap is completed, and lasts 10 minutes fo
   assert.ok(draynor.marks.tiles.some((tile) => tile[0] === x && tile[1] === y && tile[2] === z), "on one of the course's mark tiles");
 });
 
+test("every course's loot tracker source is the cache's entry for it (enum 4976)", () => {
+  const sources = CacheDefinitions.getEnumValues(4976);
+  // The enum's names for courses this server names otherwise.
+  const words = { "ape-atoll": "Ape Atoll", "wyrm-basic": "Colossal Wyrm", "wyrm-advanced": "Colossal Wyrm", gnome: "Gnome Stronghold",
+    "shayzien-basic": "Shayzien Basic", "shayzien-advanced": "Shayzien Advanced", wilderness: "Wilderness Agility", werewolf: "Werewolf" };
+  for (const course of COURSES) {
+    if (course.lootSource == null) continue;
+    const name = String(sources.get(course.lootSource));
+    const word = words[course.key] ?? course.name.replace(/ (Rooftop|Agility Course)$/, "").replace(/ Village$/, "");
+    assert.ok(name.includes(word), `${course.key}: source ${course.lootSource} is "${name}"`);
+  }
+  assert.equal(COURSES.find((course) => course.key === "barbarian").lootSource, undefined, "the enum has no Barbarian Outpost course");
+  assert.equal(COURSES.filter((course) => course.lootSource != null).length, COURSES.length - 1, "every other course has one");
+});
+
+test("a lap goes in the loot tracker after the helper's lap end, with the mark it spawned (rsprox 20261109T090342: 7197, then 7198)", () => {
+  hooks.events.length = 0;
+  // Where the scripts stood when the entry was asked for, to compare with the helper's lap end (5174).
+  let scriptsBefore = null;
+  hooks.answers["loot-tracker:add"] = ({ player }) => { scriptsBefore = player.state.scripts.length; };
+  try {
+    lapWithMarkRolls("seers", createPlayer(2729, 3489, 0, 60), [0]);
+  } finally {
+    delete hooks.answers["loot-tracker:add"];
+  }
+  const entries = hooks.events.filter((event) => event.name === "loot-tracker:add").map((event) => event.payload);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].source, 27);
+  assert.equal(entries[0].category, 5);
+  assert.deepEqual(entries[0].items, [[MARK_OF_GRACE, 1]]);
+  const [{ player }] = entries;
+  const endLap = player.state.scripts.findIndex(([id]) => id === 5174);
+  assert.ok(endLap >= 0 && endLap < scriptsBefore, "the helper's lap end was sent before the entry");
+
+  hooks.events.length = 0;
+  lapWithMarkRolls("seers", createPlayer(2729, 3489, 0, 60), [0.99, 0.99]);
+  const missed = hooks.events.filter((event) => event.name === "loot-tracker:add").map((event) => event.payload);
+  assert.deepEqual(missed.map((entry) => entry.items), [[]], "a lap with no mark is still added");
+});
+
 test("after a mark, laps can't roll another until the third clock minute on; the cooldown is saved (Wiki: Mark of Grace)", () => {
   assert.equal(hooks.persisted[MARK_COOLDOWN_ATTRIBUTE], 0, "saved, starting at 0");
   const player = createPlayer(3103, 3279, 0, 10);

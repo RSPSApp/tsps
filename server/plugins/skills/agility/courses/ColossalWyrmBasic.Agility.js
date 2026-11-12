@@ -13,6 +13,7 @@ module.exports = {
   key: "wyrm-basic",
   name: "Colossal Wyrm Agility Course (Basic)",
   helper: 22, // the Agility helper's course (enum 3507: "Colossal Wyrm Agility Course")
+  lootSource: 124, // the loot tracker's source (enum 4976)
   lapXp: 601.6,
   // varlamore_wyrm_agility_basic_progress: the obstacle the lap has reached, 1-6, and 0 with the
   // lap (rsprox 1106).

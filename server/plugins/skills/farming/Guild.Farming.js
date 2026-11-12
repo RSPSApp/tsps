@@ -150,7 +150,7 @@ function bankStorageOp(event) {
     const stored = container.getMetaValue("farming:stored") ?? {}, seeds = containerKind(container) === "seed";
     const initial = Object.keys(stored).length;
     if (!initial) player.sendMessage(seeds ? "Your seed box is already empty." : herbSackEmpty(container));
-    for (const [key, count] of Object.entries(stored)) {
+    for (const [key, count] of seeds ? SeedBox.entriesOf(container) : Object.entries(stored)) {
         const id = Number(key);
         if (!Number.isInteger(id) || id <= 0 || id >= core.CacheDefinitions.getCounts().items || !Number.isSafeInteger(count) || count <= 0) continue;
         const bank = player.getBank(core.Bank.getTabForItem(player, id));
@@ -161,6 +161,7 @@ function bankStorageOp(event) {
         if (!stored[key]) delete stored[key];
     }
     container.setMetaValue("farming:stored", stored);
+    if (seeds) SeedBox.arrange(container);
     if (seeds && Object.keys(stored).length === 0 && initial) Patches.spam(player, "Your seed box is now empty."); // spam, as recorded
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
@@ -178,6 +179,7 @@ function emptyStored(player, container) {
         contents.push({ id, amount: count });
     }
     if (Object.keys(stored).length) container.setMetaValue("farming:stored", {});
+    if (containerKind(container) === "seed") SeedBox.arrange(container);
     return contents;
 }
 const DEATH_CONTAINERS = [
@@ -208,6 +210,7 @@ function storeCrop(player, container, id, maximum) {
     const stored = container.getMetaValue("farming:stored") ?? {};
     stored[id] = (stored[id] ?? 0) + amount;
     container.setMetaValue("farming:stored", stored);
+    if (containerKind(container) === "seed") SeedBox.arrange(container);
     return amount;
 }
 /** The first open herb sack the player carries, plain or silklined. */
@@ -373,7 +376,8 @@ function storageAction(event) {
     } else if (kind === "seed" && action === "check") {
         SeedBox.open(event.player, container);
     } else {
-        const stored = (container.getMetaValue("farming:stored") ?? {}), entries = withdrawalEntries(stored, kind);
+        const stored = (container.getMetaValue("farming:stored") ?? {});
+        const entries = kind === "seed" ? SeedBox.entriesOf(container) : withdrawalEntries(stored, kind);
         let left = false;
         if (kind === "herb" && !entries.length) event.player.sendMessage(herbSackEmpty(container));
         else if (kind === "herb" && inventory.getFreeSlots() === 0) event.player.sendMessage(NO_HERB_INVENTORY_ROOM);
@@ -389,6 +393,7 @@ function storageAction(event) {
                 left ||= stored[id] > 0;
             }
         }
+        if (kind === "seed") SeedBox.arrange(container);
         if (kind === "seed" && left) event.player.sendMessage(NO_SEED_INVENTORY_ROOM);
     }
     inventory.refreshItems();

@@ -47,6 +47,16 @@ function startMakeoverDialogue(player, npcId) {
   player.getDialogueManager().startDialogues(dialogue);
 }
 
+/**
+ * "account:skip-onboarding": a test account (the agent MCP's login) keeps its default look instead of
+ * designing one, so the first-login designer doesn't hold its world clicks.
+ */
+function skipInitialDesign({ player }) {
+  if (player?.getInterfaceId?.() !== MAKEOVER_INTERFACE_ID) return;
+  player.getPacketSender().sendInterfaceRemoval();
+  player.getAppearance?.().setCanChangeAppearance?.(false);
+}
+
 function openMakeoverInterface(player) {
   if (!player || typeof player.getPacketSender !== "function") {
     return false;
@@ -228,6 +238,8 @@ module.exports = {
       }
       queueMicrotask(() => openMakeoverInterface(player));
     });
+
+    api.onCustomEvent("account:skip-onboarding", skipInitialDesign);
 
     for (const command of MAKEOVER_COMMANDS) {
       api.registerCommand(command, ({ player }) => {

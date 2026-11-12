@@ -58,6 +58,21 @@ const OFFERS_ATTRIBUTE = "grand-exchange-offers";
 const LIMITS_ATTRIBUTE = "grand-exchange-limits";
 const HISTORY_ATTRIBUTE = "grand-exchange-history";
 const HISTORY_LIMIT = 40;
+// Wiki: Grand_Exchange_Clerk. The login reminder of what waits in the collection box, which a
+// clerk turns on or off through Talk-to; it is not repeated within two minutes (world hops).
+const REMINDERS_ATTRIBUTE = "grand-exchange:collection-reminders";
+const REMINDED_AT_ATTRIBUTE = "grand-exchange:collection-reminded-at";
+const REMINDER_COOLDOWN_MS = 2 * 60_000;
+const CLERK = "Grand Exchange Clerk";
+// The clerk's Talk-to transcript: its conditions on the reminder setting, the lines that set
+// it, and the choice that opens the exchange.
+const REMINDERS_CONDITION = /^If the player has Exchange collection reminders on login (on|off):$/;
+const REMINDERS_ON_LINE = /^Okay, when you log in, we'll send you a message about any items/;
+const REMINDERS_OFF_LINE = /^Okay, when you log in, you will no longer be reminded/;
+// Adventure Paths pays a carried combat path voucher on Talk-to before this conversation
+// starts, so the transcript's voucher branch never applies here.
+const VOUCHER_CONDITION = /^If the player is carrying a Combat path voucher/;
+const EXCHANGE_TARGET = "Grand Exchange";
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
 // Milliseconds; applies to newly placed offers.
@@ -389,6 +404,70 @@ function restoreCompletedOffers({ player }) {
   if (historyUpdated) saveOffers(player);
 }
 
+/** "Grand Exchange collection: <col=ef1020>1,609,993 coins</col>": what the collection box holds. */
+function collectionReminder(player) {
+  let coins = 0;
+  const items = new Map();
+  for (const offer of Object.values(completedOffers(player))) {
+    for (const { itemId, quantity } of collection(offer).slots) {
+      if (!(quantity > 0)) continue;
+      if (itemId === COINS) coins += quantity;
+      else items.set(itemId, (items.get(itemId) ?? 0) + quantity);
+    }
+  }
+  const parts = coins > 0 ? [`${coins.toLocaleString("en-US")} coins`] : [];
+  // Ours: items are listed after the coins as "quantity x name".
+  for (const [itemId, amount] of items) {
+    parts.push(`${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(itemId).getName()}`);
+  }
+  return parts.length ? `Grand Exchange collection: <col=ef1020>${parts.join(", ")}</col>` : null;
+}
+
+function remindersOn(player) {
+  return player.getAttribute(REMINDERS_ATTRIBUTE) !== false;
+}
+
+function remindCollection({ player }, now = Date.now()) {
+  if (player.isPlayerBot?.() === true || !remindersOn(player)) return;
+  const last = Number(player.getAttribute(REMINDED_AT_ATTRIBUTE));
+  if (Number.isFinite(last) && now >= last && now - last < REMINDER_COOLDOWN_MS) return;
+  const text = collectionReminder(player);
+  if (!text) return;
+  player.setAttribute(REMINDED_AT_ATTRIBUTE, now);
+  player.sendMessage(text);
+}
+
+/** The reminder covers what was already waiting; an offer that completes after login announces itself. */
+function login(event) {
+  restoreCompletedOffers(event);
+  remindCollection(event);
+}
+
+/** Talk-to's reminder options: each is offered only while the setting is the other way. */
+function clerkCondition({ player, definition, text }) {
+  if (definition?.getName?.() !== CLERK) return null;
+  if (VOUCHER_CONDITION.test(text ?? "")) return false;
+  const match = REMINDERS_CONDITION.exec(text ?? "");
+  return match ? remindersOn(player) === (match[1] === "on") : null;
+}
+
+/** The clerk's confirmation line sets the reminder. */
+function clerkLine({ player, definition, step }) {
+  if (definition?.getName?.() !== CLERK || typeof step?.npc !== "string") return;
+  if (REMINDERS_ON_LINE.test(step.npc)) player.setAttribute(REMINDERS_ATTRIBUTE, true);
+  else if (REMINDERS_OFF_LINE.test(step.npc)) player.setAttribute(REMINDERS_ATTRIBUTE, false);
+}
+
+/** "I'd like to set up trade offers please.": the chat closes and the exchange opens. */
+function clerkAction(action) {
+  if (action.action !== "open_interface" || action.target !== EXCHANGE_TARGET) return;
+  action.handled = true;
+  // No current dialogue tells transcript playback to stop here.
+  action.player.getDialogueManager().reset();
+  action.player.getPacketSender().sendInterfaceRemoval();
+  openGrandExchange({ player: action.player });
+}
+
 function marketVarps(slot, offer) {
   const base = MARKET_BASE + slot * MARKET_STRIDE;
   return {
@@ -527,6 +606,24 @@ function showHistory(player) {
   }
   sender.sendClientScript(GE_HISTORY_REFRESH_SCRIPT)
     .sendInterfaceFlagsRange((GE_HISTORY << 16) | 3, 0, 234, 1026);
+}
+
+/** The clerk's History option: the trade history on its own, without the offers screen. */
+function openHistory({ player }) {
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) {
+    player.getPacketSender().sendInterfaceRemoval();
+    historyOpen.delete(player);
+  }
+  if (player.busy()) {
+    player.sendMessage("Finish what you are doing before opening the Grand Exchange.");
+    return true;
+  }
+  player.getMovementQueue().reset();
+  player.getSkillManager().stopSkillable();
+  home(player);
+  player.setInterfaceId(GE_HISTORY);
+  showHistory(player);
+  return true;
 }
 
 function closeSearch(player) {
@@ -992,7 +1089,7 @@ function openGrandExchange({ player }) {
   const pin = { player, feature: "grand-exchange", resume: () => openGrandExchange({ player }) };
   pluginApi.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked) return true;
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) {
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) {
     player.getPacketSender().sendInterfaceRemoval();
     historyOpen.delete(player);
   }
@@ -1043,7 +1140,7 @@ function openGrandExchange({ player }) {
 
 function openCollectionBox({ player }) {
   const sender = player.getPacketSender();
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) sender.sendInterfaceRemoval();
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) sender.sendInterfaceRemoval();
   if (player.busy()) {
     sender.sendMessage("Finish what you are doing before opening the Collection Box.");
     return true;
@@ -1237,6 +1334,10 @@ module.exports = {
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
     HISTORY_LIMIT,
+    REMINDERS_ATTRIBUTE,
+    REMINDED_AT_ATTRIBUTE,
+    collectionReminder,
+    remindCollection,
     tradeHistory,
     recordHistory,
     LIMIT_WINDOW_MS,
@@ -1252,10 +1353,12 @@ module.exports = {
     api.persistAttribute(OFFERS_ATTRIBUTE, {});
     api.persistAttribute(LIMITS_ATTRIBUTE, {});
     api.persistAttribute(HISTORY_ATTRIBUTE, []);
-    api.onPlayerLogin(restoreCompletedOffers);
+    api.persistAttribute(REMINDERS_ATTRIBUTE, true);
+    api.persistAttribute(REMINDED_AT_ATTRIBUTE);
+    api.onPlayerLogin(login);
     api.onPlayerProcess(({ player }) => {
       if (searching.has(player) && player.getInterfaceId() !== GE) closeSearch(player);
-      if (historyOpen.has(player) && player.getInterfaceId() !== GE) historyOpen.delete(player);
+      if (historyOpen.has(player) && ![GE, GE_HISTORY].includes(player.getInterfaceId())) historyOpen.delete(player);
     });
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
@@ -1267,7 +1370,10 @@ module.exports = {
     api.registerCommand("ge", openGrandExchange, undefined, "Open the Grand Exchange");
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
-    api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
+    api.onNpcInteraction(CLERK, { "Exchange": openGrandExchange, "History": openHistory });
+    api.onNpcDialogueCondition(clerkCondition);
+    api.onCustomEvent("npc-dialogue:line", clerkLine);
+    api.onCustomEvent("npc-dialogue:action", clerkAction);
     api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
 
     api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });

@@ -14,6 +14,8 @@ const SIDE = 430;
 const PACK = (MAIN << 16) | 3;
 const UNPACK = SIDE << 16;
 const MAX_STACK = 0x7fffffff;
+// Op 1 and Examine (op 10), as live enables on both lists.
+const OP1_AND_EXAMINE = (1 << 1) | (1 << 10);
 let core;
 
 before(async () => {
@@ -35,11 +37,12 @@ function note(id) {
 }
 
 function harness({ members = true, ultimate = false } = {}) {
-  const npcs = new Map(), objects = new Map(), buttons = new Map(), emitted = [];
+  const npcs = new Map(), objects = new Map(), buttons = new Map(), emitted = [], events = new Map();
   require('../plugins/interface/grandexchange/Sets.GrandExchange')({
     core: { ...core, WorldDefinition: { ...core.WorldDefinition, isMembersWorld: () => members } },
     onNpcInteraction: (name, actions) => npcs.set(name, actions),
     onObjectInteraction: (name, actions) => objects.set(name, actions),
+    onCustomEvent: (name, handler) => events.set(name, [...(events.get(name) ?? []), handler]),
     onInterfaceActionButton: (ids, handler) => {
       for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
     },
@@ -61,6 +64,7 @@ function harness({ members = true, ultimate = false } = {}) {
     } });
     const p = {
       calls, messages, getUsername: () => 'set-trader',
+      dialogueResets: 0, getDialogueManager: () => ({ reset() { p.dialogueResets++; } }),
       busy: () => false, getMovementQueue: () => ({ reset() {} }),
       getSkillManager: () => ({ stopSkillable() {} }),
       getInterfaceId: () => interfaceId, setInterfaceId: (id) => { interfaceId = id; },
@@ -79,7 +83,8 @@ function harness({ members = true, ultimate = false } = {}) {
     slot: p.getInventory().getItems().findIndex((item) => item.getId() === id),
     itemId: id, action: 1, ...extra,
   });
-  return { npcs, objects, buttons, emitted, player, open, pack, unpack };
+  const emit = (name, payload) => { for (const handler of events.get(name) ?? []) handler(payload); };
+  return { npcs, objects, buttons, emitted, emit, player, open, pack, unpack };
 }
 
 const snapshot = (p) => p.getInventory().getItems().map((item) => [item.getId(), item.getAmount()]);
@@ -108,9 +113,23 @@ test('Sets actions open the native main and side interfaces with their own opera
   assert.ok(p.calls.some(([name, parent, group, type]) => name === 'sendSubInterface' && parent === ((161 << 16) | 16) && group === MAIN && type === 0));
   assert.ok(p.calls.some(([name, parent, group, type]) => name === 'sendSubInterface' && parent === ((161 << 16) | 74) && group === SIDE && type === 3));
   const lastSlot = Math.max(...recipes().map((recipe) => recipe.slot));
-  assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === PACK && first === 0 && last === lastSlot && (flags & 2) !== 0));
-  assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === UNPACK && first === 0 && last === 27 && (flags & 2) !== 0));
+  assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === PACK && first === 0 && last === lastSlot && flags === OP1_AND_EXAMINE));
+  assert.ok(p.calls.some(([name, uid, first, last, flags]) => name === 'sendInterfaceFlagsRange' && uid === UNPACK && first === 0 && last === 27 && flags === OP1_AND_EXAMINE));
   assert.ok(p.calls.some(([name]) => name === 'sendItemContainer'), 'the real inventory is refreshed');
+});
+
+test("the clerk's Talk-to item sets choice closes the chat and opens item sets", () => {
+  const h = harness(), p = h.player();
+  const action = { player: p, action: 'open_interface', target: 'Item Sets', handled: false };
+  h.emit('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(p.dialogueResets, 1);
+  assert.equal(p.calls[0][0], 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), MAIN);
+
+  const other = { player: h.player(), action: 'open_interface', target: 'Grand Exchange', handled: false };
+  h.emit('npc-dialogue:action', other);
+  assert.equal(other.handled, false);
 });
 
 test('every native cache recipe packs and unpacks, including all available noted variants', () => {

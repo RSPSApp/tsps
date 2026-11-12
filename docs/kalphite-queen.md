@@ -85,3 +85,29 @@ to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope
 either. The capture's peek (`You peek down and see one adventurer inside the lair.`) is not
 implemented. The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
+
+## No damage while she molts (#4548)
+
+When the first form dies, `transformFirstForm` holds her at 1 hitpoint, untargetable, for
+`TRANSFORMATION_TICKS` (20, Wiki: Kalphite Queen) before the airborne form takes over at 255.
+Untargetable stops attacks and the hit queue is cleared, but direct damage (a burn's tick, poison,
+venom) is queued straight onto her pending damage. A burn ticking at the moment of the kill took
+her last hitpoint mid-molt, and since she already had the airborne id, the before-death hook let
+her die: the second form was skipped.
+
+The encounter now marks her as molting from the first form's death until the airborne form takes
+over, and zeroes any damage applied to her meanwhile (`combat:damage-apply`).
+
+From the rsprox captures (rev 227 and 234, recordings 95, 96, 545, 1757, 1864, 3276): across 154
+molts (`kalphite_update_flying_queen_emerging`, 6270) no hitsplat lands on her in the 12 ticks
+from the molt. None of those fights had status damage on her, so how live shows a burn tick then
+isn't captured.
+
+Ours: damage that still arrives during the molt shows as a 0 splat, and burn stacks keep running
+down; what is left carries over to the airborne form.
+
+In the captures the airborne form takes its first hit 13 to 16 ticks after the molt, while our
+molt lasts the Wiki's 20 ticks. That is left for a separate check.
+
+`server/tests/kalphite-queen-molt.test.cjs` loads the real plugins and burns or poisons a real
+Queen through the first form's death.

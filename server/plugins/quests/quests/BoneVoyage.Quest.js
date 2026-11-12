@@ -63,6 +63,11 @@ module.exports = function registerBoneVoyageQuest(api) {
   const { registerQuest, refreshQuestList, loadTranscripts, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Bone Voyage";
+  /** Set by a failed or aborted voyage, cleared when the next one sets off: the navigators' "after failing" pages. */
+  const VOYAGE_FAILED_ATTRIBUTE = "bone-voyage:voyage-failed";
+  const VOYAGE_FAILED_VARIANT = "the-cursed-voyage-talking-to-lead-navigator-again-if-the-player-fails-the-voyage";
+  const JUNIOR_AFTER_FAIL_VARIANT = "the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage";
+  const LEAD_TRY_AGAIN_VARIANT = "the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again";
   const START_HOOK = "quest:bone-voyage:start";
 
   const VARP_FOSSILQUEST_MAIN = 1630; // "fossilquest_main"
@@ -292,6 +297,7 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   function startVoyage(player) {
     if (quest.getStage(player) !== STAGE_PLAN_AGREED) return false;
+    player.setAttribute(VOYAGE_FAILED_ATTRIBUTE, false);
     removeCanalNavigators(player);
     const state = setVoyageState(player, { phase: "sailing", progress: 0, heading: 0, throttle: 1, ticks: 0, wind: 0 });
     quest.setStage(player, STAGE_SAILING);
@@ -344,7 +350,8 @@ module.exports = function registerBoneVoyageQuest(api) {
       return;
     }
     if (state.ticks > SAILING_MAX_TICKS) {
-      abortVoyage(player, area);
+      // Transcript:Bone_Voyage "If the player fails the voyage": the Junior Navigator's line.
+      if (abortVoyage(player, area)) startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, VOYAGE_FAILED_VARIANT);
       return;
     }
     if (state.ticks % 5 === 0) setVoyageState(player, state);
@@ -377,6 +384,7 @@ module.exports = function registerBoneVoyageQuest(api) {
       endSailingScene(player, area);
     }
     clearVoyageState(player);
+    player.setAttribute(VOYAGE_FAILED_ATTRIBUTE, true);
     quest.setStage(player, STAGE_PLAN_AGREED);
     player.moveTo(new Location(GUARD_TILE.x, GUARD_TILE.y, GUARD_TILE.z));
     ensureGuard(player);
@@ -389,7 +397,10 @@ module.exports = function registerBoneVoyageQuest(api) {
     const area = SAILING_AREAS.get(player);
     if (!area || area.state.phase !== "sailing" || quest.getStage(player) !== STAGE_SAILING) return false;
     if (buttonId === SAIL_ABORT_BUTTON) {
-      abortVoyage(player, area);
+      // Transcript:Bone_Voyage "Aborting the voyage": "Abort the voyage?" Yes./Cancel., then the message on Yes.
+      api.sendMultiChatboxPrompt(player, "Abort the voyage?", "Yes.", () => {
+        if (abortVoyage(player)) player.sendMessage("With the aid of the junior navigator, you sail back to the digsite.");
+      }, "Cancel.", () => {});
       return true;
     }
     if (buttonId === SAIL_INCREASE_BUTTON) area.state.throttle = Math.min(3, (area.state.throttle | 0) + 1);
@@ -492,6 +503,8 @@ module.exports = function registerBoneVoyageQuest(api) {
     if (stage === STAGE_BAR_PATRONS) return "talking-to-bar-patrons-returning-to-the-navigators";
     if (stage !== STAGE_PLAN_AGREED) return null;
     if (held(player, POTION_OF_SEALEGS_ITEM_ID)) return GIVING_POTION_VARIANT;
+    // After a failed or aborted voyage: "Talking to the Lead Navigator to try again".
+    if (potionState(player) >= 2 && player.getAttribute(VOYAGE_FAILED_ATTRIBUTE) === true) return LEAD_TRY_AGAIN_VARIANT;
     if (potionState(player) >= 2) return "the-cursed-voyage-talking-to-lead-navigator-again";
     return "talking-to-bar-patrons-talking-to-lead-navigator-before-getting-the-potion";
   }
@@ -517,6 +530,7 @@ module.exports = function registerBoneVoyageQuest(api) {
         : "the-cursed-voyage-talking-to-the-junior-navigator";
     }
     if (stage === STAGE_PLAN_AGREED) {
+      if (charmState(player) >= 2 && player.getAttribute(VOYAGE_FAILED_ATTRIBUTE) === true) return JUNIOR_AFTER_FAIL_VARIANT;
       if (charmState(player) >= 2) return "the-cursed-voyage-talking-to-junior-navigator-again";
       if (held(player, BONE_CHARM_ITEM_ID)) return "the-cursed-voyage-giving-junior-navigator-the-bone-charm";
       return "talking-to-bar-patrons-talking-to-junior-navigator-before-getting-the-lucky-charm";
@@ -1096,6 +1110,7 @@ module.exports = function registerBoneVoyageQuest(api) {
   api.persistAttribute(CHARM_ATTRIBUTE);
   api.persistAttribute(POTION_ATTRIBUTE);
   api.persistAttribute(APOTHECARY_ATTRIBUTE);
+  api.persistAttribute(VOYAGE_FAILED_ATTRIBUTE);
   api.persistAttribute(VOYAGE_ATTRIBUTE);
 
   quest = registerQuest(api, {

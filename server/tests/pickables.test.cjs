@@ -35,6 +35,8 @@ function player({ gloves = -1 } = {}) {
         setPositionToFace: () => {},
         performAnimation: (animation) => log.push(`anim ${animation.getId()}`),
         sendMessage: (message) => log.push(message),
+        // Typed lines are logged as "spam:..." (ChatType.SPAM is 105).
+        getPacketSender: () => ({ sendTypedMessage: (type, message) => log.push(type === 105 ? `spam:${message}` : message) }),
         getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => log.push(`hit ${hit.getDamage()}`) }) }),
     };
 }
@@ -116,10 +118,11 @@ const BananaTree = require('../plugins/objects/BananaTree.plugin');
 const { Sound } = require('../dist/game/Sound');
 const bananaActions = {};
 BananaTree.register({
-    core: { Sound, Sounds },
+    core: { Sound, Sounds, ChatType: require('../dist/net/protocol/ClientProtocol').ChatType },
     getObjectManager: () => ObjectManager,
     getTaskManager: () => ({ submit: (task) => tasks.push(task) }),
     onObjectInteraction: (name, actions) => Object.assign(bananaActions, actions),
+    emitCustomEvent: () => {},
 });
 
 test('wild bananas: every successful stage gives one banana and one pick sound (rsprox 4287)', () => {
@@ -130,7 +133,7 @@ test('wild bananas: every successful stage gives one banana and one pick sound (
         assert.deepEqual(log.filter(line => line.startsWith('item ')), ['item 1963 x1']);
         assert.deepEqual(log.filter(line => line.startsWith('sound ')), ['sound 2581']);
         assert.ok(log.includes(`add ${id + 1}`));
-        assert.ok(log.includes('You pick a banana.'));
+        assert.ok(log.includes('spam:You pick a banana.'), 'spam (57 recorded, e.g. 239/04287.txt:13598)');
         assert.equal(tasks.length, 1);
     }
 });
@@ -145,5 +148,5 @@ test('wild bananas: full inventory and searching an empty tree give no reward or
     assert.equal(tasks.length, 0);
     log.length = 0;
     bananaActions.Search({ player: player(), object: plant(2078, 'Banana tree', 3800) });
-    assert.deepEqual(log, ['There are no bananas left on the tree.']);
+    assert.deepEqual(log, ['spam:There are no bananas left on the tree.']);
 });

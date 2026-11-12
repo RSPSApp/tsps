@@ -137,6 +137,37 @@ The gangplank's Board (op 1) opens the boat selection interface when you own sev
 - script 8778 `["", 1, "", 1]` runs;
 - players on board 19235 goes to 0.
 
+## Side panel (interface 937)
+
+rsprox captures, revs 235-238 (tabs: recordings 908, 920, 934, 948, 1030, 3451, 3455, 3461; sail
+row: about 11,000 clicks in 280 recordings, e.g. 856, 857, 901, 938, 940; sail cloth: 856, 938,
+1037, 3499, 3837).
+
+- **Tabs.** Facilities 937:33, Stats 937:34 and Crew 937:35 set `sailing_sidepanel_tabs` 19152 to
+  0, 1 and 2 on the click tick; the client draws the rest. Boarding sets it back to 0 (with the
+  boarded varbits); a shipyard visit sets it to 1, with `sailing_sidepanel_shipyard_mode`.
+- **Sail row (937:25 slots 0-2).** Each step sets the move mode 19175 and the sail button 19174 on
+  the click tick, with one sound:
+
+  | Step | Button | Sound |
+  | --- | --- | --- |
+  | Rest (0 or 4) to half: Set sails | slot 2 | 10832 |
+  | Half to full: Raise speed | slot 2 | 10836 |
+  | Full to half: Lower speed | slot 1 | 10834 |
+  | Half to stopped: Un-set sails | slot 1 | 10835 |
+  | Full to stopped: Un-set sails | slot 0 | 10833 |
+  | Rest to reversing: Reverse | slot 1 | none |
+  | Reversing to stopped: Stop boat | slot 2 | none |
+  | Full, slot 2 again | | game message "The boat is already going as fast as it can." |
+  | Reversing, slot 1 again | | game message "The boat is already reversing." |
+
+- **Straight to full sail** from rest plays 11089: the sail cloth's Set (op 2), the first
+  heading after taking the helm, and a crewmate setting sail. The sail cloth's Un-set (op 5)
+  from full plays 10833. Without anyone navigating, the cloth answers "You or a crewmate must be
+  navigating at the helm to adjust the sails."
+- Every captured sail-row click was made at the helm; what live does for a click away from it
+  is not captured.
+
 ## Per-boat varbits
 
 The server describes every owned boat to the client at login (live login capture) and whenever one changes. Each boat slot has a block of varbits, 38 ids apart: slot 1 starts at 19258, slot 2 at 19296, up to slot 5 at 19410.

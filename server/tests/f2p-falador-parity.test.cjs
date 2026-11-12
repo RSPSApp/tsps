@@ -192,20 +192,24 @@ test('Black Knights dossier runs its eight-cycle native countdown without starti
   h.itemActions[0]({ player: h.player, itemId: I.DOSSIER, option: 'Read' });
   assert.equal(h.inventory.get(I.DOSSIER), 1); h.runAt(2); h.runAt(4); h.runAt(6); assert.equal(h.inventory.get(I.DOSSIER), 1);
   h.runAt(8); assert.equal(h.inventory.get(I.DOSSIER), 0); assert.equal(h.graphics.at(-1), 770); assert.equal(h.quest.getStage(h.player), 1);
+  // Rev 242 tick 203: the box closes and the bang plays with the explosion; busy clears a tick later.
+  assert.deepEqual(h.packets.filter(row => row.key === 'sendSound').map(row => row.args), [[1418, 1, 22]]);
+  assert.equal(h.current(), null); assert.equal(h.varbits.get(12393), 1);
+  h.runAt(9); assert.equal(h.varbits.get(12393), 0);
 });
 
 test('Black Knights listening and private sabotage commit only when the captured scene finishes', () => {
   const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 1);
   h.objects.find(o => o.fn).fn({ player: h.player, objectId: O.GRILL, location: { x: 3026, y: 3507, z: 0 }, clickType: 1, definition: { getInteractions: () => ['Listen-at'] } });
   assert.equal(h.quest.getStage(h.player), 1); h.runAt(2); assert.equal(h.quest.getStage(h.player), 1);
-  h.line(N.WITCH_5, 'Yeth, Mithreth.').after(); assert.equal(h.quest.getStage(h.player), 2);
+  h.line(N.WITCH_5, 'Yeth, Mithtreth.').after(); assert.equal(h.quest.getStage(h.player), 2);
   h.player.moveTo(new h.core.Location(3031, 3506, 1)); h.inventory.set(I.CABBAGE, 1); h.action(N.WITCH_5, 'lUsX9u');
-  assert.equal(h.inventory.get(I.CABBAGE), 0); assert.equal(h.quest.getStage(h.player), 2); h.runAt(8); assert.equal(h.spawned.length, 3);
+  assert.equal(h.inventory.get(I.CABBAGE), 0); assert.equal(h.quest.getStage(h.player), 2); h.runAt(7); assert.equal(h.spawned.length, 3);
   assert.equal(h.player.getPrivateArea().getName(), "Black Knights' secret weapon");
   h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(7); assert.equal(h.varbits.get(2494), 1); assert.equal(h.quest.getStage(h.player), 2);
-  h.line(N.WITCH_5, 'Meow!No special dialogue with catspeak amulet equipped').after(); h.runAt(6); h.runAt(9);
+  h.line(N.WITCH_5, 'Meow!').after(); h.runAt(5); assert.equal(h.quest.getStage(h.player), 2); h.runAt(8);
   assert.equal(h.quest.getStage(h.player), 3); assert.equal(h.player.getPrivateArea(), null); assert.equal(h.player.untargetable, false);
-  assert.deepEqual(h.action(N.SIR_AMIK_VARZE_4, 'jnrgsN').box, { statement: true }); h.action(N.SIR_AMIK_VARZE_4, 'uMmzNj');
+  h.action(N.SIR_AMIK_VARZE_4, 'uMmzNj');
   assert.equal(h.inventory.get(I.COINS), 2500); assert.equal(h.quest.getStage(h.player), 4); assert.equal(h.quest.completionJingleId, 152);
   h.action(N.SIR_AMIK_VARZE_4, 'uMmzNj'); assert.equal(h.inventory.get(I.COINS), 2500);
 });
@@ -219,21 +223,22 @@ test('Goblin crates are individually exhausted even before the quest, and legacy
   assert.equal(h.quest.varbitId, 2378); assert.equal(h.quest.varpId, undefined);
 });
 
-test('Black Knights sabotage sends the recorded tick-ten camera and restores it at the two captured return boundaries', () => {
+test('Black Knights sabotage sends the recorded tick-nine camera and restores it at the two captured return boundaries', () => {
   const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
   h.action(N.WITCH_5, 'lUsX9u');
   assert.deepEqual(h.packets.filter(row => row.key === 'sendCameraShake').map(row => row.args), [0, 1, 2, 3, 4].map(axis => [axis, 0]));
-  h.runAt(8); assert.equal(h.packets.filter(row => /sendCamera(MoveTo|LookAt)/.test(row.key)).length, 0);
-  h.runAt(10);
+  h.runAt(7); assert.equal(h.packets.filter(row => /sendCamera(MoveTo|LookAt)/.test(row.key)).length, 0);
+  h.runAt(9);
   const area = h.player.getPrivateArea(), camera = area.sourceTile(3035, 3499), target = area.sourceTile(3032, 3505);
   assert.deepEqual(h.packets.filter(row => /sendCamera(MoveTo|LookAt)/.test(row.key)), [
     { key: 'sendCameraMoveTo', args: [camera.getX(), camera.getY(), 1500, { rate: 100, rate2: 100, heightRelative: false }] },
     { key: 'sendCameraLookAt', args: [target.getX(), target.getY(), 300, { rate: 100, rate2: 100, heightRelative: false }] },
   ]);
-  h.line(N.WITCH_5, 'Meow!').after(); h.runAt(4);
+  // Rev 242: fade out 3 ticks after continuing past "Meow!", back at the hole at 5, the closing line at 8.
+  h.line(N.WITCH_5, 'Meow!').after(); h.runAt(3);
   assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 0);
-  h.runAt(6); assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 1);
-  h.runAt(9); assert.deepEqual(h.packets.filter(row => /sendCamera(Unlock|Reset)/.test(row.key)), [
+  h.runAt(5); assert.equal(h.packets.filter(row => row.key === 'sendCameraReset').length, 1);
+  h.runAt(8); assert.deepEqual(h.packets.filter(row => /sendCamera(Unlock|Reset)/.test(row.key)), [
     { key: 'sendCameraReset', args: [] }, { key: 'sendCameraUnlock', args: [false] }, { key: 'sendCameraReset', args: [] },
   ]);
 });
@@ -262,11 +267,15 @@ test('Black Knights journal at stages 2 and 3 is the captured rev 240 text', () 
 test('Black Knights sabotage plays the captured throw, noise, splash and meow sounds', () => {
   const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
   const sounds = () => h.packets.filter(row => row.key === 'sendSound').map(row => row.args[0]);
-  // The camera shakes on the scene's first tick; the throw follows one tick later (rev 240 3068 -> 3069).
+  // Rev 242 tick 887: the camera shakes and the cabbage is thrown on the scene's first tick; busy follows a tick later.
+  h.player.moveTo(new h.core.Location(3030, 3507, 1));
   h.action(N.WITCH_5, 'lUsX9u'); assert.equal(h.packets.filter(row => row.key === 'sendCameraShake').length, 5);
-  assert.deepEqual(sounds(), []); assert.deepEqual(h.animations, []); assert.deepEqual(h.graphics, []);
-  h.runAt(1); assert.deepEqual(sounds(), [1420]); assert.deepEqual(h.animations, [4553]); assert.deepEqual(h.graphics, [771]);
-  h.runAt(8); h.runAt(40); assert.deepEqual(sounds(), [1420], 'the noise is not on a fixed scene tick');
+  assert.deepEqual(sounds(), [1420]); assert.deepEqual(h.animations, [4553]); assert.deepEqual(h.graphics, [771]);
+  const [from, to] = h.packets.find(row => row.key === 'sendProjectile').args;
+  assert.deepEqual([from.getX(), from.getY(), from.getZ(), to.getX(), to.getY(), to.getZ()], [3030, 3507, 1, 3031, 3507, 1]);
+  assert.equal(h.varbits.get(542), 1); assert.equal(h.varbits.get(12393), undefined);
+  h.runAt(1); assert.equal(h.varbits.get(12393), 1);
+  h.runAt(7); h.runAt(40); assert.deepEqual(sounds(), [1420], 'the noise is not on a fixed scene tick');
   h.line(N.WITCH_5, 'Where has Greldo got to with that magic cabbage!').after();
   assert.deepEqual(sounds(), [1420]); h.runAt(3); assert.deepEqual(sounds(), [1420, 1414]);
   h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(2); assert.deepEqual(sounds(), [1420, 1414, 1416]);
@@ -284,4 +293,60 @@ test('Black Knights grill Listen-at routes onto the grill tile, as both recordin
   route(grill); assert.deepEqual(grill.destination, { x: 3026, y: 3507, z: 0 });
   const other = { objectId: O.CRATE_140, object: { getLocation: () => new h.core.Location(3026, 3507, 0) }, sourceLocation: { x: 3022, y: 3510, z: 0 } };
   route(other); assert.equal(other.destination, undefined);
+});
+
+/** Every line the real transcript runner shows for a variant, NPC and player, continuing through each. */
+function transcriptLines(h, npcId, variant) {
+  const manager = new DialogueManager(h.player);
+  h.player.getDialogueManager = () => manager;
+  // The runner asks PluginManager; answer with the plugin's own condition handler.
+  const emit = PluginManager.emitNpcDialogueCondition;
+  PluginManager.emitNpcDialogueCondition = event => h.condition(event.npcId, event.text);
+  try {
+    runtime.startTranscript(h.api, h.player, npcId, "Black Knights' Fortress", variant);
+    const lines = [];
+    for (let step = 0; step < 80; step++) {
+      const current = manager.getCurrent();
+      if (!current) break;
+      if (typeof current.getText === 'function') lines.push(current.getText());
+      manager.advance();
+    }
+    return lines;
+  } finally {
+    PluginManager.emitNpcDialogueCondition = emit;
+  }
+}
+
+test('Black Knights: Sir Amik reminds a player still holding the dossier to read it (rev 242 tick 186)', () => {
+  const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 1);
+  h.inventory.set(I.DOSSIER, 1);
+  const held = transcriptLines(h, N.SIR_AMIK_VARZE_4, h.variant(N.SIR_AMIK_VARZE_4).variant);
+  assert.equal(held.at(-1), "Don't forget to read that dossier of information I gave you.");
+  assert.ok(!held.includes("Here's the dossier on the case."));
+  h.inventory.set(I.DOSSIER, 0);
+  const lost = transcriptLines(h, N.SIR_AMIK_VARZE_4, h.variant(N.SIR_AMIK_VARZE_4).variant);
+  assert.ok(lost.includes("Here's the dossier on the case."));
+  assert.ok(!lost.includes("Don't forget to read that dossier of information I gave you."));
+});
+
+test('Black Knights: the reward has no coins box, and the scroll is the rev 242 one', () => {
+  const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 3);
+  const lines = transcriptLines(h, N.SIR_AMIK_VARZE_4, h.variant(N.SIR_AMIK_VARZE_4).variant);
+  assert.equal(lines.at(-1), 'Absolutely right. Please accept this reward.');
+  assert.ok(!lines.some(text => /hands you/.test(text)));
+  // Rev 242 tick 1113: the broken cauldron, "3 Quest Points", "2 Antique Lamps", "2,500 Coins".
+  assert.equal(h.quest.scrollItemId, I.BROKEN_CAULDRON);
+  assert.deepEqual(runtime.rewardLines(h.quest), ['You are awarded:', '3 Quest Points', '2 Antique Lamps', '2,500 Coins']);
+});
+
+test('Black Knights: captured chat-head animations, with the cat on the data rather than a forced head', () => {
+  const ANIMATIONS = require('../plugins/quests/data/chathead-animations.json');
+  assert.equal(ANIMATIONS['Sir Amik Varze']['I am the leader of the White Knights of Falador. Why do you seek my audience?'], 555);
+  assert.equal(ANIMATIONS.Witch['...not to mention the trees!'], 571);
+  assert.equal(ANIMATIONS.Greldo['Yeth, Mithtreth.'], 588);
+  assert.equal(ANIMATIONS['Black Cat']['Meow!'], 588);
+  assert.equal(ANIMATIONS.player['Looks like my work here is done. Seems like that\'s successfully sabotaged their little secret weapon plan.'], 568);
+  const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1); h.action(N.WITCH_5, 'lUsX9u');
+  const meow = h.line(N.WITCH_5, 'Meow!');
+  assert.equal(meow.speakerId, N.BLACK_CAT); assert.equal(meow.expression, undefined);
 });

@@ -134090,6 +134090,11 @@
             }
           ],
           "id": "15RG3w"
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Amik Varze",
+          "text": "Don't forget to read that dossier of information I gave you."
         }
       ],
       "infiltrating-the-fortress-trying-to-open-the-main-door-to-the-fortress": [
@@ -134303,7 +134308,7 @@
         {
           "type": "line",
           "speaker": "Witch",
-          "text": "...not to merntion the trees!"
+          "text": "...not to mention the trees!"
         },
         {
           "type": "line",
@@ -134313,7 +134318,7 @@
         {
           "type": "line",
           "speaker": "Greldo",
-          "text": "Yeth, Mithreth."
+          "text": "Yeth, Mithtreth."
         }
       ],
       "reporting-back-to-sir-amik-varze": [
@@ -134445,7 +134450,7 @@
         {
           "type": "line",
           "speaker": "Black Cat",
-          "text": "Meow!No special dialogue with catspeak amulet equipped"
+          "text": "Meow!"
         },
         {
           "player": "Looks like my work here is done. Seems like that's successfully sabotaged their little secret weapon plan."
@@ -134504,11 +134509,6 @@
           "type": "line",
           "speaker": "Sir Amik Varze",
           "text": "Absolutely right. Please accept this reward."
-        },
-        {
-          "type": "message",
-          "text": "Sir Amik hands you 2500 coins.",
-          "id": "jnrgsN"
         },
         {
           "type": "action",

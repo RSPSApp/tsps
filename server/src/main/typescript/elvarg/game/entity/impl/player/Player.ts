@@ -904,7 +904,13 @@ export class Player extends Mobile {
             this.audioSettings[varpId] = Math.trunc(value) & Music.SETTINGS_MASK;
             return true;
         }
-        const maximum = varpId === 18 ? 2 : PACKED_AUDIO_VARPS.has(varpId) ? 0x7fffffff : 100;
+        if (PACKED_AUDIO_VARPS.has(varpId)) {
+            // Every bit is a setting (live sends 3109 with bits 30 and 31 set, so negative): keep the whole 32-bit
+            // value, as the client holds it, rather than clamp it to 0 and wipe the saved levels.
+            this.audioSettings[varpId] = Math.trunc(value) | 0;
+            return true;
+        }
+        const maximum = varpId === 18 ? 2 : 100;
         this.audioSettings[varpId] = Math.max(0, Math.min(maximum, Math.trunc(value)));
         return true;
     }

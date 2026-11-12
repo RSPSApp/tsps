@@ -34,6 +34,7 @@ before(async () => {
     onPlayerBeforeDeath: (handler) => { hooks.beforeDeath = handler; },
     onPlayerLogin: (handler) => { hooks.login = handler; },
     onPlayerProcess: (handler) => { hooks.process = handler; },
+    onCanLogout: (handler) => { hooks.canLogout = handler; },
     onCustomEvent: (name, handler) => { if (name === 'npc-drops:tertiary-chance') hooks.tertiary = [handler]; },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Plugin.register(api);
@@ -71,7 +72,8 @@ function fakePlayer() {
       getMaxLevel: (skill) => (skill === core.Skill.HITPOINTS ? 99 : 70),
       setCurrentLevels: (skill, level) => { player.levels[skill.getName()] = level; },
     }),
-    getPacketSender: () => ({ sendSkill: (skill) => player.sent.push(skill.getName()) }),
+    varbits: new Map(),
+    getPacketSender: () => ({ sendSkill: (skill) => player.sent.push(skill.getName()), sendVarbit: (id, value) => player.varbits.set(id, value) }),
     getCombat: () => ({ reset() {}, getHitQueue: () => ({ clear: () => { player.queue = 0; } }) }),
     getInventory: () => ({
       contains: (id) => inventory.includes(id),
@@ -82,6 +84,25 @@ function fakePlayer() {
   };
   return player;
 }
+
+test('logout mid-wave: the first click asks to pause (in red, varbit 1548), a second click in that wave goes through (Wiki)', (t) => {
+  let cycle = 0;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  spawnNpc = ({ id, x, y }) => core.NPC.create(id, loc(x, y));
+  const player = fakePlayer();
+  hooks.enter({ player });
+  for (let i = 0; i < 6; i++) { cycle++; hooks.process({ player }); }
+  const first = { player, allow: true };
+  hooks.canLogout(first);
+  assert.equal(first.allow, false);
+  assert.equal(first.reason, '<col=ef1020>Your logout request has been received. The minigame will be paused at the end of this wave.'
+    + '<br><col=ef1020>If you try to log out before that, you will have to repeat this wave.');
+  assert.equal(player.varbits.get(1548), 1);
+  const second = { player, allow: true };
+  hooks.canLogout(second);
+  assert.equal(second.allow, true, 'the second click logs out, restarting this wave');
+  assert.equal(player.attributes['tzhaar:fight-cave-wave'], 1, 'the saved wave is the one logged out in');
+});
 
 test('clearing wave 2 while its monsters are idle spawns wave 3 and continues past its split', (t) => {
   let cycle = 0;

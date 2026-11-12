@@ -5,11 +5,15 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
 const Common = require("../plugins/bosses/phantommuspah/Common.PhantomMuspah");
+require("../dist/Server").Server.installProductionPathResolver();
+const { Bank } = require("../dist/game/model/container/impl/Bank");
+const { Item } = require("../dist/game/model/Item");
+const { Player } = require("../dist/game/entity/impl/player/Player");
 
 const ITEMS = { FROZEN_CACHE: 27622, ANCIENT_ICON: 27627, VENATOR_SHARD: 27614, ANCIENT_ESSENCE: 27616, CHARGED_ICE: 27643 };
 const hooks = { custom: {} };
 const fakeApi = {
-  core: { ItemIdentifiers: new Proxy(ITEMS, { get: (items, name) => items[name] ?? 1000 + String(name).length }) },
+  core: { Bank, ItemIdentifiers: new Proxy(ITEMS, { get: (items, name) => items[name] ?? 1000 + String(name).length }) },
   persistAttribute() {},
   onPlayerLogin() {},
   onNpcDeath() {},
@@ -93,6 +97,20 @@ test("a kill under 3:00 adds Charged ice, unless the player has one", () => {
   assert.match(quick.messages[0], /Untradeable drop: Charged ice/);
   assert.deepEqual(roll(fakePlayer(), 300), []);
   assert.deepEqual(roll(fakePlayer({ ownsIce: true }), 100), []);
+});
+
+test("Charged ice held only in the bank search tab's copy does not count as owned; a real bank tab does", () => {
+  const roll = (player) => {
+    const event = { npc: { __muspahFight: { lootTicks: 100 } }, player, drops: [] };
+    fakeApi.emitCustomEvent("npc-drops:roll", event);
+    return event.drops.map((drop) => drop.itemId);
+  };
+  const player = new Player(null);
+  player.sendMessage = () => {};
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(ITEMS.CHARGED_ICE, 1), false);
+  assert.deepEqual(roll(player), [ITEMS.CHARGED_ICE], "a search-tab copy alone: the ice drops");
+  player.getBank(2).add(new Item(ITEMS.CHARGED_ICE, 1), false);
+  assert.deepEqual(roll(player), [], "in a bank tab: no second ice");
 });
 
 test("a Venator shard comes without the main table's loot", () => {

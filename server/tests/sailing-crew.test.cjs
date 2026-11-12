@@ -941,11 +941,36 @@ test("assigning aboard: a new crewmate joins the deck when crew management close
   }
 });
 
-test("crew changes made ashore leave the boat's crew alone until boarding", () => {
+test("a crewmate cleared at sea counts as aboard until the trip ends, whatever is sent meanwhile (rsprox)", () => {
   const player = captain({ level: 99 });
-  recruited(player, JIM);
-  registrar.openCrewManagement(player);
-  registrar.assign(player, 0, JIM);
-  closeCrewManagement(player);
-  assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0) ?? 0, 0, "no side panel crew ashore");
+  const boat = boardSkiff(player, [JENKINS, JIM]);
+  try {
+    registrar.openCrewManagement(player);
+    registrar.clear(player, 1);
+    closeCrewManagement(player);
+    common.sendVarbits(player);
+    assert.equal(player.varbits.get(VARBIT.VISIBLE_JIM), 2, "not back at the Pandemonium while the boat sails");
+  } finally {
+    Sailing.disembark(player, "the_pandemonium");
+  }
+  assert.equal(player.varbits.get(VARBIT.VISIBLE_JIM), 1, "at the Pandemonium once the boat is left");
+  void boat;
+});
+
+test("cleared and assigned again before crew management closes, a crewmate stays where they stand", () => {
+  const player = captain({ level: 99 });
+  const boat = boardSkiff(player, [JENKINS, JIM]);
+  try {
+    const jim = common.crewAboard(boat).find((member) => member.crew.id === JIM);
+    registrar.openCrewManagement(player);
+    registrar.clear(player, 1);
+    registrar.assign(player, 1, JIM);
+    closeCrewManagement(player);
+    const again = common.crewAboard(boat).find((member) => member.crew.id === JIM);
+    assert.equal(again?.npc, jim.npc, "the same NPC, not one spawned on the boarding tile");
+    assert.ok(jim.npc.isRegistered());
+    assert.equal(player.varbits.get(VARBIT.SIDEPANEL_SLOT0 + 1), JIM);
+  } finally {
+    Sailing.disembark(player, "the_pandemonium");
+  }
 });

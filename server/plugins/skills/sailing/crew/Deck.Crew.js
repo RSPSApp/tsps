@@ -25,10 +25,15 @@ const CREW_RADIO_BUTTONS = 38;
 const VARBIT_CREW_PLAYER_VIEW = 19234;
 const CREW_MANAGEMENT = 938;
 
-/** Crewmates taken off a boat's crew while it sails, still on deck until crew management closes. */
+/** Crewmates taken off a boat's crew while it sails ({ crew, npc }), on deck until crew management closes. */
 const leaving = new Map();
 /** Each boat's wandering task, so a crew that empties and refills runs one. */
 const wanderers = new Map();
+
+function removeLeaving(boat) {
+  for (const { npc } of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
+  leaving.delete(boat);
+}
 
 let pluginApi;
 
@@ -115,7 +120,8 @@ function crewChanged({ player }) {
     const slot = state.slots.indexOf(member.crew.id);
     if (!sailing.has(member.crew.id)) {
       assign.stopJob(player, boat, member);
-      leaving.set(boat, [...(leaving.get(boat) ?? []), member.npc]);
+      if (!leaving.has(boat)) leaving.set(boat, []);
+      leaving.get(boat).push({ crew: member.crew, npc: member.npc });
       continue;
     }
     if (slot !== member.slot || state.positions[slot] !== member.position) {
@@ -137,24 +143,28 @@ function crewChanged({ player }) {
  * sailing slots come aboard on the boarding tile, as boarding brings them.
  */
 function settleCrew(player, boat) {
-  for (const npc of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
-  leaving.delete(boat);
   const { BoatManager, Sailing } = common.core();
   const owned = Sailing.instanceAboard(player) === boat ? Sailing.ownedOf(boat) : undefined;
   const spec = BoatManager.getSpec(boat);
   const deck = BoatManager.getDeck(boat);
-  if (!owned || !spec || !deck) return;
+  if (!owned || !spec || !deck) return removeLeaving(boat);
   const state = common.state(player);
   const members = [...common.crewAboard(boat)];
   const joined = [];
+  const left = leaving.get(boat) ?? [];
   for (const slot of crewSlots(state, assign.crewCapacity(owned))) {
     if (members.some((member) => member.slot === slot)) continue;
-    const member = spawnMember(player, boat, spec, deck, state, slot);
+    // Cleared and assigned again before the interface closed: still on deck, they stay.
+    const back = left.findIndex((entry) => entry.crew.id === state.slots[slot]);
+    const member = back >= 0
+      ? { slot, crew: left[back].crew, npc: left.splice(back, 1)[0].npc, position: state.positions[slot] }
+      : spawnMember(player, boat, spec, deck, state, slot);
     if (!member) continue;
     member.position = validPosition(owned, member);
     members.push(member);
     joined.push(member);
   }
+  removeLeaving(boat);
   if (!joined.length) return;
   members.sort((a, b) => a.slot - b.slot);
   common.setCrewAboard(boat, members);
@@ -190,16 +200,13 @@ function walkableTiles(boat, owned) {
 /** Idle crewmates walk the deck and say something now and then, for as long as the boat sails. */
 function wander(player, boat) {
   const { BoatManager, Task, TaskManager } = common.core();
-  if (wanderers.has(boat)) return;
+  if (wanderers.get(boat)?.isRunning()) return;
   const task = new (class extends Task {
     constructor() { super(1, boat, false); }
     execute() {
       const members = common.crewAboard(boat);
       const owned = common.core().Sailing.instanceAboard(player) === boat ? common.core().Sailing.activeBoat(player) : undefined;
-      if (!BoatManager.getSpec(boat) || !members.length || !owned) {
-        if (wanderers.get(boat) === task) wanderers.delete(boat);
-        return this.stop();
-      }
+      if (!BoatManager.getSpec(boat) || !members.length || !owned) return this.stop();
       for (const member of members) {
         if (member.position !== POSITION.IDLE || member.walk) continue;
         if (Math.random() < CHATTER_CHANCE) lines.say(member.npc, member.crew, "idle");
@@ -230,18 +237,20 @@ function onBoarded({ player, boat, owned }) {
 
 /** The crew leave with the boat; disembarking at a dock leaves the first slot's crewmate there. */
 function onLeft({ player, boat, reason }) {
-  for (const npc of leaving.get(boat) ?? []) pluginApi.removeNpc(npc);
-  leaving.delete(boat);
+  removeLeaving(boat);
   wanderers.delete(boat);
   const members = common.crewAboard(boat);
-  if (!members.length && reason !== "disembark") return;
+  if (!members.length && reason !== "disembark") {
+    common.endTrip(boat);
+    return;
+  }
   // The boat has gone: nothing is left to stop or lower.
   boat.helmCrew = undefined;
   for (const member of members) {
     assign.stopJob(player, boat, member);
     pluginApi.removeNpc(member.npc);
   }
-  common.setCrewAboard(boat, []);
+  common.endTrip(boat);
   const state = common.state(player);
   state.onDock = reason === "disembark" && state.slots[0] !== 0;
   player.setAttribute(common.CREW_ATTRIBUTE, state);

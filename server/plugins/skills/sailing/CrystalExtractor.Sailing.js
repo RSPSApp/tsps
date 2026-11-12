@@ -6,7 +6,7 @@
 //   "Your crystal extractor has harvested a crystal mote!" and the loc's extracted animation. It
 //   holds one mote.
 // - While it makes a mote, a progress bar shows over it for everyone who can see the boat: an
-//   NPC with no model (crystal_extractor_headbar) stands on the extractor from the tick it starts,
+//   NPC with no options (crystal_extractor_headbar) stands on the extractor from the tick it starts,
 //   with headbar 82 (40 wide) at 0. Every 5 ticks it is sent again, counting down to the mote: 2
 //   short of full for each 5 ticks left (0 while 100 or more are), so it shows 38 five ticks
 //   before the mote. It goes when the mote is ready. Ours: it also goes when the extractor is

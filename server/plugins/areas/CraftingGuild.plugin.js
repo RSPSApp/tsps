@@ -40,6 +40,11 @@ function masterCrafterSays(player, variant) {
   api.emitCustomEvent("npc-dialogue:start", { player, npcId: core.NpcIdentifiers.MASTER_CRAFTER, variant, handled: false });
 }
 
+const DOOR_BLOCKER_ID = 38848; // inviswall
+const DOOR_OPEN_ID = 1539; // inactivepoordoor
+const DOOR_OPEN_FACE = 0;
+const DOOR_CLOSE_TICKS = 2;
+
 function later(player, ticks, action) {
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(ticks, player, false); }
@@ -59,11 +64,22 @@ function crossDoor(player, door, entering) {
   const dx = to.getX() - from.getX();
   const dy = to.getY() - from.getY();
   const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
-  const sender = player.getPacketSender();
-  sender.sendObjectRemoval(door);
+  // rsprox 232/03130.txt:31143-31169: for everyone, inviswall 38848 on the doorway and the open door (inactivepoordoor
+  // 1539) on the tile inside, then the guild door back two ticks later.
+  const { GameObject, ObjectManager } = core;
+  const area = door.getPrivateArea?.() ?? null;
+  const blocker = new GameObject(DOOR_BLOCKER_ID, doorTile.clone(), 0, door.getFace(), area);
+  const open = new GameObject(DOOR_OPEN_ID, inside.clone(), 0, DOOR_OPEN_FACE, area);
+  ObjectManager.deregister(door, true);
+  ObjectManager.register(blocker, true);
+  ObjectManager.register(open, true);
   core.TaskManager.submit(new ForceMovementTask(player, 2,
     new ForceMovement(from.clone(), new Location(dx, dy), 0, 30, direction, WALK_ANIMATION)));
-  later(player, 3, () => sender.sendObject(door));
+  later(player, DOOR_CLOSE_TICKS, () => {
+    ObjectManager.deregister(open, true);
+    ObjectManager.deregister(blocker, true);
+    ObjectManager.register(door, true);
+  });
 }
 
 function openDoor(event) {

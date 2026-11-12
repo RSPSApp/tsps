@@ -2277,3 +2277,203 @@ test('native Soggy Swamp Ignore5 uses concurrent six-fighter starts and actual d
   await lethalMelee(b,teams[0][1],game,true,[[3409,4934,0],[3410,4934,0]]);tick(6);
   assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
 });
+
+// J: observed cache geometry; exact player placements/barrier row are TSPS choices.
+const CUP_ORIGIN=[3136,4928];
+const CUP_LANDINGS=[[3150,4960,0],[3185,4960,0]];
+const CUP_JAILS=[[3141,4957,0],[3194,4957,0]];
+const cupReachable=(game,from,to)=>layoutReachable(game,from,to,CUP_ORIGIN);
+
+const CUP_ORBS=[[[3140,4961],[3157,4932],[3157,4987]],[[3195,4961],[3178,4932],[3178,4987]]];
+
+test('native Clan Cup selection resets agreement across all five arenas and rejects unsupported rows',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  await click(a,'clanwars_setup:accept');const session=C.negotiations.get(a);assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:arena',15);assert.equal(session.rules.arena,5,'native Clan Cup option reaches authoritative offer');
+  assert.equal(session.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Clan Cup Arena/);
+  for(const [slot,arena] of [[3,1],[6,2],[9,3],[18,6],[15,5]]) {
+    tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+    await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
+  }
+  for(const slot of [0,1,2,12,21,39,65535]) {
+    await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,5);
+    assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),5);
+  }
+});
+
+test('native Clan Cup queued movement, full clip restoration and selected axis and terrain walk-versus-ray',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,5);
+  await join(a);await join(b);for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,CUP_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let plane=0;plane<2;plane++) for(let x=0;x<8;x++) for(let y=0;y<8;y++) {
+      reference.setChunk(plane,x,y,{sourceChunkX:392+x,sourceChunkY:616+y,sourcePlane:plane,rotation:0});
+      assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const wallId=core.CacheDefinitions.getLocId('clanwars_barrier_greyrock'),def=core.CacheDefinitions.getObject(wallId);
+    assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.equal(game.walls.length,43);
+    const walls=game.walls.slice(),{MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of walls) {
+      assert.equal(wall.getId(),wallId);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),1);
+      assert.notEqual(game.area.getClip(wall.getLocation())&0x100,0);
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),wall);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wallId).length,1);
+    }
+    for(let y=4936;y<=4983;y++) {
+      const old=reference.getClip(reference.tile(3167-3136,y-4928,0));
+      const count=walls.filter(o=>o.getLocation().equals(game.area.at([3167,y,0]))).length;
+      assert.equal(count,old&core.RegionManager.BLOCKED_MASK?0:1,'solid mapped cells need no overlay');
+      if(count) assert.equal(old&0x20100,0,'registration cannot clear pre-existing solid/projectile tile bits');
+    }
+    assert.equal(cupReachable(game,CUP_LANDINGS[0],CUP_LANDINGS[1]),false,'cardinal+diagonal routes including both wall ends stay separated');
+    for(const side of [0,1]) assert.equal(cupReachable(game,CUP_JAILS[side],CUP_LANDINGS[side]),false);
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3136,4960,0]),game.area.at([3135,4960,0]),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3151,4960,0]),across=game.area.at(CUP_LANDINGS[1]);
+    await wire(walker,walkClickFrame(open));assert.deepEqual(position(walker),[open.getX(),open.getY(),0]);
+    await wire(walker,walkClickFrame(across));tick(60);assert.equal(game.phase,'staging');
+    assert.ok(walker.getLocation().getX()<game.area.at([3167,4960,0]).getX(),'ordinary movement cannot reach east during preparation');
+    const staging={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of walls) {
+      assert.equal(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),null);
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);
+    }
+    const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'all4096 masks preserve all source terrain and directional/projectile edges');
+    for(const [y,mask] of [[4936,0x4020],[4961,0x1008],[4983,0x402]]) assert.equal(after[(y-4928)*64+3167-3136],mask,'directional/projectile edge flags survive vertical barrier removal');
+    for(const y of [4938,4939,4942,4944,4945]) assert.equal(after[(y-4928)*64+3167-3136],0x100,'skipped cells keep their original walking obstruction');
+    assert.equal(cupReachable(game,CUP_LANDINGS[0],CUP_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(across));tick(200);assert.deepEqual(position(walker),[across.getX(),across.getY(),0]);
+    console.log('CLANCUP_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    for(const specimen of [
+      {gameval:'stalagmite_twin_grey',xy:[3146,4973],left:[3145,4973],right:[3147,4973],projectile:true},
+      {gameval:'wild1_bones_small_03',xy:[3146,4944],left:[3145,4944],right:[3147,4944],projectile:false},
+    ]) {
+      const obstacle=game.area.at([...specimen.xy,0]),left=game.area.at([...specimen.left,0]),right=game.area.at([...specimen.right,0]);
+      const object=mappedLayoutObjects(game,specimen.gameval).find(o=>o.getLocation().equals(obstacle));assert.ok(object);
+      const definition=core.CacheDefinitions.getObject(object.getId());
+      assert.deepEqual([definition.sizeX,definition.sizeY,definition.blocksProjectile],[1,1,specimen.projectile]);
+      assert.equal(object.getType(),10);assert.equal(object.getFace(),0);assert.equal(object.getPrivateArea(),game.area);
+      assert.equal(game.area.getClip(obstacle)&0x20100,specimen.projectile?0x20100:0x100);
+      assert.equal(game.area.getClip(left),0);assert.equal(game.area.getClip(right),0);
+      assert.equal(cupReachable(game,CUP_LANDINGS[1],specimen.left),true);
+      await wire(walker,walkClickFrame(left));tick(240);assert.deepEqual(position(walker),[left.getX(),left.getY(),0],'ordinary walk reaches the actual open obstacle approach');
+      await wire(walker,walkClickFrame(obstacle));
+      for(let cycle=0;cycle<10;cycle++) {tick();assert.equal(core.RegionManager.blocked(walker.getLocation(),game.area),false);}
+      assert.notDeepEqual(position(walker),[obstacle.getX(),obstacle.getY(),0]);
+      console.log('CLANCUP_OBSTACLE_MOVEMENT_QUALIFICATION '+JSON.stringify({gameval:specimen.gameval,requested:[obstacle.getX(),obstacle.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}));
+      assert.equal(core.RegionManager.canMovestart(left,obstacle,1,1,game.area),false);
+      assert.equal(core.RegionManager.canProjectileAttackReturn(left,right,1,game.area),!specimen.projectile,'selected source terrain distinguishes walking from the native ray');
+    }
+    const o1=game.area.at([3150,4960,0]),o2=game.area.at([3151,4960,0]);
+    assert.equal(core.RegionManager.canMovestart(o1,o2,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(o1,o2,1,game.area),true,'open ray positive control');
+  } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
+});
+
+for(const mode of [0,1,16]) test(`native Clan Cup mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},5);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3150,4960,0]));b.moveTo(game.area.at([3151,4960,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,CUP_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of [0,1]) test(`native Clan Cup side ${victimIndex} death metadata, jail approach and viewing model`,async()=>{
+  const outsiders=[actor(),actor()];for(const p of outsiders) channel(p);
+  const foreignGame=await negotiate(outsiders[0],outsiders[1],null,1,null,3);for(const p of outsiders) await join(p);
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},5);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  victim.getInventory().add(new core.Item(995,79,{qa:'clancup'}));
+  await lethalMelee(killer,victim,game,true,[[3150,4960,0],[3151,4960,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,CUP_JAILS[side]));
+  assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'clancup'});
+  const foreignPortal=mappedLayoutObjects(foreignGame,'clanwars_prisonportal_darkrock')[0],foreignOrb=mappedLayoutObjects(foreignGame,'clanwars_viewing_start_greyrock')[0];assert.ok(foreignPortal&&foreignOrb);
+  assert.equal(Match.exit({player:victim,object:foreignPortal}),false,'valid jailed member cannot use the real same-ID portal of another match');
+  assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false,'valid jailed member cannot use a real same-ID foreign orb');
+  assert.equal(C.matches.get(victim),game);assert.equal(game.jailed.has(victim),true);
+  const scripts=scriptCalls(victim),orbXY=side===0?[3140,4961]:[3195,4961];
+  await layoutObjectInput(victim,game,'clanwars_viewing_start_greyrock',orbXY,'Use');
+  assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);
+  const at=game.area.at([...orbXY,0]);assert.ok(Math.max(Math.abs(state.location.getX()-at.getX()),Math.abs(state.location.getY()-at.getY()))<=1);
+  assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9755));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+  assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+  assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const ownedPortal=mappedLayoutObjects(game,'clanwars_prisonportal_darkrock').find(o=>o.getLocation().equals(game.area.at([...(side===0?[3140,4952]:[3195,4952]),0])));assert.ok(ownedPortal);
+  const fake=new core.GameObject(ownedPortal.getId(),ownedPortal.getLocation().clone(),ownedPortal.getType(),ownedPortal.getFace(),game.area);
+  try {assert.equal(Match.exit({player:victim,object:fake}),false);assert.equal(game.jailed.has(victim),true);} finally {game.area.detach(fake);}
+  const accountKey=victim.getLongUsername(),deadline=game.returnAt.get(accountKey);
+  if(delay) {assert.ok(Number.isInteger(deadline),'canonical account deadline exists');assert.ok(deadline>C.now(),'early Exit precondition is before the real deadline');}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3140,4952]:[3195,4952],'Exit');
+  if(delay) {
+    assert.equal(game.jailed.has(victim),true,'early ordinary Exit cannot bypass the negotiated delay');
+    assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(accountKey),deadline);assert.ok(deadline>C.now());
+    tick(deadline-C.now());
+    await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3140,4952]:[3195,4952],'Exit');
+  }
+  assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,CUP_LANDINGS[side]));
+});
+
+test('native five-layout coexistence preserves old Y/face0 walls and isolates owned Forfeit cleanup',async()=>{
+  const players=Array.from({length:10},()=>actor());for(const p of players) channel(p);
+  const [a,b,c,d,e,f,g,h,i,j]=players;
+  const old=[];
+  for(const [team,arena,y,count] of [[[a,b],1,4959,52],[[c,d],2,5023,null],[[e,f],3,5087,24],[[g,h],6,4959,57]]) {
+    const game=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team) await join(p);
+    assert.equal(game.phase,'staging');assert.ok(game.walls.length>0);if(count!==null) assert.equal(game.walls.length,count);
+    for(const wall of game.walls) {
+      assert.equal(wall.getFace(),0);assert.equal(wall.getLocation().getY()-game.area.getBaseY()+game.layout.origin[1],y,'existing selected layout keeps its old Y line');
+    }
+    old.push(game);
+  }
+  const [plateau,sylvan,quarry,swamp]=old;
+  const cup=await negotiate(i,j,null,1,null,5);await join(i);await join(j);
+  assert.equal(new Set([...old.map(game=>game.area),cup.area]).size,5);
+  const foreignExit=mappedLayoutObjects(quarry,'clanwars_exitportal_greyrock_s')[0];assert.ok(foreignExit);assert.equal(Match.forfeit({player:i,object:foreignExit}),false);
+  for(const p of [i,j]) {
+    const side=cup.members.get(p),xy=side===0?[3144,4936]:[3191,4936],approach=side===0?[3145,4936,0]:[3190,4936,0];
+    // Supplied Forfeit checkpoint; jail/orb and staging/battle movement use actual processed routes.
+    p.moveTo(cup.area.at(approach));tick(2);
+    await layoutObjectInput(p,cup,'clanwars_exitportal_small_purple',xy,'Forfeit');assert.equal(C.matches.has(p),false);lobby(p);
+  }
+  assert.equal(cup.members.size,0);assert.equal(cup.phase,'staging');const remaining=cup.starts-C.now();assert.ok(remaining>0);tick(remaining);
+  assert.equal(cup.area.isDestroyed(),true);
+  for(const [game,team] of [[plateau,[a,b]],[sylvan,[c,d]],[quarry,[e,f]],[swamp,[g,h]]]) {
+    assert.notEqual(game.phase,'over');assert.equal(game.area.isDestroyed(),false);for(const p of team) assert.equal(C.matches.get(p),game);
+  }
+});
+
+test('native Clan Cup Ignore5 uses concurrent six-fighter starts and actual defeat threshold',async()=>{
+  const {a,b,teams,players,game}=await stragglerGame(6,1,3,{},5);completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.fighters.size,12);
+  await lethalMelee(b,teams[0][1],game,true,[[3150,4960,0],[3151,4960,0]]);tick(6);
+  assert.equal(game.phase,'over');for(const p of players) lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+for(const victimIndex of [0,1]) test(`native Clan Cup jail ${victimIndex} approaches all three active orbs`,async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,5);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);
+  await lethalMelee(killer,victim,game,true,[[3150,4960,0],[3151,4960,0]]);tick(6);
+  assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,CUP_JAILS[side]));
+  const inactive=mappedLayoutObjects(game,'clanwars_viewing_darkrock')[0];assert.ok(inactive);
+  assert.equal(viewingUnit().use({player:victim,object:inactive}),false,'an actual owned inactive orb is not an active Use target');
+  for(const xy of CUP_ORBS[side]) {
+    const scripts=scriptCalls(victim),object=await layoutObjectInput(victim,game,'clanwars_viewing_start_greyrock',xy,'Use');
+    for(let cycle=0;cycle<160&&!viewingUnit().active.has(victim);cycle++) tick();
+    const state=viewingUnit().active.get(victim);assert.ok(state,'ordinary route from the jail/restored approach reaches each actual active orb');
+    assert.ok(Math.max(Math.abs(state.location.getX()-object.getLocation().getX()),Math.abs(state.location.getY()-object.getLocation().getY()))<=1);
+    assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9755));
+    console.log('CLANCUP_ORB_APPROACH_QUALIFICATION '+JSON.stringify({side,source:xy,approach:[state.location.getX(),state.location.getY(),state.location.getZ()]}));
+    await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);
+    assert.deepEqual(position(victim),[state.location.getX(),state.location.getY(),state.location.getZ()]);assert.equal(game.jailed.has(victim),true);
+    assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);
+    assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  }
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',side===0?[3140,4952]:[3195,4952],'Exit');
+  for(let cycle=0;cycle<160&&game.jailed.has(victim);cycle++) tick();
+  assert.equal(game.jailed.has(victim),false);assert.equal(game.fighters.has(victim),true);assert.deepEqual(position(victim),positionAt(game,CUP_LANDINGS[side]));
+});

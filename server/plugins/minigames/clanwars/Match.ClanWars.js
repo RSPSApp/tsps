@@ -92,12 +92,14 @@ class Game {
     this.walls = [];
     const wallId = C.core.CacheDefinitions.getLocId(this.layout.barrier);
     if (wallId == null) throw new Error("Missing Clan Wars barrier");
-    for (const [start, end] of this.layout.barrierRanges) for (let x = start; x <= end; x++) {
-      const at = this.area.at([x, this.layout.barrierY, 0]);
+    // Older layouts keep their original Y line and face 0; the selected layout may use an X line.
+    const vertical = this.layout.barrierAxis === "x";
+    for (const [start, end] of this.layout.barrierRanges) for (let coordinate = start; coordinate <= end; coordinate++) {
+      const at = this.area.at(vertical ? [this.layout.barrierX, coordinate, 0] : [coordinate, this.layout.barrierY, 0]);
       // Solid template trees already close these tiles. Overlaying them would
       // clear shared loc bits when the temporary barrier is deregistered.
       if (this.layout.barrierSkipBlocked && C.core.RegionManager.blocked(at, this.area)) continue;
-      const wall = new C.core.GameObject(wallId, at, 10, 0, this.area);
+      const wall = new C.core.GameObject(wallId, at, 10, this.layout.barrierFace ?? 0, this.area);
       // Sylvan's blocked check already built the lazy collision grid. Native
       // registration must now add clipping; Plateau retains its original lazy route.
       C.core.ObjectManager.register(wall, this.layout.barrierSkipBlocked);

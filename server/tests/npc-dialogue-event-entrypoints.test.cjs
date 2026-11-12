@@ -546,7 +546,7 @@ async function hallowvaleAccept(f, observed) {
   await choose(f, observed.start.options.indexOf('Yes.') + 1);
 }
 test('Darkness of Hallowvale applies boostable start skills at both registered checks', async t => {
-  const targets = [[core.Skill.CONSTRUCTION, 5, 'Construction'], [core.Skill.AGILITY, 26, 'Agility'], [core.Skill.MAGIC, 33, 'Magic']];
+  const targets = [[core.Skill.CONSTRUCTION, 5, 'Construction'], [core.Skill.THIEVING, 22, 'Thieving'], [core.Skill.AGILITY, 26, 'Agility'], [core.Skill.MAGIC, 33, 'Magic']];
   for (const [skill, level, label] of targets) {
     await t.test(`${label} temporary level can start the quest`, async t => {
       const f = hallowvaleStartFixture(t, { skill, boosted: true });

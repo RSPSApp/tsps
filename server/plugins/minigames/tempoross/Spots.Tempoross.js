@@ -27,9 +27,11 @@ const F = DATA.fight;
 // Wiki (Crystal harpoon): "71 Fishing, 70 Attack, and 50 Agility to wield", as Fishing's own harpoons check.
 const CRYSTAL_HARPOON_AGILITY = 50;
 const HARPOONS = [
-  // Wiki (Echo harpoon): "a non-degradable version of the crystal harpoon" with no requirement, as Fishing has it.
-  { tier: "crystal", ids: ["ECHO_HARPOON"], level: 1 },
   { tier: "crystal", ids: ["CRYSTAL_HARPOON", "CRYSTAL_HARPOON_3"], level: 71, agility: CRYSTAL_HARPOON_AGILITY, charged: true },
+  // Wiki (Echo harpoon): no requirement and no charges, as Fishing has it. The crystallised fish and the
+  // crystal catch chart belong to the crystal harpoon only: the echo harpoon recordings (rsprox_transcripts/227/00552.txt,
+  // 227/01858.txt, 234/03275.txt) show 549 harpoonfish and no crystallised one, so it fishes as a dragon harpoon.
+  { tier: "dragon", ids: ["ECHO_HARPOON"], level: 1 },
   { tier: "dragon", ids: ["CRYSTAL_HARPOON_INACTIVE_"], level: 71, agility: CRYSTAL_HARPOON_AGILITY },
   // The infernal harpoons need 75 Fishing (charged or not), as Fishing's own table has them; the dragon ones 61.
   { tier: "dragon", ids: ["INFERNAL_HARPOON", "INFERNAL_HARPOON_OR_", "INFERNAL_HARPOON_OR__3",

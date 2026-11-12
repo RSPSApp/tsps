@@ -1,6 +1,6 @@
 // Run after yarn build: node --test tests/tempoross-crystal-charges.test.cjs
 // Wiki (Crystal harpoon): a charge is used for every fish caught and, at Tempoross, when harpooning the
-// Spirit Pool; an empty harpoon turns inactive. The echo harpoon is a crystal harpoon with no charges.
+// Spirit Pool; an empty harpoon turns inactive. The echo harpoon has no charges and no crystallised fish.
 const assert = require("node:assert/strict");
 const { before, test } = require("node:test");
 const { Server } = require("../dist/Server");
@@ -80,13 +80,28 @@ test("a crystal harpoon the player can't use spends nothing while a dragon harpo
   assert.equal(left(harpoon), 50);
 });
 
-test("the echo harpoon fishes as a crystal harpoon with no requirement and no charges", () => {
+test("the echo harpoon needs nothing, spends nothing and never gives a crystallised fish", () => {
   const { player, fight } = fisher(I.ECHO_HARPOON);
   for (const skill of [core.Skill.FISHING, core.Skill.AGILITY]) player.getSkillManager().setCurrentLevel(skill, 35, false);
   const held = harpoonOf(player);
-  assert.equal(held?.tier, "crystal");
+  assert.equal(held?.tier, "dragon");
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    for (let i = 0; i < 20; i++) catchFish(player, fight, held, false);
+  } finally {
+    Math.random = random;
+  }
+  const inventory = player.getInventory();
+  assert.equal(inventory.getAmount(Shared.ITEM.CRYSTALLISED), 0);
+  assert.equal(inventory.getAmount(Shared.ITEM.RAW), 20);
+});
+
+test("a usable charged crystal harpoon beats the echo harpoon and spends its charge", () => {
+  const { player, fight } = fisher(I.ECHO_HARPOON);
   player.getInventory().setItem(1, new Item(I.CRYSTAL_HARPOON, 1));
-  player.getSkillManager().setCurrentLevel(core.Skill.FISHING, 99, false).setCurrentLevel(core.Skill.AGILITY, 99, false);
-  catchFish(player, fight, harpoonOf(player), false);
-  assert.equal(left(player.getInventory().getItems()[1]), CrystalHarpoon.START_CHARGES, "the echo harpoon is used first");
+  const held = harpoonOf(player);
+  assert.equal(held.tier, "crystal");
+  catchFish(player, fight, held, false);
+  assert.equal(left(player.getInventory().getItems()[1]), CrystalHarpoon.START_CHARGES - 1);
 });

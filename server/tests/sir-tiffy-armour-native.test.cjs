@@ -128,6 +128,7 @@ async function talk(f) {
 }
 function add(f, id, n = 1) { f.p.getInventory().add(new core.Item(id, n), true); assert.ok(f.p.getInventory().getAmount(id) >= n); }
 function amount(f, id) { return f.p.getInventory().getAmount(id); }
+function experience(f, skill) { return f.p.getSkillManager().getSkills().getExperiences()[skill.getIndex()]; }
 function shop(f, expected) {
   assert.equal(core.ShopManager.isOpen(f.p), true, "actual shop status/interface opened, not boolean open() result");
   assert.equal(core.ShopManager.activeShopByPlayer.get(f.p), expected, "exact active armoury");
@@ -189,7 +190,9 @@ test("Wanted-eligible stage zero keeps armour and its ordinary jobs offer/start"
 test("active Wanted keeps its quest topic and existing armour choice opens a paid shop", async t => {
   const f = actor(t); wantedEligible(f); seed(f.p, "wanted", 1); add(f, 995, 10000);
   await talk(f); const opts = await menu(f); assert.ok(opts.includes("Ask about the Wanted! Quest"));
-  await armour(f, INITIATE, "Ask about buying armour"); await buy(f, 5575);
+  await choose(f, "Ask about the Wanted! Quest");
+  await choose(f, "What am I supposed to be doing again?");
+  await armour(f, INITIATE, "Ask about buying armour."); await buy(f, 5575);
   assert.equal(amount(f, 5575), 1); assert.equal(amount(f, 995), 0); assert.equal(quest("wanted").getStage(f.p), 1);
 });
 for (const full of [false, true]) test(`purchase refusal conserves stock/items/coins: ${full ? "full bag" : "insufficient coins"}`, async t => {
@@ -209,13 +212,13 @@ test("before Recruitment Drive the ordinary greeting has no armour; existing sho
 });
 test("ordinary Recruitment Drive final hand-in rewards once; later armour talks do not pay again", async t => {
   const f = actor(t, 3), q = quest("recruitment_drive"), skills = [core.Skill.PRAYER, core.Skill.HERBLORE, core.Skill.AGILITY];
-  const xp = skills.map(s => f.p.getSkillManager().getExperience(s));
+  const xp = skills.map(s => experience(f, s));
   f.p.setAttribute("quest.points", 0); await talk(f); await drain(f);
   assert.equal(q.getStage(f.p), 4); assert.equal(amount(f, 5574), 1); assert.equal(amount(f, 995), 3000); assert.equal(f.p.getAttribute("quest.points"), 1);
-  const paidXp = skills.map(s => f.p.getSkillManager().getExperience(s));
+  const paidXp = skills.map(s => experience(f, s));
   paidXp.forEach((n, i) => assert.equal(n - xp[i], Math.floor(1000.5 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10));
   await talk(f); await armour(f); assert.equal(amount(f, 5574), 1); assert.equal(amount(f, 995), 3000); assert.equal(f.p.getAttribute("quest.points"), 1);
-  assert.deepEqual(skills.map(s => f.p.getSkillManager().getExperience(s)), paidXp);
+  assert.deepEqual(skills.map(s => experience(f, s)), paidXp);
 });
 test("post-Wanted without Slug prerequisites uses common initiate menu", async t => {
   const f = actor(t); wantedEligible(f); seed(f.p, "wanted"); await talk(f); assert.match(text(f), /White Knights/); await armour(f);

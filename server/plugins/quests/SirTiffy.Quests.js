@@ -39,7 +39,7 @@ function chooseCommonTopic(event) {
     event.end = startTranscript(pluginApi, player, npcId, PAGE, variant, undefined, event.npc);
     return;
   }
-  if (option !== "Ask about buying armour" && option !== "Can I buy some armour?") return;
+  if (option !== "Ask about buying armour" && option !== "Ask about buying armour." && option !== "Can I buy some armour?") return;
   event.end = startTranscript(pluginApi, player, npcId, PAGE, variant, (steps) =>
     steps.find((step) => step.type === "choice")?.options
       ?.find((entry) => entry.text === "Can I buy some armour?")?.steps ?? [], event.npc);

@@ -30,6 +30,12 @@ before(async () => {
   core = PM.getCoreApi();
   I = core.ItemIdentifiers;
   Presets = require("../plugins/modes/pvp/Presets.PvpMode");
+  // Bot-free loading also skips BH because it depends on PlayerBots. Register its
+  // canonical plugin once for these real-area tests; no bot runtime or World loop runs.
+  assert.equal(AreaManager.areas.some((area) => area.getName() === "BountyHunterLobby"), false);
+  require("../plugins/minigames/BountyHunter.plugin").register(PM.createApi("BountyHunter"));
+  assert.equal(AreaManager.areas.filter((area) => area.getName() === "BountyHunterLobby").length, 1);
+  assert.equal(AreaManager.areas.filter((area) => area.getName() === "BountyHunterArena").length, 1);
   PM.emitServerStartup({});
 });
 after(() => {
@@ -48,7 +54,7 @@ function actor(t) {
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
   t.after(() => {
     const area = p.getArea();
-    if (area?.hasMember(p)) area.leave(p, true);
+    if (typeof area?.hasMember === "function" && area.hasMember(p)) area.leave(p, true);
     p.setArea(null);
     p.setRegistered(false);
   });

@@ -55,6 +55,8 @@ const ATTR_MAGIC_IMBUE_UNTIL = "lunar:magic-imbue-until";
  */
 const DIVINE_SKILL_VARBITS = [[0, 8429], [2, 8430], [1, 8431], [4, 8432], [6, 8433]]; // attack, strength, defence, ranged, magic
 const DIVINE_COMBINED_VARBITS = [[13663, [0, 2, 1]], [13664, [4, 1]], [13665, [6, 1]]]; // combat, bastion, battlemage
+/** divineattack_potion_base: the Attack level a divine potion locked, while that lock lasts. */
+const DIVINE_ATTACK_BASE_VARBIT = 8434;
 const ATTR_DIVINE_STATE = "potions:divine:state";
 /** statrenewal_potion_timer: the Menaphite remedy's time left, in steps of 25 ticks. */
 const STAT_RENEWAL_VARBIT = 14448;
@@ -188,9 +190,12 @@ function spellTimers(player, now, cycle) {
 function divineTimers(player, now) {
   const state = player.getAttribute?.(ATTR_DIVINE_STATE);
   const ends = new Map();
+  let attackBase = 0;
   for (const entry of Array.isArray(state?.targets) ? state.targets : []) {
     const endsAt = Number.isFinite(entry?.endsAt) ? entry.endsAt : state.endsAt;
-    if (millisUntil(endsAt, now) > 0) ends.set(entry?.skillIndex, endsAt);
+    if (millisUntil(endsAt, now) <= 0) continue;
+    ends.set(entry?.skillIndex, endsAt);
+    if (entry?.skillIndex === DIVINE_SKILL_VARBITS[0][0] && Number.isInteger(entry.base)) attackBase = entry.base;
   }
   const leftOf = (skill) => (ends.has(skill) ? ticks(ends.get(skill) - now) : 0);
   // A combined potion locks its skills with one deadline: two other potions that happen to cover them don't count.
@@ -198,6 +203,7 @@ function divineTimers(player, now) {
   return [
     ...DIVINE_SKILL_VARBITS.map(([skill, varbit]) => ["varbit", varbit, leftOf(skill)]),
     ...DIVINE_COMBINED_VARBITS.map(([varbit, skills]) => ["varbit", varbit, combined(skills)]),
+    ["varbit", DIVINE_ATTACK_BASE_VARBIT, attackBase],
   ];
 }
 

@@ -13,6 +13,7 @@ const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/Clie
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
+const { Graphic } = require("../../src/main/typescript/elvarg/game/model/Graphic");
 const { EffectTimer } = require("../../src/main/typescript/elvarg/game/model/EffectTimer");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
@@ -20,6 +21,7 @@ const { HitMask } = require("../../src/main/typescript/elvarg/game/content/comba
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ItemIdentifiers: Items } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const CameraShake = require("../interface/CameraShake.plugin");
+const PlayerHitSounds = require("../combat/PlayerHitSounds.plugin");
 const { allowsBlightedItems, isBlightedItem } = require("./BlightedItems");
 /** Each potion's recorded drink line, by its cache name without the dose (data/potion-drink-lines.json). */
 const DRINK_LINES = require("./data/potion-drink-lines.json").lines;
@@ -44,6 +46,9 @@ const EXTENDED_STAMINA_DURATION_MS = 4 * 60 * 1000;
 /** A ring of endurance spends one charge per stamina dose and two per extended dose (Wiki). */
 const EXTENDED_STAMINA_RING_CHARGES = 2;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
+/** A divine potion's cost: a 10 hitsplat with the hurt voice, under an electric shock (skeleton_killerwatt_electricshock). */
+const DIVINE_DAMAGE = 10;
+const DIVINE_SHOCK_GRAPHIC = 560;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_REFRESH_MS = 15 * 1000;
 const OVERLOAD_DAMAGE_INTERVAL_MS = 600;
@@ -606,9 +611,12 @@ function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,ch
   player.getPacketSender().sendRunEnergy();
 }
 
-function applyDivine(player, baseEffect, affectedSkills, { damage = 10 } = {}) {
+/**
+ * Locks the boosted skills for five minutes. A locked Attack also keeps its level at the drink
+ * (`base`), which the client reads from divineattack_potion_base.
+ */
+function applyDivine(player, baseEffect, affectedSkills) {
   baseEffect(player);
-  if (damage > 0) damageButKeepAlive(player, damage);
 
   // Each divine potion keeps its own five minutes (Wiki: each lasts "for 5 minutes"): a second one (divine ranging after
   // divine super combat) adds its skills with their own end, rather than dropping the first one's pinned boosts.
@@ -620,6 +628,7 @@ function applyDivine(player, baseEffect, affectedSkills, { damage = 10 } = {}) {
       skillIndex: skill.getIndex(),
       target: getCurrentLevel(player, skill),
       endsAt,
+      ...(skill === Skill.ATTACK ? { base: getCurrentLevel(player, Skill.ATTACK) } : {}),
     }));
   const previous = player.getAttribute(ATTR_DIVINE_STATE);
   const kept = (previous && Array.isArray(previous.targets) ? previous.targets : [])
@@ -1373,7 +1382,7 @@ function applyMoonlightPotion(player) {
   boostSkill(player, Skill.ATTACK, ...tier(45));
   boostSkill(player, Skill.STRENGTH, ...tier(55));
   if (herblore >= 70) {
-    applyDivine(player, (p) => boostSkill(p, Skill.DEFENCE, 7, 0.2), [Skill.DEFENCE], { damage: 0 });
+    applyDivine(player, (p) => boostSkill(p, Skill.DEFENCE, 7, 0.2), [Skill.DEFENCE]);
   } else {
     boostSkill(player, Skill.DEFENCE, ...tier(66));
   }
@@ -1384,10 +1393,27 @@ registerPotion({
   chains: [doseChain("MOONLIGHT_POTION_4_", "MOONLIGHT_POTION_3_", "MOONLIGHT_POTION_2_", "MOONLIGHT_POTION_1_")],
   effect: applyMoonlightPotion,
 });
+/**
+ * The shock every divine potion gives on the drink: the graphic, and 10 damage as a real hit (hitsplat
+ * and health bar) that the drinker hears in their own hit voice.
+ */
+function divineShock(player) {
+  player.performGraphic(new Graphic(DIVINE_SHOCK_GRAPHIC));
+  const hit = new HitDamage(DIVINE_DAMAGE, HitMask.RED).onApplied((taken) => {
+    if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
+  });
+  player.getCombat().getHitQueue().addPendingDamage([hit]);
+}
+
 function registerDivinePotion(definition) {
   registerPotion({
     ...definition,
-    canUse: (player) => getCurrentLevel(player, Skill.HITPOINTS) > 10,
+    effect: (player) => {
+      definition.effect(player);
+      divineShock(player);
+    },
+    // Damage already on its way counts: a chugging barrel's second divine dose can't take the last Hitpoints.
+    canUse: (player) => (player.getHitpointsAfterPendingDamage?.() ?? getCurrentLevel(player, Skill.HITPOINTS)) > DIVINE_DAMAGE,
     canUseMessage: "You need more than 10 hitpoints to survive the power of a divine potion.",
   });
 }
@@ -2152,7 +2178,7 @@ module.exports = {
     return POTION_BY_ITEM_ID.has(itemId);
   },
   _test: {
-    applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, processDivine,
+    applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, divineShock, processDivine,
     applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
     resumePrayerRegenerationTimer,
     clearDivineOnDeath,

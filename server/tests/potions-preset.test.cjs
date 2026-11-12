@@ -191,6 +191,11 @@ function giveDrink(f, slot, id) {
   assert.equal(held.getAmount(), 1);
   assert.equal(held.getMeta(), null);
 }
+/** Lands the hits queued on the player: a divine potion's 10 arrives as a hitsplat, on the player's hit phase. */
+function landHits(f) {
+  core.World.processCycle++;
+  f.p.getCombat().getHitQueue().process(core.World.processCycle);
+}
 function advancePotionTimer(f) {
   assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
   for (let tick = 0; tick < 3; tick++) f.p.getTimers().process();
@@ -220,6 +225,7 @@ for (const [hp, after] of [[11, 1], [99, 89]]) {
     giveDrink(f, 0, I.DIVINE_SUPER_ATTACK_POTION_4_);
     await browserOp(f, 0, "Drink");
     assert.equal(f.inv.getItems()[0].getId(), 23700);
+    landHits(f);
     assert.equal(f.p.getHitpoints(), after);
     assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
     assert.ok(f.p.getAttribute("potions:divine:state").endsAt > Date.now());
@@ -267,7 +273,10 @@ async function boostThenBrew(f, divine) {
   await browserOp(f, 0, "Drink");
   assert.equal(f.inv.getItems()[0].getId(), divine ? 23700 : I.SUPER_ATTACK_3_);
   assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 118);
-  if (divine) assert.equal(f.p.getHitpoints(), 89);
+  if (divine) {
+    landHits(f);
+    assert.equal(f.p.getHitpoints(), 89);
+  }
   advancePotionTimer(f);
   await browserOp(f, 1, "Drink");
   assert.equal(f.inv.getItems()[1].getId(), I.SARADOMIN_BREW_3_);

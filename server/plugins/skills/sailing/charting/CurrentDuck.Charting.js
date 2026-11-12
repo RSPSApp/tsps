@@ -118,13 +118,11 @@ function legStarts(route, steps) {
 }
 
 /** The duck's quack: its overhead text and the area sound, `times` over (each later one delayed). */
-function quack(duck, text, times, at = duck.npc.getLocation()) {
+function quack(duck, text, times) {
   duck.npc.forceChat(text);
-  const x = at.getX?.() ?? at[0];
-  const y = at.getY?.() ?? at[1];
-  const z = at.getZ?.() ?? 0;
+  const at = duck.npc.getLocation();
   const sender = duck.player.getPacketSender();
-  for (let i = 0; i < times; i++) sender.sendAreaSound(SOUND_QUACK, x, y, z, 1, i * SECOND_QUACK_DELAY, SOUND_RANGE);
+  for (let i = 0; i < times; i++) sender.sendAreaSound(SOUND_QUACK, at.getX(), at.getY(), at.getZ(), 1, i * SECOND_QUACK_DELAY, SOUND_RANGE);
 }
 
 function later(ticks, action) {
@@ -210,11 +208,10 @@ function swim(duck) {
       feed();
       const at = duck.npc.getLocation();
       // On the tile a new leg sets off from: the quack as it moves on.
-      for (let i = leg; i < duck.steps.length; i++) {
-        if (duck.steps[i][0] !== at.getX() || duck.steps[i][1] !== at.getY()) continue;
-        leg = i + 1;
-        if (duck.legs.has(i + 1)) quack(duck, "Quack!", 1);
-        break;
+      const reached = duck.steps[leg];
+      if (reached && reached[0] === at.getX() && reached[1] === at.getY()) {
+        leg++;
+        if (duck.legs.has(leg)) quack(duck, "Quack!", 1);
       }
       if (at.getX() !== endX || at.getY() !== endY) return;
       this.stop();

@@ -399,12 +399,12 @@ export class MagicOnItemPacketListener {
     if (!payment.keepTab) player.getPacketSender().sendTab(6);
     // Cast again on what is left in the slot, once this cast ends (a league relic's automatic alchemy).
     if (policy.recast === true && inventory.getItems()[slot]?.getId() === itemId) {
-      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source }, policy.castTicks);
+      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source, automatic: true }, policy.castTicks);
     }
   }
 
   /** The waiting cast is cast once the current one ends; only one waits at a time. */
-  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown }, ticks: number): void {
+  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown; automatic?: boolean }, ticks: number): void {
     const waiting = player.getAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE);
     player.setAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE, cast);
     if (waiting) {
@@ -421,6 +421,12 @@ export class MagicOnItemPacketListener {
           return;
         }
         if (player.getInventory().getItems()[queued.slot] !== queued.item) return;
+        // A dialogue, menu or prompt opened while a clicked cast waited drops it: cast under a hand-in's dialogue, it
+        // would alch the item the dialogue had checked and the dialogue would still pay. A relic's automatic recast
+        // carries on (Wiki, Golden God: actions that would normally cancel Alchemy don't while it casts automatically).
+        const sender = player.getPacketSender?.();
+        if (!queued.automatic
+          && (player.getDialogueManager?.()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.())) return;
         listener.castAlchemy(player, queued.spellId, queued.slot, queued.itemId, true, queued.source);
       }
     });

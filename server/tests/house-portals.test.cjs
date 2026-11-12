@@ -239,6 +239,41 @@ test("a house teleport lands inside at once behind the loading screen, closed tw
   House.releaseHouse(player, true);
 });
 
+test("a move during the loading screen (another teleport) cancels the entry and closes the screen", () => {
+  const player = playerFixture("moved");
+  click(player, portalId, 2);
+  tick(player);
+  player.moveTo(new core.Location(3222, 3218, 0));
+  const sent = tick(player);
+  assert.ok(has(sent, "closeSubInterface", ids.overlay));
+  tick(player);
+  assert.equal(House.houseFor(player), null, "no house after being moved away");
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test("loading keeps a movement block another system already held", () => {
+  const player = playerFixture("held");
+  player.getMovementQueue().setBlockMovement(true);
+  click(player, portalId, 2);
+  for (let i = 0; i < 3; i++) tick(player);
+  assert.equal(House.houseFor(player)?.owner, player);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  House.releaseHouse(player, true);
+});
+
+test("the board lists the owner's own house only while it is open to guests", () => {
+  const host = hostWithHouse("boardhost");
+  const house = House.houseFor(host);
+  assert.equal(House.canVisitHouse(host, house), true);
+  house.save.locked = true;
+  assert.equal(House.canVisitHouse(host, house), false);
+  house.save.locked = false;
+  house.buildingMode = true;
+  assert.equal(House.canVisitHouse(host, house), false);
+  house.buildingMode = false;
+  House.releaseHouse(host, true);
+});
+
 test("leaving by the exit portal plays the portal sound", () => {
   const player = hostWithHouse("leaver");
   player.sent = [];

@@ -296,24 +296,34 @@ function hideHouseLoading(player) {
   sender.sendVarbit(BUSY_VARBIT, 0);
 }
 
+function tileOf(player) {
+  const location = player.getLocation();
+  return `${location.getX()},${location.getY()},${location.getZ()}`;
+}
+
 /**
  * Runs `steps` ({ ticks from now: action }) behind the loading screen, holding the player still
- * until the last one. A logout cancels it with the player's other tasks.
+ * until the last one. A logout cancels it with the player's other tasks; a move its own steps
+ * didn't make (another teleport, a death) cancels it and closes the screen.
  */
 function loadHouse(player, steps) {
   loadingHouses.add(player);
   const movement = player.getMovementQueue();
+  const wasBlocked = movement.isMovementBlocked();
   movement.setBlockMovement(true).reset();
   const last = Math.max(...Object.keys(steps).map(Number));
   let tick = 0;
+  let anchor = tileOf(player);
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player, false); }
 
     execute() {
+      if (tileOf(player) !== anchor) { this.stop(); return; }
       tick++;
       try {
         steps[tick]?.();
       } finally {
+        anchor = tileOf(player);
         if (tick >= last) this.stop();
       }
     }
@@ -321,7 +331,7 @@ function loadHouse(player, steps) {
     stop() {
       if (loadingHouses.has(player)) {
         loadingHouses.delete(player);
-        movement.setBlockMovement(false);
+        if (!wasBlocked) movement.setBlockMovement(false);
         if (tick < last) hideHouseLoading(player);
       }
       super.stop();
@@ -366,8 +376,10 @@ function visitRefusal(player, owner, house, location) {
   return null;
 }
 
+/** The advertisement board's filter: the owner's own house too is listed only while open to guests. */
 function canVisitHouse(player, house) {
-  return !!house.owner && !visitRefusal(player, house.owner, house, null);
+  if (!house.owner || visitRefusal(player, house.owner, house, null)) return false;
+  return house.owner !== player || (!house.buildingMode && !house.save.locked);
 }
 
 /**

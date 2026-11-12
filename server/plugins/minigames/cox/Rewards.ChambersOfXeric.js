@@ -128,15 +128,17 @@ function itemName(id) {
 }
 
 /**
- * Held in the inventory, worn, or in any bank tab but the search tab (as the diary rewards check). This passed a bare id
- * to Bank.contains, which wants an Item: it threw, the catch said no, and only the inventory ever counted, so a banked
- * or worn Xeric's cape (or dark journal) was handed out again and again.
+ * Held in the inventory, worn, in any bank tab but the search tab (as the diary rewards check), or in the raids private
+ * storage (where unclaimed loot goes on leaving: an ancient tablet stored there never set the taken flag). This passed
+ * a bare id to Bank.contains, which wants an Item: it threw, the catch said no, and only the inventory ever counted,
+ * so a banked or worn Xeric's cape (or dark journal) was handed out again and again.
  */
 function owns(player, id) {
   const searchTab = Shared.core().Bank.BANK_SEARCH_TAB_INDEX;
   return player.getInventory().contains(id)
     || (player.getEquipment?.().contains?.(id) ?? false)
-    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(id));
+    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(id))
+    || Storage.privatelyHeld(player, id);
 }
 
 /** The noted form of an item, if it has one. */

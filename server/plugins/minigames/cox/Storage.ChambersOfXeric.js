@@ -167,6 +167,12 @@ function privateItems(player) {
   return items;
 }
 
+/** Whether the private storage holds an item, without creating an empty store for a player who has none. */
+function privatelyHeld(player, id) {
+  const items = player.getAttribute?.(ATTR_PRIVATE);
+  return Array.isArray(items) && items.some((entry) => entry?.id === id && entry.amount > 0);
+}
+
 /** Raid-only items can't leave the raid: they are gone from the private storage once outside. */
 function clearRaidItems(player) {
   const items = privateItems(player);
@@ -646,3 +652,5 @@ Object.assign(module.exports, {
   TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
   dragPrivate, isUltimateIronman, depositOrBankAll,
 });
+
+module.exports.privatelyHeld = privatelyHeld;

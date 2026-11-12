@@ -15,7 +15,9 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
-  Accursed.register(new Proxy({ core }, { get: (object, name) => object[name] ?? (() => {}) }));
+  // The destroy prompt is answered Yes.
+  const emitCustomEvent = (name, request) => { if (name === "destroy-item:confirm") request.confirm(request.player, request.item); };
+  Accursed.register(new Proxy({ core, emitCustomEvent }, { get: (object, name) => object[name] ?? (() => {}) }));
 });
 
 test("a refused Thammaron's sceptre Dismantle keeps the sceptre", () => {
@@ -29,6 +31,7 @@ test("a refused Thammaron's sceptre Dismantle keeps the sceptre", () => {
   p.getInventory().setItem(0, sceptre);
   p.getInventory().setItem(1, new core.Item(I.REVENANT_ETHER, 2147483647 - 1000));
   assert.equal(Accursed._test.dismantleThammarons({ player: p, item: sceptre }), true);
+  p.getDialogueManager().advance(); // Continue on the objectbox
   assert.equal(messages.at(-1), "You don't have enough inventory space to dismantle your sceptre.");
   assert.equal(p.getInventory().getAmount(I.THAMMARONS_SCEPTRE_U_), 1, "the sceptre is still there");
 });

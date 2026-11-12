@@ -134,7 +134,7 @@ projectile (`spells_thammaron01_travel01`, 2340), with no impact graphic.
 `AccursedSceptre.plugin.js` also runs the sceptre the accursed sceptre is made from (Wiki: Thammaron's sceptre):
 - Max hit `floor(Magic / 3) − 8`, 60 Magic; the built-in spell, speed, range, ether rules, Swap to the (a) version and the Wilderness passive are the accursed sceptre's.
 - No special attack.
-- **Dismantle** on an uncharged one (either version) gives 7,500 revenant ether.
+- **Dismantle** on an uncharged one (either version) gives 7,500 revenant ether. Uncharge and Dismantle ask on the destroy prompt first (see revenant-weapons.md).
 - The messages and the built-in spell's look are the accursed sceptre's; no capture shows Thammaron's sceptre itself.
 
 **Condemn** (Wiki):

@@ -285,6 +285,76 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `a full rate table admits a new address and still limits the busy one`() {
+        Backend().use { backend ->
+            val port = freePort()
+            var now = 1_000L
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { now++ }).use {
+                val client = HttpClient.newHttpClient()
+                fun attempt(ip: String): List<String> =
+                    client
+                        .send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create(
+                                        "http://127.0.0.1:$port/login-utilities/v1/session"
+                                    )
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x\n"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString(),
+                        )
+                        .body()
+                        .trimEnd()
+                        .split('\n')
+                // 2047 one-off addresses plus one at its 20-a-minute limit fill the table.
+                for (i in 0 until 2047) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                repeat(20) { attempt("198.51.100.1") }
+                assertEquals("OK", request(port, ip = "198.51.100.2")[0])
+                assertEquals(listOf("ERROR", "8"), request(port, ip = "198.51.100.1"))
+            }
+        }
+    }
+
+    @Test
+    fun `concurrent new addresses at a full rate table keep it at its cap`() {
+        Backend().use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+                val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+                fun attempt(ip: String) =
+                    runCatching {
+                        client.send(
+                            java.net.http.HttpRequest.newBuilder(
+                                    URI.create("http://127.0.0.1:$port/login-utilities/v1/session")
+                                )
+                                .header("X-Real-IP", ip)
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("x"))
+                                .build(),
+                            java.net.http.HttpResponse.BodyHandlers.discarding(),
+                        )
+                    }
+                for (i in 0 until 2048) attempt("2001:db8::${Integer.toHexString(i + 1)}")
+                assertEquals(2048, broker.rateTableSize())
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(16)
+                try {
+                    (0 until 16)
+                        .map { t ->
+                            pool.submit {
+                                for (i in 0 until 150)
+                                    attempt("2001:db8:1:${Integer.toHexString(t)}::${Integer.toHexString(i + 1)}")
+                            }
+                        }
+                        .forEach { it.get(60, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+                assertEquals(2048, broker.rateTableSize())
+            }
+        }
+    }
+
+    @Test
     fun `an unredeemed native ticket expires and releases the pending login`() {
         Backend().use { backend ->
             val port = freePort()

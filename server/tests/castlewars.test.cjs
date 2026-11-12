@@ -466,6 +466,28 @@ test("a practice match's settings stay with it: the next public game has no team
   game.settings = { ...Settings._test.DEFAULTS };
 });
 
+test("an abandoned practice's bots still logging out don't count: the next human gets an empty lobby and a public match", () => {
+  game.settings = { teamSize: 1, opponent: 'none', barricades: 10, botTier: 'veteran' };
+  game.joinFromLobby(fakePlayer(), TEAM.SARADOMIN, null, TEAM.SARADOMIN, false, true);
+  assert.equal(game.practice, true);
+  // The practice player left; the released bots are queued for removal but still in the waiting rooms this tick.
+  const departing = [fakePlayer({ bot: true }), fakePlayer({ bot: true })];
+  game.waitingAreas[TEAM.SARADOMIN].players.push(departing[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(departing[1]);
+  World.getRemovePlayerQueue().push(...departing);
+  try {
+    assert.deepEqual(game.queueCounts(), { [TEAM.SARADOMIN]: 0, [TEAM.ZAMORAK]: 0 }, 'departing bots are not queued');
+    const next = fakePlayer();
+    enterPortal(next, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+    assert.ok(prompt, 'the empty-lobby prompt is shown');
+    prompt.options[3].pick();
+    assert.equal(game.practice, false, 'the abandoned practice flag does not stick');
+  } finally {
+    for (const bot of departing) World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(bot), 1);
+    game.settings = { ...Settings._test.DEFAULTS };
+  }
+});
+
 test('practice menus join from every portal through the real prompt dispatcher without losing settings or team choice', (t) => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');

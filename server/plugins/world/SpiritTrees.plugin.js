@@ -197,7 +197,12 @@ function travel(player, tree, to) {
         // The house's loading holds the player still from here on.
         movement.setBlockMovement(false);
         this.handedOff = true;
-        pluginApi.emitCustomEvent("construction:spirit-tree-travel", { player, arrived: false });
+        const from = player.getLocation?.()?.clone?.() ?? null;
+        const fromInstance = player.getPrivateArea?.() != null;
+        pluginApi.emitCustomEvent("construction:spirit-tree-travel", { player });
+        if (player.getPrivateArea?.() != null && from && !player.getLocation().equals(from)) {
+          pluginApi.emitCustomEvent("teleport:landed", { player, from, fromInstance, to: player.getLocation().clone() });
+        }
       } else if (player.isRegistered() && player.getHitpoints() > 0) {
         const from = player.getLocation?.()?.clone?.() ?? null;
         const fromInstance = player.getPrivateArea?.() != null;

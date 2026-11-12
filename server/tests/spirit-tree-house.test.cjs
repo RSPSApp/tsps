@@ -12,6 +12,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 
 let core, House, Instance, SpiritTrees;
+const landed = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -25,6 +26,7 @@ before(async () => {
   House.attach(api);
   SpiritTrees = require("../plugins/world/SpiritTrees.plugin");
   SpiritTrees.register(api);
+  api.onCustomEvent("teleport:landed", (event) => landed.push(event));
 });
 
 const HOUSE_SLOT = 11;
@@ -111,6 +113,9 @@ test("travel into the house: the bark and reach, then two ticks later the house 
   assert.ok(visit.ticks[2].includes("close 162:566"), "the bark message closes");
   assert.ok(visit.ticks[2].includes("open 71"), "the house's loading screen");
   assert.ok(visit.ticks[2].some((line) => line.startsWith("jingle ")), "and its jingle");
+  const trip = landed.find((event) => event.player === visit.player);
+  assert.ok(trip, "a teleport, as the other trees' trips are");
+  assert.deepEqual([trip.from.getX(), trip.from.getY(), trip.fromInstance], [3185, 3508, false]);
   const tree = house.furnitureEntries().find(({ furniture }) => furniture.buildableKey === "SPIRIT_TREE_AND_FAIRY_RING");
   const at = visit.player.getLocation();
   assert.deepEqual([at.getX(), at.getY(), at.getZ()], [tree.location.getX() + 2, tree.location.getY(), tree.location.getZ()], "east of the 2x2 tree");

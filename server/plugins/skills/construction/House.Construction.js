@@ -945,7 +945,7 @@ function spiritTreeLanding(house) {
 }
 
 /**
- * "construction:spirit-tree-travel" { player, arrived }: a spirit tree's trip into the house.
+ * "construction:spirit-tree-travel" { player }: a spirit tree's trip into the house.
  * The player enters as a house teleport does (its loading screen and jingle) and stands by the tree.
  */
 function spiritTreeTravel(request) {
@@ -953,7 +953,7 @@ function spiritTreeTravel(request) {
   if (!player) return;
   const saved = houseStateFor(player);
   if (saved.owned === false || !hasSpiritTree(saved)) return;
-  request.arrived = Boolean(teleportIntoHouse(player, saved.defaultBuildingMode, spiritTreeLanding));
+  teleportIntoHouse(player, saved.defaultBuildingMode, spiritTreeLanding);
 }
 
 const HOUSE_VIEWER_INTERFACE = Ids.iface("poh_viewer");

@@ -118,11 +118,13 @@ function announceKill(player, kills, ticks) {
 
 /**
  * The death roll: Nid is lifted out of the drops so the pet is only awarded when the
- * player actually harvests or destroys; everything else is held off the floor.
+ * player actually harvests or destroys; everything else is held off the floor. The rolls a
+ * harvested or destroyed corpse emits itself are that award, so they are left alone.
  */
 function stashRoll(event) {
   const session = sessionOf(event?.npc);
   if (event?.npcId !== Shared.BOSS_ID || !session || !Array.isArray(event.drops)) return;
+  if (session.harvested === true || session.destroyed === true) return;
   session.pendingPet = session.pendingPet ?? [];
   for (let index = event.drops.length - 1; index >= 0; index--) {
     if (event.drops[index]?.itemId === Shared.NID_ITEM_ID) {

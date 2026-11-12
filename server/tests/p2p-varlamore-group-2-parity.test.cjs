@@ -1514,7 +1514,8 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
 
   h.namedNpcs.get('Primio').Travel({ player: p, npcId: N.PRIMIO_3 });
   h.tick(4);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3281, 3413, 0]);
+  // rsprox 226/01695.txt:41709 (and 234/03275.txt:91289, :91595): Primio lands at (3280, 3412, 0).
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3280, 3412, 0]);
   h.tick(3);
   h.namedNpcs.get('Primio').Travel({ player: p, npcId: N.PRIMIO_2 });
   h.tick(4);

@@ -27,7 +27,8 @@ const REGULUS_VARROCK_ID = 12884;
 const REGULUS_FORTIS_ID = 12885;
 const PRIMIO_VARROCK_ID = 12888;
 const PRIMIO_FORTIS_ID = 12889;
-const VARROCK_LANDING = { id: 0, x: 3281, y: 3413, z: 0 };
+// rsprox 226/01695.txt:41709, 234/03275.txt:91289 and :91595: the Varrock landing is (3280, 3412, 0).
+const VARROCK_LANDING = { id: 0, x: 3280, y: 3412, z: 0 };
 // Primio's landing, distinct from Renu's Fortis entry in the transport-system table.
 const FORTIS_LANDING = { id: 1, x: 1700, y: 3141, z: 0 };
 

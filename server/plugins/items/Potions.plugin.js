@@ -933,6 +933,54 @@ for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky",
     requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 }
 
+// Sailing drinks (Wiki pages of each; they heal nothing). rsprox captures (rec 237/04103, the same
+// session for all): human_eat, sound 2401, two spam lines, the glass left. The cocktails drain
+// Attack, Strength, Defence and Sailing 2 + 2% of current (captured 99 -> 96, 97 -> 94) and boost one
+// skill by 1; the keg ales are flat (Whirlpool surprise Sailing 96 -> 99, Cooking 99 -> 101, Agility
+// 99 -> 97; Horizon's lure Sailing +4, Thieving -2; Trawler's trust Fishing +2, Attack 98 -> 96;
+// Perildance bitter Strength and Ranged +2, Magic 99 -> 97; Kraken ink stout Magic 98 -> 100, Attack
+// 98 -> 96). Ours: Sailing +1 on Perildance bitter and Kraken ink stout, +2 on Trawler's trust (the
+// Wiki's values; the capture's Sailing was already boosted by another drink), and the Wiki's missing
+// Attack -2 on the stout (captured).
+function sailingCocktail(boosted) {
+  return (player) => {
+    boostSkill(player, boosted, 1, 0);
+    for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.SAILING]) lowerSkillByCurrent(player, skill, 2, 0.02);
+  };
+}
+function flatDrink(boosts, drains) {
+  return (player) => {
+    for (const [skill, amount] of boosts) boostSkill(player, skill, amount, 0);
+    for (const [skill, amount] of drains) lowerSkillByCurrent(player, skill, amount, 0);
+  };
+}
+for (const [name, id, emptyItemId, lines, effect] of [
+  ["Barnacle blaster", Items.BARNACLE_BLASTER, Items.COCKTAIL_GLASS,
+    ["You drink the Barnacle blaster.", "It has a bit of a crunch to it."], sailingCocktail(Skill.FISHING)],
+  ["Kraken colada", Items.KRAKEN_COLADA, Items.COCKTAIL_GLASS,
+    ["You drink the Kraken colada.", "You find yourself feeling rather woozy."], sailingCocktail(Skill.SLAYER)],
+  ["Sailor's mirage", Items.SAILORS_MIRAGE, Items.COCKTAIL_GLASS,
+    ["You drink the Sailor's mirage.", "You feel something sharp in your mouth."], sailingCocktail(Skill.HUNTER)],
+  ["Whirlpool surprise", Items.WHIRLPOOL_SURPRISE, Items.BEER_GLASS,
+    ["You drink the rum cocktail. It tastes great!", "You feel inspired to both cook and sail!"],
+    flatDrink([[Skill.COOKING, 2], [Skill.SAILING, 3]], [[Skill.AGILITY, 2]])],
+  ["Horizon's lure", Items.HORIZONS_LURE, Items.BEER_GLASS,
+    ["You drink the rich golden ale. It tastes like a fond memory.", "You feel optimistic about the future."],
+    flatDrink([[Skill.SAILING, 4]], [[Skill.THIEVING, 2]])],
+  ["Trawler's trust", Items.TRAWLERS_TRUST, Items.BEER_GLASS,
+    ["You drink the refreshing beer. It tastes foamy and salty.", "You feel at one with the sea!"],
+    flatDrink([[Skill.SAILING, 2], [Skill.FISHING, 2]], [[Skill.ATTACK, 2]])],
+  ["Perildance bitter", Items.PERILDANCE_BITTER, Items.BEER_GLASS,
+    ["You drink the deep red bitter. It tastes paradoxically sweet!", "You feel your muscles bulge and your sight become sharp!"],
+    flatDrink([[Skill.SAILING, 1], [Skill.STRENGTH, 2], [Skill.RANGED, 2]], [[Skill.MAGIC, 2]])],
+  ["Kraken ink stout", Items.KRAKEN_INK_STOUT, Items.BEER_GLASS,
+    ["You drink the rich stout. It thickly coats the back of your throat.", "Somehow you feel more adept at magic."],
+    flatDrink([[Skill.SAILING, 1], [Skill.MAGIC, 2]], [[Skill.ATTACK, 2]])],
+]) {
+  registerPotion({ name, chains: [[id]], emptyItemId, drink: { messages: () => lines },
+    requiresFoodPermission: true, shareable: false, effect });
+}
+
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions, with the
 // cup's own drinking animation and messages (rsprox captures: human_drink_from_teacup_*, "You drink
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").

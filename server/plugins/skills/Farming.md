@@ -252,8 +252,9 @@ planting, harvesting, deferred herb planting XP and incomplete/easy-only diaries
 Source: [South Falador Farm](https://oldschool.runescape.wiki/w/South_Falador_Farm).
 
 The grown Farming Hespori is immune to ordinary-ring and Ring of Suffering recoil.
-Its content sets the generic `combat:recoil-immune` policy used by both recoil paths;
-Vengeance/Retribution retain their existing reflected-damage behavior. Tests verify
+Its content sets the generic `combat:recoil-immune` policy used by both recoil paths
+and by Vengeance (Wiki: Category:Monsters immune to recoil), whose rebound still goes off
+but deals nothing; Retribution keeps its reflected-damage behavior. Tests verify
 the actual boss wake-up, unchanged flowers, charge conservation and normal recoil.
 Source: [Hespori](https://oldschool.runescape.wiki/w/Hespori).
 

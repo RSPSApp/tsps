@@ -319,6 +319,8 @@ for (const how of ["walkout", "logout"]) test(`Watchtower: interrupted relic ass
   assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
   f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
   PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+  if (f.player.isNeedsPlacement()) tick(f);
+  assert.equal(f.player.isNeedsPlacement(), false, "resume placement completed before Talk-to");
   await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
   ticks(f, 2);
   await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
@@ -373,6 +375,8 @@ test("Watchtower: full-inventory assembly resume keeps progress pending until th
   assert.equal(inventory.getFreeSlots(), 0, "resumption starts with an actually full bag");
   const before = items(f.player);
   const resume = async () => {
+    if (f.player.isNeedsPlacement()) tick(f);
+    assert.equal(f.player.isNeedsPlacement(), false, "full-bag retry placement completed before Talk-to");
     await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
     ticks(f, 2);
     await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);

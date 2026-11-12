@@ -245,3 +245,32 @@ test("an empty chamber resets the general's health and every drained stat, not j
     Common.init({ core: previous });
   }
 });
+
+test("climbing down the roped hole says \"You climb down the rope.\" on the spam channel (rsprox 230/02960.txt:14115)", () => {
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const clicks = new Map();
+  const api = new Proxy({
+    core: { ...core, TaskManager: { submit: () => {} } },
+    onObjectFirstClick: (id, handler) => clicks.set(id, handler),
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  Common.init(api);
+  require("../plugins/bosses/godwars/Dungeon.GodWars").attachDungeon(api);
+  const typed = [];
+  const plain = [];
+  // Roped already, and Troll Stronghold past the stage the hole needs.
+  const attributes = new Map([[Common.ENTRANCE_ROPE_ATTRIBUTE, true], ["quest.troll_stronghold.stage", 99]]);
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getInventory: () => ({ contains: () => false }),
+    getPacketSender: () => ({ sendVarbit() {}, sendTypedMessage: (type, text) => typed.push([type, text]) }),
+    sendMessage: (text) => plain.push(text),
+    performAnimation() {},
+    getMovementQueue: () => ({ reset() {} }),
+  };
+  clicks.get(Common.data.entrance.hole)({ player });
+  assert.deepEqual(plain, [], "no game message");
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "You climb down the rope."]]);
+});

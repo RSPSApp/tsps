@@ -174,7 +174,8 @@ function climbDown({ player }) {
     return true;
   }
   Common.resetEssence(player);
-  player.sendMessage("You climb down the rope.");
+  // rsprox: spam at the hole (230/02960.txt:14115, 224/01461.txt:6718).
+  player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, "You climb down the rope.");
   player.performAnimation(new Common.core.Animation(entrance.climbAnim));
   player.getMovementQueue().reset();
   Common.later(1, () => player.isRegistered() && player.moveTo(Common.toLocation(entrance.landing)));

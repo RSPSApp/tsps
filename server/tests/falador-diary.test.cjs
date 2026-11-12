@@ -243,7 +243,10 @@ test("zone entry tasks check the guild helmet and credit the rat pits", () => {
   assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3048, 9755), ["enter-the-mining-guild-wearing-a-prospector-helm"]);
   assert.deepEqual(zoneEnter(player(), 3048, 9755), []);
   assert.deepEqual(zoneEnter(player(), 2860, 3546), ["enter-the-warriors-guild"]);
-  assert.deepEqual(zoneEnter(player(), 3018, 3232), ["visit-the-port-sarim-rat-pits"]);
+  // Wiki (Rat Pits): the pit is underground; walking the street over it is no visit.
+  assert.deepEqual(zoneEnter(player(), 3018, 3232), []);
+  assert.deepEqual(zoneEnter(player(), 2962, 9650), ["visit-the-port-sarim-rat-pits"]);
+  assert.deepEqual(zoneEnter(player(), 2976, 9643), ["visit-the-port-sarim-rat-pits"]);
 });
 
 test("the security guard's own hand-out condition gives one book and credits the task", () => {
@@ -300,4 +303,66 @@ test("the ordinary herblore recipe's three-dose brew credits the east bank", () 
   assert.equal(productId, 6687);
   assert.deepEqual(run("custom:herblore:made", { player: player({ x: 3012, y: 3355 }), itemId: productId }), [plugin._test.TASK.saradominBrew]);
   assert.deepEqual(run("custom:herblore:made", { player: player(), itemId: productId }), []);
+});
+
+test("Climb-down on the Port Sarim manhole lands in the Rat Pits and credits the visit; the ladder climbs back out", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { TaskManager } = require("../dist/game/task/TaskManager");
+  RegionManager.init();
+  const mapObject = (x, y, z, id) => {
+    RegionManager.loadMapFiles(x, y);
+    const object = (MapObjects.mapObjects.get(MapObjects.getHash(x, y, z)) ?? []).find((o) => o.getId() === id);
+    assert.ok(object, `cache object ${id} at ${x},${y},${z}`);
+    return object;
+  };
+  // The registered Ladders options, as the object packet reaches them.
+  const options = new Map();
+  const noop = () => {};
+  require("../plugins/objects/Ladders.plugin").register(new Proxy({
+    core,
+    getTaskManager: () => TaskManager,
+    onObjectInteraction: (name, actions) => options.set(name, actions),
+  }, { get: (target, key) => target[key] ?? noop }));
+
+  /** A player standing on (x, y) who can be moved, with the movement queue a climb blocks. */
+  function climber(x, y, z = 0) {
+    let at = new core.Location(x, y, z);
+    let blocked = false;
+    const movement = {
+      isMovementBlocked: () => blocked,
+      setBlockMovement(value) { blocked = value; return movement; },
+      reset: () => movement,
+      didMovePreviousCycle: () => false,
+    };
+    return { ...player({ x, y, z }), getLocation: () => at, moveTo: (to) => { at = to; }, getPrivateArea: () => null,
+      getMovementQueue: () => movement, performAnimation() {} };
+  }
+  function climb(name, option, object, from) {
+    const p = climber(...from);
+    const at = object.getLocation();
+    const handled = options.get(name)[option]({
+      player: p, object, objectId: object.getId(), clickType: 1, option, definition: object.getDefinition(), handled: false,
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, sourceLocation: { x: from[0], y: from[1], z: from[2] ?? 0 },
+    });
+    assert.notEqual(handled, false, `${option} on ${object.getId()} from ${from}`);
+    for (let ticks = 0; ticks < 5; ticks++) TaskManager.process();
+    const tile = p.getLocation();
+    return { p, tile: [tile.getX(), tile.getY(), tile.getZ()] };
+  }
+
+  const manhole = mapObject(3018, 3232, 0, 10321);
+  assert.equal(manhole.getDefinition().getName(), "Manhole");
+  // Shortest-path transports 3018,3231,0 -> 2962,9650,0: every side of the manhole lands at the pit ladder.
+  for (const from of [[3018, 3231], [3018, 3233], [3017, 3232], [3019, 3232]]) {
+    const { p, tile } = climb("Manhole", "Climb-down", manhole, from);
+    assert.deepEqual(tile, [2962, 9650, 0], `down from ${from}`);
+    assert.deepEqual(zoneEnter(p, ...tile), [plugin._test.TASK.ratPits], "the landing is the visit");
+  }
+
+  // And back out: the pit ladder lands north of the manhole (2962,9650,0 -> 3018,3233,0), which is no visit.
+  const ladder = mapObject(2962, 9651, 0, 10309);
+  const { p, tile } = climb(ladder.getDefinition().getName(), "Climb-up", ladder, [2962, 9650]);
+  assert.deepEqual(tile, [3018, 3233, 0]);
+  assert.deepEqual(zoneEnter(p, ...tile), []);
 });

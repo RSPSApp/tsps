@@ -123,6 +123,9 @@ export class Autocasting {
         [ItemIdentifiers.IBANS_STAFF, new Set([...Autocasting.STANDARD_SLOTS, 47])],
         ...[ItemIdentifiers.STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_LIGHT, ItemIdentifiers.STAFF_OF_BALANCE]
             .map((list): [number, Set<number>] => [list, new Set([...Autocasting.STANDARD_SLOTS, 17, 18, 19, 20, 52])]),
+        // wild_cave_*_recol: Thammaron's and the accursed sceptre (a), keyed by their own id.
+        ...[ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_]
+            .map((list): [number, Set<number>] => [list, new Set([...Autocasting.STANDARD_SLOTS, 20])]),
     ]);
 
     private static selectorSlots(list: number): Set<number> {

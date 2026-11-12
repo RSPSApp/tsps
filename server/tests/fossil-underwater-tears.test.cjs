@@ -192,7 +192,7 @@ test("a search: human_swim_steal, then a tick later the success, a glistening an
   Tears.leave(player);
 });
 
-test("a clam shuts (7673) the tick before it closes", () => {
+test("a chest or clam shuts (7673) the tick before it closes", () => {
   const player = createPlayer();
   const random = Math.random;
   const index = DATA.tears.spots.findIndex(([kind]) => kind === "clam");

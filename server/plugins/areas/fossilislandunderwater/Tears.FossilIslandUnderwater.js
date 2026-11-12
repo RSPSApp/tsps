@@ -10,7 +10,8 @@
  *   again). Nobody else is ever seen in the area, so each player has their own.
  * - A hint arrow stands on its west side (height 128), sent again every 3 ticks with
  *   `current_hint_arrow` (varbit 14192) going to 0 and back to 6.
- * - A clam shuts (fossil_loc_clam_shut, 7673) the tick before it closes (231/00713 t81-82).
+ * - A chest or clam shuts (fossil_loc_clam_shut, 7673) the tick before it closes (231/00713 t81-82,
+ *   231/00714 t97-98).
  * - The first search on a dive gives no tears: it answers "You have successfully found an open
  *   chest; the mermaids will reward you from now on." (or clam) and Mairin's "Thanks, you should be
  *   able to get some tears from the next chest!", and that opening then only gives "You'll have to
@@ -126,7 +127,7 @@ function tick(player) {
   if (state.object && state.ticks >= state.closesAt) close(player, state);
   else if (!state.object && state.opensAt != null && state.ticks >= state.opensAt) open(player, state);
   else if (state.object && state.ticks % TEARS.hintTicks === 0) sendHint(player, state);
-  if (state.object && state.spot[0] === "clam" && state.ticks === state.closesAt - 1) {
+  if (state.object && state.ticks === state.closesAt - 1) {
     player.getPacketSender().sendObjectAnimation(state.object, new core.Animation(CLAM_SHUT));
   }
 }

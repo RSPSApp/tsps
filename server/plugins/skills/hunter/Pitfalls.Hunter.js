@@ -169,9 +169,13 @@ function jump({ player, object }) {
   const trap = Traps.owned(player, object);
   if (!trap || trap.kind !== "pit") return false;
   if (!nearby(player, object, 3) || trap.state !== "idle") return true;
-  // The teased creature nearest the pit is the one that follows the player over it.
-  const near = () => chasing(player).filter(s => !runs.has(s.npc))
-    .sort((a, b) => distance(a.npc.getLocation(), center(trap)) - distance(b.npc.getLocation(), center(trap)))[0];
+  // The teased creature nearest the pit follows the player over it, one that hasn't just leapt this pit first;
+  // only when every one near has does the pit refuse (ours: live captures show one chaser at a time).
+  const near = () => {
+    const close = chasing(player).filter(s => !runs.has(s.npc) && distance(s.npc.getLocation(), center(trap)) <= 5)
+      .sort((a, b) => distance(a.npc.getLocation(), center(trap)) - distance(b.npc.getLocation(), center(trap)));
+    return close.find(s => lastPit.get(s.npc) !== trap.base) ?? close[0];
+  };
   const state = near();
   // Ours: no capture shows a creature jumped at another creature's pit.
   if (state && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(state.creature.caught)) {
@@ -297,7 +301,7 @@ function advance(npc, r) {
 
 function leap(npc, r) {
   npc.performAnimation(new H.core.Animation(antelope(r.state.creature) ? LEAP.ANTELOPE : LEAP.CAT));
-  npc.setPositionToFace(r.landing);
+  npc.setPositionToFace(ahead(r));
   const at = npc.getLocation(), [dx, dy] = STEPS[r.dir], far = r.size - 1;
   const graphics = Object.entries(LEAP_GRAPHICS).find(([key]) => H.core.NpcIdentifiers[key] === npc.getId())?.[1] ?? [];
   // The two halves start on opposite corners of the creature, turned with the leap: heading north proj1 is on
@@ -310,6 +314,12 @@ function leap(npc, r) {
       0, 90, graphic, 0, 0, null, 53, 0, 0));
   }
   H.core.Sounds.playAreaSound({ soundId: LEAP_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), radius: SOUND_RANGE });
+}
+
+/** Where a leaping creature faces, at the leap and the landing: 20 tiles on from the edge (larupia tick 427). */
+function ahead(r) {
+  const [dx, dy] = STEPS[r.dir];
+  return r.edge.clone().add(dx * 20, dy * 20);
 }
 
 function viewers(player, trap) {
@@ -356,8 +366,9 @@ function abort(npc, r) {
 function land(npc, r) {
   runs.delete(npc);
   if (!npc.isRegistered()) return;
-  // Live telejumps it; the exact move (ending at once) keeps it in view on our clients.
-  npc.exactMove(r.landing, { startCycles: 0, endCycles: 1 });
+  // Live telejumps it (larupia capture tick 429): it snaps there in view, the leap animation carrying on.
+  npc.telejump(r.landing);
+  npc.setPositionToFace(ahead(r));
   if (r.state.player.isRegistered()) knockBack(r.state.player, r);
   npc.getMovementQueue().setBlockMovement(r.blocked);
   if (teased.get(npc) === r.state) npc.setFollowing(r.state.player);

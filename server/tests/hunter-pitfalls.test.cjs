@@ -214,7 +214,7 @@ test('a miss leaps over the pit in view with its two leap projectiles, follows o
     [940, from.getX() + far, from.getY() + far, from.getX() + far, from.getY() + far - 4, 53, 90]]);
   tick(2);
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [PIT.x, PIT.y - size], '+7: landed beyond the pit');
-  assert.ok(npc.getExactMove(), 'the landing keeps the creature in view');
+  assert.ok(npc.isTelejumping(), 'the landing is a telejump: in view, no glide');
   if (size > 1) assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [SOUTH[0], SOUTH[1] - 2], 'the landing knocks the player back two tiles');
   assert.equal(varbit(p), 1, 'the pit is still set');
   assert.equal(trap.state, 'idle');
@@ -283,6 +283,55 @@ test('several creatures can be teased at once; the bite plays its animation and 
   Pitfalls.clear({ player: p });
   assert.equal(first.npc.getMovementCoordinator().getRadius(), 4, 'its radius comes back when the chase ends');
   assert.equal(second.npc.getFollowing(), null);
+});
+
+test('a creature caught after a miss forgets the leapt pit once it is back (user report)', t => {
+  const { p, sent } = hunter(t, NORTH);
+  layPit(p);
+  const { npc } = larupia(t, [2543, 2911]);
+  tease(p, npc);
+  const missAt = jump(p, false);
+  tick(missAt + 9 - H.tick);
+  // Catch it at the other Feldip pit, 19261 at 2552,2904 (rotation 1, crossed east-west).
+  const other = core.MapObjects.get(19261, new core.Location(2552, 2904, 0), null);
+  p.setLocation(new core.Location(2551, 2904, 0));
+  npc.setLocation(new core.Location(2549, 2904, 0));
+  p.getInventory().adds(core.ItemIdentifiers.LOGS, 1);
+  Traps.lay(p, 'pit', other.getLocation(), other); tick(1);
+  const api = H.api;
+  H.api = { emitCustomEvent(name, request) { if (name === 'hunter:catch-chance') request.chance = 1; } };
+  const at = H.tick;
+  try { Pitfalls.jump({ player: p, object: other }); tick(2); } finally { H.api = api; }
+  tick(at + 15 - H.tick);
+  assert.equal(npc.isVisible(), true, 'caught and back at its spawn');
+  // Tease it again and take it over the first pit.
+  sent.messages.length = 0;
+  npc.setLocation(new core.Location(2543, 2911, 0));
+  p.setLocation(new core.Location(...NORTH, 0));
+  tease(p, npc);
+  const again = jump(p, true);
+  tick(again + 4 - H.tick);
+  assert.ok(!sent.messages.some(m => m.includes("won't jump the same pit")), sent.messages.join(' | '));
+});
+
+test('with two teased, a creature that leapt this pit gives way to one that has not', t => {
+  const { p, sent } = hunter(t, NORTH);
+  layPit(p);
+  const first = larupia(t, [2543, 2911]);
+  tease(p, first.npc);
+  const missAt = jump(p, false);
+  tick(missAt + 9 - H.tick);
+  const second = larupia(t, [2544, 2912]);
+  p.setLocation(new core.Location(...NORTH, 0));
+  first.npc.setLocation(new core.Location(2543, 2911, 0));
+  tease(p, second.npc);
+  sent.messages.length = 0;
+  const at = jump(p, true);
+  // It starts 4 tiles from the loc coord: it falls at +10 and the pit is full at +13.
+  tick(at + 13 - H.tick);
+  assert.ok(!sent.messages.some(m => m.includes("won't jump the same pit")), sent.messages.join(' | '));
+  assert.equal(varbit(p), 4, 'the second larupia is caught');
+  assert.equal(second.npc.isVisible(), false);
 });
 
 test('the catch schedule follows the captured distances', () => {

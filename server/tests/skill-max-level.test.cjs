@@ -321,7 +321,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       return {animations,graphics,getId:()=>id,getFollowing:()=>following,setFollowing(m){following=m;},setPositionToFace(){},
         performGraphic(g){graphics.push(g.getId());},getDefinition:()=>core.NpcDefinition.forId(id),getPrivateArea:()=>area,setArea(a){area=a;},
         isRegistered:()=>registered,unregister(){registered=false;},isVisible:()=>visible,setVisible(v){visible=v;},
-        isDyingFunction:()=>false,getHitpoints:()=>1,getLocation:()=>where,moveTo(l){where=l;},exactMove(l){where=l;},getSize:()=>1,getSpawnPosition:()=>location.clone(),
+        isDyingFunction:()=>false,getHitpoints:()=>1,getLocation:()=>where,moveTo(l){where=l;},exactMove(l){where=l;},telejump(l){where=l;},getSize:()=>1,getSpawnPosition:()=>location.clone(),
         performAnimation(a){animations.push(a);},getMovementQueue:()=>({reset(){},resetFollow(){following=null;},isMovementBlocked:()=>blocked,setBlockMovement(v){blocked=v;}}),
         getCombat:()=>({getTarget:()=>null,getAttacker:()=>null,reset(){}})};
     }

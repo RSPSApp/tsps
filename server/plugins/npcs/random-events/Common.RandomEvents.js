@@ -30,7 +30,7 @@ const GENIE_ARRIVAL_SOUND = 2301;
 const MAYBE_LATER = "Maybe later.";
 // Dismissing an event makes its owner play one of these at random, with a short delay: No, Wave,
 // Yawn, Angry and Ya boo sucks. The same for every event NPC with a Dismiss option.
-const DISMISS_EMOTES = [856, 863, 2111, 859, 2110];
+const DISMISS_EMOTES = [856, WAVE_ANIMATION, 2111, 859, 2110];
 const DISMISS_EMOTE_DELAY = 10;
 const CHECK_INTERVAL_MS = 5 * 60_000;
 const MAX_INTERVAL_MS = 120 * 60_000;

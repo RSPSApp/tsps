@@ -289,7 +289,9 @@ module.exports = function attach(api, Events) {
     // whole event away, as Dismiss on any other event NPC does.
     Dismiss: event => {
       const frog = chorusFrogs.get(event.npc);
-      return frog ? Events.dismiss({ player: event.player, npc: frog.active.npc }) : false;
+      if (!frog) return false;
+      if (frog.active.scene) return true; // Ours: the frog turning back is not interrupted.
+      return Events.dismiss({ player: event.player, npc: frog.active.npc });
     },
   });
 

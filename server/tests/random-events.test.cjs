@@ -1250,6 +1250,14 @@ test('Kiss the frog: Dismiss on the crier or another chorus frog sends the whole
     assert.equal(npc.removed, true); assert.ok(frogs.every(entry => entry.removed), 'the whole group leaves together');
     assert.equal(Events.activeFor(p), null);
   }
+  const { h, p, npc, frogs, prompt } = frogEvent(t);
+  choose(h, p, prompt.options.findIndex(entry => FROG_KISS.includes(entry.label)));
+  endChat(p); endChat(p);
+  h.hooks.Frog.Dismiss({ player: p, npc: frogs.find(entry => entry.definition.id === N.FROG_6) });
+  assert.equal(npc.removed, undefined, 'the turning-back scene carries on');
+  assert.equal(Events.activeFor(p)?.npc, npc);
+  h.ticks(4); endChat(p);
+  assert.deepEqual(p.rewards, [I.FROG_TOKEN], 'and still pays the token');
 });
 
 test('Thessalia exchanges a frog token for costume pieces, keeping the rest', t => {

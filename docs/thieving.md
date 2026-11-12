@@ -193,7 +193,7 @@ From the Wiki ([Chest (Isle of Souls Dungeon)](https://oldschool.runescape.wiki/
 150 experience per loot, the unlock roll -23/153 out of 256 (+26 to both with a lockpick, Mod Ash), a 1 in 6 trap on a
 failed roll, and the 20-row loot table (out of 200, the dark key 1/200, a medium clue 2/200).
 
-From the rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V: 906 attempts, 55 traps), ticks from
+From the rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V: 476 attempts: 173 unlocks, 303 fails, 55 traps), ticks from
 the click on an adjacent chest:
 
 | Tick | Unlocked | Failed | Trapped |

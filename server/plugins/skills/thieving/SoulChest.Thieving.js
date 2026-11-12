@@ -6,7 +6,7 @@
  * -23/153 out of 256, a carried lockpick adding 26 to both (Mod Ash); a failed roll springs the trap 1 time in 6,
  * teleporting the player north-east of the dungeon entrance; the loot table below, out of 200.
  *
- * rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V; 906 attempts, 55 traps), ticks from
+ * rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V; 476 attempts: 173 unlocks, 303 fails, 55 traps), ticks from
  * the click on an adjacent chest:
  * - 0: human_lockedchest, sound 1243, "You attempt to picklock the chest." (spam); 1: varbit busy 1.
  * - Unlocked, 2: human_openchest and sound 52 (both delay 10), "You manage to unlock the chest."; 3: "You steal

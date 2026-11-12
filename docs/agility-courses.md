@@ -363,8 +363,8 @@ course's `marks` block:
   | Seers' gap 1 | 53 of 1,079 at 60-70 | 7% + 3 (5 at 36 HP to 9 at 89) | 182/274 | 79 |
   | Seers' tightrope | 97 of 1,026 at 60-70 | 5% + 3 (4 at 36 HP to 7 at 80-89) | 114/292 | 79 |
   | Falador hand holds | 11 of 336 at 54-59 | 7% + 2 (7 at 80 HP, 8 at 89) | 198/284 | 66 |
-  | Varrock clothes line | 14 of 203 at 30-36 | 7% + 3 (6 at 50 HP, 7 at 59-64) | 198/322 | 46 |
-  | Varrock wall | 16 of 189 at 30-36 | 6% + 2 (5 at 51-63 HP, 6 at 70) | 184/338 | 46 |
+  | Varrock clothes line | 14 of 203 at 30-36 | 7% + 3, at most 8 (6 at 50 HP, 7 at 59-64) | 198/322 | 46 |
+  | Varrock wall | 16 of 189 at 30-36 | 6% + 2, at most 5 (5 at 51-63 HP, 6 at 70) | 184/338 | 46 |
 
   - Seers' gap 1: the second jump lands on the ground, 2715,3494,0, on one knee.
   - Seers' tightrope: as far as 2710,3484, a stumble (764, sound 2493) and the ground below the
@@ -374,6 +374,9 @@ course's `marks` block:
     3212,3414,0 a tick later. Varrock wall: the fourth hold slips (1123), on the ground two ticks
     later. The wall's 6% + 2 and Falador's 7% + 2 rest on few Hitpoints levels; other rules fit them
     too.
+  - Where the Wiki gives a damage range, it wins over the recordings: Varrock's falls stop at the
+    Wiki's maximum (8 for the clothes line, 5 for the wall), though the wall's recorded 6 at 70
+    Hitpoints goes past it. Falador's 7% + 2 reaches the Wiki's 8 only at 99.
   - Canifis gap 3 (90): on 3482,3499,0 the next tick; the Wiki's chart (175/300, never from 64);
     damage 1-8 (the upper bound is an older Wiki revision's).
   - Rellekka first tightrope (1885): two tiles, the fall (764, sound 2493), a tick later straight

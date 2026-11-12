@@ -22,8 +22,9 @@
  *   { tele: [x, y, z?] }              place the player on a tile (plane changes)
  *   { wait: ticks }                   continue after this many ticks
  *   { face: [x, y] } | { faceDir: "north" | ... }
- *   { hit: n | [min, max] | { percent, plus } }
- *                                     damage the player (the last: floor(HP * percent / 100) + plus)
+ *   { hit: n | [min, max] | { percent, plus, max? } }
+ *                                     damage the player (the last: floor(HP * percent / 100) + plus,
+ *                                     no more than `max`)
  *   { msg: message } | { say: text }  chat message (see `sendMessage`) / overhead text
  *   { varbit: [id, value] }           set a player varbit (a multiloc's side, say)
  *   { sound: id, loops?, delay? }     sound effect (delay in client cycles)
@@ -135,7 +136,7 @@ function hit(player, amount) {
   const damage = Array.isArray(amount)
     ? amount[0] + Math.floor(Math.random() * (amount[1] - amount[0] + 1))
     : typeof amount === "object"
-      ? Math.floor((player.getHitpoints() * amount.percent) / 100) + (amount.plus ?? 0)
+      ? Math.min(amount.max ?? Infinity, Math.floor((player.getHitpoints() * amount.percent) / 100) + (amount.plus ?? 0))
       : amount;
   if (damage > 0) {
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);

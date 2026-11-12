@@ -71,8 +71,8 @@ function shimmyAlongWall() {
  * The wall failed (rsprox 1723, twice): three holds as usual, the fourth slips (1123, no sound)
  * and two ticks later the player is on the ground below it, 3190,3410, with no message. The slip's
  * animation is reset on landing, as captured. Damage as captured in the main game: 5 at 51-63
- * Hitpoints, 6 at 70 (16 falls); floor(HP x 6%) + 2 fits them (the Wiki says 2-5, and 1723's two
- * falls took 2).
+ * Hitpoints, 6 at 70 (16 falls); floor(HP x 6%) + 2 fits them. The Wiki's 2-5 wins over the
+ * recordings, so it stops at 5 (1723's two falls took 2).
  */
 function fallOffWall() {
   const steps = wallStart();
@@ -84,7 +84,7 @@ function fallOffWall() {
     { tele: [3190, 3410, 0] },
     { sound: LAND_SOUND },
     hurt(),
-    { hit: { percent: 6, plus: 2 } },
+    { hit: { percent: 6, plus: 2, max: 5 } },
   );
   return steps;
 }
@@ -146,7 +146,8 @@ module.exports = {
       // Wiki: can fail, 3-8 damage, no fail from 46 (Agility). Captured (1723, and 14 times in the
       // main game): the first jump, a wobble (764, sound 2493) the tick after and the fall onto
       // the street below the next tick, no message. low/high are fitted to the main game's rate at
-      // 30-36 with the Wiki's 46. Damage as captured: 6 at 50-56 Hitpoints, 7 at 59-64.
+      // 30-36 with the Wiki's 46. Damage as captured: 6 at 50-56 Hitpoints, 7 at 59-64; floor(HP x 7%)
+      // + 3 fits them, held to the Wiki's 3-8.
       fail: {
         xp: 0,
         low: 198,
@@ -158,7 +159,7 @@ module.exports = {
           { anim: Anim.BALANCE_FALL },
           { sound: WOBBLE_SOUND, loops: 10 },
           { wait: 1 },
-          ...fallTo([3212, 3414, 0], { percent: 7, plus: 3 }),
+          ...fallTo([3212, 3414, 0], { percent: 7, plus: 3, max: 8 }),
         ],
       },
     },

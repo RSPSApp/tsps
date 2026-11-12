@@ -1174,13 +1174,14 @@ test("rooftop failures fitted to the main-game captures stop at the Wiki's no-fa
 });
 
 test("rooftop falls land, hurt and end as captured; the damage follows current Hitpoints (rsprox 20261109T090342, 20261027T185126, 20261024T001512)", () => {
-  // At 99 Hitpoints: floor(HP x percent) + plus, the formulas the captured falls fit.
+  // At 99 Hitpoints: floor(HP x percent) + plus, the formulas the captured falls fit, held to the
+  // Wiki's maximum where it gives one (Varrock: 8 for the clothes line, 5 for the wall).
   const falls = [
     { key: "seers", index: 2, start: [2721, 3494, 3], tile: [2720, 3492, 3], landing: [2715, 3494, 0], tick: 5, damage: 9 },
     { key: "seers", index: 3, start: [2710, 3490, 2], tile: [2710, 3489, 2], landing: [2710, 3484, 0], tick: 7, damage: 7 },
     { key: "falador", index: 3, start: [3050, 3349, 3], tile: [3050, 3350, 3], landing: [3050, 3351, 0], tick: 2, damage: 8 },
-    { key: "varrock", index: 2, start: [3214, 3414, 3], tile: [3213, 3414, 3], landing: [3212, 3414, 0], tick: 3, damage: 9 },
-    { key: "varrock", index: 4, start: [3194, 3416, 1], tile: [3191, 3415, 1], landing: [3190, 3410, 0], tick: 10, damage: 7 },
+    { key: "varrock", index: 2, start: [3214, 3414, 3], tile: [3213, 3414, 3], landing: [3212, 3414, 0], tick: 3, damage: 8 },
+    { key: "varrock", index: 4, start: [3194, 3416, 1], tile: [3191, 3415, 1], landing: [3190, 3410, 0], tick: 10, damage: 5 },
   ];
   const random = Math.random;
   Math.random = () => 0.999;

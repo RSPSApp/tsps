@@ -79,13 +79,19 @@ function unlock(chest, player) {
   return drops;
 }
 
-/** The Grubby Chest's picture box: the egg sac when it came up, else the first reward. */
+/**
+ * The Grubby Chest's picture box. Wiki Transcript:Grubby Chest: a shark and red dragonhide,
+ * or the orange and blue egg sacs when an egg sac came up (the data's two pictures each).
+ */
 function showItemBox(chest, player, drops) {
   const bonus = drops.find((entry) => entry.bonus);
-  const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core;
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, EndDialogue } = core;
   const text = bonus ? chest.itemBox.bonus : chest.itemBox.plain;
-  const itemId = (bonus ?? drops[0]).itemId;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text), new EndDialogue(1)));
+  const pictures = (bonus ? chest.itemBox.bonusItems : chest.itemBox.plainItems)?.map((name) => core.CacheDefinitions.getObjId(name));
+  const box = pictures?.length === 2 && pictures.every((id) => id != null)
+    ? new DoubleItemStatementDialogue(0, pictures[0], pictures[1], text)
+    : new ItemStatementDialogue(0, (bonus ?? drops[0]).itemId, text);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box, new EndDialogue(1)));
 }
 
 function finish(player) {
@@ -212,4 +218,4 @@ function attach(pluginApi) {
   pluginApi.persistAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE, false);
 }
 
-module.exports = { init, attach, openChest, countMessage, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };
+module.exports = { init, attach, openChest, countMessage, showItemBox, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };

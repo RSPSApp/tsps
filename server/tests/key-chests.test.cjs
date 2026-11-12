@@ -155,3 +155,18 @@ test("the Grubby Chest: two food rolls, a potion roll, a main roll and 1/25 egg 
   const noted = Loot.roll(grubby, 99, randoms(0, 0, 0, 0.7, 0.99, 0.99));
   assert.equal(noted.at(-1).noted, true, "dragon bones come noted");
 });
+
+test("the Grubby Chest's box shows the transcript's two pictures (Wiki Transcript:Grubby Chest)", () => {
+  const Chests = require("../plugins/objects/keychests/Chests.KeyChests");
+  const grubby = chest("grubby");
+  const box = (drops) => {
+    const player = createPlayer();
+    Chests.showItemBox(grubby, player, drops);
+    const first = player.statements[0].getDialogues().get(0);
+    return [first.getItemIds(), first.getText()];
+  };
+  assert.deepEqual(box([{ itemId: obj("coins"), amount: 1 }]),
+    [[obj("shark"), obj("dragonhide_red")], "You find treasure and supplies within the chest."]);
+  assert.deepEqual(box([{ itemId: obj("coins"), amount: 1 }, { itemId: obj("hosdun_blue_egg_sac"), amount: 1, bonus: true }]),
+    [[obj("hosdun_orange_egg_sac"), obj("hosdun_blue_egg_sac")], "You find treasure, supplies, and a weirdly coloured egg sac within the chest."]);
+});

@@ -1397,13 +1397,20 @@ async function dispatchFrameNow(player, frame) {
   const packets=decodeClientPackets(frame); assert.equal(packets.length,1);
   await player.connection.dispatch(packets); player.connection.processTurnPackets();
 }
+// ClientPackets.ts and the ordinary client encoder use this high-level opcode.
+// ClientPacketId is a const enum, so compiled CommonJS cannot import its object.
+const FRIENDS_CHAT_ACTION_PACKET=196;
 function channelFrame(action, name='') {
   // ClientBinaryEncoder.encodeFriendsChatAction: production extended social packet,
   // not an OSRS-native social opcode. Ordinary native widgets/locs remain separate.
-  const { ClientPacketId }=require('../dist/net/protocol/ClientPackets');
+  const { CLIENT_PACKET_LENGTHS }=require('../dist/net/protocol/ClientPackets');
+  assert.equal(CLIENT_PACKET_LENGTHS[FRIENDS_CHAT_ACTION_PACKET],-1,'actual compiled packet length table owns this variable-length opcode');
   const text=Buffer.from(name+'\0','latin1'), frame=Buffer.alloc(text.length+4);
-  frame[0]=ClientPacketId.FRIENDS_CHAT_ACTION; frame[1]=text.length+2;
+  frame[0]=FRIENDS_CHAT_ACTION_PACKET; frame[1]=text.length+2;
   frame[2]=action==='leave'?1:0; text.copy(frame,3); frame[frame.length-1]=0;
+  const decoded=decodeClientPackets(frame)[0];
+  assert.equal(decoded.type,'friends_chat_action');
+  assert.deepEqual(decoded.action,action==='leave'?{action}:{action,name});
   return frame;
 }
 function jailPortalFrame(portal, op) {
@@ -1411,9 +1418,11 @@ function jailPortalFrame(portal, op) {
   assert.equal(op,1,'the active mapped jail portal exposes Exit as its first native option');
   const at=portal.getLocation(),id=portal.getId(),frame=Buffer.alloc(8);
   frame[0]=ClientPacketId.OPLOC1;
-  frame[1]=at.getX()>>8; frame[2]=(at.getX()+128)&255;
+  // MenuAction OPLOC1 -> PacketBuffer.writeShortAdd(x), writeShortAddLE(id).
+  // Their actual byte order is [low+128,high] and [high,low+128] respectively.
+  frame[1]=(at.getX()+128)&255; frame[2]=at.getX()>>8;
   frame.writeUInt16LE(at.getY(),3); frame[5]=0;
-  frame[6]=(id+128)&255; frame[7]=id>>8;
+  frame[6]=id>>8; frame[7]=(id+128)&255;
   const decoded=decodeClientPackets(frame)[0];
   assert.deepEqual([decoded.type,decoded.id,decoded.x,decoded.y,decoded.clickType],
     ['object_option',id,at.getX(),at.getY(),1]);

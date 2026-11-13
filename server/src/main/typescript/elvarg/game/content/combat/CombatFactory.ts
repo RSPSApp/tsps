@@ -1,5 +1,6 @@
 import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { ItemAliases } from "../../model/ItemAliases";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
@@ -1071,6 +1072,8 @@ export class CombatFactory {
         }
 
         PluginManager.emitCombatHitResolved({ attacker, target, hit: resolvedHit });
+        // Live plays no hit sound on a splash (rsprox 226/01696: no hitsplat, no sound).
+        if (target.isNpc() && attacker.isPlayer() && !magicSplash) NpcCombatSounds.hit(target.getAsNpc(), attacker.getAsPlayer());
 
         // Attacker-side effects.
         if (attacker.isPlayer()) {

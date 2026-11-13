@@ -186,9 +186,12 @@ function quickExit({ player }, credit = true) {
 const passing = new WeakMap();
 
 /** Within a tile of `from` on its plane: not teleported away meanwhile. */
-function near(player, at, from) {
-  return at.getZ() === from.getZ() && Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= 1;
+function near(player, at, from, range = 1) {
+  return at.getZ() === from.getZ() && Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= range;
 }
+
+/** The most a walk or run covers in one tick: further, or another plane, is a teleport. */
+const RUN_STEP = 2;
 
 /**
  * The Mausoleum Door in Darkmeyer (Enter) and the lobby's stairs up (Climb-up), as live
@@ -231,8 +234,17 @@ function pass(player, tile, fadeInAt, face) {
     locked = false;
   };
   const alive = () => player.isRegistered?.() !== false && player.isDyingReturn?.() !== true;
-  /** Still where the passage left them: by the door before the move, at the landing after. */
-  const inPlace = () => near(player, player.getLocation(), moved ? landing : from);
+  /**
+   * Before the move: still by the door (movement is held). After it the player may walk off as the
+   * fade in plays, so only a jump further than a run step in one tick (a teleport) counts.
+   */
+  let last = null;
+  const inPlace = () => {
+    const at = player.getLocation();
+    const ok = moved ? near(player, at, last, RUN_STEP) : near(player, at, from);
+    if (moved) last = at;
+    return ok;
+  };
   const ownFade = () => mount !== null && sender().getSubInterfaceAt?.(mount.targetUid) === mount;
 
   const task = new (class extends Task {
@@ -256,6 +268,7 @@ function pass(player, tile, fadeInAt, face) {
         player.moveTo(landing);
         player.setPositionToFace?.(Common.toLocation([tile[0], tile[1] + face, tile[2]]));
         moved = true;
+        last = landing;
         unlock();
         passing.delete(player);
       }

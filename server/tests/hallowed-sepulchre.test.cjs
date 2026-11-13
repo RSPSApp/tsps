@@ -308,6 +308,24 @@ test("a newer movement hold after a teleport away isn't released by the abandone
   assert.equal(p.location.getX(), 3222);
 });
 
+test('walking off as the stairs land still plays the fade in and its close', () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  click(p, Common.data.mausoleum.stairs, 1);
+  ticks(4);
+  p.location = new Location(3656, 3382, 0); // a run step from the landing
+  assert.deepEqual(timeline(p, 5), [[2, 'fade'], [4, 'close']]);
+});
+
+test('teleported away after landing: the fade out closes and nothing follows', () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  click(p, Common.data.mausoleum.stairs, 1);
+  ticks(4);
+  p.location = new Location(3222, 3218, 0);
+  assert.deepEqual(timeline(p, 5), [[1, 'close']]);
+});
+
 test("a fade or overlay opened over the passage's after landing is neither overwritten nor closed", () => {
   const fade = Common.data.interfaces.fade;
   for (const at of [Common.data.mausoleum.moveAt, Common.data.mausoleum.doorFadeInAt]) {

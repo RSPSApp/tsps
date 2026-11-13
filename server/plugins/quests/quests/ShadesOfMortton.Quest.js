@@ -286,17 +286,25 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   ]);
 
   /**
-   * Logs -> pyre logs and the sacred-oil doses each takes. Wiki (Pyre logs): regular and oak 2, willow and maple 3, yew
-   * and magic 4; making them gives "a flat rate of 5 experience per dose of oil used" in Firemaking.
+   * Logs -> pyre logs and the sacred-oil doses each takes. Wiki (Pyre logs): regular, oak and arctic pine 2; willow,
+   * teak, maple and mahogany 3; yew, camphor, magic, ironwood, redwood and rosewood 4; making them gives "a flat rate
+   * of 5 experience per dose of oil used" in Firemaking. Every one burns on the funeral pyres (shades-of-mortton.json).
    */
   const PYRE_XP_PER_DOSE = 5;
   const PYRE_LOG_RECIPES = new Map([
     [ItemIdentifiers.LOGS, { product: ItemIdentifiers.PYRE_LOGS, doses: 2 }],
     [ItemIdentifiers.OAK_LOGS, { product: ItemIdentifiers.OAK_PYRE_LOGS, doses: 2 }],
+    [ItemIdentifiers.ARCTIC_PINE_LOGS, { product: ItemIdentifiers.ARCTIC_PYRE_LOGS, doses: 2 }],
     [ItemIdentifiers.WILLOW_LOGS, { product: ItemIdentifiers.WILLOW_PYRE_LOGS, doses: 3 }],
+    [ItemIdentifiers.TEAK_LOGS, { product: ItemIdentifiers.TEAK_PYRE_LOGS, doses: 3 }],
     [ItemIdentifiers.MAPLE_LOGS, { product: ItemIdentifiers.MAPLE_PYRE_LOGS, doses: 3 }],
+    [ItemIdentifiers.MAHOGANY_LOGS, { product: ItemIdentifiers.MAHOGANY_PYRE_LOGS, doses: 3 }],
     [ItemIdentifiers.YEW_LOGS, { product: ItemIdentifiers.YEW_PYRE_LOGS, doses: 4 }],
+    [ItemIdentifiers.CAMPHOR_LOGS, { product: ItemIdentifiers.CAMPHOR_PYRE_LOGS, doses: 4 }],
     [ItemIdentifiers.MAGIC_LOGS, { product: ItemIdentifiers.MAGIC_PYRE_LOGS, doses: 4 }],
+    [ItemIdentifiers.IRONWOOD_LOGS, { product: ItemIdentifiers.IRONWOOD_PYRE_LOGS, doses: 4 }],
+    [ItemIdentifiers.REDWOOD_LOGS, { product: ItemIdentifiers.REDWOOD_PYRE_LOGS, doses: 4 }],
+    [ItemIdentifiers.ROSEWOOD_LOGS, { product: ItemIdentifiers.ROSEWOOD_PYRE_LOGS, doses: 4 }],
   ]);
 
   const KILLS_ATTRIBUTE = "quest.shades_of_mortton.shade_kills";

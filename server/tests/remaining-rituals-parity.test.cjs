@@ -424,6 +424,20 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   assert.equal(h.quest.getStage(h.player), 70);
   // Wiki (Pyre logs): magic pyre logs take 4 doses, at 5 Firemaking XP a dose.
   assert.deepEqual(h.xp.slice(xpBefore).map(({ skill, amount }) => [skill.getName?.() ?? String(skill), amount]), [["Firemaking", 20]]);
+  // Wiki (Pyre logs): the other woods the funeral pyres burn, each made into its own pyre logs.
+  h.give(I.SACRED_OIL_4_, 6);
+  for (const [logs, product, doses] of [
+    [I.ARCTIC_PINE_LOGS, I.ARCTIC_PYRE_LOGS, 2], [I.TEAK_LOGS, I.TEAK_PYRE_LOGS, 3], [I.MAHOGANY_LOGS, I.MAHOGANY_PYRE_LOGS, 3],
+    [I.CAMPHOR_LOGS, I.CAMPHOR_PYRE_LOGS, 4], [I.IRONWOOD_LOGS, I.IRONWOOD_PYRE_LOGS, 4],
+    [I.REDWOOD_LOGS, I.REDWOOD_PYRE_LOGS, 4], [I.ROSEWOOD_LOGS, I.ROSEWOOD_PYRE_LOGS, 4],
+  ]) {
+    h.give(logs, 1);
+    const xpAt = h.xp.length;
+    h.hooks.itemOnItem[0]({ player: h.player, usedItemId: logs, usedWithItemId: I.SACRED_OIL_4_ });
+    assert.equal(h.inventory.get(logs), 0, `log ${logs} is used`);
+    assert.equal(h.inventory.get(product), 1, `pyre logs ${product} are made`);
+    assert.deepEqual(h.xp.slice(xpAt).map(({ amount }) => amount), [doses * 5]);
+  }
   // The funeral pyres are the minigame's (ShadesOfMortton.plugin.js): it tells the quest.
   h.emit('shades-of-mortton:pyre-logs');
   assert.equal(h.quest.getStage(h.player), 75);

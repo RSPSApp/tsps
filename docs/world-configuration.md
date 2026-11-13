@@ -629,6 +629,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Lightbearer` | Lightbearer | items | yes | Makes a worn Lightbearer ring restore special attack energy every 25 ticks instead of every 50. (members only) |
 | `LootKeys` | LootKeys | items | yes | Adds Wilderness loot keys dropped by player kills, which hold the victim's loot until opened at the loot chest, with the settings and unlock interface. |
 | `LootingBag` | LootingBag | items | yes | Adds the looting bag: items go in only in the Wilderness, come out at a bank, and are lost on death, with Deposit, Check and settings. (members only) |
+| `MasterScrollBook` | MasterScrollBook | items | yes | Adds the Master scroll book: stores 20 kinds of teleport scroll (up to 1000 each), reads them from interface 597 or as the default Teleport. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
 | `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |

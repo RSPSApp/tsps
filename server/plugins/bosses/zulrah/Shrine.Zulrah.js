@@ -27,6 +27,7 @@ const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
+const ZUL_ANDRA_SCROLL = "Zul-andra teleport";
 const BOSS_NAME = "Zulrah";
 const HALBERD_REACH = 2;
 const CAPPED_DAMAGE = [45, 50];
@@ -143,6 +144,13 @@ function readScroll({ player, itemId }) {
   if (!player.getInventory().contains(itemId)) return true;
   if (toZulAndra(player)) player.getInventory().delete(itemId, 1);
   return true;
+}
+
+/** "teleport-scroll:read": a stored Zul-andra teleport (the Master scroll book) reads like the inventory one. */
+function readStoredScroll(request) {
+  if (request.handled || Shared.core().ItemDefinition.forId(request.itemId)?.getName?.() !== ZUL_ANDRA_SCROLL) return;
+  request.handled = true;
+  if (request.source.has() && toZulAndra(request.player)) request.source.spend();
 }
 
 /** On a free tile beside the player, north-east first; under them if none is free. */
@@ -472,7 +480,8 @@ module.exports = function registerZulrahShrine(api) {
   api.onPlayerLogin(returnFromShrine);
   api.onObjectInteraction(Shared.OBJECT.BOAT, { Board: board, "Quick-Board": quickBoard });
   api.onObjectInteraction(readTeleport);
-  api.onItemAction("Zul-andra teleport", { Teleport: readScroll });
+  api.onItemAction(ZUL_ANDRA_SCROLL, { Teleport: readScroll });
+  api.onCustomEvent("teleport-scroll:read", readStoredScroll);
   api.onNpcInteraction("Priestess Zul-Gwenwynig", { "Talk-to": talkTo, Collect: collect });
   api.onInterfaceActionButton?.(RETRIEVAL_COMPONENT.button, retrievalButton);
   api.onInterfaceActionButton?.(RETRIEVAL_COMPONENT.items, retrievalItemAction);

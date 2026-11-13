@@ -199,3 +199,21 @@ test("Fill puts the fillers after the main tab's last item, not where released p
   const names = Bank.layout(f.p).map((entry) => entry.item.getId());
   assert.deepEqual(names, [core.ItemIdentifiers.COINS, core.ItemIdentifiers.SHARK, core.ItemIdentifiers.BANK_FILLER]);
 });
+
+test("collapsing a tab keeps bank fillers one per slot", (t) => {
+  const f = banker(t);
+  click(f.p, "bank_filler_10");
+  click(f.p, "bank_filler_confirm");
+  const used = Bank.usedSlots(f.p);
+  const tabButton = (tab) => (Bank.MAIN_INTERFACE_ID << 16) | Bank.TABS_CHILD;
+  for (let moved = 0; moved < 3; moved++) {
+    const display = Bank.layout(f.p).findIndex((entry) => entry.tab === 0 && entry.item.getId() === core.ItemIdentifiers.BANK_FILLER);
+    Bank.handleDrag(f.p, { sourceWidgetId: (Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD, sourceSlot: display,
+      sourceItemId: core.ItemIdentifiers.BANK_FILLER, targetWidgetId: tabButton(1), targetSlot: Bank.TAB_BUTTON_SLOT_OFFSET + 1 });
+  }
+  assert.equal(f.p.getBank(1).getValidItems().length, 3, "three fillers in tab 1");
+  Bank.collapseTab(f.p, 1);
+  assert.equal(Bank.usedSlots(f.p), used, "no slot lost");
+  assert.equal(fillers(f.p).length, 10);
+  assert.ok(fillers(f.p).every((item) => item.getAmount() === 1));
+});

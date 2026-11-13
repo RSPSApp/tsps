@@ -1652,6 +1652,7 @@ test("Recover-boat asks for a locked Bank PIN first, under its own feature", () 
   locked.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
   assert.deepEqual(requests, ["boat-recovery"]);
   assert.equal(h.player.getInterfaceId(), -1, "no boat selection until the PIN is entered");
+  assert.equal(require("../plugins/interface/data/bank-pin.json").guardTitles[requests[0]], "Boat Recovery", "the keypad's title");
   clearTasks();
 });
 

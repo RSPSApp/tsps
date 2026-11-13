@@ -203,6 +203,16 @@ function salesPolicy(info) {
   return { sellsAt: rate(info?.sells_at), buysAt: rate(info?.buys_at), changePer: rate(info?.change_per) };
 }
 
+/**
+ * A shop that buys nothing from players: its Wiki StoreTableHead gives no "Buys at" and every StoreLine's buy is
+ * N/A (Farming Supplies, the inns and pubs). Recorded refusing a sale: Farming Supplies (rsprox 231/03030), Temple
+ * Supplies (227/01840) and Mairin's Market (234/03299), "You cannot sell to this shop."
+ */
+function buysNothing(record) {
+  const items = record.items ?? [];
+  return record.shop_info?.buys_at == null && items.length > 0 && items.every((item) => item.buy === "N/A");
+}
+
 // These currencies use the item value and stock-sensitive rates in ShopManager;
 // BLOOD_MONEY uses its own item valuation. A StoreLine quote must not freeze either.
 const VALUE_PRICED_CURRENCIES = new Set(["COINS", "TOKKUL", "TRADING STICKS", "BLOOD_MONEY"]);
@@ -334,6 +344,7 @@ function main() {
       name,
       currency,
       ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
+      ...(buysNothing(record) ? { buysNothing: true } : {}),
       ...salesPolicy(record.shop_info),
       originalStock: originalStock(name, record.items, record.shop_info, currency),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),

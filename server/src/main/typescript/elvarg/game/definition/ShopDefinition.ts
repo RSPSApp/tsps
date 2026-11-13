@@ -7,6 +7,8 @@ export type ShopCurrency = "COINS" | "BLOOD_MONEY" | "POINTS" | string;
  */
 export interface ShopSalesPolicy {
     generalStore?: boolean;
+    /** The shop buys nothing from players: every Wiki StoreLine's buy is N/A (Farming Supplies, the inns). */
+    buysNothing?: boolean;
     /** "Sells at": the price of buying one from the shop at its normal stock. */
     sellsAt?: number;
     /** "Buys at": the price of selling one to the shop at its normal stock. */

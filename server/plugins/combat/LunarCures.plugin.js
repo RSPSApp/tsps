@@ -16,6 +16,13 @@ const CAST_GRAPHIC_HEIGHT = 92;
 // Uncaptured cure spells keep their existing presentation.
 const CAST_ANIMATION = 4413;
 const CAST_GRAPHIC = 747;
+// rsprox rec 820 (rev 234), 8 Cure Me casts on poison: synth 2884 and this line at the click, with the poison varp to 0.
+const CURE_ME_SOUND = 2884;
+const POISON_CURED = 'Your poison has been cured.';
+// rsprox rec 820 tick 5192: Cure Group with no one poisoned around the caster sends one line per nearby player with
+// Accept Aid off, then this one, and casts nothing (no animation, runes or XP).
+const NOT_ACCEPTING_AID = name => `That spell cannot be cast on ${name} as they are not accepting aid.`;
+const NO_ONE_POISONED = 'No-one around you with Accept Aid on needs their poison healing.';
 const spells = new WeakMap();
 const lastCureMeCycle = new WeakMap();
 
@@ -48,7 +55,13 @@ function spellFor(core, name) {
   const spell = new CureSpell(); cache.set(name, spell); return spell;
 }
 
-function cast(core, player, name, effect) {
+/** Whether the cure has anything to do on `player`: poison or venom. */
+function poisoned(player) {
+  return player.getPoisonDamage() > 0;
+}
+
+/** `ready` runs after the requirements pass and before paying; false refuses the cast at no cost. */
+function cast(core, player, name, effect, ready = () => true) {
   const cycle = core.World.getProcessCycle();
   if (name === 'cure me' && lastCureMeCycle.get(player) === cycle) return;
   if (player.getSkillManager().getMaxLevel(core.Skill.DEFENCE) < 40) {
@@ -56,10 +69,11 @@ function cast(core, player, name, effect) {
     return;
   }
   const spell = spellFor(core, name);
-  if (!spell.canCast(player, false) || !spell.canCast(player, true)) return;
+  if (!spell.canCast(player, false) || !ready() || !spell.canCast(player, true)) return;
   if (name === 'cure me') lastCureMeCycle.set(player, cycle);
   player.performAnimation(new core.Animation(name === 'cure me' ? CURE_ME_ANIMATION : CAST_ANIMATION));
   player.performGraphic(new core.Graphic(name === 'cure me' ? CURE_ME_GRAPHIC : CAST_GRAPHIC, 0, CAST_GRAPHIC_HEIGHT));
+  if (name === 'cure me') player.getPacketSender().sendSoundEffect(CURE_ME_SOUND, 1, 0, 255);
   effect();
   player.getSkillManager().addExperiences(core.Skill.MAGIC, spell.baseExperience());
 }
@@ -87,13 +101,27 @@ function castSelf(core, event) {
   if (event.opId != null && event.opId !== 1) return;
   event.handled = true;
   const { player } = event;
-  cast(core, player, name, () => {
-    if (name === 'cure me') { cure(player); return; }
-    core.World.getPlayers().forEach(target => {
-      if (target && target.getHitpoints() > 0 && acceptsAid(target) && sameInstance(player, target) &&
-          (target === player || !inDuel(target)) &&
-          player.getLocation().isWithinDistance(target.getLocation(), GROUP_RADIUS)) cure(target);
+  if (name === 'cure me') {
+    cast(core, player, name, () => {
+      // Ours: the line is recorded for poison only; venom converted to poison, or no poison at all, sends none.
+      const wasPoison = poisoned(player) && !player.isVenomed();
+      cure(player);
+      if (wasPoison) player.sendMessage(POISON_CURED);
     });
+    return;
+  }
+  const around = [];
+  core.World.getPlayers().forEach(target => {
+    if (target && target.getHitpoints() > 0 && sameInstance(player, target) && (target === player || !inDuel(target)) &&
+        player.getLocation().isWithinDistance(target.getLocation(), GROUP_RADIUS)) around.push(target);
+  });
+  const targets = around.filter(acceptsAid);
+  cast(core, player, name, () => targets.forEach(cure), () => {
+    if (targets.some(poisoned)) return true;
+    // Ours: the refusal is recorded; whether a cast that goes ahead also names the refusing players is not.
+    for (const target of around) if (target !== player && !targets.includes(target)) player.sendMessage(NOT_ACCEPTING_AID(target.getDisplayName()));
+    player.sendMessage(NO_ONE_POISONED);
+    return false;
   });
 }
 

@@ -401,11 +401,17 @@ class HunllefFight {
 
   // -------------------------------------------------------------- the player's hits
 
-  /** Hits it protects against do nothing; every 6th other hit changes what it protects against. */
+  /**
+   * Hits it protects against do nothing, unless the hit bypasses protection prayers (prayer
+   * penetration); every 6th other hit changes what it protects against.
+   */
   onHit(hit) {
     const style = styleOf(hit.getCombatType?.());
     if (style === this.protecting) {
       this.wrongStyleHits++;
+      // Ours: a penetrating hit on its prayer still counts as a wrong-style hit and does not
+      // switch its prayer (no source covers penetration against the Hunllef).
+      if (hit.bypassesProtectionPrayer?.()) return;
       for (const part of hit.getHits()) part.setDamage(0);
       hit.updateTotalDamage();
       return;

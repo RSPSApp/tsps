@@ -8238,10 +8238,10 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     let attackStyle = 1;
     p.isPlayer = () => true; p.getAsPlayer = () => p;
     p.getFightType = () => ({ getBonusType: () => attackStyle });
-    const hitFor = (style) => {
+    const hitFor = (style, bypass = false) => {
       attackStyle = style;
       const part = { damage: 10, setDamage(value) { this.damage = value; } };
-      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {} };
+      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
       for (const hook of npcHitHooks) hook({ npc: spawnedFigure, hit });
       return part.damage;
     };
@@ -8249,6 +8249,8 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(hitFor(1), 10);
     assert.equal(hitFor(1), 10, 'the third attack lands before the Figure changes her prayer');
     assert.equal(hitFor(1), 0, 'the Figure blocks the attack style she prayed against');
+    assert.equal(hitFor(1, true), 10, 'a hit that bypasses protection prayers goes through hers (issue 5037)');
+    assert.equal(hitFor(1), 0, 'she still prays against melee after the third hit');
     assert.equal(hitFor(4), 10, 'switching from melee to ranged bypasses her current protection');
 
     const figureAttack = () => resolvedHitHooks.forEach(hook => hook({ attacker: spawnedFigure, target: p, hit: { getTotalDamage: () => 20 } }));

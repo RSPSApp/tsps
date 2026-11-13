@@ -207,7 +207,7 @@ The Hunllef waits in the boss room from the start of a run. It fights once the b
 | Hitpoints | 600 / 1000 |
 | Attack speed | every 5 ticks |
 | Attack style | Ranged first; switches every 4 attacks (tornado and prayer-disabling attacks count, the stomp doesn't), with animation 8754 |
-| Protection prayer | Protects against one style (forms 9021 / 9022 / 9023: melee / ranged / magic; corrupted 9035–9037). Every 6th off-prayer hit, zeros included, switches it to that hit's style. Hits it protects against do nothing. |
+| Protection prayer | Protects against one style (forms 9021 / 9022 / 9023: melee / ranged / magic; corrupted 9035–9037). Every 6th off-prayer hit, zeros included, switches it to that hit's style. Hits it protects against do nothing, unless the hit bypasses protection prayers (Demonic Pacts or Combat Masteries prayer penetration, as against a core protection prayer); ours: such a hit still counts as a wrong-style hit and doesn't switch its prayer. |
 | Stomp | If you stand under it when it attacks |
 | Tornadoes | Crystalline 1 / 2 / 3, Corrupted 2 / 3 / 4, above 66% / 33–66% / below 33% HP. They chase you for 20 ticks; damage by armour tier is in the table below. |
 | Floor | Three pattern sets by those thirds. Tiles turn blue (crimson) then orange, faster each phase; orange tiles deal 10–20 a tick. Floor loc 36149 (36046), +1 blue, +2 orange. |

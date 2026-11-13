@@ -545,7 +545,7 @@ test('native kill-target negotiation preserves cap, invalidates acceptance and r
   assert.equal(session.accepted.size, 0);
   await click(a, 'clanwars_setup:accept'); assert.equal(session.accepted.has(a), false);
   tick(9);
-  for (const forged of [1, 2, 28, 45, 63, 69, 65535]) {
+  for (const forged of [1, 2, 27, 45, 63, 69, 65535]) {
     await click(a, 'clanwars_setup:wincondition', forged);
     assert.equal(session.rules.wincondition, 1, 'non-row and deferred mode selections cannot alter the offer');
   }

@@ -721,9 +721,13 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
   t.mock.method(PluginManager, 'emitPlayerDefeated', () => {});
   const bones = t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
   const drop = t.mock.method(PlayerDeathTask, 'dropItems', () => []);
+  const announced = [];
   function victim(bot, area = island.gameArea) {
     const gear = new core.Item(core.ItemIdentifiers.DRAGON_WARHAMMER, 1);
     const player = {
+      // The respawn tick says "Oh dear, you are dead!" with jingle 90 (PlayerDeathTask, 0277f01c0).
+      sendMessage: (message) => announced.push(message),
+      getPacketSender: () => ({ sendJingle: (id) => announced.push('jingle:' + id) }),
       isPlayerBot: () => bot,
       getArea: () => area,
       getLocation: () => new core.Location(2420, 3075),
@@ -746,6 +750,8 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
     }
   }
   assert.equal(bones.mock.callCount(), 0, 'Castle Wars players and bots leave no bones in the arena or waiting rooms');
+  assert.deepEqual(announced, Array.from({ length: announced.length / 2 }, () => ['Oh dear, you are dead!', 'jingle:90']).flat());
+  assert.equal(announced.length, 2 * 2 * (1 + Object.values(island.waitingAreas).length), 'every death is announced');
   assert.equal(drop.mock.callCount(), 0);
   assert.deepEqual(calls, ['flag', data.DEATH_REMOVE_ITEM_IDS, 'flag', data.DEATH_REMOVE_ITEM_IDS]);
   for (const area of Object.values(island.waitingAreas)) {

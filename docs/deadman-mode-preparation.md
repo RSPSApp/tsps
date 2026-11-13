@@ -1,6 +1,6 @@
-# Permanent Deadman source preparation — unfinished and private
+# Permanent Deadman source preparation — unfinished source only
 
-This branch prepares canonical character entry, online protection and Doomsayer input for permanent world345. It is **not a usable Deadman mode**, a complete content delivery, a causal baseline, or a runtime-tested change. No intermediate XP formula has been chosen. No Ready PR or runtime execution is admitted while coherent fresh progression remains ungrounded.
+This public fork branch prepares canonical character entry, online protection and Doomsayer input for permanent world345. Source publication is for immutable review inputs only; no PR or Ready claim is made. It is **not a usable Deadman mode**, a complete content delivery, a causal baseline, or a runtime-tested change. No intermediate XP formula has been chosen. No Ready PR or runtime execution is admitted while coherent fresh progression remains ungrounded.
 
 The opt-in `DeadmanMode:enabled` option defaults off. No shipped or deployment world setting is changed. If explicitly selected in a disposable preparation deployment, it claims the canonical `deadman` character profile and **blocks all XP and all player-v-player combat**, including after protection expires or is removed. These are preparation locks, not asserted retail rules. Multipliers=false gains still pass the XP allow gate and are refused. There is no arbitrary rate setting or ordinary-XP fallback. The locks must remain until the full coherent implementation and exact inputs are reviewed.
 

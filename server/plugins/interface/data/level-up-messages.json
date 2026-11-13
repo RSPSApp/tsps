@@ -1,5 +1,5 @@
 {
- "_source": "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from the transcript's own qualifier, because those levels show a different message per player state; an 'items' list holds the cache ids of the box's picture(s), resolved by exact item name. Magic merges its four spellbook sections, Sailing's beta section is commented out on the wiki and is skipped, and a level the wiki marks only with {{tmissing}} has no message. Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather than splitting by world type.",
+ "_source": "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from the transcript's own qualifier, because those levels show a different message per player state; an 'items' list holds the cache ids of the box's picture(s), resolved by exact item name. Magic merges its four spellbook sections, each entry tagged with its 'spellbook' (standard, ancient, lunar or arceuus), since the game sends only the player's own book's line; Sailing's beta section is commented out on the wiki and is skipped, and a level the wiki marks only with {{tmissing}} has no message. Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather than splitting by world type.",
  "Attack": {
   "5": [
    {
@@ -1017,7 +1017,8 @@
     "text": "You can now cast Confuse!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "4": [
@@ -1025,7 +1026,8 @@
     "text": "Members can now enchant Opal tipped Crossbow Bolts!",
     "items": [
      9236
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "5": [
@@ -1033,7 +1035,8 @@
     "text": "You can now cast Water Strike!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "7": [
@@ -1041,7 +1044,8 @@
     "text": "You can now enchant Sapphire Jewellery and members can now enchant Sapphire tipped Crossbow Bolts and Opal Jewellery!",
     "items": [
      9240
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "9": [
@@ -1049,7 +1053,8 @@
     "text": "You can now cast Earth Strike!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "11": [
@@ -1057,7 +1062,8 @@
     "text": "You can now cast Weaken!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "13": [
@@ -1065,7 +1071,8 @@
     "text": "You can now cast Fire Strike!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "14": [
@@ -1073,7 +1080,8 @@
     "text": "Members can now enchant Jade tipped Crossbow Bolts!",
     "items": [
      9237
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "15": [
@@ -1081,7 +1089,8 @@
     "text": "You can now cast Bones To Bananas!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "17": [
@@ -1089,18 +1098,23 @@
     "text": "You can now cast Wind Bolt!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "18": [
-   "There is new information available from the Magic Tutor in Lumbridge!"
+   {
+    "text": "There is new information available from the Magic Tutor in Lumbridge!",
+    "spellbook": "standard"
+   }
   ],
   "19": [
    {
     "text": "You can now cast Curse!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "20": [
@@ -1112,7 +1126,8 @@
     },
     "items": [
      13385
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "You can now cast Bind!",
@@ -1120,7 +1135,8 @@
      "not": true,
      "skill": "Defence",
      "min": 10
-    }
+    },
+    "spellbook": "standard"
    }
   ],
   "21": [
@@ -1128,7 +1144,8 @@
     "text": "You can now cast Low Level Alchemy!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "23": [
@@ -1136,16 +1153,21 @@
     "text": "You can now cast Water Bolt!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
-   "Members can now cast Battlefront teleport."
+   {
+    "text": "Members can now cast Battlefront teleport.",
+    "spellbook": "arceuus"
+   }
   ],
   "24": [
    {
     "text": "Members can now enchant Pearl tipped Crossbow Bolts!",
     "items": [
      9238
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "25": [
@@ -1153,7 +1175,8 @@
     "text": "You can now Teleport to Varrock!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "27": [
@@ -1161,7 +1184,8 @@
     "text": "You can now enchant Emerald Jewellery and members can now enchant Emerald tipped Crossbow Bolts and Jade Jewellery!",
     "items": [
      9241
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "29": [
@@ -1169,7 +1193,8 @@
     "text": "You can now cast Earth Bolt and members can now enchant Red Topaz tipped Crossbow Bolts!",
     "items": [
      9239
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "30": [
@@ -1181,7 +1206,8 @@
     },
     "items": [
      22370
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "31": [
@@ -1189,7 +1215,8 @@
     "text": "You can now Teleport to Lumbridge!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "33": [
@@ -1197,24 +1224,30 @@
     "text": "You can now cast Telekinetic Grab!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "34": [
-   "Members can now cast Respawn teleport."
+   {
+    "text": "Members can now cast Respawn teleport.",
+    "spellbook": "arceuus"
+   }
   ],
   "35": [
    {
     "text": "You can now cast Fire Bolt!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Ghostly Grasp.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "37": [
@@ -1222,7 +1255,8 @@
     "text": "You can now Teleport to Falador!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "38": [
@@ -1230,7 +1264,8 @@
     "text": "Members can now cast Lesser Resurrection spells.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "39": [
@@ -1238,7 +1273,8 @@
     "text": "You can now cast Crumble Undead!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "40": [
@@ -1246,7 +1282,8 @@
     "text": "Members can now cast Teleport to House and can now wear Mystic, Enchanted & Elder chaos druid robes, and Skeletal armour!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "41": [
@@ -1254,13 +1291,15 @@
     "text": "You can now cast Wind Blast!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Adept Reanimation.",
     "items": [
      13501
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "42": [
@@ -1272,7 +1311,8 @@
     },
     "items": [
      8841
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "There is new information available from the Magic Tutor in Lumbridge!",
@@ -1280,7 +1320,8 @@
      "not": true,
      "skill": "Defence",
      "min": 42
-    }
+    },
+    "spellbook": "standard"
    }
   ],
   "43": [
@@ -1288,7 +1329,8 @@
     "text": "You can now cast Superheat Item!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "44": [
@@ -1296,7 +1338,8 @@
     "text": "Members can now cast Inferior Demonbane.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "45": [
@@ -1304,7 +1347,8 @@
     "text": "Members can now Teleport to Camelot!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "47": [
@@ -1312,13 +1356,15 @@
     "text": "You can now cast Water Blast!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Shadow Veil.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "48": [
@@ -1326,16 +1372,21 @@
     "text": "Members can now Teleport to Kourend Castle!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
-   "Members can now cast Fenkenstrain's Castle teleport."
+   {
+    "text": "Members can now cast Fenkenstrain's Castle teleport.",
+    "spellbook": "arceuus"
+   }
   ],
   "49": [
    {
     "text": "You can now enchant Ruby Jewellery and members can now enchant Ruby tipped Crossbow Bolts and Red Topaz Jewellery!",
     "items": [
      9242
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "50": [
@@ -1344,37 +1395,53 @@
     "items": [
      6910,
      25389
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Dark Lure.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "51": [
-   "Members have unlocked: Ardougne Teleport."
+   {
+    "text": "Members have unlocked: Ardougne Teleport.",
+    "spellbook": "standard"
+   }
   ],
   "52": [
-   "Members have unlocked: Shadow Rush.",
+   {
+    "text": "Members have unlocked: Shadow Rush.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Shadow Rush!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "53": [
-   "You have unlocked: Earth Blast."
+   {
+    "text": "You have unlocked: Earth Blast.",
+    "spellbook": "standard"
+   }
   ],
   "54": [
-   "Members have unlocked: Paddewwa Teleport and Civitas illa Fortis Teleport.",
+   {
+    "text": "Members have unlocked: Paddewwa Teleport and Civitas illa Fortis Teleport.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now Teleport to Paddewwa!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "55": [
@@ -1382,22 +1449,28 @@
     "text": "You have unlocked: High Level Alchemy. Members have unlocked: Teacher wand.",
     "items": [
      6912
-    ]
+    ],
+    "spellbook": "standard"
    }
   ],
   "56": [
-   "Members have unlocked: Skeletal Grasp, Blood Rush, Summon Boat and Charge Water Orb.",
+   {
+    "text": "Members have unlocked: Skeletal Grasp, Blood Rush, Summon Boat and Charge Water Orb.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Skeletal Grasp.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Blood Rush!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "57": [
@@ -1405,31 +1478,41 @@
     "text": "You have unlocked: Leevl 4 Enchant. Members have unlocked: Diamond-tipped crossbow bolts, Resurrect Superior Zombie, Resurrect Superior Skeleton and Resurrect Superior Ghost.",
     "items": [
      9243
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Superior Resurrection spells.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "58": [
-   "Members have unlocked: Ice Rush and Watchtower Teleport.",
+   {
+    "text": "Members have unlocked: Ice Rush and Watchtower Teleport.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Ice Rush!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "59": [
-   "You have unlocked: Fire Blast. Members have unlocked: Mark of Darkness.",
+   {
+    "text": "You have unlocked: Fire Blast. Members have unlocked: Mark of Darkness.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Mark of Darknesss.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    }
   ],
   "60": [
@@ -1438,55 +1521,74 @@
     "items": [
      25404,
      2413
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now Teleport to Senntisten and equip Thammaron's Sceptre!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "61": [
-   "Members have unlocked: West Ardougne Teleport and Trollheim Teleport.",
-   "Members can now cast West Ardougne teleport."
+   {
+    "text": "Members have unlocked: West Ardougne Teleport and Trollheim Teleport.",
+    "spellbook": "standard"
+   },
+   {
+    "text": "Members can now cast West Ardougne teleport.",
+    "spellbook": "arceuus"
+   }
   ],
   "62": [
    {
     "text": "Members have unlocked: Warped sceptre, Superior Demonbane, Smoke Burst and Wind Wave.",
     "items": [
      28585
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Superior Demonbane.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Smoke Burst!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "63": [
-   "Members have unlocked: Charge Fire Orb."
+   {
+    "text": "Members have unlocked: Charge Fire Orb.",
+    "spellbook": "standard"
+   }
   ],
   "64": [
-   "Members have unlocked: Lesser Corruption, Shadow Burst and Ape Atoll Teleport.",
+   {
+    "text": "Members have unlocked: Lesser Corruption, Shadow Burst and Ape Atoll Teleport.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Lesser Corruption.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Shadow Burst!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    }
   ],
   "65": [
@@ -1495,19 +1597,22 @@
     "items": [
      30070,
      12422
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Harmony Island teleport.",
     "items": [
      13495
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Bake Pie and Geomancy!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "66": [
@@ -1515,28 +1620,35 @@
     "text": "Members have unlocked: Make Ancient Wyvern shield, Vile Vigour, Monster Examine, Cure Plant, Kharyrll Teleport, Vulnerability and Charge Air Orb.",
     "items": [
      21633
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Vile Vigour.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Cure Plant and Monster Examine!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "67": [
-   "Members have unlocked: Astral Contact and Teleport to Boat.",
+   {
+    "text": "Members have unlocked: Astral Contact and Teleport to Boat.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Astral Contact!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "68": [
@@ -1544,28 +1656,35 @@
     "text": "Members have unlocked: Dragonstone-tipped crossbow bolts, Cure Other, Blood Burst and Level 5 Enchant.",
     "items": [
      9244
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Blood Burst!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Cure Other and Humidify!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "69": [
-   "Members have unlocked: Moonclan Teleport.",
+   {
+    "text": "Members have unlocked: Moonclan Teleport.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now Teleport to Moonclan Island!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "70": [
@@ -1574,35 +1693,46 @@
     "items": [
      22951,
      4712
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Degrime, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Ice Burst!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Group Teleport to Moonclan Island, wear Dagon'hai robes and wield the Ancient Sceptre and Accursed Sceptre!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "71": [
-   "Members have unlocked: Cemetery Teleport, Ourania Teleport, Hunter Kit and Cure Me.",
-   "Members can now cast Cemetery teleport.",
+   {
+    "text": "Members have unlocked: Cemetery Teleport, Ourania Teleport, Hunter Kit and Cure Me.",
+    "spellbook": "standard"
+   },
+   {
+    "text": "Members can now cast Cemetery teleport.",
+    "spellbook": "arceuus"
+   },
    {
     "text": "Members can now cast Cure Me, Hunter Kit and Teleport to Ourania!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "72": [
@@ -1610,55 +1740,69 @@
     "text": "Members have unlocked: Expert Reanimation, Waterbirth Teleport, Lassar Teleport and Nightmare Staff (without orb).",
     "items": [
      24422
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Adept Reanimation and equip the Nightmare Staff (without orb).",
     "items": [
      13501
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Teleport to Lassar and equip the Nightmare Staff (without orb)!",
     "items": [
      24422
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Teleport to Waterbirth and equip the Nightmare Staff (without orb)!",
     "items": [
      24422
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "73": [
-   "Members have unlocked: Ward of Arceuus, Tele Group Waterbirth and Enfeeble.",
+   {
+    "text": "Members have unlocked: Ward of Arceuus, Tele Group Waterbirth and Enfeeble.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Ward of Arceuus.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Group Teleport to Waterbirth!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "74": [
-   "Members have unlocked: Cure Group, Smoke Blitz and Teleother Lumbridge.",
+   {
+    "text": "Members have unlocked: Cure Group, Smoke Blitz and Teleother Lumbridge.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Smoke Blitz!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Cure Group!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "75": [
@@ -1667,34 +1811,42 @@
     "items": [
      25491,
      11791
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Barbarian Outpost Teleport and Stat Spy, and wield the Staff of the Dead, Staff of Light, Staff of Balance, Trident of the Seas, Slayer's Staff (e) and Eternal boots!",
     "items": [
      11791
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "76": [
-   "Members have unlocked: Resurrect Greater Zombie, Resurrect Greater Skeleton, Resurrect Greater Ghost, Spin Flax, Tele Group Barbarian and Shadow Blitz.",
+   {
+    "text": "Members have unlocked: Resurrect Greater Zombie, Resurrect Greater Skeleton, Resurrect Greater Ghost, Spin Flax, Tele Group Barbarian and Shadow Blitz.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Greater Resurrection spells.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Shadow Blitz!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Group Teleport to the Barbarian Outpost and cast Spin Flax!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "77": [
@@ -1702,13 +1854,15 @@
     "text": "Members have unlocked: Purging staff and Superglass Make.",
     "items": [
      29594
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Superglass Make!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "78": [
@@ -1717,40 +1871,49 @@
     "items": [
      12899,
      26243
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now Resurrect crops, wield the Trident of the Swamp and wear Virtus robes.",
     "items": [
      12899
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Teleport to Dareeyak, wield the Trident of the Swamp and wear Virtus robes!",
     "items": [
      12899
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Teleport to Port Khazard, cast Tan Leather, wield the Trident of the Swamp and wear Virtus robes!",
     "items": [
      12899
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "79": [
-   "Members have unlocked: Undead Grasp, Dream, Tele Group Khazard and Entangle.",
+   {
+    "text": "Members have unlocked: Undead Grasp, Dream, Tele Group Khazard and Entangle.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Undead Grasp.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Group Teleport to Port Khazard and Dream!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "80": [
@@ -1759,34 +1922,42 @@
     "items": [
      30759,
      21006
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Death Charge and wield the Kodai Wand.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Blood Blitz and wield the Kodai Wand!",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast String Jewellery, wield the Kodai Wand and Elidinis' Ward!",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "81": [
-   "Members have unlocked: Stat Restore Pot Share and Wind Surge.",
+   {
+    "text": "Members have unlocked: Stat Restore Pot Share and Wind Surge.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now cast Stat Restore Potion Share!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "82": [
@@ -1795,25 +1966,29 @@
     "items": [
      22323,
      24423
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Dark Demonbane and wield the Sanguinesti Staff and Nightmare Staff (with orb).",
     "items": [
      22323
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Ice Blitz and wield the Sanguinesti Staff and Nightmare Staff (with orb)!",
     "items": [
      22323
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Magic Imbue and wield the Sanguinesti Staff and Nightmare Staff (with orb)!",
     "items": [
      22323
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "83": [
@@ -1821,14 +1996,19 @@
     "text": "Members have unlocked: Eye of Ayak, Barrows Teleport and Fertile Soil.",
     "items": [
      31113
-    ]
+    ],
+    "spellbook": "standard"
    },
-   "Members can now cast Barrows teleport.",
+   {
+    "text": "Members can now cast Barrows teleport.",
+    "spellbook": "arceuus"
+   },
    {
     "text": "Members can now cast Fertile Soil!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "84": [
@@ -1836,19 +2016,22 @@
     "text": "Members can now cast Demonic Offering.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Teleport to Carrallangar!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Boost Potion Share!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "85": [
@@ -1856,19 +2039,22 @@
     "text": "Members can now cast Water Surge, Teleport Block, Teleport to Target and equip the Tumeken's Shadow!",
     "items": [
      27275
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Greater Corruption and equip the Tumeken's Shadow.",
     "items": [
      27275
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Teleport to the Fishing Guild, cast Teleport to Target and equip the Tumeken's Shadow.",
     "items": [
      27275
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "86": [
@@ -1876,13 +2062,15 @@
     "text": "Members can now cast Smoke Barrage!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Group Teleport to the Fishing Guild and Plank Make!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "87": [
@@ -1890,13 +2078,15 @@
     "text": "Members can now enchant Onyx Jewellery and Onyx tipped Crossbow Bolts!",
     "items": [
      9245
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now Teleport to Catherby!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "88": [
@@ -1904,13 +2094,15 @@
     "text": "Members can now cast Shadow Barrage!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Group Teleport to Catherby!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "89": [
@@ -1918,7 +2110,8 @@
     "text": "Members can now Teleport to the Ice Plateau and cast Recharge Dragonstone!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "90": [
@@ -1926,25 +2119,29 @@
     "text": "Members can now cast Earth Surge and Teleother Camelot!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Master reanimation and Ape Atoll teleport.",
     "items": [
      13510
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now Teleport to Annakarl!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now Group Teleport to the Ice Plateau!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "91": [
@@ -1952,7 +2149,8 @@
     "text": "Members can now cast Energy Transfer!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "92": [
@@ -1960,19 +2158,22 @@
     "text": "Members can now cast Sinister Offering.",
     "items": [
      21006
-    ]
+    ],
+    "spellbook": "arceuus"
    },
    {
     "text": "Members can now cast Blood Barrage!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Heal Other!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "93": [
@@ -1980,13 +2181,15 @@
     "text": "Members can now enchant Zenyte Jewellery!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Vengeance Other!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "94": [
@@ -1994,13 +2197,15 @@
     "text": "Members can now cast Ice Barrage!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Vengeance!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "95": [
@@ -2008,28 +2213,35 @@
     "text": "Members can now cast Fire Surge!",
     "items": [
      1379
-    ]
+    ],
+    "spellbook": "standard"
    },
    {
     "text": "Members can now cast Heal Group!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "96": [
-   "Members have unlocked: Spellbook Swap and Ghorrock Teleport.",
+   {
+    "text": "Members have unlocked: Spellbook Swap and Ghorrock Teleport.",
+    "spellbook": "standard"
+   },
    {
     "text": "Members can now Teleport to Ghorrock!",
     "items": [
      4675
-    ]
+    ],
+    "spellbook": "ancient"
    },
    {
     "text": "Members can now cast Spellbook Swap!",
     "items": [
      9084
-    ]
+    ],
+    "spellbook": "lunar"
    }
   ],
   "99": [
@@ -2037,7 +2249,8 @@
     "text": "Congratulations! You are now a master of Magic. Why not visit the robe store in the Wizards' Guild, where you can buy something special that is only available to true masters of the Magic skill!",
     "items": [
      9762
-    ]
+    ],
+    "spellbook": "standard"
    }
   ]
  },

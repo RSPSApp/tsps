@@ -20,7 +20,7 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     const listener = new MagicOnItemPacketListener();
     let onGround = true;
     let targetLocation = new Location(3205, 3200, 0);
-    const item = { clone: () => ({ id: 995 }) };
+    const item = { getId: () => 995, clone: () => ({ id: 995 }) };
     const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => targetLocation };
     const tasks = [];
     t.mock.method(TaskManager, 'submit', (task) => tasks.push(task));
@@ -53,9 +53,19 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
         sendMessage: (message) => messages.push(message),
     };
     const run = () => tasks.shift().execute();
+    const casts = [];
+    const emit = PluginManager.emitCustomEvent;
+    t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+        if (name === 'magic:telekinetic-grab-cast') casts.push(event);
+        return emit.call(PluginManager, name, event);
+    });
 
     listener.castGroundItem(player, 995, 3205, 3200, 1168);
     assert.equal(added.length, 0, 'nothing is taken on the cast tick');
+    assert.equal(casts.length, 1, 'the cast is announced on the cast tick');
+    assert.equal(casts[0].groundItem, groundItem);
+    assert.equal(casts[0].itemId, 995);
+    assert.ok(casts[0].position.equals(targetLocation));
     assert.equal(onGround, true);
     assert.equal(tasks[0].delay, 3, 'lands 80 cycles later, on the third tick');
     currentLocation = new Location(3216, 3200, 0);

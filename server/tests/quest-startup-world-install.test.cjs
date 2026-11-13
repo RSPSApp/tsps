@@ -16,9 +16,9 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
 
 const WORLD_INSTALLER_QUESTS = [
-  'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
-  'EaglesPeak', 'EyesOfGlouphrie', 'GrimTales', 'InAidOfTheMyreque', 'Pandemonium',
-  'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
+  'AKingdomDivided', 'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
+  'DesertTreasureI', 'EaglesPeak', 'EnakhrasLament', 'EyesOfGlouphrie', 'GrimTales', 'InAidOfTheMyreque',
+  'Pandemonium', 'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
 ];
 // WhatLiesBelow installs no world object since 475e73669: its Tunnel of Chaos statue is the cache map's own (the
 // installed copy was a duplicate), and it spawns no Surok of its own: the library's npc-spawns.json one is his.

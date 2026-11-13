@@ -988,7 +988,9 @@ for (const [name, id, emptyItemId, lines, effect] of [
 // Varlamore wines (Wiki item pages): each heals 16, boosts one skill by 1 (Tonameyo white restores 1
 // Prayer instead) and drains Attack by 5 and one skill by 1. rsprox capture (rsprox.net 4101, tick
 // 1138, Blackbird red at 99s): human_eat, sound 2401, the Wiki's line as two spam messages, the glass
-// gone with nothing left, Attack 99 -> 94, Slayer 99 -> 98, Hunter 99 -> 100. Principum red, Fortis
+// gone with nothing left, Attack 99 -> 94, Slayer 99 -> 98, Hunter 99 -> 100. The same recording
+// drinks a Chilhuac red (tick 2837: Attack 94, Cooking 98, Firemaking 100) and a Tonameyo white (tick
+// 3413: Attack 89 -> 84, a flat 5; Thieving 98; no Prayer change at full Prayer), with the same lines. Principum red, Fortis
 // ash white and Xochipaltic rosé have a Drink op but no known effect (the Wiki: not obtainable).
 function varlamoreWine(boosted, drained) {
   return (player) => {
@@ -1000,7 +1002,7 @@ function varlamoreWine(boosted, drained) {
   };
 }
 // Varlamore ales and liquor (Wiki item pages; no capture drinks them). Ours: their Wiki line is sent
-// as two spam messages, as the captured wine's is, and nothing is left, as the wines leave nothing.
+// as two spam messages, as the captured wines' are, and nothing is left, as the wines leave nothing.
 /** Sunbeam ale: heals 1, Agility and Strength +1, Attack -(1 + 5% of current). */
 function drinkSunbeamAle(player) {
   heal(player, 1);
@@ -1015,6 +1017,12 @@ function drinkSteamforgeBrew(player) {
   boostSkill(player, Skill.MAGIC, 1, 0);
   lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
   lowerSkillByCurrent(player, Skill.DEFENCE, 2, 0.05);
+}
+/** Moon-lite: heals 5, Strength +(1 + 5%), Attack -(1 + 5% of current). */
+function drinkMoonLite(player) {
+  heal(player, 5);
+  boostSkill(player, Skill.STRENGTH, 1, 0.05);
+  lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.05);
 }
 /** Sun-shine: heals 5, Strength +(1 + 5%), Attack -4. */
 function drinkSunShine(player) {
@@ -1043,6 +1051,7 @@ for (const [name, id, lines, effect] of [
     drinkSunbeamAle],
   ["Steamforge brew", Items.STEAMFORGE_BREW, ["You drink the Steamforge brew.", "It has an odd metallic taste to it."],
     drinkSteamforgeBrew],
+  ["Moon-lite", Items.MOON_LITE, ["You drink the Moonlite.", "It's very strong and leaves you feeling a bit dizzy."], drinkMoonLite],
   ["Sun-shine", Items.SUN_SHINE, ["You drink the Sunshine.", "It's got quite the kick to it!"], drinkSunShine],
 ]) {
   registerPotion({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },

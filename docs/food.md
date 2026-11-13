@@ -309,7 +309,10 @@ item's Wiki page.
 From [rsprox captures](https://rsprox.net/database): rec 4101 (rev 237), tick 1138, drinks a
 Blackbird red at 99s. It shows `human_eat`, sound 2401 and two spam lines, "You drink the
 Blackbird red." / "Rich flavours flutter across your tongue.". The glass is gone with nothing
-left. Attack goes 99→94, Slayer 99→98 and Hunter 99→100.
+left. Attack goes 99→94, Slayer 99→98 and Hunter 99→100. The same recording drinks a Chilhuac
+red (tick 2837: Attack 94, Cooking 98, Firemaking 100) and a Tonameyo white (tick 3413: Attack
+89→84, a flat 5 rather than 5% of current; Thieving 98; no Prayer change at full Prayer). Both send
+the same two-line pattern.
 
 | Drink | Heals | Boost | Drain | Second line |
 | --- | --- | --- | --- | --- |
@@ -323,12 +326,13 @@ left. Attack goes 99→94, Slayer 99→98 and Hunter 99→100.
 | Imperial rosé | 16 | Slayer +1 | Attack -5, Agility -1 | "You find yourself captivated by the complex flavours." |
 | Sunbeam ale | 1 | Agility, Strength +1 | Attack -(1 + 5% of current) | "It tastes wonderful and leaves you feeling energised." |
 | Steamforge brew | 1 | Mining, Magic +1 | Attack, Defence -(2 + 5% of current) | "It has an odd metallic taste to it." |
+| Moon-lite | 5 | Strength +(1 + 5%) | Attack -(1 + 5% of current) | "It's very strong and leaves you feeling a bit dizzy." (first line "You drink the Moonlite.") |
 | Sun-shine | 5 | Strength +(1 + 5%) | Attack -4 | "It's got quite the kick to it!" (first line "You drink the Sunshine.") |
 
 Ours:
-- The ales and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
-  wine's is.
-- The ales and Sun-shine leave nothing, as the captured wine does.
+- The ales, Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
+  wines' are.
+- The ales, Moon-lite and Sun-shine leave nothing, as the captured wines do.
 - Principum red, Fortis ash white and Xochipaltic rosé have a Drink op but no documented effect.
   The Wiki says they aren't obtainable, so they're left unhandled.
 

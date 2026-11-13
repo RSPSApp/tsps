@@ -177,6 +177,28 @@ test("Steamforge brew: heals 1, Mining and Magic +1, Attack and Defence -(2 + 5%
   assert.deepEqual(f.spam, ["You drink the Steamforge brew.", "It has an odd metallic taste to it."]);
 });
 
+test("Moon-lite: heals 5, Strength +(1 + 5%), Attack -(1 + 5%)", async t => {
+  assert.equal(I.MOON_LITE, 29418);
+  const f = actor(t, { attack: 70, strength: 80 });
+  f.inv.setItem(0, new core.Item(I.MOON_LITE, 1));
+  await drink(f, 0);
+  assert.equal(slotId(f, 0), NOTHING);
+  assert.equal(level(f, "STRENGTH"), 85);
+  assert.equal(level(f, "ATTACK"), 66);
+  assert.equal(f.p.getHitpoints(), 85);
+  assert.deepEqual(f.spam, ["You drink the Moonlite.", "It's very strong and leaves you feeling a bit dizzy."]);
+});
+
+test("Tonameyo white at full Prayer, Attack 89 (rsprox.net 4101 tick 3413): Attack 84, Thieving 98", async t => {
+  const f = actor(t, { attack: 99, levels: { PRAYER: 99, THIEVING: 99 } });
+  f.skills.setCurrentLevel(core.Skill.ATTACK, 89, false);
+  f.inv.setItem(0, new core.Item(I.TONAMEYO_WHITE, 1));
+  await drink(f, 0);
+  assert.equal(level(f, "ATTACK"), 84);
+  assert.equal(level(f, "THIEVING"), 98);
+  assert.equal(level(f, "PRAYER"), 99);
+});
+
 test("Sun-shine: heals 5, Strength +(1 + 5%), Attack -4", async t => {
   assert.equal(I.SUN_SHINE, 29421);
   const f = actor(t, { attack: 70, strength: 80 });

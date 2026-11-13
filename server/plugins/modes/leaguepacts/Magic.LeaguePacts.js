@@ -132,7 +132,8 @@ function isPlayer(entity) {
 /** The element a player's spell counts as for the pacts, or null. */
 function elementOf(player, spell) {
   loadSpells();
-  const entry = spellElements.get(spell);
+  // A weapon's own spell names its element (`pactElement`: the Fang of the hound's Flames of Cerberus, fire).
+  const entry = spellElements.get(spell) ?? (typeof spell?.pactElement === "string" ? { element: spell.pactElement } : null);
   if (!entry || (entry.needs && !Common.effect(player, entry.needs))) return null;
   return entry.element;
 }

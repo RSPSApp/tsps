@@ -58,11 +58,13 @@ const PAUSE_BUTTON = 1;
 /** player -> the tier list they have open: { state, count } */
 const tierMenus = new WeakMap();
 /**
- * player -> the storage they last looked in ({ house, hotspotKey }) and the chest tier they last
- * picked. The chest reopens on that tier, in any chest; the interface keeps its search and scroll
+ * player -> the storage they last looked in ({ owner, hotspotKey }: the house owner's name) and
+ * the chest tier they last picked. The chest reopens on that tier, in any chest; the interface keeps its search and scroll
  * when the same storage reopens, upgraded or not. Ours: kept until logout.
  */
 const lastViewed = new WeakMap();
+/** player -> their Open in progress; another Open or a Close replaces it, so its storage stays shut. */
+const pendingOpens = new WeakMap();
 
 // Open and Close. The chests and boxes lift their lid, the armour case and magic wardrobe open
 // like a high cupboard; each has an open loc (Search, Close). The cape rack has none and is
@@ -343,7 +345,7 @@ function openInterface(player, state, reset) {
   sender.sendVarbit(VARBIT_MODE, Number(player.getAttribute(MODE_ATTRIBUTE)) === 1 ? 1 : 0);
   sendStored(player, furniture);
   const last = lastViewed.get(player);
-  lastViewed.set(player, { house: state.house, hotspotKey: furniture.hotspotKey,
+  lastViewed.set(player, { owner: houseOwnerName(state.house), hotspotKey: furniture.hotspotKey,
     tier: furniture.hotspotKey === "TREASURE_CHEST" ? state.tier : last?.tier ?? 0 });
   sender.sendInterfaceScript(MAIN_MODAL_BACKGROUND_SCRIPT, [-1, -2]);
   sender.sendInterface(MAIN);
@@ -393,7 +395,19 @@ function rememberedTier(player) { return lastViewed.get(player)?.tier ?? 0; }
 /** Whether this storage differs from the last one the player looked in (the search and scroll reset). */
 function isNewView(player, house, furniture) {
   const last = lastViewed.get(player);
-  return last?.house !== house || last.hotspotKey !== furniture.hotspotKey;
+  return last?.owner !== houseOwnerName(house) || last.hotspotKey !== furniture.hotspotKey;
+}
+
+function houseOwnerName(house) { return house.owner?.getUsername?.() ?? null; }
+
+/**
+ * Shows the furniture open or closed. The open state is the house's for now: it isn't saved, and
+ * an upgrade (which copies the saved entry) builds the new piece closed.
+ */
+function setShownOpen(house, furniture, openLoc) {
+  if (openLoc == null) delete furniture.displayObjectId;
+  else Object.defineProperty(furniture, "displayObjectId", { value: openLoc, writable: true, configurable: true, enumerable: false });
+  house.redrawFurniture();
 }
 
 /** The open loc of a closed piece of costume-room furniture, or null (the cape rack, an open one). */
@@ -421,15 +435,17 @@ function openHouseFurniture(event) {
   const { house, furniture } = context, { player, objectId } = event;
   const openLoc = openLocOf(furniture, objectId);
   if (openLoc == null) return openHouseStorage(event);
-  const position = positionOf(player);
+  const position = positionOf(player), opening = {};
+  pendingOpens.set(player, opening);
   player.performAnimation(new Animation(CUPBOARDS.has(furniture.hotspotKey) ? OPEN_CUPBOARD : OPEN_CHEST));
   player.getPacketSender().sendSoundEffect(OPEN_SOUND, 1, LID_SOUND_DELAY, 1);
   TaskManager.submit(new CountdownTask(house, OPEN_LOC_TICKS, () => {
     if (!stillThere(event, house, furniture, objectId) || furniture.displayObjectId != null) return;
-    furniture.displayObjectId = openLoc;
-    house.redrawFurniture();
+    setShownOpen(house, furniture, openLoc);
   }));
   TaskManager.submit(new CountdownTask(player, OPEN_STORAGE_TICKS, () => {
+    if (pendingOpens.get(player) !== opening) return;
+    pendingOpens.delete(player);
     if (player.getPrivateArea() !== house || house.isDestroyed()
       || !positionOf(player).every((coordinate, index) => coordinate === position[index])) return;
     if (house.getFurnitureAt(event.location, furniture.displayObjectId ?? objectId, event.object?.getType() ?? 10) !== furniture) return;
@@ -444,12 +460,11 @@ function closeHouseFurniture(event) {
   if (!context) return false;
   const { house, furniture } = context, { player, objectId } = event;
   if (furniture.displayObjectId !== objectId || !OPEN_LOC_STEMS[furniture.hotspotKey]) return false;
+  pendingOpens.delete(player);
   player.performAnimation(new Animation(CUPBOARDS.has(furniture.hotspotKey) ? CLOSE_CUPBOARD : CLOSE_CHEST));
   player.getPacketSender().sendSoundEffect(CLOSE_SOUND, 1, LID_SOUND_DELAY, 1);
   TaskManager.submit(new CountdownTask(house, OPEN_LOC_TICKS, () => {
-    if (!stillThere(event, house, furniture, objectId)) return;
-    delete furniture.displayObjectId;
-    house.redrawFurniture();
+    if (stillThere(event, house, furniture, objectId)) setShownOpen(house, furniture, null);
   }));
   return true;
 }

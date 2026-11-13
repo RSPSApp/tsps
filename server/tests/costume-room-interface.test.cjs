@@ -410,3 +410,21 @@ test("the chest reopens on the tier last picked, keeping its search; another pie
   click(f, "search", locId("poh_cos_room_tresure_chest_open_oak"));
   assert.deepEqual(calls.at(-1), [3294, 1, 0]);
 });
+
+test("the open state isn't saved, and an upgrade's copy of the entry is closed", (t) => {
+  const f = fixture(t, "cosnosave", "TREASURE_CHEST", "OAK_TREASURE_CHEST");
+  open(f);
+  assert.equal(f.furniture.displayObjectId, locId("poh_cos_room_tresure_chest_open_oak"));
+  assert.equal(JSON.parse(JSON.stringify(f.furniture)).displayObjectId, undefined);
+  assert.equal({ ...f.furniture }.displayObjectId, undefined);
+});
+
+test("closing the lid before the storage comes up keeps it shut", (t) => {
+  const f = fixture(t, "cosquickclose", "TOY_BOX", "OAK_TOY_BOX");
+  click(f, "open");
+  TaskManager.process();
+  click(f, "close", locId("poh_cos_room_toy_box_open_oak"));
+  for (let tick = 0; tick < 3; tick++) TaskManager.process();
+  assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
+  assert.equal(f.furniture.displayObjectId, undefined);
+});

@@ -1222508,54 +1222508,51 @@
           "type": "choice",
           "options": [
             {
-              "text": "What does being a Squire entail?"
-            }
-          ]
-        },
-        {
-          "player": "So what exactly does being a squire consist of, then?"
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Amik Varze",
-          "text": "You will spend the next five years of your life running various errands for me."
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Amik Varze",
-          "text": "If I consider you to have done a more than adequate job of this, then I will begin to consider possibly moving your name forwards to becoming a full-fledged member of the Order of the White Knights."
-        },
-        {
-          "player": "So... No killing stuff for you, or anything fun like that...?"
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Amik Varze",
-          "text": "Not as such, no. Unless you consider killing time by running errands fun...?"
-        },
-        {
-          "player": "Well, erm..."
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Amik Varze",
-          "text": "So what say you [player name]? Spend five long years of your life doing pointless busywork without pay for me, on the off chance that at some point in the future I may put your name forward"
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Amik Varze",
-          "text": "as a novice White Knight?",
-          "steps": [
-            {
-              "type": "jump",
-              "reference": "other",
-              "id": "uWhfBl"
-            }
-          ]
-        },
-        {
-          "type": "choice",
-          "options": [
+              "text": "What does being a Squire entail?",
+              "steps": [
+                {
+                  "player": "So what exactly does being a squire consist of, then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sir Amik Varze",
+                  "text": "You will spend the next five years of your life running various errands for me."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sir Amik Varze",
+                  "text": "If I consider you to have done a more than adequate job of this, then I will begin to consider possibly moving your name forwards to becoming a full-fledged member of the Order of the White Knights."
+                },
+                {
+                  "player": "So... No killing stuff for you, or anything fun like that...?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sir Amik Varze",
+                  "text": "Not as such, no. Unless you consider killing time by running errands fun...?"
+                },
+                {
+                  "player": "Well, erm..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sir Amik Varze",
+                  "text": "So what say you [player name]? Spend five long years of your life doing pointless busywork without pay for me, on the off chance that at some point in the future I may put your name forward"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sir Amik Varze",
+                  "text": "as a novice White Knight?",
+                  "steps": [
+                    {
+                      "type": "jump",
+                      "reference": "other",
+                      "id": "7i4F8e"
+                    }
+                  ]
+                }
+              ]
+            },
             {
               "text": "Yes please!",
               "steps": [
@@ -1222681,7 +1222678,7 @@
         {
           "type": "line",
           "speaker": "Sir Amik Varze",
-          "text": "That is 'Sir Amik' or 'My Liege' – not 'Boss'."
+          "text": "That is 'Sir Amik' or 'My Liege' - not 'Boss'."
         },
         {
           "player": "Gotcha, boss."
@@ -1222994,7 +1222991,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Amik Varze",
-                  "text": "Nothing tangible, no, but you will be deputized to act as a White Knight, and you will feel a warm glow inside of having done the right thing."
+                  "text": "Nothing tangible, no, but you will be deputised to act as a White Knight, and you will feel a warm glow inside of having done the right thing."
                 },
                 {
                   "player": "But you can't buy things with a warm glow..."
@@ -1223132,7 +1223129,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "Well old bean, we will need to equip you for the task, but you'll need to get something for me first, what?"
+                  "text": "Well old [boy/gal/bean], we will need to equip you for the task, but you'll need to get something for me first, what?"
                 },
                 {
                   "player": "What kind of stuff?"
@@ -1225951,7 +1225948,7 @@
                 {
                   "type": "line",
                   "speaker": "Savant",
-                  "text": "Results are all-clear, [player name]. Savant out."
+                  "text": "Results are all-clear [player name]. Savant out."
                 }
               ]
             },
@@ -1226348,7 +1226345,7 @@
             {
               "type": "line",
               "speaker": "Savant",
-              "text": "Well [player name], bear in mind that it might just be an object that as in the vicinity rather than something he was carrying..."
+              "text": "Well [player name], bear in mind that it might just be an object that was in the vicinity rather than something he was carrying..."
             },
             {
               "type": "jump",
@@ -1227209,7 +1227206,7 @@
           "page_available": true
         },
         {
-          "player": "Okay, I'm on my way – and Solus had better watch out, I am up to here with his annoying tricks!"
+          "player": "Okay, I'm on my way - and Solus had better watch out, I am up to here with his annoying tricks!"
         }
       ],
       "scanning-the-sixth-location": [

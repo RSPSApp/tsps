@@ -745,6 +745,8 @@ function registerPotion(definition) {
     area: definition.area ?? null,
     requiresFoodPermission: Boolean(definition.requiresFoodPermission),
     shareable: definition.shareable !== false,
+    // false: the drink keeps the potions' 3-tick delay but doesn't hold up eating (Wiki: Hunter's mixes).
+    eatingDelay: definition.eatingDelay !== false,
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
@@ -2004,7 +2006,7 @@ function handlePotionDrink(player, itemId, slot) {
   const timers = player.getTimers();
 
   timers.extendOrRegister(TimerKey.POTION, 3);
-  timers.extendOrRegister(TimerKey.FOOD, 3);
+  if (entry.potion.eatingDelay) timers.extendOrRegister(TimerKey.FOOD, 3);
 
   player.getPacketSender().sendInterfaceRemoval();
   player.performAnimation(entry.potion.drink?.animation ? new Animation(entry.potion.drink.animation) : DRINK_ANIMATION);

@@ -298,7 +298,8 @@ function share(centre, def, user = null) {
 // doses, each giving the jar's own bonus (Attack, Defence or Strength 4 + 15%; 8 Hitpoints; the
 // sunlight moth's restore and 8 Hitpoints; 22 Prayer) to the drinker and, in a multicombat area, to
 // up to three players within two tiles of them who have Accept Aid on. They share the potions' 3-tick
-// delay. Ours: what the last dose leaves (the Wiki doesn't say); the butterfly jar the mix was made in.
+// delay but add no eating or attack delay (`eatingDelay: false`). Ours: what the last dose leaves
+// (the Wiki doesn't say); the butterfly jar the mix was made in.
 const MIXES = [
   ["Ruby harvest mix", "RUBY_HARVEST_MIX", "RUBY_HARVEST"],
   ["Sapphire glacialis mix", "SAPPHIRE_GLACIALIS_MIX", "SAPPHIRE_GLACIALIS"],
@@ -315,7 +316,7 @@ function registerMixes() {
     const def = H.data.butterflies.find(c => c.jar === I[jar]);
     if (!def) continue;
     H.api.emitCustomEvent("potions:register", {
-      name, chains: [[I[`${key}_2_`], I[`${key}_1_`]]], emptyItemId: I.BUTTERFLY_JAR,
+      name, chains: [[I[`${key}_2_`], I[`${key}_1_`]]], emptyItemId: I.BUTTERFLY_JAR, eatingDelay: false,
       effect: (player) => { bonus(player, def); share(player, def); },
     });
   }

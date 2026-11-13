@@ -74,7 +74,8 @@ test("each dose gives the mix's bonus; the second leaves the butterfly jar", asy
   await drink(f);
   assert.equal(f.level(S.ATTACK), 50 + 4 + 7, "Attack 4 + 15% of 50");
   assert.equal(f.inv.getItems()[0].getId(), I.RUBY_HARVEST_MIX_1_);
-  // No recording has the mixes' own drink line (data/potion-drink-lines.json), so only the doses left.
+  // Our transcripts (rev 223-239) and the rsprox.net index have no mix drink, so no drink line
+  // (data/potion-drink-lines.json), only the doses left.
   assert.deepEqual(f.spam, ["You have 1 dose of potion left."]);
   clearDelay(f);
   await drink(f);
@@ -115,6 +116,19 @@ test("shares the 3-tick potion delay", async (t) => {
   await drink(f);
   assert.equal(f.inv.getItems()[0].getId(), I.SAPPHIRE_GLACIALIS_MIX_1_, "the second click inside the delay does nothing");
   assert.equal(f.level(S.DEFENCE), 61);
+});
+
+test("no eating delay, unlike a potion (Wiki: Hunter's mix)", async (t) => {
+  const f = actor(t);
+  f.inv.adds(I.RUBY_HARVEST_MIX_2_, 1);
+  f.inv.adds(I.ATTACK_POTION_4_, 1);
+  await drink(f, 0);
+  assert.equal(f.inv.getItems()[0].getId(), I.RUBY_HARVEST_MIX_1_);
+  assert.ok(f.p.getTimers().has(core.TimerKey.POTION), "the 3-tick potion delay");
+  assert.ok(!f.p.getTimers().has(core.TimerKey.FOOD), "food can be eaten straight after");
+  clearDelay(f);
+  await drink(f, 1);
+  assert.ok(f.p.getTimers().has(core.TimerKey.FOOD), "a potion still holds up eating");
 });
 
 test("in multicombat, up to three players within two tiles who accept aid get the bonus", async (t) => {

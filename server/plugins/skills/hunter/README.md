@@ -27,10 +27,12 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   released-butterfly boosts, and Lucky jars resolved through `hunter:lucky-loot` or the local
   reward-casket tables.
 - **Hunter's mixes** (`Catching.registerMixes`): Drink on the six two-dose butterfly and moth mixes,
-  registered with the Potions plugin (`potions:register`) so they share its doses and 3-tick delay.
+  registered with the Potions plugin (`potions:register`) so they share its doses and 3-tick delay,
+  without its eating delay (`eatingDelay: false`; Wiki: no eating or attack delay).
   Each dose gives the jar's own bonus (`bonus`) to the drinker and, in a multicombat area, to up to
   three other players within two tiles who accept aid (Wiki "Hunter's mix" and each mix's page).
-  Ours: the last dose leaves a butterfly jar, and no drink line is sent (none recorded). Making the
+  Ours: the last dose leaves a butterfly jar, and no drink line is sent (our transcripts and the
+  rsprox.net index have no mix drink). Making the
   mixes (jar + raw hunter meat with a pestle and mortar) and their Empty option (no source says what it
   leaves) are not implemented.
 - **Birdhouses** (`Birdhouses.Hunter.js`): nine tiers, crafting, seeding (hop/herb/allotment/flower/

@@ -64,15 +64,23 @@
  *  - If the player declines at the start, the transcript's acceptance lines
  *    are dropped but its heir-choice menu still shows; the quest simply does
  *    not start.
- *  - The guard's Heroes' Quest condition (QSsVp6) only has its "may pass"
- *    branch in the dump, so it is always answered true.
+ *  - The throne-room guard turns away anyone without Heroes' Quest; once he
+ *    lets the player pass, the Throne Room Doors walk them through.
  *  - Gifts are consumed as their hand-over dialogue starts (declining the
  *    "Yes"/marriage prompt still loses them), and items granted with a full
  *    inventory are not dropped to the ground as the wiki annotations say.
  */
 module.exports = function registerThroneOfMiscellaniaQuest(api) {
-  const { ItemIdentifiers, NpcIdentifiers, Skill } = api.core;
+  const { ItemIdentifiers, NpcIdentifiers, Skill, World } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { crossingFor } = require("../../objects/WallDoor.Doors");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+
+  const THRONE_ROOM_DOOR = "Throne Room Door";
+  /** Synth 46, played as the throne room door lets the player through. */
+  const THRONE_ROOM_DOOR_SOUND = 46;
+  /** The guard stands beside the south door. */
+  const THRONE_ROOM_GUARD_RANGE = 10;
 
   const QUEEN_SIGRID_NPC_ID = NpcIdentifiers.QUEEN_SIGRID; // 765
   const PRINCE_BRAND_NPC_IDS = new Set([
@@ -831,9 +839,57 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
     if (quest.getStage(player) >= STAGE_COMPLETE) {
       return { page: GUARD_PAGE, variant: V_GUARD_POST };
     }
-    if (hasBit(player, BIT_GUARD_GREETED)) return { page: PAGE, variant: V_GUARD_AGAIN };
-    setBits(player, bits(player) | BIT_GUARD_GREETED);
+    const hero = questComplete(player, "heroes_quest");
+    if (hero && hasBit(player, BIT_GUARD_GREETED)) return { page: PAGE, variant: V_GUARD_AGAIN };
+    // The guard grants the audience ("Then you may pass.") only to a member of the Heroes' Guild.
+    if (hero) setBits(player, bits(player) | BIT_GUARD_GREETED);
     return { page: PAGE, variant: V_GUARD_FIRST };
+  }
+
+  /** The guard has let them through, or they are already at court. */
+  function grantedAudience(player) {
+    return quest.getStage(player) >= STAGE_STARTED
+      || (hasBit(player, BIT_GUARD_GREETED) && questComplete(player, "heroes_quest"));
+  }
+
+  function nearestThroneRoomGuard(door) {
+    const at = door.getLocation();
+    let nearest = null;
+    let nearestDistance = THRONE_ROOM_GUARD_RANGE + 1;
+    for (const npc of World.getNpcs()) {
+      if (npc?.getId?.() !== GUARD_NPC_ID) continue;
+      const tile = npc.getLocation();
+      if (tile.getZ() !== at.getZ()) continue;
+      const distance = Math.max(Math.abs(tile.getX() - at.getX()), Math.abs(tile.getY() - at.getY()));
+      if (distance < nearestDistance) { nearest = npc; nearestDistance = distance; }
+    }
+    return nearest;
+  }
+
+  /**
+   * The throne room doors don't swing: Open plays the door sound and walks the player one tile
+   * across. Leaving is always allowed; entering needs the guard's audience, and until then the
+   * guard stops the player and asks who goes there.
+   */
+  function openThroneRoomDoor({ player, object }) {
+    if (!player || !object || ObstacleRunner.isBusy(player)) return true;
+    const crossing = crossingFor(object, player.getLocation());
+    if (!crossing) return false;
+    const door = object.getLocation();
+    const entering = crossing.destination.x === door.getX() && crossing.destination.y === door.getY();
+    if (entering && !grantedAudience(player)) {
+      const guard = nearestThroneRoomGuard(object);
+      if (guard) player.setPositionToFace?.(guard.getLocation());
+      api.emitCustomEvent("npc-dialogue:start", {
+        player, npc: guard, npcId: GUARD_NPC_ID, variant: selectGuard(player), handled: false,
+      });
+      return true;
+    }
+    ObstacleRunner.run({ player, object }, [
+      { sound: THRONE_ROOM_DOOR_SOUND },
+      { walk: [[crossing.destination.x, crossing.destination.y]] },
+    ]);
+    return true;
   }
 
   function selectDerrik(player) {
@@ -918,7 +974,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
   function answerConditionForPlayer(player, stepId) {
     switch (stepId) {
       case COND_HEROES_GUARD:
-        return true;
+        return !questComplete(player, "heroes_quest");
       case COND_ASTRID_NOT_TRUSTED:
         return !(trusted(player) && partner(player) === PARTNER_ASTRID);
       case COND_ASTRID_TRUSTED:
@@ -1428,4 +1484,5 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
   api.onCustomEvent("miscellania:set-approval", handleSetApproval);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
+  api.onObjectInteraction(THRONE_ROOM_DOOR, { Open: openThroneRoomDoor });
 };

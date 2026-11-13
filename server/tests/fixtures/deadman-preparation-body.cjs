@@ -1,4 +1,5 @@
-// SOURCE PREPARATION ONLY — NOT EXECUTED OR SELECTED AS A BASELINE.
+// SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
+// The preceding af74 fixture failed native preparation003; these corrections are unexecuted.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This file is a proposed extension of the existing compiled/cache/login/save fixture route.
 const assert = require("node:assert/strict");
@@ -37,11 +38,24 @@ world.plugins = { ...world.plugins, JsonPlayerPersistence: true, SqlitePlayerPer
 world.pluginConfig = { ...world.pluginConfig, "DeadmanMode:enabled": profile === "deadman",
   "league:type": profile === "league" ? 4 : 0, "HardcoreWorld:enabled": profile === "hardcore" || conflict };
 fs.writeFileSync(path.join(directory, "data", "definitions", "world.json"), JSON.stringify(world));
+// Eager plugins also resolve compiled modules from deployment CWD before Server's
+// resolver can be installed. Bind the real code root without changing world data.
+fs.symlinkSync(path.join(SERVER, "dist"), path.join(directory, "dist"));
+
+const initializationErrors = [];
+const originalError = console.error;
+function recordInitializationError(...args) {
+  initializationErrors.push(args.map((value) => value instanceof Error ? value.message : String(value)).join(" "));
+  originalError(...args);
+}
 
 // FIRST core import sees only the disposable deployment. Requiring Server imports
 // WorldDefinition/GameConstants transitively, before its resolver method can be called.
 process.chdir(directory);
-const { Server } = require("../../dist/Server");
+let Server;
+console.error = recordInitializationError;
+try { ({ Server } = require("../../dist/Server")); }
+finally { console.error = originalError; }
 // The existing resolver still captures the actual source/dist/plugin roots. No core import
 // is performed while changing CWD for this already-imported method call.
 process.chdir(SERVER);
@@ -58,11 +72,15 @@ const { PasswordUtil } = require("../../dist/util/PasswordUtil");
 const { JsonPlayerPersistence } = require("../../plugins/persistence/JsonPlayerPersistence.plugin");
 let core;
 let backend;
-const initializationErrors = [];
 const actors = new Set();
 const PASSWORD = "fixture-only-password";
 
 before(async () => {
+  const cacheModule = path.join("game", "cache", "CacheDefinitions");
+  assert.equal(require.resolve(path.join(directory, "dist", cacheModule)),
+    require.resolve(path.join(SERVER, "dist", cacheModule)), "setup: disposable code resolves to canonical compiled module");
+  assert.equal(require(path.join(directory, "dist", cacheModule)) === require(path.join(SERVER, "dist", cacheModule)),
+    true, "setup: CacheDefinitions module identity is shared");
   const definition = getWorldDefinition();
   assert.equal(definition.name, world.name, "cold cached deployment identity must be disposable");
   assert.deepEqual(definition.spawn, world.spawn);
@@ -75,13 +93,13 @@ before(async () => {
   assert.equal(GameConstants.EXPERIENCE_MULTIPLIER, world.experienceMultiplier);
   assert.ok(WORLD_ZONE_BOUNDARIES.pvp.length > 0, "cached zone consumers initialized from the same fixture definition");
   await CachePipeline.initialize(SERVER);
-  const originalError = console.error;
-  console.error = (...args) => {
-    initializationErrors.push(args.map((value) => value instanceof Error ? value.message : String(value)).join(" "));
-    originalError(...args); // Preserve actual loader diagnostics; do not swallow registration failures.
-  };
+  console.error = recordInitializationError;
   try { PM.loadFromDirectory(path.join(SERVER, "plugins")); }
   finally { console.error = originalError; }
+  assert.equal(initializationErrors.some((message) => message.includes("ItemDefinitionLoader")), false,
+    "setup: ItemDefinitionLoader cold import and registration must not emit an error");
+  assert.equal(Array.isArray(PM.loadedPlugins) && PM.loadedPlugins.includes("ItemDefinitionLoader"), true,
+    "setup: actual loader registry contains ItemDefinitionLoader");
   core = PM.getCoreApi();
   backend = GameConstants.PLAYER_PERSISTENCE;
   assert.ok(backend instanceof JsonPlayerPersistence, "actual selected backend");
@@ -96,8 +114,10 @@ before(async () => {
 after(async () => {
   for (const player of actors) {
     if (player.isRegistered()) {
-      dispatchClientMessages(player, [{ type: "logout" }]);
+      assert.equal(dispatchClientMessages(player, [{ type: "logout" }]), true, "cleanup logout phase: input accepted");
+      await new Promise(setImmediate);
       core.World.process();
+      assert.equal(player.isRegistered(), false, "cleanup logout phase: actor removed by ordinary world tick");
     }
   }
   PM.emitServerShutdown({});
@@ -117,9 +137,12 @@ async function enter(name, password = PASSWORD) {
 
 async function logout(player) {
   assert.equal(dispatchClientMessages(player, [{ type: "logout" }]), true);
+  await new Promise(setImmediate);
   core.World.process();
   await backend.flush();
-  assert.equal(core.World.getPlayerByName(player.getUsername()), undefined);
+  assert.equal(core.World.getPlayerByName(player.getUsername()) === undefined, true,
+    "logout phase: actor absent from world after ordinary input delivery and removal tick");
+  assert.equal(player.isRegistered(), false, "logout phase: actor deregistered");
   actors.delete(player);
 }
 
@@ -145,7 +168,7 @@ if (!conflict) test("canonical profile init, main credentials, real login, snaps
   assert.equal(backend.exists("DmmSeed", "league"), false);
   assert.equal(backend.exists("DmmSeed", "hardcore"), false);
   const refused = await connectHeadlessClient("DmmSeed", "wrong-fixture-password");
-  assert.equal(refused.player, undefined, "main credentials still guard a fresh selected profile");
+  assert.equal(refused.player === undefined, true, "credential phase: wrong main password refuses selected-profile entry");
 
   t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
   const player = await enter("DmmSeed");

@@ -316,6 +316,9 @@ function recordLimit(player, itemId, amount, now = Date.now()) {
     entry.amount += amount;
     // A fill counted after a later one (offline completions) is the first item bought, so the window opens there.
     if (now < entry.start) entry.start = now;
+  } else if (entry && now < entry.start) {
+    // A fill from before the current window, in a window that has already closed: the current window never held it.
+    return;
   } else limits[key] = { start: now, amount };
 }
 

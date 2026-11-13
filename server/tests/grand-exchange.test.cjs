@@ -557,6 +557,9 @@ test('buys filled while logged out open the limit window at the earliest fill, n
   recordLimit(p, LIMITED, 20, T + 3 * 60 * 60 * 1000);
   recordLimit(p, LIMITED, 30, T);
   assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+  // One from a window that closed before the current one opened leaves the current window alone.
+  recordLimit(p, LIMITED, 10, T - LIMIT_WINDOW_MS);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
 });
 
 test('a bid the market never meets holds none of the buy limit; one that will fill does', () => {

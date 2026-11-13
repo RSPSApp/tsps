@@ -11,7 +11,7 @@ It covers the lobby, the entry, the five floors with their obstacles and traps, 
 | `HallowedSepulchre.plugin.js` | Registers the parts and the saved attributes. |
 | `hallowedsepulchre/Common.HallowedSepulchre.js` | The data, the recorded fades (174 with scripts 948/951), the timer HUD (668), chat helpers, spam lines and weighted rolls. |
 | `hallowedsepulchre/Run.HallowedSepulchre.js` | The run: one `TemplatedInstanceArea` per floor and its layout, the timer, crediting a floor, leaving, logout and login recovery, and the floor 5 barriers. |
-| `hallowedsepulchre/Lobby.HallowedSepulchre.js` | The lobby stairs, the warning box and "don't ask again", the Mysterious Stranger's tutorial and shards, the crystal shard, the Hallowed token, and the obelisks and return stairs. |
+| `hallowedsepulchre/Lobby.HallowedSepulchre.js` | The Mausoleum Door in and the lobby's stairs out, the lobby stairs, the warning box and "don't ask again", the Mysterious Stranger's tutorial and shards, the crystal shard, the Hallowed token, and the obelisks and return stairs. |
 | `hallowedsepulchre/Obstacles.HallowedSepulchre.js` | Drops, middle stairs, platforms, the F4 gate, the F5 stepping stones, the F2 stones and the floor stairs. Also the route hook that walks to each obstacle's start tile. |
 | `hallowedsepulchre/Skills.HallowedSepulchre.js` | The grapple pillars, the bridge, the portal and the brazier. |
 | `hallowedsepulchre/Coffins.HallowedSepulchre.js` | The coffins and the Grand Hallowed Coffin, with the Wiki loot. |
@@ -19,6 +19,13 @@ It covers the lobby, the entry, the five floors with their obstacles and traps, 
 | `data/hallowed-sepulchre.json` | Floors and layouts, tiles, varbits, messages, XP and loot. Each value is noted as recorded, derived or Wiki. |
 
 The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers.plugin.js` already opens it from the Stranger's Trade.
+
+## Getting there (recorded)
+
+- **The Mausoleum Door (38574) in Darkmeyer, Enter** (rsprox.net 3050, rev 231): +2 the fade out, +4 the player is in the lobby at (2400, 5969) facing north, +5 the fade in with the lobby music, +7 the fade closes.
+- **The lobby's stairs up (38601), Climb-up** (rsprox.net 3050): +2 the fade out, +4 the player is back by the door at (3654, 3384) facing south, +6 the fade in with the Darkmeyer music, +8 the fade closes.
+- Neither checks Sins of the Father; the lobby stairs down do. Darkmeyer can be reached during the quest, so a player there hasn't necessarily finished it. No recording shows the door refusing anyone.
+- One task keyed to the player owns each passage, so logging out cancels it. Movement is held until the move. Ours: dying or being moved away before the move abandons it, and the lock is left to whatever moved or killed the player. A fade or overlay opened over the passage's own fade is neither overwritten nor closed.
 
 ## How a run goes (recorded)
 
@@ -88,10 +95,12 @@ Each floor finds its traps among the cache map's locs in its own instance. Every
 - Death handling beyond the run ending (no recording has a death inside).
 - The ambient NPCs.
 - The clue and Mysterious page tertiaries.
+- The `hallowed_pb_reset_1`-`7` varbits live sets to 1 as the Mausoleum Door fades (rsprox.net 3050); what they gate isn't known.
 
 ## Tests
 
 `server/tests/hallowed-sepulchre.test.cjs` builds real floor instances from the cache. It covers:
+- the Mausoleum Door in and the lobby stairs out, tick by tick, and the passage given up on a death, a teleport, a newer fade or a logout;
 - the entry and its menu; the layouts and the timer;
 - every obstacle kind;
 - the recorded pillar, bridge and portal crossings, and the drop face rule;

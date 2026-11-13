@@ -1363,6 +1363,12 @@ registerPotion({
   ],
   effect: (player) => restoreRunEnergy(player, 20),
 });
+// Wiki: 40% run energy a dose and nothing else (no stamina effect).
+registerPotion({
+  name: "Extreme energy potion",
+  chains: [doseChain("EXTREME_ENERGY_POTION_4_", "EXTREME_ENERGY_POTION_3_", "EXTREME_ENERGY_POTION_2_", "EXTREME_ENERGY_POTION_1_")],
+  effect: (player) => restoreRunEnergy(player, 40),
+});
 // The Gauntlet's potion (Wiki): restores prayer like a prayer potion, 40% run energy, and works
 // as a stamina potion. Made with 3 doses; the guides' one vial per potion suggests no vial is left.
 registerPotion({

@@ -171,7 +171,7 @@ Leagues worlds:
   [Cheese](https://oldschool.runescape.wiki/w/Cheese)): milk to cream (21, 18 XP, 10 ticks),
   butter (38, 40.5, 19) or cheese (48, 64, 26); cream to butter (38, 22.5, 10) or cheese (48, 46,
   19); butter or not garlic butter to cheese (48, 23.5, 10). With a full inventory the product
-  drops to the ground. Cream needs no empty pot.
+  drops to the ground. Cream needs no empty pot. Churning is members-only.
 
 ## Not captured
 
@@ -202,7 +202,9 @@ Leagues worlds:
   it runs out. Used on the churn,
   an input offers only its own products.
 - The level refusal ("You need a Cooking level of 48 to make a cheese.") follows the recipes';
-  Churn with nothing to churn says "You have nothing to churn." Neither is captured.
+  Churn with nothing to churn says "You have nothing to churn." On a free world Churn says "To
+  use this item please login to a members' world." and an item used on a churn gets the usual
+  fallback. None of these is captured.
 
 ## Not covered
 

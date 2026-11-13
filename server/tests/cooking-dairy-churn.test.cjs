@@ -203,3 +203,15 @@ test("every churn row names cache items and sequences", () => {
     assert.ok(row.input);
   }
 });
+
+test("free worlds: Churn refuses with the members' line, and milk on a churn is left to the fallback", (t) => {
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+  const p = churner(99, [["bucket_milk", 1]]);
+  churn(p);
+  assert.equal(p.sent.menu, null);
+  assert.deepEqual(p.sent.messages, ["To use this item please login to a members' world."]);
+  assert.equal(useOnChurn(p, "bucket_milk").handled, false);
+  assert.equal(p.sent.menu, null);
+  ticks(30);
+  assert.equal(p.inventory.getAmount(obj("bucket_milk")), 1);
+});

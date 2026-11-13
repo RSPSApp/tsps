@@ -7,6 +7,7 @@
  */
 const Common = require("./Common.Cooking");
 const DATA = require("../data/cooking.json").churn;
+const FreeToPlay = require("../../modes/FreeToPlay.plugin");
 
 /** The menu title and clientscript skillmulti_setup's first argument (rsprox captures 90, 1105). */
 const MENU_TITLE = "What would you like to make?";
@@ -153,12 +154,22 @@ function isChurn(object) {
   return object?.getDefinition?.()?.getName?.() === "Dairy churn";
 }
 
+/** Wiki (Dairy churn, Cheese): churning is members-only. */
+function membersWorld() {
+  return Common.core.WorldDefinition.isMembersWorld();
+}
+
+/** Ours: on a free world Churn gets the members' item line (no capture), as the members-only recipes do. */
 function churnClick(event) {
+  if (!membersWorld()) {
+    event.player.sendMessage(FreeToPlay.ITEM_MESSAGE);
+    return;
+  }
   offer(event.player);
 }
 
 function useOnChurn(event) {
-  if (!isChurn(event.object)) return;
+  if (!isChurn(event.object) || !membersWorld()) return;
   if (!churnData().inputs.some((input) => input.id === event.itemId)) return;
   event.handled = true;
   offer(event.player, event.itemId);

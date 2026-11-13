@@ -265,18 +265,12 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
   const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
   if (!ownsAHouse(player)) return false;
   if (entryRefused(player, buildingMode, via, () => enterHouse(player, true, diaryEntryContext, via))) return true;
-  let house = activeHouses.get(player);
-  if (house?.isDestroyed()) house = undefined;
   player.getPacketSender().sendInterfaceRemoval();
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   pendingFurnitureMenus.delete(player);
+  const house = openHouse(player);
   if (houseFor(player) && houseFor(player) !== house) exitHouse(player);
-  if (!house) {
-    house = new Instance.PlayerHouseInstance(houseStateFor(player));
-    house.owner = player;
-    activeHouses.set(player, house);
-  }
   if (buildingMode) endAdvert(player);
   if (!house.enterHouse(player, buildingMode)) {
     releaseHouse(player, true);
@@ -292,6 +286,16 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
     api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_POH_TASK });
   }
   return true;
+}
+
+/** `owner`'s loaded house, loading it first if it isn't (the owner stays where they are). */
+function openHouse(owner) {
+  let house = activeHouses.get(owner);
+  if (house && !house.isDestroyed()) return house;
+  house = new Instance.PlayerHouseInstance(houseStateFor(owner));
+  house.owner = owner;
+  activeHouses.set(owner, house);
+  return house;
 }
 
 /** Each house style has its own loading jingle (house-styles.json `loadingJingle`). */
@@ -609,6 +613,8 @@ function enterAdvertisedHouse(player, name, location) {
     player.sendMessage("That house is no longer advertised or is not accepting guests.");
     return;
   }
+  // An advertised house can be visited while its owner is elsewhere.
+  if (owner !== player) openHouse(owner);
   visitHouse(player, owner.getUsername(), location, null, { loading: true });
 }
 

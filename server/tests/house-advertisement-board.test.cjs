@@ -204,6 +204,19 @@ test('entering from a row visits that house', async (t) => {
   assert.equal(House.houseFor(viewer.player), house);
 });
 
+test('a guest can enter an advertised house its owner has not opened', async (t) => {
+  const owner = actor(t, 'advaway');
+  advertise(owner);
+  assert.equal(House.houseFor(owner.player), null);
+  const guest = actor(t, 'advawayguest');
+  await enterRow(guest, 'advaway');
+  const house = House.houseFor(guest.player);
+  assert.ok(house, 'the guest is in a house');
+  assert.equal(house.owner, owner.player);
+  assert.equal(House.houseFor(owner.player), null, 'the owner stays where they were');
+  assert.deepEqual(guest.messages, []);
+});
+
 async function enterRow(who, name) {
   boardClick(who.player, 1);
   assert.ok(rows(who).some(([, text]) => text.startsWith(`${name}|`)), `${name} is listed`);

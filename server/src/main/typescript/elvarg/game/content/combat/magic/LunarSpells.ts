@@ -22,6 +22,8 @@ import { lockingQuest } from "./SpellbookLocks";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import { Wilderness } from "../../wilderness/Wilderness";
+import { AreaManager } from "../../../model/areas/AreaManager";
 
 /** A cast's animation, graphic and sound on the caster (cache ids); `areaSound` is heard nearby. */
 /** `graphicHeight`: the spotanim height rsprox captures show (0 when none is recorded). */
@@ -524,6 +526,9 @@ export class LunarSpells {
         if (target === player || !this.acceptsAid(target) || (aid && (this.inDuel(player) || this.inDuel(target))) ||
             !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
+        // Wiki (Energy Transfer): it can't be cast in single-way combat PvP areas, nor from multi onto a player
+        // standing in single-way Wilderness.
+        if (key === "energy transfer" && (this.inSingleWayPvp(player) || this.inSingleWayPvp(target))) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
         const spell = this.SPELLS.get(key)!;
@@ -755,6 +760,11 @@ export class LunarSpells {
      */
     private static sameInstance(player: Player, target: any): boolean {
         return (player.getPrivateArea() ?? null) === (target.getPrivateArea?.() ?? null);
+    }
+
+    /** Standing on single-way PvP ground (the Wilderness or another PvP zone, outside its safe spots). */
+    private static inSingleWayPvp(player: Player): boolean {
+        return Wilderness.isIn(player) && !AreaManager.inMulti(player);
     }
 
     private static acceptsAid(player: Player): boolean {

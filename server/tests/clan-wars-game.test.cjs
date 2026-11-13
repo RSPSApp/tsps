@@ -4448,8 +4448,16 @@ for(const mode of[0,1,16])test(`native T option1 offer invalidation resync confi
   for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),1);
   await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
   const revision=session.revision;
-  for(const slot of[0,4,65535])await click(a,'clanwars_setup:dropdown_specialattacks',slot);
-  assert.equal(session.revision,revision);assert.equal(session.rules.specialattacks,1);
+  for(const slot of[0,4,65534]){
+    await click(a,'clanwars_setup:dropdown_specialattacks',slot);
+    assert.equal(session.revision,revision);assert.equal(session.rules.specialattacks,1);
+  }
+  // 0xffff is the native no-slot sentinel, not an unsupported dropdown row.
+  // The preserved legacy event.action=op1 fallback selects Allowed (slot1).
+  const sentinel=clickFrame('clanwars_setup:dropdown_specialattacks',65535),decoded=decodeClientPackets(sentinel);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,undefined);assert.equal(decoded[0].buttonNum,1);
+  await wire(a,sentinel);assert.equal(session.rules.specialattacks,0);assert.equal(session.revision,revision+1);
+  await click(a,'clanwars_setup:dropdown_specialattacks',2);assert.equal(session.rules.specialattacks,1);tick(9);
   await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
   assert.equal(session.stage,'confirm');tick(5);
   await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');

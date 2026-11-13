@@ -19,9 +19,11 @@ const REFUSED = new Set(["looting bag", "karamjan rum", "bloated toad", "glowing
 /**
  * Listed items whose name other items share: the Wiki links one item each, and only those pages
  * say "cannot be banked with an imp-in-a-box". The Stick is 4179 (not 9702 or 25285), the
- * Unholy symbol Icthlarin's Little Helper's 4683 (not the Zamorak symbol, 1724).
+ * Unholy symbol Icthlarin's Little Helper's 4683 (not the Zamorak symbol, 1724), and the Lamp
+ * the random events' genie's 2528 (not the other experience lamps). Tombs of Amascut items are
+ * refused by the raid's own can-bank rule, which the imp's deposit goes through.
  */
-const REFUSED_IDS = ["STICK", "UNHOLY_SYMBOL_3"];
+const REFUSED_IDS = ["STICK", "UNHOLY_SYMBOL_3", "LAMP"];
 
 function isBox(id) {
   const I = H.core.ItemIdentifiers;

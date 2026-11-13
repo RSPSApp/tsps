@@ -367,11 +367,17 @@ function hesporiCave(event) {
         player.moveTo(EXIT.clone());
     } else if (location.y > 3700 && location.y < 3730 && action === "enter") {
         event.handled = true;
-        const area = new HesporiArea();
-        player.getArea()?.leave(player, false);
-        area.enter(player);
-        player.moveTo(ENTRY.clone());
+        // A league character carrying the echo orb is asked first ("echo-boss:entry").
+        const entry = { player, boss: "hespori", enter: () => enterCave(player), handled: false };
+        core.PluginManager.emitCustomEvent("echo-boss:entry", entry);
+        if (!entry.handled) entry.enter();
     }
+}
+function enterCave(player) {
+    const area = new HesporiArea();
+    player.getArea()?.leave(player, false);
+    area.enter(player);
+    player.moveTo(ENTRY.clone());
 }
 
 Object.assign(module.exports, { warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave });

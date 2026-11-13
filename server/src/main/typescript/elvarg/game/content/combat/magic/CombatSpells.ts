@@ -157,7 +157,8 @@ class CombatArceuusSpell extends CombatNormalSpell {
 
     private rejectInvalidDemonbaneTarget(cast: Mobile): false {
         if (cast.isPlayer()) {
-            cast.getAsPlayer().sendMessage("Demonbane spells can only be cast on demons.");
+            // rsprox_transcripts/241/900056.txt tick 131: Superior Demonbane on a man.
+            cast.getAsPlayer().sendMessage("This spell only affects demons.");
         }
         return false;
     }

@@ -217,6 +217,15 @@ test('native Crumble Undead on a living NPC is refused before runes are spent', 
   assert.deepEqual(f.messages, ['This spell only affects skeletons, zombies, ghosts and shades.']);
 });
 
+// rsprox_transcripts/241/900056.txt tick 131: Superior Demonbane cast on a man (3108) gets this line, nothing spent.
+test('native demonbane on a living NPC is refused with the recorded line before runes are spent', async t => {
+  const f = nativeCast(t, { name: 'Superior Demonbane', npcId: core.NpcIdentifiers.GOBLIN });
+  f.player.setSpellbook(core.MagicSpellbook.ARCEUUS);
+  assert.equal(f.npc.getCurrentDefinition(f.player).isDemon(), false);
+  await f.cast();
+  assert.deepEqual(f.messages, ['This spell only affects demons.']);
+});
+
 test('native Crumble Undead on an undead NPC starts the cast', async t => {
   const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.ZOMBIE });
   assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), true);

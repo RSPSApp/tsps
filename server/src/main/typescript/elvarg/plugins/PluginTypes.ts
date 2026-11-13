@@ -1450,10 +1450,18 @@ export interface PluginApi {
   /**
    * Adds to the magic damage bonus, in tenths of a percent, before it scales the
    * spell's base max hit - for effects the Wiki counts as magic damage %, like the
-   * salve amulet (i)'s 15% against the undead.
+   * salve amulet (i)'s 15% against the undead. `spell` is the spell whose max hit it is.
    */
   registerMagicDamageBonusModifier(
-    modifier: (entity: any, permille: number) => number
+    modifier: (entity: any, permille: number, spell?: any) => number
+  ): void;
+  /**
+   * Adds percentage points to the magic attack roll; the total scales the roll once, before
+   * the registerMagicAttackAccuracyModifier multipliers (the Wiki DPS calculator adds the
+   * salve amulet (i) and smoke staff bonuses this way). `spell` is the spell being cast.
+   */
+  registerMagicAccuracyPercentModifier(
+    modifier: (entity: any, percent: number, spell?: any) => number
   ): void;
   /**
    * Accuracy modifiers scale the finished attack roll - effective level times

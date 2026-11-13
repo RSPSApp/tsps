@@ -4745,6 +4745,10 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerRangedAttackAccuracyModifier(
           modifier
         ),
+      registerMagicAccuracyPercentModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerMagicAccuracyPercentModifier(
+          modifier
+        ),
       registerMagicAttackAccuracyModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerMagicAttackAccuracyModifier(
           modifier

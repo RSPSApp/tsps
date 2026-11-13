@@ -36,7 +36,7 @@ const api = {
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
   onPlayerDeath() {}, onServerShutdown() {}, onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
-  onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {},
+  onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {}, onCombatHitResolved() {},
   registerCombatMethodResolver() {},
   emitCustomEvent(name, event) {
     if (name === "quest:is-complete" && event.key === Common.data.questKey) {

@@ -355,6 +355,7 @@ class Fight {
   stop() {
     if (this.stopped) return;
     this.stopped = true;
+    Common.api().emitCustomEvent("combat:clear-burn", { target: this.npc });
     this.task?.stop();
     this.events = [];
     this.launch = null;
@@ -397,14 +398,27 @@ function started({ attacker, target, method }) {
 function finished({ attacker, target }) { const fight = fightOf(attacker, target); if (fight) fight.launch = null; }
 function defence(event) {
   const fight = fightOf(event.attacker, event.target);
-  // Add the nearby stance's +250 without overwriting permanent bonus drains (Eye of Ayak).
-  if (fight?.phase === "melee" && event.combatType === Common.core().CombatType.MAGIC) {
+  // Compose stance and live burns without overwriting permanent bonus drains (Eye of Ayak).
+  if (fight && event.combatType === Common.core().CombatType.MAGIC) {
     const bonus = fight.npc.getDefenceBonus(3);
-    event.defenceRoll *= (bonus + 64 + 250) / (bonus + 64);
+    const burns = { target: fight.npc, stacks: 0 };
+    Common.api().emitCustomEvent("combat:burn-remaining", burns);
+    // Unmeasured mixed-source/minimum edge policy: all native stacks, effective bonus floor0.
+    const effective = Math.max(0, bonus + (fight.phase === "melee" ? 250 : 0) - 20 * burns.stacks);
+    if (effective !== bonus) event.defenceRoll = event.defenceRoll / (bonus + 64) * (effective + 64);
   }
   if (!fight?.launch?.punish || fight.launch.defenceUsed) return;
   fight.launch.defenceUsed = true;
   if (event.combatType === Common.core().CombatType.MELEE && event.attacker.getFightType().getBonusType() === 2) event.defenceRoll *= 0.15;
+}
+function fireBurn({ attacker, target, hit }) {
+  if (!fightOf(attacker, target) || !hit.isAccurate()
+      || hit.getCombatMethod().type() !== Common.core().CombatType.MAGIC) return;
+  const { CombatSpells } = Common.core();
+  const spell = hit.getSpell(); // The launched spell survives a cast/gear change before impact.
+  if (![CombatSpells.FIRE_STRIKE, CombatSpells.FIRE_BOLT, CombatSpells.FIRE_BLAST,
+    CombatSpells.FIRE_WAVE, CombatSpells.FIRE_SURGE].includes(spell)) return;
+  Common.api().emitCustomEvent("combat:burn", { attacker, target, damage: 5 });
 }
 function damage(event) {
   const fight = fightOf(event.attacker, event.target);
@@ -460,6 +474,7 @@ function attach(api) {
   api.onObjectInteraction("<col=ffff00>Maggot king head</col>", { Strike: strike });
   api.onPlayerHitModify(land);
   api.onCombatHitDamage(damage);
+  api.onCombatHitResolved(fireBurn);
   api.onCustomEvent("combat:attack-started", started);
   api.onCustomEvent("combat:attack-finished", finished);
   api.onCustomEvent("combat:defence-roll", defence);

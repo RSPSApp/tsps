@@ -48,6 +48,7 @@ before(async () => {
     registerMeleeAttackAccuracyModifier: EquipmentEffects.registerMeleeAttackAccuracyModifier,
     registerRangedAttackAccuracyModifier: EquipmentEffects.registerRangedAttackAccuracyModifier,
     registerMagicAttackAccuracyModifier: EquipmentEffects.registerMagicAttackAccuracyModifier,
+    registerMagicAccuracyPercentModifier: EquipmentEffects.registerMagicAccuracyPercentModifier,
     registerRestingLevelModifier: (modifier) => SkillManager.registerRestingLevelModifier(modifier),
   };
   const api = new Proxy({

@@ -6,7 +6,7 @@ import { Misc } from "../../../../util/Misc";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { BonusManager } from "../../../model/equipment/BonusManager";
 import { Skill } from "../../../model/Skill";
-import { withHitVictim, hitVictimOf, applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
+import { withHitVictim, hitVictimOf, applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMagicAccuracyPercentModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
 import type { Player } from '../../../entity/impl/player/Player';
 import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
@@ -709,6 +709,11 @@ export class AccuracyFormulasDpsCalc {
         const baseAttackRoll = cache.attackMagicRoll ??= Math.floor(AccuracyFormulasDpsCalc.effectiveMagicLevel(entity) * (accuracyBonus + 64));
         let attRoll = baseAttackRoll;
         if (entity.isPlayer()) {
+            // The Wiki DPS calculator adds these percentages up, then scales the roll once.
+            const percent = applyMagicAccuracyPercentModifiers(entity, entity.getCombat().getSelectedSpell());
+            if (percent !== 0) {
+                attRoll = Math.floor((attRoll * (100 + percent)) / 100);
+            }
             attRoll = Math.floor(applyMagicAttackAccuracyModifiers(entity, attRoll));
         }
 

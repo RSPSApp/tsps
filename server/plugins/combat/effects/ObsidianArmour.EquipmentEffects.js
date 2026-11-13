@@ -52,9 +52,10 @@ const lastLoadouts = new WeakMap();
 function effectLines(request) {
   const player = asPlayer(request?.player);
   if (!player || !coreApi) return;
-  if (wearingSet(player)) request.setTexts?.push(SET_TEXT);
+  const fullSet = wearingSet(player);
+  if (fullSet) request.setTexts?.push(SET_TEXT);
   if (!tzhaarWielder(player)) return;
-  if (wearingSet(player)) request.lines.push("Obsidian armour: +10% melee accuracy and damage");
+  if (fullSet) request.lines.push("Obsidian armour: +10% melee accuracy and damage");
   if (wearing(player, Equipment.AMULET_SLOT, BERSERKER_NECKLACES)) {
     request.lines.push("Berserker necklace: +20% melee damage");
   }

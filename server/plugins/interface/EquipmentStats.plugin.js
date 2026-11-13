@@ -34,6 +34,11 @@ const OTHER_CHILDREN = [36, 37, 38, 39];
 const ATTACK_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const DEFENCE_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const OTHER_LABELS = ["Melee STR", "Ranged STR", "Magic DMG", "Prayer"];
+/**
+ * The "Equipment effects" panel shows the text of enum 3047 for this varbit's value, a full
+ * set's id (Guthan's 3, Void melee 10, ...), and its default line at 0.
+ */
+const SET_TEXT_VARBIT = "worn_items_set_text";
 
 const SALVE_AMULETS = new Map([
   [4081, { percent: 100 / 6, meleeOnly: true }],
@@ -109,14 +114,31 @@ function getWeight(player) {
   return Math.trunc(player.getCarriedWeightGrams() / 1000) || 0;
 }
 
-/** Set effects other plugins expose for the stats panel. */
+/**
+ * Set effects other plugins expose for the stats panel: text lines, and in `setTexts` the
+ * enum 3047 id of each full set worn.
+ */
 function describeEffects(player) {
-  const request = { player, lines: [], slotWeights: {} };
+  const request = { player, lines: [], slotWeights: {}, setTexts: [] };
   pluginApi?.emitCustomEvent?.("equipment:effects", request);
   request.lines = request.lines.filter(
     (line) => typeof line === "string" && line.trim().length > 0,
   );
   return request;
+}
+
+/** The worn set whose text the panel shows. Ours: with several full sets, the lowest id. */
+function setText(player) {
+  const ids = describeEffects(player).setTexts.filter((id) => Number.isInteger(id) && id > 0);
+  return ids.length > 0 ? Math.min(...ids) : 0;
+}
+
+function sendSetText(player) {
+  const varbit = pluginApi?.core?.CacheDefinitions?.getVarbitId?.(SET_TEXT_VARBIT);
+  const sender = player?.getPacketSender?.();
+  if (varbit == null || !sender) return;
+  const value = setText(player);
+  if (sender.getVarbit(varbit) !== value) sender.sendVarbit(varbit, value);
 }
 
 function render(player) {
@@ -150,6 +172,7 @@ function render(player) {
 }
 
 function onEquipmentChanged({ player }) {
+  sendSetText(player);
   if (player?.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {
     update(player);
   }
@@ -194,7 +217,7 @@ function handleItemAction({ player, buttonId, action }) {
 module.exports = {
   name: "EquipmentStats",
   description: "Equipment stats screen opened from the worn-items tab, with the inventory beside it, so gear can be compared and swapped.",
-  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects },
+  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects, setText, sendSetText },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();

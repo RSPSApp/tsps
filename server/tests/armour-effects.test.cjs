@@ -696,3 +696,100 @@ test("Check distinguishes every pristine Echo Ahrim piece from its used 100% var
     }
   }
 });
+
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const registerJusticiarEffects = require("../plugins/combat/effects/JusticiarArmour.EquipmentEffects");
+
+function setTexts(api, player) {
+  const request = { player, lines: [], slotWeights: {}, setTexts: [] };
+  api.emitCustomEvent("equipment:effects", request);
+  return request.setTexts;
+}
+
+const GUTHANS = {
+  [Equipment.HEAD_SLOT]: 4724,
+  [Equipment.WEAPON_SLOT]: 4726,
+  [Equipment.BODY_SLOT]: 4728,
+  [Equipment.LEG_SLOT]: 4730,
+};
+
+// Enum 3047 is the panel's text by worn_items_set_text: 3 Guthan's, 2003 with the amulet of the damned.
+test("a full Barrows set reports its brother's set text, the damned text with the amulet", () => {
+  const { api } = buildApi();
+  api.onCustomEvent("equipment:effects", BarrowsEquipment._test.addSetTexts);
+  const player = playerWithEquipment(GUTHANS);
+  player.getEquipment = () => ({ getItems: () => player.items, get: (slot) => player.items[slot] });
+  assert.deepEqual(setTexts(api, player), [3]);
+  player.items[Equipment.AMULET_SLOT] = item(12851);
+  assert.deepEqual(setTexts(api, player), [2003]);
+  player.items[Equipment.WEAPON_SLOT] = item(0);
+  assert.deepEqual(setTexts(api, player), [], "the set needs the warspear");
+  const degraded = playerWithEquipment({ ...GUTHANS, [Equipment.BODY_SLOT]: 4916 });
+  assert.deepEqual(setTexts(api, degraded), [3], "a degraded piece still counts");
+});
+
+test("void, obsidian and justiciar sets report their set texts", () => {
+  const { api } = buildApi();
+  VoidEquipment.register(api);
+  registerObsidianEffects(api);
+  api.registerIncomingDamageModifier = () => {};
+  registerJusticiarEffects(api);
+  const voidSet = (helm, top, robe) => playerWithEquipment({ 0: helm, 4: top, 7: robe, 9: ItemIdentifiers.VOID_KNIGHT_GLOVES });
+  assert.deepEqual(setTexts(api, voidSet(ItemIdentifiers.VOID_MELEE_HELM, ItemIdentifiers.ELITE_VOID_TOP, ItemIdentifiers.ELITE_VOID_ROBE)), [10]);
+  assert.deepEqual(setTexts(api, voidSet(ItemIdentifiers.VOID_RANGER_HELM, ItemIdentifiers.VOID_KNIGHT_TOP, ItemIdentifiers.VOID_KNIGHT_ROBE)), [11]);
+  assert.deepEqual(setTexts(api, voidSet(ItemIdentifiers.VOID_RANGER_HELM, ItemIdentifiers.ELITE_VOID_TOP, ItemIdentifiers.ELITE_VOID_ROBE)), [12]);
+  assert.deepEqual(setTexts(api, voidSet(ItemIdentifiers.VOID_MAGE_HELM, ItemIdentifiers.VOID_KNIGHT_TOP, ItemIdentifiers.VOID_KNIGHT_ROBE)), [13]);
+  assert.deepEqual(setTexts(api, voidSet(ItemIdentifiers.VOID_MAGE_HELM, ItemIdentifiers.ELITE_VOID_TOP, ItemIdentifiers.ELITE_VOID_ROBE)), [14]);
+
+  const obsidian = playerWithEquipment({
+    0: ItemIdentifiers.OBSIDIAN_HELMET, 4: ItemIdentifiers.OBSIDIAN_PLATEBODY, 7: ItemIdentifiers.OBSIDIAN_PLATELEGS,
+  });
+  assert.deepEqual(setTexts(api, obsidian), [9], "the armour set shows without a TzHaar weapon");
+
+  const justiciar = playerWithEquipment({
+    0: ItemIdentifiers.JUSTICIAR_FACEGUARD, 4: ItemIdentifiers.JUSTICIAR_CHESTGUARD, 7: ItemIdentifiers.JUSTICIAR_LEGGUARDS,
+  });
+  assert.deepEqual(setTexts(api, justiciar), [15]);
+  justiciar.items[0] = item(0);
+  assert.deepEqual(setTexts(api, justiciar), []);
+});
+
+test("the equipment effects panel's set text varbit follows the worn set", () => {
+  const { api } = buildApi();
+  api.core.CacheDefinitions = CacheDefinitions;
+  api.onPlayerProcess = () => {};
+  api.onInterfaceActionButton = () => {};
+  api.getBonusManager = () => ({ update: () => {} });
+  EquipmentStats.register(api);
+  api.onCustomEvent("equipment:effects", BarrowsEquipment._test.addSetTexts);
+  VoidEquipment.register(buildApi().api);
+  api.onCustomEvent("equipment:effects", VoidEquipment._test.addVoidEffects);
+
+  const varbit = CacheDefinitions.getVarbitId("worn_items_set_text");
+  assert.equal(varbit, 10535);
+  const varbits = new Map();
+  const sent = [];
+  const player = playerWithEquipment(GUTHANS);
+  const sender = {
+    getVarbit: (id) => varbits.get(id) ?? 0,
+    sendVarbit(id, value) { varbits.set(id, value); sent.push(value); return sender; },
+  };
+  player.getPacketSender = () => sender;
+  player.getInterfaceId = () => -1;
+
+  api.emitCustomEvent("equipment:changed", { player });
+  assert.equal(varbits.get(varbit), 3, "Guthan's shows its Infestation text");
+  api.emitCustomEvent("equipment:changed", { player });
+  assert.deepEqual(sent, [3], "an unchanged set is not resent");
+
+  Object.assign(player.items, {
+    0: item(ItemIdentifiers.VOID_MELEE_HELM), 4: item(ItemIdentifiers.VOID_KNIGHT_TOP),
+    7: item(ItemIdentifiers.VOID_KNIGHT_ROBE), 9: item(ItemIdentifiers.VOID_KNIGHT_GLOVES),
+  });
+  api.emitCustomEvent("equipment:changed", { player });
+  assert.equal(varbits.get(varbit), 10);
+
+  player.items.fill(item(0));
+  api.emitCustomEvent("equipment:changed", { player });
+  assert.equal(varbits.get(varbit), 0, "no set brings back the default line");
+});

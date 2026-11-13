@@ -60,6 +60,18 @@ test("a full inventory whose coins carry other metadata takes nothing", (t) => {
   assert.equal(p.getInventory().getAmount(I.COINS), 10);
 });
 
+test("a full inventory whose last slot is the prize key takes the prize into that slot", (t) => {
+  const { p, house } = ownerInBuildingMode(t, 5000);
+  house.buildingMode = false;
+  const key = require("../plugins/skills/construction/Ids.Construction").obj("poh_prize_key");
+  for (let slot = 0; slot < 27; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
+  p.getInventory().setItem(27, new core.Item(key, 1));
+  open(p);
+  assert.equal(house.save.prize, 0);
+  assert.equal(p.getInventory().getAmount(key), 0);
+  assert.equal(p.getInventory().getAmount(I.COINS), 5000);
+});
+
 test("room for it all takes the prize", (t) => {
   const { p, house } = ownerInBuildingMode(t, 5000);
   open(p);

@@ -63,7 +63,8 @@ function lunarPlayer() {
     setHasVengeance(value) { player.vengeance = value; },
     getVengeanceTimer: () => player.timer,
     getInventory: () => ({ deleteItemSet() {} }),
-    getLocation: () => new (require("../dist/game/model/Location").Location)(3100, 3600),
+    getArea: () => null,
+    getLocation: () => new (require("../dist/game/model/Location").Location)(3100, 3500),
     getAttribute(key) { return player.attributes.get(key) ?? null; },
     setAttribute(key, value) { player.attributes.set(key, value); },
     performAnimation() {},
@@ -123,6 +124,20 @@ test("Vengeance Other puts the caster on the shared cooldown, not the target", (
   assert.equal(caster.vengeance, false, "Vengeance shares the cooldown");
 });
 
+// Wiki (Vengeance Other): "unable to cast Vengeance Other ... in a single-combat area inside the Wilderness".
+test("Vengeance Other is refused from single-way Wilderness and works in multi-combat Wilderness", () => {
+  const { Location } = require("../dist/game/model/Location");
+  const at = (player, x, y) => { player.getLocation = () => new Location(x, y); return player; };
+  const caster = at(lunarPlayer(), 3100, 3600), target = at(lunarPlayer(), 3101, 3600);
+  assert.equal(castVengeanceOther(caster, target), false);
+  assert.equal(target.vengeance, false);
+  assert.deepEqual([caster.experience, caster.timer.finished()], [[], true], "nothing paid, no cooldown");
+  const multi = at(lunarPlayer(), 3100, 3600), recipient = at(lunarPlayer(), 3101, 3600);
+  multi.getArea = () => ({ isMulti: () => true });
+  assert.equal(castVengeanceOther(multi, recipient), true);
+  assert.equal(recipient.vengeance, true);
+});
+
 test("a target on its own vengeance cooldown can still receive Vengeance Other", () => {
   const caster = lunarPlayer();
   const target = lunarPlayer();
@@ -166,8 +181,10 @@ test("blighted sacks pay one complete Vengeance cast, retaining regular runes an
 
 test("blighted sacks also fund Vengeance Other, with normal target and cooldown checks", () => {
   const core = PluginManager.getCoreApi();
+  // In multi-combat: Vengeance Other is refused in single-way Wilderness.
   const caster = sackCaster();
   const target = sackCaster({ x: 3101 });
+  caster.getArea = () => ({ isMulti: () => true });
   target.setAttribute("accept-aid", false);
   assert.equal(LunarSpells.handlePlayerTarget(caster, target, "Vengeance Other"), false);
   assert.equal(caster.getInventory().getAmount(core.ItemIdentifiers.BLIGHTED_VENGEANCE_SACK), 2);
@@ -400,6 +417,11 @@ test("Vengeance can't be cast in a player-owned house, and entering one ends it"
   const vengeance = event(EffectSpells.VENGEANCE);
   hooks[0](vengeance);
   assert.equal(vengeance.disabled, true);
+  assert.deepEqual(player.messages, ["You can't use this spell inside a player-owned house."]);
+  player.messages.length = 0;
+  const vengeanceOther = { player, spellbook: null, spellId: EffectSpells.VENGEANCE_OTHER.spellId(), spell: {}, disabled: null };
+  hooks[0](vengeanceOther);
+  assert.equal(vengeanceOther.disabled, true, "Wiki (Vengeance Other): not inside a player-owned house");
   assert.deepEqual(player.messages, ["You can't use this spell inside a player-owned house."]);
   const other = event(EffectSpells.BONES_TO_BANANAS);
   hooks[0](other);

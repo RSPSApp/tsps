@@ -234,3 +234,44 @@ test("a catch that misses the roll sends nothing", () => {
   const assignment = catchPart(p, { random: 0.999 });
   assert.deepEqual([sent.messages, p.sounds, assignment.found], [[], [], false]);
 });
+
+function openSack(sack, { fits = true } = {}) {
+  const p = huntingPlayer({ held: [sack] });
+  const inventory = p.getInventory;
+  p.getInventory = () => ({ ...inventory(), getAmount: (id) => p.items.get(id) ?? 0 });
+  p.getEquipment = () => ({ getItems: () => [], getAmount: () => 0 });
+  C.H.core.Bank = { TOTAL_BANK_TABS: 0, BANK_SEARCH_TAB_INDEX: -1 };
+  const exchange = C.exchange, random = Math.random;
+  C.exchange = (player, remove) => { if (!fits) return false; for (const [id, n] of remove) player.items.set(id, player.items.get(id) - n); return true; };
+  C.H.core.ItemIdentifiers = new Proxy({}, { get: (t, k) => ({ HUNTERS_LOOT_SACK_BASIC_: ITEM.SACK_BASIC, HUNTERS_LOOT_SACK_ADEPT_: ITEM.SACK_ADEPT,
+    HUNTERS_LOOT_SACK_EXPERT_: ITEM.SACK_EXPERT, HUNTERS_LOOT_SACK_MASTER_: ITEM.SACK_MASTER })[k] ?? 7000 });
+  C.H.core.Skill.WOODCUTTING = "woodcutting";
+  Math.random = () => 0.5;
+  try { assert.equal(Rumours.open({ player: p, itemId: sack }), true); }
+  finally { C.exchange = exchange; Math.random = random; }
+  return p;
+}
+const quetzinRolls = () => events.filter(([name, e]) => name === "hunter:success" && e.method === "rumour-sack").map(([, e]) => e.petChance);
+
+test("every sack plays its opening sound as the loot arrives", () => {
+  for (const sack of [ITEM.SACK_BASIC, ITEM.SACK_ADEPT, ITEM.SACK_EXPERT, ITEM.SACK_MASTER]) {
+    const p = openSack(sack);
+    assert.deepEqual(p.sounds, [[59, 1, 0]]);
+    assert.equal(p.items.get(sack), 0);
+  }
+});
+
+test("a sack that does not fit stays shut and plays no sound", () => {
+  const p = openSack(ITEM.SACK_EXPERT, { fits: false });
+  assert.deepEqual(p.sounds, []);
+  assert.equal(p.items.get(ITEM.SACK_EXPERT), 1);
+  assert.deepEqual(quetzinRolls(), []);
+});
+
+test("the expert and master sacks roll Quetzin at 1 in 1,000; the basic and adept ones not at all", () => {
+  for (const sack of [ITEM.SACK_BASIC, ITEM.SACK_ADEPT]) openSack(sack);
+  assert.deepEqual(quetzinRolls(), []);
+  openSack(ITEM.SACK_EXPERT);
+  openSack(ITEM.SACK_MASTER);
+  assert.deepEqual(quetzinRolls(), [1000, 1000]);
+});

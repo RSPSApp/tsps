@@ -118,7 +118,7 @@ test("Canifis: Solus appears, lines are held, the varbits move at Argh! and the 
   tick(2);
   const solus = owned(player, 4939);
   assert.ok(solus, "wanted_solus1 (4939) appears for the owner");
-  assert.deepEqual([solus.getLocation().getX(), solus.getLocation().getY()], [3489, 3478], "on his captured tile");
+  assert.deepEqual([solus.getLocation().getX(), solus.getLocation().getY()], [3489, 3478], "on his captured tile (four south of the player)");
   assert.equal(varbitAt(log, CUTSCENE_STATUS).at(-1)?.value, 1, "the cutscene is on");
   assert.equal(log.lines.at(-1).text, "What the...?");
   assert.equal(log.lines.at(-1).tick, 2);
@@ -141,6 +141,16 @@ test("Canifis: Solus appears, lines are held, the varbits move at Argh! and the 
   assert.deepEqual(heldTicks, table.lines, "every line on its captured tick");
   assert.equal(player.getAttribute("quest.wanted.mission"), 2);
   assert.equal(player.getAttribute("wanted:destination"), 6);
+});
+
+test("Solus appears at the captured offset from where the player scans, not on one fixed tile", (t) => {
+  // Older Canifis recordings scanned from 3487,3482 and 3485,3481 (rsprox 229/02617, 231/00365).
+  const { player } = actor(t, [3485, 3481], { position: 1, destination: 1, pending: 6 });
+  scan(player);
+  tick(2);
+  const solus = owned(player, 4939);
+  assert.ok(solus, "wanted_solus1 (4939) appears");
+  assert.deepEqual([solus.getLocation().getX(), solus.getLocation().getY()], [3485, 3477], "four south, as captured");
 });
 
 test("the fourth stop: Flames of Zamorak take 69 HP to 10, never below 1, and Savant wakes the player outside Falador Castle", (t) => {

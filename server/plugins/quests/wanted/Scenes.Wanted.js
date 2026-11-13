@@ -54,20 +54,25 @@ const PLAYER_GROUP = 217;
 const OBJECTBOX = 193;
 const OBJECTBOX_SET_BUTTONS = 2868;
 
-/** Solus's tile per mission where the capture has it; elsewhere he appears beside the player. */
-const SOLUS_TILE = {
-  1: [3489, 3478, 0],
-  2: [3194, 3361, 0],
-  3: [3316, 9612, 0],
-  6: [3082, 3249, 0],
-  13: [2797, 3162, 0],
-  18: [2550, 3082, 0],
+/**
+ * Solus appears this far from the scanning player, per mission, as the capture had it (player tile
+ * from the scan sound, Solus's from his npc add). It is one sample, not a fixed tile: the Canifis
+ * scans of rsprox recordings 229/02617 and 231/00365 put him at +0,+4, +1,+2 and +1,+3 from the
+ * player, the rev 242.1 run at +0,-4. Missions without a sample put him a tile west (ours).
+ */
+const SOLUS_OFFSET = {
+  1: [0, -4], // player 3489,3482, Solus 3489,3478
+  2: [3, -1], // 3191,3362 -> 3194,3361
+  3: [-1, 1], // 3317,9611 -> 3316,9612 (the maiden)
+  6: [-1, 1], // 3083,3248 -> 3082,3249
+  13: [0, -1], // 2797,3163 -> 2797,3162
+  18: [-1, 0], // 2551,3082 -> 2550,3082
 };
-/** The farthest a fixed tile may be from the scanning player before Solus appears beside them (ours). */
-const FIXED_TILE_REACH = 15;
-/** Captured Black Knight tile at Yanille (2553,3081, player on 2551,3082); elsewhere the same offset (ours). */
-const KNIGHT_TILE = { 18: [2553, 3081, 0] };
+const DEFAULT_SOLUS_OFFSET = [-1, 0];
+/** The summoned Black Knight's offset from the player (Yanille: player 2551,3082, knight 2553,3081). */
 const KNIGHT_OFFSET = [2, -1];
+/** Solus's captured tile at the maiden stop; the escape walk below starts beside it. */
+const DORGESHUUN_SOLUS = [3316, 9612];
 
 const CAMELOT = [2756, 3479, 0];
 const FALADOR_CASTLE = [2971, 3338, 0];
@@ -179,7 +184,7 @@ const FINALE_DONE = { variant: "rune-essence-mine-ending-the-hunt-after-defeatin
 module.exports = function createWantedScenes(api, hooks) {
   const {
     ActionDialogue, Animation, DialogueChainBuilder, Graphic, HitDamage, HitMask, Item, ItemOnGroundManager, Location,
-    NpcDialogue, PlayerDialogue, StatementDialogue,
+    NpcDialogue, PlayerDialogue, RegionManager, StatementDialogue,
   } = api.core;
   const { loadTranscripts } = require("../QuestRuntime");
   const { formatPlayerText } = require("../../npcs/NpcDialogues.plugin.js");
@@ -335,12 +340,18 @@ module.exports = function createWantedScenes(api, hooks) {
     if (npc?.isRegistered?.()) api.removeNpc(npc);
   }
 
-  function solusTile(player, mission) {
+  /** The tile `offset` from the player, or the tile west of them (then theirs) when it is blocked. */
+  function besidePlayer(player, offset) {
     const here = player.getLocation();
-    const fixed = SOLUS_TILE[mission];
-    if (fixed && near(here, at(fixed), FIXED_TILE_REACH)) return at(fixed);
-    // Ours: uncaptured destinations put him one tile west of the player.
-    return new Location(here.getX() - 1, here.getY(), here.getZ());
+    for (const [dx, dy] of [offset, DEFAULT_SOLUS_OFFSET]) {
+      const tile = new Location(here.getX() + dx, here.getY() + dy, here.getZ());
+      if (!RegionManager.blocked(tile, player.getPrivateArea?.() ?? null)) return tile;
+    }
+    return here.clone?.() ?? new Location(here.getX(), here.getY(), here.getZ());
+  }
+
+  function solusTile(player, mission) {
+    return besidePlayer(player, SOLUS_OFFSET[mission] ?? DEFAULT_SOLUS_OFFSET);
   }
 
   function playScanEffect(player) {
@@ -439,8 +450,12 @@ module.exports = function createWantedScenes(api, hooks) {
     }
     if (event.escape && npc) {
       npc.getMovementQueue().reset();
-      for (const [x, y] of event.escape) npc.getMovementQueue().addSteps(new Location(x, y, here.getZ()));
-      npc.setSpawnPosition?.(new Location(...event.escape.at(-1), here.getZ()));
+      // The captured walk, moved with Solus when he appeared off his captured tile.
+      const from = npc.getLocation();
+      const dx = from.getX() - DORGESHUUN_SOLUS[0], dy = from.getY() - DORGESHUUN_SOLUS[1];
+      const steps = event.escape.map(([x, y]) => new Location(x + dx, y + dy, here.getZ()));
+      for (const step of steps) npc.getMovementQueue().addSteps(step);
+      npc.setSpawnPosition?.(steps.at(-1));
     }
     if (event.camReset) sender.sendCameraReset();
     if (event.teleport) player.moveTo(at(event.teleport));
@@ -480,9 +495,7 @@ module.exports = function createWantedScenes(api, hooks) {
   function summonKnight(player, state) {
     if (player.isRegistered?.() === false) return;
     const here = player.getLocation();
-    const fixed = KNIGHT_TILE[state.mission];
-    const tile = fixed && near(here, at(fixed), FIXED_TILE_REACH) ? at(fixed)
-      : new Location(here.getX() + KNIGHT_OFFSET[0], here.getY() + KNIGHT_OFFSET[1], here.getZ());
+    const tile = besidePlayer(player, KNIGHT_OFFSET);
     const knight = spawn(player, BLACK_KNIGHT, tile);
     if (!knight) return;
     const [say] = overheads(POSITION_SCENES[6].variant, ["Black Knight"]);

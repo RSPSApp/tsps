@@ -57,14 +57,19 @@ Common: at +2 the cutscene starts (`cutscene_status`, minimap 2, npc/obj ops hid
 destination's mission id) appears facing the player, the camera looks at him (height 100, rates 100/100).
 Every line is held (no "Click here to continue"), six or seven ticks apart; only the last continues.
 
-| Stop | Captured at | Solus tile | Events | Varbits | Item box |
+Solus's tile is not fixed per stop: it follows where the player scans from. The Canifis scans of
+rsprox.net recordings 229/02617 and 231/00365 put him +0,+4, +1,+2 and +1,+3 from the player; this run
++0,-4. The plugin uses this run's offset for each stop (a blocked tile falls back to the one west of
+the player); the tiles below are this run's sample. The Dorgesh-Kaan walk-off moves with him.
+
+| Stop | Captured at | Solus tile (offset from the player) | Events | Varbits | Item box |
 | --- | --- | --- | --- | --- | --- |
-| 1 Canifis | 2449 | 3489,3478 | +22 seq 714; +29 gone, camera reset | +29 | +83 grey toy horsey (2526) |
-| 2 (Draynor Market) | 2685 | 3082,3249 | +36 spotanim 345; +50 spotanim 343 + seq 1818, sound 199; +51 player seq 1816 + spotanim 342, sound 200; +54 player on 2756,3479 (Camelot) | +121 | +97 blue cape |
-| 3 Champions' Guild | 2901 | 3194,3361 | +16 seq 1979, projectile 390, sound 183; +17 gone | +39 | +60 eye patch |
-| 4 (Brimhaven pub) | 3240 | 2797,3162 | +49 player spotanim 78 (delay 20), Solus seq 811, sound 1655; +50 player seq 2724 and a 59 hit (69 HP to 10); +55 player on 2971,3338 | +145 | +145 bone spear |
-| 5 Dorgesh-Kaan mine | 3634 | 3316,9612 (the "Woman", 6264) | +38 player seq 1156 + spotanim 245, sound 2727; +40 becomes 4941; +48 walks off to 3302,9618; +65 gone | +156 | +156 Greenman's ale |
-| 6 (Yanille pub) | 3949 | 2550,3082 | +23 seq 2720; +25 cutscene ends, "Solus" line continues; a tick after the continue the knight (4959) on 2553,3081 says "Solus commands you die now!" with smokepuff 86, sound 1930 and a hint arrow, and attacks | knight's death | knight's death: 20 noted pure essence (7937) |
+| 1 Canifis | 2449 | 3489,3478 (+0,-4) | +22 seq 714; +29 gone, camera reset | +29 | +83 grey toy horsey (2526) |
+| 2 (Draynor Market) | 2685 | 3082,3249 (-1,+1) | +36 spotanim 345; +50 spotanim 343 + seq 1818, sound 199; +51 player seq 1816 + spotanim 342, sound 200; +54 player on 2756,3479 (Camelot) | +121 | +97 blue cape |
+| 3 Champions' Guild | 2901 | 3194,3361 (+3,-1) | +16 seq 1979, projectile 390, sound 183; +17 gone | +39 | +60 eye patch |
+| 4 (Brimhaven pub) | 3240 | 2797,3162 (+0,-1) | +49 player spotanim 78 (delay 20), Solus seq 811, sound 1655; +50 player seq 2724 and a 59 hit (69 HP to 10); +55 player on 2971,3338 | +145 | +145 bone spear |
+| 5 Dorgesh-Kaan mine | 3634 | 3316,9612 (-1,+1; the "Woman", 6264) | +38 player seq 1156 + spotanim 245, sound 2727; +40 becomes 4941; +48 walks off to 3302,9618; +65 gone | +156 | +156 Greenman's ale |
+| 6 (Yanille pub) | 3949 | 2550,3082 (-1,+0) | +23 seq 2720; +25 cutscene ends, "Solus" line continues; a tick after the continue the knight (4959) on 2553,3081 (+2,-1) says "Solus commands you die now!" with smokepuff 86, sound 1930 and a hint arrow, and attacks | knight's death | knight's death: 20 noted pure essence (7937) |
 
 ### Finale (ticks from Aubury's Curse, 4144)
 
@@ -80,7 +85,8 @@ in; +23 "VERY well done, ..." continues.
 
 ## Not covered
 
-- Uncaptured destinations put Solus a tile west of the player and the knight two east, one south (ours).
+- Uncaptured destinations put Solus a tile west of the player (ours). How live picks his tile is not
+  known; one offset per stop is used, though the Canifis samples differ from each other.
 - The Flames of Zamorak damage: 85% of current HP rounded up, never fatal, fitted to the one sample
   (the Wiki: "a high percentage of your current Hitpoints", it "will not kill you").
 - The finale instance is not rotated; live's is.

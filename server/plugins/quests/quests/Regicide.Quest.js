@@ -144,6 +144,15 @@ module.exports = function registerRegicideQuest(api) {
     ObjectIdentifiers.DENSE_FOREST_5,
   ]);
   const TRIPWIRE_IDS = new Set([ObjectIdentifiers.TRIPWIRE_3, ObjectIdentifiers.TRIPWIRE]);
+  const ARROW_TRAP_LOC = "regicide_trap_arrowtrip";
+  const ARROW_TRAP_ANIMATION = "arrowtrip";
+  const ARROW_PROJECTILE = "iron_arrow_travel";
+  const ARROW_FLIGHT_CYCLES = 40;
+  const TRIPWIRE_WITH_ARROWS_SOUND = 1360;
+  const ARROW_HIT_DELAY_TICKS = 4;
+  const ARROW_DAMAGE = 5;
+  // Not the player's index: walking away cancels those, and the arrows are already flying.
+  const ARROW_TRAP_TASK_KEY = "regicide:arrow-trap";
   const STICKS_IDS = new Set([ObjectIdentifiers.STICKS]);
   const LEAVES_IDS = new Set([ObjectIdentifiers.LEAVES, ObjectIdentifiers.LEAVES_2, ObjectIdentifiers.LEAVES_3]);
   const ISAFDAR_LOG_BALANCE_ID = ObjectIdentifiers.LOG_BALANCE_10;
@@ -605,6 +614,37 @@ module.exports = function registerRegicideQuest(api) {
       : { x: 2305, y: 3213, z };
   }
 
+  /**
+   * The snag fires the wire's arrow traps: every regicide_trap_arrowtrip at the corners of the
+   * wire plays arrowtrip and shoots iron_arrow_travel at the player, with tripwire_with_arrows, and
+   * two 5 hits land 4 ticks later (rsprox_transcripts/230/02969.txt ticks 157 and 161; the same
+   * four traps, sound and 5/5 hits on every snag in 230/02972.txt and 237/01105.txt).
+   */
+  function fireArrowTrap(player, wire) {
+    const { CacheDefinitions, Projectile, Sound, Sounds, CountdownTask, TaskManager } = api.core;
+    const trapId = CacheDefinitions.getLocId(ARROW_TRAP_LOC);
+    const arrow = CacheDefinitions.getSpotanimId(ARROW_PROJECTILE);
+    const trip = new api.core.Animation(CacheDefinitions.getSeqId(ARROW_TRAP_ANIMATION));
+    const target = player.getLocation();
+    for (let x = wire.x - 1; x <= wire.x + 2; x++) {
+      for (let y = wire.y - 1; y <= wire.y + 2; y++) {
+        const trap = MapObjects.get(trapId, new Location(x, y, wire.z ?? player.getLocation().getZ()), null);
+        if (!trap) continue;
+        trap.performAnimation(trip);
+        new Projectile(trap.getLocation(), target, player, arrow, 0, ARROW_FLIGHT_CYCLES, 4, 35, null)
+          .withAngle(45).withProgress(0).sendProjectile();
+      }
+    }
+    Sounds.sendSound(player, new Sound(TRIPWIRE_WITH_ARROWS_SOUND, 1, 20, 0));
+    TaskManager.submit(new CountdownTask(ARROW_TRAP_TASK_KEY, ARROW_HIT_DELAY_TICKS, () => {
+      if (!player.isRegistered()) return;
+      player.getCombat().getHitQueue().addPendingDamage([
+        new HitDamage(ARROW_DAMAGE, HitMask.RED),
+        new HitDamage(ARROW_DAMAGE, HitMask.RED),
+      ]);
+    }));
+  }
+
   /** Wiki's chance chart is 31/256 at level 1, rising to 156/256 at level 99. */
   function stepOverTripwire(event) {
     const { player, object, location } = event;
@@ -617,8 +657,8 @@ module.exports = function registerRegicideQuest(api) {
     // A snag still crosses: rsprox_transcripts/230/02969.txt tick 156-157 and 237/01105.txt tick 13814-13815
     // step over (regicide_stepover), then "You snag the trip wire as you step over it.", "You have been
     // poisoned!" and poison varp 0 -> 10. poisonEntity starts it, says the second line and honours immunity.
-    if (Math.random() >= successChance) {
-      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(10, HitMask.RED)]);
+    const snagged = Math.random() >= successChance;
+    if (snagged) {
       player.sendMessage("You snag the trip wire as you step over it.");
       api.core.CombatFactory.poisonEntity(player, 10);
     }
@@ -634,6 +674,8 @@ module.exports = function registerRegicideQuest(api) {
       axis === "y" ? destination : position.getY(),
       position.getZ(),
     ));
+    // The arrows aim at the far side, where the step lands.
+    if (snagged) fireArrowTrap(player, location);
   }
 
   function leafTrapBounds(event) {

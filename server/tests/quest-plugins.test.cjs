@@ -14356,7 +14356,7 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
     'touching a completed seal replays its memory so its return transport stays available');
 });
 
-test('Regicide tripwires use the Agility success roll and apply the dart hit and poison on failure', () => {
+test('Regicide tripwires use the Agility success roll and snag with poison and the arrow trap on failure', () => {
   const { api: base } = mockApi();
   const objectHooks = [], poisoned = [];
   const core = { ...base.core, CombatFactory: { ...base.core.CombatFactory, poisonEntity: (target, severity) => poisoned.push([target, severity]) } };
@@ -14413,7 +14413,8 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
     const failure = interactWith(caught.player);
     interact(failure);
     assert.equal(failure.handled, true);
-    assert.equal(caught.state.hits[0][0].getDamage(), 10);
+    // The arrows land 4 ticks later (regicide-trip-wire-arrow-trap.test.cjs).
+    assert.deepEqual(caught.state.hits, [], 'no hit on the snag tick');
     // rsprox_transcripts/230/02969.txt and 237/01105.txt: the snag line, real poison at 10, and the crossing.
     assert.deepEqual(caught.state.said, ['You snag the trip wire as you step over it.']);
     assert.deepEqual(poisoned, [[caught.player, 10]]);

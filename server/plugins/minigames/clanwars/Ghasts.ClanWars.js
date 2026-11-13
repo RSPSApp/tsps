@@ -134,7 +134,7 @@ function spoil(player) {
   const inventory = player.getInventory(), items = inventory.getItems(), rotten = C.core.ItemIdentifiers.ROTTEN_FOOD;
   for (let slot = 0; slot < inventory.capacity(); slot++) {
     const item = items[slot];
-    if (!item || item.getId() < 0 || !food(C.core.CacheDefinitions.getItem(item.getId()), item, rotten)) continue;
+    if (!item || !C.core.CacheDefinitions.hasItem(item.getId()) || !food(C.core.CacheDefinitions.getItem(item.getId()), item, rotten)) continue;
     const count = item.getAmount();
     const empty = count === 1 ? slot : items.findIndex((_, i) => !inventory.isSlotOccupied(i));
     if (empty < 0) continue;

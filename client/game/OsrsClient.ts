@@ -8,7 +8,7 @@ import { initializeWidgetItemModel } from "../widgets/WidgetItemModel";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
-import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
+import { closeOpenModal, hasOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
 import { handleCommandShortcut } from "./chat/commandShortcuts";
 
@@ -55,6 +55,7 @@ import {
     VARBIT_ACTIVE_SPELLBOOK,
     VARBIT_FOLLOWEROPS_DEPRIORITISED,
     VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
+    VARBIT_KEYBINDING_ESC_TO_CLOSE,
     VARBIT_MOUSECAM_DISABLED,
     VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION,
     VARBIT_STAMINA_ACTIVE,
@@ -4456,6 +4457,16 @@ export class OsrsClient {
     private handleSidePanelHotkey(event: KeyboardEvent): void {
         const shortcut = this.resolveKeyShortcut(event);
         if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
+            return;
+        }
+        // Script 2068 (toplevel_keypress): with "Esc closes current interface" on, an Esc that
+        // closes a modal does only that; the side panel stays as it is.
+        if (
+            (event.key === "Escape" || event.code === "Escape") &&
+            (this.varManager?.getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) ?? 0) !== 0 &&
+            this.widgetManager &&
+            hasOpenModal(this.widgetManager)
+        ) {
             return;
         }
 

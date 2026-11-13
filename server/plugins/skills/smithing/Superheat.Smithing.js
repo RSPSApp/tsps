@@ -12,6 +12,10 @@
  * gives Magic and Smithing XP on the same tick. Cast on coal (rev 237): "You need to cast
  * superheat item on ore.", spotanim 85 (failedspell_impact) at height 92, the same tab switch and
  * sound 191; no XP.
+ *
+ * Jogre bones (Tai Bwo Wannai Trio): Wiki Superheat Item trivia and Burnt jogre bones have the spell
+ * in place of a furnace, turning them into burnt jogre bones for 53 Magic and 25 Cooking XP with
+ * Cooking 30. No recording; the cast effects are the bar's.
  */
 const SPELL_NAME = "Superheat Item";
 const LEVEL = 43;
@@ -27,6 +31,10 @@ const FAIL_SOUND = 191;
 /** toplevel_sidebutton_switch: back to the spellbook tab. */
 const SIDEBUTTON_SWITCH_SCRIPT = 915;
 const SPELLBOOK_TAB = 6;
+
+/** Wiki Burnt jogre bones: Superheat Item needs Cooking 30 and gives 25 Cooking XP. */
+const JOGRE_COOKING_LEVEL = 30;
+const JOGRE_COOKING_XP = 25;
 
 const MESSAGE = {
   NOT_ORE: "You need to cast superheat item on ore.",
@@ -71,6 +79,7 @@ function castOnItem(event) {
   const inventory = player.getInventory();
   if (inventory.getItems()[slot]?.getId() !== itemId || !spell.canCast(player, false)) return;
   if (itemId === core.ItemIds.ELEMENTAL_ORE) return fail(player, MESSAGE.NOT_HOT_ENOUGH);
+  if (itemId === core.ItemIdentifiers.JOGRE_BONES) return superheatJogreBones(player, slot);
   const recipe = recipeFor(player, itemId);
   if (!recipe) return fail(player, MESSAGE.NOT_ORE);
 
@@ -93,6 +102,29 @@ function castOnItem(event) {
   player.getPacketSender().sendSound(CAST_SOUND);
   player.getSkillManager().addExperiences(core.Skill.MAGIC, MAGIC_XP);
   player.getSkillManager().addExperiences(core.Skill.SMITHING, Smithing.smeltingXp(player, recipe));
+}
+
+function playCast(player) {
+  player.performAnimation(new core.Animation(CAST_ANIMATION));
+  player.performGraphic(new core.Graphic(CAST_GRAPHIC, 0, core.GraphicHeight.HIGH));
+  player.getPacketSender().sendClientScript(SIDEBUTTON_SWITCH_SCRIPT, SPELLBOOK_TAB);
+  player.getPacketSender().sendSound(CAST_SOUND);
+}
+
+function superheatJogreBones(player, slot) {
+  const skills = player.getSkillManager();
+  // Wiki (Burnt jogre bones): the Cooking level is not boostable; Magic is, through canCast.
+  if (skills.getMaxLevel(core.Skill.COOKING) < JOGRE_COOKING_LEVEL) {
+    player.sendMessage(`You need a Cooking level of at least ${JOGRE_COOKING_LEVEL} to burn Jogre bones.`);
+    return;
+  }
+  if (!spell.canCast(player, true)) return;
+  // The bones' own slot: the spell's runes were just taken, so the slot still holds the bones.
+  player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.BURNT_JOGRE_BONES, 1));
+  player.getInventory().refreshItems();
+  playCast(player);
+  skills.addExperiences(core.Skill.MAGIC, MAGIC_XP);
+  skills.addExperiences(core.Skill.COOKING, JOGRE_COOKING_XP);
 }
 
 /** Ticks to the next cast; content may cast faster ("skills:action-interval", a league relic's 2-tick pace). */

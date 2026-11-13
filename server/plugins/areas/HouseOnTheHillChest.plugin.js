@@ -24,10 +24,10 @@ const OPEN_SOUND = 2387;
 const HEAD_NEUTRAL = 589;
 const HEAD_QUIZ = 554;
 /**
- * Ours: the outcome weights. The capture has 21 opens, 13 clunks and 13 spikes from 47 tries;
- * no source gives the real odds.
+ * One third each: the Wiki's Stone chest (House on the Hill) page, from a developer statement
+ * of 9 August 2023. Rec 3040 fits it: 11 opens (sound 2387), 13 clunks and 13 spikes.
  */
-const OUTCOME_WEIGHTS = { open: 2, clunk: 1, spike: 1 };
+const OUTCOME_WEIGHTS = { open: 1, clunk: 1, spike: 1 };
 
 const TEXT = {
   hole: "It looks like the hole in the front of this locked chest exactly the size of a numulite.",

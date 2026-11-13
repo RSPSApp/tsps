@@ -22,24 +22,27 @@ near the hole. Perhaps you should feed in more numulites?". From then on Search 
 
 Each "Yes, insert 100 numulites." removes 100 and has one outcome:
 
-- **Clunk** (13 of 47): "The numulites seem to clunk hollowly and nothing happens to the chest.",
+- **Clunk** (13 of 37): "The numulites seem to clunk hollowly and nothing happens to the chest.",
   sound 2386.
-- **Spike** (13 of 47): "The numulites seem to rattle louder and a spike shoots out of the hole,
+- **Spike** (13 of 37): "The numulites seem to rattle louder and a spike shoots out of the hole,
   stabbing you.", the player says "Ow!", sound 2386 and a hit. The 11 hits with a known
   Hitpoints level fit `5 + floor(hitpoints / 20)` (99, 94, 90, 85, 81 -> 9; 73, 67 -> 8; 59, 52,
   46 -> 7; 39 -> 6).
-- **Open** (21 of 47): sound 2387, the collection log message, the note in the inventory and an
-  object box with it: "The chest pops open and you snatch a very aged piece of parchment before
-  it slams shut again." The notes came in item order, fossil_note1 (Scribbled note) to
-  fossil_note10 (Short note), each after the previous one had been put into the note book.
+- **Open** (11 of 37: ten notes and the all-notes try): sound 2387, the collection log message,
+  the note in the inventory and an object box with it: "The chest pops open and you snatch a
+  very aged piece of parchment before it slams shut again." The notes came in item order,
+  fossil_note1 (Scribbled note) to fossil_note10 (Short note), each after the previous one had
+  been put into the note book.
   With all ten (t14378): "You don't find anything much of interest." and the player's
   (chatquiz1) "Hmm, maybe I have all the old notes now.", sound 2387.
+
+The odds are a third each (the Wiki's Stone chest (House on the Hill) page, from a developer
+statement of 9 August 2023), which the 11/13/13 above fits.
 
 Using a numulite on the chest is the engine's "Nothing interesting happens." (t11967).
 
 ## Ours
 
-- The outcome weights (2 open : 1 clunk : 1 spike); the capture's 21/13/13 is all there is.
 - Which notes count as owned: inventory, worn and bank. Live also counts the note book, which
   tsps doesn't have yet.
 - A full inventory drops the note under the player; the capture always had room.

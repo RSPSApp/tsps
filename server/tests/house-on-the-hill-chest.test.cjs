@@ -179,10 +179,9 @@ test("with all ten notes the open outcome finds nothing (t14378)", (t) => {
   assert.deepEqual(p.sounds, [2387]);
 });
 
-test("the outcome roll covers open, clunk and spike", () => {
-  const seen = new Set();
-  for (const value of [0, 0.49, 0.5, 0.74, 0.75, 0.999]) withRoll(value, () => seen.add(Chest._test.rollOutcome()));
-  assert.deepEqual([...seen].sort(), ["clunk", "open", "spike"]);
+test("the outcome roll gives open, clunk and spike a third each", () => {
+  const at = (value) => { let outcome; withRoll(value, () => { outcome = Chest._test.rollOutcome(); }); return outcome; };
+  assert.deepEqual([0, 0.33, 0.34, 0.66, 0.67, 0.999].map(at), ["open", "open", "clunk", "clunk", "spike", "spike"]);
 });
 
 test("other Stone chests with Search (DT2 Stranglewood lore chest 48758) fall through untouched", (t) => {

@@ -2396,8 +2396,9 @@ module.exports = {
     api.onPlayerLogout(cancelKegSway);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerLogin(resumePrayerRegenerationTimer);
-    api.onPlayerDeath(clearPrayerRegeneration);
-    api.onPlayerDeath(clearDivineOnDeath);
+    // "player:died" reaches every death; `onPlayerDeath` stops at the first handler (a quest's own respawn).
+    api.onCustomEvent("player:died", clearPrayerRegeneration);
+    api.onCustomEvent("player:died", clearDivineOnDeath);
     api.onItemOnItem(pourPotion, { noted: false });
     api.onItemAction(drinkFromLaterOp);
     api.onItemAction(emptyVessel);

@@ -15,6 +15,8 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+const { GameConstants } = require("../dist/game/GameConstants");
 
 const HOME = [3222, 3218];
 const WARNING = "<col=ff3045>Your Goading potion has almost run out!";
@@ -217,4 +219,32 @@ test("in single-way combat only one monster turns on the player", async (t) => {
   tick(f, 1);
   const attacking = [first, second].filter((npc) => npc.getCombat().getTarget() === f.p);
   assert.equal(attacking.length, 1);
+});
+
+// onPlayerDeath stops at the first hook that sets `handled` (a quest's own respawn, such as a quest boss fight), so the
+// potion effects listen on "player:died", which every death reaches. Review of #4212.
+test("a death a quest's respawn takes still ends the goading, prayer regeneration and divine effects", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, dose4());
+  f.inv.setItem(1, new core.Item(I.PRAYER_REGENERATION_POTION_4_, 1));
+  f.inv.setItem(2, new core.Item(I.DIVINE_SUPER_ATTACK_POTION_4_, 1));
+  await drink(f, 0);
+  tick(f, 3);
+  await drink(f, 1);
+  tick(f, 3);
+  await drink(f, 2);
+  assert.ok(f.timer() > 0, "the goading potion runs");
+  assert.ok(f.p.getAttribute("potions:prayer-regen:state"), "prayer regeneration runs");
+  assert.ok(f.p.getAttribute("potions:divine:state"), "the divine potion runs");
+  t.mock.method(PM, "emitPlayerDeath", (event) => { event.handled = true; return true; });
+  t.mock.method(PM, "emitShouldDropItemsOnDeath", () => false);
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE, "requestSave", () => {});
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", () => {});
+  const task = new PlayerDeathTask(f.p);
+  for (let i = 0; i < 5; i++) task.execute(); // the animation, then the death four ticks on
+  assert.equal(f.timer(), 0, "the goading timer is cleared");
+  assert.equal(f.p.getAttribute("potions:prayer-regen:state"), null, "prayer regeneration is cleared");
+  assert.equal(f.p.getAttribute("potions:divine:state"), null, "the divine potion is cleared");
+  assert.ok(f.messages.includes("<col=ff3045>The effects of your Prayer Regeneration potion have worn off."));
+  assert.ok(!f.messages.includes(WORN_OFF), "goading ends without a line on death");
 });

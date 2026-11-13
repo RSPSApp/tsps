@@ -12085,7 +12085,7 @@ test('Astral Contact and its former name use one astral, one cosmic and two air 
  const {Spell}=PluginManager.getCoreApi(),{LunarSpells}=require('../dist/game/content/combat/magic/LunarSpells');
  const {TaskManager}=require('../dist/game/task/TaskManager');
  const original=Spell.prototype.canCast,emit=PluginManager.emitCustomEvent;let costs,lists=0,xp=0;
- const player={getIndex:()=>1,isRegistered:()=>true,isDyingReturn:()=>false,getHitpoints:()=>99,getInterfaceId:()=>-1,getPacketSender:()=>({sendSoundEffect(){}}),getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){}};
+ const player={getIndex:()=>1,isRegistered:()=>true,isDyingReturn:()=>false,getHitpoints:()=>99,getInterfaceId:()=>-1,getInterfaceOpens:()=>0,getPacketSender:()=>({sendSoundEffect(){}}),getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){}};
  try {
   Spell.prototype.canCast=function(){costs=this.itemsRequired().map(i=>[i.getId(),i.getAmount()]);return true;};PluginManager.emitCustomEvent=(name)=>{if(name==='magic:npc-contact')lists++;};
   for(const name of ['Astral Contact','NPC Contact']){

@@ -57,6 +57,10 @@ function caster() {
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: (skill, xp) => player.xp.push(xp) }),
     getPacketSender: () => sender,
     getInterfaceId() { return this.interfaceId; },
+    // Player.setInterfaceId's open count: a change to a mounted id is one open.
+    opens: 0,
+    getInterfaceOpens() { return this.opens; },
+    setInterfaceId(id) { if (id !== this.interfaceId && id >= 0) this.opens++; this.interfaceId = id; },
     sendMessage(message) { this.messages.push(message); },
   };
   return player;
@@ -249,16 +253,51 @@ test("dying while the cast is pending ends it unpaid, also after a respawn", () 
 
 test("another modal opened while the cast is pending ends it unpaid; the list doesn't replace it", () => {
   const player = caster();
-  const state = castThrough(player, (tick) => { if (tick === 3) player.interfaceId = 12; });
+  const state = castThrough(player, (tick) => { if (tick === 3) player.setInterfaceId(12); });
   assert.equal(state.paid, 0);
   assert.deepEqual(player.xp, []);
   assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
-  // Walking and plain ticks don't (first test); a modal open since the click doesn't either.
+  // Walking and plain ticks don't (first test); a modal open since the click doesn't, nor closing it.
   const open = caster();
-  open.interfaceId = 12;
+  open.setInterfaceId(12);
   assert.equal(castThrough(open).paid, 1);
-  player.interfaceId = -1;
+  open.setInterfaceId(12);
+  assert.equal(castThrough(open, (tick) => { if (tick === 3) open.setInterfaceId(-1); }).paid, 1);
+  player.setInterfaceId(-1);
   assert.equal(castThrough(player).paid, 1);
+});
+
+test("the same modal mounted again, or a modal opened and closed between ticks, ends the cast too", () => {
+  // The bank held since the click, closed and opened again: the new bank owns the screen, same id or not.
+  const remount = caster();
+  remount.setInterfaceId(12);
+  const state = castThrough(remount, (tick) => {
+    if (tick === 3) { remount.setInterfaceId(-1); remount.setInterfaceId(12); }
+  });
+  assert.equal(state.paid, 0);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  const transient = caster();
+  const brief = castThrough(transient, (tick) => {
+    if (tick === 3) { transient.setInterfaceId(12); transient.setInterfaceId(-1); }
+  });
+  assert.equal(brief.paid, 0);
+  assert.deepEqual(transient.xp, []);
+});
+
+test("Player counts a modal open on each change to a mounted id, not on a close or the same id held", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = Object.create(Player.prototype);
+  player.interfaceId = -1;
+  player.interfaceOpens = 0;
+  PluginManager.emitCustomEvent = () => {};
+  player.setInterfaceId(12);
+  player.setInterfaceId(12);
+  assert.equal(player.getInterfaceOpens(), 1);
+  player.setInterfaceId(-1);
+  assert.equal(player.getInterfaceOpens(), 1);
+  player.setInterfaceId(12);
+  player.setInterfaceId(75);
+  assert.equal(player.getInterfaceOpens(), 3);
 });
 
 test("a contact the cache shows locked is refused: no last contact, no talk (Krystilia, Konar, Mortimer)", () => {

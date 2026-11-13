@@ -822,16 +822,17 @@ export class LunarSpells {
         if (NPC_CONTACT_PENDING.has(player) || !spell.castable(player)) return true;
         NPC_CONTACT_PENDING.add(player);
         spell.playCast(player);
-        const modal = player.getInterfaceId();
+        // Closing the modal held since the click is fine; any modal opened after it (another one, the same one
+        // mounted again, or one opened and closed between ticks) owns the screen instead.
+        const opens = player.getInterfaceOpens();
         let ticks = 0;
         TaskManager.submit(new class extends Task {
             constructor() { super(1, false); }
             execute(): void {
                 // Ours (no capture dies or opens a modal mid-cast): dying, logging out or another modal taking the
                 // screen ends the cast unpaid, so it never pays or opens the list in a later life or over that modal.
-                const now = player.getInterfaceId();
                 const ended = !player.isRegistered() || player.isDyingReturn() || player.getHitpoints() <= 0
-                    || (now !== modal && now !== -1);
+                    || player.getInterfaceOpens() !== opens;
                 if (!ended && ++ticks < NPC_CONTACT_TICKS) return;
                 this.stop();
                 NPC_CONTACT_PENDING.delete(player);

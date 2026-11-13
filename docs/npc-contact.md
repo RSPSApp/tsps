@@ -27,8 +27,10 @@ contacts in `server/plugins/interface/NpcContact.plugin.js` with `server/plugins
 - Slayer masters (Turael, Mazchna, Vannaka, Chaeldar, Nieve, Duradel, Krystilia, Konar, Spria, Mortimer):
   the NPC's own Talk-to through `npc-dialogue:start`, with no NPC in the world.
 - Ours: a second click on the spell before the list has opened is ignored, so one list costs one cast.
-- Ours: dying, logging out or another modal opening before the list does ends the cast unpaid (no capture
-  shows either), so it never pays or opens the list in a later life or over that modal. Walking doesn't.
+- Ours: dying, logging out or any modal opening before the list does ends the cast unpaid (no capture
+  shows either), so it never pays or opens the list in a later life or over that modal. That counts the
+  same modal mounted again after a close, and one opened and closed between ticks (`Player.getInterfaceOpens`).
+  Walking, or closing the modal open since the click, doesn't.
 - Locked contacts are refused: cs2 9733's lock conditions (the greyed-out head) are checked again on the
   trigger, since the greyed row still has its Contact op. The list stays open and nothing is sent (ours).
   For example Krystilia needs `wilderness_master_warning`, Konar `konar_spoken`, Mortimer

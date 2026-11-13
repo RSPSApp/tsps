@@ -154,6 +154,8 @@ export class Player extends Mobile {
     private session: PlayerSession;
     public status: PlayerStatus = PlayerStatus.NONE;
     public interfaceId: number = -1
+    /** Counts modal opens (a change to a mounted id), so a held id can be told from the same id mounted again. */
+    private interfaceOpens = 0
     /** The process cycle of the player's last click or key press (0 before any since login). */
     public lastInputCycle = 0;
     private multiIcon: number;
@@ -1137,12 +1139,18 @@ export class Player extends Mobile {
         return this.interfaceId;
     }
 
+    /** How many modals have opened so far; a new open, even of the same id after a close, moves it. */
+    public getInterfaceOpens(): number {
+        return this.interfaceOpens;
+    }
+
     public setInterfaceId(interfaceId: number): this {
         const previousId = this.interfaceId;
         if (this.interfaceId >= 0 && interfaceId >= 0 && this.interfaceId !== interfaceId) {
             PluginManager.emitCustomEvent("interface:closed", { player: this, interfaceId: this.interfaceId });
         }
         this.interfaceId = interfaceId;
+        if (previousId !== interfaceId && interfaceId >= 0) this.interfaceOpens++;
         if (previousId !== interfaceId) {
             PluginManager.emitCustomEvent("interface:changed", { player: this, previousId, interfaceId });
         }

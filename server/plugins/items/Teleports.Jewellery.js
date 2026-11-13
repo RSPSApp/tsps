@@ -1,6 +1,7 @@
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
+const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 
 /** Teleport jewellery usable up to this Wilderness level unless a piece says otherwise. */
 const DEFAULT_WILDERNESS_LEVEL = 20;
@@ -10,6 +11,18 @@ const LOCKED_DESTINATION_MESSAGE = "You have not yet unlocked that destination."
 const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 
 const FARMING_GUILD_INTERMEDIATE_LEVEL = 45;
+
+/**
+ * Destinations marked `kourend` need a first trip to Great Kourend on Veos's ship: the
+ * zeah_playerhasvisited varbit (Client of Kourend saves and resends it). Wiki (Games necklace):
+ * Wintertodt Camp "Must have visited Zeah at least once". The POH jewellery box's init script
+ * strikes Wintertodt Camp, the Woodcutting Guild and the Farming Guild out on the one bit, so the
+ * skills necklace's two Kourend guilds share the rule (cache; the Wiki is silent for them).
+ */
+function visitedKourend(player) {
+  const id = CacheDefinitions.getVarbitId("zeah_playerhasvisited");
+  return id != null && (player.getPacketSender().getVarbit(id) ?? 0) > 0;
+}
 
 /**
  * Charged pieces, most charges first. `spent` is what the last charge leaves
@@ -95,7 +108,7 @@ const JEWELLERY = [
       } },
       // Wiki (Games necklace): "Requires completion of Tears of Guthix quest".
       { label: "Tears of Guthix", tile: [3245, 9500, 2], quest: { key: "tears_of_guthix", name: "Tears of Guthix" } },
-      { label: "Wintertodt Camp", tile: [1627, 3941, 0] },
+      { label: "Wintertodt Camp", tile: [1627, 3941, 0], kourend: true },
     ],
   },
   {
@@ -153,9 +166,10 @@ const JEWELLERY = [
       { label: "Mining Guild", tile: [3048, 9763, 0] },
       { label: "Crafting Guild", tile: [2935, 3295, 0] },
       { label: "Cooking Guild", tile: [3143, 3439, 0] },
-      { label: "Woodcutting Guild", tile: [1661, 3505, 0] },
+      { label: "Woodcutting Guild", tile: [1661, 3505, 0], kourend: true },
       {
         label: "Farming Guild",
+        kourend: true,
         // Players who can enter the intermediate tier land inside the guild.
         tile: (player) => (player.getSkillManager().getMaxLevel(Skill.FARMING) >= FARMING_GUILD_INTERMEDIATE_LEVEL
           ? [1248, 3725, 0]
@@ -333,4 +347,4 @@ const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE };
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend };

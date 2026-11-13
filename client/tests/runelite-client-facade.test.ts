@@ -15,6 +15,7 @@ import { CacheSystem } from "../rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../rs/cache/loader/CacheLoaderFactory";
 import { VarManager } from "../rs/config/vartype/VarManager";
 import { Inventory } from "../rs/inventory/Inventory";
+import { stopInventoryTransmit } from "../game/sync/InventoryStopTransmit";
 import { ClientImpl } from "../runelite/impl/ClientImpl";
 import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
 
@@ -172,6 +173,19 @@ assert.equal(facade.getItemContainer(516), null, "a seeded-but-unsent inventory 
 client.serverSentInventoryIds.add(516);
 assert.ok(facade.getItemContainer(516), "the same inventory is a container once the server has sent it");
 client.serverSentInventoryIds.delete(516);
+
+// The bank: a container only while the server transmits it. Closing it sends
+// UPDATE_INV_STOPTRANSMIT (rsprox_transcripts/239/04254.txt tick 197: close_modal, then bank (95)), which
+// unlinks the native container, so RuneLite's getItemContainer(BANK) is null again, not empty.
+assert.equal(facade.getItemContainer(InventoryID.BANK), null, "never sent: null");
+client.serverSentInventoryIds.add(InventoryID.BANK);
+client.bankInventory.setSlot(0, ItemID.COINS, 50);
+assert.equal(facade.getItemContainer(InventoryID.BANK)!.count(ItemID.COINS), 50, "open: its contents");
+stopInventoryTransmit(new Map([[InventoryID.BANK, client.bankInventory]]), InventoryID.BANK, client.serverSentInventoryIds);
+assert.equal(facade.getItemContainer(InventoryID.BANK), null, "closed: null, as in RuneLite");
+client.serverSentInventoryIds.add(InventoryID.BANK);
+assert.ok(facade.getItemContainer(InventoryID.BANK), "reopened: a container again");
+client.serverSentInventoryIds.delete(InventoryID.BANK);
 
 // --- Plane, mouse ------------------------------------------------------------------------------------
 ClientState.plane = 2;

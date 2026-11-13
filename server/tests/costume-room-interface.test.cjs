@@ -85,14 +85,33 @@ function fixture(t, name, hotspotKey, buildableKey) {
   return { player, house, furniture, object, location, inventory: player.getInventory(), messages, mesboxes, sounds, animations };
 }
 
+/** Clicks `option` on the furniture as loc `id` (its closed loc by default). */
+function click(f, option, id = f.object.getId()) {
+  const definition = ObjectDefinition.forPlayer(id, f.player) ?? ObjectDefinition.forId(id);
+  const index = definition.getInteractions().findIndex(action => action?.toLowerCase() === option);
+  assert.notEqual(index, -1, `${option} on loc ${id}`);
+  const at = f.player.getLocation();
+  const object = new GameObject(id, f.object.getLocation(), f.object.getType(), f.object.getFace(), null);
+  assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object, objectId: id, definition,
+    clickType: index + 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
+}
+
+/** Opens the storage: Open, then two ticks for the furniture to open, or Search at once. */
 function open(f) {
   const id = f.object.getId(), definition = ObjectDefinition.forPlayer(id, f.player) ?? ObjectDefinition.forId(id);
-  const index = definition.getInteractions().findIndex(action => ["open", "search", "view"].includes(action?.toLowerCase()));
-  assert.notEqual(index, -1);
-  const at = f.player.getLocation();
-  assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object: f.object, objectId: id, definition,
-    clickType: index + 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
+  const option = definition.getInteractions().find(action => ["open", "search"].includes(action?.toLowerCase()))?.toLowerCase();
+  click(f, option);
+  if (option === "open") for (let tick = 0; tick < 2; tick++) TaskManager.process();
   assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  f.animations.length = 0; f.sounds.length = 0; // the lid's own animation and sound
+}
+
+/** The poh_costumes_init calls sent: [enum, may change, reset search]. */
+function initCalls(f) {
+  const calls = [];
+  const sender = f.player.getPacketSender(), send = sender.sendInterfaceScript.bind(sender);
+  sender.sendInterfaceScript = (id, args, ...rest) => { if (id === 3532) calls.push(args); return send(id, args, ...rest); };
+  return calls;
 }
 
 function button(f, component, op = 1, slot = -1, itemId = -1) {
@@ -303,4 +322,91 @@ test("clicks after the interface closes do nothing", (t) => {
   f.player.getPacketSender().sendInterfaceRemoval();
   button(f, "poh_costumes:items", 1, rowSlot(1));
   assert.equal(stored(f, TOYS[1]), 1);
+});
+
+const seq = (name) => core.CacheDefinitions.getSeqId(name);
+const locId = (name) => core.CacheDefinitions.getLocId(name);
+
+test("Open lifts the chest's lid, shows it open a tick later and the storage a tick after", (t) => {
+  const f = fixture(t, "coslid", "TREASURE_CHEST", "OAK_TREASURE_CHEST");
+  click(f, "open");
+  assert.deepEqual(f.animations, [seq("human_openheavychest")]);
+  assert.deepEqual(f.sounds, [62]);
+  assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
+  assert.equal(f.furniture.displayObjectId, undefined);
+  TaskManager.process();
+  assert.equal(f.furniture.displayObjectId, locId("poh_cos_room_tresure_chest_open_oak"));
+  assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
+  TaskManager.process();
+  assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  // It stays open after the interface closes.
+  f.player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(f.furniture.displayObjectId, locId("poh_cos_room_tresure_chest_open_oak"));
+});
+
+test("the armour case and magic wardrobe open and close like a high cupboard", (t) => {
+  const f = fixture(t, "coscupboard", "MAGIC_WARDROBE", "OAK_MAGIC_WARDROBE");
+  click(f, "open");
+  assert.deepEqual(f.animations, [seq("human_openhighcupboard")]);
+  for (let tick = 0; tick < 2; tick++) TaskManager.process();
+  const openLoc = locId("poh_cos_room_magic_wardrobe_open_oak");
+  assert.equal(f.furniture.displayObjectId, openLoc);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  click(f, "close", openLoc);
+  assert.deepEqual(f.animations, [seq("human_openhighcupboard"), seq("human_closehighcupboard")]);
+  assert.deepEqual(f.sounds, [62, 60]);
+  TaskManager.process();
+  assert.equal(f.furniture.displayObjectId, undefined);
+});
+
+test("Search on the open box shows the storage at once; Close puts the lid back a tick later", (t) => {
+  const f = fixture(t, "cossearch", "TOY_BOX", "OAK_TOY_BOX");
+  open(f);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  const openLoc = locId("poh_cos_room_toy_box_open_oak");
+  f.animations.length = 0; f.sounds.length = 0;
+  click(f, "search", openLoc);
+  assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  assert.deepEqual(f.animations, []);
+  assert.deepEqual(f.sounds, []);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  click(f, "close", openLoc);
+  assert.deepEqual(f.animations, [seq("human_closechest")]);
+  assert.deepEqual(f.sounds, [60]);
+  assert.equal(f.furniture.displayObjectId, openLoc);
+  TaskManager.process();
+  assert.equal(f.furniture.displayObjectId, undefined);
+});
+
+test("walking off before the lid is up leaves the storage closed", (t) => {
+  const f = fixture(t, "coswalk", "FANCY_DRESS_BOX", "OAK_FANCY_DRESS_BOX");
+  click(f, "open");
+  f.player.moveTo(new core.Location(f.location.x - 2, f.location.y, f.location.z));
+  for (let tick = 0; tick < 2; tick++) TaskManager.process();
+  assert.equal(f.furniture.displayObjectId, locId("poh_cos_room_fancy_dress_box_open_oak"));
+  assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
+});
+
+test("the cape rack has no lid: Search shows the storage at once", (t) => {
+  const f = fixture(t, "cosrack", "CAPE_RACK", "OAK_CAPE_RACK");
+  click(f, "search");
+  assert.equal(f.player.getInterfaceId(), Storage.MAIN);
+  assert.deepEqual(f.animations, []);
+});
+
+test("the chest reopens on the tier last picked, keeping its search; another piece resets it", (t) => {
+  const f = fixture(t, "costierkept", "TREASURE_CHEST", "OAK_TREASURE_CHEST");
+  const calls = initCalls(f);
+  open(f);
+  assert.deepEqual(calls.at(-1), [3293, 1, 1]);
+  button(f, "poh_costumes:tier", 3); // Easy
+  assert.deepEqual(calls.at(-1), [3294, 1, 0]);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  click(f, "search", locId("poh_cos_room_tresure_chest_open_oak"));
+  assert.deepEqual(calls.at(-1), [3294, 1, 0]);
+  // An upgraded chest is the same storage: still Easy, search kept.
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.furniture.buildableKey = "TEAK_TREASURE_CHEST";
+  click(f, "search", locId("poh_cos_room_tresure_chest_open_oak"));
+  assert.deepEqual(calls.at(-1), [3294, 1, 0]);
 });

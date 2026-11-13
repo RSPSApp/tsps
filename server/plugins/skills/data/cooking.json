@@ -185,5 +185,23 @@
   "wines": [
     {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352], "pendingLimit": 60000},
     {"grapes": "zamorak_grapes", "unfermented": "jug_unfermented_zamorak_wine", "wine": "wine_of_zamorak", "bad": "jug_bad_wine", "level": 65, "xp": 200, "chance": [-125, 260]}
-  ]
+  ],
+  "churn": {
+    "labels": {"pot_of_cream": "Cream", "pot_of_butter": "Butter", "cheese": "Cheese"},
+    "inputs": [
+      {"input": "pot_of_not_garlic_butter", "name": "butter"},
+      {"input": "pot_of_butter", "name": "butter"},
+      {"input": "pot_of_cream", "name": "cream"},
+      {"input": "bucket_milk", "name": "milk", "returns": "bucket_empty"}
+    ],
+    "products": [
+      {"input": "bucket_milk", "product": "pot_of_cream", "name": "cream", "level": 21, "xp": 18, "ticks": 10, "seq": "player_churns_milk_short"},
+      {"input": "bucket_milk", "product": "pot_of_butter", "name": "butter", "level": 38, "xp": 40.5, "ticks": 19, "seq": "player_churns_milk_medium"},
+      {"input": "bucket_milk", "product": "cheese", "name": "cheese", "level": 48, "xp": 64, "ticks": 26, "seq": "player_churns_milk_long"},
+      {"input": "pot_of_cream", "product": "pot_of_butter", "name": "butter", "level": 38, "xp": 22.5, "ticks": 10, "seq": "player_churns_milk_short"},
+      {"input": "pot_of_cream", "product": "cheese", "name": "cheese", "level": 48, "xp": 46, "ticks": 19, "seq": "player_churns_milk_medium"},
+      {"input": "pot_of_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"},
+      {"input": "pot_of_not_garlic_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"}
+    ]
+  }
 }

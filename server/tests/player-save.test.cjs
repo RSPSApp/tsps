@@ -184,6 +184,20 @@ test("a new account, with no save to load, starts every persisted attribute at i
   assert.equal(PlayerSave.fromPlayer(player).attributes["test:kills"], 1);
 });
 
+test("a new bot, with no save to load, starts every persisted attribute at its default too", (t) => {
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const { Location } = require("../dist/game/model/Location");
+  const { createBotPlayer } = require("../plugins/bots/behaviours/spawn/PlayerFactory.PlayerBots");
+  PlayerSave.persistAttribute("test:bot-kills", 0);
+  const queue = [];
+  const api = { getWorld: () => ({ getPlayerByName: () => null, getAddPlayerQueue: () => queue }) };
+  const unsaved = createBotPlayer("defaultsbot1", new Location(3222, 3218), { api, loadPersistence: false, saveRandomizedAppearance: false });
+  assert.equal(unsaved.getAttribute("test:bot-kills"), 0, "a minigame bot that never loads a save");
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE, "load", () => null);
+  const fresh = createBotPlayer("defaultsbot2", new Location(3222, 3218), { api, saveRandomizedAppearance: false });
+  assert.equal(fresh.getAttribute("test:bot-kills"), 0, "a world bot with no save yet");
+});
+
 test("a saved member rejoins an offline owner's channel with saved settings and rank", () => {
   const { Misc } = require("../dist/util/Misc");
   const { FriendsChatManager, CLAN_CHAT_ATTRIBUTE } = require("../plugins/interface/FriendsChatManager");

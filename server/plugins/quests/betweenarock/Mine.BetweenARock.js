@@ -214,7 +214,8 @@ function leap(player, from, to, angle, pan) {
   const { ForceMovement, Location, Animation, HitDamage, HitMask } = core;
   const leapToken = {};
   leaping.set(player, leapToken);
-  const current = () => leaping.get(player) === leapToken && player.isRegistered?.() !== false;
+  // A leap ends with the visit, however it ends (a death included).
+  const current = () => leaping.get(player) === leapToken && player.isRegistered?.() !== false && inside(player);
   const out = player.getPacketSender();
   player.getMovementQueue().reset().setBlockMovement(true);
   player.sendMessage(DATA.fireWalls.leap);

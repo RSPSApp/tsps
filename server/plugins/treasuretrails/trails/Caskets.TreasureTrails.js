@@ -192,8 +192,15 @@ function open(event) {
     // A preparation callback may have moved or replaced the clicked stack.
     if (inventory.getItems()[slot] !== item || item.getAmount() < 1) return true;
     if (mimic) {
-      // The trail is complete; the Mimic's own chest holds its rewards.
-      inventory.setItem(slot, mimic);
+      // The trail is complete; the Mimic's own chest holds its rewards. Only the opened casket
+      // becomes the Mimic: a lone casket's slot takes it, a stack loses one and keeps the rest.
+      if (item.getAmount() === 1) inventory.setItem(slot, mimic);
+      else {
+        inventory.deleteAtSlot(slot, 1);
+        // Ours: no source says where the Mimic goes from a stack in a full backpack; like any
+        // casket reward that doesn't fit, it lands on the floor (Wiki "Mimic": a dropped Mimic is fine).
+        inventory.forceAdd(player, mimic);
+      }
       player.setAttribute(Runtime.completedAttribute(tier), count);
       give(player, drops);
       Runtime.restore({ player });

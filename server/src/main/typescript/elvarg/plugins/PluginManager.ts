@@ -2687,6 +2687,7 @@ export class PluginManager {
       Misc: require("../util/Misc").Misc,
       ChatTextLayout: require("../game/model/dialogues/ChatTextLayout").ChatTextLayout,
       TimerKey: require("../util/timers/TimerKey").TimerKey,
+      SecondsTimer: require(`${model}/SecondsTimer`).SecondsTimer,
       Sound: require("../game/Sound").Sound,
       Sounds: require("../game/Sounds").Sounds,
       Location: require(`${model}/Location`).Location,

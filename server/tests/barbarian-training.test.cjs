@@ -144,6 +144,9 @@ const stages = (who) => ({ fishingRod: T.state(who).fishingRod, herblore: T.stat
 test("each topic's lines come from the Barbarian Training transcript, its player line first", () => {
   const who = player();
   for (const [variant, option] of [
+    ["starting-off-after-speaking-to-him-once", T.TOPIC.harpoon],
+    ["starting-off-after-speaking-to-him-once-talking-to-otto-again-without-doing-as-he-asks", T.TOPIC.harpoon],
+    ["fishing", T.TOPIC.harpoonDone],
     ["starting-off-after-speaking-to-him-once", T.TOPIC.rod],
     ["starting-off-after-speaking-to-him-once-talking-to-otto-again-without-doing-as-he-asks", T.TOPIC.rod],
     ["fishing", T.TOPIC.rodDone],
@@ -160,7 +163,7 @@ test("each topic's lines come from the Barbarian Training transcript, its player
 test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish completes it", () => {
   const who = player();
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.rod);
   assert.ok(shown.said.includes("Certainly. Take the rod from under my bed and fish in the lake. When you have caught a few fish, I am sure you will be ready to talk more with me."));
   assert.deepEqual(stages(who), { fishingRod: 1, herblore: 0 });
@@ -185,10 +188,65 @@ test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish c
   assert.deepEqual(who.sent.messages, [T.LEARNED]);
 
   shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
   pick(who, shown, T.TOPIC.rodDone);
   assert.equal(stages(who).fishingRod, 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+});
+
+test("barehanded fishing waits for Otto's harpoon lesson; a barehanded catch completes it", () => {
+  const who = player();
+  const allowed = () => {
+    const request = { player: who, allowed: null };
+    api.emitCustomEvent("fishing:barehand-unlocked", request);
+    return request.allowed;
+  };
+  assert.equal(allowed(), false, "untaught: no barehanded fishing");
+
+  // The chat closed part-way through the lesson (rsprox 237/01149 sets brut_fishing_s only at its end): nothing set.
+  let shown = talk(who);
+  who.chain = null;
+  shown.menu.execute(shown.options.indexOf(T.TOPIC.harpoon) + 1);
+  assert.ok(who.chain, "the lesson started");
+  who.chain = null;
+  assert.equal(T.state(who).harpoon, 0);
+  assert.equal(who.sent.varbits.get(T.VARBITS.harpoon) ?? 0, 0);
+  assert.equal(allowed(), false, "a lesson left part-way unlocks nothing");
+
+  shown = pick(who, talk(who), T.TOPIC.harpoon);
+  assert.ok(shown.said.includes("You must catch fish which are usually harpooned, without a harpoon. You will be using your skill and strength."));
+  assert.equal(T.state(who).harpoon, 1);
+  assert.equal(who.sent.varbits.get(T.VARBITS.harpoon), 1);
+  assert.equal(allowed(), true, "set the task: barehanded fishing opens");
+
+  // Asking again before a catch: the transcript's encouragement.
+  shown = pick(who, talk(who), T.TOPIC.harpoon);
+  assert.ok(shown.said.includes("I see you need encouragement in learning the ways of fishing without a harpoon."));
+  assert.equal(T.state(who).harpoon, 1);
+
+  api.emitCustomEvent("fishing:success", { player: who, itemId: core.ItemIdentifiers.RAW_TUNA, barehand: false });
+  assert.equal(T.state(who).harpoon, 1, "a harpooned tuna does not count");
+  api.emitCustomEvent("fishing:success", { player: who, itemId: core.ItemIdentifiers.RAW_TUNA, barehand: true });
+  assert.equal(T.state(who).harpoon, 2);
+  assert.deepEqual(read(who).said, [T.LEARNED], "the recorded mesbox");
+  api.emitCustomEvent("fishing:success", { player: who, itemId: core.ItemIdentifiers.RAW_TUNA, barehand: true });
+  assert.equal(who.chain, null, "the box only once");
+
+  // Telling Otto, closed before his last reply: still to tell.
+  shown = talk(who);
+  who.chain = null;
+  shown.menu.execute(shown.options.indexOf(T.TOPIC.harpoonDone) + 1);
+  who.chain = null;
+  assert.equal(T.state(who).harpoon, 2);
+
+  shown = talk(who);
+  assert.deepEqual(shown.options, [T.TOPIC.harpoonDone, T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
+  shown = pick(who, shown, T.TOPIC.harpoonDone);
+  assert.ok(shown.said.includes("I sense you have more understanding of harpoons through your studies."));
+  assert.equal(T.state(who).harpoon, 3);
+  assert.equal(who.sent.varbits.get(T.VARBITS.harpoon), 3);
+  assert.equal(allowed(), true);
+  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);
 });
 
 test("a full inventory leaves the rod under the bed", () => {
@@ -222,13 +280,13 @@ test("Herblore: Otto asks for an attack mix, takes it, and every mix is learned"
   assert.equal(who.inv.count("brutal_2doserangerspotion"), 0);
 
   let shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.herbloreDone, T.TOPIC.farming, T.TOPIC.leave]);
   shown = pick(who, shown, T.TOPIC.herbloreDone);
   assert.ok(shown.said.includes("I will take that off your hands now. I will say no more than that I am eternally grateful."));
   assert.equal(who.inv.count("brutal_2dose1attack"), 0);
   assert.equal(stages(who).herblore, 3);
   assert.equal(who.sent.varbits.get(T.VARBITS.herblore), 3);
-  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.farming, T.TOPIC.leave]);
 
   // Learned: the ranging mix at 80 Herblore (Wiki), 54 XP, and "herblore:made" for Sherlock.
   who.level = 79;
@@ -249,7 +307,7 @@ test("the attack mix hand-in needs the mix carried", () => {
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
   const shown = talk(who);
-  assert.deepEqual(shown.options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   assert.ok(pick(who, shown, T.TOPIC.herblore).said.includes("Do you have my potion?"));
   assert.equal(stages(who).herblore, 2);
 });
@@ -282,7 +340,7 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
   who.inv.getItems()[0].setMetaValue(core.Item.UNTRADEABLE_META, true);
   T.setStage(who, "fishingRod", 3);
   T.setStage(who, "herblore", 2);
-  assert.deepEqual(talk(who).options, [T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  assert.deepEqual(talk(who).options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
   who.inv.addItem(new core.Item(obj("brutal_2dose1attack"), 1));
   pick(who, talk(who), T.TOPIC.herbloreDone);
   assert.equal(stages(who).herblore, 3);
@@ -293,7 +351,7 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
 test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the Ancient Cavern whirlpool", () => {
   const who = player();
   const varbit = (id) => who.sent.varbits.get(id) ?? 0;
-  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
+  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
 
   let shown = pick(who, talk(who), T.TOPIC.firemaking);
   assert.equal(varbit(T.VARBITS.firemaking), 1);

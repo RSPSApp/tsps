@@ -59,7 +59,7 @@
  */
 module.exports = function registerBoneVoyageQuest(api) {
   const { CacheDefinitions, CountdownTask, ItemIdentifiers, Location, NpcIdentifiers, Skill, TaskManager } = api.core;
-  const { registerQuest, refreshQuestList, loadTranscripts, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, loadTranscripts, startTranscript, giveReward } = require("../QuestRuntime");
 
   const PAGE = "Bone Voyage";
   const JUNIOR_PAGE = "Junior Navigator";
@@ -186,6 +186,8 @@ module.exports = function registerBoneVoyageQuest(api) {
   const ISLAND_DECK_TILE = Object.freeze({ x: 3723, y: 3784, z: 1 });
   /** Everything east of this is Fossil Island (the island barge, 3723,3784); the canal is at 3360. */
   const FOSSIL_ISLAND_MIN_X = 3600;
+  /** Instance copies (the voyage) sit far east of the real map. */
+  const FOSSIL_ISLAND_MAX_X = 4000;
   const BOARD_ROUTE = "fossil-barge-board";
   const DISEMBARK_ROUTE = "fossil-barge-disembark";
   const CAMP_ROUTE = "fossil-island";
@@ -210,8 +212,9 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BOARDING_LINE = "Absolutely, the navigators are waiting for you on board!";
   /** Capture tick 722: the note book arrives as the second closing line is continued (the "journal" line is 723). */
   const JOURNAL_LINE = "I suppose you'll want to start exploring the island as soon as possible.";
-  /** Capture tick 428: live's line ends in an ellipsis (the transcript's has a full stop). */
-  const ABORT_MESSAGE = "With the aid of the junior navigator, you sail back to the digsite...";
+  /** Transcript:Bone_Voyage "Aborting the voyage" Yes. (step 2ss3M1); live ends it "..." (capture tick 428). */
+  const ABORT_VARIANT = "the-cursed-voyage-aborting-the-voyage";
+  const ABORT_STEP = "2ss3M1";
   const QUEST_SCROLL_INTERFACE = 153;
 
   const SAILING_AREAS = new WeakMap();
@@ -259,7 +262,8 @@ module.exports = function registerBoneVoyageQuest(api) {
   }
 
   function onFossilIsland(location) {
-    return typeof location?.getX?.() === "number" && location.getX() >= FOSSIL_ISLAND_MIN_X;
+    const x = location?.getX?.();
+    return typeof x === "number" && x >= FOSSIL_ISLAND_MIN_X && x < FOSSIL_ISLAND_MAX_X;
   }
 
   // ==========================================================================
@@ -298,9 +302,10 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   /** The barge's fade crossings: the Ferries plugin's routes (plugins/world/data/ferries.json), or the plain move. */
   function ferry(player, route, fallback) {
-    const request = { player, route, handled: false };
+    // Ferries answers true or false (already travelling, a locked destination); only no answer moves plainly.
+    const request = { player, route, handled: undefined };
     api.emitCustomEvent("ferries:travel", request);
-    if (!request.handled) player.moveTo(toLocation(fallback));
+    if (request.handled === undefined) player.moveTo(toLocation(fallback));
     return true;
   }
 
@@ -471,6 +476,11 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   function sailingTick(area) {
     const state = area.state;
+    // Walking or any click closes the side modal without an interface:closed event; the bar waits.
+    if (state.controlsOpen && area.player.getPacketSender().isSubInterfaceOpen?.(SAILING_INTERFACE) === false) {
+      state.controlsOpen = false;
+      controlsHint(area.player, area, true);
+    }
     state.ticks = (state.ticks | 0) + 1;
     if (state.ticks % VOYAGE.updateTicks !== 0 || !state.controlsOpen) return;
     updateVoyage(area);
@@ -584,13 +594,19 @@ module.exports = function registerBoneVoyageQuest(api) {
     clearSailingScreen(player);
     fade(player, true);
     later(player, 3, () => {
-      if (!failed) player.sendMessage(ABORT_MESSAGE);
+      if (!failed) player.sendMessage(abortMessage());
       landOnDeck(player, CANAL_DECK_TILE, "returned");
       // Transcript:Bone_Voyage "If the player fails the voyage": the Junior Navigator's line (ours: on landing).
       if (failed) startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, VOYAGE_FAILED_VARIANT);
     });
     later(player, 6, () => closeFade(player));
     return true;
+  }
+
+  function abortMessage() {
+    const choice = variantSteps(ABORT_VARIANT).find((step) => step.type === "choice");
+    const step = choice?.options?.[0]?.steps?.find((entry) => entry.id === ABORT_STEP);
+    return String(step?.text ?? "");
   }
 
   function landOnDeck(player, tile, phase) {
@@ -635,7 +651,8 @@ module.exports = function registerBoneVoyageQuest(api) {
   function giveJournal(player) {
     if (player.getAttribute(JOURNAL_PENDING_ATTRIBUTE) !== true) return;
     player.setAttribute(JOURNAL_PENDING_ATTRIBUTE, false);
-    if (!held(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID)) give(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID);
+    // As the old quest reward did: what a full inventory can't hold goes on the floor.
+    if (!held(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID)) giveReward(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID, 1);
   }
 
   function pressSailingButton(event) {
@@ -1344,8 +1361,9 @@ module.exports = function registerBoneVoyageQuest(api) {
       return;
     }
     if (phase === "returned") return;
-    // "arriving", "arrived", or a stage-10 save from before the voyage was played (already ashore).
-    if (!onFossilIsland(player.getLocation())) player.moveTo(toLocation(ISLAND_DECK_TILE));
+    // "arriving" (saved inside the instance, at instance coordinates) lands on the island deck;
+    // "arrived", or a stage-10 save from before the voyage was played, is already ashore.
+    if (phase === "arriving" || !onFossilIsland(player.getLocation())) player.moveTo(toLocation(ISLAND_DECK_TILE));
     completeVoyage(player);
   }
 

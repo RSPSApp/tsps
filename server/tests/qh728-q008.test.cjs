@@ -171,15 +171,16 @@ function drive(player, choices) {
 
 function player(woodcutting = 99) {
   const attributes = new Map(), items = new Map(), varbits = new Map(), messages = [];
-  const subInterfaces = [], closedSubInterfaces = [];
+  const subInterfaces = [], closedSubInterfaces = [], mounted = new Map();
   let location = new core.Location(3257, 3447, 0), chatbox = null, area = null;
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendChatboxInterface(id) { chatbox = id; return sender; },
     sendInterfaceRemoval() { chatbox = null; return sender; },
     isChatboxInterface(id) { return chatbox === id; },
-    sendSubInterface(uid, group, type) { subInterfaces.push([uid, group, type]); return sender; },
-    closeSubInterface(uid) { closedSubInterfaces.push(uid); return sender; },
+    sendSubInterface(uid, group, type) { subInterfaces.push([uid, group, type]); mounted.set(uid, group); return sender; },
+    closeSubInterface(uid) { closedSubInterfaces.push(uid); mounted.delete(uid); return sender; },
+    isSubInterfaceOpen(group) { return [...mounted.values()].includes(group); },
   }, { get: (target, key) => key in target ? target[key] : () => sender });
   const inventory = {
     items,
@@ -695,6 +696,38 @@ test('Operate during a briefing cut short takes over from it', () => steadyWind(
   }
 }));
 
+test('controls closed by a click pause the bar and point the hint arrow at them', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, { progress: 30, bearing: 30, offCourse: 0 });
+    const area = p.getPrivateArea();
+    p.getPacketSender().closeSubInterface(SIDEMODAL); // the engine closes the modal on a world click
+    for (let i = 0; i < 40; i++) area.process(p);
+    assert.equal(area.state.controlsOpen, false);
+    assert.equal(area.state.progress, 30, 'nothing moves while the controls are closed (capture ticks 348-390)');
+    assert.equal(p.varbits.get(14192), 7);
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('a logout between the full bar and the landing lands on the island deck', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, { progress: 90, bearing: 0, lastThrottle: 2 });
+    const area = p.getPrivateArea();
+    for (let i = 0; i < 8 && area.state.phase === 'sailing'; i++) area.process(p);
+    assert.equal(area.state.phase, 'arriving');
+    area.leave(p, true);
+    for (const login of h.logins) login({ player: p });
+    assert.deepEqual(at(p), [3723, 3784, 1], 'not left at the instance coordinates');
+    assert.equal(h.quest.getStage(p), 11);
+  } finally {
+    h.restore();
+  }
+}));
+
 test('abort closes the controls, lands on the canal deck and allows a retry', () => steadyWind(() => {
   const h = setup();
   try {
@@ -709,7 +742,8 @@ test('abort closes the controls, lands on the canal deck and allows a retry', ()
     assert.ok(p.closedSubInterfaces.includes(OVERLAY_HUD), 'the overlay goes with Yes');
     assert.equal(p.messages.length, 0, 'the message comes with the landing');
     tick(3);
-    assert.ok(p.messages.includes('With the aid of the junior navigator, you sail back to the digsite...'));
+    // The transcript's step 2ss3M1 (live adds an ellipsis: an osrsreboxed-db correction, not ours to patch).
+    assert.ok(p.messages.includes('With the aid of the junior navigator, you sail back to the digsite.'));
     assert.deepEqual(at(p), [3360, 3453, 1], 'the canal barge deck (capture tick 428)');
     assert.equal(h.quest.getStage(p), 10);
     assert.equal(p.varbits.get(5795), 35, 'abort keeps wire 35');

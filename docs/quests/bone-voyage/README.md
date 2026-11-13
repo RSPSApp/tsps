@@ -63,6 +63,7 @@ wire 35 with the charm and potion given; ticks are the recording's):
 
 ## Findings
 
+- The abort message is the transcript's (step 2ss3M1, "...back to the digsite."); live ends it "..." (tick 428).
 - The transcript (osrsreboxed-db) has "unconcious" where live says "unconscious" (tick 326), and
   David's line mid-quest is "Hi, afraid I've got no time for talking right now. The lead
   navigator might be able to help you out." (tick 126), not the transcript's.

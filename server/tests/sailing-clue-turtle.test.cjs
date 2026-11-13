@@ -358,3 +358,23 @@ test("Retrieve walks to the deck tile nearest the turtle first", () => {
   for (let t = 1; t <= 3; t++) world.clock.runTick();
   assert.equal(npc.steps.length, 3);
 });
+
+test("a walk that ends elsewhere drops the retrieve; a second click on the way starts no second walk", () => {
+  const player = sailor();
+  player.boat = boatAt(player, { hotspotData: [] });
+  let location = new Location(0, 0, 1);
+  player.getLocation = () => location;
+  const npc = spawnFor(player, 100, 100); // under the boat, so an arrival says so
+  const core = require("../plugins/skills/sailing/seacombat/Common.SeaCombat").core();
+  core.BoatManager.deckTileToward = () => new Location(1, 0, 1);
+  world.handlers.retrieve({ player, npc, handled: false });
+  world.handlers.retrieve({ player, npc, handled: false });
+  location = new Location(1, 0, 1);
+  world.clock.runTick();
+  assert.deepEqual(player.messages, ["You can't interact with something under the boat!"]);
+  player.messages.length = 0;
+  world.handlers.retrieve({ player, npc, handled: false });
+  location = new Location(0, 1, 1); // clicked somewhere else on the deck
+  world.clock.runTick();
+  assert.deepEqual(player.messages, []);
+});

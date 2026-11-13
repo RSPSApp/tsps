@@ -23,6 +23,7 @@
  */
 const { hasKeg } = require("./Kegs.Sailing");
 const seaCommon = require("./seacombat/Common.SeaCombat");
+const Creatures = require("./seacombat/Creatures.SeaCombat");
 
 const CLUE_TURTLE = 15124;
 const ENCOUNTER_TICKS = 120;
@@ -66,7 +67,7 @@ let api;
 let core;
 /** player -> their encounter timer: `{ ticks, failures }`. */
 const timers = new WeakMap();
-/** turtle npc -> `{ owner, expiresAt, retrieving }`. */
+/** turtle npc -> `{ owner, expiresAt, retrieving, walking }`: `walking` is the player on their way to it. */
 const turtles = new Map();
 let tick = 0;
 
@@ -209,7 +210,7 @@ function retrieve(event) {
   const turtle = turtles.get(npc);
   if (npc?.getId?.() !== CLUE_TURTLE || !turtle) return false;
   event.handled = true;
-  if (turtle.retrieving || !core.BoatManager.getBoatAboard(player)) return true;
+  if (turtle.retrieving || turtle.walking === player || !core.BoatManager.getBoatAboard(player)) return true;
   api.emitCustomEvent("sailing:leave-helm", { player });
   walkThenRetrieve(player, npc, turtle);
   return true;
@@ -224,14 +225,19 @@ function walkThenRetrieve(player, npc, turtle) {
   core.PathFinder.calculateWalkRoute(player, tile.getX(), tile.getY());
   const { Task, TaskManager } = core;
   const start = player.getLocation();
+  turtle.walking = player;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player, false); }
+    stop() {
+      if (turtle.walking === player) turtle.walking = undefined;
+      super.stop();
+    }
     execute() {
       if (!turtles.has(npc) || !core.BoatManager.getBoatAboard(player)) return void this.stop();
       const at = player.getLocation();
-      // Walking elsewhere (a click on the deck) drops it.
       if (movement.isMovings?.() || movement.size?.() > 0) return;
       this.stop();
+      // Walking elsewhere (a click on the deck) drops it.
       const arrived = at.getX() === tile.getX() && at.getY() === tile.getY();
       if (arrived || (at.getX() === start.getX() && at.getY() === start.getY())) arrive(player, npc, turtle);
     }
@@ -253,7 +259,6 @@ function arrive(player, npc, turtle) {
   turtle.retrieving = true;
   npc.setScriptedMovement?.(true);
   npc.setFlag?.(IGNORE_CLIPPING_FLAG, true);
-  const Creatures = require("./seacombat/Creatures.SeaCombat");
   for (let stroke = 1; stroke <= SWIM_STEPS; stroke++) {
     later(npc, stroke, () => {
       if (turtles.get(npc) !== turtle) return;

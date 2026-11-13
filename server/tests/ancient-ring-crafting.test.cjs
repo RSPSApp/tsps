@@ -17,13 +17,17 @@ before(async () => {
   const api = PluginManager.createApi("AncientRingCraftingRegression");
   Crafting.register(api);
   AncientRings.register(api);
+  api.onCustomEvent("quest:is-complete", (request) => {
+    if (request.key === "desert_treasure_ii") request.complete = request.player.dt2 === true;
+  });
 });
 
-function fakePlayer({ crafting = 99, magic = 99, learned = false, items = [] } = {}) {
+function fakePlayer({ crafting = 99, magic = 99, learned = false, items = [], dt2 = true } = {}) {
   const messages = [];
   const attributes = new Map([[Crafting._test.LEARNED_ATTRIBUTE, learned]]);
   const levels = { CRAFTING: crafting, MAGIC: magic };
   const player = {
+    dt2,
     messages,
     sendMessage: (m) => messages.push(m),
     getAttribute: (k) => attributes.get(k),
@@ -112,4 +116,21 @@ test("Inspect on an icon, vestige or upgraded icon says what it is for", () => {
     assert.deepEqual(player.messages, [text]);
   }
   assert.equal(Crafting._test.inspectIcon({ player: fakePlayer(), itemId: ItemIdentifiers.CHISEL }), false);
+});
+
+// Wiki (Berserker icon): the ring can be chiselled into its icon "after completing Desert Treasure II".
+test("a chisel breaks a Fremennik ring into its icon only after Desert Treasure II", () => {
+  const recipe = Crafting._test.recipes()[0];
+  for (const [dt2, handled] of [[false, false], [true, true]]) {
+    let started = 0;
+    const player = fakePlayer({ dt2, crafting: 99, items: [[recipe.ringId, 1], [ItemIdentifiers.CHISEL, 1]] });
+    player.getDialogueManager = () => ({ startDialogues() { started++; } });
+    assert.equal(Crafting._test.useChisel({ player, usedItemId: ItemIdentifiers.CHISEL, usedWithItemId: recipe.ringId }), handled,
+      dt2 ? "the break-down prompt opens" : "unhandled: the chisel does nothing with the ring");
+    assert.equal(started, dt2 ? 1 : 0);
+    assert.deepEqual(player.messages, []);
+  }
+  const low = fakePlayer({ dt2: false, crafting: 70 });
+  assert.equal(Crafting._test.useChisel({ player: low, usedItemId: recipe.ringId, usedWithItemId: ItemIdentifiers.CHISEL }), false);
+  assert.deepEqual(low.messages, [], "no Crafting refusal before the quest is done");
 });

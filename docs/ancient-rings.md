@@ -38,10 +38,12 @@ own items.
 
 | Step | What | Requirement | XP |
 | --- | --- | --- | --- |
-| 1 | Chisel on a Fremennik ring (Berserker, Archers, Warrior, Seers) makes its icon | 80 Crafting | 400 Crafting |
+| 1 | Chisel on a Fremennik ring (Berserker, Archers, Warrior, Seers) makes its icon | 80 Crafting, Desert Treasure II complete | 400 Crafting |
 | 2 | Peer the Seer (Rellekka), with an icon carried, teaches how to combine icons with vestiges. Once per player | none | none |
 | 3 | Icon on its vestige, with 500 blood runes, makes the upgraded icon | 90 Magic, 80 Crafting (boostable) | 400 Magic |
 | 4 | At a furnace (Smelt), the upgraded icon, 3 chromium ingots and a ring mould make the ring | 90 Magic, 80 Crafting | 2,500 Crafting |
+
+Before Desert Treasure II is complete, the chisel does nothing with a Fremennik ring (no refusal message is recorded or on the Wiki).
 
 | Ring | Fremennik ring | Vestige | Result (tradeable) |
 | --- | --- | --- | --- |

@@ -171,15 +171,16 @@ function drive(player, choices) {
 
 function player(woodcutting = 99) {
   const attributes = new Map(), items = new Map(), varbits = new Map(), messages = [];
-  const subInterfaces = [], closedSubInterfaces = [];
+  const subInterfaces = [], closedSubInterfaces = [], mounted = new Map();
   let location = new core.Location(3257, 3447, 0), chatbox = null, area = null;
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendChatboxInterface(id) { chatbox = id; return sender; },
     sendInterfaceRemoval() { chatbox = null; return sender; },
     isChatboxInterface(id) { return chatbox === id; },
-    sendSubInterface(uid, group, type) { subInterfaces.push([uid, group, type]); return sender; },
-    closeSubInterface(uid) { closedSubInterfaces.push(uid); return sender; },
+    sendSubInterface(uid, group, type) { subInterfaces.push([uid, group, type]); mounted.set(uid, group); return sender; },
+    closeSubInterface(uid) { closedSubInterfaces.push(uid); mounted.delete(uid); return sender; },
+    isSubInterfaceOpen(group) { return [...mounted.values()].includes(group); },
   }, { get: (target, key) => key in target ? target[key] : () => sender });
   const inventory = {
     items,
@@ -236,7 +237,36 @@ test('stage 5 keeps the barge closed until the foreman confirms it is ready', ()
   }
 });
 
-test('fresh stage 0 to completion follows the mandatory Quest Helper route', () => {
+const SIDEMODAL = (161 << 16) | 74;
+const OVERLAY_HUD = (161 << 16) | 8;
+const at = (p) => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+
+/** World ticks: the quest's fades and landings are CountdownTasks. */
+function tick(count = 1) {
+  for (let i = 0; i < count; i++) core.TaskManager.process();
+}
+
+/** Ours: the wind is random; 0.5 gives no gust, no change of wind and a prevailing drift of +4. */
+function steadyWind(fn) {
+  const random = Math.random;
+  Math.random = () => 0.5;
+  try {
+    return fn();
+  } finally {
+    Math.random = random;
+  }
+}
+
+/** Sail to the island: full sails, the rudder against the +4 drift, the bearing on north. */
+function sailToIsland(h, p) {
+  const area = p.getPrivateArea();
+  h.press(p, (604 << 16) | 11);
+  h.press(p, (604 << 16) | 38);
+  for (let i = 0; i < 400 && area.state.phase === 'sailing'; i++) area.process(p);
+  return area;
+}
+
+test('fresh stage 0 to completion follows the mandatory Quest Helper route', () => steadyWind(() => {
   const h = setup();
   try {
     const p = player();
@@ -262,29 +292,27 @@ test('fresh stage 0 to completion follows the mandatory Quest Helper route', () 
     assert.equal(p.inventory.getAmount(I.SAWMILL_AGREEMENT), 0);
     assert.equal(h.quest.getStage(p), 5, 'Varrock sawmill receives the agreement');
 
-    // Without this foreman leg the guard's "Can I go onto the barge?" must not
-    // spawn the navigators (covered by the previous test), so board only after it.
     h.talk(p, N.BARGE_FOREMAN, 3364, 3445);
     assert.equal(h.quest.getStage(p), 6, 'foreman confirms the barge is ready');
 
-    h.talk(p, N.BARGE_GUARD_3, 3364, 3446, ['Can I go onto the barge?']);
-    assert.equal(h.spawned.filter((npc) => npc.def.id === N.LEAD_NAVIGATOR).length, 1);
-    assert.equal(h.spawned.filter((npc) => npc.def.id === N.JUNIOR_NAVIGATOR).length, 1);
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3360, 3454, 1], 'boarding lands on the real barge deck');
+    // The crew are the cache's static multinpcs: the plugin spawns none of its own.
+    h.talk(p, N.BARGE_GUARD_3, 3362, 3446, ['Can I go onto the barge?']);
+    assert.deepEqual(at(p), [3362, 3452, 1], 'the guard helps the player onto the deck (capture tick 118)');
+    assert.equal(h.spawned.length, 0, 'no per-player crew copies');
 
-    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3453, ['Yep, that would be me.', 'No, what happened?'], 1);
+    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3454, ['Yep, that would be me.', 'No, what happened?'], 1);
     assert.equal(h.quest.getStage(p), 7, 'Lead Navigator first meeting');
     assert.equal(p.varbits.get(5795), 22);
 
     h.npcAction(p, N.BARGE_GUARD, 3362, 3451, 1, 'Disembark');
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3364, 3446, 0], 'deck guard disembarks to the bank');
+    assert.deepEqual(at(p), [3362, 3445, 0], 'the deck guard helps the player off (capture tick 168)');
     h.talk(p, N.JACK_SEAGULL, 3047, 3256, ['Ever made any cursed voyages?']);
     assert.equal(h.quest.getStage(p), 8, 'Jack Seagull points to the lucky charm and potion');
     assert.equal(p.varbits.get(5795), 23);
 
-    h.npcAction(p, N.BARGE_GUARD_3, 3364, 3446, 0, 'Embark');
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3360, 3454, 1], 'bank guard re-embarks after Port Sarim');
-    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3453, [], 1);
+    h.npcAction(p, N.BARGE_GUARD_3, 3362, 3446, 0, 'Embark');
+    assert.deepEqual(at(p), [3362, 3452, 1], 'Embark boards straight away (capture tick 160)');
+    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3454, [], 1);
     assert.equal(h.quest.getStage(p), 9, 'the navigators agree to take both protections');
     assert.equal(p.varbits.get(5795), 25);
 
@@ -294,107 +322,96 @@ test('fresh stage 0 to completion follows the mandatory Quest Helper route', () 
     assert.equal(p.varbits.get(5797), 1, 'ingredient explanation mirrors FOSSILQUEST_POTION=1');
     h.talk(p, N.APOTHECARY, 3195, 3404, ['Talk about something else.', 'Talk about Bone Voyage.']);
     assert.equal(p.varbits.get(5797), 2, 'obtaining the potion mirrors FOSSILQUEST_POTION=2');
-    assert.equal(p.inventory.getAmount(I.VODKA), 0);
-    assert.equal(p.inventory.getAmount(I.MARRENTILL_POTION_UNF_), 0);
     assert.equal(p.inventory.getAmount(I.POTION_OF_SEALEGS), 1);
-    assert.equal(Number(p.getAttribute('quest.bone_voyage.potion')), 1);
 
     h.talk(p, N.ODD_OLD_MAN, 3361, 3505, ['Talk about lucky charms.', "I'm making a cursed voyage."]);
     assert.equal(p.inventory.getAmount(I.BONE_CHARM), 1);
     assert.equal(p.varbits.get(5796), 1, 'obtaining the charm mirrors FOSSILQUEST_LUCKY_CHARM=1');
 
-    h.talk(p, N.JUNIOR_NAVIGATOR, 3361, 3452, [], 1);
+    h.talk(p, N.JUNIOR_NAVIGATOR, 3363, 3453, [], 1);
     assert.equal(p.inventory.getAmount(I.BONE_CHARM), 0);
-    assert.equal(Number(p.getAttribute('quest.bone_voyage.charm')), 2);
     assert.equal(p.varbits.get(5796), 2, 'giving the charm mirrors FOSSILQUEST_LUCKY_CHARM=2');
+    assert.equal(p.varbits.get(5795), 25, 'wire 30 waits for the potion too');
 
-    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3453, ["I'm ready, let's go."], 1);
+    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3454, ["I'm ready, let's go."], 1);
     assert.equal(p.inventory.getAmount(I.POTION_OF_SEALEGS), 0);
-    assert.equal(Number(p.getAttribute('quest.bone_voyage.potion')), 2);
     assert.equal(p.varbits.get(5797), 3, 'giving the potion mirrors FOSSILQUEST_POTION=3');
     assert.equal(h.quest.getStage(p), 10);
-    assert.equal(p.varbits.get(5795), 30, 'sailing writes QH wire stage 30');
-    assert.equal(h.removed.filter((npc) => npc.def.id === N.LEAD_NAVIGATOR).length, 1, 'canal crew leaves the deck for the voyage');
+    assert.equal(p.varbits.get(5795), 35, 'the crew sets off: wire 35 (capture)');
 
+    // The briefing ran to its end inside drive(): the barge at sea, the controls open a tick later.
+    tick(1);
     const area = p.getPrivateArea();
     assert.ok(area, 'the player is in the sailing instance');
-    assert.equal(area.state.progress, 0);
     assert.equal(area.state.phase, 'sailing');
+    assert.ok(p.subInterfaces.some(([uid, group, type]) => uid === SIDEMODAL && group === 604 && type === 0), 'controls 604 in the side modal');
+    assert.ok(p.subInterfaces.some(([uid, group, type]) => uid === OVERLAY_HUD && group === 603 && type === 1), 'overlay 603 on the HUD');
+    assert.equal(p.varbits.get(6719), 2, 'minimap off at sea');
+    tick(3); // the set-off's own boarding finds the player already at sea
 
-    // Registered transcript runner while still at sea after the sailing checkpoint:
-    // Junior must not offer the finishing-up/MUBvQ9 branch.
-    h.talk(p, N.JUNIOR_NAVIGATOR, 1815, 4760, [], 1);
-    assert.equal(h.quest.getStage(p), 10, 'Junior at sea keeps the quest at stage 10');
-    assert.equal(p.varbits.get(5795), 30, 'Junior at sea keeps wire 30, not native 50');
-    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0, 'no reward at sea');
-    assert.equal(Number(p.getAttribute('quest.points')) || 0, 0, 'no quest point at sea');
-    const seaAction = { player: p, npcId: N.JUNIOR_NAVIGATOR, stepId: 'MUBvQ9', handled: false };
-    for (const handler of h.custom.get('npc-dialogue:action') ?? []) handler(seaAction);
-    assert.equal(seaAction.handled, false, 'direct MUBvQ9 dispatch is refused at sea');
+    // The Junior Navigator at sea goes back over the briefing and closes the controls.
+    h.talk(p, N.JUNIOR_NAVIGATOR, 1820, 4762, [], 1);
     assert.equal(h.quest.getStage(p), 10);
+    assert.equal(area.state.controlsOpen, false);
+    assert.equal(p.varbits.get(14192), 7, 'the hint arrow points at the controls');
 
     h.operate(p);
-    assert.ok(p.subInterfaces.some(([uid, group]) => uid === ((161 << 16) | 8) && group === 604), 'controls interface 604 opens');
-    assert.ok(p.subInterfaces.some(([uid, group]) => uid === ((161 << 16) | 1) && group === 603), 'progress overlay 603 opens');
-    assert.equal(p.varbits.get(5798), 0);
+    assert.equal(area.state.controlsOpen, true);
+    assert.equal(p.varbits.get(14192), 0);
 
-    h.press(p, (604 << 16) | 11);
-    h.press(p, (604 << 16) | 11);
-    assert.equal(area.state.throttle, 3, 'Increase throttle raises the sails');
-    for (let tick = 0; tick < 80 && area.state.phase === 'sailing'; tick++) {
-      const wind = area.state.wind ?? 0;
-      while (area.state.heading < wind) h.press(p, (604 << 16) | 38);
-      while (area.state.heading > wind) h.press(p, (604 << 16) | 39);
-      area.process(p);
-    }
-    assert.equal(area.state.phase, 'arrived', 'the voyage reaches Fossil Island');
-    assert.ok(p.varbits.get(5798) >= 100);
-    assert.equal(h.quest.getStage(p), 10, 'arrival keeps the durable sailing stage');
-    assert.equal(p.varbits.get(5795), 35, 'arrival writes QH wire stage 35');
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3720, 3782, 0]);
-    assert.ok(p.closedSubInterfaces.includes((161 << 16) | 8));
-    assert.ok(p.closedSubInterfaces.includes((161 << 16) | 1));
-    assert.equal(h.spawned.filter((npc) => npc.def.id === N.JUNIOR_NAVIGATOR).length, 3, 'sailing junior is replaced by the island junior');
-
-    h.talk(p, N.JUNIOR_NAVIGATOR, 3721, 3782);
-    assert.equal(h.quest.getStage(p), 11);
-    assert.equal(p.varbits.get(5795), 50, 'completion writes native quest DB value 50');
-    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1);
+    sailToIsland(h, p);
+    assert.equal(area.state.phase, 'arriving', 'the bar fills');
+    assert.equal(p.varbits.get(5798), 100);
+    tick(7);
+    assert.deepEqual(at(p), [3723, 3784, 1], 'the barge lands at the Fossil Island deck (capture tick 705)');
+    assert.equal(p.varbits.get(6719), 0, 'minimap back on');
+    assert.equal(h.quest.getStage(p), 10);
+    tick(3);
+    assert.equal(h.quest.getStage(p), 11, 'arrival completes the quest (capture tick 708)');
+    assert.equal(p.varbits.get(5795), 50);
     assert.equal(Number(p.getAttribute('quest.points')), 1);
-    assert.equal(h.removed.filter((npc) => npc.def.id === N.JUNIOR_NAVIGATOR).length, 2, 'canal and island juniors removed; the sailing scene junior dies with its instance');
-    assert.equal(p.varbits.get(5796), 2);
-    assert.equal(p.varbits.get(5797), 3);
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0, 'the journal comes with the closing lines');
 
-    const relog = player();
-    h.quest.setStage(relog, 10);
-    relog.setAttribute('quest.bone_voyage.charm', 2);
-    relog.setAttribute('quest.bone_voyage.potion', 2);
-    runtime.sendQuestVarps({ player: relog });
-    for (const login of h.logins) login({ player: relog });
-    assert.equal(relog.varbits.get(5796), 2, 'login restores the charm varbit from the saved attribute');
-    assert.equal(relog.varbits.get(5797), 3, 'login restores the potion varbit from the saved attribute');
-    assert.equal(relog.varbits.get(5795), 35, 'old stage-10 saves are treated as already ashore');
-    assert.deepEqual([relog.getLocation().getX(), relog.getLocation().getY()], [3720, 3782]);
+    for (const handler of h.custom.get('interface:closed') ?? []) handler({ player: p, interfaceId: 153 });
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0, 'not before the first closing line is continued');
+    p.getDialogueManager().advance();
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1, 'with the second line (capture tick 722)');
+    drive(p, []);
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1, '"Here, take this journal..."');
+    assert.equal(p.getAttribute('bone-voyage:journal-pending'), false);
+
+    const legacy = player();
+    h.quest.setStage(legacy, 10);
+    legacy.setAttribute('quest.bone_voyage.charm', 2);
+    legacy.setAttribute('quest.bone_voyage.potion', 2);
+    runtime.sendQuestVarps({ player: legacy });
+    for (const login of h.logins) login({ player: legacy });
+    assert.equal(legacy.varbits.get(5796), 2, 'login restores the charm varbit from the saved attribute');
+    assert.equal(legacy.varbits.get(5797), 3, 'login restores the potion varbit from the saved attribute');
+    assert.equal(h.quest.getStage(legacy), 11, 'a stage-10 save from before the voyage (already ashore) completes');
+    assert.deepEqual(at(legacy), [3723, 3784, 1]);
+    assert.equal(legacy.getAttribute('bone-voyage:journal-pending'), true);
+    for (const login of h.logins) login({ player: legacy });
+    assert.equal(legacy.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1, 'a later login hands over a journal never given');
 
     const underway = player();
     h.quest.setStage(underway, 10);
-    underway.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 40, heading: 0, throttle: 1, ticks: 12, wind: 0 });
+    underway.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 40, bearing: 0, throttle: 1, steer: 0, ticks: 12 });
     runtime.sendQuestVarps({ player: underway });
     for (const login of h.logins) login({ player: underway });
-    assert.equal(underway.varbits.get(5795), 30, 'a live mid-voyage save resumes on wire stage 30');
+    assert.equal(underway.varbits.get(5795), 35, 'a mid-voyage save resumes on wire stage 35');
     const resumed = underway.getPrivateArea();
-    assert.ok(resumed, 'a live mid-voyage save re-enters the sailing instance');
+    assert.ok(resumed, 'a mid-voyage save re-enters the sailing instance');
     assert.equal(resumed.state.progress, 40);
-    h.talk(underway, N.JUNIOR_NAVIGATOR, 1815, 4760, [], 1);
-    assert.equal(h.quest.getStage(underway), 10, 'replay at sea still cannot complete');
-    assert.equal(underway.varbits.get(5795), 30, 'replay at sea keeps wire 30');
-    assert.equal(underway.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0);
-    assert.equal(Number(underway.getAttribute('quest.points')) || 0, 0);
+    assert.equal(underway.varbits.get(14192), 7, 'controls closed: hint arrow on them');
+    assert.equal(underway.varbits.get(6719), 2, 'the minimap stays off for the whole voyage');
+    h.talk(underway, N.JUNIOR_NAVIGATOR, 1820, 4762, [], 1);
+    assert.equal(h.quest.getStage(underway), 10, 'the Junior Navigator at sea cannot complete it');
     resumed.leave(underway, false);
   } finally {
     h.restore();
   }
-});
+}));
 
 test('Berry signs for players who cannot enter the Woodcutting Guild', () => {
   const h = setup();
@@ -551,86 +568,220 @@ test('durable stages map to the Quest Helper wire stages on setStage and login',
   const h = setup();
   try {
     const p = player();
-    const wire = { 0: 0, 1: 5, 2: 10, 3: 11, 4: 15, 5: 20, 6: 21, 7: 22, 8: 23, 9: 25, 10: 30, 11: 50 };
+    const wire = { 0: 0, 1: 5, 2: 10, 3: 11, 4: 15, 5: 20, 6: 21, 7: 22, 8: 23, 9: 25, 10: 35, 11: 50 };
     for (const [stage, expected] of Object.entries(wire)) {
       h.quest.setStage(p, Number(stage));
       assert.equal(p.varbits.get(5795), expected, `durable stage ${stage}`);
     }
+    const ready = player();
+    ready.setAttribute('quest.bone_voyage.charm', 2);
+    ready.setAttribute('quest.bone_voyage.potion', 2);
+    h.quest.setStage(ready, 9);
+    assert.equal(ready.varbits.get(5795), 30, 'both protections given: wire 30');
     for (const [stage, expected] of Object.entries(wire)) {
+      if (Number(stage) === 10) continue; // a bare stage-10 save completes on login (main route test)
       const oldSave = player();
       oldSave.setAttribute('quest.bone_voyage.stage', Number(stage));
       runtime.sendQuestVarps({ player: oldSave });
       for (const login of h.logins) login({ player: oldSave });
-      if (Number(stage) === 10) {
-        assert.equal(oldSave.varbits.get(5795), 35, 'legacy stage-10 save is treated as arrived');
-      } else {
-        assert.equal(oldSave.varbits.get(5795), expected, `legacy durable stage ${stage} on login`);
-      }
+      assert.equal(oldSave.varbits.get(5795), expected, `legacy durable stage ${stage} on login`);
     }
   } finally {
     h.restore();
   }
 });
 
-// Transcript:Bone_Voyage "If the player fails the voyage", then the navigators' "after failing a voyage" pages.
-test('a voyage that runs out of time fails back to the canal with the after-failing pages', () => {
+function sailingPlayer(h, voyage) {
+  const p = player();
+  p.setAttribute('quest.bone_voyage.potion', 2);
+  p.setAttribute('quest.bone_voyage.charm', 2);
+  h.quest.setStage(p, 10);
+  p.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 30, bearing: 0, throttle: 2, steer: 0, ticks: 0, ...voyage });
+  runtime.sendQuestVarps({ player: p });
+  for (const login of h.logins) login({ player: p });
+  h.operate(p);
+  return p;
+}
+
+test('a voyage too long off course goes back to the canal deck at wire 35', () => steadyWind(() => {
   const h = setup();
   try {
-    const p = player();
-    p.setAttribute('quest.bone_voyage.potion', 2);
-    p.setAttribute('quest.bone_voyage.charm', 2);
-    h.quest.setStage(p, 10);
-    p.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 0, heading: 0, throttle: 1, ticks: 9, wind: 0 });
-    runtime.sendQuestVarps({ player: p });
-    for (const login of h.logins) login({ player: p });
-    h.operate(p);
+    const p = sailingPlayer(h, { bearing: 30, offCourse: 19 });
     const area = p.getPrivateArea();
-    area.state.ticks = 100000;
-    area.process(p);
-    assert.equal(h.quest.getStage(p), 9, 'back to the canal');
+    for (let i = 0; i < 4; i++) area.process(p);
+    assert.equal(area.state.phase, 'returning');
+    tick(3);
+    assert.deepEqual(at(p), [3360, 3453, 1], 'back on the canal barge');
+    assert.equal(h.quest.getStage(p), 10, 'the crew has still set off once');
+    assert.equal(p.varbits.get(5795), 35);
     const variant = (npcId) => h.variants.map((fn) => fn({ player: p, npcId })).find(Boolean) ?? null;
     assert.equal(variant(N.LEAD_NAVIGATOR), 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again');
     assert.equal(variant(N.JUNIOR_NAVIGATOR), 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage');
   } finally {
     h.restore();
   }
-});
+}));
 
-test('abort closes the controls, returns to the canal and allows a retry', () => {
+test('the sailing model: +10 on course, -5 off it, every 4 ticks with the sails of the update before', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, { progress: 30, bearing: 6, steer: 2, lastThrottle: 2 });
+    const area = p.getPrivateArea();
+    const said = [];
+    area.junior.forceChat = (text) => said.push(text);
+    for (let i = 0; i < 3; i++) area.process(p);
+    assert.equal(area.state.progress, 30, 'nothing between updates');
+    area.process(p);
+    assert.equal(area.state.progress, 40, '6 steps from north is on course');
+    area.state.bearing = 7;
+    for (let i = 0; i < 4; i++) area.process(p);
+    assert.equal(area.state.progress, 35, '7 steps off loses 5');
+    assert.deepEqual(said, ["We're on course, keep it up!", 'You need to get back on course!'], 'the Junior Navigator calls each step (capture ticks 396-698)');
+    h.press(p, (604 << 16) | 12);
+    h.press(p, (604 << 16) | 12);
+    h.press(p, (604 << 16) | 39); // rudder back to straight: the lowered sails' drift is +1 an update
+    assert.equal(area.state.throttle, 0);
+    assert.equal(area.state.steer, 0);
+    area.state.bearing = 0;
+    for (let i = 0; i < 4; i++) area.process(p);
+    assert.equal(area.state.progress, 45, 'the update after lowering still sails at full');
+    for (let i = 0; i < 8; i++) area.process(p);
+    assert.equal(area.state.progress, 45, 'lowered sails: one step per three updates');
+    for (let i = 0; i < 4; i++) area.process(p);
+    assert.equal(area.state.progress, 55);
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('a set-off walked away from on the first message box still fades in and sails', () => steadyWind(() => {
   const h = setup();
   try {
     const p = player();
     p.setAttribute('quest.bone_voyage.potion', 2);
-    h.quest.setStage(p, 10);
-    p.setAttribute('quest.bone_voyage.voyage', { phase: 'sailing', progress: 30, heading: 0, throttle: 2, ticks: 9, wind: 0 });
-    runtime.sendQuestVarps({ player: p });
-    for (const login of h.logins) login({ player: p });
+    p.setAttribute('quest.bone_voyage.charm', 2);
+    h.quest.setStage(p, 9);
+    // The giving-potion page from "Looks like we've got everything..." up to the first message box.
+    h.npcAction(p, N.LEAD_NAVIGATOR, 3363, 3454, 1, 'Talk-to');
+    for (let i = 0; i < 20 && !MultiChatboxPrompt.getPending(p); i++) p.getDialogueManager().advance();
+    assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    assert.equal(h.quest.getStage(p), 10);
+    p.getDialogueManager().reset(); // the player clicks away from "Each member of the crew..."
+    tick(5);
+    const area = p.getPrivateArea();
+    assert.ok(area, 'the barge still sets off');
+    assert.equal(area.state.phase, 'sailing', 'the briefing ends with the chatbox');
+    assert.equal(p.varbits.get(14192), 7, 'the controls wait with the hint arrow');
     h.operate(p);
+    assert.equal(area.state.controlsOpen, true, 'Operate opens them');
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('Operate during a briefing cut short takes over from it', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 10);
+    p.setAttribute('quest.bone_voyage.voyage', { phase: 'returned' });
+    h.npcAction(p, N.LEAD_NAVIGATOR, 3363, 3454, 1, 'Talk-to');
+    for (let i = 0; i < 20 && !MultiChatboxPrompt.getPending(p); i++) p.getDialogueManager().advance();
+    assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    for (let i = 0; i < 3; i++) p.getDialogueManager().advance(); // both boxes and the Junior's first line
+    const area = p.getPrivateArea();
+    assert.equal(area.state.phase, 'briefing');
+    h.operate(p);
+    assert.equal(area.state.phase, 'sailing');
+    assert.equal(area.state.controlsOpen, true);
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('controls closed by a click pause the bar and point the hint arrow at them', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, { progress: 30, bearing: 30, offCourse: 0 });
+    const area = p.getPrivateArea();
+    p.getPacketSender().closeSubInterface(SIDEMODAL); // the engine closes the modal on a world click
+    for (let i = 0; i < 40; i++) area.process(p);
+    assert.equal(area.state.controlsOpen, false);
+    assert.equal(area.state.progress, 30, 'nothing moves while the controls are closed (capture ticks 348-390)');
+    assert.equal(p.varbits.get(14192), 7);
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('a logout between the full bar and the landing lands on the island deck', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, { progress: 90, bearing: 0, lastThrottle: 2 });
+    const area = p.getPrivateArea();
+    for (let i = 0; i < 8 && area.state.phase === 'sailing'; i++) area.process(p);
+    assert.equal(area.state.phase, 'arriving');
+    area.leave(p, true);
+    for (const login of h.logins) login({ player: p });
+    assert.deepEqual(at(p), [3723, 3784, 1], 'not left at the instance coordinates');
+    assert.equal(h.quest.getStage(p), 11);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('abort closes the controls, lands on the canal deck and allows a retry', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = sailingPlayer(h, {});
     const area = p.getPrivateArea();
     assert.ok(area);
     h.press(p, (604 << 16) | 2);
-    // Transcript:Bone_Voyage "Aborting the voyage": "Abort the voyage?" Yes./Cancel., then the message on Yes.
+    assert.equal(area.state.controlsOpen, false, 'the controls close first (capture tick 415)');
+    assert.equal(p.varbits.get(14192), 7);
     assert.deepEqual(MultiChatboxPrompt.getPending(p), { title: 'Abort the voyage?', options: ['Yes.', 'Cancel.'] });
-    assert.equal(h.quest.getStage(p), 10, 'nothing happens until Yes');
     assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    assert.ok(p.closedSubInterfaces.includes(OVERLAY_HUD), 'the overlay goes with Yes');
+    assert.equal(p.messages.length, 0, 'the message comes with the landing');
+    tick(3);
+    // The transcript's step 2ss3M1 (live adds an ellipsis: an osrsreboxed-db correction, not ours to patch).
     assert.ok(p.messages.includes('With the aid of the junior navigator, you sail back to the digsite.'));
-    assert.equal(h.quest.getStage(p), 9);
-    assert.equal(p.varbits.get(5795), 25);
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3364, 3446, 0]);
-    assert.ok(p.closedSubInterfaces.includes((161 << 16) | 8));
-    assert.ok(p.closedSubInterfaces.includes((161 << 16) | 1));
-    assert.equal(h.spawned.filter((npc) => npc.def.id === N.LEAD_NAVIGATOR).length, 1, 'retry lead is back on the deck');
-    assert.equal(h.spawned.filter((npc) => npc.def.id === N.JUNIOR_NAVIGATOR).length >= 1, true, 'retry junior is available');
-
-    h.npcAction(p, N.BARGE_GUARD_3, 3364, 3446, 0, 'Embark');
-    // "Talking to the Lead Navigator to try again" after the aborted voyage, whose "I'm ready, let's go." sets off.
-    assert.equal(h.variants.map((fn) => fn({ player: p, npcId: N.LEAD_NAVIGATOR })).find(Boolean) ?? null, 'the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again');
-    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3453, ["I'm ready, let's go."], 1);
+    assert.deepEqual(at(p), [3360, 3453, 1], 'the canal barge deck (capture tick 428)');
     assert.equal(h.quest.getStage(p), 10);
-    assert.equal(p.varbits.get(5795), 30);
+    assert.equal(p.varbits.get(5795), 35, 'abort keeps wire 35');
+
+    h.talk(p, N.LEAD_NAVIGATOR, 3363, 3454, ["I'm ready, let's go."], 1);
+    tick(1);
     const retried = p.getPrivateArea();
-    assert.ok(retried, 'the retry starts a new sailing instance');
+    assert.ok(retried && retried !== area, 'the retry starts a new sailing instance');
+    assert.equal(retried.state.progress, 0, 'a new voyage starts from nothing');
+    assert.equal(retried.state.phase, 'sailing');
     retried.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('post-quest navigators and guards use their pages by barge', () => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 11);
+    const npcAt = (x, y, z) => ({ getLocation: () => new core.Location(x, y, z) });
+    const variant = (npcId, npc) => h.variants.map((fn) => fn({ player: p, npcId, npc })).find(Boolean) ?? null;
+    assert.equal(variant(N.LEAD_NAVIGATOR_2, npcAt(3363, 3454, 1)), 'standard-dialogue-digsite');
+    assert.equal(variant(N.LEAD_NAVIGATOR_2, npcAt(3723, 3784, 1)), 'standard-dialogue-fossil-island');
+    assert.equal(variant(N.JUNIOR_NAVIGATOR_2, npcAt(3723, 3785, 1)), 'standard-dialogue-fossil-island');
+    assert.equal(variant(N.BARGE_GUARD, npcAt(3362, 3451, 1)), 'after-bone-voyage-on-the-barge');
+    assert.equal(variant(N.BARGE_GUARD_2, npcAt(3362, 3446, 0)), 'after-bone-voyage-on-the-canal');
+    const midQuest = player();
+    h.quest.setStage(midQuest, 10);
+    assert.equal(h.variants.map((fn) => fn({ player: midQuest, npcId: N.BARGE_GUARD })).find(Boolean), 'after-bone-voyage-on-the-barge',
+      'the deck guard offers "Can I get off the barge?" mid-quest (capture tick 147)');
   } finally {
     h.restore();
   }

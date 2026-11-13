@@ -340,10 +340,20 @@ test('amethyst arrows resolve with their cache visuals and only fit magic-tier b
 
   for (const bow of [
     RangedWeapon.MAGIC_LONGBOW, RangedWeapon.MAGIC_SHORTBOW, RangedWeapon.MAGIC_COMP_BOW,
-    RangedWeapon.SEERCULL, RangedWeapon.THIRD_AGE_BOW, RangedWeapon.ZARYTE_BOW,
-    RangedWeapon.GODBOW, RangedWeapon.TWISTED_BOW, RangedWeapon.SCORCHING_BOW, RangedWeapon.DARK_BOW,
+    RangedWeapon.SEERCULL, RangedWeapon.THIRD_AGE_BOW,
+    RangedWeapon.TWISTED_BOW, RangedWeapon.SCORCHING_BOW, RangedWeapon.DARK_BOW,
   ]) assert.ok(bow.getAmmunitionData().includes(ammo), 'magic-tier or higher bow can fire amethyst arrows');
   assert.ok(!RangedWeapon.YEW_SHORTBOW.getAmmunitionData().includes(ammo), 'yew bows cannot fire amethyst arrows');
+});
+
+// GODBOW (19143, 19146, 19149) and ZARYTE_BOW (20171) were RS2-era ids: in the OSRS cache they are a half full wine
+// jug, unfermented wine, a wizard's mind bomb and a steel platebody (g), so none of them is a ranged weapon.
+test('the old god bow and Zaryte bow ids are not ranged weapons', () => {
+  for (const id of [19143, 19146, 19149, 20171]) {
+    assert.equal(RangedWeapon.rangedWeapons.get(id), undefined, `${id}`);
+  }
+  assert.equal(RangedWeapon.GODBOW, undefined);
+  assert.equal(RangedWeapon.ZARYTE_BOW, undefined);
 });
 
 test('projectiles use the OSRS projanim flight times', () => {

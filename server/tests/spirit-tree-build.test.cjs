@@ -121,7 +121,7 @@ test('every second skill the cache gives is checked: Smithing for the armour dis
     return typeof result==='string'?result:null;};
   assert.equal(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,67),'You need Smithing level 68 to build that.');
   assert.notEqual(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,68),'You need Smithing level 68 to build that.');
-  assert.equal(refusal('RUNE_CASE_1',core.Skill.RUNECRAFTING,13),'You need Runecrafting level 14 to build that.');
+  assert.equal(refusal('RUNE_CASE_1',core.Skill.RUNECRAFTING,13),'You need Runecraft level 14 to build that.');
 });
 
 test('the spirit tree & fairy ring pays 885 Construction and 885 Farming (Wiki), the fairy ring alone 535 Construction',()=>{

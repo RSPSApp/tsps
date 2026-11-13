@@ -112,6 +112,8 @@ A custom NPC is a `kind: "npc"` overlay row with its own ID. Its `fields.recolor
 colours with the base NPC's built-in cache recolours and writes the resulting arrays into this row.
 Recolour values must be 0–65535. Because the client applies pairs in order, newly introduced
 swaps and chains are rejected; any unchanged pairs inherited from the base NPC remain valid.
+The same rule holds for `item` and `loc` rows, whose model loaders also apply the pairs in order
+(their base pairs come from the base item or loc).
 The existing overlay loader clones the base definition and sends it to the client; stock NPC IDs
 and their cache definitions are not changed.
 

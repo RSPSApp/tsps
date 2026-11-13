@@ -1,6 +1,6 @@
 "use strict";
 
-// PRIVATE SOURCE PREPARATION. Progression and PvP remain closed; see the preparation document.
+// OPT-IN PREPARATION. Progression and PvP remain closed; see the preparation document.
 module.exports = {
   name: "DeadmanMode",
   description: "Unfinished permanent Deadman character entry and protection preparation. XP and PvP are disabled.",

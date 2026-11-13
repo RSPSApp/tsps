@@ -216,7 +216,7 @@ function chainhitScene(t, { multi = true, special = 100, outcomes = [], bounceTa
     getLocalPlayers: () => new Map(),
   });
   const styled = [];
-  t.mock.method(CombatFactory, "multiCombatBetween", () => multi);
+  t.mock.method(CombatFactory, "areaAttackSpreads", () => multi);
   t.mock.method(CombatFactory, "applyStyleDamage", (hit, maxHit) => styled.push([hit.getTarget(), maxHit]));
   t.mock.method(CombatFactory, "canAttackSecondaryTarget", (attacker, primary, candidate, radius) =>
     candidate !== primary && candidate.getLocation().getDistance(primary.getLocation()) <= radius);
@@ -381,7 +381,7 @@ test("a chinchompa that lands explodes on everyone within a tile of its target i
   const away = mobile(3207, 3200);
   player.getLocalNpcs = () => new Map([[1, target], ...beside.map((mob, index) => [index + 2, mob]), [9, away]]);
   let multi = true;
-  t.mock.method(CombatFactory, "multiCombatBetween", () => multi);
+  t.mock.method(CombatFactory, "areaAttackSpreads", () => multi);
   t.mock.method(CombatFactory, "canAttackSecondaryTarget", (attacker, primary, candidate, radius) =>
     candidate !== primary && candidate.getLocation().getDistance(primary.getLocation()) <= radius);
   t.mock.method(RangedCombatMethod.prototype, "hits", function (character, victim) {

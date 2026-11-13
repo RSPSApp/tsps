@@ -135,7 +135,7 @@ function occupies(mobile, tiles) {
 
 /** The additional targets a thrust reaches, nearest the main target first. */
 function reachedTargets(character, target) {
-  if (!core.CombatFactory.multiCombatBetween(character, target)) return [];
+  if (!core.CombatFactory.areaAttackSpreads(character, target)) return [];
   // Wiki (Obligator): the extra reach "does not apply if the main target is praying protect from melee"
   // (the 11 November 2026 hotfix: it "will not pierce enemies behind the primary target").
   const { PrayerHandler } = core;

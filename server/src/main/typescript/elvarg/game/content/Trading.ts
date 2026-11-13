@@ -600,7 +600,7 @@ export class Trading {
             ? [
                 [Trading.CONFIRM_OPPONENT, `Trading with:<br>${name}`],
                 [Trading.CONFIRM_OWN_HEADING, `You are about to give:<br>${Trading.formatValue(this.container)}`],
-                [Trading.CONFIRM_OTHER_HEADING, `In return you will receive:<br>${Trading.formatValue(other.getTrading().getContainer())}`],
+                [Trading.CONFIRM_OTHER_HEADING, `In return you will receive:<br>${Trading.formatValue(other.getTrading().getContainer(), true)}`],
                 [Trading.CONFIRM_STATUS, Trading.statusText(
                     this.state === TradeState.ACCEPTED_CONFIRM_SCREEN,
                     otherState === TradeState.ACCEPTED_CONFIRM_SCREEN,
@@ -625,11 +625,16 @@ export class Trading {
         }
     }
 
-    private static formatValue(items: ItemContainer): string {
+    /**
+     * `redWhenZero`: the confirm screen's "you will receive" value is red at 0 (every such recording, e.g.
+     * rsprox_transcripts/227/00548.txt, 229/00253.txt); every other value, 0 included, stays white.
+     */
+    private static formatValue(items: ItemContainer, redWhenZero = false): string {
         const value = items.getValidItems()
             // Wiki (Trading): the value shown uses the Grand Exchange price; the store value only where there is none.
             .reduce((total, item) => total + item.getDefinition().getGrandExchangeValue() * item.getAmount(), 0);
-        return `(Value: <col=ffffff>${Misc.format(value)}</col> coins)`;
+        const colour = redWhenZero && value === 0 ? "ff0000" : "ffffff";
+        return `(Value: <col=${colour}>${Misc.format(value)}</col> coins)`;
     }
 
     private static freeSlotsText(name: string, freeSlots: number): string {

@@ -156,12 +156,12 @@ function bankTexts(t, p) {
   return texts;
 }
 
-test("the worn-items view's stat lines (bankmain 12:82-117) are filled on opening and on Wear", (t) => {
+test("the worn-items view's stat lines (bankmain 12:82-117) are filled on opening, on Wear and on a remount", (t) => {
   const { p } = banker(t);
   const I = core.ItemIdentifiers, E = core.Equipment;
   p.getEquipment().setItem(E.WEAPON_SLOT, new core.Item(I.RUNE_SCIMITAR, 1));
   const texts = bankTexts(t, p);
-  PM.emitCustomEvent("bank:opened", { player: p });
+  p.getBank(p.getCurrentBankTab()).open();
   assert.equal(texts.get(82), "Stab: +7");
   assert.equal(texts.get(83), "Slash: +45");
   assert.equal(texts.get(88), "Stab: +0");
@@ -178,4 +178,9 @@ test("the worn-items view's stat lines (bankmain 12:82-117) are filled on openin
   click(p, 1, 0, I.RUNE_FULL_HELM);
   assert.equal(p.getEquipment().getItems()[E.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
   assert.equal(texts.get(88), "Stab: +30", "wearing from the bank refreshes the lines");
+
+  // Searching or switching tabs remounts the bank while it is open, which resets its text.
+  texts.clear();
+  p.getBank(p.getCurrentBankTab()).open();
+  assert.equal(texts.get(88), "Stab: +30", "a remount fills the lines again");
 });

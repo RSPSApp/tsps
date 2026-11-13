@@ -225,9 +225,12 @@ function onEquipmentChanged({ player }) {
   }
 }
 
-/** The bank fills its worn-items view's stat lines on opening, and again as worn items change. */
-function onBankOpened({ player }) {
-  updateBank(player);
+/**
+ * The bank fills its worn-items view's stat lines whenever it is (re)drawn, and again as worn
+ * items change. Text that hasn't changed since the last draw is not resent.
+ */
+function onBankRefreshed({ player }) {
+  if (player?.getInterfaceId?.() === BANK_INTERFACE_ID) updateBank(player);
 }
 
 function updateBank(player) {
@@ -286,7 +289,7 @@ module.exports = {
       }
     });
     api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
-    api.onCustomEvent?.("bank:opened", onBankOpened);
+    api.onCustomEvent?.("bank:refreshed", onBankRefreshed);
     api.onPlayerLogin?.(onLogin);
     api.onCustomEvent?.("equipment:effects", addDataSetTexts);
   },

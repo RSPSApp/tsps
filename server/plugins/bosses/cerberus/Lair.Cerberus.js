@@ -127,7 +127,10 @@ function createArea(arena) {
 
 // --- The hall
 
-/** Turn: into the arena, for a player on task. */
+/**
+ * Turn: into the arena, for a player on task. A league character carrying the echo orb is asked
+ * first ("echo-boss:entry", plugins/modes/league/EchoOrbs.LeagueMode.js); the task rule stays.
+ */
 function turnWinch({ player, location }) {
   const arena = arenaOfWinch(location);
   if (!arena) return false;
@@ -135,7 +138,9 @@ function turnWinch({ player, location }) {
     player.sendMessage(Common.message("noTask"));
     return true;
   }
-  player.moveTo(Common.toLocation(arena.def.entry));
+  const entry = { player, boss: "cerberus", enter: () => player.moveTo(Common.toLocation(arena.def.entry)), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
   return true;
 }
 

@@ -224,7 +224,10 @@ function entrance({ player, objectId }) {
     Common.box(player, Common.message("noTask"));
     return true;
   }
-  travel(player, Common.data.travel.upTicks, "goUp", () => goUp(player));
+  // A league character carrying the echo orb is asked first ("echo-boss:entry").
+  const entry = { player, boss: "grotesque-guardians", enter: () => travel(player, Common.data.travel.upTicks, "goUp", () => goUp(player)), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
   return true;
 }
 

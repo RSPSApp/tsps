@@ -1,0 +1,22 @@
+{
+  "$comment": "Demonic Pacts League echo orbs, applied by plugins/modes/league/EchoOrbs.LeagueMode.js. Rates and the guarantee are from the Wiki (Demonic_Pacts_League/Echo_bosses_and_echo_equipment and Echo_orb, read 2026-11-13): each regional boss drops its region's orb at `rate` (1 in N; 1 is the Wiki's 'Guaranteed') and guarantees it once the kills since the last orb reach N. `npcs` are the NPC names whose kills roll it (NpcDrops' npc-drops:add, once per kill), `npcIds` NpcIdentifiers names where a name is shared (the quests' Hespori and Amoxliatl are not the regular bosses), `sources` the `source` other rollers pass on npc-drops:roll (the Gauntlet's reward chest). `title` is the Yes/No menu the boss's entrance opens while the orb is carried; `titleOurs` marks a title no capture shows. `ground` is how a dropped orb lies: the killer's only, never turning public, for 18,000 ticks. `leagues` are the league types (6 Demonic Pacts) whose characters get any of this.",
+  "leagues": [6],
+  "ground": { "goesGlobal": false, "despawnDelay": 18000 },
+  "messages": {
+    "drop": "<col=005f00>{player} received a drop: {item}</col>",
+    "yes": "Yes.",
+    "no": "No.",
+    "placeholder": "Nothing interesting happens."
+  },
+  "orbs": {
+    "cerberus": { "item": "ASGARNIA_ECHO_ORB", "rate": 50, "npcs": ["Cerberus"], "title": "Fight the Echo of Cerberus?", "titleOurs": true },
+    "kalphite-queen": { "item": "DESERT_ECHO_ORB", "rate": 30, "npcs": ["Kalphite Queen"], "title": "Fight the Echo of the Kalphite Queen?", "titleOurs": true },
+    "dagannoth-kings": { "item": "FREMENNIK_ECHO_ORB", "rate": 30, "npcs": ["Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme"], "title": "Fight the Echo of the Dagannoth Kings?", "titleOurs": true },
+    "thermonuclear-smoke-devil": { "item": "KANDARIN_ECHO_ORB", "rate": 50, "npcs": ["Thermonuclear smoke devil"], "title": "Fight the Echo of the Thermonuclear Smoke Devil?" },
+    "grotesque-guardians": { "item": "MORYTANIA_ECHO_ORB", "rate": 30, "npcs": ["Dusk"], "title": "Fight the Echo of the Grotesque Guardians?", "titleOurs": true },
+    "corrupted-hunllef": { "item": "TIRANNWN_ECHO_ORB", "rate": 15, "sources": ["Corrupted Hunllef"], "title": "Fight the Echo of the Hunllef?" },
+    "king-black-dragon": { "item": "WILDERNESS_ECHO_ORB", "rate": 30, "npcs": ["King Black Dragon"], "title": "Fight the Echo of the King Black Dragon?", "titleOurs": true },
+    "hespori": { "item": "KOUREND_ECHO_ORB", "rate": 1, "npcIds": ["HESPORI"], "title": "Fight the Echo of Hespori?", "titleOurs": true },
+    "amoxliatl": { "item": "VARLAMORE_ECHO_ORB", "rate": 40, "npcIds": ["AMOXLIATL"], "title": "Fight the Echo of Amoxliatl?", "titleOurs": true }
+  }
+}

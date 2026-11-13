@@ -140,9 +140,18 @@ function questComplete(player) {
   return request.complete === true;
 }
 
-/** Through the door: a chamber of the player's own, behind the fade. */
+/** Through the door: a chamber of the player's own, behind the fade. A league character carrying the echo orb is asked first ("echo-boss:entry"). */
 function passThrough({ player, objectId }) {
   if (objectId !== Common.data.door.id || sessionOf(player) || !questComplete(player)) return false;
+  const entry = { player, boss: "amoxliatl", enter: () => enterChamber(player), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
+  return true;
+}
+
+function enterChamber(player) {
+  // The menu's No comes later: the door's own rule is asked again.
+  if (sessionOf(player) || !questComplete(player)) return;
   const session = new Session(player);
   sessions.set(player, session);
   player.getMovementQueue().reset();
@@ -158,7 +167,6 @@ function passThrough({ player, objectId }) {
     player.getPacketSender().sendSong(music);
     Common.later(spawn.afterArrivalTicks, () => session.spawnBoss());
   });
-  return true;
 }
 
 /** The quest reuses the same chamber and hazards with the cache's 400-HP guardian. */

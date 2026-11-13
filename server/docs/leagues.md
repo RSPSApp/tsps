@@ -1318,8 +1318,9 @@ progress in `league:mastery-progress`.
   judged on `onNpcDeath` by the NPC's name, combat level or Slayer level. As captured
   (227/00075) a point flips its `league_combat_mastery_point_unlock_N` varbit (11585-11594),
   raises `points_earned` (11584) and `points_to_spend` (11583) and shows the green game message.
-  **No Echo boss exists in this cache**, so those three points come only from `::mastery point`;
-  the data marks them `_missing`.
+  **No Echo boss is fought here** (the orbs and their entrance prompt are, see Echo orbs below,
+  but Yes is a placeholder), so those three points come only from `::mastery point`; the data
+  marks them `_missing`.
 - **The interface, as captured.** The league side panel's mastery button (656:32) opens
   `league_combat_mastery` (311) as the main modal with `if_setevents` on its clickzones (311:36,
   0-18), menu frame (311:78, 10-18) and style tabs (311:73, 0-26), then runs 3186 on the panel's
@@ -1387,6 +1388,56 @@ stock stayed 3, and the 10 general-store opens in the Leagues VI recordings show
 Only stock main characters sold still goes, down to the shop's own amount. Every league buy in
 the recordings (39 shops, 600+ buys) left the stock unchanged; the exceptions "most" implies are
 not recorded, so there are none.
+
+### Echo orbs (Leagues VI)
+
+`league/EchoOrbs.LeagueMode.js`, data `league-echo-orbs.json` (Wiki: Demonic Pacts League/Echo
+bosses and echo equipment, Echo orb). Each region's regular boss drops its echo orb: Cerberus
+(Asgarnia, 1/50), the Kalphite Queen (Desert, 1/30), the Dagannoth Kings (Fremennik, 1/30), the
+Thermonuclear smoke devil (Kandarin, 1/50), the Grotesque Guardians (Morytania, 1/30), the
+Corrupted Hunllef (Tirannwn, 1/15, in the reward chest), the King Black Dragon (Wilderness, 1/30),
+Hespori (Kourend, every kill) and Amoxliatl (Varlamore, 1/40). The orb is certain once the kills
+since the last one reach the rate (the Wiki: "guaranteed to drop at the expected kill count").
+A kill through NpcDrops is rolled on `npc-drops:add`; the Gauntlet's chest passes
+`source: "Corrupted Hunllef"` on its `npc-drops:roll`. As 237/01158 shows, the smoke devil's orb
+lands on the floor with the rest of the loot, the Hunllef's goes into the pack from the chest, and
+the killer sees `<col=005f00><name> received a drop: Kandarin echo orb</col>`. On the floor the orb
+stays the killer's and lies 18,000 ticks (the capture's `despawn=18000, ownership=self,
+neverturnpublic=true`; the loot beside it shows `reveal=100, despawn=200`): the drop
+carries data `ground` (`{ goesGlobal: false, despawnDelay: 18000 }`), which NpcDrops' `placeDrops`
+lays over the placement's options for that drop only. The Gauntlet's chest passes the same
+options on when a reward overflows a full pack onto the floor.
+
+Each boss's own entrance emits `echo-boss:entry` `{ player, boss, enter, handled }` just before
+it lets the player in: the Iron Winch's Turn (after its task check), the Queen's roped tunnel,
+the Kings' ladder (Standard and Slayer), the smoke devil's crevice going in, the Roof Entrance
+(after its key and task checks), the Corrupted Gauntlet's entrance (before its checks, as live
+asks with a full pack), the King Black Dragon's ladder down, Hespori's cave in the Farming Guild
+and Amoxliatl's door. A league character carrying that boss's orb (Wiki: in the inventory; not
+used up) gets the captured menu, "Fight the Echo of the Thermonuclear Smoke Devil?" /
+"Fight the Echo of the Hunllef?" with "Yes." and "No.": No goes in as without the orb, Yes calls
+`startEchoFight(player, boss)`, which answers false until echo bosses exist, and the player stays
+outside with "Nothing interesting happens.".
+
+#### Ours (echo orbs)
+
+- The menu titles of the seven bosses with no capture follow the captured pattern
+  (`titleOurs` in the data).
+- No continues the normal entry; Yes is the placeholder message and leaves the player outside.
+  No comes later than the click, so it goes in only while the player is still on the tile the menu
+  opened on, logged in and alive, and each entrance asks its own rules again (the winch's and the
+  Roof Entrance's task, the Kings' Slayer task, the Queen's rope still tied, Amoxliatl's quest and
+  open chamber), with the usual refusal and without asking about the orb a second time.
+- The drop line goes to the killer only (live's audience for it is not known).
+- The three Dagannoth Kings share one kill count toward the Fremennik orb, each king's kill
+  rolling it.
+- An orb can drop again once one is owned, and the count starts again after each orb.
+- Hespori and Amoxliatl are matched by id, so the quests' versions of them drop no orb; the other
+  bosses by name (an echo variant added later must be kept out of these lists: the Wiki gives the
+  orb to the regular boss only).
+- The Cerberus winch and the Grotesque Guardians' entrance keep their Slayer task rule with the
+  orb (the Wiki waives the task only for the echo smoke devil); the Kalphite Queen's rope and the
+  winch's Peek never ask.
 
 ## Demonic Pacts
 
@@ -1469,7 +1520,8 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   the hit modifiers after it scale it) and `registerRestingLevelModifier` (the Defence pact's
   permanent, visible boost: decay and restoration settle at base + boost, as 237/01170 and
   238/01219 show Defence 114 with 99 and 15). Both are in the generic hooks table under Events.
-- **Not here:** echo bosses (their reset tasks have no trigger yet), live's second free reset given
+- **Not here:** echo bosses (their reset tasks have no trigger yet; the orbs and the entrance
+  prompt are in Echo orbs above), live's second free reset given
   later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
   points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
   earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
@@ -2146,7 +2198,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 
 ## Not yet
 
-Most task triggers (see Tasks), the Echo bosses (and so three of the mastery points), the tier
+Most task triggers (see Tasks), the Echo bosses themselves (and so three of the mastery points;
+`startEchoFight` in EchoOrbs.LeagueMode.js is where they start), the tier
 passives left out above (clue-step progress and farming ticks), the boosted sources their own
 plugins have yet to ask about, and Shattered Relics' rules (see its section). Each is its own item
 on the progress tracker.

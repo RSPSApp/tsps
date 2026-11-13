@@ -216,15 +216,24 @@ function sendUnlocked(player) {
 /** The Roof Entrance: locked until the key is used on it; then up, for a player on task. */
 function entrance({ player, objectId }) {
   if (objectId !== Common.ids.locs.entrance) return false;
+  if (!mayGoUp(player)) return true;
+  // A league character carrying the echo orb is asked first ("echo-boss:entry"); its No comes later, so it asks again.
+  const entry = { player, boss: "grotesque-guardians", enter: () => mayGoUp(player) && travel(player, Common.data.travel.upTicks, "goUp", () => goUp(player)), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
+  return true;
+}
+
+/** Whether the entrance lets this player up now: unlocked and on task, else the refusal. */
+function mayGoUp(player) {
   if (!unlocked(player)) {
     player.sendMessage(Common.message("locked"));
-    return true;
+    return false;
   }
   if (!Common.onTask(player)) {
     Common.box(player, Common.message("noTask"));
-    return true;
+    return false;
   }
-  travel(player, Common.data.travel.upTicks, "goUp", () => goUp(player));
   return true;
 }
 

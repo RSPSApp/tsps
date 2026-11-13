@@ -364,3 +364,29 @@ test('standing in lava: 15 a tick, 12 with an anti-dragon shield', () => {
     CombatEquipment.hasDragonProtectionGear = shield;
   }
 });
+
+test("the echo orb menu's later No asks for the task again before going in", () => {
+  westArena();
+  const player = fakePlayer(1292, 1254);
+  let held = null;
+  events['echo-boss:entry'] = [(entry) => { entry.handled = true; held = entry; }];
+  try {
+    onTaskAnswer = (request) => request.npcId === Common.ids.npcs.attacking;
+    assert.equal(Lair.turnWinch({ player, location: { x: 1291, y: 1254, z: 0 } }), true);
+    assert.equal(held?.boss, 'cerberus', 'on task: the menu is asked for');
+    assert.equal(player.getLocation().getY(), 1254, 'nothing until it is answered');
+    onTaskAnswer = () => false; // the task ends while the menu waits
+    held.enter();
+    assert.equal(player.getLocation().getY(), 1254, 'No: not let in');
+    assert.equal(player.messages.at(-1), 'You need a hellhound or Cerberus Slayer task to fight Cerberus.');
+    onTaskAnswer = (request) => request.npcId === Common.ids.npcs.attacking;
+    held.enter();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1240, 1226], 'still on task: in');
+    held = null;
+    onTaskAnswer = () => false;
+    Lair.turnWinch({ player: fakePlayer(1292, 1254), location: { x: 1291, y: 1254, z: 0 } });
+    assert.equal(held, null, 'off task the menu is never asked for');
+  } finally {
+    delete events['echo-boss:entry'];
+  }
+});

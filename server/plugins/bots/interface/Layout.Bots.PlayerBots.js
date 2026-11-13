@@ -12,6 +12,8 @@ const COMPONENT = {
   LOCATION_LABEL: 19, SETUP_NOTE: 20, SPAWN_BUTTON: 21, SPAWN_LABEL: 22,
   CLOSE_BUTTON: 23, CLOSE_LABEL: 24, LOCATION_INFO: 25, FEEDBACK: 26,
   COPY_LEVELS_BUTTON: 27, COPY_LEVELS_LABEL: 28, ROW_BACKGROUND_START: 30, ROW_ICON_START: 50, ROW_LABEL_START: 70,
+  SETUP_OPTION_1: 80, SETUP_OPTION_1_LABEL: 81, SETUP_OPTION_2: 82, SETUP_OPTION_2_LABEL: 83,
+  SETUP_OPTION_3: 84, SETUP_OPTION_3_LABEL: 85,
 };
 const ROW_COUNT = 10;
 const ROW_HEIGHT = 24;
@@ -23,6 +25,11 @@ const BUTTON_COMPONENTS = {
   copyLevels: [COMPONENT.COPY_LEVELS_BUTTON, COMPONENT.COPY_LEVELS_LABEL],
   spawn: [COMPONENT.SPAWN_BUTTON, COMPONENT.SPAWN_LABEL],
   close: [COMPONENT.CLOSE_BUTTON, COMPONENT.CLOSE_LABEL],
+  setupOptions: [
+    [COMPONENT.SETUP_OPTION_1, COMPONENT.SETUP_OPTION_1_LABEL],
+    [COMPONENT.SETUP_OPTION_2, COMPONENT.SETUP_OPTION_2_LABEL],
+    [COMPONENT.SETUP_OPTION_3, COMPONENT.SETUP_OPTION_3_LABEL],
+  ],
 };
 const uid = (component) => (GROUP_ID << 16) | component;
 const rowUids = Array.from({ length: ROW_COUNT }, (_, slot) => uid(COMPONENT.ROW_LABEL_START + slot));
@@ -42,9 +49,9 @@ function button(add, root, component, labelComponent, x, y, width, label) {
 
 function buildInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
-  const root = add(COMPONENT.ROOT, -1, { rawWidth: 680, rawHeight: 370, width: 680, height: 370,
+  const root = add(COMPONENT.ROOT, -1, { rawWidth: 680, rawHeight: 456, width: 680, height: 456,
     xPositionMode: 1, yPositionMode: 1, fitToViewport: true });
-  add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 680, height: 370 });
+  add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 680, height: 456 });
   add(COMPONENT.SEARCH_BOX, root, box(18, 32, 264, 22));
   add(COMPONENT.SEARCH_INPUT, root, text(24, 32, 252, 22, { actions: ["Search"], flags: FLAG_OP1, yTextAlignment: 1 }));
   add(COMPONENT.STATUS, root, text(18, 57, 644, 18, { textColor: 0xffd27f }));
@@ -62,7 +69,7 @@ function buildInterface() {
     }));
   }
 
-  add(COMPONENT.PANEL, root, box(298, 80, 364, 270, { color: 0x211b16, mouseOverColor: 0x211b16 }));
+  add(COMPONENT.PANEL, root, box(298, 80, 364, 368, { color: 0x211b16, mouseOverColor: 0x211b16 }));
   add(COMPONENT.PANEL_TITLE, root, text(310, 90, 340, 22, { fontId: 496, textColor: 0xff981f }));
   add(COMPONENT.PANEL_SUBTITLE, root, text(310, 113, 340, 18, { textColor: 0xb8ab94 }));
   add(COMPONENT.PANEL_DESCRIPTION, root, text(310, 137, 340, 48, { textColor: 0xd0c6b4 }));
@@ -70,26 +77,29 @@ function buildInterface() {
   button(add, root, COMPONENT.COUNT_MINUS, COMPONENT.COUNT_MINUS_LABEL, 432, 191, 34, "−");
   add(COMPONENT.COUNT_VALUE, root, text(470, 192, 40, 26, { text: "1", textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 }));
   button(add, root, COMPONENT.COUNT_PLUS, COMPONENT.COUNT_PLUS_LABEL, 514, 191, 34, "+");
-  button(add, root, COMPONENT.LOCATION_BUTTON, COMPONENT.LOCATION_LABEL, 310, 228, 338, "Spawn at routine location");
+  button(add, root, COMPONENT.LOCATION_BUTTON, COMPONENT.LOCATION_LABEL, 310, 228, 338, "Spawn at saved location");
   add(COMPONENT.LOCATION_INFO, root, text(310, 258, 338, 16, { textColor: 0xb8ab94, yTextAlignment: 1 }));
   button(add, root, COMPONENT.COPY_LEVELS_BUTTON, COMPONENT.COPY_LEVELS_LABEL, 310, 277, 155, "Copy my levels: Off");
   add(COMPONENT.SETUP_NOTE, root, text(474, 277, 174, 27, { textColor: 0xb8ab94, yTextAlignment: 1 }));
-  add(COMPONENT.FEEDBACK, root, text(310, 306, 338, 13, { textColor: 0xffd27f, yTextAlignment: 1 }));
-  button(add, root, COMPONENT.SPAWN_BUTTON, COMPONENT.SPAWN_LABEL, 402, 322, 156, "Spawn bots");
-  button(add, root, COMPONENT.CLOSE_BUTTON, COMPONENT.CLOSE_LABEL, 566, 322, 82, "Close");
+  for (const [index, [buttonComponent, labelComponent]] of BUTTON_COMPONENTS.setupOptions.entries()) {
+    button(add, root, buttonComponent, labelComponent, 310, 309 + index * 31, 338, "Activity setup");
+  }
+  add(COMPONENT.FEEDBACK, root, text(310, 403, 338, 13, { textColor: 0xffd27f, yTextAlignment: 1 }));
+  button(add, root, COMPONENT.SPAWN_BUTTON, COMPONENT.SPAWN_LABEL, 402, 420, 156, "Spawn bots");
+  button(add, root, COMPONENT.CLOSE_BUTTON, COMPONENT.CLOSE_LABEL, 566, 420, 82, "Close");
 
   return {
     groupId: GROUP_ID,
     widgets,
     search: { inputComponent: COMPONENT.SEARCH_INPUT, backgroundComponent: COMPONENT.SEARCH_BOX,
-      dataComponent: COMPONENT.DATA, maxLength: 60, placeholder: "Search bot routines...", caret: "|",
+      dataComponent: COMPONENT.DATA, maxLength: 60, placeholder: "Search routines and activities...", caret: "|",
       textTemplate: "Search: %s", focusColor: 0x3a3125, blurColor: 0x2b241b },
     list: { viewComponent: COMPONENT.LIST_VIEW, scrollbarComponent: COMPONENT.LIST_SCROLLBAR,
       slotCount: ROW_COUNT, columns: 1, rowHeight: ROW_HEIGHT, iconStart: COMPONENT.ROW_ICON_START,
       backgroundStart: COMPONENT.ROW_BACKGROUND_START, labelStart: COMPONENT.ROW_LABEL_START,
       textOnly: true, clickable: true, itemLabel: "%name<col=9b9384>  %detail</col>",
       select: { op: 1, texts: { title: COMPONENT.PANEL_TITLE, subtitle: COMPONENT.PANEL_SUBTITLE, description: COMPONENT.PANEL_DESCRIPTION } } },
-    status: { component: COMPONENT.STATUS, matches: "Bot routines: %total", empty: "No saved bot routines." },
+    status: { component: COMPONENT.STATUS, matches: "Bot launchers: %total", empty: "No saved routines or activity launchers." },
   };
 }
 

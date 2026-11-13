@@ -6,9 +6,10 @@ const DEVELOPER_RIGHT = { id: 'developer' };
 
 function fakePlayer() {
   const strings = new Map();
+  const visibility = new Map();
   const player = {
     interfaceId: -1,
-    strings,
+    strings, visibility,
     sentMessages: [],
     setInterfaceId(id) { this.interfaceId = id; },
     getInterfaceId() { return this.interfaceId; },
@@ -17,6 +18,7 @@ function fakePlayer() {
     getPacketSender() {
       return {
         sendString(value, widget) { strings.set(widget, value); return this; },
+        sendInterfaceDisplayState(widget, hidden) { visibility.set(widget, hidden); return this; },
         sendSubInterface(parent, group, type, options) { player.subInterface = { parent, group, type, options }; return this; },
         sendInterfaceRemoval() { player.interfaceId = -1; },
       };
@@ -24,6 +26,62 @@ function fakePlayer() {
   };
   return player;
 }
+
+test('registered activity launchers appear beside routines and deploy through the bounded common flow', () => {
+  const attack = { getName: () => 'Attack' };
+  const runtime = { entriesByUsername: new Map() };
+  const activities = [{ id: 'custom_oak', manual: true, repeat: true, spawnSetup: null }];
+  const brainRegistry = { activities, byId: new Map(activities.map(activity => [activity.id, activity])) };
+  const commands = new Map(), actions = [], interfaces = [], launches = [];
+  const api = {
+    core: { PlayerRights: { DEVELOPER: DEVELOPER_RIGHT }, Skill: { values: () => [attack] } },
+    registerCommand(name, handler, rights, description) { commands.set(name, { handler, rights, description }); },
+    registerCustomInterface(definition) { interfaces.push(definition); },
+    onInterfaceActionButton(buttons, handler) { actions.push({ buttons, handler }); },
+    emitCustomEvent(name, event) {
+      if (name !== 'bots:collect-launchers') return;
+      event.register({
+        id: 'barbarian-assault', name: 'Barbarian Assault', detail: 'Minigame',
+        description: 'Deploys bots through the activity plugin.', spawnLocation: { x: 3210, y: 3211, z: 0 },
+        setupFields: [
+          { id: 'role', label: 'Role', choices: [{ value: 'attacker', label: 'Attacker' }, { value: 'defender', label: 'Defender' }] },
+          { id: 'wave', label: 'Wave', choices: [{ value: 'low', label: 'Low' }, { value: 'high', label: 'High' }] },
+        ],
+        deploy({ runtime: botRuntime, count, location, skillOverrides, setup }) {
+          launches.push({ count, location, skillOverrides, setup });
+          const spawned = [];
+          for (let index = 1; index <= count; index += 1) {
+            const username = `AssaultBot${index}`;
+            const bot = { getUsername: () => username, isPlayerBot: () => true };
+            botRuntime.entriesByUsername.set(username, { player: bot });
+            spawned.push(username);
+          }
+          return { spawned, failures: [] };
+        },
+      });
+    },
+  };
+  registerBotsInterface({ api, runtime, brainRegistry });
+  const player = fakePlayer();
+  player.getSkillManager = () => ({ getMaxLevel: () => 70 });
+  commands.get('bots').handler({ player, parts: ['bots'] });
+  const rows = JSON.parse(player.strings.get(Layout.uid(Layout.COMPONENT.DATA)));
+  assert.deepEqual(rows.map(row => row.name), ['Oak', 'Barbarian Assault']);
+  assert.equal(rows[1].detail, 'Minigame');
+
+  actions.find(action => action.buttons.includes(Layout.rowUids[0])).handler({ player, slot: 2, opId: 1 });
+  assert.equal(_test.sessions.get(player).selectedLauncherKey, 'activity:barbarian-assault');
+  assert.equal(player.strings.get(Layout.uid(Layout.COMPONENT.SETUP_OPTION_1_LABEL)), 'Role: Attacker >');
+  assert.equal(player.visibility.get(Layout.uid(Layout.COMPONENT.SETUP_OPTION_1)), false);
+  const buttonHandler = actions.find(action => action.buttons.includes(Layout.uid(Layout.COMPONENT.SPAWN_BUTTON))).handler;
+  buttonHandler({ player, buttonId: Layout.uid(Layout.COMPONENT.COPY_LEVELS_BUTTON) });
+  buttonHandler({ player, buttonId: Layout.uid(Layout.COMPONENT.SETUP_OPTION_1) });
+  assert.equal(player.strings.get(Layout.uid(Layout.COMPONENT.SETUP_OPTION_1_LABEL)), 'Role: Defender >');
+  buttonHandler({ player, buttonId: Layout.uid(Layout.COMPONENT.SPAWN_BUTTON) });
+  assert.deepEqual(launches, [{ count: 1, location: { x: 3210, y: 3211, z: 0 }, skillOverrides: { attack: 70 }, setup: { role: 'defender', wave: 'low' } }]);
+  assert.equal(runtime.entriesByUsername.get('AssaultBot1').adminDeployedActivityId, 'barbarian-assault');
+  assert.match(player.strings.get(Layout.uid(Layout.COMPONENT.FEEDBACK)), /Spawned 1\/1 Barbarian Assault bot/);
+});
 
 test('copying the owner skill setup uses validated base levels and normalized skill names', () => {
   const attack = { getName: () => 'Attack' }, woodcutting = { getName: () => 'Woodcutting' }, bad = { getName: () => 'Sailing' };
@@ -64,11 +122,11 @@ test('::bots registers a developer-only custom interface and opens saved routine
   const rowHandler = actions.find(action => action.buttons.includes(Layout.rowUids[0])).handler;
   const controlHandler = actions.find(action => action.buttons.includes(Layout.uid(Layout.COMPONENT.COUNT_PLUS))).handler;
   rowHandler({ player, slot: 2, opId: 1 });
-  assert.equal(_test.sessions.get(player).selectedActivityId, 'custom_oak');
+  assert.equal(_test.sessions.get(player).selectedLauncherKey, 'routine:custom_oak');
   controlHandler({ player, buttonId: Layout.uid(Layout.COMPONENT.COUNT_PLUS) });
   assert.equal(_test.sessions.get(player).count, 2);
   controlHandler({ player, buttonId: Layout.uid(Layout.COMPONENT.LOCATION_LABEL) });
   assert.equal(_test.sessions.get(player).usePlayerLocation, true);
   assert.equal(player.strings.get(Layout.uid(Layout.COMPONENT.LOCATION_INFO)), 'Spawn tile: 3200, 3201, plane 0');
-  assert.match(player.strings.get(Layout.uid(Layout.COMPONENT.LOCATION_LABEL)), /routine location/i);
+  assert.match(player.strings.get(Layout.uid(Layout.COMPONENT.LOCATION_LABEL)), /saved location/i);
 });

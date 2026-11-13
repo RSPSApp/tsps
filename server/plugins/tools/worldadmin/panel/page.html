@@ -9,12 +9,16 @@
 <style id="local-bots-styles">
 .local-bots{display:grid;gap:16px;max-width:1600px;color:#e4dfd3;font-size:13px}.local-bots h2,.local-bots h3,.local-bots h4{margin:0;font-weight:600;color:#e4dfd3}.local-bots h2{font-size:19px}.local-bots h3{font-size:15px}.local-bots h4{margin:13px 0 7px;color:#caa95e;font-size:12px}.local-bots p{margin:5px 0 0;color:#aaa59a;line-height:1.55}.local-bots button,.local-bots .local-bots-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 11px;border:1px solid rgba(202,169,94,.28);border-radius:5px;background:#202125;color:#e4dfd3;font:inherit;cursor:pointer;text-decoration:none;white-space:nowrap}.local-bots button:hover,.local-bots .local-bots-button:hover{border-color:#caa95e;background:#2a2b30}.local-bots button:disabled{opacity:.45;cursor:not-allowed}.local-bots button.primary{border-color:#caa95e;background:#383120;color:#f6f2e8}.local-bots input,.local-bots select{box-sizing:border-box;min-width:0;min-height:34px;padding:5px 9px;border:1px solid rgba(202,169,94,.25);border-radius:5px;background:#101113;color:#e4dfd3;font:inherit}.local-bots input:focus,.local-bots select:focus{outline:2px solid #caa95e;outline-offset:1px}.local-bots-heading,.local-bots-card-heading,.local-bot-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.local-bots-heading-actions{display:flex;gap:8px;flex:none}.local-bot-card{min-width:0;padding:16px;border:1px solid rgba(202,169,94,.17);border-radius:8px;background:#1c1d21}.local-bots-card-heading{margin-bottom:12px}.local-bot-count{display:grid;place-items:center;min-width:32px;height:26px;padding:0 8px;border:1px solid rgba(202,169,94,.2);border-radius:99px;color:#dfc882;font-variant-numeric:tabular-nums}.local-bot-deploy-grid{display:grid;grid-template-columns:minmax(250px,2fr) minmax(130px,1fr);gap:12px;margin:14px 0}.local-bot-deploy-grid label{display:grid;gap:6px;color:#b8b3a7;font-size:12px}.local-bot-overrides{border-top:1px solid #2b2c30;padding-top:11px}.local-bot-overrides summary{color:#d8bc80;cursor:pointer}.local-bot-overrides>.local-bot-note{max-width:900px;margin-bottom:12px}.local-bot-check{display:flex;align-items:center;gap:8px;margin:10px 0;color:#d3cfc5}.local-bot-check input{min-width:15px;min-height:15px;accent-color:#caa95e}.local-bot-location-row{display:grid;grid-template-columns:repeat(3,minmax(80px,140px));gap:8px;margin:6px 0 12px}.local-bot-override-list{display:grid;gap:7px;margin:6px 0 12px}.local-bot-override-list[hidden]{display:none}.local-bot-override-row{display:flex;align-items:center;gap:7px;max-width:760px}.local-bot-override-row>select:first-child{width:180px}.local-bot-override-row>input[type=number]{width:100px}.local-bot-override-row>button,.local-bot-override-list>button{min-height:29px;padding:0 9px}.local-bot-picker{position:relative;flex:1;min-width:120px}.local-bot-picker input{width:100%}.local-bot-matches{position:absolute;z-index:5;top:calc(100% + 3px);left:0;right:0;display:grid;max-height:190px;overflow:auto;background:#131416;border:1px solid rgba(202,169,94,.3);border-radius:5px}.local-bot-matches:empty{display:none}.local-bot-matches button{justify-content:flex-start;border:0;border-radius:0}.local-bot-item-row{max-width:1000px}.local-bot-item-row>select:first-child{width:130px}.local-bot-item-row .local-bot-picker{flex:1}.local-bot-deploy-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.local-bot-deploy-status{min-width:0;font-size:12px}.local-bot-agent-warning{padding:8px 10px;border-left:2px solid #caa95e;background:#26231b}.local-bot-agent-warning[hidden]{display:none}.local-bot-watch-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 15px;border:1px solid rgba(111,165,188,.22);border-radius:8px;background:#1b2023}.local-bot-watch-bar>div{min-width:0}.local-bot-watch-bar strong{color:#b7d6e1;font-weight:600}.local-bot-watch-bar .local-bot-note{margin-top:2px;font-size:12px}.local-bot-watch-bar .is-watching{color:#88d3a1}.local-bot-watch-bar select{min-width:180px}.local-bot-columns{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);align-items:start;gap:16px}.local-bot-table{display:block;max-height:460px;overflow:auto}.local-bot-table table{width:100%}.local-bot-table th,.local-bot-table td{white-space:nowrap}.local-bot-table td:nth-child(6){max-width:260px;overflow:hidden;text-overflow:ellipsis}.local-bot-table td:first-child strong{display:block}.local-bot-managed{display:block;margin-top:2px;color:#caa95e;font-size:10px}.local-bot-row-actions{display:flex;justify-content:flex-end;gap:4px}.local-bot-row-actions button{min-height:27px;padding:0 8px;font-size:11px}.local-bot-row-actions .local-bot-remove{width:27px;padding:0;color:#d99080}.local-bot-empty{padding:14px;color:#aaa59a}.local-bot-empty[hidden]{display:none}.local-bot-detail{display:grid;gap:10px}.local-bot-detail-heading{align-items:flex-start}.local-bot-detail-heading p{font-family:var(--host-mono,monospace);font-size:11px}.local-bot-summary{display:grid;grid-template-columns:minmax(110px,.75fr) minmax(0,1.25fr);gap:5px 10px;margin:5px 0 0;padding:10px;border-radius:6px;background:#17181b;font-size:12px}.local-bot-summary dt{color:#969186}.local-bot-summary dd{min-width:0;margin:0;color:#e3ddcf;overflow-wrap:anywhere}.local-bot-skill-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px}.local-bot-skill{display:grid;grid-template-columns:26px minmax(0,1fr);grid-template-rows:auto 4px auto;align-items:center;column-gap:7px;min-width:0;padding:7px 8px;border:1px solid #2a2b30;border-radius:5px;background:#191a1e}.local-bot-skill-icon{grid-column:1;grid-row:1/4;width:25px;height:25px;object-fit:contain;image-rendering:pixelated}.local-bot-skill-label{display:flex;justify-content:space-between;gap:5px;font-size:11px}.local-bot-skill-label span{overflow:hidden;text-overflow:ellipsis}.local-bot-skill-label strong{color:#dfc882;font-variant-numeric:tabular-nums}.local-bot-skill-track{height:3px;margin-top:5px;overflow:hidden;border-radius:4px;background:#303136}.local-bot-skill-track i{display:block;height:100%;background:#91bd98}.local-bot-skill small{color:#88847a;font-size:9px}.local-bot-container-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.local-bot-items{min-width:0;padding:10px;border:1px solid #2a2b30;border-radius:6px;background:#191a1e}.local-bot-items h4{margin:0 0 7px}.local-bot-items ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.local-bot-items li{display:flex;justify-content:space-between;gap:8px;font-size:11px}.local-bot-items li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.local-bot-items li small{flex:none;color:#89857c;font-size:9px}.local-bot-items p{font-size:11px}.local-bot-detail-tabs{display:flex;gap:4px;overflow:auto;border-bottom:1px solid #3b3c40}.local-bot-detail-tab{flex:none;border:1px solid transparent!important;border-bottom:0!important;border-radius:5px 5px 0 0!important;background:transparent!important;color:#aaa59a!important}.local-bot-detail-tab.is-active{border-color:rgba(202,169,94,.28)!important;background:#26241e!important;color:#dfc882!important}.local-bot-detail-tab:focus-visible{outline:2px solid #caa95e;outline-offset:1px}.local-bot-detail-panel{min-width:0;padding:10px 2px}.local-bot-detail-panel[hidden]{display:none}.local-bot-inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;max-width:340px}.local-bot-equipment-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(5,minmax(70px,auto));gap:5px;max-width:330px}.local-bot-osrs-slot{position:relative;display:flex;min-width:0;min-height:58px;aspect-ratio:1;flex-direction:column;align-items:center;justify-content:center;gap:3px;overflow:hidden;padding:5px;border:1px solid #414044;border-radius:4px;background:#202126;text-align:center}.local-bot-osrs-slot.has-item{border-color:#63563a;background:#29271f}.local-bot-osrs-slot>small{position:absolute;top:3px;left:4px;color:#817d75;font-size:9px}.local-bot-osrs-slot>span{display:-webkit-box;max-width:100%;overflow:hidden;color:#dcd6c9;font-size:10px;line-height:1.25;-webkit-box-orient:vertical;-webkit-line-clamp:2}.local-bot-osrs-slot>span[hidden]{display:none}.local-bot-osrs-slot>.local-bot-item-icon{width:34px;height:34px;object-fit:contain;image-rendering:pixelated}.local-bot-osrs-slot>strong{position:absolute;right:4px;bottom:3px;color:#dfc882;font-size:10px}.local-bot-osrs-slot .local-bot-slot-empty{color:#77736b;font-size:9px}
 @media(max-width:1050px){.local-bot-columns{grid-template-columns:1fr}.local-bot-table{max-height:360px}.local-bot-detail{grid-row:1}}@media(max-width:650px){.local-bots-heading,.local-bot-detail-heading{align-items:flex-start;flex-direction:column}.local-bots-heading-actions{width:100%}.local-bot-deploy-grid{grid-template-columns:1fr}.local-bot-watch-bar{align-items:stretch;flex-direction:column;gap:8px}.local-bot-watch-bar select{width:100%}.local-bot-table{font-size:11px}.local-bot-table th,.local-bot-table td{padding:7px 8px}.local-bot-table th:nth-child(4),.local-bot-table td:nth-child(4),.local-bot-table th:nth-child(5),.local-bot-table td:nth-child(5){display:none}.local-bot-skill-grid{grid-template-columns:1fr 1fr}.local-bot-container-grid{grid-template-columns:1fr}.local-bot-summary{grid-template-columns:1fr 1.3fr}.local-bot-item-row{flex-wrap:wrap}.local-bot-item-row .local-bot-picker{flex-basis:calc(100% - 150px)}}
-.local-bot-swarm{display:grid;gap:14px}.local-bot-swarm-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.local-bot-swarm-metric{display:grid;gap:4px;min-width:0;padding:10px;border:1px solid #2a2b30;border-radius:5px;background:#17181b}.local-bot-swarm-metric span{color:#969186;font-size:10px}.local-bot-swarm-metric strong{font-size:19px;font-variant-numeric:tabular-nums}.local-bot-swarm-section{min-width:0;padding-top:8px;border-top:1px solid #2b2c30}.local-bot-swarm-section h4{margin:0 0 8px}.local-bot-routine-mix{display:flex;gap:7px;flex-wrap:wrap;max-height:120px;overflow:auto}.local-bot-routine-chip{min-height:29px!important;padding:3px 9px!important;border-left:3px solid #e7c66e!important;font-size:11px!important}.local-bot-routine-chip[aria-pressed=true]{background:#383120!important;border-color:#e7c66e!important;color:#f6e4a9!important}.local-bot-routine-color-1{border-left-color:#7fc5a1!important}.local-bot-routine-color-2{border-left-color:#80b9e7!important}.local-bot-routine-color-3{border-left-color:#cf98dc!important}.local-bot-routine-color-4{border-left-color:#e58e77!important}.local-bot-routine-color-5{border-left-color:#83d2d3!important}.local-bot-routine-color-6{border-left-color:#d9a76f!important}.local-bot-routine-color-7{border-left-color:#aeb9ef!important}.local-bot-movement-actions,.local-bot-cohort-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.local-bot-movement-actions select{min-width:110px}.local-bot-cohort-filters{margin:8px 0}.local-bot-cohort-filters label{display:grid;gap:4px;min-width:180px;color:#aaa59a;font-size:11px}.local-bot-movement-map{min-width:0;overflow:hidden;border:1px solid #2b2c30;border-radius:5px;background:#151619}.local-bot-movement-map svg{display:block;width:100%;height:300px}.local-bot-map-gridline{stroke:#37383c;stroke-width:1;stroke-dasharray:3 5}.local-bot-map-axis{fill:#aaa59a;font-size:10px}.local-bot-map-trail{opacity:.72;cursor:pointer;transition:opacity .15s}.local-bot-map-trail:hover,.local-bot-map-trail.selected{opacity:1}.local-bot-map-point{cursor:pointer}.local-bot-map-point:focus{outline:none;stroke:#fff;stroke-width:3}.local-bot-movement-legend{display:flex;gap:5px;flex-wrap:wrap;padding:8px}.local-bot-movement-legend-item{min-height:27px!important;padding:2px 7px!important;font-size:10px!important}.local-bot-movement-legend-item i{width:8px;height:8px;border-radius:50%}.local-bot-movement-legend-item[aria-pressed=true]{color:#f6e4a9!important;border-color:#caa95e!important}.local-bot-swarm .local-bot-note{font-size:11px}.local-bot-movement-map .local-bot-empty{padding:12px}@media(max-width:1000px){.local-bot-swarm-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.local-bot-swarm-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.local-bot-movement-map svg{height:230px}.local-bot-movement-actions{align-items:stretch}.local-bot-movement-actions select{flex:1}.local-bot-cohort-filters{align-items:stretch;flex-direction:column}.local-bot-cohort-filters label{width:100%}}
+.local-bot-swarm{display:grid;gap:14px}.local-bot-swarm-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.local-bot-swarm-metric{display:grid;gap:4px;min-width:0;padding:10px;border:1px solid #2a2b30;border-radius:5px;background:#17181b}.local-bot-swarm-metric span{color:#969186;font-size:10px}.local-bot-swarm-metric strong{font-size:19px;font-variant-numeric:tabular-nums}.local-bot-swarm-section{min-width:0;padding-top:8px;border-top:1px solid #2b2c30}.local-bot-swarm-section h4{margin:0 0 8px}.local-bot-routine-mix{display:flex;gap:7px;flex-wrap:wrap;max-height:120px;overflow:auto}.local-bot-routine-chip{min-height:29px!important;padding:3px 9px!important;border-left:3px solid #e7c66e!important;font-size:11px!important}.local-bot-routine-chip[aria-pressed=true]{background:#383120!important;border-color:#e7c66e!important;color:#f6e4a9!important}.local-bot-routine-color-1{border-left-color:#7fc5a1!important}.local-bot-routine-color-2{border-left-color:#80b9e7!important}.local-bot-routine-color-3{border-left-color:#cf98dc!important}.local-bot-routine-color-4{border-left-color:#e58e77!important}.local-bot-routine-color-5{border-left-color:#83d2d3!important}.local-bot-routine-color-6{border-left-color:#d9a76f!important}.local-bot-routine-color-7{border-left-color:#aeb9ef!important}.local-bot-cohort-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:8px 0}.local-bot-cohort-filters label{display:grid;gap:4px;min-width:180px;color:#aaa59a;font-size:11px}.local-bot-aerial-roster{display:flex;gap:5px;flex-wrap:wrap;max-height:130px;overflow:auto;padding:8px 0}.local-bot-aerial-legend-item{min-height:27px!important;padding:2px 7px!important;font-size:10px!important}.local-bot-aerial-legend-item i{width:8px;height:8px;border-radius:50%}.local-bot-aerial-legend-item[aria-pressed=true]{color:#f6e4a9!important;border-color:#caa95e!important}.local-bot-swarm .local-bot-note{font-size:11px}@media(max-width:1000px){.local-bot-swarm-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.local-bot-swarm-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.local-bot-cohort-filters{align-items:stretch;flex-direction:column}.local-bot-cohort-filters label{width:100%}.local-bot-aerial-roster{max-height:160px}}
 .local-bot-aggregate-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}.local-bot-aggregate-controls label{display:grid;gap:4px;color:#aaa59a;font-size:11px}.local-bot-aggregate-result{min-height:26px;padding:9px;border-radius:5px;background:#17181b;color:#e4dfd3}.local-bot-aggregate-result ol{display:grid;gap:4px;margin:8px 0 0;padding-left:23px}.local-bot-aggregate-result li{padding-left:3px;font-variant-numeric:tabular-nums}@media(max-width:650px){.local-bot-aggregate-controls{grid-template-columns:1fr}}
 
 </style>
+<style id="local-bot-aerial-styles">
+.local-bot-aerial-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:8px 0}.local-bot-aerial-actions select{min-width:100px}.local-bot-aerial-zoom{display:inline-flex;align-items:center;gap:5px;color:#b8b3a7;font-variant-numeric:tabular-nums}.local-bot-aerial-zoom button{min-width:34px;padding:0}.local-bot-aerial-follow{display:inline-flex;align-items:center;gap:6px;color:#aaa59a;font-size:11px}.local-bot-aerial-follow input{min-width:15px;min-height:15px;accent-color:#caa95e}.local-bot-aerial-map{position:relative;isolation:isolate;min-height:360px;height:min(58vh,540px);overflow:hidden;border:1px solid #2b2c30;border-radius:5px;background:#0d0e10;cursor:grab;touch-action:none;outline:none}.local-bot-aerial-map:focus-visible{outline:2px solid #caa95e;outline-offset:2px}.local-bot-aerial-map.is-panning{cursor:grabbing}.local-bot-aerial-tiles,.local-bot-aerial-map>svg{position:absolute;inset:0;width:100%;height:100%}.local-bot-aerial-tiles{overflow:hidden;pointer-events:none}.local-bot-aerial-tile{position:absolute;max-width:none;image-rendering:pixelated;pointer-events:none}.local-bot-aerial-map>svg{overflow:hidden;pointer-events:none}.local-bot-aerial-trail{pointer-events:stroke}.local-bot-aerial-marker{cursor:pointer;pointer-events:all;outline:none}.local-bot-aerial-marker:focus circle,.local-bot-aerial-marker:hover circle{stroke:#fff;stroke-width:3}.local-bot-aerial-marker.selected circle{stroke:#fff;stroke-width:3}.local-bot-aerial-label{fill:#fff;font:600 11px system-ui,sans-serif;paint-order:stroke;stroke:#101113;stroke-width:3px;stroke-linejoin:round;pointer-events:none}.local-bot-aerial-status{min-height:18px;color:#aaa59a;font-size:11px}.local-bot-aerial-status.error{color:#e58e77}@media(max-width:650px){.local-bot-aerial-actions{align-items:stretch}.local-bot-aerial-map{min-height:300px;height:52vh}}
+</style>
 <script src="/panel/panel.js"></script>
 <script src="/panel/swarm-aggregates.js"></script>
+<script src="/panel/bot-map-view.js"></script>
 <script id="local-bots-script">
 "use strict";
 
@@ -114,16 +118,39 @@ window.LocalBots = {
       el("label", null, [el("span", { text: "Metric" }), aggregateMetric]),
     ]);
     const routineMix = el("div", { className: "local-bot-routine-mix", role: "group", "aria-label": "Bot counts by routine" });
-    const movementPlane = el("select", { "aria-label": "Movement map plane", onchange: renderMovement });
-    const movementMap = el("div", { className: "local-bot-movement-map" });
-    const clearMovement = el("button", { type: "button", text: "Clear movement history", onclick: () => { movementByBot.clear(); renderSwarm(); } });
+    const aerialPlane = el("select", { "aria-label": "Overhead map plane", onchange: () => { aerialCenter = null; renderAerial(); } },
+      [0, 1, 2, 3].map(plane => el("option", { value: String(plane), text: `Plane ${plane}` })));
+    const aerialMap = el("div", { className: "local-bot-aerial-map", tabIndex: 0, role: "group",
+      "aria-label": "Overhead bot map. Drag to pan, use the mouse wheel or plus and minus to zoom, and use arrow keys to pan." });
+    const aerialStatus = el("p", { className: "local-bot-aerial-status", role: "status", "aria-live": "polite" });
+    const aerialRoster = el("div", { className: "local-bot-aerial-roster", role: "group", "aria-label": "Bots with a map location" });
+    const aerialScaleLabel = el("span", { className: "local-bot-aerial-scale", text: "4 px/tile" });
+    const aerialScales = [1, 2, 4, 8];
+    let aerialScale = 4;
+    let aerialCenter = null;
+    let aerialPan = null;
+    let aerialRenderFrame = 0;
+    const aerialZoomOut = el("button", { type: "button", text: "−", "aria-label": "Zoom out on overhead map", onclick: () => changeAerialZoom(-1) });
+    const aerialZoomIn = el("button", { type: "button", text: "+", "aria-label": "Zoom in on overhead map", onclick: () => changeAerialZoom(1) });
+    const aerialCenterButton = el("button", { type: "button", text: "Center on selected bot", onclick: centerAerialOnSelection });
+    const aerialFollow = el("input", { type: "checkbox", "aria-label": "Follow selected bot on overhead map", onchange: renderAerial });
+    const aerialActions = el("div", { className: "local-bot-aerial-actions" }, [
+      aerialPlane,
+      el("span", { className: "local-bot-aerial-zoom" }, [aerialZoomOut, aerialScaleLabel, aerialZoomIn]),
+      aerialCenterButton,
+      el("label", { className: "local-bot-aerial-follow" }, [aerialFollow, el("span", { text: "Follow selected bot" })]),
+    ]);
+    const aerialSection = el("div", { className: "local-bot-swarm-section" }, [
+      el("div", { className: "local-bots-card-heading" }, [el("div", null, [el("h4", { text: "Overhead bot map" }), el("p", { text: "A standalone, read-only map view; it does not need or take over a game client." })])]),
+      aerialActions, aerialMap, aerialRoster, aerialStatus,
+      el("p", { className: "local-bot-note", text: "Terrain tiles reuse Host Local’s minimap service. Dots and recent trails come from live bot snapshots; select a plane, drag to pan, or center/follow a bot. The roster below lists bots on every plane; select a name to center on it." }),
+    ]);
     const swarmCard = el("section", { className: "local-bot-card local-bot-swarm", "aria-label": "Bot swarm overview" }, [
       el("div", { className: "local-bots-card-heading" }, [el("div", null, [el("h3", { text: "Swarm overview" }), el("p", { text: "Live cohort metrics and movement trails from this panel’s recent snapshots." })]), el("span", { className: "local-bot-count", id: "bot-swarm-updated" })]),
       swarmMetrics,
       el("div", { className: "local-bot-swarm-section" }, [el("h4", { text: "Configurable swarm aggregate" }), aggregateControls, aggregateResult]),
       el("div", { className: "local-bot-swarm-section" }, [el("h4", { text: "Routine cohorts" }), routineMix]),
-      el("div", { className: "local-bot-swarm-section" }, [el("div", { className: "local-bots-card-heading" }, [el("h4", { text: "World-coordinate movement" }), el("div", { className: "local-bot-movement-actions" }, [movementPlane, clearMovement])]), movementMap,
-        el("p", { className: "local-bot-note", text: "Trails use successive bot snapshots in world X/Y coordinates, separated by plane. The view zooms to observed positions; it is not a geographic map. History is in-memory for up to 15 minutes and resets when this tab closes." })]),
+      aerialSection,
     ]);
     const routineFilterControl = el("select", { "aria-label": "Filter bots by routine", onchange: () => { routineFilter = routineFilterControl.value; renderBots(); } });
     const statusFilterControl = el("select", { "aria-label": "Filter bots by status", onchange: () => { statusFilter = statusFilterControl.value; renderBots(); } });
@@ -454,78 +481,130 @@ window.LocalBots = {
         onclick: () => { routineFilter = routineFilter === routine ? "all" : routine; renderBots(); },
       })) : [el("span", { className: "local-bot-note", text: "No online bots to group yet." })]));
       container.querySelector("#bot-swarm-updated").textContent = `${bots.length} online`;
-      renderMovement();
+      renderAerial();
     }
 
-    function renderMovement() {
-      const allPoints = [...movementByBot.values()].flatMap(trail => trail.points);
-      const planes = [...new Set(allPoints.map(point => point.z))].sort((a, b) => a - b);
-      const previousPlane = movementPlane.value || "all";
-      movementPlane.replaceChildren(el("option", { value: "all", text: "All planes" }), ...planes.map(plane => el("option", { value: String(plane), text: `Plane ${plane}` })));
-      movementPlane.value = previousPlane === "all" || planes.includes(Number(previousPlane)) ? previousPlane : "all";
-      const trails = [...movementByBot.values()].filter(trail => routineFilter === "all" || trail.routine === routineFilter)
-        .map(trail => ({ ...trail, visible: trail.points.filter(point => movementPlane.value === "all" || point.z === Number(movementPlane.value)) }))
-        .filter(trail => trail.visible.length).sort((a, b) => Number(b.username === selectedBot) - Number(a.username === selectedBot) || (b.visible.at(-1).at - a.visible.at(-1).at)).slice(0, 30);
-      if (!trails.length) {
-        movementMap.replaceChildren(el("p", { className: "local-bot-empty", text: "Movement trails will appear after bots report world coordinates." }));
+    function renderAerialRoster(bots) {
+      if (!window.LocalBotMapView?.botsWithLocation) {
+        aerialRoster.replaceChildren(el("span", { className: "local-bot-empty", text: "The bot roster is unavailable until the map module loads." }));
         return;
       }
-      const points = trails.flatMap(trail => trail.visible);
-      let minX = Math.min(...points.map(point => point.x)), maxX = Math.max(...points.map(point => point.x));
-      let minY = Math.min(...points.map(point => point.y)), maxY = Math.max(...points.map(point => point.y));
-      const padX = Math.max(8, (maxX - minX) * 0.08), padY = Math.max(8, (maxY - minY) * 0.08);
-      minX -= padX; maxX += padX; minY -= padY; maxY += padY;
-      const svgNS = "http://www.w3.org/2000/svg", width = 760, height = 340, left = 64, right = 18, top = 18, bottom = 42;
-      const svg = document.createElementNS(svgNS, "svg");
-      svg.setAttribute("viewBox", `0 0 ${width} ${height}`); svg.setAttribute("role", "group");
-      svg.setAttribute("aria-label", `Recent bot movement in world coordinates, ${movementPlane.value === "all" ? "all planes" : `plane ${movementPlane.value}`}`);
-      const addSvg = (tag, attrs = {}, text = null) => {
-        const node = document.createElementNS(svgNS, tag);
-        for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
-        if (text !== null) node.textContent = text;
-        svg.append(node); return node;
-      };
-      const xAt = value => left + (value - minX) / (maxX - minX) * (width - left - right);
-      const yAt = value => height - bottom - (value - minY) / (maxY - minY) * (height - top - bottom);
-      for (let tick = 0; tick <= 4; tick++) {
-        const x = left + tick * (width - left - right) / 4, y = top + tick * (height - top - bottom) / 4;
-        addSvg("line", { x1: x, y1: top, x2: x, y2: height - bottom, class: "local-bot-map-gridline" });
-        addSvg("line", { x1: left, y1: y, x2: width - right, y2: y, class: "local-bot-map-gridline" });
-        addSvg("text", { x, y: height - 12, class: "local-bot-map-axis", "text-anchor": "middle" }, String(Math.round(minX + tick / 4 * (maxX - minX))));
-        addSvg("text", { x: left - 8, y: y + 4, class: "local-bot-map-axis", "text-anchor": "end" }, String(Math.round(maxY - tick / 4 * (maxY - minY))));
+      const visible = window.LocalBotMapView.botsWithLocation(bots);
+      if (!visible.length) {
+        aerialRoster.replaceChildren(el("span", { className: "local-bot-empty", text: "No bots currently have a map location." }));
+        return;
       }
-      addSvg("text", { x: (left + width - right) / 2, y: height - 1, class: "local-bot-map-axis", "text-anchor": "middle" }, "World X");
-      addSvg("text", { x: 12, y: top + (height - top - bottom) / 2, class: "local-bot-map-axis", "text-anchor": "middle", transform: `rotate(-90 12 ${top + (height - top - bottom) / 2})` }, "World Y");
-      const colors = ["#e7c66e", "#7fc5a1", "#80b9e7", "#cf98dc", "#e58e77", "#83d2d3", "#d9a76f", "#aeb9ef"];
-      const legend = [];
-      trails.forEach((trail, index) => {
-        const color = colors[index % colors.length], selected = trail.username === selectedBot;
-        const byPlane = new Map();
-        for (const point of trail.visible) {
-          const segments = byPlane.get(point.z) ?? [];
-          const segment = segments.at(-1), previous = segment?.at(-1);
-          if (!segment || point.at - previous.at > 30000 || Math.hypot(point.x - previous.x, point.y - previous.y) > 64) segments.push([point]);
-          else segment.push(point);
-          byPlane.set(point.z, segments);
-        }
-        for (const [plane, segments] of byPlane) for (const segment of segments) {
-          const tooltip = `${trail.displayName}: ${segment.length} samples · plane ${plane} · latest ${segment.at(-1).x}, ${segment.at(-1).y}`;
-          const selectBot = () => { selectedBot = trail.username; renderBots(); renderDetail(); };
-          if (segment.length > 1) {
-            const coords = segment.map(point => `${xAt(point.x)},${yAt(point.y)}`).join(" ");
-            const line = addSvg("polyline", { points: coords, class: `local-bot-map-trail${selected ? " selected" : ""}`, stroke: color, "stroke-width": selected ? 4 : 2.5, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" });
-            const title = document.createElementNS(svgNS, "title"); title.textContent = tooltip; line.append(title);
-            line.addEventListener("click", selectBot);
-          }
-          const current = segment.at(-1), dot = addSvg("circle", { cx: xAt(current.x), cy: yAt(current.y), r: selected ? 6 : 4.5, fill: color, stroke: "#101113", "stroke-width": 2, class: "local-bot-map-point", tabindex: 0, role: "button", "aria-label": tooltip });
-          const title = document.createElementNS(svgNS, "title"); title.textContent = tooltip; dot.append(title);
-          dot.addEventListener("click", selectBot);
-          dot.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectBot(); } });
-        }
-        legend.push(el("button", { type: "button", className: "local-bot-movement-legend-item", "aria-pressed": String(selected), onclick: () => { selectedBot = trail.username; renderBots(); renderDetail(); } }, [el("i", { style: `background:${color}` }), el("span", { text: trail.displayName })]));
-      });
-      movementMap.replaceChildren(svg, el("div", { className: "local-bot-movement-legend" }, legend));
+      aerialRoster.replaceChildren(...visible.map(bot => el("button", {
+        type: "button", className: "local-bot-aerial-legend-item", "aria-pressed": String(bot.username === selectedBot),
+        title: `${bot.displayName ?? bot.username} · ${bot.activityId ?? bot.mode ?? "bot"} · ${bot.location.x}, ${bot.location.y}, plane ${bot.location.z}`,
+        onclick: () => {
+          selectedBot = bot.username;
+          aerialPlane.value = String(bot.location.z);
+          aerialCenter = { x: Number(bot.location.x), y: Number(bot.location.y) };
+          renderBots(); renderDetail();
+        },
+      }, [el("i", { style: `background:${window.LocalBotMapView.botColor(bots, bot.username, bot.location.z)}` }), el("span", { text: bot.displayName ?? bot.username })])));
     }
+
+    function changeAerialZoom(direction) {
+      const current = aerialScales.indexOf(aerialScale);
+      aerialScale = aerialScales[Math.max(0, Math.min(aerialScales.length - 1, current + direction))];
+      aerialScaleLabel.textContent = `${aerialScale} px/tile`;
+      renderAerial();
+    }
+
+    function centerAerialOnSelection() {
+      const selected = snapshot.bots.find(bot => bot.username === selectedBot && bot.location);
+      const fallback = snapshot.bots.find(bot => bot.location && Number(bot.location.z) === Number(aerialPlane.value));
+      const bot = selected ?? fallback;
+      if (bot?.location) {
+        aerialPlane.value = String(bot.location.z);
+        aerialCenter = { x: Number(bot.location.x), y: Number(bot.location.y) };
+      } else aerialCenter = { x: 3222, y: 3218 };
+      renderAerial();
+    }
+
+    function scheduleAerialRender() {
+      if (aerialRenderFrame) return;
+      aerialRenderFrame = window.requestAnimationFrame(() => {
+        aerialRenderFrame = 0;
+        renderAerial();
+      });
+    }
+
+    function renderAerial() {
+      if (!window.LocalBotMapView) {
+        aerialStatus.classList.add("error");
+        aerialStatus.textContent = "The overhead map module did not load.";
+        return;
+      }
+      const plane = Number(aerialPlane.value || 0);
+      const cohortBots = (snapshot.bots ?? []).filter(bot => routineFilter === "all" || routineKey(bot) === routineFilter);
+      renderAerialRoster(cohortBots);
+      const selected = cohortBots.find(bot => bot.username === selectedBot && Number(bot.location?.z) === plane);
+      if (aerialFollow.checked && selected?.location) aerialCenter = { x: Number(selected.location.x), y: Number(selected.location.y) };
+      if (!aerialCenter || !Number.isFinite(aerialCenter.x) || !Number.isFinite(aerialCenter.y)) {
+        const first = selected ?? cohortBots.find(bot => bot.location && Number(bot.location.z) === plane);
+        aerialCenter = first?.location
+          ? { x: Number(first.location.x), y: Number(first.location.y) }
+          : { x: 3222, y: 3218 };
+      }
+      const trails = [...movementByBot.values()]
+        .filter(trail => routineFilter === "all" || trail.routine === routineFilter)
+        .map(trail => ({ username: trail.username, displayName: trail.displayName, points: trail.points }));
+      const status = result => {
+        aerialStatus.classList.toggle("error", result.tiles > 0 && result.failed === result.tiles);
+        const terrain = result.tiles === 0 ? "No terrain tiles in this map area." : `${result.loaded}/${result.tiles} terrain tiles loaded${result.failed ? ` · ${result.failed} unavailable` : ""}.`;
+        aerialStatus.textContent = `${result.markers} bot(s) on plane ${plane} · ${terrain}`;
+      };
+      window.LocalBotMapView.render(aerialMap, {
+        center: aerialCenter, plane, scale: aerialScale, bots: cohortBots, trails, selectedUsername: selectedBot,
+        onSelect(username, location) {
+          selectedBot = username;
+          if (location) {
+            aerialPlane.value = String(location.z);
+            aerialCenter = { x: Number(location.x), y: Number(location.y) };
+          }
+          renderBots();
+          renderDetail();
+        },
+        onStatus: status,
+      });
+    }
+
+    aerialMap.addEventListener("pointerdown", event => {
+      if (event.target.closest?.("[data-bot]")) return;
+      aerialMap.setPointerCapture(event.pointerId);
+      aerialPan = { x: event.clientX, y: event.clientY, center: aerialCenter ?? { x: 3222, y: 3218 } };
+      aerialMap.classList.add("is-panning");
+    });
+    aerialMap.addEventListener("pointermove", event => {
+      if (!aerialPan) return;
+      aerialCenter = {
+        x: aerialPan.center.x - (event.clientX - aerialPan.x) / aerialScale,
+        y: aerialPan.center.y + (event.clientY - aerialPan.y) / aerialScale,
+      };
+      scheduleAerialRender();
+    });
+    const endAerialPan = () => { aerialPan = null; aerialMap.classList.remove("is-panning"); };
+    aerialMap.addEventListener("pointerup", endAerialPan);
+    aerialMap.addEventListener("pointercancel", endAerialPan);
+    aerialMap.addEventListener("wheel", event => {
+      event.preventDefault();
+      changeAerialZoom(event.deltaY < 0 ? 1 : -1);
+    }, { passive: false });
+    aerialMap.addEventListener("keydown", event => {
+      const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
+      if (!direction) return;
+      event.preventDefault();
+      const center = aerialCenter ?? { x: 3222, y: 3218 };
+      aerialCenter = { x: center.x + direction[0] * 48 / aerialScale, y: center.y + direction[1] * 48 / aerialScale };
+      renderAerial();
+    });
+    aerialMap.addEventListener("keyup", event => {
+      if (event.key === "+" || event.key === "=") changeAerialZoom(1);
+      else if (event.key === "-") changeAerialZoom(-1);
+    });
 
     function renderBots() {
       tableBody.replaceChildren();

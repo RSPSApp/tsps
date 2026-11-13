@@ -8,6 +8,10 @@
  * click; two ticks later the doorway holds an invisible wall, the open leaf (chefdoor_open)
  * stands just inside, and the player steps one tile through; two ticks after that the door
  * shuts again.
+ *
+ * The bank room on the ground floor: its door lets in only players who have done the hard Varrock
+ * Diary or have 99 Cooking. It is walked through the same way, with no change to the door and the
+ * door sound on the step rather than the click; the room is east of it. Leaving is never stopped. Ours: the refusal's wording, which has no source.
  */
 const REQUIRED_LEVEL = 32;
 const NO_HAT_VARIANT = "standard-dialogue-trying-to-open-the-door-without-a-chef-s-hat-a-skillcape-of-cooking-or-varrock-armour-3";
@@ -21,6 +25,8 @@ const CLOSE_TICKS = 2;
 const WALK_ANIMATION = 819;
 /** The open leaf's quarter turn, as captured. */
 const OPEN_ROTATION = 2;
+const BANK_LEVEL = 99;
+const BANK_REFUSAL = "Only those who have completed the hard Varrock Diary or have 99 Cooking may enter.";
 const HATS = /^(?:golden )?chef's hat$|^cooking hood$|max hood$/i;
 const VARROCK_ARMOUR = /^varrock armour [34]$/i;
 
@@ -100,13 +106,50 @@ function openDoor(event) {
   return true;
 }
 
+function canUseBank(player) {
+  if (player.getSkillManager().getMaxLevel(core.Skill.COOKING) >= BANK_LEVEL) return true;
+  const request = { player, diary: "varrock", tier: "hard", complete: false };
+  api.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
+}
+
+/** Walks the player one tile east into the bank room, or west out of it. */
+function walkThroughBankDoor(player, door) {
+  const { Location, ForceMovement, ForceMovementTask } = core;
+  const doorTile = door.getLocation();
+  const outside = new Location(doorTile.getX() - 1, doorTile.getY(), doorTile.getZ());
+  const goingIn = player.getLocation().getX() < doorTile.getX();
+  const from = goingIn ? outside : doorTile;
+  player.getMovementQueue().setBlockMovement(true).reset();
+  later(player, OPEN_TICKS, () => {
+    if (!player.getLocation().equals(from)) player.moveTo(from.clone());
+    player.getPacketSender().sendSound(DOOR_SOUND, 1, 0);
+    const direction = goingIn ? 1 : 3;
+    core.TaskManager.submit(new ForceMovementTask(player, 1,
+      new ForceMovement(from.clone(), new Location(goingIn ? 1 : -1, 0), 0, 30, direction, WALK_ANIMATION)));
+    later(player, CLOSE_TICKS, () => player.getMovementQueue().setBlockMovement(false));
+  });
+}
+
+function openBankDoor(event) {
+  const { player, object } = event;
+  const entering = player.getLocation().getX() < object.getLocation().getX();
+  if (entering && !canUseBank(player)) {
+    player.sendMessage(BANK_REFUSAL);
+    return true;
+  }
+  walkThroughBankDoor(player, object);
+  return true;
+}
+
 module.exports = {
   name: "CooksGuild",
-  description: "Guards the Cooks' Guild door in Varrock: 32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals.",
-  _test: { refusal, openDoor },
+  description: "Guards the Cooks' Guild door in Varrock (32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals) and its bank room door (hard Varrock Diary or 99 Cooking).",
+  _test: { refusal, openDoor, canUseBank, openBankDoor },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     api.onObjectFirstClick(core.CacheDefinitions.getLocId("chefdoor"), openDoor);
+    api.onObjectFirstClick(core.CacheDefinitions.getLocId("fai_varrock_cook_guild_door"), openBankDoor);
   },
 };

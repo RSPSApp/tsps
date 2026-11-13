@@ -14,6 +14,9 @@ const { readTemplateRegion } = require('../dist/game/collision/TemplateRegionDat
 const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
 const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
 const { ItemActionPacketListener } = require('../dist/net/packet/impl/ItemActionPacketListener');
+const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { decodeClientPackets, MAIN_INVENTORY_WIDGET_UID } = require('../dist/net/protocol/ClientProtocol');
+const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
 let core, Common, Instance, Fight;
 const rolledDamage = new WeakMap();
 const finalDamage = [];
@@ -1179,6 +1182,73 @@ for (const eggCount of [1, 2]) {
       else assert.ok(messages.includes('You feel something weird sneaking into your backpack.'));
     } finally {
       random.mock.restore();
+      releaseFixturePet(p);
+    }
+  });
+}
+
+
+// IF_BUTTON2 is widget op2; native cache script7779 resolves it to item action1 (Pop).
+function nativeBackpackPopFrame(id, slot) {
+  const frame = Buffer.alloc(9);
+  frame[0] = ClientPacketId.IF_BUTTON2;
+  frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID, 1);
+  frame.writeUInt16BE(slot, 5);
+  frame.writeUInt16BE(id, 7);
+  return frame;
+}
+
+for (const [kind, key, denominator] of EGG_POP_CASES) {
+  test(`decoded native backpack ${kind} egg Pop crosses the published threshold through the real turn dispatcher`, async t => {
+    const p = eggPlayer(t), inventory = p.getInventory(), id = core.ItemIdentifiers[key];
+    const petId = core.ItemIdentifiers.MAGGOT_MARQUESS;
+    const connection = new ClientConnection(p.getSession().getChannel());
+    connection.player = p;
+    const seen = [], emit = PM.emitItemAction.bind(PM);
+    t.mock.method(PM, 'emitItemAction', event => {
+      if (event.player === p) seen.push({ interfaceId: event.interfaceId, slot: event.slot,
+        itemId: event.itemId, clickType: event.clickType, option: event.option });
+      return emit(event);
+    });
+    inventory.setItem(0, new core.Item(id, 2)); // supplied eggs, not a corpse reward
+    const currentAction = core.CacheDefinitions.getItem(id).inventoryActions[0];
+    assert.equal(currentAction, 'Pop');
+    const packets = decodeClientPackets(nativeBackpackPopFrame(id, 0));
+    assert.deepEqual(packets, [{ type: 'widget_action', widgetId: MAIN_INVENTORY_WIDGET_UID,
+      groupId: 149, childId: 0, buttonNum: 2, slot: 0, itemId: id }]);
+    p.getSession().setTurnPacketProcessor(() => connection.processTurnPackets());
+    let random = t.mock.method(Math, 'random', () => (1 + 1e-8) / denominator);
+    try {
+      await connection.dispatch(packets);
+      assert.equal(inventory.getAmount(id), 2, 'decoded click waits for the real player input turn');
+      core.World.process();
+      assert.equal(inventory.getAmount(id), 1, 'ordinary native backpack failure consumes exactly one');
+      const absent = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', absent);
+      assert.equal(absent.owns, false);
+      random.mock.restore();
+      random = t.mock.method(Math, 'random', () => (1 - 1e-8) / denominator);
+      await connection.dispatch(decodeClientPackets(nativeBackpackPopFrame(id, 0)));
+      core.World.process();
+      assert.equal(inventory.getAmount(id), 0, 'ordinary native backpack success consumes exactly one');
+      const owned = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', owned);
+      assert.equal(owned.owns, true);
+      const pet = p.getAttribute('pets:current');
+      assert.ok(pet?.isRegistered());
+      assert.equal(pet.getOwner(), p);
+      assert.equal(pet.getId(), core.NpcIdentifiers.MAGGOT_MARQUESS);
+      assert.ok(p.getAttribute('clog.items')?.[petId] >= 1);
+      assert.equal(inventory.getAmount(petId), 0);
+      assert.deepEqual(seen, Array.from({ length: 2 }, () => ({ interfaceId: MAIN_INVENTORY_WIDGET_UID,
+        slot: 0, itemId: id, clickType: 1, option: 'Pop' })), 'actual widget UID/action reaches the registered handler');
+      await connection.dispatch(decodeClientPackets(nativeBackpackPopFrame(id, 0)));
+      core.World.process();
+      assert.equal(seen.length, 2, 'stale native last-unit repeat never reaches the item handler');
+      assert.equal(p.getAttribute('pets:current'), pet);
+    } finally {
+      random.mock.restore();
+      p.getSession().setTurnPacketProcessor(() => {});
       releaseFixturePet(p);
     }
   });

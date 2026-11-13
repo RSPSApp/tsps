@@ -12,13 +12,15 @@ const EGG_CHANCES = [
   ["MAGGOT_EGG_9", 10],
   ["MAGGOT_EGG_11", 2],
 ];
+// Canonical backpack149:0, matching ClientProtocol.MAIN_INVENTORY_WIDGET_UID.
+const BACKPACK_WIDGET_UID = 149 << 16;
 let chances = new Map();
 
 function pop({ player, interfaceId, item, itemId, slot }) {
   const { Inventory, ItemIdentifiers } = Common.core();
   const denominator = chances.get(itemId);
   const inventory = player.getInventory();
-  if (!denominator || interfaceId !== Inventory.INTERFACE_ID
+  if (!denominator || (interfaceId !== Inventory.INTERFACE_ID && interfaceId !== BACKPACK_WIDGET_UID)
       || inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() < 1) return false;
   if (player.busy()) return true;
 

@@ -987,6 +987,22 @@ and player combat turns, local NPC visibility and update resets. Other cases kee
 their previous player tick path. Former native-slot-21 refusal samples use the
 unsupported child slot 22; their existing valid unsupported arena rows remain.
 Former numeric-arena-7 Rules refusals use malformed 7.5, and a new case positively
-covers all twelve layouts. A final baseline uses the identical two fixture blobs
-with unchanged production and must classify actual offer-absence failures and all
-unreached assertions before the fixed subject is selected.
+covers all twelve layouts. The original paired baseline bound the identical two
+then-final fixture blobs to unchanged production. Its actual offer-absence failures
+and unreached assertions were independently classified before fixed selection.
+
+The original baseline on `8be20022` passed 228 inherited game cases and failed
+all 31 new cases at the ordinary arena-7 offer (expected 7, actual default 1);
+all Ghastly behavior and later suites were unreached. Its two fixture blobs match
+the original fixed `61c6df1d`, which ended OOMKilled during the game suite without
+literal case verdicts or a final source/dist/cache closure. Returned movement,
+barrier and readiness markers do not establish completed case passes.
+
+A fixture correction fixes the NPC Attack byte order and asserts the actual decoded
+NPC slot before dispatch. Exact entity-reference assertions now use boolean checks
+with bounded scalar diagnostics, preserving identity requirements without asking
+Node to inspect cyclic world/cache graphs on failure. The invalid original frame
+is source-confirmed; the OOM's precise allocation cause remains untraced. The
+original offer-absence evidence is upstream of these changes and is retained;
+it does not claim execution of the corrected fixture bytes. Any corrected fixed
+subject requires its own independent exact admission and original execution.

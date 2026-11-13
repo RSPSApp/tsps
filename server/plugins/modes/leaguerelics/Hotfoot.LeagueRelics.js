@@ -9,8 +9,10 @@
  * Agility and Cooking never fail, a lap counts twice and pays 25% more experience, a mark of grace
  * on a rooftop course is a 33% chance a lap (`agility:mark-chance`, in place of the course's own
  * and its overlevel cut; the 3-minute mark cooldown still runs: ours), and a course mark picked up
- * finishes a lap of its course, paid as one, with 10,000 coins (`agility:mark-taken`). Prifddinas's
- * portal shards come tenfold (`agility:course-item`) and the Brimhaven Agility Arena's tickets and
+ * finishes a lap of its course, paid as one, with 10,000 coins (`agility:mark-taken`), and so do the
+ * Colossal Wyrm courses' termites scooped up (`agility:course-find-taken`, Wiki: "Picking up some
+ * termites or a mark of grace"). Prifddinas's portal shards come tenfold and the Wyrm courses'
+ * termites twofold (`agility:course-item`), and the Brimhaven Agility Arena's tickets and
  * vouchers twofold (`minigame:points`, after the tier passive's: the Wiki's 16 a pillar at 8x).
  *
  * The processing hears `storage:gather` twice: first (attached before the other gathering
@@ -22,8 +24,6 @@
  * nets less and doesn't count), before the league's rates; the base level, and the count kept
  * across stops, are ours ("roughly every 10 ticks"). A tick task per owner, from login or the
  * unlock, watches the tile.
- * Not here: termites finishing a lap or doubled (the Colossal Wyrm courses' termites come through
- * `agility:course-item`, but the relic's termite rules are not known).
  */
 const Common = require("./Common.LeagueRelics");
 

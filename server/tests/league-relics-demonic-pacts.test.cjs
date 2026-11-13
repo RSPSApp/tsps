@@ -1069,6 +1069,7 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
 /** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */
 function agility() {
   const taken = [];
+  const found = [];
   const laid = [];
   const floor = {
     inventoryCapacity: (player, item) => player.getInventory().getAddableAmount(item),
@@ -1079,7 +1080,10 @@ function agility() {
     core,
     getTaskManager: () => ({ submit() {} }),
     getItemOnGroundManager: () => floor,
-    onCustomEvent: (name, handler) => { if (name === "ground-items:taken") taken.push(handler); },
+    onCustomEvent: (name, handler) => {
+      if (name === "ground-items:taken") taken.push(handler);
+      if (name === "agility:course-find-taken") found.push(handler);
+    },
     emitCustomEvent: (name, payload) => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
@@ -1093,7 +1097,7 @@ function agility() {
     };
     for (const handler of taken) handler({ player, groundItem, source: "pickup", itemId: I.MARK_OF_GRACE, amount: 1 });
   };
-  return { pickUp, laid };
+  return { pickUp, laid, found };
 }
 
 test("Hotfoot: a rooftop lap's mark is a 33% chance (agility:mark-chance), not on other courses", () => {
@@ -1139,6 +1143,44 @@ test("Hotfoot: a picked-up course mark finishes a lap, counted twice and paid, w
   const elsewhere = character("elsewhere", "league", HOTFOOT);
   pickUp(elsewhere, [3200, 3200, 0]);
   assert.equal(laps(elsewhere), 0, "a mark off every course's mark tiles finishes nothing");
+});
+
+test("Hotfoot: Colossal Wyrm termites come twofold and scooping them finishes the lap with 10,000 coins; bone shards stay as they are", () => {
+  const { found } = agility();
+  const Wyrm = require("../plugins/areas/ColossalWyrmAgility.plugin");
+  const { Loc } = require("../plugins/skills/agility/courses/ColossalWyrmSteps.Agility");
+  const wyrmEvents = {};
+  Wyrm.register(new Proxy({
+    core,
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+    onCustomEvent: (name, handler) => { (wyrmEvents[name] ??= []).push(handler); },
+    emitCustomEvent: (name, payload) => {
+      if (name === "agility:course-find-taken") for (const handler of found) handler(payload);
+      else emit(name, payload);
+    },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const who = cases(HOTFOOT);
+  const laps = (player) => player.getAttribute("agility.laps")?.["wyrm-advanced"] ?? 0;
+  // The first advanced-only marker (16-21 termites); every roll at its lowest, so 16 termites and 22 bone shards.
+  Math.random = () => 0;
+  for (const player of Object.values(who)) {
+    player.getSkillManager().setCurrentLevel(Skill.AGILITY, 99, false).setMaxLevels(Skill.AGILITY, 99, false);
+    player.setAttribute("agility.progress", { course: "wyrm-advanced", index: 3 });
+    player.setAttribute(Wyrm.TERMITE_MARKER_ATTRIBUTE, 8);
+    for (const handler of wyrmEvents["agility:obstacle"]) handler({ player, objectId: Loc.ADVANCED_EDGE });
+  }
+  assert.equal(who.relic.getInventory().getAmount(I.TERMITES), 32, "twofold");
+  assert.ok(who.relic.sent.messages.includes("You managed to scoop up <col=ff3045>32 termites</col>!"));
+  assert.equal(who.relic.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 22, "the shards aren't doubled");
+  assert.equal(laps(who.relic), 2, "the lap is finished, counted twice");
+  assert.equal(who.relic.getAttribute("agility.progress"), null, "the lap in progress is over");
+  assert.equal(who.relic.getInventory().getAmount(I.COINS), 10000);
+  for (const player of others(who)) {
+    assert.equal(player.getInventory().getAmount(I.TERMITES), 16, player.getUsername());
+    assert.equal(laps(player), 0, player.getUsername());
+    assert.deepEqual(player.getAttribute("agility.progress"), { course: "wyrm-advanced", index: 3 });
+    assert.equal(player.getInventory().getAmount(I.COINS), 0);
+  }
 });
 
 test("Barbarian Gathering: bare hands chop and mine as the crystal axe and pickaxe, at any level; without it, no tool", () => {

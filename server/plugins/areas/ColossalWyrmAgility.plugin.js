@@ -16,6 +16,8 @@
  *   scoop up N termites!", the varbit back to 0, "You also find N piles of bone shards they
  *   chipped off!" when shards come with them, human_pickupfloor, area sound 9703, synth sound
  *   2581 and wyrm_agility_termite_despawn on the marker.
+ *   Then "agility:course-find-taken": Hotfoot makes the pickup finish the lap (a shared marker's is
+ *   the basic course's, the course the lap is on until the routes split).
  * - Amounts (Wiki): 11-14 a scoop on the basic course's markers, the two shared ones included,
  *   16-21 on the advanced course's own; an 80% chance of 22-38 blessed bone shards with them.
  * - The spawn chance is not on the Wiki ("currently unknown"), which gives 5.6 termites a lap on
@@ -190,6 +192,8 @@ function scoopTermites({ player, objectId }) {
   player.getPacketSender().sendSoundEffect(SCOOP_SOUND, 1, 0);
   const [x, y, z] = spot.tile;
   player.getPacketSender().sendGraphic(new core.Graphic(DESPAWN_MAP_ANIM), new core.Location(x, y, z));
+  // A pickup a league relic may make finish the lap (Hotfoot); last, so a lap that spawns new termites keeps them.
+  if (termites > 0) api.emitCustomEvent("agility:course-find-taken", { player, course });
 }
 
 function openShop({ player }) {

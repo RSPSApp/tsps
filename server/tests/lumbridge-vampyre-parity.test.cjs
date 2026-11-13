@@ -304,7 +304,7 @@ test("Cook's special range enforces the quest unlock and applies its food-specif
   p.getInventory = () => inv; p.items.set(I.BREAD_DOUGH, 1);
   const skills = p.getSkillManager(); skills.getCurrentLevel = () => 34; p.getSkillManager = () => skills;
   const range = { getId: () => O.COOKING_RANGE, getDefinition: () => ({ getName: () => 'Cooking range' }),
-    getLocation: () => new core.Location(3212, 3215, 0), getPrivateArea: () => null };
+    getLocation: () => new core.Location(3212, 3215, 0), getPrivateArea: () => null, getType: () => 10, getFace: () => 0 };
   const bread = Cooking.COOKABLE_BY_RAW.get(I.BREAD_DOUGH);
   assert.equal(Cooking._test.startCooking(p, range, bread, sessions), false);
   assert.equal(p.items.get(I.BREAD_DOUGH), 1);

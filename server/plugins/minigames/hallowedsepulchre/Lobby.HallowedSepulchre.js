@@ -1,5 +1,5 @@
 /**
- * The lobby under Darkmeyer: the stairs down (the Stranger's warning before his tutorial, the
+ * The lobby under Darkmeyer: the Mausoleum Door in and the stairs back out, the stairs down (the Stranger's warning before his tutorial, the
  * recorded entry box and its "don't ask again"), the Mysterious Stranger's tutorial with the five
  * crystal shards, the crystal shards and the Hallowed token, and the obelisks at each floor's end.
  */
@@ -180,6 +180,71 @@ function quickExit({ player }, credit = true) {
   return true;
 }
 
+// ------------------------------------------------------------------ the way in and out
+
+/** Players between the Mausoleum Door and the lobby (or back), so a second click does nothing. */
+const passing = new WeakMap();
+
+/** Within a tile of `from` on its plane: not teleported away meanwhile. */
+function near(player, from) {
+  const at = player.getLocation();
+  return at.getZ() === from.getZ() && Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= 1;
+}
+
+/**
+ * The Mausoleum Door in Darkmeyer (Enter) and the lobby's stairs up (Climb-up), as live
+ * (rsprox.net 3050): +2 the fade out, +4 the move (facing north into the lobby, south out of the
+ * mausoleum), the fade in 1 tick later going down and 2 going up, the fade closed 2 ticks after
+ * that. The music is the area's. No quest check: Darkmeyer itself needs Sins of the Father, and
+ * the lobby stairs check it again.
+ */
+function pass(player, tile, fadeInAt, face) {
+  if (passing.has(player)) return true;
+  const steps = Common.data.mausoleum;
+  const token = {};
+  passing.set(player, token);
+  const queue = player.getMovementQueue();
+  queue.reset();
+  queue.setBlockMovement?.(true);
+  const from = player.getLocation();
+  const online = () => player.isRegistered?.() !== false;
+  const release = () => {
+    if (passing.get(player) !== token) return;
+    passing.delete(player);
+    queue.setBlockMovement?.(false);
+  };
+  let moved = false;
+  Common.later(steps.fadeOutAt, () => { if (online() && near(player, from)) Common.fade(player, true); });
+  Common.later(steps.moveAt, () => {
+    release();
+    if (!online()) return;
+    // Ours: a player teleported away meanwhile (a spell, a jewellery teleport) stays where they went.
+    if (!near(player, from)) {
+      Common.closeFade(player);
+      return;
+    }
+    player.moveTo(Common.toLocation(tile));
+    player.setPositionToFace?.(Common.toLocation([tile[0], tile[1] + face, tile[2]]));
+    moved = true;
+  });
+  Common.later(fadeInAt, () => { if (moved && online()) Common.fade(player, false); });
+  Common.later(fadeInAt + steps.fadeCloseAfter, () => { if (moved && online()) Common.closeFade(player); });
+  return true;
+}
+
+/** Enter on the Mausoleum Door: down to the lobby. */
+function enterMausoleum({ player }) {
+  const { lobbyTile, doorFadeInAt } = Common.data.mausoleum;
+  return pass(player, lobbyTile, doorFadeInAt, 1);
+}
+
+/** Climb-up on the lobby's stairs: back out into Darkmeyer. */
+function climbToDarkmeyer({ player }) {
+  if (Run.runOf(player)) return false;
+  const { darkmeyerTile, stairsFadeInAt } = Common.data.mausoleum;
+  return pass(player, darkmeyerTile, stairsFadeInAt, -1);
+}
+
 /** The lobby varbits the client needs from login: the Stranger's ops, the entry box, the PBs. */
 function restoreVarbits({ player }) {
   if (flag(player, "tutorial")) Common.varbit(player, "hallowed_tutorial", 1);
@@ -195,6 +260,8 @@ function restoreVarbits({ player }) {
 
 function attachLobby(api) {
   api.onObjectClick(Common.data.lobby.stairs, 1, climbDown);
+  api.onObjectClick(Common.data.mausoleum.door, 1, enterMausoleum);
+  api.onObjectClick(Common.data.mausoleum.stairs, 1, climbToDarkmeyer);
   api.onNpcClick(STRANGER_IDS, 1, talkTo);
   api.onItemAction("Hallowed crystal shard", { Activate: activateShard });
   api.onItemAction("Hallowed token", { Activate: activateToken });

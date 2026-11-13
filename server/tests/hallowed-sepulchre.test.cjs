@@ -201,6 +201,61 @@ test('the stairs: the Stranger first, then the recorded warning box and its menu
   Run.runOf(p).finish();
 });
 
+/** Per tick from now: [tick, what changed] for the fade subs and the player's tile. */
+function timeline(p, count) {
+  const events = [];
+  let subs = p.subs.length;
+  let at = p.location;
+  for (let t = 1; t <= count; t++) {
+    ticks(1);
+    for (const sub of p.subs.slice(subs)) events.push([t, sub < 0 ? 'close' : 'fade']);
+    subs = p.subs.length;
+    if (p.location !== at) events.push([t, `${p.location.getX()},${p.location.getY()},${p.location.getZ()}`]);
+    at = p.location;
+  }
+  return events;
+}
+
+test('the Mausoleum Door in Darkmeyer: +2 fade, +4 into the lobby, +5 fade in, +7 closed (rsprox.net 3050)', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true);
+  assert.equal(p.blocked, true, 'held in place while it plays');
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true, 'a second click is swallowed');
+  const events = timeline(p, 8);
+  const fade = Common.data.interfaces.fade;
+  assert.equal(p.subs.filter((id) => id === fade).length, 2, 'one fade out and one in, not one per click');
+  assert.deepEqual(events, [[2, 'fade'], [4, '2400,5969,0'], [5, 'fade'], [7, 'close']]);
+  assert.equal(p.blocked, false);
+  assert.equal(Run.runOf(p), null, 'the door only reaches the lobby; the stairs down start a run');
+});
+
+test("the lobby's stairs up: +2 fade, +4 out by the Mausoleum Door, +6 fade in, +8 closed (rsprox.net 3050)", () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  assert.equal(click(p, Common.data.mausoleum.stairs, 1), true);
+  assert.deepEqual(timeline(p, 9), [[2, 'fade'], [4, '3654,3384,0'], [6, 'fade'], [8, 'close']]);
+});
+
+test('teleporting away before the Mausoleum Door moves you leaves you there, the fade cleared', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(3);
+  p.location = new Location(3222, 3218, 0);
+  const events = timeline(p, 6);
+  assert.equal(p.location.getX(), 3222, 'not pulled into the lobby');
+  assert.deepEqual(events, [[1, 'close']]);
+  assert.equal(p.blocked, false);
+});
+
+test("the lobby's stairs up are not this plugin's while a run is on", () => {
+  const p = startRun(fakePlayer());
+  const player = p.player;
+  assert.equal(click(player, Common.data.mausoleum.stairs, 1), false);
+  p.finish();
+});
+
 test('without Sins of the Father neither the stairs nor a shard lets you in', () => {
   const p = fakePlayer();
   p.setAttribute(Common.data.attributes.tutorial, true);

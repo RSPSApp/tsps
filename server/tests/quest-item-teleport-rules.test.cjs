@@ -69,7 +69,9 @@ test("Drakan's medallion is refused under Tele Block in the Wilderness, and tele
   await choose(blocked, /^Ver Sinhaza/);
   settle();
   assert.deepEqual(xy(blocked), WILDERNESS.slice(0, 2), "not moved");
-  assert.ok(blocked.messages.includes("A magical spell is blocking you from teleporting."), blocked.messages.join(" | "));
+  // The refusal names the time left (4fabd01e5; rsprox_transcripts/232/00435.txt): 100 ticks is 1 minute, 40 seconds.
+  assert.ok(blocked.messages.includes("A teleport block has been cast on you. It should wear off in 1 minute, 40 seconds."),
+    blocked.messages.join(" | "));
 
   const free = actor(t, WILDERNESS, MEDALLION());
   sotf.setStage(free.p, sotf.completionValue);

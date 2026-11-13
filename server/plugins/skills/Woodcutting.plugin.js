@@ -840,12 +840,21 @@ function useFellingRation(player, axe) {
   return request.taken === 1;
 }
 
-/** Ordinary one-handed axes can use a ration for energy on a successful chop.
+/** One-handed axes and felling axes can use a ration for energy on a successful chop.
  * Jagex Forestry Part One specifies 30% and 20 run-energy points; Wiki: Forester's ration
- * specifies the below-90% threshold. Felling axes retain their separate existing behavior.
+ * specifies the below-90% threshold. Wiki (Forester's ration): "Both regular axes and felling axes can trigger this
+ * effect"; a felling axe's chop has already eaten its ration (`fellingRationUsed`), so that ration restores the energy
+ * with "The Forester's ration restores some of your energy." and no second one is spent.
  */
-function rollForesterRationEnergy(player, axe) {
-  if (!axe || axe.felling || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+function rollForesterRationEnergy(player, axe, fellingRationUsed = false) {
+  if (!axe || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  if (axe.felling) {
+    if (!fellingRationUsed || player.getRunEnergyUnits() >= 9000 || Math.random() >= 0.3) return false;
+    player.addRunEnergyUnits(2000);
+    player.getPacketSender().sendRunEnergy();
+    player.sendMessage("The Forester's ration restores some of your energy.");
+    return true;
+  }
   if (pluginApi.core.ItemDefinition.forId(axe.id).isDoubleHanded()) return false;
   if (!player.getInventory().contains(axe.id) && getEquippedWeaponId(player) !== axe.id) return false;
   if (player.getRunEnergyUnits() >= 9000 || availableFellingRations(player) < 1) return false;
@@ -1376,7 +1385,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     // Trees without bird nests (birdNests: false) still roll clue nests below.
     if (state.tree.logId >= 0 && !(state.tree.birdNests !== false && maybeDropBirdNest(player))) {
       const felling = fellingChop(player, state.axe);
-      rollForesterRationEnergy(player, state.axe);
+      rollForesterRationEnergy(player, state.axe, felling.bonus);
       const baseXp = treeBaseXp(player, state.tree, state.location) * lumberjackXpMultiplier(player);
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
       const logAmount = KandarinHeadgear.logsPerChop(player, state.tree.logId);

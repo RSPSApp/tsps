@@ -8,6 +8,7 @@ const SIDES = ["north", "east", "south", "west"];
 const LEVEL = 60;
 const STROKES = 5;
 const STROKE_TICKS = 4;
+const REPEATED_INPUT_TICKS = 3;
 const BASE_XP = 1560;
 const ACTIVE_TICKS = 30;
 const FURS = [
@@ -125,8 +126,9 @@ function shape(player, object, n) {
   if (s.progress[side] === STROKES) {
     player.sendMessage("You have already shaped this side of the golem."); return;
   }
+  const strokeStart = clocks.get(player) ?? 0;
   works.set(player, { station: n, side, object, origin: player.getLocation().clone(),
-    due: (clocks.get(player) ?? 0) + STROKE_TICKS });
+    strokeStart, due: strokeStart + STROKE_TICKS });
   player.setPositionToFace(object.getLocation());
   player.performAnimation(new core.Animation(seq("human_golem_chisel")));
 }
@@ -197,7 +199,15 @@ function interact(event) {
   if (!gate(player) || sideOf(player, event.object) < 0) { cancel(event); return; }
   const s = state(player, n);
   const w = works.get(player);
-  if (w?.station === n && w.side === sideOf(player, event.object)) return;
+  if (w?.station === n && w.side === sideOf(player, event.object)) {
+    // Wiki establishes spam's 15-tick side, not the first input/XP packet phase.
+    // TSPS convention: another matching click may shorten this pending stroke,
+    // including the first, to three ticks. Never award progress in the input
+    // handler, pull a deadline into the past, or retain credit for later strokes.
+    const fastDue = w.strokeStart + REPEATED_INPUT_TICKS;
+    if ((clocks.get(player) ?? 0) < fastDue) w.due = Math.min(w.due, fastDue);
+    return;
+  }
   cancel(event);
   if (!s.started) start(player, n);
   else if (stage(s) === 5) finish(player, event.object, n);
@@ -217,6 +227,7 @@ function process(player) {
         cancel({ player });
         player.performAnimation(new core.Animation(seq("human_golem_chisel_end")));
       } else {
+        w.strokeStart = tick;
         w.due = tick + STROKE_TICKS;
         player.performAnimation(new core.Animation(seq("human_golem_chisel")));
       }

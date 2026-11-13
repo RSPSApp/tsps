@@ -3,9 +3,22 @@
 The members activity is registered by `GolemCrafting.plugin.js`. After Fallen From
 Grace and at 60 base and current Crafting, a player can start either cache plinth
 with four sunstones, a chisel (including Jeweller's chisel) and a hammer. Each of
-the four cardinal sides needs five shaping steps, four game ticks apart. Movement,
+the four cardinal sides needs five shaping steps. With one click, these are four
+game ticks apart: 20 ticks per side. Continuous repeated shaping input takes 15
+ticks per side, 60 for four sides excluding movement. Movement,
 other world input, leaving the area and logout stop the active shaping action.
-Repeated clicks on the same side preserve its pending step.
+Repeated clicks on the same side can shorten only its pending step to three
+ticks. They add no progress themselves and cannot queue faster steps or reset
+the deadline. After each step, the next one defaults to four ticks again.
+
+The Wiki states the continuous-spam total and describes clicking on the XP-drop
+tick to speed up the next action. It does not establish the first-action phase
+or exact input/XP packet order. TSPS uses an explicit input convention: an extra
+matching click before the current step's third tick may shorten that step,
+including the first. A click after that tick was processed cannot backdate it.
+This convention supports the published spam total; it is not a measured retail
+input-window rule. Sparse exact-XP-drop timing and retail per-stroke XP are not
+validated. The existing deferred aggregate XP is unchanged.
 
 The paid base and completed shaping steps are saved per player. The two plinths
 and all four sides have separate native progress/rubble variables. Players can
@@ -47,9 +60,9 @@ supplies the shaping and golem animation names. Native test initialization check
 the active cache definitions and real mapped station roots before interactions.
 
 The full base XP is deliberately deferred to completion: the published total is
-known, but its retail distribution between strokes is unverified. The four-tick
-regular rhythm is implemented; the Wiki's faster three-tick click rhythm remains
-unfinished. The assumed model-front rotation has not been independently checked
+known, but its retail distribution between strokes is unverified. The regular
+four-tick and continuous-spam aggregate rhythms are implemented with the input
+convention above. The assumed model-front rotation has not been independently checked
 against a retail scene; the wrong-side test establishes enforcement relative to
 that assumption. NPC movement paths, exact sound/packet ordering and an original
 activity overlay are not claimed. No applicable activity capture was established.

@@ -10,7 +10,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
 const { AreaManager } = require("../dist/game/model/areas/AreaManager");
-let core, roots, next = 5800;
+let core, roots, next = 1;
 const players = [];
 const SIDES = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const bit = name => core.CacheDefinitions.getVarbitId(name);
@@ -35,7 +35,12 @@ function actor(t, { level = 60, boost = 0, quest = true, fur = "WYRMSCRAIG_GOAT_
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
     send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel));
-  player.setIndex(next++); player.setUsername(`golem${player.getIndex()}`); player.setRegistered(true);
+  player.setUsername(`golemtest${next++}`);
+  player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
+  player.setAttribute("bot-skip-persistence", true);
+  assert.equal(core.World.getPlayers().add(player), true, "admit actor through the real world player list");
+  assert.equal(core.World.getPlayers().get(player.getIndex()), player);
+  assert.ok(player.getIndex() > 0 && player.getIndex() < core.World.MAX_PLAYERS);
   player.needsPlacement = false;
   player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, level, false)
     .setCurrentLevels(core.Skill.CRAFTING, level + boost, false)
@@ -74,6 +79,8 @@ function click(player, n = 1) {
   const root = roots[n - 1], p = root.getLocation();
   const definition = core.ObjectDefinition.forPlayer(root.getId(), player);
   assert.ok(definition?.getInteractions()?.[0], "cache supplies a normal callable option before the action");
+  PluginManager.emitCustomEvent("player:world-input", { player,
+    packet: { type: "object_option", clickType: 1, id: definition.id, x: p.getX(), y: p.getY() }, handled: false });
   new ObjectActionPacketListener().executeAction(player, definition.id, p.getX(), p.getY(), 1);
   core.TaskManager.processWalkTo(player.getIndex());
 }
@@ -110,6 +117,11 @@ test("four unique cardinal sides each take twenty area ticks; repetition cannot 
   for (const s of [1, 2, 3]) carve(f, s);
   assert.equal(stage(f.player), 5);
   assert.ok(f.inv.contains(id("SUNSTONE_CORE")), "shaping never spends the core");
+});
+test("repeated normal shaping input preserves the pending stroke deadline", t => {
+  const f = actor(t); start(f);
+  for (let n = 0; n < 20; n++) { click(f.player); tick(); }
+  assert.equal(stage(f.player), 2, "spam clicks cannot postpone the first side forever");
 });
 test("unmet quest, unboostable level, tools and four-stone cost conserve inputs", t => {
   for (const options of [{ quest: false }, { level: 59, boost: 1 }, { remove: "CHISEL" },
@@ -214,6 +226,20 @@ test("existing core producer refuses below sixty and gives boostable core XP", t
   assert.equal(f.inv.getAmount(id("SUNSTONE")), before - 1);
   assert.equal(skills.getExperience(core.Skill.CRAFTING) - xp, 10 * core.GameConstants.EXPERIENCE_MULTIPLIER);
 });
+test("Jeweller's chisel starts and shapes golems and makes a core", t => {
+  const f = actor(t); f.inv.deleteNumber(id("CHISEL"), 1); f.inv.add(new core.Item(id("JEWELLERS_CHISEL")), false);
+  f.inv.add(new core.Item(id("SUNSTONE")), false);
+  assert.equal(PluginManager.emitItemOnItem({ player: f.player, usedItemId: id("JEWELLERS_CHISEL"),
+    usedWithItemId: id("SUNSTONE"), handled: false }), true);
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 2);
+  start(f); carve(f, 0); assert.equal(stage(f.player), 2);
+});
 after(() => {
-  if (core) for (const player of players) PluginManager.emitPlayerLogout({ player });
+  if (core) for (const player of players) {
+    PluginManager.emitPlayerLogout({ player });
+    core.TaskManager.cancelTasks(player.getIndex());
+    core.TaskManager.cancelTasks(player);
+    core.World.getPlayers().remove(player);
+    for (const gift of core.World.getItems().filter(item => item.getOwner() === player.getUsername())) core.ItemOnGroundManager.deregister(gift);
+  }
 });

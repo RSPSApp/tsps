@@ -5,7 +5,8 @@
  * higher in both the Thieving and Agility skills, or have a Thieving level of 99. Boosts cannot be used to fulfil
  * either of these requirements." His transcript checks that on Talk-to and on Trade alike (its "right-click trade
  * option" section): below 50 Thieving, then 50-98 Thieving without 50 Agility, he says to train up; otherwise his
- * Lost and Found opens. No recording has him, so the transcript's lines are the ones played.
+ * Lost and Found opens. rsprox_transcripts/232/03131.txt records the open path (99 Thieving and Agility: Talk-to's
+ * opener, its three options, then the trimmed-cape copy of his shop); the train-up lines are the transcript's, unrecorded.
  *
  * Trade plays that section instead of the generic shops.json binding, which opened the shop for anyone, and this
  * answers its condition steps (the runtime would otherwise take the first, "train up your Thieving", every time).

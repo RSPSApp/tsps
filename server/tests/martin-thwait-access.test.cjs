@@ -17,10 +17,11 @@ let index = 400;
 
 before(async () => {
   await CachePipeline.initialize(ROOT);
-  // The server's shops, as its startup data loads them.
+  // The server's order (Server, then GameBuilder): plugins, then the shops (with the skillcape copies the
+  // plugins add), then startup.
+  PluginManager.loadFromDirectory(path.join(ROOT, "plugins"));
   assert.equal(new (require("../dist/game/definition/loader/impl/ShopDefinitionLoader").ShopDefinitionLoader)().load(), true);
   require("../dist/game/model/container/shop/ShopManager").ShopManager.initialize();
-  PluginManager.loadFromDirectory(path.join(ROOT, "plugins"));
   PluginManager.emitServerStartup({ timestamp: Date.now() });
   core = PluginManager.getCoreApi();
 });
@@ -54,11 +55,19 @@ function visitor(t, { thieving, agility, boostedThieving = thieving }) {
   return { p, lines, trade };
 }
 
-test("Trade opens the Lost and Found with 50 Thieving and 50 Agility, or 99 Thieving", (t) => {
-  for (const [thieving, agility] of [[50, 50], [70, 80], [99, 1]]) {
+test("Trade opens the Lost and Found with 50 Thieving and 50 Agility, or 99 Thieving, and the cape copy at 99", (t) => {
+  const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
+  const I = core.ItemIdentifiers;
+  // 99 Thieving gets the copy with the Thieving cape; with another 99 the trimmed one, as rsprox_transcripts/232/03131.txt
+  // records (99 Thieving and Agility: roguesden_shop_skillcape_trimmed).
+  for (const [thieving, agility, cape] of [[50, 50, null], [70, 80, null], [99, 1, I.THIEVING_CAPE], [99, 99, I.THIEVING_CAPE_T_]]) {
     const f = visitor(t, { thieving, agility });
     f.trade();
     assert.equal(f.p.getInterfaceId(), SHOP_INTERFACE, `${thieving} Thieving, ${agility} Agility: the shop opens`);
+    const shop = ShopManager.getOpenShop(f.p);
+    assert.equal(shop.name, "Martin Thwait's Lost and Found.");
+    const capes = shop.stock.map((entry) => entry.itemId).filter((id) => id === I.THIEVING_CAPE || id === I.THIEVING_CAPE_T_);
+    assert.deepEqual(capes, cape == null ? [] : [cape], `${thieving} Thieving, ${agility} Agility: ${cape == null ? "no cape" : "the cape copy"}`);
   }
 });
 

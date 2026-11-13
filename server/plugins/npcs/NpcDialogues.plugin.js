@@ -1154,7 +1154,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         }
         if (step.type === "action" && step.action === "open_shop") {
           const target = shopName(api, player, npcId, step);
-          const shops = ShopDefinition.all().filter((shop) => shop.getName() === target);
+          const named = ShopDefinition.all().filter((shop) => shop.getName() === target);
+          // A skill master's shop also has its skillcape copies under its name (Sellers.SkillCapes): open the
+          // shops.json shop, which that plugin turns into the copy for a player with 99.
+          const shops = named.length > 1 ? named.filter((shop) => shop.getSource() === "core") : named;
           if (shops.length === 1) {
             close();
             if (ShopManager.open(player, shops[0].getId(), true)) return;

@@ -518,6 +518,73 @@ test('aborting the first buy of a window gives back the full limit even when the
   assert.equal(remainingLimit(p, LIMITED), 150, 'the offer was counted in the window it opened');
 });
 
+test('the buy-limit window opens at the first item bought, not when the offer is placed (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.49);
+  let clock = 1_000_000_000;
+  t.mock.method(Date, 'now', () => clock);
+  const { p, inventory, place, timers } = exchange(t);
+  inventory.add(new Item(995, 1_000), false);
+  const offer = place(false, LIMITED, 100, 5);
+  assert.equal(offer.finished, false);
+  assert.equal(remainingLimit(p, LIMITED), 50, 'an unfilled bid still counts against the limit');
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)?.[LIMITED], undefined, 'no window before anything is bought');
+  clock = offer.completesAt;
+  timers.at(-1).callback();
+  assert.equal(offer.finished, true);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: offer.completesAt, amount: 100 });
+  assert.equal(remainingLimit(p, LIMITED, offer.placedAt + LIMIT_WINDOW_MS), 50, 'four hours after placing, the window is still open');
+  assert.equal(remainingLimit(p, LIMITED, offer.completesAt + LIMIT_WINDOW_MS), 150, 'four hours after the fill it resets');
+});
+
+// #5056 review: two buys of one item that filled while logged out, the later fill in the lower slot. The window opens
+// at the earlier fill (Wiki: "the first item bought"), whatever the slots, so the later buy joins it.
+test('buys filled while logged out open the limit window at the earliest fill, not in slot order', t => {
+  let clock = 1_000_000_000;
+  t.mock.method(Date, 'now', () => clock);
+  const { p, hooks, timers } = exchange(t);
+  const T = clock - 5 * 60 * 60 * 1000;
+  const buy = (slot, completesAt, quantity) =>
+    ({ slot, itemId: LIMITED, sell: false, quantity, total: quantity * 5, finished: false, limitOnFill: true, placedAt: T - 1, completesAt });
+  const later = buy(0, T + 3 * 60 * 60 * 1000, 20);
+  const earlier = buy(1, T, 30);
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: later, 1: earlier });
+  hooks.onPlayerLogin({ player: p });
+  for (const timer of timers.splice(0)) timer.callback(); // both are due: fired as scheduled
+  assert.equal(later.finished && earlier.finished, true);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 }, 'opened at the earlier fill, both counted');
+  // A late count of an earlier fill within the window still moves its start back (recordLimit).
+  p.setAttribute(LIMITS_ATTRIBUTE, {});
+  recordLimit(p, LIMITED, 20, T + 3 * 60 * 60 * 1000);
+  recordLimit(p, LIMITED, 30, T);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+  // One from a window that closed before the current one opened leaves the current window alone.
+  recordLimit(p, LIMITED, 10, T - LIMIT_WINDOW_MS);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+});
+
+test('a bid the market never meets holds none of the buy limit; one that will fill does', () => {
+  const p = player();
+  const bid = (slot, completesAt) => ({ slot, itemId: LIMITED, quantity: 60, sell: false, finished: false, limitOnFill: true, completesAt });
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: bid(0, null) });
+  assert.equal(remainingLimit(p, LIMITED), 150);
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: bid(0, null), 1: bid(1, Date.now() + 60_000) });
+  assert.equal(remainingLimit(p, LIMITED), 90);
+});
+
+test('a fill missed while logged out counts at its fill time, and older saves counted at placement still release on abort', t => {
+  const { p } = exchange(t);
+  const placedAt = 2_000_000_000;
+  const filled = { itemId: LIMITED, quantity: 40, sell: false, finished: false, limitOnFill: true, placedAt, completesAt: placedAt + 60_000 };
+  plugin._test.countFilledBuy(p, filled, placedAt + LIMIT_WINDOW_MS);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: placedAt + 60_000, amount: 40 });
+  const legacy = { itemId: LIMITED, quantity: 30, sell: false, placedAt: placedAt + 60_000 };
+  recordLimit(p, LIMITED, 30, placedAt + 60_000);
+  plugin._test.countFilledBuy(p, legacy, placedAt + 70_000);
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED].amount, 70, 'a legacy offer is not counted twice');
+  plugin._test.releaseLimit(p, legacy, placedAt + 70_000);
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED].amount, 40);
+});
+
 test('an abort never frees a later buy-limit window that did not count the offer', t => {
   const { p } = exchange(t);
   const start = Date.now();

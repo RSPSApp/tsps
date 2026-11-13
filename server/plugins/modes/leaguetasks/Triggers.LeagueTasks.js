@@ -110,7 +110,9 @@ function levelReached(player, trigger) {
     case "any-level":
       return [...skills()].some(([name, skill]) => !(trigger.excluding ?? []).includes(name) && manager.getMaxLevel(skill) >= trigger.level);
     case "total-level":
-      return manager.getTotalLevel() >= trigger.level;
+      // The league's skills only (their 2277 is 23 x 99): Sailing came after the first two, and Demonic Pacts left it
+      // out (Wiki: "Sailing was not included in the Demonic Pacts League").
+      return [...skills()].reduce((sum, [name, skill]) => sum + (name === "SAILING" ? 0 : manager.getMaxLevel(skill)), 0) >= trigger.level;
     case "base-level":
       // Every skill of the leagues' day: Sailing came after both.
       return [...skills()].every(([name, skill]) => name === "SAILING" || manager.getMaxLevel(skill) >= trigger.level);

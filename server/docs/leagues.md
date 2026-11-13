@@ -1726,7 +1726,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   the hand-maintained overlay `data/league-task-triggers.json` (by league type and task id; it
   wins). Kinds: `kill { npcs, count }`, kills of any of the NPCs (by name) added up per task in
   `league:task-kills` (task id -> kills); `level { skill, level }`, `any-level { level,
-  excluding }`, `total-level`, `base-level` (Sailing left out, it came after both leagues) and
+  excluding }`, `total-level` and `base-level` (both leave Sailing out: no league had it) and
   `combat-level { level }` on `onPlayerLevelUp` and at login; `level-up` on any level gained;
   `quest { name }` on `quest:completed` and at login (`quest:is-complete`). A kill is credited
   from an NPC's death (`onNpcDeath`, to its killer) and from the shared credited-kill event

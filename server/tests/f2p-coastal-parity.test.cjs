@@ -209,6 +209,13 @@ test('as captured: Smelt on a furnace makes the Prince Ali key with no prompt, a
   assert.equal(p.items.get(2418), 1); assert.equal(p.items.get(2423), 0); assert.equal(p.items.get(2349), 0);
   assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 2]]); assert.equal(q.quest.getStage(p), 20);
   assert.equal(smeltAt(q, p).handled, undefined, 'with the print used up Smelt opens the normal menu');
+  // A spare print and a bar after the rescue: Smelt is the smelting menu, nothing is used.
+  for (const stage of [100, 110]) {
+    q.quest.setStage(p, stage); p.items.set(2423, 1); p.items.set(2349, 1);
+    assert.equal(smeltAt(q, p).handled, undefined, `stage ${stage}: Smelt opens the normal menu`);
+    q.tick(1);
+    assert.equal(p.items.get(2423), 1); assert.equal(p.items.get(2349), 1); assert.equal(p.items.get(2418), 1, 'no second key');
+  }
 });
 
 test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player at state20', () => {

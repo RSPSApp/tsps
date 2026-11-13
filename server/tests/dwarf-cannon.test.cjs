@@ -802,3 +802,15 @@ test("a Turoth, a Vyrewatch Sentinel and the leafy superiors are never targeted 
     assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);
   }
 });
+
+// Wiki (Dwarf multicannon, 18 March 2026): "The dwarf multicannon no longer fires at sea creatures." The cannon
+// shot any of them in its zones that had an Attack option.
+test("sea creatures are never targeted (Wiki)", () => {
+  const p = gunner();
+  const cannon = built(p);
+  const shark = spawnNpc(core.NpcIdentifiers.BULL_SHARK, 3260, 3262);
+  shark.getCombat().setUnderAttack(p);
+  assert.ok(shark.getDefinition().getActions().includes("Attack"), "a sea creature has Attack");
+  assert.equal(Firing.canTarget(p, shark), false);
+  assert.equal(Firing.targetFor(cannon, p), null);
+});

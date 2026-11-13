@@ -591,8 +591,11 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     });
   }
 
-  /** Grinds the dye into a held vial in place (setId keeps its meta: a preset vial gives a preset dye). */
-  function grindDye(player) {
+  /**
+   * Grinds the dye into a held vial in place (setId keeps its meta: a preset vial gives a preset dye).
+   * The clicked vial and mushroom are the ones used; one not clicked (the pestle on the mushroom) is the first held.
+   */
+  function grindDye(player, clicked = {}) {
     const inventory = player.getInventory();
     if (!inventory.getItems) {
       inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
@@ -600,13 +603,17 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       inventory.adds(BLACK_DYE_ITEM_ID, 1);
       return;
     }
-    const vial = inventory.getItems().find((item) => item?.getId() === VIAL_ITEM_ID);
-    if (!vial) return;
-    if (restricted(inventory.getItems().find((item) => item?.getId() === BLACK_MUSHROOM_ITEM_ID))) {
+    const items = inventory.getItems();
+    const slotOf = (itemId, slot) => (Number.isInteger(slot) && items[slot]?.getId() === itemId
+      ? slot : items.findIndex((item) => item?.getId() === itemId));
+    const vial = items[slotOf(VIAL_ITEM_ID, clicked.vialSlot)];
+    const mushroomSlot = slotOf(BLACK_MUSHROOM_ITEM_ID, clicked.mushroomSlot);
+    if (!vial || mushroomSlot < 0) return;
+    if (restricted(items[mushroomSlot])) {
       player.sendMessage(PRESET_TEXT);
       return;
     }
-    inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
+    inventory.deleteAtSlot(mushroomSlot, 1);
     vial.setId(BLACK_DYE_ITEM_ID);
     inventory.refreshItems();
   }
@@ -1736,7 +1743,11 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         player.sendMessage("You need a pestle and mortar to grind the mushroom.");
         return;
       }
-      grindDye(player);
+      const vialFirst = first === VIAL_ITEM_ID;
+      grindDye(player, {
+        vialSlot: vialFirst ? event.usedItemSlot : event.usedWithItemSlot,
+        mushroomSlot: vialFirst ? event.usedWithItemSlot : event.usedItemSlot,
+      });
       return;
     }
     const pestle = first === PESTLE_AND_MORTAR_ITEM_ID ? second : second === PESTLE_AND_MORTAR_ITEM_ID ? first : null;
@@ -1746,7 +1757,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         player.sendMessage("You need an empty vial to make the dye.");
         return;
       }
-      grindDye(player);
+      grindDye(player, { mushroomSlot: first === BLACK_MUSHROOM_ITEM_ID ? event.usedItemSlot : event.usedWithItemSlot });
       return;
     }
     const mail = first === GOBLIN_MAIL_ITEM_ID ? second : second === GOBLIN_MAIL_ITEM_ID ? first : null;

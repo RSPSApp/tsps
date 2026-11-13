@@ -584,9 +584,13 @@ function notePreserveActivated({ player, prayerId }) {
   if (prayerId === pluginApi.core.PrayerHandler.PRESERVE) player.setAttribute(ATTR_PRESERVE_SINCE, Date.now());
 }
 
+/**
+ * A stamina effect from something other than a stamina potion (the Egniol potion): the usual four minutes, no energy of
+ * its own here, and never doubled by a ring of endurance. It still goes through potions:stamina-effect, so the ring
+ * forgets an effect it doubled earlier and a later unequip leaves this one alone.
+ */
 function startStamina(player) {
-  player.setAttribute(ATTR_STAMINA_END, Date.now() + STAMINA_DURATION_MS);
-  player.setAttribute(ATTR_STAMINA_ACC, 0);
+  applyStaminaRequest({ player, energy: 0, ringDoubles: false });
 }
 
 function applyStamina(player) {

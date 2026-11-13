@@ -1309,8 +1309,9 @@ export class CombatFactory {
     }
 
     /**
-     * Content may disable ring recoil without suppressing other reflected damage: with the
-     * attribute, or by answering `combat:recoil-target` (`{ target, allow }`; `allow = false`).
+     * Content may make a target immune to ring recoil and vengeance (Wiki: Category:Monsters immune to
+     * recoil) without suppressing other reflected damage: with the attribute, or by answering
+     * `combat:recoil-target` (`{ target, allow }`; `allow = false`).
      */
     public static canReceiveRecoil(target: Mobile): boolean {
         if (target.getAttribute?.(CombatFactory.RECOIL_IMMUNE_ATTRIBUTE) === true) return false;
@@ -1346,13 +1347,23 @@ export class CombatFactory {
         }
     }
 
+    /**
+     * Vengeance rebounds 75% of the damage, rounded down, at least 1 (Wiki: Vengeance), and the player
+     * says "Taste vengeance!". The Wiki's Category:Monsters immune to recoil covers vengeance too
+     * ("immune to recoil effects such as ring of recoil and vengeance"), so against one the rebound
+     * still goes off and is spent but deals nothing: rsprox_transcripts/237/01148.txt, The Nightmare
+     * hits for 3, "Taste vengeance!" clears vengeance_rebound, and no 2 reaches it the next tick
+     * (a Kalphite's 4 in 227/01864.txt rebounds 3).
+     */
     public static handleVengeance(character: Mobile, attacker: Mobile, damage: number) {
         if (damage <= 0) {
             return;
         }
-        const returnDmg = Math.max(1, Math.floor(damage * 0.75));
-        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(character)]);
-        character.forceChat("Taste Vengeance!");
+        if (CombatFactory.canReceiveRecoil(attacker)) {
+            const returnDmg = Math.max(1, Math.floor(damage * 0.75));
+            attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(character)]);
+        }
+        character.forceChat("Taste vengeance!");
         character.setHasVengeance(false);
     }
 

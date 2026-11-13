@@ -40,6 +40,7 @@ function actor(t, stage) {
 const action = (f, stepId) => PM.emitCustomEvent("npc-dialogue:action", { player: f.p, npcId: core.NpcIdentifiers.BORK_SIGMUNDSON, stepId, kind: "action" });
 
 test("each of Bork's supplies is given once", (t) => {
+  t.mock.method(Math, "random", () => 0.99); // the top of each range
   const f = actor(t, 18);
   action(f, "1eVvoF");
   action(f, "1eVvoF");
@@ -49,7 +50,22 @@ test("each of Bork's supplies is given once", (t) => {
   assert.equal(f.inv.getAmount(I.STRENGTH_POTION_4_), 4);
 });
 
+test("Bork's amounts are the Wiki's ranges: 8-10 tuna, 2-4 of each potion", (t) => {
+  for (const [roll, tuna, potions] of [[0, 8, 2], [0.5, 9, 3], [0.99, 10, 4]]) {
+    t.mock.method(Math, "random", () => roll);
+    const f = actor(t, 18);
+    action(f, "1eVvoF");
+    action(f, "eJNB7e");
+    action(f, "eCZJLI");
+    assert.equal(f.inv.getAmount(I.TUNA), tuna, `tuna at roll ${roll}`);
+    assert.equal(f.inv.getAmount(I.STRENGTH_POTION_4_), potions, `strength potions at roll ${roll}`);
+    assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), potions, `prayer potions at roll ${roll}`);
+    Math.random.mock.restore();
+  }
+});
+
 test("a supply that does not fit is not claimed, so it can be asked for again", (t) => {
+  t.mock.method(Math, "random", () => 0.99); // four potions
   const f = actor(t, 18);
   for (let slot = 0; slot < 25; slot++) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
   action(f, "eCZJLI");

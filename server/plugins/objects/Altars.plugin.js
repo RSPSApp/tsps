@@ -227,6 +227,8 @@ function prayAtChaosAltar({ player, objectId, location }) {
 
 /** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
 function natureAltar({ player }) {
+  // Dead or dying (killed on the way): nothing, and answered here so Nature Spirit's own Pray-at hook can't restore.
+  if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return true;
   const skills = player.getSkillManager();
   const before = skills.getCurrentLevel(Skill.PRAYER);
   const max = skills.getMaxLevel(Skill.PRAYER);

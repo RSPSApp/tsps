@@ -21,7 +21,7 @@
 // Ours: it charges only while its owner is aboard; the crystal-flecked waters' second shard and
 // live's refusals ("The crystal extractor doesn't seem to respond in this area.", which the Wiki
 // now keeps for bank boats) aren't modelled.
-const { animateDeckLoc, later, playSound } = require("./SailingContent.Sailing");
+const { animateDeckLoc, later, playSound, removeDeckNpc } = require("./SailingContent.Sailing");
 const { EXTRACTOR_SWITCHED_ON } = require("./BoatFacilities.Sailing");
 const windCatcher = require("./WindCatcher.Helm");
 
@@ -110,8 +110,7 @@ function stopCharging(player) {
   if (!charge) return;
   charging.delete(player);
   if (!charge.npc) return;
-  core().BoatManager.getDeck(charge.boat)?.leave(charge.npc, false);
-  pluginApi.removeNpc(charge.npc);
+  removeDeckNpc(pluginApi, charge.boat, charge.npc);
 }
 
 /** The bar's fill `ticks` into the charge: how close the mote is. */

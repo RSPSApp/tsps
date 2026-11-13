@@ -777,6 +777,8 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
     if (session.requested || session.objectId !== state.objectId || session.privateArea !== state.privateArea) continue;
     if (!session.location?.equals?.(state.location)) continue;
     if (other.isRegistered?.() === false) continue;
+    // A level-up dialogue holds the session without chopping (SkillActions.pauseForLevelUp): not a chopper meanwhile.
+    if (session.levelUpPaused && other !== player) continue;
     chopping++;
   }
   return Math.min(GROUP_BONUS_MAX, chopping);

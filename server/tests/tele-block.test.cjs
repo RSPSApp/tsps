@@ -126,3 +126,18 @@ test("an Elder Chaos druid's Tele Block swing returns a splat-less hit that spla
   method.handleAfterHitEffects(hitFor(true));
   assert.equal(splashes.length, 1, "a landed Tele Block does not");
 });
+
+test("logging out ends the block: the save holds none and an old save's seconds are not restored (Wiki, 23 August 2018)", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const blocked = new Player(null);
+  blocked.getCombat().getTeleblockTimer().start(core.TeleBlock.DURATION_SECONDS);
+  assert.equal(core.TeleBlock.isBlocked(blocked), true);
+  const save = PlayerSave.fromPlayer(blocked);
+  assert.equal(save.teleblockTimer, 0, "the logout save carries no block");
+
+  save.setTeleblockTimer(240); // as a save written before the fix holds it
+  const loaded = new Player(null);
+  save.applyToPlayer(loaded);
+  assert.equal(core.TeleBlock.isBlocked(loaded), false, "logging back in can teleport");
+});

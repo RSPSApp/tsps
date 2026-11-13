@@ -659,7 +659,8 @@ export class PlayerSave {
 
         player.getCombat().getPoisonClock().restore(this.poisonClock, this.poisonImmunityTimer);
         player.getCombat().getFireImmunityTimer().start(this.fireImmunityTimer);
-        player.getCombat().getTeleblockTimer().start(this.teleblockTimer);
+        // Tele Block is not restored: it ends on logging out (Wiki, Teleport Block: the 23 August 2018
+        // update "The effects of Tele Block now expire upon logging out."). Older saves may still hold seconds.
         // The special attack restore timer is not saved: logging out restarts it, so the
         // first 10% after login takes the full 50 ticks.
 
@@ -770,7 +771,8 @@ export class PlayerSave {
             ? poisonClock.snapshot() : undefined;
         playerSave.fireImmunityTimer = player.getCombat().getFireImmunityTimer().secondsRemaining();
 
-        playerSave.teleblockTimer = player.getCombat().getTeleblockTimer().secondsRemaining();
+        // Logging out ends a Tele Block (see applyToPlayer), so the save never carries one.
+        playerSave.teleblockTimer = 0;
 
         playerSave.skullTimer = player.getSkullTimer();
         playerSave.skullType = player.getSkullType();

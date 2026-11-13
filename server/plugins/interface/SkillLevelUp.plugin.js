@@ -114,16 +114,30 @@ function conditionHolds(player, condition) {
   return condition.not ? level < condition.min : level >= condition.min;
 }
 
+/** The data's spellbook tag for the player's book (Transcript:Magic has a section per book). */
+function spellbookKey(player) {
+  const { MagicSpellbook } = pluginApi.core;
+  const book = player.getSpellbook?.();
+  if (book === MagicSpellbook.ANCIENT) return "ancient";
+  if (book === MagicSpellbook.LUNAR) return "lunar";
+  if (book === MagicSpellbook.ARCEUUS) return "arceuus";
+  return "standard";
+}
+
 /**
  * "You can now wear Rune Armour!": what the wiki records for every level crossed, so a lamp
- * taking a skill from 1 to 10 still says what 2 through 9 unlocked.
+ * taking a skill from 1 to 10 still says what 2 through 9 unlocked. A Magic line tagged with a
+ * spellbook is only the line of a player on that book (rsprox_transcripts/227/00073.txt: one box
+ * at Magic 80, the standard book's).
  */
 function unlockEntries(player, skill, fromLevel, toLevel) {
   const entries = [];
+  let book = null;
   for (let level = fromLevel + 1; level <= toLevel; level++) {
     for (const entry of UNLOCK_MESSAGES[skill.getName()]?.[level] ?? []) {
-      if (typeof entry === "string") entries.push({ text: entry });
-      else if (!entry.when || conditionHolds(player, entry.when)) entries.push(entry);
+      if (typeof entry === "string") { entries.push({ text: entry }); continue; }
+      if (entry.spellbook && entry.spellbook !== (book ??= spellbookKey(player))) continue;
+      if (!entry.when || conditionHolds(player, entry.when)) entries.push(entry);
     }
   }
   return entries;

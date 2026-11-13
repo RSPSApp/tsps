@@ -21,14 +21,18 @@ const SKILLS = ["Attack", "Strength", "Defence", "Ranged", "Prayer", "Magic", "R
 // differ: `Transcript:Runecrafting` is only a 34-byte `#REDIRECT [[Transcript:Runecraft]]`,
 // which `action=raw` returns as a 200, so nothing follows it and the skill comes out empty.
 const WIKI_PAGE = { Runecrafting: "Runecraft" };
+// Transcript:Magic's "Level up messages (...)" headings -> the spellbook an entry belongs to.
+const SPELLBOOK_SECTIONS = { "standard spellbook": "standard", "ancient magicks": "ancient",
+  "lunar spellbook": "lunar", "arceuus spellbook": "arceuus" };
 const DEST = path.join(__dirname, "..", "plugins", "interface", "data", "level-up-messages.json");
 const SOURCE_NOTE = "OSRS Wiki, the 'Level up messages' section of each Transcript:<Skill> page, read "
   + "as raw wikitext by scripts/dump-level-up-messages.cjs. Each level maps to the message(s) the "
   + "game sends on reaching it, in wiki order; a nested entry carries a 'when' condition built from "
   + "the transcript's own qualifier, because those levels show a different message per player state; "
   + "an 'items' list holds the cache ids of the box's picture(s), resolved by exact item name. "
-  + "Magic merges its four spellbook sections, Sailing's beta section is commented out on the wiki "
-  + "and is skipped, and a level the wiki marks only with {{tmissing}} has no message. "
+  + "Magic merges its four spellbook sections, each entry tagged with its 'spellbook' (standard, "
+  + "ancient, lunar or arceuus), since the game sends only the player's own book's line; Sailing's "
+  + "beta section is commented out on the wiki and is skipped, and a level the wiki marks only with {{tmissing}} has no message. "
   + "Messages are verbatim, including their 'Members ...' clause, which OSRS words inline rather "
   + "than splitting by world type.";
 /** Lower-cased cache item name -> lowest id, noted copies and placeholders excluded. */
@@ -183,13 +187,25 @@ function parseSkill(skill, raw) {
   // Commented-out wiki sections (Sailing's beta messages) are not part of the game's text.
   const wikitext = raw.replace(/<!--[\s\S]*?-->/g, "");
   const blocks = wikitext.split(/^==([^=].*?)==\s*$/m);
-  let body = "", found = false;
+  const bodies = [];
   for (let i = 1; i < blocks.length; i += 2) {
-    if (blocks[i].trim().toLowerCase().startsWith("level up messages")) { body += blocks[i + 1]; found = true; }
+    const heading = blocks[i].trim();
+    if (!heading.toLowerCase().startsWith("level up messages")) continue;
+    // "Level up messages (Lunar Spellbook)": each spellbook's player sees only its own section.
+    const qualifier = /\((.+)\)\s*$/.exec(heading)?.[1];
+    const spellbook = qualifier ? SPELLBOOK_SECTIONS[qualifier.toLowerCase()] : undefined;
+    if (qualifier && !spellbook) throw new Error(skill + ": unknown level-up section '" + heading + "'");
+    bodies.push({ body: blocks[i + 1], spellbook });
   }
-  if (!found) return {};
+  if (bodies.length === 0) return {};
 
   const levels = {};
+  for (const { body, spellbook } of bodies) parseLevels(levels, body, spellbook);
+  return levels;
+}
+
+/** One "Level up messages" section's levels, appended to `levels`; a spellbook section's entries carry it. */
+function parseLevels(levels, body, spellbook) {
   const sections = body.split(/^===\s*Level (\d+)\s*===\s*$/m);
   for (let i = 1; i < sections.length; i += 2) {
     const level = sections[i], chunk = sections[i + 1];
@@ -216,6 +232,7 @@ function parseSkill(skill, raw) {
           const entry = { text };
           if (predicate) entry.when = predicate;
           if (items.length) entry.items = items;
+          if (spellbook) entry.spellbook = spellbook;
           entries.push(Object.keys(entry).length === 1 ? text : entry);
         }
         continue;
@@ -227,13 +244,16 @@ function parseSkill(skill, raw) {
       if (!bullet) continue;
       if (bullet[1].trimStart().startsWith("{{")) continue;
       const text = clean(bullet[1]);
-      if (text && !/^transcript/i.test(text)) entries.push(when ? { text, when: condition(when) } : text);
+      if (!text || /^transcript/i.test(text)) continue;
+      const entry = { text };
+      if (when) entry.when = condition(when);
+      if (spellbook) entry.spellbook = spellbook;
+      entries.push(Object.keys(entry).length === 1 ? text : entry);
     }
     // Appended, not replaced: Magic gives a level its own box in each spellbook section
     // (Water Bolt on Standard, a Battlefront teleport on Arceuus), and the last one won.
     if (entries.length) levels[level] = (levels[level] ?? []).concat(entries);
   }
-  return levels;
 }
 
 /**

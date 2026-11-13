@@ -59,7 +59,7 @@ function fakePlayer(at, { teleblocked = false } = {}) {
     sendMessage: (m) => player.log.push(`message ${m}`),
     setInterfaceId: (id) => { player.interfaceId = id; },
     getInterfaceId: () => player.interfaceId,
-    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked }) }),
+    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked, secondsRemaining: () => (teleblocked ? 100 : 0) }) }),
     getPacketSender: () => ({
       sendSound: (id, volume, delay) => player.log.push(`synth ${id} delay ${delay}`),
       sendAreaSound: (id, x, y, z, loops, delay, radius) => player.log.push(`area ${id} ${x},${y} r${radius}`),
@@ -130,7 +130,7 @@ test("everyone on the pad goes; a Tele Blocked player stays and is told; someone
     assert.ok(traveller.log.includes("spam Ancient magic teleports you somewhere in the Wilderness!"));
     assert.ok(traveller.getLocation().getY() > 3660, "at level 19");
   }
-  assert.ok(blocked.log.includes("message A magical spell is blocking you from teleporting."));
+  assert.ok(blocked.log.includes("message A teleport block has been cast on you. It should wear off in 1 minute, 40 seconds."));
   assert.equal(blocked.getLocation().getY(), 3620);
   assert.equal(beside.getLocation().getX(), 3154);
   assert.equal(dead.getLocation().getY(), 3621, "a player dying on the pad stays");

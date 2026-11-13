@@ -153,7 +153,8 @@ function activate(player, index, to, chosen) {
       if (!traveller?.isRegistered?.() || !onPad(traveller, obelisk)) continue;
       if (traveller.getHitpoints?.() <= 0 || traveller.isDyingReturn?.() === true) continue;
       if (isTeleblocked(traveller)) {
-        traveller.sendMessage(data.messages.teleblocked);
+        // Since 2 March 2017 a refused teleport names the time left (Wiki, Tele Block); TeleBlock has the captured line.
+        traveller.sendMessage(core.TeleBlock.attemptMessage(traveller));
         continue;
       }
       // Spam, as all 9 recorded arrivals are (e.g. 236/03931.txt:45746); the random line, unrecorded, alike.

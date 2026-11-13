@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
-import { Notifier, watchNotificationSettings } from "@runelite/client/Notifier";
+import { Notifier, turnsNotificationOn, watchNotificationSettings } from "@runelite/client/Notifier";
 import { GroundItemsConfig } from "../game/plugins/grounditems/GroundItemsConfig";
 import { ChatNotificationsConfig } from "../game/plugins/chatnotifications/ChatNotificationsConfig";
 import { IdleNotifierConfig } from "../game/plugins/idlenotifier/IdleNotifierConfig";
@@ -77,22 +77,32 @@ assert.equal(permissionRequests, 0, "a change without a click (another tab) does
 config.setConfigValue(GroundItemsConfig, "notifyHighlightedDrops", false);
 userActive = true;
 
+// A runtime key that happens to end in "idle" is not Idle Notifier's: Bank Tags' icon for a tag named "idle".
+config.setConfiguration("banktags", "icon_idle", "995");
+assert.equal(permissionRequests, 0, "banktags.icon_idle is not a notification setting");
+
 config.setConfigValue(GroundItemsConfig, "notifyHighlightedDrops", true);
 assert.equal(permissionRequests, 1, "turning on Notify for highlighted drops asks");
 config.setConfigValue(GroundItemsConfig, "notifyTier", "HIGH");
-assert.equal(permissionRequests, 2, "a notify tier asks too while the answer is still pending");
 config.setConfigValue(IdleNotifierConfig, "animationIdle", true);
-assert.equal(permissionRequests, 3, "Idle Notifier's idle toggles count as notification settings");
-config.setConfigValue(ImplingsConfig, "showBaby", "NONE");
-assert.equal(permissionRequests, 3, "an impling set back to None does not ask");
 config.setConfigValue(ImplingsConfig, "showBaby", "NOTIFY");
-assert.equal(permissionRequests, 4, "an impling set to Notify asks");
+for (const ms of ["1", "10", "100"]) config.setConfiguration("idlenotifier", "hitpointsNotification", ms);
+assert.equal(permissionRequests, 1, "while the answer is still pending, later notification settings do not ask again");
+
+// Which changes count (the listener's own test, now that it asks only once).
+assert.equal(turnsNotificationOn("idlenotifier", "animationidle", "true"), true, "Idle Notifier's idle toggles count");
+assert.equal(turnsNotificationOn("idlenotifier", "movementidle", "true"), true);
+assert.equal(turnsNotificationOn("banktags", "icon_idle", "995"), false, "another group's ...idle key does not");
+assert.equal(turnsNotificationOn("grounditems", "notifyTier", "HIGH"), true, "a notify tier counts");
+assert.equal(turnsNotificationOn("implings", "showBaby", "NOTIFY"), true, "an impling set to Notify counts");
+assert.equal(turnsNotificationOn("implings", "showBaby", "NONE"), false, "an impling set to None does not");
+assert.equal(turnsNotificationOn("grounditems", "notifyTier", "OFF"), false, "a notify setting left off does not");
 
 permission = "granted";
 config.setConfigValue(GroundItemsConfig, "notifyTier", "INSANE");
 permission = "denied";
 config.setConfigValue(GroundItemsConfig, "notifyTier", "MEDIUM");
-assert.equal(permissionRequests, 4, "no prompt once the player has answered");
+assert.equal(permissionRequests, 1, "no prompt once the player has answered");
 
 // --- notify(): chat line, then the browser notification -----------------------------------------
 async function notifyCases(): Promise<void> {
@@ -110,7 +120,7 @@ async function notifyCases(): Promise<void> {
     assert.deepEqual(shown, []);
     assert.equal(clickListeners.length, 1, "the fallback still asks on the next click");
     clickListeners[0]();
-    assert.equal(permissionRequests, 5, "the next-click fallback asks");
+    assert.equal(permissionRequests, 2, "the next-click fallback asks");
 
     permission = "granted";
     fakeDocument.hidden = false;
@@ -158,8 +168,15 @@ async function notifyCases(): Promise<void> {
 
     stop();
     permission = "default";
+    // A fresh watcher has not asked yet; stopped, it still says nothing.
+    const stopFresh = watchNotificationSettings(config);
+    stopFresh();
     config.setConfigValue(GroundItemsConfig, "notifyTier", "LOW");
-    assert.equal(permissionRequests, 5, "the returned function stops listening");
+    assert.equal(permissionRequests, 2, "the returned function stops listening");
+    const fresh = watchNotificationSettings(config);
+    config.setConfigValue(GroundItemsConfig, "notifyTier", "HIGH");
+    assert.equal(permissionRequests, 3, "a listening watcher that has not asked yet does ask");
+    fresh();
 
     console.log("notifier: ok");
 }

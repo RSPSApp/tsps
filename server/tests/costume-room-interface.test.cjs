@@ -428,3 +428,39 @@ test("closing the lid before the storage comes up keeps it shut", (t) => {
   assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
   assert.equal(f.furniture.displayObjectId, undefined);
 });
+
+// Every piece's rows count what is stored with invother_total on poh_costumes, which reads the
+// inventory sent as "another's" (id + 32768).
+const STORED_INV = 637 + 32768;
+const PIECES = [["TREASURE_CHEST", "MAHOGANY_TREASURE_CHEST"], ["TOY_BOX", "OAK_TOY_BOX"],
+  ["FANCY_DRESS_BOX", "OAK_FANCY_DRESS_BOX"], ["ARMOUR_CASE", "OAK_ARMOUR_CASE"],
+  ["MAGIC_WARDROBE", "OAK_MAGIC_WARDROBE"], ["CAPE_RACK", "MARBLE_CAPE_RACK"]];
+
+for (const [hotspotKey, buildableKey] of PIECES) {
+  test(`${hotspotKey}: Store and Withdraw send the storage as the inventory its rows read`, (t) => {
+    const f = fixture(t, `cosinv${PIECES.findIndex(([key]) => key === hotspotKey)}`, hotspotKey, buildableKey);
+    const sent = [];
+    const sender = f.player.getPacketSender(), send = sender.sendInventory.bind(sender);
+    sender.sendInventory = (id, capacity, items, ...rest) => { sent.push({ id, items: items.filter(Boolean).map(item => item.id) }); return send(id, capacity, items, ...rest); };
+    const [id, representative] = [...Storage.storageItems(f.furniture)].find(([item]) => !core.ItemDefinition.forId(item).isStackable());
+    f.inventory.resetItems();
+    f.inventory.addItem(new Item(id, 1));
+    open(f);
+    assert.deepEqual(sent.map(entry => entry.id), [STORED_INV]);
+    button(f, "poh_costumes_side:items", 1, 0, id);
+    assert.equal(stored(f, id), 1);
+    assert.deepEqual(sent.at(-1), { id: STORED_INV, items: [id] });
+    // Withdraw on the chosen row: a treasure chest shows the tier the item belongs to.
+    let tier = 0;
+    if (hotspotKey === "TREASURE_CHEST") {
+      tier = [3293, 3294, 3295, 3296, 3297, 3298].findIndex(enumId => [...core.CacheDefinitions.getEnumValues(enumId).values()].includes(representative));
+      button(f, "poh_costumes:tier", tier + 2);
+    }
+    const enumId = hotspotKey === "TREASURE_CHEST" ? 3293 + tier : { TOY_BOX: 3299, FANCY_DRESS_BOX: 3291, ARMOUR_CASE: 3290, MAGIC_WARDROBE: 3289, CAPE_RACK: 3292 }[hotspotKey];
+    const row = [...core.CacheDefinitions.getEnumValues(enumId).entries()].find(([, value]) => value === representative)[0];
+    button(f, "poh_costumes:items", 1, rowSlot(row), representative);
+    assert.equal(stored(f, id), 0);
+    assert.equal(f.inventory.getAmount(id), 1);
+    assert.deepEqual(sent.at(-1), { id: STORED_INV, items: [] });
+  });
+}

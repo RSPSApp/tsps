@@ -1477,6 +1477,49 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
   none of them spends charges through `combat:consume-charge` here.
 
+### Echo equipment: Infernal tecpatl, Shadowflame quadrant, Devil's element, Lithic sceptre, Crystal blessing
+
+Wiki: [Demonic Pacts League/Echo bosses and echo equipment](https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Echo_bosses_and_echo_equipment)
+and each item's page. How the items are obtained (the echo bosses' drops) is not here.
+
+- **Infernal tecpatl** (`combat/MultiHitWeapons.plugin.js`, `combat/specials/InfernalTecpatl.SpecialAttack.js`):
+  two independently rolled half-max hits, its cache swing and sound; 10% demonbane
+  (`combat/effects/Demonbane.EquipmentEffects.js`, a Demonic Pacts character only); Brand, 50%
+  energy, four hits at +25% accuracy and max hit.
+- **Shadowflame quadrant** (`items/ShadowflameQuadrant.plugin.js`, `items/ElementalStaves.plugin.js`,
+  Autocasting): as before this section was written.
+- **Devil's element** (`items/DevilsElement.plugin.js`): +30% weakness to every element on every
+  target, through `added` on `elemental-spells:weakness` (Common.ElementalSpells), and the four
+  elemental runes from the shield slot. The Demonic Pacts pact keyed on a weakness to air counts it.
+- **Lithic sceptre** (`items/LithicSceptre.plugin.js`, `combat/specials/LithicSceptre.SpecialAttack.js`):
+  a powered staff with the captured cast, impact and splash; body and earth rune charges and the
+  captured Check line; Shatter stacks in varbit `lithic_sceptre_shatter_stacks` (one an attack as
+  its hit lands, a splash too, up to 14, one lost every 50 ticks out of combat, all on a teleport
+  or instance); Explosive Shatter fires from the bar at the target for 5 stacks and no energy, with
+  the captured look and refusal line.
+- **Crystal blessing** (`items/CrystalArmour.plugin.js`): crystal armour's accuracy and damage bonus
+  for melee and powered staves, and +20 magic attack and +2% magic damage a piece, which Tumeken's
+  shadow multiplies.
+- **Leagues VI only:** the Devil's element's weakness and runes, the crystal blessing and the
+  tecpatl's demonbane are the Demonic Pacts versions (Raging Echoes had other Devil's element and
+  blessing effects), so they apply to a Demonic Pacts character only (`items/EchoItems.js`). The
+  items' own attacks, charges and specials work for whoever holds the item, as the quadrant and the
+  tecpatl's double hit already did.
+
+**Ours** (no capture or Wiki source):
+- Brand's damage split over the accurate hits (the first accurate roll shared out, at least 1 a
+  landed hit) and its sound (the tecpatl's swing); its animation is the cache's.
+- The sceptre's charge, uncharge and empty messages and the Uncharge prompt; a stack lost "out of
+  combat" means while the player has no combat target.
+- Explosive Shatter: the 3 tiles counted round the target; the magic part as the spell's roll
+  times 1.5; the typeless part as a uniform roll up to 75% of the max hit, raised to 10, that never
+  misses; one sceptre charge a use; nothing happening with no target in reach.
+
+**Not covered:** the Raging Echoes and Grid Master versions of the Devil's element and the crystal
+blessing; the quadrant and the tecpatl's double hit staying open to any character, as they were;
+the Lithic sceptre's flask of fervour rule (the flask's explosions are its own hits here, so no
+charge is taken anyway).
+
 ## Areas
 
 `AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.

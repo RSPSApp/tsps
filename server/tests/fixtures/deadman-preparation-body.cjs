@@ -1,7 +1,7 @@
 // SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
-// Preparations003/006/007/008/010 remain retained; ordinary onboarding completion is unexecuted.
+// Preparations003/006/007/008/010 remain retained; source63233 passed the six preparation checks.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
-// This file is a proposed extension of the existing compiled/cache/login/save fixture route.
+// This uses the existing compiled/cache/login/save fixture route; see the document for runtime scope.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");

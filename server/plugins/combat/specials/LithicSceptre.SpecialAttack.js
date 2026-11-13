@@ -15,9 +15,9 @@
  * Ours, where the Wiki is silent: the 3 tiles are round the target, which counts as one of the 12;
  * the magic part is the built-in spell's roll scaled by 1.5, the typeless part a uniform roll from 0
  * to 75% of the spell's max hit, raised to 10, that never misses; it takes one of the sceptre's
- * charges like a cast; with no target in reach nothing happens and the stacks are kept. The
- * typeless part counts as a powered staff attack (Wiki): its max is the spell's own, which already
- * holds the crystal blessing's bonus.
+ * charges like a cast; with no target the cast could attack and reach, nothing happens and nothing
+ * is spent. The typeless part counts as a powered staff attack (Wiki): its max is the spell's own,
+ * which already holds the crystal blessing's bonus.
  *
  * Stacks come from the LithicSceptre plugin: `lithic-sceptre:stacks` { player, stacks, consume, consumed }.
  */
@@ -81,12 +81,17 @@ function centreOf(target) {
   return new core.Location(at.getX() + half, at.getY() + half, at.getZ());
 }
 
-/** The target, alive and within the sceptre's reach (range and line of sight, as its cast). */
-function reachable(player, target) {
-  if (!target || target.getHitpoints?.() <= 0 || target.isRegistered?.() === false) return false;
-  if (target.getLocation().getZ() !== player.getLocation().getZ()) return false;
-  const method = core.CombatFactory.getMethod(player);
-  return !!method && player.getCombat().resolveCanReachForCurrentCycle(method, target) === true;
+/**
+ * Whether the sceptre's cast could hit the target now: the ordinary attack permission (a valid
+ * target, PvP and area rules, single combat, immunity, content that refuses the attack) with the
+ * sceptre's own method, then its range and line of sight. Nothing is spent asking.
+ */
+function canHit(player, target) {
+  if (!target) return false;
+  const { CanAttackResponse, CombatFactory } = core;
+  const method = CombatFactory.getMethod(player);
+  if (!method || CombatFactory.canAttackPermission(player, target, false, method) !== CanAttackResponse.CAN_ATTACK) return false;
+  return player.getCombat().resolveCanReachForCurrentCycle(method, target) === true;
 }
 
 /** The target and up to 11 more attackable enemies within 3 tiles of it. */
@@ -145,7 +150,7 @@ function hitsOn(player, victim, spell) {
 function explode(player) {
   const staff = staffOf(player);
   const target = player.getCombat().getTarget();
-  if (!staff || staff.charges <= 0 || !reachable(player, target)) return [];
+  if (!staff || staff.charges <= 0 || !canHit(player, target)) return [];
   if (!stacksOf(player, STACKS_USED).consumed) {
     player.sendMessage(NOT_ENOUGH_STACKS);
     return [];
@@ -197,5 +202,5 @@ module.exports = function registerLithicSceptreSpecialAttack(pluginApi) {
 };
 
 module.exports._test = {
-  specialDisabled, specialCost, victims, explode, centreOf, ID, STACKS_USED, MAGIC_MULTIPLIER, TYPELESS_FRACTION, TYPELESS_MINIMUM, MAX_TARGETS, RADIUS, NOT_ENOUGH_STACKS,
+  specialDisabled, specialCost, victims, explode, canHit, centreOf, ID, STACKS_USED, MAGIC_MULTIPLIER, TYPELESS_FRACTION, TYPELESS_MINIMUM, MAX_TARGETS, RADIUS, NOT_ENOUGH_STACKS,
 };

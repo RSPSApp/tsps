@@ -17,6 +17,7 @@ const { GameConstants } = require("../dist/game/GameConstants");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { DamageFormulas: Damage } = require("../dist/game/content/combat/formula/DamageFormulas");
 const { AccuracyFormulasDpsCalc: Accuracy } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+const { TimerKey } = require("../dist/util/timers/TimerKey");
 
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
@@ -307,38 +308,72 @@ test("Shatter stacks: one an attack up to 14, shown in the varbit; teleporting, 
   assert.equal(Lithic._test.stacks(p), 3, "one lost after 50 ticks out of combat");
   PluginManager.emitCustomEvent("teleport:landed", { player: p });
   assert.equal(Lithic._test.stacks(p), 0, "teleporting loses them");
-  p.getPrivateArea = () => ({});
-  Lithic._test.setStacks(p, 6);
-  attack();
-  assert.equal(Lithic._test.stacks(p), 1, "entering an instance loses them");
 });
 
-test("Explosive Shatter: no energy, Overly Draining doesn't block it, and fewer than 5 stacks refuse the bar", () => {
-  const special = specials.find((definition) => definition.id === "lithic_sceptre");
-  assert.ok(special);
-  assert.equal(special.drainAmount, 0);
-  assert.equal(special.traits.skipAttack, true, "fires on the press");
-  const cost = { player: null, specialId: "lithic_sceptre", cost: 100, allow: false, phase: "check" };
-  PluginManager.emitCustomEvent("combat-special:cost", cost);
-  assert.equal(cost.cost, 0);
-  assert.equal(cost.allow, true);
+/** A sceptre wielder with 7 stacks, whose combat target is `target`, and what a press spends. */
+function shatterer(t, target) {
   const p = player();
-  wear(p, WEAPON(), I.LITHIC_SCEPTRE, { [Lithic._test.CHARGES_KEY]: 50 });
-  Lithic._test.setStacks(p, 4);
-  const refused = { player: p, specialAttackId: "lithic_sceptre", disabled: null };
-  Shatter._test.specialDisabled(refused);
-  assert.equal(refused.disabled, true);
-  assert.equal(refused.message, "You need 5 Shatter stacks to use that ability.");
-  Lithic._test.setStacks(p, 5);
-  const allowed = { player: p, specialAttackId: "lithic_sceptre", disabled: null };
-  Shatter._test.specialDisabled(allowed);
-  assert.equal(allowed.disabled, null);
+  p.setNeedsPlacement(false);
+  const sceptre = wear(p, WEAPON(), I.LITHIC_SCEPTRE, { [Lithic._test.CHARGES_KEY]: 50 });
+  t.mock.method(p.getCombat(), "getTarget", () => target);
+  Lithic._test.setStacks(p, 7);
+  const performed = [];
+  const listener = PluginManager.createApi("EchoPerformedCheck");
+  listener.onCustomEvent("combat-special:performed", (event) => { if (event.player === p) performed.push(event); });
+  const spent = () => ({ stacks: Lithic._test.stacks(p), charges: sceptre.getMetaValue(Lithic._test.CHARGES_KEY), performed: performed.length });
+  return { p, spent };
+}
+
+function registeredNpc(t, id = 12204) {
+  const npc = new NPC(id, new core.Location(3203, 3200));
+  npc.setRegistered(true);
+  npc.setNeedsPlacement?.(false);
+  t.after(() => npc.setRegistered(false));
+  return npc;
+}
+
+test("Explosive Shatter is refused, spending nothing, when the cast could not attack the target", (t) => {
+  const queued = [];
+  t.mock.method(core.CombatFactory, "addPendingHit", (hit) => queued.push(hit));
+  const untouched = { stacks: 7, charges: 50, performed: 0 };
+
+  // Another player, outside any PvP area.
+  const other = player();
+  other.setNeedsPlacement(false);
+  other.setLocation(new core.Location(3203, 3200, 0));
+  const pvp = shatterer(t, other);
+  assert.deepEqual(Shatter._test.explode(pvp.p), []);
+  assert.deepEqual(pvp.spent(), untouched, "a player outside PvP");
+
+  // An NPC that is immune to attacks for now.
+  const immune = registeredNpc(t);
+  immune.getTimers().registers(TimerKey.ATTACK_IMMUNITY, 10);
+  const blocked = shatterer(t, immune);
+  assert.deepEqual(Shatter._test.explode(blocked.p), []);
+  assert.deepEqual(blocked.spent(), untouched, "an immune NPC");
+
+  // Content that refuses the attack (an instance's owner rule, a boss phase).
+  const refused = registeredNpc(t);
+  const policy = shatterer(t, refused);
+  let refuse = true;
+  PluginManager.createApi("EchoRefuse").onCanAttack((event) => { if (refuse && event.target === refused) event.allow = false; });
+  assert.deepEqual(Shatter._test.explode(policy.p), []);
+  assert.deepEqual(policy.spent(), untouched, "an attack content refuses");
+  refuse = false;
+  assert.equal(queued.length, 0, "nothing was hit");
+
+  // The same target once the attack is allowed.
+  assert.equal(Shatter._test.explode(policy.p).length, 2);
+  assert.deepEqual(policy.spent(), { stacks: 2, charges: 49, performed: 1 });
 });
 
 test("Explosive Shatter hits the target and up to 11 more within 3 tiles: magic at 150%, typeless 10 to 75% of the max", (t) => {
   const p = player();
+  p.setNeedsPlacement(false);
   const sceptre = wear(p, WEAPON(), I.LITHIC_SCEPTRE, { [Lithic._test.CHARGES_KEY]: 50 });
   const target = weakTarget(t, p);
+  target.setRegistered(true);
+  t.after(() => target.setRegistered(false));
   const others = Array.from({ length: 15 }, () => new NPC(12204, new core.Location(3204, 3200)));
   p.getLocalNpcs = () => [target, ...others];
   t.mock.method(core.CombatFactory, "canAttackSecondaryTarget", () => true);

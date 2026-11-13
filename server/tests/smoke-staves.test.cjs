@@ -24,7 +24,9 @@ const registerSalve = require("../plugins/combat/effects/SalveAmulet.EquipmentEf
 ItemDefinition.forId = (id) => ({ getName: () => (id === ItemIds.SALVE_AMULET_I_ ? "Salve amulet(i)" : "") });
 
 // The real core stages, so the rolls below are the formulas' own.
+const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
 const api = {
+  core: { Equipment, ItemIdentifiers, MagicSpellbook },
   registerMeleeAttackAccuracyModifier: effects.registerMeleeAttackAccuracyModifier,
   registerMeleeHitModifier: effects.registerMeleeHitModifier,
   registerRangedAttackAccuracyModifier: effects.registerRangedAttackAccuracyModifier,

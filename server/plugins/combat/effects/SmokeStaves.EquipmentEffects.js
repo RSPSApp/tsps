@@ -9,24 +9,25 @@
  * salve amulet (i)/(ei) also adds to, and the damage adds 10% (100 permille) to the magic
  * damage bonus.
  */
-const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
-const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { asPlayer } = require("./GearChecks.EquipmentEffects");
 
 const BONUS_PERCENT = 10;
-const STAVES = new Set([
-  ItemIdentifiers.SMOKE_BATTLESTAFF,
-  ItemIdentifiers.MYSTIC_SMOKE_STAFF,
-  ItemIdentifiers.TWINFLAME_STAFF,
-]);
+let core;
+let staves = null;
+
+/** Smoke staff ids from core.ItemIdentifiers, built on first use. */
+function smokeStaves() {
+  const ids = core.ItemIdentifiers;
+  return (staves ??= new Set([ids.SMOKE_BATTLESTAFF, ids.MYSTIC_SMOKE_STAFF, ids.TWINFLAME_STAFF]));
+}
 
 /** The entity wields a smoke staff and `spell` is from the standard spellbook. */
 function boosts(entity, spell) {
   const player = asPlayer(entity);
-  if (!player || spell?.getSpellbook?.() !== MagicSpellbook.NORMAL) return false;
-  const weapon = player.getEquipment?.()?.getItems?.()?.[Equipment.WEAPON_SLOT];
-  return STAVES.has(weapon?.getId?.() ?? -1);
+  if (!player || spell?.getSpellbook == null) return false;
+  if (spell.getSpellbook() !== core.MagicSpellbook.NORMAL) return false;
+  const weapon = player.getEquipment?.()?.getItems?.()?.[core.Equipment.WEAPON_SLOT];
+  return smokeStaves().has(weapon?.getId?.() ?? -1);
 }
 
 function magicAccuracyPercent(entity, percent, spell) {
@@ -38,8 +39,9 @@ function magicDamageBonus(entity, permille, spell) {
 }
 
 module.exports = function registerSmokeStaffEffects(api) {
+  core = api.core;
   api.registerMagicAccuracyPercentModifier(magicAccuracyPercent);
   api.registerMagicDamageBonusModifier(magicDamageBonus);
 };
 
-module.exports._test = { boosts, magicAccuracyPercent, magicDamageBonus, STAVES };
+module.exports._test = { boosts, magicAccuracyPercent, magicDamageBonus, smokeStaves };

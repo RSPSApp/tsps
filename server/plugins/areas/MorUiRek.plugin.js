@@ -64,6 +64,19 @@ function fillTzhaarTitle(request) {
   request.text = request.text.replace(CASTE_PLACEHOLDER, title);
 }
 
+/**
+ * The same blank in menu option labels ("What's a '[TzHaar caste]'?"), which go straight to the menu and never pass
+ * through npc-dialogue:line. Options are copied with the filled text, as LostTribe fills its "[NPC]".
+ */
+function fillTzhaarMenu(notice) {
+  const options = Array.isArray(notice?.options) ? notice.options : [];
+  if (!options.some((option) => String(option?.text ?? "").includes("[TzHaar caste]"))) return;
+  const title = tzhaarTitle(notice.player);
+  notice.options = options.map((option) => (String(option?.text ?? "").includes("[TzHaar caste]")
+    ? { ...option, text: option.text.replace(CASTE_PLACEHOLDER, title) }
+    : option));
+}
+
 /** "If the player's caste is JalYt-Ket:": the TzHaar dialogues' branch for each caste. */
 function casteCondition({ player, text }) {
   const match = CASTE_CONDITION.exec(String(text).trim().toLowerCase());
@@ -198,6 +211,7 @@ module.exports = {
   members: true,
   passVentDoor,
   fillTzhaarTitle,
+  fillTzhaarMenu,
   casteCondition,
   register(api) {
     core = api.core;
@@ -206,6 +220,7 @@ module.exports = {
     api.onNpcDialogueCondition(guardCondition);
     api.onNpcDialogueCondition(casteCondition);
     api.onCustomEvent("npc-dialogue:line", fillTzhaarTitle);
+    api.onCustomEvent("npc-dialogue:menu", fillTzhaarMenu);
     api.onItemOnNpc(useCapeOnGuard);
     api.onCustomEvent("npc-dialogue:action", showCapeInDialogue);
     api.onCustomEvent("mor-ul-rek:grant-access", grantAccess);

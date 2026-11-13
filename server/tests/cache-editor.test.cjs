@@ -559,6 +559,35 @@ test("NPC recolour swaps and chains are rejected before the client applies them 
   assert.equal(Document.check(core, { rows: [row] }).ok, true);
 });
 
+test("item and loc recolour swaps and chains are rejected too: their model loaders apply pairs in order", () => {
+  for (const kind of ["item", "loc"]) {
+    const row = { kind, id: 50000, baseId: 1, fields: { recolorFrom: [1234, 4321], recolorTo: [4321, 1234] } };
+    assert.match(Document.check(core, { rows: [row] }).problems.join("; "), new RegExp(`${kind} 50000: recolour pair 2 would recolour an earlier pair's result`));
+    row.fields.recolorFrom = [918, 1234];
+    row.fields.recolorTo = [1234, 7777];
+    assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+    row.fields.recolorFrom = [918, 1234];
+    row.fields.recolorTo = [7777, 4321];
+    assert.doesNotMatch(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  }
+});
+
+test("a cache item or loc whose own recolours chain still passes as a copy of its base", () => {
+  for (const [kind, count, get] of [["item", "items", "getItem"], ["loc", "objects", "getObject"]]) {
+    const total = CacheDefinitions.getBaseCounts()[count];
+    let base;
+    for (let id = 0; id < total && !base; id++) {
+      const type = CacheDefinitions[get](id);
+      const from = type?.recolorFrom, to = type?.recolorTo;
+      if (!from || !to || from.length !== to.length) continue;
+      for (let i = 0; i < from.length && !base; i++) for (let j = 0; j < i; j++) if (from[j] !== to[j] && to[j] === from[i]) { base = type; break; }
+    }
+    assert.ok(base, `the cache has a ${kind} with chained recolours`);
+    const row = { kind, id: 50000, baseId: base.id, fields: { recolorFrom: [...base.recolorFrom], recolorTo: [...base.recolorTo] } };
+    assert.doesNotMatch(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/, `${kind} ${base.id}`);
+  }
+});
+
 test("recolour values outside the client's 16-bit colour range are rejected", () => {
   for (const kind of ["npc", "item", "loc"]) {
     const row = { kind, id: 50000, baseId: 1, fields: { recolorFrom: [70000], recolorTo: [-5] } };

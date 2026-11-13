@@ -1221,10 +1221,8 @@ test("Kiss the frog: every recorded line carries live's chathead", t => {
   assert.deepEqual(pageHeads(p), [567], "the frog's Yes! is chathap1");
   endChat(p);
   h.ticks(4);
-  const thanks = pageTexts(p)[0];
-  const { Misc } = require('../dist/util/Misc');
-  const lines = thanks.split('<br>').flatMap(part => Misc.wrapText(part, 53)).length;
-  assert.deepEqual(pageHeads(p), [567 + Math.min(3, lines - 1)], 'the thanks is the happy head by line count');
+  assert.match(pageTexts(p)[0], /^Thank you so much, Player\./);
+  assert.deepEqual(pageHeads(p), [570], 'the four-line thanks is chathap4 (1702 tick 2035)');
   const speaker = frogs.find(entry => entry.definition.id === N.FROG_5);
   const other = frogs.find(entry => entry.definition.id === N.FROG_6);
   for (const frog of [speaker, other]) {

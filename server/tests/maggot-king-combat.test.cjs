@@ -560,8 +560,9 @@ test('whole1500HP encounter traverses rotations and thresholds through real rang
     controllerHealing += Math.max(0, boss.getHitpoints() - before);
     return result;
   });
-  // An actual sustained input sequence: leave a live larva before its deferred contact hit,
-  // then reselect Attack when the walk finishes. Healing and NPC/controller movement stay live.
+  // An actual sustained input sequence: walk off a live larva to break subsequent escalating
+  // contact, then reselect Attack when the walk finishes. The current hit still resolves before
+  // movement in Player.process; healing and NPC/controller movement remain live.
   const fullInput = () => {
     if (boss.getHitpoints() <= 0 || Instance.sessionOf(p) !== session) return;
     phases.add(fight.phase);

@@ -2,8 +2,9 @@
 
 `plugins/interface/Grouping.plugin.js` (units in `plugins/interface/grouping/`) gives players
 groups: a leader and members who form, join and leave them, kept across logins and restarts, with
-`grouping:*` events for co-op content. The Grouping tab's own activity list and minigame teleports
-are separate and unchanged (`SideChannels.plugin.js`, `MinigameTeleports.plugin.js`).
+`grouping:*` events for co-op content. It also runs the Grouping tab's activity chat-channels
+(below). The tab's mounting and teleports stay with `SideChannels.plugin.js` and
+`MinigameTeleports.plugin.js`.
 
 ## Sources
 
@@ -64,6 +65,81 @@ are separate and unchanged (`SideChannels.plugin.js`, `MinigameTeleports.plugin.
   (`leader`, `member` or ""). The store is the authority: a login reads it first, corrects the
   attributes and says "You are no longer in a group." to someone removed while away.
 
+## Chat-channels
+
+Live capture (rev 242, the user's RSProx session of the Grouping tab):
+
+- Mounting the tab sends op 1 on `grouping:teleport` (76:32) and `grouping:hop_button` (76:26) for
+  slots 0-30. Each button is the dynamic child at the chosen activity's index (client varc 64,
+  script 435), so a click's slot is the activity (enum 848). `SideChannels` sends both.
+- Script 435 offers "Switch <world>" (and shows "Suggested world:") whenever enum 850 gives the
+  chosen activity a world, and for Castle Wars uses world 383 unless varc 103 (`PLAYERMEMBER`, set
+  by live's `playermember` script 828 as the social tab mounts) says members. A server has one
+  world, so every login sends the client enum 850 with no world for any activity (an
+  `enumOverrides` dataset from the sender `grouping-tab`; the client keeps each sender's enum
+  overrides apart, so a league's aren't cleared) and runs script 828 with the world's members flag.
+  On a free-to-play world Castle Wars still suggests 383; RuneLite through the gateway gets no
+  enum overrides and still shows the button.
+- Teleport on an activity with no teleport (Tombs of Amascut, Shooting Stars), and with no activity
+  chosen (slot 0, the user's live screenshot), answers "That activity doesn't have a teleport." The
+  Wiki's table lists which have none (Theatre of Blood, Tombs of Amascut, Dagannoth Kings, God Wars,
+  ...). A slot past the activities has no button to click and gets nothing.
+- Join (client script 437) leaves the current channel, then sends an ordinary chat-channel join
+  with the enum 849 name ("osrs star cc"). The server answers "Attempting to join
+  chat-channel...", then "Now talking in chat-channel Stars", and the channel's owner is
+  "osrs star cc", its name "Stars", kick rank General, every member Unranked and from any world.
+  Leave sends an empty name and gets "You have left the channel."
+
+No player owns these channels here, so they run as **system channels** in `FriendsChatManager`:
+registered under a key ("osrs star cc"; keys compare as names do, since the cache writes them with
+no-break spaces and a typed name has ordinary ones, while the owner name stays the cache's string
+for the tab's own Join/Leave check), winning over any account of that name, with no Owner rank,
+optionally admitting only some players, and rejoined at login by their key. Other plugins reach
+them through `friends-chat:system-channel` `{ key, channel }`, and `friends-chat:joined`
+`{ player, channelKey }` is the counterpart of `friends-chat:left`. Which activity channels exist,
+and the name each shows, is the Wiki's Grouping table (`plugins/interface/data/grouping-channels.json`):
+27 channels, "Osrs Ba" and so on, with Shooting Stars showing live's "Stars". Bounty Hunter,
+Mastering Mixology and Sorceress's Garden have no channel on the Wiki though enum 849 names one
+("osrs bounty", "osrs mmix", "osrs sgarden"), so their Join finds no such channel.
+
+**A group's own channel**, `#group-<id>` (a key no typed name reaches), is members only, named
+"Group", with the leader shown as owner. Forming or joining a group enters it when the player is in
+no other channel; otherwise they are told to use `::group chat`. Its chat is ordinary Channel chat
+(`/`), and its members get the client's friends-chat minimap dot. Leaving or being kicked takes the
+player out, and disbanding ends the channel. When a leader joins an activity channel, members in no
+channel or in the group's own follow; anyone in another channel is told where the group went, and
+nobody is moved out of a channel they chose. A leader's return to an activity channel at login (the
+rejoin of their last channel) brings nobody, as members may have chosen another channel meanwhile.
+In the group's channel the leader holds the Owner rank and members Recruit (a system channel's
+`rankOf`), which is what Chambers of Xeric reads: a group in its channel can make a CoX party at
+the recruiting board, its leader leading it, with no CoX change.
+
+## Activities and group size
+
+A group stays at most 5. Each minigame that uses groups says how many players it takes, from its
+own rules, with `grouping:activity` at startup, so Grouping keeps no table of its own. A minigame
+forming a party asks `grouping:members` for the group's members online and whether the whole group
+fits ("Your group has 3 players; Royal Titans takes at most 2."), and `grouping:same-group` whether
+two players share a group. `::group info` lists the activities the group is too big for.
+
+What uses it (none of this is OSRS; players without a group see no change):
+
+| Activity | Size | With a group |
+| --- | --- | --- |
+| Tombs of Amascut (Grouping Obelisk) | 8 | A group leader's new party takes in the members who are in the lobby and in no party ("You have joined the party of <leader>."); the others are told to apply at the obelisk, and a member applying is accepted at once unless declined before or the party is full. |
+| Theatre of Blood (notice board) | 5 | The same from Ver Sinhaza, for members who have met the Mysterious Stranger (the board calls anyone else over), joining through the leader's own Accept. |
+| Fractured Archive (Grouping Board) | 8 | The same from the Archive's lobby. |
+| Chambers of Xeric (recruiting board) | 100 | No change in CoX: its party is a chat-channel, and in the group's own channel the leader is Owner and members Recruit, so the group's channel makes the party. |
+| Barbarian Assault | 5 | Its queue is one team, so group-mates who queue always play together. |
+| Pest Control (landers) | 25 | When more wait than a lander takes, a group's waiting members board or wait together; a game always starts. |
+
+Castle Wars and Soul Wars keep live's team rules. Live has no way to put friends or a chat-channel
+on one team in their public games (Wiki: Castle Wars' portals refuse the bigger team, Soul Wars
+balances by combat level), so group members pick portals and are balanced like everyone else.
+
+Each announces its size at startup, from its own constant. A group too big for a party (more than
+it takes) gets "Your group has N players; <activity> takes at most M." and fills it in group order.
+
 ## Group storage
 
 The chests are transforms of bank locs (the Grand Exchange's is 31483), picked by varbit 13677
@@ -82,6 +158,11 @@ attribute is not membership. A member's click is sent as `grouping:storage`; the
 | `grouping:invite` | request | `{ player, target }` (a player or a typed name) → `invited` |
 | `grouping:open` | request | `{ player }` opens the panel |
 | `grouping:storage` | emitted | `{ player, group, handled }` when a member opens group storage |
+| `grouping:activity` | announce | `{ name, maxSize }`: how many players a minigame takes |
+| `grouping:members` | request | `{ player, activity?, maxSize? }` → `groupId` (0 for none), `leader` (online, else null), `isLeader`, `members` (online, leader first; `[player]` without a group), `size` (every member), `max`, `fits`, `message` |
+| `grouping:same-group` | request | `{ player, other }` → `same` |
+| `friends-chat:system-channel` | request (FriendsList) | `{ key, channel }`: runs a channel no player owns, `channel` `{ ownerName, channelName, entryRank?, talkRank?, kickRank?, admits?(player), rankOf?(player) }`, or ends it with `null` |
+| `friends-chat:joined` | emitted (FriendsList) | `{ player, channelKey, rejoin }` when a player joins a chat-channel; `rejoin` is true for the return to their last channel at login |
 
 A snapshot is `{ id, profile, cap, leader, members: [{ account, name, role, online, joined }],
 invites: [{ account, name, expires }] }`.
@@ -95,7 +176,8 @@ clicked. The rows are sent over the game socket per viewer, not through a public
 `registerContentEndpoint` resource, because the Find list depends on who is asking.
 
 `::group create | invite <name> | accept [name] | decline [name] | withdraw <name> |
-promote <name> | kick <name> | leave | disband | info` do the same by name.
+promote <name> | kick <name> | leave | disband | info` do the same by name, and `::group chat`
+switches to the group's own chat-channel.
 
 RuneLite through the gateway can't show the panel: the gateway drops every server-defined
 interface (group 30000 and up, `runelite-gateway/src/main/kotlin/gateway/down/Interfaces.kt`), as

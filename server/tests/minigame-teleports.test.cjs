@@ -352,11 +352,19 @@ test('native Grouping selections use the existing teleport, cooldown and refusal
         await f.connection.dispatch([{ type: 'widget_action', widgetId: (76 << 16) | 32, groupId: 76, childId: 32, buttonNum: opId, opId, slot, itemId: -1 }]);
         f.connection.processTurnPackets();
     };
-    for (const slot of [0, -1, 999, slotFor('Shield of Arrav')]) {
+    // Live (rev 242): an activity without a teleport says so, and so does the button with no activity
+    // chosen (slot 0); a slot past the activities (no button to click) says nothing.
+    for (const [slot, message] of [
+        [0, "That activity doesn't have a teleport."], [-1, undefined], [999, undefined],
+        [slotFor('Shield of Arrav'), "That activity doesn't have a teleport."],
+        [slotFor('Tombs of Amascut'), "That activity doesn't have a teleport."],
+        [slotFor('Theatre of Blood'), "That activity doesn't have a teleport."],
+    ]) {
         const f = who(); await click(f, slot);
         for (let tick = 0; tick < 26; tick++) TaskManager.process();
         assert.deepEqual(position(f), [3222, 3218, 0], `ineligible grouping slot ${slot} stays put`);
         assert.equal(f.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);
+        assert.equal(f.messages.at(-1), message, `slot ${slot}`);
     }
     const wrongOp = who(); await click(wrongOp, slotFor('Castle Wars'), 2);
     assert.equal(wrongOp.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);

@@ -2794,6 +2794,9 @@ test("a click on a loc of the player's own shipyard boat resolves from the yard;
   h.player.setLocation(new Location(2084, 2730, 0));
   click(h.player);
   assert.deepEqual(seen, [[h.player, loc]], "the owner's click finds the loc on their boat");
+  // A yard tile with that id isn't taken for the boat's loc: only the deck tile itself is.
+  new ObjectActionPacketListener().executeAction(h.player, loc.getId(), 2084, 2731, 1);
+  assert.equal(seen.length, 1, "not off the deck");
 
   stillPlayer(stranger);
   stranger.setLocation(new Location(2084, 2730, 0));

@@ -220,6 +220,8 @@ export class ObjectActionPacketListener {
     const root = BoatManager.rootLocation(player);
     let best: { object: GameObject; boat: Boat; distance: number } | undefined;
     for (const boat of ships) {
+      // The player's own boat is a drawn deck in the shipyard: only its exact tile counts.
+      if (ObjectActionPacketListener.ownOnly(player, boat)) continue;
       const distance = Math.max(Math.abs(boat.tileX - root.getX()), Math.abs(boat.tileY - root.getY()));
       if (distance > OTHER_DECK_SEARCH_TILES || (best && best.distance <= distance)) continue;
       const object = BoatManager.getDeck(boat)!.getObjects().find((entry) => matches(entry)

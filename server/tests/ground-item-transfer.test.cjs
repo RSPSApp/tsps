@@ -388,3 +388,36 @@ test("Gerrant's display spawn gives the wearable apron and refuses Telekinetic G
   ItemOnGroundManager.pickup(f.player, pile);
   assert.equal(f.inventory.getAmount(1005), 1, "the removed display cannot be collected again");
 });
+
+test("the Wine of Zamorak spawns: both Asgarnia floors, the Wilderness church and the dungeon's display wine", () => {
+  const data = require("../data/definitions/ground-items.json");
+  const at = (x, y, z) => data.filter(d => d.location.x === x && d.location.y === y && d.location.z === z)
+    .map(d => [d.id, d.respawn, d.members === true, d.pickupReplacement?.id ?? null]);
+  assert.deepEqual(at(2930, 3515, 0), [[245, 50, false, null]]);
+  assert.deepEqual(at(2938, 3517, 1), [[245, 50, false, null]], "the upper floor has its own wine");
+  assert.deepEqual(at(2950, 3824, 0), [[245, 50, false, null]]);
+  assert.deepEqual(at(3018, 10353, 0), [[23489, 7, true, 245]], "the dungeon shows its display wine, back 7 ticks after it goes, and gives the real one");
+});
+
+test("a ground-items:reward handler can credit the item's note instead", t => {
+  const pile = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, new Location(3222, 3218), new Item(245), false, -1, null);
+  const f = fixture();
+  const items = World.getItems(), previous = items.splice(0);
+  t.after(() => items.splice(0, items.length, ...previous));
+  const requests = [];
+  const emit = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "ground-items:reward") { requests.push({...event}); event.noted = true; }
+    return emit.call(PluginManager, name, event);
+  });
+  ItemOnGroundManager.register(pile);
+  assert.equal(ItemOnGroundManager.rewardItem(f.player, pile, "telegrab").getId(), 246);
+  assert.equal(ItemOnGroundManager.transferToInventory(f.player, pile, "telegrab"), 1);
+  assert.equal(f.inventory.getAmount(246), 1, "the noted wine is credited");
+  assert.equal(f.inventory.getAmount(245), 0);
+  assert.equal(pile.isPendingRemoval(), true);
+  assert.deepEqual(requests.map(r => [r.source, r.itemId, r.noted]), [["telegrab", 245, false], ["telegrab", 245, false]]);
+
+  const noted = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, new Location(3222, 3218), new Item(246), false, -1, null);
+  assert.equal(ItemOnGroundManager.rewardItem(f.player, noted).getId(), 246, "a note is never noted again");
+});

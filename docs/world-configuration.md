@@ -591,10 +591,11 @@ This table lists bundled plugins that have a description. The world config page 
 | `Chronicle` | Chronicle | items | yes | Chronicle: teleports to the Champions' Guild for one charge, charged with teleport cards up to 1,000, with Check charges. |
 | `ChuggingBarrel` | ChuggingBarrel | items | yes | Chugging barrel: assemble and dismantle it, store five potions at 100 doses each, and drink one dose of every potion in one click. (members only) |
 | `CircletOfWater` | CircletOfWater | items | yes | Circlet of water: charged with water runes up to 500,000 charges, uncharge, and stands in for drinks against desert heat. (members only) |
-| `CrystalArmour` | CrystalArmour | items | yes | Crystal armour in every colour: boosts crystal bow and Faerdhinen accuracy and damage, loses charges when hit, takes shards and reverts to seeds. (members only) |
+| `CrystalArmour` | CrystalArmour | items | yes | Crystal armour in every colour: boosts crystal bow and Faerdhinen accuracy and damage (melee and powered staves too with the crystal blessing), loses charges when hit, takes shards and reverts to seeds. (members only) |
 | `CrystalHalberd` | CrystalHalberd | items | yes | Crystal halberd: starts with 2,500 charges, loses one per hit, takes crystal shards up to 20,000 and goes inactive at zero. (members only) |
 | `CrystalRecolour` | CrystalRecolour | items | yes | Crystal equipment recolours: the Elven Clan crystals recolour crystal armour and the corrupted blade of Saeldor and bow of Faerdhinen, keeping their charges. (members only) |
 | `CrystalSinging` | CrystalSinging | items | yes | Crystal singing at the Prifddinas singing bowl: turns crystal seeds and shards into crystal armour, tools, weapons and teleport crystals for Smithing and Crafting XP. (members only) |
+| `DevilsElement` | DevilsElement | items | yes | The Devil's element's Demonic Pacts effect: a 30% weakness to every element on every target. (members only) |
 | `DiaryRewards` | DiaryRewards | items | yes | Achievement diary reward items: their daily teleports, Falador shield prayer restore, Explorer's ring energy and the other diary rewards. (members only) |
 | `DizanasQuiver` | DizanasQuiver | items | yes | Dizana's quiver: an extra ammunition slot with Fill, charges, Open, Empty and Uncharge, plus its death rules and the Shrine of Ralos blessing. (members only) |
 | `DragonboneNecklace` | DragonboneNecklace | items | yes | Dragonbone necklace: while worn, burying or crushing bones restores Prayer points. (members only) |
@@ -603,7 +604,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DwarfCannon` | DwarfCannon | items | yes | Dwarf multicannon: setup, cannonballs, turning and firing, decay and repair, Nulodion's replacements, restricted areas and the ornament kit. (members only) |
 | `EclipseAtlatl` | EclipseAtlatl | items | yes | Eclipse atlatl: a short-range thrown weapon using atlatl darts, with its own attack speed and combat method and the Eclipse Moon set bonus. (members only) |
 | `ElementalTomes` | Elemental Tomes | items | yes | Tomes of fire and water: charged with burnt or soaked pages, boosting spell damage and saving runes, with page-storing and bank options. (members only) |
-| `ElementalStaves` | ElementalStaves | items | yes | Elemental staves, battlestaves, the Kodai wand, the twinflame staff and the Shadowflame quadrant supply their element's runes to spells automatically. |
+| `ElementalStaves` | ElementalStaves | items | yes | Elemental staves, battlestaves, the Kodai wand, the twinflame staff, the Shadowflame quadrant and the Devil's element supply their element's runes to spells automatically. |
 | `Emblems` | Emblems | items | yes | Mysterious emblems: they downgrade a tier when you die to a player and are dropped on the ground instead of kept. |
 | `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets, pots, jugs, bowls and plant cure: leaves the empty container and sends the captured message and sound. |
 | `EternalTeleportCrystal` | EternalTeleportCrystal | items | yes | Eternal teleport crystal: unlimited Lletya and Prifddinas teleports, with Toggle swapping the left-click destination. (members only) |
@@ -627,6 +628,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `KourendTravelItems` | KourendTravelItems | items | yes | Adds Kharedst's memoirs, the Book of the Dead and Xeric's talisman teleports to Kourend, with charges and Wilderness limits. (members only) |
 | `LightSources` | LightSources | items | yes | Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again. (members only) |
 | `Lightbearer` | Lightbearer | items | yes | Makes a worn Lightbearer ring restore special attack energy every 25 ticks instead of every 50. (members only) |
+| `LithicSceptre` | LithicSceptre | items | yes | The Lithic sceptre: its built-in spell, rune charges, Shatter stacks for Explosive Shatter. (members only) |
 | `LootKeys` | LootKeys | items | yes | Adds Wilderness loot keys dropped by player kills, which hold the victim's loot until opened at the loot chest, with the settings and unlock interface. |
 | `LootingBag` | LootingBag | items | yes | Adds the looting bag: items go in only in the Wilderness, come out at a bank, and are lost on death, with Deposit, Check and settings. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |

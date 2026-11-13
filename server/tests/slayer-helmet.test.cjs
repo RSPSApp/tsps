@@ -50,6 +50,7 @@ let onTask = true;
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
 SlayerHelmet.register({
   core: {
+    hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf,
     ItemIdentifiers,
     Skill,
     Equipment: { HEAD_SLOT: 0 },

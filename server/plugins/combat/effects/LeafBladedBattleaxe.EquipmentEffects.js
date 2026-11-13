@@ -19,14 +19,22 @@ function isTurothOrKurask(target) {
   return /turoth|kurask/i.test(name);
 }
 
+let core;
+
+/** The core API; the battleaxe judges an area hit against its own victim (core.hitTargetOf). */
+function init(api) {
+  core = api.core;
+}
+
 function applyLeafBladedDamage(attacker, baseHit) {
   const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
-  if (!player || !wieldingBattleaxe(player) || !isTurothOrKurask(attacker?.getCombat?.()?.getTarget?.())) {
+  if (!player || !wieldingBattleaxe(player) || !isTurothOrKurask(core?.hitTargetOf(attacker))) {
     return baseHit;
   }
   return baseHit * DAMAGE_MULTIPLIER;
 }
 
 module.exports = function registerLeafBladedBattleaxeEffects(api) {
+  init(api);
   api.registerMeleeHitModifier(applyLeafBladedDamage);
 };

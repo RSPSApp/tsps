@@ -2625,6 +2625,7 @@ export class PluginManager {
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
       Barrows: require(`${combat}/Barrows`).Barrows,
       applyPrayerDrainModifiers: require(`${combat}/EquipmentEffects`).applyPrayerDrainModifiers,
+      hitTargetOf: require(`${combat}/EquipmentEffects`).hitTargetOf,
       CombatEquipment: require(`${combat}/CombatEquipment`).CombatEquipment,
       CombatRange: require(`${combat}/CombatRange`).CombatRange,
       CombatPosition: require(`${combat}/CombatPosition`).CombatPosition,

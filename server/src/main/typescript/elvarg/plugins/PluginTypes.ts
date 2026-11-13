@@ -1559,6 +1559,8 @@ export interface PluginCoreApi {
   WeaponInterfaces: any;
   Barrows: any;
   applyPrayerDrainModifiers(entity: any, amount: number, context?: any): number;
+  /** Who an attacker's hit is judged against: an area hit's own victim while it is rolled, else the combat target. */
+  hitTargetOf(attacker: any): any;
   CombatEquipment: any;
   CanAttackResponse: any;
   CombatType: any;

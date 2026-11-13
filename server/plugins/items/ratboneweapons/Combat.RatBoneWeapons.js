@@ -17,7 +17,7 @@ function onlyRats(event) {
 /** Melee and ranged maximum hit: +10 with a rat bone weapon against a rat. */
 function ratbane(entity, value) {
   if (!entity?.isPlayer?.() || !Common.wieldsRatBone(entity.getAsPlayer())) return value;
-  return Common.isRat(entity.getCombat?.()?.getTarget?.()) ? value + Common.RAT_MAX_HIT_BONUS : value;
+  return Common.isRat(Common.api.core.hitTargetOf(entity)) ? value + Common.RAT_MAX_HIT_BONUS : value;
 }
 
 function attach(api) {

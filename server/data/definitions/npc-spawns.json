@@ -30820,5 +30820,9 @@
   {"level":0,"name":"Arena Guard Yon","x":3314,"y":3235,"id":11667,"source":"wiki"},
   {"level":0,"name":"Poison gas cloud","x":1428,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
   {"level":0,"name":"Poison gas cloud","x":1437,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
-  {"level":0,"name":"Poison gas cloud","x":1448,"y":3867,"id":7070,"wanderRadius":4,"source":"wiki"}
+  {"level":0,"name":"Poison gas cloud","x":1448,"y":3867,"id":7070,"wanderRadius":4,"source":"wiki"},
+  {"level":0,"name":"Trader Crewmember","x":1808,"y":3681,"id":12642,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Trader Crewmember","x":1807,"y":3676,"id":12636,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Trader Crewmember","x":3065,"y":3000,"id":15509,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0}
 ]

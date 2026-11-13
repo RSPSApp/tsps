@@ -106,8 +106,20 @@ test("Collect on an NPC that doesn't bank is left to its own plugin", async (t) 
   const f = actor(t);
   const definition = { getName: () => "Someone", getActions: () => ["Talk-to", null, "Collect", null, null] };
   const event = { player: f.p, npc: {}, definition, npcId: 1, npcIndex: 1, clickType: 3, location: { x: 0, y: 0, z: 0 }, handled: false };
-  PM.emitNpcInteraction(event);
+  assert.equal(PM.emitNpcInteraction(event), false, "nothing claims it");
   assert.notEqual(f.p.getInterfaceId(), GE_COLLECT);
+});
+
+test("the Colosseum lobby bank chest still turns away Collect without enough Glory", async (t) => {
+  const f = actor(t);
+  const Shared = require("../plugins/minigames/colosseum/Shared.Colosseum");
+  const object = new GameObject(Shared.OBJECT.BANK_CHEST, new core.Location(HOME[0] + 1, HOME[1], 0), 10, 0, null);
+  const definition = object.getDefinition();
+  const clickType = definition.getInteractions().indexOf("Collect") + 1;
+  assert.ok(clickType > 0, "the chest offers Collect");
+  const event = { player: f.p, object, definition, objectId: Shared.OBJECT.BANK_CHEST, clickType, option: "collect", location: { x: HOME[0] + 1, y: HOME[1], z: 0 }, handled: false };
+  assert.equal(PM.emitObjectInteraction(event), true);
+  assert.notEqual(f.p.getInterfaceId(), GE_COLLECT, "Minimus answers instead");
 });
 
 test("Collect on the Emir's Arena bank chest (Open chest) and other banking locs opens the collection box", async (t) => {

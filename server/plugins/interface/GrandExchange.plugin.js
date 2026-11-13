@@ -468,7 +468,7 @@ function clerkAction(action) {
 
 /** A bank NPC's "I'd like to collect items.": the chat closes and the collection box opens. */
 function collectAction(action) {
-  if (action.action !== "open_interface" || action.target !== COLLECTION_TARGET) return;
+  if (action.handled || action.action !== "open_interface" || action.target !== COLLECTION_TARGET) return;
   action.handled = true;
   action.player.getDialogueManager().reset();
   action.player.getPacketSender().sendInterfaceRemoval();

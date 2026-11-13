@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell or Ghastly Swamp**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -1019,3 +1019,57 @@ Never-registered checks use canonical falsey semantics with the same concrete
 absence checks. It changes no production behavior or hazard requirement. These
 failed runs and the upstream original baseline remain distinct evidence; no full
 340-test result is established by their partial results.
+
+## Gridlock
+
+Gridlock (arena 9, native slot 27) uses the existing supported melee modes,
+restrictions, Ignore 5 and safe deaths. Plateau remains the default and explicit
+Wasteland remains valid. The [pinned Clan Wars Wiki](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+and revision-242 chooser describe a huge four-way multi-mountain map suited to
+King of the Hill, rangers and mages. This slice does not introduce objective modes,
+four teams, ranged/magic combat or a new membership-world enforcement policy.
+
+The bounded copy uses source origin (3456,4800), sixteen by sixteen chunks, plane
+0, from regions 13899/13900/14155/14156. All four raw planes were inspected: all
+1,911 raw locs and actual owned copies are on plane 0. The upper settings/clips
+were empty in that observation, which establishes neither playable upper floors
+nor a retail floor ban. Planes 1/2/3 remain unmapped as a bounded copy choice.
+No stairs, resource actions or bridge transitions were found; mountain wording
+does not manufacture a climb route. Terrain height and rendering parity are not
+established by these source facts.
+
+Native directional and solid masks give a 13,317-tile main component and isolated
+31-tile lower and 24-tile upper holdings, all inside the source observation's
+boundary. Landings (3465,4829)/(3575,4899) and jails (3519,4861)/(3519,4865) are
+TSPS choices. The preparation cut scans X3519 at Y4802..4858 and Y4868..4925,
+skipping blocked tiles. Its 106 darkrock barriers split the main component into
+6,549 west and 6,662 east tiles. The holdings are left unchanged; no synthetic
+jail blocking is added. Twenty-two nonblocking type-22 floor locs coincide with
+the row and retain their exact identities and underlying collision on removal.
+
+Both active darkrock viewing orbs 26741 use model 9752, at (3519,4859)/(3519,4867).
+The two Exit portals 26738 at (3519,4863)/(3519,4864) share a gameval but remain
+distinct owned objects in distinct holdings. Existing exact instance ownership
+and native interaction routes apply; fake and foreign objects gain no authority.
+Forfeits 26732/26731 at (3459,4827)/(3579,4897) have faces 1/3: their canonical
+4x2 definitions rotate to 2x4 footprints, with access mask 30 admitting the east
+and west edges respectively. Portal labels do not override those actual sides.
+
+The other source objects have no usable actions. Null-action dug-up floor locs,
+walls, torches and skeletons gain no harvesting or climb handlers. Ordinary native
+walking uses the real directional walls and rotated solid footprints; projectile
+blocking remains distinct, including projectile-passable skeletons and blocking
+torches. A 128-tile copy can require successive ordinary movement targets within
+the centered native route-search window; a distant click is not a teleport or
+proof of an extreme-to-extreme path.
+
+The existing game and Rules fixtures cover negotiation, all supported modes,
+supplies, six identical staging/combat crossing targets, full 16,384 native ground
+masks/settings and coexistent floor identities, both real deaths/holding bounds,
+view-close and owned Exit deadlines, both side-correct Forfeits, ownership and
+instance cleanup/reuse. These describe required assertions; actual outcomes and
+failed attempts belong to the exact tested revision reported with the PR. The
+source-only qualification's 312 checks do not prove implemented Gridlock gameplay
+or transfer Ghastly Swamp's results. All twelve earlier layouts, including its
+shared ghast hazard, remain distinct controls. No rendered scene, login, natural
+RNG, retail placement/timing or complete issue #153 resolution is claimed.

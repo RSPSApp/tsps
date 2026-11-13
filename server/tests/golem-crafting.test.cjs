@@ -38,7 +38,8 @@ function actor(t, { level = 60, boost = 0, quest = true, fur = "WYRMSCRAIG_GOAT_
   player.setIndex(next++); player.setUsername(`golem${player.getIndex()}`); player.setRegistered(true);
   player.needsPlacement = false;
   player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, level, false)
-    .setCurrentLevels(core.Skill.CRAFTING, level + boost, false);
+    .setCurrentLevels(core.Skill.CRAFTING, level + boost, false)
+    .setExperiences(core.Skill.CRAFTING, player.getSkillManager().constructor.getExperienceForLevel(level), false);
   player.getPacketSender().sendVarbit(bit("ffg"), quest ? 20 : 0);
   const query = { player, key: "fallen_from_grace", complete: false };
   PluginManager.emitCustomEvent("quest:is-complete", query);
@@ -125,17 +126,25 @@ test("unmet quest, unboostable level, tools and four-stone cost conserve inputs"
   }
 });
 test("front-only completion consumes one core and fur, grants Crafting only, and cannot repeat", t => {
-  const f = actor(t); shaped(f);
-  const xp = [], skills = f.player.getSkillManager();
-  t.mock.method(skills, "addExperiences", (skill, amount) => { xp.push([skill, amount]); return skills; });
+  const f = actor(t, { level: 99 }); shaped(f);
+  t.mock.method(Math, "random", () => 0.5);
+  const skills = f.player.getSkillManager(), crafting = skills.getExperience(core.Skill.CRAFTING),
+    hunter = skills.getExperience(core.Skill.HUNTER);
   position(f.player, (front() + 1) % 4); click(f.player);
   assert.equal(stage(f.player), 5); assert.ok(f.inv.contains(id("SUNSTONE_CORE")));
-  assert.ok(f.inv.contains(id("WYRMSCRAIG_GOAT_FUR"))); assert.deepEqual(xp, []);
+  assert.ok(f.inv.contains(id("WYRMSCRAIG_GOAT_FUR")));
+  assert.equal(skills.getExperience(core.Skill.CRAFTING), crafting);
   position(f.player, front()); click(f.player);
   assert.equal(stage(f.player), 0); assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 0);
   assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 0);
-  assert.deepEqual(xp, [[core.Skill.CRAFTING, 2440]], "published aggregate; no Hunter reward");
-  click(f.player); assert.equal(stage(f.player), 0); assert.equal(xp.length, 1);
+  const awarded = skills.getExperience(core.Skill.CRAFTING);
+  assert.equal(awarded - crafting, 2440 * core.GameConstants.EXPERIENCE_MULTIPLIER,
+    "real earned Crafting XP respects the world multiplier");
+  assert.equal(skills.getExperience(core.Skill.HUNTER), hunter, "no Hunter reward");
+  const gift = core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id("UNCUT_SAPPHIRE"),
+    f.player.getLocation(), f.player.getPrivateArea());
+  assert.ok(gift, "the ordinary reward is a real ground gift");
+  click(f.player); assert.equal(stage(f.player), 0); assert.equal(skills.getExperience(core.Skill.CRAFTING), awarded);
   assert.ok(f.messages.some(s => /previous golem/.test(s)), "completed NPC holds station while active");
 });
 test("two players' private station transforms and progress stay independent", t => {
@@ -149,10 +158,61 @@ test("movement and logout interrupt carving while paid progress survives a fresh
   position(f.player, 1); tick(20); assert.equal(stage(f.player), 1);
   PluginManager.emitPlayerLogout({ player: f.player });
   const restored = actor(t); restored.player.setAttribute("golem-crafting:stations", saved);
+  restored.inv.setItems(f.inv.getItems().map(item => item.clone()));
   PluginManager.emitPlayerLogin({ player: restored.player });
   assert.equal(stage(restored.player), 1);
   position(restored.player, 0); click(restored.player); tick(12);
   assert.equal(stage(restored.player), 2, "two saved strokes plus three resumed strokes");
+  assert.equal(restored.inv.getAmount(id("SUNSTONE")), 0, "recovery does not refund the paid stones");
+});
+test("tatty fur and a missing core cannot finish or spend another material", t => {
+  const f = actor(t, { fur: "TATTY_KYATT_FUR" }); shaped(f); position(f.player, front());
+  click(f.player); assert.equal(stage(f.player), 5);
+  assert.ok(f.inv.contains(id("SUNSTONE_CORE")) && f.inv.contains(id("TATTY_KYATT_FUR")));
+  f.inv.add(new core.Item(id("WYRMSCRAIG_GOAT_FUR"), 1), false);
+  f.inv.deleteNumber(id("SUNSTONE_CORE"), 1);
+  click(f.player); assert.equal(stage(f.player), 5);
+  assert.ok(f.inv.contains(id("WYRMSCRAIG_GOAT_FUR")));
+});
+test("carried fur pouch debits real stored fur and open gem bag receives the reward", t => {
+  const f = actor(t, { level: 99 });
+  f.inv.add(new core.Item(id("LARGE_FUR_POUCH")), false);
+  const pouch = f.inv.getItems().find(i => i.getId() === id("LARGE_FUR_POUCH"));
+  const fur = f.inv.getItems().find(i => i.getId() === id("WYRMSCRAIG_GOAT_FUR"));
+  assert.equal(PluginManager.emitItemOnItem({ player: f.player, usedItemId: pouch.getId(),
+    usedWithItemId: fur.getId(), usedItem: pouch, usedWithItem: fur, handled: false }), true);
+  assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 0, "normal pouch fill moved the fur");
+  const amount = () => {
+    const q = { player: f.player, itemId: id("WYRMSCRAIG_GOAT_FUR"), amount: 0 };
+    PluginManager.emitCustomEvent("storage:amount", q); return q.amount;
+  };
+  assert.equal(amount(), 1);
+  f.inv.add(new core.Item(id("OPEN_GEM_BAG")), false);
+  shaped(f); position(f.player, front()); t.mock.method(Math, "random", () => 0.5); click(f.player);
+  assert.equal(stage(f.player), 0); assert.equal(amount(), 0);
+  const q = { player: f.player, item: f.inv.getItems().find(i => i.getId() === id("OPEN_GEM_BAG")), contents: [] };
+  PluginManager.emitCustomEvent("storage:contents", q);
+  assert.deepEqual(q.contents, [{ id: id("UNCUT_SAPPHIRE"), amount: 1 }]);
+});
+test("full inventory can finish and retains exactly one ground gift", t => {
+  const f = actor(t, { level: 99 }); shaped(f);
+  while (f.inv.getFreeSlots()) f.inv.add(new core.Item(id("SPADE")), false);
+  assert.equal(f.inv.getFreeSlots(), 0);
+  position(f.player, front()); t.mock.method(Math, "random", () => 0.5); click(f.player);
+  assert.equal(stage(f.player), 0);
+  assert.ok(core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id("UNCUT_SAPPHIRE"),
+    f.player.getLocation(), f.player.getPrivateArea()));
+  assert.equal(f.inv.getAmount(id("UNCUT_SAPPHIRE")), 0, "ground gift does not depend on free bag slots");
+});
+test("existing core producer refuses below sixty and gives boostable core XP", t => {
+  const f = actor(t, { level: 59 });
+  const use = () => PluginManager.emitItemOnItem({ player: f.player, usedItemId: id("CHISEL"),
+    usedWithItemId: id("SUNSTONE"), handled: false });
+  const before = f.inv.getAmount(id("SUNSTONE")), skills = f.player.getSkillManager(), xp = skills.getExperience(core.Skill.CRAFTING);
+  use(); assert.equal(f.inv.getAmount(id("SUNSTONE")), before);
+  skills.setCurrentLevels(core.Skill.CRAFTING, 60, false); use();
+  assert.equal(f.inv.getAmount(id("SUNSTONE")), before - 1);
+  assert.equal(skills.getExperience(core.Skill.CRAFTING) - xp, 10 * core.GameConstants.EXPERIENCE_MULTIPLIER);
 });
 after(() => {
   if (core) for (const player of players) PluginManager.emitPlayerLogout({ player });

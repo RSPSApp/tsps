@@ -1695,9 +1695,9 @@ export class PluginManager {
   }
 
   /** The plugin's refusal message when the special attack bar is disabled, or null when it is usable. */
-  public static emitSpecialAttackDisabled(player: any): string | null {
+  public static emitSpecialAttackDisabled(player: any, specialAttackId?: string): string | null {
     if (PluginManager.specialAttackDisabledHooks.length === 0) return null;
-    const event: PluginSpecialAttackDisabledEvent = { player, disabled: null };
+    const event: PluginSpecialAttackDisabledEvent = { player, specialAttackId, disabled: null };
     return PluginManager.firstAnswer(PluginManager.specialAttackDisabledHooks, event, "special_attack_disabled", "disabled") === true
       ? event.message ?? "You can't use special attacks here."
       : null;
@@ -2687,6 +2687,7 @@ export class PluginManager {
       Misc: require("../util/Misc").Misc,
       ChatTextLayout: require("../game/model/dialogues/ChatTextLayout").ChatTextLayout,
       TimerKey: require("../util/timers/TimerKey").TimerKey,
+      SecondsTimer: require(`${model}/SecondsTimer`).SecondsTimer,
       Sound: require("../game/Sound").Sound,
       Sounds: require("../game/Sounds").Sounds,
       Location: require(`${model}/Location`).Location,

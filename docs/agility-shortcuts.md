@@ -40,6 +40,7 @@ and say what is still a guess in `unverified`.
 | Crevices (Waterbirth, Shaman Caves), hole (Fossil Island), cave (Meiyerditch) | the crawl animation, a tick, the message and a teleport |
 | Tight gaps (North and South Iorwerth Dungeon) | squeeze in, crawl, squeeze out, a tick apart; sounds 2489 and 2490; "You squeeze through the tight gap." |
 | Chain (Chasm of Fire) | one way down: "You deftly slide down the chain, leaping off before landing on the cage.", sound 2461 and a teleport to the floor below |
+| Platform edge (Chasm of Fire) | one way down, from 1438,10097 on the top floor (rsprox captures 817, 819, event worlds): on arrival a 1-tile move north onto the edge, cycles 22-35, facing south (angle 0), with 827 (`human_pickupfloor`, delay 4) and sounds 2454 and 2461 (2 loops, delays 12 and 26); a tick later the spam line "You slide off the lip of the platform, landing on the one below." and the floor below (1438,10098,1). 73 Agility and 3.2 XP from the Wiki (the event-world XP is boosted) |
 | Jutting walls (Zanaris) | a 2-tile side-step from cycle 28 to 124, sound 2489 and "You try to squeeze past.", sound 2490 five ticks later |
 | Strange floor (Fremennik Slayer Dungeon) | a 2-tile run-up (1995) with sound 2464, the 2-tile hurdle (1603) a tick later, both cycles 8-50 |
 | Stepping stones (Karamja) | a stone a click: 769 with delay 20, cycles 48-60, sound 2461; "You attempt to balance on the stepping stone." and "You manage to make the jump." |

@@ -278,6 +278,18 @@ function syncPyramidTop({ player }) {
   player.getPacketSender().sendVarbit(PYRAMID_TOP_VARBIT, 1);
 }
 
+/**
+ * agility_pyramid_level again at login: live sends it in the login varbits (rsprox_transcripts/230/02933.txt, a login
+ * on floor 3 at 3370,2840: 0 -> 3), so the floor's moving blocks show after a relog. Sent from the floor stood on;
+ * off the pyramid it stays 0 (live keeps the last floor there, which nothing off the course reads).
+ */
+function syncPyramidLevel({ player }) {
+  const location = player.getLocation?.();
+  if (!onPyramid(location)) return;
+  const level = pyramidLevel([location.getX(), location.getY(), location.getZ()]);
+  if (level > 0) player.getPacketSender().sendVarbit(PYRAMID_LEVEL_VARBIT, level);
+}
+
 /** Off the pyramid with the top taken, by any way but the doorway: it can be taken again (see syncPyramidTop). */
 function clearPyramidTop(player) {
   if (player.getAttribute(PYRAMID_TOP_ATTRIBUTE) !== true || onPyramid(player.getLocation?.())) return;
@@ -401,7 +413,7 @@ function stoneBlocks({ varbit, block: [bx, by, bz, face], fall }) {
 }
 
 module.exports = {
-  PYRAMID_TOP_ATTRIBUTE, syncPyramidTop, clearPyramidTop, takePyramidTop, leavePyramid,
+  PYRAMID_TOP_ATTRIBUTE, syncPyramidTop, syncPyramidLevel, clearPyramidTop, takePyramidTop, leavePyramid,
   key: "pyramid",
   name: "Agility Pyramid",
   helper: 6, // the Agility helper's course (enum 3507: "Agility Pyramid")

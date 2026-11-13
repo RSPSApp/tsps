@@ -8021,7 +8021,7 @@ module.exports = function registerDesertTreasureII(api) {
     const attackType = attacker.getAsPlayer?.().getFightType?.()?.getBonusType?.();
     if (!Number.isInteger(attackType)) return;
     const style = attackType === 3 ? 3 : attackType === 4 ? 4 : 0;
-    if (npc.__dt2FinalFigurePrayer === style) {
+    if (npc.__dt2FinalFigurePrayer === style && !hit.bypassesProtectionPrayer?.()) {
       for (const damage of hit.getHits?.() ?? []) damage.setDamage(0);
       hit.updateTotalDamage?.();
     }

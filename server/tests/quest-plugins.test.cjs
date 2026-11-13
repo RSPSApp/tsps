@@ -8238,10 +8238,10 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     let attackStyle = 1;
     p.isPlayer = () => true; p.getAsPlayer = () => p;
     p.getFightType = () => ({ getBonusType: () => attackStyle });
-    const hitFor = (style) => {
+    const hitFor = (style, bypass = false) => {
       attackStyle = style;
       const part = { damage: 10, setDamage(value) { this.damage = value; } };
-      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {} };
+      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
       for (const hook of npcHitHooks) hook({ npc: spawnedFigure, hit });
       return part.damage;
     };
@@ -8249,6 +8249,8 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(hitFor(1), 10);
     assert.equal(hitFor(1), 10, 'the third attack lands before the Figure changes her prayer');
     assert.equal(hitFor(1), 0, 'the Figure blocks the attack style she prayed against');
+    assert.equal(hitFor(1, true), 10, 'a hit that bypasses protection prayers goes through hers (issue 5037)');
+    assert.equal(hitFor(1), 0, 'she still prays against melee after the third hit');
     assert.equal(hitFor(4), 10, 'switching from melee to ranged bypasses her current protection');
 
     const figureAttack = () => resolvedHitHooks.forEach(hook => hook({ attacker: spawnedFigure, target: p, hit: { getTotalDamage: () => 20 } }));
@@ -14356,7 +14358,7 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
     'touching a completed seal replays its memory so its return transport stays available');
 });
 
-test('Regicide tripwires use the Agility success roll and apply the dart hit and poison on failure', () => {
+test('Regicide tripwires use the Agility success roll and snag with poison and the arrow trap on failure', () => {
   const { api: base } = mockApi();
   const objectHooks = [], poisoned = [];
   const core = { ...base.core, CombatFactory: { ...base.core.CombatFactory, poisonEntity: (target, severity) => poisoned.push([target, severity]) } };
@@ -14413,7 +14415,8 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
     const failure = interactWith(caught.player);
     interact(failure);
     assert.equal(failure.handled, true);
-    assert.equal(caught.state.hits[0][0].getDamage(), 10);
+    // The arrows land 4 ticks later (regicide-trip-wire-arrow-trap.test.cjs).
+    assert.deepEqual(caught.state.hits, [], 'no hit on the snag tick');
     // rsprox_transcripts/230/02969.txt and 237/01105.txt: the snag line, real poison at 10, and the crossing.
     assert.deepEqual(caught.state.said, ['You snag the trip wire as you step over it.']);
     assert.deepEqual(poisoned, [[caught.player, 10]]);

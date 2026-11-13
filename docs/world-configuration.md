@@ -398,7 +398,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MorUiRek` | MorUiRek | areas | yes | Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors. (members only) |
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
 | `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, and the guild dog's Pet. (members only) |
-| `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement): open after Dragon Slayer II. (members only) |
+| `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement) and the Lithkren Vault barriers: open after Dragon Slayer II. (members only) |
 | `PortPhasmatysBarrier` | PortPhasmatysBarrier | areas | yes | Port Phasmatys energy barriers and Ghost guards: a 2 ecto-token toll before Ghosts Ahoy, free passage after. (members only) |
 | `RangingGuild` | RangingGuild | areas | yes | Lets players through the Ranging Guild door only with 40 Ranged, the doorman turning others away. (members only) |
 | `Rellekka` | Rellekka | areas | yes | Rellekka's tunnel entrance to Keldagrim's entrance cave. (members only) |
@@ -527,6 +527,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `FreezeTimer` | Freeze Timer | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
 | `FriendsList` | FriendsList | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
 | `GrandExchange` | GrandExchange | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
+| `Grouping` | Grouping | interface | yes | Player groups of up to five: ::group to form one, invite, accept, promote, kick, leave or disband, kept across logins, with grouping:* events for co-op content. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
 | `LoginTips` | LoginTips | interface | yes | Sends a 'Did you know?' tip after the login greeting, following the All Settings row that turns them off. |
@@ -615,6 +616,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GoblinMail` | GoblinMail | items | yes | Stops goblin mail being worn unless the player is in the Land of the Goblins goblin form, and unequips it if they stop being one. |
 | `GracefulOutfit` | GracefulOutfit | items | yes | Gives each graceful piece its run-energy restoration bonus, plus the full-set bonus, and counts an Agility or max cape as the graceful cape. (members only) |
 | `Greegrees` | Greegrees | items | yes | Wielding a monkey greegree on Ape Atoll turns the player into a monkey, calms the island's monsters and removes the greegree on leaving. (members only) |
+| `HarmonisedNightmareStaff` | HarmonisedNightmareStaff | items | yes | The Harmonised nightmare staff autocasts standard-spellbook combat spells in 4 ticks. (members only) |
 | `HolidayToys` | HolidayToys | items | yes | Plays the animations and chat lines of permanent holiday toys such as Santa's list, the Zombie head and other event reward items. |
 | `IbansStaff` | IbansStaff | items | yes | Charges Iban's staff (120, or 2,500 for the upgraded staff), spends charges on Iban Blast, and lets the Dark Mage recharge it for coins. (members only) |
 | `ImbuedHeart` | ImbuedHeart | items | yes | Adds the imbued and saturated hearts' Invigorate Magic boost with its seven-minute (five for saturated) shared cooldown, and the saturated upgrade. (members only) |
@@ -844,7 +846,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BoneAltars` | BoneAltars | skills | yes | Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last. (members only) |
 | `Construction` | Construction | skills | yes | Construction: player-owned houses, rooms, furniture and the house's facilities. (members only) |
 | `Cooking` | Cooking | skills | yes | Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish and gnome cooking. |
-| `Crafting` | Crafting | skills | yes | Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms and light orbs. |
+| `Crafting` | Crafting | skills | yes | Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms, limestone bricks and light orbs. |
 | `CraftingSpells` | CraftingSpells | skills | yes | Spells that make crafting materials: Lunar Spin Flax, Tan Leather and Superglass Make, and Charge Orb on the obelisks. (members only) |
 | `Ectofuntus` | Ectofuntus | skills | yes | The Ectofuntus in Port Phasmatys: slime, bonemeal, worship, ghost disciple tokens, the ectophial teleport and bonecrusher. (members only) |
 | `EnchantJewellery` | EnchantJewellery | skills | yes | The Lvl-1 to Lvl-7 Enchant spells, which enchant rings, necklaces, bracelets and amulets from the inventory. |
@@ -892,7 +894,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `EditModeApi` | EditModeApi | world | yes | Serves the local map editor read-only world data (zones, object and NPC spawns) over the content API, in development builds only. |
 | `EventScheduler` | EventScheduler | world | yes | Opens and closes seasonal event windows from the events calendar, handles event reward claims, and adds the owner-only ::forceevent command. |
 | `FairyRings` | FairyRings | world | yes | Fairy rings: the three-dial interface for all 64 codes, travel log with favourites, last-destination, quest-gated rings and the Zanaris exit rings. (members only) |
-| `Ferries` | Ferries | world | yes | NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat and others. (members only) |
+| `Ferries` | Ferries | world | yes | NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat, Andras's Slepe boat and others. (members only) |
 | `FishingCrane` | FishingCrane | world | yes | Repair broken fishing cranes in Port Piscarilius with a hammer, planks and nails (30 Crafting and Construction); one success also repairs for helpers nearby. (members only) |
 | `FreeMovement` | Free movement | world | yes | Continuous free movement: moves players by client input at walk and run speed with server-checked timing, and sends fine positions to observers. |
 | `GameUpdate` | GameUpdate | world | yes | Adds the owner-only ::gameUpdate command to schedule a server shutdown, pushing a live countdown to every player until it restarts. |

@@ -243,13 +243,33 @@ function reading(current, previous) {
   return `The device is ${now}${change}.`;
 }
 
+// Each Feel also plays the band's history_key synth, on both devices (rsprox 235/01034, 235/01043,
+// 236/03929): burning when shaking or incredibly hot, hot for hot and very hot, warm, cold, and
+// freezing for very cold and ice cold.
+const HISTORY_KEY_BURNING = 1197;
+const HISTORY_KEY_COLD = 1198;
+const HISTORY_KEY_FREEZING = 1199;
+const HISTORY_KEY_HOT = 1200;
+const HISTORY_KEY_WARM = 1202;
+const FEEL_SOUNDS = new Map([
+  ["visibly shaking", HISTORY_KEY_BURNING], ["incredibly hot", HISTORY_KEY_BURNING], ["very hot", HISTORY_KEY_HOT],
+  ["hot", HISTORY_KEY_HOT], ["warm", HISTORY_KEY_WARM], ["cold", HISTORY_KEY_COLD], ["very cold", HISTORY_KEY_FREEZING],
+  ["ice cold", HISTORY_KEY_FREEZING],
+]);
+function feelSound(current) { return FEEL_SOUNDS.get(temperature(current)); }
+function playFeelSound(core, player, current) {
+  core.Sounds.sendSound(player, new core.Sound(feelSound(current), 1, 0, 0));
+}
+
 function feel(event) {
   if (event.itemId !== data().device || !clicked(event, data().device)) return false;
   const trail = trails(event.player, true).find(trail => trail.step.kind === "hotcold");
-  if (!trail) { event.player.sendMessage("The strange device is inactive."); return true; }
+  // Live shows it as an item box with the device (rsprox 235/01043, 236/03931).
+  if (!trail) { itemBox(event.player, data().device, "The strange device is inactive."); return true; }
   const target = data().hotcold.find(target => target.row === trail.state.hotcold);
   const current = distance(location(event.player), target.location);
   event.player.sendMessage(reading(current, trail.state.previous));
+  playFeelSound(core, event.player, current);
   trail.item.setMetaValue(TRAIL_META, { ...trail.state, previous: current });
   return true;
 }
@@ -301,4 +321,4 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   api.onInterfaceActionButton((203 << 16) | 1, close);
 };
 
-Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, reading, emoteReady, restore, categoryCount, canEmote });
+Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, reading, feelSound, playFeelSound, emoteReady, restore, categoryCount, canEmote });

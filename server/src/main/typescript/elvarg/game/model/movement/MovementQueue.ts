@@ -95,6 +95,9 @@ export class MovementQueue {
      */
     private blockMovement = false;
 
+    /** Bumped by every setBlockMovement, so a delayed owner can tell whether the hold is still its own. */
+    private blockMovementGeneration = 0;
+
     /**
      * Are we currently moving?
      */
@@ -471,6 +474,17 @@ export class MovementQueue {
         this.movedThisCycle = false;
         this.ranThisCycle = false;
         this.blockedByDynamicOccupancy = false;
+        this.ignoredOccupant = null;
+    }
+
+    /**
+     * For this cycle only, one player doesn't block this NPC's steps: a large NPC stepping off the
+     * target standing under it still covers that player's tile mid-step (Combat.processNpcUnderTarget).
+     * Everyone else still blocks it. Cleared by the next beginCycle.
+     */
+    private ignoredOccupant: Mobile | null = null;
+    public ignoreOccupantThisCycle(occupant: Mobile | null): void {
+        this.ignoredOccupant = occupant;
     }
 
     /** The cycle just processed was spent running (a running tick spends energy). */
@@ -705,7 +719,8 @@ export class MovementQueue {
             if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
                 return true;
             }
-            if (World.isPlayerOccupyingTile(next, null, size, privateArea, true)) {
+            const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;
+            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -1133,7 +1148,16 @@ export class MovementQueue {
 
     public setBlockMovement(blockMovement: boolean): MovementQueue {
         this.blockMovement = blockMovement;
+        this.blockMovementGeneration++;
         return this;
+    }
+
+    /**
+     * Changes on every setBlockMovement call. A delayed owner that saved it right after taking the
+     * hold releases only while it is unchanged, never a hold another system took (or gave back) since.
+     */
+    public getBlockMovementGeneration(): number {
+        return this.blockMovementGeneration;
     }
 
     public isMovementBlocked(): boolean {

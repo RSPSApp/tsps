@@ -379,6 +379,8 @@ export interface PluginPrayerDisabledEvent {
 
 export interface PluginSpecialAttackDisabledEvent {
   player: any;
+  /** The actual selected special's registration id, including native offhand selection. Legacy queries may omit it. */
+  specialAttackId?: string;
   disabled: boolean | null;
   /** Shown to the player when disabled is true. */
   message?: string;
@@ -1620,6 +1622,8 @@ export interface PluginCoreApi {
   Misc: any;
   ChatTextLayout: any;
   TimerKey: any;
+  /** A countdown in whole seconds, the one Trading spaces trade requests with (game/model/SecondsTimer). */
+  SecondsTimer: typeof import("../game/model/SecondsTimer").SecondsTimer;
   Sound: any;
   Sounds: any;
   Location: any;

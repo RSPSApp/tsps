@@ -835,6 +835,7 @@ module.exports = {
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);
     api.onPlayerLogin(Pyramid.syncPyramidTop);
+    api.onPlayerLogin(Pyramid.syncPyramidLevel);
     // A taken top clears once its player is off the pyramid by any way but the doorway (a teleport, a death).
     api.onPlayerProcess(({ player }) => Pyramid.clearPyramidTop(player));
     api.onCustomEvent("ground-items:taken", creditMarkTaken);

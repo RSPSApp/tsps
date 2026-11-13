@@ -145,7 +145,7 @@ test("the plugin is members-only and hooks the altar, the bowl and every breakab
   assert.equal(RalosRise.members, true);
   assert.deepEqual(Object.keys(objectActions.get("Exposed altar")), ["Bless"]);
   assert.deepEqual(Object.keys(bowl()), ["Fill", "Sacrifice", "Check"]);
-  for (const name of ["Blessed bones", "Blessed superior dragon bones", "Sun-kissed bones", "Blessed bone statuette"]) {
+  for (const name of ["Blessed bones", "Blessed superior dragon bones", "Sun-kissed bones", "Blessed bone statuette", "Alan's blessed bones"]) {
     assert.ok(itemActions.get(name)?.["Break-down"], name);
     assert.ok(itemOnItem.some((hook) => hook.a === "Chisel" && hook.b === name), name);
   }
@@ -154,7 +154,7 @@ test("the plugin is members-only and hooks the altar, the bowl and every breakab
 test("every blessable bone names a real blessed obj, with the Wiki's (and Soul Harvest's) shard count", () => {
   const league = LEAGUE.effects.soulHarvest.shards;
   const blessed = BONES.bones.filter((row) => row.blessed);
-  assert.equal(blessed.length, 19);
+  assert.equal(blessed.length, 20);
   for (const row of blessed) {
     assert.ok(Number.isInteger(id(row.blessed)), row.blessed);
     assert.ok(Number.isInteger(row.shards) && row.shards > 0, row.obj);
@@ -164,6 +164,7 @@ test("every blessable bone names a real blessed obj, with the Wiki's (and Soul H
   assert.equal(byObj.dragon_bones, league.DRAGON_BONES);
   assert.equal(byObj.dagannoth_king_bones, league.DAGANNOTH_BONES);
   assert.equal(byObj.dragon_bones_superior, league.SUPERIOR_DRAGON_BONES);
+  assert.equal(byObj.alan_bones, 5, "Wiki: Alan's blessed bones break into 5 shards");
   // Wiki: these cannot be blessed.
   for (const name of ["bones_burnt", "wolf_bones", "tbwt_jogre_bones", "mm_normal_monkey_bones", "tbwt_beast_bones", "dorgesh_construction_bone"]) {
     assert.equal(BONES.bones.find((row) => row.obj === name).blessed, undefined, name);
@@ -182,6 +183,17 @@ test("Bless turns every wine and blessable bone at once, leaving noted, unblessa
   assert.deepEqual(player.sent.animations, [CacheDefinitions.getSeqId("human_lockedchest")]);
   assert.deepEqual(player.sent.sounds, [2674]);
   assert.deepEqual(player.sent.xp, [], "no experience for blessing");
+});
+
+test("Alan's bones bless into Alan's blessed bones, which break down into 5 shards for 5 Crafting XP (Wiki)", () => {
+  const player = playerWith(["alan_bones", "chisel"]);
+  objectActions.get("Exposed altar").Bless({ player });
+  assert.equal(player.slots[0].getId(), id("blessed_alan_bones"));
+  cycle++;
+  itemActions.get("Alan's blessed bones")["Break-down"]({ player, itemId: id("blessed_alan_bones") });
+  assert.equal(player.amountOf(id("blessed_alan_bones")), 0);
+  assert.equal(player.amountOf(id("blessed_bone_shard")), 5);
+  assert.deepEqual(player.sent.xp.map(([skill, xp]) => [skill, xp]), [[core.Skill.CRAFTING, 5]]);
 });
 
 test("Bless refuses nothing suitable, low Prayer, and superior dragon bones under 70", () => {

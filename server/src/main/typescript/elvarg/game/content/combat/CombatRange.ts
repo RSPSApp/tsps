@@ -34,10 +34,10 @@ export class CombatRange {
         const targetBounds = this.bounds(target, targetLocation);
         const range = this.attackDistance(attacker, method, target);
         const overlapped = this.overlaps(attackerBounds, targetBounds);
-        // A large NPC fights on while its target stands inside its footprint: it cannot
-        // vacate in a step, so overlap only stops 1x1 attackers (and players, who route out).
-        const overlapBlocks = !attacker.isNpc() || Math.max(1, attacker.getSize() | 0) <= 1;
-        if ((!differentFloor && overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
+        // Wiki (Aggressiveness): "The tile underneath the NPC itself is not part of the attack
+        // range", whatever its size; rsprox shows large NPCs step off first (Combat.processNpcUnderTarget).
+        // Attacks that do land under a boss (the Corporeal Beast's stomp) are the boss's own specials.
+        if ((!differentFloor && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
             return false;
         }
 
@@ -48,8 +48,6 @@ export class CombatRange {
         }
 
         if (method.type() === CombatType.MELEE) {
-            // Only large NPC attackers reach here overlapped: distance 0 is in range.
-            if (overlapped) return true;
             if (range === 1) {
                 return this.hasOpenSharedEdge(attackerBounds, targetBounds, attackerLocation.getZ(), area);
             }

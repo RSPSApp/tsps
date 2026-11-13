@@ -47,8 +47,12 @@ Newest first.
   "Remind me how to spin wool." uses it too.
 - **open** (cosmetic) Live raises varp 179 once per ball handed in (19 updates in one tick for 19
   balls); the server sets the final value once. The client ends in the same state.
-- **open** `finishing-up` and the post-Thing menu: the "Fred! Fred! I've seen The Thing!" option
-  shows in `finishing-up` even if the player never met The Thing. No capture covers that case.
+- **fixed** The "Fred! Fred! I've seen The Thing!" option showed in `finishing-up` and after the
+  quest even if the player never met The Thing. Transcript:Sheep Shearer gives `finishing-up` the
+  after-The-Thing menu ("Same as above"), the hand-in without The Thing has no menu, and
+  Transcript:Fred the Farmer guards the option "If the player has interacted with the Thing". Without
+  it, `finishing-up` now goes straight into the shearing talk and the post-quest menu drops the option.
+  No capture covers the never-met case.
 - **fixed** "You've started a new quest: Sheep Shearer" was never sent; it now follows
   "Yes, okay. I can do that." as in 1718.
 - **fixed** The 20 balls of wool left at the "You give Fred 20 balls of wool." box; 1718 takes

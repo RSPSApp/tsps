@@ -1,9 +1,41 @@
 {
   "$comment": "Mahogany Homes: what the cache does not hold. Each home's client NPC (by gameval name; the one living there), and the Wiki's planks per piece of furniture (repair-only pieces take one plank, or a steel bar for the sink, range and bath).",
-  "planks": {"bookcase": 2, "cabinet": 2, "chair": 1, "cupboard": 2, "diningtable": 3, "doublebed": 3, "drawers": 2, "dresser": 2, "longtable": 4, "shelves": 2, "sidetable": 2, "singlebed": 2, "table": 3, "wardrobe": 2},
-  "steelRepairs": ["sink", "range", "bath"],
-  "$pronouns": "How the last-job line refers to each client (Wiki infobox genders; rsprox captures show Jeff and Bob as him, Sarah as her).",
-  "pronouns": {"Bob": "him", "Jeff": "him", "Sarah": "her", "Barbara": "her", "Leela": "her", "Mariah": "her", "Jess": "her", "Noella": "her", "Ross": "him", "Larry": "him", "Norman": "him", "Tau": "her"},
+  "planks": {
+    "bookcase": 2,
+    "cabinet": 2,
+    "chair": 1,
+    "cupboard": 2,
+    "diningtable": 3,
+    "doublebed": 3,
+    "drawers": 2,
+    "dresser": 2,
+    "longtable": 4,
+    "shelves": 2,
+    "sidetable": 2,
+    "singlebed": 2,
+    "table": 3,
+    "wardrobe": 2
+  },
+  "steelRepairs": [
+    "sink",
+    "range",
+    "bath"
+  ],
+  "$pronouns": "How the last-job line and the contractor refer to each client (rsprox captures: every client's assignment line, \"... once you have furnished his/her home.\").",
+  "pronouns": {
+    "Bob": "him",
+    "Jeff": "him",
+    "Sarah": "her",
+    "Barbara": "her",
+    "Leela": "her",
+    "Mariah": "her",
+    "Jess": "her",
+    "Noella": "her",
+    "Ross": "him",
+    "Larry": "him",
+    "Norman": "him",
+    "Tau": "her"
+  },
   "clients": {
     "varrock_north": "con_contract_client_1",
     "varrock_mid": "con_contract_client_2",
@@ -17,5 +49,95 @@
     "ardy_north": "con_contract_client_6",
     "ardy_west": "con_contract_client_7",
     "ardy_south": "con_contract_client_8"
+  },
+  "$descriptions": "Where each client lives, as the contractors' assignment message and line give it (rsprox captures, rev 241/242: every client; \"Bob </col>in\" as live sends it).",
+  "descriptions": {
+    "Bob": "<col=ff0000>Bob </col>in north-east <col=ff0000>Varrock</col>, opposite the church",
+    "Jeff": "<col=ff0000>Jeff</col> in the middle of <col=ff0000>Varrock</col>, west of the museum",
+    "Sarah": "<col=ff0000>Sarah</col> along the south wall of <col=ff0000>Varrock</col>",
+    "Tau": "<col=ff0000>Tau</col>, south east of the fountain in <col=ff0000>Falador</col>",
+    "Norman": "<col=ff0000>Norman</col>, south of the fountain in <col=ff0000>Falador</col>",
+    "Larry": "<col=ff0000>Larry</col>, north of the fountain in <col=ff0000>Falador</col>",
+    "Noella": "<col=ff0000>Noella</col>, north of East <col=ff0000>Ardougne market</col>",
+    "Ross": "<col=ff0000>Ross</col>, north of the church in East <col=ff0000>Ardougne</col>",
+    "Jess": "<col=ff0000>Jess</col>, upstairs of the building south of the church in East <col=ff0000>Ardougne</col>",
+    "Mariah": "<col=ff0000>Mariah</col>, west of the estate agents in <col=ff0000>Hosidius</col>",
+    "Leela": "<col=ff0000>Leela</col>, east of the town market in <col=ff0000>Hosidius</col>",
+    "Barbara": "<col=ff0000>Barbara</col>, south of <col=ff0000>Hosidius</col>, near the mill"
+  },
+  "$areas": "Each home's area [minX, minY, maxX, maxY]: live sends the contract's hotspot displays only while the player stands in it and zeroes them on leaving (rsprox captures, rev 241/242: the 8x8 zones where the displays were sent or cleared, around the homes' hotspots).",
+  "areas": {
+    "varrock_north": [
+      3232,
+      3480,
+      3247,
+      3495
+    ],
+    "varrock_mid": [
+      3232,
+      3440,
+      3247,
+      3463
+    ],
+    "varrock_south": [
+      3224,
+      3376,
+      3239,
+      3391
+    ],
+    "hosidius_north": [
+      1752,
+      3608,
+      1783,
+      3631
+    ],
+    "hosidius_east": [
+      1776,
+      3584,
+      1791,
+      3607
+    ],
+    "hosidius_south": [
+      1736,
+      3520,
+      1759,
+      3543
+    ],
+    "falador_southeast": [
+      3040,
+      3336,
+      3055,
+      3351
+    ],
+    "falador_south": [
+      3032,
+      3336,
+      3047,
+      3359
+    ],
+    "falador_north": [
+      3024,
+      3360,
+      3047,
+      3367
+    ],
+    "ardy_north": [
+      2648,
+      3304,
+      2671,
+      3327
+    ],
+    "ardy_west": [
+      2600,
+      3304,
+      2623,
+      3327
+    ],
+    "ardy_south": [
+      2600,
+      3288,
+      2631,
+      3303
+    ]
   }
 }

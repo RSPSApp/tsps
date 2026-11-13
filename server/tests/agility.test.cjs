@@ -1351,6 +1351,42 @@ test("the Chasm of Fire gaps land where the captures do: one long jump, then two
   assert.deepEqual(tileOf(player), [1440, 10098, 1]);
 });
 
+test("the Chasm of Fire platform edge drops a floor, as captured (73 Agility, 3.2 XP)", () => {
+  // rsprox captures 817, 819: from 1438,10097 a south-facing move onto the edge (cycles 22-35,
+  // 827 delay 4, sounds 2454 and 2461), a tick later the spam line and the floor below.
+  const player = createPlayer(1440, 10096, 2);
+  const animations = [];
+  const original = player.performAnimation;
+  player.performAnimation = (animation) => { animations.push([animation.getId(), animation.getDelay?.() ?? 0]); original(animation); };
+  const object = gameObject(56371, 1438, 10098, 2);
+  const route = { player, object, definition: object.getDefinition(), objectId: 56371, clickType: 1, destination: null };
+  hooks.route.forEach((handler) => handler(route));
+  assert.deepEqual([route.destination.x, route.destination.y, route.destination.z], [1438, 10097, 2]);
+  player.setLocation(new Location(1438, 10097, 2));
+  hooks.click.get(56371)({ player, object, objectId: 56371, clickType: 1, location: { x: 1438, y: 10098, z: 2 }, handled: false });
+  const move = player.getForceMovement();
+  assert.ok(move, "the exact move starts on the arrival tick");
+  assert.deepEqual([move.getEnd().getX(), move.getEnd().getY()], [0, 1]);
+  assert.deepEqual([move.getSpeed(), move.getReverseSpeed(), move.getDirection()], [22, 35, 2], "cycles 22-35, facing south (angle 0)");
+  assert.deepEqual(player.state.sounds, [2454, 2461]);
+  assert.deepEqual(animations[0], [827, 4]);
+  assert.deepEqual(player.state.spam, []);
+  tick();
+  assert.deepEqual(tileOf(player), [1438, 10098, 1], "a tick later, the floor below");
+  for (let ticks = 0; player.getAttribute("agility.obstacle") != null && ticks < 10; ticks++) tick();
+  assert.deepEqual(player.state.spam, ["You slide off the lip of the platform, landing on the one below."]);
+  assert.deepEqual(tileOf(player), [1438, 10098, 1]);
+  assert.equal(player.state.xp, 3.2);
+  assert.deepEqual(animations.map(([id]) => id), [827], "no sequence reset at landing (none in the captures)");
+
+  const novice = createPlayer(1438, 10097, 2, 72);
+  hooks.click.get(56371)({ player: novice, object, objectId: 56371, clickType: 1, location: { x: 1438, y: 10098, z: 2 }, handled: false });
+  tick();
+  assert.deepEqual(tileOf(novice), [1438, 10097, 2]);
+  assert.equal(novice.state.xp, 0);
+  assert.match(novice.state.messages[0], /Agility level of at least 73/);
+});
+
 test("the Prifddinas course's second half is played south-west of the city, as captured", () => {
   // rsprox capture 1149: the first dark hole drops to 2269,3389, the last climbs back to the city.
   const course = COURSES.find((entry) => entry.key === "prifddinas");

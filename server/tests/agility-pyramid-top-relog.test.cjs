@@ -88,3 +88,19 @@ test("off the pyramid by any way but the doorway, the top can be taken again, an
   Pyramid.takePyramidTop({ player: relogged, core, api });
   assert.equal(relogged.getInventory().getAmount(PYRAMID_TOP), 1, "and the next lap's top can be taken");
 });
+
+// agility_pyramid_level (1550) is in the login varbits on live (rsprox_transcripts/230/02933.txt: a login on floor 3
+// at 3370,2840 sends 0 -> 3), so a relog on a floor keeps the floor's moving blocks.
+test("a login on a pyramid floor sends agility_pyramid_level for that floor; one off the pyramid sends nothing", (t) => {
+  for (const [location, level] of [
+    [new core.Location(3370, 2840, 3), 3],
+    [new core.Location(3356, 2835, 1), 1],
+    [SUMMIT(), 5],
+    [new core.Location(3354, 2830, 0), 0],
+  ]) {
+    const p = player(t);
+    p.setLocation(location);
+    PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+    assert.equal(p.getPacketSender().getVarbit(1550), level, `${location.getX()},${location.getY()},${location.getZ()}`);
+  }
+});

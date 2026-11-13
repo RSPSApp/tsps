@@ -8,7 +8,8 @@
  * recordings play them; ./ferries/ holds the units:
  *
  * - Voyages.Ferries.js: the five travel styles and landing on logout or shutdown;
- * - Routes.Ferries.js: what starts each route, the Entrana search and `ferries:travel`.
+ * - Routes.Ferries.js: what starts each route, the Entrana search and `ferries:travel`;
+ * - Andras.Ferries.js: Andras's Port Phasmatys - Slepe boat, its fare and permanent access.
  *
  * Quest plugins keep their own crossings and hand ordinary ones over with `ferries:travel`.
  * At Port Sarim, Veos (1063) is in npc-spawns.json; Cabin Boy Herbert (11126, shown from
@@ -17,16 +18,18 @@
 const Common = require("./ferries/Common.Ferries");
 const Voyages = require("./ferries/Voyages.Ferries");
 const Routes = require("./ferries/Routes.Ferries");
+const Andras = require("./ferries/Andras.Ferries");
 
 module.exports = {
   name: "Ferries",
-  description: "NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat and others.",
+  description: "NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat, Andras's Slepe boat and others.",
   members: true,
-  _test: { Common, Voyages, Routes },
+  _test: { Common, Voyages, Routes, Andras },
   register(api) {
     Common.init(api);
     api.onPlayerLogout(Voyages.landNow);
     api.onServerShutdown(Voyages.landEveryone);
     Routes.attach(api);
+    Andras.attach(api);
   },
 };

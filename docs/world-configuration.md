@@ -811,7 +811,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Chests` | Chests | objects | yes | Generic household chests: Open and Shut swap between the closed and open locs, and searching an open one finds nothing. |
 | `DairyCow` | DairyCow | objects | yes | Dairy cows: Milk fills an empty bucket, and Steal-cowbell is a 15 Thieving action unlocked once Cold War is started. |
 | `Doors` | Doors | objects | yes | Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load. |
-| `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest and Forthos' Grubby Chest, plus crystal key crafting. (members only) |
+| `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest and the Zombie Pirate's Locker, plus crystal key crafting. (members only) |
 | `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event. |

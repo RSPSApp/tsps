@@ -16,6 +16,7 @@ let pass;
 let showCape;
 let guardCondition;
 let dialogueAction;
+let menuHandler;
 let core;
 
 before(() => {
@@ -24,9 +25,9 @@ before(() => {
   const api = {
     core,
     onObjectInteraction: (name, actions) => { handlers[name] = actions; },
-    onNpcDialogueCondition: (handler) => { guardCondition = handler; },
+    onNpcDialogueCondition: (handler) => { guardCondition = guardCondition ?? handler; },
     onItemOnNpc: (handler) => { showCape = handler; },
-    onCustomEvent: (name, handler) => { if (name === 'npc-dialogue:action') dialogueAction = handler; },
+    onCustomEvent: (name, handler) => { if (name === 'npc-dialogue:action') dialogueAction = handler; if (name === 'npc-dialogue:menu') menuHandler = handler; },
     persistAttribute() {},
   };
   require('../plugins/areas/MorUiRek.plugin').register(api);
@@ -158,4 +159,58 @@ test('the guard dialogue exposes the cape option only while held and rechecks it
   p.items.add(core.ItemIdentifiers.FIRE_MAX_CAPE);
   dialogueAction({ ...step, end: false });
   assert.equal(p.getAttribute('mor-ul-rek:access'), true);
+});
+
+test("TzHaar dialogue fills [TzHaar caste] with the player's TzHaar name (Wiki: TzHaar; rsprox 227/00073, 227/01749)", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const Plugin = require('../plugins/areas/MorUiRek.plugin');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  const fill = (text) => { const request = { player: p, text }; Plugin.fillTzhaarTitle(request); return request.text; };
+  // Every pair equal: Mej first. No inner core access yet: no honorific.
+  assert.equal(fill('You need help [TzHaar caste]-[player name]?'), 'You need help JalYt-Mej-[player name]?');
+  assert.equal(fill("What's a '[TzHaar caste]'?"), "What's a 'JalYt-Mej'?");
+  assert.equal(fill('Can I help you JalYt-[TzHaar caste]-[player name]?'), 'Can I help you JalYt-Mej-[player name]?', 'no doubled JalYt');
+  p.getSkillManager().setMaxLevels(core.Skill.STRENGTH, 99, false).setMaxLevels(core.Skill.DEFENCE, 99, false);
+  p.setAttribute('mor-ul-rek:access', true);
+  assert.equal(fill('That is most impressive [TzHaar caste]-[player name].'), 'That is most impressive JalYt-Ket-Xo-[player name].');
+  assert.equal(fill('Hello JalYt-[TzHaar caste]-Xo-[player name].'), 'Hello JalYt-Ket-Xo-[player name].', 'no doubled Xo');
+  p.setAttribute('inferno:completions', 1);
+  assert.equal(fill('Then you [TzHaar caste]!'), 'Then you JalYt-Ket-Kal!');
+  assert.equal(fill("Ah that would be [TzHaar caste]-[champion's name]!"), "Ah that would be [TzHaar caste]-[champion's name]!",
+    "the Fight Pit champion's caste is not the player's");
+});
+
+test("TzHaar dialogue branches on the player's caste (If the player's caste is JalYt-Ket:)", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const Plugin = require('../plugins/areas/MorUiRek.plugin');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  const ask = (caste) => Plugin.casteCondition({ player: p, text: `If the player's caste is JalYt-${caste}:` });
+  assert.deepEqual(['Mej', 'Ket', 'Xil', 'Hur'].map(ask), [true, false, false, false]);
+  p.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 99, false).setMaxLevels(core.Skill.SMITHING, 99, false);
+  assert.deepEqual(['Mej', 'Ket', 'Xil', 'Hur'].map(ask), [false, false, false, true]);
+  assert.equal(Plugin.casteCondition({ player: p, text: 'If the player has a firecape with them:' }), null);
+});
+
+// #5093 review: menu option labels go straight to the menu, not through npc-dialogue:line, so the plugin's own
+// npc-dialogue:menu handler fills them (npc-dialogues.json: "What's a '[TzHaar caste]'?" and four more).
+test("TzHaar menu options fill [TzHaar caste] too", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  assert.equal(typeof menuHandler, 'function', 'the plugin listens for npc-dialogue:menu');
+  const plain = { text: 'Goodbye.', steps: [] };
+  const notice = { player: p, options: [
+    { text: "What's a '[TzHaar caste]'?", steps: [{ npc: 'x' }] },
+    { text: "What's a '[TzHaar caste]-[player name]'?", steps: [] },
+    { text: 'Oh well, [TzHaar caste]-[player name] over and out.', steps: [] },
+    plain,
+  ] };
+  menuHandler(notice);
+  assert.deepEqual(notice.options.map((option) => option.text), [
+    "What's a 'JalYt-Mej'?", "What's a 'JalYt-Mej-[player name]'?", 'Oh well, JalYt-Mej-[player name] over and out.', 'Goodbye.',
+  ]);
+  assert.deepEqual(notice.options[0].steps, [{ npc: 'x' }], 'the option keeps its branch');
+  assert.equal(notice.options[3], plain, 'other options are left as they are');
 });

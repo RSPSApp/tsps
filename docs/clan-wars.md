@@ -869,7 +869,8 @@ movement and projectile blocking remain distinct from the source torch and
 skeleton's projectile-passable movement blocking.
 
 Existing native and Rules fixtures exercise all four ordinary tree approaches and
-native harvest/stump/respawn, cancellation and stale/foreign refusal, destruction
+native harvest/stump/respawn, active chopping cancellation on walking or real
+death, walking cancellation followed by Forfeit, stale/foreign refusal, destruction
 while depleted followed by actual slot reuse, concurrent-match/world preservation,
 full clipping and mapped-settings restoration, real holding/orb/Exit and both
 Forfeit paths, ordinary melee and obstacle detours, existing layouts and shared

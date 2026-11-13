@@ -244,6 +244,7 @@ function maker(cooking, carried) {
     getAmount: amount,
     contains: (id) => amount(id) > 0,
     getFreeSlots: () => slots.filter((slot) => !slot).length,
+    full: () => { p.sent.spam.push(["normal", "Not enough space in your inventory."]); return inventory; },
     deleteNumber: (id, count) => { for (let i = 0; i < slots.length && count > 0; i++) if (slots[i]?.getId() === id) { slots[i] = null; count--; } },
     addItem: (added) => { for (let i = 0; i < added.getAmount(); i++) slots[slots.indexOf(null)] = item(added.getId()); },
     setItem: (slot, added) => { slots[slot] = item(added.getId()); },
@@ -374,6 +375,30 @@ test("flour on swamp tar makes raw swamp paste and leaves the empty pot", () => 
   ticks(1);
   assert.equal(p.getInventory().getAmount(obj("rawswamppaste")), 1, "raw swamp paste");
   assert.equal(p.getInventory().getAmount(obj("pot_empty")), 1, "the pot is left");
+  assert.equal(p.getInventory().getAmount(obj("swamp_tar")), 0);
+  assert.equal(p.getInventory().getAmount(obj("pot_flour")), 0);
+});
+
+test("flour on a swamp tar stack refuses when the empty pot would not fit", () => {
+  const p = maker(1, [[obj("pot_flour"), 1], [obj("swamp_tar"), 5]]);
+  for (let slot = 6; slot < 28; slot++) p.getInventory().setItem(slot, { getId: () => obj("logs") });
+  assert.equal(p.getInventory().getFreeSlots(), 0, "full inventory");
+  useItems(p, "pot_flour", "swamp_tar");
+  ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("rawswamppaste")), 0, "nothing made");
+  assert.equal(p.getInventory().getAmount(obj("pot_flour")), 1, "flour is kept");
+  assert.equal(p.getInventory().getAmount(obj("swamp_tar")), 5, "tar is kept");
+  assert.ok(p.sent.spam.some(([, text]) => text === "Not enough space in your inventory."));
+});
+
+test("flour on the last swamp tar still fits with no free slot", () => {
+  const p = maker(1, [[obj("pot_flour"), 1], [obj("swamp_tar"), 1]]);
+  for (let slot = 2; slot < 28; slot++) p.getInventory().setItem(slot, { getId: () => obj("logs") });
+  assert.equal(p.getInventory().getFreeSlots(), 0, "full inventory");
+  useItems(p, "pot_flour", "swamp_tar");
+  ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("rawswamppaste")), 1, "the two freed slots hold the paste and pot");
+  assert.equal(p.getInventory().getAmount(obj("pot_empty")), 1);
   assert.equal(p.getInventory().getAmount(obj("swamp_tar")), 0);
   assert.equal(p.getInventory().getAmount(obj("pot_flour")), 0);
 });

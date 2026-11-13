@@ -58,7 +58,8 @@ async function main() {
     profile === 'pvp', 'native ordinary-tile profile boundaries');
   assert.ok(require.resolve('../../dist/net/NetworkBuilder').endsWith('.js'));
   const target = fs.readFileSync(path.join(server, 'target.txt'), 'utf8').trim();
-  assert.equal(target, 'osrs-241_2026-10-20');
+  // The client half checks this is the cache revision its own cache scripts run (no pinned literal).
+  assert.match(target, /^osrs-\d+_\d{4}-\d{2}-\d{2}$/, 'a sealed OSRS cache target');
   assert.equal(CachePipeline.isValid(path.join(server, 'caches', target)), true,
     'sealed cache required; no download fallback');
   await CachePipeline.initialize(server);
@@ -125,7 +126,9 @@ async function main() {
     require('../../plugins/areas/Wilderness.plugin').register(PM.createApi('blighted-spellbook-wilderness'));
     require('../../plugins/items/BlightedSpellSacks.plugin').register(PM.createApi('blighted-spellbook-regression'));
     PM.emitServerStartup({ timestamp: Date.now() });
-    assert.equal(AreaManager.areas.length, 3, 'prerequisite: native Ferox, free-for-all and Wilderness areas');
+    assert.deepEqual(AreaManager.areas.map(area => area.constructor.name).sort(),
+      ['DemonicRuinsArea', 'FeroxEnclaveArea', 'FreeForAllArena', 'WildernessArea'],
+      'prerequisite: native Ferox, free-for-all, Wilderness and Demonic Ruins areas');
     assert.equal(AreaManager.get(FEROX)?.constructor.name, 'FeroxEnclaveArea', 'prerequisite: real Ferox area wins priority');
     assert.equal(AreaManager.get(TRUE_WILDERNESS)?.constructor.name, 'WildernessArea', 'prerequisite: distinct real Wilderness area');
     const channel = {
@@ -137,7 +140,7 @@ async function main() {
     // Authenticated-save checkpoint only: ordinary handshake still owns actual Player creation,
     // World insertion, login event, spellbook/inventory mount and bootstrap-complete emission.
     connection.pending = {
-      username: 'blighted2321', profile: 'main', passwordHash: 'fixture-not-a-credential',
+      username: 'blighted2321', credentialName: 'blighted2321', profile: 'main', passwordHash: 'fixture-not-a-credential',
       save: { applyToPlayer(p) {
         p.setLocation(profile === 'ordinary' ? FEROX.clone() :
           profile === 'mage-bank' ? new core.Location(2539, 4712, 0) : new core.Location(3222, 3218, 0));
@@ -208,7 +211,7 @@ async function main() {
     failure ??= cleanupErrors[0];
   }
   if (failure) throw failure;
-  const result = { kind: 'complete', profile, rows };
+  const result = { kind: 'complete', profile, cacheTarget: target, rows };
   assert.ok(JSON.stringify(result).length < 262144, 'bounded IPC result');
   await new Promise((resolve, reject) => process.send(result, error => error ? reject(error) : resolve()));
   process.disconnect();

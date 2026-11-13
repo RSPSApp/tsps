@@ -6,6 +6,8 @@ This change implements combat and recovery. The separate corpse-choice/reward ch
 
 Until corpse-choice rewards are implemented, actors spawned by this encounter suppress the generic NPC death-loot roll. This prevents premature Take-eggs tertiary loot behind the bone wall. Suppression follows the original actor after death/session cleanup; unrelated NPCs with the same ID retain ordinary drops. This does not implement either corpse reward option.
 
+Already-owned Maggot eggs support their native inventory **Pop** action. One action consumes one egg and makes one roll for Maggot marquess: base1/3000, sickly1/2500, warm1/1250, pulsating1/500, wriggling1/10 and writhing1/2. The six subtypes share a display name but use distinct cache IDs; placeholders cannot be popped. Pet ownership, duplicates, follower/inventory delivery, full-pack insurance and collection-log updates use the existing `pets:award` consumer. A duplicate or ineligible award does not refund the consumed egg. The failure message is descriptive server wording, not an observed retail line; no animation or automatic batch cadence is inferred.
+
 ## Rules and source
 
 Primary Wiki revisions read for this encounter:
@@ -14,6 +16,7 @@ Primary Wiki revisions read for this encounter:
 - [Strategies, revision15398168](https://oldschool.runescape.wiki/w/Maggot_King/Strategies?oldid=15398168), raw SHA256 `b5f4f9667d73511df33c68e26c7894677f657735d8a574dff9e8f35a29ee9cea`.
 - [Lair, revision15252788](https://oldschool.runescape.wiki/w/Maggot_King%27s_lair?oldid=15252788), raw SHA256 `b62d516056c067ee9a3bf231e1ef5d5c480dbb4771639fc1d155bd8dfb95a629`.
 - [8 July2026 update, revision15256817](https://oldschool.runescape.wiki/w/Update:The_Blood_Moon_Rises_Tweaks_%26_Fixes?oldid=15256817), raw SHA256 `199b67ce151ae8c973fabfcb34e710333f2f1c429f4cb0abf7e6267d9b9388a8`: ammunition fired at the boss must land in the player arena.
+- The [15 July2026 Jagex drop-rate table](https://secure.runescape.com/m=news/the-blood-moon-rises--bank-tags-tweaks?oldschool=1) states all six egg-pop pet chances above. Retained full-page bytes SHA256 `aa131a30be901c0be2147ddd8b69b2a85cc9d8504dab4a4ed2674b32e91f6c4d`; its declared encoding is ISO-8859-1. Cache242 `dump.obj` at the same pinned Joshua-F revision confirms stackable eggs33665/33667/33669/33671/33673/33675, all named Maggot egg with first action Pop and distinct following placeholder IDs.
 
 The source supports 4–8 attacks per rotation, ranged/magic maximum46 blocked by the corresponding prayer, three impact bile tiles, screech pulses15–25 for active protection prayers, temporarily100Defence then restoration to200, carrion25/fragment10 maxima, accelerating attacks after the first screech, larvae eating carrion/healing actual player damage, and head slams55/35 with a fresh-click melee punish. The HP thresholds1250/980/305/299 are approximate source values. The newer Strategies' specific ordinary-bow cooldown overwrite rule takes precedence over the supplemental larvae page's conflicting “no delay” wording.
 
@@ -44,3 +47,5 @@ node --test tests/maggot-king-combat.test.cjs
 ```
 
 The native fixture uses real cache/Player/World/registered hooks and ordinary NPC Attack input. Quest completion, equipment and standing are supplied. Targeted HP/hazard checkpoints are marked. The complete boss-health traversal keeps1500HP unseeded and drives native Attack and ordinary walking away from live larvae through death/retry, with player invulnerability supplied for survival; separate prayer/floor/larva cases use ordinary99HP actors. This does not claim a natural quest, unaided full-fight survival, sockets, rendering, exact retail timings, every gear variant or the queued corpse reward chain.
+
+The egg cases supply inventory eggs and, for delivery controls, another pet through the native award event. They use the actual item listener/cache action and registered pet consumer, with RNG selected immediately on either side of each published threshold. They check one-unit consumption, last-unit repeat refusal, stale/wrong-container/placeholder negatives, duplicate award refusal, follower delivery, inventory delivery into the consumed egg's freed slot and full-pack insurance feedback. These are planned assertions until an exact run is reported publicly; they do not establish natural corpse acquisition or measured pet frequency.

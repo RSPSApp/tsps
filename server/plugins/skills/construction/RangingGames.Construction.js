@@ -112,7 +112,7 @@ function shoot(event) {
       furnitureGenerations.set(furniture, {});
       gamesIn(house).set(furniture, { players: new Map(), done: false });
       start();
-    }, valid);
+    }, valid, furniture);
     return true;
   }
   start();
@@ -173,8 +173,8 @@ function finishIfDone(house, furniture, kind, game) {
   game.done = true;
   const best = Math.max(...[...game.players.values()].map(entry => entry.score));
   game.winners = [...game.players].filter(([, entry]) => entry.score === best).map(([player]) => player);
-  Prizes.award(house, kind.game, game.winners.length === 1 ? game.winners[0] : null);
-  if (game.winners.length !== 1) Prizes.withdraw(house, kind.game);
+  Prizes.award(house, kind.game, game.winners.length === 1 ? game.winners[0] : null, furniture);
+  if (game.winners.length !== 1) Prizes.withdraw(house, kind.game, furniture);
   delete furniture.displayObjectId;
   house.redrawFurniture();
 }
@@ -206,7 +206,7 @@ function leftGames(player, house) {
     if (game.players.size) sendOverlay(game);
     else {
       gamesIn(house).delete(furniture);
-      if (!game.done) Prizes.withdraw(house, kind.game);
+      if (!game.done) Prizes.withdraw(house, kind.game, furniture);
       delete furniture.displayObjectId; // the hoop or dart isn't left on it
     }
   }
@@ -220,7 +220,7 @@ function resetGames(house) {
       busyUntil.delete(player);
       player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
     }
-    Prizes.withdraw(house, GAMES[furniture.buildableKey].game);
+    Prizes.withdraw(house, GAMES[furniture.buildableKey].game, furniture);
     delete furniture.displayObjectId;
   }
   games.delete(house);

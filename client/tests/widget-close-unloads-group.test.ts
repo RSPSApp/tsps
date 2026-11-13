@@ -126,11 +126,28 @@ manager.openSubInterface(MAIN_MODAL, SHOP);
 setHide(loadingLayer, false);
 assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false);
 manager.closeSubInterface(MAIN_MODAL);
+assert.equal(manager.isGroupLoaded(SHOP), false, "PRE: the close unloaded the shop");
+// Widget.getWidget: an IF_ op on a closed interface loads its group first, so the op applies
+// (to freshly decoded widgets, not the ones the close dropped) and the next open shows it.
+const decodesBefore = decodes.get(SHOP)!;
 setHide(loadingLayer, false);
+assert.equal(manager.isGroupLoaded(SHOP), true, "if_sethide loads the closed group");
+assert.equal(decodes.get(SHOP), decodesBefore + 1, "decoded again from the cache");
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false);
 manager.openSubInterface(MAIN_MODAL, SHOP);
-assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, true, "if_sethide on a closed interface does not reach its next open");
-setHide(loadingLayer, false);
-assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false, "if_sethide after a reopen changes the reopened widget");
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false, "if_sethide on a closed interface reaches its next open");
+assert.equal(decodes.get(SHOP), decodesBefore + 1, "the open uses the group the op loaded");
+setHide(loadingLayer, true);
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, true, "if_sethide after a reopen changes the reopened widget");
+for (const [opcode, uid] of [[Opcodes.IF_FIND, (OTHER << 16) | 24], [Opcodes.IF_FIND, -1], [Opcodes.IF_FIND, (OTHER << 16) | 999]] as const) {
+    vm.intStackSize = 0;
+    vm.pushInt(uid);
+    handlers.get(opcode)!(context, 0, null);
+    assert.equal(vm.intStack[0], uid === ((OTHER << 16) | 24) ? 1 : 0, `if_find ${uid}: a closed group's component is found, a missing one is not`);
+}
+manager.closeSubInterface(MAIN_MODAL);
+manager.unloadGroup(OTHER);
+manager.openSubInterface(MAIN_MODAL, SHOP);
 
 const textUid = (SHOP << 16) | 5;
 const textWidget = manager.getWidgetByUid(textUid)!;

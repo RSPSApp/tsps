@@ -18,7 +18,20 @@ import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 // Helper to get widget by UID from stack. Looked up every time, never cached: a closed
 // interface is unloaded, and its next open has new widgets under the same uids.
 function getWidgetFromStack(ctx: HandlerContext): WidgetNode | null {
-    const uid = ctx.intStack[--ctx.intStackSize];
+    return getWidget(ctx, ctx.intStack[--ctx.intStackSize]);
+}
+
+/**
+ * The real client's Widget.getWidget: a component of a group that isn't loaded loads the group
+ * first (decoded from the cache, its onLoad not run), so an IF_ op on a closed interface still
+ * applies, and the next open shows it, as getWidgetByUidAndChild already does for CC_ ops.
+ */
+function getWidget(ctx: HandlerContext, uid: number): WidgetNode | null {
+    const existing = ctx.widgetManager.getWidgetByUid(uid);
+    if (existing || uid < 0) return existing ?? null;
+    const groupId = (uid >>> 16) & 0xffff;
+    if (groupId === 0) return null;
+    ctx.widgetManager.getGroup(groupId);
     return ctx.widgetManager.getWidgetByUid(uid) ?? null;
 }
 
@@ -492,7 +505,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const uid = ctx.intStack[ctx.intStackSize];
         const childIndex = ctx.intStack[ctx.intStackSize + 1];
 
-        const parent = ctx.widgetManager.getWidgetByUid(uid);
+        const parent = getWidget(ctx, uid);
         let w: WidgetNode | null = null;
         if (parent && ctx.widgetManager.isServerOwnedWidget(uid)) {
             const groupId = (uid >>> 16) & 0xffff;
@@ -536,7 +549,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.IF_FIND, (ctx, intOp) => {
         const uid = ctx.intStack[--ctx.intStackSize];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         //  (class28): do not clear target widget when lookup fails.
         if (w) {
             setTargetWidget(ctx, intOp, w);

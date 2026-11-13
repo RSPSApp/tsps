@@ -5,14 +5,15 @@
  * the main one. They all share the account's name, so only one of them can be online at a time,
  * as on live.
  */
-export type PlayerProfile = "main" | "league" | "hardcore";
+export type PlayerProfile = "main" | "league" | "hardcore" | "deadman";
 
 export const MAIN_PROFILE: PlayerProfile = "main";
 export const LEAGUE_PROFILE: PlayerProfile = "league";
 export const HARDCORE_PROFILE: PlayerProfile = "hardcore";
+export const DEADMAN_PROFILE: PlayerProfile = "deadman";
 
 /** Every profile an account can have a character in, the main one first. */
-export const PLAYER_PROFILES: readonly PlayerProfile[] = [MAIN_PROFILE, LEAGUE_PROFILE, HARDCORE_PROFILE];
+export const PLAYER_PROFILES: readonly PlayerProfile[] = [MAIN_PROFILE, LEAGUE_PROFILE, HARDCORE_PROFILE, DEADMAN_PROFILE];
 
 /** The account's other characters, in PLAYER_PROFILES order: the saves that vouch for a login of a character not made yet. */
 export function otherProfiles(profile: PlayerProfile): PlayerProfile[] {

@@ -105,6 +105,9 @@ export class GameConstants {
     public static SERVER_LOG_DISABLED_TYPES: string[] = ["plugin", "npc.face", "Combat"];
 
     public static setWorldProfile(profile: PlayerProfile): void {
+        if (profile !== MAIN_PROFILE && this.WORLD_PROFILE !== MAIN_PROFILE && this.WORLD_PROFILE !== profile) {
+            throw new Error(`World already selects the ${this.WORLD_PROFILE} profile; cannot also select ${profile}`);
+        }
         this.WORLD_PROFILE = profile;
     }
 

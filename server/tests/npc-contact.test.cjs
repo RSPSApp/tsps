@@ -29,9 +29,19 @@ afterEach(() => {
 const canCast = Spell.prototype.canCast;
 
 function caster() {
-  const sender = new Proxy({}, { get: (_, key) => (...args) => { player.sent.push([key, ...args]); return sender; } });
+  const sender = new Proxy({}, { get: (_, key) => {
+    if (key === "getVarbit") return (id) => player.varbits.get(id) ?? 0;
+    if (key === "getVarp") return (id) => player.varps.get(id) ?? 0;
+    return (...args) => { player.sent.push([key, ...args]); return sender; };
+  } });
   const player = {
     sent: [],
+    varbits: new Map(),
+    varps: new Map(),
+    hitpoints: 99,
+    dying: false,
+    isDyingReturn() { return this.dying; },
+    getHitpoints() { return this.hitpoints; },
     animations: [],
     graphics: [],
     xp: [],
@@ -176,6 +186,7 @@ test("contacts whose Wiki astral-contact talk can't play yet (Honest Jimmy, Murp
   for (const [contactId, name] of [[1, "Honest Jimmy"], [12, "Murphy"], [13, "Cyrisus"]]) {
     const player = caster();
     player.interfaceId = 75;
+    player.varbits.set(CacheDefinitions.getVarbitId("dream_prog"), 28);
     assert.equal(trigger(player, contactId).handled, true);
     assert.deepEqual(player.sent, [["sendVarbit", 5006, contactId], ["sendInterfaceRemoval"]]);
     assert.deepEqual(player.messages, [`You contact ${name}.`]);
@@ -206,4 +217,90 @@ test("a trigger without the list open, or for another component, is not a contac
   assert.equal(other.handled, false);
   assert.deepEqual(seen, []);
   assert.deepEqual(player.sent, []);
+});
+
+/** Steps the pending cast to where the list would open; returns what was paid. */
+function castThrough(player, during = () => {}) {
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 1; tick <= 7; tick++) {
+    during(tick);
+    TaskManager.process();
+  }
+  return state;
+}
+
+test("dying while the cast is pending ends it unpaid, also after a respawn", () => {
+  const player = caster();
+  const state = castThrough(player, (tick) => { if (tick === 7) { player.hitpoints = 0; player.dying = true; } });
+  assert.equal(state.paid, 0);
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  // Died at +2 and respawned at +5: the cast belonged to the old life.
+  const again = caster();
+  const later = castThrough(again, (tick) => { again.dying = tick >= 2 && tick < 5; });
+  assert.equal(later.paid, 0);
+  assert.deepEqual(again.xp, []);
+  // The pending guard is cleared, so the next cast works.
+  assert.equal(castThrough(again).paid, 1);
+});
+
+test("another modal opened while the cast is pending ends it unpaid; the list doesn't replace it", () => {
+  const player = caster();
+  const state = castThrough(player, (tick) => { if (tick === 3) player.interfaceId = 12; });
+  assert.equal(state.paid, 0);
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  // Walking and plain ticks don't (first test); a modal open since the click doesn't either.
+  const open = caster();
+  open.interfaceId = 12;
+  assert.equal(castThrough(open).paid, 1);
+  player.interfaceId = -1;
+  assert.equal(castThrough(player).paid, 1);
+});
+
+test("a contact the cache shows locked is refused: no last contact, no talk (Krystilia, Konar, Mortimer)", () => {
+  const seen = [];
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
+    seen.push(name);
+    if (name === "npc-dialogue:start") event.handled = true;
+  } });
+  for (const [contactId, unlock] of [[18, "wilderness_master_warning"], [20, "konar_spoken"], [23, "mortimer_introduction"]]) {
+    const player = caster();
+    player.interfaceId = 75;
+    assert.equal(trigger(player, contactId).handled, true);
+    assert.deepEqual(player.sent, [], `${unlock} = 0: list stays open, nothing sent`);
+    player.varbits.set(CacheDefinitions.getVarbitId(unlock), 1);
+    trigger(player, contactId);
+    assert.deepEqual(player.sent, [["sendVarbit", 5006, contactId], ["sendInterfaceRemoval"]]);
+  }
+  assert.deepEqual(seen, Array(3).fill(["magic:npc-contact-selected", "npc-dialogue:start"]).flat());
+});
+
+test("the locks are cs2 9733's: every condition reads a real varbit, and the always-open contacts stay open", () => {
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
+  const player = caster();
+  for (const contactId of NpcContact._test.getContacts().keys()) NpcContact._test.locked(player, contactId);
+  // Lanthus, Turael, Mazchna, Vannaka, Chaeldar, Nieve, Duradel: alternates at most, never locked.
+  for (const contactId of [3, 6, 7, 8, 9, 10, 11]) assert.equal(NpcContact._test.locked(player, contactId), false);
+  const { locked } = NpcContact._test;
+  const dream = CacheDefinitions.getVarbitId("dream_prog"), wgs = CacheDefinitions.getVarbitId("wgs");
+  player.varbits.set(dream, 15);
+  assert.equal(locked(player, 13), true, "Cyrisus before Dream Mentor's stage 16");
+  player.varbits.set(dream, 16);
+  player.varbits.set(wgs, 300);
+  assert.equal(locked(player, 13), false, "Cyrisus while While Guthix Sleeps recruits him");
+  player.varbits.set(wgs, 661);
+  assert.equal(locked(player, 13), true);
+  assert.equal(locked(player, 22), true, "Spria before porcine 40");
+  player.varbits.set(CacheDefinitions.getVarbitId("porcine"), 40);
+  assert.equal(locked(player, 22), false);
+  player.varps.set(77, 2);
+  assert.equal(locked(player, 19), false, "Barbarian Guard at varp 77 = 2");
+  player.varps.set(77, 0);
+  assert.equal(locked(player, 19), true);
+  player.varps.set(76, 6);
+  assert.equal(locked(player, 19), false);
 });

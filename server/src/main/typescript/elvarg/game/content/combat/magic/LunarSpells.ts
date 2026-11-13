@@ -822,12 +822,20 @@ export class LunarSpells {
         if (NPC_CONTACT_PENDING.has(player) || !spell.castable(player)) return true;
         NPC_CONTACT_PENDING.add(player);
         spell.playCast(player);
+        const modal = player.getInterfaceId();
+        let ticks = 0;
         TaskManager.submit(new class extends Task {
-            constructor() { super(NPC_CONTACT_TICKS, false); }
+            constructor() { super(1, false); }
             execute(): void {
+                // Ours (no capture dies or opens a modal mid-cast): dying, logging out or another modal taking the
+                // screen ends the cast unpaid, so it never pays or opens the list in a later life or over that modal.
+                const now = player.getInterfaceId();
+                const ended = !player.isRegistered() || player.isDyingReturn() || player.getHitpoints() <= 0
+                    || (now !== modal && now !== -1);
+                if (!ended && ++ticks < NPC_CONTACT_TICKS) return;
                 this.stop();
                 NPC_CONTACT_PENDING.delete(player);
-                if (!player.isRegistered() || !spell.canCast(player, true)) return;
+                if (ended || !spell.canCast(player, true)) return;
                 player.getSkillManager().addExperiences(Skill.MAGIC, spell.data.experience);
                 PluginManager.emitCustomEvent("magic:npc-contact", { player });
             }

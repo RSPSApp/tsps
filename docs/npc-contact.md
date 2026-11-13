@@ -27,6 +27,14 @@ contacts in `server/plugins/interface/NpcContact.plugin.js` with `server/plugins
 - Slayer masters (Turael, Mazchna, Vannaka, Chaeldar, Nieve, Duradel, Krystilia, Konar, Spria, Mortimer):
   the NPC's own Talk-to through `npc-dialogue:start`, with no NPC in the world.
 - Ours: a second click on the spell before the list has opened is ignored, so one list costs one cast.
+- Ours: dying, logging out or another modal opening before the list does ends the cast unpaid (no capture
+  shows either), so it never pays or opens the list in a later life or over that modal. Walking doesn't.
+- Locked contacts are refused: cs2 9733's lock conditions (the greyed-out head) are checked again on the
+  trigger, since the greyed row still has its Contact op. The list stays open and nothing is sent (ours).
+  For example Krystilia needs `wilderness_master_warning`, Konar `konar_spoken`, Mortimer
+  `mortimer_introduction`, Spria `porcine` 40, Cyrisus `dream_prog` 16 and `wgs` 660 or less.
+- Ours (no capture sets them): speaking to Konar sets `konar_spoken`, and Krystilia's first task sets
+  `wilderness_master_warning` (Wiki: she can be contacted after the first Wilderness assignment).
 - `magic:npc-contact-selected { player, name, contactId, handled }` goes first, so content can answer a
   contact itself. While Guthix Sleeps uses it to recruit Turael, Mazchna, Duradel and Cyrisus.
 
@@ -35,8 +43,7 @@ contacts in `server/plugins/interface/NpcContact.plugin.js` with `server/plugins
 - Other contacts (Honest Jimmy, Bert, Advisor Ghrim, Dark Mage, Lanthus, Murphy, Cyrisus, Smoggy, Ginea,
   Watson, Barbarian Guard, Amy, Random) have no captured or transcribed contact conversation that works without the NPC in the world.
   They get "You contact <name>." (ours, kept from the old chat menu).
-- Ours: the server trusts the client's list. Locked contacts are greyed out by the client and not refused
-  again here. Alternate NPCs (Aya, Achtryn, Kuradal, Steve) are not chosen. The spell's right-click
+- Alternate NPCs (Aya, Achtryn, Kuradal, Steve) are not chosen. The spell's right-click
   re-contact (Wiki) and Amy's contract op are not handled.
 - The `busy` varbit (12393) the cast toggles is not sent.
 - The Wiki astral-contact variants of Honest Jimmy, Murphy and Cyrisus are not used yet. Murphy's and

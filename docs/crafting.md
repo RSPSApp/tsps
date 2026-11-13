@@ -94,9 +94,10 @@ Recording ids refer to the capture database at https://rsprox.net/database.
   preparations).
 - **Limestone bricks** (recording 261 tick 35, recording 690 ticks 294-303, rev 229): a chisel used
   on limestone (either way round) carves one brick per use, on the tick of the use, with no menu.
-  The brick takes the limestone's slot; `human_limestonecutting` plays, "You use the chisel on the
-  limestone and carve it into a building block." is spam, 6 Crafting XP, no sound. Two uses sent in
-  one tick carved on two ticks. The Wiki gives level 12.
+  The brick takes the first limestone's slot, whichever limestone was used (recording 690 tick 300:
+  used on slot 14, brick in slot 12); `human_limestonecutting` plays, "You use the chisel on the
+  limestone and carve it into a building block." is spam, 6 Crafting XP, no sound. The Wiki gives
+  level 12.
 
 ## Wiki-only (no capture)
 
@@ -140,6 +141,8 @@ Recording ids refer to the capture database at https://rsprox.net/database.
 - Golem crafting (Wyrmscraig) and fixing the Dorgesh-Kaan lamps: separate follow-ups.
 - Limestone bricks never fail: the Wiki says a heavy-handed carve below level 40 makes a rock
   (1.5 XP), but nothing gives the rate or the line. The level-12 refusal line is ours.
+- Limestone bricks: two uses sent in one tick both carve on that tick. Recording 690 tick 302 answered
+  the second one tick later; one capture, cause unknown.
 - Splitbark, mixed hide armour, snelms, crab armour, and the Broodoo shields.
 - Pottery: the cup crack rate, exact crack messages, messages for other pottery types and
   full-inventory cup behaviour still need capture evidence. Cups retain their previous guaranteed

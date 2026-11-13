@@ -78,14 +78,14 @@ function useOn(f, usedSlot, targetSlot) {
 
 const crafting = (f) => f.p.getSkillManager().getExperience(core.Skill.CRAFTING);
 
-test("a chisel on limestone carves one brick in the limestone's slot, as recording 261 shows", (t) => {
+test("a chisel on limestone carves one brick in the first limestone's slot, as recordings 261 and 690 show", (t) => {
   const f = actor(t);
   hold(f, I.LIMESTONE, I.LIMESTONE, I.CHISEL);
   const xp = crafting(f);
   const event = useOn(f, 2, 1);
   assert.equal(event.handled, true);
-  assert.equal(f.inv.get(1)?.getId(), I.LIMESTONE_BRICK, "the brick takes the used-on limestone's slot");
-  assert.equal(f.inv.get(0)?.getId(), I.LIMESTONE, "one brick per use, no menu or repeat");
+  assert.equal(f.inv.get(0)?.getId(), I.LIMESTONE_BRICK, "recording 690 tick 300: used on a later limestone, the brick is in the first one's slot");
+  assert.equal(f.inv.get(1)?.getId(), I.LIMESTONE, "the used limestone stays; one brick per use, no menu or repeat");
   assert.equal(f.inv.getAmount(I.CHISEL), 1, "the chisel stays");
   assert.equal(crafting(f) - xp, 6, "Wiki and recording 261: 6 Crafting XP");
   assert.deepEqual(f.log.animations, [core.CacheDefinitions.getSeqId("human_limestonecutting")]);

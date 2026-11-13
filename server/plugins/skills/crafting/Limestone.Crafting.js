@@ -1,7 +1,8 @@
 /**
  * A chisel on limestone carves a limestone brick (https://oldschool.runescape.wiki/w/Limestone_brick:
  * level 12 Crafting, 6 XP, 0 ticks). rsprox captures (recordings 261 and 690, rev 229): each use
- * carves one brick on the tick of the use, with no menu; the brick takes the limestone's slot,
+ * carves one brick on the tick of the use, with no menu; the brick takes the first limestone's slot,
+ * whichever limestone was used (recording 690 tick 300: used on slot 14, brick in slot 12),
  * human_limestonecutting plays, the line below is spam, 6 Crafting XP, and no sound.
  *
  * Not covered: the Wiki says carving can fail below level 40, making a rock for 1.5 XP, but no
@@ -37,7 +38,8 @@ function carveLimestone(event) {
     player.sendMessage(TOO_LOW_MESSAGE);
     return;
   }
-  limestone.setId(I.LIMESTONE_BRICK);
+  const first = inventory.getItems().find((item) => item?.getId() === I.LIMESTONE);
+  first.setId(I.LIMESTONE_BRICK);
   inventory.refreshItems();
   player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_limestonecutting")));
   Shared.spam(player, CARVE_MESSAGE);

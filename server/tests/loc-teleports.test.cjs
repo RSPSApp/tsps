@@ -744,7 +744,9 @@ test("H.A.M. diary credit requires the exact entrance and landing, and a complet
     runTicks(visit, 3);
     assert.equal(done(visit), 0, "blocked, logged-out or interrupted travel gives no diary credit");
   }
-  const other = explorer([3077, 3492, 0]);
+  // Evil Dave's trapdoor, already open (varbit 1888), so option 1 is its Go-down.
+  const other = varbitExplorer([3077, 3492, 0]);
+  other.player.getPacketSender().sendVarbit(1888, 1);
   hooks.object({ player: other.player, object: locAt(12266, 3077, 3493, 0), clickType: 1, handled: false });
   runTicks(other, 6);
   assert.equal(other.player.getLocation().getY(), 9893, "another real trapdoor route still works");
@@ -1062,6 +1064,65 @@ test("Draynor's trapdoor opens as captured, into the open trapdoor Ladders climb
   assert.deepEqual(visit.ticks, [["message You open the trapdoor."], ["anim 536", "sound 91"], []]);
   assert.ok(MapObjects.get(6435, new core.Location(3084, 3272, 0), null), "the open trapdoor is in place");
   assert.equal(MapObjects.get(6434, new core.Location(3084, 3272, 0), null), null, "the closed one is gone");
+});
+
+/** An explorer whose client varbits are kept, as a real PacketSender keeps them. */
+function varbitExplorer(at) {
+  const visit = explorer(at);
+  const varbits = new Map();
+  const sender = visit.player.getPacketSender();
+  visit.player.getPacketSender = () => new Proxy(sender, {
+    get: (target, key) => {
+      if (key === "sendVarbit") return (id, value) => (varbits.set(id, value), target.sendVarbit(id, value));
+      if (key === "getVarbit") return (id) => varbits.get(id) ?? 0;
+      return target[key];
+    },
+  });
+  return { ...visit, varbits };
+}
+
+test("Evil Dave's trapdoor opens and closes per player by its varbit, and only the open one goes down", () => {
+  // Captured (rec 3212, rev 232; the user's Edgeville capture): Open sets varbit 1888
+  // hundred_dave_trapdoor 0 -> 1 with synth sound 89, Close sets it back with 88, on the tick
+  // the open trapdoor's Go-down plays its animation. Going down leaves it open.
+  const varbit = CacheDefinitions.getVarbitId("hundred_dave_trapdoor");
+  assert.equal(varbit, 1888);
+  const trapdoor = locAt(12266, 3077, 3493, 0);
+  const click = (visit, clickType) => {
+    const event = { player: visit.player, object: trapdoor, objectId: trapdoor.getId(), clickType, handled: false };
+    hooks.object(event);
+    return event.handled;
+  };
+
+  const visit = varbitExplorer([3078, 3493, 0]);
+  assert.equal(click(visit, 2), false, "the closed trapdoor has no Close");
+  assert.equal(click(visit, 1), true);
+  runTicks(visit, 2);
+  assert.deepEqual(visit.ticks, [[], ["sound 89", "varbit 1888=1"], []], "Open opens it in place");
+  assert.equal(visit.varbits.get(varbit), 1);
+  assert.deepEqual(visit.player.getAttribute(LocTeleports._test.TOGGLED_ATTRIBUTE), { hundred_dave_trapdoor: 1 });
+  assert.deepEqual([visit.player.getLocation().getX(), visit.player.getLocation().getY()], [3078, 3493], "Open doesn't go down");
+
+  const closing = visit.ticks.length - 1;
+  assert.equal(click(visit, 2), true);
+  runTicks(visit, 2);
+  assert.deepEqual(visit.ticks.slice(closing), [[], ["sound 88", "varbit 1888=0"], []], "Close closes it");
+  assert.deepEqual(visit.player.getAttribute(LocTeleports._test.TOGGLED_ATTRIBUTE), { hundred_dave_trapdoor: 0 });
+
+  click(visit, 1);
+  runTicks(visit, 2);
+  const down = visit.ticks.length - 1;
+  assert.equal(click(visit, 1), true, "the open trapdoor's option 1 is Go-down");
+  runTicks(visit, 4);
+  assert.deepEqual(visit.ticks.slice(down), [[], ["anim 827"], [], ["move 3077,9893,0"], []]);
+  assert.equal(visit.varbits.get(varbit), 1, "it stays open");
+});
+
+test("a toggled trapdoor is sent again at login, as live sends varbit 1888 on login", () => {
+  const visit = varbitExplorer([3078, 3493, 0]);
+  visit.player.setAttribute(LocTeleports._test.TOGGLED_ATTRIBUTE, { hundred_dave_trapdoor: 1 });
+  hooks.login({ player: visit.player });
+  assert.deepEqual(visit.ticks[0], ["varbit 1888=1"]);
 });
 
 test("Monk's Friend keeps its cave ladder; other cellar ladders of that id go where the captures show", () => {

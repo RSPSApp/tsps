@@ -4,6 +4,7 @@ import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
 import {
     classifyNpcSpawnPatch,
     HiddenNpcSpawns,
+    loadNpcSpawnRegion,
     parseNpcSpawnRecords,
     parseNpcSpawns,
 } from "../game/plugins/editmode/hostProtocol/npcSpawnMessage";
@@ -46,6 +47,30 @@ const canvas = document.querySelector("canvas")!;
     assert.equal(hidden.visible(pair).length, 1, "undoing a marker brings one back");
     hidden.show(key);
     assert.equal(hidden.visible([...pair, { id: 4, tileX: 3300, tileY: 3300, plane: 0 }]).length, 3);
+}
+
+{
+    // A region that loads after a removal marker keeps the hidden spawn as a hidden entry with its own id, so
+    // undoing the marker (showNpcSpawn finds a hidden entry) brings it back without reloading the region.
+    const man = { id: 3, tileX: 3300, tileY: 3300, plane: 0 };
+    const other = { id: 4, tileX: 3301, tileY: 3300, plane: 0 };
+    const hidden = new HiddenNpcSpawns();
+    hidden.hide("3:3300:3300:0");
+    const spawned: unknown[] = [];
+    let nextId = 70000;
+    let reserved = 80000;
+    const entries = loadNpcSpawnRegion([man, man, other], hidden, (spawn) => {
+        spawned.push(spawn);
+        return nextId++;
+    }, () => reserved++);
+    assert.deepEqual(spawned, [man, other], "only the visible spawns are spawned");
+    assert.deepEqual(entries, [
+        { spawn: man, serverId: 80000, hidden: true },
+        { spawn: man, serverId: 70000 },
+        { spawn: other, serverId: 70001 },
+    ], "the marker's spawn stays listed, hidden, under a reserved id");
+    assert.deepEqual(loadNpcSpawnRegion([man], new HiddenNpcSpawns(), () => undefined, () => reserved++), [],
+        "a spawn the client could not create is left out, as before");
 }
 
 {

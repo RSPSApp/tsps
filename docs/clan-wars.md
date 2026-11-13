@@ -868,11 +868,13 @@ guessed destinations or artificial resource actions are added. Boat/debris
 movement and projectile blocking remain distinct from the source torch and
 skeleton's projectile-passable movement blocking.
 
-Required fixture coverage includes all four ordinary tree approaches and native
-harvest/stump/respawn, cancellation and stale/foreign refusal, destruction while
-depleted followed by actual slot reuse, concurrent-match/world preservation,
-full clipping restoration, real holding/orb/Exit and both Forfeit paths, ordinary
-melee and obstacle detours, existing layouts and shared restrictions. At this
-early source stage these are proof obligations, not observed runtime outcomes.
+Existing native and Rules fixtures exercise all four ordinary tree approaches and
+native harvest/stump/respawn, cancellation and stale/foreign refusal, destruction
+while depleted followed by actual slot reuse, concurrent-match/world preservation,
+full clipping and mapped-settings restoration, real holding/orb/Exit and both
+Forfeit paths, ordinary melee and obstacle detours, existing layouts and shared
+restrictions. This describes implemented coverage; observed outcomes and failure
+history accompany the PR. The XP control checks 25 base XP against the actual
+world rate with an allowed multiplier-one gate, unlocked and uncapped XP.
 Supplied setup/RNG, source graphs, decoded inputs and native handlers do not
 establish rendered geometry, login transport, retail timing or all of issue #153.

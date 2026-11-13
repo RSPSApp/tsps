@@ -1125,6 +1125,14 @@ test("as captured: another bank op under an unanswered Enter amount prompt runs,
   assert.equal(sent.filter((id) => id === TRIGGER_ONDIALOGABORT).length, 1);
   assert.equal(player.getEnteredAmountAction(), null);
 
+  // Search opens the client's own search box over the prompt; an abort would close that box too.
+  op(7, 5, 995);
+  assert.ok(player.getEnteredAmountAction(), "PRE: Deposit-X asks again");
+  sent.length = 0;
+  assert.equal(Bank.handleWidgetAction(player, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.SEARCH_CHILD, buttonNum: 1 }), true);
+  assert.ok(!sent.includes(TRIGGER_ONDIALOGABORT), "Search sends no abort");
+  assert.equal(player.getEnteredAmountAction(), null, "but the prompt's answer is dropped");
+
   // An op that asks again replaces the prompt instead of aborting it.
   op(7, 5, 995);
   const first = player.getEnteredAmountAction();

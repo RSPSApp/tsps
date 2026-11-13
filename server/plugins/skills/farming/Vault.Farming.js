@@ -374,6 +374,12 @@ function click(event) {
         action > 10
     )
         return;
+    if (buttonId === uid("seed_vault:search")) {
+        // Script2865 owns local text input and filtering. Its search box replaced a count prompt,
+        // which an abort would close too (script 138), so only the prompt's answer is dropped.
+        player.setEnteredAmountAction(null);
+        return;
+    }
     player.getPacketSender().abortInputPrompt();
     const farm = session.farm,
         settings = farm.vaultSettings;
@@ -404,7 +410,6 @@ function click(event) {
             }
             return;
         }
-        if (buttonId === uid("seed_vault:search")) return; // Script2865 owns local text input and filtering.
         if (buttonId === uid("seed_vault:category_list")) {
             const offset =
                 player

@@ -288,7 +288,9 @@ function listClick({ player, slot }) {
  */
 function blockFromList(player, master, entry) {
   const taskId = entry.task.id;
-  if (!isBlocked(player, master, taskId) && fillBlockSlot(player, master, taskId)) {
+  // The menu's answer can come after an unlock or toggle changed: block only what the master can still assign.
+  if (!isBlocked(player, master, taskId) && Tasks.eligible(player, master, entry, new Set())
+    && fillBlockSlot(player, master, taskId)) {
     player.sendMessage(LIST_BLOCKED.replace("{name}", entry.task.displayName));
     if (Tasks.current(player)?.taskId === taskId) Tasks.clear(player);
   }

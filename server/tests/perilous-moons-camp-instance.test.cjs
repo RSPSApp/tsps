@@ -284,3 +284,16 @@ test("leaving the copy mid-Build closes the Build's fade and builds nothing", as
   assert.equal(f.player.getAttribute(CAMPS_ATTRIBUTE) ?? 0, 0, "no camp counted");
   assert.equal(f.player.getInventory().getAmount(SUPPLIES), 1, "supplies kept");
 });
+
+test("the Earthbound copy has its moths and cockatrices but none of the map's wyrmlings", async (t) => {
+  const f = actor(t, [1422, 9651, 1]);
+  ticks(f, 2);
+  quest().setStage(f.player, 10);
+  f.player.getInventory().add(new core.Item(SUPPLIES, 1), true);
+  await click(f, O.DIAGONAL, [1421, 9650, 1], [1422, 9651, 1]);
+  const area = copyOf(f);
+  assert.ok(area);
+  const ids = [...core.World.getNpcs()].filter((n) => n && n.getPrivateArea?.() === area).map((n) => n.getId());
+  assert.equal(ids.includes(13031), false, "rec 1693's Earthbound copy had no wyrmlings");
+  assert.ok(ids.includes(13030) && ids.includes(12771), "moonlight cockatrices and moths");
+});

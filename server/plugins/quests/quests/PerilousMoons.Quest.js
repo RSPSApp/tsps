@@ -311,7 +311,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
   // areas the capture's copies used (lines 21973, 23191, 26022/26889, 29668 of the transcript;
   // Earthbound's is 8x13 chunks, so 13 square). `boxes` are the cavern's tiles, which pick the copy
   // for a destination or a login tile; `exit` is where a logout inside it is saved (the landing).
-  // `npcIds`: the map spawns the capture's copy had (the antechamber's and prison's had no moths).
+  // `npcIds`: the map spawns the capture's copy had (the antechamber's and prison's had no moths,
+  // Earthbound's no wyrmlings, which the real map adds from stage 15).
   const CAVERNS = [
     {
       key: "antechamber", sourceChunk: [176, 1200], size: 8, exit: NEYPOTZLI_LANDING,
@@ -322,7 +323,10 @@ module.exports = function registerPerilousMoonsQuest(api) {
       key: "prison", sourceChunk: [168, 1192], size: 8, exit: PRISON_LANDING, camp: CAMP_SITES[0],
       boxes: [[1344, 1407, 9536, 9599, 0]], npcIds: [NpcIdentifiers.SULPHUR_NAGUA_2],
     },
-    { key: "earthbound", sourceChunk: [168, 1208], size: 13, exit: EARTHBOUND_LANDING, camp: CAMP_SITES[1], boxes: [[1344, 1407, 9664, 9767, 0]] },
+    {
+      key: "earthbound", sourceChunk: [168, 1208], size: 13, exit: EARTHBOUND_LANDING, camp: CAMP_SITES[1],
+      boxes: [[1344, 1407, 9664, 9767, 0]], npcIds: [NpcIdentifiers.MOONLIGHT_MOTH, NpcIdentifiers.MOONLIGHT_COCKATRICE],
+    },
     { key: "streambound", sourceChunk: [184, 1208], size: 8, exit: STREAMBOUND_LANDING, camp: CAMP_SITES[2], boxes: [[1472, 1535, 9664, 9727, 0]] },
   ];
   const CAVERN_SCENE_PREFIX = "neypotzli-";

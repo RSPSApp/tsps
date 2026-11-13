@@ -746,6 +746,15 @@ test("the amulet leaves unfinished potions and 4-dose potions alone, and extends
   });
 });
 
+test("the amulet's message names the doses the brew came out with (a 1-dose input makes a 2-dose potion)", () => {
+  rolling(true, () => {
+    const who = player([["1dose2energy"], ["amylase"]], 77, { amulet: "amulet_of_chemistry" });
+    use(who, "amylase", "1dose2energy");
+    assert.equal(who.inv.count("2dosestamina"), 1);
+    assert.equal(who.sent.spam.at(-1), "Your amulet of chemistry helps you create a 2-dose potion. It has 4 charges left.");
+  });
+});
+
 // Wiki Amulet_of_chemistry: "Despite not being a potion, the amulet also affects Haemostatic dressing,
 // creating 4 'doses' instead of 3."
 test("the amulet gives a haemostatic dressing its fourth dose too", () => {

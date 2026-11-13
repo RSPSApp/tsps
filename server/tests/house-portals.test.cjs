@@ -245,6 +245,45 @@ test("a Group Ironman may visit a group member's house; anyone else's is refused
   House.releaseHouse(stranger, true);
 });
 
+test("Teleport to House's Group options land at a group mate's house portal and take the player in; building mode refuses", () => {
+  const Common = require("../plugins/modes/ironman/Common.Ironman");
+  const mate = hostWithHouse("grouphost");
+  api.onCustomEvent("grouping:same-group", (query) => {
+    query.same = query.other === mate;
+    query.ironman = query.same;
+  });
+  const visitor = (name) => {
+    const player = playerFixture(name);
+    Common.setMode(player, "group");
+    return player;
+  };
+  const ask = (player) => {
+    const request = { player, owner: mate, destination: null, onArrival: null, refused: false };
+    api.emitCustomEvent("construction:group-house", request);
+    return request;
+  };
+  const tablet = visitor("tabletvisitor");
+  const request = ask(tablet);
+  assert.equal(request.refused, false);
+  assert.ok(request.destination, "the owner's house portal");
+  request.onArrival();
+  assert.equal(House.houseFor(tablet), House.houseFor(mate), "in as a guest");
+
+  const caster = visitor("spellvisitor");
+  ask(caster);
+  api.emitCustomEvent("spell:teleport-arrival", { player: caster, name: "teleport to house", option: "group" });
+  assert.equal(House.houseFor(caster), House.houseFor(mate), "the spell's arrival, option group, does the same");
+
+  const late = visitor("latevisitor");
+  House.houseFor(mate).buildingMode = true;
+  const refusals = withRefusals(() => assert.equal(ask(late).refused, true));
+  assert.deepEqual(refusals, ["Hosty is in building mode at the moment."]);
+  House.houseFor(mate).buildingMode = false;
+  House.releaseHouse(caster, true);
+  House.releaseHouse(tablet, true);
+  House.releaseHouse(mate, true);
+});
+
 test("each failed visit gets its own line: offline or private, building mode, locked", () => {
   const guest = playerFixture("guesty");
   click(guest, portalId, 4);

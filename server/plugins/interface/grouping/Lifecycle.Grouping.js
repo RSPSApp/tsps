@@ -182,6 +182,11 @@ function targetAccount(target) {
   return typeof target === "string" ? Members.typed(target) : Members.identify(target)?.account;
 }
 
+/** "grouping:stay" { player }: as ::group stay (the group settings' Cancel Leave); sets stayed. */
+function answerStay(request) {
+  request.stayed = Leaving.stay(request.player) === true;
+}
+
 /** "grouping:kick" { player, target }: as ::group kick (the Group Ironman tab's Kick); sets kicked. */
 function answerKick(request) {
   request.kicked = Leaving.kick(request.player, targetAccount(request.target)) === true;
@@ -200,6 +205,6 @@ function answerInvite(request) {
 
 module.exports = {
   STORAGE_EVENT, STORAGE_NOT_MEMBER, STORAGE_UNAVAILABLE, NO_LONGER_IN_GROUP, LEADER_GRACE_TICKS, SETTLE_TICKS,
-  init, settle, start, login, logout, openStorage, answerGet, answerCreate, answerLeave, answerKick, answerDisband,
+  init, settle, start, login, logout, openStorage, answerGet, answerCreate, answerLeave, answerStay, answerKick, answerDisband,
   answerInvite,
 };

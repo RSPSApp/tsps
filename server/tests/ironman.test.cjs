@@ -313,6 +313,17 @@ test("an Ironman gets no combat experience from fighting players", () => {
   assert.equal(cooking.allow, null);
 });
 
+test("a Group Ironman gets an eighth of the combat experience from fighting players (Wiki)", () => {
+  const gim = account("gim", "group");
+  const target = account("pker");
+  target.isPlayer = () => true;
+  gim.getCombat = () => ({ getTarget: () => target });
+  const event = { player: gim, skill: core.Skill.STRENGTH, experience: 40, allow: null, multiplier: 1 };
+  hooks.onCanGainExperience(event);
+  assert.equal(event.allow, null);
+  assert.equal(event.multiplier, 1 / 8);
+});
+
 test("loot from a player an Ironman kills is registered to the fallen player, out of the Ironman's reach", () => {
   const iron = account("iron", "ironman");
   const fallen = account("fallen");

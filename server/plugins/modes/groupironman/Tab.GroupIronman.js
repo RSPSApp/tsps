@@ -16,6 +16,8 @@
  */
 
 const Common = require("./Common.GroupIronman");
+const Recruiting = require("./Recruiting.GroupIronman");
+const Settings = require("./Settings.GroupIronman");
 const Variants = require("./Variants.GroupIronman");
 
 const GIM_CLAN = 1;
@@ -33,13 +35,11 @@ const LIST_PLAYERS_SCRIPT = 4448;
 const NAME_BUTTON_SCRIPT = 4447;
 const CREATE_NAME_ENUM = 4053;
 const LIMITED_SCRIPT = 5261;
-/** The Node's islands, as npc-spawn-sync.json boxes them. */
-const NODE_BOX = Object.freeze({ minX: 3072, minY: 2995, maxX: 3135, maxY: 3071 });
 const MESSAGE = Object.freeze({
   NO_GROUP_NODE: "Create a group here, then invite other Group Ironmen.",
   NO_GROUP: "You are not in a group. Groups are formed on The Node.",
   NAME_PROMPT: "Enter your group's name:",
-  INVITE_HELP: "Invite players with ::group invite <name>.",
+  INVITE_HELP: "Use Invite on a player, or ::group invite <name>.",
 });
 
 let updateNum = 0;
@@ -55,11 +55,6 @@ function runeDay(ms) {
 
 function send(player, packet) {
   player.getSession?.()?.sendClientPacket?.(packet);
-}
-
-function onNode(player) {
-  const at = player.getLocation();
-  return at.getX() >= NODE_BOX.minX && at.getX() <= NODE_BOX.maxX && at.getY() >= NODE_BOX.minY && at.getY() <= NODE_BOX.maxY;
 }
 
 function settingsSnapshot(group, record) {
@@ -106,6 +101,7 @@ function sendRoles(player, member) {
   const sender = player.getPacketSender();
   sender.sendVarbit(varbit("gim_i_am_leader"), member?.role === "leader" ? 1 : 0);
   sender.sendVarbit(varbit("gim_i_am_member"), member ? 1 : 0);
+  sender.sendVarbit(varbit("gim_pending_leave"), member?.leaving ? 1 : 0);
 }
 
 /** gim_sidepanel's data: the group as clan type 1, and the varbits its scripts read first. */
@@ -114,7 +110,7 @@ function sendGroup(player, group, member, record) {
   const sender = player.getPacketSender();
   sendRoles(player, member);
   sender.sendVarbit(varbit("gim_affinitystatus"), 3);
-  sender.sendVarbit(varbit("gim_invitationstatus"), member?.role === "leader" ? 2 : 0);
+  sender.sendVarbit(varbit("gim_invitationstatus"), Recruiting.statusOf(player, member));
   send(player, encodeClanSettingsFull(GIM_CLAN, settingsSnapshot(group, record)));
   send(player, encodeClanChannelFull(GIM_CLAN, channelSnapshot(group)));
 }
@@ -129,6 +125,7 @@ function sendCreation(player, group, member) {
   }
   if (member?.role === "leader") {
     sender.sendInterfaceFlagsRange(uid("gim_creation_sidepanel:contents"), 0, 4, 1 << 1);
+    Recruiting.targetFlags(player, member);
   }
 }
 
@@ -136,7 +133,7 @@ function sendLimited(player) {
   const { encodeClanSettingsFull, encodeClanChannelFull } = Common.api.core;
   send(player, encodeClanSettingsFull(GIM_CLAN, null));
   send(player, encodeClanChannelFull(GIM_CLAN, null));
-  const here = onNode(player);
+  const here = Recruiting.onNode(player);
   player.getPacketSender().sendClientScript(LIMITED_SCRIPT, uid("gim_limited_sidepanel:button"), here ? 1 : 0,
     uid("gim_limited_sidepanel:text"), here ? MESSAGE.NO_GROUP_NODE : MESSAGE.NO_GROUP);
 }
@@ -196,7 +193,7 @@ function click(event) {
   event.handled = true;
   const api = Common.api;
   if (buttonId === uid("gim_limited_sidepanel:button")) {
-    if (onNode(player)) api.emitCustomEvent("grouping:create", { player });
+    if (Recruiting.onNode(player)) api.emitCustomEvent("grouping:create", { player });
   } else if (buttonId === uid("gim_creation_sidepanel:name")) {
     player.setEnteredSyntaxAction({ execute: (name) => api.emitCustomEvent("grouping:rename", { player, name }) });
     player.getPacketSender().sendEnterInputPrompt(MESSAGE.NAME_PROMPT);
@@ -208,12 +205,18 @@ function click(event) {
   } else if (buttonId === uid("gim_creation_sidepanel:contents") && Number.isInteger(slot)) {
     const target = Common.groupOf(player).group?.members[slot];
     if (target) api.emitCustomEvent("grouping:kick", { player, target: target.name });
-  } else if (buttonId === uid("gim_sidepanel:invite") || buttonId === uid("gim_creation_sidepanel:invite")) {
+  } else if (buttonId === uid("gim_sidepanel:invite")) {
+    Recruiting.toggle(player);
+  } else if (buttonId === uid("gim_creation_sidepanel:invite")) {
     player.getPacketSender().sendMessage(MESSAGE.INVITE_HELP);
+  } else if (buttonId === uid("gim_sidepanel:settings")) {
+    Settings.open(player);
+  } else if (buttonId === uid("gim_sidepanel:refresh") || buttonId === uid("gim_creation_sidepanel:refresh")) {
+    refresh(player);
   }
 }
 
 module.exports = {
-  GIM_CLAN, SETTING, TAB_VALUE, NODE_BOX, MESSAGE,
-  onNode, settingsSnapshot, channelSnapshot, gimTab, changed, recordChanged, modeChanged, click,
+  GIM_CLAN, SETTING, TAB_VALUE, MESSAGE,
+  settingsSnapshot, channelSnapshot, gimTab, changed, recordChanged, modeChanged, click,
 };

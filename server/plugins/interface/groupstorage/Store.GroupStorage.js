@@ -3,7 +3,7 @@
 /**
  * Every group's storage, written whole to data/saves/group-storage.json (TSPS_GROUP_STORAGE_FILE
  * overrides it) at each save, as the groups' own store is: one write per Save, atomically through
- * a temporary file. A storage is keyed by its Grouping group id and is a row of CAPACITY slots,
+ * a temporary file. A storage is keyed by its Grouping group id and is a row of up to MAX_CAPACITY slots,
  * each { id, amount } or empty (null); withdrawing leaves the slot empty until "Shuffle items up".
  *
  * Nothing is thrown away: a group that ends with items still stored (Grouping refuses that, but a
@@ -16,8 +16,9 @@ const path = require("path");
 
 const FILE_ENV = "TSPS_GROUP_STORAGE_FILE";
 const DEFAULT_FILE = path.join("data", "saves", "group-storage.json");
-/** Wiki (Group Ironman Mode): "Initially, there are 80 bank spaces." Unlocks to 200 aren't built. */
+/** Wiki (Group Ironman Mode): "Initially, there are 80 bank spaces", unlocked "up to a maximum of 200". */
 const CAPACITY = 80;
+const MAX_CAPACITY = 200;
 
 /** groupId -> { slots: Array<{ id, amount } | null>, ended: ms (0 while the group lasts) } */
 let storages = null;
@@ -26,14 +27,14 @@ function file() {
   return process.env[FILE_ENV] || path.join(process.cwd(), DEFAULT_FILE);
 }
 
-function emptySlots() {
-  return Array.from({ length: CAPACITY }, () => null);
+function emptySlots(length = CAPACITY) {
+  return Array.from({ length }, () => null);
 }
 
 function revive(record) {
-  const slots = emptySlots();
+  const slots = emptySlots(MAX_CAPACITY);
   for (const [slot, id, amount] of record.items ?? []) {
-    if (Number.isInteger(slot) && slot >= 0 && slot < CAPACITY && id > 0 && amount > 0) slots[slot] = { id, amount };
+    if (Number.isInteger(slot) && slot >= 0 && slot < MAX_CAPACITY && id > 0 && amount > 0) slots[slot] = { id, amount };
   }
   return { slots, ended: Number(record.ended) || 0 };
 }
@@ -70,10 +71,15 @@ function save() {
   fs.renameSync(temporary, target);
 }
 
-/** A copy of the group's slots (CAPACITY of them, empty ones null). */
-function slotsOf(groupId) {
-  const storage = load().get(Number(groupId));
-  return (storage?.slots ?? emptySlots()).map((item) => (item ? { ...item } : null));
+/**
+ * A copy of the group's slots, empty ones null: `size` of them (CAPACITY at least), or more when
+ * items sit further on (a storage never hides what it holds).
+ */
+function slotsOf(groupId, size = CAPACITY) {
+  const stored = load().get(Number(groupId))?.slots ?? [];
+  const last = stored.reduce((at, item, slot) => (item ? slot : at), -1);
+  const length = Math.min(MAX_CAPACITY, Math.max(CAPACITY, size, last + 1));
+  return Array.from({ length }, (_, slot) => (stored[slot] ? { ...stored[slot] } : null));
 }
 
 function isEmpty(groupId) {
@@ -82,8 +88,8 @@ function isEmpty(groupId) {
 
 /** Replaces the group's slots with `slots` and saves. */
 function commit(groupId, slots) {
-  const kept = emptySlots();
-  slots.slice(0, CAPACITY).forEach((item, slot) => {
+  const kept = emptySlots(MAX_CAPACITY);
+  slots.slice(0, MAX_CAPACITY).forEach((item, slot) => {
     if (item && item.amount > 0) kept[slot] = { id: item.id, amount: item.amount };
   });
   load().set(Number(groupId), { slots: kept, ended: 0 });
@@ -108,4 +114,4 @@ function reset() {
   storages = null;
 }
 
-module.exports = { FILE_ENV, CAPACITY, slotsOf, isEmpty, commit, end, endedAt, reset };
+module.exports = { FILE_ENV, CAPACITY, MAX_CAPACITY, slotsOf, isEmpty, commit, end, endedAt, reset };

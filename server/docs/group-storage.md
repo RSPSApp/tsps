@@ -41,7 +41,8 @@ and holds one storage per Group Ironman group.
 | --- | --- | --- |
 | Who gets in | a Group Ironman (`ironman:mode` is `group`, `group-hardcore` or `group-unranked`) in a Group Ironman group, as the store has it at the click; from a chest, or the bank's Group Storage button (`bankmain:gim_storage` op 1, `popup_button_out` op 2) | Wiki; Grouping |
 | New members' limits | what the Group Ironman plugin answers to `group-storage:limit` is shown in %if1, and a Save that takes out more is refused by `group-storage:can-withdraw` (`server/docs/group-ironman.md`) | Wiki (wealth caps) |
-| Spaces | 80; "Storage Unlocks" says they aren't available | Wiki (unlocks not built) |
+| Spaces | 80, and up to 200 as content gives more: `group-storage:capacity` { player, groupId, capacity } is asked at each opening (Group Ironman's storage unlocks); the storage draws that many | Wiki |
+| Storage Unlocks | `group-storage:unlocks` { player, groupId, popup, handled } (popup: `shared_bank:popup`); with no answer, "Storage unlocks aren't available on this world" *(ours)*. `group-storage:popup-closed` { player } puts the storage's own %if varps back after a popup used them | Wiki |
 | At a time | one member: "<name> is using the group storage." *(ours)* | Wiki |
 | Leaving member | "Deposit only" (%if2 = 1); a withdrawal: "You can't take items out of the group storage while you're leaving the group." *(ours)* | Wiki |
 | Free-to-play world | members' items can't go in or out: "To use this item please login to a members' world." (the game's line for members' items) | Wiki |
@@ -94,7 +95,8 @@ and the backpack. That window lasts one save.
 ## Persistence
 
 `data/saves/group-storage.json` (`TSPS_GROUP_STORAGE_FILE` overrides it) holds every non-empty
-storage by group id as `[slot, item, amount]` rows. It is written whole at every Save, through a
+storage by group id as `[slot, item, amount]` rows, slots 0 to 199. A storage always shows every
+slot that holds something, even past the spaces content gives it. It is written whole at every Save, through a
 temporary file. If a group ends with items still stored, its record is kept and marked `ended`, for
 an administrator to return. Grouping refuses to end such a group, but a leaver's deposit could still
 arrive as the group ends.

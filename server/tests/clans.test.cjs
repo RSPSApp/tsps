@@ -448,14 +448,17 @@ test('// reaches everyone in the channel as type 41 with the clan as prefix, exc
   assert.equal(chatText(ignorer).length, 0);
 });
 
-test('// outside a channel is refused, and a guest clan type is not ours yet', () => {
+test('// outside a channel is refused, and another clan type is left to its own content', () => {
   const self = player('Solo');
   say(self, 'hello');
   assert.deepEqual(self.notices, [[43, 'You are not currently in a clan channel.']]);
   const owner = player('Owner');
   createClan(owner);
-  const event = say(owner, 'hello', 255);
-  assert.equal(event.handled, true);
+  // Clan type 1 is a Group Ironman's group chat (GroupIronman.plugin.js), so Clans takes only its own.
+  for (const clanType of [1, 255]) {
+    const event = say(owner, 'hello', clanType);
+    assert.equal(event.handled, false);
+  }
   assert.equal(chatText(owner).length, 0);
 });
 

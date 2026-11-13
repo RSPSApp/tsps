@@ -194,6 +194,7 @@ With no handler, the player is told "Group storage isn't available on this world
 | `grouping:invite` | request | `{ player, target }` (a player or a typed name) → `invited` |
 | `grouping:create` | request | `{ player }` → `created` (a group led by them, if they are in none) |
 | `grouping:leave` | request | `{ player }` → `left` (as `::group leave`) |
+| `grouping:stay` | request | `{ player }` → `stayed` (as `::group stay`) |
 | `grouping:kick` | request | `{ player, target }` (a player or a typed name) → `kicked` (as `::group kick`) |
 | `grouping:disband` | request | `{ player }` → `disbanded` (as `::group disband`) |
 | `grouping:rename` | request | `{ player, name }` → `renamed` (the leader) |

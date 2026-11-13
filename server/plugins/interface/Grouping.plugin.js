@@ -12,7 +12,8 @@
  * - "grouping:invite" { player, target } -> invited
  * - "grouping:create" { player } -> created (a group led by them)
  * - "grouping:leave" { player } -> left; "grouping:rename" { player, name } -> renamed (the leader)
- * - "grouping:kick" { player, target } -> kicked; "grouping:disband" { player } -> disbanded
+ * - "grouping:stay" { player } -> stayed; "grouping:kick" { player, target } -> kicked;
+ *   "grouping:disband" { player } -> disbanded
  * - "grouping:leaving-period" (emitted) { groupId, group, period }: false lets a Group Ironman
  *   group's members leave at once (one still forming)
  * - "grouping:can-join" (emitted) { player, inviter, groupId, group, stage, allowed, reason }
@@ -74,6 +75,7 @@ module.exports = {
     api.onCustomEvent("grouping:members", Activities.answerMembers);
     api.onCustomEvent("grouping:create", Lifecycle.answerCreate);
     api.onCustomEvent("grouping:leave", Lifecycle.answerLeave);
+    api.onCustomEvent("grouping:stay", Lifecycle.answerStay);
     api.onCustomEvent("grouping:kick", Lifecycle.answerKick);
     api.onCustomEvent("grouping:disband", Lifecycle.answerDisband);
     api.onCustomEvent("grouping:rename", Names.answerRename);

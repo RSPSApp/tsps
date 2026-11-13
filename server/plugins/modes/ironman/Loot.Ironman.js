@@ -24,6 +24,8 @@ const WARNED_ATTRIBUTE = "ironman:kill-credit-warned";
 /** iron_noloot_message_disabled: All Settings "Iron loot restriction messages" off. */
 const LOOT_MESSAGES_DISABLED_VARBIT = 13040;
 const COMBAT_SKILLS = new Set(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS"]);
+/** The share of PvP combat experience a Group Ironman keeps (Wiki: 1/8). */
+const GROUP_PVP_EXPERIENCE = 1 / 8;
 
 function pickup(event) {
   if (cannotTake(event)) event.handled = true;
@@ -93,8 +95,10 @@ function experience(event) {
   const { player, skill } = event;
   if (!Common.isIron(player)) return;
   const name = Object.entries(Common.core.Skill).find(([, value]) => value === skill)?.[0];
-  if (!COMBAT_SKILLS.has(name)) return;
-  if (player.getCombat?.().getTarget?.()?.isPlayer?.()) event.allow = false;
+  if (!COMBAT_SKILLS.has(name) || !player.getCombat?.().getTarget?.()?.isPlayer?.()) return;
+  // Wiki (Group Ironman Mode, Combat): Group Ironmen get 1/8 of the combat experience in PvP.
+  if (Common.isGroup(player)) event.multiplier = (Number(event.multiplier) || 1) * GROUP_PVP_EXPERIENCE;
+  else event.allow = false;
 }
 
 module.exports = function attach(api) {

@@ -7,7 +7,8 @@
  * - Getting there: a Group Ironman who finishes Tutorial Island arrives here instead of the
  *   mainland ("tutorial-island:destination"); from Lumbridge, the portal by the general store
  *   (gim_portal_lumbridge, a loc only Group Ironmen see) leads here; so does the Group ironman
- *   helm's Teleport. The Node's own portal (gim_portal) leads back to it. Going to the mainland
+ *   helm's Teleport, and the rowboat at Tutorial Island's south end (gim_boat, The Node page's "boat
+ *   on southern end of Tutorial Island"). The Node's own portal (gim_portal) leads back to it. Going to the mainland
  *   the first time makes them a player who has played before (Variants.EXPERIENCED_ATTRIBUTE).
  * - Tony (Group Ironman tutor): his transcript plays on Talk-to; "Yes, leave my group." starts
  *   leaving, and a leader's "Rename group." asks for the new name. Armour, and the armour crates,
@@ -36,10 +37,12 @@ const MESSAGE = Object.freeze({
 const locId = (name) => Common.api.core.CacheDefinitions.getLocId(name);
 const location = ({ x, y, z }) => new Common.api.core.Location(x, y, z);
 
+/** Asks first (TeleportHandler.confirm: a boat at sea, the Wilderness), then teleports. */
 function teleport(player, destination) {
   const { TeleportHandler, TeleportType } = Common.api.core;
   const to = location(destination);
-  if (TeleportHandler.checkReqs(player, to)) TeleportHandler.teleport(player, to, TeleportType.NORMAL, false);
+  if (!TeleportHandler.checkReqs(player, to)) return;
+  TeleportHandler.confirm(player, to, () => TeleportHandler.teleport(player, to, TeleportType.NORMAL, false));
 }
 
 /** "tutorial-island:destination" { player, location, welcome }: a Group Ironman goes to The Node. */
@@ -61,6 +64,18 @@ function portal(event) {
   }
   if (toMainland) player.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
   teleport(player, toNode ? NODE_ARRIVAL : LUMBRIDGE_ARRIVAL);
+  return true;
+}
+
+/** The rowboat's Travel (gim_boat): a Group Ironman rows over to The Node; other "Rowboat"s aren't this unit's. */
+function rowboat(event) {
+  const { player, objectId } = event;
+  if (objectId !== locId("gim_boat")) return false;
+  if (!Common.isGroupIronman(player)) {
+    player.getPacketSender().sendMessage(MESSAGE.NOT_GROUP_IRONMAN);
+    return true;
+  }
+  teleport(player, NODE_ARRIVAL);
   return true;
 }
 
@@ -148,5 +163,5 @@ function choice(event) {
 
 module.exports = {
   NODE_ARRIVAL, LUMBRIDGE_ARRIVAL, MESSAGE, BANK_REFUSED,
-  tutorialDestination, portal, helmTeleport, armourFor, giveArmour, tonyArmour, crate, chest, bank, choice,
+  tutorialDestination, portal, rowboat, helmTeleport, armourFor, giveArmour, tonyArmour, crate, chest, bank, choice,
 };

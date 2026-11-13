@@ -54,7 +54,7 @@ before(async () => {
     getPlayers: () => ({ search: (filter) => online.find(filter) ?? null, forEach: (action) => online.forEach(action) }),
   };
   // Teleports land at once here: the travel itself is the core's.
-  const TeleportHandler = { checkReqs: () => true, teleport: (player, to) => player.moveTo(to) };
+  const TeleportHandler = { checkReqs: () => true, confirm: (player, to, proceed) => proceed(), teleport: (player, to) => player.moveTo(to) };
   core = { ...real, World, TeleportHandler, WorldDefinition: { isMembersWorld: () => true } };
 });
 
@@ -626,4 +626,194 @@ test("the tab follows changes: Grouping's for the players they touch, the group'
   refreshed.length = 0;
   gim(alice, "form");
   assert.deepEqual([...new Set(refreshed)].sort(), ["alice", "bob"], "forming redraws both");
+});
+
+// --- Storage unlocks, group settings, group chat, house teleports, inviting ---------------------
+
+const RUNE_PLATEBODY = 1127;
+const WEEK = 7 * DAY_MS;
+
+/** Ages the group's record as if it had been formed `weeks` ago. */
+function formedAgo(player, weeks) {
+  const record = recordOf(player);
+  record.formed = Date.now() - weeks * WEEK;
+  Store.update(record);
+}
+
+test("storage unlocks: the cache's 49 tasks add 120 spaces; one counts once a member opens the storage after doing it, from the group's fifth week", () => {
+  const { Unlocks } = GroupIronman._test;
+  const tasks = Unlocks.taskList();
+  assert.equal(tasks.length, 49);
+  assert.equal(tasks.reduce((sum, task) => sum + task.slots, 0), 120, "80 + 120 = the Wiki's 200");
+  assert.ok(tasks.every((task) => task.condition), "every cache task has its condition");
+  assert.match(tasks[0].text, /Rune Platebody/);
+
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  const capacity = (player) => emit("group-storage:capacity", { player, groupId: groupOf(alice).id, capacity: 80 }).capacity;
+  alice.getEquipment().setItem(core.Equipment.BODY_SLOT, new Item(RUNE_PLATEBODY, 1));
+  assert.equal(capacity(alice), 80, "not before five weeks");
+  assert.deepEqual(recordOf(alice).unlocks, []);
+
+  formedAgo(alice, 5);
+  assert.equal(capacity(alice), 83);
+  assert.ok(bob.log.messages.includes(message("storageUnlocked", { slots: 3, total: 83 })));
+  alice.getEquipment().setItem(core.Equipment.BODY_SLOT, new Item(-1, 0));
+  assert.equal(capacity(bob), 83, "an unlock is the group's for good");
+
+  bob.getSkillManager().setMaxLevels(core.Skill.MINING, 99, false);
+  assert.equal(capacity(bob), 83 + 3 + 2, "99 Mining: the gathering-skill task and the Mining one");
+  assert.deepEqual(Unlocks.bitWords(recordOf(alice)), [(1 << 0) | (1 << 2) | (1 << 22), 0]);
+
+  const snapshot = emit("grouping:get", { player: alice });
+  Storage.Access.open({ player: alice, group: snapshot.group, member: snapshot.member, handled: false });
+  assert.equal(Storage.Session.current(alice).storage.length, 88, "the storage draws the group's spaces");
+});
+
+test("group settings: Group Storage shows the unlocks in its popup; Leave Group and Cancel Leave", () => {
+  const { Settings } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  const click = (player, name) => Settings.click({ player, buttonId: core.CacheDefinitions.getComponentId(`gim_settings:${name}`), action: 1, handled: false });
+  const mounts = [];
+  const sender = bob.getPacketSender();
+  const recording = new Proxy(sender, {
+    get: (target, key) => (key === "sendSubInterface" ? (uid, id) => { mounts.push([uid, id]); return recording; } : target[key]),
+  });
+  bob.getPacketSender = () => recording;
+  click(bob, "storage_unlocks");
+  assert.deepEqual(mounts.at(-1), [core.CacheDefinitions.getComponentId("gim_settings:popup"), core.CacheDefinitions.getInterfaceId("gim_shared_bank_unlocks")]);
+  click(bob, "quit");
+  assert.ok(groupOf(alice).leaving.has(encoded("bob")), "Leave Group starts the leave");
+  click(bob, "quit");
+  assert.equal(groupOf(alice).leaving.has(encoded("bob")), false, "Cancel Leave takes it back");
+  click(bob, "hiscores");
+  assert.equal(said(bob), Settings.MESSAGE.NOT_AVAILABLE);
+});
+
+test("group chat: a line on clan type 1 reaches the group's members online, as clan chat on a channel named with a bar", () => {
+  const { Chat } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  const stranger = account("stranger");
+  formed(alice, bob);
+  emit("grouping:rename", { player: alice, name: "Iron Pals" });
+  const heard = new Map();
+  for (const player of [alice, bob, stranger]) {
+    const name = player.getUsername();
+    player.getSession = () => ({ sendClientPacket: (packet) => heard.set(name, [...(heard.get(name) ?? []), packet]) });
+    player.getHostAddress = () => "127.0.0.1";
+  }
+  const say = (clanType, text) => {
+    const event = { player: alice, packet: { type: "clan_chat", clanType, text }, handled: false };
+    for (const handler of hooks.get("onSocialPacket")) handler(event);
+    return event;
+  };
+  assert.equal(say(1, "hello group").handled, true);
+  assert.equal(heard.get("bob")?.length, 1);
+  assert.equal(heard.get("alice")?.length, 1);
+  assert.equal(heard.get("stranger"), undefined);
+  const line = heard.get("bob")[0].toString("latin1");
+  assert.ok(line.includes("|Iron Pals"), "the channel name starts with the bar the cache looks for");
+  assert.equal(Chat.channelName({ name: "" }), "|Group");
+  assert.equal(say(0, "clan").handled, false, "clan type 0 is the clan's own");
+});
+
+test("Teleport to House's Group options: Choose lists the group's members online, Previous goes back to the last one", () => {
+  const { Houses } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  const picked = [];
+  const ask = (player, previous) => emit("teleports:group-house", { player, previous, pick: (owner) => picked.push(owner.getUsername()), handled: false });
+  assert.equal(ask(alice, false).handled, false, "no group: SpellTeleports says live's line");
+  formed(alice, bob);
+  assert.equal(ask(alice, true).handled, true);
+  assert.equal(said(alice), Houses.MESSAGE.NO_PREVIOUS);
+  ask(alice, false);
+  hooks.get("sendMultiChatboxPrompt").at(-1)();
+  assert.deepEqual(picked, ["bob"]);
+  ask(alice, true);
+  assert.deepEqual(picked, ["bob", "bob"], "Previous: the same house");
+  online.splice(online.indexOf(bob), 1);
+  for (const handler of hooks.get("onPlayerLogout") ?? []) handler({ player: bob });
+  ask(alice, true);
+  assert.equal(said(alice), Houses.MESSAGE.PREVIOUS_OFFLINE);
+});
+
+test("inviting: Apply on The Node for a forming group's leader, and once formed only while Inviting; the creation panel's Invite used on a player", () => {
+  const { Recruiting, Node } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  const carl = account("carl");
+  for (const player of [alice, bob, carl]) player.moveTo(new core.Location(Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y, 0));
+  const apply = (player, target) => {
+    const event = { player, target, option: Recruiting.APPLY_OPTION_SLOT, handled: false };
+    for (const handler of hooks.get("onPlayerOption")) handler(event);
+    return event;
+  };
+  group(alice, "create");
+  apply(bob, alice);
+  assert.equal(said(bob), Recruiting.MESSAGE.NOT_LEADER);
+  wait();
+  apply(alice, bob);
+  assert.ok(groupOf(alice).invites.has(encoded("bob")), "Apply invites");
+  group(bob, "accept");
+  gim(alice, "form");
+  wait();
+  apply(alice, carl);
+  assert.equal(said(alice), Recruiting.MESSAGE.NOT_INVITING);
+  Recruiting.toggle(alice);
+  assert.equal(Recruiting.statusOf(alice, { role: "leader" }), Recruiting.STATUS.INVITING);
+  wait();
+  apply(alice, carl);
+  assert.equal(said(alice), message("warnPrestige"), "a formed group's invitation still warns first");
+
+  const dana = account("dana");
+  const erin = account("erin");
+  group(dana, "create");
+  wait();
+  const target = { player: dana, target: erin, spellWidget: core.CacheDefinitions.getComponentId("gim_creation_sidepanel:invite"), handled: false };
+  emit("magic:spell-on-player", target);
+  assert.equal(target.handled, true);
+  assert.ok(groupOf(dana).invites.has(encoded("erin")));
+});
+
+test("the rowboat at Tutorial Island's south end takes Group Ironmen to The Node", () => {
+  const { Node } = GroupIronman._test;
+  const alice = account("alice");
+  const main = account("main", null);
+  const row = (player) => {
+    let handled = false;
+    for (const actions of hooks.get("object:Rowboat")) handled = actions.Travel({ player, objectId: core.CacheDefinitions.getLocId("gim_boat") }) || handled;
+    return handled;
+  };
+  assert.equal(row(alice), true);
+  assert.deepEqual([alice.getLocation().getX(), alice.getLocation().getY()], [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y]);
+  row(main);
+  assert.equal(said(main), Node.MESSAGE.NOT_GROUP_IRONMAN);
+});
+
+test("raids with outsiders: a Hardcore group's member is refused; a group with prestige is warned, then loses it", () => {
+  const alice = account("alice", "group-hardcore");
+  const bob = account("bob", "group-hardcore");
+  formed(alice, bob);
+  const stranger = account("stranger", null);
+  const check = (players) => emit("group-pvm:can-start", { players, activity: "the Chambers of Xeric", allowed: true, reason: null });
+  assert.equal(check([alice, bob]).allowed, true, "group mates only");
+  const refused = check([alice, stranger]);
+  assert.equal(refused.allowed, false);
+  assert.equal(refused.reason, message("hardcoreOutsiders", { name: "alice", activity: "the Chambers of Xeric" }));
+
+  const carl = account("carl");
+  const dana = account("dana");
+  formed(carl, dana);
+  assert.equal(check([carl, stranger]).allowed, true);
+  assert.equal(said(carl), message("prestigeOutsidersWarning", { activity: "the Chambers of Xeric" }));
+  emit("group-pvm:started", { players: [carl, dana], activity: "the Chambers of Xeric" });
+  assert.equal(recordOf(carl).prestige, true, "with group mates only, it stays");
+  emit("group-pvm:started", { players: [carl, stranger], activity: "the Chambers of Xeric" });
+  assert.equal(recordOf(carl).prestige, false);
+  assert.ok(dana.log.messages.includes(message("prestigeLost")));
 });

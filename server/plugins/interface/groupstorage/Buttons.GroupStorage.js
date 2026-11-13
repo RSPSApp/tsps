@@ -1,5 +1,15 @@
 "use strict";
 
+
+/**
+ * Storage Unlocks: content shows the group's tasks ("group-storage:unlocks" { player, groupId,
+ * popup, handled }, popup being shared_bank:popup to mount them in); without it, none exist here.
+ */
+function unlocks(player, session) {
+  const request = { player, groupId: session.groupId, popup: View.uid("shared_bank:popup"), handled: false };
+  api.emitCustomEvent("group-storage:unlocks", request);
+  if (!request.handled) player.getPacketSender().sendMessage(UNLOCKS_UNAVAILABLE);
+}
 /**
  * The storage interface's buttons and drags (component names from the cache's gamevals). Item ops
  * are the cache's (shared_bank_drawitem / shared_bank_side_drawitem): 1 the default quantity, 2-4
@@ -142,7 +152,7 @@ function click(event) {
     case "save_button": return void Access.save(player, false);
     case "main_bank": return void Access.backToBank(player);
     case "close": return void Access.save(player, true);
-    case "storage_unlocks": return void player.getPacketSender().sendMessage(UNLOCKS_UNAVAILABLE);
+    case "storage_unlocks": return unlocks(player, session);
     case "swap_insert": case "note": return setting(player, name, action);
     default:
       if (QUANTITY_BUTTONS.includes(name)) setting(player, name, action);

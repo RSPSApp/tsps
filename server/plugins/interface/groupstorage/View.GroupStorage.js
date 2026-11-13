@@ -10,7 +10,7 @@
  * - %if1 (varp 261): the wealth a member may still take, shown with a coin icon; -1 hides it (no
  *   wealth-transfer caps here);
  * - %if2: 0 "View only", 1 "Deposit only", 2 the full storage (Session.ACCESS);
- * - %if3: how many slots it draws (Store.CAPACITY);
+ * - %if3: how many slots it draws (the group's capacity);
  * - %if4: 1 gives main_bank a "Back to bank" op, when opened from the bank's Group Storage
  *   button (bankmain:gim_storage); 0 from the chests, which have no way back.
  * `gim_shared_bank_hasedited` (varbit 4602) turns the close button into "Save and Close", whose op
@@ -18,7 +18,6 @@
  * bank's own varbits, so the two share them.
  */
 
-const Store = require("./Store.GroupStorage");
 
 /** Items: ops 1-10 (bits 1-10), drag depth 1 and drag target, as the bank's slots. */
 const STORAGE_SLOT_FLAGS = 0x7fe | (1 << 17) | (1 << 20);
@@ -65,18 +64,29 @@ function settingVarbits(player) {
 /** Sends both working copies and whether there is anything to save. */
 function refresh(player, session) {
   const sender = player.getPacketSender();
-  sender.sendInventory(inventory("inv_group_temp"), Store.CAPACITY, session.storage, MAIN());
+  sender.sendInventory(inventory("inv_group_temp"), session.storage.length, session.storage, MAIN());
   sender.sendInventory(inventory("inv_player_temp"), INVENTORY_SIZE,
     session.inventory.map((item) => (item ? { id: item.getId(), amount: item.getAmount() } : null)), SIDE());
   sender.sendVarbit(varbit("gim_shared_bank_hasedited"), session.edited ? 1 : 0);
 }
 
-function open(player, session) {
-  const sender = player.getPacketSender();
-  const varps = {
-    [varp("if1")]: session.limit ?? -1, [varp("if2")]: session.access, [varp("if3")]: Store.CAPACITY,
+/** shared_bank_init's inputs: the limit, the access, the spaces drawn, "Back to bank". */
+function scratchVarps(session) {
+  return {
+    [varp("if1")]: session.limit ?? -1, [varp("if2")]: session.access, [varp("if3")]: session.storage.length,
     [varp("if4")]: session.fromBank ? 1 : 0,
   };
+}
+
+/** The same varps again, after a popup over the storage (Storage Unlocks) used them for its own. */
+function sendScratchVarps(player, session) {
+  const sender = player.getPacketSender();
+  for (const [id, value] of Object.entries(scratchVarps(session))) sender.sendConfig(Number(id), value);
+}
+
+function open(player, session) {
+  const sender = player.getPacketSender();
+  const varps = scratchVarps(session);
   const varbits = { ...settingVarbits(player), [varbit("gim_shared_bank_hasedited")]: 0 };
   for (const [id, value] of Object.entries(varps)) sender.sendConfig(Number(id), value);
   for (const [id, value] of Object.entries(varbits)) sender.sendVarbit(Number(id), value);
@@ -85,7 +95,7 @@ function open(player, session) {
   sender.sendInterfaceScript(BANK_SIDE_SCRIPT, [-1, -2])
     .sendSubInterface(uid("toplevel_osrs_stretch:mainmodal"), MAIN(), 0, { varps, varbits })
     .sendSubInterface(uid("toplevel_osrs_stretch:sidemodal"), SIDE(), SIDE_MODAL_TYPE, { varps, varbits })
-    .sendInterfaceFlagsRange(uid("shared_bank:items"), 0, Store.CAPACITY - 1, STORAGE_SLOT_FLAGS)
+    .sendInterfaceFlagsRange(uid("shared_bank:items"), 0, session.storage.length - 1, STORAGE_SLOT_FLAGS)
     .sendInterfaceFlagsRange(uid("shared_bank_side:items"), 0, INVENTORY_SIZE - 1, SIDE_SLOT_FLAGS);
   player.setInterfaceId(MAIN());
 }
@@ -107,5 +117,5 @@ function close(player) {
 
 module.exports = {
   STORAGE_SLOT_FLAGS, SIDE_SLOT_FLAGS, INVENTORY_SIZE, init, MAIN, SIDE, uid, varbit, isOpen, settingVarbits,
-  refresh, open, sendLimit, sendAccess, close,
+  refresh, open, sendScratchVarps, sendLimit, sendAccess, close,
 };

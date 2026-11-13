@@ -197,9 +197,10 @@ function channelAction(event) {
 function chat(event) {
   const { player, packet } = event;
   if (packet.type !== "clan_chat") return;
-  event.handled = true;
   const isGuest = packet.clanType === Core.LISTENED_CLAN;
+  // Other clan types are other content's (Group Ironman's group chat is clan type 1).
   if (!isGuest && packet.clanType !== Core.OWN_CLAN) return;
+  event.handled = true;
   const channel = isGuest ? Core.guestChannelOf(player) : Core.channelOf(player);
   if (!channel) {
     if (isGuest) player.getPacketSender().sendTypedMessage(GUEST_NOTICE_MESSAGE_TYPE, "You are not currently in a guest clan channel.");

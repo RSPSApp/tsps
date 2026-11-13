@@ -93,7 +93,10 @@ The Varrock tablet's Grand Exchange option lands in the same square. Watchtower 
 
 ## The house tablet's Group option
 
-Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house). This server has no Ironman groups, so every
-player gets live's refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`,
-sends the game message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet
-is kept (`plugins/combat/SpellTeleports.plugin.js`).
+Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house), as do the spell's "Group: Choose" (op4) and
+"Group: Previous" (op5). SpellTeleports asks `teleports:group-house` whose house (the Group Ironman plugin answers for a
+member of a Group Ironman group: `server/docs/group-ironman.md`), and Construction where it stands and whether the player
+may go in (`construction:group-house`). The tablet is used up as Break uses it. A player nobody answers for gets live's
+refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`, sends the game
+message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet is kept
+(`plugins/combat/SpellTeleports.plugin.js`).

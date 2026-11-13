@@ -44,7 +44,7 @@ function fingerprintSlots(slots) {
 
 /** Copies the saved storage and the backpack afresh, and takes their fingerprints. */
 function refill(session) {
-  session.storage = Store.slotsOf(session.groupId);
+  session.storage = Store.slotsOf(session.groupId, session.capacity);
   session.inventory = copyItems(session.player.getInventory().getItems());
   session.baseline = {
     storage: fingerprintSlots(session.storage),
@@ -65,10 +65,13 @@ function holder(groupId) {
   return null;
 }
 
-/** `fromBank`: opened with the bank's Group Storage button, so "Back to bank" leads back. */
-function begin(player, groupId, name, access, fromBank = false) {
+/**
+ * `fromBank`: opened with the bank's Group Storage button, so "Back to bank" leads back.
+ * `capacity`: how many spaces the group has (Store.CAPACITY to Store.MAX_CAPACITY).
+ */
+function begin(player, groupId, name, access, fromBank = false, capacity = Store.CAPACITY) {
   end(player);
-  const session = refill({ player, groupId, name, access, fromBank: fromBank === true });
+  const session = refill({ player, groupId, name, access, fromBank: fromBank === true, capacity });
   sessions.set(player, session);
   locks.set(groupId, session);
   return session;

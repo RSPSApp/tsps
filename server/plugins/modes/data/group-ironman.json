@@ -13,8 +13,8 @@
     "restrictedWeeks": 5
   },
   "hardcoreUnsafeAreas": {
-    "$comment": "Wiki (Group Ironman Mode, Hardcore): deaths in these cost a Hardcore group a life although they keep items for others. Matched against the plugin that owns the area the player died in (Construction: a death in a player-owned house). Not matched yet: the Camelot training room, Lunar Diplomacy's Dream World, Nightmare Zone and the PvM Arena, which have no area of their own here.",
-    "plugins": ["BarbarianAssault", "ChambersOfXeric", "FishingTrawler", "Inferno", "MageTrainingArena", "PestControl", "TzhaarFightCaves", "RoguesDen", "RandomEvents", "Construction"]
+    "$comment": "Wiki (Group Ironman Mode, Hardcore): deaths in these cost a Hardcore group a life although they keep items for others. Matched against the plugin that owns the area the player died in (Construction: a death in a player-owned house). Not matched yet: the Camelot training room, Lunar Diplomacy's Dream World and the PvM Arena, which have no area of their own here.",
+    "plugins": ["BarbarianAssault", "ChambersOfXeric", "FishingTrawler", "Inferno", "MageTrainingArena", "Nightmare Zone", "PestControl", "TzhaarFightCaves", "RoguesDen", "RandomEvents", "Construction"]
   },
   "messages": {
     "formed": { "text": "Your group has been formed.", "source": "ours" },
@@ -46,6 +46,9 @@
     "unrankedInGroup": { "text": "Leave your group first.", "source": "ours" },
     "capReached": { "text": "As a new member, you can only receive {left} coins' worth from your group this week.", "source": "ours (Wiki: new members' wealth transfer is capped weekly)" },
     "capTradeOther": { "text": "{name} can't receive that much from the group this week.", "source": "ours" },
+    "hardcoreOutsiders": { "text": "{name} is in a Hardcore group, which can't take on {activity} with players outside the group until it loses its Hardcore status.", "source": "ours (Wiki: a message explains that they may not enter until they lose the hardcore status)" },
+    "prestigeOutsidersWarning": { "text": "Taking on {activity} with players outside your group will cost your group its Group Prestige.", "source": "ours (Wiki: members are warned before an action that costs prestige)" },
+    "storageUnlocked": { "text": "Your group storage has gained {slots} spaces, {total} in all.", "source": "ours (Update:Group Ironman Improvements: a task unlocks once a member opens the storage after doing it)" },
     "restrictedItem": { "text": "You need to have killed {source} before you can use that.", "source": "ours (Wiki: certain items require you to have killed the monster that drops them)" }
   }
 }

@@ -527,7 +527,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `FreezeTimer` | Freeze Timer | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
 | `FriendsList` | FriendsList | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
 | `GrandExchange` | GrandExchange | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
-| `GroupStorage` | GroupStorage | interface | yes | Group Ironman's shared group storage at the Group storage chests: 80 spaces, one member at a time, Save to keep changes, deposit-only for leavers, members' items fixed on free-to-play worlds. |
+| `GroupStorage` | GroupStorage | interface | yes | Group Ironman's shared group storage at the Group storage chests: 80 spaces (up to 200 with unlocks), one member at a time, Save to keep changes, deposit-only for leavers, members' items fixed on free-to-play worlds. |
 | `Grouping` | Grouping | interface | yes | Player groups of up to five with their own chat-channel, and the Grouping tab's activity chat-channels: ::group to form, invite, accept, promote, kick, leave or disband, kept across logins. A Group Ironman's group takes only Group Ironmen and keeps leavers for seven days. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
@@ -748,7 +748,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `VolcanicMine` | VolcanicMine | minigames | yes | Adds the Volcanic Mine on Fossil Island: Petrified Pete, vents, gas, lava, the boulder, hazards and the reward on exit. (members only) |
 | `Wintertodt` | Wintertodt | minigames | yes | Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart. (members only) |
 | `FreeToPlay` | FreeToPlay | modes | no | Switches this world to free-to-play. The spawn must be inside a free-to-play area. |
-| `GroupIronman` | GroupIronman | modes | yes | Group Ironman's rules: The Node, the Group Ironman tab, forming groups, Hardcore groups' shared lives, Unranked groups, what a leaver becomes, and new members' weekly wealth limits and item restrictions. |
+| `GroupIronman` | GroupIronman | modes | yes | Group Ironman's rules: The Node, the Group Ironman tab and group chat, storage unlocks, forming groups, Hardcore groups' shared lives, Unranked groups, what a leaver becomes, and new members' weekly wealth limits and item restrictions. |
 | `Ironman` | Ironman | modes | yes | Adds Ironman, Ultimate, Hardcore and Group Ironman accounts (Group, Hardcore Group and Unranked Group), chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command. |
 | `LeagueMode` | LeagueMode | modes | yes | Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards. (members only) |
 | `PvpMode` | PvpMode | modes | yes | Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests. |

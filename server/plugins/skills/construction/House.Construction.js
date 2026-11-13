@@ -134,6 +134,8 @@ const kickOptionVisible = new WeakSet();
 const activeHouses = new WeakMap();
 const advertisedHouses = new Set();
 const lastVisited = new WeakMap();
+/** A teleport on its way to a group mate's house (Teleport to House's Group options): player -> owner. */
+const groupVisits = new WeakMap();
 const pendingFurnitureMenus = new WeakMap();
 
 function defaultHouse() {
@@ -945,9 +947,40 @@ function handleHouseOptions(event) {
 /** Cast follows the house's teleport setting; the spell's "Outside" option (`option`) always stays outside. */
 function houseTeleportArrival({ player, name, option }) {
   if (name !== "teleport to house") return;
+  if (option === "group") return groupHouseArrival(player);
   const saved = houseStateFor(player);
   if (option === "outside" || saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
   else teleportIntoHouse(player, saved.defaultBuildingMode);
+}
+
+/**
+ * "construction:group-house" { player, owner, destination, onArrival, refused }: Teleport to House's
+ * Group options take a Group Ironman to a group mate's house (Update:Group Ironman Improvements:
+ * the owner on the same world, not in building mode, and the house open to them as at its portal).
+ * `destination` is the owner's house portal; arriving (`onArrival`, or the spell's arrival with
+ * option "group") takes them in as a guest. Refused, the reason is shown and `refused` set.
+ */
+function groupHouse(request) {
+  const { player, owner } = request;
+  const refusal = owner === player ? "That's your own house." : visitRefusal(player, owner, owner && activeHouses.get(owner), null);
+  if (refusal) {
+    request.refused = true;
+    Menu.refuse(player, refusal);
+    return;
+  }
+  groupVisits.set(player, owner);
+  request.destination = Estate.houseExit(houseStateFor(owner));
+  request.onArrival = () => groupHouseArrival(player);
+}
+
+/** The group teleport has landed: in as a guest, if the house is still open to them. */
+function groupHouseArrival(player) {
+  const owner = groupVisits.get(player);
+  groupVisits.delete(player);
+  const house = owner && activeHouses.get(owner);
+  const late = visitRefusal(player, owner, house, null);
+  if (late) Menu.refuse(player, late);
+  else arriveAsGuest(player, owner, house);
 }
 
 /**
@@ -1910,6 +1943,7 @@ function attach(api) {
   api.onCustomEvent("interface:closed", closeFurnitureMenu);
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
+  api.onCustomEvent("construction:group-house", groupHouse);
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onCustomEvent("construction:spirit-tree", spiritTreeHouse);

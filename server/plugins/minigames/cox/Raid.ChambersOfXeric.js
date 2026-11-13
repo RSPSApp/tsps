@@ -45,10 +45,24 @@ function startRaid({ player }) {
     player.sendMessage("Only the party leader can begin the raid.");
     return true;
   }
+  // "group-pvm:can-start" / "group-pvm:started": content may refuse or follow who raids together
+  // (Group Ironman: a Hardcore group may not raid with outsiders; a group with prestige loses it).
+  const check = { players: [...raid.players], activity: "the Chambers of Xeric", allowed: true, reason: null };
+  Shared.api().emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed === false) {
+    if (check.reason) player.sendMessage(check.reason);
+    return true;
+  }
   Shared.options(player, "No-one may join the party after the raid begins.",
-    "Begin the raid.", () => raid.start(),
+    "Begin the raid.", () => beginRaid(raid),
     "Don't begin the raid yet.", () => {});
   return true;
+}
+
+function beginRaid(raid) {
+  raid.start();
+  if (raid.stage !== Raid.STAGE.STARTED) return;
+  Shared.api().emitCustomEvent("group-pvm:started", { players: [...raid.players], activity: "the Chambers of Xeric" });
 }
 
 // ---------------------------------------------------------------- moving around

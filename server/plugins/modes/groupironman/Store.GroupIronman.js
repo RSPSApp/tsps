@@ -6,7 +6,8 @@
  *
  * Record: { groupId, variant: "ranked" | "hardcore" | "unranked", formed: ms (0 while forming),
  *           prestige: boolean, lives: number (Hardcore), originals: [account keys],
- *           received: { account key: coins' worth received from the group } }
+ *           received: { account key: coins' worth received from the group },
+ *           unlocks: [the storage unlock tasks' bits the group has done] }
  *
  * and the accounts that have left a group and not yet chosen what they become (pending).
  */
@@ -45,6 +46,7 @@ function load() {
       lives: Number(record.lives) || 0,
       originals: [...(record.originals ?? [])],
       received: { ...(record.received ?? {}) },
+      unlocks: (record.unlocks ?? []).map(Number).filter(Number.isInteger),
     });
   }
   records = loadedRecords;
@@ -70,7 +72,7 @@ function ensure(groupId, variant) {
   load();
   let record = records.get(Number(groupId));
   if (!record) {
-    record = { groupId: Number(groupId), variant, formed: 0, prestige: false, lives: 0, originals: [], received: {} };
+    record = { groupId: Number(groupId), variant, formed: 0, prestige: false, lives: 0, originals: [], received: {}, unlocks: [] };
     records.set(record.groupId, record);
     save();
   }

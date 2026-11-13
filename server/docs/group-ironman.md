@@ -53,8 +53,8 @@ A formed Hardcore group has a life per member it was formed with. A member's dan
 costs one; so does a death in an activity that is safe for others but not for Hardcore groups
 (`hardcoreUnsafeAreas`: matched by the plugin that owns the area), and a member leaving or being
 removed. The members online are told. At none the group is a ranked Group Ironman group, its
-members Group Ironmen. Not matched yet: the Camelot training room, Lunar Diplomacy's Dream World,
-Nightmare Zone and the PvM Arena, which have no area of their own here.
+members Group Ironmen. Nightmare Zone counts; not matched yet: the Camelot training room, Lunar
+Diplomacy's Dream World and the PvM Arena, which have no area of their own here.
 
 ## Leaving a group (Leaving)
 
@@ -81,8 +81,48 @@ It takes effect after 7 days; choosing it again calls it off. On Tutorial Island
   above 0, or a kill Group Ironman saw). The Gauntlet's own crystal gear is free. Echo boots are
   left out: the list's source for them isn't settled.
 - **Group Prestige lost to outside help:** a kill of The Nightmare, Phosani's Nightmare, Nex, the
-  Royal Titans or Yama that someone outside the group damaged. The raids are not covered: their
-  parties aren't seen here.
+  Royal Titans or Yama that someone outside the group damaged; and a raid (Chambers of Xeric,
+  Theatre of Blood, Tombs of Amascut) started with anyone outside the group, after a warning when
+  it is about to start (Pvm). The raids ask `group-pvm:can-start` { players, activity, allowed,
+  reason } before they start and say `group-pvm:started` { players, activity } after.
+- **Hardcore groups with outsiders:** a Hardcore group must keep its prestige, so a raid its member
+  would start with anyone outside the group is refused, with a line saying why *(ours)*.
+
+## Storage unlocks (Unlocks)
+
+The group storage starts with 80 spaces and grows to 200 (Wiki; Update:Group Ironman Improvements,
+2 March 2022). The tasks are the cache's: enum 4216 lists 49 structs, each with its bit (param
+1289), spaces (1547) and text (1546), 120 spaces in all. `data/group-ironman-unlocks.json` says
+what each one asks, by bit: a worn rune platebody or Stronghold boots, a 99 in a set of skills or in
+one, 50 to 200 quest points, combat level 50, 100 or 126, total level 500 to 2,000, every diary or
+combat achievement task of a tier (the cache has four tiers, Easy to Elite).
+
+- A task counts once a member opens the storage after doing it (GroupStorage asks
+  `group-storage:capacity` at each opening), from 5 weeks after the group was formed. The group is
+  told *(ours)*; the done tasks are the record's `unlocks`.
+- The storage's Storage Unlocks button and the group settings' Group Storage show
+  `gim_shared_bank_unlocks` (743) in their popup slot, cs 3127, with %if1/%if2 the done bits,
+  %if3 the spaces, %if4 200 and %if5 the weeks to wait.
+
+## Group settings, chat, houses, inviting
+
+- **Group settings** (Settings): the tab's Settings opens `gim_settings` (730), which draws the
+  group from the clan settings. Group Storage shows the unlocks; Leave Group / Cancel Leave (by
+  `gim_pending_leave`) leave or stay; the name asks the leader for a new one. Hiscores, Options,
+  Raffle, stepping down and the members row say where to go instead *(ours)*.
+- **Group chat** (Chat; Wiki, Chat Interface: "//// or /g"): the client sends it as clan chat on
+  clan type 1; every member online who doesn't ignore the speaker gets it as clan chat (type 41) on
+  a channel whose name is a bar and the group's name, which the cache's chat filter (script 5501)
+  puts in the Group tab. Clans now leaves clan types other than its own to their content.
+- **Teleport to House's Group options** (Houses; the update of 2 March 2022): the spell's "Group:
+  Choose" (op4) and "Group: Previous" (op5), and the house tablet's Group, take a Group Ironman to a
+  teammate's house. Choose lists the group members online *(ours: a chatbox list)*; Previous goes
+  to the last one. SpellTeleports asks `teleports:group-house`; the house's rules (same world,
+  not in building mode, open to visitors) are Construction's (`construction:group-house`).
+- **Inviting** (Recruiting): on The Node a leader's right-click Apply (player option 6) invites
+  another player; the creation panel's Invite is a target button (the use-on-player flag, the
+  click coming back as `magic:spell-on-player`); the group panel's Invite turns the leader's
+  Inviting on or off (`gim_invitationstatus`), which Apply needs once the group is formed *(ours)*.
 
 ## The Node (Node)
 
@@ -90,7 +130,9 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
 
 - **Getting there:** a Group Ironman who finishes Tutorial Island arrives on The Node
   (`tutorial-island:destination`); the portal by Lumbridge's general store (`gim_portal_lumbridge`,
-  seen only by Group Ironmen) and the Group ironman helm's Teleport lead there. The Node's portal
+  seen only by Group Ironmen), the rowboat at Tutorial Island's south end (`gim_boat`, Travel) and
+  the Group ironman helm's Teleport lead there, each asking first as other teleports do
+  (`TeleportHandler.confirm`). The Node's portal
   (`gim_portal`) leads to Lumbridge. The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3233) beside Lumbridge's, are ours, both checked walkable in game.
 - **Tony** (Group Ironman tutor): his transcript; "Yes, leave my group." starts leaving; a leader's
   "Rename group." asks for the new name. **Armour** and the armour crates hand out the set of the
@@ -112,10 +154,9 @@ the plugin answers to `side-channels:gim-tab`:
 
 Buttons: Create Group (`grouping:create`), the group name (an input prompt, then
 `grouping:rename`), Confirm (forming), Cancel (`grouping:disband` for the leader,
-`grouping:leave` for a member), Kick on a member row (`grouping:kick`). Invite answers "Invite
-players with ::group invite <name>." *(ours)*: the cache's Invite is a target button, and the
-server has no hook for a component used on a player yet. Every Grouping change and every change to
-a group's record (formed, prestige, lives) mounts the tab again for the players it touches.
+`grouping:leave` for a member), Kick on a member row (`grouping:kick`), Invite (see Inviting),
+Settings (the group settings) and Refresh. Every Grouping change and every change to a group's
+record (formed, prestige, lives, unlocks) mounts the tab again for the players it touches.
 
 ## Commands
 
@@ -132,6 +173,11 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 | `ironman:change-mode` | answered | the Lumbridge Unranked switch |
 | `ironman:mode-changed` | answered | the tab again |
 | `group-storage:limit`, `:can-withdraw`, `:withdrawn` | answered | the wealth caps |
+| `group-storage:capacity`, `:unlocks` | answered | the storage's spaces after this opening's unlocks; its Storage Unlocks button |
+| `group-storage:popup-closed` | emitted | `{ player }` when the unlocks close over the storage |
+| `group-pvm:can-start`, `group-pvm:started` | answered | Hardcore groups refused, prestige warned of and lost |
+| `teleports:group-house` | answered | whose house Teleport to House's Group options go to |
+| `magic:spell-on-player` | answered | the creation panel's Invite used on a player |
 | `npc-drops:roll` | answered | kills for restricted items; prestige lost to outside help |
 | `tutorial-island:destination` | answered | The Node for a Group Ironman |
 | `npc-dialogue:choice` | answered | Tony's leave and rename, Maggie's bank |
@@ -141,9 +187,16 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 
 ## Not done yet
 
-- The Node's rowboat (loc 42826) and the inventory wipe when a player first leaves The Node.
-- Teleport to House's group options, group chat through clan channel type 1, the Apply option,
-  storage unlocks beyond 80 spaces (`shared_bank:storage_unlocks`).
-- Prestige lost in the raids, and Hardcore groups' PvM with outsiders.
+- Hardcore groups' PvM with outsiders at The Nightmare, Nex, the Royal Titans, Yama and The
+  Fractured Archive: their kills cost prestige (Restrictions), but nothing refuses a Hardcore group
+  at their door.
+- The Camelot training room, Lunar Diplomacy's Dream World and the PvM Arena as unsafe for
+  Hardcore groups: they have no area of their own here.
+- The group settings' Hiscores, Options and Raffle; the members' Switch world; group chat for
+  RuneLite through the gateway (it is clan chat there).
+- What a Ranked leaver keeps beyond the inventory, worn items and bank (the Wiki's lists of
+  storages kept and lost), other than through `group-ironman:wipe-tradeables`.
 
-Tests: `server/tests/group-ironman.test.cjs`, and the GIM frame in `server/tests/chat-channel.test.cjs`.
+Tests: `server/tests/group-ironman.test.cjs`; the GIM frame in `server/tests/chat-channel.test.cjs`; the
+house's Group options in `server/tests/teleport-tablet-destinations.test.cjs` and
+`server/tests/house-portals.test.cjs`; PvP experience in `server/tests/ironman.test.cjs`.

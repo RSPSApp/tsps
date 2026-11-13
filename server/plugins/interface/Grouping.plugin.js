@@ -63,10 +63,13 @@ module.exports = {
     api.persistAttribute(Actions.ROLE_ATTRIBUTE, "");
     api.registerCustomInterface(Layout.buildInterface());
     api.registerCommand("group", Commands.run, undefined, "Form or run a group (invite, accept, decline, promote, kick, leave, disband, info, chat)");
-    api.onServerStartup(Channels.registerAll);
+    // One startup hook: the chat-channels, then the leaving and leadership checks.
+    api.onServerStartup((event) => {
+      Channels.registerAll(event);
+      Lifecycle.start(event);
+    });
     api.onPlayerLogin(Lifecycle.login);
     api.onPlayerLogout(Lifecycle.logout);
-    api.onServerStartup(Lifecycle.start);
     api.onObjectInteraction("Group storage", { Open: Lifecycle.openStorage });
     api.onCustomEvent(Actions.CHANGED_EVENT, Panel.refresh);
     api.onCustomEvent(Actions.CHANGED_EVENT, Channels.onGroupChanged);

@@ -148,7 +148,8 @@ nobody is moved out of a channel they chose. A leader's return to an activity ch
 rejoin of their last channel) brings nobody, as members may have chosen another channel meanwhile.
 In the group's channel the leader holds the Owner rank and members Recruit (a system channel's
 `rankOf`), which is what Chambers of Xeric reads: a group in its channel can make a CoX party at
-the recruiting board, its leader leading it, with no CoX change.
+the recruiting board, its leader leading it, with no CoX change. A Group Ironman group has no such channel *(ours)*: it
+talks in its own group chat (`////`, the Group Ironman tab's), and `::group chat` says so.
 
 ## Activities and group size
 

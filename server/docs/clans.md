@@ -176,8 +176,9 @@ Wiki's:
 - Lever: 1,000 coins, setting 95. Balloons: objects 115-122 (123-130 have no Burst), gone after two minutes.
   Setting 96 and not being an Ironman decide who gets a drop. **Ours:** 16 to 64 balloons, a 50% chance, the
   whole stack dropping, and that they fill the main room.
-- Coffer: the side panel 697 for deposits; Ironmen can't deposit, 50m a transaction, and a withdrawal tells
-  members. **Ours:** the wording. clans.json and the player's save commit separately, so each transfer is
+- Coffer: the side panel 697 for deposits; Ironmen can't deposit or withdraw (the Wiki's lines, Clan Coffer: "As an
+  Ironman, you can't share your money like that." and "As an Ironman, you can't take the Clan's money."), 50m a
+  transaction, and a withdrawal tells members. **Ours:** the other wording. clans.json and the player's save commit separately, so each transfer is
   journalled in the clan, per character, under a number the player's save carries with its inventory. At
   login, a number above the saved one is undone: a crash loses the transfer rather than duplicating or
   destroying coins. Entries the save covers stay until `flush()` says that save has been committed.

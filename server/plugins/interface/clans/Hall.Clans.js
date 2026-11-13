@@ -263,7 +263,8 @@ function deposit(player, clan, amount) {
     return;
   }
   if (Core.ironmanMode(player) !== "none") {
-    player.sendMessage(`${Core.asIronman(player)}, you can't deposit into the coffer.`);
+    // The Wiki (Clan Coffer) quotes "As an Iron Man, ...": the 15 May 2024 update renamed every "Iron man" to "Ironman".
+    player.sendMessage("As an Ironman, you can't share your money like that.");
     return;
   }
   const inventory = player.getInventory();
@@ -286,7 +287,7 @@ function withdraw(player, clan, amount) {
     return;
   }
   if (Core.ironmanMode(player) !== "none") {
-    player.sendMessage(`${Core.asIronman(player)}, you can't withdraw from the coffer.`);
+    player.sendMessage("As an Ironman, you can't take the Clan's money."); // the Wiki (Clan Coffer)
     return;
   }
   const inventory = player.getInventory();

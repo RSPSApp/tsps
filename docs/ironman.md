@@ -49,7 +49,7 @@ Setting a mode updates the client at once: the `ironman` varbit and the chat ico
 
 ## The rules
 
-Each rule comes from the rsprox capture database (https://rsprox.net/database) or the OSRS Wiki. A message marked *ours* hasn't been recorded or documented, and is meant to be replaced when someone records it.
+Each rule comes from the rsprox capture database (https://rsprox.net/database) or the OSRS Wiki. A message marked *ours* hasn't been recorded or documented, and is meant to be replaced when someone records it. On 13 November 2026 the rsprox database had none of them (every recording with an Ironman message is a standard Ironman's, none a Group Ironman's). A rule for every mode says "As an Ironman" to each of them, as the cache's own lines tell Group and Ultimate Ironmen (`raids_storage_side_warning`).
 
 | Rule | Modes | Message |
 | --- | --- | --- |
@@ -61,14 +61,14 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | Loot from a player an Ironman kills is the fallen player's (Wiki: Ironmen can't take PvP loot) | all | none |
 | No combat experience from fighting players (Wiki); a Group Ironman gets an eighth of it (Wiki, Group Ironman Mode: Combat) | all | none |
 | No entering another player's house (Wiki); own house remains available | all | Existing house-unavailable message *(ours)* |
-| Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." (the player's own mode: "As a Group Ironman, ...") *(ours)* |
-| Grand Exchange: only single-bond buy offers (Wiki); no sales or other purchases | all | "As an Ironman, you can only buy one bond per Grand Exchange offer." (the player's own mode) *(ours)* |
-| No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." (the player's own mode) *(ours)* |
-| No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." (the player's own mode) *(ours)* |
+| Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." *(ours)* |
+| Grand Exchange: only single-bond buy offers (Wiki); no sales or other purchases | all | "As an Ironman, you can only buy one bond per Grand Exchange offer." *(ours)* |
+| No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." *(ours)* |
+| No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." *(ours)* |
 | No bank (the Ironman tutor, captured) | Ultimate | "As an Ultimate Ironman, you cannot use the bank." *(ours)* |
 | No Seed Vault access ([Jagex update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault)) | Ultimate | no Vault-specific line |
 | All items dropped on death, none kept (the Ironman tutor, captured) | Ultimate | none |
-| One life: a dangerous death makes them a standard Ironman; a safe death (a minigame) doesn't | Hardcore | "You have fallen as a Hardcore Ironman. You are now a standard Ironman." *(ours)* |
+| One life: a dangerous death makes them a standard Ironman; a safe death (a minigame) doesn't | Hardcore | "You have fallen as a Hardcore Ironman, your Hardcore status has been revoked." (Wiki) |
 | Every rule above, except with the members of their own group (a member in their leaving period included): they trade freely, pick up each other's items, keep the drop of a kill only group mates helped with, get no kill-credit warning for a group mate's damage, can loot a group mate they kill in the Wilderness, and can enter a group mate's house, also by Teleport to House's Group options (Wiki, Group Ironman Mode). An outsider's help still means no loot | Group | to an outsider: "*name* is a Group Ironman. He/She/They can only trade members of their group." (Wiki); to the Group Ironman: "You are a Group Ironman. You can only trade members of your group." *(ours)*. The Ironman tutor says the same rule: "Group Ironmen have the same restrictions as regular Ironmen except you can trade your items with each other!" (rsprox 3178, rev 232, tick 164) |
 
 **Item-on-player:** the only hand-off that actually moves an item into the target's inventory

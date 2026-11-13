@@ -366,10 +366,7 @@ beforeEach(() => {
     persistAttribute: () => {},
     emitCustomEvent: (name, payload) => {
       hooks.emitted.push([name, payload]);
-      if (name === 'ironman:mode') {
-        payload.mode = payload.player.ironman ?? 'none';
-        payload.label = { ironman: 'Ironman', ultimate: 'Ultimate Ironman', group: 'Group Ironman' }[payload.mode] ?? '';
-      }
+      if (name === 'ironman:mode') payload.mode = payload.player.ironman ?? 'none';
       if (name === 'bank-pin:guard' && payload.player.pinLocked) payload.locked = true;
       // SideChannels mounting the panel at once, as it does when the tab is up.
       if (name === 'side-channels:replace-your-clan') payload.onMount?.();
@@ -1896,7 +1893,7 @@ test('an Ironman can\'t withdraw either', () => {
   hooks.objects['Clan Coffer'].Use({ player: owner });
   owner.ironman = 'ultimate';
   clickGroup(owner, 696, 12);
-  assert.equal(owner.messages.at(-1), "As an Ultimate Ironman, you can't withdraw from the coffer.");
+  assert.equal(owner.messages.at(-1), "As an Ironman, you can't take the Clan's money.");
   assert.equal(clan.coffer, 1000);
   assert.equal(held.coins, 0);
 });
@@ -2181,7 +2178,7 @@ test('an Ironman can\'t deposit, and no transaction moves over 50m', () => {
   hooks.objects['Clan Coffer'].Use({ player: owner });
   owner.ironman = 'ironman';
   clickGroup(owner, 697, 10);
-  assert.equal(owner.messages.at(-1), "As an Ironman, you can't deposit into the coffer.");
+  assert.equal(owner.messages.at(-1), "As an Ironman, you can't share your money like that.");
   assert.equal(clan.coffer ?? 0, 0);
   owner.ironman = 'none';
   clickGroup(owner, 697, 10);

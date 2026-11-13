@@ -636,6 +636,95 @@ The rows sit on varp 4503. The cache's own scripts apply them in the client: a c
 
   The other filter rows on the same varp (396, 397, 399-401, 403, 404: visual feedback, target, interface, walk, global click, use, cancel), which the desktop list doesn't show, are not saved or obeyed. The touch controls' tap panel (`client/game/plugins/touchcontrols`) offers its own option list and ignores the filters.
 
+## Rows saved for the client
+
+These All Settings rows were in no list: the browser client's toggle script (3965) flips the row's var, or the dropdown sets it, but nothing saved it, so the next login sent nothing and the setting was back to 0, as the transparent chatbox (11) was before #3330. Each is now a `settings.json` row with the var the cache's own reader names for it (script 6716 for toggles, 3962 for dropdowns), so it is saved in `settings:values` and sent at login. Many of them drive overlays or helpers this server does not draw yet (the clue, Slayer, Blast Furnace and Herbiboar helpers, NPC highlights, the ground items overlay, tile highlights, respawn timers); for those only the choice is kept. Tests: `tests/settings-wired-rows.test.cjs` (`SAVED_TOGGLES`, `SAVED_DROPDOWNS`) checks each against the cache's reader, then that a click sets it and a login brings it back.
+
+| Setting | Id | Variable |
+| --- | --- | --- |
+| Show the Store button on mobile | 47 | varbit 13036 `tli_storebutton_toggle_mobile` |
+| Tile highlighting | 112 | varbit 12342 `tile_highlighting_disabled` |
+| Data orbs - Regeneration indicators | 116 | varbit 12346 `regen_indicator_disabled` |
+| Chambers of Xeric helper | 118 | varbit 12347 `cox_helper_disabled` |
+| Fishing spot indicators | 120 | varbit 12349 `fishing_spot_indicator_disabled` |
+| Fishing spot indicators - Tools only | 121 | varbit 12350 `fishing_spot_indicator_all_fish_disabled` |
+| Fishing spot indicators - Mouse over tooltip | 122 | varbit 12351 `fishing_spot_indicator_more_info_disabled` |
+| Always on top | 146 | varbit 12372 `always_on_top` |
+| Highlight Agility shortcuts | 165 | varbit 13135 `agility_helper_highlight_shortcuts` = option |
+| Highlight hovered tile | 172 | varbit 12977 `highlighting_tile_mouseover_enabled` |
+| Highlight hovered tile - Always on top | 173 | varbit 12980 `highlighting_tile_mouseover_alwaysontop` |
+| Highlight current tile | 175 | varbit 12978 `highlighting_tile_current_enabled` |
+| Highlight current tile - Always on top | 176 | varbit 12981 `highlighting_tile_current_alwaysontop` |
+| Highlight destination tile | 178 | varbit 12979 `highlighting_tile_destination_enabled` |
+| Highlight destination tile - Always on top | 179 | varbit 12982 `highlighting_tile_destination_alwaysontop` |
+| Iron loot restriction indicator | 182 | varbit 13039 `iron_noloot_icon_disabled` |
+| Slayer helper | 184 | varbit 13082 `slayer_helper_disabled` |
+| Ore respawn timer | 187 | varbit 13085 `ore_respawn_timer` = option |
+| Woodcutting respawn timer | 188 | varbit 13086 `woodcutting_respawn_timer` = option |
+| Highlight entities on mouse-over | 190 | varbit 13088 `mouseover_entity_highlights_enabled` |
+| Highlight Agility shortcuts - Shortcut Requirements | 210 | varbit 13136 `agility_helper_highlight_shortcuts_overlay_disabled` |
+| Highlight entities on tap | 212 | varbit 13666 `interact_entity_highlights_disabled` |
+| Vibrate on interaction | 229 | varbit 13831 `option_haptic_on_op_disabled` |
+| Vibrate on drag | 230 | varbit 13832 `option_haptic_on_drag_disabled` |
+| Vibrate when minimenu opens | 231 | varbit 13833 `option_haptic_on_minimenu_open_disabled` |
+| Vibrate when hovering over minimenu entries | 232 | varbit 13834 `option_haptic_on_minimenu_entry_hover_enabled` |
+| Tears of Guthix timers | 242 | varbit 14167 `tog_helper_disabled` |
+| Hunter trap timers | 243 | varbit 14165 `hunter_trap_timers_disabled` |
+| Herbiboar helper | 245 | varbit 14172 `herbiboar_helper_disabled` |
+| Cannon hud | 247 | varbit 14174 `cannon_hud_disabled` |
+| Popout panel (desktop) | 251 | varbit 13982 `popout_panel_desktop_disabled` |
+| Popout panel (mobile) | 252 | varbit 13981 `popout_panel_mobile_enabled` |
+| NPC highlight - Display name | 258 | varbit 14169 `option_npc_indicators_name` = option |
+| NPC highlight - Highlight tile | 259 | varbit 14171 `option_npc_indicators_tile` = option |
+| NPC highlight - Highlight outline | 260 | varbit 14170 `option_npc_indicators_outline_enabled` |
+| NPC highlight | 261 | varbit 14168 `option_npc_indicators_enabled` |
+| Display all NPC names above their body | 264 | varbit 14178 `option_npc_name_all` = option |
+| Blast Furnace helper | 268 | varbit 14180 `blast_furnace_helper_disabled` |
+| Blast Furnace highlights | 269 | varbit 14181 `blast_furnace_highlights_disabled` |
+| Clue scroll helper - Overlay | 270 | varbit 14189 `option_cluehelper_overlay_enabled` |
+| Clue scroll helper | 271 | varbit 14182 `option_cluehelper_enabled` |
+| Clue scroll helper - Worldmap marker | 272 | varbit 14183 `option_cluehelper_worldmap_marker_enabled` |
+| Clue scroll helper - World arrows | 273 | varbit 14185 `option_cluehelper_target_world_arrow_enabled` |
+| Clue scroll helper - Menu highlights | 274 | varbit 14186 `option_cluehelper_menu_highlight_enabled` |
+| Clue scroll helper - Infobox | 275 | varbit 14187 `option_cluehelper_infobox_enabled` |
+| Clue scroll helper - Clue text | 276 | varbit 14188 `option_cluehelper_infobox_show_clue_text` |
+| Clue scroll helper - Entity highlights | 277 | varbit 14184 `option_cluehelper_target_highlight_enabled` |
+| Expand minimap | 317 | varbit 6254 `osm_minimap_toggle` |
+| Ground Items Overlay | 321 | varbit 14869 `ground_items_enabled` |
+| Ground Items Overlay - Alchemy value | 333 | varbit 14870 `ground_items_price_type` |
+| Ground Items Overlay - Time until items despawn | 334 | varbit 14873 `ground_items_despawn_time_enabled_desktop` = option |
+| Ground Items Overlay - Time until items despawn | 335 | varbit 14874 `ground_items_despawn_time_enabled_mobile` |
+| Ground Items Overlay - Time until items are visible to others | 336 | varbit 14875 `ground_items_visibility_time_enabled_desktop` = option |
+| Ground Items Overlay - Time until items are visible to others | 337 | varbit 14876 `ground_items_visibility_time_enabled_mobile` |
+| Ground Items Overlay - Edit mode | 338 | varbit 14871 `ground_items_edit_mode_enabled_desktop` = option |
+| Ground Items Overlay - Edit mode | 339 | varbit 14872 `ground_items_edit_mode_enabled_mobile` |
+| Loot Tracker - Track loot | 343 | varbit 14879 `option_loottracker_disabled` |
+| Loot Tracker - Track consumed Loot | 344 | varbit 14878 `option_loottracker_ignore_consumed_drops` |
+| Ground Items - Show price | 346 | varbit 14885 `ground_items_display_price_disabled` |
+| Ground Items - Show non-exchangeable items | 366 | varbit 9606 `ground_items_untradeable_items_disabled` |
+| Highlight quest start points | 367 | varbit 9619 `quest_start_highlight` = option |
+| Filter quest start highlights based on requirements | 368 | varbit 9622 `quest_start_highlight_filter_requirements` |
+| Show hotkeys | 408 | varbit 11557 `osm_hide_hotkeys` |
+| Show tile highlights | 409 | varbit 16115 `settings_mobile_tile_highlights_hidden` |
+| Tile highlighting | 410 | varbit 16112 `settings_mobile_tile_highlight_enabled` |
+| Tap to drop items | 413 | varbit 16111 `settings_mobile_taptodrop_enabled` |
+| Hotkeys open side panels on the left | 414 | varbit 11558 `settings_osm_hotkeys_open_sidepanels_on_left` |
+| Show empty hotkey slots | 415 | varbit 11559 `settings_osm_hotkeys_show_empty_hotkeys` |
+| NPC highlight - Tagging | 416 | varbit 11518 `option_npc_indicators_tagging_enabled` |
+| Hiscores - In-world lookup | 417 | varbit 11519 `popout_hiscores_globalclick_enabled` |
+| Minimenu icon while on mobile | 447 | varbit 3212 `settings_mobile_minimenu_icon_enabled` |
+| Highlight poll booths | 453 | varbit 9538 `poll_booth_highlight_disabled` |
+| Cargo hold access privacy | 470 | varbit 19614 `settings_cargo_hold_privacy` = option |
+| Fairy rings - Show keyboard automatically | 475 | varbit 19648 `settings_fairyring_mobile_keyboard_autoopen_disabled` |
+| Farming compost overlay | 503 | varbit 15913 `farming_patch_overlay_enabled` |
+
+- **Not done:**
+  - Colour rows with no `COLOUR_SETTINGS` entry (113, 174, 177, 180, 262, 263, 266, 322-327, 504) and number rows with no prompt (200, 233, 328-332, 350) still do nothing.
+  - The Group Ironman broadcast rows (200-204) have no All Settings struct.
+  - Rows the desktop list doesn't show (191, 303, 304, 320, 396, 397, 399-401, 403, 404) are left out, as is Minimenu reordering (406, see above).
+  - The music rows on varp 19 (33, 348, 479-481, 484) are kept by `Music.plugin.js` from the varp the client transmits.
+  - No defaults: a row whose live default isn't 0 still starts at 0 until the player picks.
+
 ## Containers on death
 
 Rows 354-359 are `data/settings.json` toggles, saved and sent back at login. Each is off by default: no rsprox capture ever sets its varbit. With a row on, a PvM death empties that container into the grave even when it is kept, as the row's cache text says ("its contents will be emptied into your grave, even if the pouch itself is not lost"). The storage items' death hook applies them; what each death does is in [storage-items.md](storage-items.md#death) (cases in `tests/container-death.test.cjs`).

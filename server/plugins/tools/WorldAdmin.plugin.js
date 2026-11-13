@@ -104,6 +104,12 @@ function layerSummary(layers) {
   return summary;
 }
 
+function clientToolUrl(flag) {
+  const port = Number(process.env.PORT || 3000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return `http://localhost:${port}/?${flag}=1`;
+}
+
 function catalogAction() {
   const layers = readLayers();
   const status = gameUpdateStatus();
@@ -115,6 +121,8 @@ function catalogAction() {
     body: {
       catalog: pluginApi.core.WorldConfigCatalog.build(PLUGIN_DIRECTORY, layers),
       layers: layerSummary(layers),
+      cacheEditorUrl: clientToolUrl("cache"),
+      mapEditorUrl: clientToolUrl("edit"),
       mode: restartMode(),
       onlinePlayers: onlinePlayers(),
       playerCount: players.length - bots,

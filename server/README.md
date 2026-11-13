@@ -212,10 +212,14 @@ This prevents stale "ghost" players from remaining visible after disconnects/ref
 ## World config page
 
 The local panel edits world settings and plugin options, lists players and their saves,
-and lets you browse and upload plugins. Settings are saved in
-`data/definitions/world.local.json`. When launched with the root `yarn start`, the
-panel also provides Start, Stop and Restart controls and stays available while the
-game server is stopped. The panel bundle is built from `rsps-website/host-local`
+and lets you browse and upload plugins. Its Tools section links to the map and cache editors
+on this worktree's client port. `yarn dev:panel` enables the cache editor's loopback-only
+authoring service by default; set `CACHE_EDITOR_ENABLED=0` to disable writes. Saved cache
+overlays take effect after the server restarts. Settings are saved in
+`data/definitions/world.local.json`.
+When launched with the root `yarn start`, the panel also provides Start, Stop and Restart
+controls and stays available while the game server is stopped. The panel bundle is built from
+`rsps-website/host-local`
 and ships in `plugins/tools/worldadmin/panel/`. At startup the server prints the URL and where the token is, never the token
 itself (logs end up in `server.log` and journald):
 

@@ -43,7 +43,13 @@ if (process.argv[2] === "--runner") {
   function start() {
     phase = "starting";
     const child = fork(__filename, ["--runner"], {
-      env: { ...process.env, TSPS_WORLD_ADMIN_SOCKET: socket, WORLD_ADMIN_TOKEN: access.token },
+      env: {
+        ...process.env,
+        TSPS_WORLD_ADMIN_SOCKET: socket,
+        WORLD_ADMIN_TOKEN: access.token,
+        // `dev:panel` is an explicit local-authoring entrypoint; set this to 0 to disable writes.
+        CACHE_EDITOR_ENABLED: process.env.CACHE_EDITOR_ENABLED ?? "1",
+      },
     });
     runner = child;
     child.on("message", event => {

@@ -14,6 +14,8 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), "deadman-preparation-"))
 const scenario = process.env.DMM_PREPARATION_FIXTURE_PROFILE;
 assert.ok(["main", "league", "hardcore", "deadman", "conflict"].includes(scenario), "valid fixture scenario, not a feature-absence assertion");
 const conflict = scenario === "conflict";
+const lockRegression = process.env.DMM_PREPARATION_LOCK_REGRESSION === "1";
+if (lockRegression) assert.ok(["main", "deadman"].includes(scenario));
 const profile = conflict ? "deadman" : scenario;
 process.env.DISABLE_PLAYER_BOTS = "1";
 process.env.TSPS_ACCOUNTS_FILE = path.join(directory, "accounts.json");
@@ -38,6 +40,7 @@ const world = JSON.parse(fs.readFileSync(path.join(SERVER, "data", "definitions"
 world.name = `Disposable preparation fixture: ${scenario}`;
 delete world.disabledPlugins;
 world.plugins = { ...world.plugins, JsonPlayerPersistence: true, SqlitePlayerPersistence: false, PlayerBots: false, TutorialIsland: false };
+if (lockRegression) world.plugins.PvpMode = true;
 world.pluginConfig = { ...world.pluginConfig, "DeadmanMode:enabled": profile === "deadman",
   "league:type": profile === "league" ? 4 : 0, "HardcoreWorld:enabled": profile === "hardcore" || conflict };
 fs.writeFileSync(path.join(directory, "data", "definitions", "world.json"), JSON.stringify(world));
@@ -320,11 +323,13 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
 
   await remove(player, "On second thoughts, leave it.");
   assert.equal(protection(player), full);
+  if (lockRegression) await assertOrdinaryStatSetting(player, true);
   await remove(player, "Yes, arrange for my PvP protection to end in 1 minute.");
   assert.equal(protection(player), 60_000);
   const before = player.getSkillManager().getExperience(core.Skill.COOKING);
   t.mock.timers.tick(60_000);
   assert.equal(protection(player), 0);
+  if (lockRegression) await assertOrdinaryStatSetting(player, true);
   player.getSkillManager().addExperience(core.Skill.COOKING, 10, false);
   assert.equal(player.getSkillManager().getExperience(core.Skill.COOKING), before);
   assert.equal(PM.emitCanAttack(player, other), false, "preparation lock remains after expiry (hook boundary only)");
@@ -337,6 +342,7 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
   instant.moveTo(new core.Location(3232, 3222, 0));
   await remove(instant, "Yes, remove my PvP protection right now.");
   assert.equal(protection(instant), 0);
+  if (lockRegression) await assertOrdinaryStatSetting(instant, true);
   const instantXp = instant.getSkillManager().getExperience(core.Skill.COOKING);
   instant.getSkillManager().addExperiences(core.Skill.COOKING, 10);
   assert.equal(instant.getSkillManager().getExperience(core.Skill.COOKING), instantXp);
@@ -360,4 +366,125 @@ if (conflict) test("actual loader catches a competing profile claim; deployment 
   actor.getSkillManager().addExperience(core.Skill.COOKING, 10, false);
   assert.equal(actor.getSkillManager().getExperience(core.Skill.COOKING), before);
   assert.equal(PM.emitCanAttack(actor, new Player(null)), false);
+});
+
+// Revision6 prepared regression. These ordinary packet assertions are not yet runtime qualified.
+async function sendLockInput(actor, packet) {
+  assert.equal(dispatchClientMessages(actor, [packet]), true, "ordinary lock-regression input accepted");
+  await new Promise(setImmediate);
+  core.World.process();
+}
+
+async function finishLockOnboarding(actor) {
+    // A fresh ordinary login opens the designer, then the tutorial-off initial mode choice.
+    // Finish both through their actual widget input routes before attempting an NPC action.
+    const DESIGNER_INTERFACE = 679;
+    const DESIGNER_CONFIRM = 74; // Existing MakeOverMage cache component and native designer precedent.
+    const initialLook = [...actor.getAppearance().getLook()];
+    const initialProtection = protection(actor);
+    if (actor.getInterfaceId() === DESIGNER_INTERFACE) {
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), true, "setup: initial designer is active");
+      await sendLockInput(actor, { type: "widget_action", widgetId: (DESIGNER_INTERFACE << 16) | DESIGNER_CONFIRM,
+        groupId: DESIGNER_INTERFACE, childId: DESIGNER_CONFIRM, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), false, "setup: ordinary Confirm completed the designer");
+      assert.notEqual(actor.getInterfaceId(), DESIGNER_INTERFACE, "setup: designer closed through ordinary input");
+    }
+    const INITIAL_SETUP_PENDING = "ironman:initial-setup-pending";
+    if (actor.getAttribute(INITIAL_SETUP_PENDING) === true) {
+      const setup = require("../../plugins/modes/data/ironman.json").setup;
+      const noneChild = Number(Object.entries(setup.buttons).find(([, mode]) => mode === "none")?.[0]);
+      assert.ok(Number.isInteger(noneChild), "setup: canonical initial None component exists");
+      assert.equal(actor.getInterfaceId(), setup.interface, "setup: ordinary designer completion offered initial mode choice");
+      await sendLockInput(actor, { type: "widget_action", widgetId: (setup.interface << 16) | noneChild,
+        groupId: setup.interface, childId: noneChild, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAttribute(INITIAL_SETUP_PENDING), false, "setup: ordinary None completed initial onboarding");
+      assert.notEqual(actor.getInterfaceId(), setup.interface, "setup: initial choice closed through ordinary input");
+    }
+    assert.deepEqual(actor.getAppearance().getLook(), initialLook, "setup: confirmation preserves the seeded appearance");
+    assert.equal(protection(actor), initialProtection, "setup: onboarding does not remove protection");
+    assert.equal(actor.getProfile(), profile, "setup: initial account choice does not change world profile");
+}
+
+function skillState(actor) {
+  return JSON.parse(JSON.stringify({ skills: actor.getSkillManager().getSkills(), combat: actor.getSkillManager().getCombatLevel() }));
+}
+
+async function assertOrdinaryStatSetting(actor, blocked) {
+  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
+  assert.equal(Presets.isEnabled(), true, "setup: PvpMode stat-setting route enabled");
+  assert.equal(actor.busy(), false, "setup: onboarding/dialogue finished");
+  assert.equal(core.Wilderness.isIn(actor), false, "setup: outside Wilderness");
+  assert.equal(actor.getEquipment().getItems().some(item => (item?.getId?.() ?? 0) > 0), false, "setup: unarmed");
+  const before = skillState(actor);
+  await sendLockInput(actor, { type: "widget_action", widgetId: (320 << 16) | 1, groupId: 320, childId: 1, buttonNum: 2, slot: -1, itemId: -1 });
+  assert.ok(actor.getEnteredAmountAction(), "real guide operation installed an amount callback");
+  await sendLockInput(actor, { type: "dialogue_amount", amount: 99 });
+  assert.equal(actor.getEnteredAmountAction(), null, "ordinary amount dispatch consumed callback");
+  if (blocked) assert.deepEqual(skillState(actor), before, "preparation locks ordinary stat-setting current/max/XP/combat");
+  else {
+    assert.equal(actor.getSkillManager().getExperience(core.Skill.ATTACK), core.SkillManager.getExperienceForLevel(99));
+    assert.equal(actor.getSkillManager().getMaxLevel(core.Skill.ATTACK), 99);
+    assert.notEqual(actor.getSkillManager().getCombatLevel(), before.combat, "positive actual setter reached");
+  }
+}
+
+if (lockRegression) test("ordinary PvpMode stat and preset routes preserve preparation lock and logout restoration", async () => {
+  const actor = await enter("DmmLock");
+  await finishLockOnboarding(actor);
+  await assertOrdinaryStatSetting(actor, profile === "deadman");
+  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
+  const { GROUP_ID, COMPONENT, uid } = require("../../plugins/modes/pvp/PresetsWidget.PvpMode");
+  const selected = Presets.getGlobalPresetPool()[0];
+  assert.ok(selected, "setup: canonical selected global preset exists");
+  const snapshot = () => JSON.parse(JSON.stringify({ skills: skillState(actor), inventory: actor.getInventory().getItems(),
+    equipment: actor.getEquipment().getItems(), banks: actor.getBanks().map(bank => bank?.getItems() ?? null) }));
+  if (profile === "deadman") {
+    await sendLockInput(actor, { type: "chat", messageType: "public", text: "::presets" });
+    assert.notEqual(actor.getInterfaceId(), GROUP_ID, "ordinary preset opening refused");
+    // Explicit stale UI checkpoint only: simulate an already-open selected preset.
+    // Do not bypass applyPreset's policy; native Load must refuse before any mutation.
+    const previousInterface = actor.getInterfaceId();
+    actor.setInterfaceId(GROUP_ID);
+    actor.setAttribute("pvp:current-preset", selected);
+    const before = snapshot();
+    await sendLockInput(actor, { type: "widget_action", widgetId: uid(COMPONENT.LOAD_BUTTON), groupId: GROUP_ID,
+      childId: COMPONENT.LOAD_BUTTON, buttonNum: 1, slot: -1, itemId: -1 });
+    assert.deepEqual(snapshot(), before, "actual stale Load leaves bank/gear/inventory/all skills untouched");
+    actor.setInterfaceId(previousInterface);
+    actor.setAttribute("pvp:current-preset", null);
+  } else {
+    await sendLockInput(actor, { type: "chat", messageType: "public", text: "::presets" });
+    assert.equal(actor.getInterfaceId(), GROUP_ID, "positive: ordinary main preset opening works");
+    // Supplied simple preset selection, using the existing Presetable fixture pattern.
+    // This qualifies native Load/apply, not natural selection or eligibility of every shipped kit.
+    const { Presetable } = require("../../dist/game/content/presets/Presetable");
+    const positive = new Presetable("lock-positive", [new core.Item(core.ItemIdentifiers.SHARK, 1)], [],
+      [50, 1, 99, 85, 99, 1, 1], core.MagicSpellbook.NORMAL, true);
+    actor.setAttribute("pvp:current-preset", positive);
+    await sendLockInput(actor, { type: "widget_action", widgetId: uid(COMPONENT.LOAD_BUTTON), groupId: GROUP_ID,
+      childId: COMPONENT.LOAD_BUTTON, buttonNum: 1, slot: -1, itemId: -1 });
+    assert.equal(actor.getSkillManager().getMaxLevel(core.Skill.STRENGTH), 99, "positive: main native Load reached stat writes");
+    assert.equal(actor.getInventory().getAmount(core.ItemIdentifiers.SHARK), 1, "positive: supplied preset reached inventory writes");
+    assert.equal(actor.getProfile(), profile);
+  }
+  const skillsBeforeLogout = skillState(actor);
+  await logout(actor);
+  const stored = backend.load("DmmLock", profile);
+  assert.deepEqual(JSON.parse(JSON.stringify(stored.skills)), skillsBeforeLogout.skills, "actual JSON logout retains exact skill state");
+  const reloaded = await enter("DmmLock");
+  assert.deepEqual(skillState(reloaded), skillsBeforeLogout, "actual saved skills restore without low-level setter blocking");
+  await logout(reloaded);
+  // A preexisting nonzero Deadman save must also restore: source seed, not gameplay gain.
+  if (profile === "deadman") {
+    const seed = new Player(null);
+    seed.setUsername("DmmRestore"); seed.setProfile(profile);
+    seed.setPasswordHashWithSalt(await PasswordUtil.generatePasswordHashWithSalt(PASSWORD));
+    seed.getSkillManager().setCurrentLevels(core.Skill.ATTACK, 20, false).setMaxLevels(core.Skill.ATTACK, 20, false)
+      .setExperiences(core.Skill.ATTACK, core.SkillManager.getExperienceForLevel(20), false);
+    backend.save(seed, "fixture-existing-profile"); await backend.flush();
+    const restored = await enter("DmmRestore");
+    assert.equal(restored.getSkillManager().getExperience(core.Skill.ATTACK), core.SkillManager.getExperienceForLevel(20));
+    assert.equal(restored.getSkillManager().getMaxLevel(core.Skill.ATTACK), 20);
+    await logout(restored);
+  }
 });

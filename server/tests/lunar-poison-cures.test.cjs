@@ -287,3 +287,21 @@ test('Cure Group goes ahead when only the caster is poisoned, and refuses when n
   assert.deepEqual(out.messages, ['No-one around you with Accept Aid on needs their poison healing.']);
   assert.deepEqual(caster.xp, [74]);
 });
+
+// rsprox rec 820 tick 5192, the recorded state: the caster (an ironman, so Accept Aid off) had poison 8, and two
+// neighbours had Accept Aid off. The caster's own poison doesn't count; the three lines, no cost, poison kept.
+test("Cure Group from a poisoned caster with Accept Aid off refuses, as recorded", async t => {
+  const caster = actor(t), left = actor(t, 3199, 3200), right = actor(t, 3201, 3200);
+  left.player.setDisplayName('Lefty'); right.player.setDisplayName('Righty');
+  caster.player.setAttribute('accept-aid', false); caster.player.setPoisonDamage(8);
+  for (const f of [left, right]) f.player.setAttribute('accept-aid', false);
+  const out = recordOutput(t, caster.player);
+  await cast(t, caster, 'Cure Group', [left, right]);
+  assert.deepEqual(out.messages, [
+    'That spell cannot be cast on Lefty as they are not accepting aid.',
+    'That spell cannot be cast on Righty as they are not accepting aid.',
+    'No-one around you with Accept Aid on needs their poison healing.',
+  ]);
+  assert.equal(caster.player.getPoisonDamage(), 8);
+  assert.deepEqual(caster.xp, []); assert.equal(caster.amounts.get(core.ItemIdentifiers.ASTRAL_RUNE), 100);
+});

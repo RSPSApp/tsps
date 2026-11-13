@@ -291,10 +291,11 @@ poison = 0;
 
 // Ranged shot vs spell: both send a projectile and a graphic on the player a few ms apart.
 const launch = { source: { actor: { kind: "player", serverId: 7 } } } as never;
-const fire = (order: "projectileFirst" | "graphicFirst", weapon: number) => {
+const fire = (order: "projectileFirst" | "graphicFirst", weapon: number, clicks: number[] = []) => {
     now += 10_000;
     weaponType = weapon;
     plugin.state.reset();
+    for (const opcode of clicks) { plugin.onMenuOptionClicked({ opcode } as never); now += 600; }
     const projectile = () => (plugin as any).onProjectile(launch);
     const graphic = () => (plugin as any).onGraphic({ type: "player", serverId: 7, graphic: 19 });
     if (order === "projectileFirst") { projectile(); now += 4; graphic(); } else { graphic(); now += 4; projectile(); }
@@ -307,6 +308,21 @@ for (const order of ["projectileFirst", "graphicFirst"] as const) {
     assert.ok(bow.ranged > 0 && bow.spell === 0, `a bow's shot is ranged focus, not a spell (${order})`);
     const staff = fire(order, 18);
     assert.ok(staff.spell > 0 && staff.ranged === 0, `a staff's cast is a spell glow, not ranged focus (${order})`);
+}
+// A spell cast by hand ("Cast" on an NPC or player) while wielding a bow is a spell glow, for up to 10 s after the click.
+for (const order of ["projectileFirst", "graphicFirst"] as const) {
+    for (const target of [8, 15, 2008]) {
+        const cast = fire(order, 3, [target]);
+        assert.ok(cast.spell > 0 && cast.ranged === 0, `a manual cast (${target}) with a bow is a spell glow (${order})`);
+        const shot = fire(order, 3);
+        assert.ok(shot.ranged > 0 && shot.spell === 0, `the next shot is ranged focus again (${order})`);
+    }
+    const walkedAway = fire(order, 3, [8, 9]);
+    assert.ok(walkedAway.ranged > 0 && walkedAway.spell === 0, `attacking instead gives the cast up (${order})`);
+    // fire() moves the clock on 10 s: a cast clicked that long ago (no projectile came) no longer claims a shot.
+    plugin.onMenuOptionClicked({ opcode: 8 } as never);
+    const later = fire(order, 3);
+    assert.ok(later.ranged > 0 && later.spell === 0, `a cast with no projectile for 10 s gives up (${order})`);
 }
 weaponType = 18;
 now += 10_000;

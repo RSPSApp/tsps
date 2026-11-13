@@ -103,6 +103,11 @@ function record(f) {
     f.messages.push({ tick: f.tick, text });
     return send(text, ...rest);
   };
+  const typed = sender.sendTypedMessage.bind(sender);
+  sender.sendTypedMessage = (type, text, ...rest) => {
+    f.messages.push({ tick: f.tick, text, type });
+    return typed(type, text, ...rest);
+  };
   const animate = f.player.performAnimation.bind(f.player);
   f.player.performAnimation = (animation) => {
     (f.animations ??= []).push({ tick: f.tick, id: animation.getId() });
@@ -295,10 +300,11 @@ test("the fungus is shown once (55 after 'Wonderful'), then 'Hello again!'; the 
   assert.equal(shown(f)?.text, "Hello again! I don't suppose you've found out what the other components of the Nature spell are have you?");
   await until(f, "I think I've solved the puzzle!");
   await choose(f, "I think I've solved the puzzle!");
+  await until(f, "Oh really.. Have you placed all the items on the stones?");
   await continueLine(f);
-  const tried = waitForChat(f, "Oh really.. Have you placed all the items on the stones?");
+  const tried = f.tick;
   const failed = waitFor(f, "Hmm, something still doesn't seem right.");
-  assert.equal(failed - tried, 4, "the try closes itself two ticks on, his answer two ticks after (958, 960, 962)");
+  assert.equal(failed - tried, 2, "his answer two ticks after the continue (960, 962)");
   await finishChat(f);
   assert.equal(stage(f), 55);
 
@@ -316,10 +322,11 @@ test("the fungus is shown once (55 after 'Wonderful'), then 'Hello again!'; the 
   await talk(f, npcAt(f, [N.FILLIMAN_TARLOCK]).at(-1));
   await until(f, "I think I've solved the puzzle!");
   await choose(f, "I think I've solved the puzzle!");
+  await until(f, "Oh really.. Have you placed all the items on the stones?");
   await continueLine(f);
-  const ritual = waitForChat(f, "Oh really.. Have you placed all the items on the stones?");
+  const ritual = f.tick;
   const done = waitFor(f, "Aha, everything seems to be in place!");
-  assert.equal(done - ritual, 5, "closes a tick on, stars two ticks later, the spell lands two after (1037-1042)");
+  assert.equal(done - ritual, 4, "stars two ticks after the continue, the spell lands two after (1038-1042)");
   assert.equal(stage(f), 60);
   await finishChat(f);
   await clickObject(f, O.GROTTO, GROTTO_ENTRANCE);
@@ -353,10 +360,12 @@ test("the transformation: Search calls Filliman to 3443,9738, the scene, 70 and 
   await continueLine(f);
   const blessing = f.tick;
   ticks(f, 2);
+  assert.equal(stage(f), 70, "the scene starts a tick after the continue (1114-1115)");
+  tick(f);
   assert.equal(stage(f), 75);
   assert.ok(f.player.getInventory().contains(I.SILVER_SICKLE_B_));
   const box = waitFor(f, "Your sickle has been blessed!");
-  assert.equal(box - blessing, 5, "the box five ticks on (1115-1120)");
+  assert.equal(box - blessing, 6, "the box six ticks after the continue (1114-1120)");
   await until(f, "The nature spirit gives you an empty pouch.");
   assert.ok(f.player.getInventory().contains(I.DRUID_POUCH));
   await finishChat(f);

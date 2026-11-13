@@ -453,7 +453,7 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(p.inventory.getAmount(USED_SPELL), 0);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'talking-to-filliman');
   const ritual = line(N.FILLIMAN_TARLOCK, "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell. ~");
-  assert.equal(ritual.advance, true);
+  assert.equal(ritual.pauseTicks, 4, "the spell lands four ticks after the continue (1038-1042)");
   ritual.after();
   assert.equal(h.quest.getStage(p), 60);
 

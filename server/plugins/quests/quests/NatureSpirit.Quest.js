@@ -310,6 +310,8 @@ module.exports = function registerNatureSpiritQuest(api) {
     return at.getX() >= 3435 && at.getX() <= 3448 && at.getY() >= 9733 && at.getY() <= 9746;
   };
   const tile = ([x, y], z) => new Location(x, y, z);
+  /** Live's filterable channel (capture 233, 873, 1240: type spam). */
+  const spam = (player, text) => player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
   const sound = (player, id, loops = 1, delay = 0) => player.getPacketSender().sendSoundEffect(id, loops, delay, 0);
   /** Runs `step` `ticks` game ticks from now (0 = now), for this player. */
   const later = (player, ticks, step) => {
@@ -671,7 +673,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     // source is already visible to this player, so repeat attacks cannot burn charges.
     if (held(player, DRUID_POUCH_FILLED_ITEM_ID) && revealGhast(player, ghast)) return;
     if (Math.random() < GHAST_MISS_CHANCE) {
-      player.sendMessage(GHAST.missMessage);
+      spam(player, GHAST.missMessage);
       ghastLunge(player, ghast, GHAST.missShout);
       return;
     }
@@ -1069,9 +1071,9 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
-   * Capture 1113-1120: the Nature Spirit blesses the sickle. Stars fly from the grotto water at
-   * the player as the spirit casts, the player raises the sickle a tick later, the sickle is
-   * blessed (75) on the second tick and the box shows on the fifth.
+   * Capture 1114-1120: the Nature Spirit blesses the sickle, starting a tick after the continue. Stars
+   * fly from the grotto water at the player as the spirit casts, the player raises the sickle a tick
+   * later, the sickle is blessed (75) on the next and the box shows six ticks after the continue.
    */
   function sickleScene(player, spirit) {
     player.performGraphic(new Graphic(BLOOM_PLAYER_GRAPHIC, 90, 200));
@@ -1158,9 +1160,7 @@ module.exports = function registerNatureSpiritQuest(api) {
       };
     }
     if (text.startsWith(LINE.RITUAL_TRY) && stage >= STAGE_SHOWN_FUNGUS && stage < STAGE_PERFORMED_RITUAL) {
-      // The line closes by itself: two ticks on when the spell fails (958-960), one when it works (1037-1038).
-      event.holdTicks = ritualReady(player) ? 1 : 2;
-      event.advance = true;
+      // Capture 960, 1038: the scene starts on the player's continue.
       event.pauseTicks = ritualReady(player) ? 4 : 2;
       event.after = () => ritualScene(player, spiritOf(player) ?? event.npc);
     }
@@ -1172,8 +1172,8 @@ module.exports = function registerNatureSpiritQuest(api) {
       event.pauseTicks = 3;
     }
     if (stage === STAGE_FULL_TRANSFORM && text.startsWith(LINE.SICKLE_BLESSING) && held(player, SILVER_SICKLE_ITEM_ID)) {
-      event.after = () => sickleScene(player, spiritOf(player) ?? event.npc);
-      event.pauseTicks = 5;
+      event.after = () => later(player, 1, () => sickleScene(player, spiritOf(player) ?? event.npc));
+      event.pauseTicks = 6;
     }
     if (stage >= STAGE_KILLED_GHAST_3 && stage < STAGE_COMPLETE && text.startsWith(LINE.QUEST_DONE)) {
       event.after = () => altarScene(player, spiritOf(player) ?? event.npc);
@@ -1332,12 +1332,12 @@ module.exports = function registerNatureSpiritQuest(api) {
       quest.setStage(player, STAGE_PICKED_PRODUCE);
     }
     if (event.objectId === FUNGI_ON_LOG_ID) {
-      player.sendMessage("You pick a mushroom from the log.");
+      spam(player, "You pick a mushroom from the log.");
     } else if (event.objectId === BUDDING_BRANCH_ID) {
-      player.sendMessage("You take a cutting from the budding branch.");
+      spam(player, "You take a cutting from the budding branch.");
     } else {
       // Ours: no capture picks a pear.
-      player.sendMessage("You pick a pear from the bush.");
+      spam(player, "You pick a pear from the bush.");
     }
   }
 

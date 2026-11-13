@@ -15,9 +15,9 @@
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
  * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
- * plays, then continue normally or, with `box.advance`, move on by itself; a line can do the same
- * with `holdTicks` and `advance`, and `pauseTicks` closes the chatbox after a line and waits that
- * many ticks before the conversation carries on (a scene between two lines). "npc-dialogue:start" plays a named variant on demand
+ * plays, then continue normally or, with `box.advance`, move on by itself. A line's `pauseTicks`
+ * closes the chatbox after it and waits that many ticks before the conversation carries on (a
+ * scene between two lines). "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -1029,17 +1029,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           : undefined;
         if (hold) chain.add(hold);
         let held;
-        // `advance` (with `holdTicks`): the held line moves on by itself once the hold ends,
-        // never gaining its continue (live closes a "~ The druid attempts to cast a spell. ~").
-        const advances = hold !== undefined && request.advance === true;
         for (const text of pages) {
-          // A line that advances by itself is only ever held: its pages take no chain index.
-          const slot = advances ? -1 : index++;
           const dialogue = isPlayer
-            ? new PlayerDialogue(slot, text, expression)
-            : new NpcDialogue(slot, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
+            ? new PlayerDialogue(index++, text, expression)
+            : new NpcDialogue(index++, speakerId, text, speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
           held ??= dialogue;
-          if (!advances) chain.add(dialogue);
+          chain.add(dialogue);
         }
         // `pauseTicks` (set by a line handler): after the line the chatbox closes and the
         // conversation waits that many ticks while a scene plays, then carries on.

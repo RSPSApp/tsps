@@ -35,10 +35,10 @@ Live's own values, each moved where live moves it:
 | 45 | the Bloom spell's effect, two ticks after the cast (868) |
 | 50 | the first fungus picked (873) |
 | 55 | "Wonderful, the mushroom represents..." continued (939) |
-| 60 | four ticks after the ritual try closes (1042) |
+| 60 | four ticks after the ritual try is continued (1042) |
 | 65 | entering the grotto (1057) |
 | 70 | three ticks after "I must complete the transformation now..." (1075) |
-| 75 | two ticks into the sickle's blessing (1117) |
+| 75 | three ticks after the sickle line is continued (1117) |
 | 80 | a tick after the first sickle Bloom (1235) |
 | 85 | the first produce picked after it (1238) |
 | 90 | the first pouch filling (1248) |
@@ -69,18 +69,17 @@ All the chat closes for the scene, then the next line shows on the given tick.
   and chants "Ashustru, blessidium, adverturasi, fidum!" overhead; a tick later a star (268)
   from Drezel to the player and sound 2674; a tick later spotanim 259 on the player; a tick
   later 40 and "There you go my friend...".
-- **The ritual** (958-962, 1037-1042): "Oh really.. lets try! ~ The druid attempts to cast a
-  spell. ~" closes by itself, two ticks on when it fails (Filliman casts, sound 1495, "Hmm,
-  something still doesn't seem right..." two ticks later) and one tick on when both offerings
-  are placed (sound 1495; two ticks later stars from 3440,3334, 3442,3336 and 3438,3336 to him;
-  two ticks later 60, three spotanim 266 bursts, sound 1492 and "Aha, everything seems to be in
-  place!...").
+- **The ritual** (958-962, 1037-1042): on the continue of "Oh really.. lets try! ~ The druid
+  attempts to cast a spell. ~" the spell fails (Filliman casts, sound 1495, "Hmm, something still
+  doesn't seem right..." two ticks later) or, with both offerings placed, works (sound 1495; two
+  ticks later stars from 3440,3334, 3442,3336 and 3438,3336 to him; two ticks later 60, three
+  spotanim 266 bursts, sound 1492 and "Aha, everything seems to be in place!...").
 - **The transformation** (1072-1075): a tick after the line Filliman casts (811, delay 5) and
   seven stars fly at him with sound 1490; a tick later three 266 bursts; a tick later 70, 266 on
   him and he changes to the Nature Spirit (944) in place, which speaks next.
-- **The sickle** (1113-1120): stars from the grotto water at the player, 264 on the player, the
-  spirit casts, sound 2674; a tick later the player's 1100; a tick later 75 and the blessed
-  sickle; the box five ticks after the continue. The pouch box hands over the empty pouch; the
+- **The sickle** (1113-1120): a tick after the continue, stars from the grotto water at the
+  player, 264 on the player, the spirit casts, sound 2674; a tick later the player's 1100; a tick
+  later 75 and the blessed sickle; the box six ticks after the continue. The pouch box hands over the empty pouch; the
   stage stays 75.
 - **The altar** (1464-1482): the spirit casts as his line closes; two ticks later three stars and
   sound 1495; a tick later three 266 bursts, 1492 and two 2340; he casts again on the sixth tick;
@@ -99,7 +98,7 @@ All the chat closes for the scene, then the next line shows on the given tick.
   (811), the bloom around the player (263, delay 30, height 46), sound 1493, and the rotting logs
   beside the player turn to fungi (1491 each) with the spell used up; with none, "There is no
   suitable material to be affected in this area." and the spell is kept.
-- **Picking** (873, 1240): "You pick a mushroom from the log." / "You take a cutting from the
+- **Picking** (873, 1240), spam messages: "You pick a mushroom from the log." / "You take a cutting from the
   budding branch.", 827 and sound 2581.
 - **Stones** (1005-1021): the fungus on the brown (west) stone, "The stone seems to absorb the
   fungus."; an unused bloom spell on the grey (east) stone, "The stone seems to absorb the spell
@@ -112,7 +111,7 @@ All the chat closes for the scene, then the next line shows on the given tick.
   item yet." with the pouch; three items, the first three in the pack, go in, one charge a
   fungus and two a stem: "You add five harvested items to your druid pouch."; with fewer, "You
   need at least three blossomed items to add something to the druid pouch.".
-- **Ghasts** (233, 285, 499, 1257, 1310): a miss is "An attacking Ghast just misses you.", the
+- **Ghasts** (233, 285, 499, 1257, 1310): a miss is "An attacking Ghast just misses you." (spam), the
   player's block, the ghast's 1093, "OOooooohhh" and sound 433; a rot is "You feel something
   attacking your backpack, and smell a terrible stench.", "Oouuaarrr!" and sounds 433 and 1494,
   a pie leaving its dish in its slot and the rotten food in a free one. On the island the camp's

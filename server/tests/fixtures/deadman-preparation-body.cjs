@@ -428,7 +428,9 @@ async function assertOrdinaryStatSetting(actor, blocked) {
   }
 }
 
-if (lockRegression) test("ordinary PvpMode stat and preset routes preserve preparation lock and logout restoration", async () => {
+if (lockRegression) test("ordinary PvpMode stat and preset routes preserve preparation lock and logout restoration", async (t) => {
+  // Keep the existing online-play clock fixed across ordinary awaited onboarding inputs.
+  t.mock.timers.enable({ apis: ["Date"], now: 3_000_000 });
   const actor = await enter("DmmLock");
   await finishLockOnboarding(actor);
   await assertOrdinaryStatSetting(actor, profile === "deadman");

@@ -158,3 +158,32 @@ test('ordinary registered range cooking credits a successful summer pie in the g
   assert.equal(cooking.isCookingActive(p),false);
   assert.equal(p.getInventory().getAmount(raw),0); assert.equal(p.getInventory().getAmount(cooked),1); assert.equal(credited(p),true);
 });
+
+// The bank room door (fai_varrock_cook_guild_door), a wall on the west edge of its tile: the room is east.
+const BANK_DOOR_X=3144, BANK_DOOR_Y=3452;
+async function bankDoor(t, {cooking=1, hardDiary=false, inside=false}={}) {
+  const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const p=new Player(new PlayerSession(channel)); const name=`cookbank${next++}`;
+  t.after(() => { core.TaskManager.cancelTasks(p); if(p.isRegistered()) core.World.getPlayers().remove(p); });
+  p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+  p.setAttribute('bot-skip-persistence',true); assert.equal(core.World.getPlayers().add(p),true);
+  p.moveTo(new core.Location(inside?BANK_DOOR_X:BANK_DOOR_X-1,BANK_DOOR_Y,0)); p.setNeedsPlacement(false);
+  const c=new ClientConnection(channel); c.player=p; p.getSession().setPlayer(p); p.getSession().setTurnPacketProcessor(()=>c.processTurnPackets());
+  const skills=p.getSkillManager(), skill=core.Skill.COOKING;
+  skills.setMaxLevels(skill,cooking,false).setExperience(skill,SkillManager.getExperienceForLevel(cooking)).setCurrentLevels(skill,cooking,false);
+  if(hardDiary) for(const task of diary.tiers.hard.tasks) diaryProgress.completeTask(p,diary,task.key);
+  const query={player:p,diary:'varrock',tier:'hard',complete:false}; PM.emitCustomEvent('diary:is-complete',query); assert.equal(query.complete,hardDiary);
+  const id=core.CacheDefinitions.getLocId('fai_varrock_cook_guild_door');
+  assert.ok(core.World.findCacheObject(p,id,new core.Location(BANK_DOOR_X,BANK_DOOR_Y,0)),'active cache has the bank room door');
+  const messages=[]; const send=p.sendMessage.bind(p); p.sendMessage=(m,...rest)=>{ messages.push(String(m)); return send(m,...rest); };
+  await c.dispatch([{type:'object_option',id,x:BANK_DOOR_X,y:BANK_DOOR_Y,clickType:1}]);
+  let forced=false;
+  for(let i=0;i<20;i++) { core.World.process(); forced ||= !!p.getForceMovement(); }
+  assert.ok(p.getForceMovement()==null); assert.equal(p.getMovementQueue().isMovementBlocked(),false,'door releases movement');
+  const loc=p.getLocation();
+  return {p,forced,messages:messages.filter(m=>!m.includes("music track")),at:[loc.getX(),loc.getY(),loc.getZ()]};
+}
+test('bank room door lets in a player with the hard Varrock Diary',async t=>{const f=await bankDoor(t,{cooking:32,hardDiary:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X,BANK_DOOR_Y,0]);assert.deepEqual(f.messages,[]);});
+test('bank room door lets in a player with 99 Cooking',async t=>{const f=await bankDoor(t,{cooking:99});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X,BANK_DOOR_Y,0]);});
+test('bank room door turns away a player without either',async t=>{const f=await bankDoor(t,{cooking:98});assert.equal(f.forced,false);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);assert.deepEqual(f.messages,['Only those who have completed the hard Varrock Diary or have 99 Cooking may enter.']);});
+test('leaving the bank room is never stopped',async t=>{const f=await bankDoor(t,{inside:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);});

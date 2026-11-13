@@ -396,7 +396,7 @@ test("the Wine of Zamorak spawns: both Asgarnia floors, the Wilderness church an
   assert.deepEqual(at(2930, 3515, 0), [[245, 50, false, null]]);
   assert.deepEqual(at(2938, 3517, 1), [[245, 50, false, null]], "the upper floor has its own wine");
   assert.deepEqual(at(2950, 3824, 0), [[245, 50, false, null]]);
-  assert.deepEqual(at(3018, 10353, 0), [[23489, 11, true, 245]], "the dungeon shows its display wine and gives the real one");
+  assert.deepEqual(at(3018, 10353, 0), [[23489, 7, true, 245]], "the dungeon shows its display wine, back 7 ticks after it goes, and gives the real one");
 });
 
 test("a ground-items:reward handler can credit the item's note instead", t => {

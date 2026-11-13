@@ -633,7 +633,8 @@ function sailor(sailing = emptySailingState()) {
     setSailing: (next) => { sailing = next; },
     // Message boxes (dialogue chains) land in `boxes`.
     boxes: [],
-    getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     // Spam lines (sendTypedMessage) land in `messages` too, after `spam: `.
     getPacketSender: () => new Proxy({}, {
       get: (_t, key, proxy) => key === "sendTypedMessage" ? (_type, text) => { messages.push(`spam: ${text}`); return proxy; } : () => proxy,
@@ -3660,7 +3661,8 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
       isRegistered: () => true,
       getRelations: () => ({ isVisibleTo: () => player.visible }),
       setEnteredSyntaxAction: (action) => { player.answer = action; },
-      getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+      // Shows the first entry, as the real manager does (a box logs its own chat line).
+      getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     });
     const sender = new Proxy({}, {
       get: (_t, key) => (...args) => {

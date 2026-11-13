@@ -130,6 +130,7 @@ function player({ at = WILDERNESS, items = [] } = {}) {
   const sender = new Proxy({}, {
     get: (_, name) => {
       if (name === "getVarbit") return (id) => varbits.get(id) ?? 0;
+      if (name === "isSubInterfaceOpen") return (id) => p.packets.some(([packet, , group]) => packet === "sendSubInterface" && group === id);
       return (...args) => {
         p.packets.push([name, ...args]);
         if (name === "sendVarbit") varbits.set(args[0], args[1]);
@@ -506,6 +507,36 @@ test("on death the killer gets everything but food and potions (Wiki)", () => {
   const before = dropped.length;
   hooks.defeated({ killer: player(), victim });
   assert.deepEqual(dropped.slice(before).map((entry) => entry.getId()), [COINS]);
+});
+
+test("a Deposit panel closed by walking leaves no deposit mode behind for a late Store click", async (t) => {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { HeadlessBinaryChannel } = require("../dist/net/BinaryChannel");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  t.mock.method(PluginManager, "emitInterfaceActionClick", (event) => click(event).handled);
+  const channel = new HeadlessBinaryChannel();
+  channel.send = () => {};
+  const session = new PlayerSession(channel);
+  const p = new Player(session, new Location(...WILDERNESS, 0));
+  session.setPlayer(p);
+  const bag = bagWith(OPEN_BAG);
+  p.getInventory().setItem(0, bag);
+  p.getInventory().setItem(1, item(FIRE_RUNE, 13));
+  const connection = new ClientConnection(channel);
+  connection.player = p;
+  const storeAll = () => connection.dispatch([{ type: "widget_action", widgetId: (81 << 16) | 5, groupId: 81, childId: 5,
+    slot: 1, itemId: FIRE_RUNE, buttonNum: 3 }], true);
+  assert.equal(hooks.actions.Deposit({ player: p, item: bag }), true);
+  assert.equal(p.getPacketSender().isSubInterfaceOpen(81), true);
+  p.getPacketSender().closeInterruptibleInterfaces();
+  assert.equal(p.getPacketSender().isSubInterfaceOpen(81), false, "walking closes the side panel");
+  await storeAll();
+  assert.deepEqual(stored(bag), [], "no Store op once the panel is gone");
+  assert.equal(p.getInventory().getAmount(FIRE_RUNE), 13);
+  hooks.actions.Deposit({ player: p, item: bag });
+  await storeAll();
+  assert.deepEqual(stored(bag), [{ id: FIRE_RUNE, amount: 13, meta: null }], "reopened, Store-All works again");
 });
 
 // Source-only diagnostic: normal decoded widget/amount dispatch, without a saved callback call.

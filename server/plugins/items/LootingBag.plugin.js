@@ -101,6 +101,9 @@ const isDestroyedOnDestroy = (id) => !ItemDefinition.forId(id).isNoted()
   && (isSupply(id) || id === ItemIdentifiers.VIAL_OF_WATER);
 const canUseBag = (player) => Wilderness.isIn(player) || isInsideEnclave(player.getLocation?.());
 const setting = (player, key) => player.getAttribute(key) === true;
+// Deposit mode lasts only while its panel is up: walking, a hit or another modal can close it
+// without sendBag, so the flag alone would outlive the panel.
+const inDepositView = (player) => depositing.has(player) && player.getPacketSender().isSubInterfaceOpen(BAG_INTERFACE) === true;
 
 function canStore(item) {
   return item?.isValid?.() && item.isTradeable() && !isBag(item);
@@ -208,7 +211,7 @@ function depositItem(player, bag, key, amount) {
     amount -= moved;
   }
   inventory.refreshItems();
-  if (depositing.has(player)) {
+  if (inDepositView(player)) {
     sendContents(player, bag);
     sendTotals(player, bag, true);
   }
@@ -261,7 +264,7 @@ function clickBagInterface(event) {
   const bag = bagFor(player);
   if (!bag) return;
   const op = Number(event.action);
-  if (!depositing.has(player)) {
+  if (!inDepositView(player)) {
     const entry = bagItems(bag)[event.slot];
     if (op !== CHECK_EXAMINE_OP || !entry || entry.id !== event.itemId) return;
     event.handled = true;

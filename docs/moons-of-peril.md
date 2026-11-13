@@ -324,6 +324,18 @@ sends unprotected items to a grave outside, and anything left on the arena floor
 | Exit stairs (`pmoon_boss_exit_stairs`, 53003; Quick-escape / Escape) | Leaves the arena. Quick-escape is the default since 3 April 2024 (Wiki). | capture (rev 228, 4 attempts); Wiki |
 | Tunnels (`pmoon_telebox`, `_3x3`, `_diagonal`, `_cave`, 51375-51378, Pass-through) | `fade_overlay` [0, 255, 0, 0, 15], the boss HUD cleared, the move about 2 ticks later with spam "You follow a long and winding tunnel before emerging on the other side.", then fade back in [0, 0, 0, 255, 15], `busy` 1 meanwhile, and music 785 (Lost to Time). Destinations from captures: (1439, 9509, 1), (1440, 9615, 1), (1423, 9615, 1), (1513, 9596, 0), (1510, 9675, 0), (1355, 9538, 0). | capture (126 attempts) |
 
+## The quest's camp caverns
+
+Perilous Moons (`PerilousMoons.Quest.js`) builds the camps in copies of Neypotzli, as rsprox capture
+1693 (rev 226) shows (#5196).
+
+| Thing | What happens | Source |
+| --- | --- | --- |
+| Entering a cavern, stages 8-14 | Every entrance sends rebuild_region: a fresh copy of the destination (antechamber, Ancient Prison, Earthbound or Streambound Cavern) with that cavern's own NPCs (the prison's sulphur nagua included). The way in from Cam Torum at stage 7 sets 8 first. From stage 15 the entrances send rebuild_normal (the real map). Ours: 13x13 chunks copied unturned around each cavern; a copy goes when the player leaves it; a logout inside one is saved at the cavern's landing, and the login copies that cavern again. | capture 1693 |
+| Antechamber copy | `pmoon_camp_supplies_1..3` (50855-50857, Take-from) at (1435, 9636, 1), (1436, 9636, 1) and (1436, 9637, 1) while a camp is left to build. Attala, Zuma and Jessamine stand in it. | capture 1693 |
+| A camp not built yet | The copied map has every camp built. loc_del on the camp's stools, crate and barrel; `pmoon_campbox` (50858, Build) on (1348, 9580) / (1373, 9710) / (1509, 9693) and `pmoon_range_notbuilt` (53007) on the range's tile, as loc_add_change. | capture 1693 |
+| Build | From the click's arrival: `human_poh_build_wall` (3684), sound 938, loc_del of the camp spot and a fade out [0, 255, 0, 0, 50]; +1 minimap off; +2 the camp's locs (barrier, range, two stools, supply crates, barrel; the crate faces 0 where the map's faces 2); +3 animation -1, fade in, minimap back; +4 `human_pickuptable_walkmerge` (9401); +6 "You drink some tea from the newly built camp and find yourself feeling energised!", `pmoon_camp_N` 1, "Aaah, nothing like a nice cuppa tea!", `human_eat` (829), one camp supplies (28968) gone, sound 2401, full run energy. The third camp sets `pmoon_quest` 10->12 on that tick. Built from (1351, 9581) and (1375, 9709). | capture 1693 ticks 1344-1350, 1454-1460, 1575 |
+
 ## Camps and supplies
 
 `Camps.MoonsOfPeril.js` and `River.MoonsOfPeril.js`, data `supplies`, `river` and `neypotzli`.
@@ -342,7 +354,7 @@ moonlight moths stay with the Hunter plugin.
 | River fishing (`river_fishing_spot` 62193 at (1501, 9698) and (1521, 9689)) | 20 Fishing and a big fishing net. Fish sets `river_fishing_is_fishing` (15454), `river_fishing_dir` (15453) to the middle lane and plays `human_largenet_looping`; the spot and the stream's click zones (`river_fishing_clickzone` 62191) turn into "Stream" tiles to Align-net in, which sets the lane without walking. Fish (`pmoon_fish`, spotanim 2799) swim down a random lane every 2 ticks in two legs (90 and 80 cycles); one reaching the net's lane is a raw bream (3 xp), a second on a skilling roll (7-35 xp by level, Wiki) with "You manage to catch an additional fish!". Walking, a full inventory or 30 seconds without a click stop it. | capture (rev 237's click zones); Wiki; the rev 241 locs and varbits; lane timing and the roll's odds: estimates |
 | Food | `food.json`: cooked bream heals the lower of Cooking/3 and Fishing/3, to the nearest ("You eat the bream.", capture); cooked moss lizard the lower of Cooking/3 and Hunter/2, rounded down. | Wiki; capture |
 | Moonlight potion (`Potions.plugin.js`) | Prayer: the greater of 7 + 25% Prayer and 7 + 30% Herblore (none below 38 Herblore). Attack, Strength, Defence: 3 + 10% from 33 Herblore, 5 + 15% from 45 / 55 / 66; Defence 7 + 20% from 70, held like a divine potion's for five minutes without its damage. | Wiki |
-| Leaving Neypotzli | Bream, moss lizards, grubs and paste go and moonlight potions turn into vials of water: "The resources from Neypotzli fizzle to dust as they are severed from its magic." Checked on every map square crossed and at login. Neypotzli is the caverns (x 1344-1535, y 9536-9727, plane 0) and the antechamber (x 1408-1471, y 9600-9663, plane 1). | capture; Wiki |
+| Leaving Neypotzli | Bream, moss lizards, grubs and paste go and moonlight potions turn into vials of water: "The resources from Neypotzli fizzle to dust as they are severed from its magic." Checked on every map square crossed and at login; a copy of Neypotzli counts as Neypotzli. Neypotzli is the caverns (x 1344-1535, y 9536-9727, plane 0) and the antechamber (x 1408-1471, y 9600-9663, plane 1). | capture; Wiki |
 
 ## Lunar Chest
 

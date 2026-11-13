@@ -286,8 +286,14 @@ function fizzle(player) {
   player.sendMessage(neypotzli.fizzle);
 }
 
+/** A copy of Neypotzli (the quest's camp caverns are instances) counts as the place it copies. */
+function sourceOf(player, location) {
+  const area = player.getPrivateArea?.();
+  return typeof area?.toSource === "function" && area.contains?.(location) ? area.toSource(location) : location;
+}
+
 function onMapSquare({ player, location }) {
-  if (location && !inNeypotzli(location)) fizzle(player);
+  if (location && !inNeypotzli(sourceOf(player, location))) fizzle(player);
 }
 
 function onLogin({ player }) {

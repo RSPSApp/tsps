@@ -61,8 +61,9 @@ const pos = p => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation(
 test('every captured mandatory entrance lands on its real destination', () => {
   const h = harness(), p = player();
   h.quest.setStage(p, 5); gate(h, p, O.ENTRANCE_15, 1435, 3129); assert.deepEqual(pos(p), [1439, 9509, 1]);
-  h.quest.setStage(p, 7); gate(h, p, O.ENTRANCE_15, 1439, 9600, 1); assert.deepEqual(pos(p), [1440, 9615, 1]);
+  // Stages 7-14 land in a copy of the antechamber (tests/perilous-moons-camp-instance.test.cjs); the real map's landing:
   h.quest.setStage(p, 27);
+  gate(h, p, O.ENTRANCE_15, 1439, 9600, 1); assert.deepEqual(pos(p), [1440, 9615, 1]);
   gate(h, p, O.ENTRANCE_16, 1421, 9613, 1); assert.deepEqual(pos(p), [1388, 9575, 0]);
   gate(h, p, O.ENTRANCE_16, 1421, 9650, 1); assert.deepEqual(pos(p), [1403, 9717, 0]);
   gate(h, p, O.ENTRANCE_16, 1458, 9650, 1); assert.deepEqual(pos(p), [1481, 9669, 0]);

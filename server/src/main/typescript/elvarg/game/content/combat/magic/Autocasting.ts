@@ -3,12 +3,13 @@ import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { ItemAliases } from "../../../model/ItemAliases";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { FightStyle } from "../FightStyle";
-import { FightType } from "../FightType";
+import { COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, FightType } from "../FightType";
 import { CombatSpell } from "./CombatSpell";
 import { CombatSpells } from "./CombatSpells";
 import { Barrows } from "../Barrows";
 
 const getBonusManager = () => require("../../../model/equipment/BonusManager").BonusManager as typeof import("../../../model/equipment/BonusManager").BonusManager;
+const getWeaponInterfaceManager = () => require("../WeaponInterfaceManager").WeaponInterfaceManager as typeof import("../WeaponInterfaceManager").WeaponInterfaceManager;
 
 export class Autocasting {
     private static readonly COMBAT_INTERFACE = 593;
@@ -170,6 +171,7 @@ export class Autocasting {
         if (player.getSpellbook() === MagicSpellbook.LUNAR) {
             // rsprox_transcripts/234/03297.txt tick 212.
             player.sendMessage("You cannot autocast Lunar Magicks.");
+            this.clearForRefusal(player);
             return true;
         }
         if (!player.getEquipment().hasStaffEquipped()) {
@@ -181,6 +183,7 @@ export class Autocasting {
         const refusal = this.weaponRefusal(player, player.getSpellbook());
         if (refusal != null) {
             player.sendMessage(refusal);
+            this.clearForRefusal(player);
             return true;
         }
 
@@ -271,6 +274,19 @@ export class Autocasting {
         if (player.getCombat().getAutocastSpell() == null) return;
         player.getCombat().setAutocastSpell(null);
         this.refreshIndicators(player);
+    }
+
+    /**
+     * A refused autocast button turns an existing autocast off (rsprox_transcripts/234/00843.txt tick 465:
+     * autocast_set, autocast_defmode and autocast_spell go to 0 with the refusal line, and com_mode goes back to the
+     * style chosen before autocasting, 4 -> 3 -> 1; also 237/01108.txt tick 6692).
+     */
+    private static clearForRefusal(player: Player): void {
+        if (player.getCombat().getAutocastSpell() == null) return;
+        this.setAutocast(player, null);
+        // The selector's own style (Focus/Fend) is not remembered, so the category still holds the pre-autocast slot.
+        const slot = player.getAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE)?.[player.getWeapon().getCategory()];
+        if (slot !== undefined) getWeaponInterfaceManager().changeCombatStyle(player, slot);
     }
 
     public static refreshIndicators(player: Player): void {

@@ -167,6 +167,13 @@ function canPay(player, station, count) {
   return carriedForTrip(player, station.log) >= count || stored(player, station.log) >= count;
 }
 
+/** Read-only fuel eligibility for other plugins; no menu, preference change or payment. */
+function queryFuel(event) {
+  const station = Common.data.stations.find((entry) => entry.key === event.station);
+  event.canPay = Boolean(station && Number.isInteger(event.logs) && event.logs > 0 &&
+    canPay(event.player, station, event.logs));
+}
+
 /**
  * Where the trip's logs come from, given to `go(source)`: storage when preferred (or the only
  * place with enough), the inventory otherwise; asked when the player chose to be asked and both
@@ -226,6 +233,7 @@ function attach(api) {
   api.persistAttribute(PREFERENCE_ATTRIBUTE, settings().defaultPreference);
   api.onObjectInteraction(settings().loc, { Store: store, Preferences: preferences, Check: check });
   api.onItemOnObject(useOnStorage);
+  api.onCustomEvent("balloon-transport:can-pay", queryFuel);
 }
 
 module.exports = {

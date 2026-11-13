@@ -117,6 +117,8 @@ function makePlayer() {
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
     sendMessage: (message) => messages.push(message),
+    prayerPointDrain: 7,
+    setPrayerPointDrain(drain) { player.prayerPointDrain = drain; },
     getDialogueManager: () => ({ isActive: () => false, startDialogues(builder) { started.push(builder); } }),
     getArea: () => null,
     getIndex: () => 1,
@@ -895,6 +897,7 @@ test('transformation waits for its line, uses the green chathead and completion 
   p.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
   objectAction(h, {objectId: O.ALTAR_OF_NATURE, option: 'Pray-at'});
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 52);
+  assert.equal(p.prayerPointDrain, 0, 'the altar also clears the drain counter (b0ffb7704)');
 });
 
 test('pouch use is limited to one reveal per game tick across every invisible ghast variant', () => {

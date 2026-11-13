@@ -121,6 +121,7 @@ test("travel into the house: the bark and reach, then two ticks later the house 
   assert.deepEqual([at.getX(), at.getY(), at.getZ()], [tree.location.getX() + 2, tree.location.getY(), tree.location.getZ()], "east of the 2x2 tree");
   runTicks(visit, 2);
   assert.ok(visit.ticks[4].includes("close 161:1"), "the loading screen lifts two ticks later");
+  assert.ok(!visit.spoken.some((line) => line.includes("dry tough bark")), "no second bark box: the house loads instead");
   assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false, "free to move once loaded");
   assert.equal(visit.player.getAttribute("spirit-trees:last-destination"), "Your house", "Last-destination remembers it");
   House.releaseHouse(visit.player, false);

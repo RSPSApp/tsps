@@ -20,6 +20,7 @@ QuestRuntime.getRegisteredQuests = () => quests;
 
 let core;
 let grown = [];
+let loginHook = null;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -31,6 +32,7 @@ before(async () => {
     onObjectInteraction() {},
     onInterfaceActionClick() {},
     onCustomEvent() {},
+    onPlayerLogin: (hook) => { loginHook = hook; },
     emitCustomEvent: (name, request) => {
       if (name === "spirit-trees:grown") request.patches.push(...grown);
     },
@@ -53,6 +55,10 @@ function traveller(at) {
       if (key === "closeSubInterface") return (uid) => (log(`close ${uid >>> 16}:${uid & 0xffff}`), sender);
       if (key === "sendChatboxInterface") return (id) => (log(`chatbox ${id}`), sender);
       if (key === "sendString") return (text, uid) => (log(`text ${uid >>> 16}:${uid & 0xffff} ${text}`), sender);
+      if (key === "sendTypedMessage") return (type, text) => (log(`chat ${type} ${text}`), sender);
+      if (key === "sendItemOnInterfaces") return (uid, item, zoom) => (log(`item ${uid >>> 16}:${uid & 0xffff} ${item} ${zoom}`), sender);
+      if (key === "sendInterfaceFlagsRange") return (uid, from, to, flags) => (log(`events ${uid >>> 16}:${uid & 0xffff} ${from}..${to} ${flags}`), sender);
+      if (key === "sendVarbit") return (id, value) => (log(`varbit ${id}=${value}`), sender);
       if (key === "sendSound") return (id) => (log(`sound ${id}`), sender);
       if (key === "sendInterfaceScript") return (id) => (id === 2158 && log("restore chat input"), sender);
       if (key === "getVarbit" || key === "getVarp") return () => 0;
@@ -67,7 +73,12 @@ function traveller(at) {
   player.moveTo = (location) => (log(`move ${location.getX()},${location.getY()},${location.getZ()}`), moveTo(location));
   const spoken = [];
   // What the tree says: each chain's lines, in order.
-  player.getDialogueManager().startDialogues = (chain) => spoken.push([...chain.getDialogues().values()].map((entry) => entry.text ?? "").join(" / "));
+  player.getDialogueManager().startDialogues = (chain) => {
+    const entries = [...chain.getDialogues().values()];
+    spoken.push(entries.map((entry) => entry.text ?? "").join(" / "));
+    const box = entries.find((entry) => entry instanceof core.ItemStatementDialogue);
+    if (box) log(`item box ${box.getItemId()} ${box.getText()}`);
+  };
   return { player, ticks, spoken, nextTick: () => ticks.push([]) };
 }
 
@@ -99,20 +110,53 @@ test("the menu lists every tree in the game's order, greying out those the playe
   assert.ok(visit.ticks[0].includes("open 187"));
 });
 
-test("choosing a tree: the bark message and the reach, then the move two ticks later", () => {
+const BARK = "You place your hands on the dry tough bark of the spirit tree, and feel a surge of energy run through your veins.";
+const BARK_BOX = "You place your hands on the dry tough bark of the<br>spirit tree, and feel a surge of energy run through<br>your veins.";
+
+test("choosing a tree: the bark box and the reach, the move two ticks later, then the box with its continue button", () => {
   quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
   const visit = traveller([3185, 3508, 0]);
   SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
   visit.ticks.length = 0;
   visit.nextTick();
   assert.equal(choose(visit, 187, 3, 1), true, "slot 1: Gnome Stronghold");
-  runTicks(visit, 2);
+  runTicks(visit, 3);
   assert.deepEqual(visit.ticks, [
-    ["close 161:16", "restore chat input", "chatbox 193", 'script 2868 [""]',
-      "text 193:2 You place your hands on the dry tough bark of the spirit tree, and feel a surge of energy run through your veins.", "anim 828"],
+    ["close 161:16", "restore chat input", "varbit 20252=2", `chat 115 ${BARK}`, "chatbox 193", 'script 2868 [""]',
+      "events 193:0 -1..-1 0", "item 193:1 6063 400", `text 193:2 ${BARK_BOX}`, "anim 828"],
     [],
-    ["move 2461,3444,0", "close 162:566"],
+    ["move 2461,3444,0"],
+    [`chat 115 ${BARK}`, `item box 6063 ${BARK_BOX}`],
   ]);
+  assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false, "free to walk once the box shows");
+});
+
+test("the player can't walk off between the landing and the second box", () => {
+  quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
+  const visit = traveller([3185, 3508, 0]);
+  SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
+  choose(visit, 187, 3, 4);
+  const movement = visit.player.getMovementQueue();
+  runTicks(visit, 2);
+  assert.equal(movement.isMovementBlocked(), true, "held still on the landing tick");
+  runTicks(visit, 1);
+  assert.equal(movement.isMovementBlocked(), false);
+});
+
+test("spirit_tree_previous: the last tree's menu slot plus one, sent again on login", () => {
+  quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
+  const visit = traveller([3185, 3508, 0]);
+  SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
+  choose(visit, 187, 3, 4);
+  assert.ok(visit.ticks.flat().includes("varbit 20252=5"), "Feldip Hills, slot 4");
+  runTicks(visit, 3);
+  visit.ticks.length = 0;
+  visit.nextTick();
+  loginHook({ player: visit.player });
+  assert.deepEqual(visit.ticks, [["varbit 20252=5"]]);
+  const fresh = traveller([3185, 3508, 0]);
+  loginHook({ player: fresh.player });
+  assert.deepEqual(fresh.ticks, [[]], "nothing before the first trip");
 });
 
 test("a greyed tree, or the tree the player is at, makes the tree speak instead", () => {

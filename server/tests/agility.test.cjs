@@ -57,6 +57,7 @@ const agilityApi = {
   onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
   onObjectInteraction: (name, actions) => hooks.objectActions.set(name, { ...(hooks.objectActions.get(name) ?? {}), ...actions }),
   onCanTeleport: (handler) => hooks.teleport.push(handler),
+  registerRunEnergyRestoreModifier: (modifier) => require("../dist/game/content/combat/EquipmentEffects").registerRunEnergyRestoreModifier(modifier),
   registerArea: (area) => hooks.areas.push(area),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onPlayerLogin: (handler) => hooks.login.push(handler),
@@ -1914,6 +1915,37 @@ test("the Waterbirth crevice goes one way, from the crab room down; from below i
   operate(low.player, CREVICE, [1853, 4406, 3]);
   assert.deepEqual(tileOf(low.player), [1852, 4406, 3]);
   assert.deepEqual(low.messages, ["You need an Agility level of at least 81 to attempt this."]);
+});
+
+test("run energy does not recover while an Agility obstacle is crossed, and does again after", () => {
+  // Wiki (Energy): no regeneration while "crossing an agility obstacle". rsprox_transcripts/223/00003.txt:
+  // on the Trollheim climbing rocks no update_runenergy is sent while BUSY is set, and +20 comes back
+  // on the tick it clears.
+  const { MovementQueue } = require("../dist/game/model/movement/MovementQueue");
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  const CREVICE = 53258;
+  const { player } = realPlayer(1852, 4406, 3, 81);
+  player.setRunEnergyUnits(5000);
+  const resting = MovementQueue.runEnergyRestoreUnits(player);
+  assert.equal(resting, Math.floor(81 / 10) + 15);
+
+  const object = gameObject(CREVICE, 1853, 4406, 3);
+  hooks.click.get(CREVICE)({ player, object, definition: object.getDefinition(), objectId: CREVICE, clickType: 1, location: { x: 1853, y: 4406, z: 3 }, handled: false });
+  let crossingTicks = 0;
+  for (; ObstacleRunner.isBusy(player); crossingTicks++) {
+    assert.ok(crossingTicks < 100, "the crevice never finished");
+    assert.equal(MovementQueue.runEnergyRestoreUnits(player), 0, `tick ${crossingTicks}: no recovery mid-obstacle`);
+    tick();
+  }
+  assert.ok(crossingTicks > 0);
+  assert.deepEqual(tileOf(player), [1862, 4406, 1]);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(player), resting, "recovery resumes once across");
+
+  // The same runner playing a door or lever (no `agility` flag) leaves recovery alone.
+  ObstacleRunner.run({ player }, [{ wait: 2 }]);
+  assert.equal(ObstacleRunner.isBusy(player), true);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(player), resting);
+  while (ObstacleRunner.isBusy(player)) tick();
 });
 
 test("a refuse entry is a message or a mesbox, and nothing else", () => {

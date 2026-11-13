@@ -273,6 +273,9 @@ function done(player, session) {
     if (open.get(player) === session) open.delete(player);
     // TSPS fallback; the exact retail stale-session wording is not established.
     player.sendMessage("This nexus is no longer available for configuration.");
+    // Nothing is left to configure: the panel closes as a saved configuration's does.
+    player.getPacketSender().sendVarbit(NEXUS_ID, 0);
+    player.getPacketSender().sendInterfaceRemoval();
     return;
   }
   const added = session.slots.filter(id => !stateOf(player, session.furniture).slots.includes(id));

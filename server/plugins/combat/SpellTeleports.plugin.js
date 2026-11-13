@@ -270,6 +270,7 @@ function refuseGroupHouse(event) {
 /** The clicked scroll in the inventory, as a "teleport-scroll:read" source. */
 function inventoryScroll(player, itemId) {
   return {
+    item: itemId,
     has: () => player.getInventory().contains(itemId),
     spend: () => {
       if (!player.getInventory().contains(itemId)) return false;
@@ -281,7 +282,8 @@ function inventoryScroll(player, itemId) {
 
 /**
  * A teleport scroll is used up on the click (docs/teleport-tablets.md). `source` is where the
- * scroll comes from: the inventory, or a scroll store such as the Master scroll book.
+ * scroll comes from: the inventory, or a scroll store such as the Master scroll book. Its `item`
+ * is what a warning's yes checks the player still carries (the scroll, or the book).
  */
 function readScroll(event, destination, source = inventoryScroll(event.player, event.itemId)) {
   const { player } = event;
@@ -290,7 +292,7 @@ function readScroll(event, destination, source = inventoryScroll(event.player, e
   core.TeleportHandler.confirm(player, destination, () => {
     if (!source.spend()) return;
     core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_SCROLL, false);
-  }, 20, { item: event.itemId });
+  }, 20, { item: source.item ?? event.itemId });
 }
 
 /** "teleport-scroll:read" { player, itemId, source }: a stored scroll read like the inventory one. */

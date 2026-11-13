@@ -59,5 +59,5 @@ that scroll from the inventory reads it the same way: the same checks, prompts, 
 quest lock. The first listener that takes it sets `handled`:
 `SpellTeleports` (the `scrolls` in `teleport-tablets.json`), `RevenantCaves`, `Shrine.Zulrah`
 and `Scroll.TormentedDemons`. `spend()` takes one from the book once the reader's checks pass,
-where it would have deleted the inventory scroll. The Revenant caves entry's Config emits
+where it would have deleted the inventory scroll. The source's `item` is what `TeleportHandler.confirm` checks is still carried after a warning's yes (the boat-at-sea warning): the scroll for an inventory read, the book for a stored one. The Revenant caves entry's Config emits
 `teleport-scroll:configure`, which RevenantCaves answers with the scroll's own Config menu.

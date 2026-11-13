@@ -263,3 +263,47 @@ test("the counts and default come back on login", (t) => {
   assert.equal(varbit(f, "bookofscrolls_selected_teleport_highbits"), 1);
   assert.equal(varbit(f, "bookofscrolls_selected_teleport_lowbits"), 5);
 });
+
+/** On a stand-in boat at sea (every tile its deck), with the boat teleport warning on (the default). */
+function aboard(t, f) {
+  const boat = { containsDeckTile: () => true };
+  const real = core.Sailing.instanceAboard;
+  t.mock.method(core.Sailing, "instanceAboard", (player) => (player === f.p ? boat : real.call(core.Sailing, player)));
+}
+
+/** The boat warning's message box, then its question: answers `answer`. */
+function answerBoatWarning(f, answer) {
+  const TeleportWarning = require("../plugins/skills/sailing/TeleportWarning.Sailing");
+  assert.equal(f.p.getDialogueManager().getCurrent()?.text, TeleportWarning.TEXT_BOX);
+  f.p.getDialogueManager().advance();
+  assert.equal(prompt(f).title, TeleportWarning.QUESTION);
+  choose(f, prompt(f).options.indexOf(answer(TeleportWarning)) + 1);
+}
+
+test("at sea, the boat warning's yes reads a stored scroll: it checks the book is still carried", (t) => {
+  const f = actor(t);
+  give(f, BOOK);
+  stock(f, { watson: 20 }, 15);
+  aboard(t, f);
+  op(f, "Teleport");
+  answerBoatWarning(f, (w) => w.YES);
+  ticks(6);
+  assert.deepEqual(f.messages.filter((m) => /no longer have/.test(m)), []);
+  assert.equal(Book._test.countOf(f.p, "watson"), 19);
+  const at = f.p.getLocation();
+  assert.ok(Math.abs(at.getX() - 1644) <= 2 && Math.abs(at.getY() - 3580) <= 2, `landed at ${at.getX()},${at.getY()}`);
+});
+
+test("at sea, a book dropped before the warning's yes reads nothing and spends nothing", (t) => {
+  const f = actor(t);
+  give(f, BOOK);
+  stock(f, { watson: 20 }, 15);
+  aboard(t, f);
+  op(f, "Teleport");
+  f.inv.deleteAtSlot(slotOf(f, BOOK), 1);
+  answerBoatWarning(f, (w) => w.YES);
+  ticks(6);
+  assert.ok(f.messages.includes("You no longer have the item you were teleporting with."));
+  assert.equal(Book._test.countOf(f.p, "watson"), 20);
+  assert.equal(f.p.getLocation().getX(), GE[0]);
+});

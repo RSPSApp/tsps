@@ -41,6 +41,7 @@ function questComplete(player) {
 /** The clicked slot, else wherever the scroll is now, as a "teleport-scroll:read" source. */
 function inventoryScroll(player, slot) {
   return {
+    item: SCROLL,
     has: () => true,
     spend: () => {
       const inventory = player.getInventory();
@@ -66,7 +67,7 @@ function readScroll({ player, slot, source = inventoryScroll(player, slot) }) {
     TeleportHandler.teleport(player, to, scrollTeleport(), false, () => {
       Shared.api().emitCustomEvent("wgs:enter-chasm", { player, tile: to });
     });
-  }, 20, { item: SCROLL });
+  }, 20, { item: source.item ?? SCROLL });
 }
 
 /** "teleport-scroll:read": a stored scroll (the Master scroll book) reads like the inventory one. */

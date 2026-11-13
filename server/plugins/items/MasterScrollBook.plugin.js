@@ -177,9 +177,13 @@ function useOnBook(event) {
 
 // ------------------------------------------------------------------ reading
 
-/** One stored scroll, spent when the reading plugin's checks pass (it may still be refused). */
+/**
+ * One stored scroll, spent when the reading plugin's checks pass (it may still be refused). Its
+ * `item` is the book: a warning's yes (the boat-at-sea one) checks the player still carries it.
+ */
 function storedSource(player, entry) {
   return {
+    item: core.CacheDefinitions.getObjId("bookofscrolls_charged"),
     has: () => countOf(player, entry.key) > 0,
     spend: () => {
       const count = countOf(player, entry.key);

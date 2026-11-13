@@ -234,6 +234,7 @@ function inventoryScroll(player, slot) {
     return inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
   };
   return {
+    item: SCROLL,
     has: () => true,
     spend: () => {
       const at = find();
@@ -266,7 +267,7 @@ function readScroll(player, source, destination) {
     }
     sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
     core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
-  }, SCROLL_LEVEL_LIMIT, { item: SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
+  }, SCROLL_LEVEL_LIMIT, { item: source.item ?? SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** "Teleport": a sub-option picks the entrance; a left-click uses the configured one. */

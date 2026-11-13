@@ -1,4 +1,4 @@
-// SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
+// OPT-IN PREPARATION; mixed-world bootstrap correction below is not yet runtime qualified.
 // Preparations003/006/007/008/010 remain retained; source63233 passed the six preparation checks.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This uses the existing compiled/cache/login/save fixture route; see the document for runtime scope.
@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const { spawnSync } = require("node:child_process");
 const { before, after, test } = require("node:test");
 
 const SERVER = path.resolve(__dirname, "../..");
@@ -14,6 +15,8 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), "deadman-preparation-"))
 const scenario = process.env.DMM_PREPARATION_FIXTURE_PROFILE;
 assert.ok(["main", "league", "hardcore", "deadman", "conflict"].includes(scenario), "valid fixture scenario, not a feature-absence assertion");
 const conflict = scenario === "conflict";
+const competing = process.env.DMM_PREPARATION_CONFLICT_KIND ?? "hardcore";
+assert.ok(["hardcore", "league", "both"].includes(competing));
 const profile = conflict ? "deadman" : scenario;
 process.env.DISABLE_PLAYER_BOTS = "1";
 process.env.TSPS_ACCOUNTS_FILE = path.join(directory, "accounts.json");
@@ -39,11 +42,23 @@ world.name = `Disposable preparation fixture: ${scenario}`;
 delete world.disabledPlugins;
 world.plugins = { ...world.plugins, JsonPlayerPersistence: true, SqlitePlayerPersistence: false, PlayerBots: false, TutorialIsland: false };
 world.pluginConfig = { ...world.pluginConfig, "DeadmanMode:enabled": profile === "deadman",
-  "league:type": profile === "league" ? 4 : 0, "HardcoreWorld:enabled": profile === "hardcore" || conflict };
+  "league:type": profile === "league" || (conflict && competing !== "hardcore") ? 4 : 0,
+  "HardcoreWorld:enabled": profile === "hardcore" || (conflict && competing !== "league") };
 fs.writeFileSync(path.join(directory, "data", "definitions", "world.json"), JSON.stringify(world));
 // Eager plugins also resolve compiled modules from deployment CWD before Server's
 // resolver can be installed. Bind the real code root without changing world data.
 fs.symlinkSync(path.join(SERVER, "dist"), path.join(directory, "dist"));
+// Server.main uses the deployment CWD. Copy plugins so any legacy relative source
+// requests stay within this deployment's resolver roots, including the real CLI child.
+fs.cpSync(path.join(SERVER, "plugins"), path.join(directory, "plugins"), { recursive: true });
+fs.copyFileSync(path.join(SERVER, "target.txt"), path.join(directory, "target.txt"));
+fs.mkdirSync(path.join(directory, "caches"));
+for (const entry of fs.readdirSync(path.join(SERVER, "caches"))) {
+  const source = path.join(SERVER, "caches", entry);
+  const destination = path.join(directory, "caches", entry);
+  if (fs.statSync(source).isDirectory()) fs.symlinkSync(source, destination);
+  else fs.copyFileSync(source, destination);
+}
 
 const initializationErrors = [];
 const originalError = console.error;
@@ -77,6 +92,34 @@ let core;
 let backend;
 const actors = new Set();
 const PASSWORD = "fixture-only-password";
+let bootstrap;
+
+async function observeBootstrapBoundaries() {
+  const { GameBuilder } = require("../../dist/game/GameBuilder");
+  const { NetworkBuilder } = require("../../dist/net/NetworkBuilder");
+  const calls = [];
+  const exits = [];
+  // Explicit lifecycle test stubs: no game engine, listener or harness exit. The
+  // actual Server.main, cache initialization and plugin loader remain in use.
+  const replacements = [
+    [GameBuilder.prototype, "initialize", () => calls.push("game")],
+    [NetworkBuilder.prototype, "initialize", () => calls.push("network")],
+    [process, "exit", (code) => exits.push(code)],
+    [Server, "setupFileLogging", () => {}],
+    [Server, "installGlobalCrashHandlers", () => {}],
+    [Server, "installGracefulShutdownHandlers", () => {}],
+    // Canonical resolver was already installed above before switching CWD.
+    [Server, "installProductionPathResolver", () => {}],
+  ].map(([owner, key, value]) => ({ owner, key, value, original: owner[key] }));
+  for (const replacement of replacements) replacement.owner[replacement.key] = replacement.value;
+  console.error = recordInitializationError;
+  try { await Server.main(["1", "--disablePlayerBots"]); }
+  finally {
+    console.error = originalError;
+    for (const replacement of replacements.reverse()) replacement.owner[replacement.key] = replacement.original;
+  }
+  return { calls, exits };
+}
 
 before(async () => {
   const cacheModule = path.join("game", "cache", "CacheDefinitions");
@@ -96,6 +139,12 @@ before(async () => {
   assert.equal(GameConstants.EXPERIENCE_MULTIPLIER, world.experienceMultiplier);
   assert.ok(WORLD_ZONE_BOUNDARIES.pvp.length > 0, "cached zone consumers initialized from the same fixture definition");
   await CachePipeline.initialize(SERVER);
+  if (conflict) {
+    bootstrap = await observeBootstrapBoundaries();
+    core = PM.getCoreApi();
+    backend = GameConstants.PLAYER_PERSISTENCE;
+    return;
+  }
   console.error = recordInitializationError;
   try { PM.loadFromDirectory(path.join(SERVER, "plugins")); }
   finally { console.error = originalError; }
@@ -106,9 +155,6 @@ before(async () => {
   core = PM.getCoreApi();
   backend = GameConstants.PLAYER_PERSISTENCE;
   assert.ok(backend instanceof JsonPlayerPersistence, "actual selected backend");
-  // An invalid mixed configuration is NOT allowed into any ordinary-entry fixture below.
-  // The actual loader catches setter errors and continues: this case documents that limit.
-  if (conflict) return;
   core.RegionManager.init();
   PM.emitServerStartup({});
   assert.equal(GameConstants.WORLD_PROFILE, profile, "actual plugin init, not manually assigned profile");
@@ -345,19 +391,44 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
   await logout(other);
 });
 
-if (conflict) test("actual loader catches a competing profile claim; deployment rejection remains unfinished", () => {
+if (conflict) test("mixed profiles stop actual bootstrap before explicit game/network boundaries", () => {
   assert.ok(initializationErrors.some((message) => /World already selects .* profile; cannot also select/.test(message)),
     "actual plugin initialization must attempt a competing claim, not a direct setter unit call");
-  assert.ok(["deadman", "hardcore"].includes(GameConstants.WORLD_PROFILE), "one claim remains; no coherent refusal is claimed");
+  assert.ok(initializationErrors.some((message) => message.includes("An error occurred while binding the Bootstrap: WorldProfileConflictError:")),
+    "intended typed conflict reaches the actual bootstrap catch, not an import/cache setup failure");
+  assert.deepEqual(bootstrap, { calls: [], exits: [1] });
+  assert.equal(GameConstants.WORLD_PROFILE, "deadman", "first actual sorted plugin claim remains; no rollback is claimed");
   assert.equal(core.World.getPlayerByName("DmmSeed") === null, true, "conflict phase: no actor entered the world");
   for (const other of ["main", "league", "hardcore", "deadman"]) {
     assert.equal(backend.exists("DmmSeed", other), false);
   }
-  // Observe readiness locks only. No login/handshake/startup or feature-absence target is attempted.
+  // Partial registration still retains the existing preparation locks.
   const actor = new Player(null);
   const before = actor.getSkillManager().getExperience(core.Skill.COOKING);
   actor.getSkillManager().addExperience(core.Skill.COOKING, 10, true);
   actor.getSkillManager().addExperience(core.Skill.COOKING, 10, false);
   assert.equal(actor.getSkillManager().getExperience(core.Skill.COOKING), before);
   assert.equal(PM.emitCanAttack(actor, new Player(null)), false);
+});
+
+if (conflict) test("actual Server CLI exits for the intended conflict in the disposable deployment", () => {
+  // Existing world-config-catalog/prayer-unlocks child-process pattern. No preloads,
+  // loader/exit stubs, socket probe, ordinary login or forced timeout-success claim.
+  const result = spawnSync(process.execPath, [path.join(SERVER, "dist", "Server.js"), "1", "--disablePlayerBots"], {
+    cwd: directory, env: { ...process.env }, encoding: "utf8", timeout: 60000, maxBuffer: 8 * 1024 * 1024,
+  });
+  const output = (result.stdout ?? "") + (result.stderr ?? "");
+  assert.equal(result.error, undefined, output);
+  assert.equal(result.signal, null, output);
+  assert.equal(result.status, 1, output);
+  assert.match(output, /\[cache\] active .*revision/);
+  assert.match(output, /An error occurred while binding the Bootstrap: WorldProfileConflictError: World already selects the deadman profile; cannot also select (hardcore|league)/);
+  assert.doesNotMatch(output, /\[server\] initializing in|\[network\] client websocket listening/);
+  console.log(JSON.stringify({ stage: "mixed-world-cli-refusal", competing, status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr }));
+});
+
+if (!conflict) test("valid profile reaches explicit bootstrap game/network stubs", async () => {
+  assert.deepEqual(await observeBootstrapBoundaries(), { calls: ["game", "network"], exits: [] },
+    "positive boundary wiring only; ordinary entry is exercised separately above");
+  assert.equal(GameConstants.WORLD_PROFILE, profile);
 });

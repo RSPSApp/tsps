@@ -7,7 +7,7 @@ import { ContentApi } from "../net/http/ContentApi";
 import { CustomInterfaceRegistry } from "../game/interfaces/CustomInterfaceRegistry";
 import * as fs from "fs";
 import * as path from "path";
-import { GameConstants } from "../game/GameConstants";
+import { GameConstants, WorldProfileConflictError } from "../game/GameConstants";
 import { PluginContext } from "./PluginContext";
 import { isMembersWorld, readWorldConfig } from "../game/definition/WorldDefinition";
 import {
@@ -2588,6 +2588,8 @@ export class PluginManager {
       }
       return api;
     } catch (err) {
+      // A conflicting deployment must reach Server.main's fatal bootstrap catch.
+      if (err instanceof WorldProfileConflictError) throw err;
       console.error(
         `[plugins] failed to initialize ${path.basename(candidate.pluginPath)}`,
         err

@@ -131,6 +131,22 @@ test("no eating delay, unlike a potion (Wiki: Hunter's mix)", async (t) => {
   assert.ok(f.p.getTimers().has(core.TimerKey.FOOD), "a potion still holds up eating");
 });
 
+test("the chugging barrel refuses them, as it does the Hunting mix (Wiki: Chugging barrel)", async (t) => {
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  for (const [itemId, stored] of [[I.RUBY_HARVEST_MIX_2_, false], [I.MOONLIGHT_MOTH_MIX_1_, false], [I.ATTACK_POTION_4_, true]]) {
+    const f = actor(t);
+    // Lumbridge castle's top-floor bank, so only what is used on the barrel decides.
+    f.p.setLocation(new core.Location(3208, 3220, 2));
+    f.inv.adds(itemId, 1);
+    f.inv.adds(I.CHUGGING_BARREL, 1);
+    const messages = [];
+    t.mock.method(f.p, "sendMessage", (message) => messages.push(message));
+    UseItemPacketListener.itemOnItem(f.p, 0, 1);
+    assert.equal(f.inv.getItems()[0].getId() !== itemId, stored, `item ${itemId} ${stored ? "stored" : "kept"}`);
+    if (!stored) assert.ok(messages.includes("You can't store that in the chugging barrel."), messages.join(" | "));
+  }
+});
+
 test("in multicombat, up to three players within two tiles who accept aid get the bonus", async (t) => {
   const f = actor(t);
   const near = [1, 2, -2].map((dx) => actor(t, dx));

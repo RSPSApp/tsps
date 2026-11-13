@@ -28,7 +28,8 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   reward-casket tables.
 - **Hunter's mixes** (`Catching.registerMixes`): Drink on the six two-dose butterfly and moth mixes,
   registered with the Potions plugin (`potions:register`) so they share its doses and 3-tick delay,
-  without its eating delay (`eatingDelay: false`; Wiki: no eating or attack delay).
+  without its eating delay (`eatingDelay: false`; Wiki: no eating or attack delay), and kept out of
+  the chugging barrel (`chuggable: false`; Wiki: Chugging barrel).
   Each dose gives the jar's own bonus (`bonus`) to the drinker and, in a multicombat area, to up to
   three other players within two tiles who accept aid (Wiki "Hunter's mix" and each mix's page).
   Ours: the last dose leaves a butterfly jar, and no drink line is sent (our transcripts and the

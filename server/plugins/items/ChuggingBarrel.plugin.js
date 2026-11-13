@@ -110,7 +110,7 @@ function isBarrelAtSlot(player, item, slot) {
 
 function canStore(dose) {
   const name = dose.potion.name;
-  if (dose.potion.area || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
+  if (dose.potion.area || dose.potion.chuggable === false || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
   return !dose.potion.requiresFoodPermission || name.endsWith("mix") || FOOD_PERMISSION_POTIONS.has(name);
 }
 

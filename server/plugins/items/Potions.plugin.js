@@ -747,6 +747,8 @@ function registerPotion(definition) {
     shareable: definition.shareable !== false,
     // false: the drink keeps the potions' 3-tick delay but doesn't hold up eating (Wiki: Hunter's mixes).
     eatingDelay: definition.eatingDelay !== false,
+    // false: the chugging barrel won't store it (Wiki: Chugging barrel refuses hunter mixes).
+    chuggable: definition.chuggable !== false,
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,

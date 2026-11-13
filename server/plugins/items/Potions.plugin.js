@@ -985,6 +985,70 @@ for (const [name, id, emptyItemId, lines, effect] of [
     requiresFoodPermission: true, shareable: false, effect });
 }
 
+// Varlamore wines (Wiki item pages): each heals 16, boosts one skill by 1 (Tonameyo white restores 1
+// Prayer instead) and drains Attack by 5 and one skill by 1. rsprox capture (rsprox.net 4101, tick
+// 1138, Blackbird red at 99s): human_eat, sound 2401, the Wiki's line as two spam messages, the glass
+// gone with nothing left, Attack 99 -> 94, Slayer 99 -> 98, Hunter 99 -> 100. Principum red, Fortis
+// ash white and Xochipaltic rosé have a Drink op but no known effect (the Wiki: not obtainable).
+function varlamoreWine(boosted, drained) {
+  return (player) => {
+    heal(player, 16);
+    if (boosted === Skill.PRAYER) restorePrayer(player, 1, 0);
+    else boostSkill(player, boosted, 1, 0);
+    lowerSkillByCurrent(player, Skill.ATTACK, 5, 0);
+    lowerSkillByCurrent(player, drained, 1, 0);
+  };
+}
+// Varlamore ales and liquor (Wiki item pages; no capture drinks them). Ours: their Wiki line is sent
+// as two spam messages, as the captured wine's is, and nothing is left, as the wines leave nothing.
+/** Sunbeam ale: heals 1, Agility and Strength +1, Attack -(1 + 5% of current). */
+function drinkSunbeamAle(player) {
+  heal(player, 1);
+  boostSkill(player, Skill.AGILITY, 1, 0);
+  boostSkill(player, Skill.STRENGTH, 1, 0);
+  lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.05);
+}
+/** Steamforge brew: heals 1, Mining and Magic +1, Attack and Defence -(2 + 5% of current). */
+function drinkSteamforgeBrew(player) {
+  heal(player, 1);
+  boostSkill(player, Skill.MINING, 1, 0);
+  boostSkill(player, Skill.MAGIC, 1, 0);
+  lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
+  lowerSkillByCurrent(player, Skill.DEFENCE, 2, 0.05);
+}
+/** Sun-shine: heals 5, Strength +(1 + 5%), Attack -4. */
+function drinkSunShine(player) {
+  heal(player, 5);
+  boostSkill(player, Skill.STRENGTH, 1, 0.05);
+  lowerSkillByCurrent(player, Skill.ATTACK, 4, 0);
+}
+for (const [name, id, lines, effect] of [
+  ["Blackbird red", Items.BLACKBIRD_RED, ["You drink the Blackbird red.", "Rich flavours flutter across your tongue."],
+    varlamoreWine(Skill.HUNTER, Skill.SLAYER)],
+  ["Chilhuac red", Items.CHILHUAC_RED, ["You drink the Chilhuac red.", "You feel a warmth spreading through you."],
+    varlamoreWine(Skill.FIREMAKING, Skill.COOKING)],
+  ["Eclipse red", Items.ECLIPSE_RED, ["You drink the Eclipse red.", "It tastes great, but maybe not 1,000 coins great."],
+    varlamoreWine(Skill.WOODCUTTING, Skill.FLETCHING)],
+  ["Ixcoztic white", Items.IXCOZTIC_WHITE, ["You drink the Ixcoztic white.", "The citrusy profile perfectly energises your palate."],
+    varlamoreWine(Skill.FARMING, Skill.HERBLORE)],
+  ["Metztonalli white", Items.METZTONALLI_WHITE, ["You drink the Metztonalli white.", "You find yourself feeling refreshed."],
+    varlamoreWine(Skill.RUNECRAFTING, Skill.FIREMAKING)],
+  ["Tonameyo white", Items.TONAMEYO_WHITE, ["You drink the Tonameyo white.", "You feel a divine warmth surround you."],
+    varlamoreWine(Skill.PRAYER, Skill.THIEVING)],
+  ["Chichilihui rosé", Items.CHICHILIHUI_ROS, ["You drink the Chichilihui rosé.", "A graceful calmness settles over you."],
+    varlamoreWine(Skill.HERBLORE, Skill.FARMING)],
+  ["Imperial rosé", Items.IMPERIAL_ROS, ["You drink the Imperial rosé.", "You find yourself captivated by the complex flavours."],
+    varlamoreWine(Skill.SLAYER, Skill.AGILITY)],
+  ["Sunbeam ale", Items.SUNBEAM_ALE, ["You drink the Sunbeam ale.", "It tastes wonderful and leaves you feeling energised."],
+    drinkSunbeamAle],
+  ["Steamforge brew", Items.STEAMFORGE_BREW, ["You drink the Steamforge brew.", "It has an odd metallic taste to it."],
+    drinkSteamforgeBrew],
+  ["Sun-shine", Items.SUN_SHINE, ["You drink the Sunshine.", "It's got quite the kick to it!"], drinkSunShine],
+]) {
+  registerPotion({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },
+    requiresFoodPermission: true, shareable: false, effect });
+}
+
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions, with the
 // cup's own drinking animation and messages (rsprox captures: human_drink_from_teacup_*, "You drink
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").

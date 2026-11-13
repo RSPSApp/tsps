@@ -757,11 +757,14 @@ No action injection, manual private-tree registration, resource disabling or
 Woodcutting change is introduced. Tree/Mushroom obstacle examples distinguish
 walking from projectile rays; this does not establish ranged-combat parity.
 
-Existing native and Rules fixtures will cover deliberate slot-zero offers and
+Existing native and Rules fixtures cover deliberate slot-zero offers and
 reset/reselection, both jail/orb/Exit paths, both Forfeit footprints, complete
 barrier restoration and causal movement, native walk/ray distinctions, truthful
 unavailable resource actions with a separate canonical actionful-tree control,
-instance reuse, modes, restrictions and melee multi controls. This paragraph
-states intended coverage until actual runtime evidence accompanies the PR.
+instance reuse, modes, restrictions and melee multi controls. At tested revision
+`093c21f7c1bca1ffb54f26e9768cfe2711f63d7a`, all 254 checks passed: 176 native,
+18 Rules, 6 camera-shake, 1 WASD and 53 Cooking. These results apply to that tested
+tree, not the entire later merged tree; commands and failure history are recorded
+in [PR #4879](https://github.com/RSPSApp/tsps/pull/4879).
 Supplied checkpoints and handler inputs do not prove natural traversal, login,
 client rendering, retail timing or the remaining content in issue #153.

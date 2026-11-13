@@ -335,6 +335,22 @@ test("the torch used on a range lights it, where the cooking fallback would refu
   assert.deepEqual(f.messages, ["You light your torch."]);
 });
 
+test("the torch used on an oven is not lit: the Wiki names a fire or range", (t) => {
+  for (const name of ["Small oven", "Large oven", "Clay oven", "Clay Oven", "Oven"]) {
+    const f = actor(t, 1);
+    f.inv.setItem(0, item(I.UNLIT_TORCH));
+    useTorchOn(f, name);
+    assert.equal(idAt(f, 0), I.UNLIT_TORCH, name);
+    assert.ok(!f.messages.includes("You light your torch."), name);
+  }
+  for (const name of ["Range", "Fire", "Stove"]) {
+    const f = actor(t, 1);
+    f.inv.setItem(0, item(I.UNLIT_TORCH));
+    assert.equal(useTorchOn(f, name), true, name);
+    assert.equal(idAt(f, 0), I.LIT_TORCH, name);
+  }
+});
+
 test("the torch used on something that is not a fire or range is left alone", (t) => {
   const f = actor(t, 1);
   f.inv.setItem(0, item(I.UNLIT_TORCH));

@@ -3,6 +3,7 @@
 const { HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { originAllowed } = require("./Access.WorldAdmin");
 const { getActiveBotRuntime } = require("../../bots/runtime/RuntimeRegistry.PlayerBots");
+const { trackControlSession, untrackControlSession } = require("../../bots/runtime/Control.PlayerBots");
 const { deployRoutineBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP } = require("../../bots/runtime/Deploy.PlayerBots");
 const { itemIconDataUri } = require("./ItemIcons.WorldAdmin");
 const viewersByOwner = new Map();
@@ -143,6 +144,7 @@ async function watch(request, response, api) {
   if (entry.manuallyControlled || entry.spectating) throw new HttpError(409, "This bot is already controlled or being watched.");
   const viewerKey = viewer.getUsername().toLowerCase();
   const clear = () => {
+    untrackControlSession(entry.player, viewer);
     entry.spectating = false;
     entry.spectatorOwner = null;
     viewersByOwner.delete(viewerKey);
@@ -153,6 +155,7 @@ async function watch(request, response, api) {
     clear();
     throw new HttpError(409, "Could not switch the game client to this bot. Finish any active interaction and try again.");
   }
+  trackControlSession(entry.player, viewer);
   viewersByOwner.set(viewerKey, { botUsername: entry.player.getUsername(), entry });
   send(response, 200, { watching: entry.player.getUsername(), viewer: viewer.getUsername() });
 }

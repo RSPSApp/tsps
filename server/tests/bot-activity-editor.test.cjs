@@ -129,6 +129,23 @@ test('conditional item branches are validated and retained', () => {
   assert.throws(() => validateActivities([{ id: 'custom_conditional', repeat: false, actions: [{ ...condition, then: { type: 'if' } }] }]), /invalid parameters/);
 });
 
+test('switch normalization accepts five valid cases during import and save', () => {
+  const cases = [10, 20, 30, 40, 50].map(healthPercentBelow => ({ healthPercentBelow }));
+  const nodes = [
+    { id: 'start', kind: 'start', x: 0, y: 0 },
+    { id: 'switch', kind: 'switch', cases, x: 100, y: 0 },
+    ...cases.map((_, index) => ({ id: `case_${index}`, kind: 'end', x: 300, y: index * 80 })),
+    { id: 'fallback', kind: 'end', x: 300, y: 500 },
+  ];
+  const edges = [
+    { from: 'start', port: 'next', to: 'switch' },
+    ...cases.map((_, index) => ({ from: 'switch', port: `case_${index}`, to: `case_${index}` })),
+    { from: 'switch', port: 'default', to: 'fallback' },
+  ];
+  const [saved] = validateActivities([{ id: 'custom_five_switch_cases', repeat: false, graph: { nodes, edges } }]);
+  assert.deepEqual(saved.graph.nodes.find(node => node.id === 'switch').cases, cases);
+});
+
 test('rejects invalid IDs, duplicates and invalid actions', () => {
   const activity = { id: 'custom_test', repeat: false, actions: [{ type: 'walkTo', x: 1, y: 2, z: 0, radius: 3 }] };
   assert.throws(() => validateActivities([activity, activity]), /unique/);

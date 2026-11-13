@@ -83,7 +83,7 @@ function validateActivities(value) {
             base.priority = priority;
           }
           if (node.kind === "switch") {
-            base.cases = node.cases.map(cleanCondition);
+            base.cases = node.cases.map(condition => cleanCondition(condition));
           }
           if (node.kind === "agent") {
             const prompt = typeof node.prompt === "string" ? node.prompt.trim() : "";

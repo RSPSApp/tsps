@@ -122,6 +122,9 @@ function createGraphAction(graph, compileAction, compileCondition, compileAgent 
         return "running";
       }
       if (node.kind === "interrupt") {
+        // Re-arming the same monitor refreshes its recency without letting a loop grow
+        // the guard list beyond the graph's interrupt-node count.
+        state.guards = state.guards.filter(guard => guard.nodeId !== node.id);
         state.guards.push({ nodeId: node.id, condition: compiled.get(node.id), priority: node.priority ?? 0 });
         state.id = outputs.get(`${node.id}:next`);
         return "running";

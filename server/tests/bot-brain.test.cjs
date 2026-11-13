@@ -2862,6 +2862,53 @@ function nativeFollowCombatPlayer(t, name, location) {
   return player;
 }
 
+test('wait begins a fresh interval after an interrupted action resumes', (t) => {
+  const { createWaitAction } = require('../plugins/bots/brain/actions/Wait.PlayerBots');
+  const player = nativeFollowCombatPlayer(t, 'wait-resume', new Location(3200, 3200));
+  const wait = createWaitAction({ seconds: 5 });
+  assert.equal(wait.update({ player, nowMs: 1000 }), 'running');
+  wait.stop({ player, nowMs: 2000 });
+  assert.equal(wait.update({ player, nowMs: 5000 }), 'running', 'time spent in recovery does not count toward the wait');
+  assert.equal(wait.update({ player, nowMs: 9999 }), 'running');
+  assert.equal(wait.update({ player, nowMs: 10000 }), 'success');
+});
+
+test('a repeating BotBrain graph gives each Wait visit its full duration', (t) => {
+  const { createWaitAction } = require('../plugins/bots/brain/actions/Wait.PlayerBots');
+  const { createGraphAction } = require('../plugins/bots/brain/Graph.PlayerBots');
+  const player = nativeFollowCombatPlayer(t, 'wait-loop', new Location(3200, 3200));
+  const graph = { nodes: [
+    { id: 'start', kind: 'start' },
+    { id: 'wait_five', kind: 'action', action: { type: 'wait', seconds: 5 } },
+    { id: 'wait_ten', kind: 'action', action: { type: 'wait', seconds: 10 } },
+    { id: 'end', kind: 'end' },
+  ], edges: [
+    { from: 'start', port: 'next', to: 'wait_five' },
+    { from: 'wait_five', port: 'next', to: 'wait_ten' },
+    { from: 'wait_ten', port: 'next', to: 'end' },
+  ] };
+  let waitFiveVisits = 0, repeatedWaitResult = null;
+  const run = createGraphAction(graph, spec => {
+    const wait = createWaitAction(spec);
+    if (spec.seconds !== 5) return wait;
+    return { ...wait, update(ctx) {
+      const result = wait.update(ctx);
+      if (++waitFiveVisits >= 3) repeatedWaitResult = result;
+      return result;
+    }, stop: ctx => wait.stop(ctx) };
+  }, () => ({ check: () => false }));
+  const brain = new BotBrain({ player, registry: fakeRegistry(), activity: { id: 'custom_wait_loop', repeat: true, actions: [run] }, nowMs: 0 });
+  t.after(() => brain.reset());
+  brain.tick(0); brain.tick(1); brain.tick(2); brain.tick(5002);
+  brain.tick(5003); brain.tick(15003); brain.tick(15004);
+  brain.tick(15005); brain.tick(15006);
+  assert.equal(repeatedWaitResult, 'running', 'the second visit must not inherit elapsed time from the other graph node');
+  brain.tick(20005);
+  assert.equal(repeatedWaitResult, 'running');
+  brain.tick(20006);
+  assert.equal(repeatedWaitResult, 'success');
+});
+
 test('a teleblocked recruit walks a segmented route after a distant owner teleport', (t) => {
   const { createFollowOwnerAction } = require('../plugins/bots/brain/actions/FollowOwner.PlayerBots');
   const { ATTR_RECRUIT_OWNER_USERNAME } = require('../plugins/bots/runtime/RecruitConstants.PlayerBots');
@@ -3147,6 +3194,99 @@ test('manual control preserves both characters and restores the bot on return or
   assert.equal(World.getRemovePlayerQueue().includes(bot), false);
   World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(owner), 1);
   assert.deepEqual(bootstraps, [owner, bot, owner, bot, owner]);
+});
+
+test('watch control is released when either side is removed and never restores a removed owner', async (t) => {
+  const { Readable } = require('node:stream');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { World } = require('../dist/game/World');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { HeadlessBinaryChannel } = require('../dist/net/BinaryChannel');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { botRoutes } = require('../plugins/tools/worldadmin/Bots.WorldAdmin');
+  const { setActiveBotRuntime } = require('../plugins/bots/runtime/RuntimeRegistry.PlayerBots');
+  const { registerBotControlCommands } = require('../plugins/bots/runtime/Control.PlayerBots');
+  const core = PluginManager.createApi('BotWatchRemovalTest').core;
+  const online = new Map();
+  t.mock.method(World, 'getPlayerByName', username => online.get(String(username).toLowerCase()) ?? null);
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+
+  const runtime = { entriesByUsername: new Map() };
+  let onLogout, onDisconnect;
+  registerBotControlCommands({
+    api: {
+      core,
+      registerCommand() {},
+      onPlayerLogout(handler) { onLogout = handler; },
+      onPlayerDisconnect(handler) { onDisconnect = handler; },
+    },
+    runtime,
+    resetMovementState() {},
+  });
+  assert.equal(typeof onLogout, 'function');
+  assert.equal(typeof onDisconnect, 'function');
+  setActiveBotRuntime(runtime, {}, { activities: [] });
+
+  const players = [], connections = [];
+  t.after(() => {
+    for (const connection of connections) connection.cleanup('watch-removal-test-cleanup');
+    const removeQueue = World.getRemovePlayerQueue();
+    for (let index = removeQueue.length - 1; index >= 0; index--) {
+      if (players.includes(removeQueue[index])) removeQueue.splice(index, 1);
+    }
+    setActiveBotRuntime(null, null, null);
+  });
+  const pair = (ownerName, botName) => {
+    const owner = nativeFollowCombatPlayer(t, ownerName, new Location(3200, 3200));
+    owner.setPlayerBot(false);
+    const bot = nativeFollowCombatPlayer(t, botName, new Location(3100, 3500));
+    const botSession = new BotPlayerSession();
+    bot.setSession(botSession);
+    const entry = { player: bot, manuallyControlled: false, spectating: false, spectatorOwner: null };
+    runtime.entriesByUsername.set(botName, entry);
+    online.set(ownerName.toLowerCase(), owner);
+    const connection = new ClientConnection(new HeadlessBinaryChannel());
+    t.mock.method(connection, 'sendPlayerBootstrap', () => {});
+    connection.bindControlledPlayer(owner);
+    owner.setNeedsPlacement(false);
+    bot.setNeedsPlacement(false);
+    players.push(owner, bot);
+    connections.push(connection);
+    return { owner, bot, botSession, entry, connection };
+  };
+  const post = async (pathname, body) => {
+    const request = Readable.from([Buffer.from(JSON.stringify(body))]);
+    request.method = 'POST';
+    request.headers = { 'content-type': 'application/json' };
+    const response = { status: null, body: null, writeHead(status) { this.status = status; }, end(value) { this.body = JSON.parse(value); } };
+    const ok = await botRoutes(request, response, new URL(`http://localhost${pathname}`), { core });
+    return { ok, response };
+  };
+
+  const ownerRemoved = pair('WatchOwnerLogout', 'WatchedBotLogout');
+  const ownerWatch = await post('/api/bots/watch', { bot: ownerRemoved.bot.getUsername(), viewer: ownerRemoved.owner.getUsername() });
+  assert.equal(ownerWatch.response.status, 200);
+  assert.equal(ownerRemoved.connection.player, ownerRemoved.bot);
+  online.delete(ownerRemoved.owner.getUsername().toLowerCase());
+  onLogout({ player: ownerRemoved.owner });
+  assert.equal(ownerRemoved.connection.player, undefined, 'a removed parked owner closes its borrowed client');
+  assert.equal(ownerRemoved.bot.getSession(), ownerRemoved.botSession, 'the bot regains its own session');
+  assert.equal(ownerRemoved.entry.spectating, false);
+  assert.equal(ownerRemoved.entry.spectatorOwner, null);
+  await assert.rejects(post('/api/bots/unwatch', { viewer: ownerRemoved.owner.getUsername() }), error => error.status === 404);
+  assert.equal(ownerRemoved.connection.player, undefined, 'unwatch cannot resurrect an owner removed from the world');
+
+  const targetRemoved = pair('WatchOwnerDisconnect', 'WatchedBotDisconnect');
+  const targetWatch = await post('/api/bots/watch', { bot: targetRemoved.bot.getUsername(), viewer: targetRemoved.owner.getUsername() });
+  assert.equal(targetWatch.response.status, 200);
+  assert.equal(targetRemoved.connection.player, targetRemoved.bot);
+  onDisconnect({ player: targetRemoved.bot });
+  assert.equal(targetRemoved.connection.player, targetRemoved.owner, 'a removed target returns the client to its online owner');
+  assert.equal(targetRemoved.bot.getSession(), targetRemoved.botSession);
+  assert.equal(targetRemoved.entry.spectating, false);
+  assert.equal(targetRemoved.entry.spectatorOwner, null);
+  await assert.rejects(post('/api/bots/unwatch', { viewer: targetRemoved.owner.getUsername() }), error => error.status === 409);
+  assert.equal(targetRemoved.connection.player, targetRemoved.owner, 'a later unwatch does not rebind a cleared session');
 });
 
 test('read-only spectator control receives bot updates but ignores game-changing client input', async (t) => {

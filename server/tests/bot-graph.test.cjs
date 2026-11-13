@@ -207,6 +207,52 @@ test('start setup is validated and remains separate from the graph loop', () => 
   assert.throws(() => validateActivities(raw), /duplicate slots/);
 });
 
+test('looping an interrupt monitor keeps armed guards bounded by node count', () => {
+  const graph = { nodes: [
+    { id: 'start', kind: 'start' },
+    { id: 'watch', kind: 'interrupt', condition: { monitor: true } },
+    { id: 'loop', kind: 'if', condition: { loop: true } },
+    { id: 'done', kind: 'end' }, { id: 'triggered', kind: 'end' },
+  ], edges: [
+    { from: 'start', port: 'next', to: 'watch' },
+    { from: 'watch', port: 'next', to: 'loop' }, { from: 'watch', port: 'trigger', to: 'triggered' },
+    { from: 'loop', port: 'true', to: 'watch' }, { from: 'loop', port: 'false', to: 'done' },
+  ] };
+  const iterations = 1000;
+  let monitorChecks = 0;
+  const runner = createGraphAction(graph, () => null, spec => ({ check: () => {
+    if (spec.monitor) { monitorChecks++; return false; }
+    return true;
+  } }));
+  const ctx = { player: {}, brain: { stopAction() {} } };
+  runner.update(ctx); // Start -> monitor
+  for (let i = 0; i < iterations; i++) {
+    runner.update(ctx); // arm/re-arm monitor
+    runner.update(ctx); // loop back to monitor
+  }
+  assert.equal(monitorChecks, iterations * 2 - 1, 'each update checks one armed monitor, not the full visit history');
+});
+
+test('re-arming a monitor refreshes equal-priority recency', () => {
+  const graph = { nodes: [
+    { id: 'start', kind: 'start' },
+    { id: 'first', kind: 'interrupt', condition: { trigger: true } },
+    { id: 'second', kind: 'interrupt', condition: { trigger: true } },
+    { id: 'first_event', kind: 'end' }, { id: 'second_event', kind: 'end' },
+  ], edges: [
+    { from: 'start', port: 'next', to: 'first' },
+    { from: 'first', port: 'next', to: 'second' }, { from: 'first', port: 'trigger', to: 'first_event' },
+    { from: 'second', port: 'next', to: 'first' }, { from: 'second', port: 'trigger', to: 'second_event' },
+  ] };
+  let trigger = false;
+  const runner = createGraphAction(graph, () => null, () => ({ check: () => trigger }));
+  const ctx = { player: {}, brain: { stopAction() {} } };
+  runner.update(ctx); runner.update(ctx); runner.update(ctx); runner.update(ctx);
+  trigger = true;
+  assert.equal(runner.update(ctx), 'running');
+  assert.equal(runner.describe(ctx), 'end: first_event', 'the re-armed first monitor is most recent and wins the tie');
+});
+
 test('switch node selects first matching case and supports a default route', () => {
   const graph = { nodes: [{ id: 'start', kind: 'start' }, { id: 'switch', kind: 'switch', cases: [{ condition: 'a' }, { condition: 'b' }] }, { id: 'a', kind: 'end' }, { id: 'b', kind: 'end' }, { id: 'default', kind: 'end' }], edges: [
     { from: 'start', port: 'next', to: 'switch' }, { from: 'switch', port: 'case_0', to: 'a' }, { from: 'switch', port: 'case_1', to: 'b' }, { from: 'switch', port: 'default', to: 'default' },

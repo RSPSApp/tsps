@@ -7,10 +7,11 @@ function createWaitAction(spec) {
   const action = {
     id: "wait",
     update(ctx) {
-      const state = playerState(action, ctx.player, () => ({ startedAt: ctx.nowMs }));
+      const state = playerState(action, ctx.player, () => ({ startedAt: null }));
+      if (state.startedAt === null) state.startedAt = ctx.nowMs;
       return ctx.nowMs - state.startedAt >= durationMs ? "success" : "running";
     },
-    stop(ctx) { playerState(action, ctx.player, () => ({ startedAt: ctx?.nowMs ?? 0 })).startedAt = ctx?.nowMs ?? 0; },
+    stop(ctx) { playerState(action, ctx.player, () => ({ startedAt: null })).startedAt = null; },
     madeProgress: () => true,
     describe: () => `wait ${durationMs}ms`,
   };

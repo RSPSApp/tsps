@@ -106,6 +106,8 @@ const MONSTER_STATS_INTERFACE = 522;
 const MONSTER_STATS_CLOSE = 17;
 const MONSTER_STATS_SCRIPT = 1179;
 const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
+/** NPC Contact: the click to the runes, XP and contact list (rsprox 4045: +7 on all three casts). */
+const NPC_CONTACT_TICKS = 7;
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
 /** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
@@ -166,6 +168,11 @@ class LunarSpell extends Spell {
     /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
     pay(player: Player): boolean {
         if (!this.castable(player) || !this.canCast(player, true)) return false;
+        this.playCast(player);
+        return true;
+    }
+    /** The caster's animation, graphic and sound, without paying. */
+    playCast(player: Player): void {
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
@@ -177,7 +184,6 @@ class LunarSpell extends Spell {
                 Sounds.playAreaSound({ soundId: cast.areaSound, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 5 });
             }
         }
-        return true;
     }
     /** One cast: pays, runs `effect` and gives the Magic XP. Always true (the click is handled). */
     cast(player: Player, effect: () => void): boolean {
@@ -295,7 +301,7 @@ export class LunarSpells {
             case "humidify": return this.castHumidify(player, spell);
             case "hunter kit": return this.castHunterKit(player, spell);
             case "magic imbue": return this.castMagicImbue(player, spell);
-            case "astral contact": return spell.cast(player, () => this.openNpcContact(player));
+            case "astral contact": return this.castNpcContact(player, spell);
             case "string jewellery": return this.castStringJewellery(player, spell);
         }
         return false;
@@ -804,27 +810,24 @@ export class LunarSpells {
         }
     }
 
-    private static openNpcContact(player: Player): void {
-        const contacts = ["Nieve", "Duradel", "Konar quo Maten", "Mazchna"];
-        PluginManager.emitCustomEvent("magic:npc-contact", { player, contacts });
-        const openPage = (offset: number) => {
-            const page = contacts.slice(offset, offset + 4);
-            const more = contacts.length > offset + 4;
-            const options = more ? [...page, "More contacts..."] : page;
-            const builder = new DialogueChainBuilder();
-            builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
-                const index = (option as number) - 1;
-                player.getPacketSender().sendInterfaceRemoval();
-                if (more && index === page.length) { openPage(offset + 4); return; }
-                const contact = page[index];
-                if (!contact) return;
-                const event = { player, name: contact, handled: false };
-                PluginManager.emitCustomEvent("magic:npc-contact-selected", event);
-                if (!event.handled) player.sendMessage(`You contact ${contact}.`);
-            } }, ...options));
-            player.getDialogueManager().startDialogues(builder);
-        };
-        openPage(0);
+    /**
+     * NPC Contact as live casts it (rsprox 4045, rev 237): the animation, graphic and sound on the click, then 7 ticks
+     * later the runes and XP go and the contact list (lunar_contact_npc) opens. Walking in between doesn't stop it.
+     * The list and the contacts are plugins/interface/NpcContact.plugin.js's.
+     */
+    private static castNpcContact(player: Player, spell: LunarSpell): boolean {
+        if (!spell.castable(player)) return true;
+        spell.playCast(player);
+        TaskManager.submit(new class extends Task {
+            constructor() { super(NPC_CONTACT_TICKS, false); }
+            execute(): void {
+                this.stop();
+                if (!player.isRegistered() || !spell.canCast(player, true)) return;
+                player.getSkillManager().addExperiences(Skill.MAGIC, spell.data.experience);
+                PluginManager.emitCustomEvent("magic:npc-contact", { player });
+            }
+        });
+        return true;
     }
 
     /** Two minutes on the chosen book for one spell, then back to Lunar (Wiki: Spellbook Swap). */

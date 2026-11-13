@@ -534,6 +534,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MaxHitsInterface` | MaxHitsInterface | interface | yes | Adds the ::maxhits command, an interface of live melee, ranged and per-spell max hits for the player's current gear and levels. |
 | `MinigameTeleports` | MinigameTeleports | interface | yes | Minigame Teleport spell: opens the minigame list, checks requirements, plays the home teleport cast and applies the 20-minute cooldown. |
 | `Notifications` | Notifications | interface | yes | Shows the pop-up banner at the top of the screen for collection log and Combat Achievements, queuing them one at a time. |
+| `NpcContact` | NpcContact | interface | yes | NPC Contact's contact list (interface 75) and the conversation each contact opens. (members only) |
 | `Omnishop` | Omnishop | interface | yes | Opens Jagex's shared reward shop interface from the cache's shop data, tracks currency balances and handles buying and selling for other plugins' shops. |
 | `PoisonTimer` | Poison Timer | interface | yes | Sends the poison and venom state to the client so the poison timer shows the seconds until the next damage hit. |
 | `PriceChecker` | PriceChecker | interface | yes | Price checker opened from the worn-items tab: deposit items to see each value and the total, and get them back on close. |

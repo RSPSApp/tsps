@@ -1608,8 +1608,10 @@ module.exports = function registerTasteOfHopeQuest(api) {
         player.sendMessage("The fountain is bone dry.");
         return;
       }
-      // In place (setId keeps the vial's meta: a preset vial stays preset).
-      const converted = player.getInventory().getItems?.().find((item) => item?.getId() === VIAL_ITEM_ID);
+      // The vial the player used, in place (setId keeps the vial's meta: a preset vial stays preset).
+      const items = player.getInventory().getItems?.();
+      const converted = items?.[event.itemSlot]?.getId() === VIAL_ITEM_ID
+        ? items[event.itemSlot] : items?.find((item) => item?.getId() === VIAL_ITEM_ID);
       if (converted) converted.setId(VIAL_OF_WATER_ITEM_ID);
       else { player.getInventory().deleteNumber(VIAL_ITEM_ID, 1); player.getInventory().adds(VIAL_OF_WATER_ITEM_ID, 1); }
       player.getInventory().refreshItems?.();

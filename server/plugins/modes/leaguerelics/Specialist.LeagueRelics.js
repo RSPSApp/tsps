@@ -19,10 +19,11 @@ function specialAccuracy(entity, roll) {
   return entity.isSpecialActivated?.() && active(entity) ? roll * effect.accuracyMultiplier : roll;
 }
 
-/** A special that misses (one refund a missed hit) gives back a tenth of the bar. */
+/** Each hitsplat of a special that fails its accuracy roll gives back a tenth of the bar (Wiki). */
 function missRefund({ player, hit }) {
-  if (hit.isAccurate() || !player.isSpecialActivated() || !active(player)) return;
-  Common.restoreSpecial(player, effect.missRefundPercent);
+  const failed = hit.getFailedAccuracyChecks?.() ?? 0;
+  if (failed <= 0 || !player.isSpecialActivated() || !active(player)) return;
+  Common.restoreSpecial(player, effect.missRefundPercent * failed);
 }
 
 function killRestore({ killer }) {

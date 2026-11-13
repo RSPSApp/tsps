@@ -203,6 +203,7 @@ function introduction(player, npcId) {
       sendHotspots(player);
       api.sendMultiChatboxPrompt(player, "Select an option",
         "I'd like a construction contract.", () => askForContract(player, npcId),
+        // Ours: not captured; closes the chatbox.
         "Thanks for the information.", () => {});
     } },
   ]);
@@ -221,7 +222,8 @@ function talkToContractor(event) {
   const npcId = event.npcId;
   if (!player.getAttribute(DISCUSSED_ATTRIBUTE)) {
     if (!AMY.includes(event.npc.getId()) && !AMY.includes(npcId)) {
-      // Ours: not captured (the captured contractors' first Talk-to is Amy's).
+      // Ours: not captured. Marlo's own first Talk-to is Daddy's Home's welcome (DaddysHome.Quest.js);
+      // its "Tell me about working for Mahogany Homes." answer is not captured either.
       return say(player, npcId, ["You'll want to speak to Amy in Falador first. She runs Mahogany Homes."]), true;
     }
     return introduction(player, npcId), true;

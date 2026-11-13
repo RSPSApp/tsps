@@ -288,7 +288,9 @@ test('the dying event fires during the death animation, before respawning', t =>
     order.push('dying');
   });
   new PlayerDeathTask(victim).execute();
-  assert.deepEqual(order, ['message:Oh dear, you are dead!', 'jingle:90', 'animation', 'dying']);
+  // The message and jingle 90 wait for the respawn tick (0277f01c0; rsprox 426: animation 836 at tick 1131, the
+  // message at 1135), so the animation tick holds only the animation and the dying event.
+  assert.deepEqual(order, ['animation', 'dying']);
 });
 
 test('ordinary death completes four ticks after animation, preserving final lifecycle order', t => {
@@ -299,9 +301,11 @@ test('ordinary death completes four ticks after animation, preserving final life
   const { GameConstants } = require('../dist/game/GameConstants');
   const victim = new Player(null);
   const order = [];
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({}, {
+    get: (_target, key) => key === 'sendJingle' ? id => (order.push('jingle:' + id), sender) : () => sender,
+  });
   t.mock.method(victim, 'getPacketSender', () => sender);
-  t.mock.method(victim, 'sendMessage', () => {});
+  t.mock.method(victim, 'sendMessage', message => order.push('message:' + message));
   t.mock.method(victim, 'performAnimation', animation => {
     assert.equal(animation.getId(), 836);
     order.push('animation');
@@ -327,8 +331,9 @@ test('ordinary death completes four ticks after animation, preserving final life
     assert.deepEqual(order, ['animation', 'dying'], 'no completion at animation tick + ' + elapsed);
   }
   task.execute();
-  assert.deepEqual(order, ['animation', 'dying', 'reset', 'defeated', 'save:death', 'death',
-    'respawn-policy', 'respawn', 'save:respawn']);
+  // The respawn tick opens with the death message and jingle 90 (rsprox 426, 431, 732, 1084, 1085).
+  assert.deepEqual(order, ['animation', 'dying', 'message:Oh dear, you are dead!', 'jingle:90', 'reset', 'defeated',
+    'save:death', 'death', 'respawn-policy', 'respawn', 'save:respawn']);
 });
 
 test('attack-started observers run only after permission succeeds, for every combat style', t => {

@@ -32,6 +32,7 @@ function isTeleblocked(player) {
 function cross(player, crossing) {
   const sender = player.getPacketSender();
   const target = new Ferox.core.Location(crossing.target.x, crossing.target.y, crossing.target.z);
+  Ferox.releaseBusy(player);
   sender.sendVarbit(Ferox.BUSY_VARBIT, 1);
   player.setPositionToFace(target);
   player.performAnimation(new Ferox.core.Animation(CROSS_ANIMATION));
@@ -45,7 +46,7 @@ function cross(player, crossing) {
 
 function warnThenCross(player, crossing) {
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Ferox.core;
-  player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 1);
+  Ferox.holdBusy(player);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, BARRIER_WARNING),
     new ActionDialogue(1, {
@@ -55,7 +56,7 @@ function warnThenCross(player, crossing) {
           setDontAsk(player, true);
           cross(player, crossing);
         },
-        "No.", () => player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 0)),
+        "No.", () => Ferox.clearBusy(player)),
     }),
   ));
 }

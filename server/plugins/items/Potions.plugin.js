@@ -4,7 +4,6 @@ const {
   curePoison,
   boostSkill,
   lowerSkillByCurrent,
-  lowerSkillByMax,
   restoreSkillToBaseWithFormula,
 } = require("./ConsumableEffects");
 const { TimerKey } = require("../../src/main/typescript/elvarg/util/timers/TimerKey");
@@ -272,12 +271,14 @@ function applyJarOfCongealedBlood(player) {
  * `hpDamage(currentHp)` is the brew's Hitpoints cost; the Zamorak mix passes its own (Wiki). The brew's (Wiki, Zamorak
  * brew): it lowers "current Hitpoints by 12%, rounded down, though it will not lower a player's Hitpoints below the
  * minimum of 1"; the page's formula and table give floor(Hitpoints x 12/100), with no flat part.
+ * Defence drops by 2 + 10% of the current level (Wiki; rsprox 234/00831 at base 99: 116 -> 103,
+ * 103 -> 91). Prayer gains 10% of the base level (rsprox 237/04060 at base 99: 71 -> 80, 79 -> 88).
  */
 function applyZamorakBrew(player, hpDamage = (hp) => Math.floor(hp * 0.12)) {
   boostSkill(player, Skill.ATTACK, 2, 0.2);
   boostSkill(player, Skill.STRENGTH, 2, 0.12);
 
-  lowerSkillByMax(player, Skill.DEFENCE, 2, 0.1, 0);
+  lowerSkillByCurrent(player, Skill.DEFENCE, 2, 0.1, 0);
 
   damageButKeepAlive(player, hpDamage(getCurrentLevel(player, Skill.HITPOINTS)));
 

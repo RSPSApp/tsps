@@ -17,10 +17,10 @@ function enterLair({ player, objectId }) {
   return true;
 }
 
-function exitLair({ player, objectId }) {
+function exitLair({ player, object, objectId }) {
   if (objectId !== EXIT_CAVE_ID) return false;
   const session = Instance.sessionOf(player);
-  if (!session) return false;
+  if (!session || object !== session.exit) return false;
   player.moveTo(Common.loc(Common.data.outside));
   session.area.leave(player, false);
   return true;

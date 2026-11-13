@@ -1922,11 +1922,15 @@ export class CombatFactory {
         // Refresh the equipment interface.
         player.getEquipment().refreshItems();
 
+        // A projectile belongs to the scene it was fired in, even if its owner leaves before landing.
+        const privateArea = player.getPrivateArea();
+        const landing = pos?.clone();
         const apply = () => {
-            if (landed > 0 && pos) {
+            if (privateArea?.isDestroyed()) return;
+            if (landed > 0 && landing) {
                 // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
                 // and comes back as preset ammo, owner-only like any untradeable ground item.
-                ItemOnGroundManager.registerLocation(player, new Item(ammoId, landed, firedMeta), pos);
+                ItemOnGroundManager.registerLocation(player, new Item(ammoId, landed, firedMeta), landing, privateArea);
             }
         };
 

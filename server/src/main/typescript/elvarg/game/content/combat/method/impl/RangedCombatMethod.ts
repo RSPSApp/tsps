@@ -186,7 +186,9 @@ export class RangedCombatMethod extends CombatMethod {
             // Paid in finished(), on this tick but after hits(): the swing rolls with the ammo it fired (a last
             // fire arrow, silver bolt or thrown weapon is still worn), then the slot drops (rsprox 227/00096).
             const flightTicks = Math.max(1, ...hitDelays);
-            RangedCombatMethod.pendingShots.set(character, { pos: target.getLocation(), amount: arrows, flightTicks });
+            const landing = { attacker: character, target, location: target.getLocation().clone() };
+            PluginManager.emitCustomEvent("ranged:ammo-drop-location", landing);
+            RangedCombatMethod.pendingShots.set(character, { pos: landing.location.clone(), amount: arrows, flightTicks });
         }
     }
 

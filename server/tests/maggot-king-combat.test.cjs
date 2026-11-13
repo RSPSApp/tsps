@@ -496,9 +496,14 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     const beforeRows = finalDamage.length;
     let clicked = false;
     let oldDelay;
+    let removedFloor;
     p.getSession().setTurnPacketProcessor(() => {
       if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
       clicked = true;
+      // Supplied no-floor checkpoint for this timing probe: the actual slam can
+      // place sticky bile before input, whose later area contact adds a separate tick.
+      removedFloor = [...fight.floor.values()].map(object => ({ id: object.getId(), tile: session.worldTile(object.getLocation()) }));
+      for (const object of [...fight.floor.values()]) fight.removeFloor(object.getLocation());
       oldDelay = p.getCombat().getAttackDelay();
       if (edge === Fight.FLOOR.minX) attack(p, session.boss);
       else {
@@ -508,6 +513,9 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     });
     until(() => clicked, 20, 'native input observes an actual head extension after the body finishes walking');
     p.getSession().setTurnPacketProcessor(() => {});
+    console.log(JSON.stringify({ event: 'maggot-native-punish-deadline-boundary', edge,
+      cycle: core.World.getProcessCycle(), removedFloor, before: oldDelay, after: p.getCombat().getAttackDelay() }));
+    assert.equal(fight.floor.size, 0, 'timing probe excludes concurrent floor contact');
     assert.ok(oldDelay > 0, 'punish actually crosses an outstanding weapon deadline');
     assert.equal(fight.punishSpent, core.World.getProcessCycle(), 'ordinary fresh Attack commits the extension punish');
     assert.equal(p.getCombat().getAttackDelay(), oldDelay, 'punish keeps the prior deadline');

@@ -40,9 +40,10 @@ function hasIbanStaff(inventory) {
   });
 }
 
+/** Any Iban's staff the Dark Mage recharges, the (o) variants included (IbansStaff.plugin.js isStaffId). */
 function hasRechargeableIbanStaff(inventory, core) {
-  return inventory.contains(core.ItemIdentifiers.IBANS_STAFF)
-    || inventory.contains(core.ItemIdentifiers.IBANS_STAFF_U_);
+  const ids = core.ItemIdentifiers;
+  return [ids.IBANS_STAFF, ids.IBANS_STAFF_U_, ids.IBANS_STAFF_O_, ids.IBANS_STAFF_U_O_].some((id) => inventory.contains(id));
 }
 
 function conditionAnswer({ player, npcId, pages, stepId }, registry) {

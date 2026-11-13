@@ -13,6 +13,7 @@ import { Skill } from "../../../model/Skill";
 import { Sound } from "../../../Sound";
 import { Misc } from "../../../../util/Misc";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
+import { ItemAliases } from "../../../model/ItemAliases";
 import { Equipment } from "../../../model/container/impl/Equipment";
 import { PrayerHandler } from "../../PrayerHandler";
 import { TeleBlock } from "./TeleBlock";
@@ -314,7 +315,11 @@ export class CombatAncientSpellExtend extends CombatSpell {
  */
 const SARADOMIN_STRIKE_STAVES = new Set([ItemIdentifiers.SARADOMIN_STAFF, ItemIdentifiers.STAFF_OF_LIGHT]);
 /** Wiki (Claws of Guthix): a Guthix staff, the void knight mace or the staff of balance. */
-const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.VOID_KNIGHT_MACE, ItemIdentifiers.STAFF_OF_BALANCE]);
+const CLAWS_OF_GUTHIX_STAVES = new Set([ItemIdentifiers.GUTHIX_STAFF, ItemIdentifiers.VOID_KNIGHT_MACE,
+    ItemIdentifiers.VOID_KNIGHT_MACE_L_, ItemIdentifiers.STAFF_OF_BALANCE]);
+const IBAN_BLAST_STAVES = new Set([
+    ItemIdentifiers.IBANS_STAFF, ItemIdentifiers.IBANS_STAFF_U_, ItemIdentifiers.IBANS_STAFF_O_, ItemIdentifiers.IBANS_STAFF_U_O_,
+]);
 const FLAMES_OF_ZAMORAK_STAVES = new Set([
     ItemIdentifiers.ZAMORAK_STAFF, ItemIdentifiers.STAFF_OF_THE_DEAD, 12902, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
     ItemIdentifiers.THAMMARONS_SCEPTRE_A_, ItemIdentifiers.ACCURSED_SCEPTRE_A_,
@@ -369,7 +374,9 @@ function shadowDrainNpc(castOn: Mobile, percent: number, multiplier: number): vo
 /** The wielded staff when it is one of `staves`, else the god staff (the first), which the cast then reports missing. */
 function godStaffRequired(player: Player, staves: Set<number>): Item[] {
     const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId() ?? -1;
-    return [new Item(staves.has(weaponId) ? weaponId : staves.values().next().value as number)];
+    // A minigame copy (Last Man Standing's br_sotd) casts as the staff it copies.
+    const wields = staves.has(weaponId) || staves.has(ItemAliases.baseOf(weaponId) ?? -1);
+    return [new Item(wields ? weaponId : staves.values().next().value as number)];
 }
 
 export class CombatSpells {
@@ -963,8 +970,9 @@ export class CombatSpells {
         },
         equipmentRequired(player) {
             const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
-            return weapon?.getId() === ItemIdentifiers.IBANS_STAFF_U_
-                ? [new Item(ItemIdentifiers.IBANS_STAFF_U_)]
+            // Wiki (Iban's staff): the upgraded and ornamented staves cast it too.
+            return IBAN_BLAST_STAVES.has(weapon?.getId() ?? -1)
+                ? [new Item(weapon.getId())]
                 : [new Item(ItemIdentifiers.IBANS_STAFF)];
         },
         itemsRequired(player) {

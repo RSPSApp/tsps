@@ -175,6 +175,21 @@ test('post-quest Talk-to selection and its conditions only apply to the two towe
     'active-quest condition answers remain unavailable');
 });
 
+test('the recharge option is offered for every Iban staff variant, the (o) ones included', (t) => {
+  for (const id of ['IBANS_STAFF', 'IBANS_STAFF_U_', 'IBANS_STAFF_O_', 'IBANS_STAFF_U_O_']) {
+    const f = fixture(t);
+    const event = {
+      player: f.player,
+      npcId: core.NpcIdentifiers.DARK_MAGE_2,
+      pages: [{ page: 'Dark Mage' }],
+      stepId: diary._test.RECHARGE_STAFF_CONDITION_ID,
+    };
+    assert.equal(f.conditions[0](event), false, `${id}: no staff, no recharge option`);
+    add(f.player, core.ItemIdentifiers[id]);
+    assert.equal(f.conditions[0](event), true, `${id}: the recharge option`);
+  }
+});
+
 test('a real Dark Mage Talk-to dialogue offers and completes the upgrade', (t) => {
   const previous = {
     interaction: PluginManager.npcAnyInteractionHooks.length,

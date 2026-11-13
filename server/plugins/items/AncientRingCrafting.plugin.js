@@ -2,7 +2,9 @@
  * Making the Desert Treasure II ancient rings (docs/ancient-rings.md; rsprox capture 3432, rev 235,
  * and https://oldschool.runescape.wiki/w/Ancient_rings). Four steps, the same for each ring:
  *
- * 1. A chisel on a Fremennik ring (80 Crafting, 400 XP) breaks it into its icon.
+ * 1. A chisel on a Fremennik ring (80 Crafting, 400 XP) breaks it into its icon, once Desert Treasure II
+ *    is complete (Wiki: Berserker icon, "after completing Desert Treasure II"). Before that the chisel
+ *    does nothing with the ring (no refusal is recorded or on the Wiki).
  * 2. Peer the Seer teaches how to combine an icon with an ancient vestige (once, per player).
  * 3. The icon used on its boss's vestige, with 500 blood runes, 90 Magic and 80 Crafting (both
  *    boostable), makes the upgraded icon (400 Magic XP).
@@ -14,6 +16,7 @@
  * refusal, so those messages are the Wiki's requirement worded in the same style.
  */
 const LEARNED_ATTRIBUTE = "ancient-rings:combine-learned";
+const DESERT_TREASURE_II = "desert_treasure_ii";
 const PEER_LEARN_STEP = "U25hrc";
 const PEER_LEARN_MESSAGE_ID = "ancient-rings-learn";
 const PEER_LEARN_TEXT = "Peer the Seer shows you how to combine ring icons with ancient vestiges.";
@@ -119,10 +122,16 @@ function breakRing(player, recipe) {
   return true;
 }
 
+function desertTreasureIIComplete(player) {
+  const request = { player, key: DESERT_TREASURE_II, complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
 function useChisel({ player, usedItemId, usedWithItemId }) {
   const ringId = usedItemId === api.core.ItemIdentifiers.CHISEL ? usedWithItemId : usedItemId;
   const recipe = recipes().find((entry) => entry.ringId === ringId);
-  if (!recipe) return false;
+  if (!recipe || !desertTreasureIIComplete(player)) return false;
   return breakRing(player, recipe);
 }
 

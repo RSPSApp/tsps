@@ -8,6 +8,8 @@ const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sa
 const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
 const { Mobile } = require("../../../src/main/typescript/elvarg/game/entity/impl/Mobile");
 const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
+const { MapObjects } = require("../../../src/main/typescript/elvarg/game/entity/impl/object/MapObjects");
+const { ObjectActionPacketListener } = require("../../../src/main/typescript/elvarg/net/packet/impl/ObjectActionPacketListener");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -31,11 +33,12 @@ const { unlessBeforePandemonium } = require("./shipwright/Pandemonium.Shipwright
 const SHIPYARD = {
   arrival: { x: 2084, y: 2730, z: 0 },
   boat: { fineX: 2091 * 128 + 64, fineY: 2724 * 128, level: 0, angle: 1536 },
-  /** The boat's gangplank (59719), and where Disembark puts the player. */
+  /** The boat's gangplank (GANGPLANK), and where Disembark puts the player. */
   gangplank: { x: 2087, y: 2723 },
   landing: { x: 2086, y: 2724, z: 0 },
   bounds: { minX: 2048, maxX: 2111, minY: 2688, maxY: 2751 },
 };
+const GANGPLANK = 59719;
 const VARBIT_SHIPYARD_MODE = 19173;
 const VARBIT_SHIPYARD_BOAT_ANGLE = 19519;
 const VARBIT_SHIPYARD_BOAT_OFFSET_FINEX = 19520;
@@ -392,6 +395,32 @@ function boardShipyardBoat({ player, location }) {
   pluginApi.emitCustomEvent("sailing:boarded", { player, boat: visit.shown, owned: ownedBoat(player, visit.slot) });
 }
 
+/**
+ * A loc on the shown boat's deck clicked from the yard (a facility's Modify, a hotspot's Build):
+ * ours, the player walks to the gangplank, boards, and the click is then made from the deck,
+ * where those options are answered.
+ */
+function boardForDeckClick(event) {
+  const { player, location, clickType } = event;
+  const visit = visits.get(player);
+  if (!visit?.shown || visit.aboard || !location || !visit.shown.containsDeckTile(location.x, location.y)) return;
+  event.handled = true;
+  const objectId = event.object.getId();
+  const fromDeck = () => {
+    if (visits.get(player) !== visit || !visit.shown) return;
+    if (!visit.aboard && boardShipyardBoat({ player, location: SHIPYARD.gangplank }) === false) return;
+    // Placed on the deck this tick, the player can act from the next.
+    later(player, 1, () => {
+      if (visits.get(player) === visit && visit.aboard) {
+        new ObjectActionPacketListener().executeAction(player, objectId, location.x, location.y, clickType);
+      }
+    });
+  };
+  const gangplank = MapObjects.get(GANGPLANK, new Location(SHIPYARD.gangplank.x, SHIPYARD.gangplank.y, 0), null);
+  if (gangplank) player.getMovementQueue().walkToObject(gangplank, { execute: fromDeck }, 1);
+  else fromDeck();
+}
+
 function disembarkShipyardBoat({ player, location }) {
   const visit = visits.get(player);
   if (!visit?.aboard || !atGangplank(location)) return false;
@@ -511,6 +540,7 @@ module.exports = {
     api.onObjectInteraction("Shipyard Portal", { Exit: exitShipyard });
     for (const name of Object.keys(TOOL_CRATES)) api.onObjectInteraction(name, { "Take-from": takeTool });
     api.onObjectInteraction("Gangplank", { Board: boardShipyardBoat, Disembark: disembarkShipyardBoat });
+    api.onBeforeObjectInteraction(boardForDeckClick);
     api.onInterfaceActionClick(clickCustomisation);
     api.onCustomEvent("interface:closed", customisationClosed);
     api.onPlayerLogout(forgetVisit);

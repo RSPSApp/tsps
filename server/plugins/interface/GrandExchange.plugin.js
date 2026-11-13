@@ -312,8 +312,11 @@ function recordLimit(player, itemId, amount, now = Date.now()) {
   if (!limits) player.setAttribute(LIMITS_ATTRIBUTE, limits = {});
   const key = limitKey(itemId);
   const entry = limits[key];
-  if (entry && now - entry.start < LIMIT_WINDOW_MS) entry.amount += amount;
-  else limits[key] = { start: now, amount };
+  if (entry && Math.abs(now - entry.start) < LIMIT_WINDOW_MS) {
+    entry.amount += amount;
+    // A fill counted after a later one (offline completions) is the first item bought, so the window opens there.
+    if (now < entry.start) entry.start = now;
+  } else limits[key] = { start: now, amount };
 }
 
 /**
@@ -427,7 +430,13 @@ function scheduleCompletion(player, offer) {
 
 function restoreCompletedOffers({ player }) {
   let historyUpdated = false;
-  for (const offer of Object.values(completedOffers(player))) {
+  // Offers that filled while offline complete in the order they filled, not slot order: the buy-limit window opens
+  // at the first item bought (Wiki), so a later fill in a lower slot must not open it first.
+  const byFill = Object.values(completedOffers(player))
+    .map((offer, index) => ({ offer, index }))
+    .sort((a, b) => (Number(a.offer.completesAt) || Infinity) - (Number(b.offer.completesAt) || Infinity) || a.index - b.index)
+    .map(({ offer }) => offer);
+  for (const offer of byFill) {
     if (offer.finished) historyUpdated = recordHistory(player, offer) || historyUpdated;
     else scheduleCompletion(player, offer);
   }

@@ -536,6 +536,29 @@ test('the buy-limit window opens at the first item bought, not when the offer is
   assert.equal(remainingLimit(p, LIMITED, offer.completesAt + LIMIT_WINDOW_MS), 150, 'four hours after the fill it resets');
 });
 
+// #5056 review: two buys of one item that filled while logged out, the later fill in the lower slot. The window opens
+// at the earlier fill (Wiki: "the first item bought"), whatever the slots, so the later buy joins it.
+test('buys filled while logged out open the limit window at the earliest fill, not in slot order', t => {
+  let clock = 1_000_000_000;
+  t.mock.method(Date, 'now', () => clock);
+  const { p, hooks, timers } = exchange(t);
+  const T = clock - 5 * 60 * 60 * 1000;
+  const buy = (slot, completesAt, quantity) =>
+    ({ slot, itemId: LIMITED, sell: false, quantity, total: quantity * 5, finished: false, limitOnFill: true, placedAt: T - 1, completesAt });
+  const later = buy(0, T + 3 * 60 * 60 * 1000, 20);
+  const earlier = buy(1, T, 30);
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: later, 1: earlier });
+  hooks.onPlayerLogin({ player: p });
+  for (const timer of timers.splice(0)) timer.callback(); // both are due: fired as scheduled
+  assert.equal(later.finished && earlier.finished, true);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 }, 'opened at the earlier fill, both counted');
+  // A late count of an earlier fill within the window still moves its start back (recordLimit).
+  p.setAttribute(LIMITS_ATTRIBUTE, {});
+  recordLimit(p, LIMITED, 20, T + 3 * 60 * 60 * 1000);
+  recordLimit(p, LIMITED, 30, T);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+});
+
 test('a bid the market never meets holds none of the buy limit; one that will fill does', () => {
   const p = player();
   const bid = (slot, completesAt) => ({ slot, itemId: LIMITED, quantity: 60, sell: false, finished: false, limitOnFill: true, completesAt });

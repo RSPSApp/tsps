@@ -65,8 +65,15 @@ function npcEvent(p, id, option) {
 function npcClick(p, id, option) {
   assert.equal(PM.emitNpcInteraction(npcEvent(p, id, option)), true);
 }
+// rsprox captures: the shared display varbits carry a contract only in its home's area.
+function standIn(p, home) {
+  const { minX, minY, maxX, maxY } = home.area;
+  p.setLocation(new core.Location((minX + maxX) >> 1, (minY + maxY) >> 1, 0));
+  PM.updatePlayerZones(p);
+}
 function contract(p, home, tier, layout = 0, count = 3) {
   p.setAttribute("construction:contract", null);
+  standIn(p, home);
   p.setAttribute("construction:contract-last-tier", tier);
   // Only the assignment call is under deterministic RNG; normal engine setup is untouched.
   const values = [(Mahogany.HOMES.indexOf(home) + 0.5) / Mahogany.HOMES.length, (layout + 0.5) / count];
@@ -96,9 +103,7 @@ function drain(p) {
 // Supplied restored-contract checkpoint, including the client-side state that login sends.
 function seedContract(p, saved) {
   p.setAttribute("construction:contract", structuredClone(saved));
-  for (let index = 1; index <= 8; index++) {
-    p.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId(`con_contract_hotspot_${index}_display`), saved.states[index] ?? 0);
-  }
+  standIn(p, Mahogany.HOMES.find(home => home.key === saved.home));
 }
 function work(p, home, index, clickType) {
   const h = home.hotspots.find(h => h.index === index);
@@ -149,7 +154,9 @@ test("both contractor options preserve an unfinished saved contract, including l
   for (const option of ["Contract", "Last-tier contract"]) {
     npcClick(p, core.CacheDefinitions.getNpcId("con_contractor_varrock"), option);
     assert.deepEqual(p.getAttribute("construction:contract"), saved, `${option} cannot abandon work`);
-    assert.match(drain(p)[0], /already working for Jeff/);
+    // rsprox captures (Last-tier contract with work unfinished, rev 241/242).
+    assert.deepEqual(drain(p), ["What's my current construction contract?",
+      "You're currently on a <col=ff0000>Beginner Contract</col>. Go see <col=ff0000>Jeff</col> in the middle of <col=ff0000>Varrock</col>, west of the museum. You can get another job once you have furnished his home."]);
   }
   tools(p);
   work(p, home, 3, 4); // no planks: refused without losing the removed space
@@ -527,7 +534,7 @@ test("a documented range repair refuses missing steel without spending planks an
   assert.equal(xp(), before);
   p.getInventory().add(new core.Item(core.ItemIdentifiers.STEEL_BAR, 1), false);
   work(p, home, 5, 3);
-  assert.equal(p.getAttribute("construction:contract").states[5] ?? 0, 0);
+  assert.equal(p.getAttribute("construction:contract").states[5], 2, "rsprox captures: a repaired piece shows 2");
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.STEEL_BAR), 0);
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.PLANK), 1);
   assert.equal(Math.round((xp() - before) * 10) / 10, 120);
@@ -556,4 +563,183 @@ test("duplicate requests use tiered dialogue nouns and update after one of a pai
   assert.ok(!last.includes("I'd like two Wooden bookcases built."));
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.PLANK), 0);
   assert.equal(p.getAttribute("construction:carpenter-points") ?? 0, 0);
+});
+
+// ---- rsprox captures (the user's rev 241/242 Mahogany Homes runs; see docs/construction.md) ----
+
+function chatLog(t, p) {
+  const log = { messages: [], spam: [], overhead: [], sounds: [] };
+  const sender = p.getPacketSender();
+  t.mock.method(sender, "sendMessage", function (text) { log.messages.push(text); return this; });
+  t.mock.method(sender, "sendTypedMessage", function (type, text) { if (type === core.ChatType.SPAM) log.spam.push(text); return this; });
+  const sendSound = sender.sendSound.bind(sender);
+  t.mock.method(sender, "sendSound", function (id, ...rest) { log.sounds.push(id); return sendSound(id, ...rest); });
+  t.mock.method(p, "forceChat", function (text) { log.overhead.push(text); return this; });
+  return log;
+}
+const OPTIONS = (219 << 16) | 1;
+function prompt(p) { return core.MultiChatboxPrompt.getPending(p); }
+function pick(p, option) {
+  assert.equal(core.MultiChatboxPrompt.handleInterfaceActionClick({ player: p, buttonId: OPTIONS, groupId: 219, childId: 1, slot: option, handled: false }), true);
+}
+function seeded(values, fn) {
+  const original = Math.random;
+  let calls = 0;
+  Math.random = () => values[calls++] ?? 0;
+  try { return fn(); } finally { Math.random = original; }
+}
+function display(p, index) {
+  return p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`con_contract_hotspot_${index}_display`));
+}
+
+// Recordings 20261012T114410 t3706, 20261027T082315 t415-514 (rev 241).
+test("Amy's first Talk-to plays the captured introduction, then the contract menu and an assignment", (t) => {
+  const { p } = actor(t), jeff = homeFor("Jeff");
+  const log = chatLog(t, p);
+  p.setAttribute("construction:contract-discussed", false);
+  p.getSkillManager().setCurrentLevel(core.Skill.CONSTRUCTION, 25, false);
+  npcClick(p, core.CacheDefinitions.getNpcId("con_contractor"), "Talk-to");
+  assert.deepEqual(drain(p), [
+    "Hey I'm Amy, how may I help you?", "What do you do here?",
+    "I'm the founder of Mahogany Homes, Gielinor's first Construction company!",
+    "We've currently got branches in Falador, Varrock, Hosidius and Ardougne.",
+    "So people contact you for help with their homes?",
+    "Yep! They'll get in contact if they want assistance, whether it's fixing parts of their house or requesting nicer furniture, and then we will go and help them out.",
+    "That sounds quite enjoyable and satisfying to do, are you hiring at all?",
+    "If you have the supplies, I can tell you where one of our clients is that needs some work doing.",
+    "I'll keep track of the work you do as well and give you some points for our company reward shop.",
+    "Also there are assistants in Varrock, Ardougne, and Hosidius that can give you work, if Falador is inconvienent for you.",
+    "The clients that I would offer you to go help could be in any of those cities, it might be a bit of a journey to get there!",
+  ]);
+  assert.equal(p.getAttribute("construction:contract-discussed"), true);
+  assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("con_contract_discussed")), 1);
+  assert.deepEqual(prompt(p), { title: "Select an option", options: ["I'd like a construction contract.", "Thanks for the information."] });
+  pick(p, 1);
+  assert.deepEqual(drain(p), ["I'd like a construction contract.", "What kind of contract would you like?"]);
+  assert.deepEqual(prompt(p).options, ["Beginner Contract", "Novice Contract (Requires 20 Construction)",
+    "<str>Adept Contract (Requires 50 Construction)", "<str>Expert Contract (Requires 70 Construction)", "I'll pass actually."]);
+  pick(p, 2);
+  // The assignment comes as the player's request is continued.
+  assert.deepEqual(seeded([(Mahogany.HOMES.indexOf(jeff) + 0.5) / Mahogany.HOMES.length, 0], () => drain(p)), ["Could I have a novice contract please?",
+    "Please could you go see <col=ff0000>Jeff</col> in the middle of <col=ff0000>Varrock</col>, west of the museum for us? You can get another job once you have furnished his home."]);
+  assert.ok(log.messages.includes("<col=ff0000>Novice Contract</col>: Go see <col=ff0000>Jeff</col> in the middle of <col=ff0000>Varrock</col>, west of the museum."));
+  assert.equal(p.getAttribute("construction:contract").home, jeff.key);
+  assert.equal(p.getAttribute("construction:contract").tier, 1);
+});
+
+// Every client's assignment line (recordings 20261108T013333, 20261110T074142, 20261103T060358 ...).
+test("each client's assignment and reminder name the captured place and pronoun", (t) => {
+  const { p } = actor(t);
+  const log = chatLog(t, p);
+  const expected = {
+    Bob: ["<col=ff0000>Bob </col>in north-east <col=ff0000>Varrock</col>, opposite the church", "his"],
+    Sarah: ["<col=ff0000>Sarah</col> along the south wall of <col=ff0000>Varrock</col>", "her"],
+    Barbara: ["<col=ff0000>Barbara</col>, south of <col=ff0000>Hosidius</col>, near the mill", "her"],
+    Jess: ["<col=ff0000>Jess</col>, upstairs of the building south of the church in East <col=ff0000>Ardougne</col>", "her"],
+    Norman: ["<col=ff0000>Norman</col>, south of the fountain in <col=ff0000>Falador</col>", "his"],
+  };
+  for (const [client, [where, his]] of Object.entries(expected)) {
+    log.messages.length = 0;
+    contract(p, homeFor(client), 2);
+    assert.ok(log.messages.includes(`<col=ff0000>Adept Contract</col>: Go see ${where}.`), client);
+    assert.deepEqual(drain(p), [`Please could you go see ${where} for us? You can get another job once you have furnished ${his} home.`]);
+    npcClick(p, core.CacheDefinitions.getNpcId("con_contractor_varrock"), "Last-tier contract");
+    assert.deepEqual(drain(p), ["What's my current construction contract?",
+      `You're currently on an <col=ff0000>Adept Contract</col>. Go see ${where}. You can get another job once you have furnished ${his} home.`]);
+  }
+});
+
+// Recording 20261108T011509 t486-618: the displays are sent in Mariah's home and zeroed on leaving.
+test("the shared hotspot displays carry the contract only in its home's area", (t) => {
+  const { p } = actor(t), jeff = homeFor("Jeff"), bob = homeFor("Bob");
+  const saved = contract(p, jeff, 0);
+  for (let i = 1; i <= 8; i++) assert.equal(display(p, i), saved.states[i] ?? 0);
+  standIn(p, bob);
+  for (let i = 1; i <= 8; i++) assert.equal(display(p, i), 0, "Bob's home shows nothing of Jeff's contract");
+  standIn(p, jeff);
+  assert.equal(display(p, 3), 3);
+});
+
+// Recordings 20261108T011509 t584-602 and 20261111T012755 t892-903.
+test("the client pays on the player's line, then the tea restores run energy", (t) => {
+  const { p } = actor(t), jeff = homeFor("Jeff");
+  const log = chatLog(t, p);
+  const saved = contract(p, jeff, 0);
+  drain(p);
+  tools(p);
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.PLANK, 11), false);
+  log.messages.length = 0;
+  for (const hotspot of jeff.hotspots) {
+    let state = p.getAttribute("construction:contract").states[hotspot.index];
+    if (state === 3) work(p, jeff, hotspot.index, 2);
+    state = p.getAttribute("construction:contract").states[hotspot.index];
+    if (state === 4) work(p, jeff, hotspot.index, 4);
+    else if (state === 1) work(p, jeff, hotspot.index, 3);
+  }
+  assert.deepEqual(log.messages, ["<col=06600c>Jeff seems happy with your work. Talk to him for your reward.</col>"]);
+  log.messages.length = 0;
+  const xp = () => p.getSkillManager().skills.experience[core.Skill.CONSTRUCTION.getIndex()];
+  const before = xp();
+  p.setRunEnergy(40);
+  npcClick(p, jeff.client, "Talk-to");
+  const dm = p.getDialogueManager();
+  assert.equal(dm.getCurrent().getText(), "I've finished with the work you wanted.");
+  assert.ok(p.getAttribute("construction:contract"), "nothing is paid until the line is continued");
+  dm.handleResume((217 << 16) | 5, -1);
+  assert.equal(dm.getCurrent().getText(), "Thank you so much! Would you like a cup of tea before you go?");
+  assert.equal(p.getAttribute("construction:contract"), null);
+  assert.deepEqual(log.messages, ["You have completed <col=ef1020>1</col> contract with a total of <col=ef1020>2</col> points."]);
+  assert.equal(xp() - before, 500);
+  assert.equal(p.getRunEnergy(), 40, "the tea comes after");
+  dm.handleResume((231 << 16) | 5, -1);
+  assert.equal(dm.getCurrent().getText(), "Yes, I'd love a cuppa.");
+  dm.handleResume((217 << 16) | 5, -1);
+  assert.equal(dm.isActive(), false);
+  assert.deepEqual(log.spam, ["You drink the tea, you feel energized!"]);
+  assert.deepEqual(log.overhead, ["Aaah, nothing like a nice cuppa tea!"]);
+  assert.ok(log.sounds.includes(2401));
+  assert.equal(p.getRunEnergy(), 100);
+  // The finished home keeps its new furniture on show until the player leaves it.
+  assert.equal(display(p, 3), 5);
+  assert.equal(display(p, 7), 2, "the repaired mirror");
+  standIn(p, homeFor("Bob"));
+  standIn(p, jeff);
+  assert.equal(display(p, 3), 0);
+  void saved;
+});
+
+// Recording 20261111T195440 t1024-1039: Sarah's Novice worklist.
+test("the homeowner's worklist uses an before Oak", (t) => {
+  const { p } = actor(t), sarah = homeFor("Sarah");
+  contract(p, sarah, 1, 0, 2);
+  drain(p);
+  seedContract(p, { home: sarah.key, tier: 1, states: { 1: 3, 2: 3, 3: 3, 4: 3, 6: 3 } });
+  npcClick(p, sarah.client, "Talk-to");
+  assert.deepEqual(drain(p), ["Hey, I'm your contractor from Mahogany Homes, what did you want done?",
+    "I'd like an Oak table built.", "I'd like an Oak bed built.", "I'd like an Oak dresser built.",
+    "I'd like an Oak small table built.", "I'd like an Oak shelf built."]);
+});
+
+// Recording 20261012T114410 t3726: the shop's prices ride inv 247; Confirm is child 6 at the entry's index.
+test("the reward shop sends its prices and confirms the selected entry", (t) => {
+  const { p } = actor(t);
+  const shop = core.CacheDefinitions.getInterfaceId("construction_contract_shop");
+  const sent = [];
+  const sender = p.getPacketSender();
+  const sendInventory = sender.sendInventory.bind(sender);
+  t.mock.method(sender, "sendInventory", (id, capacity, items, owner) => { sent.push({ id, capacity, items, owner }); return sendInventory(id, capacity, items, owner); });
+  const flags = [];
+  const sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender, "sendInterfaceFlagsRange", (uid, from, to, mask) => { flags.push([uid, from, to, mask]); return sendFlags(uid, from, to, mask); });
+  p.setAttribute("construction:carpenter-points", 400);
+  npcClick(p, core.CacheDefinitions.getNpcId("con_contractor"), "Rewards");
+  assert.equal(p.getInterfaceId(), shop);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].id, 247);
+  assert.deepEqual(sent[0].items.map(item => item.amount), [400, 800, 600, 200, 350, 25, 500, 2000]);
+  assert.ok(sent[0].items.every(item => item.id === core.CacheDefinitions.getObjId("burntfish1")));
+  assert.deepEqual(flags, [[(shop << 16) | 6, 0, 7, 2]]);
+  PM.emitInterfaceActionClick({ player: p, buttonId: (shop << 16) | 6, action: 1, groupId: shop, childId: 6, slot: 4, handled: false });
+  assert.equal(p.getInventory().getAmount(core.CacheDefinitions.getObjId("plank_sack")), 1);
+  assert.equal(p.getAttribute("construction:carpenter-points"), 50);
 });

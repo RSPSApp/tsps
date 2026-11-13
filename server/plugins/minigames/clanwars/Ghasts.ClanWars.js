@@ -51,7 +51,7 @@ function definitions() {
 function prepare(game) {
   if (!applies(game)) return true;
   if (game.ghasts) return game.ghasts.ready;
-  game.ghasts = { ready: false, npcs: [] };
+  game.ghasts = { ready: false, npcs: [], awaiting: new Set() };
   try {
     const id = definitions();
     for (const tile of SPAWNS) {
@@ -62,6 +62,8 @@ function prepare(game) {
       npc.__skipDefaultRespawn = true; // Set before NPCDeathTask reads it, not in area.leave.
       game.ghasts.npcs.push(npc);
       game.area.add(npc);
+      if (!npc.isRegistered()) game.ghasts.awaiting.add(npc);
+      registered(game, npc);
       if (npc.getArea() !== game.area || (!npc.isRegistered() && !C.core.World.getAddNPCQueue().includes(npc))) {
         throw new Error("Ghastly spawn not admitted");
       }
@@ -72,6 +74,27 @@ function prepare(game) {
     game.ghasts.failure = String(error?.message ?? error);
     stop(game);
     return false;
+  }
+}
+function reconcile(game) {
+  if (!applies(game)) return true;
+  if (!game.ghasts?.ready) return false;
+  for (const npc of game.ghasts.awaiting) {
+    if (npc.isRegistered()) registered(game, npc);
+    else if (!C.core.World.getAddNPCQueue().includes(npc)) {
+      game.ghasts.failure = "Ghastly queued registration failed";
+      game.ghasts.ready = false;
+      return false; // World consumed a refused addition; cancel, never retry/requeue.
+    }
+  }
+  return true;
+}
+function registered(game, npc) {
+  // add() owns queued actors; enter() indexes only their final registered world slot.
+  if (owners.get(npc) === game && !retired.has(npc) && npc.isRegistered()
+    && npc.getArea() === game.area && !game.area.isDestroyed()) {
+    if (!game.area.hasMember(npc)) game.area.enter(npc);
+    game.ghasts.awaiting.delete(npc);
   }
 }
 function left(game, npc) {
@@ -85,6 +108,7 @@ function left(game, npc) {
 function stop(game) {
   if (!game.ghasts) return;
   game.ghasts.ready = false;
+  game.ghasts.awaiting.clear();
   for (const npc of game.ghasts.npcs) {
     retired.add(npc);
     npc.__skipDefaultRespawn = true;
@@ -170,4 +194,4 @@ function attach(api) {
   api.onCustomEvent("npc-drops:claim", claimDrops);
   api.onNpcDeath(died);
 }
-module.exports = { applies, prepare, canAttack, aggression, left, playerLeft, stop, attach };
+module.exports = { applies, prepare, reconcile, canAttack, aggression, registered, left, playerLeft, stop, attach };

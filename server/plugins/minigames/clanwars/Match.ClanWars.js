@@ -50,6 +50,7 @@ function arenaClass() {
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
+    process(mobile) { if (mobile.isNpc()) Ghasts.registered(this.game, mobile.getAsNpc()); }
     canTeleport() { return false; }
     canTrade() { return false; }
     postLeave(mobile, logout) {
@@ -228,6 +229,10 @@ class Game {
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
     }
     if (this.phase === "combat") {
+      if (!Ghasts.reconcile(this)) {
+        for (const player of this.members.keys()) player.sendMessage("This Clan Wars battle could not continue. Please try a new challenge.");
+        return this.finish(null);
+      }
       if (Rules.respawns(this.rules)) {
         // Jail and pending safe deaths retain their roster slot. A temporary lack
         // of living fighters must not end a respawning 1v1 after its first kill.

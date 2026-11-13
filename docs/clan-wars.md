@@ -500,8 +500,8 @@ exact spawn/barrier coordinates are our choices, not recorded retail positions.
 ## Soggy Swamp
 
 The native arena scrollbox offers Soggy Swamp (6, row slot 18) alongside Plateau,
-Sylvan Glade and Forsaken Quarry. Ghastly Swamp (7) is a separate, unsupported
-arena. Existing melee modes, restrictions, Ignore 5, safe deaths and membership
+Sylvan Glade and Forsaken Quarry. Ghastly Swamp (7) is a separate arena with the
+shared fight-start hazard described below. Existing melee modes, restrictions, Ignore 5, safe deaths and membership
 rules use the same selected-layout consumers.
 
 The bounded revision-242 template is region 13645, source 3392..3455 / 4928..4991,
@@ -952,13 +952,41 @@ mode-specific Ignore5 consequences, without guessed opposing-player kill credit.
 Exact current and retired NPC ownership suppresses default drops and per-instance
 respawn; no shared definition or global NPC-5626 reward rule is changed.
 
-Required fixture coverage includes native size-2 approaches and eight-tick turns,
+The existing game and Rules fixtures include native size-2 approaches and eight-tick turns,
 exact hit provenance and mitigation/food branches, all inventory policies,
 NoFood/NoDrinks, both real player deaths/holdings/view/Exit/Forfeit paths,
 readiness failure, queued additions/hits/deaths/removals and actual freed-slot
 reuse with concurrent-match/world controls. All 4,096 native ground masks and
-mapped settings must restore before intentional resource mutations, with full
+mapped settings are compared before intentional resource mutations, with full
 upper-plane preservation, both ends and center staging crossings, current owned
-barrier identities and all Soil copies. These are early source-stage proof
-obligations, not observed gameplay outcomes. Source/decoded/native-handler proof
+barrier identities and all Soil copies. These describe the written fixture assertions; runtime outcomes remain unobserved
+until the exact source runs. Source/decoded/native-handler proof
 is distinct from rendering, natural RNG, login, retail timing and full issue #153.
+
+Queued NPCs remain attached but unindexed until their actual world slot is assigned.
+The normal area process and match tick reconcile that initial registration once.
+If World consumes an admitted addition but refuses registration, the next owned
+match tick cancels the battle and removes both hazards without retrying or
+requeuing. The fixture separately supplies registration refusals to exercise this
+failure path; that control is distinct from the ordinary successful NPC turns.
+
+The fixture loads canonical NPC definitions and registers the actual NpcDrops,
+Prayer, Bonecrusher and Nature Spirit consumers. An owned ghast death is compared
+with world-5626 bones reaching the real charged Bonecrusher/Prayer route and a
+canonical pouch-revealed quest ghast advancing its own quest identity. The quest
+control supplies its stage and item-on-NPC event; it does not claim native quest
+traversal. Native cadence tests run NPC turns, player combat/movement and ordinary
+aggression without forced rolls. Supplied PendingHit/HitDamage and scoped force-roll
+controls cover exact inventory and stale/provenance edges, not natural timing.
+
+Source-derived suite counts are 259 game cases (228 inherited plus 31 Ghastly),
+21 Rules, six shake, one WASD and 53 Cooking including nested cases: 340 expected,
+not observed here. The inherited fixture helpers now also admit/remove real NPC
+queues, and Q's explicitly selected engine cases additionally process native NPC
+and player combat turns, local NPC visibility and update resets. Other cases keep
+their previous player tick path. Former native-slot-21 refusal samples use the
+unsupported child slot 22; their existing valid unsupported arena rows remain.
+Former numeric-arena-7 Rules refusals use malformed 7.5, and a new case positively
+covers all twelve layouts. A final baseline uses the identical two fixture blobs
+with unchanged production and must classify actual offer-absence failures and all
+unreached assertions before the fixed subject is selected.

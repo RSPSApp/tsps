@@ -104,6 +104,7 @@ const BOOK_TURN_GRAPHIC_HEIGHT = 92;
 const BOOK_READ_ANIMATION = 1350;
 /** busy: set while the book is open, cleared when it closes. */
 const BUSY_VARBIT = 12393;
+const READING_ANIMATIONS = new Set([BOOK_READ_ANIMATION, BOOK_TURN_RIGHT.animation, BOOK_TURN_LEFT.animation]);
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
 const INDEXED_BOOK = {
@@ -592,7 +593,9 @@ function closeBook(player) {
   openBooks.delete(player);
   if (!book.indexed) {
     player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 0);
-    readingAnimation(player, -1);
+    // The reset stops the reading pose, not an animation the closing action has just started.
+    const current = player.getAnimation?.();
+    if (!current || READING_ANIMATIONS.has(current.getId?.())) readingAnimation(player, -1);
   }
   if (typeof book.onClose === "function") book.onClose();
 }

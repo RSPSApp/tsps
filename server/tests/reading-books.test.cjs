@@ -83,6 +83,15 @@ test("closing the book clears busy and the reading animation, by the X or by the
   assert.deepEqual(walked.state.animations, [READ, -1]);
 });
 
+test("closing keeps an animation the closing action started on the same tick", () => {
+  const { player, state } = reader();
+  itemActions.get("Glassblowing book").Read({ player });
+  player.getAnimation = () => ({ getId: () => 714 });
+  for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: BOOK });
+  assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0]]);
+  assert.deepEqual(state.animations, [READ], "no reset over the teleport");
+});
+
 test("the Construction guide runs to sixteen pages and the diary to six", () => {
   const { player, state } = reader();
   itemActions.get("Construction guide").Read({ player });

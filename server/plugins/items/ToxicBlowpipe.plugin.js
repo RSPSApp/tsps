@@ -557,6 +557,7 @@ function usesScales(item) {
 /**
  * Picked-up darts go into a carried blowpipe already loaded with that dart, worn or in the
  * inventory, while Ammo-picking behaviour is on (Wiki: Toxic blowpipe). The worn pipe goes first.
+ * Ours: a Drygore blowpipe takes them the same way.
  */
 function pickupDarts(event, dartId) {
   const { player } = event;

@@ -5,17 +5,10 @@
  * which reads the armed special as the hit is rolled). Only one special a tick.
  *
  * Ours: as Quick Smash, the swing comes on the press even mid-cooldown and leaves a one-tick
- * cooldown; it plays the weapon's own attack animation (the Wiki names no other).
+ * cooldown; it plays the weapon's own attack animation (the Wiki names no other). Outside Leagues VI
+ * it is the same instant hit without the Flames (FangOfTheHound.plugin.js gates them).
  */
 let core;
-let pluginApi;
-/** Leagues VI (Demonic Pacts) item: Ferocity is a Leagues VI character's only (LeagueMode's `league:profile`). */
-const LEAGUE_VI = 6;
-function inLeagueSix(player) {
-  const query = { player, league: null };
-  pluginApi.emitCustomEvent("league:profile", query);
-  return Number(query.league) === LEAGUE_VI;
-}
 /** Player -> the process cycle of their last Ferocity: one a tick. */
 const lastFerocity = new WeakMap();
 
@@ -32,8 +25,6 @@ function buildSpecial() {
   class FangOfTheHoundCombatMethod extends MeleeCombatMethod {
     canAttack(character, target) {
       if (lastFerocity.get(character) === World.getProcessCycle()) return false;
-      // Ours: outside Leagues VI the special does nothing (no swing, no energy spent).
-      if (!character?.isPlayer?.() || !inLeagueSix(character.getAsPlayer())) return false;
       return super.canAttack(character, target);
     }
 
@@ -62,6 +53,5 @@ function buildSpecial() {
 
 module.exports = function registerFangOfTheHoundSpecialAttack(api) {
   core = api.core;
-  pluginApi = api;
   api.registerCombatSpecial(buildSpecial());
 };

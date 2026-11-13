@@ -1510,17 +1510,18 @@ Ours (neither a capture nor the Wiki):
 - Fang of the hound: "every hit" read as every landed melee hit; the Flames land with the hit that
   cast them, earn no Magic XP, and show `vfx_flames_of_cerberus` for the target's size; Ferocity
   plays the weapon's own attack (Osmumten's fang's style set, the cache's) and, outside Leagues VI,
-  does nothing.
+  is the same instant hit without the Flames.
 - Nature's recurve: the restore on the hit's landing, up to base levels, with
   `vfx_natures_recurve_spotanim_01` on the player.
 - V's helm: the stored special is used with or without the helm worn and is not kept over a
   logout; the zeroed hitsplat is the blocked (blue) one.
 - King's barrage: one bolt spent an attack; the ice bolt freezes on a miss too and earns its XP at
   the bolt's rates; `vfx_kings_barrage_projectile_single` flown as a crossbow bolt and
-  `vfx_kings_barrage_impact` where it lands.
+  `vfx_kings_barrage_impact` where it lands; outside Leagues VI Toggle-Freeze does nothing.
 - Drygore blowpipe: Unload returns the darts with no prompt, as the toxic blowpipe's does (Raging
   Echoes' version had an Uncharge with a confirm instead; this cache's pipe has Check and Unload);
-  a pact echo neither burns nor gets a second roll's burn.
+  a pact echo does not burn; picked-up darts go into a carried pipe loaded with them, as the
+  toxic blowpipe's do.
 
 ## Areas
 

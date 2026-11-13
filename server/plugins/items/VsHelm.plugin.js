@@ -59,6 +59,7 @@ function expireLater(player, until) {
     constructor() { super(FREE_SPECIAL_TICKS); }
     execute() {
       this.stop();
+      if (!player.isRegistered?.()) return;
       if (Number(player.getAttribute?.(FREE_SPECIAL_ATTRIBUTE) ?? 0) === until) clearFreeSpecial(player);
     }
   })());

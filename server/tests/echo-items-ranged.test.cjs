@@ -511,6 +511,9 @@ test("outside Leagues VI the items are plain weapons: one bolt, no heal, one rol
   wield(player, core.ItemIdentifiers.KINGS_BARRAGE, "CROSSBOW", "CROSSBOW_RAPID", DRAGON_BOLTS);
   assert.equal(methodFor(player), null, "the core's crossbow attack");
   assert.equal(Beast.halved(player, core.CombatType.RANGED), true, "the Corporeal Beast halves it");
+  Barrage._test.toggleFreeze({ player });
+  assert.equal(player.getAttribute(Barrage._test.FREEZE_DISABLED_ATTRIBUTE) === true, false, "Toggle-Freeze does nothing");
+  assert.equal(player.sent.messages.length, 0);
 
   wield(player, core.ItemIdentifiers.NATURES_RECURVE, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 50, false);

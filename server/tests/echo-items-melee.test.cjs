@@ -309,14 +309,17 @@ test("V's helm counts as a Slayer helmet (i)", (t) => {
 
 // ------------------------------------------------------------------ Leagues VI only
 
-test("outside Leagues VI: no Flames, no Ferocity, no zeroed hit, no Slayer helmet", (t) => {
+test("outside Leagues VI: no Flames (not even from Ferocity), no Slayer helmet", (t) => {
   const { player, npc } = actors(t, { weapon: core.ItemIdentifiers.FANG_OF_THE_HOUND, head: core.ItemIdentifiers.VS_HELM });
   mainCharacters.add(player);
   attack(player, npc, [true], [0]);
   assert.equal(flamesOf(npc).length, 0, "no Flames of Cerberus");
+  core.World.processCycle = (core.World.getProcessCycle() ?? 0) + 1;
   player.setSpecialPercentage(100);
   player.setSpecialActivated(true);
-  assert.equal(player.getCombatSpecial().getCombatMethod().canAttack(player, npc), false, "no Ferocity");
+  const special = attack(player, npc, [true], [0.99]);
+  assert.equal(special.launched, true, "Ferocity still swings");
+  assert.equal(flamesOf(npc).length, 0, "without the Flames");
   const request = { player, worn: null };
   Helm._test.slayerHelmet(request);
   assert.equal(request.worn, null, "not a Slayer helmet");

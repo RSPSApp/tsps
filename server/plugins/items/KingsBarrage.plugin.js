@@ -161,6 +161,8 @@ function resolveMethod(attacker) {
 }
 
 function toggleFreeze({ player }) {
+  // The freeze is Leagues VI's, so is its toggle (ours: elsewhere the option does nothing).
+  if (!inLeagueSix(player)) return true;
   const disable = freezes(player);
   player.setAttribute(FREEZE_DISABLED_ATTRIBUTE, disable);
   player.sendMessage(disable ? FREEZE_OFF_TEXT : FREEZE_ON_TEXT);

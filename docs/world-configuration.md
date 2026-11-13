@@ -527,6 +527,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `FreezeTimer` | Freeze Timer | interface | yes | Sends the remaining freeze time and spell for the client's freeze-timer overlay. |
 | `FriendsList` | FriendsList | interface | yes | Friends list and friends chat: private messages, chat filters and friends-chat channels. |
 | `GrandExchange` | GrandExchange | interface | yes | The Grand Exchange: offers, offer collection and the item-price resource it uses. |
+| `Grouping` | Grouping | interface | yes | Player groups of up to five: ::group to form one, invite, accept, promote, kick, leave or disband, kept across logins, with grouping:* events for co-op content. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
 | `LoginTips` | LoginTips | interface | yes | Sends a 'Did you know?' tip after the login greeting, following the All Settings row that turns them off. |

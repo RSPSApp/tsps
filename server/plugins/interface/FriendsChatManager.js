@@ -850,4 +850,4 @@ class FriendsChatManager {
     }
 }
 
-module.exports = { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE, FRIENDS_PANEL_ATTRIBUTE };
+module.exports = { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE, accountName, typedAccount, FRIENDS_PANEL_ATTRIBUTE };

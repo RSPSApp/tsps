@@ -452,19 +452,24 @@ test("Group Ironmen reach The Node from Tutorial Island, the Lumbridge portal an
 });
 
 test("Tony's armour shows the group's size on the platebody, the Hardcore set for Hardcore; Maggie's bank is for new adventurers", () => {
-  const { Node } = GroupIronman._test;
+  const { Armour, Node } = GroupIronman._test;
   const ids = core.ItemIdentifiers;
   const alice = account("alice");
   const bob = account("bob");
   const carl = account("carl");
   formed(alice, bob, carl);
-  assert.equal(Node.giveArmour(alice), "There you go. Wear it with pride.");
+  assert.equal(Armour.giveArmour(alice), "There you go. Wear it with pride.");
   assert.deepEqual([ids.GROUP_IRONMAN_HELM, ids.GROUP_IRONMAN_PLATEBODY_3, ids.GROUP_IRONMAN_PLATELEGS, ids.GROUP_IRONMAN_BRACERS]
     .map((id) => alice.getInventory().getAmount(id)), [1, 1, 1, 1], "platebody03 for a group of three");
-  assert.equal(Node.giveArmour(alice), "I think you've already got the whole set.");
+  assert.equal(Armour.giveArmour(alice), "I think you've already got the whole set.");
   const hc = account("hc", "group-hardcore");
-  Node.giveArmour(hc);
+  Armour.giveArmour(hc);
   assert.equal(hc.getInventory().getAmount(ids.HARDCORE_GROUP_IRONMAN_PLATEBODY), 1, "platebody02 when not in a group");
+  const unranked = account("unranked", "group-unranked");
+  Armour.giveArmour(unranked);
+  assert.deepEqual(["group_ironman_helm_unranked", "group_ironman_platebody02_unranked", "group_ironman_platelegs_unranked", "group_ironman_gloves_unranked"]
+    .map((name) => unranked.getInventory().getAmount(core.CacheDefinitions.getObjId(name))), [1, 1, 1, 1], "the cache's (unranked) set");
+  assert.equal(unranked.getInventory().getAmount(ids.GROUP_IRONMAN_HELM), 0, "not the ranked helm");
 
   let opened = 0;
   bob.getBank = () => ({ open: () => opened++ });
@@ -473,6 +478,78 @@ test("Tony's armour shows the group's size on the platebody, the Hardcore set fo
   bob.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
   Node.bank({ player: bob });
   assert.deepEqual([opened, said(bob)], [1, Node.BANK_REFUSED]);
+});
+
+test("a numbered platebody crumbles when equipped by a group of another size; Adam hands out the group's number", () => {
+  const { Armour } = GroupIronman._test;
+  const plate = (size) => core.CacheDefinitions.getObjId(`group_ironman_platebody0${size}`);
+  const equip = (player, id) => {
+    const event = { player, slot: core.Equipment.BODY_SLOT, item: new Item(id, 1), allow: null };
+    for (const handler of hooks.get("onCanEquip")) handler(event);
+    return event.allow;
+  };
+  const alone = account("alone");
+  alone.getInventory().adds(plate(2), 1);
+  assert.equal(equip(alone, plate(2)), null, "II fits a player alone");
+  const alice = account("alice");
+  const bob = account("bob");
+  const carl = account("carl");
+  formed(alice, bob, carl);
+  alice.getInventory().adds(plate(2), 1);
+  assert.equal(equip(alice, plate(2)), false);
+  assert.equal(alice.getInventory().getAmount(plate(2)), 0, "gone");
+  assert.equal(said(alice), Armour.MESSAGE.CRUMBLED);
+  alice.getInventory().adds(plate(3), 1);
+  assert.equal(equip(alice, plate(3)), null, "III fits a group of three");
+  const hardcore = account("hardcore", "group-hardcore");
+  hardcore.getInventory().adds(core.CacheDefinitions.getObjId("hardcore_group_ironman_platebody04"), 1);
+  assert.equal(equip(hardcore, core.CacheDefinitions.getObjId("hardcore_group_ironman_platebody04")), false, "the Hardcore ones too");
+
+  assert.deepEqual(emit("ironman:armour", { player: alice, items: null }).items, Armour.setOf("ranked", 3), "Adam's set, numbered III");
+  assert.equal(emit("ironman:armour", { player: account("main", null), items: null }).items, null, "others keep Adam's own list");
+});
+
+test("the armour crates: a player's own crate hands out the set; the other changes the Group Iron mode before the mainland", () => {
+  const { Armour } = GroupIronman._test;
+  const crate = (player, name) => {
+    for (const actions of hooks.get(`object:${name}`)) actions.Take({ player, objectId: core.CacheDefinitions.getLocId(name === "Armour crate" ? "gim_armour_crate_standard" : "gim_armour_crate_hardcore") });
+  };
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => { prompts.push({ player, title, pairs }); return true; };
+  const answer = (option) => { const prompt = prompts.at(-1); prompt.pairs[prompt.pairs.indexOf(option) + 1](); };
+
+  const alice = account("alice");
+  crate(alice, "Armour crate");
+  assert.equal(said(alice), Armour.LINE.GIVEN);
+  crate(alice, "Hardcore armour crate");
+  assert.equal(prompts.at(-1).title, "Become a Hardcore Group Ironman?");
+  answer("No.");
+  assert.equal(modeOf(alice), "group");
+  crate(alice, "Hardcore armour crate");
+  answer("Yes.");
+  assert.equal(modeOf(alice), "group-hardcore");
+  assert.equal(alice.getInventory().getAmount(core.CacheDefinitions.getObjId("hardcore_group_ironman_helm")), 1, "the Hardcore set");
+
+  let tony = 0;
+  const travelled = account("travelled");
+  travelled.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
+  travelled.getDialogueManager = () => ({ startDialogues: () => tony++ });
+  const before = prompts.length;
+  crate(travelled, "Hardcore armour crate");
+  assert.deepEqual([tony, prompts.length, modeOf(travelled)], [1, before, "group"], "Tony: only before the mainland");
+
+  const bob = account("bob");
+  const carl = account("carl");
+  formed(bob, carl);
+  crate(bob, "Hardcore armour crate");
+  assert.deepEqual([said(bob), modeOf(bob)], ["Leave your group first.", "group"]);
+
+  const unranked = account("unranked", "group-unranked");
+  crate(unranked, "Hardcore armour crate");
+  assert.equal(said(unranked), Armour.MESSAGE.UNRANKED);
+  crate(unranked, "Armour crate");
+  assert.equal(unranked.getInventory().getAmount(core.CacheDefinitions.getObjId("group_ironman_helm_unranked")), 1, "the Armour crate serves Unranked");
+  crate(account("main", null), "Armour crate");
 });
 
 test("a leader renames the group through Tony; names are at most 12 letters, numbers or spaces, and unique among groups and clans", () => {
@@ -853,7 +930,16 @@ test("the rowboat at Tutorial Island's south end takes Group Ironmen to The Node
   assert.equal(row(alice), true);
   assert.deepEqual([alice.getLocation().getX(), alice.getLocation().getY()], [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y]);
   row(main);
-  assert.equal(said(main), Node.MESSAGE.NOT_GROUP_IRONMAN);
+  assert.equal(said(main), Node.MESSAGE.BOAT_REFUSED);
+
+  // Still on the tutorial: the crossing ends it ("tutorial-island:leave"), which lands them itself.
+  const islander = account("islander");
+  const asked = [];
+  handlers.set("tutorial-island:leave", [(request) => { asked.push(request.player); request.handled = true; }]);
+  assert.equal(row(islander), true);
+  assert.deepEqual(asked, [islander]);
+  assert.notDeepEqual([islander.getLocation().getX(), islander.getLocation().getY()], [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y],
+    "the tutorial's ending moves them, not the boat");
 });
 
 test("raids with outsiders: a Hardcore group's member is refused; a group with prestige is warned, then loses it", () => {

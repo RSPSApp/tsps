@@ -8,11 +8,13 @@
  *   mainland ("tutorial-island:destination"); from Lumbridge, the portal by the general store
  *   (gim_portal_lumbridge, a loc only Group Ironmen see) leads here; so does the Group ironman
  *   helm's Teleport, and the rowboat at Tutorial Island's south end (gim_boat, The Node page's "boat
- *   on southern end of Tutorial Island"). The Node's own portal (gim_portal) leads back to it. Going to the mainland
+ *   on southern end of Tutorial Island"). A Group Ironman still on the tutorial takes that boat after the
+ *   Ironman tutor (Wiki: Tutorial Island), so it ends the tutorial ("tutorial-island:leave"), which
+ *   lands them here. The Node's own portal (gim_portal) leads back to it. Going to the mainland
  *   the first time makes them a player who has played before (Variants.EXPERIENCED_ATTRIBUTE).
  * - Tony (Group Ironman tutor): his transcript plays on Talk-to; "Yes, leave my group." starts
- *   leaving, and a leader's "Rename group." asks for the new name. Armour, and the armour crates,
- *   hand out the set of the player's mode, the platebody showing their group's size (II to V).
+ *   leaving, and a leader's "Rename group." asks for the new name. His Armour and the armour
+ *   crates are Armour.GroupIronman.js.
  * - Maggie (Group Storage tutor): her bank, and the chest beside her, are for players who haven't
  *   gone to the mainland yet ("This bank is for new adventurers only, ...").
  */
@@ -25,11 +27,11 @@ const NODE_ARRIVAL = Object.freeze({ x: 3095, y: 3039, z: 0 });
 const LUMBRIDGE_ARRIVAL = Object.freeze({ x: 3217, y: 3233, z: 0 });
 const TONY = "Group Ironman tutor";
 const MAGGIE = "Group Storage tutor";
-const ARMOUR_LINE = "There you go. Wear it with pride.";
-const ARMOUR_ALREADY = "I think you've already got the whole set.";
 const BANK_REFUSED = "This bank is for new adventurers only, you cannot access it as you've already started your Group Ironman journey.";
 const MESSAGE = Object.freeze({
   NOT_GROUP_IRONMAN: "Only Group Ironmen can use this.",
+  // Learning the Ropes' transcript: a regular account at the way to The Node.
+  BOAT_REFUSED: "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the Ironman tutor north-east of here.",
   ARRIVED: "Welcome to The Node. Form your group here before you set out.",
   RENAME_PROMPT: "Enter your group's new name:",
 });
@@ -72,10 +74,13 @@ function rowboat(event) {
   const { player, objectId } = event;
   if (objectId !== locId("gim_boat")) return false;
   if (!Common.isGroupIronman(player)) {
-    player.getPacketSender().sendMessage(MESSAGE.NOT_GROUP_IRONMAN);
+    player.getPacketSender().sendMessage(MESSAGE.BOAT_REFUSED);
     return true;
   }
-  teleport(player, NODE_ARRIVAL);
+  // On the tutorial, the crossing ends it, and its destination (above) is The Node.
+  const leave = { player, handled: false };
+  Common.api.emitCustomEvent("tutorial-island:leave", leave);
+  if (!leave.handled) teleport(player, NODE_ARRIVAL);
   return true;
 }
 
@@ -86,45 +91,6 @@ function helmTeleport({ player }) {
     return true;
   }
   teleport(player, NODE_ARRIVAL);
-  return true;
-}
-
-/** The armour of the player's mode, the platebody numbered by their group's size (2-5). */
-function armourFor(player) {
-  const { ItemIdentifiers } = Common.api.core;
-  const hardcore = Common.modeOf(player) === Common.modeOfVariant("hardcore");
-  const prefix = hardcore ? "HARDCORE_GROUP_IRONMAN" : "GROUP_IRONMAN";
-  const size = Math.max(2, Math.min(5, Common.groupOf(player).group?.members.length ?? 2));
-  const platebody = ItemIdentifiers[`${prefix}_PLATEBODY`] + (size - 2) * 2;
-  return [ItemIdentifiers[`${prefix}_HELM`], platebody, ItemIdentifiers[`${prefix}_PLATELEGS`], ItemIdentifiers[`${prefix}_BRACERS`]];
-}
-
-/** Hands out what the player lacks of their set; returns Tony's line. */
-function giveArmour(player) {
-  if (!Common.isGroupIronman(player)) return MESSAGE.NOT_GROUP_IRONMAN;
-  const inventory = player.getInventory();
-  const missing = armourFor(player).filter((id) => !inventory.contains(id) && !player.getEquipment().contains(id));
-  if (!missing.length) return ARMOUR_ALREADY;
-  if (inventory.getFreeSlots() < missing.length) return "You don't have enough inventory space.";
-  for (const id of missing) inventory.adds(id, 1);
-  return ARMOUR_LINE;
-}
-
-/** Tony's Armour option. */
-function tonyArmour({ player, npc }) {
-  const { DialogueChainBuilder, NpcDialogue } = Common.api.core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npc?.getId?.() ?? 0, giveArmour(player))));
-  return true;
-}
-
-/** The armour crates' Take: the Hardcore crate only for a Hardcore Group Ironman. */
-function crate(event) {
-  const { player, objectId } = event;
-  if (objectId === locId("gim_armour_crate_hardcore") && Common.modeOf(player) !== Common.modeOfVariant("hardcore")) {
-    player.getPacketSender().sendMessage(MESSAGE.NOT_GROUP_IRONMAN);
-    return true;
-  }
-  player.getPacketSender().sendMessage(giveArmour(player));
   return true;
 }
 
@@ -163,5 +129,5 @@ function choice(event) {
 
 module.exports = {
   NODE_ARRIVAL, LUMBRIDGE_ARRIVAL, MESSAGE, BANK_REFUSED,
-  tutorialDestination, portal, rowboat, helmTeleport, armourFor, giveArmour, tonyArmour, crate, chest, bank, choice,
+  tutorialDestination, portal, rowboat, helmTeleport, chest, bank, choice,
 };

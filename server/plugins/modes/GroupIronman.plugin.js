@@ -22,6 +22,7 @@
  * It talks to Ironman, Grouping and GroupStorage only through their events.
  */
 
+const Armour = require("./groupironman/Armour.GroupIronman");
 const Chat = require("./groupironman/Chat.GroupIronman");
 const Commands = require("./groupironman/Commands.GroupIronman");
 const Common = require("./groupironman/Common.GroupIronman");
@@ -90,14 +91,16 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:choice", Node.choice);
     api.onObjectInteraction("Portal", { Enter: Node.portal });
     api.onObjectInteraction("Rowboat", { Travel: Node.rowboat });
-    api.onObjectInteraction("Armour crate", { Take: Node.crate });
-    api.onObjectInteraction("Hardcore armour crate", { Take: Node.crate });
-    api.onNpcInteraction("Group Ironman tutor", { Armour: Node.tonyArmour });
+    api.onObjectInteraction("Armour crate", { Take: Armour.crate });
+    api.onObjectInteraction("Hardcore armour crate", { Take: Armour.crate });
+    api.onNpcInteraction("Group Ironman tutor", { Armour: Armour.tonyArmour });
+    api.onCanEquip(Armour.crumble);
+    api.onCustomEvent("ironman:armour", Armour.adamArmour);
     api.onNpcInteraction("Group Storage tutor", { Bank: Node.bank });
     api.onObjectInteraction("Chest", { Bank: Node.chest });
     api.onItemAction("Group ironman helm", { Teleport: Node.helmTeleport });
     api.onItemAction("Hardcore group ironman helm", { Teleport: Node.helmTeleport });
     api.onServerStartup(Unranked.start);
   },
-  _test: { Chat, Commands, Common, Events, Hardcore, Houses, Leaving, Node, Pvm, Recruiting, Restrictions, Settings, Store, Tab, Unlocks, Unranked, Variants, Wealth, Wipe },
+  _test: { Armour, Chat, Commands, Common, Events, Hardcore, Houses, Leaving, Node, Pvm, Recruiting, Restrictions, Settings, Store, Tab, Unlocks, Unranked, Variants, Wealth, Wipe },
 };

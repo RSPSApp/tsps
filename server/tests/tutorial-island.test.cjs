@@ -440,6 +440,22 @@ test("arriving in Lumbridge clears the worn items completely: the weapon interfa
   assert.equal(player.getWeapon(), WeaponInterfaces.UNARMED, "fights unarmed, not with the bow");
 });
 
+test("a Group Ironman's rowboat ends the tutorial at The Node, before the Magic Instructor; others stay", () => {
+  const { STEP } = require("../plugins/areas/tutorialisland/Common.TutorialIsland");
+  const { player } = tutorialPlayer(STEP.MAGIC_TALK, 3133, 3089); // past the Ironman tutor
+  PluginManager.emitCustomEvent("ironman:set-mode", { player, mode: "group", handled: false });
+  const leave = { player, handled: false };
+  PluginManager.emitCustomEvent("tutorial-island:leave", leave);
+  assert.equal(leave.handled, true);
+  assert.equal(progress(player), STEP.COMPLETED, "Learning the Ropes is done");
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3095, 3039], "The Node, not Lumbridge");
+
+  const { player: done } = tutorialPlayer(STEP.COMPLETED, 3095, 3039);
+  const again = { player: done, handled: false };
+  PluginManager.emitCustomEvent("tutorial-island:leave", again);
+  assert.equal(again.handled, false, "off the tutorial already: the boat itself takes them");
+});
+
 test("skipping the island as an Ironman opens the setup with every mode, then ends it; declining does not", () => {
   const Leave = require("../plugins/areas/tutorialisland/Leave.TutorialIsland");
   const { STEP } = require("../plugins/areas/tutorialisland/Common.TutorialIsland");

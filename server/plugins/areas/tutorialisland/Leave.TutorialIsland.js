@@ -143,6 +143,17 @@ function onProcess({ player }) {
   complete(player);
 }
 
+/**
+ * "tutorial-island:leave" { player, handled }: a way off the island other than the Home Teleport
+ * ends the tutorial at once. A Group Ironman's rowboat to The Node is one: they take it after the
+ * Ironman tutor, never seeing the Magic Instructor (Wiki: Tutorial Island).
+ */
+function onLeave(request) {
+  if (request.handled || !request.player || !T.isActive(request.player)) return;
+  request.handled = true;
+  complete(request.player);
+}
+
 // The first Talk-to with the Gielinor Guide offers to skip the island.
 const passedSkipOffer = new WeakSet();
 
@@ -249,6 +260,7 @@ module.exports = function attach(api) {
   api.onPlayerLogin(onLogin);
   api.onCanTeleport(onCanTeleport);
   api.onPlayerProcess(onProcess);
+  api.onCustomEvent("tutorial-island:leave", onLeave);
 };
 
 Object.assign(module.exports, { complete, skipTutorial, finishSkip, onLogin, SKIP_PENDING_ATTRIBUTE });

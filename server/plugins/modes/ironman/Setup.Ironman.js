@@ -129,13 +129,19 @@ function choose(player, mode) {
   });
 }
 
-/** The mode's armour, if the inventory has room; returns the line Adam says. */
+/**
+ * The mode's armour, if the inventory has room; returns the line Adam says. "ironman:armour"
+ * { player, items } lets a mode hand out its own set (Group Ironman: the platebody of the group's size).
+ */
 function handOutArmour(player) {
   const armour = Ironman.data.modes[Ironman.modeOf(player)]?.armour;
   if (!armour) return Ironman.message("armourNotIron");
+  const request = { player, items: null };
+  Ironman.api.emitCustomEvent("ironman:armour", request);
+  const items = request.items ?? armour.map((name) => core.ItemIdentifiers[name]);
   const inv = player.getInventory();
-  if (inv.getFreeSlots() < armour.length) return Ironman.message("armourFull");
-  for (const name of armour) inv.adds(core.ItemIdentifiers[name], 1);
+  if (inv.getFreeSlots() < items.length) return Ironman.message("armourFull");
+  for (const id of items) inv.adds(id, 1);
   return Ironman.message("armour");
 }
 

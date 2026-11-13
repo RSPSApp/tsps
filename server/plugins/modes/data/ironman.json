@@ -8,7 +8,7 @@
     "hardcore": { "label": "Hardcore Ironman", "varbit": 3, "icon": 10, "rank": 2, "armour": ["HARDCORE_IRONMAN_HELM", "HARDCORE_IRONMAN_PLATEBODY", "HARDCORE_IRONMAN_PLATELEGS"] },
     "group": { "label": "Group Ironman", "varbit": 4, "icon": 41, "rank": 1, "chests": 2, "islandOnly": true, "armour": ["GROUP_IRONMAN_HELM", "GROUP_IRONMAN_PLATEBODY", "GROUP_IRONMAN_PLATELEGS", "GROUP_IRONMAN_BRACERS"] },
     "group-hardcore": { "label": "Hardcore Group Ironman", "varbit": 5, "icon": 42, "rank": 2, "chests": 2, "islandOnly": true, "armour": ["HARDCORE_GROUP_IRONMAN_HELM", "HARDCORE_GROUP_IRONMAN_PLATEBODY", "HARDCORE_GROUP_IRONMAN_PLATELEGS", "HARDCORE_GROUP_IRONMAN_BRACERS"] },
-    "group-unranked": { "label": "Unranked Group Ironman", "varbit": 6, "icon": 43, "rank": 1, "chests": 2, "armour": ["GROUP_IRONMAN_HELM", "GROUP_IRONMAN_PLATEBODY", "GROUP_IRONMAN_PLATELEGS", "GROUP_IRONMAN_BRACERS"] }
+    "group-unranked": { "label": "Unranked Group Ironman", "varbit": 6, "icon": 43, "rank": 1, "chests": 2, "armour": ["GROUP_IRONMAN_HELM_UNRANKED_", "GROUP_IRONMAN_PLATEBODY_UNRANKED_", "GROUP_IRONMAN_PLATELEGS_UNRANKED_", "GROUP_IRONMAN_BRACERS_UNRANKED_"] }
   },
   "groupModes": ["group", "group-hardcore", "group-unranked"],
   "setup": {

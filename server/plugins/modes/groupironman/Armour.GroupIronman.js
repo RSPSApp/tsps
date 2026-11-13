@@ -1,0 +1,135 @@
+"use strict";
+
+/**
+ * Group Ironman armour (Wiki: Group ironman armour, Group ironman platebody; Tony's transcript; the cache).
+ *
+ * - The set is the cache's for the player's mode: group_ironman_*, hardcore_group_ironman_*, or the
+ *   "(unranked)" group_ironman_*_unranked. The platebody is numbered by the group's size, II to V
+ *   (platebody02 to 05); the cache has no I, so fewer than two in the group still gets II (ours, the
+ *   user's choice).
+ * - Tony's Armour hands out what the player lacks; Adam in Lumbridge asks "ironman:armour" for the set.
+ * - A numbered platebody that doesn't match the group's size crumbles as the player equips it
+ *   (Wiki: "The platebody crumbles to dust as you attempt to equip it. You can get a new one from an
+ *   Ironman tutor.").
+ * - The armour crates (Armour crate, Hardcore armour crate; Take): the crate of the player's own mode
+ *   hands out its set, the Armour crate serving Unranked players too. The other crate changes the
+ *   player's Group Iron mode to its own, which only a player who hasn't been to the mainland may do
+ *   (Tony's transcript, at the crates: "You can only change your Group Iron mode if you haven't been
+ *   to the mainland."). Ours: the question first, only outside a group, and Unranked can't change.
+ */
+
+const Common = require("./Common.GroupIronman");
+const Variants = require("./Variants.GroupIronman");
+
+const SIZES = [2, 3, 4, 5];
+const LINE = Object.freeze({
+  GIVEN: "There you go. Wear it with pride.",
+  ALREADY: "I think you've already got the whole set.",
+  MAINLAND: "You can only change your Group Iron mode if you haven't been to the mainland.",
+});
+const MESSAGE = Object.freeze({
+  NOT_GROUP_IRONMAN: "Only Group Ironmen can use this.",
+  NO_SPACE: "You don't have enough inventory space.",
+  CRUMBLED: "The platebody crumbles to dust as you attempt to equip it. You can get a new one from an Ironman tutor.",
+  // Ours: the crates' question, and an Unranked player at the Hardcore crate.
+  SWITCH: (label) => `Become a ${label}?`,
+  UNRANKED: "An Unranked Group Ironman can't change their Group Iron mode.",
+});
+
+const objId = (name) => Common.api.core.CacheDefinitions.getObjId(name);
+const locId = (name) => Common.api.core.CacheDefinitions.getLocId(name);
+const variantOf = (player) => Common.variantOfMode(Common.modeOf(player));
+
+function names(variant) {
+  const prefix = variant === "hardcore" ? "hardcore_group_ironman" : "group_ironman";
+  const suffix = variant === "unranked" ? "_unranked" : "";
+  return (piece) => `${prefix}_${piece}${suffix}`;
+}
+
+/** The group's size as the platebody shows it: 2 to 5. */
+function groupSize(player) {
+  return Math.max(2, Math.min(5, Common.groupOf(player).group?.members.length ?? 0));
+}
+
+/** The set of `variant` ("ranked", "hardcore", "unranked") for a group of `size`. */
+function setOf(variant, size) {
+  const name = names(variant);
+  return ["helm", `platebody0${size}`, "platelegs", "gloves"].map((piece) => objId(name(piece)));
+}
+
+function armourFor(player) {
+  return setOf(variantOf(player), groupSize(player));
+}
+
+let platebodies = null;
+/** Every numbered platebody: id -> the group size it shows. */
+function platebodySize(itemId) {
+  if (!platebodies) {
+    platebodies = new Map();
+    for (const variant of ["ranked", "hardcore", "unranked"]) {
+      for (const size of SIZES) platebodies.set(objId(names(variant)(`platebody0${size}`)), size);
+    }
+  }
+  return platebodies.get(itemId) ?? null;
+}
+
+/** Hands out what the player lacks of their set; returns the line to say. */
+function giveArmour(player) {
+  if (!Common.isGroupIronman(player)) return MESSAGE.NOT_GROUP_IRONMAN;
+  const inventory = player.getInventory();
+  const missing = armourFor(player).filter((id) => !inventory.contains(id) && !player.getEquipment().contains(id));
+  if (!missing.length) return LINE.ALREADY;
+  if (inventory.getFreeSlots() < missing.length) return MESSAGE.NO_SPACE;
+  for (const id of missing) inventory.adds(id, 1);
+  return LINE.GIVEN;
+}
+
+function tonySays(player, text, npcId = Common.api.core.CacheDefinitions.getNpcId("ironman_tutor_node") ?? 0) {
+  const { DialogueChainBuilder, NpcDialogue } = Common.api.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, text)));
+}
+
+/** Tony's Armour option. */
+function tonyArmour({ player, npc }) {
+  tonySays(player, giveArmour(player), npc?.getId?.());
+  return true;
+}
+
+/** The armour crates' Take. */
+function crate({ player, objectId }) {
+  const say = (text) => player.getPacketSender().sendMessage(text);
+  if (!Common.isGroupIronman(player)) return say(MESSAGE.NOT_GROUP_IRONMAN), true;
+  const crateVariant = objectId === locId("gim_armour_crate_hardcore") ? "hardcore" : "ranked";
+  const variant = variantOf(player);
+  if (variant === crateVariant || (variant === "unranked" && crateVariant === "ranked")) return say(giveArmour(player)), true;
+  if (variant === "unranked") return say(MESSAGE.UNRANKED), true;
+  if (Variants.isExperienced(player)) return tonySays(player, LINE.MAINLAND), true;
+  if (Common.groupOf(player).group) return Common.tell(player, "unrankedInGroup"), true;
+  Common.api.sendMultiChatboxPrompt(player, MESSAGE.SWITCH(Common.data.variants[crateVariant].label),
+    "Yes.", () => {
+      Common.setMode(player, Common.modeOfVariant(crateVariant));
+      say(giveArmour(player));
+    },
+    "No.", () => {});
+  return true;
+}
+
+/** onCanEquip: a numbered platebody for another group size crumbles. */
+function crumble(event) {
+  const { player, item } = event;
+  if (event.allow === false || !item || !Common.isGroupIronman(player)) return;
+  const size = platebodySize(item.getId());
+  if (size === null || size === groupSize(player)) return;
+  event.allow = false;
+  player.getInventory().delete(item.getId(), 1);
+  player.getPacketSender().sendMessage(MESSAGE.CRUMBLED);
+}
+
+/** "ironman:armour" { player, items }: Adam's set for a Group Ironman, numbered for their group. */
+function adamArmour(request) {
+  if (!request.items && Common.isGroupIronman(request.player)) request.items = armourFor(request.player);
+}
+
+module.exports = {
+  LINE, MESSAGE, groupSize, setOf, armourFor, platebodySize, giveArmour, tonyArmour, crate, crumble, adamArmour,
+};

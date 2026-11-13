@@ -166,10 +166,26 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   seen only by Group Ironmen), the rowboat at Tutorial Island's south end (`gim_boat`, Travel) and
   the Group ironman helm's Teleport lead there, each asking first as other teleports do
   (`TeleportHandler.confirm`). The Node's portal
-  (`gim_portal`) leads to Lumbridge. The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3233) beside Lumbridge's, are ours, both checked walkable in game.
+  (`gim_portal`) leads to Lumbridge. A Group Ironman still on the tutorial takes the rowboat after the
+  Ironman tutor and never sees the Magic Instructor (Wiki: Tutorial Island), so the crossing ends the
+  tutorial (`tutorial-island:leave`), whose destination is The Node; anyone else at the boat is told
+  "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the
+  Ironman tutor north-east of here." (Learning the Ropes' transcript). The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3233) beside Lumbridge's, are ours, both checked walkable in game.
 - **Tony** (Group Ironman tutor): his transcript; "Yes, leave my group." starts leaving; a leader's
-  "Rename group." asks for the new name. **Armour** and the armour crates hand out the set of the
-  player's mode, the platebody numbered by the group's size (II to V).
+  "Rename group." asks for the new name.
+- **Armour** (Armour): Tony's Armour hands out what the player lacks of the cache's set for their mode
+  (ranked, Hardcore, or the "(unranked)" set), the platebody numbered by the group's size (II to V; the
+  cache has no I, so a player alone gets II *(ours, the user's choice)*). Adam in Lumbridge hands out
+  the same set (`ironman:armour`). A numbered platebody that doesn't match the group's size crumbles as
+  it is equipped (Wiki): "The platebody crumbles to dust as you attempt to equip it. You can get a new
+  one from an Ironman tutor."
+- **The armour crates** (Armour crate, Hardcore armour crate; Take): the crate of the player's own mode
+  hands out its set (the Armour crate serves Unranked players too). The other crate changes the
+  player's Group Iron mode to its own, only before the mainland: after it, Tony says "You can only
+  change your Group Iron mode if you haven't been to the mainland." (his transcript, at the crates).
+  *Ours:* that the crates change the mode at all (only Tony's line says so), the question first
+  ("Become a Hardcore Group Ironman?"), "Leave your group first." for a member of a group, and
+  "An Unranked Group Ironman can't change their Group Iron mode."
 - **Maggie** (Group Storage tutor), and the chest beside her: a bank for players who haven't been
   to the mainland yet: "This bank is for new adventurers only, ..." after that.
 
@@ -215,6 +231,8 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 | `magic:spell-on-player` | answered | the creation panel's Invite used on a player |
 | `npc-drops:roll` | answered | kills for restricted items; prestige lost to outside help |
 | `tutorial-island:destination` | answered | The Node for a Group Ironman |
+| `ironman:armour` | answered | `{ player, items }`: Adam's set for a Group Ironman, numbered for their group |
+| `tutorial-island:leave` | emitted | `{ player, handled }` by the rowboat: ends the tutorial for a player still on it |
 | `npc-dialogue:choice` | answered | Tony's leave and rename, Maggie's bank |
 | `side-channels:gim-tab` | answered | `{ player, tab, group, onMount }` |
 | `side-channels:refresh` | emitted | `{ player }` after a change |

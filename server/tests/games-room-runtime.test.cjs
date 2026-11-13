@@ -144,3 +144,35 @@ test('a challenge in the lobby is not limited to a previous opponent', () => {
   room.leave(b);for(const p of [a,b,c])p.moveTo(new core.Location(2200,4960,0));a.getPacketSender().sendInterfaceRemoval();
   assert.ok(invite(a,c));
 });
+function playRunelink(a,b) {
+  invite(a,b);accept(b,a);
+  const m=room.matchOf(a),first=m.state.turn;
+  for(let i=0;i<7;i++)click(m.players[m.state.turn],`boardgames_runelink:column${m.state.turn===first?0:1}`);
+  assert.ok(m.state.result);
+  for(const p of [a,b])p.getPacketSender().sendInterfaceRemoval();
+  return m;
+}
+test('two players who walk into a ground-floor game room through its door can challenge each other', () => {
+  present();const a=actor('room-a'),b=actor('room-b');
+  for(const p of [a,b])p.moveTo(new core.Location(2219,4940,0));
+  assert.ok(invite(a,b),'no post-game pairing: the room is open');accept(b,a);
+  assert.ok(room.matchOf(a));assert.equal(room.matchOf(a),room.matchOf(b));
+});
+test('the post-game pairing ends once the previous opponent walks out of the room', () => {
+  present();const a=actor('room-a'),b=actor('room-b'),c=actor('room-c');
+  playRunelink(a,b);
+  const postGame=a.getLocation().clone();c.moveTo(postGame.clone());
+  assert.equal(invite(a,c),undefined,'still paired while both stay');
+  b.moveTo(new core.Location(2200,4960,0));room.areaOf().process(b);
+  b.moveTo(postGame.clone());
+  assert.ok(invite(a,c),'a stale opponent no longer locks the room');
+  assert.ok(invite(b,c),'nor does the returning opponent stay locked');
+});
+test('a rematch ended by the opponent leaving the area leaves no pairing behind', () => {
+  present();const a=actor('room-a'),b=actor('room-b'),c=actor('room-c');
+  playRunelink(a,b);
+  assert.ok(invite(b,a));accept(a,b);room.leave(b);
+  for(const p of [a,c])p.getPacketSender().sendInterfaceRemoval();
+  c.moveTo(a.getLocation().clone());
+  assert.ok(invite(a,c),'the rematch ended by leaving leaves no pairing behind');
+});

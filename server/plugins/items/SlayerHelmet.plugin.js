@@ -151,7 +151,7 @@ function slayerHeadwear(player) {
 }
 
 function onTask(player) {
-  const target = player.getCombat?.()?.getTarget?.();
+  const target = pluginApi.core.hitTargetOf(player);
   if (!target?.isNpc?.()) return false;
   const request = { player, npc: target.getAsNpc(), onTask: false };
   pluginApi.emitCustomEvent("slayer:on-task", request);

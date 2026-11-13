@@ -120,6 +120,7 @@ test("Keris partisans, including the Theatre of Blood and Tombs of Amascut varia
   let damage;
   let accuracy;
   require("../plugins/items/Keris.plugin").register({
+    core: { hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf },
     registerMeleeHitModifier: (fn) => { damage = fn; },
     registerMeleeAttackAccuracyModifier: (fn) => { accuracy = fn; },
   });

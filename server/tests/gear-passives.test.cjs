@@ -29,7 +29,7 @@ function buildApi({ onTask = false, fullDharoks = () => false } = {}) {
     const listeners = new Map();
     const register = (kind) => (modifier) => (modifiers[kind] ??= []).push(modifier);
     const api = {
-        core: { ItemIdentifiers, Skill, Equipment, ItemDefinition, CombatType },
+        core: { ItemIdentifiers, Skill, Equipment, ItemDefinition, CombatType, hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf },
         registerMeleeHitModifier: register('meleeHit'),
         registerRangedHitModifier: register('rangedHit'),
         registerMagicHitModifier: register('magicHit'),

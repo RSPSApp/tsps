@@ -82,6 +82,11 @@ export function hitVictimOf(attacker: Mobile): Mobile | null {
   return hitVictimScope?.attacker === attacker ? hitVictimScope.victim : null;
 }
 
+/** Who `attacker`'s hit is judged against: the victim of the hit being computed, else its combat target. */
+export function hitTargetOf(attacker: Mobile): Mobile | null {
+  return hitVictimOf(attacker) ?? attacker?.getCombat?.()?.getTarget?.() ?? null;
+}
+
 const applyModifiers = (modifiers: HitModifier[], entity: Mobile, baseHit: number): number =>
   modifiers.reduce((damage, modifier) => {
     const next = modifier(entity, damage);

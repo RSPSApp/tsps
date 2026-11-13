@@ -267,12 +267,12 @@ function rangedDamageBoost(attacker, target, value) {
 }
 
 function addToSlayerBonus(payload) {
-  if (passiveApplies(payload?.player, payload?.player?.getCombat?.()?.getTarget?.(), RANGED)) {
+  if (passiveApplies(payload?.player, core.hitTargetOf(payload?.player), RANGED)) {
     payload.numerator += 10;
   }
 }
 
-const meleeBoost = (attacker, value) => (passiveApplies(attacker, attacker?.getCombat?.()?.getTarget?.(), MELEE) ? Math.floor(value * WILDERNESS_MULTIPLIER) : value);
+const meleeBoost = (attacker, value) => (passiveApplies(attacker, core.hitTargetOf(attacker), MELEE) ? Math.floor(value * WILDERNESS_MULTIPLIER) : value);
 
 // ------------------------------------------------------------------ death
 

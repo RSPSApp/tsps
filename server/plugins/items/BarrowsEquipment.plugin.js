@@ -297,7 +297,7 @@ module.exports = {
 
     api.registerMeleeHitModifier((attacker, maxHit) => {
       if (!attacker.isNpc() || !CombatFactory.fullVeracs(attacker)) return maxHit;
-      const target = attacker.getCombat().getTarget();
+      const target = api.core.hitTargetOf(attacker);
       return target && PrayerHandler.isActivated(target, PrayerHandler.PROTECT_FROM_MELEE)
         ? Math.floor(maxHit * 2 / 3) : maxHit;
     });

@@ -269,8 +269,10 @@ test("only the pipe's cache options are hooked, so right-click Wield cannot unlo
     "Toxic blowpipe",
     "Toxic blowpipe (empty)",
   ]);
-  for (const actions of hooks.actionsByItem.values()) {
-    assert.deepEqual(Object.keys(actions).sort(), ["Check", "Uncharge", "Unload"]);
+  for (const [name, actions] of hooks.actionsByItem) {
+    // The empty toxic pipe's cache options are Dismantle and Drop; the Blazing one's Dismantle is the kit's.
+    const expected = name === "Toxic blowpipe (empty)" ? ["Check", "Dismantle", "Uncharge", "Unload"] : ["Check", "Uncharge", "Unload"];
+    assert.deepEqual(Object.keys(actions).sort(), expected);
   }
   assert.equal(hooks.buttonId, 584 << 16);
 });
@@ -454,7 +456,7 @@ test("a dart swap in a full inventory goes ahead when the whole new stack loads 
   assert.equal(f.inventory.getAmount(DRAGON_DART), 120, "the old darts take the freed slot");
   assert.equal(f.inventory.getAmount(ItemIdentifiers.RUNE_DART), 0);
   assert.equal(f.messages.length, 1);
-  assert.match(f.messages[0], /^You load 50 rune dart/);
+  assert.equal(f.messages[0], "Darts: <col=007f00>Rune dart x 50</col>. Scales: <col=007f00>5,000 (30.5%)</col>.");
 });
 
 test("a dart swap in a full inventory is still refused when part of the new stack stays behind", () => {

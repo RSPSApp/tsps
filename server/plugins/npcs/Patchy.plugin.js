@@ -5,13 +5,13 @@
  * see what you can do.", open his sewing interface (patchy). As captured (rsprox.net recording
  * 1039, rev 235, ticks 302-1384; facts in docs/patchy.md):
  * - the open: varp if1 = -1, script toplevel_mainmodal_open (-1, -1), the patchy modal, then
- *   if_setevents patchy:list -1..-1 IF_SCRIPT_TRIGGER;
+ *   if_setevents patchy:list -1..-1 IF_SCRIPT_TRIGGER, and varbit busy = 1 (cleared on close);
  * - the list is drawn by the client from the cache's patchy_data table. A pick arrives as a script
  *   trigger on patchy:list with the row's id (-1 for none), which the server sets in if1;
  * - Confirm without every ingredient: "Patchy needs the following items: <col=ef1020>A</col> &
  *   <col=ef1020>B</col>" (game message, every ingredient listed, the modal stays open);
  * - with them: the ingredients and 500 coins go, the costume piece comes, sounds 2592 and 2114
- *   (delay 10), the modal closes for an objectbox "<name>:<br><br>Patchy takes 500 coins and sews
+ *   (delay 10), a mesbox chat line, the modal closes for an objectbox "<name>:<br><br>Patchy takes 500 coins and sews
  *   your items together."; its Continue opens the interface again, nothing picked.
  */
 
@@ -22,6 +22,7 @@ const LIST = "patchy:list";
 const CONFIRM = "patchy:confirm";
 const TABLE = "patchy_data";
 const SELECTION_VARP = "if1";
+const BUSY_VARBIT = "busy";
 const MAINMODAL_OPEN_SCRIPT = 2524;
 const COINS = 995;
 const SEW_COST = 500;
@@ -68,6 +69,10 @@ function component(name) {
   return required(cache().getComponentId(name), `${name} component`);
 }
 
+function busyVarbit() {
+  return required(cache().getVarbitId(BUSY_VARBIT), `${BUSY_VARBIT} varbit`);
+}
+
 function selectionVarp() {
   return required(cache().getVarpId(SELECTION_VARP), `${SELECTION_VARP} varp`);
 }
@@ -83,6 +88,18 @@ function openSewing(player) {
   sender.sendClientScript(MAINMODAL_OPEN_SCRIPT, -1, -1);
   sender.sendInterface(interfaceId());
   sender.sendInterfaceFlagsRange(component(LIST), -1, -1, IF_SCRIPT_TRIGGER);
+  sender.sendVarbit(busyVarbit(), 1);
+}
+
+/**
+ * Live clears busy when the interface is closed (rec 1039, Close). It keeps it through the sew's
+ * objectbox; here it drops with the modal there, since an objectbox walked away from reports no
+ * close and the flag would stay set.
+ */
+function closed({ player, interfaceId: closedId }) {
+  if (closedId !== interfaceId()) return;
+  picked.delete(player);
+  player.getPacketSender().sendVarbit(busyVarbit(), 0);
 }
 
 function isOpen(player) {
@@ -110,8 +127,10 @@ function sew(player, recipe) {
   sender.sendSound(SEW_SOUND, 1, 0);
   sender.sendSound(SNIP_SOUND, 1, SNIP_SOUND_DELAY);
   sender.sendInterfaceRemoval();
-  const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = core;
+  const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, ChatType } = core;
   const text = `${itemName(recipe.combined)}:<br><br>Patchy takes ${SEW_COST} coins and sews your items together.`;
+  // The chat history gets the box's text as a mesbox line, the breaks as spaces (rec 1039, tick 1380).
+  sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new ItemStatementDialogue(0, recipe.combined, text))
     .add(new ActionDialogue(1, { execute: () => reopen(player) })));
@@ -185,6 +204,7 @@ module.exports = {
     pluginApi.onCustomEvent("npc-dialogue:action", dialogueOpen);
     pluginApi.onInterfaceActionButton(component(LIST), pick);
     pluginApi.onInterfaceActionButton(component(CONFIRM), confirm);
+    pluginApi.onCustomEvent("interface:closed", closed);
   },
-  _test: { start, openSewing, pick, confirm, dialogueOpen, loadRecipes, picked },
+  _test: { start, openSewing, pick, confirm, closed, dialogueOpen, loadRecipes, picked },
 };

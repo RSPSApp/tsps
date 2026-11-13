@@ -15,7 +15,8 @@ What the server sends on opening:
 1. varp `if1` (261) = -1: nothing picked;
 2. script `toplevel_mainmodal_open` (2524) with -1, -1;
 3. the `patchy` interface (946) as the main modal;
-4. `if_setevents patchy:list` from -1 to -1 with `IF_SCRIPT_TRIGGER`.
+4. `if_setevents patchy:list` from -1 to -1 with `IF_SCRIPT_TRIGGER`;
+5. varbit `busy` (12393) = 1 (live sends it the tick after). Closing the interface sets it back to 0.
 
 ## The list
 
@@ -33,7 +34,8 @@ row's `id`, or -1 when the row is cleared. The server sets `if1` to it.
   1. the two ingredients and 500 coins are taken;
   2. the costume piece arrives (in the capture, in a freed ingredient slot);
   3. sounds 2592, then 2114 with delay 10, play;
-  4. the interface closes for an objectbox with the piece and
+  4. a mesbox chat line with the box's text, its breaks as spaces;
+  5. the interface closes for an objectbox with the piece and
      `<name>:<br><br>Patchy takes 500 coins and sews your items together.`
 
   Continue opens the interface again, with `if1` back at -1.
@@ -45,6 +47,8 @@ row's `id`, or -1 when the row is cleared. The server sets `if1` to it.
   `Patchy needs <col=ef1020>500 coins</col> to sew those together.`
 
 There is no capture or Wiki line for either.
+
+- **Busy during the objectbox:** live keeps `busy` at 1 through the sew's objectbox. Here it drops when the modal closes and comes back on the reopen. An objectbox the player walks away from reports no close, so keeping it would leave the flag set.
 
 ## Not covered
 

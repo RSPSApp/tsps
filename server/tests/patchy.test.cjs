@@ -15,6 +15,7 @@ const BANDANA_BLUE = 7130;
 const BANDANA_EYEPATCH_BLUE = 8926;
 const IF1 = 261;
 const PATCHY = 946;
+const BUSY = 12393;
 
 let core;
 let npcOptions;
@@ -49,6 +50,8 @@ function actor(t) {
     sendInterface(id) { player.setInterfaceId(id); packets.push(["open", id]); return sender; },
     sendInterfaceFlagsRange(...args) { packets.push(["flags", ...args]); return sender; },
     sendSound(...args) { packets.push(["sound", ...args]); return sender; },
+    sendVarbit(id, value) { packets.push(["varbit", id, value]); return sender; },
+    sendTypedMessage(type, text) { messages.push(type === core.ChatType.MESBOX ? `mesbox: ${text}` : text); return sender; },
     sendInterfaceRemoval() { player.setInterfaceId(-1); packets.push(["close"]); return sender; },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   const manager = {
@@ -90,6 +93,7 @@ test("Sew opens the patchy modal as captured: if1 -1, mainmodal script, then scr
     ["script", 2524, -1, -1],
     ["open", PATCHY],
     ["flags", component("patchy:list"), -1, -1, 1 << 23],
+    ["varbit", BUSY, 1],
   ]);
 });
 
@@ -140,6 +144,8 @@ test("Confirm with the ingredients and coins sews the piece, plays the sounds an
   assert.equal(f.inventory.getItems()[8]?.getId() ?? -1, -1);
   assert.deepEqual(f.packets.filter((p) => p[0] === "sound"), [["sound", 2592, 1, 0], ["sound", 2114, 1, 10]]);
   assert.equal(f.player.getInterfaceId(), -1);
+  assert.deepEqual(f.messages, ["mesbox: Bandana eyepatch (blue):  Patchy takes 500 coins and sews your items together."]);
+  f.messages.length = 0;
   const [statement, reopen] = f.manager.entries;
   assert.equal(statement.itemId ?? statement.getItemId?.(), BANDANA_EYEPATCH_BLUE);
   assert.equal(statement.text ?? statement.getText?.(), "Bandana eyepatch (blue):<br><br>Patchy takes 500 coins and sews your items together.");
@@ -192,4 +198,16 @@ test("Talk-to's open_interface Patchy opens the interface the tick after", (t) =
   const other = { player: f.player, action: "open_interface", target: "Plank-making" };
   dialogueAction(other);
   assert.notEqual(other.handled, true);
+});
+
+test("closing the interface clears busy and the pick; other interfaces are left alone", (t) => {
+  const f = actor(t);
+  open(f);
+  trigger(f, 2);
+  f.packets.length = 0;
+  Patchy._test.closed({ player: f.player, interfaceId: 12 });
+  assert.deepEqual(f.packets, []);
+  Patchy._test.closed({ player: f.player, interfaceId: PATCHY });
+  assert.deepEqual(f.packets, [["varbit", BUSY, 0]]);
+  assert.equal(Patchy._test.picked.has(f.player), false);
 });

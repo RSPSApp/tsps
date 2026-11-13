@@ -478,7 +478,7 @@ test("Specialist: specials cost a fifth with double accuracy, a miss refunds 10%
   const dealt = (player, special, accurate) => {
     player.setSpecialPercentage(50);
     player.setSpecialActivated(special);
-    hooks.onPlayerDealtDamage({ player, target: who.main, hit: fakeHit({ isAccurate: () => accurate }) });
+    hooks.onPlayerDealtDamage({ player, target: who.main, hit: fakeHit({ isAccurate: () => accurate, getFailedAccuracyChecks: () => (accurate ? 0 : 1) }) });
     player.setSpecialActivated(false);
     return player.getSpecialPercentage();
   };
@@ -495,6 +495,38 @@ test("Specialist: specials cost a fifth with double accuracy, a miss refunds 10%
     hooks.onNpcDeath({ killer: player, damagers: [player], npc: {}, npcId: 1, location: { x: 0, y: 0, z: 0 }, remains: null });
     assert.equal(player.getSpecialPercentage(), 50);
   }
+});
+
+test("Specialist: each hitsplat of a real multi-hit special that fails its accuracy roll refunds 10%", (t) => {
+  // Wiki: "For each failed accuracy roll with a special attack, gain 10%"; on multi-hit specials each
+  // hitsplat can trigger it. The dragon claws and daggers put all their hitsplats in one PendingHit.
+  require("../plugins/combat/specials/DragonClaw.SpecialAttack")(pluginApi);
+  require("../plugins/combat/specials/DragonDagger.SpecialAttack")(pluginApi);
+  require("../plugins/combat/specials/AbyssalDagger.SpecialAttack")(pluginApi);
+  const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+  const who = cases(SPECIALIST, 5);
+  const player = who.relic;
+  const target = who.main;
+  let outcomes = [];
+  t.mock.method(AccuracyFormulasDpsCalc, "rollAccuracy", () => outcomes.shift() ?? false);
+  t.mock.method(AccuracyFormulasDpsCalc, "rollAccuracyCount", (_a, _b, _c, count) => (outcomes.shift() ?? false ? count : 0));
+  const attack = (weapon, rolls) => {
+    wield(player, weapon);
+    player.setCombatSpecial(core.CombatSpecial.getForWeaponId(weapon));
+    player.setSpecialActivated(true);
+    player.setSpecialPercentage(0);
+    outcomes = [...rolls];
+    const hit = new core.PendingHit(player, target, core.CombatFactory.getMethod(player), { delay: 0 });
+    hooks.onPlayerDealtDamage({ player, target, hit });
+    player.setSpecialActivated(false);
+    return player.getSpecialPercentage();
+  };
+  assert.equal(attack(core.ItemIdentifiers.DRAGON_CLAWS, [false, false, false, false]), 40, "claws: all four rolls miss");
+  assert.equal(attack(core.ItemIdentifiers.DRAGON_CLAWS, [false, true]), 10, "claws: the second roll lands");
+  assert.equal(attack(core.ItemIdentifiers.DRAGON_CLAWS, [true]), 0, "claws: the first roll lands");
+  assert.equal(attack(core.ItemIdentifiers.DRAGON_DAGGER, [false, false]), 20, "dragon dagger: both independent rolls miss");
+  assert.equal(attack(core.ItemIdentifiers.DRAGON_DAGGER, [true, false]), 10, "dragon dagger: one of two misses");
+  assert.equal(attack(core.ItemIdentifiers.ABYSSAL_DAGGER, [false]), 10, "abyssal dagger: one shared roll, one refund");
 });
 
 test("Last Stand: logging out mid-stand settles the boosts at base + 15 before the save", () => {

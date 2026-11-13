@@ -76,6 +76,8 @@ export class PendingHit {
     private totalDamage = 0;
     private readonly delay: number;
     private accurate: boolean;
+    /** Hitsplats whose own accuracy roll failed (a shared or skipped roll counts once or not at all). */
+    private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
     private damageBudget?: { remaining: number };
@@ -260,6 +262,11 @@ export class PendingHit {
         return this.accurate;
     }
 
+    /** How many hitsplats of this attack failed their own accuracy roll (Specialist refunds each). */
+    public getFailedAccuracyChecks(): number {
+        return this.failedAccuracyChecks;
+    }
+
     /** Whether a roll hook let this hit through protection prayers (not a special's own trait). */
     public bypassesProtectionPrayer(): boolean {
         return this.protectionBypassed;
@@ -428,6 +435,7 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            if (rollAccuracy && !this.accurate) this.failedAccuracyChecks = 1;
             // Cap the roll to the HP held when it was made, before the hit-time
             // protection/Elysian reductions, so tick-eating and XP see this value.
             capToRemaining(damage);
@@ -489,6 +497,8 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            const ownRoll = !blockedByFirstMiss && !(i > 0 && traits?.sharedAccuracyRollAcrossHits === true);
+            if (ownRoll && rollAccuracy && !this.accurate) this.failedAccuracyChecks++;
             if (i === 0 && this.requireFirstAccurate) firstAccurate = this.accurate;
             capToRemaining(damage);
             this.totalDamage += damage.getDamage();
@@ -600,6 +610,7 @@ export class PendingHit {
                     this.method.accuracyDefenceType(this.combatType)
                 );
             if (!success) {
+                this.failedAccuracyChecks = Math.min(hitCount, attempt + 1);
                 continue;
             }
             const bounds: SpecialDamageBounds = {

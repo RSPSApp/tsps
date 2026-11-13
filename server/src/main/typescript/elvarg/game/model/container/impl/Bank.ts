@@ -25,6 +25,20 @@ const INVENTORY_FULL_MESSAGE = "You don't have enough inventory space.";
 const WITHDRAW_PARTIAL_MESSAGE = "You don't have enough inventory space to withdraw that many.";
 const NEW_TAB_MESSAGE = "To create a new tab, drag items from your bank onto this tab.";
 
+type BankDragPacket = {
+    sourceWidgetId: number; sourceSlot: number; sourceItemId: number;
+    targetWidgetId: number; targetSlot: number;
+};
+
+type BankWidgetPacket = {
+    groupId: number;
+    childId: number;
+    buttonNum: number;
+    option?: string;
+    slot?: number;
+    itemId?: number;
+};
+
 export class Bank extends ItemContainer {
     full(): ItemContainer {
         const event = { player: this.getPlayer(), message: "Not enough space in bank." };
@@ -581,10 +595,11 @@ export class Bank extends ItemContainer {
      * Handles a drag (IF_BUTTOND) within the bank or its inventory panel.
      * Returns false for drags the bank doesn't own.
      */
-    public static handleDrag(player: Player, drag: {
-        sourceWidgetId: number; sourceSlot: number; sourceItemId: number;
-        targetWidgetId: number; targetSlot: number;
-    }): boolean {
+    public static handleDrag(player: Player, drag: BankDragPacket): boolean {
+        return Bank.abortingPrompt(player, () => Bank.dragBankWidget(player, drag));
+    }
+
+    private static dragBankWidget(player: Player, drag: BankDragPacket): boolean {
         const sourceGroup = drag.sourceWidgetId >>> 16, sourceChild = drag.sourceWidgetId & 0xffff;
         const targetGroup = drag.targetWidgetId >>> 16, targetChild = drag.targetWidgetId & 0xffff;
         const fromBank = sourceGroup === Bank.MAIN_INTERFACE_ID && sourceChild === Bank.ITEMS_CHILD;
@@ -850,14 +865,25 @@ export class Bank extends ItemContainer {
         EquipPacketListener.equip(player, itemId, slot, Inventory.INTERFACE_ID);
     }
 
-    public static handleWidgetAction(player: Player, packet: {
-        groupId: number;
-        childId: number;
-        buttonNum: number;
-        option?: string;
-        slot?: number;
-        itemId?: number;
-    }): boolean {
+    public static handleWidgetAction(player: Player, packet: BankWidgetPacket): boolean {
+        return Bank.abortingPrompt(player, () => Bank.handleBankWidget(player, packet));
+    }
+
+    /**
+     * Captures (rsprox_transcripts/235/00960.txt cycle 4244, a click; 237/04064.txt line 15732, a
+     * drag): another bank op with the "Enter amount:" prompt still open runs, then the server aborts
+     * the prompt. An op that asks for an amount again replaces it instead.
+     */
+    private static abortingPrompt(player: Player, op: () => boolean): boolean {
+        const pending = player.getEnteredAmountAction?.();
+        const handled = op();
+        if (handled && pending && player.getEnteredAmountAction?.() === pending) {
+            player.getPacketSender().abortInputPrompt();
+        }
+        return handled;
+    }
+
+    private static handleBankWidget(player: Player, packet: BankWidgetPacket): boolean {
         if (!Bank.isOpen(player)) return false;
 
         // Capture (bank search): picking a tab heading switches to that tab and ends the search.

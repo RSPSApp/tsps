@@ -374,7 +374,7 @@ function click(event) {
         action > 10
     )
         return;
-    player.setEnteredAmountAction(null);
+    player.getPacketSender().abortInputPrompt();
     const farm = session.farm,
         settings = farm.vaultSettings;
     if (popup) {
@@ -513,7 +513,7 @@ function drag(event) {
         (packet.targetItemId > 0 && packet.targetItemId !== display(order[to]))
     )
         return;
-    player.setEnteredAmountAction(null);
+    player.getPacketSender().abortInputPrompt();
     [order[from], order[to]] = [order[to], order[from]];
     changed(player);
 }

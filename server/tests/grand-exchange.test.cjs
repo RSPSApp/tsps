@@ -1056,6 +1056,32 @@ for (const [kind, arm] of [['count', armCount], ['text', armText]]) {
     assert.equal(player.syntax, null);
   });
 
+  test(`IF_CLOSE aborts a ${kind} prompt when a plugin or a close-on-close overlay takes the close`, async t => {
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    for (const route of ['handled', 'overlay']) {
+      const { player, frames } = promptWithNoInterface(arm);
+      const closed = [];
+      player.packetSender.closeInterface = groupId => { closed.push(groupId); return player.packetSender; };
+      if (route === 'overlay') player.getAttribute = key => (key === 'interface:close-on-interface-close' ? 1234 : undefined);
+      player.setAttribute = () => {};
+      const hooks = PluginManager.customEventHooks.get('interface:close') ?? [];
+      const takeClose = event => { if (route === 'handled' && event.player === player) event.handled = true; };
+      PluginManager.customEventHooks.set('interface:close', [...hooks, { handler: takeClose }]);
+      try {
+        const connection = new ClientConnection({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+          send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+        connection.player = player;
+        await connection.dispatch([{ type: 'interface_close' }], true);
+      } finally {
+        PluginManager.customEventHooks.set('interface:close', hooks);
+      }
+      assert.equal(aborts(frames), 1, route);
+      assert.equal(player.amount, null, route);
+      assert.equal(player.syntax, null, route);
+      assert.deepEqual(closed, route === 'overlay' ? [1234] : [], route);
+    }
+  });
+
   test(`a trade or duel keeps its ${kind} prompt when the player walks`, () => {
     for (const status of [PlayerStatus.TRADING, PlayerStatus.DUELING]) {
       const { player, frames } = promptWithNoInterface(arm);

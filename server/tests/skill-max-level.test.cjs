@@ -764,6 +764,7 @@ function feedbackPlayer(core) {
     getInventory: () => inventory, getEquipment: () => ({ contains: () => false }), getPacketSender: () => sender,
     getMovementQueue: () => ({ size: () => 0 }), getForceMovement: () => null,
     isRegistered: () => true, getHitpoints: () => 99,
+    prayerPointDrain: 7, setPrayerPointDrain(drain) { p.prayerPointDrain = drain; },
     getUsername: () => "feedback-test", getDisplayName: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
     performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
     getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
@@ -1695,32 +1696,44 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   assert.ok(!Sounds.knownSoundNames().includes("PRAYERON"));
 
   const interactions = new Map();
+  let menu = null;
   require("../plugins/objects/Altars.plugin").register({
     core,
     onObjectInteraction: (name, actions) => interactions.set(name, actions),
+    sendMultiChatboxPrompt: (_player, title, ...pairs) => { menu = { title, pairs }; },
     // The spellbooks' quests (Desert Treasure I, Lunar Diplomacy) are done: this is about the switches' audio.
     emitCustomEvent: (name, query) => { if (name === "quest:is-complete") query.complete = true; },
   });
   const change = core.MagicSpellbook.changeSpellbook;
-  core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; };
+  core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; return true; }; // the real one returns true
   // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself.
   const emit = PluginManager.emitCustomEvent;
   PluginManager.emitCustomEvent = (name, query) => { if (name === "quest:is-complete") query.complete = true; else return emit.call(PluginManager, name, query); };
   try {
+    // The Altar of the Occult plays its own recorded switch sound, 1097 (b5c0de7f8; occult-altar-switch.test.cjs).
     const cases = [["Ancient Altar", "Venerate", core.MagicSpellbook.ANCIENT],
       ["Lunar Altar", "Venerate", core.MagicSpellbook.LUNAR],
       ["Dark Altar", "Venerate", core.MagicSpellbook.ARCEUUS],
-      ["Altar of the Occult", "Venerate", core.MagicSpellbook.NORMAL],
       ...["Standard", "Ancient", "Lunar", "Arceuus"].map((action, i) =>
         ["Altar of the Occult", action, [core.MagicSpellbook.NORMAL, core.MagicSpellbook.ANCIENT,
           core.MagicSpellbook.LUNAR, core.MagicSpellbook.ARCEUUS][i]])];
+    const sounds = (p) => p.sent.filter(([type]) => type === "sendSoundEffect").map(([, id]) => id);
     for (const [name, action, expected] of cases) {
       const p = feedbackPlayer(core);
       p.getSpellbook = () => core.MagicSpellbook.NORMAL;
       assert.equal(interactions.get(name)[action]({ player: p, objectId: ObjectIds.ALTAR_OF_THE_OCCULT }), true);
       assert.equal(p.spellbook, expected, `${name}: ${action}`);
-      assert.deepEqual(p.sent.filter(([type]) => type === "sendSoundEffect"), [["sendSoundEffect", 2674, 0, 0, 1]]);
+      assert.deepEqual(sounds(p), [name === "Altar of the Occult" ? 1097 : 2674], `${name}: ${action}`);
     }
+    // Its Venerate offers the other three books; a pick switches with the same sound.
+    const p = feedbackPlayer(core);
+    p.getSpellbook = () => p.spellbook ?? core.MagicSpellbook.NORMAL;
+    assert.equal(interactions.get("Altar of the Occult").Venerate({ player: p, objectId: ObjectIds.ALTAR_OF_THE_OCCULT }), true);
+    assert.deepEqual(menu.pairs.filter((_, i) => i % 2 === 0), ["Ancient", "Lunar", "Arceuus"]);
+    assert.deepEqual(sounds(p), [], "the menu itself is silent");
+    menu.pairs[menu.pairs.indexOf("Lunar") + 1](p);
+    assert.equal(p.spellbook, core.MagicSpellbook.LUNAR);
+    assert.deepEqual(sounds(p), [1097]);
   } finally { core.MagicSpellbook.changeSpellbook = change; PluginManager.emitCustomEvent = emit; }
 
   assert.deepEqual(Music.tracksAt(1310, 10205, 0).map(id => Music.trackNames()[id]), ['Ful to the Brim', 'Kanon of Kahlith', 'Way of the Wyrm']);
@@ -1752,6 +1765,7 @@ test("the cache Shrine of Ralos Bask action restores Prayer without reducing boo
     assert.deepEqual(player.messages, [restored ? "You recharge your Prayer points." : "You already have full Prayer points."]);
     assert.deepEqual(player.animations, restored ? [645] : []);
     assert.equal(player.sent.filter(([type, id]) => type === "sendSoundEffect" && id === 2674).length, restored ? 1 : 0);
+    if (restored) assert.equal(player.prayerPointDrain, 0, "praying clears the drain counter (b0ffb7704)");
   }
 });
 

@@ -3904,6 +3904,7 @@
       "at": [1438,10098,2],
       "level": 73,
       "xp": 3.2,
+      "keepAnimation": true,
       "route": [1438,10097,2],
       "steps": [
         {"sound":2454,"loops":2,"delay":12},

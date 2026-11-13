@@ -1377,6 +1377,7 @@ test("the Chasm of Fire platform edge drops a floor, as captured (73 Agility, 3.
   assert.deepEqual(player.state.spam, ["You slide off the lip of the platform, landing on the one below."]);
   assert.deepEqual(tileOf(player), [1438, 10098, 1]);
   assert.equal(player.state.xp, 3.2);
+  assert.deepEqual(animations.map(([id]) => id), [827], "no sequence reset at landing (none in the captures)");
 
   const novice = createPlayer(1438, 10097, 2, 72);
   hooks.click.get(56371)({ player: novice, object, objectId: 56371, clickType: 1, location: { x: 1438, y: 10098, z: 2 }, handled: false });

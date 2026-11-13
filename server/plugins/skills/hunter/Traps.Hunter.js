@@ -15,7 +15,8 @@ const CLOSING_TICKS = 2;
 // Reset lays the trap again three ticks after the dismantle (captures 1108, 1871, 4002).
 const RESET_LAY_TICKS = 3;
 const DISMANTLE_SOUND = 2632;
-// rsprox captures play the net dismantle sound with the animation, 25 client cycles late.
+// A full net trap's Check and Reset play the dismantle sound with the animation, 25 client cycles late;
+// dismantling a set net trap plays it at once.
 const NET_DISMANTLE_SOUND_DELAY = 25;
 // Trap area sounds (setting up, trapping, full, dismantling a caught box) reach 5 tiles.
 const TRAP_SOUND_RADIUS = 5;
@@ -151,15 +152,30 @@ function setState(trap, state, creature = null, animatedId = null) {
   const def = H.data.traps[trap.kind];
   const id = animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
   const base = trap.base;
-  if (def.tree) {
+  if (def.tree && state === "idle") {
     spawn(trap, def.idleTree, base.getLocation(), base.getType(), base.getFace());
-    const [dx, dy] = [[0, 1], [1, 0], [0, -1], [-1, 0]][base.getFace() & 3];
-    const loc = base.getLocation().clone().add(dx, dy);
+    spawn(trap, id, netTile(trap), base.getType(), base.getFace());
+  } else if (def.tree) {
+    // The closing, caught and failed nets are one 1x2 loc over the tree and net tiles, placed on the south-west one.
+    const tree = base.getLocation(), net = netTile(trap);
+    const loc = new H.core.Location(Math.min(tree.getX(), net.getX()), Math.min(tree.getY(), net.getY()), tree.getZ());
     spawn(trap, id, loc, base.getType(), base.getFace());
   } else {
     spawn(trap, id, trap.location, base?.getType() ?? 10, base?.getFace() ?? 0);
   }
   sendTimer(trap);
+}
+
+/** A net trap's net tile: beside its young tree, on the side the tree faces. */
+function netTile(trap) {
+  const [dx, dy] = [[0, 1], [1, 0], [0, -1], [-1, 0]][trap.base.getFace() & 3];
+  return trap.base.getLocation().clone().add(dx, dy);
+}
+
+/** Where the trap's own area sounds play and its items fall: a net trap's net tile, else the trap's loc. */
+function trapTile(trap) {
+  if (H.data.traps[trap.kind]?.tree && trap.base) return netTile(trap);
+  return trap.objects.at(-1)?.getLocation() ?? trap.location;
 }
 
 function sendTimer(trap) {
@@ -173,7 +189,7 @@ function sendTimer(trap) {
 
 function trapSound(trap, soundId) {
   if (!soundId) return;
-  const at = trap.objects.at(-1)?.getLocation() ?? trap.location;
+  const at = trapTile(trap);
   H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS, source: trap.player });
 }
 
@@ -181,9 +197,10 @@ function trapSound(trap, soundId) {
  * Laying, from rsprox captures (box 4002, 1104, 1108; bird snare 70, 1102, 1788; nets 1108, 1115, 1858;
  * deadfall 1105, 1108, 1757): the animation, the set-up sound and the spam line come at once. A trap
  * from the inventory goes on the floor until the loc replaces it (box 2 ticks, bird snare 3); a tree
- * or boulder turns into its setting loc and the trap stands a tick later.
+ * or boulder turns into its setting loc and the trap stands a tick later. With `lead`, the setting loc
+ * goes up that many ticks before the animation, sound and line (a net trap's Reset).
  */
-function lay(player, kind, location, base = null, ground = null, layTicks = null) {
+function lay(player, kind, location, base = null, ground = null, layTicks = null, lead = 0) {
   if (!nearby(player, base ?? { getPrivateArea: () => player.getPrivateArea(), getLocation: () => location }, 2)
     || !canLay(player, kind, location, base, ground)) return;
   const def = H.data.traps[kind];
@@ -193,7 +210,21 @@ function lay(player, kind, location, base = null, ground = null, layTicks = null
     removeObject(setting); setting = null;
     H.core.ObjectManager.register(base, true);
   };
-  if (!begin(player, layTicks ?? def.layTicks ?? 3, def.animation, () => {
+  const announce = () => {
+    if (setting && def.settingAnimation) {
+      for (const viewer of new Set([player, ...(H.core.World.getNearbyPlayersForUpdate?.(player) ?? [])])) {
+        viewer.getPacketSender().sendObjectAnimation(setting, new H.core.Animation(def.settingAnimation));
+      }
+    }
+    if (def.laySound && kind !== "pit") {
+      if (def.layAreaSound) trapSound({ player, objects: [], location: base?.getLocation() ?? location }, def.laySound);
+      else player.getPacketSender().sendSound(def.laySound, 1, 0);
+    }
+    const message = def.layMessage ?? (def.item ? "You begin setting up the trap." : null);
+    if (message) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, message);
+  };
+  const step = lead ? { ticks: lead, run: () => { player.performAnimation(new H.core.Animation(def.animation)); announce(); } } : null;
+  if (!begin(player, (layTicks ?? def.layTicks ?? 3) + lead, lead ? null : def.animation, () => {
     restore();
     if (!canLay(player, kind, location, base, placed)) return;
     if (placed) {
@@ -215,7 +246,7 @@ function lay(player, kind, location, base = null, ground = null, layTicks = null
         if (queue.canWalk(dx, dy)) { queue.walkStep(dx, dy); break; }
       }
     }
-  }, restore, { reset: !def.keepsAnimation })) return;
+  }, restore, { reset: !def.keepsAnimation, step })) return;
   if (!placed && def.item && exchange(player, [[def.item, 1]], [])) {
     placed = H.core.ItemOnGroundManager.registerLocation(player, new H.core.Item(def.item, 1), location.clone());
   }
@@ -223,18 +254,8 @@ function lay(player, kind, location, base = null, ground = null, layTicks = null
     H.core.ObjectManager.deregister(base, true);
     setting = new H.core.GameObject(def.setting, base.getLocation().clone(), base.getType(), base.getFace(), base.getPrivateArea());
     H.core.ObjectManager.register(setting, true);
-    if (def.settingAnimation) {
-      for (const viewer of new Set([player, ...(H.core.World.getNearbyPlayersForUpdate?.(player) ?? [])])) {
-        viewer.getPacketSender().sendObjectAnimation(setting, new H.core.Animation(def.settingAnimation));
-      }
-    }
   }
-  if (def.laySound && kind !== "pit") {
-    if (def.layAreaSound) trapSound({ player, objects: [], location: base?.getLocation() ?? location }, def.laySound);
-    else player.getPacketSender().sendSound(def.laySound, 1, 0);
-  }
-  const message = def.layMessage ?? (def.item ? "You begin setting up the trap." : null);
-  if (message) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, message);
+  if (!lead) announce();
 }
 
 function releasePrey(trap) {
@@ -296,9 +317,10 @@ function collect(event, reset = false, check = true) {
     for (const line of dismantleLines(trap).slice(def.dismantleTicks === 1 ? 1 : 0)) {
       player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
     }
-    if (reset) begin(player, RESET_LAY_TICKS, null, () => lay(player, kind, location, base, null, def.resetLayTicks ?? null));
+    if (reset) begin(player, def.resetDelay ?? RESET_LAY_TICKS, null,
+      () => lay(player, kind, location, base, null, def.resetLayTicks ?? null, def.resetSettingLead ?? 0), undefined, { reset: !def.keepsAnimation });
   }, undefined, { reset: !def.keepsAnimation })) return true;
-  if (def.dismantleSoundFirst) player.getPacketSender().sendSound(DISMANTLE_SOUND, 1, NET_DISMANTLE_SOUND_DELAY);
+  if (def.dismantleSoundFirst) player.getPacketSender().sendSound(DISMANTLE_SOUND, 1, trap.state === "caught" ? NET_DISMANTLE_SOUND_DELAY : 0);
   if (def.dismantleTicks === 1) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, "You dismantle the trap.");
   return true;
 }
@@ -416,6 +438,7 @@ function attempt(trap) {
   if (closing) {
     trap.closing = { due: H.tick + CLOSING_TICKS, success, creature };
     setState(trap, "closing", null, closing);
+    if (success) trapSound(trap, H.data.traps[trap.kind].catchSound);
     trapSound(trap, H.data.traps[trap.kind].trappingSound);
   } else setState(trap, success ? "caught" : "failed", success ? creature : null);
   if (success) {
@@ -452,7 +475,7 @@ function process() {
       continue;
     }
     if (H.tick >= trap.expires) {
-      drop(trap.player, returnedItems(trap), trap.location, trap.area);
+      drop(trap.player, returnedItems(trap), H.data.traps[trap.kind].tree ? trapTile(trap) : trap.location, trap.area);
       remove(trap);
       const [message, type] = H.data.traps[trap.kind].collapse ?? ["Your trap has collapsed.", H.core.ChatType.GAME];
       trap.player.getPacketSender().sendTypedMessage(type, message);

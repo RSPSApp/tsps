@@ -1006,3 +1006,16 @@ is source-confirmed; the OOM's precise allocation cause remains untraced. The
 original offer-absence evidence is upstream of these changes and is retained;
 it does not claim execution of the corrected fixture bytes. Any corrected fixed
 subject requires its own independent exact admission and original execution.
+
+The corrected `9eb8a02b` run completed the game suite with 256 passes and three
+fixture failures; later suites were unreached. Its source, compiled output and
+cache post-run content checks passed. The failures were an expectation that stopped
+hazard history was absent after the empty-roster start transition, and two literal
+`false` expectations where never-registered NPCs canonically return `undefined`.
+The next fixture correction keeps an explicit last-staging-tick no-spawn check,
+then verifies both stopped initial NPCs are absent from actual World slots, add and
+remove queues, the area index and attached entities after cleanup and 120 ticks.
+Never-registered checks use canonical falsey semantics with the same concrete
+absence checks. It changes no production behavior or hazard requirement. These
+failed runs and the upstream original baseline remain distinct evidence; no full
+340-test result is established by their partial results.

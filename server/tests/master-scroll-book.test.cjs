@@ -320,3 +320,82 @@ test("at sea with only the empty book, 597's Activate reads a stored scroll past
   assert.deepEqual(f.messages.filter((m) => /no longer have/.test(m)), []);
   assert.equal(Book._test.countOf(f.p, "watson"), 19);
 });
+
+test("at sea, a stored Zul-andra teleport asks the boat warning first and is spent on the yes", (t) => {
+  const f = actor(t);
+  give(f, BOOK);
+  stock(f, { zulandra: 5 }, 12);
+  aboard(t, f);
+  op(f, "Teleport");
+  assert.equal(Book._test.countOf(f.p, "zulandra"), 5, "nothing spent while the warning asks");
+  answerBoatWarning(f, (w) => w.NO);
+  ticks(6);
+  assert.equal(Book._test.countOf(f.p, "zulandra"), 5);
+  assert.equal(f.p.getLocation().getX(), GE[0]);
+  op(f, "Teleport");
+  answerBoatWarning(f, (w) => w.YES);
+  assert.equal(Book._test.countOf(f.p, "zulandra"), 4);
+  ticks(6);
+  const at = f.p.getLocation();
+  assert.ok(Math.abs(at.getX() - 2195) <= 3 && Math.abs(at.getY() - 3057) <= 3, `landed at ${at.getX()},${at.getY()}`);
+});
+
+test("597's Revenant caves Activate submenu picks the entrance over the configured one", async (t) => {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const uid = C.getComponentId("bookofscrolls:teleportscroll_revenants");
+  // The decoded if_button's subOpId is 1-based (ClientProtocol); 3 is southern, 1 northern.
+  for (const [subOpId, question] of [[3, "Teleport to the Wilderness?"], [1, "Teleport to deep Wilderness?"]]) {
+    const f = actor(t);
+    give(f, BOOK);
+    stock(f, { revenants: 2 });
+    // Configured: northern for the southern pick, southern for the northern one.
+    f.p.setAttribute("revenant-caves:scroll-location", subOpId === 3 ? 0 : 2);
+    op(f, "Open");
+    const connection = new ClientConnection(f.p.getSession().getChannel());
+    connection.player = f.p;
+    // Through the network's widget_action dispatch, sub-op and all.
+    await connection.dispatch([{ type: "widget_action", widgetId: uid, groupId: uid >>> 16, childId: uid & 0xffff, buttonNum: 1, opId: 1, subOpId, slot: -1, itemId: -1 }]);
+    connection.processTurnPackets();
+    assert.equal(prompt(f)?.title, question, `submenu ${subOpId}`);
+  }
+});
+
+test("a dangerous PvP death loses every stored scroll to the killer (Wiki); a PvM death keeps them", (t) => {
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  for (const pvp of [true, false]) {
+    const f = actor(t);
+    const killer = pvp ? actor(t).p : null;
+    give(f, BOOK);
+    give(f, EMPTY_BOOK);
+    stock(f, { watson: 1000, zulandra: 7 });
+    f.p.setSkullTimer(100);
+    const floor = [];
+    t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item) => floor.push(item));
+    PlayerDeathTask.returnKeptItems(f.p, PlayerDeathTask.dropItems(f.p, killer, f.p.getLocation()));
+    t.mock.restoreAll();
+    const onFloor = (id) => floor.filter((item) => item.getId() === id).reduce((n, item) => n + item.getAmount(), 0);
+    if (pvp) {
+      // Once, though two books were carried.
+      assert.equal(onFloor(WATSON), 1000);
+      assert.equal(onFloor(ZULANDRA), 7);
+      assert.equal(Book._test.countOf(f.p, "watson"), 0);
+      assert.equal(varbit(f, "bookofscrolls_watson_highbits"), 0);
+      assert.equal(varbit(f, "bookofscrolls_zulandra"), 0);
+      assert.equal(f.p.getAttribute("master-scroll-book:scrolls"), null);
+    } else {
+      assert.equal(onFloor(WATSON), 0);
+      assert.equal(Book._test.countOf(f.p, "watson"), 1000);
+      assert.equal(Book._test.countOf(f.p, "zulandra"), 7);
+    }
+  }
+});
+
+test("at sea, the inventory Zul-andra teleport asks the same warning (one reader for both)", (t) => {
+  const f = actor(t);
+  give(f, ZULANDRA, 2);
+  aboard(t, f);
+  op(f, "Teleport", ZULANDRA);
+  assert.equal(f.inv.getAmount(ZULANDRA), 2);
+  answerBoatWarning(f, (w) => w.YES);
+  assert.equal(f.inv.getAmount(ZULANDRA), 1);
+});

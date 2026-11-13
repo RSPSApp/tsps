@@ -283,7 +283,8 @@ function click(event) {
   const op = Number(event.opId ?? event.action);
   if (op === OP_ACTIVATE) {
     player.getPacketSender().sendInterfaceRemoval();
-    readStored(player, entry);
+    // Revenant caves' Activate has the scroll's three entrance submenus (script bookofscrolls_populate).
+    readStored(player, entry, event.subOpId > 0 ? event.subOpId : undefined);
   } else if (op === OP_SET_DEFAULT) {
     askDefault(player, entry);
   } else if (op === OP_REMOVE) {
@@ -292,6 +293,27 @@ function click(event) {
     api.emitCustomEvent("teleport-scroll:configure", { player, itemId: entry.itemId, handled: false });
   }
 }
+
+// ------------------------------------------------------------------ death
+
+/**
+ * Wiki: a dangerous PvP death with the book on them loses every stored scroll to the killer. The
+ * storage death hook (Events.StorageItems) empties a container only on a PvP death (no
+ * keptInPvp), so other deaths keep the counts; a second book carried finds them already gone.
+ */
+const deathContainer = {
+  holds: isBook,
+  empty(player) {
+    const contents = [];
+    for (const entry of scrollTable()) {
+      const count = countOf(player, entry.key);
+      if (count <= 0) continue;
+      contents.push({ id: entry.itemId, amount: count });
+      setCount(player, entry.key, 0);
+    }
+    return contents;
+  },
+};
 
 function closed({ player, interfaceId: closedId }) {
   if (closedId === interfaceId()) sendVarbit(player, BUSY_VARBIT, 0, true);
@@ -312,6 +334,7 @@ module.exports = {
     api.onItemAction(EMPTY_BOOK, { Open: open });
     api.onInterfaceActionClick(click);
     api.onCustomEvent("interface:closed", closed);
+    api.onCustomEvent("storage:death-containers", (query) => query.containers.push(deathContainer));
   },
-  _test: { useOnBook, teleport, removeDefault, open, click, countOf, defaultIndex, scrollTable, MESSAGE },
+  _test: { deathContainer, useOnBook, teleport, removeDefault, open, click, countOf, defaultIndex, scrollTable, MESSAGE },
 };

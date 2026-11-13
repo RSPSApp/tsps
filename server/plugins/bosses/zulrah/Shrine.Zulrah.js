@@ -139,10 +139,28 @@ function readTeleport(event) {
   Shared.options(player, "Leave Zulrah's shrine?", "Yes.", () => toZulAndra(player), "No.", () => {});
 }
 
-/** The Zul-andra teleport scrolls in Zulrah's loot (Wiki: teleport to Zul-Andra). */
+/**
+ * A Zul-andra teleport scroll read (Wiki: teleport to Zul-Andra), from the inventory or stored in
+ * the Master scroll book: asked first where a warning applies (the boat at sea), spent on the yes.
+ */
+function readFrom(player, source) {
+  const { TeleportHandler } = Shared.core();
+  const destination = Shared.loc(Shared.ZUL_ANDRA);
+  if (!source.has() || !TeleportHandler.checkReqs(player, destination)) return;
+  TeleportHandler.confirm(player, destination, () => {
+    if (!source.spend()) return;
+    TeleportHandler.teleport(player, destination, scrollType(), false);
+  }, 20, { item: source.item });
+}
+
+/** The Zul-andra teleport scrolls in Zulrah's loot. */
 function readScroll({ player, itemId }) {
-  if (!player.getInventory().contains(itemId)) return true;
-  if (toZulAndra(player)) player.getInventory().delete(itemId, 1);
+  const inventory = player.getInventory();
+  readFrom(player, {
+    item: itemId,
+    has: () => inventory.contains(itemId),
+    spend: () => inventory.contains(itemId) && (inventory.delete(itemId, 1), true),
+  });
   return true;
 }
 
@@ -150,7 +168,7 @@ function readScroll({ player, itemId }) {
 function readStoredScroll(request) {
   if (request.handled || Shared.core().ItemDefinition.forId(request.itemId)?.getName?.() !== ZUL_ANDRA_SCROLL) return;
   request.handled = true;
-  if (request.source.has() && toZulAndra(request.player)) request.source.spend();
+  readFrom(request.player, request.source);
 }
 
 /** On a free tile beside the player, north-east first; under them if none is free. */

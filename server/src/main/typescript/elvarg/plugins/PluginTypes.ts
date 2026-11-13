@@ -880,6 +880,8 @@ export interface PluginInterfaceActionClickEvent {
   itemId?: number;
   slot?: number;
   option?: string;
+  /** The op's submenu entry, 1-based (absent or 0 for none). */
+  subOpId?: number;
   targetWidgetId?: number;
   targetSlot?: number;
   targetItemId?: number;

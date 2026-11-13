@@ -49,7 +49,10 @@ player's varbits.
 - Ours: Teleport with no default set, or with none of the default left, opens the book.
 - Ours: a scroll used on the empty book turns it into the book (the empty one has only Open,
   which opens 597).
-- Not done: a dangerous PvP death that gives the stored scrolls to the killer (Wiki).
+- Wiki: a dangerous PvP death with the book on them loses every stored scroll to the killer. The
+  book is a `storage:death-containers` container with no `keptInPvp`, so only a PvP death empties
+  it (once, with two books carried) and the scrolls drop with the rest of the loot. A PvM death
+  keeps the counts.
 
 ## Reading a stored scroll
 
@@ -59,5 +62,7 @@ that scroll from the inventory reads it the same way: the same checks, prompts, 
 quest lock. The first listener that takes it sets `handled`:
 `SpellTeleports` (the `scrolls` in `teleport-tablets.json`), `RevenantCaves`, `Shrine.Zulrah`
 and `Scroll.TormentedDemons`. `spend()` takes one from the book once the reader's checks pass,
-where it would have deleted the inventory scroll. The source's `item` is what `TeleportHandler.confirm` checks is still carried after a warning's yes (the boat-at-sea warning): the scroll for an inventory read, the book for a stored one. The Revenant caves entry's Config emits
+where it would have deleted the inventory scroll. The source's `item` is what `TeleportHandler.confirm` checks is still carried after a warning's yes (the boat-at-sea warning): the scroll for an inventory read, the book for a stored one. The Revenant caves entry's Activate has the scroll's three entrance submenus (script
+`bookofscrolls_populate`); the click's `subOpId` (passed to interface hooks by `NetworkBuilder`)
+picks the entrance as the scroll's own submenu does. Its Config emits
 `teleport-scroll:configure`, which RevenantCaves answers with the scroll's own Config menu.

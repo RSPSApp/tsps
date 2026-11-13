@@ -885,10 +885,15 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
       });
       return true;
     }
-    ObstacleRunner.run({ player, object }, [
-      { sound: THRONE_ROOM_DOOR_SOUND },
-      { walk: [[crossing.destination.x, crossing.destination.y]] },
-    ]);
+    // A player beside the doorway steps onto its approach tile first, then across.
+    const from = player.getLocation();
+    const path = from.getX() === crossing.approach.x && from.getY() === crossing.approach.y
+      ? [] : [[crossing.approach.x, crossing.approach.y]];
+    if (path.length && Math.max(Math.abs(from.getX() - crossing.approach.x), Math.abs(from.getY() - crossing.approach.y)) > 1) {
+      return true;
+    }
+    path.push([crossing.destination.x, crossing.destination.y]);
+    ObstacleRunner.run({ player, object }, [{ sound: THRONE_ROOM_DOOR_SOUND }, { walk: path }]);
     return true;
   }
 

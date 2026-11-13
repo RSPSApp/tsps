@@ -86,6 +86,14 @@ test("once the guard has let a hero pass, the doors walk them in and out", (t) =
   assert.deepEqual(at(p), OUTSIDE_SOUTH);
 });
 
+test("from beside the doorway the player steps onto it first, never across the wall corner", (t) => {
+  const p = player(t, [2505, 3863, 1]);
+  open(p, NORTH_DOOR, FACE_NORTH);
+  p.getMovementQueue().process(); core.TaskManager.process();
+  settle(p);
+  assert.deepEqual(at(p), OUTSIDE_NORTH);
+});
+
 test("leaving through the north door needs no audience", (t) => {
   const p = player(t, NORTH_DOOR);
   open(p, NORTH_DOOR, FACE_NORTH);

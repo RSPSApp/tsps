@@ -17,6 +17,7 @@ const { GameConstants } = require("../dist/game/GameConstants");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { DamageFormulas: Damage } = require("../dist/game/content/combat/formula/DamageFormulas");
 const { AccuracyFormulasDpsCalc: Accuracy } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
 const { TimerKey } = require("../dist/util/timers/TimerKey");
 
 const core = PluginManager.getCoreApi();
@@ -308,6 +309,50 @@ test("Shatter stacks: one an attack up to 14, shown in the varbit; teleporting, 
   assert.equal(Lithic._test.stacks(p), 3, "one lost after 50 ticks out of combat");
   PluginManager.emitCustomEvent("teleport:landed", { player: p });
   assert.equal(Lithic._test.stacks(p), 0, "teleporting loses them");
+});
+
+test("entering an instance loses the stacks at once, with no cast or query inside, and the varbit shows it", () => {
+  const p = player();
+  Lithic._test.setStacks(p, 14);
+  const varbit = core.CacheDefinitions.getVarbitId("lithic_sceptre_shatter_stacks");
+  const instance = new (class EchoTestInstance extends PrivateArea {})();
+  instance.add(p);
+  assert.equal(Lithic._test.stacks(p), 0, "lost on entry");
+  assert.deepEqual(p.varbits.filter(([id]) => id === varbit).at(-1), [varbit, 0], "the client is told on entry");
+  instance.remove(p);
+  const query = { player: p, stacks: -1, consume: 0, consumed: false };
+  PluginManager.emitCustomEvent("lithic-sceptre:stacks", query);
+  assert.equal(query.stacks, 0, "none left after leaving again");
+  Lithic._test.setStacks(p, 6);
+  instance.add(p);
+  instance.add(p);
+  assert.equal(Lithic._test.stacks(p), 0);
+  Lithic._test.setStacks(p, 4);
+  instance.add(p);
+  assert.equal(Lithic._test.stacks(p), 4, "only joining the instance loses them, not staying in it");
+  instance.remove(p);
+});
+
+test("Explosive Shatter: no energy, Overly Draining doesn't block it, and fewer than 5 stacks refuse the bar", () => {
+  const special = specials.find((definition) => definition.id === "lithic_sceptre");
+  assert.ok(special);
+  assert.equal(special.drainAmount, 0);
+  assert.equal(special.traits.skipAttack, true, "fires on the press");
+  const cost = { player: null, specialId: "lithic_sceptre", cost: 100, allow: false, phase: "check" };
+  PluginManager.emitCustomEvent("combat-special:cost", cost);
+  assert.equal(cost.cost, 0);
+  assert.equal(cost.allow, true);
+  const p = player();
+  wear(p, WEAPON(), I.LITHIC_SCEPTRE, { [Lithic._test.CHARGES_KEY]: 50 });
+  Lithic._test.setStacks(p, 4);
+  const refused = { player: p, specialAttackId: "lithic_sceptre", disabled: null };
+  Shatter._test.specialDisabled(refused);
+  assert.equal(refused.disabled, true);
+  assert.equal(refused.message, "You need 5 Shatter stacks to use that ability.");
+  Lithic._test.setStacks(p, 5);
+  const allowed = { player: p, specialAttackId: "lithic_sceptre", disabled: null };
+  Shatter._test.specialDisabled(allowed);
+  assert.equal(allowed.disabled, null);
 });
 
 /** A sceptre wielder with 7 stacks, whose combat target is `target`, and what a press spends. */

@@ -14,8 +14,8 @@
  *   currently has N charges."
  * - Shatter stacks, shown in varbit lithic_sceptre_shatter_stacks: one for every attack with the
  *   sceptre, a splash too, as its hit lands, up to 14. Out of combat one is lost every 50 ticks,
- *   sceptre worn or not; teleporting or entering an instance loses them all. Instance entry is
- *   noticed on the next attack or special, as no event marks it.
+ *   sceptre worn or not; teleporting or entering an instance loses them all (`private-area:entered`,
+ *   as the player joins it).
  * - Explosive Shatter, its special (combat/specials/LithicSceptre.SpecialAttack.js), uses 5 stacks:
  *   `lithic-sceptre:stacks` { player, stacks, consume, consumed } reads them and takes `consume`.
  */
@@ -50,8 +50,6 @@ let api = null;
 let core = null;
 let staff = null;
 const decayTasks = new WeakMap();
-/** Player -> the private area (instance) the stacks were last counted in. */
-const areas = new WeakMap();
 
 function plural(amount, word) {
   return `${amount.toLocaleString("en-US")} ${word}${amount === 1 ? "" : "s"}`;
@@ -78,14 +76,6 @@ function setStacks(player, value) {
   const before = stacks(player);
   player.setAttribute(STACKS_ATTRIBUTE, Math.max(0, Math.min(MAX_STACKS, value)));
   if (stacks(player) !== before) sendStacks(player);
-}
-
-/** Entering an instance since the stacks were last counted loses them. */
-function checkInstance(player) {
-  const area = player.getPrivateArea?.() ?? null;
-  const known = areas.has(player) ? areas.get(player) : null;
-  areas.set(player, area);
-  if (area != null && area !== known) setStacks(player, 0);
 }
 
 /** Every 50 ticks out of combat a stack is lost; the countdown restarts with each change. */
@@ -118,7 +108,6 @@ function gainStack(hit) {
   const attacker = hit?.getAttacker?.();
   if (!attacker?.isPlayer?.()) return;
   const player = attacker.getAsPlayer();
-  checkInstance(player);
   setStacks(player, stacks(player) + 1);
   restartDecay(player);
 }
@@ -127,7 +116,6 @@ function gainStack(hit) {
 function answerStacks(request) {
   const player = request?.player;
   if (!player) return;
-  checkInstance(player);
   const held = stacks(player);
   request.stacks = held;
   const consume = Math.floor(Number(request.consume) || 0);
@@ -138,8 +126,8 @@ function answerStacks(request) {
   restartDecay(player);
 }
 
-/** Teleporting loses the stacks. */
-function teleported({ player }) {
+/** Teleporting or entering an instance loses the stacks. */
+function loseStacks({ player }) {
   if (!player || stacks(player) === 0) return;
   setStacks(player, 0);
   restartDecay(player);
@@ -327,14 +315,15 @@ module.exports = {
     pluginApi.onCustomEvent("powered-staff:spell", answerSpell);
     pluginApi.onCustomEvent("item:fill-charges", fillCharges);
     pluginApi.onCustomEvent("lithic-sceptre:stacks", answerStacks);
-    pluginApi.onCustomEvent("teleport:landed", teleported);
+    pluginApi.onCustomEvent("teleport:landed", loseStacks);
+    pluginApi.onCustomEvent("private-area:entered", loseStacks);
     pluginApi.onPlayerLogin(login);
     pluginApi.onItemOnItem(chargeWithRunes, { noted: false });
     pluginApi.onItemAction("Lithic sceptre", { Check: checkSceptre, Uncharge: unchargeSceptre });
     pluginApi.onItemAction("Lithic sceptre (uncharged)", { Charge: chargeOption });
   },
   _test: {
-    maxHit, stacks, setStacks, gainStack, answerStacks, teleported, chargeSceptre, chargeWithRunes, chargeOption,
+    maxHit, stacks, setStacks, gainStack, answerStacks, loseStacks, chargeSceptre, chargeWithRunes, chargeOption,
     checkSceptre, unchargeSceptre, resolveSceptre, impact, projectileEnd, staff: () => staff,
     CHARGES_KEY, MAX_CHARGES, MAX_STACKS, STACKS_ATTRIBUTE, SPECIAL_ID, ATTACK_SPEED, ATTACK_RANGE,
   },

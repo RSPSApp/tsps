@@ -1076,6 +1076,8 @@ function registerPlugin(file, api = {}) {
       Item,
       Location,
       Skill: require("../dist/game/model/Skill").Skill,
+      OptionDialogue,
+      ChatTextLayout: require("../dist/game/model/dialogues/ChatTextLayout").ChatTextLayout,
     },
     onObjectInteraction: (name, actions) => {
       if (typeof name === "function") hooks.objectHandlers.push(name);
@@ -1527,6 +1529,36 @@ test("Shipwright Sophie recovers a boat to Catherby, and the Port Wizard appears
   runTicks(5);
   assert.deepEqual(h.said(), [[15365, "All done! The boat is now docked here at Catherby."], ["player", "Thanks!"]],
     "a boat brought from another port gets the plain line, in Sophie's face");
+  clearTasks();
+});
+
+test("a recovery stops if the player logs out before it happens, and the closing line waits for no other conversation", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  h.player.setLocation(new Location(2805, 3429, 0));
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  let online = true;
+  h.player.isRegistered = () => online;
+
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  online = false;
+  runTicks(2);
+  assert.equal(h.bank.getAmount(995), 10000, "nothing is paid");
+  assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "the_pandemonium" });
+
+  online = true;
+  let talking = false;
+  const manager = h.player.getDialogueManager();
+  h.player.getDialogueManager = () => ({ ...manager, isActive: () => talking });
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  runTicks(1);
+  assert.equal(h.bank.getAmount(995), 9750);
+  talking = true;
+  runTicks(5);
+  assert.equal(h.player.boxes.length, 0, "the shipwright doesn't talk over another conversation");
   clearTasks();
 });
 

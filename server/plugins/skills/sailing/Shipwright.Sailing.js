@@ -10,8 +10,6 @@ const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
-const { OptionDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/OptionDialogue");
-const { ChatTextLayout } = require("../../../src/main/typescript/elvarg/game/model/dialogues/ChatTextLayout");
 const { PlayerDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/PlayerDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
 const { content, playSound, tileBeside } = require("./SailingContent.Sailing");
@@ -100,11 +98,16 @@ function pay(player, fee) {
  * their own name (Jim's chat head is his nameless multinpc parent).
  */
 function npcLines(dock, head, text, from) {
-  return ChatTextLayout.pages(text).map((page, index) => new NpcDialogue(from + index, head, page, dock.shipwright));
+  return pluginApi.core.ChatTextLayout.pages(text).map((page, index) => new NpcDialogue(from + index, head, page, dock.shipwright));
 }
 
-function wordsFor(head) {
-  return head === JUNIOR_JIM_HEAD ? LINES.jim : LINES.shipwright;
+function wordsFor(dock) {
+  return dock.shipwright === "Junior Jim" ? LINES.jim : LINES.shipwright;
+}
+
+/** Whether the player is still online. */
+function present(player) {
+  return player.isRegistered?.() !== false;
 }
 
 /**
@@ -117,7 +120,7 @@ function closing(dock, cause, head) {
     const plain = npcLines(dock, head, `All done! The boat is now docked here at ${where}.`, 0);
     return [...plain, new PlayerDialogue(plain.length, "Thanks!")];
   }
-  const lines = npcLines(dock, head, wordsFor(head).lost(where, cause), 0);
+  const lines = npcLines(dock, head, wordsFor(dock).lost(where, cause), 0);
   return [...lines, new PlayerDialogue(lines.length, "Ah, I see. Thanks anyway.")];
 }
 
@@ -145,6 +148,8 @@ function castRecovery(player, dock, cause, head = JUNIOR_JIM_HEAD) {
     playSound(player, SOUND_CAST, 35);
   });
   later(player, WIZARD_TIMING.done, () => {
+    // Not over another conversation the player started meanwhile.
+    if (!present(player) || player.getDialogueManager().isActive?.()) return;
     const lines = closing(dock, cause, head);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(...lines, new EndDialogue(lines.length)));
   });
@@ -191,7 +196,9 @@ function closeMenu(player, owner) {
 /** A menu's yes: the menu closes, and the wizard comes on the next tick. */
 function recoverNext(player, owner, dock, slot, head) {
   closeMenu(player, owner);
-  later(player, 1, () => recoverNow(player, dock, slot, head));
+  later(player, 1, () => {
+    if (present(player)) recoverNow(player, dock, slot, head);
+  });
 }
 
 function coins(fee) {
@@ -203,7 +210,8 @@ function coins(fee) {
  * asks whether to recover it for the fee. Keeping the cargo ends the conversation.
  */
 function warnCargo(player, dock, slot, head, fee) {
-  const words = wordsFor(head);
+  const { OptionDialogue } = pluginApi.core;
+  const words = wordsFor(dock);
   const owner = {};
   const warning = npcLines(dock, head, words.warning, 0);
   const menu = new OptionDialogue(warning.length, {
@@ -223,6 +231,7 @@ function warnCargo(player, dock, slot, head, fee) {
 
 /** Asks before paying, until the player answers "don't ask again". */
 function confirmCost(player, dock, slot, head, fee) {
+  const { OptionDialogue } = pluginApi.core;
   const owner = {};
   const menu = new OptionDialogue(0, {
     executeOption: (option) => {
@@ -246,6 +255,7 @@ function confirmCost(player, dock, slot, head, fee) {
 function recoverSlot(player, dock, slot, head = JUNIOR_JIM_HEAD) {
   if (!recoverable(player, dock, slot)) return;
   later(player, 1, () => {
+    if (!present(player)) return;
     const boat = recoverable(player, dock, slot);
     if (!boat) return;
     const fee = recoveryFee(boat);

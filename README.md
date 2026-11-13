@@ -11,10 +11,6 @@ or `Ctrl+/` to open `::commands` while playing; page text fields keep their norm
 - [`client/`](client/) — browser client (Forked from [xRSPS](https://github.com/xrsps/xrsps-typescript))
 - [`server/`](server/) — game server (Official continuation of our [Elvarg](https://github.com/RSPSApp/elvarg-rsps) fork - Ported to TypeScript)
 
-### RuneLite gateway
-
-[`runelite-gateway/`](runelite-gateway/README.md) connects RuneLite and the official OSRS client to the server through RSProx, with a separate session per player. Run `yarn gateway` alongside the server; see the [setup and supported features](runelite-gateway/README.md).
-
 ## Quick start
 
 Install [Node.js 22.16 or later](https://nodejs.org/en/download) first. No separate Yarn or Corepack installation is needed.
@@ -37,6 +33,7 @@ Running several branches at once, one worktree each on its own ports: see [docs/
 Create `server/data/definitions/world.local.json` with the settings you want to override from
 `world.json`; omitted settings keep their shipped values. This file is gitignored, so local
 customizations survive updates without changing tracked files. Restart the server after edits.
+Every setting is listed in [docs/world-configuration.md](docs/world-configuration.md).
 
 ### Optional: Java sidecars
 
@@ -63,7 +60,7 @@ WEBRTC_WORLD_ID=my-world
 WEBRTC_WORLD_TOKEN=paste-your-token-here
 ```
 
-Set `"name": "My World"` in `server/data/definitions/world.local.json` to choose the display name; it defaults to `Old School RuneScape`. This name is used by the login page, World list, welcome messages and bank title. `WEBRTC_WORLD_NAME` is no longer used. The list also shows the `description` (up to 120 characters) and `spawn` from [`server/data/definitions/world.json`](server/data/definitions/world.json).
+Set `"name": "My World"` in `server/data/definitions/world.local.json` to choose the display name; it defaults to `Old School RuneScape`. This name is used by the login page, World list, welcome messages and bank title. The list also shows the `description` (up to 120 characters) and `spawn` from [`server/data/definitions/world.json`](server/data/definitions/world.json).
 
 Run `yarn start`. Your world appears in the World list once it registers. Keep the token private.
 
@@ -75,7 +72,7 @@ Run `yarn start`. Your world appears in the World list once it registers. Keep t
 
 ## Credits
 
-We want to thank Astrul/@Lerl, Detuks/@Reinismu, @xrsps, Vexus/@bandithaxx and all the contributors of both the legacy Java project and the TypeScript continuation.
+We want to thank Astrul/[@Lerl](https://github.com/Lerl), Detuks/[@Reinismu](https://github.com/Reinismu), Kraken/[@UnhealthyKraken](https://github.com/UnhealthyKraken), Vexus/[@Bandit-HaxUnit](https://github.com/Bandit-HaxUnit), [@xrsps](https://github.com/xrsps) and all the contributors of both the legacy Java project and the TypeScript continuation.
 
 ## Legal
 

@@ -13,6 +13,7 @@ const BITE_SOUND = 1018;
 const EAT_HURTS_ABOVE = 2;
 const EAT_DAMAGE = 1;
 const GUZZLE_PERCENT = 10;
+const HOT_BITE_DELAY_TICKS = 1;
 
 const COOL_EAT_MESSAGES = ["Ow! You nearly broke a tooth!", "The rock cake resists all attempts to eat it."];
 const COOL_GUZZLE_MESSAGES = [
@@ -42,11 +43,25 @@ function hurt(player, damage) {
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
 }
 
-/** Eat: 1 Hitpoint above 2; at 2 or less nothing moves, the player only hears and reads it. */
-function eatRockCake({ player, itemId }) {
-  if (!isHot(itemId)) player.getPacketSender().sendSound(BITE_SOUND, 1, 0);
+/** One bite: 1 Hitpoint above 2; at 2 or less nothing moves, the player only hears and reads it. */
+function bite(player, hot) {
+  if (!hot) player.getPacketSender().sendSound(BITE_SOUND, 1, 0);
   if (player.getHitpointsAfterPendingDamage() > EAT_HURTS_ABOVE) hurt(player, EAT_DAMAGE);
-  say(player, isHot(itemId) ? HOT_EAT_MESSAGES : COOL_EAT_MESSAGES);
+  say(player, hot ? HOT_EAT_MESSAGES : COOL_EAT_MESSAGES);
+}
+
+/**
+ * Eat. A cooled cake bites on the click tick; a hot one a tick later (rsprox 233/03250: the cool
+ * cake's click and bite share tick 8145, the hot cake's click is tick 8025 and its bite 8026).
+ */
+function eatRockCake({ player, itemId }) {
+  if (!isHot(itemId)) {
+    bite(player, false);
+    return;
+  }
+  core.TaskManager.submit(new core.CountdownTask(player, HOT_BITE_DELAY_TICKS, () => {
+    if (player.getHitpoints() > 0) bite(player, true);
+  }));
 }
 
 /** Guzzle: 10% of the current Hitpoints plus 1, never the last one (0 damage at 1 Hitpoint). */

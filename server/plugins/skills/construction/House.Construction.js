@@ -1484,7 +1484,9 @@ function handleFurnitureAction(event) {
   }
   if (Servants.useServantFurniture(event) || Portals.useHousePortal(event)
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
-    || (["open", "search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (action === "open" && Storage.openHouseFurniture(event))
+    || (action === "close" && Storage.closeHouseFurniture(event))
+    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.

@@ -43,8 +43,13 @@ function spottierCapeTraded(registry, event) {
   event?.player?.setAttribute(SPOTTIER_TRADED_ATTRIBUTE, true);
 }
 
+/**
+ * Only the act of equipping the cape (EquipPacketListener's `equipped` change) credits it: a cape
+ * already worn before the trade is not credited by some later, unrelated equipment change.
+ */
 function equippedSpottierCape(registry, event) {
   const { player } = event ?? {};
+  if (event?.equipped !== true || event.itemId !== SPOTTIER_CAPE) return;
   if (!player?.isRegistered?.() || player.getAttribute(SPOTTIER_TRADED_ATTRIBUTE) !== true) return;
   if (player.getEquipment().get(registry.core.Equipment.CAPE_SLOT)?.getId() !== SPOTTIER_CAPE) return;
   emit(registry, player, TASK.spottierCape);

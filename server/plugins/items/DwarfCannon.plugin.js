@@ -5,6 +5,7 @@
  * ornament kit. Each lives in ./dwarfcannon/.
  */
 const Cannon = require("./dwarfcannon/Common.DwarfCannon");
+const Firing = require("./dwarfcannon/Firing.DwarfCannon");
 
 module.exports = {
   name: "DwarfCannon",
@@ -17,5 +18,6 @@ module.exports = {
     require("./dwarfcannon/Decay.DwarfCannon")(api);
     require("./dwarfcannon/Nulodion.DwarfCannon")(api);
     require("./dwarfcannon/Ornament.DwarfCannon")(api);
+    api.onCombatHitResolved(Firing.payExperience);
   },
 };

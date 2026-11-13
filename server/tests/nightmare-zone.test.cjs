@@ -118,6 +118,11 @@ function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
       getCurrentLevel: (skill) => p.levels[skill.getName?.() ?? skill] ?? 99,
       getMaxLevel: () => 99,
       setCurrentLevel(skill, level) { p.levels[skill.getName?.() ?? skill] = level; return this; },
+      // As SkillManager: up by `amount`, capped at `max`, never lowering a level already past it.
+      increaseCurrentLevel(skill, amount, max) {
+        const key = skill.getName?.() ?? skill, current = p.levels[key] ?? 99;
+        if (current < max) p.levels[key] = Math.min(max, current + amount);
+      },
     }),
     setEnteredAmountAction(action) { p.amount = action; },
     getDialogueManager: () => (p.dialogue ??= dialogueManager(p)),
@@ -498,6 +503,24 @@ test('real executeHit protects before absorption spends points', () => {
 
   assert.equal(Potions.absorbOf(player), 50, 'the prayer blocked the 20 before absorption could spend points');
   assert.equal(player.getHitpoints(), 99, 'the protected hit dealt no damage');
+});
+
+// The shared potion rule (ConsumableEffects.boostSkill, 226/01696.txt): a drained stat gains the boost from its
+// current level; one between base and the cap goes to the cap; one past the cap is left alone.
+test('super ranging and overload add to a drained level, up to base + boost, like every other potion', () => {
+  const p = dreamer();
+  p.inventory.add(new core.Item(11722, 3));
+  for (const [before, after] of [[60, 60 + 14 + 5], [110, 99 + 14 + 5], [120, 120]]) {
+    p.levels.Ranged = before;
+    nextTick();
+    drink(p, 11722);
+    assert.equal(p.levels.Ranged, after, `Ranged ${before}`);
+  }
+  p.levels.Strength = 50;
+  p.inventory.add(new core.Item(11730, 1));
+  drink(p, 11730);
+  assert.equal(p.levels.Strength, 50 + 14 + 5, 'the overload adds to drained Strength');
+  Dream.wake({ player: p });
 });
 
 test('overload: not under 51 Hitpoints; +floor(15%)+5 to the combat skills, 50 damage of its own, 5 minutes, 50 back at the end', () => {

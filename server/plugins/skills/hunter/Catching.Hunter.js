@@ -4,6 +4,7 @@ const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, nearby, active, available, roll, exchange, catchExchange, xp, begin, hide, chance } = C;
 const tables = require("../data/impling-loot.json");
 const Matthias = require("./Matthias.Hunter");
+const { boostSkill } = require("../../items/ConsumableEffects");
 const falcons = new Map();
 const caught = new Map();
 // Players wearing a falconer's glove, so leaving the falconry grounds is checked for them only.
@@ -270,7 +271,7 @@ function bonus(player, def) {
   const skills = player.getSkillManager(), max = skills.getMaxLevel(def.boost), current = skills.getCurrentLevel(def.boost);
   if (def.boost === H.core.Skill.PRAYER) skills.setCurrentLevels(def.boost, Math.min(max, current + 22));
   else if (def.boost === H.core.Skill.HITPOINTS) skills.setCurrentLevels(def.boost, Math.min(max, current + 8));
-  else skills.setCurrentLevels(def.boost, Math.max(current, max + Math.floor(max * 0.15) + 4));
+  else boostSkill(player, def.boost, 4, 0.15);
 }
 
 function boost(event) {

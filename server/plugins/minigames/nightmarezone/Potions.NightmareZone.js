@@ -17,6 +17,7 @@
  */
 const Common = require("./Common.NightmareZone");
 const { drinkTimerRefusal } = require("../../items/Potions.plugin");
+const { boostSkill } = require("../../items/ConsumableEffects");
 
 /** The tick each player last drank a quick dream potion (absorption, super magic, super ranging). */
 const lastQuickDose = new WeakMap();
@@ -56,12 +57,9 @@ function maxLevel(player, skill) {
   return player.getSkillManager().getMaxLevel(Common.core.Skill[skill]);
 }
 
+/** 5 + 15% of base, added to the current level up to base + boost (the shared potion rule). */
 function boost(player, skills) {
-  for (const skill of skills) {
-    const base = maxLevel(player, skill);
-    const boosted = base + Math.floor((base * 15) / 100) + 5;
-    if (level(player, skill) < boosted) player.getSkillManager().setCurrentLevel(Common.core.Skill[skill], boosted, true);
-  }
+  for (const skill of skills) boostSkill(player, Common.core.Skill[skill], 5, 0.15);
 }
 
 // ---------------------------------------------------------------- drinking

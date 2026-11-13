@@ -59,6 +59,8 @@ const DEFAULT_MOVE_TICKS = 1;
 const MAX_WALK_TILES = 64;
 
 const BUSY_ATTRIBUTE = "agility.obstacle";
+/** The game cycle an Agility crossing played without this runner ends on (see `holdAgilityCrossing`). */
+const CROSSING_UNTIL_ATTRIBUTE = "agility:crossing-until";
 /** The client's BUSY varbit: 1 while a course obstacle plays, 0 as it ends (rsprox 1788, 1885). */
 const BUSY_VARBIT = 12393;
 
@@ -434,12 +436,22 @@ function run(context, steps, { render = null, onFinish = null, busyVarbit = fals
 }
 
 /**
- * Whether the player is part-way through an Agility obstacle (a course obstacle or shortcut, not
- * a gate or lever played by the same runner). Run energy does not regenerate meanwhile (Wiki:
- * Energy; rsprox_transcripts/223/00003.txt: no update_runenergy on the Trollheim rocks' busy ticks).
+ * An Agility obstacle content plays with its own moves (the Hallowed Sepulchre's): the player is
+ * crossing it until game cycle `untilCycle`, as an `agility` run would be.
  */
-function isCrossingAgilityObstacle(player) {
-  return player.getAttribute(BUSY_ATTRIBUTE)?.agility === true;
+function holdAgilityCrossing(player, untilCycle) {
+  player.setAttribute(CROSSING_UNTIL_ATTRIBUTE, untilCycle);
+}
+
+/**
+ * Whether the player is part-way through an Agility obstacle at game cycle `cycle`: an `agility`
+ * run (a course obstacle or shortcut, not a gate or lever played by the same runner), or a
+ * `holdAgilityCrossing` that hasn't ended. Run energy does not regenerate meanwhile (Wiki: Energy;
+ * rsprox_transcripts/223/00003.txt: no update_runenergy on the Trollheim rocks' busy ticks).
+ */
+function isCrossingAgilityObstacle(player, cycle) {
+  if (player.getAttribute(BUSY_ATTRIBUTE)?.agility === true) return true;
+  return cycle < (player.getAttribute(CROSSING_UNTIL_ATTRIBUTE) ?? -1);
 }
 
 /** Finishes an in-progress obstacle instantly (logout), landing on its end tile. */
@@ -455,6 +467,7 @@ module.exports = {
   init,
   isBusy,
   isCrossingAgilityObstacle,
+  holdAgilityCrossing,
   run,
   completeNow,
   directionBetween,

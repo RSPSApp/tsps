@@ -11,6 +11,7 @@
  */
 const Common = require("./Common.HallowedSepulchre");
 const Traps = require("./Traps.HallowedSepulchre");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const CHUNK = 8;
 const SIZE_CHUNKS = 12;
@@ -100,11 +101,20 @@ class Run {
     this.ticks = 0;
   }
 
-  /** Starts an obstacle that takes `ticks`, unless one is still going (a second click). */
-  act(ticks) {
+  /**
+   * Starts an obstacle that takes `ticks`, unless one is still going (a second click). `agility`:
+   * an Agility obstacle, which pauses run energy recovery while it plays (Wiki: Energy).
+   */
+  act(ticks, { agility = false } = {}) {
     if (this.transitioning || this.ticks < this.busyUntil || Traps.holding(this)) return false;
     this.busyUntil = this.ticks + ticks;
+    if (agility) this.crossAgilityObstacle(ticks);
     return true;
+  }
+
+  /** An Agility obstacle playing for `ticks` (one that `act` started before its refusals were checked). */
+  crossAgilityObstacle(ticks) {
+    ObstacleRunner.holdAgilityCrossing(this.player, Common.core.World.getProcessCycle() + ticks);
   }
 
   /** Runs `action` later unless the run has moved on (or ended) since. */

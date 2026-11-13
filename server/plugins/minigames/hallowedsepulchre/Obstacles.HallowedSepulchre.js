@@ -73,7 +73,7 @@ function drop(event) {
   const { run, tile } = found;
   const to = Common.data.drops[Common.key(...tile)];
   if (!to) return false;
-  if (!run.act(3)) return true;
+  if (!run.act(3, { agility: true })) return true;
   const { player } = run;
   player.getMovementQueue().reset();
   Common.animate(player, "jumpDown", 15);
@@ -92,7 +92,7 @@ function stairs(event) {
   const { run, tile } = found;
   const to = Common.data.stairs[Common.key(...tile)];
   if (!to) return false;
-  if (!run.act(9)) return true;
+  if (!run.act(9, { agility: true })) return true;
   const { player } = run;
   player.getMovementQueue().reset();
   run.schedule(3, () => {
@@ -156,6 +156,7 @@ function platform(event) {
     run.player.sendMessage(Common.message("noBack"));
     return true;
   }
+  run.crossAgilityObstacle(4);
   const xp = run.floorNumber === 5 ? Common.data.xp.platformFloor5 : Common.data.xp.platform;
   hops(run, path, 2, () => {
     Common.spam(run.player, Common.message("platform"));
@@ -175,6 +176,7 @@ function steppingStones(event) {
     run.player.sendMessage(Common.message("noBack"));
     return true;
   }
+  run.crossAgilityObstacle(4);
   const tiles = [from, ...path.map(([x, y, cycles]) => [x, y, from[2], cycles])];
   hops(run, tiles, 1, () => run.pause(), Common.data.xp.steppingStones);
   return true;
@@ -189,7 +191,7 @@ function floor2Stone(event) {
   const dx = tile[0] - here[0];
   const dy = tile[1] - here[1];
   if ((dx !== 0 && dy !== 0) || Math.abs(dx + dy) > 2 || dx + dy === 0) return false;
-  if (!run.act(2)) return true;
+  if (!run.act(2, { agility: true })) return true;
   run.player.getMovementQueue().reset();
   Common.animate(run.player, "jumpStones");
   exactMove(run, here, tile, HOP_CYCLES, facingOf(dx, dy));
@@ -208,6 +210,7 @@ function gate(event) {
     run.player.sendMessage(Common.message("noBack"));
     return true;
   }
+  run.crossAgilityObstacle(3);
   run.player.getMovementQueue().reset();
   Common.spam(run.player, Common.message("gate"));
   Common.animate(run.player, "squeeze");

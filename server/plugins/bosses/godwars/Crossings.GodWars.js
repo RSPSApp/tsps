@@ -121,7 +121,7 @@ function climbDownRope({ player, objectId }) {
     { msg: "You climb down the rope." },
     { wait: 1 },
     { tele: rope.down },
-  ]);
+  ], { agility: true });
   return true;
 }
 

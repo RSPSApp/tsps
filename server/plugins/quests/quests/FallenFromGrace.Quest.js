@@ -868,7 +868,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
       obj: { x: 2551, y: 2209, z: player.getLocation().getZ() },
       object: event.object,
     };
-    ObstacleRunner.run(context, spec.steps(context));
+    ObstacleRunner.run(context, spec.steps(context), { agility: true });
     return true;
   }
 

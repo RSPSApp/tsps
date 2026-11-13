@@ -37,7 +37,7 @@ Changes outside the plugin:
 | What | Behaviour | Source |
 | --- | --- | --- |
 | Area | Part of the God Wars Dungeon: the essence overlay stays up. Multi-combat. The chamber is cut out of its boundary (an actor keeps an area while inside it). | Wiki, ours |
-| Followers | Spiritual warriors, rangers, mages and blood reavers attack anyone not wearing a Zarosian item (by name: "ancient ", "zaryte ", "torva ", "virtus ", "... of darkness", not the ancient hilt). Each one killed in the prison is a point of ancient essence. | Wiki |
+| Followers | Spiritual warriors, rangers, mages and blood reavers attack anyone not wearing a Zarosian item: the God Wars Dungeon's Zaros protection table (`godwars.json`, from the Wiki's God items), so not the ancient hilt or the Ancient mace (Bandos). Each one killed in the prison is a point of ancient essence. | Wiki |
 | Logging out | In the prison proper or a chamber: back in the entry room. | Wiki |
 | Frozen key | The four generals' pieces "Assemble" into the frozen key (26356). Using it on the Frozen Door (42840/42841) from the God Wars side unseals the door for good (`nex:frozen-door-unlocked`); without it, one of six laments. The two messages are ours. | Wiki, ours |
 | Frozen Door | Fade, the move two ticks later, fade back (the God Wars doors' fade). The prison side (42931/42932) leads back up. | ours |
@@ -52,7 +52,7 @@ Changes outside the plugin:
 
 The [ring of endurance](https://oldschool.runescape.wiki/w/Ring_of_endurance) counts as
 Saradomin equipment. It does not grant [Zarosian protection](https://oldschool.runescape.wiki/w/Zaros#Affiliated_items)
-in the Ancient Prison. The prison's hand-maintained `itemKeywords` list therefore excludes it;
+in the Ancient Prison. The prison uses the God Wars Dungeon's Zaros protection table, which does not list it;
 a worn ancient item still protects the player when worn alongside the ring.
 The rsprox index has no recorded actions for the ring, so this correction relies on the Wiki.
 The cache identifies the charged, wearable ring as 24736; 24844 is the tradeable uncharged ring.

@@ -191,6 +191,20 @@ test('shared wall-door reach masks cover every operation and preserve other obje
   } finally { h.restore(); }
 });
 
+test('Shilo Village inner wooden gate swings with its nameless open panels', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ realMapObjects: true });
+  try {
+    const closed = MapObjects.get(2262, new Location(2867, 2952, 0), null);
+    assert.ok(closed, 'the Shilo gate is placed on the map');
+    const ops = h.click(2262, 2867, 2952, closed.getFace(), 'Open', 'Wooden gate', 0);
+    assert.ok(ops.some(([op, id]) => op === 'register' && (id === 2263 || id === 2264)),
+      'the open panels 2263/2264 are registered');
+    assert.ok(ops.some(([op, id]) => op === 'deregister' && (id === 2261 || id === 2262)),
+      'the closed panels 2261/2262 are removed');
+  } finally { h.restore(); }
+});
+
 test('real Ardougne wall doors retain collision checks at their ends', async () => {
   await initializeMapCollisionOnce();
   const door = MapObjects.get(1535, new Location(2579, 3285, 0), null);

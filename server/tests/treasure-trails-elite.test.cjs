@@ -307,6 +307,37 @@ test("an opted-in player's elite casket can become the Mimic, carrying its rolls
   } finally { Math.random = random; }
 });
 
+test("issue 4897: a Mimic from a stack of elite caskets replaces one casket, not the stack", () => {
+  const f = fixture();
+  MimicShared.bind({ core });
+  f.api.onCustomEvent("treasure-trails:mimic-casket", MimicReward.fromCasket);
+  f.attributes.set("mimic:opted-in", true);
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    f.items[0] = new core.Item(I.REWARD_CASKET_ELITE_, 5);
+    assert.equal(Caskets.open(f.event(0)), true);
+    assert.equal(f.items[0]?.getId(), I.REWARD_CASKET_ELITE_);
+    assert.equal(f.items[0].getAmount(), 4, "four caskets are left");
+    const mimicSlot = f.items.findIndex(item => item?.getId() === I.MIMIC);
+    assert.ok(mimicSlot > 0, "the Mimic takes a free slot");
+    assert.equal(f.items[mimicSlot].getMetaValue(MimicShared.ROLLS_META_KEY).tier, "elite");
+    assert.equal(f.attributes.get(Runtime.completedAttribute(ELITE)), 1);
+    // Full backpack: the stack still loses only one; the Mimic goes to the floor.
+    f.items.fill(null);
+    f.attributes.set(Runtime.completedAttribute(ELITE), 0);
+    f.items[0] = new core.Item(I.REWARD_CASKET_ELITE_, 3);
+    for (let slot = 1; slot < 28; slot++) f.items[slot] = new core.Item(I.HAMMER, 1);
+    const ground = [];
+    const forceAdd = f.player.getInventory().forceAdd;
+    f.player.getInventory().forceAdd = (player, item) => { if (f.items.some(i => !i)) forceAdd(player, item); else ground.push(item); };
+    assert.equal(Caskets.open(f.event(0)), true);
+    assert.equal(f.items[0].getAmount(), 2);
+    assert.equal(f.items.filter(item => item?.getId() === I.MIMIC).length, 0);
+    assert.deepEqual(ground.map(item => item.getId()), [I.MIMIC]);
+  } finally { Math.random = random; }
+});
+
 test("the elite casket rolls 4-6; elite STASH units need Construction 77 and mahogany planks", () => {
   const f = fixture();
   assert.deepEqual(require("../data/definitions/clue-caskets.json").tables.elite.rolls, [4, 6]);

@@ -73,6 +73,14 @@ paid). The precise interaction and payment order are not verified by a recording
 not clear the held items. Sources: [Strange casket](https://oldschool.runescape.wiki/w/Strange_casket)
 and [Item Retrieval Service](https://oldschool.runescape.wiki/w/Item_Retrieval_Service).
 
+## Obtaining it from a stack
+
+Reward caskets stack. When the opened casket turns out to be the Mimic, only that
+one casket becomes it (issue 4897). A lone casket's slot takes the Mimic. A stack
+loses one casket and the Mimic goes into a free slot. Ours: with no free slot it
+drops to the floor like any casket reward that doesn't fit. No source covers that
+case, and the Wiki says a dropped Mimic is allowed.
+
 ## Casket state
 
 The [Mimic item page](https://oldschool.runescape.wiki/w/Mimic) permits juggling

@@ -897,12 +897,19 @@ module.exports = function registerFallenFromGraceQuest(api) {
   function handleItemOnItem(event) {
     const { player, usedItemId, usedWithItemId } = event;
     const pair = [usedItemId, usedWithItemId];
-    if (!pair.includes(CHISEL_ITEM_ID)) return false;
-    const other = pair[0] === CHISEL_ITEM_ID ? pair[1] : pair[0];
+    const chisel = pair.find(id => id === CHISEL_ITEM_ID || id === ItemIdentifiers.JEWELLERS_CHISEL);
+    if (chisel === undefined) return false;
+    const other = pair[0] === chisel ? pair[1] : pair[0];
     if (other === SUNSTONE_ITEM_ID && held(player, SUNSTONE_ITEM_ID)) {
       event.handled = true;
+      // Wiki Sunstone core: 60 Crafting (boostable), instant, 10 Crafting XP.
+      if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 60) {
+        player.sendMessage("You need a Crafting level of 60 to make a sunstone core.");
+        return true;
+      }
       player.getInventory().deleteNumber(SUNSTONE_ITEM_ID, 1);
       player.getInventory().adds(SUNSTONE_CORE_ITEM_ID, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, 10);
       player.sendMessage("You chisel the sunstone into a core.");
       return true;
     }

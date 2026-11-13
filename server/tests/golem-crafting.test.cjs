@@ -98,13 +98,13 @@ function combine(player, first, second) {
   assert.ok(a >= 0 && b >= 0, "real selected inventory slots exist");
   UseItemPacketListener.itemOnItem(player, a, b);
 }
-function start(f) { click(f.player); assert.equal(stage(f.player), 1); }
-function carve(f, side) {
-  position(f.player, side); click(f.player); tick(20);
-  assert.equal(f.player.getPacketSender().getVarbit(bit(`golem_1_${["north", "east", "south", "west"][side]}_progress`)), 5);
+function start(f, n = 1) { click(f.player, n); assert.equal(stage(f.player, n), 1); }
+function carve(f, side, n = 1) {
+  position(f.player, side, n); click(f.player, n); tick(20);
+  assert.equal(f.player.getPacketSender().getVarbit(bit(`golem_${n}_${["north", "east", "south", "west"][side]}_progress`)), 5);
 }
-function shaped(f) { start(f); for (let s = 0; s < 4; s++) carve(f, s); assert.equal(stage(f.player), 5); }
-const front = () => [2, 3, 0, 1][roots[0].getFace() & 3];
+function shaped(f, n = 1) { start(f, n); for (let s = 0; s < 4; s++) carve(f, s, n); assert.equal(stage(f.player, n), 5); }
+const front = (n = 1) => [2, 3, 0, 1][roots[n - 1].getFace() & 3];
 
 test("starts a reachable plinth after positive quest/cache/tool/material controls", t => {
   const f = actor(t);
@@ -255,6 +255,14 @@ test("completed personal NPC retires after thirty area ticks and releases its st
   tick(); assert.equal(npc.isRegistered(), false, "actual world NPC membership is removed at thirty ticks");
   f.inv.add(new core.Item(id("SUNSTONE"), 4), false); click(f.player);
   assert.equal(stage(f.player), 1, "the station can start the next paid golem");
+});
+test("the second real plinth completes its own four-sided production without changing the first", t => {
+  const f = actor(t, { level: 99 }); position(f.player, 0, 2); shaped(f, 2);
+  assert.equal(stage(f.player, 1), 0, "second-station work does not overwrite the first station");
+  position(f.player, front(2), 2); t.mock.method(Math, "random", () => 0.5); click(f.player, 2);
+  assert.equal(stage(f.player, 2), 0); assert.equal(stage(f.player, 1), 0);
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 0);
+  assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 0);
 });
 after(() => {
   if (core) for (const player of players) {

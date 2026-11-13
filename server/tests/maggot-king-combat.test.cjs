@@ -842,7 +842,7 @@ test('real twin crush attacks boost only the first splat and first defence roll;
   const random = t.mock.method(Math, 'random', () => 0.5);
   const startDamage = finalDamage.length;
   const startDefence = defenceRolls.length;
-  let clicked = false;
+  let clicked = false, otherClicked = false;
   assert.equal(core.CombatFactory.validTarget(q, other.boss), true, 'other actor has a live valid own-session target');
   assert.equal(core.CombatFactory.canAttackPermission(q, other.boss, false, core.CombatFactory.getMethod(q)),
     core.CanAttackResponse.CAN_ATTACK);
@@ -854,13 +854,22 @@ test('real twin crush attacks boost only the first splat and first defence roll;
     if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
     clicked = true;
     attack(p, session.boss);
-    // A held native target is setup for the other actor, without manufacturing a fresh NPC click stamp.
+  });
+  // Each actor supplies input in its own native turn; rotating PID must not decide whether
+  // the negative control commits before its damage/accuracy observers are inspected.
+  q.getSession().setTurnPacketProcessor(() => {
+    if (otherClicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
+    otherClicked = true;
+    // Held-target setup does not manufacture a fresh NPC menu click stamp.
     q.getCombat().setAttackDelay(0);
     q.getCombat().attack(other.boss);
   });
-  until(() => clicked, 20, 'actual extension tick receives fresh ordinary twin-weapon Attack');
-  p.getSession().setTurnPacketProcessor(() => {});
-  forced.mock.restore(); random.mock.restore();
+  try { until(() => clicked && otherClicked, 20, 'extension tick receives each actor input on its own native turn'); }
+  finally {
+    p.getSession().setTurnPacketProcessor(() => {});
+    q.getSession().setTurnPacketProcessor(() => {});
+    forced.mock.restore(); random.mock.restore();
+  }
   const parts = finalDamage.slice(startDamage).filter(row => row.attacker === p);
   assert.equal(parts.length, 2, 'installed ordinary twin-weapon method rolled both real splats');
   assert.ok(parts.every(row => row.before > 0), 'selected successful native damage rolls are nonzero');

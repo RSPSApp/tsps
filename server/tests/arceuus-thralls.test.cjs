@@ -49,7 +49,7 @@ function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}
   const hooks=new Map();
   Rewards({core:{},onBeforeNpcInteraction(){},onPlayerLogout(){},onNpcDialogueVariant(){},onNpcDialogueCondition(){},onItemAction(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
   // The Slayer plugin attached as the server does: it cancels the thrall's attack on its thrall-immune monsters.
-  Slayer.attach({onCombatHitRoll(){},registerIncomingDamageModifier(){},onCombatHitResolved(){},onNpcHitModify(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
+  Slayer.attach({onCombatHitRoll(){},registerIncomingDamageModifier(){},onCombatHitResolved(){},onPlayerDealtDamage(){},onNpcHitModify(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
   if(attackHook)hooks.set('magic:thrall-attack',attackHook);
   t.mock.method(PluginManager,'emitCustomEvent',(name,event)=>hooks.get(name)?.(event));
   if(claimed)Progress.setClaimed(p,{tier:5,index:4});

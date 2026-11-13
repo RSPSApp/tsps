@@ -89,7 +89,7 @@ test("a charged Webweaver lost in PvM keeps its ether metadata through the norma
   const Bow = require("../plugins/items/WebweaverBow.plugin");
   Bow.register({
     core, emitCustomEvent() {}, onItemOnItem() {}, onItemAction() {},
-    registerRangedAmmoHandler() {}, registerRangedCombatModifier() {}, onPlayerDeathItemDrop() {},
+    registerRangedAmmoHandler() {}, registerRangedCombatModifier() {}, onPlayerDeathItemDrop() {}, onCustomEvent() {},
   });
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
   t.mock.method(PluginManager, "emitPlayerDeathItemDrop", (event) => { Bow._test.deathItemDrop(event); return false; });

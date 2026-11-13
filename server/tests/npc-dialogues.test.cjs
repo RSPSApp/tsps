@@ -643,16 +643,35 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   const { ItemIdentifiers: I } = require('../dist/util/ItemIdentifiers');
   const { NpcIdentifiers: N } = require('../dist/util/NpcIdentifiers');
   const hooks = {};
+  const { ItemOnGround, State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
+  const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
+  const { Location } = require('../dist/game/model/Location');
+  const TUTOR_TILE = new Location(3218, 3238, 0);
+  const onGround = [];
+  // A real unowned ground stack at the ranged tutor, visible to whoever stands there.
+  const groundStack = (item) => {
+    const groundItem = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, TUTOR_TILE.clone(), item, false, -1, null);
+    onGround.push(groundItem);
+    return groundItem;
+  };
   require('../plugins/npcs/Tutors.plugin').register({
     core: {
       Skill, ItemIdentifiers: I, NpcIdentifiers: N, ItemDefinition: { forId: () => ({ getName: () => 'Thing' }) },
       Equipment: require('../dist/game/model/container/impl/Equipment').Equipment,
       Sounds: { sendSound() {} }, Sound: { PICK_UP_ITEM: 0 },
-      ItemOnGroundManager: { deregister(groundItem) { groundItem.deregistered = true; } },
+      World: { getItems: () => onGround },
+      ItemOnGroundManager: {
+        canSee: (p, groundItem) => ItemOnGroundManager.canSee(p, groundItem),
+        deregister(groundItem) { groundItem.deregistered = true; onGround.splice(onGround.indexOf(groundItem), 1); },
+      },
     },
     persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {}, onPlayerLogin() {},
     onNpcDialogueCondition(handler) { hooks.condition = handler; },
-    onCustomEvent(name, handler) { hooks[name] = handler; },
+    // Every handler of an event runs, in registration order, as PluginManager.emitCustomEvent does.
+    onCustomEvent(name, handler) {
+      const previous = hooks[name];
+      hooks[name] = previous ? (event) => { previous(event); handler(event); } : handler;
+    },
     onNpcInteraction(name, actions) { hooks[name] = actions; },
     onGroundItemPickup(handler) { hooks.pickup = handler; },
     emitCustomEvent(name, request) {
@@ -673,7 +692,8 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
     return { inventory, messages: [], getInventory: () => inventory, getEquipment: () => container(), getBanks: () => [container(bank)],
       getAttribute: (key) => attributes[key], setAttribute: (key, value) => { attributes[key] = value; },
       getPacketSender: () => ({ getVarbit: (id) => varbits[id] ?? 0, sendVarbit: (id, value) => { varbits[id] = value; } }),
-      sendMessage(text) { this.messages.push(text); }, getSkillManager: () => ({ getMaxLevel: () => 1 }) };
+      sendMessage(text) { this.messages.push(text); }, getSkillManager: () => ({ getMaxLevel: () => 1 }),
+      getUsername: () => 'tutored', getLocation: () => TUTOR_TILE, getPrivateArea: () => null };
   };
   // Plays a transcript the way startDialogue drives the hooks, taking the menu option `pick`.
   const play = (p, npcId, steps, pick) => {
@@ -726,17 +746,17 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
     get: (slot) => slot === Equipment.AMMUNITION_SLOT ? ammoSlot : new Item(-1, 0),
     refreshItems() {},
   });
-  const matching = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
+  const matching = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: groundStack(new Item(I.BRONZE_ARROW, 3)), handled: false };
   hooks.pickup(matching);
   assert.equal(matching.handled, true);
   assert.equal(matching.groundItem.deregistered, true);
   assert.equal(ammoSlot.getAmount(), 8);
-  const wrongAmmo = { player: ranger, groundItemId: I.IRON_ARROW, groundItem: { getItem: () => new Item(I.IRON_ARROW, 1) }, handled: false };
+  const wrongAmmo = { player: ranger, groundItemId: I.IRON_ARROW, groundItem: groundStack(new Item(I.IRON_ARROW, 1)), handled: false };
   hooks.pickup(wrongAmmo);
   assert.equal(wrongAmmo.handled, false, 'different ammo stays on the normal inventory pickup path');
   hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Place it in my inventory.' });
   assert.equal(hooks.settings.value, 0);
-  const disabled = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
+  const disabled = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: groundStack(new Item(I.BRONZE_ARROW, 3)), handled: false };
   hooks.pickup(disabled);
   assert.equal(disabled.handled, false);
 });

@@ -143,6 +143,7 @@ function player() {
   }, { get: (target, key) => target[key] ?? (() => packet) });
   const inventory = {
     getAmount: id => items.get(id) ?? 0,
+    contains: id => (items.get(id) ?? 0) > 0,
     isFull: () => false,
     adds(id, amount) { items.set(id, (items.get(id) ?? 0) + amount); },
     deleteNumber(id, amount) { items.set(id, (items.get(id) ?? 0) - amount); },
@@ -358,18 +359,27 @@ test('Dragon Slayer answers the Pandemonium and Murder Mystery guards instead of
   assert.equal(answer(h, p, N.OZIACH, 'If Murder Mystery has been completed:'), false);
 });
 
+// Wormbrain's own drop table carries the piece; the quest withholds it through npc-drops:context (#3855).
+const wormbrainDrops = (h, p) => {
+  const context = { handledItemIds: new Set() };
+  h.emit('npc-drops:context', { player: p, npc: null, npcId: N.WORMBRAIN, context });
+  h.hooks.onNpcDeath[0]({ killer: p, npcId: N.WORMBRAIN, location: { x: 3016, y: 3188, z: 0 } });
+  return !context.handledItemIds.has(I.MAP_PART_2);
+};
+
 test('Dragon Slayer only drops Wormbrain\'s map piece after the Lozar answer', () => {
   const h = harness(), p = player();
   h.quest.setStage(p, 2);
   p.attrs.set('dragon-slayer:instructions', 31);
-  h.hooks.onNpcDeath[0]({ killer: p, npcId: N.WORMBRAIN, location: { x: 3016, y: 3188, z: 0 } });
-  assert.equal(h.ground.length, 0);
+  assert.equal(wormbrainDrops(h, p), false);
+  assert.deepEqual(p.messages, []);
 
   const asked = player();
   h.quest.setStage(asked, 2);
   asked.attrs.set('dragon-slayer:instructions', 31 & ~(1 << 2));
-  h.hooks.onNpcDeath[0]({ killer: asked, npcId: N.WORMBRAIN, location: { x: 3016, y: 3188, z: 0 } });
-  assert.equal(h.ground.length, 1);
+  assert.equal(wormbrainDrops(h, asked), true);
+  assert.deepEqual(asked.messages, ['Wormbrain drops a map piece on the floor.']);
+  assert.equal(h.ground.length, 0, 'the quest adds no second piece of its own');
 });
 
 /** Collect the door:open requests the quest hands to Doors (the captured pass-through wall opens and shuts there). */

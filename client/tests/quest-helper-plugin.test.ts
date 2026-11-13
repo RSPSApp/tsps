@@ -41,8 +41,10 @@ async function main(){
     assert.equal(reused.snapshot.objects,undefined);assert.equal(reused.snapshot.widgets,undefined);assert.deepEqual(reused.snapshot.reuse,{objects:held.snapshot.digests.objects,widgets:held.snapshot.digests.widgets});
     assert.ok(reused.snapshot.digests.itemDefinitions,"a section the server did not acknowledge is still sent in full");assert.ok(reused.snapshot.itemDefinitions);
     assert.deepEqual(plugin.getSnapshot()?.objects,[],"the overlays keep the full snapshot");
-    bus.post(new PluginMessage("quest-helper",{type:"error",protocol:1,session:reused.session,sequence:reused.sequence,message:"Quest Helper snapshot reuses objects the server does not hold"}));
+    bus.post(new PluginMessage("quest-helper",{type:"error",protocol:1,session:reused.session,sequence:reused.sequence,code:"QUEST_HELPER_REUSE_STALE",message:"Quest Helper snapshot reuses objects the server does not hold"}));
+    assert.equal(plugin.getState().result?.status,"active","a stale reuse keeps the guide shown until the full resend answers");assert.equal(plugin.getState().status,"Guided route active");
     Date.now=()=>nativeNow()+6000;bus.post(new GameTick());Date.now=nativeNow;const resent=requests.filter(x=>x.type==="evaluate").at(-1);assert.deepEqual(resent.snapshot.objects,[],"after an error every section goes in full again");assert.equal(resent.snapshot.reuse,undefined);
+    bus.post(new PluginMessage("quest-helper",{type:"error",protocol:1,session:resent.session,sequence:resent.sequence,code:"QUEST_HELPER_UNAVAILABLE",message:"bridge down"}));assert.equal(plugin.getState().result,null,"any other error still clears the guide");assert.equal(plugin.getState().status,"bridge down");
     plugin.selectQuest("sheep");assert.equal(client.tileHighlightManager.getRenderEntries().length,0);assert.equal(hintArrow.type,0,"switching quests immediately clears navigation");bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result,null);assert.equal(hintArrow.type,0,"stale responses cannot restore an arrow");
     assert.equal(config.getConfiguration("questhelper","selectedQuest"),"sheep");
     bus.post(new GameStateChanged(GameState.LOGIN_SCREEN));assert.equal(client.varManager.varpChangeListeners.size,0);assert.equal(plugin.getState().result,null);assert.equal(hintArrow.type,0);

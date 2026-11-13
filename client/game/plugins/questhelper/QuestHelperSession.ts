@@ -38,9 +38,17 @@ export class QuestHelperSession {
         session?: unknown;
         sequence?: unknown;
         message?: unknown;
+        code?: unknown;
     }): boolean {
         if (!this.isCurrentMessage(data) || (data.sequence !== undefined && data.sequence !== this.sequence) || typeof data.message !== "string")
             return false;
+        if (data.code === "QUEST_HELPER_REUSE_STALE") {
+            // The server lost the sections this snapshot reused: the guide shown still holds, so it stays up
+            // while the next tick resends every section in full.
+            this.inFlight = false;
+            this.lastTick = -1;
+            return true;
+        }
         this.fail(data.message.slice(0, 16384));
         return true;
     }

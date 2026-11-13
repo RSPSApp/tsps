@@ -23,8 +23,10 @@
  *   - The natural history quiz (museum/NaturalHistoryQuiz.Museum.js): 2 Kudos per
  *     display case, through AWARD_KUDOS_EVENT.
  *
- * Not implemented: fossil displays, ancient relics and the hand-in of salvaged relics to
- * Curator Haig Halen (the salvage lamps can be rubbed). They are separate Kudos routes and are
+ *   - The Sailing salvaging relics (museum/SalvagingRelics.Museum.js): Inspect, and handing each
+ *     to Curator Haig Halen for 1 Kudos and an antique lamp, or 5,000 coins once claimed.
+ *
+ * Not implemented: fossil displays and ancient relics. They are separate Kudos routes and are
  * not needed for 100.
  */
 "use strict";
@@ -929,7 +931,7 @@ function handleBootstrap({ player }) {
 
 module.exports = {
   name: "Museum",
-  description: "Varrock Museum Kudos: the Dig Site cleaning activity, display cases and Historian Minas's quest timeline reports for the Bone Voyage requirement.",
+  description: "Varrock Museum Kudos: the Dig Site cleaning activity, display cases, Historian Minas's quest timeline reports and Curator Haig Halen's salvaging relics.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -958,5 +960,6 @@ module.exports = {
     pluginApi.onPlayerLogin(handleLogin);
     pluginApi.onCustomEvent("player:bootstrap-complete", handleBootstrap);
     require("./museum/NaturalHistoryQuiz.Museum")(pluginApi);
+    require("./museum/SalvagingRelics.Museum")(pluginApi);
   },
 };

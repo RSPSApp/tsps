@@ -63,3 +63,42 @@ and Kudos agree across the three and with the Wiki's Kudos page.
 - A full bag on a lamp report says "You need at least 1 free inventory space to receive the
   lamp." and ends the conversation there; the report stays open for the next talk.
 - A player still holding a report's lamp gets no second one and no lamp line.
+
+# Curator Haig Halen: Sailing salvaging relics
+
+Code: `server/plugins/world/museum/SalvagingRelics.Museum.js`; test:
+`server/tests/salvaging-relics.test.cjs`.
+
+## From rsprox captures (revision 235: 908, 958, 960, 968, 3848, 3911, 4292)
+
+- **Inspect** (op3) on the compass, mirror, coin and doll opens objectbox (193) with the relic
+  at zoom 400, the examine sentence then "You get the feeling that an item this old belongs in a
+  museum." with live's line breaks (the chatbox layout reproduces all four), and the same text as
+  a `mesbox` chat line.
+- **Hand-in** (the relic used on `curator`, 960 and 3848): the player's "I found a strange relic
+  while salvaging...", an objectbox with the relic "You show the <relic> to Curator Haig Halen.",
+  Haig's offer, then `chatbox_multi_init` "Trade the <relic> in for a lamp?" "Yes.|No." The
+  mirror's prompt names the mirror (the Wiki transcript says "broken compass" there).
+- On "Yes.", one tick: `salvaging_rare_<relic>_claimed` 0 -> 1 (a bit of
+  `salvaging_rare_all_claimed`, varp 5208 bits 0-7), `vm_kudos` +1, the Kudos spam line, the
+  objectbox (the relic) "You hand Curator Haig Halen the <relic> and he gives you the promised
+  lamp in return.", the relic out and the lamp into the first free slot, sound 3653. Then the
+  inscription line and "Anyway, thank you for bringing it to us...".
+- Lamps: mirror and doll the large lamp, coin and compass the medium one.
+
+## From the Wiki (Transcript:Curator Haig Halen, Antique lamp (salvaging))
+
+- The inscriptions of the locket, mouldy block, dull knife and sextant, the repeat offer (5,000
+  coins, "The museum thanks you for your generosity.") and "No." ("Actually, I think I'll keep
+  it." / "Oh... very well.").
+- Lamps: small (5,000 xp, level 30) for the locket, block and knife; medium (10,000 xp, level 40)
+  for the compass, coin and sextant; large (15,000 xp, level 50) for the mirror and doll. A lamp
+  only for the first of each relic; 1 Kudos each.
+- Talk-to offers "I found a strange relic while salvaging..." only while a relic is carried.
+
+## Ours
+
+- With several relics carried, Talk-to shows the first in item order.
+- The repeat hand-in's box shows the relic, as the first-time one does (not captured).
+- A relic gone from the inventory by the time "Yes." is picked ends the conversation unpaid.
+- Not played: the lines after all eight are handed in (their trigger is not documented).

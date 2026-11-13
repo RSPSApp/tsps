@@ -82,8 +82,9 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
   MOURNER_CAGE_GATE_LEFT_OPEN: 2059, // mournerquaters_gatelopen; Biohazard capture tick 557
   MOURNER_CAGE_GATE_RIGHT_OPEN: 2061, // mournerquaters_gateropen
-  // inactivepoordoor: Melzar's front door opens onto it (Dragon Slayer I capture 20261106T101002 tick
-  // 2070), which the cache doesn't pair by name; ObjectIdentifiers has no property for it.
+  // inactivepoordoor: Melzar's front door and the Mining Guild doors open onto it (Dragon Slayer I capture
+  // 20261106T101002 tick 2070, 233/03241.txt tick 12674), which the cache doesn't pair by name;
+  // ObjectIdentifiers has no property for it.
   MELZAR_DOOR_OPEN: 1539,
   // grim_inactiveposhdoor: Witch's House front and back doors open onto it (capture 20261108T030409
   // ticks 154, 389); ObjectIdentifiers has no property for it.
@@ -528,6 +529,19 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
+    // Mining Guild doors (mguild_door, mguild_door_inner1/2), rsprox_transcripts/233/03241.txt tick 12674 and
+    // 233/03239.txt ticks 581 and 2234: Open puts inviswall 38848 on the doorway and inactivepoordoor (1539) on the
+    // tile north, sound 81, the player steps across and the door is back two ticks later. A distant observer gets
+    // the same swap (233/03241.txt ticks 13489, 13847). The Mining level and members checks are MiningGuild's
+    // (door:toggle).
+    ...[[O.DOOR_562, 3046, 9756], [O.DOOR_563, 3019, 9732], [O.DOOR_564, 3043, 9729]].map(([id, x, y]) => Object.freeze({
+      closed: [[id, x, y, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, x, y, 0, 1], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, x, y + 1, 0, 2]],
+      crossY: y + 1,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 81,
+    })),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
     Object.freeze({

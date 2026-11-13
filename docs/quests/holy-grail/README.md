@@ -28,7 +28,8 @@ transcript menus are still shaped wrong by the dialogue dump (see Findings).
   indents the whistle conditions between his two options. Also a dumper fix.
 - **open** King Arthur's "Start the Holy Grail quest?" prompt shows as a plain "Select an option"
   menu (the dump gives the prompt to an empty choice).
-- **open** The fairy ring BJR is not gated on quest progress; the OSRS refusal message is unknown.
+- **fixed** The fairy ring BJR wasn't gated on quest progress; it now opens once the crone has been spoken to
+  (stage 4, our choice: the Wiki says only "partial completion") and lands in the withered realm until Percival is king.
 - **open** `travel_to` can't route through the Grail castles' inner doors (both realms) or to
   their first floors; the doors and stairs work when clicked.
 - **fixed** Galahad gave a magic whistle with the napkin; the two whistles are now on the Draynor

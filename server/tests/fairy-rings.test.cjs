@@ -24,6 +24,10 @@ let core;
 let canAttackHook;
 
 const undoneQuests = new Set();
+/** Quest stages a test sets (by key); any other quest is past every stage a code needs. */
+const questStages = new Map();
+/** The fairy-rings events the plugin emitted. */
+const emitted = [];
 const eliteLumbridge = new Set();
 
 before(async () => {
@@ -37,6 +41,8 @@ before(async () => {
     // Quests are done unless a test says otherwise (the codes' own quest locks).
     emitCustomEvent(name, event) {
       if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key);
+      if (name === "quest:get-stage") event.stage = questStages.get(event.key) ?? 1000;
+      if (name.startsWith("fairy-rings:")) emitted.push({ name, code: event.code });
       if (name === "diary:is-complete") event.complete = event.diary === "lumbridge" && event.tier === "elite" && eliteLumbridge.has(event.player);
     },
     onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
@@ -82,6 +88,7 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     sendInterfaceRemoval: () => ((open = -1), log("close"), sender),
     sendClientScript: (id, ...args) => (log(`script ${id} [${args}]`), sender),
     sendSoundEffect: (id) => (log(`sound ${id}`), sender),
+    sendTypedMessage: (type, text) => (log(`mesbox ${text}`), sender),
   };
   const p = {
     getEquipment: () => ({ get: () => item(weapon), getItems: () => [item(weapon)] }),
@@ -333,20 +340,112 @@ test("AJQ warns a player without a light source; No cancels, a lit candle skips 
 });
 
 // Wiki (Fairy ring): AJQ needs Death to the Dorgeshuun, BJS Regicide, CIP The Fremennik Trials, CLR Monkey Madness I,
-// DLS In Search of the Myreque.
-test("a code whose quest isn't done is refused, with no teleport and no last destination", () => {
-  for (const [code, key, name] of [["AJQ", "death_to_the_dorgeshuun", "Death to the Dorgeshuun"], ["CLR", "monkey_madness_i", "Monkey Madness I"], ["CIP", "fremennik_trials", "The Fremennik Trials"]]) {
-    undoneQuests.add(key);
+// DLS In Search of the Myreque; AIS, AJP and CKQ the first quetzal flight to Civitas illa Fortis; AKP entering the
+// Necropolis in Beneath Cursed Sands; BJR and BLQ partial completion of Holy Grail and Land of the Goblins.
+const VARLAMORE_VISITED = () => CacheDefinitions.getVarbitId("varlamore_visited");
+const VARLAMORE_LINE = "You can't use the fairy ring to go there until you have visited Varlamore.";
+const LOCKS = [
+  ["AJQ", "You need to complete Death to the Dorgeshuun to travel there.", () => undoneQuests.add("death_to_the_dorgeshuun")],
+  ["BJS", "You need to complete Regicide to travel there.", () => undoneQuests.add("regicide")],
+  ["CIP", "You need to complete The Fremennik Trials to travel there.", () => undoneQuests.add("fremennik_trials")],
+  ["CLR", "You need to complete Monkey Madness I to travel there.", () => undoneQuests.add("monkey_madness_i")],
+  ["DLS", "You need to complete In Search of the Myreque to travel there.", () => undoneQuests.add("in_search_of_the_myreque")],
+  ["AIS", VARLAMORE_LINE, (f) => f.varbits.set(VARLAMORE_VISITED(), 0)],
+  ["AJP", VARLAMORE_LINE, (f) => f.varbits.set(VARLAMORE_VISITED(), 0)],
+  ["CKQ", VARLAMORE_LINE, (f) => f.varbits.set(VARLAMORE_VISITED(), 0)],
+  ["AKP", "You can't use the fairy ring to go there until you have visited the Necropolis.",
+    () => questStages.set("beneath_cursed_sands", 13)],
+  ["BLQ", "You can't use the fairy ring to go there until you have visited Yu'biusk.",
+    () => questStages.set("land_of_the_goblins", 51)],
+  ["BJR", "You can't use the fairy ring to go there until you have visited the Fisher King's realm.",
+    () => questStages.set("holy_grail", 3)],
+];
+/** Each partial-quest or Varlamore code's requirement just met: the stage reached, Varlamore visited. */
+const UNLOCKS = new Map([
+  ["AIS", (f) => f.varbits.set(VARLAMORE_VISITED(), 1)], ["AJP", (f) => f.varbits.set(VARLAMORE_VISITED(), 1)],
+  ["CKQ", (f) => f.varbits.set(VARLAMORE_VISITED(), 1)], ["AKP", () => questStages.set("beneath_cursed_sands", 14)],
+  ["BLQ", () => questStages.set("land_of_the_goblins", 52)], ["BJR", () => questStages.set("holy_grail", 4)],
+]);
+const AT_RING = () => [...T.rings().values()].find((candidate) => candidate.destination?.getDistance(new Location(RING.x, RING.y, 0)) <= 1);
+
+/** Configure at the test ring from the tile north of it, dial the code, Confirm, and run the trip out. */
+function dialFromRing(code, setup = () => {}) {
+  const f = player({ at: new Location(RING.x, RING.y + 1, 0), inventory: [LIT_CANDLE] });
+  f.varbits.set(VARLAMORE_VISITED(), 1);
+  setup(f);
+  T.openDial({ player: f.p, location: RING });
+  f.nextTick();
+  runTicks(f, 1);
+  T.setDials(f.p, code);
+  emitted.length = 0;
+  const confirmTick = f.ticks.length - 1;
+  click(f.p, 398, 26);
+  f.nextTick();
+  runTicks(f, 6);
+  return { ...f, confirmTick, events: emitted.splice(0) };
+}
+
+function at(f) {
+  const l = f.p.getLocation();
+  return [l.getX(), l.getY(), l.getZ()];
+}
+
+test("each locked code: the last destination, the fairy teleport back onto your own ring, then the mesbox (as recorded)", () => {
+  const home = AT_RING();
+  assert.ok(home, "the test ring has a code");
+  for (const [code, message, lock] of LOCKS) {
     try {
-      const f = player({ inventory: [LIT_CANDLE] });
-      T.setDials(f.p, code);
-      click(f.p, 398, 26);
-      assert.ok(f.ticks.flat().includes(`You need to complete ${name} to travel there.`), `${code}: ${f.ticks.flat().join(" | ")}`);
-      assert.ok(!runTicks(f, 6).flat().some((e) => e.startsWith("teleport")), `${code}: no teleport`);
+      const ring = T.rings().get(code);
+      const f = dialFromRing(code, lock);
+      const confirmed = f.ticks[f.confirmTick];
+      assert.ok(confirmed.includes(`varp 817=${ring.destinationId}`) && confirmed.includes(`varbit 5374=${ring.index}`),
+        `${code}: the code is the last destination at once: ${confirmed.join(" | ")}`);
+      assert.equal(f.p.getAttribute(T.LAST_CODE_ATTRIBUTE), code);
+      assert.ok(!confirmed.some((entry) => entry.includes(message)), `${code}: no line before the teleport`);
+      const sent = f.ticks.slice(f.confirmTick).flat();
+      assert.ok(sent.includes("gfx 569") && sent.includes("anim 3265 delay 30") && sent.includes("anim 3266"), `${code}: ${sent.join(" | ")}`);
+      assert.deepEqual(at(f), [home.destination.getX(), home.destination.getY(), home.destination.getZ()], `${code}: back on its own ring`);
+      // Recorded: the appear animation, then the mesbox the next tick.
+      const appear = f.ticks.findIndex((entries) => entries.includes("anim 3266"));
+      const after = f.ticks[appear + 1];
+      assert.ok(after.includes(`mesbox ${message}`) && after.some((entry) => entry.startsWith(`say ${message}`)),
+        `${code}: the mesbox after arrival: ${after.join(" | ")}`);
+      assert.ok(!sent.some((entry) => entry.startsWith("say Wow")), `${code}: not the "hardly moved" line`);
+      assert.equal(f.p.getAttribute(T.USED_CODES_ATTRIBUTE), undefined, `${code}: no travel-log entry`);
+      assert.ok(!f.events.some((event) => event.name === "fairy-rings:travelled"), `${code}: no travel credit`);
+      assert.equal(f.varbits.get(12393), 0, `${code}: busy cleared`);
     } finally {
-      undoneQuests.delete(key);
+      undoneQuests.clear();
+      questStages.clear();
     }
   }
+});
+
+test("each partial-quest or Varlamore code goes once its requirement is met", () => {
+  for (const [code, unlock] of UNLOCKS) {
+    try {
+      const ring = T.rings().get(code);
+      const f = dialFromRing(code, unlock);
+      assert.deepEqual(at(f), [ring.destination.getX(), ring.destination.getY(), ring.destination.getZ()], code);
+      assert.ok(!f.ticks.flat().some((entry) => entry.startsWith("mesbox")), code);
+      assert.equal(f.p.getAttribute(T.USED_CODES_ATTRIBUTE), code, `${code}: in the travel log`);
+      assert.ok(f.events.some((event) => event.name === "fairy-rings:travelled" && event.code === code), code);
+    } finally {
+      questStages.clear();
+    }
+  }
+});
+
+test("Last-destination to a locked code refuses the same way, from the ring you stand at", () => {
+  const home = AT_RING();
+  const f = player({ at: new Location(RING.x, RING.y + 1, 0) });
+  f.p.setAttribute(T.LAST_CODE_ATTRIBUTE, "AJP");
+  T.lastDestination({ player: f.p, location: RING });
+  f.nextTick();
+  const ticks = runTicks(f, 6);
+  assert.deepEqual(at(f), [home.destination.getX(), home.destination.getY(), home.destination.getZ()]);
+  assert.ok(ticks.flat().includes(`mesbox ${VARLAMORE_LINE}`), ticks.flat().join(" | "));
+  assert.equal(f.p.getAttribute(T.USED_CODES_ATTRIBUTE), undefined);
 });
 
 test("Last-destination goes at once; to the ring you stand on, it only plays the animation", () => {
@@ -743,6 +842,62 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     p.getMovementQueue().setBlockMovement(false);
     travel(p, 'DJQ'); travel(p, 'AJS'); assert.deepEqual(at(p), [2500, 3896, 0]);
     route(p); assert.deepEqual(at(p), [2328, 4426, 0]);
+  });
+  await t.test('locked codes through the native dials: AJP until Varlamore is visited, BJR by Holy Grail stage', async t => {
+    runtime.registerQuestWidgets(PluginManager.createApi('FairyRingLocksQuestRuntimeTest'));
+    require('../plugins/quests/quests/HolyGrail.Quest')(PluginManager.createApi('FairyRingLocksHolyGrailTest'));
+    const grail = runtime.getRegisteredQuests().findLast(q => q.key === 'holy_grail');
+    const { p } = actor(t);
+    const connection = new ClientConnection(p.getSession().getChannel());
+    connection.player = p;
+    const typed = [];
+    const sender = p.getPacketSender();
+    const sendTyped = sender.sendTypedMessage.bind(sender);
+    sender.sendTypedMessage = (type, text, from) => { typed.push(text); return sendTyped(type, text, from); };
+    const nativeClick = async childId => {
+      await connection.dispatch([{ type: 'widget_action', widgetId: (398 << 16) | childId, groupId: 398, childId, buttonNum: 1 }]);
+      connection.processTurnPackets();
+    };
+    const nativeTravel = async code => {
+      p.closeInterruptibleInterfaces();
+      objectAction(p, COMMON_RING, p.getLocation(), 'Configure');
+      assert.equal(p.getInterfaceId(), 398);
+      for (let i = 0; i < 3; i++) for (let n = 0; n < T.DIAL_LETTERS[i].indexOf(code[i]); n++) await nativeClick(19 + i * 2);
+      assert.equal(T.codeFromDials(p), code);
+      await nativeClick(26); ticks(p);
+    };
+    const used = () => String(p.getAttribute(T.USED_CODES_ATTRIBUTE) ?? '').split(',');
+    const home = [...T.rings().values()].find(r => r.destination?.getDistance(new Location(RING.x, RING.y, 0)) <= 1).destination;
+    const ajp = T.rings().get('AJP');
+    const visited = CacheDefinitions.getVarbitId('varlamore_visited');
+
+    sender.sendVarbit(visited, 0);
+    await nativeTravel('AJP');
+    assert.deepEqual(at(p), [home.getX(), home.getY(), home.getZ()], 'back onto the ring it was dialled from');
+    assert.equal(typed.at(-1), "You can't use the fairy ring to go there until you have visited Varlamore.");
+    assert.equal(p.getDialogueManager().isActive(), true, 'the mesbox is open');
+    assert.equal(p.getAttribute(T.LAST_CODE_ATTRIBUTE), 'AJP');
+    assert.equal(sender.getVarbit(5374), ajp.index, 'the code is the last destination');
+    assert.ok(!used().includes('AJP'), 'no travel-log entry');
+
+    sender.sendVarbit(visited, 1);
+    await nativeTravel('AJP');
+    assert.deepEqual(at(p), [ajp.destination.getX(), ajp.destination.getY(), ajp.destination.getZ()]);
+    assert.ok(used().includes('AJP'));
+
+    const bjr = T.rings().get('BJR').destination;
+    grail.setStage(p, 3);
+    const refusals = typed.length;
+    await nativeTravel('BJR');
+    assert.deepEqual(at(p), [ajp.destination.getX(), ajp.destination.getY(), ajp.destination.getZ()], 'BJR before the crone');
+    assert.equal(typed.length, refusals + 1);
+    assert.equal(typed.at(-1), "You can't use the fairy ring to go there until you have visited the Fisher King's realm.");
+    grail.setStage(p, 4);
+    await nativeTravel('BJR');
+    assert.deepEqual(at(p), [bjr.getX() + 128, bjr.getY(), bjr.getZ()], 'the withered realm, 128 tiles east');
+    grail.setStage(p, 9);
+    await nativeTravel('BJR');
+    assert.deepEqual(at(p), [bjr.getX(), bjr.getY(), bjr.getZ()], 'the restored realm once Percival is king');
   });
 });
 

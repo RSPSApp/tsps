@@ -100,6 +100,8 @@ const RULES = {
   port_roberts: { needs: [{ varbit: "port_roberts_visited", min: 1 }] },
 };
 const CRANDOR = "crandor";
+/** The Great Conch's port, The Summer Shore (Wiki: The Great Conch), as the cache's charter row. */
+const GREAT_CONCH_PORT = "summer_shore";
 
 let core = null;
 let pluginApi = null;
@@ -599,6 +601,8 @@ function transcriptOpensMap(event) {
 function answerTranscriptCondition({ player, definition, text }) {
   if (!TRADERS.includes(definition?.getName?.())) return null;
   const value = String(text).toLowerCase();
+  // "What brings you all the way out here?" is only asked of the crew at the Great Conch.
+  if (value === "at the great conch") return portAt(player.getLocation?.())?.slug === GREAT_CONCH_PORT;
   if (value.includes("does not have")) return !carriesRefused(player);
   if (value.includes("crandor")) return false;
   return refusalCarried(player, text);

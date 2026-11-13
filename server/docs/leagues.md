@@ -1497,8 +1497,10 @@ and each item's page. How the items are obtained (the echo bosses' drops) is not
   a powered staff with the captured cast, impact and splash; body and earth rune charges and the
   captured Check line; Shatter stacks in varbit `lithic_sceptre_shatter_stacks` (one an attack as
   its hit lands, a splash too, up to 14, one lost every 50 ticks out of combat, all on a teleport
-  or instance); Explosive Shatter fires from the bar at the target for 5 stacks and no energy, with
-  the captured look and refusal line.
+  or on joining an instance, through the private area's `private-area:entered` { player, area });
+  Explosive Shatter fires from the bar at the target for 5 stacks and no energy, with the captured
+  look and refusal line, only at a target the sceptre's cast may attack and reach (the ordinary
+  attack permission, then range and line of sight).
 - **Crystal blessing** (`items/CrystalArmour.plugin.js`): crystal armour's accuracy and damage bonus
   for melee and powered staves, and +20 magic attack and +2% magic damage a piece, which Tumeken's
   shadow multiplies.
@@ -1515,7 +1517,8 @@ and each item's page. How the items are obtained (the echo bosses' drops) is not
   combat" means while the player has no combat target.
 - Explosive Shatter: the 3 tiles counted round the target; the magic part as the spell's roll
   times 1.5; the typeless part as a uniform roll up to 75% of the max hit, raised to 10, that never
-  misses; one sceptre charge a use; nothing happening with no target in reach.
+  misses; one sceptre charge a use; nothing happening, and nothing spent, with no target the cast
+  could attack and reach.
 
 **Not covered:** the Raging Echoes and Grid Master versions of the Devil's element and the crystal
 blessing; the quadrant and the tecpatl's double hit staying open to any character, as they were;

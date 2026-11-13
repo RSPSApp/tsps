@@ -1068,14 +1068,9 @@ export class CombatFactory {
                 let poisonType: PoisonType | undefined;
                 let rangedPoison = false;
                 let applyPoison = false;
-                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn.
+                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn. Only a
+                // weapon that fires from the ammo slot uses it (not a crystal bow or chinchompas with (p) ammo left there).
                 const fired = resolvedHit.getFiredRangedShot?.() ?? null;
-                const weaponInterface = fired ? fired.weaponInterface : playerAttacker.getWeapon();
-                const thrownRangedWeapon =
-                    weaponInterface == WeaponInterfaces.DART ||
-                    weaponInterface == WeaponInterfaces.KNIFE ||
-                    weaponInterface == WeaponInterfaces.THROWNAXE ||
-                    weaponInterface == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
                     const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
@@ -1084,12 +1079,17 @@ export class CombatFactory {
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
-                    poisonType = CombatPoisonData.getPoisonType(fired
-                        ? (thrownRangedWeapon ? fired.weapon : fired.ammo)
-                        : playerAttacker.getEquipment().get(
-                            thrownRangedWeapon ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT
-                        )
-                    );
+                    // A stand-in player without a real Equipment has no fired shot: its thrown weapon or ammo slot.
+                    const weaponInterface = playerAttacker.getWeapon();
+                    const thrown = weaponInterface == WeaponInterfaces.DART || weaponInterface == WeaponInterfaces.KNIFE ||
+                        weaponInterface == WeaponInterfaces.THROWNAXE || weaponInterface == WeaponInterfaces.JAVELIN;
+                    const projectile = fired
+                        ? fired.projectile
+                        : playerAttacker.getEquipment().get(thrown ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT);
+                    // The toxic blowpipe rolls its own venom (ToxicBlowpipe.plugin.js, 1 in 4 on the Wiki).
+                    poisonType = projectile?.getId?.() === ItemIdentifiers.TOXIC_BLOWPIPE
+                        ? undefined
+                        : CombatPoisonData.getPoisonType(projectile);
                 }
 
                 if (applyPoison && poisonType) {

@@ -13,8 +13,9 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 let core, Mahogany, Instance;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.ObjectDefinition.init();
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   Mahogany = require("../plugins/skills/construction/MahoganyHomes.Construction");
   Instance = require("../plugins/skills/construction/Instance.Construction");
   PM.emitServerStartup({});
@@ -88,11 +89,25 @@ function drain(p) {
   }
   return lines;
 }
+// Supplied restored-contract checkpoint, including the client-side state that login sends.
+function seedContract(p, saved) {
+  p.setAttribute("construction:contract", structuredClone(saved));
+  for (let index = 1; index <= 8; index++) {
+    p.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId(`con_contract_hotspot_${index}_display`), saved.states[index] ?? 0);
+  }
+}
 function work(p, home, index, clickType) {
   const h = home.hotspots.find(h => h.index === index);
   assert.ok(h, `hotspot ${index} exists`);
-  const object = new core.GameObject(h.loc, p.getLocation().clone(), 10, 0, null);
-  assert.equal(PM.emitObjectInteraction({ player: p, object, objectId: h.loc, clickType, handled: false }), true);
+  const at = p.getLocation().clone();
+  const object = new core.GameObject(h.loc, at, 10, 0, null);
+  const definition = core.ObjectDefinition.forPlayer(h.loc, p);
+  const option = definition?.getInteractions()?.[clickType - 1]?.toLowerCase();
+  assert.equal(option, { 2: "remove", 3: "repair", 4: "build" }[clickType], "the current cache variant exposes the requested operation");
+  const location = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  // Match ObjectActionPacketListener's actual event, including generic quest consumers.
+  assert.equal(PM.emitObjectInteraction({ player: p, object, definition, objectId: h.loc, clickType, option,
+    location, sourceLocation: { ...location }, handled: false }), true);
 }
 function tools(p) {
   for (const id of [core.ItemIdentifiers.HAMMER, core.ItemIdentifiers.SAW]) p.getInventory().add(new core.Item(id, 1), false);
@@ -125,8 +140,8 @@ test("both contractor options preserve an unfinished saved contract, including l
   const { p } = actor(t), home = homeFor("Jeff");
   // A legacy individually rolled layout and removed space remain actionable after the update.
   const saved = { home: home.key, tier: 0, states: { 3: 4, 7: 1 } };
-  p.setAttribute("construction:contract", structuredClone(saved));
-  p.setAttribute("construction:contract-last-tier", 3);
+  seedContract(p, saved);
+  p.setAttribute("construction:contract-last-tier", 0);
   for (const option of ["Contract", "Last-tier contract"]) {
     npcClick(p, core.CacheDefinitions.getNpcId("con_contractor_varrock"), option);
     assert.deepEqual(p.getAttribute("construction:contract"), saved, `${option} cannot abandon work`);
@@ -140,12 +155,14 @@ test("both contractor options preserve an unfinished saved contract, including l
 test("worklists track removal, rebuild and repair; another player's state and rewards stay isolated", (t) => {
   const a = actor(t), b = actor(t), home = homeFor("Jeff");
   const saved = contract(a.p, home, 0);
-  b.p.setAttribute("construction:contract", structuredClone(saved));
+  assert.equal(stateString(saved), "00333313", "the documented work order precedes object actions");
+  seedContract(b.p, saved);
   tools(a.p); tools(b.p);
   // Only the first assigned object is removed. It must still appear on the worklist.
   work(a.p, home, 3, 2);
   assert.equal(a.p.getAttribute("construction:contract").states[3], 4);
   assert.equal(b.p.getAttribute("construction:contract").states[3], 3);
+  assert.equal(b.p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("con_contract_hotspot_3_display")), 3);
   npcClick(a.p, home.client, "Talk-to");
   assert.ok(drain(a.p).includes("I'd like a Wooden shelf built."));
   // Beginner Jeff row1 costs 11 planks:2+3+2+2+1+1, including the mirror repair.

@@ -63,6 +63,12 @@ function animate(player, animation) {
   player.performAnimation(new (Common.getCore().Animation)(animation));
 }
 
+/**
+ * The urn's poison severity (first hit 2): the poison varp goes 0 -> 6 on a bite, and back up to 6 from 5 or lower,
+ * whatever the bite's damage (rsprox_transcripts/227/01843.txt:24865, :25476, :25755; 227/00552.txt:89659).
+ */
+const URN_POISON_SEVERITY = 6;
+
 /** The bite itself: the damage, synth 797, the line and the poison. */
 function bite(player, random) {
   const { CombatFactory } = Common.getCore();
@@ -70,7 +76,7 @@ function bite(player, random) {
   Common.sound(player, Common.ids().sound.bitten);
   Common.spam(player, Common.MESSAGES.bitten);
   Common.spam(player, Common.MESSAGES.urnPoisoned);
-  CombatFactory.poisonEntity(player, Common.rollHit(random));
+  CombatFactory.poisonEntity(player, URN_POISON_SEVERITY);
 }
 
 /** A step of a search that is still this run's room: nothing happens once the player has left it. */

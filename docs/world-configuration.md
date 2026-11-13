@@ -608,6 +608,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `EmptyContainers` | EmptyContainers | items | yes | Empty option on filled buckets, pots, jugs, bowls and plant cure: leaves the empty container and sends the captured message and sound. |
 | `EternalTeleportCrystal` | EternalTeleportCrystal | items | yes | Eternal teleport crystal: unlimited Lletya and Prifddinas teleports, with Toggle swapping the left-click destination. (members only) |
 | `EyeOfAyak` | EyeOfAyak | items | yes | Eye of Ayak: powered staff charged with demon tears or runes, with Check, Uncharge and Dismantle, casting every 3 ticks. (members only) |
+| `FerociousGloves` | FerociousGloves | items | yes | Ferocious gloves: the Lithkren Vault machinery makes them from hydra leather and reverts them, with a hammer, after Dragon Slayer II; and the leather's Inspect. (members only) |
 | `Food` | Food | items | yes | Eating: heals, boosts, drains and cures from data/food.json, with eat delays, multi-bite foods, combo foods and the food-eaten counter. |
 | `GiantEggSac` | GiantEggSac | items | yes | Giant egg sac: cut open in a bank for 100 red spiders' eggs, Remove-eggs, Check-eggs and bank Empty. (members only) |
 | `GiantsoulAmulet` | GiantsoulAmulet | items | yes | Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each. (members only) |

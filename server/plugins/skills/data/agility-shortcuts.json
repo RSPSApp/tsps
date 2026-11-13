@@ -3899,6 +3899,22 @@
       "note": "rsprox captures 772, 799, 817, 3340"
     },
     {
+      "name": "Platform edge (Chasm of Fire)",
+      "object": 56371,
+      "at": [1438,10098,2],
+      "level": 73,
+      "xp": 3.2,
+      "route": [1438,10097,2],
+      "steps": [
+        {"sound":2454,"loops":2,"delay":12},
+        {"sound":2461,"loops":2,"delay":26},
+        {"move":[1438,10098,2],"anim":"CLIMB_DOWN","delay":4,"speed":[22,35],"dir":"south","ticks":1},
+        {"msg":{"spam":"You slide off the lip of the platform, landing on the one below."}},
+        {"tele":[1438,10098,1]}
+      ],
+      "note": "rsprox captures 817, 819"
+    },
+    {
       "name": "Slope (Pollnivneach)",
       "object": [62414,62415],
       "at": [[3347,2981,0],[3340,2981,0]],

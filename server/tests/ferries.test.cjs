@@ -84,7 +84,11 @@ const api = {
     TeleportHandler: { checkReqs: () => true, destinationAllowed: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
     TeleportType: { NORMAL: "NORMAL" },
   },
-  onNpcInteraction: (handler) => hooks.npc.push(handler),
+  // Named hooks (Andras's Travel) are tested in andras-boat.test.cjs.
+  onNpcInteraction: (handler) => { if (typeof handler === "function") hooks.npc.push(handler); },
+  onNpcDialogueVariant() {},
+  onPlayerLogin() {},
+  persistAttribute() {},
   onObjectInteraction: (handler) => hooks.object.push(handler),
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),

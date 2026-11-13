@@ -144,7 +144,6 @@ module.exports = function registerBearYourSoulQuest(api) {
     if (!String(event.option ?? "").toLowerCase().includes("read")) return false;
     const { player } = event;
     if (!has(player, SOUL_JOURNEY)) return false;
-    player.performAnimation?.(READ_ANIMATION);
     openBook(player, BOOK_TITLE, BOOK_PAGES, () => finishReadingBook(player));
     event.handled = true;
     return true;

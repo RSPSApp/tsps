@@ -2,6 +2,7 @@
 
 const { randomUUID } = require("node:crypto");
 const Data = require("./Data.BeginnerTreasureTrails");
+const { playDig } = require("../trails/Dig.TreasureTrails");
 const { TIERS, completedAttribute, sharedCompletedCount } = require("../trails/Tiers.TreasureTrails");
 const TRAIL_META = "treasure-trails:beginner";
 const COMPLETED_ATTRIBUTE = completedAttribute({ name: "beginner" });
@@ -196,7 +197,7 @@ function dig(event) {
   });
   if (!trail) return;
   event.allow = false;
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_dig" ) ?? 830));
+  playDig(core, player);
   advance(player, trail);
 }
 

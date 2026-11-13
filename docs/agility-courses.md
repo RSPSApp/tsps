@@ -413,8 +413,9 @@ course's `marks` block:
   log and ledge can fail until 93 (the Wiki's charts), but no damage, landing or line is known,
   so they don't. The entry pipe uses sequence 749 delayed to cycle 30 and exact movement from
   cycles 30–126 in both directions, as recorded in RSProx 1060, 1061 and 2875. The 10 XP, level
-  requirement and ladder route are in `agility-shortcuts.json`. The pipe's Barcrawl requirement
-  isn't done.
+  requirement and ladder route are in `agility-shortcuts.json`. Barcrawl is asked at the
+  outpost's gate (2545,3569-3570, `AlfredGrimhandsBarcrawl.Quest.js`), which the Wiki's Barbarian
+  Guard page says keeps players out of the outpost until it is done; the pipe is inside it.
 
 ## Wilderness Agility Course
 

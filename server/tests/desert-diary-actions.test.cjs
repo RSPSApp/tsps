@@ -65,6 +65,15 @@ test("Desert Diary skill, combat and Pyramid Plunder tasks credit only their qua
   const wrongClay = actor(3200, 2900);
   for (let i = 0; i < 5; i++) send("mining:success", { player: wrongClay, itemId: core.ItemIdentifiers.CLAY });
   assert.equal(done(wrongClay, "mine-5-clay-in-the-north-eastern-desert"), false);
+  // A worn bracelet of clay turns it into soft clay as it is mined (Mining sends the yielded id): it still counts.
+  const braceletClay = actor(3405, 3160);
+  for (let i = 0; i < 4; i++) send("mining:success", { player: braceletClay, itemId: core.ItemIdentifiers.SOFT_CLAY });
+  assert.equal(done(braceletClay, "mine-5-clay-in-the-north-eastern-desert"), false);
+  send("mining:success", { player: braceletClay, itemId: core.ItemIdentifiers.SOFT_CLAY });
+  assert.equal(done(braceletClay, "mine-5-clay-in-the-north-eastern-desert"), true);
+  const softClayElsewhere = actor(3200, 2900);
+  for (let i = 0; i < 5; i++) send("mining:success", { player: softClayElsewhere, itemId: core.ItemIdentifiers.SOFT_CLAY });
+  assert.equal(done(softClayElsewhere, "mine-5-clay-in-the-north-eastern-desert"), false);
 
   // Granite, teak, yew balcony, smithing, cooking, herblore.
   const granite = actor(3200, 2900);

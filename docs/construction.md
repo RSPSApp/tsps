@@ -320,13 +320,46 @@ for a sink, range or bath), old (Remove), empty (Build: the Wiki's planks) or th
 The client pays the tier's experience and Carpenter points and restores run energy (the Carpenter's
 outfit adds to the experience, see below). Last-tier contract repeats the last tier; Rewards opens the shop
 (673) with the Wiki's prices; the supply crate rolls the Wiki's table. One Leagues capture
-(recording 1863, rev 227) gives the tier menu ("Select an option": "Beginner Contract", "Novice
-Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
+(recording 1863; decoded-snapshot identity below) gives the tier menu ("Select an option":
+"Beginner Contract", "Novice Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
 Build playing `human_poh_build` with synth 938, Remove playing `human_throw_away` with synth 2097
 or 2098 (delay 20), and the last job's `<col=229628>Jeff seems happy with your work. Talk to him
-for your reward.</col>` (him/her from the Wiki's client genders). The rest of its dialogue and
-messages are ours (except "I'd better leave this alone right now."), and which pieces need work
-approximates the Wiki's per-client layouts.
+for your reward.</col>` (him/her from the Wiki's client genders). The homeowner's unfinished work is now listed in hotspot order rather than as a count.
+References to recording 1863 here use the supplied decoded snapshot (`recordings/1863.txt`),
+header revision 227.1, transcript SHA-256
+`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`.
+In that snapshot, lines 88589–88820 show a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
+dresser, mirror repair and chair in successive dialogue pages. These offsets apply only to this
+snapshot's rendering; its decoder build and capture date are unknown. To locate the sequence in
+another render, search for `Hey, I'm your contractor from Mahogany Homes, what did you want done?`,
+then Jeff's `I'd like a Wooden shelf built.` through `I'd like a Wooden chair built.`.
+The request vocabulary comes from the
+[homeowner transcripts](https://oldschool.runescape.wiki/w/Transcript:Jeff_(Mahogany_Homes)),
+not the loc's generic display names (for example, "Shelves"). The other homeowner transcripts
+also group duplicate pieces, such as Bob's bookcases/cabinets and Leela's small tables; requests
+combine unfinished pieces of the same kind. The exact singular wording after partially finishing
+a pair is a template inference, and unrecorded clients/tiers are not claimed as captured wording.
+The player question precedes the list. Removed spaces remain on the list until built; completed
+pieces disappear from it.
+
+[`Mahogany Homes/Mechanics`](https://oldschool.runescape.wiki/w/Mahogany_Homes/Mechanics?oldid=15141725)
+documents fixed client/tier layouts. `data/Layouts.Construction.js` records its 138 table rows as
+137 distinct work orders: Expert Larry has a duplicate row. Beginner Norman has two orders
+and Tau four; Sarah has two at every tier; Expert Bob and Jeff have two. The shared Beginner/
+Novice layouts and the Adept/Expert differences are retained. Equal selection among distinct
+documented orders is an inference; neither exact probabilities nor an undocumented third
+Expert Larry order are asserted. The Wiki's display-state table is explicitly unverified;
+work orders use the active cache's repair/remove states, and removal/building continue using
+its empty and tier-built states. Existing saved contracts are not migrated or rerolled, and
+both contractor actions refuse to overwrite unfinished work.
+
+Other contractor/completion dialogue and messages remain approximations except the captured
+lines described above. These recordings are historical Leagues observations; they establish
+sent dialogue and actions, not current-game probabilities or rendered UI. The native regression
+is `node --test tests/mahogany-homes-contract-work.test.cjs` after `yarn build` in `server/`.
+It loads the real cache and plugins and uses registered NPC/object hooks and dialogue resumes
+with seeded players/house ownership; it does not claim walking, login persistence or rendered
+client coverage.
 
 ### Adding a room
 
@@ -417,6 +450,17 @@ rarely, so when it shows otherwise isn't known).
 A new house's save lists its garden's exit portal by hotspot only; loading a house now places
 such furniture, so the portal shows, and you arrive in front of it.
 
+Costume room storage (`Storage`): Open on a treasure chest, toy box or fancy dress box plays
+`human_openheavychest`, on an armour case or magic wardrobe `human_openhighcupboard`, both with
+sound 62. The furniture shows its open loc (`poh_cos_room_<piece>_open_<wood>`, options Search and
+Close) a tick later and the storage opens a tick after that, Bank PIN first if one is set. Search on
+the open loc opens the storage at once; Close plays `human_closechest` or `human_closehighcupboard`
+with sound 60 and shows the closed loc a tick later. The cape rack has no open loc and is searched
+as it stands. The treasure chest reopens on the tier last picked, in any chest, and the interface
+keeps its search and scroll when the same storage reopens, upgraded or not (rsprox captures 229/2803,
+229/2808, 229/2812, 229/271). Ours: the open state isn't saved, an upgrade builds the piece closed,
+and the remembered tier lasts until logout.
+
 Pools of restoration to ornate rejuvenation (RejuvenationPool plugin) play `poh_pool_drink`
 when drunk from, with no message or sound (captures).
 
@@ -481,7 +525,6 @@ butler's, guests' conversations with the servant, and the Butler's guest greetin
 ## Not done yet
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).
-- Hosidius blueprints from the reward shop do nothing yet; Amy's saw works as a saw only.
 - The spice rack's build menu text: live shows "Spice rack|Teak plank: 3<br>Soft clay: 6<br>4 dose
   spice shaker<br>of each colour" (captures). Ours lists the cache name and its first four materials.
 - Fish trophy experience the Wiki doesn't list (haddock and orangefin on teak use the

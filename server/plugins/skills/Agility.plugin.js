@@ -507,6 +507,11 @@ function giveCourseItem(player, course, gives) {
   if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
 }
 
+/** No run energy comes back while an Agility obstacle is being crossed (Wiki: Energy). */
+function pauseEnergyRecoveryMidObstacle(entity, units) {
+  return ObstacleRunner.isCrossingAgilityObstacle(entity, core.World.getProcessCycle()) ? 0 : units;
+}
+
 function pauseMarksOnLogout({ player }) {
   spawnedMarks(player.getUsername()).forEach((item) => item.setAgingPaused(true));
 }
@@ -666,6 +671,7 @@ function attemptObstacle(player, context, entry) {
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
     busyVarbit: obstacle.course != null,
+    agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
@@ -824,6 +830,7 @@ module.exports = {
     api.onNpcInteraction("Agility Trainer", { "Give-Stick": operateNpcObstacle });
     api.registerArea(createTileObstacleArea());
     api.onCanTeleport(blockTeleportMidObstacle);
+    api.registerRunEnergyRestoreModifier(pauseEnergyRecoveryMidObstacle);
     api.onPlayerLogout(finishObstacleOnLogout);
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);

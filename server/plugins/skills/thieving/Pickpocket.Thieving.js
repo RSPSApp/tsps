@@ -14,7 +14,8 @@
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite
  * workman's are game messages); the success line is followed by the loot's own lines: the
  * Master Farmer counts his seeds (`lootLines: "count"`), an entry's `steal` names its item,
- * and a clue scroll is always announced.
+ * and a clue scroll is always announced. Too low a level is a message box with its mesbox line.
+ * A success reports its loot to the client's loot tracker (script 7192) after the sound.
  */
 const fs = require("fs");
 const path = require("path");
@@ -264,7 +265,9 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
       let coins = 0;
       for (let extra = 1; extra < times; extra++) coins += roll(target.coinPouch.coins, random);
       if (coins > 0) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, coins));
-      given.push({ ...item, amount: 1 });
+      const tracked = [[target.coinPouch.id, 1]];
+      if (coins > 0) tracked.push([core.ItemIdentifiers.COINS, coins]);
+      given.push({ ...item, amount: 1, tracked });
       continue;
     }
     const total = clue ? amount : amount * times;
@@ -280,11 +283,47 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
   return given;
 }
 
+/**
+ * Wiki (Gloves of silence): Check names the wear, which belongs to the player (every pair shows the same), by the
+ * failures left: each line from 62, 61, 33, 19, 9 and 1 left down to the next (the table keeps each line's lowest).
+ */
+const GLOVES_CONDITION = [
+  [GLOVES_OF_SILENCE_FAILURES, "Your gloves are new."],
+  [34, "Your gloves are in good condition."],
+  [20, "Your gloves are starting to look quite shabby."],
+  [10, "Your gloves are starting to need repair."],
+  [2, "Your gloves are in need of repair!"],
+  [1, "Your gloves are about to fall apart!"],
+];
+
+function glovesFailuresLeft(player) {
+  return GLOVES_OF_SILENCE_FAILURES - (Number(player.getAttribute(GLOVES_OF_SILENCE_ATTRIBUTE)) || 0);
+}
+
+function checkGloves({ player }) {
+  const left = glovesFailuresLeft(player);
+  player.sendMessage((GLOVES_CONDITION.find(([atLeast]) => left >= atLeast) ?? GLOVES_CONDITION.at(-1))[1]);
+}
+
+/** The necklace's charges, the player's own (Wiki: "all dodgy necklaces will show the same charge when checked"). */
+function dodgyNecklaceCharges(player) {
+  const stored = player.getAttribute(DODGY_NECKLACE_ATTRIBUTE);
+  return stored === undefined || stored === null ? DODGY_NECKLACE_CHARGES : Number(stored);
+}
+
+/** Check, carried or worn. No recording or Wiki quote gives the line: it follows the protect line's wording. */
+function checkDodgyNecklace({ player }) {
+  const charges = dodgyNecklaceCharges(player);
+  player.sendMessage(`Your dodgy necklace has ${charges} charge${charges === 1 ? "" : "s"} left.`);
+}
+
 function wearOutGloves(player) {
   if (wornName(player, core.Equipment.HANDS_SLOT) !== "gloves of silence") return;
   const failures = (Number(player.getAttribute(GLOVES_OF_SILENCE_ATTRIBUTE)) || 0) + 1;
   if (failures < GLOVES_OF_SILENCE_FAILURES) {
     player.setAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, failures);
+    // Wiki (Gloves of silence): with one failure left, a chatbox warning.
+    if (failures === GLOVES_OF_SILENCE_FAILURES - 1) player.sendMessage("Your gloves of silence are going to fall apart!");
     return;
   }
   player.setAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
@@ -296,8 +335,7 @@ function wearOutGloves(player) {
 /** Wiki (Dodgy necklace): one charge per stun it prevents; the last one crumbles it. */
 function dodgyNecklaceProtects(player, random = Math.random) {
   if (wornName(player, core.Equipment.AMULET_SLOT) !== "dodgy necklace" || random() >= DODGY_NECKLACE_CHANCE) return false;
-  const stored = player.getAttribute(DODGY_NECKLACE_ATTRIBUTE);
-  const charges = (stored === undefined || stored === null ? DODGY_NECKLACE_CHARGES : Number(stored)) - 1;
+  const charges = dodgyNecklaceCharges(player) - 1;
   if (charges <= 0) {
     player.setAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
     player.getEquipment().set(core.Equipment.AMULET_SLOT, new core.Item(-1));
@@ -310,7 +348,7 @@ function dodgyNecklaceProtects(player, random = Math.random) {
   return true;
 }
 
-function succeed(player, npc, target, name) {
+function succeed(player, npc, target, name, npcId) {
   player.performAnimation(new core.Animation(target.pickpocketAnimation ?? THIEVING_ANIMATION));
   // Content may change the loot before it is handed over ("thieving:loot", a league relic's doubled or noted loot),
   // or multiply it as the rogue outfit does (`multiplier`, a league fragment's double loot).
@@ -324,18 +362,20 @@ function succeed(player, npc, target, name) {
     if (line) say(player, target, line);
   }
   core.Sounds.sendSound(player, core.Sound.THIEVING_PICKPOCKET);
+  // The client's loot tracker gets the loot as it landed, one entry per success.
+  pluginApi.emitCustomEvent("loot-tracker:add-npc", { player, npcId, items: given.flatMap((item) => item.tracked ?? [[item.id, item.amount]]) });
   player.getSkillManager().addExperiences(core.Skill.THIEVING, target.xp);
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: target.petBase, method: "pickpocket", target: target.name });
 }
 
 /** Caught: the message and the NPC's line now (no pickpocket animation); the stun follows. */
-function fail(player, npc, target, name) {
+function fail(player, npc, target, name, npcId) {
   if (core.ArceuusSpells.hasShadowVeil(player) && Math.random() < SHADOW_VEIL_CHANCE) {
     player.sendMessage("Your shadow veil prevents you from being noticed.");
     return;
   }
   say(player, target, `You fail to pick ${name}'s pocket.`);
-  npc.forceChat(target.catchLine ?? DEFAULT_CATCH_LINE);
+  npc.forceChat(target.catchLines?.[npcId] ?? target.catchLine ?? DEFAULT_CATCH_LINE);
   wearOutGloves(player);
   caughtAt.set(player, core.World.getProcessCycle());
   core.TaskManager.submit(caughtTask(player, npc, target));
@@ -415,8 +455,8 @@ function pickpocketTask(player, npc, target, name, event) { return new (class ex
     if (this.succeeded && (this.ticks = (this.ticks ?? 0) + 1) < (target.successTicks ?? 1)) return;
     this.stop();
     const succeeded = this.succeeded;
-    if (succeeded) succeed(player, npc, target, name);
-    else fail(player, npc, target, name);
+    if (succeeded) succeed(player, npc, target, name, event.npcId);
+    else fail(player, npc, target, name, event.npcId);
     // Content may ask for another go ("thieving:done", a league relic that keeps pickpocketing): the same click, a tick later.
     const done = { player, kind: "pickpocket", npc, succeeded, again: false };
     pluginApi.emitCustomEvent("thieving:done", done);
@@ -447,6 +487,12 @@ function pickpocketAgain(event) {
   event.player.getMovementQueue().walkToEntity(event.npc, () => pickpocket({ ...event, repeat: true }));
 }
 
+/** Too low a level: a message box, with its text as a mesbox line in the chat history. */
+function levelRefusal(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, text)));
+}
+
 function pickpocket(event) {
   const { player, npc } = event;
   const npcName = event.definition.getName();
@@ -458,8 +504,9 @@ function pickpocket(event) {
   event.handled = true;
 
   if (!event.repeat && !player.getClickDelay().elapsedTime(PICKPOCKET_COOLDOWN_MS)) return;
+  const name = messageName(target, npcName, event.npcId);
   if (player.getSkillManager().getCurrentLevel(core.Skill.THIEVING) < target.level) {
-    player.sendMessage(`You need a Thieving level of at least ${target.level} to do this.`);
+    levelRefusal(player, `You need level ${target.level} thieving to pick ${name}'s pocket.`);
     return;
   }
   const missing = requirementMessage(player, target);
@@ -490,7 +537,6 @@ function pickpocket(event) {
   request.onAttempt?.();
   player.getMovementQueue().reset();
   player.setPositionToFace(npc.getLocation());
-  const name = messageName(target, npcName, event.npcId);
   say(player, target, target.attemptLine ?? `You attempt to pick ${name}'s pocket.`);
   player.getClickDelay().reset();
   npc.getTimers().registers(core.TimerKey.ATTACK_IMMUNITY, 10);
@@ -523,6 +569,8 @@ function register(api) {
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
   api.onNpcsInteraction([...new Set(TARGETS.filter((t) => !t.option).flatMap((t) => t.npcs))], { Pickpocket: pickpocket });
   api.onNpcInteraction("Digsite workman", { "Steal-from": pickpocket });
+  api.onItemAction("Dodgy necklace", { Check: checkDodgyNecklace });
+  api.onItemAction("Gloves of silence", { Check: checkGloves });
 }
 
 module.exports = {
@@ -531,5 +579,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, rateOf },
+  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
 };

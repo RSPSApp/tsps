@@ -15,6 +15,10 @@ let core, next = 1500;
 const previousPlayerBots = process.env.DISABLE_PLAYER_BOTS;
 const SEERS = { x: 2725, y: 3500 };
 const ELSEWHERE = { x: 3222, y: 3218 };
+// West of each tree: the Wiki's west-most Seers' Village maple (2720,3475), and one of the four
+// maples it lists under "Woods west of Sinclair Mansion" (2683,3521), inside the diary's own box.
+const SEERS_WEST = { x: 2719, y: 3475 };
+const SINCLAIR_WOODS = { x: 2682, y: 3521 };
 
 before(async () => {
   process.env.DISABLE_PLAYER_BOTS = "1";
@@ -24,6 +28,7 @@ before(async () => {
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(SEERS.x, SEERS.y);
   core.RegionManager.loadMapFiles(ELSEWHERE.x, ELSEWHERE.y);
+  core.RegionManager.loadMapFiles(SINCLAIR_WOODS.x, SINCLAIR_WOODS.y);
   PM.emitServerStartup({});
 });
 after(() => {
@@ -76,4 +81,8 @@ test("a maple in Seers' Village pays 100 XP without the diary tier", async (t) =
 });
 test("a maple outside Seers' Village pays 100 XP even with the diary tier", async (t) => {
   assert.equal(await mapleXp(t, ELSEWHERE, true), 100);
+});
+test("the west-most Seers' Village maple pays 110, the woods west of Sinclair Mansion 100", async (t) => {
+  assert.equal(await mapleXp(t, SEERS_WEST, true), 110);
+  assert.equal(await mapleXp(t, SINCLAIR_WOODS, true), 100);
 });

@@ -1,15 +1,15 @@
 "use strict";
 
 const {
-  api, Animation, CacheDefinitions, DialogueChainBuilder, NpcDialogue, ActionDialogue, Equipment, ItemDefinition, Skill,
+  api, Animation, CacheDefinitions, DialogueChainBuilder, NpcDialogue, PlayerDialogue, ActionDialogue, ItemDefinition, Skill,
   ItemIdentifiers: Items,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 
-// Mahogany Homes (Wiki, and one Leagues rsprox capture, recording 1863, for the tier menu, the
-// hotspot sounds and the last-job line; the other dialogue lines and messages here are ours
+// Mahogany Homes (Wiki, and one Leagues rsprox capture, recording 1863, for the tier menu,
+// Jeff's worklist, hotspot sounds and the last-job line; other dialogue/messages are approximations
 // except "I'd better leave this alone right now."): Amy in Falador, then also Marlo (Varrock),
 // Ellie (East Ardougne) and Angelo (Hosidius) give contracts at four tiers (Beginner, Novice,
 // Adept, Expert: levels 1/20/50/70, planks, oak, teak, mahogany) for a random client's home in
@@ -19,13 +19,15 @@ const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 // mahogany wood; 0 is the home as it stands.
 // Speaking to the client when the work is done gives the tier's experience and Carpenter points
 // and a cup of tea (run energy to 100%). The Wiki's experience per plank, per repair and per
-// contract is used; the full Carpenter's outfit adds 2.5%. Which pieces need work is our
-// approximation of the Wiki's per-client layouts. Amy's Rewards opens the reward shop (673).
+// contract is used; the full Carpenter's outfit adds 2.5%. Layouts.Construction holds the
+// Wiki's tier-specific per-client work orders. Amy's Rewards opens the reward shop (673).
 // The homes, from the cache: each con_contract_<home>_hotspot<n> multiloc, the display varbit it
 // reads (con_contract_hotspot_<n>_display), and its piece of furniture, named by its empty-space
 // form (or its broken form for the pieces that are only ever repaired). ./data has the clients
 // and the Wiki's planks per piece.
 const MAHOGANY = require("./data/mahogany-homes.json");
+const LAYOUTS = require("./data/Layouts.Construction");
+const WORKLIST = require("./data/Worklist.Construction");
 const HOMES = (() => {
   const names = CacheDefinitions.getLocNames();
   const homes = new Map();
@@ -184,25 +186,21 @@ function planksName(tier) {
   return tier.planks;
 }
 
-/** A random home and the work it needs: each piece is fine, broken, or old and due a rebuild. */
+/** Choose a home and one of its tier-specific work orders; never replace a saved contract. */
 function assign(player, npcId, tierIndex) {
+  if (contractOf(player) || House.houseStateFor(player).owned === false) return chooseTier(player, npcId);
   const tier = TIERS[tierIndex];
   if (player.getSkillManager().getCurrentLevel(Skill.CONSTRUCTION) < tier.level) {
     return say(player, npcId, [`You'll need a Construction level of ${tier.level} for ${tier.name.toLowerCase()} contracts.`]);
   }
   const home = HOMES[Math.floor(Math.random() * HOMES.length)];
+  const layouts = LAYOUTS[clientName(home)][tierIndex];
+  const layout = layouts[Math.floor(Math.random() * layouts.length)];
   const states = {};
-  for (const hotspot of home.hotspots) {
-    if (!hotspot.buildable) {
-      if (Math.random() < 0.5) states[hotspot.index] = BROKEN;
-    } else if (Math.random() < 0.65) {
-      states[hotspot.index] = Math.random() < 0.3 ? BROKEN : OLD;
-    }
-  }
-  if (!Object.keys(states).length) {
-    const hotspot = home.hotspots[Math.floor(Math.random() * home.hotspots.length)];
-    states[hotspot.index] = hotspot.buildable ? OLD : BROKEN;
-  }
+  home.hotspots.forEach(hotspot => {
+    const state = Number(layout[hotspot.index - 1]);
+    if (state) states[hotspot.index] = state;
+  });
   player.setAttribute(LAST_TIER_ATTRIBUTE, tierIndex);
   setContract(player, { home: home.key, tier: tierIndex, states });
   say(player, npcId, [`${clientName(home)} in ${homeName(home)} needs some work done. Take ${planksName(tier)} and a few steel bars, just in case.`]);
@@ -244,18 +242,19 @@ function hotspotOption(event) {
 }
 
 function hasTools(player) {
-  const inventory = player.getInventory();
-  const offhand = player.getEquipment().getItems()[Equipment.SHIELD_SLOT]?.getId?.();
   // Wiki (Imcando hammer): it "can be used as a hammer, both while equipped and unequipped, in any way that a normal
   // hammer can be used"; Mahogany Homes: "Amy's saw or the Imcando hammer can be worn in the off-hand". House.hasHammer
-  // takes a hammer or either Imcando hammer, carried or wielded, as building at home does.
-  return House.hasHammer(player) && [Items.SAW, Items.CRYSTAL_SAW, Items.AMYS_SAW].some(id => inventory.contains(id) || offhand === id);
+  // and House.hasSaw take the tools carried or wielded, as building at home does.
+  return House.hasHammer(player) && House.hasSaw(player);
 }
 
-/** Planks come from the inventory, then the plank sack (as building at home does). */
+/**
+ * Planks come from the inventory, then the plank sack, and content may keep some
+ * ("construction:materials", a league fragment's planks saved "whilst training Construction"), as building at home does.
+ */
 function take(player, itemId, amount) {
   if (player.getInventory().getAmount(itemId) + House.storedAmount(player, itemId) < amount) return false;
-  House.useMaterial(player, itemId, amount);
+  House.useMaterials(player, null, new Map([[itemId, amount]]));
   return true;
 }
 
@@ -274,6 +273,38 @@ function remaining(contract) {
   return Object.values(contract.states).filter(state => state === BROKEN || state === OLD || state === EMPTY).length;
 }
 
+/** The client lists only unfinished work, in hotspot order, also after removing furniture. */
+function describeWork(player, npcId, home, contract) {
+  const chain = new DialogueChainBuilder()
+    .add(new PlayerDialogue(0, "Hey, I'm your contractor from Mahogany Homes, what did you want done?"));
+  const work = new Map();
+  for (const hotspot of home.hotspots) {
+    const state = contract.states[hotspot.index];
+    if (![BROKEN, OLD, EMPTY].includes(state)) continue;
+    const key = `${state === BROKEN ? "repair" : "build"}:${hotspot.kind}`;
+    const entry = work.get(key) ?? { hotspot, state, count: 0 };
+    entry.count++;
+    work.set(key, entry);
+  }
+  let index = 1;
+  for (const { hotspot, state, count } of work.values()) {
+    let line;
+    if (state === BROKEN) {
+      // Individually rolled legacy contracts can contain broken buildable pieces.
+      const transforms = CacheDefinitions.getObject(hotspot.loc).transforms;
+      const name = WORKLIST.repairs[hotspot.kind]
+        ?? CacheDefinitions.getObject(transforms[BROKEN]).name.replace(/^broken /i, "").toLowerCase();
+      line = `I'd like my ${name} fixed.`;
+    } else {
+      const names = WORKLIST.furniture[hotspot.kind];
+      const quantity = count === 1 ? "a" : count === 2 ? "two" : String(count);
+      line = `I'd like ${quantity} ${WORKLIST.woods[contract.tier]} ${names[count === 1 ? 0 : 1]} built.`;
+    }
+    chain.add(new NpcDialogue(index++, npcId, line));
+  }
+  player.getDialogueManager().startDialogues(chain);
+}
+
 function talkToClient(event) {
   const player = event.player;
   const npcId = event.npcId;
@@ -282,7 +313,7 @@ function talkToClient(event) {
   const contract = contractOf(player);
   if (contract?.home !== home.key) return say(player, npcId, ["Hello there. Mahogany Homes looks after my house, you know."]), true;
   const left = remaining(contract);
-  if (left) return say(player, npcId, [`There's still ${left === 1 ? "one thing" : `${left} things`} left to sort out.`]), true;
+  if (left) return describeWork(player, npcId, home, contract), true;
   const tier = TIERS[contract.tier];
   const award = { player, minigame: "mahogany-homes", points: tier.points };
   api.emitCustomEvent("minigame:points", award);

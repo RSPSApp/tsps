@@ -125,6 +125,65 @@ async function send(f, packet, npc) {
 
 const prod = (f, npc) => send(f, { type: "npc_option", index: npc.getIndex(), clickType: 1 }, npc);
 
+/** The first cardinal step from `at` to the gate approach, avoiding the pen and its gate. */
+function stepToGate(at, gate) {
+  const key = (x, y) => `${x},${y}`;
+  const inPen = (x, y) => x >= 2595 && x <= 2598 && y >= 3358 && y <= 3364;
+  const gateTile = (x, y) => x === 2594 && (y === 3361 || y === 3362);
+  const start = key(at.getX(), at.getY());
+  const target = key(gate[0], gate[1]);
+  const prev = new Map([[start, null]]);
+  const queue = [[at.getX(), at.getY()]];
+  while (queue.length) {
+    const [x, y] = queue.shift();
+    if (key(x, y) === target) {
+      let cur = key(x, y);
+      let step = null;
+      while (prev.get(cur)) {
+        const entry = prev.get(cur);
+        step = entry;
+        cur = entry.from;
+      }
+      return step;
+    }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 2576 || nx > 2624 || ny < 3336 || ny > 3380) continue;
+      if (inPen(nx, ny) || gateTile(nx, ny) || prev.has(key(nx, ny))) continue;
+      if (!core.RegionManager.canMovestart(new core.Location(x, y, at.getZ()), new core.Location(nx, ny, at.getZ()), 1, 1, null)) continue;
+      prev.set(key(nx, ny), { from: key(x, y), dx, dy });
+      queue.push([nx, ny]);
+    }
+  }
+  return null;
+}
+
+/** Prod a tile at a time until the sheep reaches the pen (the wiki's spam-click herding). */
+async function prodToPen(f, npc, index, pen) {
+  const gate = [2592, pen[1] >= 3362 ? 3362 : 3361];
+  for (let i = 0; i < 200 && progress(f, index) === 0 && npc.isRegistered(); i++) {
+    const at = npc.getLocation();
+    let step = null;
+    if (at.getY() === gate[1] && at.getX() >= gate[0] && at.getX() <= 2593) {
+      step = { dx: 1, dy: 0 }; // prod east through the west gate
+    } else {
+      step = stepToGate(at, gate);
+    }
+    if (!step) break;
+    // Stand behind the sheep, so clicking it faces the prod along the next step.
+    f.p.setLocation(new core.Location(at.getX() - step.dx, at.getY() - step.dy, at.getZ()));
+    await prod(f, npc);
+  }
+  // This test's actor stays in the world until the test ends; step it away from the
+  // gate so the next colour's sheep is not blocked by a previous player.
+  if (progress(f, index) === 1) f.p.setLocation(new core.Location(HOME[0], HOME[1], 0));
+  return progress(f, index);
+}
+
+const groundBones = (bones) => core.World.getItems().find((entry) =>
+  entry.getItem().getId() === bones && entry.isPendingRemoval?.() !== true);
+
 function useOn(f, itemId, npc) {
   const slot = f.inv.getSlotForItemId(itemId);
   return send(f, { type: "item_on_npc", targetIndex: npc.getIndex(), itemId, slot, widgetId: 3214 }, npc);
@@ -142,8 +201,8 @@ test("Sheep Herder: each sheep standing in the world can be prodded into the pen
     const npc = place(f, world);
     assert.equal(npc.getContentId(f.p), form, `control: ${world} shows as ${form}`);
     assert.equal(npc.getCurrentDefinition(f.p).getActions()[0], "Prod", "control: with Prod");
-    await prod(f, npc);
-    t.diagnostic(`${world}: progress ${progress(f, index)}; messages ${f.messages}`);
+    await prodToPen(f, npc, index, pen);
+    t.diagnostic(`${world}: progress ${progress(f, index)}; at ${npc.getLocation().getX()},${npc.getLocation().getY()}; messages ${f.messages}`);
     assert.ok(!f.messages.includes("Nothing interesting happens."), `${world}: not "Nothing interesting happens"`);
     assert.equal(progress(f, index), 1, `${world}: penned`);
     assert.ok(f.messages.includes(PENNED), `${world}: the transcript's line`);
@@ -162,7 +221,7 @@ test("Sheep Herder: the quest's own spawned sheep still works", async (t) => {
   const own = f.spawned.find((entry) => entry.getId() === 3986);
   assert.ok(own, "control: the quest spawned its red sheep");
   f.p.setLocation(new core.Location(own.getLocation().getX() - 1, own.getLocation().getY(), 0));
-  await prod(f, own);
+  await prodToPen(f, own, 0, [2596, 3362]);
   assert.equal(progress(f, 0), 1, "penned");
   assert.ok(npc.isRegistered(), "the other one is untouched");
 });
@@ -182,7 +241,7 @@ test("Sheep Herder: a world sheep needs the suit, the prod and the stage, and on
 
   const f = herder(t);
   const npc = place(f, 6179);
-  await prod(f, npc);
+  await prodToPen(f, npc, 0, [2596, 3362]);
   assert.equal(progress(f, 0), 1, "control: penned");
   const spawns = f.spawned.length;
   f.messages.length = 0;
@@ -195,7 +254,7 @@ test("Sheep Herder: feed on a world sheep doesn't remove it; on the penned one i
   const f = herder(t);
   f.inv.adds(I.SHEEP_FEED, 1);
   const npc = place(f, 6179);
-  await prod(f, npc);
+  await prodToPen(f, npc, 0, [2596, 3362]);
   assert.equal(progress(f, 0), 1, "control: penned");
 
   f.messages.length = 0;
@@ -207,10 +266,47 @@ test("Sheep Herder: feed on a world sheep doesn't remove it; on the penned one i
 
   const penned = f.spawned.at(-1);
   f.p.setLocation(new core.Location(penned.getLocation().getX() + 1, penned.getLocation().getY(), 0));
+  const death = t.mock.method(penned, "performAnimation", () => {});
   await useOn(f, I.SHEEP_FEED, penned);
   t.diagnostic(`on the penned sheep: ${f.messages}; progress ${progress(f, 0)}`);
   assert.equal(progress(f, 0), 2, "bones");
-  assert.equal(f.inv.getAmount(I.SHEEP_BONES_1_), 1, "in the pack");
+  assert.equal(death.mock.calls[0]?.arguments[0]?.getId?.(), 5336, "the sheep plays its collapse");
+  assert.equal(f.inv.getAmount(I.SHEEP_BONES_1_), 0, "not teleported into the pack");
+  assert.ok(groundBones(I.SHEEP_BONES_1_), "the bones fall where the sheep collapsed");
+});
+
+test("Sheep Herder: a sheep beside the west fence cannot be penned through it", async (t) => {
+  const f = herder(t);
+  const npc = place(f, 6179);
+  npc.moveTo(new core.Location(2594, 3360, 0));
+  f.p.setLocation(new core.Location(2593, 3360, 0));
+  await prod(f, npc);
+  t.diagnostic(`at ${npc.getLocation().getX()},${npc.getLocation().getY()}; progress ${progress(f, 0)}; messages ${f.messages}`);
+  assert.equal(progress(f, 0), 0, "not penned through the fence");
+  assert.ok(!f.messages.includes(PENNED), "no pen line");
+  assert.equal(npc.isRegistered(), true, "the sheep is still outside");
+});
+
+test("Sheep Herder: disposed bones outlive the old 300-tick life and return after a logout", async (t) => {
+  const f = herder(t);
+  f.inv.adds(I.SHEEP_FEED, 1);
+  const npc = place(f, 6179);
+  await prodToPen(f, npc, 0, [2596, 3362]);
+  const penned = f.spawned.at(-1);
+  f.p.setLocation(new core.Location(penned.getLocation().getX() + 1, penned.getLocation().getY(), 0));
+  await useOn(f, I.SHEEP_FEED, penned);
+  assert.equal(progress(f, 0), 2, "bones stage");
+  const bonesAt = () => core.World.getItems().filter((entry) =>
+    entry.getItem().getId() === I.SHEEP_BONES_1_ && entry.getOwner?.() === f.p.getUsername()
+    && entry.isPendingRemoval?.() !== true);
+  const bones = bonesAt()[0];
+  assert.ok(bones, "bones dropped");
+  for (let i = 0; i < 301; i++) bones.process();
+  assert.equal(bonesAt().length, 1, "bones outlive the default 300 ticks");
+  core.ItemOnGroundManager.deregister(bones);
+  assert.equal(bonesAt().length, 0, "owner-only bones are lost on logout");
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.equal(bonesAt().length, 1, "ensureSheep re-drops the bones on login");
 });
 
 // ------------------------------------------------------------------ Mourning's End Part I

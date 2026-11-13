@@ -12,6 +12,7 @@ module.exports = {
     require("./BoatTeleport.Sailing").register(api);
     require("./CargoHold.Sailing").register(api);
     require("./Charting.Sailing").register(api);
+    require("./ClueTurtle.Sailing").register(api);
     require("./Crew.Sailing").register(api);
     require("./CrystalExtractor.Sailing").register(api);
     require("./Gangplank.Sailing").register(api);

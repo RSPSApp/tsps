@@ -48,7 +48,7 @@ before(async () => {
     emitCustomEvent: (name, request) => {
       if (name === "combat-achievements:count") request.total = request.monster === "Zulrah" ? 12 : 0;
       if (liveTiles.has(name)) request.tile = liveTiles.get(name);
-      if (name === "entrana:check-items") Object.assign(request, { handled: true, allowed: !request.player.armed });
+      if (name === "entrana:check-items" && !request.player.noEntranaRule) Object.assign(request, { handled: true, allowed: !request.player.armed });
       events.push(name);
     },
   });
@@ -136,6 +136,17 @@ test("the Entrana port asks Entrana's item rule: no weapons or armour by ::telep
   run(p);
   clickRow(p, "port-entrana", OP.TELEPORT);
   assert.equal(teleports.length, 1, "unarmed: teleported");
+});
+
+test("the Entrana port refuses when nothing answers Entrana's item rule (its plugin off, a free-to-play world)", () => {
+  const p = player();
+  teleports.length = 0;
+  p.noEntranaRule = true;
+  run(p);
+  clickRow(p, "port-entrana", OP.TELEPORT);
+  assert.equal(teleports.length, 0, "unchecked: refused");
+  assert.equal(p.messages.at(-1), "You can't go there right now.");
+  assert.ok(!(p.getAttribute("teleports:recent") ?? []).includes("port-entrana"), "not remembered");
 });
 
 test("every destination lands on a free tile, with a known icon, type and tab", () => {

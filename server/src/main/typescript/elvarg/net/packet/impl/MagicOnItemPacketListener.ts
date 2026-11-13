@@ -164,7 +164,7 @@ export class MagicOnItemPacketListener {
     }
 
     if (!this.canGrabGroundItem(player, groundItem)) return;
-    if (!this.canReceiveGroundItem(player, groundItem.getPickupItem())) {
+    if (!this.canReceiveGroundItem(player, ItemOnGroundManager.rewardItem(player, groundItem, "telegrab"))) {
       player.getInventory().full();
       return;
     }
@@ -193,6 +193,8 @@ export class MagicOnItemPacketListener {
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();
+    // The cast itself, before the item comes away: what reacts to the grab rather than its landing.
+    PluginManager.emitCustomEvent("magic:telekinetic-grab-cast", { player, groundItem, itemId: groundItemId, position: position.clone() });
 
     // The item comes away when the projectile lands, not on the cast; the grab doesn't stall the
     // player, and anyone can still take the item first.

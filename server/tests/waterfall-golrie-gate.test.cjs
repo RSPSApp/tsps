@@ -57,3 +57,51 @@ test('from the inside the gate opens without the key', (t) => {
   assert.ok(messages.includes(WALK), messages.join(' | '));
   assert.ok(!p.getDialogueManager().isActive(), 'no locked-out conversation');
 });
+
+// Wiki Key (Tree Gnome Village Dungeon): after Roving Elves starts the key is no longer in the crate and
+// is re-obtained from Golrie ("Can I use your key?" ... "Golrie gives you a key.", recorded in
+// rsprox_transcripts/226/01694.txt during The Path of Glouphrie).
+const quests = () => require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+const questByKey = (key) => quests().find((entry) => entry.key === key);
+const CRATE = [1990, 2548, 9565];
+
+function crateSearcher(t, { rovingElves = 0 } = {}) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('golrie' + p.getIndex());
+  p.setRegistered(true); p.setLocation(new core.Location(2548, 9564, 0)); p.needsPlacement = false;
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+  const messages = [];
+  t.mock.method(p.getPacketSender(), 'sendMessage', (m) => { messages.push(m); return p.getPacketSender(); });
+  questByKey('waterfall_quest').setStage(p, 3);
+  questByKey('roving_elves').setStage(p, rovingElves);
+  return { p, messages };
+}
+
+
+const keys = (p) => p.getInventory().getAmount(core.ItemIdentifiers.KEY_17);
+
+test('before Roving Elves the crate still has the key', (t) => {
+  const { p } = crateSearcher(t);
+  new ObjectActionPacketListener().executeAction(p, ...CRATE, 1);
+  for (let i = 0; i < 6; i++) { p.getMovementQueue().process(); core.TaskManager.processWalkTo(p.getIndex()); core.TaskManager.process(); }
+  assert.equal(keys(p), 1);
+});
+
+test('once Roving Elves is started the crate no longer gives the key', (t) => {
+  const { p, messages } = crateSearcher(t, { rovingElves: 1 });
+  new ObjectActionPacketListener().executeAction(p, ...CRATE, 1);
+  for (let i = 0; i < 6; i++) { p.getMovementQueue().process(); core.TaskManager.processWalkTo(p.getIndex()); core.TaskManager.process(); }
+  assert.equal(keys(p), 0);
+  assert.ok(messages.includes('You search the crate but find nothing of interest.'), messages.join(' | '));
+});
+
+test('Golrie hands the key over when asked, once, and not into a full inventory', (t) => {
+  const { p } = crateSearcher(t, { rovingElves: 1 });
+  const ask = () => PM.emitCustomEvent('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.GOLRIE_2, stepId: '4oakcM', kind: 'message', handled: false });
+  ask(); ask();
+  assert.equal(keys(p), 1, 'one key, even on a second ask');
+  p.getInventory().deleteNumber(core.ItemIdentifiers.KEY_17, 1);
+  for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
+  ask();
+  assert.equal(keys(p), 0, 'no key into a full inventory');
+});

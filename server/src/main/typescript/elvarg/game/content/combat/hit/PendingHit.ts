@@ -46,6 +46,11 @@ type PendingHitConfig = {
     rollAccuracy?: boolean;
     /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
     experience?: boolean;
+    /**
+     * Skills the usual combat XP for this hit is split across, when it is not the attacker's
+     * fight style (a derived hit that pays another style's XP).
+     */
+    experienceSkills?: readonly number[];
     /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
     damage?: number;
     /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
@@ -76,8 +81,12 @@ export class PendingHit {
     private totalDamage = 0;
     private readonly delay: number;
     private accurate: boolean;
+    /** Hitsplats whose own accuracy roll failed (a shared or skipped roll counts once or not at all). */
+    private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** The skills the usual combat XP is split across, when not the attacker's fight style. */
+    private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
     private bestOf = 1;
     private damageMultiplier = 1;
@@ -161,6 +170,11 @@ export class PendingHit {
             }
             if (delayOrConfig.experience === false) {
                 this.experience = false;
+            }
+            if (Array.isArray(delayOrConfig.experienceSkills)) {
+                this.experienceSkills = delayOrConfig.experienceSkills
+                    .filter((skill) => Number.isInteger(skill))
+                    .map((skill) => skill as number);
             }
         }
 
@@ -258,6 +272,11 @@ export class PendingHit {
 
     public isAccurate(): boolean {
         return this.accurate;
+    }
+
+    /** How many hitsplats of this attack failed their own accuracy roll (Specialist refunds each). */
+    public getFailedAccuracyChecks(): number {
+        return this.failedAccuracyChecks;
     }
 
     /** Whether a roll hook let this hit through protection prayers (not a special's own trait). */
@@ -428,6 +447,7 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            if (rollAccuracy && !this.accurate) this.failedAccuracyChecks = 1;
             // Cap the roll to the HP held when it was made, before the hit-time
             // protection/Elysian reductions, so tick-eating and XP see this value.
             capToRemaining(damage);
@@ -489,6 +509,8 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            const ownRoll = !blockedByFirstMiss && !(i > 0 && traits?.sharedAccuracyRollAcrossHits === true);
+            if (ownRoll && rollAccuracy && !this.accurate) this.failedAccuracyChecks++;
             if (i === 0 && this.requireFirstAccurate) firstAccurate = this.accurate;
             capToRemaining(damage);
             this.totalDamage += damage.getDamage();
@@ -600,6 +622,7 @@ export class PendingHit {
                     this.method.accuracyDefenceType(this.combatType)
                 );
             if (!success) {
+                this.failedAccuracyChecks = Math.min(hitCount, attempt + 1);
                 continue;
             }
             const bounds: SpecialDamageBounds = {
@@ -661,6 +684,9 @@ export class PendingHit {
     public getSkills(): number[] {
         if (this.attacker.isNpc()) {
             return new Array();
+        }
+        if (this.experienceSkills) {
+            return [...this.experienceSkills];
         }
         return (this.attacker as Player).getFightType().getStyle().skill(this.combatType);
     }

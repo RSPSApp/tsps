@@ -17,6 +17,8 @@ import { Animation } from "../../../model/Animation";
 import { Graphic } from "../../../model/Graphic";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { resolveChatHighlights } from "../../../../net/protocol/ClientProtocol";
+import { CombatRange } from "../CombatRange";
 
 type TeleportSpell = {
     level: number;
@@ -44,13 +46,17 @@ const DEATH_CHARGE_COOLDOWN_VARBIT = "arceuus_death_charge_cooldown";
 const DEATH_CHARGE_ACTIVE_VARBIT = "arceuus_death_charge_active";
 const DEATH_CHARGE_CAST_SOUND = 5034;
 const DEATH_CHARGE_FADE_SOUND = 5056;
-/** Wiki: the killed creature must be within 16 tiles of the caster. */
+/** Wiki: the caster must be within 16 tiles of the slain creature (any tile of a large one). */
 const DEATH_CHARGE_RANGE = 16;
+/** Wiki: it does not trigger after PvP combat in the last ten ticks (Mod Ash: "attacked by a player lately"). */
+const DEATH_CHARGE_PVP_TICKS = 10;
 const DEATH_CHARGE_PENDING = "You already have a Death Charge pending on you.";
 const DEATH_CHARGE_COOLDOWN = "You can only cast Death Charge every 60 seconds.";
-const DEATH_CHARGE_CAST = "<col=a53fff>Upon the death of your next foe, some of your special attack energy will be restored.</col>";
-const DEATH_CHARGE_RESTORED = "<col=a53fff>Some of your special attack energy has been restored.</col>";
-const DEATH_CHARGE_FADED = "<col=a53fff>Your Death Charge has faded away.</col>";
+// Live's purple highlight: a53fff on a transparent chatbox, 6800bf on an opaque one (237/04102.txt; 241/900051.txt
+// sends the @mes_hl_pur@ tag itself).
+const DEATH_CHARGE_CAST = "@mes_hl_pur@Upon the death of your next foe, some of your special attack energy will be restored.</col>";
+const DEATH_CHARGE_RESTORED = "@mes_hl_pur@Some of your special attack energy has been restored.</col>";
+const DEATH_CHARGE_FADED = "@mes_hl_pur@Your Death Charge has faded away.</col>";
 
 /** The cache's self-cast Arceuus animation (human_cast_selfimbue). */
 const SELF_IMBUE = 8970;
@@ -356,6 +362,12 @@ export class ArceuusSpells {
         player.setAttribute(this.CORRUPTION_MARKED, this.hasMark(player));
     }
 
+    /** A message with live's `@mes_hl_*@` highlight, coloured for the player's chatbox background. */
+    private static sendHighlighted(player: Player, message: string): void {
+        const varbit = CacheDefinitions.getVarbitId("chatbox_transparency");
+        player.sendMessage(resolveChatHighlights(message, varbit != null && player.getPacketSender().getVarbit(varbit) === 1));
+    }
+
     private static sendDeathChargeVarbit(player: Player, name: string, value: number): void {
         const id = CacheDefinitions.getVarbitId(name);
         if (id != null) player.getPacketSender().sendVarbit(id, value);
@@ -371,7 +383,7 @@ export class ArceuusSpells {
         player.setAttribute(this.DEATH_CHARGE_TOKEN, token);
         this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 1);
         this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 1);
-        player.sendMessage(DEATH_CHARGE_CAST);
+        this.sendHighlighted(player, DEATH_CHARGE_CAST);
         player.getPacketSender().sendSoundEffect(DEATH_CHARGE_CAST_SOUND, 1, 0, 255);
         TaskManager.submit(new class extends Task {
             // Not keyed to the player, so clearing their tasks (a click) doesn't cancel it.
@@ -383,7 +395,7 @@ export class ArceuusSpells {
                 if (player.getAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL) == null) return; // spent on a kill
                 player.setAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL, null);
                 ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
-                player.sendMessage(DEATH_CHARGE_FADED);
+                ArceuusSpells.sendHighlighted(player, DEATH_CHARGE_FADED);
                 player.getPacketSender().sendSoundEffect(DEATH_CHARGE_FADE_SOUND, 1, 0, 255);
             }
         });
@@ -394,13 +406,16 @@ export class ArceuusSpells {
      * creature is within 16 tiles; a full bar still spends it), with its end graphic (cache 1855),
      * the varbit going down and the restored message (recording 3340).
      */
-    public static useDeathCharge(player: Player, killed?: { getLocation(): Location }): boolean {
+    public static useDeathCharge(player: Player, killed?: { getLocation(): Location; size?(): number }): boolean {
         if (!this.hasDeathCharge(player)) return false;
-        if (killed && !player.getLocation().isWithinDistance(killed.getLocation(), DEATH_CHARGE_RANGE)) return false;
+        if (killed && CombatRange.footprintDistance(killed.getLocation(), killed.size?.() ?? 1, player.getLocation()) > DEATH_CHARGE_RANGE) {
+            return false;
+        }
+        if (player.getCombat().ticksSinceAttackedByPlayer() <= DEATH_CHARGE_PVP_TICKS) return false;
         player.setAttribute(this.DEATH_CHARGE_UNTIL, null);
         this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
         player.performGraphic(new Graphic(1855));
-        player.sendMessage(DEATH_CHARGE_RESTORED);
+        this.sendHighlighted(player, DEATH_CHARGE_RESTORED);
         return true;
     }
 

@@ -1,8 +1,9 @@
 /**
  * Fremennik Diary drops that come noted (OSRS Wiki: Dagannoth bones, Aviansie, Thorodin):
  * - elite: the Dagannoth Kings' bones drop as bank notes;
- * - hard: the adamantite bars of the God Wars Dungeon's aviansie drop noted. Wilderness aviansie
- *   always drop them noted, whatever the diary.
+ * - hard: the adamantite bars of the God Wars Dungeon's aviansie drop noted. Aviansie in the
+ *   Wilderness (its God Wars Dungeon) always drop them noted, whatever the diary; anywhere else
+ *   they drop unnoted.
  * The Wiki also lets Thorodin switch the bones' noting off; that toggle is not here (no capture of
  * his lines, and his dialogue is generated).
  */
@@ -28,7 +29,9 @@ function notesDrop(player, npc, npcId, itemId) {
   const { ADAMANTITE_BAR, DAGANNOTH_BONES } = api.core.ItemIdentifiers;
   if (itemId === DAGANNOTH_BONES && DAGANNOTH_KING_IDS.has(npcId)) return tierComplete(player, "elite");
   if (itemId === ADAMANTITE_BAR && npc?.getDefinition?.()?.getName?.() === AVIANSIE) {
-    return !inGodWarsDungeon(npc.getLocation?.()) || tierComplete(player, "hard");
+    const location = npc.getLocation?.();
+    if (api.core.Wilderness.isInLocation(location)) return true;
+    return inGodWarsDungeon(location) && tierComplete(player, "hard");
   }
   return false;
 }

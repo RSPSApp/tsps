@@ -60,6 +60,19 @@ function withExtraDose(productId) {
   return next > 0 ? next : null;
 }
 
+/**
+ * The doses the brew came out with: recordings 4211 and 4213 only show 3-dose mixes made 4-dose
+ * ("...create a 4-dose potion."); a 1- or 2-dose input names its own count (Ours: the Wiki's
+ * Mechanics give the extra dose for any input under 4, and no message for it). Haemostatic
+ * dressing, which has no dose family, comes as 4.
+ */
+function productDoses(productId) {
+  const request = { itemId: productId, family: null };
+  api.emitCustomEvent("potions:dose-family", request);
+  const doses = request.family?.doses;
+  return Number.isInteger(doses) && doses > 0 ? doses : MAX_DOSES;
+}
+
 function breakAmulet(player) {
   player.setAttribute(CHARGES_ATTRIBUTE, MAX_CHARGES);
   const equipment = player.getEquipment();
@@ -72,7 +85,7 @@ function breakAmulet(player) {
 /** One charge spent on a brew, after "You mix ...": the message, and the crumble that ends the amulet. */
 function spendCharge({ player, mix }) {
   const left = chargesLeft(player) - 1;
-  const base = "Your amulet of chemistry helps you create a 4-dose potion.";
+  const base = `Your amulet of chemistry helps you create a ${productDoses(mix?.productId)}-dose potion.`;
   if (left > 1) {
     player.setAttribute(CHARGES_ATTRIBUTE, left);
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `${base} It has ${chargeText(left)} left.`);
@@ -97,7 +110,10 @@ function onMix(request) {
   request.extraDose = true;
 }
 
-/** "herblore:made": a brew given its extra dose costs its charge. */
+/**
+ * "herblore:made": a brew given its extra dose costs its charge. A league relic or fragment that makes the
+ * potion with 4 doses anyway clears `extraDose` (Wiki: no benefit for potions that always come with 4 doses).
+ */
 function onMade(made) {
   if (made.mix?.extraDose === true) spendCharge(made);
 }

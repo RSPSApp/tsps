@@ -335,6 +335,8 @@ function openWardrobe(f) {
   const at = f.player.getLocation();
   assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object: f.object, objectId: id, definition,
     clickType: index + 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
+  // Open swings the wardrobe open first; the storage follows two ticks later.
+  if (definition.getInteractions()[index]?.toLowerCase() === "open") for (let tick = 0; tick < 2; tick++) core.TaskManager.process();
 }
 
 function depositAllClick(f) {

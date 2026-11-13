@@ -19,6 +19,7 @@ All object ids and tiles are checked against this cache.
 - **Crossing:**
   - **On the choice, or straight away:** `busy` = 1; you face the way through; animation 4282 (`sos_security_door_drag`) and sound 4193 (2 loops, delay 30).
   - **A tick later:** a one-tile teleport through, `busy` = 0, and the animation is reset.
+- **Closing the warning or the question without an answer** (walking away, Esc, being interrupted): `busy` = 0 as the chatbox closes, as live does for a walk click under a chatbox (rsprox_transcripts/238/04168.txt tick 30). The same goes for the Castle Wars portal and the free-for-all questions.
 - **Teleblocked:** a teleblocked player can't come in: "A magical force prevents you from entering the Ferox Enclave while teleblocked." (our wording, kept from before).
 - **Varbits:** 6549 (`pvp_adjacent_area_client`) is 1 inside the town, and 10530 (`wildy_hub_buffer`) is 1 in the buffer by the barriers. Both are kept up to date by the local Ferox Area and cleared when the player leaves, including teleports, floor changes and direct entry into another area.
 - **Not like OSRS:** in OSRS the buffer counts as Wilderness (varbit 5963 = 1). Here the Wilderness plugin counts it as safe ground, as before, so 5963 stays 0 there. Attacks there are still only allowed when someone is teleblocked.

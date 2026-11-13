@@ -539,7 +539,9 @@ test("a Nid from the death roll or from Destroy reaches the listeners after the 
   assert.deepEqual(pets, [false], "Destroy's own Nid roll is handed over");
 });
 
-test("the collection log gets what the corpse hands over: the harvest's loot, and from a Destroy only its clue", () => {
+// The collection log, the clan loot broadcast and the loot notifications all read "npc-drops:roll" a microtask later,
+// so the harvested loot is sent as its own roll (the death roll is emptied); a Destroy logs only the clue it keeps.
+test("the harvest's loot goes out as one npc-drops:roll (log, clan broadcast), a Destroy logs only its clue", () => {
   const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
   const events = [];
   const core = {
@@ -567,9 +569,14 @@ test("the collection log gets what the corpse hands over: the harvest's loot, an
     return npc;
   };
   const logged = () => events.filter(([name]) => name === "collection-log:obtain").map(([, request]) => request.itemId);
+  const rolls = () => events.filter(([name]) => name === "npc-drops:roll").map(([, request]) => request);
   const player = { performAnimation() {} };
   Corpse.harvest({ player, npc: corpseWith() });
-  assert.deepEqual(logged(), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "harvested: all of it");
+  assert.equal(rolls().length, 1, "harvested: one roll");
+  assert.deepEqual(rolls()[0].drops.map((drop) => drop.itemId), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "all of it");
+  assert.equal(rolls()[0].countKill, false, "the death roll counted the kill");
+  assert.equal(rolls()[0].player, player);
+  assert.deepEqual(logged(), [], "logged through the roll, not twice");
   events.length = 0;
   const originalRandom = Math.random;
   Math.random = () => 0.99; // no Nid

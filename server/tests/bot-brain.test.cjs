@@ -3584,6 +3584,61 @@ test('a bot fighting away from players eats every cycle while its activity stays
   assert.ok(activityTicks < 10, `its activity is still downsampled (${activityTicks} of 60 cycles)`);
 });
 
+test('a bot retreating on foot away from players walks every cycle; its activity stays downsampled', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { BotPlayerSession } = require('../dist/net/BotPlayerSession');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { createInitialState } = require('../plugins/bots/behaviours/state/State.PlayerBots');
+  const core = PluginManager.getCoreApi();
+  const bot = (name, y) => {
+    const player = new Player(null, new core.Location(3093, y, 0));
+    player.setUsername(name);
+    player.setPlayerBot(true);
+    player.setSession(new BotPlayerSession());
+    player.setRegistered(true);
+    player.sendMessage = () => {};
+    t.after(() => player.setRegistered(false));
+    return player;
+  };
+  const behaviorMode = { PVP: 'pvp', ROAMING: 'roaming' };
+  const run = (retreating) => {
+    const player = bot(retreating ? 'far-retreat' : 'far-fight', 3700);
+    const opponent = bot(retreating ? 'far-chaser' : 'far-foe', 3701);
+    opponent.getCombat().attack(player);
+    player.getCombat().setUnderAttack(opponent);
+    const state = createInitialState({ x: 3093, y: 3700, z: 0 }, behaviorMode);
+    state.mode = 'pvp';
+    if (retreating) state.pvp.retreat = { startedAtMs: 0, runUntilMs: 0 };
+    let activityTicks = 0, supportTicks = 0, walks = 0;
+    const registry = { byId: new Map(), acquire: () => true, release() {}, pickNext: () => null, isBlocked: () => false };
+    const brain = new BotBrain({
+      player, state, registry,
+      world: { supportTick: () => { supportTicks++; return null; } },
+      activity: { id: 'pvp', repeat: true, actions: [{ id: 'fight', update: () => { activityTicks++; return 'running'; } }] },
+    });
+    t.mock.method(brain, 'dispatchMovement', () => { walks++; });
+    const entry = { player, state, brain };
+    const task = new BotBehaviorTask([entry], 1, {
+      timingDesyncMs: 0, behaviorMode,
+      lodConfig: { enabled: true, farStride: 4, mediumStride: 2, nearStride: 1 },
+      api: {
+        getWorld: () => ({ getPlayers: () => [], isPlayerSessionConnected: () => false }),
+        getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+        getCombatFactory: () => ({}), getAreaManager: () => ({}),
+        getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+      },
+    });
+    for (let cycle = 0; cycle < 60; cycle++) task.processEntry(entry, 0, 1000 + cycle * 600);
+    return { activityTicks, supportTicks, walks };
+  };
+  const retreat = run(true), fight = run(false);
+  assert.equal(retreat.supportTicks, 60, 'support still runs every cycle');
+  assert.equal(retreat.walks, 60, `the retreat's route goes out every cycle (${retreat.walks} of 60)`);
+  assert.ok(retreat.activityTicks < 10, `its activity is still downsampled (${retreat.activityTicks} of 60 cycles)`);
+  assert.ok(fight.walks < 10, `a bot that isn't retreating keeps its walk on the brain tick (${fight.walks} of 60)`);
+});
+
 test('rare cosmetic swaps replace armour with stat-identical variants in the same slot', () => {
   const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
   const { Item } = require('../dist/game/model/Item');
@@ -3606,4 +3661,20 @@ test('rare cosmetic swaps replace armour with stat-identical variants in the sam
       assert.equal(variant.getRequirements?.()?.toString(), def.getRequirements?.()?.toString(), key);
     }
   }
+});
+
+test('a name only a league character is saved under is taken for a new AI bot', () => {
+  const { nameHeld } = require('../plugins/bots/ai/RegisterAiBots.PlayerBots');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const real = PluginManager.getCoreApi();
+  const saves = new Set(['main:mainonly', 'league:leagueonly']);
+  const core = {
+    PLAYER_PROFILES: real.PLAYER_PROFILES,
+    GameConstants: { PLAYER_PERSISTENCE: { exists: (name, profile = real.MAIN_PROFILE) => saves.has(`${profile}:${name}`) } },
+    World: { getPlayerByName: (name) => (name === 'online' ? {} : undefined) },
+  };
+  const roster = { has: (name) => name === 'rostered' };
+  assert.ok(real.PLAYER_PROFILES.includes(real.LEAGUE_PROFILE), 'PRE: the league profile is one of the profiles');
+  for (const name of ['mainonly', 'leagueonly', 'online', 'rostered']) assert.equal(nameHeld(core, roster, name), true, name);
+  assert.equal(nameHeld(core, roster, 'free'), false);
 });

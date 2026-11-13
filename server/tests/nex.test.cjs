@@ -52,6 +52,13 @@ test("Zarosian items by name, the ancient hilt excepted", () => {
   assert.equal(Common.isZarosian("Rune platebody"), false);
 });
 
+test("Zarosian items follow the God Wars table: the Ancient mace is Bandos's, not Zaros's", () => {
+  assert.equal(Common.isZarosian("Ancient mace"), false);
+  assert.equal(Common.isZarosian("Ancient wyvern shield"), false);
+  assert.equal(Common.isZarosian("Torva platebody (damaged)"), true);
+  assert.equal(Common.isZarosian("Venator bow"), true);
+});
+
 test("the prison aggression rule requires Zarosian equipment, not a ring of endurance", () => {
   const Prison = require("../plugins/bosses/nex/Prison.Nex");
   let area;

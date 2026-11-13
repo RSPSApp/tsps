@@ -81,6 +81,18 @@ function layoutInputs(w: WidgetNode): string {
     return `${w.rawX},${w.rawY},${w.rawWidth},${w.rawHeight},${w.xPositionMode},${w.yPositionMode},${w.widthMode},${w.heightMode},${w.isHidden},${w.x},${w.y}`;
 }
 
+/**
+ * Widget.getWidget's group load for a CS2 lookup (IF_/CC_ ops, IF_FIND, CC_FIND): a closed
+ * interface is loaded without counting as opened. Stand-in managers without it just look up.
+ */
+export function loadGroupForCs2Lookup(
+    manager: Pick<WidgetManager, "getGroup"> & Partial<Pick<WidgetManager, "loadGroupForLookup">>,
+    groupId: number,
+): void {
+    if (typeof manager.loadGroupForLookup === "function") manager.loadGroupForLookup(groupId);
+    else manager.getGroup(groupId);
+}
+
 export class WidgetManager {
     private loader: WidgetLoader;
     private groups: Map<number, WidgetGroupInstance> = new Map();
@@ -201,6 +213,11 @@ export class WidgetManager {
      * RuneLite's WidgetLoaded sees it.
      */
     readonly groupRemountedListeners = new Set<(groupId: number) => void>();
+    /**
+     * Groups a CS2 lookup loaded (Widget.getWidget on a closed interface) that no open has
+     * mounted since: their first real open is still the load the listeners above hear about.
+     */
+    private readonly groupsLoadedForLookup = new Set<number>();
     readonly interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
 
     onLoadListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
@@ -1478,6 +1495,7 @@ export class WidgetManager {
         this.rootsByGroup.clear();
         this.dynamicChildrenByParent.clear();
         this.loadedGroups = [];
+        this.groupsLoadedForLookup.clear();
         this.loader.clearCache();
 
         // Clear dynamic UID allocators
@@ -1546,6 +1564,19 @@ export class WidgetManager {
      * Only loads if not already loaded (checks loadedGroups array)
      */
     loadGroup(groupId: number): WidgetGroupInstance | undefined {
+        return this.loadGroupInstance(groupId, true);
+    }
+
+    /**
+     * Widget.getWidget's load of a closed interface for a CS2 IF_ op: the widgets exist (decoded
+     * from the cache, onLoad not run), but nothing has opened it, so the open listeners
+     * (RuneLite WidgetLoaded and the plugins on it) wait for its first real open.
+     */
+    loadGroupForLookup(groupId: number): WidgetGroupInstance | undefined {
+        return this.groups.get(groupId) ?? this.loadGroupInstance(groupId, false);
+    }
+
+    private loadGroupInstance(groupId: number, opened: boolean): WidgetGroupInstance | undefined {
         // Check if already loaded
         if (this.loadedGroups[groupId]) {
             return this.groups.get(groupId);
@@ -1561,12 +1592,19 @@ export class WidgetManager {
             // Mark as loaded
             this.loadedGroups[groupId] = true;
             this.onGroupLoaded?.(groupId);
-            for (const listener of this.groupLoadedListeners) listener(groupId);
+            if (opened) for (const listener of this.groupLoadedListeners) listener(groupId);
+            else this.groupsLoadedForLookup.add(groupId);
 
             return instance;
         } catch {
             return undefined;
         }
+    }
+
+    /** A group a CS2 lookup loaded is opened for the first time: that open is its load. */
+    private notifyLookupLoadedGroupOpened(groupId: number): void {
+        if (!this.groupsLoadedForLookup.delete(groupId)) return;
+        for (const listener of this.groupLoadedListeners) listener(groupId);
     }
 
     /**
@@ -1587,6 +1625,7 @@ export class WidgetManager {
 
         // Only unload if actually loaded
         if (!this.loadedGroups[groupId]) return false;
+        this.groupsLoadedForLookup.delete(groupId);
 
         // Clear the group from our maps
         this.clearGroupIndex(groupId);
@@ -1897,6 +1936,7 @@ export class WidgetManager {
         if (!instance) {
             return undefined;
         }
+        this.notifyLookupLoadedGroupOpened(groupId);
 
         // Already-cached groups skip the load-time indexing, so always re-find
         // the root's scene viewport/minimap/compass. Without it a layout switch
@@ -2021,13 +2061,14 @@ export class WidgetManager {
         // Close any existing interface mounted here. Reopening the same group keeps it loaded.
         const existing = this.interfaceParents.get(targetUid);
         this.closeSubInterface(targetUid, existing?.group !== groupId);
-        const wasLoaded = this.loadedGroups[groupId] === true;
+        const wasLoaded = this.loadedGroups[groupId] === true && !this.groupsLoadedForLookup.has(groupId);
 
         // Load the interface
         const instance = this.getGroup(groupId);
         if (!instance) {
             return;
         }
+        this.notifyLookupLoadedGroupOpened(groupId);
 
         // Track the mounting
         this.interfaceParents.set(targetUid, { group: groupId, type, closeOnOutsideClick });

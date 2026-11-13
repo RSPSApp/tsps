@@ -21,9 +21,13 @@ const TWO_POINT_BONES = new Set<number>([
     ItemIds.OURG_BONES, ItemIds.DAGANNOTH_BONES, ItemIds.HYDRA_BONES, ItemIds.SUPERIOR_DRAGON_BONES,
 ]);
 
+/**
+ * Demonic Offering's ashes and their scattering experience (Wiki: Demonic Offering's table, 300% an ash). Eldritch ashes
+ * are Akkha's remains from the Tombs of Amascut, not on the table.
+ */
 const ASH_XP = new Map<number, number>([
     [ItemIds.FIENDISH_ASHES, 10], [ItemIds.VILE_ASHES, 25], [ItemIds.MALICIOUS_ASHES, 65],
-    [ItemIds.ABYSSAL_ASHES, 85], [ItemIds.INFERNAL_ASHES, 110], [ItemIds.ELDRITCH_ASHES, 200],
+    [ItemIds.ABYSSAL_ASHES, 85], [ItemIds.INFERNAL_ASHES, 110],
 ]);
 
 export class ArceuusOfferings {

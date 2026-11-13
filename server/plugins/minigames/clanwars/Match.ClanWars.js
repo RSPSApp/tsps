@@ -10,6 +10,7 @@ const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
+const Ghasts = require("./Ghasts.ClanWars");
 const PREPARATION_TICKS = 200;
 // Wiki15379109 and rev242 enum2339: 60 seconds; engine cycle is 600ms.
 const REJOIN_DELAY_TICKS = 100;
@@ -37,7 +38,7 @@ function arenaClass() {
     getName() { return "Clan Wars"; }
     isMulti() { return true; }
     canAttack(attacker, target, method) {
-      if (!attacker.isPlayer() || !target.isPlayer()) return false;
+      if (!attacker.isPlayer() || !target.isPlayer()) return Ghasts.canAttack(this.game, attacker, target, method);
       if (this.game.phase !== "combat" || this.game.expired()
         || attacker.getArea() !== this || target.getArea() !== this) return false;
       if (this.game.rules.specialattacks === 2 && attacker.isSpecialActivated()) return false;
@@ -47,10 +48,14 @@ function arenaClass() {
       // their primary attack policy; absent method is not permission to start a ranged spell.
       return method == null || method.type() === C.core.CombatType.MELEE;
     }
+    npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
+    npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
+    process(mobile) { if (mobile.isNpc()) Ghasts.registered(this.game, mobile.getAsNpc()); }
     canTeleport() { return false; }
     canTrade() { return false; }
     postLeave(mobile, logout) {
       if (mobile.isPlayer()) this.game.remove(mobile.getAsPlayer(), logout);
+      else if (mobile.isNpc()) Ghasts.left(this.game, mobile.getAsNpc());
       this.detach(mobile);
       mobile.setArea(null);
       // Match lifetime is owned by Game, including empty staging and pending safe deaths.
@@ -212,6 +217,10 @@ class Game {
       if (this.phase === "over") return;
     }
     if (this.phase === "staging" && C.now() >= this.starts) {
+      if (!Ghasts.prepare(this)) {
+        for (const player of this.members.keys()) player.sendMessage("This Clan Wars battle could not start. Please try a new challenge.");
+        return this.finish(null);
+      }
       this.phase = "combat";
       const duration = Rules.timeLimitTicks(this.rules);
       this.ends = duration ? C.now() + duration : null;
@@ -220,6 +229,10 @@ class Game {
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
     }
     if (this.phase === "combat") {
+      if (!Ghasts.reconcile(this)) {
+        for (const player of this.members.keys()) player.sendMessage("This Clan Wars battle could not continue. Please try a new challenge.");
+        return this.finish(null);
+      }
       if (Rules.respawns(this.rules)) {
         // Jail and pending safe deaths retain their roster slot. A temporary lack
         // of living fighters must not end a respawning 1v1 after its first kill.
@@ -245,7 +258,7 @@ class Game {
       C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
     }
   }
-  eliminate(player) { Viewing.stop(player); this.fighters.delete(player); player.getCombat().reset(); }
+  eliminate(player) { Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death
@@ -272,6 +285,7 @@ class Game {
   finish(winner) {
     if (this.phase === "over") return;
     this.phase = "over";
+    Ghasts.stop(this);
     this.returnAt.clear();
     this.task.stop();
     active.delete(this);
@@ -408,6 +422,7 @@ function noPvpRewards(event) {
 }
 function shutdown() { for (const game of [...active]) game.finish(null); }
 function attach(api) {
+  Ghasts.attach(api);
   api.onInterfaceActionClick(joinClicked);
   api.onCustomEvent("interface:closed", joinClosed);
   api.onCustomEvent("player:dying", dyingStarts);

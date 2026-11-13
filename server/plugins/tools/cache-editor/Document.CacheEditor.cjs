@@ -58,6 +58,9 @@ function read(root) {
   return { ...parsed, assets: Array.isArray(parsed.assets) ? parsed.assets : [] };
 }
 
+/** The cache definition a row's base pairs come from, per kind. */
+const BASE_GETTERS = { npc: "getNpc", item: "getItem", loc: "getObject" };
+
 function cacheCount(core, kind) {
   const counts = core.CacheDefinitions.getBaseCounts?.() ?? core.CacheDefinitions.getCounts();
   switch (kind) {
@@ -158,9 +161,11 @@ function check(core, document) {
           break;
         }
       }
-      if (row.kind === "npc" && from.length === to.length) {
-        const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, "npc")
-          ? core.CacheDefinitions.getNpc(row.baseId) : null;
+      // The client's NPC, item and loc model loaders all apply the pairs one after another.
+      const getBase = BASE_GETTERS[row.kind];
+      if (getBase && from.length === to.length) {
+        const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, row.kind)
+          ? core.CacheDefinitions[getBase](row.baseId) : null;
         const baseFrom = base?.recolorFrom ?? [];
         const baseTo = base?.recolorTo ?? [];
         let newlyChained = false;
@@ -170,7 +175,7 @@ function check(core, document) {
             const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
               && baseFrom[i] === from[i] && baseTo[i] === to[i];
             if (!inherited) {
-              problems.push(`npc ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
+              problems.push(`${row.kind} ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
               newlyChained = true;
               break;
             }

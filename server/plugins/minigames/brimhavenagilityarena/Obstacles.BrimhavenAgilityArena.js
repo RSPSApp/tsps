@@ -468,6 +468,7 @@ function useObstacle(event) {
     })(),
   };
   ObstacleRunner.run(context, steps, {
+    agility: true,
     onFinish: (completed) => {
       if (completed && !failed) Shared.addObstacleXp(player, kind);
     },

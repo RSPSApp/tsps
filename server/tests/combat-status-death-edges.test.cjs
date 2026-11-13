@@ -163,6 +163,28 @@ for (const type of [0, 1, 3]) test(`combat respects the interruption policy for 
   assert.equal(sender.hasInterruptibleInterface(), false);
 });
 
+for (const kind of ['amount', 'text']) test(`a hit drops an Enter ${kind} prompt with no interface open, as walking does`, t => {
+  const f = impactFixture(t), sender = f.p.getPacketSender();
+  const answers = [];
+  let cancelled = 0;
+  if (kind === 'amount') {
+    f.p.setEnteredAmountAction({ execute: amount => answers.push(amount), cancel: () => cancelled++ });
+    sender.sendEnterAmountPrompt('Enter amount:');
+  } else {
+    f.p.setEnteredSyntaxAction({ execute: text => answers.push(text) });
+    sender.sendEnterInputPrompt('Enter name:');
+  }
+  assert.equal(sender.hasInterruptibleInterface(), false, 'a bare prompt is not an interface');
+  assert.equal(sender.hasInputPrompt(), true);
+  f.hit();
+  assert.equal(f.p.getHitpoints(), 9);
+  assert.equal(sender.hasInputPrompt(), false, 'the waiting answer is dropped');
+  assert.equal(f.p.getEnteredAmountAction(), null);
+  assert.equal(f.p.getEnteredSyntaxAction(), null);
+  assert.equal(cancelled, kind === 'amount' ? 1 : 0);
+  assert.deepEqual(answers, []);
+});
+
 function npc(hitpoints = 100) {
   const entity = {
     hitpoints,
@@ -334,6 +356,33 @@ test('ordinary death completes four ticks after animation, preserving final life
   // The respawn tick opens with the death message and jingle 90 (rsprox 426, 431, 732, 1084, 1085).
   assert.deepEqual(order, ['animation', 'dying', 'message:Oh dear, you are dead!', 'jingle:90', 'reset', 'defeated',
     'save:death', 'death', 'respawn-policy', 'respawn', 'save:respawn']);
+});
+
+test("a plugin's onPlayerBeforeDeath message replaces the death line on the respawn tick, with the jingle", t => {
+  // Fight Cave, Inferno and TzHaar-Ket-Rak deaths print "You have been defeated!" (rsprox 227/00075, 227/04308).
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const victim = new Player(null);
+  const order = [];
+  const sender = new Proxy({}, {
+    get: (_target, key) => key === 'sendJingle' ? id => (order.push('jingle:' + id), sender) : () => sender,
+  });
+  t.mock.method(victim, 'getPacketSender', () => sender);
+  t.mock.method(victim, 'sendMessage', message => order.push('message:' + message));
+  t.mock.method(victim, 'performAnimation', () => {});
+  t.mock.method(victim, 'moveTo', () => {});
+  t.mock.method(PluginManager, 'emitPlayerBeforeDeath', event => { event.message = 'You have been defeated!'; return false; });
+  t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => false);
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => { if (name === 'player:death-bones') event.allow = false; });
+  t.mock.method(PluginManager, 'emitPlayerDeath', () => true);
+  let task = null;
+  t.mock.method(TaskManager, 'submit', submitted => { task = submitted; });
+  victim.appendDeath();
+  assert.ok(task, 'the death task was submitted');
+  for (let tick = 0; tick < 5; tick++) task.execute();
+  assert.deepEqual(order.slice(0, 2), ['message:You have been defeated!', 'jingle:90']);
+  assert.ok(!order.includes('message:Oh dear, you are dead!'));
 });
 
 test('attack-started observers run only after permission succeeds, for every combat style', t => {

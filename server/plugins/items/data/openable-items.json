@@ -39,7 +39,10 @@
     {"name": "Rune arrow pack", "contents": [{"item": "RUNE_ARROW", "amount": 50}]}
   ],
   "loot": [
-    {"name": "Casket", "items": ["CASKET"], "sound": 52, "message": "You open the casket. Inside you find {item}.", "article": true, "box": true, "tables": [
+    {"name": "Casket", "items": ["CASKET"], "sound": 52, "message": "You open the casket. Inside you find {item}.", "box": true, "wording": {
+        "COINS": "some coins", "UNCUT_SAPPHIRE": "an uncut sapphire", "UNCUT_EMERALD": "uncut emerald", "UNCUT_RUBY": "an uncut ruby",
+        "UNCUT_DIAMOND": "an uncut diamond", "COSMIC_TALISMAN": "a cosmic talisman", "LOOP_HALF_OF_KEY": "half a key", "TOOTH_HALF_OF_KEY": "half a key"
+      }, "tables": [
         { "rolls": 1, "entries": [
           {"item": "COINS", "weight": 10, "amount": [20, 20]},
           {"item": "COINS", "weight": 10, "amount": [40, 40]},
@@ -56,7 +59,7 @@
           {"item": "TOOTH_HALF_OF_KEY", "weight": 1, "amount": [1, 1]}
         ] }
     ] },
-    {"name": "Oyster", "message": "You open the oyster shell.", "tables": [
+    {"name": "Oyster", "message": "You open the oyster shell.", "spam": true, "tables": [
         { "rolls": 1, "entries": [
           {"item": "OYSTER_PEARL", "weight": 25, "amount": [1, 1]},
           {"item": "EMPTY_OYSTER", "weight": 7, "amount": [1, 1]}

@@ -1199,6 +1199,21 @@ test("open-chest: a key chest opened by the real KeyChests (Open the Crystal Che
   assert.ok(done(f, "open-the-crystal-chest"));
 });
 
+test("open-chest: the Zombie Pirate's Locker opened by the real KeyChests (Open 1 Zombie Pirate Locker)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const Data = require("../plugins/objects/keychests/Data.KeyChests");
+  const chest = Data.get().chests.find((each) => each.name === "Zombie Pirate's Locker");
+  const loc = new core.GameObject(chest.locId, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(loc, true);
+  t.after(() => core.ObjectManager.deregister(loc, true));
+  f.player.getInventory().add(new core.Item(chest.keyId), true);
+  await send(f, { type: "object_option", id: chest.locId, x: 1667, y: 3136, action: "Open" }, 8);
+  assert.equal(f.player.getInventory().getAmount(chest.keyId), 0, `the key used: ${f.messages}`);
+  assert.ok(done(f, "open-1-zombie-pirate-locker"));
+  assert.ok(!done(f, "open-15-zombie-pirate-lockers"));
+});
+
 test("plant: seeds dibbed in an allotment through the real Farming (Plant some seeds in an allotment patch)", (t) => {
   const f = pactsCharacter(t);
   const Data = require("../plugins/skills/farming/Data.Farming");

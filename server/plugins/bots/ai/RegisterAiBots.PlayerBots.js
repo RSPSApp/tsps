@@ -101,6 +101,16 @@ function tickMinds(minds, runtime, nowMs, log = () => {}) {
   }
 }
 
+/**
+ * Whether a bot may not take `name`: the roster has it, someone online uses it, or any character
+ * (the league one too, docs/leagues.md) is saved under it, so a bot would share a player's login name.
+ */
+function nameHeld(core, roster, name) {
+  const persistence = core.GameConstants.PLAYER_PERSISTENCE;
+  return roster.has(name) || core.PLAYER_PROFILES.some((profile) => persistence?.exists?.(name, profile) === true)
+    || !!core.World.getPlayerByName(name);
+}
+
 function registerAiBots({ api, botApi, runtime, registry, world, resetMovementState }) {
   const config = readAiBotConfig(api.getPluginConfig(CONFIG_KEY));
   if (config.enabled !== true) {
@@ -141,7 +151,7 @@ function registerAiBots({ api, botApi, runtime, registry, world, resetMovementSt
   const tiers = JSON.parse(fs.readFileSync(ACTIVITIES_FILE, "utf8")).tiers ?? {};
 
   function nameTaken(name) {
-    return roster.has(name) || core.GameConstants.PLAYER_PERSISTENCE?.exists?.(name) === true || !!core.World.getPlayerByName(name);
+    return nameHeld(core, roster, name);
   }
 
   function profileFor(index) {
@@ -316,4 +326,4 @@ function registerAiBots({ api, botApi, runtime, registry, world, resetMovementSt
   return { minds, roster };
 }
 
-module.exports = { registerAiBots, buildCatalog, heldByAdmin, logOutAiBot, tickMinds };
+module.exports = { registerAiBots, buildCatalog, heldByAdmin, logOutAiBot, tickMinds, nameHeld };

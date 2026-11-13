@@ -183,7 +183,7 @@ test("a frozen player still interacts with an NPC in reach, and cannot reach one
   frozen.messages.length = 0;
   queue.walkToEntity(npc, () => talked++);
   assert.equal(talked, 0, "a stunned frozen player does not interact");
-  assert.deepEqual(frozen.messages, ["You're stunned!"]);
+  assert.deepEqual(frozen.messages, [[core.ChatType.SPAM, "You're stunned!"]], "the stun refusal is a spam line");
 });
 
 test("a frozen player at a counter still talks to the NPC behind it", (t) => {

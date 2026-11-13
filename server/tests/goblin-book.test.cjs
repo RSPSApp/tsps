@@ -10,7 +10,7 @@ const runtime = require("../plugins/quests/QuestRuntime");
 const buttons = new Map();
 const itemActions = new Map();
 const api = new Proxy({
-  core: {},
+  core: { Animation: class { constructor(id) { this.id = id; } }, Graphic: class { constructor(id) { this.id = id; } } },
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onInterfaceActionButton: (ids, handler) => ids.forEach(id => buttons.set(id, handler)),
 }, { get: (target, key) => target[key] ?? (() => {}) });
@@ -29,16 +29,22 @@ test("Goblin book Read uses the shared book UI, turns pages and closes without c
   let open = -1;
   const texts = new Map();
   const hidden = new Map();
+  const varbits = [];
+  const animations = [];
   const sender = {
     sendInterface: (group) => { open = group; return sender; },
     sendString: (text, uid) => { texts.set(uid, text); return sender; },
     sendInterfaceDisplayState: (uid, hide) => { hidden.set(uid, hide); return sender; },
     sendInterfaceScript: () => sender,
+    sendConfig: () => sender,
+    sendVarbit: (id, value) => { varbits.push([id, value]); return sender; },
     sendInterfaceRemoval: () => { open = -1; return sender; },
   };
-  const player = { getPacketSender: () => sender, getInventory: () => inventory };
+  const player = { getPacketSender: () => sender, getInventory: () => inventory, performAnimation: (a) => animations.push(a.id) };
   actions.Read({ player, itemId: 10999 });
   assert.equal(open, 392);
+  assert.deepEqual(varbits, [[12393, 1]], "reading sets busy");
+  assert.deepEqual(animations, [1350], "and plays human_readbook");
   assert.match(texts.get((392 << 16) | 6), /Big High War God/);
   assert.equal(texts.get((392 << 16) | 9), "1");
   assert.equal(hidden.get((392 << 16) | 75), true);
@@ -63,6 +69,8 @@ test("Goblin book Read uses the shared book UI, turns pages and closes without c
   assert.equal(texts.get((392 << 16) | 9), "9");
   buttons.get((392 << 16) | 7)({ player, buttonId: (392 << 16) | 7 });
   assert.equal(open, -1);
+  assert.deepEqual(varbits.at(-1), [12393, 0], "closing clears busy");
+  assert.equal(animations.at(-1), -1, "and resets the reading animation");
   actions.Read({ player, itemId: 10999 });
   assert.equal(texts.get((392 << 16) | 9), "1", "reopening starts at the beginning");
   buttons.get((392 << 16) | 75)({ player, buttonId: (392 << 16) | 75 });

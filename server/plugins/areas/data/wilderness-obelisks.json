@@ -28,8 +28,7 @@
     "_recorded": "chosen: recorded (a set destination). random: the Wiki's arrival line.",
     "chosen": "Ancient magic teleports you to a place within the wilderness!",
     "random": "Ancient magic teleports you somewhere in the Wilderness!",
-    "_calibrated": "No source gives these: the teleblock line (the old engine's), and the refusals without the hard diary or a set destination.",
-    "teleblocked": "A magical spell is blocking you from teleporting.",
+    "_calibrated": "No source gives these: the refusals without the hard diary or a set destination.",
     "needsDiary": "You need to complete the hard Wilderness Diary to choose an obelisk's destination.",
     "noDestination": "You haven't set a destination yet."
   }

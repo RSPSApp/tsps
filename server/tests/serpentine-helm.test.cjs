@@ -10,6 +10,9 @@ const { CombatType } = require("../dist/game/content/combat/CombatType");
 const { ItemIds } = require("../dist/util/IdEnums");
 
 const SerpentineHelm = require("../plugins/items/SerpentineHelm.plugin");
+const { ItemAliases } = require("../dist/game/model/ItemAliases");
+// As ToxicBlowpipe.plugin.js registers it: the ornament kit only changes the look.
+ItemAliases.register(ItemIds.BLAZING_BLOWPIPE, ItemIds.TOXIC_BLOWPIPE);
 
 const poisoned = [];
 let cycle = 100;
@@ -25,6 +28,8 @@ const weaponNames = new Map([
   [ItemIds.EMERALD_BOLTS_E_, "Emerald bolts (e)"],
   [ItemIds.NOXIOUS_HALBERD, "Noxious halberd"],
   [ItemIds.TOXIC_BLOWPIPE, "Toxic blowpipe"],
+  [ItemIds.BLAZING_BLOWPIPE, "Blazing blowpipe"],
+  [ItemIds.DRYGORE_BLOWPIPE, "Drygore blowpipe"],
   [ItemIds.TRIDENT_OF_THE_SWAMP_E_, "Trident of the Swamp (e)"],
 ]);
 SerpentineHelm.register({
@@ -32,6 +37,7 @@ SerpentineHelm.register({
     ItemIdentifiers: ItemIds,
     Equipment, CombatType,
     Item: require("../dist/game/model/Item").Item,
+    ItemAliases,
     World: { getProcessCycle: () => cycle },
     ItemDefinition: { forId: (id) => ({ getName: () => weaponNames.get(id) ?? "" }) },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
@@ -116,6 +122,11 @@ test("the envenom chance depends on the weapon: 1/6 plain, 1/2 poisoned, 100% to
   assert.equal(SerpentineHelm._test.venomChance(poisonedWeapon, CombatType.MELEE), 0.5);
   const toxic = createPlayer({ helm: item(ItemIds.SERPENTINE_HELM, { "serpentine-helm": 100 }), weapon: ItemIds.TOXIC_BLOWPIPE });
   assert.equal(SerpentineHelm._test.venomChance(toxic, CombatType.RANGED), 1);
+  const blazing = createPlayer({ helm: item(ItemIds.SERPENTINE_HELM, { "serpentine-helm": 100 }), weapon: ItemIds.BLAZING_BLOWPIPE });
+  assert.equal(SerpentineHelm._test.venomChance(blazing, CombatType.RANGED), 1, "the blazing blowpipe is an ornamented toxic blowpipe");
+  // The drygore blowpipe is a separate league weapon that burns (Wiki); it is not guaranteed.
+  const drygore = createPlayer({ helm: item(ItemIds.SERPENTINE_HELM, { "serpentine-helm": 100 }), weapon: ItemIds.DRYGORE_BLOWPIPE });
+  assert.notEqual(SerpentineHelm._test.venomChance(drygore, CombatType.RANGED), 1);
 });
 
 test("a successful hit on a monster can envenom it, but never a player", () => {

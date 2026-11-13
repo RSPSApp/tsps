@@ -127,6 +127,6 @@ module.exports = {
     api.onPlayerProcess(process);
     api.onCustomEvent("teleport:landed", teleported);
     api.onCustomEvent("food:eaten", ateTea);
-    api.onPlayerDeath(died);
+    api.onCustomEvent("player:died", died); // every death, unlike onPlayerDeath, which a quest respawn can take
   },
 };

@@ -2,7 +2,10 @@
 // open from the deck with a crowbar for that spot's drink; drinking it charts the task (75 XP).
 //   Pry-open: the helm let go of; with no crowbar: "You require a crowbar to do that."; else
 //   sound 67 and the drink with "You pry open the crate and take a bottle of {drink} to sample.",
-//   or "The crate contains a bottle of {drink}, but you don't take it as you already have one."
+//   or the drink in an item box with "The crate contains a bottle of {drink}, but you don't take it
+//   as you've already sampled it before." (charted, and not one of the few drinks that can be
+//   sampled again), "... but you don't have enough room to take it." or "... but you don't take it
+//   as you already have one."
 //   Drink: unless told not to ask again, the box "This drink has been sealed in a crate for an
 //   unknown amount of time. It could do anything to you, good or bad. Are you sure you want to
 //   drink it?" and the choice "Yes. / Yes, and don't ask again. / No." Then "You drink the bottle
@@ -29,7 +32,6 @@ const NO_WARNING_ATTRIBUTE = "charting:drink-no-warning";
 const WARNING_SETTING = 455;
 
 const NO_CROWBAR = "You require a crowbar to do that.";
-const NO_ROOM = "You don't have enough inventory space.";
 const WARNING = "This drink has been sealed in a crate for an unknown amount of time. It could do anything to you, good or bad. Are you sure you want to drink it?";
 const CHOICE = "Are you sure you want to drink this?";
 
@@ -102,14 +104,20 @@ function pryOpen(event) {
     return;
   }
   const name = drinkName(spot);
-  if (player.getInventory().contains(spot.item)) {
-    itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't take it as you already have one.`);
+  // Most drinks are sampled once; a few can be taken again (with no further XP).
+  // Ours: this refusal is checked before the inventory ones.
+  if (!spot.drink?.repeatable && common.isCharted(player, spot)) {
+    itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't take it as you've already sampled it before.`);
     return;
   }
+  // A full inventory refuses even when a bottle is already held.
   const bottle = new (common.core().Item)(spot.item, 1);
-  // Ours: a full inventory isn't captured; the crate stays shut, as the other charting rewards do.
   if (player.getInventory().getAddableAmount(bottle) < 1) {
-    player.sendMessage(NO_ROOM);
+    itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't have enough room to take it.`);
+    return;
+  }
+  if (player.getInventory().contains(spot.item)) {
+    itemBox(player, spot.item, `The crate contains a bottle of ${name}, but you don't take it as you already have one.`);
     return;
   }
   player.getPacketSender().sendSoundEffect(SOUND_PRY, 1, 0);

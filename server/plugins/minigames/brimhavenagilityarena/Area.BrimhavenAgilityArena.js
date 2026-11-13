@@ -310,6 +310,7 @@ function stepTrap(player, span, previous = null) {
     context.object = new core.GameObject(Shared.OBJECTS.SPINNING_BLADES, new core.Location(x, y, Shared.ARENA_PLANE), 10, face, null);
   }
   ObstacleRunner.run(context, trapSteps(player, span, outcome, dir), {
+    agility: true,
     onFinish: (completed) => {
       if (completed && outcome === "pass" && pays) Shared.addObstacleXp(player, kind);
     },

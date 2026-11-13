@@ -201,7 +201,8 @@ test("both supported area leagues initialize defaults and restore saved unlocks 
     for (const type of [4, 5]) {
       worldLeague = type;
       const player = character(`area-mode-${type}`);
-      assert.deepEqual(player.getAttribute("league:areas"), [MISTHALIN, KARAMJA]);
+      // Raging Echoes' Karamja comes from the tutorial's pick, not the defaults.
+      assert.deepEqual(player.getAttribute("league:areas"), type === 5 ? [MISTHALIN] : [MISTHALIN, KARAMJA]);
       player.setAttribute("league:areas", [MISTHALIN, KARAMJA, MORYTANIA]);
       player.setLocation(at(3495, 3491));
       const restored = character(`area-mode-${type}`, "league", { restore: PlayerSave.fromPlayer(player) });
@@ -504,7 +505,7 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   worldLeague = 4;
   echoes.setRegistered(true);
   openAreas(echoes);
-  viewArea(echoes, KARAMJA);
+  viewArea(echoes, MISTHALIN);
   assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: echoes }), true);
   const from = echoes.getLocation().clone();
   core.TaskManager.process();
@@ -516,6 +517,29 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   core.TaskManager.process();
   assert.ok(!echoes.getLocation().equals(from), "landed at +21");
   echoes.setRegistered(false);
+});
+
+test("Raging Echoes: Misthalin to start, Karamja the free tutorial pick that ends the areas page's wait (Wiki, 227/00196)", () => {
+  worldLeague = 5;
+  const echoes = character("echoesfirstpick");
+  worldLeague = 4;
+  assert.deepEqual(echoes.getAttribute("league:areas"), [MISTHALIN], "Wiki: 'All players will begin the league restricted to Misthalin'");
+  assert.equal(echoes.sent.varbits.get(SELECTION[1]) ?? 0, 0, "league_area_selection_1 is still 0, so the tutorial's areas page waits");
+  const areas = query("league:areas", { player: echoes });
+  assert.deepEqual([areas.next, areas.available], [{ slot: 1, tasks: 0 }, true], "the first pick needs no tasks");
+  openAreas(echoes);
+  viewArea(echoes, ASGARNIA);
+  assert.deepEqual(echoes.sent.scripts.at(-1)[1].slice(11, 12), [3], "only Karamja may be the first pick");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: echoes }), true);
+  assert.deepEqual(echoes.getAttribute("league:areas"), [MISTHALIN]);
+  viewArea(echoes, KARAMJA);
+  assert.equal(echoes.sent.scripts.at(-1)[1][11], 2, "Karamja can be unlocked");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: echoes }), true);
+  const event = emitted.find(([name, payload]) => name === "league:area-unlocked" && payload.player === echoes)?.[1];
+  assert.deepEqual([event?.area, event?.slot], [KARAMJA, 1], "league:area-unlocked moves the tutorial on");
+  for (let tick = 0; tick < 14; tick++) core.TaskManager.process();
+  assert.equal(echoes.sent.varbits.get(SELECTION[1]), KARAMJA, "league_area_selection_1 0 -> 2, as recorded");
+  assert.deepEqual(query("league:areas", { player: echoes }).next, { slot: 2, tasks: 90 }, "then 90 tasks, as before");
 });
 
 test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abyss open, Karamja first at 80 tasks, its own cast", () => {

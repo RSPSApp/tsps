@@ -399,7 +399,7 @@ function jumpToRock(event) {
   } else {
     steps.push({ run: () => player.getSkillManager().addExperiences(core.Skill.AGILITY, JUMP_XP) });
   }
-  ObstacleRunner.run({ player }, steps, { busyVarbit: true });
+  ObstacleRunner.run({ player }, steps, { busyVarbit: true, agility: true });
   return true;
 }
 

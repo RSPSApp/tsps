@@ -348,6 +348,38 @@ test("the log basket takes logs while open, worn or carried, and empties with it
   assert.equal(gather(worn, Items.MAGIC_LOGS), 1);
 });
 
+test("storage:empty-to-bank empties a carried or worn log basket into the bank, as far as the bank's stack allows", () => {
+  const empty = (player) => {
+    const request = { player, key: "log-basket", moved: 0, left: 0 };
+    PluginManager.emitCustomEvent(Storage.BANK_EMPTY_EVENT, request);
+    return request;
+  };
+  const carried = createPlayer([new Item(Items.LOG_BASKET, 1)]);
+  Storage.store(carried, family("log-basket"), Items.OAK_LOGS, 20);
+  Storage.store(carried, family("log-basket"), Items.YEW_LOGS, 3);
+  assert.deepEqual(empty(carried), { player: carried, key: "log-basket", moved: 23, left: 0 });
+  assert.equal(Storage.total(carried, family("log-basket")), 0);
+  assert.equal(carried.getBank(Bank.getTabForItem(carried, Items.OAK_LOGS)).getAmount(Items.OAK_LOGS), 20);
+  assert.equal(carried.getBank(Bank.getTabForItem(carried, Items.YEW_LOGS)).getAmount(Items.YEW_LOGS), 3);
+  assert.equal(carried.getInventory().getAmount(Items.LOG_BASKET), 1, "the basket itself stays put");
+
+  const worn = createPlayer([]);
+  worn.getEquipment().getItems()[Equipment.CAPE_SLOT] = new Item(Items.FORESTRY_BASKET, 1);
+  Storage.store(worn, family("log-basket"), Items.MAGIC_LOGS, 4);
+  assert.equal(empty(worn).moved, 4, "a worn forestry basket shares the store");
+
+  const banked = createPlayer([]);
+  Storage.store(banked, family("log-basket"), Items.OAK_LOGS, 5);
+  assert.deepEqual([empty(banked).moved, Storage.total(banked, family("log-basket"))], [0, 5], "no basket carried or worn: nothing moves");
+
+  const capped = createPlayer([new Item(Items.LOG_BASKET, 1)]);
+  capped.getBank(Bank.getTabForItem(capped, Items.OAK_LOGS)).add(new Item(Items.OAK_LOGS, MAX_STACK_AMOUNT - 2));
+  Storage.store(capped, family("log-basket"), Items.OAK_LOGS, 5);
+  const result = empty(capped);
+  assert.deepEqual([result.moved, result.left], [2, 3], "the rest stays in the basket at the stack cap");
+  assert.equal(capped.getBank(Bank.getTabForItem(capped, Items.OAK_LOGS)).getAmount(Items.OAK_LOGS), MAX_STACK_AMOUNT);
+});
+
 test("the plank sack fills from the sawmill whenever carried and sends its plank varbits", () => {
   const sack = new Item(Items.PLANK_SACK, 1);
   const player = createPlayer([sack]);

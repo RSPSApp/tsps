@@ -100,18 +100,35 @@ test("the diary is credited by each ordinary success event", (t) => {
   assert.equal(f.taskKeys.has(D.TASK.yewRoots), true);
 });
 
+/** What Equipment.refreshItems emits: the equip packet passes the item and slot it equipped. */
+function wear(f, slot, id) {
+  f.player.getEquipment().setItem(slot, new Item(id, 1));
+  f.api.emitCustomEvent("equipment:changed", { player: f.player, equipped: true, itemId: id, slot });
+}
+
 test("the spottier cape task needs Asyff's trade and then the cape worn", (t) => {
   const f = diaryFixture(t);
-  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new Item(Y.SPOTTIER_CAPE, 1));
-  f.api.emitCustomEvent("equipment:changed", { player: f.player });
+  wear(f, core.Equipment.CAPE_SLOT, Y.SPOTTIER_CAPE);
   assert.equal(f.taskKeys.has(D.TASK.spottierCape), false, "a cape from elsewhere");
 
   f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, null);
   f.api.emitCustomEvent("asyff:spottier-cape-traded", { player: f.player, capeId: Y.SPOTTIER_CAPE });
   assert.equal(f.taskKeys.has(D.TASK.spottierCape), false, "traded but not worn");
 
-  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new Item(Y.SPOTTIER_CAPE, 1));
+  wear(f, core.Equipment.CAPE_SLOT, Y.SPOTTIER_CAPE);
+  assert.equal(f.taskKeys.has(D.TASK.spottierCape), true);
+});
+
+test("a spottier cape already worn at the trade is credited only when the cape is equipped again", (t) => {
+  const f = diaryFixture(t);
+  wear(f, core.Equipment.CAPE_SLOT, Y.SPOTTIER_CAPE);
+  f.api.emitCustomEvent("asyff:spottier-cape-traded", { player: f.player, capeId: Y.SPOTTIER_CAPE });
+  wear(f, core.Equipment.RING_SLOT, G.RING_OF_CHAROS_A);
   f.api.emitCustomEvent("equipment:changed", { player: f.player });
+  assert.equal(f.taskKeys.has(D.TASK.spottierCape), false, "another item equipped, or a refresh, is not equipping the cape");
+
+  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, null);
+  wear(f, core.Equipment.CAPE_SLOT, Y.SPOTTIER_CAPE);
   assert.equal(f.taskKeys.has(D.TASK.spottierCape), true);
 });
 

@@ -55,6 +55,8 @@ const THUG_KNOCKED_ATTRIBUTE = "achievement-diaries:desert-thug-knocked-out";
 const CLAY_TARGET = 5;
 const POTATO_CACTUS_TARGET = 5;
 const CLAY_ITEM_ID = 434;
+/** A worn bracelet of clay softens the clay as it is mined; the Uzer mine has no soft clay rocks. */
+const SOFT_CLAY_ITEM_ID = 1761;
 const POTATO_CACTUS_ITEM_ID = 3138;
 const GRANITE_ITEM_IDS = [6979, 6981, 6983];
 const TEAK_LOGS_ID = 6333;
@@ -98,7 +100,7 @@ function hunterSuccess({ player, npcId }) {
 
 function mined({ player, itemId }) {
   const at = player.getLocation();
-  if (itemId === CLAY_ITEM_ID && inside(at, UZER_CLAY_MINE)) counter(player, CLAY_ATTRIBUTE, TASKS.clay, CLAY_TARGET);
+  if ((itemId === CLAY_ITEM_ID || itemId === SOFT_CLAY_ITEM_ID) && inside(at, UZER_CLAY_MINE)) counter(player, CLAY_ATTRIBUTE, TASKS.clay, CLAY_TARGET);
   else if (GRANITE_ITEM_IDS.includes(itemId)) emit(player, TASKS.granite);
 }
 

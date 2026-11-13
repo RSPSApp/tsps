@@ -455,3 +455,19 @@ test("a plain unicorn horn is still ground with a pestle and mortar", async (t) 
   assert.equal(plainOf(f, I.UNICORN_HORN_DUST), 1);
   assert.equal(f.inv.getAmount(I.UNICORN_HORN), 0);
 });
+
+test("a knife repeats on the chocolate bars like the pestle: at once, 2 ticks on, then every 3", async (t) => {
+  // Wiki, Chocolate dust (under both the knife and the pestle): auto-crushing is 0, then 2, then 3 ticks.
+  const f = actor(t);
+  f.inv.add(item(I.KNIFE), false);
+  for (let n = 0; n < 3; n++) f.inv.add(item(I.CHOCOLATE_BAR), false);
+  await useOn(f, f.inv.getSlotForItemId(I.KNIFE), f.inv.getSlotForItemId(I.CHOCOLATE_BAR));
+  const dust = () => f.inv.getAmount(I.CHOCOLATE_DUST);
+  assert.equal(dust(), 1, "the first bar at once");
+  ticks(1); assert.equal(dust(), 1);
+  ticks(1); assert.equal(dust(), 2, "the second 2 ticks on");
+  ticks(2); assert.equal(dust(), 2);
+  ticks(1); assert.equal(dust(), 3, "the third 3 after that");
+  assert.equal(f.inv.getAmount(I.CHOCOLATE_BAR), 0);
+  assert.equal(f.inv.getAmount(I.KNIFE), 1, "the knife is kept");
+});

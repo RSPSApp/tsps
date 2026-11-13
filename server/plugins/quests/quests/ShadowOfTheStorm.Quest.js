@@ -1743,7 +1743,6 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function handleItemAction(event) {
     if (event.itemId === DEMONIC_TOME_ITEM_ID && String(event.option ?? "").toLowerCase() === "read") {
       event.handled = true;
-      event.player.performAnimation(new Animation(SEQ_READ_BOOK));
       openBook(event.player, TOME_TITLE, TOME_PAGES);
       return;
     }

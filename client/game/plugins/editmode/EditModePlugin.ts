@@ -735,7 +735,7 @@ export class EditModePlugin {
                     plane: spawn.plane,
                     shape: 0,
                     rotation: 0,
-                }]);
+                }], true, this.npcMarkerIndexAt(selection));
             });
         }
         this.selection = undefined;
@@ -789,8 +789,12 @@ export class EditModePlugin {
         this.commit();
     }
 
-    /** Index of the editor-placed NPC edit a selection points at, if any. */
+    /**
+     * Index of the editor-placed NPC edit a selection points at, if any. A selected game spawn never points
+     * at one, even when an editor-placed copy of that NPC shares its tile.
+     */
     private customNpcEditIndex(selection: EditModeSelection): number {
+        if (selection.npcSource === "spawn") return -1;
         return this.config.edits.findIndex((edit) =>
             edit.kind === "npc" &&
             edit.locId === selection.locId &&
@@ -820,8 +824,21 @@ export class EditModePlugin {
      * for, so removing the replacement has to leave it behind.
      */
     private npcReplacementIndicesAt(selection: EditModeSelection): number[] {
-        return this.npcEditIndicesAt(selection).filter((index) =>
-            this.config.edits[index].kind !== "npcDelete");
+        return this.npcEditIndicesAt(selection).filter((index) => {
+            const kind = this.config.edits[index].kind;
+            // A game spawn's own edit is its wander override; an editor-placed copy on its tile is not its.
+            return kind !== "npcDelete" && !(selection.npcSource === "spawn" && kind === "npc");
+        });
+    }
+
+    /**
+     * Where a game spawn's removal marker goes: before the first editor-placed copy of that NPC on its tile,
+     * so the saved patch reads [remove, add] (the copy stays) rather than the copy replacing the spawn and the
+     * marker then finding nothing to remove.
+     */
+    private npcMarkerIndexAt(selection: EditModeSelection): number {
+        const copy = this.npcEditIndicesAt(selection).find((index) => this.config.edits[index].kind === "npc");
+        return copy ?? this.config.edits.length;
     }
 
     private removeEdits(indices: readonly number[]): void {
@@ -1299,10 +1316,9 @@ export class EditModePlugin {
                 this.removeEdits(this.npcReplacementIndicesAt(moving));
                 if (moving.npcWanderRadius !== undefined) edit.wanderRadius = moving.npcWanderRadius;
                 if (moving.npcSpawn?.direction !== undefined) edit.direction = moving.npcSpawn.direction;
-                const edits: EditModeEdit[] = [];
                 if (customIndex < 0) {
                     if (moving.npcSource === "spawn") {
-                        edits.push({
+                        this.commitEdits([{
                             kind: "npcDelete",
                             locId: moving.locId,
                             tileX: moving.tileX,
@@ -1310,12 +1326,12 @@ export class EditModePlugin {
                             plane: moving.plane,
                             shape: 0,
                             rotation: 0,
-                        });
+                        }], true, this.npcMarkerIndexAt(moving));
                     } else if (moving.npcServerId !== undefined) {
                         this.host?.despawnNpc(moving.npcServerId);
                     }
                 }
-                this.commitEdits([...edits, edit]);
+                this.commitEdits([edit]);
             });
             this.setConfig({ tool: "select" });
         } else if (moving && edit.kind === "place") {

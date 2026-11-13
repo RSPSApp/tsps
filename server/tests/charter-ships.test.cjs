@@ -391,6 +391,15 @@ test("Talk-to's transcript opens the map and answers its item conditions", () =>
   tasks.length = 0;
 });
 
+test("the Great Conch option is offered only by the crew at The Summer Shore", () => {
+  const definition = { getName: () => "Trader Crewmember" };
+  const ask = (at) => hooks.conditions[0]({ player: createPlayer({ at }), definition, text: "At The Great Conch" });
+  assert.equal(ask(SARIM_DOCK), false, "Port Sarim's crew never ask what brings them out here");
+  assert.equal(ask(CATHERBY_DOCK), false);
+  const shore = row("summer_shore").zone;
+  assert.equal(ask(tile(shore.low.x + 1, shore.low.y + 1)), true);
+});
+
 test("a passenger who dies before arrival stays where they died, still locked", () => {
   tasks.length = 0;
   const player = createPlayer({ at: CATHERBY_DOCK });

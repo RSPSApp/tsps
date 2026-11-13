@@ -105,6 +105,25 @@ test("Spellbook Swap's menu offers only the books the player has access to (Wiki
   assert.deepEqual(done.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Ancient", "Arceuus"]);
 });
 
+// Wiki (Spellbook Swap): the runes are spent when a book is selected, not when the menu opens.
+test("Spellbook Swap's menu spends nothing until a book is chosen, and nothing when closed", (t) => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, true);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  assert.equal(f.runes(), 10, "opening the menu spends nothing");
+  f.p.getDialogueManager().reset();
+  assert.equal(f.runes(), 10, "closing it unchosen spends nothing");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  f.p.getDialogueManager().handleOption(2);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT);
+  assert.ok(f.runes() < 10, "choosing a book pays for the cast");
+  const poor = swapper(t, true);
+  poor.p.getInventory().delete(9075, 10);
+  LunarSpells.handleSelf(poor.p, "spellbook swap", 1);
+  assert.equal(poor.p.getDialogueManager().getCurrent(), undefined, "no menu without the runes");
+});
+
 test("the occult altar's choice of the book already in use needs no unlock", (t) => {
   const f = wizard(t, { lunar: false });
   f.p.setSpellbook(core.MagicSpellbook.LUNAR);

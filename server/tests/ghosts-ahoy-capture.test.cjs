@@ -588,8 +588,14 @@ test('the rocks to the island need 25 Agility, boosts count (Wiki: Ghosts Ahoy)'
   assert.equal(p.getLocation().getX(), 3604, 'stays put');
   assert.equal(skills.getExperience(core.Skill.AGILITY), xp);
   skills.setCurrentLevel(core.Skill.AGILITY, 25, false); // a boost: the base level stays 1
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const resting = MovementQueue.runEnergyRestoreUnits(p);
+  assert.ok(resting > 0);
   assert.equal(jump(), true);
+  // Wiki (Energy): no run energy comes back while crossing an Agility obstacle.
+  assert.equal(MovementQueue.runEnergyRestoreUnits(p), 0, 'no recovery mid-jump');
   tick(5);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(p), resting, 'recovery resumes once across');
   assert.equal(p.getLocation().getX(), 3602, 'jumps at a boosted 25');
   assert.ok(skills.getExperience(core.Skill.AGILITY) > xp);
 });

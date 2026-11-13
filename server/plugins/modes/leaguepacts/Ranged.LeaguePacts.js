@@ -10,7 +10,8 @@
  * time, with the cache's leagues_6_echo_arrow projectile and leagues_6_ranged_mastery_vfx_left /
  * _right on the player (alternating, as the Raging Echoes melee echo did: no capture of either).
  * Never against a player, never from a special attack, and never from another echo except with
- * talent_ranged_echo_cyclical. Its XP is the usual (the Wiki does not say).
+ * talent_ranged_echo_cyclical. A melee echo pays Ranged XP, not the melee style's (issue #4922's
+ * live Leagues VI report; the Wiki does not say).
  *
  * - 8 talent_crossbow_echo_reproc_chance: a crossbow (or ballista) attack has the pact's % chance
  *   to fire an echo when its hit lands, hit or miss (onCombatHitResolved). Read as its own trigger;
@@ -323,8 +324,10 @@ function fireEcho(player, target, { source = "ranged", chance = 0, depth = 0 } =
   const { CombatFactory, PendingHit, Projectile, CacheDefinitions, Graphic } = core;
   const method = source === "melee" ? meleeEcho() : CombatFactory.RANGED_COMBAT;
   const distance = player.getLocation().getDistance(target.getLocation());
+  // A melee echo is a ranged attack for XP even though its rolls use the melee stats.
+  const experienceSkills = source === "melee" ? [core.Skill.RANGED.getIndex()] : undefined;
   const echo = build({ player, echo: true, source }, () =>
-    new PendingHit(player, target, method, { delay: 1 + Math.floor((3 + distance) / 6), ordinary: true }));
+    new PendingHit(player, target, method, { delay: 1 + Math.floor((3 + distance) / 6), ordinary: true, experienceSkills }));
   echoes.set(echo, { depth, chance, source });
   CombatFactory.addPendingHit(echo);
   const side = graphicSide.get(player) ?? 0;

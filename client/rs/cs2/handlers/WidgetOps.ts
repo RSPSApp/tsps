@@ -8,7 +8,7 @@ import {
 import { markWidgetInteractionDirty } from "../../../widgets/WidgetInteraction";
 import { initializeWidgetItemModel } from "../../../widgets/WidgetItemModel";
 import { MAX_WIDGET_OPS } from "../../../widgets/WidgetFlags";
-import { SCRIPT_LAYOUT, type WidgetNode } from "../../../widgets/WidgetManager";
+import { SCRIPT_LAYOUT, loadGroupForCs2Lookup, type WidgetNode } from "../../../widgets/WidgetManager";
 import { getViewportSize } from "../../../common/utils/DeviceUtil";
 import { Cs2ArrayObject } from "../Cs2ArrayObject";
 import { applyNpcRowIcon } from "../spawnSearch";
@@ -18,7 +18,20 @@ import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 // Helper to get widget by UID from stack. Looked up every time, never cached: a closed
 // interface is unloaded, and its next open has new widgets under the same uids.
 function getWidgetFromStack(ctx: HandlerContext): WidgetNode | null {
-    const uid = ctx.intStack[--ctx.intStackSize];
+    return getWidget(ctx, ctx.intStack[--ctx.intStackSize]);
+}
+
+/**
+ * The real client's Widget.getWidget: a component of a group that isn't loaded loads the group
+ * first (decoded from the cache, its onLoad not run), so an IF_ op on a closed interface still
+ * applies, and the next open shows it, as getWidgetByUidAndChild already does for CC_ ops.
+ */
+function getWidget(ctx: HandlerContext, uid: number): WidgetNode | null {
+    const existing = ctx.widgetManager.getWidgetByUid(uid);
+    if (existing || uid < 0) return existing ?? null;
+    const groupId = (uid >>> 16) & 0xffff;
+    if (groupId === 0) return null;
+    loadGroupForCs2Lookup(ctx.widgetManager, groupId);
     return ctx.widgetManager.getWidgetByUid(uid) ?? null;
 }
 
@@ -283,7 +296,7 @@ function getWidgetByUidAndChild(
 ): WidgetNode | null {
     const groupId = (widgetUid >>> 16) & 0xffff;
     if (groupId !== 0) {
-        ctx.widgetManager.getGroup(groupId);
+        loadGroupForCs2Lookup(ctx.widgetManager, groupId);
     }
     const parent = ctx.widgetManager.getWidgetByUid(widgetUid);
     if (!parent) {
@@ -492,7 +505,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const uid = ctx.intStack[ctx.intStackSize];
         const childIndex = ctx.intStack[ctx.intStackSize + 1];
 
-        const parent = ctx.widgetManager.getWidgetByUid(uid);
+        const parent = getWidget(ctx, uid);
         let w: WidgetNode | null = null;
         if (parent && ctx.widgetManager.isServerOwnedWidget(uid)) {
             const groupId = (uid >>> 16) & 0xffff;
@@ -536,7 +549,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.IF_FIND, (ctx, intOp) => {
         const uid = ctx.intStack[--ctx.intStackSize];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         //  (class28): do not clear target widget when lookup fails.
         if (w) {
             setTargetWidget(ctx, intOp, w);
@@ -653,7 +666,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
         // Ensure the parent's group is loaded before looking up the widget
         // This is critical because getWidgetByUid only checks the cache - it doesn't load groups
-        ctx.widgetManager.getGroup(groupId);
+        loadGroupForCs2Lookup(ctx.widgetManager, groupId);
 
         const parent = ctx.widgetManager.getWidgetByUid(parentUid);
         if (!parent) {
@@ -767,7 +780,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
 
         // Ensure group loaded before lookup (parity with CC_CREATE guard).
-        ctx.widgetManager.getGroup(groupId);
+        loadGroupForCs2Lookup(ctx.widgetManager, groupId);
         const parent = ctx.widgetManager.getWidgetByUid(parentUid);
         if (!parent || !Array.isArray(parent.children)) {
             throw new Error("RuntimeException");
@@ -1076,7 +1089,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const param1Id = ctx.popInt() | 0;
         const parentUid = ctx.popInt() | 0;
 
-        ctx.widgetManager.getGroup((parentUid >>> 16) & 0xffff);
+        loadGroupForCs2Lookup(ctx.widgetManager, (parentUid >>> 16) & 0xffff);
         const parent = ctx.widgetManager.getWidgetByUid(parentUid);
         let found: WidgetNode | null = null;
 
@@ -1123,7 +1136,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const mode = ctx.intStack[ctx.intStackSize] | 0;
         const uid = ctx.intStack[ctx.intStackSize + 1] | 0;
         const anchorIndex = ctx.intStack[ctx.intStackSize + 2] | 0;
-        ctx.widgetManager.getGroup((uid >>> 16) & 0xffff);
+        loadGroupForCs2Lookup(ctx.widgetManager, (uid >>> 16) & 0xffff);
         const query = initWidgetQuery(
             ctx,
             mode,
@@ -1232,7 +1245,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const y = ctx.intStack[ctx.intStackSize + 1];
         const xMode = ctx.intStack[ctx.intStackSize + 2];
         const yMode = ctx.intStack[ctx.intStackSize + 3];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         // PERF: Only invalidate if position actually changed
         if (
             w &&
@@ -1288,7 +1301,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const h = ctx.intStack[ctx.intStackSize + 1];
         const wMode = ctx.intStack[ctx.intStackSize + 2];
         const hMode = ctx.intStack[ctx.intStackSize + 3];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w && ctx.widgetManager.isServerOwnedWidget(uid)) return;
         // PERF: Only invalidate if size actually changed
         if (
@@ -1639,7 +1652,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const xAlign = ctx.intStack[ctx.intStackSize];
         const yAlign = ctx.intStack[ctx.intStackSize + 1];
         const lineHeight = ctx.intStack[ctx.intStackSize + 2];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (
             w &&
             (w.xTextAlignment !== xAlign ||
@@ -2105,7 +2118,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const angleY = ctx.intStack[ctx.intStackSize + 3];
         const angleZ = ctx.intStack[ctx.intStackSize + 4];
         const zoom = ctx.intStack[ctx.intStackSize + 5];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             w.modelOffsetX = offsetX;
             w.modelOffsetY = offsetY;
@@ -2405,7 +2418,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const scrollX = ctx.intStack[ctx.intStackSize];
         const scrollY = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             // scroll clamping uses the widget's current computed width/height.
             ensureWidgetLayout(ctx, w);
@@ -2450,7 +2463,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const width = ctx.intStack[ctx.intStackSize];
         const height = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w && ctx.widgetManager.isServerOwnedWidget(uid)) return;
         if (w) {
             const sizeChanged = w.scrollWidth !== width || w.scrollHeight !== height;
@@ -2568,7 +2581,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const itemId = ctx.intStack[ctx.intStackSize];
         const amount = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         applySetObjectWidget(ctx, w, itemId, amount, 2);
     });
 
@@ -2587,7 +2600,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const itemId = ctx.intStack[ctx.intStackSize];
         const amount = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         applySetObjectWidget(ctx, w, itemId, amount, 0);
     });
 
@@ -2606,7 +2619,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const itemId = ctx.intStack[ctx.intStackSize];
         const amount = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         applySetObjectWidget(ctx, w, itemId, amount, 1);
     });
 
@@ -2962,7 +2975,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const keyChar = ctx.intStack[ctx.intStackSize];
         const keyCode = ctx.intStack[ctx.intStackSize + 1];
         const opIndex = ctx.intStack[--ctx.intStackSize] - 1;
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w && opIndex >= 0 && opIndex <= 9) {
             if (!w.opKeys) w.opKeys = [];
             if (keyChar >= 0) {
@@ -3009,7 +3022,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const keyChar = ctx.intStack[ctx.intStackSize];
         const keyCode = ctx.intStack[ctx.intStackSize + 1];
         const opIndex = 10; // Typed key slot
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             if (!w.opKeys) w.opKeys = [];
             if (keyChar >= 0) {
@@ -3050,7 +3063,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const opIndex = ctx.intStack[ctx.intStackSize] - 1;
         const keyRate = ctx.intStack[ctx.intStackSize + 1];
         const tickRate = ctx.intStack[ctx.intStackSize + 2];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w && opIndex >= 0 && opIndex <= 9) {
             if (!w.opKeyRates) w.opKeyRates = [];
             w.opKeyRates[opIndex] = {
@@ -3081,7 +3094,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const opIndex = 10; // Hardcoded for typed key slot
         const keyRate = ctx.intStack[--ctx.intStackSize];
         const tickRate = ctx.intStack[--ctx.intStackSize];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             if (!w.opKeyRates) w.opKeyRates = [];
             w.opKeyRates[opIndex - 1] = { rate: keyRate, enabled: tickRate !== 0, opIndex };
@@ -3103,7 +3116,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         // Reference: uid first, then 1 arg (opIndex)
         const uid = ctx.intStack[--ctx.intStackSize];
         const opIndex = ctx.intStack[--ctx.intStackSize] - 1;
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w && opIndex >= 0 && opIndex <= 9) {
             if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
             w.opKeyIgnoreHeld[opIndex] = true;
@@ -3125,7 +3138,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         // Reference: only uid, opIndex is hardcoded to 10
         const uid = ctx.intStack[--ctx.intStackSize];
         const opIndex = 10; // Hardcoded for typed key slot
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
             w.opKeyIgnoreHeld[opIndex - 1] = true;
@@ -3170,11 +3183,11 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const parentUid = ctx.intStack[ctx.intStackSize];
         const childIndex = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             w.isDraggable = true;
             // Resolve drag render area: get child at childIndex within parent container
-            const parentWidget = ctx.widgetManager?.getWidgetByUid(parentUid);
+            const parentWidget = getWidget(ctx, parentUid);
             if (
                 parentWidget &&
                 parentWidget.children &&
@@ -3278,7 +3291,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const xOffset = ctx.intStack[ctx.intStackSize];
         const yOffset = ctx.intStack[ctx.intStackSize + 1];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (w) {
             (w as any)._dragPickupOffsetX = xOffset;
             (w as any)._dragPickupOffsetY = yOffset;
@@ -3297,7 +3310,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.IF_CALLONRESIZE, (ctx) => {
         const uid = ctx.intStack[--ctx.intStackSize];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
+        const w = getWidget(ctx, uid);
         if (!w) {
             throw new Error("RuntimeException");
         }
@@ -3326,7 +3339,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         if (opIndex < 1 || opIndex > 10) {
             throw new Error("RuntimeException");
         }
-        const parent = ctx.widgetManager.getWidgetByUid(uid);
+        const parent = getWidget(ctx, uid);
         const w =
             slot === -1 || !parent
                 ? parent

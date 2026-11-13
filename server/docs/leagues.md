@@ -61,10 +61,10 @@ character**, a save kept apart from its main one (`persistence/PlayerProfile.ts`
   `::unmute`, `::ban` and `::unban` (those four are still stubs that punish nobody).
 - Known limits: the SQLite backend's one-time import of legacy JSON saves reads only the main
   files; an offline update to either save (an external store purchase) is refused while the
-  account's other character is online, since both share the name; the friends chat's offline
-  owner lookup (`FriendsChatManager.js`) and the AI bots' name checks (`RegisterAiBots`,
-  `PlayerFactory`) still read the main save only, so on a league world an offline owner's channel
-  is the main character's and a name held only by a league character counts as free for a bot.
+  account's other character is online, since both share the name.
+- The friends chat's offline owner lookup (`FriendsChatManager.js`) reads the world's character
+  too, and a new AI bot never takes a name any character is saved under (`RegisterAiBots`). Bots
+  themselves are always main characters, so their own saves (`PlayerFactory`) stay main.
 
 The world's league is the one a new league character joins; the character keeps it in
 `league:type`. A new character starts at the league's levels (Wiki: Trailblazer and Trailblazer
@@ -1475,8 +1475,11 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
 ## Areas
 
 `AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
-A league character starts in Misthalin and Karamja (the Wiki's start; live unlocks Karamja free
-during its tutorial, which this server has none of) and picks up to three more areas as its
+A Trailblazer Reloaded character starts in Misthalin and Karamja (the Wiki's start; live unlocks
+Karamja free during its tutorial, which this server has none of for that league). A Raging Echoes
+character starts in Misthalin alone and picks Karamja free during the league tutorial, whose areas
+page waits for it (`firstPick` at 0 tasks; Wiki Raging_Echoes_League/Areas, recording 227/00196).
+Each then picks up to three more areas as its
 completed tasks reach the league's thresholds: Trailblazer Reloaded 60, 140 and 300 tasks from
 Asgarnia, the Fremennik Province, Kandarin, the Kharidian Desert, Morytania, Tirannwn, the
 Wilderness and Kourend; Raging Echoes 90, 200 and 400, Varlamore among them (Wiki). Only the next

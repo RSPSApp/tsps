@@ -188,6 +188,28 @@ test("fewer than a set fletches as many as are held (live: 7 unfinished bolts, \
   assert.equal(darts.count("RUNE_DART_TIP"), 0);
 });
 
+test("Make-All past full sets finishes with the last partial set (live: 15, 15, 15, 15, then 14)", () => {
+  // rsprox_transcripts/227/01756.txt: one Make-All attaches dragon arrowtips to 15 four times, then to 14.
+  const p = player({ items: { HEADLESS_ARROW: 37, BRONZE_ARROWTIPS: 40 } });
+  assert.equal(use(p, "BRONZE_ARROWTIPS", "HEADLESS_ARROW"), true);
+  p.menu().execute(I.BRONZE_ARROW, 28);
+  runTask();
+  assert.equal(p.count("BRONZE_ARROW"), 37);
+  assert.equal(p.count("HEADLESS_ARROW"), 0);
+  assert.equal(p.count("BRONZE_ARROWTIPS"), 3);
+  assert.deepEqual(p.spam.filter((line) => line.startsWith("You attach")), [
+    "You attach bronze arrowtips to 15 headless arrows.",
+    "You attach bronze arrowtips to 15 headless arrows.",
+    "You attach bronze arrowtips to 7 headless arrows.",
+  ]);
+  const x = player({ items: { ARROW_SHAFT: 20, FEATHER: 20 } });
+  use(x, "FEATHER", "ARROW_SHAFT");
+  x.menu().execute(I.HEADLESS_ARROW, 2);
+  runTask();
+  assert.equal(x.count("HEADLESS_ARROW"), 20, "Make-2 covers a set and the last five");
+  assert.equal(x.count("ARROW_SHAFT"), 0);
+});
+
 // Wiki: Gryphon_feather, Stymphike_feather and Feather, retrieved 2026-10-27.
 for (const feather of ["GRYPHON_FEATHER", "STYMPHIKE_FEATHER"]) {
   for (const [material, output, amount, feathers, xp] of [

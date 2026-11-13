@@ -56,6 +56,8 @@ const TIARA_STAGE_ATTRIBUTE = "fremennik-diary:tiara-stage";
 const OAK_CHOPPED_ATTRIBUTE = "fremennik-diary:oak-chopped";
 const KINGS_ATTRIBUTE = "fremennik-diary:dagannoth-kings";
 const GENERALS_ATTRIBUTE = "fremennik-diary:gwd-generals";
+/** Wiki Managing Miscellania: approval is 0-127, 127 being 100%. */
+const MISCELLANIA_APPROVAL_MAX = 127;
 
 let api;
 
@@ -295,6 +297,16 @@ function onApprovalChanged({ player, value, max }) {
   if (value >= max) complete(player, "obtain-100-support-from-your-kingdom-subjects");
 }
 
+/** Backfill: a player already at full approval (from before the task was tracked, or a migration) is credited at login. */
+function onLoginApproval({ player }) {
+  if (!player) return;
+  const request = { player, value: undefined };
+  api.emitCustomEvent("miscellania:get-approval", request);
+  if (Number.isFinite(request.value) && request.value >= MISCELLANIA_APPROVAL_MAX) {
+    complete(player, "obtain-100-support-from-your-kingdom-subjects");
+  }
+}
+
 function onDialogueLine({ player, npcId, text }) {
   if (npcId !== api.core.NpcIdentifiers.BLAST_FURNACE_FOREMAN) return;
   if (text !== "A human has level 60 smithing? How extraordinary!") return;
@@ -373,6 +385,7 @@ module.exports = {
     api.onCustomEvent("spell:teleport-arrival", onSpellArrival);
     api.onCustomEvent("water-source:filled", onWaterSourceFilled);
     api.onCustomEvent("miscellania:approval-changed", onApprovalChanged);
+    api.onPlayerLogin(onLoginApproval);
     api.onCustomEvent("npc-dialogue:line", onDialogueLine);
     api.onCustomEvent("fremennik-isles:shield-made", onShieldMade);
     api.onCustomEvent("runecrafting:success", onRunecraftingSuccess);
@@ -384,7 +397,7 @@ module.exports = {
     inBox, questComplete, questStarted, onShopOpened, onHunterSuccess, onNpcDeath, onGroundItemsTaken,
     onMiningSuccess, onSmeltingSuccess, onCraftingMade, onWoodcuttingSuccess, onFiremakingSuccess,
     onHerbloreMade, onThievingSuccess, onTrollStrongholdEnter, onEagleArrived, onFairyRingLanded, onSpellArrival,
-    onWaterSourceFilled, onPetRockTaken, onApprovalChanged, onDialogueLine, onShieldMade,
+    onWaterSourceFilled, onPetRockTaken, onApprovalChanged, onLoginApproval, onDialogueLine, onShieldMade,
     onRunecraftingSuccess, onGodWarsKill, onDiaryTask,
     RELLEKKA, RELLEKKA_FURNACE, RELLEKKA_WELL, FREMENNIK_PROVINCE, WATERBIRTH, KELDAGRIM,
     JATIZSO_MINE, ARZINIAN_MINE, NEITIZNOT_CLAY_FORGE,

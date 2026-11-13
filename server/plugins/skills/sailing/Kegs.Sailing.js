@@ -14,8 +14,9 @@
  * sailing_sidepanel_whirlpool_surprise_active), perildance bitter +1 cannon max hit.
  * Ours: the Check text of the kraken ink stout, perildance bitter and trawler's trust kegs (live's
  * wording for the other two, with Charles's effect lines); the lines for too few ales, for Fill
- * without them and for emptying (none recorded). Kraken ink stout's +4% ocean encounters and
- * trawler's trust's extra fish do nothing: there are no ocean encounters or deep sea trawling yet.
+ * without them and for emptying (none recorded). Kraken ink stout shortens the ocean encounter
+ * timer (ClueTurtle.Sailing.js); trawler's trust's extra fish do nothing: there is no deep sea
+ * trawling yet.
  */
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
 const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");

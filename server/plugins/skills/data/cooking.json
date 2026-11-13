@@ -134,6 +134,7 @@
     ]
   },
   "recipes": [
+    {"product":"rawswamppaste","level":1,"ingredients":["pot_flour","swamp_tar"],"returns":["pot_empty"]},
     {"product":"pie_shell","level":1,"ingredients":["pastry_dough","piedish"]},
     {"product":"uncooked_redberry_pie","level":10,"ingredients":["redberries","pie_shell"]},
     {"product":"uncooked_meat_pie","level":20,"ingredients":["cooked_meat","pie_shell"]},

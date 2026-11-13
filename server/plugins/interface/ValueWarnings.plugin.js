@@ -18,6 +18,7 @@
  *   hear "item:drop-warning" { player, item, itemId, slot, answered, warned, proceed(name) }
  *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text }
  *   hear "npc-drops:roll" { player, npc, drops }
+ *   hear "drops:received" { player, source, drops }: loot from anything but a kill (a key chest)
  */
 const Value = require("./ValueWarning");
 
@@ -104,19 +105,26 @@ function lootLine(core, drop, threshold, untradeables) {
   return Value.reaches(value, threshold) ? `<col=${LOOT_COLOUR}>Valuable drop: ${counted} (${value.toLocaleString("en-GB")} coins)</col>` : null;
 }
 
+function notify(player, drops) {
+  if (varbit(player, LOOT_ON) === 0) return;
+  const threshold = varbit(player, LOOT_VALUE);
+  const untradeables = varbit(player, LOOT_UNTRADEABLES) === 1;
+  for (const drop of drops ?? []) {
+    const line = lootLine(pluginApi.core, drop, threshold, untradeables);
+    if (line) player.sendMessage(line);
+  }
+}
+
 /** An NPC's drop, read once the roll's other handlers have edited it (as the collection log does). */
 function lootNotifications(request) {
   const { player, npc } = request ?? {};
   if (!player || !npc) return;
-  queueMicrotask(() => {
-    if (varbit(player, LOOT_ON) === 0) return;
-    const threshold = varbit(player, LOOT_VALUE);
-    const untradeables = varbit(player, LOOT_UNTRADEABLES) === 1;
-    for (const drop of request.drops ?? []) {
-      const line = lootLine(pluginApi.core, drop, threshold, untradeables);
-      if (line) player.sendMessage(line);
-    }
-  });
+  queueMicrotask(() => notify(player, request.drops));
+}
+
+/** Loot already given to the player, from anything but a kill. */
+function receivedNotifications(request) {
+  if (request?.player) notify(request.player, request.drops);
 }
 
 module.exports = {
@@ -128,6 +136,7 @@ module.exports = {
     api.onCustomEvent("item:drop-warning", dropWarning);
     api.onCustomEvent("magic:alchemy-warning", alchemyWarning);
     api.onCustomEvent("npc-drops:roll", lootNotifications);
+    api.onCustomEvent("drops:received", receivedNotifications);
   },
-  _test: { settingClicked, dropWarning, alchemyWarning, lootLine, lootNotifications, PROMPTS, setApi: (api) => { pluginApi = api; } },
+  _test: { settingClicked, dropWarning, alchemyWarning, lootLine, lootNotifications, receivedNotifications, PROMPTS, setApi: (api) => { pluginApi = api; } },
 };

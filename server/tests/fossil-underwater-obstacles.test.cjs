@@ -32,6 +32,7 @@ before(() => {
     onObjectInteraction() {},
     onPlayerProcess() {},
     onCanTeleport() {},
+    registerRunEnergyRestoreModifier() {},
     registerArea() {},
     onPlayerLogout() {},
     onPlayerLogin() {},

@@ -83,7 +83,8 @@ function container() {
 }
 
 function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
-  const attributes = new Map();
+  // A fake can't be snapshotted; a real reward's save request (e.g. a new Collection Log item) skips it, as for bots.
+  const attributes = new Map([['bot-skip-persistence', true]]);
   const p = {
     location: new Location(2387, 5982, 0), area: null, messages: [], spam: [], boxes: [], anims: [], graphics: [],
     varbits: new Map(), scripts: [], subs: [], xp: {}, songs: [], forced: [], registered: true,
@@ -121,6 +122,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { p.varbits.set(id, value); return sender; },
+        sendConfig: (id, value) => { (p.varps ??= new Map()).set(id, value | 0); return sender; },
+        getVarp: (id) => p.varps?.get(id) ?? 0,
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendSubInterface: (uid, id) => { p.subs.push(id); return sender; },
         closeSubInterface: (uid) => { p.subs.push(-uid); return sender; },
@@ -128,6 +131,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
         sendSong: (id) => { p.songs.push(id); return sender; },
         sendJingle: () => sender,
         sendSound: () => sender,
+        sendSoundEffect: () => sender,
+        sendInterfaceScript: () => sender,
         sendObjectAnimation: (object, anim) => { (p.locAnims ??= []).push([object.getId(), anim.getId()]); return sender; },
         sendGraphic: (graphic, location) => { (p.tileGraphics ??= []).push([graphic.id, location]); return sender; },
         sendInterfaceRemoval: () => sender,
@@ -269,6 +274,50 @@ test('a drop: the jump-down, the landing a plane lower the next tick, 25 Agility
   ticks(1);
   assert.equal(p.xp.Agility ?? p.xp.AGILITY, 25);
   run.finish();
+});
+
+test('run energy does not recover while a Sepulchre Agility obstacle plays, and does again after (Wiki: Energy)', () => {
+  const ObstacleRunner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  const { World } = Common.core;
+  const cycle = World.processCycle;
+  try {
+    const p = fakePlayer();
+    const run = startRun(p, 0);
+    const crossing = () => ObstacleRunner.isCrossingAgilityObstacle(p, World.getProcessCycle());
+    assert.equal(crossing(), false);
+    // The drop takes 3 ticks (the jump, the landing, the XP).
+    click(p, 38462, 1, locOf(run, 38462, [2281, 5988, 2]));
+    for (let i = 0; i < 3; i++) {
+      assert.equal(crossing(), true, `tick ${i} of the drop`);
+      World.processCycle++;
+      ticks(1);
+    }
+    assert.equal(crossing(), false, 'over once the drop has played');
+    run.finish();
+  } finally {
+    World.processCycle = cycle;
+  }
+});
+
+test('a run that ends mid-drop (a teleport) stops holding run energy at once', () => {
+  const ObstacleRunner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  const { World } = Common.core;
+  const cycle = World.processCycle;
+  try {
+    const p = fakePlayer();
+    const run = startRun(p, 0);
+    const crossing = () => ObstacleRunner.isCrossingAgilityObstacle(p, World.getProcessCycle());
+    click(p, 38462, 1, locOf(run, 38462, [2281, 5988, 2]));
+    assert.equal(crossing(), true, 'the drop is being crossed');
+    run.finish();
+    for (let i = 0; i < 4; i++) {
+      assert.equal(crossing(), false, `cycle ${i} after the run ended`);
+      World.processCycle++;
+      ticks(1);
+    }
+  } finally {
+    World.processCycle = cycle;
+  }
 });
 
 test('a platform: two hops two ticks apart, the line and the timer stopped; back is refused', () => {
@@ -1023,7 +1072,14 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
     const prior = run.busyUntil, taskCount = tasks.size;
     assert.equal(skills.getCurrentLevel(Skill.AGILITY), agilityCurrent);
     assert.equal(skills.getCurrentLevel(Skill.THIEVING), thievingCurrent);
-    assert.equal(PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType: 1, option }), true);
+    // Shaped as ObjectActionPacketListener sends it: the loc tile and the tile the player clicked from.
+    const at = object.getLocation(), from = player.getLocation();
+    assert.equal(PluginManager.emitObjectInteraction({
+      player, object, definition, objectId: id, clickType: 1, option,
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() },
+      sourceLocation: { x: from.getX(), y: from.getY(), z: from.getZ() },
+      handled: false,
+    }), true);
     assert.equal(run.busyUntil, accepted ? run.ticks + 8 : prior, name);
     if (!accepted) assert.equal(tasks.size, taskCount, 'refusal schedules no action');
     if (state === 'held') run.traps = null;

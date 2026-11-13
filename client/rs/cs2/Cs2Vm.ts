@@ -3,7 +3,7 @@ import { EMOTE_SHORTCUT_SCRIPT_ID, isEmoteShortcut } from "./EmoteShortcuts";
 import { GAMEFRAME_LAYOUT_SETTING, GAMEFRAME_317_OPTION, GAMEFRAME_317_FIXED_OPTION, SETTINGS_GET_SELECTED_SCRIPT, VARP_GAMEFRAME_317 } from "../../common/ui/gameframeLayout";
 import type { FriendsChatAction } from "../../common/social/FriendsChat";
 import type { ClanChannel, ClanSettings } from "./handlers/HandlerTypes";
-import type { WidgetManager, WidgetNode } from "../../widgets/WidgetManager";
+import { loadGroupForCs2Lookup, type WidgetManager, type WidgetNode } from "../../widgets/WidgetManager";
 import type { TypeLoader } from "../config/TypeLoader";
 import type { DbRepository } from "../config/db/DbRepository";
 import type { EnumType } from "../config/enumtype/EnumType";
@@ -1468,7 +1468,7 @@ export class Cs2Vm {
         // - resolve parent by widget UID
         // - if childIndex != -1, resolve child from parent.children[childIndex]
         const groupId = (widgetUid >>> 16) & 0xffff;
-        this.context.widgetManager.getGroup(groupId);
+        loadGroupForCs2Lookup(this.context.widgetManager, groupId);
         const parent = this.context.widgetManager.getWidgetByUid(widgetUid);
         const widget =
             childIndex !== -1
@@ -2123,7 +2123,7 @@ export class Cs2Vm {
 
         //  - UID lookup attempts group load first.
         const groupId = (uid >>> 16) & 0xffff;
-        this.context.widgetManager.getGroup(groupId);
+        loadGroupForCs2Lookup(this.context.widgetManager, groupId);
         const widget = this.context.widgetManager.getWidgetByUid(uid);
         if (!widget) {
             throw new Error("RuntimeException");

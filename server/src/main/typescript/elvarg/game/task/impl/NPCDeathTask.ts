@@ -8,8 +8,7 @@ import { TaskManager } from "../TaskManager";
 import { NPCRespawnTask } from '../impl/NPCRespawnTask'
 import { PluginManager } from "../../../plugins/PluginManager";
 import type { PluginNpcDeathEvent } from "../../../plugins/PluginTypes";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { ArceuusSpells } from "../../content/combat/magic/ArceuusSpells";
 import { CombatSpecial } from "../../content/combat/CombatSpecial";
 
@@ -43,8 +42,7 @@ export class NPCDeathTask extends Task {
                 this.lastDamager = this.npc.getCombat().getLastDamager();
                 this.killer = this.npc.getCombat().getKiller(true);
                 this.npc.performAnimation(new Animation(this.npc.getCurrentDefinition().getDeathAnim()));
-                const deathSound = this.npc.getCurrentDefinition().getDeathSound();
-                if (deathSound > 0) Sounds.sendSound(this.npc, new Sound(deathSound, 1, 0, 0));
+                NpcCombatSounds.death(this.npc, this.damagers.length > 0 ? this.damagers : this.killer ? [this.killer] : []);
                 this.npc.getCombat().reset();
                 this.npc.getCombat().setUnderAttack(null);
                 this.npc.setMobileInteraction(null);

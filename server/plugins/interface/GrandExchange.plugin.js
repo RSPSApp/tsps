@@ -51,6 +51,11 @@ const FEE_INFORMATION =
 // Keep them separate from the stockmarket opcode data.
 const OFFER_ITEMS = [3204, 3206, 3208, 3210, 3212, 3214, 3216, 3218];
 const COLLECTIONS = [518, 519, 520, 521, 522, 523, 539, 540];
+// Sounds (rsprox captures, ge_offers 465): placing an offer, and taking coins or items from the collection
+// box, which plays one of each when it hands over both.
+const SOUND_OFFER_PLACED = 3925;
+const SOUND_COLLECT_COINS = 3924;
+const SOUND_COLLECT_ITEMS = 3928;
 const MARKET_BASE = 7900;
 const MARKET_STRIDE = 7;
 const FINISHED = 5;
@@ -163,6 +168,10 @@ const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
 let marketData;
+
+function playSound(player, id) {
+  player.getPacketSender().sendSoundEffect(id, 1, 0, 0);
+}
 
 function loadMarketData() {
   if (marketData) return marketData;
@@ -1031,6 +1040,7 @@ function confirm(player, offer, warned = null) {
       { [COLLECTIONS[offer.slot]]: collection(finished) })
     .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(offer.itemId), feeLabel(offer), DETAILS_DESC, DETAILS_FEE_INFO])
     .sendMessage("Offer placed. It will fill when the market meets your price.");
+  playSound(player, SOUND_OFFER_PLACED);
   scheduleCompletion(player, finished);
 
 }
@@ -1102,6 +1112,8 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false,
       returned: Boolean(offer.sell && offer.aborted),
     });
   }
+  const heard = new Set(parts.map(({ outputId }) => outputId === COINS || outputId === PLATINUM_TOKEN ? SOUND_COLLECT_COINS : SOUND_COLLECT_ITEMS));
+  for (const sound of heard) playSound(player, sound);
   const remaining = all.length - taken.length - wanted.length;
   if (remaining > 0) offer.collected = [...taken, ...wanted.map(({ index }) => index)];
   else delete completedOffers(player)[slot];

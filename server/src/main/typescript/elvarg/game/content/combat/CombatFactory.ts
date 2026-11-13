@@ -1,5 +1,6 @@
 import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { ItemAliases } from "../../model/ItemAliases";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
@@ -1071,6 +1072,7 @@ export class CombatFactory {
         }
 
         PluginManager.emitCombatHitResolved({ attacker, target, hit: resolvedHit });
+        if (target.isNpc() && attacker.isPlayer()) NpcCombatSounds.hit(target.getAsNpc(), attacker.getAsPlayer());
 
         // Attacker-side effects.
         if (attacker.isPlayer()) {

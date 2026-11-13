@@ -123,7 +123,7 @@ function refusal(player, target) {
   if (!target || !inCrater(target)) return "You don't have a target to teleport to.";
   if (Date.now() - (lastCombatAt.get(player) ?? 0) < COMBAT_COOLDOWN_MS) return "You can't cast this spell so soon after combat.";
   if (usesOf(player, target) >= USES_PER_TARGET) return "You have already teleported to this target five times.";
-  if (!player.getCombat().getTeleblockTimer().finished()) return "A magical spell is blocking you from teleporting.";
+  if (!player.getCombat().getTeleblockTimer().finished()) return core.TeleBlock.attemptMessage(player);
   if (bh.inLobby(player) && !bh.inLobby(target)) return arenaRefusal(player);
   return null;
 }

@@ -113,11 +113,18 @@ function light(event) {
   applyLight(player, item, source);
 }
 
-/** The torch used on a fire or range (Wiki). Cooking's fallback would otherwise refuse it. */
+/** Ovens cook as a range does, but the Wiki's Torch names only "a fire or range" to light it on. */
+const OVEN_NAME = /\boven\b/i;
+
+/**
+ * The torch used on a fire or range (Wiki: Torch), not an oven (a small, large, clay or plain
+ * oven). Cooking's fallback would otherwise refuse it.
+ */
 function lightOnObject(event) {
   const { player } = event;
   if (event.itemId !== core.ItemIdentifiers.UNLIT_TORCH) return;
-  if (!isCooker(event.object.getDefinition())) return;
+  const definition = event.object.getDefinition();
+  if (!isCooker(definition) || OVEN_NAME.test(definition.getName() ?? "")) return;
   event.handled = true;
   applyLight(player, event.item, lights.get(core.ItemIdentifiers.UNLIT_TORCH));
 }

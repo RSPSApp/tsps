@@ -1405,7 +1405,8 @@ the killer sees `<col=005f00><name> received a drop: Kandarin echo orb</col>`. O
 stays the killer's and lies 18,000 ticks (the capture's `despawn=18000, ownership=self,
 neverturnpublic=true`; the loot beside it shows `reveal=100, despawn=200`): the drop
 carries data `ground` (`{ goesGlobal: false, despawnDelay: 18000 }`), which NpcDrops' `placeDrops`
-lays over the placement's options for that drop only.
+lays over the placement's options for that drop only. The Gauntlet's chest passes the same
+options on when a reward overflows a full pack onto the floor.
 
 Each boss's own entrance emits `echo-boss:entry` `{ player, boss, enter, handled }` just before
 it lets the player in: the Iron Winch's Turn (after its task check), the Queen's roped tunnel,

@@ -156,7 +156,8 @@ function openChest(player, random = Math.random) {
     const room = inventory.getAddableAmount(new Item(id, reward.amount));
     if (room > 0) inventory.adds(id, room);
     if (room < reward.amount) {
-      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount - room), player.getLocation().clone());
+      // A reward that brings its own ground options (a league echo orb's) keeps them on the floor.
+      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount - room), player.getLocation().clone(), undefined, reward.ground ?? {});
     }
   }
   inventory.refreshItems();

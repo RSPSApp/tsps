@@ -187,6 +187,27 @@ async function main() {
         key("Escape");
         assert.deepEqual(runs.map(([id]) => id), [71, 71], "with the row off, neither closes it");
         assert.deepEqual(runs.map(([, args]) => args[1]), [3, 3]);
+
+        // Script 2068: with "Esc closes current interface" on, an Esc that closes a modal leaves
+        // the side panel alone; F4 still switches, and with the setting off Esc still does too.
+        let escCloses = 1;
+        cannotClose = 0;
+        client.varManager.getVarbit = (id: number) => (id === 4681 ? escCloses : id === 4678 ? 4 : 0);
+        client.widgetManager = { rootInterface: 161, interfaceParents: new Map([[1, { group: 12, type: 0 }]]) };
+        runs.length = 0;
+        key("Escape");
+        assert.deepEqual(runs, [], "Esc closing the bank does not switch the side panel");
+        key("F4");
+        assert.deepEqual(runs.map(([id]) => id), [914], "an F-key still switches with a modal open");
+        runs.length = 0;
+        escCloses = 0;
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [914], "with Esc-to-close off, Esc is the tab hotkey");
+        runs.length = 0;
+        escCloses = 1;
+        client.widgetManager = { rootInterface: 161, interfaceParents: new Map() };
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [914], "with nothing to close, Esc is the tab hotkey");
     }
 
     // Row 347: the in-game server list asks before switching while the confirmation is on.

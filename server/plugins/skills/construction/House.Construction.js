@@ -813,6 +813,7 @@ function exitHouse(player) {
   const house = houseFor(player);
   if (!house) return false;
   standFromChair(player);
+  Workbench.standUp(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   if (house.owner === player) advertisedHouses.delete(house);
@@ -1169,8 +1170,9 @@ function getBuildMaterials(player, house, target, buildable) {
     // The cache's second skills: Farming (spirit trees), Cooking (the kitchen barrels), Smithing (the armour displays)
     // and Runecraft (the rune cases). Boostable, so the current level counts (Wiki: Beer barrel, Cooking 5; Mithril
     // armour (Construction), Smithing 68; Rune case space, Runecraft 14, 44 and 90).
+    // Skill.getName() says "Runecrafting"; the game's name for the skill is Runecraft (Wiki; level-up lines).
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
-      return `You need ${skill.getName()} level ${requirement.level} to build that.`;
+      return `You need ${skill === Skill.RUNECRAFTING ? "Runecraft" : skill.getName()} level ${requirement.level} to build that.`;
   }
   // Natural teleports use a filled watering can instead (Wiki: Teleport space).
   if (buildable.tool !== "watering-can" && (!hasHammer(player) || !hasSaw(player))) return "You need a saw and a hammer in order to make furniture.";
@@ -1773,6 +1775,7 @@ function logoutHouse({ player }) { standFromChair(player); releaseHouse(player, 
 /** Per tick, for players inside a house only (PlayerHouseInstance.process). */
 function processOccupant(player, house) {
   processChair(player);
+  Workbench.processSeat(player, house);
   Servants.processServant(player);
   syncKickOption(player);
   Altars.expireHouseBurners(house);
@@ -1783,6 +1786,7 @@ function processOccupant(player, house) {
 /** PlayerHouseInstance.postLeave, after the player is out of the house. */
 function leftHouse(player, house) {
   standFromChair(player);
+  Workbench.standUp(player);
   syncKickOption(player);
   if (house.owner === player) advertisedHouses.delete(house);
   GamesRoom.leftGamesRoom(player, house);

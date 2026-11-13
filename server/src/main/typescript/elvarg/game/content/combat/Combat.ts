@@ -9,6 +9,7 @@ import type { Player } from "../../entity/impl/player/Player";
 import { CoordinateState } from "../../entity/impl/npc/NPCMovementCoordinator";
 import { SecondsTimer } from "../../model/SecondsTimer";
 import { PoisonClock } from "./PoisonClock";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { StatementDialogue } from "../../model/dialogues/entries/impl/StatementDialogue";
 import { TickStopwatch } from "../../../util/TickStopwatch";
 import { ServerPerf } from "../../../util/ServerPerf";
@@ -1002,6 +1003,7 @@ export class Combat {
         this.expectAttackAnimation();
         PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
+        if (this.character.isNpc() && target.isPlayer()) NpcCombatSounds.attack(this.character.getAsNpc(), target.getAsPlayer());
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {

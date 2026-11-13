@@ -93,7 +93,10 @@ function claimBoots(player, floor, itemId) {
   ));
 }
 
-/** The boots menu's verb, as recorded: script 2046 mode 23 (rsprox_transcripts/227/01723.txt, 234/03275.txt). */
+/**
+ * The boots menu's verb, as recorded: script 2046 mode 23 (rsprox_transcripts/227/01723.txt, 234/03275.txt).
+ * Its amount is the free inventory space (10, 11 and 11 free slots in those and 241/900071.txt), starting at 1.
+ */
 const BOOTS_MENU_MODE = 23;
 
 function searchCradle(player, floor) {
@@ -109,7 +112,7 @@ function searchCradle(player, floor) {
         "Select the boots you want.",
         [fancy, fighting, fancier],
         { execute: (itemId) => claimBoots(player, floor, itemId) },
-        { mode: BOOTS_MENU_MODE },
+        { mode: BOOTS_MENU_MODE, maxAmount: player.getInventory().getFreeSlots(), lastAmount: 1 },
       ));
     } }),
   ));

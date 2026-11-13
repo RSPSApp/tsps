@@ -88,6 +88,9 @@ test("Spellbook Swap's Ancient quick pick is refused before Desert Treasure I, a
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
   assert.equal(f.runes(), 10, "no runes spent");
   assert.equal(f.boxes.length, 1, "the refusal box");
+  // rsprox_transcripts/227/00086.txt: the captured line keeps its colour tags.
+  assert.equal(f.p.getDialogueManager().getCurrent().getText(),
+    "You need to have completed <col=800000>Desert Treasure I<col=000000> in order to use <col=000000>Ancient Magicks.");
   const done = swapper(t, true);
   LunarSpells.handleSelf(done.p, "spellbook swap", 3);
   assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest, the swap works");

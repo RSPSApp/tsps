@@ -34,6 +34,10 @@ const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const SOCIAL_TAB_TARGET_UID = (161 << 16) | 85;
 // Cache241 toplevel_redraw907 reads friends_panel to select the social tab icon.
 const FRIENDS_PANEL_VARBIT = 6516;
+/** 1 while the social tab shows the ignore list; kept across logins (rsprox 227/00242 logs in on it). */
+const FRIENDS_PANEL_ATTRIBUTE = "friends-list:panel";
+const FRIENDS_LIST_GROUP = 429;
+const IGNORE_LIST_GROUP = 432;
 const RANK_OPTIONS = [
     "Anyone",
     "Any friends",
@@ -138,7 +142,8 @@ class FriendsChatManager {
     /** Owner key -> the setup the channel takes when its delay ends. */
     static pendingSetups = new Map();
     static onLogin(player) {
-        // encodeGameframeBootstrap mounts Friends429 on every login.
+        // encodeGameframeBootstrap mounts Friends429 on every login; restorePanel swaps in the
+        // ignore list after it when that was the last one shown.
         player.getPacketSender().sendVarbit(FRIENDS_PANEL_VARBIT, 0);
         this.offlinePlayerIds.delete(player.getIndex());
         const filters = player.getAttribute(CHAT_FILTERS_ATTRIBUTE);
@@ -251,20 +256,33 @@ class FriendsChatManager {
             member.getSession().sendClientPacket(encodeChatMessage("channel", text, player.getDisplayName(), channel.profile.channelName, player.getIndex(), FRIENDS_CHAT_MESSAGE_TYPE));
         }
     }
+    /**
+     * Live logs in on the list last shown (rsprox 227/00242: friends_panel 1 and ignore (432) in
+     * side9, and again after the welcome screen). Every mount of Friends429 comes here after it.
+     */
+    static restorePanel(player) {
+        if (player.getAttribute(FRIENDS_PANEL_ATTRIBUTE) !== 1)
+            return;
+        player.getPacketSender()
+            .sendVarbit(FRIENDS_PANEL_VARBIT, 1)
+            .sendSubInterface(SOCIAL_TAB_TARGET_UID, IGNORE_LIST_GROUP, 1);
+    }
     static handleWidgetAction(player, groupId, componentId, rawOption, rawOpId) {
         const option = String(rawOption ?? "").trim() ||
             optionFromWidget(groupId, componentId, Math.trunc(rawOpId)) || "";
         const normalized = option.toLowerCase();
-        if (groupId === 429 && normalized === "view ignore list") {
+        if (groupId === FRIENDS_LIST_GROUP && normalized === "view ignore list") {
+            player.setAttribute(FRIENDS_PANEL_ATTRIBUTE, 1);
             player.getPacketSender()
                 .sendVarbit(FRIENDS_PANEL_VARBIT, 1)
-                .sendSubInterface(SOCIAL_TAB_TARGET_UID, 432, 1);
+                .sendSubInterface(SOCIAL_TAB_TARGET_UID, IGNORE_LIST_GROUP, 1);
             return true;
         }
-        if (groupId === 432 && normalized === "view friends list") {
+        if (groupId === IGNORE_LIST_GROUP && normalized === "view friends list") {
+            player.setAttribute(FRIENDS_PANEL_ATTRIBUTE, 0);
             player.getPacketSender()
                 .sendVarbit(FRIENDS_PANEL_VARBIT, 0)
-                .sendSubInterface(SOCIAL_TAB_TARGET_UID, 429, 1);
+                .sendSubInterface(SOCIAL_TAB_TARGET_UID, FRIENDS_LIST_GROUP, 1);
             return true;
         }
         if (groupId === 7) {
@@ -832,4 +850,4 @@ class FriendsChatManager {
     }
 }
 
-module.exports = { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE };
+module.exports = { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE, FRIENDS_PANEL_ATTRIBUTE };

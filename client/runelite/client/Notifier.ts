@@ -11,16 +11,29 @@ const HIGHLIGHT = "ff0000";
 const APP_NAME = "RuneLite";
 /**
  * Keys of settings that turn a notification on: Ground Items' notify*, Chat Notifications'
- * notifyOn*, Boosts, Regen Meter and Idle Notifier's *Notification, plus Idle Notifier's
- * animationidle / interactionidle / movementidle. Thresholds, word lists and colours do not count.
+ * notifyOn*, Boosts, Regen Meter and Idle Notifier's *Notification. Thresholds, word lists and
+ * colours do not count.
  */
-const NOTIFICATION_KEY = /notif|idle$/i;
+const NOTIFICATION_KEY = /notif/i;
+/**
+ * Idle Notifier's animationidle / interactionidle / movementidle. Only in its own group: runtime
+ * keys elsewhere can end in "idle" too (Bank Tags' icon_<tag> for a tag named "idle").
+ */
+const IDLE_NOTIFIER_GROUP = "idlenotifier";
+const IDLE_KEY = /idle$/i;
 /** A mode setting set to notify (Implings' per-impling "Notify"). */
 const NOTIFY_VALUE = /^notify$/i;
 /** Values that leave a notification setting off. */
 const OFF_VALUES = new Set(["", "false", "off", "none", "0"]);
 
 let permissionAsked = false;
+
+/** True when this change turns a notification setting on. */
+export function turnsNotificationOn(group: string, key: string, value: string | undefined): boolean {
+    if (value === undefined || OFF_VALUES.has(value.toLowerCase())) return false;
+    if (NOTIFY_VALUE.test(value) || NOTIFICATION_KEY.test(key)) return true;
+    return group === IDLE_NOTIFIER_GROUP && IDLE_KEY.test(key);
+}
 
 function canAskPermission(): boolean {
     return typeof window !== "undefined" && typeof Notification !== "undefined"
@@ -55,14 +68,18 @@ function hasUserActivation(): boolean {
  * Asks for notification permission on the click that turns a notification setting on, so the
  * prompt comes while the player is choosing notifications, not on a later unrelated click after
  * the first notification was already lost. A change from another tab (no gesture) is ignored.
+ * It asks once: while the answer is "default", every matching change (each keystroke in a number
+ * field) would otherwise prompt again, and Chrome blocks a site whose prompts keep being dismissed.
+ * The next-click fallback (askPermissionOnNextClick) still asks once more.
  */
 export function watchNotificationSettings(config: ConfigSource): () => void {
+    let asked = false;
     return config.addListener((event) => {
-        const value = event.getNewValue();
-        if (value === undefined || OFF_VALUES.has(value.toLowerCase())) return;
-        if (!NOTIFICATION_KEY.test(event.getKey()) && !NOTIFY_VALUE.test(value)) return;
+        if (asked) return;
+        if (!turnsNotificationOn(event.getGroup(), event.getKey(), event.getNewValue())) return;
         if (!canAskPermission() || !hasUserActivation()) return;
         // The next-click fallback stays armed: a dismissed prompt leaves the permission "default".
+        asked = true;
         requestPermission();
     });
 }

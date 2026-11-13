@@ -4,8 +4,9 @@
  * player could clean at their Herblore level + 25, of a kind it has room for, 30 of each, 100 in
  * Demonic Pacts) when
  * they gather with Woodcutting, Fishing, Mining or Hunter, at most once every 9 ticks, with the
- * herb's cleaning XP (ours: the Wiki says "a small amount"). Its Check, Fill and Withdraw (as
- * notes) options manage the herbs, which it keeps itself (live shares them with the herb sack).
+ * herb's cleaning XP (ours: the Wiki says "a small amount"). Its Check, Fill, Withdraw (a menu:
+ * Empty Pouch, or one herb, as notes) and the bank's Empty manage the herbs with the herb sack's
+ * lines; it keeps them itself (live shares them with the herb sack).
  * In Herblore, a secondary ingredient has a 90% chance not to be used and a potion is made with
  * four doses instead of three. Demonic Pacts' pouch (tier 2) also makes every Herblore item at once
  * (the effect's `leagueBatch`).
@@ -20,6 +21,9 @@ let core;
 let effect;
 let alsoSaved;
 let neverSaved;
+
+/** The bank side panel's op the cache labels Empty. */
+const BANK_EMPTY_OP = 9;
 
 /** When each player's pouch may find its next herb (a process cycle). */
 const nextFind = new WeakMap();
@@ -65,7 +69,23 @@ function herbCap(player) {
   return effect.leagueHerbCap?.[Common.leagueOf(player)] ?? effect.herbCap;
 }
 
-/** A gathering action: a herb the pouch has room for and the player could clean at level + 25. A minigame's reward (a `source`, the rumour sack) is not gathering. */
+let herbOrder = null;
+
+/** The herbs the pouch holds, in its order: [{ id, label }]. */
+function pouchHerbs() {
+  herbOrder ??= effect.herbs.map(([gameval, label]) => ({ id: core.CacheDefinitions.getObjId(gameval), label })).filter((herb) => Number.isInteger(herb.id));
+  return herbOrder;
+}
+
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage?.(core.ChatType.SPAM, text);
+}
+
+/**
+ * A gathering action: a herb the pouch has room for and the player could clean at level + 25. With
+ * every such herb full, the pouch says so instead, on the same cooldown. A minigame's reward (a
+ * `source`, the rumour sack) is not gathering.
+ */
 function find({ player, source, method }) {
   if (source || method === "rumour-sack" || !player?.isPlayer?.() || !active(player)) return;
   const pouch = pouchOf(player);
@@ -74,68 +94,201 @@ function find({ player, source, method }) {
   if (cycle < (nextFind.get(player) ?? 0)) return;
   const level = player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) + effect.levelRange;
   const contents = stored(pouch);
-  const candidates = herbs().filter((herb) => herb.level <= level && (contents[herb.grimyId] ?? 0) < herbCap(player));
-  if (candidates.length === 0) return;
+  const cleanable = herbs().filter((herb) => herb.level <= level);
+  const candidates = cleanable.filter((herb) => (contents[herb.grimyId] ?? 0) < herbCap(player));
+  if (candidates.length === 0) {
+    if (cleanable.length === 0) return;
+    nextFind.set(player, cycle + effect.cooldownTicks);
+    spam(player, Common.message("foragerFoundNoRoom"));
+    return;
+  }
   const herb = candidates[Math.floor(Math.random() * candidates.length)];
   contents[herb.grimyId] = (contents[herb.grimyId] ?? 0) + 1;
   pouch.setMetaValue(POUCH_STORE_META, contents);
   nextFind.set(player, cycle + effect.cooldownTicks);
   if (herb.xp > 0) player.getSkillManager().addExperiences(core.Skill.HERBLORE, herb.xp);
-  player.getPacketSender().sendTypedMessage?.(core.ChatType.SPAM, Common.message("foragerFound"));
+  spam(player, Common.message("foragerFound"));
 }
 
+/** The header, then each herb it holds in the pouch's order; an empty pouch answers with the herb sack's line. */
 function check(event) {
   const { player } = event;
   const pouch = clicked(event);
   if (!pouch) return;
-  const contents = Object.entries(stored(pouch)).filter(([, amount]) => amount > 0);
-  if (contents.length === 0) {
-    player.sendMessage(Common.message("foragerEmpty"));
-    return;
-  }
+  const contents = stored(pouch);
+  const held = pouchHerbs().filter((herb) => (contents[herb.id] ?? 0) > 0);
   player.sendMessage(Common.message("foragerHolds"));
-  for (const [id, amount] of contents) player.sendMessage(Common.message("foragerHoldsHerb", { amount, herb: herbName(Number(id)) }));
+  if (held.length === 0) player.sendMessage(Common.message("foragerEmpty"));
+  for (const herb of held) player.sendMessage(Common.message("foragerHoldsHerb", { amount: contents[herb.id], herb: herbName(herb.id) }));
 }
 
-/** Every grimy herb in the inventory the pouch knows and has room for goes in. */
+/** Every grimy herb in the inventory the pouch holds and has room for goes in, with the herb sack's lines. */
 function fill(event) {
   const { player } = event;
   const pouch = clicked(event);
   if (!pouch) return;
-  const known = new Set(herbs().map((herb) => herb.grimyId));
-  const contents = stored(pouch);
   const inventory = player.getInventory();
+  const carried = pouchHerbs().filter((herb) => inventory.getAmount(herb.id) > 0);
+  if (carried.length === 0) {
+    player.sendMessage(Common.message("foragerNothingToFill"));
+    return;
+  }
+  spam(player, Common.message("foragerSearch"));
+  const contents = stored(pouch);
   let moved = 0;
-  for (const id of known) {
-    const room = herbCap(player) - (contents[id] ?? 0);
-    const amount = Math.min(room, inventory.getAmount(id));
+  for (const { id } of carried) {
+    const amount = Math.min(herbCap(player) - (contents[id] ?? 0), inventory.getAmount(id));
     if (amount <= 0) continue;
     inventory.deleteNumber(id, amount);
     contents[id] = (contents[id] ?? 0) + amount;
     moved += amount;
   }
   pouch.setMetaValue(POUCH_STORE_META, contents);
-  player.sendMessage(moved > 0 ? Common.message("foragerFilled", { amount: moved }) : Common.message("foragerNothingToFill"));
+  if (moved > 0) spam(player, Common.message("foragerFilled"));
+  else player.sendMessage(Common.message("foragerFillNoRoom"));
 }
 
-/** Every herb comes out as notes (Wiki), while the inventory has room for the stacks. */
+/** Up to `wanted` of one herb comes out as notes: how many, or -1 when the inventory has no room for them. */
+function takeOut(player, pouch, id, wanted) {
+  const contents = stored(pouch);
+  const amount = Math.min(wanted, contents[id] ?? 0);
+  if (amount <= 0) return 0;
+  const note = Common.noted(id);
+  if (player.getInventory().getAddableAmount(new core.Item(note, amount)) < amount) return -1;
+  player.getInventory().adds(note, amount);
+  contents[id] -= amount;
+  if (contents[id] <= 0) delete contents[id];
+  pouch.setMetaValue(POUCH_STORE_META, contents);
+  return amount;
+}
+
+/** Empty Pouch: every herb comes out as notes. */
+function emptyPouch(player, pouch) {
+  const contents = stored(pouch);
+  const held = pouchHerbs().filter((herb) => (contents[herb.id] ?? 0) > 0);
+  if (held.length === 0) {
+    player.sendMessage(Common.message("foragerEmpty"));
+    return;
+  }
+  spam(player, Common.message("foragerRummage"));
+  for (const herb of held) {
+    if (takeOut(player, pouch, herb.id, contents[herb.id]) < 0) {
+      player.sendMessage(Common.message("foragerNoRoom"));
+      break;
+    }
+  }
+  player.getInventory().refreshItems();
+}
+
+/** One herb: how many (a count dialog), then that many as notes, at most what the pouch holds. */
+function askAmount(player, herb) {
+  player.setEnteredAmountAction({
+    execute: (entered) => {
+      // The pouch carried or worn when the amount comes in.
+      const pouch = pouchOf(player);
+      if (!Number.isFinite(entered) || entered <= 0 || !pouch) return;
+      const name = herbName(herb.id);
+      const taken = takeOut(player, pouch, herb.id, Math.floor(entered));
+      if (taken === 0) player.sendMessage(Common.message("foragerNoneOf", { herb: name }));
+      else if (taken < 0) player.sendMessage(Common.message("foragerNoRoom"));
+      else {
+        player.getInventory().refreshItems();
+        player.sendMessage(Common.message("foragerWithdrew", { amount: taken, herb: name }));
+      }
+    },
+  });
+  player.getPacketSender().sendEnterAmountPrompt(Common.message("foragerHowMany"));
+}
+
+const MENU = 187;
+const MENU_CHOICES = 3;
+const MAIN_MODAL = (161 << 16) | 16;
+const SCRIPT_MAINMODAL_OPEN = 2524;
+const SCRIPT_MENU = 217;
+const SCRIPT_RESTORE_INPUT = 2158;
+const PAUSE_BUTTON = 1;
+const MENU_SLOTS = 127;
+/** The herbs each player's open Withdraw menu lists. */
+const menus = new WeakMap();
+
+/** Withdraw: the "Withdraw Herb" menu: Empty Pouch, every herb with its count (0 included), Exit. */
 function withdraw(event) {
   const { player } = event;
   const pouch = clicked(event);
   if (!pouch) return;
   const contents = stored(pouch);
-  const inventory = player.getInventory();
-  for (const [id, amount] of Object.entries(contents)) {
+  const herbList = pouchHerbs();
+  const labels = [
+    Common.message("foragerMenuEmpty"),
+    ...herbList.map((herb) => Common.message("foragerMenuHerb", { herb: herb.label, amount: contents[herb.id] ?? 0 })),
+    Common.message("foragerMenuExit"),
+  ];
+  menus.set(player, { herbs: herbList });
+  const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  player.setInterfaceId(MENU);
+  sender.sendSubInterface(MAIN_MODAL, MENU, 0);
+  sender.sendClientScript(SCRIPT_MENU, Common.message("foragerMenuTitle"), labels.join(" | "), 1);
+  sender.sendInterfaceFlagsRange((MENU << 16) | MENU_CHOICES, 0, MENU_SLOTS, PAUSE_BUTTON);
+}
+
+function closeMenu(player) {
+  menus.delete(player);
+  const sender = player.getPacketSender();
+  sender.closeSubInterface(MAIN_MODAL);
+  sender.sendInterfaceScript(SCRIPT_RESTORE_INPUT);
+  player.setInterfaceId(-1);
+}
+
+function chooseMenu(event) {
+  const buttonId = Number(event.buttonId ?? 0);
+  if ((event.groupId ?? (buttonId >>> 16)) !== MENU || (event.childId ?? (buttonId & 0xffff)) !== MENU_CHOICES) return;
+  const { player } = event;
+  const menu = menus.get(player);
+  if (!menu) return;
+  event.handled = true;
+  closeMenu(player);
+  // The pouch still carried or worn.
+  const pouch = pouchOf(player);
+  if (!pouch) return;
+  const index = Number(event.action);
+  if (index === 0) emptyPouch(player, pouch);
+  else if (index >= 1 && index <= menu.herbs.length) askAmount(player, menu.herbs[index - 1]);
+}
+
+function menuClosed({ player, interfaceId }) {
+  if (interfaceId !== MENU || !menus.has(player)) return;
+  menus.delete(player);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_INPUT);
+}
+
+/** The bank's Empty (side panel op 9): every herb goes into the bank, unnoted and silently, as far as it has room. */
+function bankEmpty(event) {
+  if (event.handled || event.op !== BANK_EMPTY_OP || event.item?.getId?.() !== pouchId()) return;
+  const { player } = event;
+  if (!core.Bank.isOpen(player)) return;
+  event.handled = true;
+  const pouch = event.item;
+  const contents = stored(pouch);
+  const held = pouchHerbs().filter((herb) => (contents[herb.id] ?? 0) > 0);
+  if (held.length === 0) {
+    player.sendMessage(Common.message("foragerEmpty"));
+    return;
+  }
+  for (const { id } of held) {
+    const bank = player.getBank(core.Bank.getTabForItem(player, id));
+    const item = new core.Item(id, contents[id]);
+    const amount = bank.getAddableAmount(item);
     if (amount <= 0) continue;
-    const note = Common.noted(Number(id));
-    if (inventory.getAddableAmount(new core.Item(note, amount)) < amount) {
-      player.sendMessage(Common.message("foragerNoRoom"));
-      break;
-    }
-    inventory.adds(note, amount);
-    delete contents[id];
+    bank.add(item.setAmount(amount), false);
+    contents[id] -= amount;
+    if (contents[id] <= 0) delete contents[id];
   }
   pouch.setMetaValue(POUCH_STORE_META, contents);
+  // A bank search shows the search results, not the tab.
+  if (player.isSearchingBank()) player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).refreshItems();
+  else player.getBank(player.getCurrentBankTab()).refreshItems();
+  player.getInventory().refreshItems();
 }
 
 function gamevals(names) {
@@ -214,6 +367,9 @@ module.exports = function attach(pluginApi) {
   effect = Common.data.effects.friendlyForager;
   for (const name of effect.triggers) api.onCustomEvent(name, find);
   api.onItemAction(effect.toolName, { Check: check, Fill: fill, Withdraw: withdraw });
+  api.onInterfaceActionClick(chooseMenu);
+  api.onCustomEvent("interface:closed", menuClosed);
+  api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, bankEmpty);
   api.onCustomEvent("herblore:mix", mix);
   api.onCustomEvent("skills:actions-per-cycle", allAtOnce);
 };

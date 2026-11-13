@@ -8,7 +8,7 @@ import { initializeWidgetItemModel } from "../widgets/WidgetItemModel";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
-import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
+import { closeOpenModal, hasOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
 import { handleCommandShortcut } from "./chat/commandShortcuts";
 
@@ -55,6 +55,7 @@ import {
     VARBIT_ACTIVE_SPELLBOOK,
     VARBIT_FOLLOWEROPS_DEPRIORITISED,
     VARBIT_HOTKEY_CANNOT_CLOSE_SIDEPANEL,
+    VARBIT_KEYBINDING_ESC_TO_CLOSE,
     VARBIT_MOUSECAM_DISABLED,
     VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION,
     VARBIT_STAMINA_ACTIVE,
@@ -195,6 +196,7 @@ import {
     ArchiveMapElementTypeLoader,
     type MapElementTypeLoader,
 } from "../rs/config/meltype/MapElementTypeLoader";
+import type { NpcType } from "../rs/config/npctype/NpcType";
 import { NpcTypeLoader } from "../rs/config/npctype/NpcTypeLoader";
 import { ObjModelLoader } from "../rs/config/objtype/ObjModelLoader";
 import { ObjTypeLoader, PostProcessedObjTypeLoader } from "../rs/config/objtype/ObjTypeLoader";
@@ -3377,7 +3379,7 @@ export class OsrsClient {
         this.unsubscribeNpcSpecificEffects = subscribeNpcSpecificEffects(effect => {
             if (effect.kind === "headicon") {
                 applyNpcSpecificHeadIcon(this.npcEcs, this.npcHeadIcons,
-                    typeId => this.npcTypeLoader?.load(typeId), effect);
+                    typeId => this.headIconNpcType(typeId), effect);
             } else {
                 applyNpcSpecificEffect(this.npcEcs, this.renderer, effect, getClientCycle());
             }
@@ -4456,6 +4458,16 @@ export class OsrsClient {
     private handleSidePanelHotkey(event: KeyboardEvent): void {
         const shortcut = this.resolveKeyShortcut(event);
         if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
+            return;
+        }
+        // Script 2068 (toplevel_keypress): with "Esc closes current interface" on, an Esc that
+        // closes a modal does only that; the side panel stays as it is.
+        if (
+            (event.key === "Escape" || event.code === "Escape") &&
+            (this.varManager?.getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) ?? 0) !== 0 &&
+            this.widgetManager &&
+            hasOpenModal(this.widgetManager)
+        ) {
             return;
         }
 
@@ -8413,6 +8425,21 @@ export class OsrsClient {
             this.npcInstances.markMapPendingReload(mapId);
         }
         this.npcInstances.scheduleFlush();
+    }
+
+    /**
+     * The type whose head icons a specific-headicon packet starts from: the transformed one, as the
+     * head-icon renderer draws (getEffectiveNpcType), so a transformed NPC keeps its own defaults.
+     */
+    private headIconNpcType(typeId: number): NpcType | undefined {
+        if ((typeId | 0) < 0) return undefined;
+        try {
+            const base = this.npcTypeLoader?.load(typeId | 0);
+            if (!base?.transforms) return base;
+            return base.transform(this.varManager, this.npcTypeLoader);
+        } catch {
+            return undefined;
+        }
     }
 
     private despawnNpcBinary(serverId: number): void {

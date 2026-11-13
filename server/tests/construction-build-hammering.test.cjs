@@ -125,10 +125,21 @@ test("each nail is hammered a tick apart, with the sound on every second nail an
   }
 });
 
-// The player stays in the bench's house (houseFor) for the whole test; the materials are all carried.
+// The player stays in the bench's house (houseFor) for the whole test; the materials are all carried. The bench's
+// oak stool is on the tile south of it, and the player stands east of the stool.
+const BENCH_AT = { x: 3000, y: 3000, z: 0 };
+const STOOL_AT = { x: 3000, y: 2999, z: 0 };
+const BESIDE_STOOL = { x: 3001, y: 2999, z: 0 };
+const at = ({ x, y, z }) => new core.Location(x, y, z);
+
 function workbench(f, buildable) {
   if (!f.bench) {
-    f.bench = { house: {}, limit: 99 };
+    const stool = new core.GameObject(core.CacheDefinitions.getLocId("poh_stool_2"), at(STOOL_AT), 10, 0, null);
+    const house = { furnitureObjects: [stool], getPlayers: () => [f.p] };
+    f.bench = { house, limit: 99, location: BENCH_AT, stool };
+    f.p.setLocation(at(BESIDE_STOOL));
+    f.t.mock.method(f.p, "getPrivateArea", () => house);
+    f.t.mock.method(f.p.getPacketSender(), "sendObject", (object) => { f.log.push(["loc", object.getId()]); return f.p.getPacketSender(); });
     f.t.mock.method(House, "houseFor", () => f.bench.house);
     f.t.mock.method(House, "getBuildMaterials", (player, house, target, piece) =>
       new Map(piece.materials.filter((m) => m.itemId != null).map((m) => [m.itemId, m.amount])));
@@ -136,40 +147,98 @@ function workbench(f, buildable) {
   Workbench.makeFlatpack(f.p, f.bench, buildable);
 }
 
-test("a flatpack without nails: the stool animation and XP on the pick, the flatpack after 8 ticks", (t) => {
-  const f = builder(t);
-  const [key, flatpack] = [...Workbench.FLATPACK_OF.entries()].find(([k]) => House.nailsOf(Data.BUILDABLE_BY_KEY.get(k)) === 0);
+function flatpackWith(f, nails) {
+  const [key, flatpack] = [...Workbench.FLATPACK_OF.entries()].find(([k]) => House.nailsOf(Data.BUILDABLE_BY_KEY.get(k)) === nails);
   const buildable = Data.BUILDABLE_BY_KEY.get(key);
-  for (const m of buildable.materials) f.p.getInventory().add(new core.Item(m.itemId, m.amount), false);
+  for (const m of buildable.materials) if (m.itemId != null) f.p.getInventory().add(new core.Item(m.itemId, m.amount), false);
+  if (nails) f.p.getInventory().add(new core.Item(core.ItemIdentifiers.MITHRIL_NAILS, nails), false);
+  return { buildable, flatpack };
+}
+
+const SAT_DOWN = () => [["anim", seq("chair_sit")]];
+const AT_WORK = () => [["anim", seq("human_use_workbench_stool_2")], ["loc", core.CacheDefinitions.getLocId("poh_invisible_stool_2")]];
+
+test("a flatpack without nails: the player sits on the stool on the pick, works the tick after, the flatpack after 8 ticks", (t) => {
+  const f = builder(t);
+  const { buildable, flatpack } = flatpackWith(f, 0);
   const xp = f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
   workbench(f, buildable);
-  assert.deepEqual(f.log, [["anim", seq("human_use_workbench_stool_2")]], "no hammer sound");
+  assert.deepEqual(f.log, SAT_DOWN(), "no hammer sound");
+  assert.ok(f.p.getLocation().equals(at(STOOL_AT)), "on the stool");
+  assert.equal(f.p.getSkillAnimation(), seq("chair_sit_ready_stool_2"), "the stool's seated pose");
   assert.ok(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) > xp);
   assert.ok(buildable.materials.every((m) => f.p.getInventory().getAmount(m.itemId) === 0), "materials on the pick");
-  ticks(f, Workbench.FLATPACK_TICKS - 1);
+  assert.deepEqual(ticks(f, 1)[0], AT_WORK(), "works at the bench, the stool drawn empty under them");
+  ticks(f, Workbench.FLATPACK_TICKS - 2);
   assert.equal(f.p.getInventory().getAmount(flatpack), 0);
   ticks(f, 1);
   assert.equal(f.p.getInventory().getAmount(flatpack), 1);
 });
 
-test("a nailed flatpack hammers nail by nail, then the stool animation in place of the last nail's hammer", (t) => {
+test("a nailed flatpack hammers nail by nail, then the player sits down in place of the last nail's hammer", (t) => {
   const f = builder(t);
-  const [key, flatpack] = [...Workbench.FLATPACK_OF.entries()].find(([k]) => House.nailsOf(Data.BUILDABLE_BY_KEY.get(k)) === 3);
-  const buildable = Data.BUILDABLE_BY_KEY.get(key);
-  for (const m of buildable.materials) if (m.itemId != null) f.p.getInventory().add(new core.Item(m.itemId, m.amount), false);
-  f.p.getInventory().add(new core.Item(core.ItemIdentifiers.MITHRIL_NAILS, 3), false);
+  const { buildable, flatpack } = flatpackWith(f, 3);
   const xp = f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
   workbench(f, buildable);
   assert.deepEqual(f.log, [["anim", seq("human_poh_build")], ["sound", 938]]);
-  const sent = ticks(f, 3);
-  assert.deepEqual(sent[0].filter(([kind]) => kind !== "spam"), [["anim", seq("human_poh_build")]]);
-  assert.deepEqual(sent[1].filter(([kind]) => kind !== "spam"), [["anim", seq("human_poh_build")], ["sound", 938]]);
-  assert.deepEqual(sent[2].filter(([kind]) => kind !== "spam"), [["anim", seq("human_use_workbench_stool_2")]], "the last nail: silent");
+  const sent = ticks(f, 4).map((tick) => tick.filter(([kind]) => kind !== "spam"));
+  assert.deepEqual(sent[0], [["anim", seq("human_poh_build")]]);
+  assert.deepEqual(sent[1], [["anim", seq("human_poh_build")], ["sound", 938]]);
+  assert.deepEqual(sent[2], SAT_DOWN(), "the last nail: silent");
+  assert.deepEqual(sent[3], AT_WORK());
   assert.ok(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) > xp, "XP with the last nail");
-  ticks(f, Workbench.FLATPACK_TICKS - 3 - 1);
+  ticks(f, Workbench.FLATPACK_TICKS - 4 - 1);
   assert.equal(f.p.getInventory().getAmount(flatpack), 0);
   ticks(f, 1);
   assert.equal(f.p.getInventory().getAmount(flatpack), 1, "8 ticks after the pick");
+});
+
+test("seated at the bench, the next flatpack is worked at once, its nails with the hammer's sound only", (t) => {
+  const f = builder(t);
+  workbench(f, flatpackWith(f, 0).buildable);
+  ticks(f, 1);
+  f.log.length = 0;
+  workbench(f, flatpackWith(f, 0).buildable);
+  assert.deepEqual(f.log, [["anim", seq("human_use_workbench_stool_2")]], "no second sit");
+  f.log.length = 0;
+  workbench(f, flatpackWith(f, 3).buildable);
+  assert.deepEqual(f.log, [["sound", 938]]);
+  const sent = ticks(f, 3).map((tick) => tick.filter(([kind]) => kind !== "spam"));
+  assert.deepEqual(sent, [[], [["sound", 938]], [["anim", seq("human_use_workbench_stool_2")]]]);
+  assert.ok(f.p.getLocation().equals(at(STOOL_AT)), "still on the stool");
+});
+
+test("the seated player gets up when they walk away, or back off the stool when they leave the house", (t) => {
+  const f = builder(t);
+  const house = () => f.bench.house;
+  workbench(f, flatpackWith(f, 0).buildable);
+  ticks(f, 1);
+  Workbench.processSeat(f.p, house());
+  assert.ok(f.p.getLocation().equals(at(STOOL_AT)), "sitting stays put");
+  house().furnitureObjects = [new core.GameObject(f.bench.stool.getId(), at(STOOL_AT), 10, 0, null)];
+  t.mock.method(f.p, "getAnimation", () => core.Animation.DEFAULT_RESET_ANIMATION);
+  f.log.length = 0;
+  Workbench.processSeat(f.p, house());
+  assert.deepEqual(f.log, [], "a furniture redraw or an animation reset doesn't get them up");
+  f.log.length = 0;
+  const walking = t.mock.method(f.p.getMovementQueue(), "hasPendingWork", () => true);
+  Workbench.processSeat(f.p, house());
+  assert.deepEqual(f.log, [["loc", core.CacheDefinitions.getLocId("poh_stool_2")], ["anim", seq("chair_get_up")]], "the stool back, and up");
+  assert.equal(f.p.getSkillAnimation(), 0, "the seated pose ends");
+  assert.ok(f.p.getLocation().equals(at(STOOL_AT)), "the walk goes on from the stool");
+  f.log.length = 0;
+  Workbench.processSeat(f.p, house());
+  assert.deepEqual(f.log, [], "once");
+
+  walking.mock.restore();
+  f.p.setLocation(at(BESIDE_STOOL));
+  workbench(f, flatpackWith(f, 0).buildable);
+  ticks(f, 1);
+  f.log.length = 0;
+  Workbench.standUp(f.p);
+  assert.ok(f.p.getLocation().equals(at(BESIDE_STOOL)), "stepped back off the stool");
+  assert.deepEqual(f.log, [["loc", core.CacheDefinitions.getLocId("poh_stool_2")], ["anim", seq("chair_get_up")]]);
+  assert.equal(f.p.getSkillAnimation(), 0);
 });
 
 test("a flatpack still on its way is handed over on logout, and cancelling the player's tasks doesn't lose it", (t) => {

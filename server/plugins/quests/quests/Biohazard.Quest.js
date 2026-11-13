@@ -1183,8 +1183,10 @@ module.exports = function registerBiohazardQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     // The Wiki route uses bird feed on the watchtower fence; live Investigates it. Both play
-    // the same throw, so the feed is spent once.
+    // the same throw, so the feed is spent once. Outside stage 2 the use stays unhandled, so
+    // the player gets the usual "Nothing interesting happens.".
     if (itemId === BIRD_FEED_ITEM_ID && objectId === WATCHTOWER_OBJECT_ID) {
+      if (quest.getStage(player) !== STAGE_SPOKEN_TO_JERICO) return;
       investigateWatchtower(event);
       return;
     }

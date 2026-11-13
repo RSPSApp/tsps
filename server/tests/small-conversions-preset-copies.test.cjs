@@ -376,11 +376,29 @@ test("Smiths gloves combine and dismantle through registered inventory actions",
   assert.deepEqual(prompt(), { title: "Dismantle your Smithing gloves (i)?", options: ["Yes.", "No."] });
   answer(f.p, 2);
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 1);
+  const shown = [];
+  t.mock.method(f.p.getDialogueManager(), "startDialogues", (chain) => { shown.push(...chain.getDialogues().values()); });
   dismantle(slot);
   answer(f.p, 1);
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES_I_), 0);
   assert.equal(f.inv.getAmount(I.SMITHS_GLOVES), 1);
   assert.equal(f.inv.getAmount(I.ICE_GLOVES), 1);
+  // Wiki, Transcript:Smiths gloves (i): Yes ends with this line.
+  assert.equal(shown.length, 1);
+  assert.ok(shown[0] instanceof core.ItemStatementDialogue);
+  assert.equal(shown[0].getText(), "The gloves get separated into smith gloves and ice gloves.");
+});
+
+test("worn Smiths gloves (i) get no Dismantle prompt", (t) => {
+  const f = actor(t);
+  const gloves = new core.Item(I.SMITHS_GLOVES_I_, 1);
+  f.p.getEquipment().setItem(core.Equipment.HANDS_SLOT, gloves);
+  const index = core.CacheDefinitions.getItem(I.SMITHS_GLOVES_I_).inventoryActions.indexOf("Dismantle");
+  const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+  ItemActionPacketListener.handleAction(f.p, core.Equipment.INVENTORY_INTERFACE_ID, I.SMITHS_GLOVES_I_, core.Equipment.HANDS_SLOT,
+    index + 1, "Dismantle");
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p), null);
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.HANDS_SLOT], gloves);
 });
 
 test("Smiths gloves confirmations preserve stale, restricted and full inventories", (t) => {

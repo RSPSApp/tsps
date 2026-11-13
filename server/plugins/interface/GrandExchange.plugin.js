@@ -51,6 +51,14 @@ const FEE_INFORMATION =
 // Keep them separate from the stockmarket opcode data.
 const OFFER_ITEMS = [3204, 3206, 3208, 3210, 3212, 3214, 3216, 3218];
 const COLLECTIONS = [518, 519, 520, 521, 522, 523, 539, 540];
+// Sounds (rsprox captures, ge_offers 465): placing an offer, and taking coins or items from the collection
+// box, which plays one of each when it hands over both.
+const SOUND_OFFER_PLACED = 3925;
+const SOUND_COLLECT_COINS = 3924;
+const SOUND_COLLECT_ITEMS = 3928;
+// Collect-all (465:6, 402:3/4) sends one sound of each kind however many offers it empties, and its coins sound
+// is delayed 5 (rsprox 226/01671, 224/01445); a single offer's collect plays both at delay 0.
+const COLLECT_ALL_COINS_DELAY = 5;
 const MARKET_BASE = 7900;
 const MARKET_STRIDE = 7;
 const FINISHED = 5;
@@ -163,6 +171,10 @@ const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
 let marketData;
+
+function playSound(player, id, delay = 0) {
+  player.getPacketSender().sendSoundEffect(id, 1, delay, 0);
+}
 
 function loadMarketData() {
   if (marketData) return marketData;
@@ -1031,6 +1043,7 @@ function confirm(player, offer, warned = null) {
       { [COLLECTIONS[offer.slot]]: collection(finished) })
     .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(offer.itemId), feeLabel(offer), DETAILS_DESC, DETAILS_FEE_INFO])
     .sendMessage("Offer placed. It will fill when the market meets your price.");
+  playSound(player, SOUND_OFFER_PLACED);
   scheduleCompletion(player, finished);
 
 }
@@ -1055,7 +1068,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
  * Collects a finished offer: every part not yet taken, or with `part` only that collection slot
  * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
  */
-function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null) {
+/** `heard`, when given, collects the sounds instead of playing them (collect-all plays the union once). */
+function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null, heard = null) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
   const taken = collectedParts(offer);
@@ -1102,6 +1116,11 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false,
       returned: Boolean(offer.sell && offer.aborted),
     });
   }
+  for (const { outputId } of parts) {
+    const sound = outputId === COINS || outputId === PLATINUM_TOKEN ? SOUND_COLLECT_COINS : SOUND_COLLECT_ITEMS;
+    if (heard) heard.add(sound);
+    else playSound(player, sound);
+  }
   const remaining = all.length - taken.length - wanted.length;
   if (remaining > 0) offer.collected = [...taken, ...wanted.map(({ index }) => index)];
   else delete completedOffers(player)[slot];
@@ -1147,9 +1166,13 @@ function abort(player, slot = viewing.get(player)) {
 /** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
 function collectAll(player, action) {
   const to = action === 2 ? 3 : 1;
+  const heard = new Set();
   for (const slot of Object.keys(completedOffers(player)).map(Number)) {
-    if (collect(player, to, slot, to === 1) === false) break;
+    if (collect(player, to, slot, to === 1, null, heard) === false) break;
   }
+  // Items, then coins: the order of the capture's single-offer collect.
+  if (heard.has(SOUND_COLLECT_ITEMS)) playSound(player, SOUND_COLLECT_ITEMS);
+  if (heard.has(SOUND_COLLECT_COINS)) playSound(player, SOUND_COLLECT_COINS, COLLECT_ALL_COINS_DELAY);
 }
 
 /** "grand-exchange:can-open": other content may keep a player out. */

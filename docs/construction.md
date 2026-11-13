@@ -188,7 +188,9 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   missing-materials message is inferred from the captured ones.
 - **Workbench:** Work-at opens the flatpack categories (enum 3526), then the category's
   furniture; a pick makes the flatpack with the furniture's materials and experience, up to the
-  bench's level. Using a flatpack on a hotspot installs it in building mode.
+  bench's level. The player sits down on the bench's stool as the flatpack is finished and works
+  from it (captures); moving or any other action gets them up again, and the stool is drawn
+  back. Using a flatpack on a hotspot installs it in building mode.
 - **Armour repair stand:** Barrows repair at Bob's price x (1 - Smithing / 200) (Wiki), through
   the `barrows:repair` event.
 - **Larders, shelves:** "Select an option", four at a time with More... (captures; contents

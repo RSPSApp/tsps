@@ -93,9 +93,11 @@ function mount(event) {
   if (!entry) return player.sendMessage("You can't display that here.");
   if (furniture.mountedCape) return player.sendMessage("There's something there already.");
   if (house.owner !== player) return player.sendMessage("You can only do that in your own house.");
-  // The hood names the cape when it is used: the plainer cape that has it, if the player carries it.
-  const cape = entry.cape === event.itemId ? entry.cape
-    : Object.values(MOUNTED).map(items => items.cape).find(id => player.getInventory().contains(id) && MOUNTED[capeLocs.get(id)]?.hood === event.itemId);
+  // The hood names the cape when it is used: the plainer cape that has it, if the player carries it. A plain
+  // (non-preset) copy wins, so a preset untrimmed cape doesn't hide a plain trimmed one.
+  const carried = entry.cape === event.itemId ? [entry.cape]
+    : Object.values(MOUNTED).map(items => items.cape).filter(id => player.getInventory().contains(id) && MOUNTED[capeLocs.get(id)]?.hood === event.itemId);
+  const cape = carried.find(id => plainAmount(player.getInventory(), id) > 0) ?? carried[0];
   if (!cape || !capeLocs.has(cape)) return player.sendMessage("You need both the cape and the hood for display.");
   const hood = MOUNTED[capeLocs.get(cape)].hood;
   if (hood && !player.getInventory().contains(hood)) return player.sendMessage("You need both the cape and the hood for display.");

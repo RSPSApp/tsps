@@ -830,3 +830,36 @@ test("a destroy prompt left open or walked away from never takes the barrel's Ye
     assert.equal(inventory.getItems()[0].getId(), I.CHUGGING_BARREL_DISASSEMBLED_, `${leave}: the barrel is dismantled`);
   }
 });
+
+function fiveKinds(f) {
+  const I = core.ItemIdentifiers;
+  seed(f.player, Object.fromEntries([I.PRAYER_POTION_4_, I.SUPER_RESTORE_4_, I.ENERGY_POTION_4_, I.RANGING_POTION_4_, I.STRENGTH_POTION_4_]
+    .map((itemId, slot) => [Potions.doseOf(itemId).potion.name, { itemId, name: "x", doses: 1, slot }])));
+}
+
+test("an extreme energy potion is stored, shown and drunk from the barrel like any potion", (t) => {
+  const f = actor(t), I = core.ItemIdentifiers;
+  put(f, I.EXTREME_ENERGY_POTION_4_, 0);
+  put(f, I.CHUGGING_BARREL, 1);
+  fill(f, 0, 1);
+  assert.equal(storedDoses(f, "Extreme energy potion"), 4);
+  assert.equal(f.inventory.getItems()[0].getId(), I.VIAL);
+  assert.ok(f.messages.includes("Your chugging barrel has been filled with 4 doses of Extreme energy potion(1)."), f.messages.join(" | "));
+  f.player.setRunEnergy(10);
+  itemAction(f, BARREL_NAME, "Drink", 1);
+  assert.equal(f.player.getRunEnergy(), 50, "40% a dose");
+  assert.equal(storedDoses(f, "Extreme energy potion"), 3);
+});
+
+test("with five kinds stored, Store names the clicked vial and Fill the 1-dose form (rsprox 238/04236, 238/04242)", (t) => {
+  const I = core.ItemIdentifiers;
+  for (const [action, line] of [[1, "Extreme energy potion(4)"], [2, "Extreme energy potion(4)"], [5, "Extreme energy potion(1)"], [6, "Extreme energy potion(1)"]]) {
+    const f = actor(t);
+    fiveKinds(f);
+    put(f, I.EXTREME_ENERGY_POTION_4_, 15);
+    openBarrel(f);
+    ui(f, INVENTORY_WIDGET, 15, I.EXTREME_ENERGY_POTION_4_, action);
+    assert.deepEqual(f.messages, [`Your chugging barrel doesn't have space to store any more ${line}.`], `op${action}`);
+    assert.equal(f.inventory.getItems()[15].getId(), I.EXTREME_ENERGY_POTION_4_);
+  }
+});

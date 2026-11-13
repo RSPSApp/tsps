@@ -47,6 +47,8 @@ const MAX_REQUEST_ROUNDS=64;
 const REUSABLE_SECTIONS=['objects','widgets','itemDefinitions','objectDefinitions','npcDefinitions','terrain'];
 const TERRAIN_KEYS=['loadedTilesPacked','tileHeightsPacked','tileSettingsPacked'];
 const validDigest=d=>typeof d==='string'&&/^[0-9a-f]{1,64}$/.test(d);
+/** The error code of a snapshot reusing a section the server no longer holds. */
+const REUSE_STALE='QUEST_HELPER_REUSE_STALE';
 /** The full snapshot: sections sent with a digest are kept, sections named by digest are restored. */
 function rehydrate(state,raw){
  const {digests,reuse,...snapshot}=raw;
@@ -59,7 +61,8 @@ function rehydrate(state,raw){
  if(record(reuse))for(const section of REUSABLE_SECTIONS){
   const digest=reuse[section];if(digest===undefined)continue;
   const held=state.cache.get(section);
-  if(!held||held.digest!==digest)throw new Error(`Quest Helper snapshot reuses ${section} the server does not hold`);
+  // A stale reuse (a restart, a dropped result) is answered with its own code: the client resends in full and keeps its panel.
+  if(!held||held.digest!==digest)throw Object.assign(new Error(`Quest Helper snapshot reuses ${section} the server does not hold`),{questHelperCode:REUSE_STALE});
   if(section==='terrain')snapshot.geometry={...(record(snapshot.geometry)?snapshot.geometry:{}),...held.value};
   else snapshot[section]=held.value;
  }
@@ -194,7 +197,7 @@ class QuestHelperRuntime {
     state.lastResult={at:Date.now(),result};
     this.emit(player,result);
    }finally{if(state.generation===generation)state.busy=false;}
-  }catch(error){if(this.players.get(player)===state)this.emit(player,{type:'error',protocol:1,session:state.session,code:'QUEST_HELPER_UNAVAILABLE',message:String(error.message).slice(0,1024)});}
+  }catch(error){if(this.players.get(player)===state)this.emit(player,{type:'error',protocol:1,session:state.session,code:error?.questHelperCode??'QUEST_HELPER_UNAVAILABLE',message:String(error.message).slice(0,1024)});}
  }
  authoritative(player,raw,questKey){
   const snapshot={...raw,varps:record(raw.varps)?{...raw.varps}:{},varbits:record(raw.varbits)?{...raw.varbits}:{},questStates:{}};

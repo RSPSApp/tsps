@@ -144,6 +144,15 @@ export class Bank extends ItemContainer {
     public static readonly DEPOSIT_CONTAINERS_CHILD = 45; // bankmain:depositcontainers
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
+    /**
+     * bankmain:wornslot0..wornslot13 (12:68-78), the worn-equipment panel, in enum 2777's slot order. The cache's
+     * wear_updateslot (script 546) gives each op 1 Remove (ClientConnection's equipment route), op 2 Bank and
+     * op 10 Examine (rsprox_transcripts/239/04254.txt: op 10 answers with examine_item).
+     */
+    public static readonly WORN_SLOT_FIRST_CHILD = 68;
+    public static readonly WORN_SLOT_LAST_CHILD = 78;
+    public static readonly WORN_SLOT_BANK_OP = 2;
+    public static readonly WORN_SLOT_EXAMINE_OP = 10;
     /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
     public static readonly INCINERATOR_CHILD = 54;
     /** `{ player, item, tab, slot, handled }`: a bank stack dropped on the incinerator. */
@@ -962,6 +971,10 @@ export class Bank extends ItemContainer {
         }
 
         if (packet.groupId !== Bank.MAIN_INTERFACE_ID) return false;
+        if (packet.childId >= Bank.WORN_SLOT_FIRST_CHILD && packet.childId <= Bank.WORN_SLOT_LAST_CHILD) {
+            Bank.wornSlotAction(player, packet.childId, packet.buttonNum);
+            return true;
+        }
         const sender = player.getPacketSender();
         if (packet.childId === Bank.FRAME_CHILD) sender.sendInterfaceRemoval();
         else if (packet.childId === Bank.SWAP_INSERT_CHILD) {
@@ -985,6 +998,17 @@ export class Bank extends ItemContainer {
         else if (packet.childId === Bank.DEPOSIT_WORN_CHILD) Bank.depositItems(player, player.getEquipment(), false);
         else return false;
         return true;
+    }
+
+    /** Op 2 banks just that worn item (as Deposit worn items does for all); op 10 examines it. */
+    private static wornSlotAction(player: Player, childId: number, op: number): void {
+        const { EquipPacketListener } = require("../../../../net/packet/impl/EquipPacketListener") as
+            typeof import("../../../../net/packet/impl/EquipPacketListener");
+        const slot = EquipPacketListener.resolveEquipmentSlot(Bank.MAIN_INTERFACE_ID, childId);
+        const item = slot >= 0 ? player.getEquipment().getItems()[slot] : undefined;
+        if (!item || item.getId() < 0 || item.getAmount() <= 0) return;
+        if (op === Bank.WORN_SLOT_EXAMINE_OP) examineItem(player, item.getId(), item.getAmount());
+        else if (op === Bank.WORN_SLOT_BANK_OP) Bank.depositItems(player, player.getEquipment(), false, slot);
     }
 
     /**
@@ -1142,8 +1166,8 @@ export class Bank extends ItemContainer {
         }
         return false;
     }
-    /** Banks [from]'s items, or only those [only] picks (one worn item). */
-    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean) {
+    /** Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). */
+    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number) {
         if (!ignoreReqs) {
             if (!Bank.isOpen(player)) {
                 return;
@@ -1151,11 +1175,13 @@ export class Bank extends ItemContainer {
         }
         let movedAny = false;
         for (let item of from.getValidItems()) {
+            const slot = from.getItems().indexOf(item);
+            if (onlySlot !== undefined && slot !== onlySlot) continue;
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
-            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, from.getItems().indexOf(item), false);
+            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
             movedAny = true;
         }
         from.refreshItems();

@@ -302,7 +302,8 @@ Transcript:Junior Jim).
   quarter of its price) plus 5% of it per hull tier above wooden, plus half of it again for a
   capsized boat, rounded down. Captured: raft wooden 250, raft ironwood 312, skiff oak 3,937,
   skiff teak 4,125, skiff camphor 4,500, skiff rosewood 4,875, sloop camphor 60,000, and a
-  capsized wooden skiff 5,625. Coins leave the inventory with no chat message.
+  capsized wooden skiff 5,625. Paid from the bank, the game says "Payment has been taken from
+  your bank." on the tick the wizard appears; coins from the inventory leave with no message.
 - **A tick after the choice**, one of:
   - a boat with anything in its hold: the shipwright warns that it will be lost, then a menu
     "Recover your boat for N coins? Some cargo will be lost." with "Yes, recover it without

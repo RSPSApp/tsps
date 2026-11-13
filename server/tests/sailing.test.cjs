@@ -1396,7 +1396,7 @@ test("Junior Jim's Recover-boat asks which boat, confirms the fee, takes it from
 
   assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "the_pandemonium" });
   assert.equal(h.bank.getAmount(995), 750);
-  assert.deepEqual(h.player.messages, [], "the fee is taken without a message");
+  assert.deepEqual(h.player.messages, ["Payment has been taken from your bank."]);
   assert.equal(h.varbits.get(19260), 1, "the boat's port varbit shows The Pandemonium");
   assert.equal(h.attributes["sailing:recovery-cost-warning-dismissed"], undefined, "a plain yes asks again next time");
 
@@ -1560,6 +1560,34 @@ test("a recovery stops if the player logs out before it happens, and the closing
   runTicks(5);
   assert.equal(h.player.boxes.length, 0, "the shipwright doesn't talk over another conversation");
   clearTasks();
+});
+
+test("a fee paid from the inventory says nothing, and the wizard still leaves if the player logs out", () => {
+  clearTasks();
+  const removed = [];
+  const wizard = { setPositionToFace() {}, performAnimation() {}, performGraphic() {}, forceChat() {} };
+  const h = shipwrightHarness(0);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  const shipwright = registerPlugin("Shipwright.Sailing", {
+    spawnNpc: () => wizard,
+    removeNpc: (npc) => removed.push(npc),
+  });
+  h.player.setLocation(new Location(2805, 3429, 0));
+  h.player.getInventory().add(new Item(995, 1000), false);
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  try {
+    shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+    h.choose(0);
+    runTicks(1);
+    assert.equal(h.player.getInventory().getAmount(995), 750);
+    assert.deepEqual(h.player.messages, [], "no payment message for the inventory");
+    // Logging out stops the player's tasks (Player.onLogout); the wizard's are his own.
+    TaskManager.cancelTasks(h.player);
+    runTicks(9);
+    assert.deepEqual(removed, [wizard], "the wizard is removed");
+  } finally {
+    clearTasks();
+  }
 });
 
 test("a capsized boat shows as capsized, costs half its base fee more, and the shipwright says it had capsized", () => {

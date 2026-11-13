@@ -65,9 +65,13 @@ const LINES = {
 
 let pluginApi;
 
-function later(player, ticks, action) {
+/**
+ * Runs `action` in `ticks` ticks. `key` is what the task belongs to: a player's tasks stop when
+ * they log out, so the wizard's own steps are keyed to the wizard.
+ */
+function later(key, ticks, action) {
   TaskManager.submit(new (class extends Task {
-    constructor() { super(ticks, player); }
+    constructor() { super(ticks, key); }
     execute() {
       action();
       this.stop();
@@ -75,12 +79,16 @@ function later(player, ticks, action) {
   })());
 }
 
-/** Takes `fee` coins from the bank, as OSRS does; falls back to the inventory. Live says nothing. */
+/**
+ * Takes `fee` coins from the bank, as OSRS does, saying so; falls back to the inventory, which
+ * says nothing.
+ */
 function pay(player, fee) {
   if (fee <= 0) return true;
   const bank = player.getBank(Bank.getTabForItem(player, COINS));
   if (bank.getAmount(COINS) >= fee) {
     bank.delete(COINS, fee);
+    player.sendMessage("Payment has been taken from your bank.");
     return true;
   }
   const inventory = player.getInventory();
@@ -141,24 +149,27 @@ function castRecovery(player, dock, cause, head = JUNIOR_JIM_HEAD) {
   wizard?.performGraphic(new Graphic(SPOT_TELEPORT_IN));
   playSound(player, SOUND_TELEPORT_IN);
   const line = WIZARD_LINES[Math.floor(Math.random() * WIZARD_LINES.length)];
-  later(player, WIZARD_TIMING.say, () => wizard?.forceChat(line));
-  later(player, WIZARD_TIMING.cast, () => {
-    wizard?.performAnimation(new Animation(SEQ_CAST, 10));
-    wizard?.performGraphic(new Graphic(SPOT_CAST, 10));
-    playSound(player, SOUND_CAST, 35);
-  });
+  // The wizard finishes and leaves even if the player logs out; the sounds and the line are theirs.
+  if (wizard) {
+    later(wizard, WIZARD_TIMING.say, () => wizard.forceChat(line));
+    later(wizard, WIZARD_TIMING.cast, () => {
+      wizard.performAnimation(new Animation(SEQ_CAST, 10));
+      wizard.performGraphic(new Graphic(SPOT_CAST, 10));
+    });
+    later(wizard, WIZARD_TIMING.leave, () => {
+      wizard.performAnimation(new Animation(SEQ_TELEPORT_OUT, 18));
+      wizard.performGraphic(new Graphic(SPOT_TELEPORT_OUT, 19));
+    });
+    later(wizard, WIZARD_TIMING.gone, () => pluginApi.removeNpc(wizard));
+  }
+  later(player, WIZARD_TIMING.cast, () => playSound(player, SOUND_CAST, 35));
   later(player, WIZARD_TIMING.done, () => {
     // Not over another conversation the player started meanwhile.
     if (!present(player) || player.getDialogueManager().isActive?.()) return;
     const lines = closing(dock, cause, head);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(...lines, new EndDialogue(lines.length)));
   });
-  later(player, WIZARD_TIMING.leave, () => {
-    wizard?.performAnimation(new Animation(SEQ_TELEPORT_OUT, 18));
-    wizard?.performGraphic(new Graphic(SPOT_TELEPORT_OUT, 19));
-    playSound(player, SOUND_TELEPORT_OUT, 18);
-  });
-  later(player, WIZARD_TIMING.gone, () => { if (wizard) pluginApi.removeNpc(wizard); });
+  later(player, WIZARD_TIMING.leave, () => playSound(player, SOUND_TELEPORT_OUT, 18));
 }
 
 /** The boat in `slot`, if a shipwright at `dock` can recover it; otherwise says why. */

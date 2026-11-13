@@ -443,11 +443,12 @@ test('independent: actual Plateau clipping separates staging and jail', async ()
 
 // These tests seed scene placement and pre-rolled melee damage. Negotiation, attack
 // input, hit/death tasks, portal dispatch, inventories and instance cleanup are real.
-async function lethalMelee(killer, victim, game, runDeathTick = true, combatTiles = [[3293,4955,0],[3294,4955,0]], beforeHit = null) {
+async function lethalMelee(killer, victim, game, runDeathTick = true, combatTiles = [[3293,4955,0],[3294,4955,0]], beforeHit = null, preserveVictim = false) {
   const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
   const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
   killer.moveTo(game.area.at(combatTiles[0]));
-  victim.moveTo(game.area.at(combatTiles[1]));
+  if (preserveVictim) assert.deepEqual(position(victim),positionAt(game,combatTiles[1]));
+  else victim.moveTo(game.area.at(combatTiles[1]));
   for (const p of [killer, victim]) { p.setNeedsPlacement(false); p.resetUpdating(); AreaManager.process(p); }
   assert.equal(CombatFactory.canAttackByPolicy(killer, victim, CombatFactory.MELEE_COMBAT), CanAttackResponse.CAN_ATTACK);
   const frame = Buffer.alloc(4); frame[0] = 44; frame[1] = 128; frame.writeUInt16BE(victim.getIndex(), 2);
@@ -3802,7 +3803,7 @@ for(const spec of NORTHLEACH_TREES)test(`native Northleach snow tree ${spec.xy} 
 
 for(const exit of['walk','forfeit','death'])test(`native Northleach active canonical chopping ${exit==='forfeit'?'walk cancellation then Forfeit':'cancellation on '+exit} without late yield`,async t=>{
   t.mock.method(Math,'random',()=>new Error().stack.includes('rollLog')?0.99:0.99);const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,8);await join(a);await join(b);completePreparation(game);const p=[a,b].find(p=>game.members.get(p)===0),killer=p===a?b:a,I=core.ItemIdentifiers,wood=require('../plugins/skills/Woodcutting.plugin');ruleStats(p);p.getSkillManager().setCurrentLevel(core.Skill.WOODCUTTING,99);p.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING,99);give(p,I.BRONZE_AXE,'northleach-cancel');const tree=northleachObject(game,'deadtree2_snowy',[3411,4890]);await northleachWalk(p,game,[3410,4890]);const before=p.getInventory().getAmount(I.LOGS),xp=p.getSkillManager().getExperience(core.Skill.WOODCUTTING);lumbridgeObjectClick(p,tree,'Chop down');tick(3);assert.equal(wood.isWoodcuttingActive(p),true);assert.equal(treeTask(tree),undefined);
-  if(exit==='walk')await northleachWalk(p,game,[3410,4889]);else if(exit==='forfeit')await layoutObjectInput(p,game,'clanwars_exitportal_darkrock_n',[3397,4869],'Forfeit');else{await lethalMelee(killer,p,game,true,[[3410,4889,0],[3410,4890,0]],()=>{assert.deepEqual(position(p),positionAt(game,[3410,4890,0]));assert.ok(p.getHitpoints()>0);assert.equal(wood.isWoodcuttingActive(p),true,'canonical chopping remains active beside tree immediately before lethal hit');});tick(6);assert.equal(game.jailed.has(p),true);}
+  if(exit==='walk')await northleachWalk(p,game,[3410,4889]);else if(exit==='forfeit')await layoutObjectInput(p,game,'clanwars_exitportal_darkrock_n',[3397,4869],'Forfeit');else{await lethalMelee(killer,p,game,true,[[3410,4889,0],[3410,4890,0]],()=>{assert.deepEqual(position(p),positionAt(game,[3410,4890,0]));assert.ok(p.getHitpoints()>0);assert.equal(wood.isWoodcuttingActive(p),true,'canonical chopping remains active beside tree immediately before lethal hit');},true);tick(6);assert.equal(game.jailed.has(p),true);}
   tick(105);assert.equal(wood.isWoodcuttingActive(p),false);assert.equal(p.getInventory().getAmount(I.LOGS),before);assert.equal(p.getSkillManager().getExperience(core.Skill.WOODCUTTING),xp);assert.equal(treeTask(tree),undefined);if(exit==='forfeit'){assert.equal(C.matches.has(p),false);lobby(p);}
 });
 

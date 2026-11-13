@@ -104,10 +104,26 @@ function sequence(entity, gameval) {
   if (id != null) entity?.performAnimation?.(new core.Animation(id));
 }
 
-function finish(player, recipe, object) {
+/**
+ * The conversion belongs to the life and spot it started in, and to its own movement hold: a death,
+ * a forced move (teleport, respawn) or another system taking the hold (a cutscene) abandons it.
+ */
+function stillOurs(player, run) {
+  return player.isDyingReturn?.() !== true
+    && player.getLocation().equals(run.origin)
+    && player.getMovementQueue().getBlockMovementGeneration() === run.generation;
+}
+
+/** Ends the run; gives back the hold only while nothing else has set or cleared it since. */
+function release(player, run, object) {
   busy.delete(player);
-  player.getMovementQueue().setBlockMovement(false);
-  sequence(object, MACHINE_INACTIVE_SEQ);
+  const queue = player.getMovementQueue();
+  if (queue.getBlockMovementGeneration() === run.generation) queue.setBlockMovement(false);
+  if (run.active) sequence(object, MACHINE_INACTIVE_SEQ);
+}
+
+function finish(player, recipe, object, run) {
+  release(player, run, object);
   const slot = plainSlot(player, recipe.from);
   if (slot < 0) return;
   // The new item takes the old one's slot (captures 1526, 1527: slot 2 both ways).
@@ -120,21 +136,28 @@ function feed(player, recipe, object) {
   if (busy.has(player) || plainSlot(player, recipe.from) < 0 || !hasHammer(player)) return;
   busy.add(player);
   // Live holds the player at the machine: walk clicks during it do nothing (1526 ticks 899-901).
-  player.getMovementQueue().setBlockMovement(true).reset();
+  const queue = player.getMovementQueue().setBlockMovement(true).reset();
+  const run = { origin: player.getLocation().clone(), generation: queue.getBlockMovementGeneration(), active: false };
   sequence(player, SMITHING_SEQ);
   let elapsed = 0;
   core.TaskManager.submit(new (class FerociousGlovesTask extends core.Task {
     constructor() { super(1, player, false); }
     execute() {
+      if (!stillOurs(player, run)) {
+        this.stop();
+        release(player, run, object);
+        return;
+      }
       elapsed++;
       if (elapsed === CAST_TICK) {
+        run.active = true;
         sequence(player, CASTING_SEQ);
         sequence(object, MACHINE_ACTIVE_SEQ);
         player.getPacketSender().sendSound(SOUND, 1, 0);
       }
       if (elapsed < DONE_TICK) return;
       this.stop();
-      finish(player, recipe, object);
+      finish(player, recipe, object, run);
     }
   })());
 }

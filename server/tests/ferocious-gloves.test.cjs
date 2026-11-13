@@ -175,3 +175,43 @@ test("a preset leather does not hide plain gloves' revert; a preset alone is ref
   assert.deepEqual(g.boxes.map((b) => b.text), ["Preset items cannot be used for this."]);
   assert.equal(prompts.length, 0);
 });
+
+function started(t) {
+  const f = fixture(t, { items: [[2, "hydra_leather"], [5, "hammer"]] });
+  const machineAnims = [];
+  f.object = { performAnimation: (animation) => machineAnims.push(animation.getId()) };
+  f.machineAnims = machineAnims;
+  investigate({ player: f.player, object: f.object, objectId: MACHINE() });
+  yes(prompts[0]);
+  return f;
+}
+
+test("dying during the conversion abandons it: the leather is kept through the respawn", (t) => {
+  const f = started(t);
+  ticks(1);
+  t.mock.method(f.player, "isDyingReturn", () => true);
+  ticks(DONE_TICK);
+  assert.equal(f.at(2), obj("hydra_leather"));
+  assert.deepEqual(f.boxes, []);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, "its own hold is given back");
+});
+
+test("a forced move off the machine abandons the conversion", (t) => {
+  const f = started(t);
+  ticks(CAST_TICK);
+  f.player.setLocation(f.player.getLocation().clone().addX(20));
+  ticks(DONE_TICK);
+  assert.equal(f.at(2), obj("hydra_leather"));
+  assert.deepEqual(f.boxes, []);
+  assert.deepEqual(f.machineAnims.at(-1), core.CacheDefinitions.getSeqId("fi_dkl_shield_machine_inactive"), "the machine stops");
+});
+
+test("a newer movement hold (a cutscene) is left alone and its UI is not replaced", (t) => {
+  const f = started(t);
+  ticks(1);
+  f.player.getMovementQueue().setBlockMovement(true);
+  ticks(DONE_TICK);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "the scene's hold stays");
+  assert.equal(f.at(2), obj("hydra_leather"));
+  assert.deepEqual(f.boxes, [], "no reward box over the scene's dialogue");
+});

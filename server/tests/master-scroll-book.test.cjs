@@ -307,3 +307,16 @@ test("at sea, a book dropped before the warning's yes reads nothing and spends n
   assert.equal(Book._test.countOf(f.p, "watson"), 20);
   assert.equal(f.p.getLocation().getX(), GE[0]);
 });
+
+test("at sea with only the empty book, 597's Activate reads a stored scroll past the warning's yes", (t) => {
+  const f = actor(t);
+  give(f, EMPTY_BOOK);
+  stock(f, { watson: 20 });
+  aboard(t, f);
+  op(f, "Open", EMPTY_BOOK);
+  click(f, "watson", 1);
+  answerBoatWarning(f, (w) => w.YES);
+  ticks(6);
+  assert.deepEqual(f.messages.filter((m) => /no longer have/.test(m)), []);
+  assert.equal(Book._test.countOf(f.p, "watson"), 19);
+});

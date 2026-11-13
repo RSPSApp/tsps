@@ -859,6 +859,18 @@ test("a kill reported a few ticks after its death (Araxxor's corpse) still count
   cycle += 2;
   killReal(quick, core.NpcIdentifiers.ARTIO);
   assert.equal(quick.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two deaths close together are two kills");
+
+  // Two close kills of a late-reporting boss: deaths at 0 and 18, reports at 5 and 23. The second
+  // report is 23 ticks after the first death but 5 after its own.
+  const close = character("closekills");
+  killReal(close, core.NpcIdentifiers.ARTIO);
+  cycle += 5;
+  creditedKill(close, "Callisto");
+  cycle += 13;
+  killReal(close, core.NpcIdentifiers.ARTIO);
+  cycle += 5;
+  creditedKill(close, "Callisto");
+  assert.equal(close.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two kills, not three");
 });
 
 test("the Nightmare's real ending, which kills no NPC, credits her kill tasks for each rewarded player", () => {

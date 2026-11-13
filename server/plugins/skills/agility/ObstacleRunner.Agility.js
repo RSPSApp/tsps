@@ -130,7 +130,6 @@ function sendMessage(player, message) {
   } else if (message?.itembox) {
     const { item, text } = message.itembox;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item, text)));
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   }
 }
 

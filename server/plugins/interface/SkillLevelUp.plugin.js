@@ -171,7 +171,7 @@ function unlockDialogue(index, items, text) {
  * a message-box line. False when those levels unlock nothing.
  */
 function showUnlockBox(player, state, skill, fromLevel, toLevel) {
-  const { DialogueChainBuilder, EndDialogue, ChatType } = pluginApi.core;
+  const { DialogueChainBuilder, EndDialogue } = pluginApi.core;
   const chain = new DialogueChainBuilder();
   const texts = [];
   for (let level = fromLevel + 1; level <= toLevel; level++) {
@@ -184,7 +184,6 @@ function showUnlockBox(player, state, skill, fromLevel, toLevel) {
   if (texts.length === 0) return false;
   chain.add(new EndDialogue(texts.length));
   const sender = player.getPacketSender();
-  for (const text of texts) sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   // The box takes the pop-up's place in the chatbox; that is no reason to stop the level-up.
   if (state) state.replacing = true;
   try {

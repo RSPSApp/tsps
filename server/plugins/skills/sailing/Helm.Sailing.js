@@ -499,7 +499,6 @@ function escapeBoat(api, { player }) {
     Sailing.escape(player);
     player.sendMessage(cargoLost ? ABANDONED + ABANDONED_CARGO : ABANDONED);
   };
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, ESCAPE_WARNING);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, ESCAPE_WARNING_BOX))
     .add(new ActionDialogue(1, {

@@ -172,7 +172,8 @@ test('capes block entry before the teleport', () => {
   assert.equal(player.moves.length, 0);
   // rsprox 3233 (rev 232): the reason in chat, then the message box.
   assert.deepEqual(player.messages, ["You can't wear capes in the arena."]);
-  assert.deepEqual(player.typed, [[115, 'Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.']]);
+  // The box logs its own mesbox chat line as it opens; nothing is sent by hand.
+  assert.deepEqual(player.typed, []);
   assert.equal(player.statements.length, 1);
 });
 

@@ -37,7 +37,9 @@ export class DoubleItemStatementDialogue extends Dialogue {
         DoubleItemStatementDialogue.send(player, this.firstItemId, this.secondItemId, this.text);
     }
 
+    /** Opens the box, its text going to the chat first. */
     static send(player: Player, firstItemId: number, secondItemId: number, text: string) {
+        Dialogue.sendBoxChatLine(player, text);
         player.getPacketSender()
             .sendChatboxInterface(DoubleItemStatementDialogue.GROUP_ID)
             .sendInterfaceFlagsRange(DoubleItemStatementDialogue.CONTINUE_UID, -1, -1, DoubleItemStatementDialogue.PAUSE_BUTTON)

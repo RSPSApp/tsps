@@ -17,15 +17,12 @@ function refresh(player) {
   player.getEquipment().refreshItems();
 }
 
-/** The chat type of a mesbox line, as the Castle Wars lobby and the Mime event send them; the number is not verified by this capture (it shows only `type=mesbox`). */
-const MESBOX_CHAT = 115;
 
 /**
  * rsprox 3333: the text goes to the chat as a mesbox line, and a box shows it. The refusal is an
  * OBJECTBOX_DOUBLE (interface 11) with the shard and Darklight; the made box is an OBJECTBOX (interface 193) with Arclight.
  */
 function box(player, entry) {
-  player.getPacketSender().sendTypedMessage(MESBOX_CHAT, entry.getText());
   const { DialogueChainBuilder, EndDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(entry, new EndDialogue(1)));
 }

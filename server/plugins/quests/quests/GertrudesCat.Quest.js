@@ -249,8 +249,6 @@ module.exports = function registerGertrudesCatQuest(api) {
       return;
     }
     if (event.kind === "message" && String(stepId ?? "").startsWith(HINT_BOX_PREFIX)) {
-      // The mesbox chat line goes with the box, as the repo's other message boxes (Barrows, Mining Guild).
-      player.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, String(event.text ?? ""));
       event.box = { statement: true };
       event.handled = true;
       return;

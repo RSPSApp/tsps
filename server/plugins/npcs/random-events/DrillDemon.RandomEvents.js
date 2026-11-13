@@ -43,7 +43,6 @@ const PLAYER_EXPRESSION = 567;
 const INVITE_EXPRESSION = 616;
 const SPEECH_EXPRESSION = 615;
 const ORDER_EXPRESSION = 614;
-const BOX_MESSAGE_TYPE = 115;
 
 function shuffled(values) {
   const copy = [...values];
@@ -144,7 +143,6 @@ module.exports = function attach(api, Events) {
   function showOrderBox(session, exercise) {
     const { player } = session;
     const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
-    player.getPacketSender().sendTypedMessage(BOX_MESSAGE_TYPE, exercise.box);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
       .add(new ItemStatementDialogue(0, exercise.icon, exercise.box))
       .add(new ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, "Select an option",

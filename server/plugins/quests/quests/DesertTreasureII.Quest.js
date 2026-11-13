@@ -5831,7 +5831,6 @@ module.exports = function registerDesertTreasureII(api) {
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
       // Rsprox 1703 t16262 (341501-341515): the mesbox chat line, then an item box (objectbox 193) with the medallion.
-      p.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, "You find a medallion amongst the entrails.");
       p.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
         new api.core.ItemStatementDialogue(0, I.WHISPERERS_MEDALLION, "You find a medallion amongst the entrails.")));
       return true;

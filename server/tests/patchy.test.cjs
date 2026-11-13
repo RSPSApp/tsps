@@ -56,7 +56,8 @@ function actor(t) {
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   const manager = {
     entries: null,
-    startDialogues(builder) { manager.entries = [...builder.getDialogues().values()]; dialogues.push(manager.entries[0]); },
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    startDialogues(builder) { manager.entries = [...builder.getDialogues().values()]; dialogues.push(manager.entries[0]); manager.entries[0].send(player); },
     reset() { manager.entries = null; },
     isActive: () => manager.entries !== null,
   };

@@ -32,10 +32,9 @@ function dropWarning(request) {
   const { player } = request ?? {};
   if (!player || request.warned || request.answered?.includes(WARNING) || !asks(player)) return;
   request.warned = true;
-  const { DialogueChainBuilder, StatementDialogue, OptionDialogue, ChatType } = api.core;
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue } = api.core;
   const sender = player.getPacketSender();
   const owner = {};
-  sender.sendTypedMessage(ChatType.MESBOX, TEXT);
   const chain = new DialogueChainBuilder()
     .add(new StatementDialogue(0, TEXT_BOX))
     .add(new OptionDialogue(1, {

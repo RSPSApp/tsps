@@ -497,7 +497,6 @@ function plantFromBox(player, patch, box, id) {
     const level = player.getSkillManager().getCurrentLevel(core.Skill.FARMING);
     const entry = fits.find(([seed]) => Data.SEEDS.get(seed).level <= level) ?? fits[0];
     if (!entry) {
-        player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, NO_BOX_SEED);
         player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, NO_BOX_SEED)));
         return;
     }

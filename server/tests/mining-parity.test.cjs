@@ -7,6 +7,7 @@ const path = require("node:path");
 const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -52,7 +53,8 @@ function guildVisitor(x, y, current = 60, members = true) {
   player.getSkillManager().setMaxLevel(core.Skill.MINING, 59);
   player.getSkillManager().setCurrentLevel(core.Skill.MINING, current);
   player.sendMessage = message => messages.push(message);
-  player.getDialogueManager = () => ({ startDialogues: chain => { for (const d of chain.getDialogues().values()) boxes.push(d.getText()); } });
+  // A box logs its own chat line as it opens, as the real one does.
+  player.getDialogueManager = () => ({ startDialogues: chain => { for (const d of chain.getDialogues().values()) { Dialogue.sendBoxChatLine(player, d.getText()); boxes.push(d.getText()); } } });
   player.getPacketSender = () => new Proxy({
     sendObjectRemoval: object => packets.push(["remove", object]),
     sendObject: object => packets.push(["restore", object]),

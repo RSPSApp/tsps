@@ -31,6 +31,9 @@ before(async () => {
   core = PM.getCoreApi();
   core.RegionManager.init();
   for (const [x, y] of [[3279, 9420], [3302, 3036], [3279, 3017]]) core.RegionManager.loadMapFiles(x, y);
+
+  // What GameBuilder does once the world is up: plugins that read the core API in onServerStartup need it first.
+  PM.emitServerStartup({ timestamp: Date.now() });
 });
 after(() => PM.emitServerShutdown({}));
 

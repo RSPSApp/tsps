@@ -1396,7 +1396,10 @@ test('native shared stack queries preserve cap, cadence, expiry and owner credit
 
 test('encounter magic rolls compose live stack reduction and near stance without overwriting bonus drains or screech levels', t => {
   const f = fireFixture(t), npc = f.boss;
-  assert.equal(npc.getDefenceBonus(3), 150);
+  assert.equal(npc.getDefenceBonus(3), 0, 'the pinned native definition starts at zero, not the positive checkpoint');
+  assert.equal(magicRoll(f), 209 * 64, 'the unsupplied native zero-bonus roll remains valid');
+  npc.setDefenceBonusOverrides([null, null, null, 150, null]); // supplied positive bonus to exercise reduction above the disclosed floor
+  assert.equal(npc.getDefenceBonus(3), 150, 'positive-bonus checkpoint uses the real NPC override');
   assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
   assert.equal(magicRoll(f), 209 * 214);
   for (let i = 1; i <= 5; i++) {
@@ -1453,7 +1456,8 @@ test('real paid Soul Rend keeps its permanent magic bonus drain while encounter 
   assert.equal(f.p.getCombatSpecial().getId(), 'eye_of_ayak');
   f.p.setSpecialPercentage(100);
   f.p.setSpecialActivated(true);
-  npc.setDefenceBonusOverrides([null, 7, null, null, null]);
+  npc.setDefenceBonusOverrides([null, 7, null, 150, null]); // supplied positive starting bonus, not this definition's native zero
+  assert.equal(npc.getDefenceBonus(3), 150);
   assert.equal(suppliedBurn(f), true); // supplied live shared stack; fire producer is proved separately
   const random = t.mock.method(Math, 'random', () => 0.5);
   try {
@@ -1508,6 +1512,8 @@ test('the shared read-only count distinguishes mixed burn durations on an unrela
 for (const longDamage of [10, 5]) {
   test(`off-phase expiry removes only unexpired shared stacks from the actual magic roll (${longDamage}+5 damage)`, t => {
     const f = fireFixture(t), start = core.World.getProcessCycle();
+    f.boss.setDefenceBonusOverrides([null, null, null, 150, null]); // supplied positive bonus makes live-count changes observable above floor0
+    assert.equal(f.boss.getDefenceBonus(3), 150);
     assert.equal(suppliedBurn(f, longDamage), true);
     ticks(1);
     assert.equal(core.World.getProcessCycle(), start + 1);

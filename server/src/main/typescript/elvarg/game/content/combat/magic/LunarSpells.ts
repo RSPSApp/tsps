@@ -124,9 +124,13 @@ const ENERGY_TRANSFER_HITPOINTS = 10;
  */
 const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
 
-/** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
+/**
+ * A Dream Mentor spell before the quest: refused (before any other check or cost), and true. The world's
+ * `quests:equipment-requirements` switch lifts this with the other quest spellbook requirements when false.
+ */
 export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
     if (!DREAM_MENTOR_SPELLS.has(key)) return false;
+    if (PluginManager.getPluginConfig<boolean>("quests:equipment-requirements", true) === false) return false;
     const query = { player, key: "dream_mentor", complete: false };
     PluginManager.emitCustomEvent("quest:is-complete", query);
     if (query.complete === true) return false;

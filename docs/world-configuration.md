@@ -340,7 +340,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `quests:equipment-requirements` | boolean | `true` | **Quest equipment and spellbook requirements.** Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements. |
+| `quests:equipment-requirements` | boolean | `true` | **Quest equipment and spellbook requirements.** Require quest completion for equipment and spellbook access (including the Arceuus spells that need A Kingdom Divided and the Lunar spells that need Dream Mentor), and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements. |
 
 #### Plugin area `skills` (`pluginConfig`)
 

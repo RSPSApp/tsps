@@ -404,6 +404,7 @@ test("the helmet off mid-leap: the player stays out and takes no fire damage", a
   H.ticks(f, 30);
   assert.deepEqual(H.xy(f.player.getLocation()), [2825, 10171, 0]);
   assert.equal(f.player.getHitpoints(), 50);
+  assert.equal(H.callsNamed(f, "sendVarbit").filter((call) => call.args[0] === 12393).at(-1)?.args[1], 0, "not left busy");
 });
 
 test("after the quest the helmet off leaves the mine; a login inside it, or in the cannon's cutscene area, is outside", async (t) => {
@@ -417,4 +418,27 @@ test("after the quest the helmet off leaves the mine; a login inside it, or in t
     H.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
     assert.deepEqual(H.xy(g.player.getLocation()), out);
   }
+});
+
+test("a visit ended without the helmet coming off (a teleport) takes its time with it; the helmet off at the warning closes it, and no time starts outside", async (t) => {
+  const f = H.actor(t, { stage: 90, worn: [ITEMS.helmet], at: [2420, 4965, 0] });
+  Mine.startTimer(f.player);
+  H.tick(f);
+  f.player.moveTo(new H.core.Location(3222, 3218, 0));
+  H.ticks(f, 2);
+  assert.equal(Mine.timing(f.player), false, "the time ends with the visit");
+  const g = H.actor(t, { stage: 90, worn: [ITEMS.helmet] });
+  const npc = H.spawn(g, DONDAKAN, H.DONDAKAN_TILE);
+  await H.talk(g, npc);
+  await H.until(g, "Ready as I'll ever be");
+  await H.choose(g, "Ready as I'll ever be.");
+  await H.until(g, "Okay, here we go, hold on to your helmet!");
+  await H.continueLine(g);
+  await H.until(g, "Your helmet starts to feel heavier and heavier!");
+  g.player.getEquipment().setItem(H.core.Equipment.HEAD_SLOT, new H.core.Item(-1, 0));
+  H.ticks(g, 2);
+  assert.deepEqual(H.xy(g.player.getLocation()), [2825, 10171, 0]);
+  assert.equal(H.shown(g), null, "the warning is gone");
+  H.ticks(g, 5);
+  assert.equal(Mine.timing(g.player), false);
 });

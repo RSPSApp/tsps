@@ -103,7 +103,11 @@ function leave(player, { helmetOff = false, killed = false } = {}) {
   if (leaping.has(player)) {
     leaping.delete(player);
     player.setForceMovement?.(null);
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
   }
+  // A box still up (the helmet's warning) goes with the visit.
+  player.getDialogueManager().reset?.();
+  player.getPacketSender().sendInterfaceRemoval();
   ctx.removeAvatar(player);
   const equipment = player.getEquipment();
   const [x, y] = killed ? DATA.exits.avatarKilled : DATA.exits.helmetOff;

@@ -802,7 +802,8 @@ module.exports = function registerBetweenARockQuest(api) {
       player.getInventory().deleteNumber(SCHEMATIC_ASSEMBLED_ITEM, 1);
       enterMine(player);
     }
-    Scenes.firstThoughts(player, Mine.startTimer);
+    Mine.stopTimer(player);
+    Scenes.firstThoughts(player, startTimeInside);
   }
 
   /** Every later landing: the helmet's warning (tick 3738), its continue starting the time. */
@@ -810,7 +811,13 @@ module.exports = function registerBetweenARockQuest(api) {
     enterMine(player);
     const raw = loadTranscripts(api)?.[PAGE]?.variants?.["between-a-rock-talking-to-dondakan-after-being-shot-into-the-mine"] ?? [];
     const box = stepsFrom(raw, "ucl68v") ?? [];
-    Scenes.warningBox(player, formatPlayerText(String(box[0]?.text ?? ""), player), Mine.startTimer);
+    Mine.stopTimer(player);
+    Scenes.warningBox(player, formatPlayerText(String(box[0]?.text ?? ""), player), startTimeInside);
+  }
+
+  /** The warning's continue: the time starts only for a player still inside with the helmet on. */
+  function startTimeInside(player) {
+    if (Mine.inside(player) && wearingHelmet(player) && stageOf(player) === STAGE_MINE && !quest.isComplete(player)) Mine.startTimer(player);
   }
 
   function enterMine(player) {
@@ -1311,6 +1318,16 @@ module.exports = function registerBetweenARockQuest(api) {
           return;
         }
         Mine.tickTimer(player);
+      }
+
+      /** However a visit ends (a teleport, a death), its time and Avatar end with it. */
+      postLeave(mobile, logout) {
+        if (mobile?.isPlayer?.()) {
+          const player = mobile.getAsPlayer();
+          Mine.stopTimer(player);
+          removeAvatar(player);
+        }
+        super.postLeave?.(mobile, logout);
       }
     }
     return new DondakanMineArea([ARZINIAN_MINE_BOUNDS]);

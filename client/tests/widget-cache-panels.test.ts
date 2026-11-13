@@ -265,12 +265,15 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     player.moveTo(new core.Location(2423, 3076, 1));
     setUp!({ player, slot: 0 });
     checkCastleHud(ZAMORAK, 1);
-    // The configured cap only applies while practice bots are in the game.
+    // The configured cap only applies to a "Join practice" match with practice bots in the game.
     const hasPracticeBots = game.hasPracticeBots;
+    const practice = game.practice;
+    game.practice = true;
     game.hasPracticeBots = () => true;
     game.settings.barricades = 20;
     checkCastleHud(SARADOMIN, 1);
     checkCastleHud(ZAMORAK, 1);
+    assert.equal(game.getBarricadeLimit(), 20, 'the practice match uses its configured cap');
     const extra = Array.from({ length: 19 }, () => new core.NPC(game.data.BARRICADE_NPC[ZAMORAK], player.getLocation().clone()));
     extra.forEach(npc => game.trackBarricade(npc, ZAMORAK));
     castleStates[ZAMORAK][0] = 33;
@@ -286,6 +289,7 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     checkCastleHud(ZAMORAK, 1);
     game.settings.barricades = 10;
     game.hasPracticeBots = hasPracticeBots;
+    game.practice = practice;
     checkCastleHud(ZAMORAK, 1);
     assert.equal(wm.isServerOwnedWidget((59 << 16) | 15), false, 'normal mode releases cache text ownership');
     game.removeBarricade(first);
@@ -914,14 +918,19 @@ async function nativeSpecialOrbSendsOneServerAuthoritativeInput() {
 
         const source = ts.createSourceFile('OsrsClient.ts', fs.readFileSync(path.resolve(__dirname, '../game/OsrsClient.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
         let varpCallback = '';
+        let controlSettingVars = '';
         const findVarpCallback = (node: ts.Node) => {
             if (ts.isBinaryExpression(node) && node.left.getText(source) === 'this.varManager.onVarpChange') {
                 varpCallback = node.right.getText(source);
+            }
+            if (ts.isMethodDeclaration(node) && node.name.getText(source) === 'applyControlSettingVars') {
+                controlSettingVars = 'function ' + node.getText(source).replace(/^private\s+/, '');
             }
             ts.forEachChild(node, findVarpCallback);
         };
         findVarpCallback(source);
         assert.ok(varpCallback, 'the production varp callback is present');
+        assert.ok(controlSettingVars, 'the production control-setting var handler is present');
 
         const { state } = require('../network/serverConnection/state');
         const { sendVarpTransmit } = require('../network/serverConnection/outgoing/movement');
@@ -933,7 +942,21 @@ async function nativeSpecialOrbSendsOneServerAuthoritativeInput() {
         const socket: any = { readyState: 1, send: (frame: any) => frames.push(Buffer.from(frame)) };
         state.socket = socket;
         setPacketSocket(socket);
-        const client: any = { cs2Vm: vm, varManager: vm.context.varManager, applyAudioVarpChange() {}, setRoofsHidden() {} };
+        const client: any = {
+            cs2Vm: vm, varManager: vm.context.varManager, applyAudioVarpChange() {}, setRoofsHidden() {},
+            settings: { leftClickOpensMenu: false }, mouseCamEnabled: true,
+        };
+        // The callback re-applies the control-setting vars on every varp change; run the real method.
+        const vars = require('../common/vars');
+        const { ClientState } = require('../game/ClientState');
+        const controlSettings: any = { exports: null };
+        new Function(
+            'VARP_MOUSE_BUTTONS', 'VARBIT_MOUSECAM_DISABLED', 'VARBIT_FOLLOWEROPS_DEPRIORITISED', 'ClientState', 'module',
+            ts.transpileModule('module.exports = (' + controlSettingVars + ');', {
+                compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+            }).outputText,
+        )(vars.VARP_MOUSE_BUTTONS, vars.VARBIT_MOUSECAM_DISABLED, vars.VARBIT_FOLLOWEROPS_DEPRIORITISED, ClientState, controlSettings);
+        client.applyControlSettingVars = controlSettings.exports;
         const body = ts.transpileModule('module.exports = (' + varpCallback + ');', {
             compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
         }).outputText;

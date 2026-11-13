@@ -416,11 +416,14 @@ function release(player, keepAnimation = false) {
  * Runs `steps` for the player. `render` sets a walk animation for the whole run.
  * `onFinish(completed)` fires once; `completed` is false if the player died or left.
  * `busyVarbit` sets the client's BUSY varbit for the run (Agility course obstacles).
+ * `agility` marks the run as crossing an Agility obstacle, which pauses run energy recovery
+ * (see `isCrossingAgilityObstacle`).
  * `keepAnimation` lets a successful delayed pose finish after movement unlocks; cancellation resets it.
  */
-function run(context, steps, { render = null, onFinish = null, busyVarbit = false, keepAnimation = false } = {}) {
+function run(context, steps, { render = null, onFinish = null, busyVarbit = false, keepAnimation = false, agility = false } = {}) {
   const task = new ObstacleTask(context, steps, onFinish);
   task.busyVarbit = busyVarbit;
+  task.agility = agility;
   task.keepAnimation = keepAnimation;
   lock(context.player, task);
   if (render != null) {
@@ -428,6 +431,15 @@ function run(context, steps, { render = null, onFinish = null, busyVarbit = fals
   }
   TaskManager.submit(task);
   return task;
+}
+
+/**
+ * Whether the player is part-way through an Agility obstacle (a course obstacle or shortcut, not
+ * a gate or lever played by the same runner). Run energy does not regenerate meanwhile (Wiki:
+ * Energy; rsprox_transcripts/223/00003.txt: no update_runenergy on the Trollheim rocks' busy ticks).
+ */
+function isCrossingAgilityObstacle(player) {
+  return player.getAttribute(BUSY_ATTRIBUTE)?.agility === true;
 }
 
 /** Finishes an in-progress obstacle instantly (logout), landing on its end tile. */
@@ -442,6 +454,7 @@ module.exports = {
   DIRECTION_VECTORS,
   init,
   isBusy,
+  isCrossingAgilityObstacle,
   run,
   completeNow,
   directionBetween,

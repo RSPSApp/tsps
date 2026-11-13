@@ -27,6 +27,7 @@ const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 // and the Wiki's planks per piece.
 const MAHOGANY = require("./data/mahogany-homes.json");
 const LAYOUTS = require("./data/Layouts.Construction");
+const WORKLIST = require("./data/Worklist.Construction");
 const HOMES = (() => {
   const names = CacheDefinitions.getLocNames();
   const homes = new Map();
@@ -275,14 +276,29 @@ function remaining(contract) {
 function describeWork(player, npcId, home, contract) {
   const chain = new DialogueChainBuilder()
     .add(new PlayerDialogue(0, "Hey, I'm your contractor from Mahogany Homes, what did you want done?"));
-  let index = 1;
+  const work = new Map();
   for (const hotspot of home.hotspots) {
     const state = contract.states[hotspot.index];
     if (![BROKEN, OLD, EMPTY].includes(state)) continue;
-    const transforms = CacheDefinitions.getObject(hotspot.loc).transforms;
-    const display = state === BROKEN ? transforms[BROKEN] : transforms[BUILT + contract.tier];
-    const name = CacheDefinitions.getObject(display).name.replace(/^broken /i, "");
-    const line = state === BROKEN ? `I'd like my ${name.toLowerCase()} fixed.` : `I'd like a ${name} built.`;
+    const key = `${state === BROKEN ? "repair" : "build"}:${hotspot.kind}`;
+    const entry = work.get(key) ?? { hotspot, state, count: 0 };
+    entry.count++;
+    work.set(key, entry);
+  }
+  let index = 1;
+  for (const { hotspot, state, count } of work.values()) {
+    let line;
+    if (state === BROKEN) {
+      // Individually rolled legacy contracts can contain broken buildable pieces.
+      const transforms = CacheDefinitions.getObject(hotspot.loc).transforms;
+      const name = WORKLIST.repairs[hotspot.kind]
+        ?? CacheDefinitions.getObject(transforms[BROKEN]).name.replace(/^broken /i, "").toLowerCase();
+      line = `I'd like my ${name} fixed.`;
+    } else {
+      const names = WORKLIST.furniture[hotspot.kind];
+      const quantity = count === 1 ? "a" : count === 2 ? "two" : String(count);
+      line = `I'd like ${quantity} ${WORKLIST.woods[contract.tier]} ${names[count === 1 ? 0 : 1]} built.`;
+    }
     chain.add(new NpcDialogue(index++, npcId, line));
   }
   player.getDialogueManager().startDialogues(chain);

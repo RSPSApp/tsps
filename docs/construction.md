@@ -328,10 +328,14 @@ for your reward.</col>` (him/her from the Wiki's client genders). The homeowner'
 Recording 1863, revision 227.1, transcript SHA-256
 `4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`,
 lines 88589–88820, shows a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
-dresser, mirror repair and chair in successive dialogue pages. The remaining wording uses
-these templates with active-cache furniture names; it is not claimed as captured wording for
-every client. The player question precedes the list. Removed spaces remain on the list until
-built; completed pieces disappear from it.
+dresser, mirror repair and chair in successive dialogue pages. The request vocabulary comes from the
+[homeowner transcripts](https://oldschool.runescape.wiki/w/Transcript:Jeff_(Mahogany_Homes)),
+not the loc's generic display names (for example, "Shelves"). The other homeowner transcripts
+also group duplicate pieces, such as Bob's bookcases/cabinets and Leela's small tables; requests
+combine unfinished pieces of the same kind. The exact singular wording after partially finishing
+a pair is a template inference, and unrecorded clients/tiers are not claimed as captured wording.
+The player question precedes the list. Removed spaces remain on the list until built; completed
+pieces disappear from it.
 
 [`Mahogany Homes/Mechanics`](https://oldschool.runescape.wiki/w/Mahogany_Homes/Mechanics?oldid=15141725)
 documents fixed client/tier layouts. `data/Layouts.Construction.js` records its 138 table rows as

@@ -494,3 +494,27 @@ test("a documented range repair refuses missing steel without spending planks an
   assert.equal(Math.round((xp() - before) * 10) / 10, 120);
   assert.equal(p.getAttribute("construction:carpenter-points") ?? 0, 0);
 });
+
+
+test("duplicate requests use tiered dialogue nouns and update after one of a pair is built", (t) => {
+  const { p } = actor(t), home = homeFor("Bob");
+  const saved = contract(p, home, 0);
+  assert.equal(stateString(saved), "30303333", "documented Bob order is established before object actions");
+  npcClick(p, home.client, "Talk-to");
+  const first = drain(p);
+  assert.ok(first.includes("I'd like two Wooden bookcases built."));
+  assert.ok(first.includes("I'd like a Wooden cabinet built."));
+  assert.equal(first.filter(line => line.includes("bookcase")).length, 1);
+  tools(p);
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.PLANK, 2), false);
+  work(p, home, 5, 2); // the first bookcase becomes an empty space, still requiring work
+  npcClick(p, home.client, "Talk-to");
+  assert.ok(drain(p).includes("I'd like two Wooden bookcases built."));
+  work(p, home, 5, 4);
+  npcClick(p, home.client, "Talk-to");
+  const last = drain(p);
+  assert.ok(last.includes("I'd like a Wooden bookcase built."));
+  assert.ok(!last.includes("I'd like two Wooden bookcases built."));
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.PLANK), 0);
+  assert.equal(p.getAttribute("construction:carpenter-points") ?? 0, 0);
+});

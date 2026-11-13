@@ -3,6 +3,7 @@ import { SecondsTimer } from "../../model/SecondsTimer";
 export interface PoisonClockState {
     counter: number;
     ticksUntilPulse: number;
+    protectionOffsetTicks?: number;
     briefPoisonSeconds?: number;
     briefVenomSeconds?: number;
 }
@@ -13,6 +14,7 @@ export class PoisonClock extends SecondsTimer {
     public static readonly PERIOD_SECONDS = 18;
     public static readonly VENOM_CUTOFF = 38;
     private counter = 0;
+    private protectionOffsetTicks = 0;
     private ticksUntilPulse = PoisonClock.PERIOD_TICKS;
     private readonly briefPoison = new SecondsTimer();
     private readonly briefVenom = new SecondsTimer();
@@ -24,6 +26,7 @@ export class PoisonClock extends SecondsTimer {
     public start(seconds: number): void {
         if (!Number.isFinite(seconds) || seconds <= 0) { this.stop(); return; }
         this.counter = Math.ceil(seconds / PoisonClock.PERIOD_SECONDS);
+        this.protectionOffsetTicks = 0;
         this.startingSeconds = seconds;
         this.ensureTask();
     }
@@ -35,40 +38,62 @@ export class PoisonClock extends SecondsTimer {
         if (venom && this.briefVenom.secondsRemaining() < seconds) this.briefVenom.start(seconds);
     }
 
-    public getCounter(): number { return this.counter; }
-    public hasCounter(): boolean { return this.counter > 0; }
-    public clearCounter(): void { this.counter = 0; }
+    private protectionTicks(): number {
+        return this.counter > 0
+            ? Math.max(0, (this.counter - 1) * PoisonClock.PERIOD_TICKS + this.ticksUntilPulse - this.protectionOffsetTicks)
+            : 0;
+    }
+
+    /** Remove protection time without moving the status pulse or changing an affliction. */
+    public reduceProtection(seconds: number): void {
+        if (!Number.isFinite(seconds) || seconds <= 0) return;
+        const removed = Math.min(this.protectionTicks(), Math.ceil(seconds / 0.6));
+        const offset = this.protectionOffsetTicks + removed;
+        this.counter = Math.max(0, this.counter - Math.floor(offset / PoisonClock.PERIOD_TICKS));
+        this.protectionOffsetTicks = offset % PoisonClock.PERIOD_TICKS;
+        if (this.protectionTicks() <= 0) this.clearCounter();
+        const poison = Math.max(0, this.briefPoison.secondsRemaining() - seconds);
+        const venom = Math.max(0, this.briefVenom.secondsRemaining() - seconds);
+        if (poison > 0) this.briefPoison.start(poison); else this.briefPoison.stop();
+        if (venom > 0) this.briefVenom.start(venom); else this.briefVenom.stop();
+    }
+
+    public getCounter(): number {
+        return this.protectionOffsetTicks === 0 ? this.counter : Math.ceil(this.protectionTicks() / PoisonClock.PERIOD_TICKS);
+    }
+    public hasCounter(): boolean { return this.getCounter() > 0; }
+    public clearCounter(): void { this.counter = 0; this.protectionOffsetTicks = 0; }
     public isVenomImmune(): boolean {
-        return this.counter > PoisonClock.VENOM_CUTOFF || !this.briefVenom.finished();
+        return this.getCounter() > PoisonClock.VENOM_CUTOFF || !this.briefVenom.finished();
     }
 
     /** Count towards one deadline while modal; retain only one overdue pulse. */
     public tickPulse(modal: boolean): boolean {
         this.ticksUntilPulse = Math.max(0, this.ticksUntilPulse - 1);
+        if (this.protectionOffsetTicks > 0 && this.protectionTicks() <= 0) this.clearCounter();
         if (modal || this.ticksUntilPulse > 0) return false;
         this.ticksUntilPulse = PoisonClock.PERIOD_TICKS;
-        if (this.counter > 0) this.counter--;
+        if (this.counter > 0 && --this.counter === 0) this.protectionOffsetTicks = 0;
         return true;
     }
 
     public resetPhase(): void { this.ticksUntilPulse = PoisonClock.PERIOD_TICKS; }
     public stop(): void {
-        this.counter = 0;
+        this.clearCounter();
         this.briefPoison.stop();
         this.briefVenom.stop();
     }
-    public finished(): boolean { return this.counter === 0 && this.briefPoison.finished(); }
+    public finished(): boolean { return !this.hasCounter() && this.briefPoison.finished(); }
     public isRunning(): boolean { return !this.finished(); }
     public secondsRemaining(): number {
-        const dose = this.counter > 0
-            ? Math.ceil((this.counter - 1) * PoisonClock.PERIOD_SECONDS + this.ticksUntilPulse * 0.6)
-            : 0;
+        const dose = Math.ceil(this.protectionTicks() * 0.6);
         return Math.max(dose, this.briefPoison.secondsRemaining());
     }
     public secondsElapsed(): number { return Math.max(0, this.startingSeconds - this.secondsRemaining()); }
 
     public snapshot(): PoisonClockState {
         const state: PoisonClockState = { counter: this.counter, ticksUntilPulse: this.ticksUntilPulse };
+        if (this.protectionOffsetTicks > 0) state.protectionOffsetTicks = this.protectionOffsetTicks;
         const briefPoisonSeconds = this.briefPoison.secondsRemaining();
         const briefVenomSeconds = this.briefVenom.secondsRemaining();
         if (briefPoisonSeconds > 0) state.briefPoisonSeconds = briefPoisonSeconds;
@@ -82,11 +107,15 @@ export class PoisonClock extends SecondsTimer {
             state.counter <= Number.MAX_SAFE_INTEGER / PoisonClock.PERIOD_TICKS &&
             Number.isInteger(state.ticksUntilPulse) && state.ticksUntilPulse >= 0 &&
             state.ticksUntilPulse <= PoisonClock.PERIOD_TICKS &&
+            (state.protectionOffsetTicks === undefined || (Number.isInteger(state.protectionOffsetTicks) &&
+                state.protectionOffsetTicks >= 0 && state.protectionOffsetTicks < PoisonClock.PERIOD_TICKS)) &&
             (state.briefPoisonSeconds === undefined || (Number.isFinite(state.briefPoisonSeconds) && state.briefPoisonSeconds >= 0)) &&
             (state.briefVenomSeconds === undefined || (Number.isFinite(state.briefVenomSeconds) && state.briefVenomSeconds >= 0 &&
                 state.briefVenomSeconds <= (state.briefPoisonSeconds ?? 0)))) {
             this.counter = state.counter;
             this.ticksUntilPulse = state.ticksUntilPulse;
+            this.protectionOffsetTicks = state.protectionOffsetTicks ?? 0;
+            if (this.protectionOffsetTicks > 0 && this.protectionTicks() <= 0) this.clearCounter();
             if (state.briefPoisonSeconds) this.briefPoison.start(state.briefPoisonSeconds);
             if (state.briefVenomSeconds) this.briefVenom.start(state.briefVenomSeconds);
         } else if (Number.isFinite(legacySeconds) && legacySeconds > 0) {

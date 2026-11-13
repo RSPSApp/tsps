@@ -12,9 +12,12 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { readTemplateRegion } = require('../dist/game/collision/TemplateRegionData');
 const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
+const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
 let core, Common, Instance, Fight;
 const rolledDamage = new WeakMap();
 const finalDamage = [];
+const beforeDefence = new WeakMap();
+const defenceRolls = [];
 let serial = 0;
 const actorIds = new Set();
 const errors = [];
@@ -33,12 +36,17 @@ before(async () => {
   PM.createApi('MaggotNativePreDamage').onCombatHitDamage(event => {
     if (event.target?.__maggotKingSession) rolledDamage.set(event.damage, event.damage.getDamage());
   });
+  PM.createApi('MaggotNativePreDefence').onCustomEvent('combat:defence-roll', event => beforeDefence.set(event, event.defenceRoll));
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   PM.emitServerStartup({});
   PM.createApi('MaggotNativePostDamage').onCombatHitDamage(event => {
     if (event.target?.__maggotKingSession) finalDamage.push({ attacker: event.attacker, hit: event.hit,
       part: event.damage, before: rolledDamage.get(event.damage), after: event.damage.getDamage(),
       punish: event.target.__maggotKingSession.fight?.launch?.punish });
+  });
+  PM.createApi('MaggotNativePostDefence').onCustomEvent('combat:defence-roll', event => {
+    if (event.target?.__maggotKingSession) defenceRolls.push({ attacker: event.attacker, target: event.target,
+      before: beforeDefence.get(event), after: event.defenceRoll });
   });
   Common = require('../plugins/bosses/maggotking/Common.MaggotKing');
   Instance = require('../plugins/bosses/maggotking/Instance.MaggotKing');
@@ -429,7 +437,11 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
       if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
       clicked = true;
       oldDelay = p.getCombat().getAttackDelay();
-      attack(p, session.boss);
+      if (edge === Fight.FLOOR.minX) attack(p, session.boss);
+      else {
+        const at = fight.head.getLocation();
+        new ObjectActionPacketListener().executeAction(p, fight.head.getId(), at.getX(), at.getY(), 1, 'Strike');
+      }
     });
     until(() => clicked, 20, 'native input observes an actual head extension after the body finishes walking');
     p.getSession().setTurnPacketProcessor(() => {});
@@ -565,4 +577,228 @@ test('dangerous native death leaves the grave outside, returns to Vampyrium and 
   until(() => !p.isDying && p.getHitpoints() > 0, 5, 'native death restoration finishes');
   p.moveTo(Common.loc(Common.data.outside));
   assert.ok(enter(p), 'quest-complete owner may retry after dangerous death');
+});
+
+
+test('native Cave menu input walks to the eastern recovery prop and escapes', t => {
+  const p = player(t);
+  const session = enter(p);
+  invulnerable(p);
+  // Supplied standing two columns from the cave; the final approach and operation are native.
+  p.moveTo(session.tile([2917, 8034, 0]));
+  p.setNeedsPlacement(false);
+  const cave = session.exit;
+  const at = cave.getLocation();
+  const old = p.getLocation().clone();
+  input(p, () => new ObjectActionPacketListener().executeAction(p, cave.getId(), at.getX(), at.getY(), 2, 'Quick-escape'));
+  until(() => Instance.sessionOf(p) === null, 6, 'actual ordinary object route reaches and operates the cave');
+  assert.equal(session.area.isDestroyed(), true);
+  assert.ok(p.getLocation().equals(Common.loc(Common.data.outside)));
+  console.log(JSON.stringify({ event: 'maggot-native-cave-route', sourceStanding: [2917, 8034],
+    cave: Common.data.exit, leftSuppliedTile: !p.getLocation().equals(old), policyPlacement: true }));
+  assert.ok(enter(p), 'ordinary registered entrance permits retry after native Cave escape');
+});
+
+test('poisonous-bile walking contact removes45seconds from a nonboundary dose without moving the status pulse', t => {
+  const p = player(t);
+  const session = enter(p);
+  const clock = p.getCombat().getPoisonClock();
+  clock.restore({ counter: 10, ticksUntilPulse: 20 }); // supplied dose checkpoint
+  const destination = session.tile([2912, 8036, 0]);
+  session.fight.placeFloor(destination, Fight.BILE_POISON);
+  input(p, () => p.getMovementQueue().addFirstStep(destination));
+  assert.ok(p.getLocation().equals(destination));
+  assert.equal(session.fight.floor.has(session.fight.key(destination)), false);
+  assert.equal(clock.snapshot().ticksUntilPulse, 19, 'only the one elapsed native tick changed the shared phase');
+  assert.equal(clock.secondsRemaining(), 129, '173.4remainingseconds minus45, displayed rounded up');
+});
+
+function ordinaryRoom(t, p) {
+  const room = new core.TemplatedInstanceArea(5, 5);
+  for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) {
+    room.setChunk(0, x, y, { sourceChunkX: 400 + x, sourceChunkY: 400 + y, sourcePlane: 0, rotation: 0 });
+  }
+  room.enter(p);
+  p.moveTo(room.tile(22, 18, 0));
+  p.setNeedsPlacement(false);
+  const at = room.tile(24, 18, 0);
+  const npc = PM.spawnNpc({ id: core.NpcIdentifiers.SAND_CRAB, x: at.getX(), y: at.getY(), z: 0, owner: p, wanderRadius: 0 });
+  assert.ok(npc?.isRegistered());
+  npc.setScriptedMovement(true);
+  npc.setMultiCombat(true);
+  npc.setNeedsPlacement(false);
+  room.add(npc);
+  t.after(() => { if (p.getPrivateArea() === room) room.leave(p, false); room.destroy(); PM.removeNpc(npc); });
+  return { room, npc };
+}
+
+test('unrelated ordinary shots keep their target snapshot and original surviving private scene after the owner leaves', t => {
+  const p = player(t);
+  const keeper = player(t);
+  const { room, npc } = ordinaryRoom(t, p);
+  room.enter(keeper);
+  keeper.moveTo(room.tile(21, 18, 0));
+  invulnerable(p);
+  ranged(p);
+  const method = core.CombatFactory.getMethod(p);
+  assert.equal(core.CombatFactory.canAttackPermission(p, npc, false, method), core.CanAttackResponse.CAN_ATTACK);
+  assert.equal(core.CombatRange.canReach(p, method, npc), true);
+  const targetAtShot = npc.getLocation().clone();
+  const prior = new Set(core.World.getItems());
+  const random = t.mock.method(core.Misc, 'getRandom', maximum => maximum === 99 ? 50 : Math.floor(maximum / 2));
+  input(p, () => attack(p, npc));
+  p.getCombat().reset();
+  // Mutate the real target's Location after launch to expose a retained reference alias.
+  npc.getLocation().add(1, 0);
+  assert.ok(!npc.getLocation().equals(targetAtShot));
+  p.moveTo(Common.loc(Common.data.outside));
+  room.leave(p, false);
+  assert.equal(room.isDestroyed(), false, 'second real member keeps the original private scene alive');
+  assert.equal(p.getPrivateArea(), null);
+  ticks(4);
+  random.mock.restore();
+  const drops = core.World.getItems().filter(item => !prior.has(item) && !item.isPendingRemoval()
+    && item.getItem().getId() === core.ItemIdentifiers.RUNITE_BOLTS);
+  assert.equal(drops.length, 1);
+  assert.equal(drops[0].getPrivateArea(), room, 'landing belongs to the original surviving scene');
+  assert.ok(drops[0].getPosition().equals(targetAtShot), 'unrelated target retains its launch snapshot, with no boss redirect');
+  room.leave(keeper, false);
+  assert.equal(room.isDestroyed(), true);
+});
+
+test('the existing Dizana quiver decrement handler retains one payment and its own delayed scheduling', t => {
+  const p = player(t);
+  const session = enter(p);
+  invulnerable(p);
+  ranged(p);
+  p.getEquipment().setItem(core.Equipment.CAPE_SLOT, new core.Item(core.ItemIdentifiers.DIZANAS_QUIVER, 1));
+  // Incompatible worn arrows force the native crossbow to use the actual registered quiver source.
+  p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new core.Item(core.ItemIdentifiers.RUNE_ARROW, 500));
+  p.setAttribute('dizanas-quiver', { id: core.ItemIdentifiers.RUNITE_BOLTS, amount: 100 });
+  core.BonusManager.update(p);
+  const original = PM.decrementRangedAmmo;
+  const calls = [];
+  t.mock.method(PM, 'decrementRangedAmmo', function(who, position, amount, delay) {
+    const handled = original.call(PM, who, position, amount, delay);
+    if (who === p) calls.push({ handled, position: position.clone(), amount, delay });
+    return handled;
+  });
+  const random = t.mock.method(core.Misc, 'getRandom', maximum => maximum === 99 ? 50 : Math.floor(maximum / 2));
+  const prior = new Set(core.World.getItems());
+  input(p, () => attack(p, session.boss));
+  p.getCombat().reset();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].handled, true, 'the real installed quiver handler consumed the decrement route');
+  assert.equal(calls[0].amount, 1);
+  assert.ok(calls[0].delay > 0);
+  assert.equal(p.getAttribute('dizanas-quiver').amount, 100, 'current custom handler keeps its existing landing-time payment');
+  assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(), 500, 'Factory fallback did not touch worn arrows');
+  ticks(calls[0].delay);
+  random.mock.restore();
+  assert.equal(p.getAttribute('dizanas-quiver').amount, 99, 'one cost, not custom plus Factory cost');
+  assert.equal(calls.length, 1);
+  const drops = core.World.getItems().filter(item => !prior.has(item) && !item.isPendingRemoval()
+    && item.getPrivateArea() === session.area && item.getItem().getId() === core.ItemIdentifiers.RUNITE_BOLTS);
+  assert.equal(drops.reduce((sum, item) => sum + item.getItem().getAmount(), 0), 1);
+  assert.ok(drops.every(item => session.fight.inFloor(item.getPosition())), 'custom handler receives the location snapshot too');
+  // Its historical late-scene semantics are outside the Factory fallback guard and are not claimed fixed here.
+});
+
+test('real twin crush attacks boost only the first splat and first defence roll; other actors remain ordinary', t => {
+  const p = player(t);
+  const q = player(t);
+  const session = enter(p);
+  const other = enter(q);
+  invulnerable(p); invulnerable(q);
+  session.boss.setHitpoints(900); other.boss.setHitpoints(900); // supplied threshold checkpoints
+  until(() => session.fight.phase === 'melee' && other.fight.phase === 'melee', 75, 'both independent native rotations reach melee');
+  for (const who of [p, q]) equip(who, core.ItemIdentifiers.TORAGS_HAMMERS, core.WeaponInterfaces.WARHAMMER);
+  const fight = session.fight;
+  assert.equal(core.CombatFactory.getMethod(p).type(), core.CombatType.MELEE);
+  assert.equal(p.getFightType().getBonusType(), 2, 'real crush style');
+  const originalAccuracy = core.AccuracyFormulasDpsCalc.rollAccuracy;
+  const forced = t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', function(attacker, target, ...args) {
+    const actual = originalAccuracy.call(this, attacker, target, ...args);
+    // Retain the real defence-roll producer; select two successful outcomes to exercise nonzero first/second splats.
+    return (attacker === p && target === session.boss) || (attacker === q && target === other.boss) ? true : actual;
+  });
+  const random = t.mock.method(Math, 'random', () => 0.5);
+  const startDamage = finalDamage.length;
+  const startDefence = defenceRolls.length;
+  let clicked = false;
+  p.getCombat().setAttackDelay(30);
+  p.getSession().setTurnPacketProcessor(() => {
+    if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
+    clicked = true;
+    assert.equal(core.CombatFactory.canAttackPermission(q, session.boss, false, core.CombatFactory.getMethod(q)),
+      core.CanAttackResponse.CANT_ATTACK_IN_AREA, 'other session never acquires the owner\'s punish');
+    attack(p, session.boss);
+    // A held native target is setup for the other actor, without manufacturing a fresh NPC click stamp.
+    q.getCombat().setAttackDelay(0);
+    q.getCombat().attack(other.boss);
+  });
+  until(() => clicked, 20, 'actual extension tick receives fresh ordinary twin-weapon Attack');
+  p.getSession().setTurnPacketProcessor(() => {});
+  forced.mock.restore(); random.mock.restore();
+  const parts = finalDamage.slice(startDamage).filter(row => row.attacker === p);
+  assert.equal(parts.length, 2, 'installed ordinary twin-weapon method rolled both real splats');
+  assert.ok(parts.every(row => row.before > 0), 'selected successful native damage rolls are nonzero');
+  assert.equal(parts[0].after, Math.floor(parts[0].before * 1.5));
+  assert.equal(parts[1].after, parts[1].before, 'second splat gets no bonus');
+  const rolls = defenceRolls.slice(startDefence).filter(row => row.attacker === p);
+  assert.equal(rolls.length, 2);
+  assert.equal(rolls[0].after, rolls[0].before * 0.15);
+  assert.equal(rolls[1].after, rolls[1].before, 'second independent crush accuracy roll is ordinary');
+  const negative = finalDamage.slice(startDamage).filter(row => row.attacker === q);
+  assert.equal(negative.length, 2);
+  assert.ok(negative.every(row => !row.punish && row.after === row.before));
+});
+
+
+test('native object lookup rejects another session cave and a retracted head', t => {
+  const p = player(t), q = player(t);
+  const session = enter(p), other = enter(q);
+  invulnerable(p); invulnerable(q);
+  const listener = new ObjectActionPacketListener();
+  const foreign = other.exit.getLocation();
+  input(p, () => listener.executeAction(p, other.exit.getId(), foreign.getX(), foreign.getY(), 2, 'Quick-escape'));
+  ticks(2);
+  assert.equal(Instance.sessionOf(p), session, 'foreign private object cannot operate owner recovery');
+  assert.equal(Instance.sessionOf(q), other);
+  session.boss.setHitpoints(900); // supplied threshold checkpoint
+  until(() => session.fight.phase === 'melee' && session.fight.head, 90, 'natural rotation exposes a real head');
+  const head = session.fight.head;
+  const at = head.getLocation().clone();
+  until(() => session.fight.head !== head, 3, 'native next turn retracts the one-tick head');
+  p.getCombat().reset();
+  const stamp = session.fight.clickCycle;
+  const spent = session.fight.punishSpent;
+  input(p, () => listener.executeAction(p, head.getId(), at.getX(), at.getY(), 1, 'Strike'));
+  assert.equal(session.fight.clickCycle, stamp, 'removed object never reaches the Strike handler');
+  assert.equal(session.fight.punishSpent, spent);
+  assert.equal(p.getCombat().getTarget(), null);
+});
+
+test('native incoming-hit auto-retaliation and a held target never mint a fresh extension punish', t => {
+  const p = player(t);
+  const session = enter(p);
+  invulnerable(p);
+  equip(p, core.ItemIdentifiers.ELDER_MAUL, core.WeaponInterfaces.MAUL);
+  p.setAutoRetaliate(true);
+  p.getCombat().reset();
+  const random = t.mock.method(Math, 'random', () => 0.99);
+  // Supplied incoming blow, but PendingHit landing and CombatFactory retaliation scheduling are native.
+  session.fight.blow('control', 'melee', null, 1);
+  until(() => p.getCombat().getTarget() === session.boss, 5, 'actual incoming hit schedules auto-retaliation');
+  random.mock.restore();
+  assert.equal(session.fight.clickCycle, -1, 'retaliation was never an NPC menu click');
+  session.boss.setHitpoints(900); // supplied phase checkpoint
+  until(() => session.fight.phase === 'melee', 75, 'normal rotation reaches melee');
+  p.getCombat().setAttackDelay(30);
+  const spent = session.fight.punishSpent;
+  until(() => session.fight.head !== null, 20, 'native extension arrives while the target is held');
+  assert.equal(p.getCombat().getTarget(), session.boss);
+  assert.equal(session.fight.punishSpent, spent, 'retaliation target cannot cross the weapon deadline as a fresh click');
+  assert.ok(p.getCombat().getAttackDelay() > 0);
+  assert.equal(session.fight.clickCycle, -1);
 });

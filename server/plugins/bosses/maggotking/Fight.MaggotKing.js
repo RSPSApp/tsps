@@ -214,15 +214,7 @@ class Fight {
       skills.setCurrentLevels(skill, Math.max(0, skills.getCurrentLevel(skill) - amount), true);
       this.player.getCombat().extendAttackDelay(1);
     } else {
-      const clock = this.player.getCombat().getPoisonClock();
-      const state = clock.snapshot();
-      // Subtract75ticks from the dose, retaining its exact remaining protection rather than rounding to a fresh dose.
-      let ticks = Math.max(0, (state.counter - 1) * 30 + state.ticksUntilPulse - 75);
-      state.counter = ticks > 0 ? Math.ceil(ticks / 30) : 0;
-      if (ticks > 0) state.ticksUntilPulse = ticks - (state.counter - 1) * 30;
-      if (state.briefPoisonSeconds) state.briefPoisonSeconds = Math.max(0, state.briefPoisonSeconds - 45);
-      if (state.briefVenomSeconds) state.briefVenomSeconds = Math.max(0, state.briefVenomSeconds - 45);
-      clock.restore(state);
+      this.player.getCombat().getPoisonClock().reduceProtection(45);
     }
   }
 
@@ -431,6 +423,8 @@ function strike({ player, object, objectId }) {
   if (!fight?.valid() || fight.head !== object || fight.phase !== "melee") return true;
   fight.clickCycle = fight.cycle();
   player.getCombat().attack(fight.npc);
+  // Object operations resolve after the normal combat turn. Commit through the native checked path now.
+  player.getCombat().performNewAttack(false);
   return true;
 }
 function ammoLanding(event) {

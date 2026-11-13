@@ -184,3 +184,58 @@ test('the resistance lines come one pulse before and at each end, once each', t 
   f.step(90);
   assert.equal(lines.length, 4, 'nothing more');
 });
+
+test('protection duration reduction retains the shared nonboundary pulse and roundtrips its fractional dose', t => {
+  const { PoisonClock } = require('../dist/game/content/combat/PoisonClock');
+  const clock = new PoisonClock(() => {});
+  clock.restore({ counter: 10, ticksUntilPulse: 20 }); // supplied nonboundary clock checkpoint
+  assert.equal(clock.secondsRemaining(), 174);
+  clock.reduceProtection(45);
+  assert.equal(clock.secondsRemaining(), 129, 'exact75ticks removed without rounding to whole18second dose units');
+  assert.equal(clock.snapshot().ticksUntilPulse, 20, 'next status pulse did not move to5ticks');
+  const state = clock.snapshot();
+  const restored = new PoisonClock(() => {});
+  restored.restore(state);
+  assert.deepEqual(restored.snapshot(), state, 'new optional precision state survives save/load');
+  const pulses = [];
+  for (let tick = 1; tick <= 230; tick++) {
+    if (restored.tickPulse(false)) pulses.push(tick);
+    if (tick === 214) assert.equal(restored.finished(), false);
+    if (tick === 215) {
+      assert.equal(restored.finished(), true, 'remaining129seconds expires at215ticks');
+      assert.equal(restored.snapshot().ticksUntilPulse, 15, 'expiry preserves the pending shared pulse too');
+    }
+  }
+  assert.deepEqual(pulses, [20, 50, 80, 110, 140, 170, 200, 230]);
+  clock.reduceProtection(45);
+  assert.equal(clock.secondsRemaining(), 84, 'repeated reductions retain their exact remainder');
+  assert.equal(clock.snapshot().ticksUntilPulse, 20);
+});
+
+test('duration reduction safely exhausts a dose, preserves no-dose phase and independently reduces brief protection', t => {
+  const { PoisonClock } = require('../dist/game/content/combat/PoisonClock');
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  const clock = new PoisonClock(() => {});
+  clock.restore({ counter: 1, ticksUntilPulse: 20 });
+  clock.reduceProtection(45);
+  assert.equal(clock.getCounter(), 0);
+  assert.equal(clock.finished(), true);
+  assert.equal(clock.snapshot().ticksUntilPulse, 20);
+  clock.reduceProtection(45);
+  assert.equal(clock.snapshot().ticksUntilPulse, 20, 'empty protection is no status reset');
+  clock.protectBriefly(60, true);
+  clock.reduceProtection(45);
+  assert.equal(clock.secondsRemaining(), 15);
+  assert.equal(clock.isVenomImmune(), true);
+  assert.equal(clock.snapshot().ticksUntilPulse, 20);
+  now += 15000;
+  assert.equal(clock.isVenomImmune(), false);
+  assert.equal(clock.finished(), true);
+  clock.protectBriefly(2, true);
+  clock.reduceProtection(45);
+  assert.equal(clock.finished(), true);
+  assert.equal(clock.isVenomImmune(), false);
+  for (const seconds of [NaN, Infinity, -1, 0]) clock.reduceProtection(seconds);
+  assert.equal(clock.snapshot().ticksUntilPulse, 20);
+});

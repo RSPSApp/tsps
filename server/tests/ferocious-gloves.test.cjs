@@ -156,3 +156,16 @@ test("hydra leather's Inspect shows the leather with its line (rec 1521)", (t) =
   inspectLeather({ player: f.player, itemId: obj("hydra_leather") });
   assert.deepEqual(f.boxes, [{ text: INSPECT, item: obj("hydra_leather") }]);
 });
+
+test("a preset leather does not hide plain gloves' revert; a preset alone is refused", (t) => {
+  const f = fixture(t, { items: [[1, "hydra_leather"], [2, "ferocious_gloves"], [5, "hammer"]] });
+  t.mock.method(f.player.getInventory().getItems()[1], "isPresetItem", () => true);
+  investigate({ player: f.player, objectId: MACHINE() });
+  assert.equal(prompts[0]?.title, "Would you like to revert your ferocious gloves into hydra leather?");
+
+  const g = fixture(t, { items: [[1, "hydra_leather"], [5, "hammer"]] });
+  t.mock.method(g.player.getInventory().getItems()[1], "isPresetItem", () => true);
+  investigate({ player: g.player, objectId: MACHINE() });
+  assert.deepEqual(g.boxes.map((b) => b.text), ["Preset items cannot be used for this."]);
+  assert.equal(prompts.length, 0);
+});

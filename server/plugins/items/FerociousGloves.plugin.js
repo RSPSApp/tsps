@@ -87,9 +87,11 @@ function plainSlot(player, gameval) {
   return player.getInventory().getItems().findIndex((item) => item?.getId() === id && item.isPresetItem?.() !== true);
 }
 
+/** A recipe with a plain copy to feed wins; a preset-only one is kept for the preset refusal. */
 function recipeFor(player) {
   const inventory = player.getInventory();
-  return RECIPES.find((recipe) => inventory.contains(obj(recipe.from))) ?? null;
+  return RECIPES.find((recipe) => plainSlot(player, recipe.from) >= 0)
+    ?? RECIPES.find((recipe) => inventory.contains(obj(recipe.from))) ?? null;
 }
 
 function sequence(player, gameval) {

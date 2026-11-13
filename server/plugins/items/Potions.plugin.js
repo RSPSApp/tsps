@@ -1347,6 +1347,19 @@ registerPotion({
   chains: [doseChain("HUNTER_POTION_4_", "HUNTER_POTION_3_", "HUNTER_POTION_2_", "HUNTER_POTION_1_")],
   effect: (player) => boostSkill(player, Skill.HUNTER, 3, 0),
 });
+// Wiki (Super fishing potion, Pillar coral; Super hunter potion, Crystal impling: 80 Hunter or 74
+// with one): a flat +6 a dose. rsprox.net rec 4100 (rev 237) tick 953 drinks a super fishing
+// potion(3): human_eat, sound 2401, the drink and doses-left lines, a (2) left.
+registerPotion({
+  name: "Super fishing potion",
+  chains: [doseChain("SUPER_FISHING_POTION_4_", "SUPER_FISHING_POTION_3_", "SUPER_FISHING_POTION_2_", "SUPER_FISHING_POTION_1_")],
+  effect: (player) => boostSkill(player, Skill.FISHING, 6, 0),
+});
+registerPotion({
+  name: "Super hunter potion",
+  chains: [doseChain("SUPER_HUNTER_POTION_4_", "SUPER_HUNTER_POTION_3_", "SUPER_HUNTER_POTION_2_", "SUPER_HUNTER_POTION_1_")],
+  effect: (player) => boostSkill(player, Skill.HUNTER, 6, 0),
+});
 registerPotion({
   name: "Agility potion",
   chains: [doseChain("AGILITY_POTION_4_", "AGILITY_POTION_3_", "AGILITY_POTION_2_", "AGILITY_POTION_1_")],

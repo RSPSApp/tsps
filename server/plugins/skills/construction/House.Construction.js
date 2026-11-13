@@ -813,6 +813,7 @@ function exitHouse(player) {
   const house = houseFor(player);
   if (!house) return false;
   standFromChair(player);
+  Workbench.standUp(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   if (house.owner === player) advertisedHouses.delete(house);
@@ -1773,6 +1774,7 @@ function logoutHouse({ player }) { standFromChair(player); releaseHouse(player, 
 /** Per tick, for players inside a house only (PlayerHouseInstance.process). */
 function processOccupant(player, house) {
   processChair(player);
+  Workbench.processSeat(player, house);
   Servants.processServant(player);
   syncKickOption(player);
   Altars.expireHouseBurners(house);
@@ -1783,6 +1785,7 @@ function processOccupant(player, house) {
 /** PlayerHouseInstance.postLeave, after the player is out of the house. */
 function leftHouse(player, house) {
   standFromChair(player);
+  Workbench.standUp(player);
   syncKickOption(player);
   if (house.owner === player) advertisedHouses.delete(house);
   GamesRoom.leftGamesRoom(player, house);

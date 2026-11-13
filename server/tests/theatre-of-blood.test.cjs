@@ -1404,6 +1404,30 @@ test('Theatre preserves Recent Party, OFF, ignore and existing event veto behavi
   assert.equal(f.raid.spectators.has(f.viewer), false);
 });
 
+test('the party HUD Exit takes a spectator out of the Theatre; a party member click is left alone', (t) => {
+  const f = spectatorFixture(t);
+  const Shared = require('../plugins/minigames/tob/Shared.TheatreOfBlood');
+  const uid = PluginManager.getCoreApi().CacheDefinitions.getComponentId('tob_hud:spectator_exit');
+  assert.equal(uid, (28 << 16) | 15, 'PRE: the cache component');
+  const exit = hooks.buttons[uid];
+  assert.equal(typeof exit, 'function', 'tob_hud:spectator_exit (28:15) has a handler');
+  const closed = [];
+  f.raid.closeHud = (player) => closed.push(player);
+  assert.equal(exit({ player: f.member }), false, 'not a spectator: nothing happens');
+  assert.deepEqual(closed, []);
+  f.member.getRelations().setStatus(f.PrivateChatStatus.ON, false);
+  f.chooseName('Member');
+  assert.equal(f.raid.spectators.has(f.viewer), true, 'PRE: watching');
+  assert.equal(f.viewer.isUntargetable(), true);
+  assert.equal(exit({ player: f.viewer }), true);
+  assert.equal(f.raid.spectators.has(f.viewer), false, 'no longer a spectator');
+  assert.equal(f.viewer.isUntargetable(), false);
+  assert.deepEqual(closed, [f.viewer], 'the HUD is cleared');
+  const at = f.viewer.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [Shared.OUTSIDE.x, Shared.OUTSIDE.y, Shared.OUTSIDE.z], 'put outside the Theatre');
+  assert.equal(exit({ player: f.viewer }), false, 'a second click does nothing');
+});
+
 // A save made mid-raid (shutdown, saveall, a requested save) has no logout record. Back in the theatre with no raid,
 // the player is put outside and leaves the Theatre's own items: the Dawnbringer and the bandages.
 test('a login from a mid-raid save in the theatre leaves the Dawnbringer and bandages behind', () => {

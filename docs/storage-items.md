@@ -107,6 +107,7 @@ Other plugins reach the containers only through custom events (owned by `Common.
 | `storage:gather` | `{ player, itemId, amount, stored, announce? }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, pickpocketed gems, Shooting Stars: open containers take what fits, the rest goes to the inventory |
 | `storage:amount` | `{ player, itemId, amount }` | Smithing (smelting), Construction, Fishing (bait) |
 | `storage:take` | `{ player, itemId, amount, taken }` | the same, after the inventory's own items |
+| `storage:empty-to-bank` | `{ player, key, moved, left }` | Forestry's Woodcutting Leprechaun ("Yes, bank it all"): a carried or worn container of family `key` (the log basket) empties into the bank |
 
 `DestroyItem` emits `destroy-item:destroyed` `{ player, itemId, amount }` after a confirmed
 Destroy. When the last container of a family is destroyed, its contents go with it.

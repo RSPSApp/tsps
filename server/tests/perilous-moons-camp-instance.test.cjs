@@ -134,6 +134,7 @@ test("entering Neypotzli at stage 7 sets 8 and builds the antechamber's copy wit
   const npcs = [...core.World.getNpcs()].filter((n) => n && n.getPrivateArea?.() === area).map((n) => n.getId());
   assert.ok(npcs.includes(core.NpcIdentifiers.ATTALA), "Attala in the copy");
   assert.ok(npcs.includes(core.NpcIdentifiers.JESSAMINE), "the map's Jessamine copied in");
+  assert.equal(npcs.includes(12770), false, "rec 1693's antechamber copy had no sunlight moths");
 });
 
 test("an unbuilt camp is the spot and the unbuilt range, with the copied map's camp locs gone", async (t) => {
@@ -174,6 +175,7 @@ test("Build follows rec 1693 tick by tick, and the third camp sets stage 12", as
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held from the minimap's tick");
   assert.equal(objectAt(area, O.RANGE, [1349, 9580, 0]), null);
   tick(f); // +2
+  assert.deepEqual(source(f), [1350, 9582, 0], "rec 1693 tick 1346: moved off the stool's tile as the camp appears");
   for (const [id, x, y, face] of [[O.BARRIER, 1350, 9579, 1], [O.RANGE, 1349, 9580, 0], [O.STOOL, 1348, 9580, 3],
     [O.STOOL, 1351, 9581, 3], [O.CRATE, 1348, 9582, 0], [O.BARREL, 1348, 9581, 2]]) {
     const object = objectAt(area, id, [x, y, 0]);
@@ -245,4 +247,21 @@ test("a logout in a copy saves its landing, and the login copies the cavern agai
   assert.ok(again, "back in a copy");
   assert.deepEqual(source(restored), [1388, 9575, 0]);
   assert.ok(objectAt(again, O.CAMP_SPOT, [1348, 9580, 0]));
+});
+
+test("a save made inside a copy keeps Neypotzli's resources at login", async (t) => {
+  const f = await prisonCopy(t, 0);
+  const saved = f.player.getLocation().clone();
+  const exit = f.player.getAttribute("perilous-moons:scene-exit");
+  assert.deepEqual(exit, [1388, 9575, 0]);
+  // A crash: the save holds the copy's tile and the pending exit, and no logout ran.
+  const restored = actor(t, [saved.getX(), saved.getY(), saved.getZ()]);
+  quest().setStage(restored.player, 10);
+  restored.player.setAttribute("perilous-moons:scene-exit", exit);
+  restored.player.getInventory().add(new core.Item(RAW_BREAM, 1), true);
+  PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
+  ticks(restored, 3);
+  assert.equal(restored.player.getInventory().getAmount(RAW_BREAM), 1, "nothing fizzles");
+  assert.ok(copyOf(restored), "back in a copy of the prison");
+  assert.deepEqual(source(restored), [1388, 9575, 0]);
 });

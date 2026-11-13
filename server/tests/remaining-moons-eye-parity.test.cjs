@@ -876,7 +876,7 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
     const copy = p.getPrivateArea();
     assert.ok(copy instanceof core.TemplatedInstanceArea, `the cavern behind ${entrance} is a copy`);
     const at = copy.sourceTile(spot[0], spot[1], 0);
-    h.object(p, O.CAMP_SPOT, { x: at.getX(), y: at.getY(), z: 0 }, 1, ['Build']);
+    h.namedObjects.get('Camp spot').Build({ player: p, objectId: O.CAMP_SPOT, location: at, clickType: 1 });
     h.tick(6);
   }
   assert.equal(stage(), 12);

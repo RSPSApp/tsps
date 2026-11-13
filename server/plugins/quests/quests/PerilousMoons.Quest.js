@@ -270,10 +270,13 @@ module.exports = function registerPerilousMoonsQuest(api) {
   // `cleared` as loc_del, then the camp spot on `spot` and the unbuilt range on the range tile (as
   // loc_add_change over the map's). Build sends loc_del on `spot` and two ticks later `built`, as
   // [id, x, y, rotation] (all shape 10) - not always the map's rotation, so the capture's are kept.
+  // A player standing on one of those tiles is moved to `stand` in that tick: rec 1693 tick 1346
+  // moved the prison's builder from (1351, 9581) to (1350, 9582). Ours: the other two stand tiles
+  // are where their captured builders stood (no loc there), as no capture built from a loc tile.
   const CAMP_SITES = [
     {
       name: "Ancient Prison", x: 1349, y: 9580, z: 0, face: 0, varbit: CAMP_VARBITS[0], bit: 1,
-      spot: [1348, 9580], cleared: [[1351, 9581], [1348, 9582], [1348, 9581]],
+      spot: [1348, 9580], cleared: [[1351, 9581], [1348, 9582], [1348, 9581]], stand: [1350, 9582],
       built: [
         [CAMP_BARRIER_OBJECT_ID, 1350, 9579, 1], [CAMP_RANGE_OBJECT_ID, 1349, 9580, 0],
         [CAMP_STOOL_OBJECT_ID, 1348, 9580, 3], [CAMP_STOOL_OBJECT_ID, 1351, 9581, 3],
@@ -282,7 +285,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
     },
     {
       name: "Earthbound Cavern", x: 1374, y: 9710, z: 0, face: 3, varbit: CAMP_VARBITS[1], bit: 2,
-      spot: [1373, 9710], cleared: [[1374, 9709], [1375, 9712], [1376, 9711]],
+      spot: [1373, 9710], cleared: [[1374, 9709], [1375, 9712], [1376, 9711]], stand: [1375, 9709],
       built: [
         [CAMP_BARRIER_OBJECT_ID, 1373, 9711, 3], [CAMP_RANGE_OBJECT_ID, 1374, 9710, 3],
         [CAMP_STOOL_OBJECT_ID, 1374, 9709, 2], [CAMP_BARREL_OBJECT_ID, 1373, 9710, 2],
@@ -291,7 +294,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
     },
     {
       name: "Streambound Cavern", x: 1510, y: 9693, z: 0, face: 0, varbit: CAMP_VARBITS[2], bit: 4,
-      spot: [1509, 9693], cleared: [[1511, 9692], [1509, 9694], [1511, 9695], [1510, 9695]],
+      spot: [1509, 9693], cleared: [[1511, 9692], [1509, 9694], [1511, 9695], [1510, 9695]], stand: [1512, 9693],
       built: [
         [CAMP_BARRIER_OBJECT_ID, 1509, 9692, 2], [CAMP_RANGE_OBJECT_ID, 1510, 9693, 0],
         [CAMP_STOOL_OBJECT_ID, 1511, 9692, 3], [CAMP_STOOL_OBJECT_ID, 1509, 9694, 3],
@@ -304,15 +307,23 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   // Rec 1693: from stage 8 to 15 (camps, report, talismans) every Neypotzli entrance builds the
   // destination cavern as the player's own copy (rebuild_region); from stage 15 on, the real map
-  // (rebuild_normal). Each copy is 13x13 chunks from `sourceChunk`, every plane; `boxes` are the
-  // cavern's tiles, which pick the copy for a destination or a login tile; `exit` is where a
-  // logout inside it is saved (the cavern's landing).
-  const CAVERN_CHUNKS = 13;
+  // (rebuild_normal). A copy is `size` x `size` chunks from `sourceChunk`, every plane: the build
+  // areas the capture's copies used (lines 21973, 23191, 26022/26889, 29668 of the transcript;
+  // Earthbound's is 8x13 chunks, so 13 square). `boxes` are the cavern's tiles, which pick the copy
+  // for a destination or a login tile; `exit` is where a logout inside it is saved (the landing).
+  // `npcIds`: the map spawns the capture's copy had (the antechamber's and prison's had no moths).
   const CAVERNS = [
-    { key: "antechamber", sourceChunk: [174, 1197], boxes: [[1405, 1475, 9595, 9665, 0], [1405, 1475, 9595, 9665, 1]], exit: NEYPOTZLI_LANDING },
-    { key: "prison", sourceChunk: [164, 1189], boxes: [[1335, 1400, 9530, 9600, 0]], exit: PRISON_LANDING, camp: CAMP_SITES[0] },
-    { key: "earthbound", sourceChunk: [167, 1206], boxes: [[1355, 1415, 9665, 9730, 0]], exit: EARTHBOUND_LANDING, camp: CAMP_SITES[1] },
-    { key: "streambound", sourceChunk: [181, 1205], boxes: [[1465, 1535, 9650, 9730, 0]], exit: STREAMBOUND_LANDING, camp: CAMP_SITES[2] },
+    {
+      key: "antechamber", sourceChunk: [176, 1200], size: 8, exit: NEYPOTZLI_LANDING,
+      boxes: [[1408, 1471, 9600, 9663, 0], [1408, 1471, 9600, 9663, 1]],
+      npcIds: [NpcIdentifiers.JESSAMINE, NpcIdentifiers.BUILDER_8],
+    },
+    {
+      key: "prison", sourceChunk: [168, 1192], size: 8, exit: PRISON_LANDING, camp: CAMP_SITES[0],
+      boxes: [[1344, 1407, 9536, 9599, 0]], npcIds: [NpcIdentifiers.SULPHUR_NAGUA_2],
+    },
+    { key: "earthbound", sourceChunk: [168, 1208], size: 13, exit: EARTHBOUND_LANDING, camp: CAMP_SITES[1], boxes: [[1344, 1407, 9664, 9767, 0]] },
+    { key: "streambound", sourceChunk: [184, 1208], size: 8, exit: STREAMBOUND_LANDING, camp: CAMP_SITES[2], boxes: [[1472, 1535, 9664, 9727, 0]] },
   ];
   const CAVERN_SCENE_PREFIX = "neypotzli-";
   // An ordinary dungeon copied: teleports and aggression follow the usual rules.
@@ -744,11 +755,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   function openCavern(player, cavern, tile) {
     const [chunkX, chunkY] = cavern.sourceChunk;
-    const minX = chunkX * 8, minY = chunkY * 8, size = CAVERN_CHUNKS * 8;
+    const minX = chunkX * 8, minY = chunkY * 8, size = cavern.size * 8;
     // The whole copy on every plane: only an entrance or a teleport leaves it.
     const bounds = [0, 1, 2, 3].map((z) => [minX, minX + size - 1, minY, minY + size - 1, z]);
     const scene = Scenes.open(player, CAVERN_SCENE_PREFIX + cavern.key, bounds, CAVERN_RULES, {
-      instance: { sourceChunk: cavern.sourceChunk, size: CAVERN_CHUNKS },
+      instance: { sourceChunk: cavern.sourceChunk, size: cavern.size },
       at: [tile.x, tile.y, tile.z],
       exit: [cavern.exit.x, cavern.exit.y, cavern.exit.z],
     });
@@ -758,7 +769,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   /** The cavern's own NPCs, the quest's trio and the camp-phase locs, in the copy. */
   function populateCavern(player, scene, cavern) {
-    cavern.spawns ??= NPC_SPAWN_ROWS.filter((row) => cavern.boxes.some((box) => inBox(box, { x: row.x, y: row.y, z: row.level ?? 0 })));
+    cavern.spawns ??= NPC_SPAWN_ROWS.filter((row) => (!cavern.npcIds || cavern.npcIds.includes(row.id))
+      && cavern.boxes.some((box) => inBox(box, { x: row.x, y: row.y, z: row.level ?? 0 })));
     for (const row of cavern.spawns) {
       spawnCavernNpc(player, scene, row.id, { x: row.x, y: row.y, z: row.level ?? 0 }, row.wanderRadius ?? 0);
     }
@@ -1427,8 +1439,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
    */
   function handleBuildCamp(event) {
     const { player } = event;
-    const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
-    if (option !== "Build") return;
     const scene = cavernScene(player);
     const site = CAVERNS.find((cavern) => cavern.camp && scene?.name === CAVERN_SCENE_PREFIX + cavern.key)?.camp;
     if (!scene || !site || !scene.campSpot) return;
@@ -1446,7 +1456,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
     scene.campSpot = null;
     Scenes.fade(player, true);
     Scenes.later(scene, 1, () => Scenes.controls(player, true));
-    Scenes.later(scene, 2, () => placeBuiltCamp(scene, site));
+    Scenes.later(scene, 2, () => placeBuiltCamp(player, scene, site));
     Scenes.later(scene, 3, () => {
       Scenes.controls(player, false);
       player.performAnimation(new Animation(-1));
@@ -1457,7 +1467,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
   }
 
   /** The camp's locs over the copied map's (loc_add_change), the unbuilt range swapped in place. */
-  function placeBuiltCamp(scene, site) {
+  function placeBuiltCamp(player, scene, site) {
+    const at = sourceTile(player, player.getLocation());
+    if (at.z === site.z && site.built.some(([, x, y]) => x === at.x && y === at.y)) {
+      Scenes.place(player, [site.stand[0], site.stand[1], site.z]);
+    }
     for (const [id, x, y, face] of site.built) {
       const object = new GameObject(id, Scenes.tileFor(scene, [x, y, site.z]), 10, face, scene.area);
       if (id === CAMP_RANGE_OBJECT_ID && scene.campRange) {
@@ -1491,10 +1505,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
     if (!player || !location) return;
     if (ENTRANCE_OBJECT_IDS.has(objectId)) {
       handleEntranceInteraction(event, location);
-      return;
-    }
-    if (objectId === CAMP_SPOT_OBJECT_ID) {
-      handleBuildCamp(event);
       return;
     }
     if (CAMP_SUPPLIES_OBJECT_IDS.includes(objectId)) {
@@ -2167,6 +2177,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onObjectInteraction("Camp spot", { Build: handleBuildCamp });
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(ECLIPSE_MOON_ZONE, handleEclipseMoonEnter);
   api.onCustomEvent("moons-of-peril:can-enter", handleCanEnter);

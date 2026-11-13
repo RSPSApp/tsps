@@ -296,8 +296,13 @@ function onMapSquare({ player, location }) {
   if (location && !inNeypotzli(sourceOf(player, location))) fizzle(player);
 }
 
+/** A tick on: a save made inside a quest's copy of Neypotzli is first put back on its real landing. */
 function onLogin({ player }) {
-  if (!inNeypotzli(player.getLocation())) fizzle(player);
+  const { CountdownTask, TaskManager } = Common.core;
+  TaskManager.submit(new CountdownTask(player, 1, () => {
+    if (player.isRegistered?.() === false) return;
+    if (!inNeypotzli(sourceOf(player, player.getLocation()))) fizzle(player);
+  }));
 }
 
 module.exports = function attachCamps(api) {

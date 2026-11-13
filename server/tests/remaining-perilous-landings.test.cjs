@@ -31,7 +31,7 @@ function harness() {
     getItemOnGroundManager: () => ({ registerLocation: () => {} }),
     persistAttribute() {}, onCustomEvent(k, fn) { (events[k] ??= []).push(fn); },
     emitCustomEvent(k, e) { for (const fn of events[k] ?? []) fn(e); },
-    onObjectInteraction(fn) { (hooks.object ??= []).push(fn); },
+    onObjectInteraction(fn) { if (typeof fn === 'function') (hooks.object ??= []).push(fn); },
     spawnNpc(def) { let loc = new core.Location(def.x, def.y, def.z); const npc = { ...def, getLocation: () => loc, moveTo: to => { loc = to; }, remove: () => {}, isRegistered: () => true, isNpc: () => true, getAsNpc: () => npc, getIndex: () => next++, setOwner() {}, setMobileInteraction() {}, setPositionToFace() {}, getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }) }; npcs.push(npc); return npc; },
     removeNpc(npc) { npc.removed = true; removed.push(npc); },
   }, { get: (t, k) => t[k] ?? ((...args) => (hooks[k] ??= []).push(args.find(x => typeof x === 'function'))) });
@@ -161,7 +161,7 @@ test('shop Squeeze-through 51005 is a captured two-way transition and the real o
   assert.equal(door.getDefinition().getInteractions()[0], 'Squeeze-through');
 
   let objectHook;
-  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {} };
+  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { if (typeof fn === 'function') objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {} };
   require('../plugins/world/LocTeleports.plugin').register(api);
   const p = player();
   p.performAnimation = animation => { p.animation = animation.getId(); };

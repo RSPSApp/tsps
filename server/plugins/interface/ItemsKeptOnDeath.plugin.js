@@ -20,6 +20,8 @@ const LOST_ITEM_STATE = 1991;
 const DELETED_ITEM_STATE = 368;
 // Wiki: Items Kept on Death: the looting bag "disappears completely"; its contents drop.
 const LOOTING_BAG = "Looting bag";
+// Priced at face value in the guide risk value.
+const CURRENCY = new Set(["Coins", "Platinum token"]);
 const previewSettings = new WeakMap();
 
 function getSettings(player) {
@@ -75,6 +77,19 @@ function itemState(player, item, lostOnDeath, makesGrave) {
   return { itemId: LOST_ITEM_STATE, quantity: 1 };
 }
 
+/**
+ * What one item adds to the guide risk value: coins and platinum tokens at their face value, any
+ * other item at the price a death ranks it by (Grand Exchange price, else its alchemy value),
+ * untradeables included. Ours: the Wiki gives no formula for untradeables.
+ */
+function riskValue(item) {
+  const definition = item.getDefinition();
+  const value = CURRENCY.has(definition.getName())
+    ? definition.getValue()
+    : core.PlayerDeathTask.keepValue(item);
+  return Math.max(0, Number(value) || 0);
+}
+
 function getDeathItems(player, toKeep, settings, cosmetic = []) {
   const kept = new Set(toKeep);
   const protectedItems = new Set(cosmetic);
@@ -99,14 +114,11 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
       itemId: item.getId(),
       quantity: item.getAmount(),
     });
-    states.push({ slot: states.length, ...itemState(player, item, lostOnDeath, grave.makesGrave) });
+    const state = itemState(player, item, lostOnDeath, grave.makesGrave);
+    states.push({ slot: states.length, ...state });
 
-    if (tradeable && lostOnDeath) {
-      const value = Math.max(0, Number(core.PlayerDeathTask.keepValue(item)) || 0);
-      risk = Math.min(
-        Number.MAX_SAFE_INTEGER,
-        risk + value * item.getAmount()
-      );
+    if (state.itemId !== KEPT_ITEM_STATE) {
+      risk = Math.min(Number.MAX_SAFE_INTEGER, risk + riskValue(item) * item.getAmount());
     }
   }
 

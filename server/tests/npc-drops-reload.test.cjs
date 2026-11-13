@@ -53,10 +53,18 @@ const table = (itemId = 1) => ({ label: "t", main_max_roll: 1, entries: [{ item_
 
 test("reloading the shipped data twice gives the same stats and the same tables", () => {
   const first = Drops._test.loadDrops();
-  const snapshot = { npcs: tablesByNpc.size, shared: sharedTables.size, ids: [...tablesByNpc.keys()].slice(0, 50) };
+  const snapshot = {
+    npcs: tablesByNpc.size, shared: sharedTables.size, ids: [...tablesByNpc.keys()].slice(0, 50),
+    content: JSON.stringify([[...tablesByNpc], [...sharedTables]]),
+  };
   const second = Drops._test.loadDrops();
-  assert.deepEqual(second, first, "the counters restart on every load instead of adding up");
-  assert.deepEqual({ npcs: tablesByNpc.size, shared: sharedTables.size, ids: [...tablesByNpc.keys()].slice(0, 50) }, snapshot);
+  // The stats object carries unusableSubtableRows (reset at the top of every load) and the other counts; only
+  // unusableSubtableRows is asserted to restart: bossNpcIds and conditionalTertiarySkipped are not reset on every path.
+  assert.deepEqual(second, first, "the stats of a second load equal the first, so unusableSubtableRows does not add up");
+  assert.deepEqual({
+    npcs: tablesByNpc.size, shared: sharedTables.size, ids: [...tablesByNpc.keys()].slice(0, 50),
+    content: JSON.stringify([[...tablesByNpc], [...sharedTables]]),
+  }, snapshot, "the same tables and shared tables, entry for entry");
   assert.ok(first.npcs > 1000 && first.shared > 0);
 });
 
@@ -112,6 +120,9 @@ test("the reloaddrops command picks up edited files without a restart, and repor
   write("npc-drops.json", "{ not json");
   assert.equal(reload({ player }), true);
   assert.equal(messages.at(-1), "Error reloading npc drops.");
+  // loadDrops clears its maps BEFORE it reads the files, so a broken reload leaves the server with no drops until a
+  // good one. This documents that behaviour; reading first and swapping afterwards would keep the previous drops.
+  assert.equal(tablesByNpc.size, 0);
 });
 
 test("a dump without npcs or without tables loads as empty instead of throwing", (t) => {

@@ -116,7 +116,7 @@ module.exports = {
   name: "SoulreaperAxe",
   description: "Soulreaper axe components: Inspect each, and assemble the four with 2,000 blood runes into the axe.",
   members: true,
-  _test: { inspect, combine, assemble, resolve, BLOOD_RUNES, MAGIC_XP },
+  _test: { inspect, combine, assemble, resolve, COMPONENTS, BLOOD_RUNES, MAGIC_XP },
   register(pluginApi) {
     api = pluginApi;
     const names = COMPONENTS.map(([, name]) => name);

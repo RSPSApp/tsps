@@ -100,6 +100,14 @@ test("the four components and the axe resolve from the cache by gameval", () => 
     ["Executioner's axe head", "Eye of the Duke", "Siren's staff", "Leviathan's lure"]);
 });
 
+test("the plugin's hook names and the Inspect option match each component in the cache", () => {
+  for (const [gameval, name] of SoulreaperAxe._test.COMPONENTS) {
+    const id = piece(gameval);
+    assert.equal(name, ItemDefinition.forId(id).getName(), gameval);
+    assert.ok(CacheDefinitions.getItem(id).inventoryActions.includes("Inspect"), `${gameval} has Inspect`);
+  }
+});
+
 test("Inspect shows each component's captured line in an item box and the chatbox", () => {
   const expected = {
     soulreaper_axe_head: "It's the head of Vardorvis' axe. You might be able to combine it with something else.",

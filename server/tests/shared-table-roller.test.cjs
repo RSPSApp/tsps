@@ -1,10 +1,12 @@
 // Run after `yarn build`: node --test tests/shared-table-roller.test.cjs
 //
-// Shared drop tables (rare -> gem -> mega-rare, seeds, herbs ...) are rolled by rollSharedTable: one roll of the table's
+// Shared drop tables (rare -> gem -> mega-rare, herbs ...) are rolled by rollSharedTable: one roll of the table's
 // pool, a walk over the per-item n/outOf slots, a roll past the last slot is a miss, a nested table is followed up to
 // depth 4 and no further, and a ring of wealth removes the empty slots from rareDrop/gem/megaRare. These tests drive it
 // with a seeded or scripted Math.random over small synthetic tables put in the loader's own sharedTables map (real
 // tables are restored afterwards), so the weights and the cap are checked without depending on the Wiki data.
+// Out of scope here: the categorised tables (seed, chosen by combat level), covered by npc-drops-seed-categories and
+// npc-drops-seed-integration.
 const assert = require("node:assert/strict");
 const { test, before, afterEach } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
@@ -17,8 +19,12 @@ const { sharedTables, rollSharedTable } = Drops._test;
 before(() => {
   CachePipeline.initialize();
   const core = PluginManager.getCoreApi();
-  const api = new Proxy({ core, emitCustomEvent: () => {}, getPluginConfig: (_key, fallback) => fallback },
-    { get: (target, key) => (key in target ? target[key] : () => {}) });
+  // Legends' Quest complete, so the gem table's last slot reaches the real mega-rare table instead of the talisman.
+  const api = new Proxy({
+    core,
+    emitCustomEvent: (name, event) => { if (name === "quest:is-complete" && event.key === "legends_quest") event.complete = true; },
+    getPluginConfig: (_key, fallback) => fallback,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
   Drops.register(api);
   Drops._test.loadDrops();
 });
@@ -131,7 +137,16 @@ test("a table that nests itself, or two that nest each other, end the roll inste
   assert.deepEqual(rollSharedTable("loop_a", plain), []);
 });
 
-test("the real rare -> gem -> mega-rare chain ends in at most one item per roll", (t) => {
+test("the real gem table's last slot reaches the real mega-rare table (Legends' Quest done), one item deep", (t) => {
+  const megaIds = new Set(sharedTables.get("megaRare").filter((entry) => entry.itemId).map((entry) => entry.itemId));
+  assert.ok(megaIds.size > 0);
+  t.mock.method(Math, "random", () => 0.999999);
+  const drops = rollSharedTable("gem", plain);
+  assert.equal(drops.length, 1);
+  assert.ok(megaIds.has(drops[0].itemId), `item ${drops[0].itemId} is not a mega-rare row`);
+});
+
+test("the real rare drop table gives at most one valid item per roll", (t) => {
   t.mock.method(Math, "random", seeded(77));
   for (let i = 0; i < 20000; i++) {
     const drops = rollSharedTable("rareDrop", plain);

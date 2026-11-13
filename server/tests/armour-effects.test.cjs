@@ -760,6 +760,8 @@ test("the equipment effects panel's set text varbit follows the worn set", () =>
   api.onPlayerProcess = () => {};
   api.onInterfaceActionButton = () => {};
   api.getBonusManager = () => ({ update: () => {} });
+  let login;
+  api.onPlayerLogin = (handler) => { login = handler; };
   EquipmentStats.register(api);
   api.onCustomEvent("equipment:effects", BarrowsEquipment._test.addSetTexts);
   VoidEquipment.register(buildApi().api);
@@ -777,8 +779,8 @@ test("the equipment effects panel's set text varbit follows the worn set", () =>
   player.getPacketSender = () => sender;
   player.getInterfaceId = () => -1;
 
-  api.emitCustomEvent("equipment:changed", { player });
-  assert.equal(varbits.get(varbit), 3, "Guthan's shows its Infestation text");
+  login({ player });
+  assert.equal(varbits.get(varbit), 3, "Guthan's shows its Infestation text from login");
   api.emitCustomEvent("equipment:changed", { player });
   assert.deepEqual(sent, [3], "an unchanged set is not resent");
 

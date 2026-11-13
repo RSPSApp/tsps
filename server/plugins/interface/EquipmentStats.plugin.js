@@ -171,6 +171,11 @@ function render(player) {
   sender.sendString(`${getWeight(player)} kg`, component(50));
 }
 
+/** Login sends the worn set too: the restored equipment does not go through a change. */
+function onLogin({ player }) {
+  sendSetText(player);
+}
+
 function onEquipmentChanged({ player }) {
   sendSetText(player);
   if (player?.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {
@@ -229,5 +234,6 @@ module.exports = {
       }
     });
     api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
+    api.onPlayerLogin?.(onLogin);
   },
 };

@@ -31,6 +31,7 @@
     "hardcoreNoUnranked": { "text": "A Hardcore group can't take a player who has played before.", "source": "ours" },
     "unrankedOnly": { "text": "An Unranked Group Ironman can only join an Unranked group.", "source": "ours (Wiki: Unranked is one-way)" },
     "variantMismatch": { "text": "That player can't join your group: they play a different Group Ironman mode.", "source": "ours" },
+    "alreadyInGroup": { "text": "{name} is already in a group.", "source": "ours (Grouping's line for a player in a group with others)" },
     "warnUnranked": { "text": "{name} has played before: inviting them makes your group Unranked for good. Invite them again to confirm.", "source": "ours (Wiki: a group that invites an experienced player becomes Unranked)" },
     "warnPrestige": { "text": "Inviting a new member will cost your group its Group Prestige. Invite them again to confirm.", "source": "ours (Wiki: members are warned before an action that costs prestige)" },
     "nowUnranked": { "text": "Your group is now an Unranked group.", "source": "ours" },

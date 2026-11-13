@@ -25,6 +25,11 @@ const Vorkath = require("../plugins/bosses/vorkath/Retrieval.Vorkath");
 const Tombs = require("../plugins/minigames/toa/Retrieval.TombsOfAmascut");
 const Theatre = require("../plugins/minigames/tob/Retrieval.TheatreOfBlood");
 const Mimic = require("../plugins/bosses/mimic/Retrieval.Mimic");
+const Pete = require("../plugins/minigames/volcanicmine/Retrieval.VolcanicMine");
+const VolcanicMine = require("../plugins/minigames/volcanicmine/Common.VolcanicMine");
+// Farming's units need its core first (Core.Farming.init), so they load in before().
+let Hespori;
+let Patches;
 
 let core;
 const registered = new Map();
@@ -42,7 +47,11 @@ function stubApi() {
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
-  for (const attach of [Nightmare.attachRetrieval, Yama.attachVoice, Vorkath.attach, Mimic.attach, Zulrah, Tombs, Theatre]) {
+  VolcanicMine.init(stubApi());
+  require("../plugins/skills/farming/Core.Farming").init({ core });
+  Patches = require("../plugins/skills/farming/Patches.Farming");
+  Hespori = require("../plugins/skills/farming/Hespori.Farming");
+  for (const attach of [Nightmare.attachRetrieval, Yama.attachVoice, Vorkath.attach, Mimic.attach, Zulrah, Tombs, Theatre, Pete.attachRetrieval, (api) => Patches.attach(api)]) {
     try {
       attach(stubApi());
     } catch {
@@ -58,9 +67,36 @@ function holder() {
 
 test("every item retrieval service listens for the wipe", () => {
   const handlers = registered.get("group-ironman:wipe-tradeables") ?? [];
-  for (const unit of [Zulrah, Nightmare, Yama, Vorkath, Tombs, Theatre, Mimic]) {
+  for (const unit of [Zulrah, Nightmare, Yama, Vorkath, Tombs, Theatre, Mimic, Pete, Hespori]) {
     assert.ok(handlers.includes(unit.wipeForGroupIronman), "registered");
   }
+});
+
+test("Arno (Hespori) and Petrified Pete (Volcanic Mine): the Wiki's Item Retrieval Service list has them too", () => {
+  const player = holder();
+  const bank = [{ id: WHIP, amount: 1, meta: null }, { id: RANGER_BOOTS, amount: 1, meta: null }];
+  player.setAttribute(Patches.FARM_ATTRIBUTE, { deathbank: bank, deathbankPaid: false });
+  Hespori.wipeForGroupIronman({ player, lost });
+  assert.equal(player.getAttribute(Patches.FARM_ATTRIBUTE).deathbank, bank, "the same bank, which a Hespori warning holds");
+  assert.deepEqual(bank.map((entry) => entry.id), [RANGER_BOOTS]);
+
+  const attribute = VolcanicMine.data.attributes.stored;
+  player.setAttribute(attribute, [{ id: WHIP, amount: 1 }, { id: RANGER_BOOTS, amount: 1 }]);
+  Pete.wipeForGroupIronman({ player, lost });
+  assert.deepEqual(player.getAttribute(attribute).map((entry) => entry.id), [RANGER_BOOTS]);
+  Pete.wipeForGroupIronman({ player, lost: () => true });
+  assert.equal(player.getAttribute(attribute), null, "an emptied lot is cleared");
+});
+
+test("the Tombs of Amascut chest's unpaid fee is the fee for what the wipe leaves", () => {
+  const player = holder();
+  player.setAttribute(Tombs.ATTR_STORED, { items: [{ id: WHIP, amount: 1 }, { id: RANGER_BOOTS, amount: 1 }], paid: false, fee: 500 });
+  Tombs.wipeForGroupIronman({ player, lost });
+  const lot = player.getAttribute(Tombs.ATTR_STORED);
+  assert.notEqual(lot.fee, 500, "not the fee the whip was part of");
+  player.setAttribute(Tombs.ATTR_STORED, { items: [{ id: WHIP, amount: 1 }, { id: RANGER_BOOTS, amount: 1 }], paid: true, fee: 500 });
+  Tombs.wipeForGroupIronman({ player, lost });
+  assert.equal(player.getAttribute(Tombs.ATTR_STORED).fee, 500, "a paid one stays paid");
 });
 
 test("[id, amount, meta] stores: Zulrah's priestess, The Nightmare's keepers, Yama's Voice", () => {

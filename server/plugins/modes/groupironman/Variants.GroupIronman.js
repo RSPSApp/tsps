@@ -70,6 +70,11 @@ function canJoin(request) {
   const { player, inviter, stage } = request;
   const theirs = Common.variantOfMode(Common.modeOf(player));
   if (!theirs || (request.group && !request.group.ironman)) return;
+  // Grouping lets an invitation reach a player alone in their group; a Group Ironman who has made
+  // one is in a group, so they leave it (Cancel) before anyone can invite them (ours).
+  if (stage === "invite" && Common.groupOf(player).group) {
+    return refuse(request, "alreadyInGroup", { name: player.getDisplayName?.() ?? player.getUsername() });
+  }
   const record = request.group
     ? recordFor(request.group)
     : { variant: Common.variantOfMode(Common.modeOf(inviter)) ?? "ranked", formed: 0, prestige: false };

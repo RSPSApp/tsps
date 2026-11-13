@@ -93,7 +93,6 @@ function apply(event) {
   invite(player, target);
 }
 
-/** "grouping:changed" "invited": a Group Ironman group's invitation, as live's chat line. */
 /**
  * The text of an invitation line. rebuildchatbox splits a 111/112 line at its first "|" (script632)
  * and draws only what follows, so the line leads with one; without it the line shows empty.
@@ -102,6 +101,7 @@ function lineText(text) {
   return `|${text}`;
 }
 
+/** "grouping:changed" "invited": a Group Ironman group's invitation, as live's chat line. */
 function invited(event) {
   if (event.type !== "invited" || !event.group?.ironman) return;
   const invitee = Common.onlinePlayer(event.target);

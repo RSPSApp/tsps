@@ -23,7 +23,8 @@ RingOfLife.register({
     ItemIdentifiers: ItemIds,
     GameConstants: { DEFAULT_LOCATION: { getX: () => 3222, getY: () => 3218, getZ: () => 0 } },
     TeleportHandler: {
-      checkReqs: () => teleportsAllowed,
+      checkReqs: (player) => teleportsAllowed && player.held !== true,
+      playerReqs: (player) => player.held !== true,
       teleport: (player, destination, type, warning) => teleports.push({ player, destination, type, warning }),
     },
     TeleportType: { NORMAL: "NORMAL" },
@@ -96,6 +97,11 @@ test("where teleports are refused the ring works only if content allows it (ring
     allowed.mayEscape = true;
     RingOfLife._test.onIncomingDamage(allowed, { getDamage: () => 95 });
     assert.deepEqual([teleports.length, allowed.deleted], [1, [[ItemIds.RING_OF_LIFE, 1]]]);
+    // Content allows the place, not a busy or held player (checkReqs' own checks still apply).
+    const held = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+    Object.assign(held, { mayEscape: true, held: true });
+    RingOfLife._test.onIncomingDamage(held, { getDamage: () => 95 });
+    assert.deepEqual([teleports.length, held.deleted], [1, []], "not saved");
   } finally {
     teleportsAllowed = true;
   }

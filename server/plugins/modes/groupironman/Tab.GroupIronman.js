@@ -10,6 +10,11 @@
  *   CLANCHANNEL (who is online, on which world). gim_affinitystatus must be 3.
  * - In a group still forming: gim_creation_sidepanel (723): its name and Confirm (the leader forms
  *   the group, as ::gim form), Cancel (the group ends), the members (clan_create_side_list_players).
+ *   clan_create_side_init draws the name, Invite and Confirm live for the leader and greyed for the
+ *   members. clan_create_update_button_text (4447) makes the name button live for whoever gets it,
+ *   and keeps the name in %clan_create_name, which outlives the group and is what the init draws
+ *   for a leader: so only the leader gets it, with the init's own label while the group has no name
+ *   (an earlier group's name would show otherwise).
  * - In none: gim_limited_sidepanel (721), with "Create Group" on The Node.
  * Any Grouping change re-mounts it for the players it touched ("side-channels:refresh"), and so
  * does a change to the group's record (formed, prestige, lives) for its logged-in members.
@@ -34,6 +39,8 @@ const TAB_VALUE = Object.freeze({ group: 4, "group-hardcore": 5, "group-unranked
 const LIST_PLAYERS_SCRIPT = 4448;
 const NAME_BUTTON_SCRIPT = 4447;
 const CREATE_NAME_ENUM = 4053;
+/** clan_create_side_init's label for a leader's name button, gim_creation_sidepanel's being "Group". */
+const NAME_BUTTON_LABEL = "<col=ff981f>Group name</col>";
 const LIMITED_SCRIPT = 5261;
 const MESSAGE = Object.freeze({
   NO_GROUP_NODE: "Create a group here, then invite other Group Ironmen.",
@@ -43,6 +50,8 @@ const MESSAGE = Object.freeze({
 });
 
 let updateNum = 0;
+/** The name prompts the name button opened: one still up when its group stops forming is closed. */
+const namePrompts = new WeakSet();
 
 const defs = () => Common.api.core.CacheDefinitions;
 const uid = (name) => defs().getComponentId(name);
@@ -120,10 +129,9 @@ function sendCreation(player, group, member) {
   const names = group.members.map((entry) => entry.name);
   while (names.length < 5) names.push("");
   sender.sendClientScript(LIST_PLAYERS_SCRIPT, uid("gim_creation_sidepanel:contents"), ...names.slice(0, 5), member?.name ?? "");
-  if (group.name) {
-    sender.sendClientScript(NAME_BUTTON_SCRIPT, uid("gim_creation_sidepanel:universe"), uid("gim_creation_sidepanel:name"), CREATE_NAME_ENUM, group.name);
-  }
   if (member?.role === "leader") {
+    sender.sendClientScript(NAME_BUTTON_SCRIPT, uid("gim_creation_sidepanel:universe"), uid("gim_creation_sidepanel:name"),
+      CREATE_NAME_ENUM, group.name || NAME_BUTTON_LABEL);
     sender.sendInterfaceFlagsRange(uid("gim_creation_sidepanel:contents"), 0, 4, 1 << 1);
     Recruiting.targetFlags(player, member);
   }
@@ -138,14 +146,20 @@ function sendLimited(player) {
     uid("gim_limited_sidepanel:text"), here ? MESSAGE.NO_GROUP_NODE : MESSAGE.NO_GROUP);
 }
 
+/** Closes the name prompt if it's still up (the group it would name has formed or gone: Cancel). */
+function closeNamePrompt(player) {
+  if (namePrompts.has(player.getEnteredSyntaxAction?.())) player.getPacketSender().abortInputPrompt?.();
+}
+
 /** "side-channels:gim-tab" { player, tab, group, onMount }: what the tab shows now. */
 function gimTab(request) {
   const { player } = request;
   const tab = TAB_VALUE[Common.modeOf(player)];
-  if (!tab) return;
+  if (!tab) return void closeNamePrompt(player);
   request.tab = tab;
   const { group, member } = Common.groupOf(player);
   const record = group?.ironman ? Variants.recordFor(group) : null;
+  if (!record || record.formed || member?.role !== "leader") closeNamePrompt(player);
   if (!record) {
     sendRoles(player, null);
     request.group = groupId("gim_limited_sidepanel");
@@ -195,11 +209,16 @@ function click(event) {
   if (buttonId === uid("gim_limited_sidepanel:button")) {
     if (Recruiting.onNode(player)) api.emitCustomEvent("grouping:create", { player });
   } else if (buttonId === uid("gim_creation_sidepanel:name")) {
-    player.setEnteredSyntaxAction({ execute: (name) => api.emitCustomEvent("grouping:rename", { player, name }) });
+    // A member's is drawn greyed (clan_create_side_init): nothing happens.
+    if (Common.groupOf(player).member?.role !== "leader") return;
+    const prompt = { execute: (name) => api.emitCustomEvent("grouping:rename", { player, name }) };
+    namePrompts.add(prompt);
+    player.setEnteredSyntaxAction(prompt);
     player.getPacketSender().sendEnterInputPrompt(MESSAGE.NAME_PROMPT);
   } else if (buttonId === uid("gim_creation_sidepanel:confirm")) {
     Variants.form(player);
   } else if (buttonId === uid("gim_creation_sidepanel:cancel")) {
+    closeNamePrompt(player);
     const leader = Common.groupOf(player).member?.role === "leader";
     api.emitCustomEvent(leader ? "grouping:disband" : "grouping:leave", { player });
   } else if (buttonId === uid("gim_creation_sidepanel:contents") && Number.isInteger(slot)) {
@@ -217,6 +236,6 @@ function click(event) {
 }
 
 module.exports = {
-  GIM_CLAN, SETTING, TAB_VALUE, MESSAGE,
+  GIM_CLAN, SETTING, TAB_VALUE, MESSAGE, NAME_BUTTON_LABEL,
   settingsSnapshot, channelSnapshot, gimTab, changed, recordChanged, modeChanged, click,
 };

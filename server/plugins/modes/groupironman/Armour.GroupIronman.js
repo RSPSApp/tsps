@@ -33,8 +33,9 @@ const MESSAGE = Object.freeze({
   NOT_GROUP_IRONMAN: "Only Group Ironmen can use this.",
   NO_SPACE: "You don't have enough inventory space.",
   CRUMBLED: "The platebody crumbles to dust as you attempt to equip it. You can get a new one from an Ironman tutor.",
-  // Ours: the crates' question, an Unranked player at the Hardcore crate, and the old mode's armour going.
-  SWITCH: (label) => `Become a ${label}?`,
+  // Ours: the crates' question (saying so when the old mode's armour will go), an Unranked player at
+  // the Hardcore crate, and the old mode's armour going.
+  SWITCH: (label, losesArmour) => `Become a ${label}?${losesArmour ? " Your old armour will crumble." : ""}`,
   UNRANKED: "An Unranked Group Ironman can't change their Group Iron mode.",
   OLD_ARMOUR: "The armour of your old Group Iron mode crumbles to dust.",
 });
@@ -108,7 +109,8 @@ function crate({ player, objectId }) {
   if (variant === "unranked") return say(MESSAGE.UNRANKED), true;
   if (Variants.isExperienced(player)) return tonySays(player, LINE.MAINLAND), true;
   if (Common.groupOf(player).group) return Common.tell(player, "unrankedInGroup"), true;
-  Common.api.sendMultiChatboxPrompt(player, MESSAGE.SWITCH(Common.data.variants[crateVariant].label),
+  const label = Common.data.variants[crateVariant].label;
+  Common.api.sendMultiChatboxPrompt(player, MESSAGE.SWITCH(label, holdsOtherArmour(player, crateVariant)),
     "Yes.", () => {
       Common.setMode(player, Common.modeOfVariant(crateVariant));
       if (destroyOtherArmour(player, crateVariant)) say(MESSAGE.OLD_ARMOUR);
@@ -126,6 +128,17 @@ function otherModesArmour(keep) {
     for (const size of SIZES) for (const id of setOf(variant, size)) ids.add(id);
   }
   return ids;
+}
+
+/** The containers the other modes' armour goes from: carried, worn or banked. */
+function armourContainers(player) {
+  return [player.getInventory(), player.getEquipment(), ...(player.getBanks?.() ?? [])].filter(Boolean);
+}
+
+/** Whether the player has any of the other modes' armour, carried, worn or banked. */
+function holdsOtherArmour(player, keep) {
+  const ids = otherModesArmour(keep);
+  return armourContainers(player).some((container) => container.getItems().some((item) => item && ids.has(item.getId())));
 }
 
 /** Removes the other modes' armour, carried, worn or banked; true when any went. */

@@ -61,6 +61,8 @@ The Ring of Life's effect, and the Defence and max capes', works for a Hardcore 
 the minigames the update of 2 March 2022 lists, where teleports are otherwise refused: the Fight
 Caves, the Inferno, the Mage Training Arena, Nightmare Zone and Pest Control (`ringOfLifeAreas`;
 RingOfLife asks `ring-of-life:can-escape`). Its Knight Waves and quest replays don't exist here.
+The escape only overrides the place: a busy or held player isn't saved (`TeleportHandler.playerReqs`,
+checkReqs without the destination).
 
 ## Leaving a group (Leaving)
 
@@ -78,7 +80,8 @@ What a Ranked leaver loses (Wipe; Wiki, Leaving a group):
   the rune pouch's runes (the pouch stays), the Nightmare Zone and Last Man Standing coffers, the
   seed vault, and what every item retrieval service holds (Wiki: "Items in an Item Retrieval
   Service"): Death's Office, Zulrah's priestess, Vorkath's Torfinn, The Nightmare's keepers, Yama's
-  Voice, and the Tombs of Amascut, Theatre of Blood and Mimic chests. A standing grave is left, as it
+  Voice, Hespori's Arno, Volcanic Mine's Petrified Pete, and the Tombs of Amascut, Theatre of Blood
+  and Mimic chests (the Tombs chest's unpaid fee becomes the fee for what is left). A standing grave is left, as it
   lasts minutes and the choice comes after a week.
 Storage pouches, the cargo hold, STASH units, the steel key ring and the tool leprechaun keep
 theirs, as the Wiki says.
@@ -107,9 +110,11 @@ It takes effect after 7 days; choosing it again calls it off. On Tutorial Island
   confirms } before they start and say `group-pvm:started` { players, activity } after. Warned
   means before anything happens: the first start is refused ("A Group Ironman group here would lose
   its Group Prestige. Start again to go ahead.") and the group told, and a second start within a
-  minute goes ahead *(ours)*. Chambers of Xeric asks its own "Begin the raid." question afterwards,
-  so it says `confirms` and is only warned; it asks again when Begin is chosen, as players may enter
-  while the question is up.
+  minute goes ahead *(ours)*. Every group with prestige there is warned by the same start, so the
+  second goes ahead for all of them. Chambers of Xeric asks its own "Begin the raid." question
+  afterwards, so asking before it says `confirms`, which only warns and counts as the warning; it
+  asks again without it when Begin is chosen, as players may enter while the question is up, and a
+  group that came in then hasn't been warned: that Begin is refused, with the warning.
 - **Hardcore groups with outsiders:** a Hardcore group must keep its prestige, so a raid its member
   would start with anyone outside the group is refused, and so is walking into Nex's chamber or a
   private Nex instance, The Nightmare's dream or a friend's Royal Titans fight with someone from
@@ -189,12 +194,15 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   tutorial (`tutorial-island:leave`), whose destination is The Node; anyone else at the boat is told
   "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the
   Ironman tutor north-east of here." (Learning the Ropes' transcript). The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3236) in front of Lumbridge's, are ours: Lumbridge's portal (3216,3235, 4 wide) is set in a wall along y 3234, and its open side faces north, towards the general store.
-- **Leaving without a group:** a Group Ironman with no formed group (none, or one still forming)
-  chooses another game mode at The Node's portal before it takes them (Update:Group Ironman: "you
-  can just leave The Node without a group. You'll need to choose between the other game modes before
-  being teleported to the mainland."): Ironman, Hardcore, Ultimate or none, or staying. A group still
-  forming is left first (refused, as any leave, while its storage holds items). *Ours:* the prompt's
-  wording.
+- **Leaving without a group:** a Group Ironman in no group chooses another game mode at The Node's
+  portal before it takes them (Update:Group Ironman: "you can just leave The Node without a group.
+  You'll need to choose between the other game modes before being teleported to the mainland."):
+  Ironman, Hardcore, Ultimate or none, or staying. *Ours:* the prompt's wording; that the leader or a
+  member of a group still forming gets no choice, only "Your group hasn't been formed yet. Its leader
+  forms it with Confirm on the group tab; to go without it, leave it first." (the group tab's Cancel
+  leaves a group still forming at once); and that an answer does nothing for a player who has joined
+  a group since the question (an invitation accepted meanwhile): that line, or "Your group has been
+  formed: use the portal again to leave as a Group Ironman." once its leader has formed it.
 - **Tony** (Group Ironman tutor): his transcript; "Yes, leave my group." starts leaving; a leader's
   "Rename group." asks for the new name. His "I'd like to manage my group." offers more than the transcript
   has *(ours, the labels)*: a player in no group creates one (Wiki: "Players can apply to be a group
@@ -214,7 +222,8 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   That the crates change the mode is Tony's line and Update:Group Ironman ("going to the Hardcore
   Armour Crate (found on The Node, east of the statue) should allow you to re-select Hardcore").
   *Ours:* the question first
-  ("Become a Hardcore Group Ironman?"), "Leave your group first." for a member of a group,
+  ("Become a Hardcore Group Ironman?", with " Your old armour will crumble." when the player has
+  any of the other modes' armour), "Leave your group first." for a member of a group,
   "An Unranked Group Ironman can't change their Group Iron mode.", and that the other modes' armour
   (carried, worn or banked) crumbles when the mode changes ("The armour of your old Group Iron mode
   crumbles to dust.").
@@ -230,7 +239,7 @@ the plugin answers to `side-channels:gim-tab`:
 | State | Interface | What is sent |
 | --- | --- | --- |
 | In no group | `gim_limited_sidepanel` (721) | cs 5261: "Create Group" only on The Node, and a line saying where groups are formed *(ours)*; clan type 1 cleared |
-| In a group still forming | `gim_creation_sidepanel` (723) | varbits `gim_i_am_leader` / `gim_i_am_member`; cs 4448 with up to five member names; cs 4447 with the group's name; op 1 (Kick) on the member rows for the leader |
+| In a group still forming | `gim_creation_sidepanel` (723) | varbits `gim_i_am_leader` / `gim_i_am_member`; cs 4448 with up to five member names; cs 4447 (clan_create_update_button_text) for the leader only, with the group's name or, unnamed, the init's own label `<col=ff981f>Group name</col>` (the script makes the button live for whoever gets it, and keeps its text in `%clan_create_name`, which outlives the group and is what the init draws for a leader); op 1 (Kick) on the member rows for the leader. A member's name button does nothing, and the name box closes when the group stops forming under it (Cancel) |
 | In a formed group | `gim_sidepanel` (726) | `gim_affinitystatus` 3, the group as clan type 1: CLANSETTINGS (name, members, owner slot, extra-info bit 28 for originals' prestige star, settings 37 size, 39 prestige, 40 0, 41 lives) and CLANCHANNEL (members online, world 1) |
 
 Buttons: Create Group (`grouping:create`), the group name (an input prompt, then
@@ -249,7 +258,7 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 | Event | Direction | Payload |
 | --- | --- | --- |
 | `grouping:changed` | answered | `created`/`joined`: the mode rules; `left`/`kicked`: lives and the leaver's choice; `disbanded`: the record goes; every type: the tab |
-| `grouping:can-join` | answered | refuses an invitation or join against the mode rules |
+| `grouping:can-join` | answered | refuses an invitation or join against the mode rules, and an invitation to a Group Ironman already in a group, even alone in one still forming ("{name} is already in a group.", ours: Grouping lets that one through) |
 | `grouping:leaving-period` | answered | `period: false` for a group not yet formed |
 | `ironman:change-mode` | answered | the Lumbridge Unranked switch |
 | `ironman:mode-changed` | answered | the tab again |

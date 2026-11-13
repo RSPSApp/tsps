@@ -12,10 +12,10 @@
  *   Ironman tutor (Wiki: Tutorial Island), so it ends the tutorial ("tutorial-island:leave"), which
  *   lands them here. The Node's own portal (gim_portal) leads back to it. Going to the mainland
  *   the first time makes them a player who has played before (Variants.EXPERIENCED_ATTRIBUTE).
- *   A Group Ironman with no formed group (none, or one still forming) chooses another game mode
- *   before the portal takes them (Update:Group Ironman: "you can just leave The Node without a
- *   group. You'll need to choose between the other game modes before being teleported to the
- *   mainland."); a group still forming is left first.
+ *   A Group Ironman in no group chooses another game mode before the portal takes them
+ *   (Update:Group Ironman: "you can just leave The Node without a group. You'll need to choose
+ *   between the other game modes before being teleported to the mainland."). A member of a group
+ *   still forming is in a group: they are told to form it or leave it first, with no choice (ours).
  * - Tony (Group Ironman tutor): his transcript plays on Talk-to; "Yes, leave my group." starts
  *   leaving, and a leader's "Rename group." asks for the new name. His "I'd like to manage my
  *   group." offers more than the transcript has (ours): a player in no group creates one there (Wiki:
@@ -62,8 +62,10 @@ const MESSAGE = Object.freeze({
   YES_LEAVE: "Yes, leave my group.",
   NO_LEAVE: "No, I changed my mind.",
   FINE: "I'm fine, thanks.",
-  // Ours: leaving The Node without a formed group.
+  // Ours: leaving The Node in no group, or in one still forming.
   CHOOSE_MODE: "You aren't in a group. Choose a game mode for the mainland.",
+  NOT_FORMED: "Your group hasn't been formed yet. Its leader forms it with Confirm on the group tab; to go without it, leave it first.",
+  FORMED_SINCE: "Your group has been formed: use the portal again to leave as a Group Ironman.",
 });
 
 /** The game modes a Group Ironman with no group may leave The Node as: the prompt's options. */
@@ -102,7 +104,11 @@ function portal(event) {
     player.getPacketSender().sendMessage(MESSAGE.NOT_GROUP_IRONMAN);
     return true;
   }
-  if (toMainland && !inFormedGroup(player)) return chooseMode(player), true;
+  if (toMainland && !inFormedGroup(player)) {
+    if (Common.groupOf(player).group) player.getPacketSender().sendMessage(MESSAGE.NOT_FORMED);
+    else chooseMode(player);
+    return true;
+  }
   if (toMainland) player.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
   teleport(player, toNode ? NODE_ARRIVAL : LUMBRIDGE_ARRIVAL);
   return true;
@@ -113,7 +119,7 @@ function inFormedGroup(player) {
   return Boolean(group && Store.get(group.id)?.formed);
 }
 
-/** No formed group: another game mode first, then the mainland. */
+/** No group: another game mode first, then the mainland. */
 function chooseMode(player) {
   Common.api.sendMultiChatboxPrompt(player, MESSAGE.CHOOSE_MODE,
     ...LEAVING_MODES.flatMap(([label, mode]) => [label, () => leaveAs(player, mode)]),
@@ -121,11 +127,12 @@ function chooseMode(player) {
 }
 
 function leaveAs(player, mode) {
+  // Asked in no group; they may have joined one since (an invitation accepted while the question
+  // was up), and its leader may have formed it: it stays theirs, as the portal would have said.
+  if (!Common.isGroupIronman(player)) return;
   if (Common.groupOf(player).group) {
-    const request = { player, left: false };
-    Common.api.emitCustomEvent("grouping:leave", request);
-    // Grouping says why it couldn't (group storage holding items, say).
-    if (!request.left) return;
+    player.getPacketSender().sendMessage(inFormedGroup(player) ? MESSAGE.FORMED_SINCE : MESSAGE.NOT_FORMED);
+    return;
   }
   Common.setMode(player, mode);
   if (Common.isGroupIronman(player)) return;

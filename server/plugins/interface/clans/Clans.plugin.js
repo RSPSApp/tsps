@@ -216,7 +216,9 @@ function chat(event) {
     Core.sendNotice(player, "You are not a high enough rank to talk in this clan's channel.");
     return;
   }
-  const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH);
+  // A leading "|" marks a Group Ironman group's line (its group chat sends one): the cache's chat
+  // filters (script 5501) and RuneLite file such a line under the group, so a clan's never has one.
+  const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH)?.replace(/^[|\s]+/, "");
   if (!text || !FriendsChatManager.allowChat(player, text)) return;
   const line = (type) => core.encodeChatMessage("clan", text, player.getUsername(), channel.clan.name, player.getIndex(), type);
   const forMembers = line(CLAN_CHAT_MESSAGE_TYPE);

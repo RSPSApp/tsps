@@ -8,7 +8,8 @@
  * (the Skillcapes plugin's "skillcape:ring-of-life"). The teleport works up to level 30
  * Wilderness, but Tele Block stops it and the effect never cures poison. Where teleports are
  * refused, "ring-of-life:can-escape" { player, allowed } lets content allow it anyway (Group
- * Ironman: a Hardcore Group Ironman in the minigames of the 2 March 2022 update).
+ * Ironman: a Hardcore Group Ironman in the minigames of the 2 March 2022 update): only the place,
+ * so a busy or held player still isn't saved.
  *
  * The ring's own "Toggle-respawn" (Wiki): after the medium Ardougne Diary its teleport can be switched to East
  * Ardougne, the marketplace tile the Defence cape's option uses. The refusal line and option labels are TSPS wording.
@@ -106,7 +107,10 @@ function saveFromDeath(player) {
   const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
   const escape = { player, allowed: false };
   pluginApi?.emitCustomEvent("ring-of-life:can-escape", escape);
-  if (escape.allowed !== true && !core.TeleportHandler.checkReqs(player, destination, 30)) {
+  const free = escape.allowed === true
+    ? core.TeleportHandler.playerReqs(player, 30)
+    : core.TeleportHandler.checkReqs(player, destination, 30);
+  if (!free) {
     return false;
   }
 

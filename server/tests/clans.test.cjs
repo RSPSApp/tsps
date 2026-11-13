@@ -448,6 +448,20 @@ test('// reaches everyone in the channel as type 41 with the clan as prefix, exc
   assert.equal(chatText(ignorer).length, 0);
 });
 
+test('a clan line never starts with "|", which marks a Group Ironman group\'s line', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  createClan(owner);
+  addMember(owner, member);
+  const before = chatText(member).length;
+  say(owner, '|| hi');
+  assert.deepEqual(chatText(member).slice(before), [protocol
+    .encodeChatMessage('clan', 'hi', 'Owner', 'Blur', owner.getIndex(), 41)
+    .toString('latin1')]);
+  say(owner, '|');
+  assert.equal(chatText(member).length, before + 1, 'nothing left to say');
+});
+
 test('// outside a channel is refused, and another clan type is left to its own content', () => {
   const self = player('Solo');
   say(self, 'hello');
@@ -601,8 +615,11 @@ test('naming sets the button, and refuses a taken or bad name', () => {
   assert.deepEqual(founder.messages, ['That name is taken.']);
   nameClan(founder, 'bad<name>');
   assert.match(founder.messages.at(-1), /letters, numbers and spaces/);
+  // Unnamed, the button gets the init's own label: %clan_create_name outlives a panel (a Group
+  // Ironman group's sets it too), and the init draws it.
+  assert.deepEqual(founder.scripts.find((script) => script[0] === 4447), [4447, 705 << 16, (705 << 16) | 8, 3824, '<col=ff981f>Clan name</col>']);
   nameClan(founder, 'Fresh');
-  assert.deepEqual(founder.scripts.find((script) => script[0] === 4447), [4447, 705 << 16, (705 << 16) | 8, 3824, 'Fresh']);
+  assert.deepEqual(founder.scripts.filter((script) => script[0] === 4447).at(-1), [4447, 705 << 16, (705 << 16) | 8, 3824, 'Fresh']);
 });
 
 test('Confirm needs a name, five founders and 25 hours each', () => {

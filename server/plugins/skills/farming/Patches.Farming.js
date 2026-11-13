@@ -1389,6 +1389,7 @@ function attach(api) {
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);
+    api.onCustomEvent("group-ironman:wipe-tradeables", Hespori.wipeForGroupIronman);
     api.onCustomEvent("hespori:quest-process", Hespori.hesporiProcess);
     api.onCustomEvent("hespori:quest-can-attack", Hespori.hesporiCanAttack);
     api.onCustomEvent("hespori:quest-leave", Hespori.hesporiLogout);

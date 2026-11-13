@@ -481,7 +481,7 @@ test("Group Ironmen reach The Node from Tutorial Island, the Lumbridge portal an
   answer("Become an Ironman.");
   assert.deepEqual([at(alice), modeOf(alice)], [[Node.LUMBRIDGE_ARRIVAL.x, Node.LUMBRIDGE_ARRIVAL.y], "ironman"]);
 
-  // A group still forming is left first; the others keep it.
+  // A group still forming is a group: no choice, for its leader or a member, until it's formed or left.
   const dana = account("dana");
   const erin = account("erin");
   emit("grouping:create", { player: dana });
@@ -489,11 +489,38 @@ test("Group Ironmen reach The Node from Tutorial Island, the Lumbridge portal an
   group(dana, "invite", "erin");
   group(erin, "accept");
   assert.ok(groupOf(erin), "erin joined the forming group");
+  const asked = prompts.length;
+  for (const player of [dana, erin]) {
+    player.moveTo(new core.Location(Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y, 0));
+    portal(player, "gim_portal");
+    assert.equal(said(player), Node.MESSAGE.NOT_FORMED, player.getUsername());
+    assert.deepEqual([at(player), modeOf(player)], [[Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y], "group"]);
+  }
+  assert.equal(prompts.length, asked, "no game mode question");
+  group(erin, "leave");
+  assert.equal(groupOf(erin), undefined, "left at once: the group isn't formed");
   portal(erin, "gim_portal");
   answer("Become a Hardcore Ironman.");
-  assert.equal(groupOf(erin), undefined, "erin left the group");
-  assert.ok(groupOf(dana), "dana keeps it");
   assert.equal(modeOf(erin), "hardcore");
+
+  // Asked in no group, then in one by the answer: it stays theirs, forming or formed meanwhile.
+  const gus = account("gus");
+  portal(gus, "gim_portal");
+  wait();
+  group(dana, "invite", "gus");
+  group(gus, "accept");
+  answer("Become an Ironman.");
+  assert.deepEqual([modeOf(gus), said(gus)], ["group", Node.MESSAGE.NOT_FORMED]);
+  const fay = account("fay");
+  portal(fay, "gim_portal");
+  wait();
+  group(dana, "invite", "fay");
+  group(fay, "accept");
+  gim(dana, "form");
+  answer("Become an Ironman.");
+  assert.deepEqual([modeOf(fay), said(fay)], ["group", Node.MESSAGE.FORMED_SINCE]);
+  assert.equal(groupOf(fay)?.id, groupOf(dana).id, "still in the group");
+  assert.equal(groupOf(dana).leaving.has(encoded("fay")), false, "no leave started");
 });
 
 test("Tony's armour shows the group's size on the platebody, the Hardcore set for Hardcore; Maggie's bank is for new adventurers", () => {
@@ -567,7 +594,7 @@ test("the armour crates: a player's own crate hands out the set; the other chang
   crate(alice, "Armour crate");
   assert.equal(said(alice), Armour.LINE.GIVEN);
   crate(alice, "Hardcore armour crate");
-  assert.equal(prompts.at(-1).title, "Become a Hardcore Group Ironman?");
+  assert.equal(prompts.at(-1).title, "Become a Hardcore Group Ironman? Your old armour will crumble.", "she holds the ranked set");
   answer("No.");
   assert.equal(modeOf(alice), "group");
   const ranked = (name) => core.CacheDefinitions.getObjId(`group_ironman_${name}`);
@@ -746,6 +773,55 @@ test("the Group Ironman tab: Create Group on The Node, the creation panel while 
   const hc = account("hc", "group-hardcore");
   assert.equal(tabOf(hc).tab, 5);
   assert.equal(tabOf(account("loner", "group-unranked")).tab, 6);
+});
+
+test("the creation panel's name button: only the leader's is live, with the name or the init's own label; Cancel closes the name box", () => {
+  const { Tab } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  group(alice, "create");
+  wait();
+  group(alice, "invite", "bob");
+  group(bob, "accept");
+  const lead = recording(alice);
+  const member = recording(bob);
+  const nameButton = (sent) => sent.scripts(4447).at(-1)?.slice(3);
+  const button = core.CacheDefinitions.getComponentId("gim_creation_sidepanel:name");
+  tabOf(alice);
+  tabOf(bob);
+  // clan_create_update_button_text keeps its text in %clan_create_name, which the init draws for a
+  // leader and which outlives the group: an unnamed group sends the init's own label over it.
+  assert.deepEqual(nameButton(lead), [button, 4053, Tab.NAME_BUTTON_LABEL]);
+  assert.equal(Tab.NAME_BUTTON_LABEL, "<col=ff981f>Group name</col>");
+  emit("grouping:rename", { player: alice, name: "Test" });
+  tabOf(alice);
+  tabOf(bob);
+  assert.deepEqual(nameButton(lead), [button, 4053, "Test"]);
+  assert.equal(member.scripts(4447).length, 0, "a member's button stays the init's greyed one");
+
+  clickTab(bob, "gim_creation_sidepanel:name");
+  assert.equal(member.calls.some(([name]) => name === "sendEnterInputPrompt"), false, "nothing for a member");
+  assert.equal(bob.getEnteredSyntaxAction() ?? null, null);
+  clickTab(alice, "gim_creation_sidepanel:name");
+  assert.ok(lead.calls.some(([name, title]) => name === "sendEnterInputPrompt" && title === Tab.MESSAGE.NAME_PROMPT));
+  assert.ok(alice.getEnteredSyntaxAction());
+  clickTab(alice, "gim_creation_sidepanel:cancel");
+  assert.equal(groupOf(alice), undefined, "Cancel ended the group");
+  assert.ok(lead.calls.some(([name]) => name === "abortInputPrompt"), "and closed the name box");
+});
+
+test("a Group Ironman in a group can't be invited, even alone in one still forming", () => {
+  const alice = account("alice");
+  const bob = account("bob");
+  group(alice, "create");
+  group(bob, "create");
+  wait();
+  assert.equal(group(alice, "invite", "bob"), message("alreadyInGroup", { name: "bob" }));
+  assert.equal(groupOf(alice).invites.has(encoded("bob")), false, "no invitation");
+  clickTab(bob, "gim_creation_sidepanel:cancel");
+  assert.equal(groupOf(bob), undefined);
+  wait();
+  assert.equal(group(alice, "invite", "bob"), "You invite bob to join your group.");
 });
 
 test("the creation panel's Kick and Cancel act at once while the group forms; once formed, leaving takes seven days", () => {
@@ -1072,15 +1148,39 @@ test("raids with outsiders: a Hardcore group's member is refused; a group with p
   assert.equal(recordOf(carl).prestige, true, "nothing lost yet");
   assert.equal(tob([carl, stranger]).allowed, true, "starting again goes ahead");
   assert.equal(tob([carl, stranger]).allowed, false, "a warning counts once");
-  // Content with its own question afterwards (CoX's "Begin the raid.") is only warned.
-  const cox = emit("group-pvm:can-start", { players: [carl, stranger], activity: "the Chambers of Xeric", allowed: true, reason: null, confirms: true });
-  assert.equal(cox.allowed, true);
+  // Content with its own question afterwards (CoX's "Begin the raid.") is only warned when it asks,
+  // and the check at the answer, without `confirms`, goes ahead on that warning.
+  const coxCheck = (players, confirms) => emit("group-pvm:can-start", { players, activity: "the Chambers of Xeric", allowed: true, reason: null, confirms });
+  assert.equal(coxCheck([carl, stranger], true).allowed, true);
   assert.equal(said(carl), message("prestigeOutsidersWarning", { activity: "the Chambers of Xeric" }));
+  assert.equal(coxCheck([carl, stranger], false).allowed, true, "Begin, after the warning");
+  // An outsider who came in while the question was up wasn't warned of: Begin refuses, and warns.
+  assert.equal(coxCheck([carl, dana], true).allowed, true, "the question: group mates only");
+  const begin = coxCheck([carl, dana, stranger], false);
+  assert.deepEqual([begin.allowed, begin.reason], [false, message("prestigeOutsidersConfirm", { activity: "the Chambers of Xeric" })]);
+  assert.equal(said(dana), message("prestigeOutsidersWarning", { activity: "the Chambers of Xeric" }));
+  assert.equal(coxCheck([carl, dana, stranger], true).allowed, true);
+  assert.equal(coxCheck([carl, dana, stranger], false).allowed, true, "asked again, Begin goes ahead");
   emit("group-pvm:started", { players: [carl, dana], activity: "the Chambers of Xeric" });
   assert.equal(recordOf(carl).prestige, true, "with group mates only, it stays");
   emit("group-pvm:started", { players: [carl, stranger], activity: "the Chambers of Xeric" });
   assert.equal(recordOf(carl).prestige, false);
   assert.ok(dana.log.messages.includes(message("prestigeLost")));
+});
+
+test("every group with prestige is warned by the same start, so one more goes ahead for all of them", () => {
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  const carl = account("carl");
+  const dana = account("dana");
+  formed(carl, dana);
+  const start = () => emit("group-pvm:can-start", { players: [alice, carl], activity: "the Theatre of Blood", allowed: true, reason: null });
+  assert.equal(start().allowed, false);
+  for (const member of [bob, dana]) assert.equal(said(member), message("prestigeOutsidersWarning", { activity: "the Theatre of Blood" }));
+  assert.equal(start().allowed, true, "the second start, not a third or fourth");
+  emit("group-pvm:started", { players: [alice, carl], activity: "the Theatre of Blood" });
+  assert.deepEqual([recordOf(alice).prestige, recordOf(carl).prestige], [false, false]);
 });
 
 // --- Boss doors, bans, combat achievements' team size, a ranked leaver's losses ------------------

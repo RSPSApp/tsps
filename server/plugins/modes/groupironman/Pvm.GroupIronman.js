@@ -14,9 +14,12 @@
  *   player from entering"; the line is ours).
  * - A ranked group with Group Prestige is warned first, then loses it when one starts with an
  *   outsider. Warned means before anything happens: the first start is refused with the warning, and
- *   a second within a minute goes ahead (ours). Content that asks its own question after the check
- *   (Chambers of Xeric's "Begin the raid.") says `confirms: true`, and only warns. (Bosses whose
- *   kills carry their damagers are Restrictions.kill's.)
+ *   a second within a minute goes ahead (ours). Every group with prestige there is warned by the
+ *   same start, so one more goes ahead for all of them. Content that asks its own question after the
+ *   check (Chambers of Xeric's "Begin the raid.") says `confirms: true` when it asks, which only warns
+ *   and counts as the warning, and checks again without it at the answer: a group that came in while
+ *   the question was up wasn't warned, so that start is refused. (Bosses whose kills carry their
+ *   damagers are Restrictions.kill's.)
  */
 
 const Common = require("./Common.GroupIronman");
@@ -46,7 +49,9 @@ function withOutsiders(player, players) {
 /** "group-pvm:can-start": a Hardcore group's member with outsiders is refused; prestige is warned of. */
 function canStart(request) {
   const players = (request.players ?? []).filter(Boolean);
-  const warned = new Set();
+  const activity = request.activity ?? "";
+  /** groupId -> { group, player }: each group with prestige taking part with outsiders. */
+  const prestige = new Map();
   for (const player of request.entrant ? [request.entrant] : players) {
     if (!Common.isGroupIronman(player)) continue;
     const found = recordOf(player);
@@ -54,30 +59,37 @@ function canStart(request) {
     if (found.record.variant === "hardcore") {
       request.allowed = false;
       const key = request.entrant ? "hardcoreOutsidersYou" : "hardcoreOutsiders";
-      request.reason = Common.message(key, { name: player.getUsername(), activity: request.activity ?? "" });
+      request.reason = Common.message(key, { name: player.getUsername(), activity });
       return;
     }
-    if (found.record.prestige && !warned.has(found.group.id)) {
-      warned.add(found.group.id);
-      if (request.confirms || confirmed(found.group.id, request.activity)) {
-        Common.tell(player, "prestigeOutsidersWarning", { activity: request.activity ?? "" });
-        continue;
-      }
-      warnings.set(found.group.id, { activity: request.activity ?? "", until: Date.now() + CONFIRM_MS });
-      Common.tellGroup(found.group, "prestigeOutsidersWarning", { activity: request.activity ?? "" });
-      request.allowed = false;
-      request.reason = Common.message("prestigeOutsidersConfirm", { activity: request.activity ?? "" });
-      return;
-    }
+    if (found.record.prestige && !prestige.has(found.group.id)) prestige.set(found.group.id, { group: found.group, player });
   }
+  if (request.confirms) {
+    for (const { group, player } of prestige.values()) {
+      warn(group.id, activity);
+      Common.tell(player, "prestigeOutsidersWarning", { activity });
+    }
+    return;
+  }
+  const unwarned = [...prestige.values()].filter(({ group }) => !warnedOf(group.id, activity));
+  if (unwarned.length === 0) {
+    for (const id of prestige.keys()) warnings.delete(id);
+    return;
+  }
+  for (const id of prestige.keys()) warn(id, activity);
+  for (const { group } of unwarned) Common.tellGroup(group, "prestigeOutsidersWarning", { activity });
+  request.allowed = false;
+  request.reason = Common.message("prestigeOutsidersConfirm", { activity });
 }
 
-/** Whether this group was warned of this activity within the last minute: a second start goes ahead. */
-function confirmed(groupId, activity = "") {
+function warn(groupId, activity) {
+  warnings.set(groupId, { activity, until: Date.now() + CONFIRM_MS });
+}
+
+/** Whether this group was warned of this activity within the last minute: the next start goes ahead. */
+function warnedOf(groupId, activity) {
   const warning = warnings.get(groupId);
-  if (!warning || warning.activity !== activity || warning.until < Date.now()) return false;
-  warnings.delete(groupId);
-  return true;
+  return Boolean(warning && warning.activity === activity && warning.until >= Date.now());
 }
 
 /** "group-pvm:started": every group with prestige that started with an outsider loses it. */

@@ -205,7 +205,9 @@ function wipeForGroupIronman({ player, lost }) {
   const lot = lotOf(player);
   if (!lot || typeof lost !== "function") return;
   const left = lot.items.filter((entry) => !(entry && lost(entry.id, entry.amount)));
-  if (left.length !== lot.items.length) setLot(player, { ...lot, items: left });
+  if (left.length === lot.items.length) return;
+  // The fee was set by what the lot held (storeLost): an unpaid one is the fee for what is left.
+  setLot(player, lot.paid ? { ...lot, items: left } : { ...lot, items: left, fee: feeFor(player, left) });
 }
 
 module.exports = function registerTombsRetrieval(api) {

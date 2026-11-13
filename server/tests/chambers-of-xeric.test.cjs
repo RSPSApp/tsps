@@ -419,6 +419,7 @@ test('"Begin the raid." asks again whether the raid may start: someone who enter
     leader.prompts.at(-1).args[1]();
     assert.equal(raid.stage, RaidModule.STAGE.WAITING, 'not begun');
     assert.equal(checks.length, 2, 'asked again at Begin');
+    assert.equal(checks.at(-1).confirms, false, 'Begin is the start itself: a group not yet warned is refused');
     assert.ok(leader.messages.includes('No outsiders.'));
   } finally {
     groupPvm = null;

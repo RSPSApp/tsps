@@ -45,3 +45,59 @@ test("the gloves' wear and the necklace's charges survive a relog", (t) => {
   assert.equal(again.getAttribute("thieving.gloves-of-silence-failures"), 61, "one failure from wearing out");
   assert.equal(again.getAttribute("thieving.dodgy-necklace-charges"), 1, "one charge left");
 });
+
+/** Check, from the inventory (the cache's own option) or the equipment tab (`worn`). */
+function check(t, p, itemId, { worn = false } = {}) {
+  const messages = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
+  const item = new core.Item(itemId, 1);
+  if (worn) {
+    const slot = itemId === core.ItemIdentifiers.DODGY_NECKLACE ? core.Equipment.AMULET_SLOT : core.Equipment.HANDS_SLOT;
+    p.getEquipment().setItem(slot, item);
+    // Equipment-tab click 2 is the first worn option, the cache's param 451 ("Check").
+    PM.emitItemAction({ player: p, itemId, slot, item, clickType: 2, interfaceId: core.Equipment.INVENTORY_INTERFACE_ID, handled: false });
+  } else {
+    p.getInventory().setItem(0, item);
+    const clickType = (core.CacheDefinitions.getItem(itemId).inventoryActions ?? []).indexOf("Check") + 1;
+    assert.ok(clickType > 0, "the cache's Check option");
+    PM.emitItemAction({ player: p, itemId, slot: 0, item, clickType, handled: false });
+  }
+  t.mock.restoreAll();
+  return messages;
+}
+
+test("Check shows the player's dodgy necklace charges, carried or worn (Wiki: every necklace shows the same)", (t) => {
+  const p = thief(t, "thief8962");
+  const necklace = core.ItemIdentifiers.DODGY_NECKLACE;
+  assert.deepEqual(check(t, p, necklace), ["Your dodgy necklace has 10 charges left."], "a fresh count");
+  p.setAttribute("thieving.dodgy-necklace-charges", 4);
+  assert.deepEqual(check(t, p, necklace), ["Your dodgy necklace has 4 charges left."]);
+  p.setAttribute("thieving.dodgy-necklace-charges", 1);
+  assert.deepEqual(check(t, p, necklace, { worn: true }), ["Your dodgy necklace has 1 charge left."]);
+});
+
+test("Check names the gloves of silence's wear by failures left (Wiki), and one left warns", (t) => {
+  const p = thief(t, "thief8963");
+  const gloves = core.ItemIdentifiers.GLOVES_OF_SILENCE;
+  const at = (failures) => { p.setAttribute("thieving.gloves-of-silence-failures", failures); return check(t, p, gloves)[0]; };
+  assert.equal(at(0), "Your gloves are new.");
+  assert.equal(at(1), "Your gloves are in good condition.");
+  assert.equal(at(28), "Your gloves are in good condition.");
+  assert.equal(at(29), "Your gloves are starting to look quite shabby.");
+  assert.equal(at(43), "Your gloves are starting to need repair.");
+  assert.equal(at(53), "Your gloves are in need of repair!");
+  assert.equal(at(60), "Your gloves are in need of repair!");
+  assert.equal(at(61), "Your gloves are about to fall apart!");
+
+  // The 61st failure leaves one: the warning, and the gloves stay on.
+  const Pickpocket = require("../plugins/skills/thieving/Pickpocket.Thieving")._test;
+  p.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(gloves, 1));
+  p.setAttribute("thieving.gloves-of-silence-failures", 60);
+  const said = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (message) => { said.push(message); return p.getPacketSender(); });
+  Pickpocket.wearOutGloves(p);
+  assert.deepEqual(said, ["Your gloves of silence are going to fall apart!"]);
+  assert.equal(p.getEquipment().get(core.Equipment.HANDS_SLOT)?.getId(), gloves);
+  Pickpocket.wearOutGloves(p);
+  assert.deepEqual(said.slice(1), ["Your gloves of silence have worn out."]);
+});

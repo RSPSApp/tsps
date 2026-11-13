@@ -467,14 +467,21 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   // one diagonal step from the supplied approach, after that native movement has occurred.
   input(p, () => p.getMovementQueue().requestWalk(larva.npc.getLocation().clone()));
   assert.ok(p.getLocation().equals(larva.npc.getLocation()), 'ordinary movement reaches the live landed larva');
+  // The intervening native walking turn can feed the larva more carrion.
+  // Measure contact healing from contact entry, separately from that movement.
+  const contactBefore = session.boss.getHitpoints();
+  assert.equal(session.fight.larvae.size, 1, 'one real larva owns the contact probe');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
   ticks(1);
+  console.log(JSON.stringify({ event: 'maggot-native-larva-contact-boundary', cycle: core.World.getProcessCycle(),
+    afterKnownFood: before + 1, beforeContact: contactBefore, afterFirstContact: session.boss.getHitpoints(),
+    playerAfterFirstContact: p.getHitpoints(), contact: larva.contact }));
   assert.equal(p.getHitpoints(), 96);
-  assert.equal(session.boss.getHitpoints(), before + 4, 'contact heals the actual3HP lost');
+  assert.equal(session.boss.getHitpoints(), contactBefore + 3, 'contact heals the actual3HP lost');
   ticks(1);
   assert.equal(p.getHitpoints(), 92);
-  assert.equal(session.boss.getHitpoints(), before + 8);
+  assert.equal(session.boss.getHitpoints(), contactBefore + 7);
   const off = food.transform(0, y === Fight.FLOOR.maxY ? -1 : 1, 0);
   input(p, () => p.getMovementQueue().addFirstStep(off));
   ticks(1);

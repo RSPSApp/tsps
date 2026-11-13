@@ -56,3 +56,15 @@ test('removing the net before the delayed catch preserves cancellation and no re
   const f=fixture(t);f.catchNpc();f.p.getEquipment().set(core.Equipment.WEAPON_SLOT,new core.Item(-1,0));f.finish();
   assert.deepEqual(f.messages,[]);assert.deepEqual(f.xp,[]);
 });
+// A jarred ruby harvest used on a player boosts Attack by the shared potion rule (ConsumableEffects.boostSkill):
+// from a drained level it adds 4 + 15%, between base and the cap it goes to the cap, past the cap it stays.
+test('a ruby harvest boost adds to drained Attack, up to base + boost, like a potion',t=>{
+  const f=fixture(t);
+  C.H.api.getAreaManager=()=>({inMulti:()=>false});t.after(()=>{delete C.H.api.getAreaManager;});
+  for(const [before,after] of [[50,50+14+4],[105,99+14+4],[120,120]]){
+    f.p.getInventory().adds(I.RUBY_HARVEST,1);
+    f.p.getSkillManager().setMaxLevel(core.Skill.ATTACK,99).setCurrentLevels(core.Skill.ATTACK,before);
+    Catching.boost({player:f.p,target:f.p,itemId:I.RUBY_HARVEST});
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK),after,'Attack '+before);
+  }
+});

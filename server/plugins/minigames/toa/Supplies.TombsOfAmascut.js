@@ -10,6 +10,7 @@
 
 const Shared = require("./Shared.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
+const { boostSkill } = require("../../items/ConsumableEffects");
 
 const CONSUME_ANIMATION = 829;
 const ATTR_EFFECTS = "toa:supply-effects";
@@ -44,10 +45,9 @@ function effectsOf(player) {
   return effects;
 }
 
+/** Added to the current level up to base + boost (the shared potion rule). */
 function boost(player, skill, percent, flat) {
-  const manager = player.getSkillManager();
-  const max = manager.getMaxLevel(skill);
-  manager.setCurrentLevels(skill, Math.max(manager.getCurrentLevel(skill), max + Math.floor(max * percent) + flat));
+  boostSkill(player, skill, flat, percent);
 }
 
 function restore(player, skill, percent, flat) {

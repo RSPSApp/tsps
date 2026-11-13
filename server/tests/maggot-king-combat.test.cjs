@@ -14,6 +14,7 @@ const { readTemplateRegion } = require('../dist/game/collision/TemplateRegionDat
 const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
 let core, Common, Instance;
 let serial = 0;
+const actorIds = new Set();
 const errors = [];
 const originalError = console.error;
 const QUEST_ATTRIBUTE = 'quest.the_blood_moon_rises.stage';
@@ -42,9 +43,14 @@ function player(t, complete = true) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
     send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
-  const name = `maggotnative${++serial}`;
+  const name = `mgnative${++serial}`;
+  assert.ok(name.length <= 12, 'native account names fit the base-37 identity limit');
   p.setUsername(name);
   p.setLongUsername(core.Misc.stringToLongBigInt(name));
+  const nativeId = p.getLongUsername();
+  assert.notEqual(nativeId, 0n, 'native account identity is nonzero');
+  assert.equal(actorIds.has(nativeId), false, 'simultaneous and prior fixture actors have distinct native identities');
+  actorIds.add(nativeId);
   p.setAttribute('bot-skip-persistence', true);
   p.setAttribute(QUEST_ATTRIBUTE, complete ? QUEST_COMPLETE : 0);
   p.getSession().setPlayer(p);

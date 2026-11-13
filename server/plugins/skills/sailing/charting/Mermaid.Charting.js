@@ -15,6 +15,8 @@
 //   charting, and the same box again, now to continue; after it her "There you go. Hope the dive
 //   got you everything you needed!". Wrong: "I don't think that's right... You should try again."
 //   and the riddle again, once every answer is in.
+//   From the helm, Dive and Talk-to let go of it on the click, with her first line: the boat stops
+//   and the player is free to walk. Ours: her refusals do the same.
 const common = require("./Common.Charting");
 
 const NPC_FIRST = 15155; // sailing_charting_mermaid_guide_1 (Victoria) .. _5 (Christina)
@@ -71,6 +73,7 @@ function dive(event) {
   const { player, npc } = event;
   const spot = taskOf(npc);
   if (!spot) return false;
+  common.leaveHelm(player);
   const npcId = npc.getId();
   if (player.getSkillManager().getCurrentLevel(common.core().Skill.SAILING) < LEVEL) {
     say(player, npcId, [TOO_LOW, { box: TOO_LOW_BOX }]);
@@ -166,6 +169,7 @@ function escort(player, npc, spot) {
 function talk(event) {
   const { player, npc } = event;
   if (!isMermaid(npc.getId())) return false;
+  common.leaveHelm(player);
   const npcId = npc.getId();
   say(player, npcId, ["Hello, land dweller.", { player: "Hello, sea dweller." }], () => {
     common.api().sendMultiChatboxPrompt(player, "Select an option",
@@ -197,5 +201,6 @@ function attach(api) {
 
 module.exports = attach;
 module.exports.dive = dive;
+module.exports.talk = talk;
 module.exports.taskOf = taskOf;
 module.exports.NAMES = NAMES;

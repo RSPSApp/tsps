@@ -1087,6 +1087,32 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
   }
 });
 
+test("Dive and Talk-to from the helm let go of it on the click: the boat stops (rsprox 939, 948)", () => {
+  const { BoatMoveMode } = require("../dist/game/content/sailing/Boat");
+  const spot = common.spotByKey("mermaid_guide_mudskipper_sound");
+  const npc = mermaidAt(spot);
+  for (const [option, click] of [["Dive", mermaid.dive], ["Talk-to", mermaid.talk]]) {
+    const player = captain();
+    const boat = atTheHelm(player);
+    boat.moveMode = BoatMoveMode.Half;
+    player.varbits.set(19205, 1); // sailing_sidepanel_player_at_helm
+    player.varbits.set(19175, 2); // sailing_sidepanel_boat_move_mode: half sail
+    player.getEquipment = () => ({ contains: (id) => id === 7534 || id === 7535 });
+    try {
+      assert.equal(click({ player, npc }), true, option);
+      assert.equal(boat.helmPlayerId, undefined, `${option}: the helm is free`);
+      assert.equal(boat.moveMode, BoatMoveMode.Stopped, `${option}: the boat stops`);
+      assert.equal(player.varbits.get(19105), 0, `${option}: facility_lockedin 3->0`);
+      assert.equal(player.varbits.get(19205), 0, `${option}: player_at_helm 1->0`);
+      assert.equal(player.varbits.get(19175), 0, `${option}: move mode 2->0`);
+      assert.ok(player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 10808), `${option}: the helm's exit sound`);
+      assert.match(dialogueTexts(player).join(), option === "Dive" ? /I want something in return/ : /Hello, land dweller\./);
+    } finally {
+      leave(player);
+    }
+  }
+});
+
 /** The dive text sent as the message box, since the last check. */
 function dived(player, from = 0) {
   return player.sent.slice(from).some(([key, text]) => key === "sendString" && /^The mermaid, satisfied with your answer/.test(text));

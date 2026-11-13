@@ -1089,6 +1089,7 @@ function registerPlugin(file, api = {}) {
       if (typeof name === "function") hooks.objectHandlers.push(name);
       else hooks.objects[name] = actions;
     },
+    onBeforeObjectInteraction: (handler) => { hooks.beforeObject = handler; },
     emitCustomEvent: (name, payload) => hooks.emitted.push([name, payload]),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcDialogueCondition: () => {},
@@ -2723,6 +2724,84 @@ test("closing a hotspot's customisation by any route leaves the schematics showi
   h.varbits.set(19524, 4);
   h.shipyard.objects["Boat schematics"].Modify({ player: h.player });
   assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524)], [0, 0]);
+});
+
+test("a deck loc of the shipyard boat clicked from the yard boards it first, then makes the click from the deck", () => {
+  const h = shipyardHarness();
+  const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  const hotspot = facilities.hotspotsOf("skiff")[2];
+  const location = { x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 };
+  const walks = [];
+  h.player.getMovementQueue = () => ({ walkToObject: (object, action, clickType) => walks.push({ object, action, clickType }), reset() {}, handleRegionChange() {} });
+  const clicks = [];
+  const original = ObjectActionPacketListener.prototype.executeAction;
+  ObjectActionPacketListener.prototype.executeAction = (player, ...click) => clicks.push([player, ...click]);
+  // The yard's map isn't loaded here: its gangplank, as the map has it.
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const mapGet = MapObjects.get;
+  const gangplank = { getId: () => 59719 };
+  MapObjects.get = (id, at) => (id === 59719 && at.getX() === 2087 && at.getY() === 2723 ? gangplank : null);
+  try {
+    // Another boat's loc, or the main world's, is none of the shipyard's business.
+    const elsewhere = { player: h.player, object: { getId: () => 1276 }, location: { x: 2077, y: 2718, z: 0 }, clickType: 1, handled: false };
+    h.shipyard.beforeObject(elsewhere);
+    assert.equal(elsewhere.handled, false);
+
+    const event = { player: h.player, object: { getId: () => 59452 }, location, clickType: 5, handled: false };
+    h.shipyard.beforeObject(event);
+    assert.equal(event.handled, true);
+    assert.equal(walks.length, 1, "to the gangplank");
+    assert.equal(walks[0].object.getId(), 59719);
+    walks[0].action.execute();
+    assert.equal(require("../plugins/skills/sailing/Shipyard.Sailing").aboardVisit(h.player)?.shown, shown, "aboard the shown boat");
+    assert.deepEqual(clicks, [], "placed on the deck this tick, the player acts from the next");
+    TaskManager.process();
+    assert.deepEqual(clicks, [[h.player, 59452, location.x, location.y, 5]], "the same click, now from the deck");
+
+    // Already aboard: the click is the deck's own.
+    const aboard = { player: h.player, object: { getId: () => 59452 }, location, clickType: 5, handled: false };
+    h.shipyard.beforeObject(aboard);
+    assert.equal(aboard.handled, false);
+  } finally {
+    ObjectActionPacketListener.prototype.executeAction = original;
+    MapObjects.get = mapGet;
+  }
+});
+
+test("a click on a loc of the player's own shipyard boat resolves from the yard; another player's never does", () => {
+  const h = shipyardHarness();
+  const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+  require("../dist/game/definition/ObjectDefinition").ObjectDefinition.init();
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  const loc = BoatManager.getDeck(shown).getObjects().find((object) => object.getDefinition()?.getInteractions()?.some(Boolean));
+  assert.ok(loc, "the shown boat has a loc with options");
+  const api = require("../dist/plugins/PluginManager").PluginManager.createApi("ShipyardDeckClickTest");
+  const seen = [];
+  const stranger = sailor();
+  // The hook stays registered; it answers only this test's two players.
+  api.onBeforeObjectInteraction((event) => {
+    if (event.player !== h.player && event.player !== stranger) return;
+    seen.push([event.player, event.object]);
+    event.handled = true;
+  });
+  const click = (player) => new ObjectActionPacketListener().executeAction(player, loc.getId(), loc.getLocation().getX(), loc.getLocation().getY(), 1);
+  const stillPlayer = (player) => Object.assign(player, {
+    getHitpoints: () => 99, busy: () => false, getRights: () => 0, setPositionToFace() {},
+    getMovementQueue: () => ({ reset() {}, walkToReset() {}, handleRegionChange() {}, size: () => 0 }),
+  });
+  stillPlayer(h.player);
+  h.player.setLocation(new Location(2084, 2730, 0));
+  click(h.player);
+  assert.deepEqual(seen, [[h.player, loc]], "the owner's click finds the loc on their boat");
+  // A yard tile with that id isn't taken for the boat's loc: only the deck tile itself is.
+  new ObjectActionPacketListener().executeAction(h.player, loc.getId(), 2084, 2731, 1);
+  assert.equal(seen.length, 1, "not off the deck");
+
+  stillPlayer(stranger);
+  stranger.setLocation(new Location(2084, 2730, 0));
+  click(stranger);
+  assert.equal(seen.length, 1, "nobody else's");
 });
 
 test("building at the schematics swaps a part for the cache's materials and gives Construction XP", () => {

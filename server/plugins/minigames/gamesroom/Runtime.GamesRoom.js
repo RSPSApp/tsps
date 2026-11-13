@@ -18,6 +18,8 @@ const TIMES = ['15seconds','30seconds','1minute','2minutes'];
 // /w/Victory!_(Burthorpe_Games_Room) on oldschool.runescape.wiki.
 const RESULT_JINGLES = { draw: 108, defeat: 109, victory: 110 };
 const menus = new Map(), matches = new Map(), invitations = new Map(), results = new Map();
+/** Each player's opponent in their last game: the only one they may challenge in a ground-floor game room. */
+const previousOpponents = new WeakMap();
 let api, core, area;
 function now() { return core.World.getProcessCycle(); }
 function ticks(seconds) { return Math.ceil(seconds*1000/core.GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE); }
@@ -41,7 +43,17 @@ function available(player) {
 }
 function pairValid(a,b) {
   const aRoom=a&&Access.roomGame(a.getLocation()),bRoom=b&&Access.roomGame(b.getLocation());
-  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
+  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16
+    &&(!postGameRoom(a)||previousOpponents.get(a)===b&&previousOpponents.get(b)===a);
+}
+/**
+ * Wiki (Burthorpe Games Room): "at the end of each game, the player is placed in a room in which they can only
+ * challenge their opponent" to another match of that game. The ground-floor rooms are those (gameRoom); the
+ * upstairs experienced rooms keep challenges open among their players (ours: the Wiki only names a rank to enter).
+ */
+function postGameRoom(player) {
+  const location=player.getLocation();
+  return location.getZ()===0&&Access.roomGame(location)!=null;
 }
 function invitation(a,b) { return invitations.get(a)?.get(b); }
 function removeInvitation(inv) {
@@ -132,6 +144,7 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
     w.setAttribute(RANK_ATTRIBUTES[match.game],Math.min(60000,wr+delta));l.setAttribute(RANK_ATTRIBUTES[match.game],Math.max(1,lr-delta));
   }
   for(const p of match.players) {if(matches.get(p)===match)matches.delete(p);match.selected.delete(p);}
+  previousOpponents.set(match.players[0],match.players[1]);previousOpponents.set(match.players[1],match.players[0]);
   for(const p of match.players) {
     if((p!==departing||returnDeparting)&&inRoom(p))p.moveTo(Access.gameRoom(match.game,match.seats[0].getZ()));
     if(p===departing)continue;

@@ -121,3 +121,26 @@ test('retained challenges cannot interrupt a real trading status or pending plac
   PM.emitPlayerOption({player:b,target:a,option:4,handled:false});
   assert.equal(b.getInterfaceId(),-1);assert.equal(room.matchOf(a),undefined);
 });
+// Wiki (Burthorpe Games Room): "at the end of each game, the player is placed in a room in which they can only challenge
+// their opponent" to another match of the previous game.
+test('after a game, the post-game room lets each player challenge only their previous opponent', () => {
+  present();const a=actor('room-a'),b=actor('room-b'),c=actor('room-c');invite(a,b);accept(b,a);
+  const m=room.matchOf(a),first=m.state.turn;
+  for(let i=0;i<7;i++)click(m.players[m.state.turn],`boardgames_runelink:column${m.state.turn===first?0:1}`);
+  assert.ok(m.state.result);
+  const postGame=a.getLocation();
+  assert.equal(b.getLocation().equals(postGame),true,'both in the Runelink room');
+  c.moveTo(postGame.clone());
+  for(const p of [a,b])p.getPacketSender().sendInterfaceRemoval();
+  const said=[];a.sendMessage=text=>said.push(text);
+  assert.equal(invite(a,c),undefined,'a stranger in the room cannot be challenged');
+  assert.ok(said.includes('That player is unavailable for a game.'));
+  assert.equal(invite(c,a),undefined,'nor challenge someone back from the room');
+  assert.ok(invite(b,a),'the previous opponent can');accept(a,b);
+  assert.ok(room.matchOf(a));assert.equal(room.matchOf(a),room.matchOf(b));assert.equal(room.matchOf(a).game,'runelink');
+});
+test('a challenge in the lobby is not limited to a previous opponent', () => {
+  present();const a=actor('room-a'),b=actor('room-b'),c=actor('room-c');invite(a,b);accept(b,a);
+  room.leave(b);for(const p of [a,b,c])p.moveTo(new core.Location(2200,4960,0));a.getPacketSender().sendInterfaceRemoval();
+  assert.ok(invite(a,c));
+});

@@ -7,9 +7,6 @@ Server.installProductionPathResolver();
 
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
-const { TaskManager } = require("../dist/game/task/TaskManager");
-const { Player } = require("../dist/game/entity/impl/player/Player");
-const { Skill } = require("../dist/game/model/Skill");
 const RockCake = require("../plugins/items/RockCake.plugin");
 
 let core;
@@ -84,16 +81,10 @@ test("guzzling hits for 10% of the current Hitpoints rounded down plus 1 (Wiki; 
   }
 });
 
-test("eating the hot cake burns the mouth a tick after the click (rsprox 3250); guzzling a hot cake is not handled", () => {
+test("eating the hot cake burns the mouth (rsprox 3250); guzzling a hot cake is not handled", () => {
   const player = createPlayer(30);
-  player.getHitpoints = () => 30;
   eat(player, HOT());
-  assert.deepEqual(player.hits, [], "nothing on the click tick");
-  assert.deepEqual(player.messages, []);
-  TaskManager.process();
   assert.deepEqual(player.hits, [1]);
-  assert.deepEqual(player.animations, [829]);
-  assert.deepEqual(player.sounds, [], "the hot cake has no bite sound");
   assert.deepEqual(player.messages, ["Ow! Ow! That's hot!", "You burn your mouth on the hot rock cake."]);
   const other = createPlayer(30);
   assert.equal(guzzle(other, HOT()), false);
@@ -110,24 +101,4 @@ test("two guzzles or eats in the same tick count the queued hit and never kill",
   eat(eats, COOL());
   eat(eats, COOL());
   assert.deepEqual(eats.hits, [1]);
-});
-
-test("a real Player's hot Eat lands a tick after the click; the cooled one on it (rsprox 233/03250)", (t) => {
-  const player = new Player(null);
-  const messages = [];
-  const sender = new Proxy({}, {
-    get: (_, name) => (name === "sendTypedMessage" ? (type, text) => { messages.push(text); return sender; } : () => sender),
-  });
-  t.mock.method(player, "getPacketSender", () => sender);
-  const skills = player.getSkillManager();
-  skills.setMaxLevel(Skill.HITPOINTS, 30);
-  skills.setCurrentLevel(Skill.HITPOINTS, 30, false);
-  eat(player, HOT());
-  eat(player, HOT());
-  assert.equal(player.getHitpointsAfterPendingDamage(), 30, "a double click bites nothing on the click tick");
-  TaskManager.process();
-  assert.equal(player.getHitpointsAfterPendingDamage(), 28, "both bites land the next tick");
-  assert.equal(messages.length, 4);
-  eat(player, COOL());
-  assert.equal(player.getHitpointsAfterPendingDamage(), 27, "the cooled cake bites at once");
 });

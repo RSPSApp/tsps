@@ -168,7 +168,11 @@ test("native All Settings inventory-alchemy warning toggle persists and restores
 test("real untradeable confirmation accepts, cancels and rejects same-id replacement",async t=>{
   for(const mode of ["accept","cancel","replace"]){
     // An alchemisable untradeable (Iban's staff (broken), rsprox 3215): the Fire cape is "Not alchemisable" (Wiki).
-    const f=actor(t);await f.open();const itemId=1410;
+    // Login sends the settings' live defaults (Settings.plugin.js restoreSettings), among them row 65's: an untradeable
+    // item warns before Alchemy (varbit 6092, on). This fixture never logs in, so it sends that default itself.
+    const f=actor(t);const row=require("../plugins/interface/data/settings.json").settings["65"];
+    f.p.getPacketSender().sendVarbit(row.varbit,row.default);
+    await f.open();const itemId=1410;
     f.p.getInventory().add(new core.Item(itemId),false);
     const slot=f.p.getInventory().getItems().findIndex(i=>i.getId()===itemId);
     await cast(f,{slot,itemId});assert.equal(used(f),0);

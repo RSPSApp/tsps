@@ -1043,6 +1043,36 @@ registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_
     for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0.02);
   } });
 
+// Mature brews (Wiki: Brewing's table): one more of the boost and healing than the young brew, and one
+// more drain at the base, except Dragon bitter(m), whose drain is the young one's. No recording drinks
+// one, so each keeps its young brew's lines.
+const DRAIN_ATTACK_STRENGTH = [Skill.ATTACK, Skill.STRENGTH];
+const DRAIN_MELEE = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE];
+for (const [name, id, effect, lines] of [
+  ["Asgarnian ale(m)", Items.ASGARNIAN_ALE_M_, player => { boostSkill(player, Skill.STRENGTH, 3, 0); lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.05); },
+    reinvigoratedLines("ale")],
+  ["Greenman's ale(m)", Items.GREENMANS_ALE_M_, player => { boostSkill(player, Skill.HERBLORE, 2, 0); for (const skill of DRAIN_MELEE) lowerSkillByCurrent(player, skill, 3, 0.04); },
+    () => ["You drink the Greenman's Ale.", "It has a strange taste."]],
+  ["Dragon bitter(m)", Items.DRAGON_BITTER_M_, player => { boostSkill(player, Skill.STRENGTH, 3, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); },
+    reinvigoratedLines("Dragon Bitter")],
+  ["Dwarven stout(m)", Items.DWARVEN_STOUT_M_, player => {
+    boostSkill(player, Skill.MINING, 2, 0);
+    boostSkill(player, Skill.SMITHING, 2, 0);
+    for (const skill of DRAIN_MELEE) lowerSkillByCurrent(player, skill, 3, 0.04);
+  }, () => ["You drink the Dwarven Stout. It tastes foul.", "It tastes pretty strong too."]],
+  ["Axeman's folly(m)", Items.AXEMANS_FOLLY_M_, player => { boostSkill(player, Skill.WOODCUTTING, 2, 0); for (const skill of DRAIN_ATTACK_STRENGTH) lowerSkillByCurrent(player, skill, 3, 0.02); },
+    undefined],
+  ["Chef's delight(m)", Items.CHEFS_DELIGHT_M_, player => { boostSkill(player, Skill.COOKING, 2, 0.05); for (const skill of DRAIN_ATTACK_STRENGTH) lowerSkillByCurrent(player, skill, 3, 0.05); },
+    reinvigoratedLines("ale")],
+  ["Mature wmb", Items.MATURE_WMB, player => { boostSkill(player, Skill.MAGIC, 3, 0.02); for (const skill of DRAIN_MELEE) lowerSkillByCurrent(player, skill, 2, 0.05); },
+    () => ["You drink the Wizard's Mind Bomb.", "You feel very strange."]],
+  ["Mature cider", Items.MATURE_CIDER, player => { boostSkill(player, Skill.FARMING, 2, 0); for (const skill of DRAIN_ATTACK_STRENGTH) lowerSkillByCurrent(player, skill, 3, 0.02); },
+    () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]],
+]) {
+  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: lines ? { messages: lines } : undefined,
+    requiresFoodPermission: true, shareable: false, effect: player => { heal(player, 2); effect(player); } });
+}
+
 // Core combat/stat potions.
 registerPotion({
   name: "Attack potion",

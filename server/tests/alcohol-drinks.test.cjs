@@ -369,3 +369,30 @@ for (const [item, glass, lines, expected] of SAILING_DRINKS) {
     for (const [name, value] of Object.entries(after)) assert.equal(level(f, name), value, name);
   });
 }
+
+// Wiki (Brewing): each mature brew heals 2, at 99 Attack/Strength/Defence and 50 in the boosted skill.
+const ale = reinvigorated => [`You drink the ${reinvigorated}. You feel slightly reinvigorated...`, "...and slightly dizzy too."];
+const MATURE_BREWS = [
+  ["ASGARNIAN_ALE_M_", ale("ale"), { STRENGTH: 102, ATTACK: 92 }],
+  ["GREENMANS_ALE_M_", ["You drink the Greenman's Ale.", "It has a strange taste."], { HERBLORE: 52, ATTACK: 93, STRENGTH: 93, DEFENCE: 93 }],
+  ["DRAGON_BITTER_M_", ale("Dragon Bitter"), { STRENGTH: 102, ATTACK: 93 }],
+  ["DWARVEN_STOUT_M_", ["You drink the Dwarven Stout. It tastes foul.", "It tastes pretty strong too."], { MINING: 52, SMITHING: 52, ATTACK: 93, STRENGTH: 93, DEFENCE: 93 }],
+  ["AXEMANS_FOLLY_M_", null, { WOODCUTTING: 52, ATTACK: 95, STRENGTH: 95 }],
+  ["CHEFS_DELIGHT_M_", ale("ale"), { COOKING: 54, ATTACK: 92, STRENGTH: 92 }],
+  ["MATURE_WMB", ["You drink the Wizard's Mind Bomb.", "You feel very strange."], { MAGIC: 54, ATTACK: 93, STRENGTH: 93, DEFENCE: 93 }],
+  ["MATURE_CIDER", ale("cider"), { FARMING: 52, ATTACK: 95, STRENGTH: 95 }],
+];
+for (const [item, lines, expected] of MATURE_BREWS) {
+  test(`${item} drinks: heals 2 with the Wiki's mature boost and drain, leaving a beer glass`, async t => {
+    const f = actor(t);
+    setLevels(f, { DEFENCE: 99, HERBLORE: 50, MINING: 50, SMITHING: 50, WOODCUTTING: 50, COOKING: 50, MAGIC: 50, FARMING: 50 });
+    f.inv.setItem(3, new core.Item(I[item], 1));
+    await drink(f, 3);
+    assert.equal(slotId(f, 3), I.BEER_GLASS);
+    assert.equal(f.p.getHitpoints(), 82);
+    if (lines) assert.deepEqual(f.spam, lines);
+    assert.deepEqual(f.animations, [829]);
+    const after = { ATTACK: 99, STRENGTH: 99, DEFENCE: 99, ...expected };
+    for (const [name, value] of Object.entries(after)) assert.equal(level(f, name), value, name);
+  });
+}

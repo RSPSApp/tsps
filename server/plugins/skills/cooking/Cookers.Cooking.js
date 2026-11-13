@@ -318,7 +318,7 @@ function validSelectedInput(player, cookable, selected) {
     && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable();
 }
 
-function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity, selected = null) {
+function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity, selected = null, alternates = []) {
   if (!canCook(player, object, cookable)) return false;
   if (selected && !validSelectedInput(player, cookable, selected)) return false;
   if (!player.getInventory().contains(cookable.raw)) {
@@ -331,7 +331,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
   stopCooking(player, false);
   ensureCookTask();
   sessions.set(player, {
-    cookable, selected,
+    cookable, selected, alternates,
     animation: cookAnimationFor(object.getDefinition().getName()),
     cooker: FIRE_OBJECT_NAMES.has(object.getDefinition().getName()) ? "fire" : "range",
     objectId: object.getId(),
@@ -388,16 +388,19 @@ function offerCook(player, object, cookables, singleClick = false, selected = nu
     });
     return;
   }
-  // Keyed by what this player gets (a karambwan is poison until Tinsay's training), valued by the recipe.
+  // Keyed by what this player gets (a karambwan is poison until Tinsay's training), valued by the recipes:
+  // one entry cooks every raw with that product (raw beef, then raw rat meat), in inventory order.
   const byProduct = new Map();
   for (const cookable of cookables) {
     const product = cookedResult(player, cookable).cooked;
-    if (!byProduct.has(product)) byProduct.set(product, cookable);
+    if (!byProduct.has(product)) byProduct.set(product, []);
+    byProduct.get(product).push(cookable);
   }
-  const most = Math.max(...cookables.map((cookable) => inventory.getAmount(cookable.raw)));
+  const most = Math.max(...[...byProduct.values()].map((group) =>
+    group.reduce((total, cookable) => total + inventory.getAmount(cookable.raw), 0)));
   openCookMenu(player, MANY_TYPES_TITLE, [...byProduct.keys()], most, (id, amount) => {
-    const cookable = byProduct.get(id);
-    if (cookable) startCooking(player, object, cookable, activeSessions, amount);
+    const [cookable, ...alternates] = byProduct.get(id) ?? [];
+    if (cookable) startCooking(player, object, cookable, activeSessions, amount, null, alternates);
   });
 }
 
@@ -446,7 +449,7 @@ function cookTick(task) {
     }
     if (session.levelUpPaused) continue;
 
-    if (session.remaining <= 0 || !player.getInventory().contains(session.cookable.raw)) {
+    if (session.remaining <= 0 || !carriedRaw(player, session)) {
       stopCooking(player);
       continue;
     }
@@ -464,6 +467,16 @@ function cookTick(task) {
   }
 }
 
+/** Whether a raw is left to cook, moving on to the menu entry's next raw with the same product once one runs out. */
+function carriedRaw(player, session) {
+  const inventory = player.getInventory();
+  if (inventory.contains(session.cookable.raw)) return true;
+  const next = session.alternates?.find((cookable) => inventory.contains(cookable.raw) && canCookFood(player, cookable));
+  if (!next) return false;
+  session.cookable = next;
+  return true;
+}
+
 function cookStep(player, session, cycle) {
   const { Sound, Sounds } = Common.core;
   // Content may cook faster ("skills:action-interval", a league relic's 2-tick pace).
@@ -478,7 +491,7 @@ function cookStep(player, session, cycle) {
   // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once), but
   // never past the amount chosen: the first is already counted above, each further one is counted here.
   const actions = Math.min(Common.actionsPerCycle(player, "cook"), session.remaining + 1);
-  for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
+  for (let done = 0; done < actions && carriedRaw(player, session); done++) {
     if (done > 0) session.remaining--;
     if (cookOne(player, session) === false) { stopCooking(player); break; }
   }

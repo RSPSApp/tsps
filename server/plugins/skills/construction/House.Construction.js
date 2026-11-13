@@ -879,7 +879,6 @@ function toggleHouseLock(event) {
   if (!house) return false;
   if (house.owner !== player) { player.sendMessage("Only the owner can lock this portal."); return true; }
   house.save.locked = !house.save.locked;
-  if (house.save.locked) endAdvert(player);
   for (const occupant of house.getPlayers()) occupant.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   player.setAttribute(HOUSE_ATTRIBUTE, house.save);
   player.sendMessage(house.save.locked ? "You lock the house portal." : "You unlock the house portal.");

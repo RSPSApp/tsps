@@ -204,6 +204,47 @@ test('entering from a row visits that house', async (t) => {
   assert.equal(House.houseFor(viewer.player), house);
 });
 
+async function enterRow(who, name) {
+  boardClick(who.player, 1);
+  assert.ok(rows(who).some(([, text]) => text.startsWith(`${name}|`)), `${name} is listed`);
+  await who.connection.dispatch([{ type: 'dialogue_input', value: name }]);
+  who.connection.processTurnPackets();
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process();
+}
+
+function exitPortalClick(player, clickType) {
+  const id = core.CacheDefinitions.getLocId('poh_exit_portal');
+  const object = new GameObject(id, player.getLocation(), 10, 0, null);
+  const definition = ObjectDefinition.forId(id);
+  PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType,
+    location: { x: player.getLocation().getX(), y: player.getLocation().getY(), z: player.getLocation().getZ() }, handled: false });
+}
+
+test('a locked house stays listed but cannot be entered', async (t) => {
+  const owner = actor(t, 'advlocked');
+  advertise(owner);
+  House.enterHouse(owner.player, false);
+  const house = House.houseFor(owner.player);
+  exitPortalClick(owner.player, 2); // Lock
+  assert.equal(house.save.locked, true);
+  assert.equal(owner.varbits.get(advertisingVarbit), 1, 'locking keeps the advert');
+  const viewer = actor(t, 'advlockview');
+  await enterRow(viewer, 'advlocked');
+  assert.equal(House.houseFor(viewer.player), null);
+  assert.deepEqual(viewer.messages, ['advlocked has locked his house to visitors.']);
+});
+
+test("a house whose owner's privacy shuts the viewer out stays listed but cannot be entered", async (t) => {
+  const owner = actor(t, 'advprivate');
+  advertise(owner);
+  House.enterHouse(owner.player, false);
+  owner.player.getRelations().setChatModes(0, 2, 0); // private chat off
+  const viewer = actor(t, 'advprivview');
+  await enterRow(viewer, 'advprivate');
+  assert.equal(House.houseFor(viewer.player), null);
+  assert.deepEqual(viewer.messages, ['That player is offline, or has privacy mode enabled.']);
+});
+
 test('Visit-Last before visiting anyone', (t) => {
   const player = actor(t, 'advnolast');
   boardClick(player.player, 3);

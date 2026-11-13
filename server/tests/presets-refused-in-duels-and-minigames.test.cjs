@@ -103,6 +103,27 @@ test("no preset where a plugin's teleport hook refuses (the Inferno, Fight Caves
   refused(t, f, /can't load a preset here/);
 });
 
+test("a preset refusal in Castle Wars or the Inferno is the one line, without their teleport messages", (t) => {
+  const castleWars = AreaManager.areas.find((area) => area.getName() === "Castle Wars");
+  assert.ok(castleWars, "the real Castle Wars game area is registered");
+  const inCastleWars = actor(t);
+  t.mock.method(inCastleWars.p, "getArea", () => castleWars);
+  refused(t, inCastleWars, /can't load a preset here/);
+  assert.deepEqual(inCastleWars.messages, ["You can't load a preset here."]);
+  assert.equal(castleWars.canTeleport(inCastleWars.p, 20), false, "the area still refuses teleports");
+  assert.deepEqual(inCastleWars.messages.slice(1), ["You can't leave just like that!"], "and still says so for a real teleport");
+
+  const Inferno = require("../plugins/minigames/inferno/Run.Inferno");
+  const inInferno = actor(t);
+  Inferno.enter(inInferno.p);
+  t.after(() => Inferno.leave(inInferno.p));
+  inInferno.messages.length = 0;
+  refused(t, inInferno, /can't load a preset here/);
+  assert.deepEqual(inInferno.messages, ["You can't load a preset here."]);
+  assert.equal(PM.emitCanTeleport(inInferno.p, 20), false, "the run still refuses teleports");
+  assert.deepEqual(inInferno.messages.slice(1), ["You can't teleport out of the Inferno."], "and still says so for a real teleport");
+});
+
 test("no preset whose gear the normal equip checks refuse here", (t) => {
   const f = actor(t);
   t.mock.method(PM, "emitCanEquip", () => false);

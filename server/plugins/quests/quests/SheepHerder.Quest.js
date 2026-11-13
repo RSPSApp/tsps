@@ -18,17 +18,20 @@
  * farm zone.
  *
  * Gaps (no dump/index support): the enclosure gate/door objects are handled by id
- * (166/167); the reference's temporary object state and NPC movement simulation
- * are not reproduced; the mourner-outfit and Song of the Elves dialogue branches
+ * (166/167); the mourner-outfit and Song of the Elves dialogue branches
  * are not selected.
  */
 module.exports = function registerSheepHerderQuest(api) {
   const {
     Skill,
+    Animation,
     Equipment,
+    Item,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    Task,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
 
@@ -57,6 +60,13 @@ module.exports = function registerSheepHerderQuest(api) {
 
   const INCINERATOR_LOC_ID = ObjectIdentifiers.INCINERATOR; // 165
   const GATE_LOC_IDS = new Set([ObjectIdentifiers.GATE_14, ObjectIdentifiers.GATE_15]); // 166,167
+  // Cache sequences: the sheep's collapse (5336) and the player's furnace gesture (899).
+  const SHEEP_DEATH_ANIM = 5336;
+  const HUMAN_FURNACE_ANIM = 899;
+  /** The four pen tiles, just east of the west gate at 2594,3361/3362. */
+  const PEN_BOUNDS = { minX: 2595, maxX: 2598, minY: 3358, maxY: 3364 };
+  /** The west gate's tiles: a sheep prodded east through one goes into the pen. */
+  const GATE_TILES = new Set(["2594,3361", "2594,3362"]);
 
   const START_HOOK = "quest:sheep-herder:start";
   // Councillor Halgrive and the Sheep Herder page both carry the start hand-out.
@@ -299,6 +309,8 @@ module.exports = function registerSheepHerderQuest(api) {
     if (event.stepId === COMPLETE_ACTION_ID) {
       if (!event.player || quest.isComplete(event.player)) return;
       if (!allSheepDisposed(event.player)) return;
+      const feed = event.player.getInventory().getAmount(FEED_ITEM_ID);
+      if (feed > 0) event.player.getInventory().deleteNumber(FEED_ITEM_ID, feed);
       clearSheep(event.player);
       quest.complete(event.player);
       event.handled = true;
@@ -328,12 +340,14 @@ module.exports = function registerSheepHerderQuest(api) {
     const existing = trackedFor(player, index);
     if (existing) api.removeNpc(existing);
     const tile = inPen ? sheep.pen : sheep.start;
+    // The quest's owner-only sheep stand still until prodded. Wandering let a loose
+    // colour drift into the pen (or its neighbour's patch) before the player arrived.
     const npc = api.spawnNpc({
       id: sheep.npcId,
       x: tile.x,
       y: tile.y,
       z: tile.z,
-      wanderRadius: inPen ? 1 : 3,
+      wanderRadius: 0,
       owner: player,
       ownerOnly: true,
     });
@@ -369,6 +383,88 @@ module.exports = function registerSheepHerderQuest(api) {
 
   const isWorldSheep = (npc) => WORLD_SHEEP_IDS.has(npc?.getId?.());
 
+  const inPen = (location) =>
+    location.getX() >= PEN_BOUNDS.minX && location.getX() <= PEN_BOUNDS.maxX
+      && location.getY() >= PEN_BOUNDS.minY && location.getY() <= PEN_BOUNDS.maxY;
+
+  const inFarm = (location) =>
+    location.getX() >= FARM_ZONE.minX && location.getX() <= FARM_ZONE.maxX
+      && location.getY() >= FARM_ZONE.minY && location.getY() <= FARM_ZONE.maxY;
+
+  /** One collision-checked tile for a prod: the way the player faces, else a nearby open tile. */
+  function prodStep(player, npc, sheep) {
+    const at = npc.getLocation();
+    const facing = player.getFacingDirection?.();
+    let faceX = facing?.getX?.() ?? 0;
+    let faceY = facing?.getY?.() ?? 0;
+    // A scripted or stale heading still herds towards the pen.
+    if (!faceX && !faceY) {
+      faceX = Math.sign(sheep.pen.x - at.getX());
+      faceY = Math.sign(sheep.pen.y - at.getY());
+    }
+    if (!faceX && !faceY) return null;
+
+    const stepTo = (dx, dy) => {
+      const target = new api.core.Location(at.getX() + dx, at.getY() + dy, at.getZ());
+      if (!inFarm(target)) return null;
+      // The west gate is the pen's only opening: prodding east through it pens the sheep.
+      const entering = dx > 0 && (inPen(target) || GATE_TILES.has(`${target.getX()},${target.getY()}`));
+      if (!entering && npc.getMovementQueue?.()?.canWalk?.(dx, dy) === false) return null;
+      return { dx, dy, target, entering };
+    };
+
+    const primary = stepTo(faceX, faceY);
+    if (primary) return primary;
+
+    // Since the 10 September 2025 update, a prod against a corner or wall nudges the
+    // sheep to a nearby open tile instead of leaving it immobile (Wiki).
+    const gateDistance = (location) => Math.min(
+      Math.abs(location.getX() - 2594) + Math.abs(location.getY() - 3361),
+      Math.abs(location.getX() - 2594) + Math.abs(location.getY() - 3362));
+    const candidates = [];
+    for (const [dx, dy] of [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]]) {
+      if (dx === faceX && dy === faceY) continue;
+      const step = stepTo(dx, dy);
+      if (step) candidates.push(step);
+    }
+    candidates.sort((a, b) => gateDistance(a.target) - gateDistance(b.target));
+    return candidates[0] ?? null;
+  }
+
+  function penSheep(player, index, npc) {
+    setProgress(player, index, 1);
+    if (isWorldSheep(npc)) {
+      // The shared sheep is other players' to herd too: send it back to its start,
+      // so one player's penning neither blocks the gate nor pens it for everyone.
+      npc.getMovementQueue?.()?.reset?.();
+      npc.moveTo?.(new api.core.Location(SHEEP[index].start.x, SHEEP[index].start.y, SHEEP[index].start.z));
+    } else {
+      api.removeNpc(npc);
+      setTracked(player, index, null);
+    }
+    spawnSheep(player, index, true);
+    player.sendMessage("The sheep obligingly jumps over the gate and into the enclosure!");
+  }
+
+  /** Poison a penned sheep: play its collapse, then leave the bones where it fell. */
+  function killSheep(player, index, npc) {
+    setProgress(player, index, 2);
+    setTracked(player, index, null);
+    npc.getMovementQueue?.()?.setBlockMovement?.(true);
+    npc.getMovementQueue?.()?.reset?.();
+    npc.performAnimation?.(new Animation(SHEEP_DEATH_ANIM));
+    player.sendMessage("The sheep eats the poisoned feed and collapses.");
+    // The bones stay where the sheep fell, owner-only like the quest's own sheep.
+    api.getItemOnGroundManager().registerNonGlobals(player, new Item(SHEEP[index].bones, 1), npc.getLocation().clone());
+    const ticks = Math.max(1, npc.getCurrentDefinition?.()?.getDeathTicks?.() ?? 2);
+    const task = new Task(ticks, npc);
+    task.execute = () => {
+      task.stop();
+      if (npc.isRegistered?.() !== false) api.removeNpc(npc);
+    };
+    TaskManager.submit(task);
+  }
+
   /** Prod a sheep with the cattleprod while wearing the suit. */
   function handleNpcInteraction(event) {
     const index = SHEEP.findIndex((sheep) => sheep.npcId === event.npcId);
@@ -394,9 +490,22 @@ module.exports = function registerSheepHerderQuest(api) {
       player.sendMessage("This sheep is already in the enclosure.");
       return;
     }
-    setProgress(player, index, 1);
-    spawnSheep(player, index, true);
-    player.sendMessage("The sheep obligingly jumps over the gate and into the enclosure!");
+    // A sheep that is already inside the pen (a player or another sheep pushed it
+    // through) is penned by the next prod, as reaching the gate is what counts.
+    if (inPen(event.npc.getLocation())) {
+      penSheep(player, index, event.npc);
+      return;
+    }
+    const step = prodStep(player, event.npc, SHEEP[index]);
+    if (!step) {
+      player.sendMessage("The sheep has nowhere to go.");
+      return;
+    }
+    if (step.entering) {
+      penSheep(player, index, event.npc);
+      return;
+    }
+    event.npc.getMovementQueue?.()?.walkStep?.(step.dx, step.dy);
   }
 
   /** Poison the penned sheep and collect its bones. */
@@ -412,15 +521,7 @@ module.exports = function registerSheepHerderQuest(api) {
       player.sendMessage("The sheep must be safely inside the enclosure first.");
       return;
     }
-    if (freeSlots(player) < 1) {
-      player.sendMessage("You need a free inventory space for the sheep's remains.");
-      return;
-    }
-    setProgress(player, index, 2);
-    api.removeNpc(event.target);
-    setTracked(player, index, null);
-    player.getInventory().adds(SHEEP[index].bones, 1);
-    player.sendMessage("The sheep eats the poisoned feed and collapses. You collect its remains.");
+    killSheep(player, index, event.target);
   }
 
   /** Burn the collected bones in the incinerator. */
@@ -434,7 +535,9 @@ module.exports = function registerSheepHerderQuest(api) {
     if (progress(player, index) !== 2) return;
     player.getInventory().deleteNumber(event.itemId, 1);
     setProgress(player, index, 6);
-    player.sendMessage("You put the remains into the incinerator. They burn to dust.");
+    player.performAnimation?.(new Animation(HUMAN_FURNACE_ANIM));
+    player.sendMessage("You put the remains into the furnace.");
+    player.sendMessage("The remains burn to dust.");
   }
 
   /** The enclosure gate refuses entry without the suit. */

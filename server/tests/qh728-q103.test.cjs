@@ -28,7 +28,7 @@ before(async () => {
   RegionManager.init();
 });
 
-function makePlayer() {
+function makePlayer(animations) {
   const attrs = new Map();
   const items = new Map();
   const messages = [];
@@ -102,7 +102,7 @@ function makePlayer() {
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
     getLocation: () => location,
     moveTo: (next) => { location = next; moves.push([next.getX(), next.getY(), next.getZ()]); },
-    performAnimation: noop,
+    performAnimation: (animation) => { animations.push(animation?.getId?.()); },
     sendMessage: (text) => messages.push(text),
     isRegistered: () => true,
     isPlayerBot: () => false,
@@ -122,6 +122,8 @@ function harness() {
   const logins = [];
   const logouts = [];
   const spawned = [];
+  const ground = [];
+  const animations = [];
   const otherQuests = new Map();
   const api = new Proxy({
     core,
@@ -138,10 +140,16 @@ function harness() {
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach((handler) => handler(event)),
     spawnNpc: (definition) => {
+      let at = new core.Location(definition.x, definition.y, definition.z ?? 0);
       const npc = {
         id: definition.id,
         getId: () => definition.id,
-        getLocation: () => new core.Location(definition.x, definition.y, definition.z ?? 0),
+        getLocation: () => at,
+        getMovementQueue: () => ({
+          canWalk: () => true,
+          walkStep: (dx, dy) => { at = new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()); },
+        }),
+        getCurrentDefinition: () => ({ getDeathTicks: () => 2 }),
         isRegistered: () => !npc.removed,
       };
       npc.remove = () => { npc.removed = true; };
@@ -149,7 +157,11 @@ function harness() {
       return npc;
     },
     removeNpc: (npc) => { if (npc) npc.remove(); },
-    getItemOnGroundManager: () => ({ getGroundItem: () => null, deregister: noop, registerLocation: noop }),
+    getItemOnGroundManager: () => ({
+      getGroundItem: () => null,
+      deregister: noop,
+      registerNonGlobals: (player, item, location) => ground.push({ player, item, location }),
+    }),
   }, { get: (target, key) => target[key] ?? noop });
 
   api.onCustomEvent('quest:is-started', (request) => {
@@ -161,12 +173,12 @@ function harness() {
 
   require('../plugins/quests/quests/SheepHerder.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'sheep_herder');
-  const player = makePlayer();
+  const player = makePlayer(animations);
 
   const emit = (key, event) => (events[key] ?? []).forEach((handler) => handler(event));
   return {
     quest, player, variants, conditions, itemOnNpc, npcInteraction, itemOnObject, objectInteraction,
-    zoneHandlers, logins, logouts, spawned, otherQuests, events, drops: player.drops,
+    zoneHandlers, logins, logouts, spawned, ground, animations, otherQuests, events, drops: player.drops,
     variant(npcId) { return variants.at(-1)({ player, npcId }); },
     condition(text, stepId, npcId) { emit('npc-dialogue:condition', { player, text, stepId, npcId }); },
     action(stepId, kind = 'action', npcId) {
@@ -279,16 +291,20 @@ test('fresh stage 0 completes the mandatory route and replays varp 60 = 3', () =
   for (const [npcId, bonesId] of sheep) {
     const loose = h.liveSpawn(npcId);
     assert.ok(loose, `the ${npcId} sheep spawned`);
-    const prod = h.prod(loose, npcId);
-    assert.equal(prod.handled, true, `prodding ${npcId} is owned`);
+    for (let i = 0; i < 60 && h.liveSpawn(npcId) === loose; i++) {
+      const prod = h.prod(loose, npcId);
+      assert.equal(prod.handled, true, `prodding ${npcId} is owned`);
+    }
     const penned = h.liveSpawn(npcId);
-    assert.notEqual(penned, loose, 'the loose sheep is replaced by the penned one');
+    assert.notEqual(penned, loose, 'the loose sheep walks to the pen and is replaced');
     const feed = h.feed(penned, npcId);
     assert.equal(feed.handled, true, `feeding ${npcId} is owned`);
-    assert.equal(p.items.get(bonesId), 1, `feeding ${npcId} yields its bones`);
+    assert.ok(h.ground.some((entry) => entry.item.getId() === bonesId), `feeding ${npcId} drops its bones`);
+    p.items.set(bonesId, 1);
     assert.equal(p.items.get(I.SHEEP_FEED), 1, 'the single sheep feed is reused');
     const burn = h.burn(bonesId);
     assert.equal(burn.handled, true, `burning bones ${bonesId} is owned`);
+    assert.ok(h.animations.includes(899), `burning bones ${bonesId} plays the furnace gesture`);
     assert.equal(p.items.get(bonesId) ?? 0, 0, `bones ${bonesId} are consumed`);
   }
 
@@ -305,6 +321,7 @@ test('fresh stage 0 completes the mandatory route and replays varp 60 = 3', () =
   assert.equal(wire(), 3, 'completion sends canonical varp 60 = 3');
   assert.equal(p.attrs.get('quest.points'), 4);
   assert.equal(p.items.get(I.COINS), 3100, 'the 100-coin refund plus 3,000 reward');
+  assert.equal(p.items.get(I.SHEEP_FEED) ?? 0, 0, 'the leftover sheep feed is taken on completion');
   assert.deepEqual(p.xp, [[core.Skill.HUNTER, 1000]], 'the reward pays 1,000 Hunter experience');
   assert.ok(p.messages.some((text) => text.includes('Sheep Herder')));
 

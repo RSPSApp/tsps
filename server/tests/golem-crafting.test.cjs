@@ -11,7 +11,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
 const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
 const { AreaManager } = require("../dist/game/model/areas/AreaManager");
-let core, roots, next = 1;
+let core, roots, fallenFromGrace, next = 1;
 const players = [];
 const SIDES = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const bit = name => core.CacheDefinitions.getVarbitId(name);
@@ -20,6 +20,10 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PluginManager.getCoreApi();
+  const quests = require("../plugins/quests/QuestRuntime").getRegisteredQuests()
+    .filter(q => q.key === "fallen_from_grace");
+  assert.equal(quests.length, 1, "one actual registered Fallen From Grace quest");
+  fallenFromGrace = quests[0];
   assert.equal(core.WorldDefinition.isMembersWorld(), true, "activity and item-use controls require the ordinary members world");
   core.ObjectDefinition.init(); core.RegionManager.init();
   core.RegionManager.loadMapFiles(2596, 2257);
@@ -47,7 +51,9 @@ function actor(t, { level = 60, boost = 0, quest = true, fur = "WYRMSCRAIG_GOAT_
   player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, level, false)
     .setCurrentLevels(core.Skill.CRAFTING, level + boost, false)
     .setExperiences(core.Skill.CRAFTING, player.getSkillManager().constructor.getExperienceForLevel(level), false);
-  player.getPacketSender().sendVarbit(bit("ffg"), quest ? 20 : 0);
+  fallenFromGrace.setStage(player, quest ? fallenFromGrace.completionValue : 0);
+  assert.equal(player.getPacketSender().getVarbit(bit("ffg")), quest ? 20 : 0,
+    "canonical quest setter publishes the native client stage too");
   const query = { player, key: "fallen_from_grace", complete: false };
   PluginManager.emitCustomEvent("quest:is-complete", query);
   assert.equal(query.complete, quest, "actual quest completion consumer agrees with setup");
@@ -135,11 +141,10 @@ test("unmet quest, unboostable level, tools and four-stone cost conserve inputs"
     const f = actor(t, options);
     if (options.remove) f.inv.deleteNumber(id(options.remove), 1);
     const before = f.inv.getAmount(id("SUNSTONE"));
-    // Below-quest cache deliberately suppresses Start-golem; dispatch only when an option exists.
-    if (options.quest === false) {
-      const def = core.ObjectDefinition.forPlayer(roots[0].getId(), f.player);
-      assert.equal(def.getInteractions()?.[0] ?? null, null);
-    } else click(f.player);
+    // The client suppresses this menu before the quest; ObjectDefinition retains
+    // the raw cache action. Send the listener input to verify the server gate too.
+    click(f.player);
+    if (options.quest === false) assert.ok(f.messages.some(s => /Fallen From Grace/.test(s)));
     assert.equal(stage(f.player), 0); assert.equal(f.inv.getAmount(id("SUNSTONE")), before);
   }
 });
@@ -162,7 +167,9 @@ test("front-only completion consumes one core and fur, grants Crafting only, and
   const gift = core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id("UNCUT_SAPPHIRE"),
     f.player.getLocation(), f.player.getPrivateArea());
   assert.ok(gift, "the ordinary reward is a real ground gift");
+  assert.equal(gift.getItem().getAmount(), 1);
   click(f.player); assert.equal(stage(f.player), 0); assert.equal(skills.getExperience(core.Skill.CRAFTING), awarded);
+  assert.equal(gift.getItem().getAmount(), 1, "repeat input does not duplicate the gift");
   assert.ok(f.messages.some(s => /previous golem/.test(s)), "completed NPC holds station while active");
 });
 test("two players' private station transforms and progress stay independent", t => {
@@ -236,6 +243,16 @@ test("Jeweller's chisel starts and shapes golems and makes a core", t => {
   combine(f.player, id("JEWELLERS_CHISEL"), id("SUNSTONE"));
   assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 2);
   start(f); carve(f, 0); assert.equal(stage(f.player), 2);
+});
+test("completed personal NPC retires after thirty area ticks and releases its station", t => {
+  const f = actor(t, { level: 99 }); shaped(f); position(f.player, front());
+  t.mock.method(Math, "random", () => 0.5); click(f.player);
+  const npc = [...core.World.getNpcs()].find(n => n.getId() === core.NpcIdentifiers.GOLEM_4 && n.getOwner() === f.player);
+  assert.ok(npc?.isRegistered()); assert.equal(npc.isOwnerOnly(), true);
+  tick(29); assert.equal(npc.isRegistered(), true, "not removed a tick early");
+  tick(); assert.equal(npc.isRegistered(), false, "actual world NPC membership is removed at thirty ticks");
+  f.inv.add(new core.Item(id("SUNSTONE"), 4), false); click(f.player);
+  assert.equal(stage(f.player), 1, "the station can start the next paid golem");
 });
 after(() => {
   if (core) for (const player of players) {

@@ -63,6 +63,8 @@ module.exports = function registerSheepHerderQuest(api) {
   // Cache sequences: the sheep's collapse (5336) and the player's furnace gesture (899).
   const SHEEP_DEATH_ANIM = 5336;
   const HUMAN_FURNACE_ANIM = 899;
+  // The bones are a quest item; the default 300-tick ground-item life can strand progress.
+  const SHEEP_BONES_DESPAWN_TICKS = 1_000_000;
   /** The four pen tiles, just east of the west gate at 2594,3361/3362. */
   const PEN_BOUNDS = { minX: 2595, maxX: 2598, minY: 3358, maxY: 3364 };
   /** The west gate's tiles: a sheep prodded east through one goes into the pen. */
@@ -354,6 +356,19 @@ module.exports = function registerSheepHerderQuest(api) {
     if (npc) setTracked(player, index, npc);
   }
 
+  /** Re-drop a disposed sheep's bones if the ground item was lost (logout or the old 300-tick life). */
+  function ensureBones(player, index) {
+    const bones = SHEEP[index].bones;
+    if (held(player, bones)) return;
+    const manager = api.getItemOnGroundManager();
+    const tile = new api.core.Location(SHEEP[index].pen.x, SHEEP[index].pen.y, SHEEP[index].pen.z);
+    if (manager.getGroundItem(player.getUsername(), bones, tile, player.getPrivateArea())) return;
+    manager.registerLocation(player, new Item(bones, 1), tile, player.getPrivateArea(), {
+      goesGlobal: false,
+      despawnDelay: SHEEP_BONES_DESPAWN_TICKS,
+    });
+  }
+
   function ensureSheep(player) {
     if (quest.getStage(player) !== STAGE_DISPOSING) return;
     SHEEP.forEach((_, index) => {
@@ -364,6 +379,7 @@ module.exports = function registerSheepHerderQuest(api) {
           api.removeNpc(existing);
           setTracked(player, index, null);
         }
+        if (value === 2) ensureBones(player, index);
         return;
       }
       if (!trackedFor(player, index)) spawnSheep(player, index, value === 1);
@@ -407,8 +423,11 @@ module.exports = function registerSheepHerderQuest(api) {
     const stepTo = (dx, dy) => {
       const target = new api.core.Location(at.getX() + dx, at.getY() + dy, at.getZ());
       if (!inFarm(target)) return null;
-      // The west gate is the pen's only opening: prodding east through it pens the sheep.
-      const entering = dx > 0 && (inPen(target) || GATE_TILES.has(`${target.getX()},${target.getY()}`));
+      // The west gate is the pen's only opening: only a step through a gate tile
+      // enters the pen. A sheep beside the fence cannot be penned through it.
+      const fromGate = GATE_TILES.has(`${at.getX()},${at.getY()}`);
+      const toGate = GATE_TILES.has(`${target.getX()},${target.getY()}`);
+      const entering = dx > 0 && (fromGate || toGate);
       if (!entering && npc.getMovementQueue?.()?.canWalk?.(dx, dy) === false) return null;
       return { dx, dy, target, entering };
     };
@@ -455,7 +474,14 @@ module.exports = function registerSheepHerderQuest(api) {
     npc.performAnimation?.(new Animation(SHEEP_DEATH_ANIM));
     player.sendMessage("The sheep eats the poisoned feed and collapses.");
     // The bones stay where the sheep fell, owner-only like the quest's own sheep.
-    api.getItemOnGroundManager().registerNonGlobals(player, new Item(SHEEP[index].bones, 1), npc.getLocation().clone());
+    // Keep them far longer than the default ground-item life so the colour stays burnable.
+    api.getItemOnGroundManager().registerLocation(
+      player,
+      new Item(SHEEP[index].bones, 1),
+      npc.getLocation().clone(),
+      player.getPrivateArea(),
+      { goesGlobal: false, despawnDelay: SHEEP_BONES_DESPAWN_TICKS }
+    );
     const ticks = Math.max(1, npc.getCurrentDefinition?.()?.getDeathTicks?.() ?? 2);
     const task = new Task(ticks, npc);
     task.execute = () => {

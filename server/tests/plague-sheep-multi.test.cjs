@@ -181,7 +181,8 @@ async function prodToPen(f, npc, index, pen) {
   return progress(f, index);
 }
 
-const groundBones = (bones) => core.World.getItems().find((entry) => entry.getItem().getId() === bones);
+const groundBones = (bones) => core.World.getItems().find((entry) =>
+  entry.getItem().getId() === bones && entry.isPendingRemoval?.() !== true);
 
 function useOn(f, itemId, npc) {
   const slot = f.inv.getSlotForItemId(itemId);
@@ -272,6 +273,40 @@ test("Sheep Herder: feed on a world sheep doesn't remove it; on the penned one i
   assert.equal(death.mock.calls[0]?.arguments[0]?.getId?.(), 5336, "the sheep plays its collapse");
   assert.equal(f.inv.getAmount(I.SHEEP_BONES_1_), 0, "not teleported into the pack");
   assert.ok(groundBones(I.SHEEP_BONES_1_), "the bones fall where the sheep collapsed");
+});
+
+test("Sheep Herder: a sheep beside the west fence cannot be penned through it", async (t) => {
+  const f = herder(t);
+  const npc = place(f, 6179);
+  npc.moveTo(new core.Location(2594, 3360, 0));
+  f.p.setLocation(new core.Location(2593, 3360, 0));
+  await prod(f, npc);
+  t.diagnostic(`at ${npc.getLocation().getX()},${npc.getLocation().getY()}; progress ${progress(f, 0)}; messages ${f.messages}`);
+  assert.equal(progress(f, 0), 0, "not penned through the fence");
+  assert.ok(!f.messages.includes(PENNED), "no pen line");
+  assert.equal(npc.isRegistered(), true, "the sheep is still outside");
+});
+
+test("Sheep Herder: disposed bones outlive the old 300-tick life and return after a logout", async (t) => {
+  const f = herder(t);
+  f.inv.adds(I.SHEEP_FEED, 1);
+  const npc = place(f, 6179);
+  await prodToPen(f, npc, 0, [2596, 3362]);
+  const penned = f.spawned.at(-1);
+  f.p.setLocation(new core.Location(penned.getLocation().getX() + 1, penned.getLocation().getY(), 0));
+  await useOn(f, I.SHEEP_FEED, penned);
+  assert.equal(progress(f, 0), 2, "bones stage");
+  const bonesAt = () => core.World.getItems().filter((entry) =>
+    entry.getItem().getId() === I.SHEEP_BONES_1_ && entry.getOwner?.() === f.p.getUsername()
+    && entry.isPendingRemoval?.() !== true);
+  const bones = bonesAt()[0];
+  assert.ok(bones, "bones dropped");
+  for (let i = 0; i < 301; i++) bones.process();
+  assert.equal(bonesAt().length, 1, "bones outlive the default 300 ticks");
+  core.ItemOnGroundManager.deregister(bones);
+  assert.equal(bonesAt().length, 0, "owner-only bones are lost on logout");
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.equal(bonesAt().length, 1, "ensureSheep re-drops the bones on login");
 });
 
 // ------------------------------------------------------------------ Mourning's End Part I

@@ -161,6 +161,7 @@ function harness() {
       getGroundItem: () => null,
       deregister: noop,
       registerNonGlobals: (player, item, location) => ground.push({ player, item, location }),
+      registerLocation: (player, item, location) => ground.push({ player, item, location }),
     }),
   }, { get: (target, key) => target[key] ?? noop });
 

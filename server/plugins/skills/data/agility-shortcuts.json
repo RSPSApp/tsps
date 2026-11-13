@@ -4071,6 +4071,21 @@
       "note": "rsprox captures 2952"
     },
     {
+      "name": "Shortcut (Witchaven Dungeon)",
+      "object": 18416,
+      "level": 30,
+      "xp": 0,
+      "unverified": "the reverse direction (only west to east was captured; it mirrors that one) and failing (the Wiki's up to 5 damage has no capture)",
+      "between": {
+        "ends": [[2330,5096,0],[2333,5096,0]],
+        "cross": [
+          {"move":"to","anim":"SQUEEZE_PIPE","delay":30,"speed":[30,96],"ticks":3},
+          {"sound":2489}
+        ]
+      },
+      "note": "The Slug Menace capture (rev 242.1) ticks 1768-1772 and 4530-4534; 30 Agility and no XP: the Wiki's Shortcut (Witchaven Dungeon) page"
+    },
+    {
       "name": "Rocks (Tirannwn easy)",
       "object": [16514,16515],
       "at": [[2346,3299,0],[2344,3295,0]],

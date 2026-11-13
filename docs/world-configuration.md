@@ -417,7 +417,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `WhiteWolfMountain` | WhiteWolfMountain | areas | yes | The rock slide at the Ice Queen's Lair on White Wolf Mountain: Investigate, and Mine with a pickaxe and 50 Mining to clear it and walk through. (members only) |
 | `Wilderness` | Wilderness | areas | yes | The Wilderness: PvP attack rules, the overlay, teleport limits and web slashing. |
 | `WildernessGodWarsBoulder` | WildernessGodWarsBoulder | areas | yes | Lets players with 60 Strength move the boulder blocking the Wilderness God Wars Dungeon corridor, gaining 5.5 Strength XP going in. (members only) |
-| `WildernessObelisks` | WildernessObelisks | areas | yes | The six Wilderness obelisks: activating one teleports everyone on its pad to a random or chosen obelisk, with Set Destination after the hard diary. (members only) |
+| `WildernessObelisks` | WildernessObelisks | areas | yes | The six Wilderness obelisks and the house obelisk: activating one teleports everyone on its pad (the house one, its user) to a random or chosen obelisk, with Set Destination after the hard diary. (members only) |
 | `Wyrmscraig` | Wyrmscraig | areas | yes | The cave under Ardeaglais on Wyrmscraig, with its Fallen From Grace cliff state; its shortcuts and the Mad Angel are separate plugins. (members only) |
 | `WyvernCave` | WyvernCave | areas | yes | Stops anyone without a Fossil Island wyvern Slayer task from attacking the wyverns in the northern Wyvern Cave, with Weve warning them off. (members only) |
 | `AbyssalSire` | AbyssalSire | bosses | yes | The Abyssal Sire in the Abyssal Nexus: its chambers, lungs, tentacles and miasma fight, the kill, the Font of Consumption and the Overseer. (members only) |

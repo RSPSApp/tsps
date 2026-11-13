@@ -3,6 +3,14 @@
 const C = require("./Common.ClanWars");
 const tile = (x, y) => Object.freeze([x, y, 0]);
 const layouts = Object.freeze({
+  0: Object.freeze({ name: "Wasteland", origin: Object.freeze([3264, 4992]), width: 8, height: 16,
+    planes: Object.freeze([0, 1]), landings: Object.freeze([tile(3296, 5010), tile(3296, 5100)]),
+    jails: Object.freeze([tile(3317, 5053), tile(3317, 5058)]),
+    barrier: "clanwars_barrier_darkrock", barrierY: 5055, barrierSkipBlocked: true,
+    barrierRanges: Object.freeze([Object.freeze([3268, 3315])]),
+    orb: "clanwars_viewing_start_darkrock", orbModel: 9752,
+    jailPortal: "clanwars_prisonportal_darkrock",
+    exits: Object.freeze(["clanwars_exitportal_darkrock_s", "clanwars_exitportal_darkrock_n"]) }),
   1: Object.freeze({ name: "Plateau", origin: Object.freeze([3264, 4928]), size: 8,
     planes: Object.freeze([0]), landings: Object.freeze([tile(3293, 4933), tile(3293, 4986)]),
     jails: Object.freeze([tile(3323, 4943), tile(3323, 4976)]),

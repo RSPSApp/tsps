@@ -217,6 +217,10 @@ cooks half the catch, so their fishing is quicker than on a normal world:
   fish; a spirit pool scatter 1.1 times it. Crystallised fish give 20% more for filling.
 - **Catch chance:** low 170 / high 255 (dragon 178/267, crystal 187/280) out of 256; the jumping
   spots give a bonus fish half the time.
+- **Infernal harpoon:** a charged one fishes as a dragon harpoon and cooks 1 in 3 harpoonfish as
+  they're caught (the cooked fish is kept): 5 Cooking XP (half the shrine's 10) and one charge a
+  cook, no shrine points. The jumping spot's bonus fish rolls its own cook. An uncharged one
+  fishes as a dragon harpoon only.
 - **Damage:** raw and crystallised 10 energy, cooked 15. A spirit pool scatter takes up to 12
   essence (boosts don't help).
 - **Points:** fish 5, cook 10, load raw 20 / crystallised 20 / cooked 65, repair 40, douse 40,
@@ -261,8 +265,7 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 
 - Item perks the loot gives: tome of water charging, fish barrel, tackle box, spirit flakes'
   extra fish (if not already in tsps).
-- The infernal harpoon's auto-cook and charges at the cove (it fishes as a dragon harpoon),
-  barbarian (barehanded) fishing, and harpoon special attacks.
+- Barbarian (barehanded) fishing and harpoon special attacks.
 - Combat achievements, the Spirit Angler stats board, the Retired sailor's exchange, the hosts'
   Talk-to variants in the cove.
 - The wave's push for untethered players.

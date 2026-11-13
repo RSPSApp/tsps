@@ -65,6 +65,19 @@ function tryCookFish(player, rawId, random = Math.random) {
 }
 
 /**
+ * For a catch that is cooked but kept, as Tempoross's harpoonfish are (Wiki: Infernal harpoon): the
+ * 1/3 roll and the charge, with the caller giving the cooked fish and its experience.
+ */
+function tryCookKept(player, random = Math.random) {
+  const item = findCharged(player);
+  if (!item || Math.floor(random() * COOK_CHANCE) !== 0) {
+    return false;
+  }
+  useCharge(player, item);
+  return true;
+}
+
+/**
  * "Check": the Wiki says the charges show "as a percentage in the chat window". The infernal axe
  * and pickaxe are recorded as "Infernal axe: 69.2% remaining." (rsprox 237/03996.txt:8285).
  */
@@ -135,4 +148,4 @@ function attach(pluginApi) {
   api.onItemOnItem("Dragon harpoon", "Infernal harpoon (uncharged)", rechargeHarpoon, { noted: false });
 }
 
-module.exports = { attach, tryCookFish, charges, MAX_CHARGES };
+module.exports = { attach, tryCookFish, tryCookKept, charges, MAX_CHARGES };

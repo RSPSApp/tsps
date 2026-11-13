@@ -358,6 +358,33 @@ test('ordinary death completes four ticks after animation, preserving final life
     'save:death', 'death', 'respawn-policy', 'respawn', 'save:respawn']);
 });
 
+test("a plugin's onPlayerBeforeDeath message replaces the death line on the respawn tick, with the jingle", t => {
+  // Fight Cave, Inferno and TzHaar-Ket-Rak deaths print "You have been defeated!" (rsprox 227/00075, 227/04308).
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const victim = new Player(null);
+  const order = [];
+  const sender = new Proxy({}, {
+    get: (_target, key) => key === 'sendJingle' ? id => (order.push('jingle:' + id), sender) : () => sender,
+  });
+  t.mock.method(victim, 'getPacketSender', () => sender);
+  t.mock.method(victim, 'sendMessage', message => order.push('message:' + message));
+  t.mock.method(victim, 'performAnimation', () => {});
+  t.mock.method(victim, 'moveTo', () => {});
+  t.mock.method(PluginManager, 'emitPlayerBeforeDeath', event => { event.message = 'You have been defeated!'; return false; });
+  t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => false);
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => { if (name === 'player:death-bones') event.allow = false; });
+  t.mock.method(PluginManager, 'emitPlayerDeath', () => true);
+  let task = null;
+  t.mock.method(TaskManager, 'submit', submitted => { task = submitted; });
+  victim.appendDeath();
+  assert.ok(task, 'the death task was submitted');
+  for (let tick = 0; tick < 5; tick++) task.execute();
+  assert.deepEqual(order.slice(0, 2), ['message:You have been defeated!', 'jingle:90']);
+  assert.ok(!order.includes('message:Oh dear, you are dead!'));
+});
+
 test('attack-started observers run only after permission succeeds, for every combat style', t => {
   const { Combat } = require('../dist/game/content/combat/Combat');
   const { CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');

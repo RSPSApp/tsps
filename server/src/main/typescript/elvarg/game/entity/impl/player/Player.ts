@@ -307,7 +307,8 @@ export class Player extends Mobile {
 
     public appendDeath() {
         if (!this.isDying) {
-            const beforeDeath = { player: this, preventDeath: false, announce: true };
+            const beforeDeath: { player: Player; preventDeath: boolean; announce: boolean; message?: string } =
+                { player: this, preventDeath: false, announce: true };
             if (PluginManager.emitPlayerBeforeDeath(beforeDeath)) {
                 return;
             }
@@ -319,7 +320,8 @@ export class Player extends Mobile {
             World.getPlayers().forEach((other) => {
                 if (other !== this) other.getCombat().removeDamager(this);
             });
-            TaskManager.submit(new PlayerDeathTask(this, beforeDeath.announce !== false));
+            TaskManager.submit(new PlayerDeathTask(this, beforeDeath.announce !== false,
+                typeof beforeDeath.message === "string" ? beforeDeath.message : undefined));
             this.isDying = true;
         }
     }

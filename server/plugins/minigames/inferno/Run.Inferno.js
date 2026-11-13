@@ -13,6 +13,7 @@ let monsters;
 let zuk;
 let InfernoArea = null;
 const sessions = new WeakMap();
+const DEFEATED_MESSAGE = "You have been defeated!";
 
 const ATTR_WAVE = "inferno:wave";
 /** ::infernowave outside a run: the wave the next run starts at (not saved). */
@@ -630,6 +631,14 @@ function leave(player) {
   finishRun(player, session ? session.wave - 1 : 0, false);
 }
 
+/**
+ * A death in here prints "You have been defeated!" instead of "Oh dear, you are dead!", with the
+ * usual jingle (rsprox_transcripts/227/00193.txt, 227/00210.txt, 227/02111.txt).
+ */
+function defeatedLine(event) {
+  if (sessionOf(event.player)) event.message = DEFEATED_MESSAGE;
+}
+
 function runDeath(event) {
   const session = sessionOf(event.player);
   if (!session) return;
@@ -740,6 +749,6 @@ function completions(player) {
 module.exports = {
   ATTR_WAVE, ATTR_SUPPORTS, ATTR_COMPLETIONS, TZHAAR_KET_KEH,
   init, spawn, say, tile, cycle, addJad, sessionOf,
-  enter, leave, completions, setNextWave, processRun, runDeath, keepItemsInRun, noTeleportOut, guardPassives, supportsCollapse, resumeRun, runLogout,
+  enter, leave, completions, setNextWave, processRun, defeatedLine, runDeath, keepItemsInRun, noTeleportOut, guardPassives, supportsCollapse, resumeRun, runLogout,
   tryRevive, failedRunTokkul, monsterHitpoints, createArea,
 };

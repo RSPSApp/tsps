@@ -503,6 +503,9 @@ test('dying, the cave exit and logging out fail it: nothing lost, the copy gone,
   flush();
   player.messages = [];
   const deathsBefore = Scoreboard.worldRecords().deaths[1];
+  const before = { player, preventDeath: false, announce: true };
+  Challenge.defeatedLine(before);
+  assert.equal(before.message, 'You have been defeated!', 'not "Oh dear, you are dead!" (rsprox 227/04308, 237/01141)');
   const death = { player, handled: false };
   Challenge.onDeath(death);
   assert.equal(death.handled, true);

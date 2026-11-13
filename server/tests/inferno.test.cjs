@@ -220,7 +220,7 @@ function createWorld() {
     emitCustomEvent: (name, event) => { if (name === 'diary:tokkul' && world.eliteKaramja) event.amount *= 2; },
   };
   for (const name of ['onNpcDialogueCondition', 'onCustomEvent', 'onObjectFirstClick', 'onObjectSecondClick', 'onObjectRoute', 'onPlayerLogin', 'onPlayerLogout', 'onPlayerProcess',
-    'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
+    'onPlayerBeforeDeath', 'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
     'onPlayerDealtDamage', 'onNpcDeath',
     'registerCommand']) {
     api[name] = hook(name);
@@ -532,6 +532,17 @@ test('the Elite Karamja Diary doubles the TokKul a run pays', () => {
   } finally {
     world.eliteKaramja = false;
   }
+});
+
+test('a death in a run says "You have been defeated!", not the usual line (rsprox 227/00193, 227/00210)', () => {
+  const { player } = startAt(3);
+  const inside = { player, preventDeath: false, announce: true };
+  run.defeatedLine(inside);
+  assert.equal(inside.message, 'You have been defeated!');
+  run.runDeath({ player, handled: false });
+  const after = { player, preventDeath: false, announce: true };
+  run.defeatedLine(after);
+  assert.equal(after.message, undefined, 'outside a run the usual line stays');
 });
 
 test('dying keeps the items and pays half the hitpoints of the waves cleared in TokKul', () => {

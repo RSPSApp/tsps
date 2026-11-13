@@ -38,6 +38,7 @@ module.exports = {
     api.onPlayerProcess(run.processRun);
     require("./inferno/CombatAchievements.Inferno")(api);
     require("./inferno/EscapeCrystal.Inferno")(api);
+    api.onPlayerBeforeDeath(run.defeatedLine);
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);

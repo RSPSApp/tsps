@@ -19,6 +19,10 @@ before(async () => {
   Mahogany = require("../plugins/skills/construction/MahoganyHomes.Construction");
   Instance = require("../plugins/skills/construction/Instance.Construction");
   PM.emitServerStartup({});
+  // What Plank Stretcher does (FragmentProduction.LeagueMode.js), for a test player that holds it.
+  PM.createApi("PlankStretcherStandIn").onCustomEvent("construction:materials", (request) => {
+    if (request.player?.getAttribute?.("test:keep-planks")) request.materials = request.materials.map(([id]) => [id, 0]);
+  });
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -187,6 +191,24 @@ test("worklists track removal, rebuild and repair; another player's state and re
   assert.equal(b.p.getAttribute("construction:carpenter-points") ?? 0, 0);
 });
 
+
+// Wiki, Plank Stretcher: a chance "to save their planks whilst training Construction", Mahogany Homes included.
+test("content keeping a build's planks (construction:materials) keeps Mahogany Homes builds' and repairs' planks too", (t) => {
+  const a = actor(t), home = homeFor("Jeff");
+  contract(a.p, home, 0);
+  tools(a.p);
+  a.p.setAttribute("test:keep-planks", true);
+  a.p.getInventory().add(new core.Item(core.ItemIdentifiers.PLANK, 11), false);
+  for (const hotspot of home.hotspots) {
+    let state = a.p.getAttribute("construction:contract").states[hotspot.index];
+    if (state === 3) work(a.p, home, hotspot.index, 2);
+    state = a.p.getAttribute("construction:contract").states[hotspot.index];
+    if (state === 4) work(a.p, home, hotspot.index, 4);
+    else if (state === 1) work(a.p, home, hotspot.index, 3);
+  }
+  assert.equal(Object.values(a.p.getAttribute("construction:contract").states).some(s => [1, 3, 4].includes(s)), false, "every job done");
+  assert.equal(a.p.getInventory().getAmount(core.ItemIdentifiers.PLANK), 11, "no plank used");
+});
 
 test("an above-level assignment is refused before state or rewards change", (t) => {
   const { p } = actor(t);

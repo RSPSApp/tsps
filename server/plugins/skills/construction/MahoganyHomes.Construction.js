@@ -248,10 +248,13 @@ function hasTools(player) {
   return House.hasHammer(player) && House.hasSaw(player);
 }
 
-/** Planks come from the inventory, then the plank sack (as building at home does). */
+/**
+ * Planks come from the inventory, then the plank sack, and content may keep some
+ * ("construction:materials", a league fragment's planks saved "whilst training Construction"), as building at home does.
+ */
 function take(player, itemId, amount) {
   if (player.getInventory().getAmount(itemId) + House.storedAmount(player, itemId) < amount) return false;
-  House.useMaterial(player, itemId, amount);
+  House.useMaterials(player, null, new Map([[itemId, amount]]));
   return true;
 }
 

@@ -1246,7 +1246,7 @@ function useMaterial(player, itemId, amount) {
 /**
  * Uses a build's materials (getBuildMaterials' map), as content may keep some of them
  * ("construction:materials" `{ player, buildable, materials }` as [id, amount] pairs, a league
- * fragment's planks kept): a listener may lower an amount, never raise it.
+ * fragment's planks kept; `buildable` is null for a Mahogany Homes job): a listener may lower an amount, never raise it.
  */
 function useMaterials(player, buildable, materials) {
   const request = { player, buildable, materials: [...materials].map(([itemId, amount]) => [itemId, amount]) };

@@ -10,7 +10,7 @@
  */
 const Shared = require("./Shared.Vorkath");
 const Specials = require("./Specials.Vorkath");
-const { getDragonfireProtectionTier, DragonfireProtectionTier } = require("../../combat/DragonfireProtection");
+const { getDragonfireProtectionTier, DragonfireProtectionTier, emitDragonfireBreath, sendDragonfireMessages } = require("../../combat/DragonfireProtection");
 
 const MELEE_ANIMATION = 7951;
 const RANGED_ANIMATION = 7952;
@@ -357,6 +357,8 @@ function combatClass() {
       const breath = hit.vorkathBreath;
       if (!breath) return;
       for (const line of breath.messages ?? []) sendBreathLine(target, line);
+      // Wiki (Dragonfire shield): each adult dragon's dragonfire attack charges a worn shield.
+      sendDragonfireMessages(target, emitDragonfireBreath(hit.getAttacker(), target, []));
       if (breath.variant === Shared.Attack.VENOM && Math.random() < 0.5) {
         CombatFactory.poisonEntity(target, 6, 2);
       }

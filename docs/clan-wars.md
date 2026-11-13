@@ -244,9 +244,9 @@ runtime outcomes and independent acceptance belong to the PR evidence.
 
 Wiki Clan Wars revision 15379109 and the pinned revision-242 cache agree on food
 and drinks Allowed/Disabled, prayers All allowed/No overhead icons/Disabled, and
-special attacks Allowed/No Staff of the Dead/Disabled. This slice offers food and
+special attacks Allowed/No Staff of the Dead/Disabled. The original restriction delivery offered food and
 drinks values 0/1, prayer values 0/1/2, and special-attack values 0/2. The Staff-only
-value 1 remains deferred and is refused/reset to the server offer. Melee stays
+value 1 was deferred then; the bounded follow-up below adds it. Melee stays
 allowed, ranged stays disabled and magical combat stays disabled; no ammunition,
 charge or item restoration rule is added.
 
@@ -1109,3 +1109,58 @@ Rules/shake/WASD/Cooking were unreached in that failed fixed run. Original basel
 offer-absence evidence is upstream of both corrections and remains bounded causal
 evidence; it does not establish corrected-baseline fixture byte identity or
 execution. Failed actuals remain separate from any later corrected result.
+
+## No Staff of the Dead and the existing Magic Disabled term
+
+The native special-attacks dropdown now accepts 0 (Allowed), 1 (No Staff of the
+Dead) and 2 (Disabled). Offer changes invalidate agreement, and confirmation names
+the selected term. Magic remains fixed to Disabled (4). The [Staff of the Dead
+page, revision 15361545](https://oldschool.runescape.wiki/w/Staff_of_the_Dead?oldid=15361545)
+records that Clan Wars rules forbidding Magic also prevent Power of Death.
+The individually sourced [Toxic staff](https://oldschool.runescape.wiki/w/Toxic_Staff_of_the_Dead?oldid=15363039),
+[Staff of Light](https://oldschool.runescape.wiki/w/Staff_of_Light?oldid=15364807)
+and [Staff of Balance](https://oldschool.runescape.wiki/w/Staff_of_Balance?oldid=15299804)
+share that special. Their four canonical producers are therefore refused under
+both 0 and 1 by Magic Disabled; 2 still refuses all specials. Option 1 is redundant
+for Power of Death in this supported configuration. This does not define which
+variants the No Staff label alone excludes in an unimplemented Magic-enabled match.
+
+Power of Death is an instant utility special: it starts on the button press,
+without a target attack going through the arena's melee policy. The existing
+restriction event now carries the optional ID of the actual resolved special.
+This distinguishes a staff's weapon button from the same player's real Rondache
+shield button or offhand orb operation. A staff in the weapon slot does not block
+an unrelated shield utility. The core change only passes that generic identity;
+Clan Wars owns the four-ID policy. Existing one-argument event queries and the
+Champions Challenge consumer keep their behavior. Missing optional context does
+not invent a selected identity; actual native activation supplies it. Other
+utility and ordinary melee specials retain their existing requirements under 0/1,
+and ordinary magical combat remains refused. There is no blanket MAGIC-utility veto.
+
+This is an activation-only restriction. As an explicit TSPS lifecycle choice,
+protection earned outside a match keeps its original deadline and shared removal
+behavior across entry, return, death, finish and exit. Clan Wars does not reset,
+suspend, refund, refresh, snapshot or restore it. A normal 200-tick preparation
+outlasts the already-running 100-tick effect; a late entrant can still have time
+left. That carry policy is not a claim about retail entry parity. The canonical
+producer still halves positive melee damage while one of its registered staves
+is held, expires after 100 ticks, clears on a positive hit without one or on a
+rejuvenation pool, and refreshes without stacking when legitimately used outside.
+A pending impact uses the existing modifier's current clock and equipment.
+
+Native utility activation does not remain prearmed. Real weapon swaps reset the
+armed state; genuine ordinary melee prearm remains allowed under 0/1 and the
+existing Disabled entry policy clears it under 2 without spending energy. The
+shared staff definitions/effect producer, Match lifecycle and all thirteen layouts
+are preserved. Uncharged, noted and placeholder items are not invented special
+producers. Existing resolved LMS aliases are classified by their actual selected
+special ID; this does not add aliases or repair the shared producer's separate
+four-item mitigation set, or promise full LMS effect parity.
+
+The required verification distinguishes authoritative option-1 absence from the
+separate old option-0 Magic Disabled utility path. It covers actual four-producer
+native vetoes before payment/effect, real staff-plus-shield selection, other
+utility/melee/world positives, legacy consumers and the explicitly attributed
+carry policy. Fixtures and runtime results must be reviewed at their exact heads;
+this section makes no standalone native execution claim. No ranged/ammunition,
+ordinary magic, objective mode, modern-clan or full-#153 completion follows.

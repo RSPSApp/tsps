@@ -41,6 +41,7 @@ plugin.register({
   onCustomEvent(name, handler) { handlers.set(name, handler); },
   onNpcDeath(handler) { handlers.set("npc:death", handler); },
   onZoneEnter(zone, handler) { zones.push([zone, handler]); },
+  onPlayerLogin(handler) { handlers.set("player:login", handler); },
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = request.player.completeQuests.has(request.key);
     else if (name === "quest:is-started") request.started = request.player.startedQuests.has(request.key);

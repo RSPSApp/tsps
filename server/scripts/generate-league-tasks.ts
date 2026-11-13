@@ -548,8 +548,9 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   { name: /^Find a Gout Tuber$/i, description: /^Find a Gout Tuber in Tai Bwo Wannai\.?$/i, event: "tai-bwo-wannai-cleanup:gout-tuber" },
   // MerlinsCrystal: the beehive's bees stinging a player who took wax unprotected (its own event).
   { name: /^Get Stung By Bees$/i, description: /^Get stung by bees at the Beehives?\.?$/i, event: "bees:stung" },
-  // EternalTeleportCrystal: a teleport with an elven teleport crystal, on arrival.
-  { name: /^Use an Elven Teleport Crystal$/i, description: /^Use an Elven Teleport Crystal\.?$/i, event: "elven-teleport-crystal:teleported" },
+  // EternalTeleportCrystal: a teleport with an elven teleport crystal, on arrival (Demonic Pacts
+  // names both: "Use a teleport crystal or eternal teleport crystal").
+  { name: /^Use an Elven Teleport Crystal$/i, description: /^Use (?:an Elven Teleport Crystal|a teleport crystal or eternal teleport crystal)\.?$/i, event: "elven-teleport-crystal:teleported" },
   // Pennant: a crystal seed traded for a crystal acorn (his own event; the acorn is also a crystal
   // impling's and the Elven Crystal Chest's, so the source must be his exchange).
   { name: /^Receive a Crystal Acorn from Pennant$/i, description: /^Trade in a Crystal weapon seed, Crystal armour seed, or Crystal tool seed to Pennant for a Crystal acorn\.?$/i, event: "pennant:crystal-acorn", items: () => ["Crystal acorn"] },

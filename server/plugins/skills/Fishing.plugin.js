@@ -1054,6 +1054,20 @@ function isFishingActive(player) {
   return activeSessionsRef?.has(player) === true;
 }
 
+/**
+ * An inventory item action (eat, drink, drop...) clears the interaction and ends fishing; worn
+ * items' actions don't (osrs-docs: Entity Interactions - Interruptions). The new action's
+ * animation is kept.
+ */
+function interruptFishingForInteraction({ player }) {
+  stopFishing(activeSessionsRef, player, false);
+}
+
+/** An accepted emote replaces fishing while keeping the emote's animation. */
+function interruptFishingForEmote({ player }) {
+  stopFishing(activeSessionsRef, player, false);
+}
+
 function pauseFishing(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopFishing(activeSessionsRef, player, false));
 }
@@ -1082,6 +1096,8 @@ module.exports = {
       stopFishing(activeSessions, player, false);
     });
     api.onCustomEvent("level-up:popup-opened", pauseFishing);
+    api.onCustomEvent("player:interaction-cleared", interruptFishingForInteraction);
+    api.onCustomEvent("player:emote", interruptFishingForEmote);
 
     // Returning false leaves spots this plugin doesn't fish (aerial...) to others.
     function startFishingInteraction(event) {

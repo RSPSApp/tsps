@@ -75,7 +75,7 @@ assert.deepEqual(withPickedId(withPickedId(overlay, seqField, 3206), seqField, 3
 console.log("cache-editor page model ok");
 
 // Preview specs: which models a definition draws, and which sequence plays.
-import { previewModels, previewSpec, sequenceFrameCount } from "../custom/cache-editor/CacheEditorPreview";
+import { buildModelRecolorPairs, previewModels, previewSpec, scanModelColors, sequenceFrameCount } from "../custom/cache-editor/CacheEditorPreview";
 
 const loc = {
     kind: "loc", id: 1, exists: true, name: "Crate", label: "Loc (object)",
@@ -95,7 +95,26 @@ assert.equal(previewSpec({ ...loc, kind: "loc", values: { seqId: 1 } }), null, "
 assert.deepEqual(previewModels({ ...loc, kind: "varbit", values: {} }), [], "a kind with no models previews nothing");
 assert.equal(sequenceFrameCount(undefined as any, 3206), 1, "without a client a sequence is a still");
 
-console.log("cache-editor preview specs ok");
+const scanned = scanModelColors({
+    getModel: (id: number) => id === 10
+        ? { faceCount: 4, faceColors: new Uint16Array([20, 10, 20, 0]) } as any
+        : undefined,
+    missCount: 0,
+} as any, [10, 10, 11]);
+assert.deepEqual(scanned, { colors: [0, 10, 20], unavailableModelIds: [11], waiting: false }, "model colors are unique, sorted and missing models are reported");
+let modelMisses = 0;
+const waitingScan = scanModelColors({
+    getModel: () => { modelMisses++; return undefined; },
+    get missCount() { return modelMisses; },
+} as any, [12]);
+assert.deepEqual(waitingScan, { colors: [], unavailableModelIds: [12], waiting: true }, "sparse cache misses are retried while model data downloads");
+assert.deepEqual(buildModelRecolorPairs([20, 10, 20], [10, 7], [15, 8]), [
+    { from: 20, to: 20, isModelColor: true },
+    { from: 10, to: 15, isModelColor: true },
+    { from: 7, to: 8, isModelColor: false },
+], "unmapped model colors default to themselves while existing extra pairs are retained");
+
+console.log("cache-editor preview specs and model colors ok");
 
 import { CustomDefinitionLoader, replaceCustomDefinitions, getCustomDefinitions } from "../custom/definitions/CustomDefinitionStore";
 import { NpcType } from "../rs/config/npctype/NpcType";

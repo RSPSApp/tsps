@@ -4,6 +4,7 @@ import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { ObjModelLoader } from "../../rs/config/objtype/ObjModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { Model } from "../../rs/model/Model";
+import type { ModelLoader } from "../../rs/model/ModelLoader";
 import { Model2DRenderer } from "../../ui/model/Model2DRenderer";
 import type { CacheDefinition } from "./CacheEditorModel";
 
@@ -51,6 +52,63 @@ export function previewModels(definition: CacheDefinition, kind = definition.kin
         return numbers(values.modelId ?? []);
     }
     return [];
+}
+
+export type ModelColorScan = { colors: number[]; unavailableModelIds: number[]; waiting: boolean };
+
+/** Distinct original face colors from the cache models referenced by a definition. */
+export function scanModelColors(modelLoader: ModelLoader | undefined, modelIds: readonly number[]): ModelColorScan {
+    const colors = new Set<number>();
+    const unavailableModelIds: number[] = [];
+    if (!modelLoader) return { colors: [], unavailableModelIds: [...new Set(modelIds)], waiting: false };
+
+    const missesBefore = modelLoader.missCount ?? 0;
+    for (const id of new Set(modelIds)) {
+        try {
+            const model = modelLoader.getModel(id);
+            if (!model) {
+                unavailableModelIds.push(id);
+                continue;
+            }
+            for (let face = 0; face < model.faceCount; face++) colors.add(model.faceColors[face] & 0xffff);
+        } catch {
+            unavailableModelIds.push(id);
+        }
+    }
+    const missesAfter = modelLoader.missCount ?? 0;
+    return {
+        colors: [...colors].sort((left, right) => left - right),
+        unavailableModelIds,
+        waiting: unavailableModelIds.length > 0 && missesAfter > missesBefore,
+    };
+}
+
+export type ModelRecolorPair = { from: number; to: number; isModelColor: boolean };
+
+/** Keep existing mappings, add one identity pair for every unmapped model color, then retain extras. */
+export function buildModelRecolorPairs(
+    modelColors: readonly number[],
+    recolorFrom: readonly number[],
+    recolorTo: readonly number[],
+): ModelRecolorPair[] {
+    const used = new Set<number>();
+    const pairs: ModelRecolorPair[] = [];
+    for (const from of new Set(modelColors)) {
+        const match = recolorFrom.findIndex((color, index) => color === from && !used.has(index));
+        if (match >= 0) {
+            used.add(match);
+            pairs.push({ from, to: recolorTo[match] ?? from, isModelColor: true });
+        } else {
+            pairs.push({ from, to: from, isModelColor: true });
+        }
+    }
+    const pairCount = Math.max(recolorFrom.length, recolorTo.length);
+    for (let index = 0; index < pairCount; index++) {
+        if (used.has(index)) continue;
+        const from = recolorFrom[index] ?? 0;
+        pairs.push({ from, to: recolorTo[index] ?? from, isModelColor: false });
+    }
+    return pairs;
 }
 
 /** A preview spec from a definition: what to draw, how it is oriented, and which frame. */

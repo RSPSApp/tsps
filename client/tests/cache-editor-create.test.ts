@@ -20,6 +20,10 @@ test("new overlay selects a typed base and exposes paired model recolors", async
     let savedUrl: string | undefined;
     let savedRtc: (typeof import("../network/serverConnection/state"))["state"]["webRtcConfig"];
     let React: typeof import("react") | undefined;
+    const client = {
+        modelLoader: { getModel: (id: number) => id === 3 ? { faceCount: 3, faceColors: new Uint16Array([123, 321, 123]) } : undefined, missCount: 0 },
+        objTypeLoader: {}, npcTypeLoader: {}, locTypeLoader: {},
+    } as any;
 
     try {
         Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
@@ -55,7 +59,7 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         state.webRtcConfig = undefined;
         const { CacheEditor } = await import("../custom/cache-editor/CacheEditor");
         root = createRoot(document.getElementById("root")!);
-        await React.act(async () => root!.render(React!.createElement(CacheEditor, {})));
+        await React.act(async () => root!.render(React!.createElement(CacheEditor, { client })));
 
         const take = (path: string, query?: string) => {
             const request = pending.shift();
@@ -112,7 +116,7 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         const inspect = take("/api/cache-inspect", "kind=npc&id=7");
         await React.act(async () => inspect.resolve(response({
             kind: "npc", id: 7, exists: true, name: "Goblin", label: "NPC",
-            values: { name: "Goblin", recolorFrom: [123], recolorTo: [456] },
+            values: { name: "Goblin", modelIds: [3], recolorFrom: [123], recolorTo: [456] },
         })));
         assert.match(dialog.textContent ?? "", /npc 7/);
 
@@ -130,12 +134,22 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         assert.equal(detailTabLabels.indexOf("Model recolors"), detailTabLabels.indexOf("Values") + 1);
         assert.equal(detailTabLabels.indexOf("Preview"), detailTabLabels.indexOf("Model recolors") + 1);
         await React.act(async () => button("Model recolors").click());
-        assert.ok(document.querySelector('[aria-label="Original packed HSL color 1"]'));
+        const originalOne = document.querySelector<HTMLInputElement>('[aria-label="Original packed HSL color 1"]');
+        const originalTwo = document.querySelector<HTMLInputElement>('[aria-label="Original packed HSL color 2"]');
+        const replacementOne = document.querySelector<HTMLInputElement>('[aria-label="Replacement packed HSL color 1"]');
+        const replacementTwo = document.querySelector<HTMLInputElement>('[aria-label="Replacement packed HSL color 2"]');
+        assert.ok(originalOne && originalTwo && replacementOne && replacementTwo);
+        assert.equal(originalOne.value, "123");
+        assert.equal(originalTwo.value, "321", "every distinct original face color is listed automatically");
+        assert.equal(replacementOne.value, "456", "existing base mappings are preserved");
+        assert.equal(replacementTwo.value, "321", "an unmapped model color defaults to itself");
+        assert.equal(originalOne.readOnly, true, "discovered source colors are read-only");
+        assert.equal(replacementTwo.readOnly, false, "the replacement color remains editable");
         assert.equal(document.querySelector('[aria-label="Edit recolorFrom"]'), null, "paired controls replace the raw array editors");
 
         await React.act(async () => button("+ Add color pair").click());
-        const original = document.querySelector<HTMLInputElement>('[aria-label="Original packed HSL color 2"]');
-        const replacement = document.querySelector<HTMLInputElement>('[aria-label="Choose replacement color 2"]');
+        const original = document.querySelector<HTMLInputElement>('[aria-label="Original packed HSL color 3"]');
+        const replacement = document.querySelector<HTMLInputElement>('[aria-label="Choose replacement color 3"]');
         assert.ok(original && replacement);
         await React.act(async () => {
             Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(original, "1234");
@@ -149,8 +163,8 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         assert.ok(summary);
         await React.act(async () => summary.click());
         const draft = document.querySelector(".cache-editor-draft-data code")?.textContent ?? "";
-        assert.match(draft, /"recolorFrom":\[123,1234\]/);
-        assert.match(draft, /"recolorTo":\[456,960\]/);
+        assert.match(draft, /"recolorFrom":\[123,321,1234\]/);
+        assert.match(draft, /"recolorTo":\[456,321,960\]/);
 
         // A type switch is visible immediately even when its authoring lookup is still pending.
         await React.act(async () => { button("+ New").click(); await tick(); });

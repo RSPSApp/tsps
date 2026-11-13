@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchContent, getContentApiBase } from "../../network/serverConnection/contentApi";
 import type { OsrsClient } from "../../game/OsrsClient";
-import { createPreviewRenderer, previewSpec, sequenceFrameCount, type PreviewRenderer } from "./CacheEditorPreview";
+import { buildModelRecolorPairs, createPreviewRenderer, previewModels, previewSpec, scanModelColors, sequenceFrameCount, type ModelColorScan, type PreviewRenderer } from "./CacheEditorPreview";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import "./CacheEditor.css";
 import {
@@ -72,6 +72,9 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const [error, setError] = useState<string | null>(null);
 
     const [clientReady, setClientReady] = useState(false);
+    const [modelColorState, setModelColorState] = useState<{ key: string; scan: ModelColorScan }>({
+        key: "", scan: { colors: [], unavailableModelIds: [], waiting: false },
+    });
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [frame, setFrame] = useState(0);
     const [shape, setShape] = useState<LocModelType>(LocModelType.NORMAL);
@@ -161,6 +164,31 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
             transforms: editing.base?.transforms,
         };
     }, [definition, editing]);
+    const modelIds = useMemo(() => shown ? previewModels(shown) : [], [shown]);
+    const modelIdsKey = modelIds.join(",");
+    const editingKind = editing?.kind;
+    const editingId = editing?.id;
+    const modelColorKey = editingKind !== undefined && editingId !== undefined ? `${editingKind}:${editingId}:${modelIdsKey}` : "";
+    const modelColorScan = modelColorState.key === modelColorKey ? modelColorState.scan : null;
+    const modelColors = modelColorScan?.colors ?? [];
+
+    useEffect(() => {
+        if (tab !== "recolors" || editingKind === undefined || !supportsModelRecolor(editingKind) || !clientReady) return;
+        let cancelled = false;
+        let timer: number | undefined;
+        const scan = () => {
+            const ids = modelIdsKey ? modelIdsKey.split(",").map(Number) : [];
+            const result = scanModelColors(client?.modelLoader, ids);
+            if (cancelled) return;
+            setModelColorState({ key: modelColorKey, scan: result });
+            if (result.waiting) timer = window.setTimeout(scan, 500);
+        };
+        scan();
+        return () => {
+            cancelled = true;
+            if (timer !== undefined) window.clearTimeout(timer);
+        };
+    }, [client, clientReady, editingId, editingKind, modelColorKey, modelIdsKey, tab]);
 
     const inspect = useCallback(async (nextKind: string, id: number, push = true) => {
         setError(null);
@@ -444,9 +472,12 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const grouped = useMemo(() => linksByField(shown?.links), [shown]);
     const rawRecolorFrom = editing?.overrides.recolorFrom ?? editing?.base?.values?.recolorFrom;
     const rawRecolorTo = editing?.overrides.recolorTo ?? editing?.base?.values?.recolorTo;
-    const recolorFrom = Array.isArray(rawRecolorFrom) ? rawRecolorFrom.map((value) => Number(value) || 0) : [];
-    const recolorTo = Array.isArray(rawRecolorTo) ? rawRecolorTo.map((value) => Number(value) || 0) : [];
-    const recolorCount = Math.max(recolorFrom.length, recolorTo.length);
+    const storedRecolorFrom = Array.isArray(rawRecolorFrom) ? rawRecolorFrom.map((value) => Number(value) || 0) : [];
+    const storedRecolorTo = Array.isArray(rawRecolorTo) ? rawRecolorTo.map((value) => Number(value) || 0) : [];
+    const recolorPairs = buildModelRecolorPairs(modelColors, storedRecolorFrom, storedRecolorTo);
+    const recolorFrom = recolorPairs.map((pair) => pair.from);
+    const recolorTo = recolorPairs.map((pair) => pair.to);
+    const recolorCount = recolorPairs.length;
     const detailTabs: Tab[] = editing && supportsModelRecolor(editing.kind)
         ? ["values", "recolors", "preview", "links", "used", "transforms"]
         : ["values", "preview", "links", "used", "transforms"];
@@ -813,23 +844,35 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                             <div className="cache-editor-recolor-heading">
                                 <div>
                                     <h3 id="cache-editor-recolor-title">Model recolors</h3>
-                                    <p>Replace model colors in pairs. The color picker stores the nearest packed OSRS HSL value; use the number fields for exact values.</p>
+                                    <p>Original colors are listed automatically from every model used by this definition. Unmapped colors default to themselves; change a replacement to recolor. Existing base mappings are preserved. The color picker stores the nearest packed OSRS HSL value; use the number fields for exact values.</p>
                                 </div>
                                 <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={addRecolorPair}>+ Add color pair</button>
                             </div>
                             <div className="cache-editor-recolor-note">Packed HSL: hue 0–63 · saturation 0–7 · lightness 0–127 · total 0–65535</div>
-                            {recolorCount === 0 ? <div className="cache-editor-recolor-empty">No recolor pairs yet. Add a pair to change the model’s colors.</div> : null}
+                            {recolorCount === 0 ? (
+                                <div className="cache-editor-recolor-empty">
+                                    {!modelIds.length ? "No model IDs are set. Add models in Values to list their original colors, or add a pair manually." :
+                                        !client ? "The client model cache is unavailable. You can still add a pair manually." :
+                                            !clientReady || !modelColorScan ? "Waiting for the client cache to load model colors…" :
+                                                modelColorScan.waiting ? "Loading model colors…" :
+                                                    modelColorScan.unavailableModelIds.length ? `Could not load model data for ${modelColorScan.unavailableModelIds.join(", ")}. You can still add a pair manually.` :
+                                                        "No face colors were found in these models. You can still add a pair manually."}
+                                </div>
+                            ) : null}
+                            {modelColorScan?.waiting ? <div className="cache-editor-recolor-empty">Loading model data for {modelColorScan.unavailableModelIds.join(", ")}…</div> : null}
+                            {modelColorScan && !modelColorScan.waiting && modelColorScan.unavailableModelIds.length > 0 && recolorCount > 0 ? (
+                                <div className="cache-editor-recolor-empty">Some model data is unavailable ({modelColorScan.unavailableModelIds.join(", ")}); showing colors from the models that loaded.</div>
+                            ) : null}
                             <div className="cache-editor-recolor-list">
-                                {Array.from({ length: recolorCount }, (_, index) => {
-                                    const from = recolorFrom[index] ?? 0;
-                                    const to = recolorTo[index] ?? 0;
+                                {recolorPairs.map((pair, index) => {
+                                    const { from, to } = pair;
                                     return (
                                         <div className="cache-editor-recolor-row" key={index}>
                                             <div className="cache-editor-recolor-color-field">
                                                 <label htmlFor={`cache-editor-recolor-from-${index}`}>Original color {index + 1}</label>
                                                 <div className="cache-editor-recolor-value-control">
                                                     <span className="cache-editor-recolor-swatch" style={{ backgroundColor: packedHslToHex(from) }} aria-hidden="true" />
-                                                    <input id={`cache-editor-recolor-from-${index}`} type="number" min="0" max="65535" step="1" style={styles.input} value={from} aria-label={`Original packed HSL color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "from", Number(event.target.value))} />
+                                                    <input id={`cache-editor-recolor-from-${index}`} type="number" min="0" max="65535" step="1" style={styles.input} value={from} readOnly={pair.isModelColor} aria-label={`Original packed HSL color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "from", Number(event.target.value))} />
                                                 </div>
                                             </div>
                                             <span className="cache-editor-recolor-arrow" aria-hidden="true">→</span>
@@ -840,7 +883,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                                     <input id={`cache-editor-recolor-to-${index}`} type="number" min="0" max="65535" step="1" style={styles.input} value={to} aria-label={`Replacement packed HSL color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "to", Number(event.target.value))} />
                                                 </div>
                                             </div>
-                                            <button type="button" className="cache-editor-recolor-remove" aria-label={`Remove recolor pair ${index + 1}`} title="Remove pair" onClick={() => removeRecolorPair(index)}>×</button>
+                                            {pair.isModelColor ? <span aria-hidden="true" /> : <button type="button" className="cache-editor-recolor-remove" aria-label={`Remove recolor pair ${index + 1}`} title="Remove pair" onClick={() => removeRecolorPair(index)}>×</button>}
                                         </div>
                                     );
                                 })}

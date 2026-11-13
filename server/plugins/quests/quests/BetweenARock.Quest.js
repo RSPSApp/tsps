@@ -321,9 +321,15 @@ module.exports = function registerBetweenARockQuest(api) {
   function handleLogin({ player }) {
     // Ours: a player who logged out inside the rock (during the quest) is outside again, as taking the
     // helmet off would leave them; the time and the Avatar do not carry over.
-    if (inArzinianMine(player) && stageOf(player) === STAGE_MINE && !quest.isComplete(player) && !avatarKilled(player)) {
+    // After the quest, logging out leaves the mine as well (Wiki, Arzinian Mine).
+    if (inArzinianMine(player)) {
       const [x, y] = DATA.exits.helmetOff;
       player.setLocation(new Location(x, y, 0));
+    }
+    // Ours: a logout during the cannon cutscene (2057,4978, plane 3) comes back next to Dondakan, the stage unchanged.
+    const at = player.getLocation?.();
+    if (at && at.getZ() === 3 && at.getX() >= 2048 && at.getX() <= 2066 && at.getY() >= 4966 && at.getY() <= 4990) {
+      player.setLocation(new Location(2825, 10168, 0));
     }
     player.setAttribute(INSIDE_ATTRIBUTE, false);
     player.setAttribute(MINE_TICKS_ATTRIBUTE, 0);
@@ -1287,10 +1293,21 @@ module.exports = function registerBetweenARockQuest(api) {
       process(mobile) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();
-        if (stageOf(player) !== STAGE_MINE || quest.isComplete(player) || avatarKilled(player)) return;
-        if (!Mine.timing(player)) return;
+        // Not while being fired in or thinking the first thoughts: the helmet is on and the player held.
+        if (scenePlaying.has(player)) return;
+        const questVisit = stageOf(player) === STAGE_MINE && !quest.isComplete(player) && !avatarKilled(player);
+        if (!questVisit && !quest.isComplete(player)) return;
+        // The helmet off takes the player out (tick 3679); after the quest too (Wiki, Arzinian Mine).
         if (!wearingHelmet(player)) {
           Mine.leave(player, { helmetOff: true });
+          return;
+        }
+        if (!questVisit) return;
+        // Ours: a warning box closed some other way than its continue starts the time as the continue would.
+        if (!Mine.timing(player)) {
+          if (player.getDialogueManager().isActive?.()) return;
+          Mine.startTimer(player);
+          player.getMovementQueue().setBlockMovement(false);
           return;
         }
         Mine.tickTimer(player);

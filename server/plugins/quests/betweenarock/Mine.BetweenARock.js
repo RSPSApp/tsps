@@ -40,8 +40,8 @@ let core;
 let ctx;
 /** Players inside with the timer running -> { ticks }. */
 const timers = new WeakMap();
-/** Players mid-leap. */
-const leaping = new WeakSet();
+/** Players mid-leap -> that leap (its tasks do nothing once it is not the player's current one). */
+const leaping = new WeakMap();
 
 function inside(player) {
   const at = player.getLocation?.();
@@ -99,6 +99,11 @@ function tickTimer(player) {
  */
 function leave(player, { helmetOff = false, killed = false } = {}) {
   stopTimer(player);
+  // A leap in progress ends here: its landing and its damage would put the player back inside.
+  if (leaping.has(player)) {
+    leaping.delete(player);
+    player.setForceMovement?.(null);
+  }
   ctx.removeAvatar(player);
   const equipment = player.getEquipment();
   const [x, y] = killed ? DATA.exits.avatarKilled : DATA.exits.helmetOff;
@@ -203,31 +208,36 @@ function angleOf(dx, dy) {
 
 function leap(player, from, to, angle, pan) {
   const { ForceMovement, Location, Animation, HitDamage, HitMask } = core;
-  leaping.add(player);
+  const leapToken = {};
+  leaping.set(player, leapToken);
+  const current = () => leaping.get(player) === leapToken && player.isRegistered?.() !== false;
   const out = player.getPacketSender();
   player.getMovementQueue().reset().setBlockMovement(true);
   player.sendMessage(DATA.fireWalls.leap);
   player.setForceMovement(new ForceMovement(new Location(from[0], from[1], 0), new Location(to[0] - from[0], to[1] - from[1]), 30, 60, angle, -1));
   player.performAnimation(new Animation(longJump, 20));
   out.sendSound(FIRE_JUMP_SOUND, 0, 20);
-  core.TaskManager.submit(new core.CountdownTask(player, 1, () => out.sendVarbit(BUSY_VARBIT, 1)));
+  core.TaskManager.submit(new core.CountdownTask(player, 1, () => { if (current()) out.sendVarbit(BUSY_VARBIT, 1); }));
   core.TaskManager.submit(new core.CountdownTask(player, 2, () => {
+    if (!current()) return;
     player.setForceMovement(null);
     player.moveTo(new Location(to[0], to[1], 0));
   }));
   for (const [at, move, look, move2] of pan ?? []) {
     core.TaskManager.submit(new core.CountdownTask(player, at, () => {
+      if (!current()) return;
       if (move) out.sendCameraMoveTo(move[0], move[1], move[2], { rate: 232, rate2: 232 });
       if (look) out.sendCameraLookAt(look[0], look[1], look[2], { rate: move ? 232 : 2, rate2: move ? 232 : 2 });
       if (move2) out.sendCameraMoveTo(move2[0], move2[1], move2[2], { rate: 2, rate2: 2 });
     }));
   }
   core.TaskManager.submit(new core.CountdownTask(player, DATA.fireWalls.landTicks, () => {
+    if (!current()) return;
     leaping.delete(player);
     player.getMovementQueue().setBlockMovement(false);
     out.sendVarbit(BUSY_VARBIT, 0);
     if (pan) out.sendCameraReset();
-    if (player.isRegistered?.() !== false) player.getCombat().getHitQueue().addPendingDamage([new HitDamage(DATA.fireWalls.damage, HitMask.RED)]);
+    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(DATA.fireWalls.damage, HitMask.RED)]);
   }));
 }
 

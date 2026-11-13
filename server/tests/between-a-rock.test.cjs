@@ -373,3 +373,48 @@ test("after the quest Khorvak and the Dwarven Engineer say their own things (tic
   await H.talk(g, engineer);
   assert.equal(H.shown(g)?.text, "I wish you'd just leave me alone.");
 });
+
+test("the helmet's warning holds the player; closed some other way, the time starts anyway; the helmet off takes them out even before it", async (t) => {
+  const f = H.actor(t, { stage: 90, worn: [ITEMS.helmet] });
+  const npc = H.spawn(f, DONDAKAN, H.DONDAKAN_TILE);
+  await H.talk(f, npc);
+  await H.until(f, "Ready as I'll ever be");
+  await H.choose(f, "Ready as I'll ever be.");
+  await H.until(f, "Okay, here we go, hold on to your helmet!");
+  await H.continueLine(f);
+  await H.until(f, "Your helmet starts to feel heavier and heavier!");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held at the box");
+  f.player.getDialogueManager().reset();
+  f.player.getPacketSender().sendInterfaceRemoval();
+  H.ticks(f, 2);
+  assert.equal(Mine.timing(f.player), true, "the time runs once the box is gone");
+  const g = H.actor(t, { stage: 90, worn: [ITEMS.helmet], at: [2420, 4965, 0] });
+  assert.equal(Mine.timing(g.player), false, "no time yet");
+  g.player.getEquipment().setItem(H.core.Equipment.HEAD_SLOT, new H.core.Item(-1, 0));
+  H.ticks(g, 2);
+  assert.deepEqual(H.xy(g.player.getLocation()), [2825, 10171, 0], "out without the helmet");
+});
+
+test("the helmet off mid-leap: the player stays out and takes no fire damage", async (t) => {
+  const f = H.actor(t, { stage: 90, worn: [ITEMS.helmet], at: [2389, 4967, 0] });
+  f.player.getSkillManager().setMaxLevels(H.core.Skill.HITPOINTS, 50, false).setCurrentLevels(H.core.Skill.HITPOINTS, 50, false);
+  Mine.startTimer(f.player);
+  await H.objectOption(f, 5977, [2388, 4967], 1);
+  f.player.getEquipment().setItem(H.core.Equipment.HEAD_SLOT, new H.core.Item(-1, 0));
+  H.ticks(f, 30);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2825, 10171, 0]);
+  assert.equal(f.player.getHitpoints(), 50);
+});
+
+test("after the quest the helmet off leaves the mine; a login inside it, or in the cannon's cutscene area, is outside", async (t) => {
+  const f = H.actor(t, { stage: 100, worn: [ITEMS.helmet], at: [2420, 4965, 0] });
+  H.tick(f);
+  f.player.getEquipment().setItem(H.core.Equipment.HEAD_SLOT, new H.core.Item(-1, 0));
+  H.ticks(f, 2);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2825, 10171, 0]);
+  for (const [at, out] of [[[2420, 4965, 0], [2825, 10171, 0]], [[2057, 4978, 3], [2825, 10168, 0]]]) {
+    const g = H.actor(t, { stage: 80, at });
+    H.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
+    assert.deepEqual(H.xy(g.player.getLocation()), out);
+  }
+});

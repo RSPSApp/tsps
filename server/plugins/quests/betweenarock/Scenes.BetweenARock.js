@@ -390,10 +390,13 @@ function firstThoughts(player, done) {
 /** The helmet's warning box, with its continue; `done` runs as it is continued. */
 function warningBox(player, text, done) {
   const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = core;
+  // Held until it is continued, as live keeps the player busy there (busy 1 until tick 3350).
+  player.getMovementQueue().reset().setBlockMovement(true);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, text))
     .add(new ActionDialogue(1, { execute: () => {
       player.getPacketSender().sendInterfaceRemoval();
+      player.getMovementQueue().setBlockMovement(false);
       done?.(player);
     } })));
 }

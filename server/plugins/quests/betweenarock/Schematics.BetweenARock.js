@@ -185,7 +185,14 @@ function pressButton(event) {
   else if (buttonId === buttons.rotate) rotate(player, state);
   else if (buttons.select.includes(buttonId)) select(player, state, buttons.select.indexOf(buttonId));
   else if (buttons.hide.includes(buttonId)) toggleShown(player, state, buttons.hide.indexOf(buttonId));
-  if (!state.solved && solvedNow(state)) solve(player, state);
+  if (!state.solved && solvedNow(state)) {
+    // The parts must still all be carried (the panel covers the inventory, but a drop could slip in).
+    if (!ctx.schematicParts.every((itemId) => ctx.hasItem(player, itemId))) {
+      sender(player).sendInterfaceRemoval();
+      return;
+    }
+    solve(player, state);
+  }
 }
 
 function closed({ player, interfaceId }) {

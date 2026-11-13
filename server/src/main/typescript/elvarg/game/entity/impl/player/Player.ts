@@ -1382,9 +1382,11 @@ export class Player extends Mobile {
             return;
         }
         // Wiki (Skull (status), 9 December 2021): a skull "cannot disappear during PvP combat". Its last tick waits
-        // while a player is this player's target or attacker (the attacker clears six seconds after the last hit).
+        // while a player is this player's target or attacker (the attacker clears six seconds after the last hit),
+        // or a player's first hit is still on its way (the attacker is only set when it lands).
         const combat = this.getCombat();
-        const inPvpCombat = combat.getTarget?.()?.isPlayer?.() === true || combat.getAttacker?.()?.isPlayer?.() === true;
+        const inPvpCombat = combat.getTarget?.()?.isPlayer?.() === true || combat.getAttacker?.()?.isPlayer?.() === true
+            || combat.getHitQueue?.()?.hasIncomingPlayerHit?.() === true;
         if (this.skullTimer <= 1 && inPvpCombat) {
             return;
         }

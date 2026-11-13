@@ -181,6 +181,11 @@ export class HitQueue {
         return this.pendingHits.length > 0 || this.pendingDamage.length > 0;
     }
 
+    /** Whether another player's hit is on its way to the owner: queued, not landed yet. */
+    hasIncomingPlayerHit(): boolean {
+        return this.pendingHits.some(({ hit }) => hit.getAttacker()?.isPlayer?.() === true && hit.getAttacker() !== this.character);
+    }
+
     /** Whether this exact hit is still queued, independent of other hits from its attacker. */
     hasPendingHit(hit: PendingHit): boolean {
         return this.pendingHits.some((entry) => entry.hit === hit);

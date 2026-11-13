@@ -9,7 +9,7 @@
  *
  * Wiki (Myths' Guild): entry needs Dragon Slayer II. Wiki (Lithkren Vault): "These barriers can
  * only be entered once Dragon Slayer II has been completed." How the quest was completed doesn't matter,
- * so a Leagues area unlock that completes it opens both barriers too.
+ * so a Leagues area unlock that completes it opens every barrier here too.
  *
  * rsprox 224/01437, 230/00350 and 233/00778: the player stops beside the barrier and faces it
  * for a tick; on the next tick "You pass through the barrier." (spam) arrives and the player is
@@ -91,7 +91,8 @@ module.exports = {
   register(registry) {
     bind(registry);
     registry.onObjectInteraction("Magical Barrier", { Pass: pass });
-    // Zalcano's prison barrier shares the name; each handler passes on the other's ids.
+    // Other "Barrier" locs (Zalcano, Soul Wars, ToB, GOTR) share the name; every handler
+    // returns false for ids it doesn't own.
     registry.onObjectInteraction("Barrier", { Pass: pass });
   },
   across, pass, QUEST, PASS_MESSAGE, REFUSED,

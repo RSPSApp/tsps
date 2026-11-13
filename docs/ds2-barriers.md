@@ -28,5 +28,5 @@ Dragon Slayer II:
 
 - The refusal for a player without the quest. Neither the captures nor the Wiki give a line,
   so `You need to complete Dragon Slayer II to pass through the barrier.` is ours.
-- Zalcano's prison barrier is also called "Barrier". Each handler returns `false` for the
-  other's ids.
+- Other locs are also called "Barrier" (Zalcano, Soul Wars, ToB, GOTR). Every handler
+  returns `false` for ids it doesn't own.

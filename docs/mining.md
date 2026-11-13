@@ -2,7 +2,7 @@
 
 `plugins/skills/Mining.plugin.js` mines the ore rocks (clay to runite, blurite, barronite, the essence mines) and the
 skilling rocks below them: soft clay, lead, lovakite, nickel, rubium, sunstone, infernal shale, gem rocks, amethyst,
-Daeyalt and the Cam Torum calcified rocks.
+Daeyalt, the Cam Torum calcified rocks and Fossil Island's ash piles.
 Pickaxe-specific rules are in `plugins/skills/mining/`.
 
 `plugins/areas/MiningGuild.plugin.js` checks 60 current Mining at all four Falador entrance
@@ -113,6 +113,31 @@ OSRS Wiki rock pages (https://oldschool.runescape.wiki/w/Soft_clay_rocks, `/w/Le
   `This rock face is now empty.`. It grows back as `_01`. Its ore line is a game message (recording 1637), where
   every other rock's is spam.
 
+### Ash piles
+
+Fossil Island's ash piles (`fossil_ashpile`, "Ash pile"). Sources: the Wiki's
+[Ash pile](https://oldschool.runescape.wiki/w/Ash_pile) and [Volcanic ash](https://oldschool.runescape.wiki/w/Volcanic_ash)
+pages, and rsprox captures AshPile-MithrilPickaxe and AshPile-DragonPickaxe (the user's own, rev 242, a normal world,
+Mining 73 with no boost, 784 rolls and 745 successes between them).
+
+- **Wiki:** level 22 and 10 XP a success, whatever it gives. Each success is volcanic ash (19/20) or one soda ash (1/20).
+  Volcanic ash is one at 22 and one more every 15 levels, six from 97 ("boosts can be used", so the current level
+  counts). Each success has a 1/4 chance to empty the pile. Gems, clue geodes and the rock golem (base 741,600) apply;
+  mining enhancers, Varrock armour, the Mining cape and mining gloves don't.
+- **Recorded:** `You manage to mine some volcanic ash.` / `You manage to mine some soda ash.` (spam), sound 3600, the
+  normal pickaxe swing, 10 XP for both. Four ash at 73, and `tracking_ore_mined` goes up by four; soda ash goes up by
+  one. The captures had 39 soda ash in 745 successes, about the Wiki's 1/20.
+- **Emptying:** the pile became `fossil_ashpile_empty` ("Empty ash pile") only on a success, never on a miss: 181 of
+  745 successes, about the Wiki's 1/4. The respawn timer read 49 ticks every time, the empty pile's own shape (10 or
+  11), and every pile came back 49 ticks later (179 of 179). The Wiki's 30 s would be 50.
+- **First roll:** a full pickaxe interval after arrival, so one tick less than that after the swing message.
+  Mithril: +4 after the swing in 76 of 76; dragon: +2 in 84 and +1 in 22 (its 1/6 fast roll). The last pile's timer
+  never carries over. A pile emptied at tick 44 of the mithril capture, the next was reached at 48, and its first
+  roll came at 53, not 49. Rocks without `freshRollTimer` keep the carried-over timer (below).
+- **Success chart (estimate):** the Wiki has none. `[206, 255]` gives 243/256 (94.9%) at 73, which matches the
+  captures' 95.0% (745 of 784 rolls). The assumption that success is certain at 99 sets the high value, so the low
+  levels are only a guess.
+
 ### Calcified rocks
 
 Cam Torum mine (Wiki Calcified rocks; rsprox capture 1105, rev 237, a Leagues world, ten water cycles).
@@ -194,6 +219,7 @@ The Wiki has no chart for the rocks below; these are estimates, to replace once 
 | Infernal shale | 60 | 180 | the Wiki: "between iron and coal" to mine |
 | Daeyalt | 96 | 350 | iron's chart; recordings got ore on every roll |
 | Calcified | 20 | 200 | the Wiki training rates (23,500-49,000 XP an hour at 50-99), and 46% at level 61 in capture 1105 (51% here) |
+| Ash pile | 206 | 255 | the captures' 95.0% at level 73 (94.9% here), with success certain at 99 assumed |
 
 The Runite rocks page checks the formula: 17/256 at level 85 and 19/256 from 97.
 
@@ -313,7 +339,8 @@ The area is the tiles reachable from the cave with the inner doors shut, in the 
   manipulation is not modelled.
 - The first roll after the swing: main-game captures with dragon and infernal pickaxes have it the tick after the
   swing, but slower pickaxes were recorded later (bronze on gold, recording 468: seven ticks after the swing; steel
-  and iron on Leagues worlds: interval minus one). Not enough to model; every pickaxe rolls the tick after.
+  and iron on Leagues worlds: interval minus one). Not enough to model; every pickaxe rolls the tick after, except on
+  ash piles, whose captures show a full interval after arrival (above).
 - Barronite's 1-minute respawn was 67 ticks in recording 1636, and the timer the client was sent read 86.
 - Other plugins that mine rocks of their own (quests, minigames, stars, Motherlode) keep their wording.
 - No recordings of a successful Mine on lead, nickel, rubium, soft clay, lovakite, sunstone or infernal shale: the
@@ -330,10 +357,13 @@ The area is the tiles reachable from the cave with the inner doors shut, in the 
 - Access isn't checked: Shilo Village for the Shilo gem rocks, the Mining Guild for amethyst, the Yama contract for
   infernal shale, Sailing islands for lead, nickel and rubium.
 - A Daeyalt face only grows back once it is empty; a face left part-mined stays at its stage.
+- Ash piles: no capture has a full inventory or a click on an empty pile. A full inventory holding ash mines on,
+  because the ash stacks, and a soda ash with no free slot falls to the floor (ours). The empty pile answers with
+  the rocks' `There is currently no ore available in this rock.` and sound 2661 (ours). The level the ash amount reads is
+  the current one, without the celestial ring's invisible +4 (the Wiki doesn't say).
 - Calcified rocks: the world-hop debuff (`Your pickaxe keeps slipping on the rocks as it's still wet from the last
   deposit.`) and the Varlamore red token are not modelled.
 - Not mineable yet, each needing its own area or mechanic: limestone (stages with their own respawns), rubium and
   infernal shale deposits (one of two active, timed), Daeyalt Essence,
-  Tai Bwo Wannai gem rocks, the Lovatt Mine ore veins, the Fossil Island boulders, ash piles and volcanic
-  sulphur, the Keldagrim gold vein, the salt rocks, and the Easter egg rock. `tests/mining-parity.test.cjs` lists
+  Tai Bwo Wannai gem rocks, the Lovatt Mine ore veins, the Fossil Island boulders, the Keldagrim gold vein, the salt rocks, and the Easter egg rock. `tests/mining-parity.test.cjs` lists
   every loc with a Mine option, so a new one without a handler fails the test.

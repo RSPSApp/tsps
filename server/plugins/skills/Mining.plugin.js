@@ -33,8 +33,9 @@ const RESPAWN_TIMER_COLOUR = 16765184;
 const NO_ORE_MESSAGE = "There is currently no ore available in this rock.";
 // rsprox captures 3139 (rev 232): Mine on a mined-out rock stops the swing and plays this sound.
 const NO_ORE_SOUND = 2661;
-// The rocks without their own mined-out loc that still offer Mine (amethyst's wall).
-const EMPTY_ROCK_NAMES = ["Empty wall", "Wall"];
+// Mined-out locs by name that still offer Mine: amethyst's wall, and the ash pile's fossil_ashpile_empty
+// (Ours: no capture clicks an empty ash pile, so it answers as the rocks do).
+const EMPTY_ROCK_NAMES = ["Empty wall", "Wall", "Empty ash pile"];
 const SWING_MESSAGE = "You swing your pick at the rock.";
 const NO_PICKAXE_MESSAGE = "You need a pickaxe to mine this rock. You do not have a pickaxe which you have the Mining level to use.";
 const MINING_SUCCESS_SOUND = 3600;
@@ -206,6 +207,25 @@ const ROCKS = [
   // (0.39453125 at level 1, 0.58984375 at 42, 0.86328125 at 99). A breathing filter must be worn.
   // No depleted loc of its own is published, so the shared fallback ("rocks1") is used.
   { objectName: "Volcanic sulphur", objectIds: [28496, 28497, 28498], level: 42, xp: 35, oreId: ItemIdentifiers.VOLCANIC_SULPHUR, petBase: 710000, chance: [100, 220], gems: true, respawnTicks: 42, requiresBreathingFilter: true, oreMessage: "You manage to mine some volcanic sulphur." },
+  // Wiki Ash pile / Volcanic ash: level 22, 10 XP a success whatever it gives, volcanic ash 19/20 (one at 22 and
+  // one more every 15 levels, six from 97, by the boosted level) or one soda ash 1/20, a 1/4 chance on each
+  // success that the pile goes, gems, clue geodes and the rock golem (741,600) but no mining enhancers or gloves.
+  // rsprox captures AshPile-MithrilPickaxe and AshPile-DragonPickaxe (rev 242, Mining 73, 745 successes):
+  // "You manage to mine some volcanic ash." / "... soda ash." (spam), sound 3600, four ash (tracking_ore_mined +4)
+  // or one soda ash, fossil_ashpile -> fossil_ashpile_empty only on a success (181 of 745), back after 49 ticks
+  // with a 49-tick timer every time. The first roll comes a full pickaxe interval after arrival, the previous
+  // pile's timer never carrying over (`freshRollTimer`: mithril +4 after the swing in 76 of 76, dragon +2 or +1).
+  // The Wiki has no success chart: [206, 255] is an estimate fitted to the captures' 95% at 73 (745 of 784 rolls).
+  // Ours: a soda ash with no free slot (a full inventory still mines on, as the ash stacks) falls to the floor.
+  {
+    objectName: "Ash pile",
+    level: 22, xp: 10, oreId: ItemIdentifiers.VOLCANIC_ASH, petBase: 741600,
+    chance: [206, 255], gems: true, respawnTicks: 49, yield: { min: 1, chance: 1 / 4 }, countEach: true, freshRollTimer: true,
+    outcomes: [
+      { itemId: ItemIdentifiers.VOLCANIC_ASH, weight: 19, xp: 10, levelSteps: { from: 22, every: 15, max: 6 }, message: "You manage to mine some volcanic ash." },
+      { itemId: ItemIdentifiers.SODA_ASH, min: 1, max: 1, weight: 1, xp: 10, message: "You manage to mine some soda ash." },
+    ],
+  },
   // Wiki Nickel rocks: 2-16 ores before the rock goes, 2 min respawn; only Varrock armour 4 adds ore
   // (the cape and celestial ring stop below level 74). No published chart: mithril's is an estimate.
   { objectName: "Nickel rocks", level: 74, xp: 80.5, oreId: ItemIdentifiers.NICKEL_ORE, petBase: 247200, chance: [4, 50], gems: true, respawnTicks: 200, yield: { min: 2, max: 16 } },
@@ -694,11 +714,20 @@ function startMining(player, rockObject, rock, activeSessions) {
     location: rockObject.getLocation().clone(),
     privateArea: rockObject.getPrivateArea(),
     swingTick: miningTick + 1,
-    // The skilling timer carries over between rocks: a roll waits for the last one's interval.
-    nextRollTick: Math.max(miningTick + FIRST_ROLL_DELAY_TICKS, ROLL_READY_TICKS.get(player) ?? 0),
+    nextRollTick: firstRollTick(player, pickaxe, rock),
   });
   ACTIVE_MINERS.add(player);
   return true;
+}
+
+/**
+ * The tick of a new session's first roll. The skilling timer carries over between rocks: a roll waits for the last
+ * one's interval. A rock with a `freshRollTimer` (ash piles) starts its own: the first roll is a full pickaxe
+ * interval after arrival, one less than that after the swing, however recently the last pile was mined.
+ */
+function firstRollTick(player, pickaxe, rock) {
+  if (rock.freshRollTimer) return miningTick + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe));
+  return Math.max(miningTick + FIRST_ROLL_DELAY_TICKS, ROLL_READY_TICKS.get(player) ?? 0);
 }
 
 /** Mining's chat lines are spam (rsprox captures), except where a rock was recorded otherwise. */
@@ -799,7 +828,13 @@ function answerGemRoll(request) {
   request.gem = true;
 }
 
-function outcomeAmount(outcome) {
+/**
+ * How many of an outcome a success gives: `min`-`max`, or one from `levelSteps.from` and one more every `every`
+ * levels up to `max`, by the current (boosted) level (Wiki Volcanic ash: "Boosts can be used").
+ */
+function outcomeAmount(player, outcome) {
+  const steps = outcome.levelSteps;
+  if (steps) return Math.min(steps.max, 1 + Math.floor(Math.max(0, getMiningLevel(player) - steps.from) / steps.every));
   return outcome.min + Math.floor(Math.random() * (outcome.max - outcome.min + 1));
 }
 
@@ -899,7 +934,7 @@ class MiningTask extends Task {
 
       const { outcome } = landed;
       let oreId = outcome?.itemId ?? state.rock.oreId;
-      let amount = outcome?.min !== undefined ? outcomeAmount(outcome) : oreAmount(player, state.rock);
+      let amount = outcome?.min !== undefined || outcome?.levelSteps ? outcomeAmount(player, outcome) : oreAmount(player, state.rock);
       // Content may change what a success yields ("mining:ore-yield": a bracelet of clay softens clay and
       // doubles soft clay). `spend` runs once the ore is really kept, so a charge is not used on an ore
       // that content takes off the player or a pickaxe burns.

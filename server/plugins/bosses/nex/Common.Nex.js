@@ -238,18 +238,15 @@ function setEssence(player, value) {
   GodWars.setEssence(player, ancient(), value);
 }
 
-/** Wiki ("God Wars Dungeon/God items"): what counts as Zarosian, by the cache's item name. */
-function isZarosian(name) {
-  const lower = String(name ?? "").toLowerCase();
-  if (lower === "ancient hilt") return false;
-  return data.prison.itemKeywords.some((keyword) =>
-    keyword.endsWith(" ") ? lower.startsWith(keyword) : keyword.startsWith(" ") ? lower.endsWith(keyword) : lower === keyword);
+/** Wiki ("God Wars Dungeon/God items"): Zaros's protection items, the same table the God Wars Dungeon uses. */
+function isZarosian(name, id = -1) {
+  return GodWars.isGodItem(ancient(), id, String(name ?? ""));
 }
 
 function wearsZarosian(player) {
   const { ItemDefinition } = core;
   return player.getEquipment().getItems().some((item) =>
-    item && item.getId() > 0 && isZarosian(ItemDefinition.forId(item.getId())?.getName?.()));
+    item && item.getId() > 0 && isZarosian(ItemDefinition.forId(item.getId())?.getName?.(), item.getId()));
 }
 
 /** m:ss, as the kill message prints a fight's length. */

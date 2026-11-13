@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5704 (Fossil Island to Lithkren after Talk-to's Yes please.: the message and fade on that continue, the move on the third tick facing north, angle 1024) and 227/91, 227/1768 (Lithkren's Travel: the move facing east, angle 1536). Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
+  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5876 (Travel at Fossil Island: the message and fade on the click, the move on the third tick facing north, angle 1024) and tick 5863 (Talk-to at Lithkren, Yes please.: the same timeline to Fossil Island facing east, angle 1536). Their Travel waits for Dragon Slayer II's own arrival on Lithkren: the cache shows it from varbit 6104 65 (rowboat built), mid-quest. Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
   "routes": {
     "larry-weiss": { "style": "larry_weiss", "ticks": 9, "to": [2849, 3968, 0] },
     "larry-iceberg": { "style": "larry_iceberg", "ticks": 7, "to": [2660, 3989, 1] },
@@ -64,8 +64,8 @@
     { "npc": "Torfinn", "option": "Ungael", "route": "ungael" },
     { "npc": "Torfinn", "option": "Rellekka", "route": "ungael-back" },
     { "npc": "Barge guard", "option": "Quick-Travel", "route": "fossil-island" },
-    { "npc": "Jardric", "option": "Travel", "from": ["jardric_boat"], "route": "lithkren" },
-    { "npc": "Jardric", "option": "Travel", "from": ["jardric_lithkren"], "route": "lithkren-back" },
+    { "npc": "Jardric", "option": "Travel", "from": ["jardric_boat"], "gate": "dragonSlayerIILithkren", "route": "lithkren" },
+    { "npc": "Jardric", "option": "Travel", "from": ["jardric_lithkren"], "gate": "dragonSlayerIILithkren", "route": "lithkren-back" },
     { "npc": "Jeb", "option": "Travel", "near": [2719, 3304], "route": "fishing-platform" },
     { "npc": "Jeb", "option": "Travel", "near": [2782, 3273], "route": "witchaven" },
     { "npc": "Sailor", "option": "Miscellania", "route": "miscellania", "gate": "fremennikTrials" },
@@ -133,7 +133,8 @@
   "gates": {
     "fremennikTrials": { "quest": "fremennik_trials", "complete": true, "refusal": "before-the-fremennik-trials" },
     "fremennikIsles": { "quest": "the_fremennik_isles", "started": true, "refusal": "before-the-fremennik-trials" },
-    "dragonSlayerII": { "quest": "dragon_slayer_ii", "complete": true }
+    "dragonSlayerII": { "quest": "dragon_slayer_ii", "complete": true },
+    "dragonSlayerIILithkren": { "quest": "dragon_slayer_ii", "complete": true, "orAttribute": "dragon-slayer-ii:lithkren-arrived" }
   },
   "entrana": {
     "conditions": {

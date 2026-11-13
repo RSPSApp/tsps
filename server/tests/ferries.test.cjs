@@ -798,9 +798,10 @@ test("Larry's iceberg voyage shows the captured ship interface before landing", 
 });
 
 test("Jardric's rowboat after Dragon Slayer II: Travel from Fossil Island lands at Lithkren facing north", () => {
-  // rsprox 231/711 tick 5704: the message (spam) and fade on the click, the minimap off a tick
+  // rsprox 231/711 tick 5876: the message (spam) and fade on the click, the minimap off a tick
   // later, the move to 3583,3973 on the third (face_angle 1024), the fade in on the fifth.
   const minimap = CacheDefinitions.getVarbitId("minimap_state");
+  quests.complete.add("dragon_slayer_ii");
   const player = createPlayer({ at: new Location(3661, 3849, 0) });
   const event = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
   assert.equal(event.handled, true);
@@ -823,7 +824,8 @@ test("Jardric's rowboat after Dragon Slayer II: Travel from Fossil Island lands 
 });
 
 test("Jardric's Travel at Lithkren rows back to Fossil Island facing east", () => {
-  // rsprox 227/91, 227/1768: "You board the boat and travel to Fossil Island.", 3660,3849, angle 1536.
+  // rsprox 231/711 tick 5863 (and 227/91, 227/1768): "You board the boat and travel to Fossil Island.", 3660,3849, angle 1536.
+  quests.complete.add("dragon_slayer_ii");
   const player = createPlayer({ at: new Location(3583, 3974, 0) });
   click(player, "Jardric", "Travel", { gameval: "jardric_lithkren", at: [3581, 3975] });
   assert.deepEqual(player.sent.spam, ["You board the boat and travel to Fossil Island."]);
@@ -857,4 +859,25 @@ test("Jardric's Talk-to offers the crossing after Dragon Slayer II, and Yes plea
   const home = { player: back, npcId: npcId("jardric_lithkren"), stepId: "0P4s9G", kind: "message", handled: false };
   for (const handler of hooks.events.get("npc-dialogue:action")) handler(home);
   assert.deepEqual(back.sent.spam, ["You board the boat and travel to Fossil Island."]);
+});
+
+test("mid Dragon Slayer II, Jardric's Travel is the quest's until it lands the player on Lithkren", () => {
+  // The multi-NPC shows Travel from varbit 6104 65 (the rowboat built), before the quest's own
+  // arrival (Dallas's crossing): the ferry leaves that click alone.
+  const player = createPlayer({ at: new Location(3661, 3849, 0) });
+  const attributes = new Map();
+  player.getAttribute = (key) => attributes.get(key);
+  const early = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
+  assert.equal(early.handled, false);
+  assert.deepEqual(player.sent.spam, []);
+  assert.deepEqual(starts, []);
+  tick(3);
+  assert.deepEqual(at(player), [3661, 3849, 0]);
+
+  // Once the quest has landed them there, the rowboat runs both ways before the quest ends.
+  attributes.set("dragon-slayer-ii:lithkren-arrived", true);
+  const later = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
+  assert.equal(later.handled, true);
+  tick(3);
+  assert.deepEqual(at(player), [3583, 3973, 0]);
 });

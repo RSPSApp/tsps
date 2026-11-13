@@ -105,8 +105,11 @@ function opRoute(event) {
 function npcOption(event) {
   const entry = opRoute(event);
   if (!entry) return;
-  event.handled = true;
   const { player } = event;
+  // A gate without a refusal leaves the click to its quest (Dragon Slayer II owns Jardric's
+  // rowboat until it lands the player on Lithkren).
+  if (!Common.passes(player, entry.gate) && !Common.data.gates[entry.gate]?.refusal) return;
+  event.handled = true;
   if (Common.travelling(player)) return;
   if (!Common.passes(player, entry.gate)) {
     Common.playTranscript(player, Common.speaker(event), { variant: Common.data.gates[entry.gate].refusal, exact: true });

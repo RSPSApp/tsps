@@ -36,6 +36,7 @@ const api = {
   emitCustomEvent(name, payload) { emitted.push([name, payload]); },
   registerDefinitionSource() {},
   registerNpcCombatMethodProvider() {},
+  onServerStartup() {},
   getAreaManager: () => ({ areas: [] }),
   getObjectManager: () => ObjectManager,
   getRegionManager: () => RegionManager,

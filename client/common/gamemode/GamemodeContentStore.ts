@@ -88,7 +88,8 @@ export type EnumOverride = {
 };
 
 let structOverrides: Map<number, Record<string, number | string>> | null = null;
-let enumOverrides: Map<number, EnumOverride> | null = null;
+/** Each sender's enum overrides (by payload gamemodeId), the latest sender first, so two don't clear each other. */
+const enumOverridesBySender = new Map<string, Map<number, EnumOverride>>();
 let dbRowOverrides: Map<number, DbRowOverrideRow> | null = null;
 
 let dynamicWidgetGroups: Map<number, { root: any; widgets: Map<number, any> }> | null = null;
@@ -167,7 +168,8 @@ export function loadFromPayload(payload: {
                 break;
             // The override datasets are replaced whole when sent: the server sends one complete payload
             // (a league's relics, ranks and tasks together), so a payload without the dataset keeps
-            // the last set and an empty one clears it.
+            // the last set and an empty one clears it. Enum overrides are kept per sender (gamemodeId),
+            // so another plugin's (Grouping's enum 850) doesn't clear a league's.
             case "structOverrides":
                 structOverrides = new Map();
                 for (const row of dataset.rows as StructOverrideRow[]) {
@@ -182,8 +184,10 @@ export function loadFromPayload(payload: {
                     dbRowOverrides.set(row.rowId | 0, row);
                 }
                 break;
-            case "enumOverrides":
-                enumOverrides = new Map();
+            case "enumOverrides": {
+                const enumOverrides = new Map<number, EnumOverride>();
+                enumOverridesBySender.delete(payload.gamemodeId);
+                enumOverridesBySender.set(payload.gamemodeId, enumOverrides);
                 for (const row of dataset.rows as EnumOverrideRow[]) {
                     if (row?.enumId == null || !Array.isArray(row.entries)) continue;
                     const strings = row.valueType === "s";
@@ -204,6 +208,7 @@ export function loadFromPayload(payload: {
                     });
                 }
                 break;
+            }
             case "customTasks":
                 customTasksByStructId = new Map();
                 customTasksByTaskId = new Map();
@@ -334,9 +339,14 @@ export function getStructOverride(structId: number, paramId: number): number | s
     return structOverrides?.get(structId | 0)?.[paramId | 0];
 }
 
-/** A server-sent enum, or undefined to read the cache. */
+/** A server-sent enum (the latest sender's, when two send one), or undefined to read the cache. */
 export function getEnumOverride(enumId: number): EnumOverride | undefined {
-    return enumOverrides?.get(enumId | 0);
+    const senders = [...enumOverridesBySender.values()];
+    for (let i = senders.length - 1; i >= 0; i--) {
+        const override = senders[i].get(enumId | 0);
+        if (override) return override;
+    }
+    return undefined;
 }
 
 /** A server-sent DB row, or undefined to read the cache. */

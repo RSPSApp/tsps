@@ -3,15 +3,18 @@
 /**
  * ::group on its own opens the panel; with a word it does what the panel's buttons do, by name:
  * ::group invite <name>, accept [name], decline [name], withdraw <name>, promote <name>,
- * kick <name>, leave, disband, create, and info (the group as a chat line).
+ * kick <name>, leave, disband, create, info (the group as a chat line) and chat (into the group's
+ * own chat-channel).
  */
 
 const Store = require("./Store.Grouping");
 const Members = require("./Members.Grouping");
 const Actions = require("./Actions.Grouping");
+const Activities = require("./Activities.Grouping");
+const Channels = require("./Channels.Grouping");
 const Panel = require("./Panel.Grouping");
 
-const USAGE = "Use ::group, or ::group invite/accept/decline/withdraw/promote/kick <name>, leave, disband or info.";
+const USAGE = "Use ::group, or ::group invite/accept/decline/withdraw/promote/kick <name>, leave, disband, info or chat.";
 
 /** The group whose invitation the player means: the one led or joined by `name`, else the newest. */
 function invitationFrom(player, name) {
@@ -34,6 +37,8 @@ function describe(player) {
   const invited = snapshot.invites.map(({ name }) => name);
   Actions.tell(player, `Group (${group.members.size}/${snapshot.cap}): ${members.join(", ")}.`
     + (invited.length ? ` Invited: ${invited.join(", ")}.` : ""));
+  const tooBig = Activities.tooBigFor(group);
+  if (tooBig.length) Actions.tell(player, `Too many players for: ${tooBig.join(", ")}.`);
   return true;
 }
 
@@ -52,6 +57,7 @@ function run({ player, parts = [] }) {
     case "leave": Actions.leave(player); break;
     case "disband": Actions.disband(player); break;
     case "info": describe(player); break;
+    case "chat": Channels.switchToGroupChannel(player); break;
     default: Actions.tell(player, USAGE);
   }
   return true;

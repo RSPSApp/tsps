@@ -56,8 +56,9 @@ function player(t) {
 const id = (name) => core.CacheDefinitions.getObjId(name);
 const tree = () => {
   const locId = core.CacheDefinitions.getLocId('wom_tree');
-  return MapObjects.get(locId, new Location(TREE.x, TREE.y, 0), null)
-    ?? { getId: () => locId, getLocation: () => new Location(TREE.x, TREE.y, 0), getDefinition: () => core.ObjectDefinition.forId(locId) };
+  const object = MapObjects.get(locId, new Location(TREE.x, TREE.y, 0), null);
+  assert.ok(object, 'the guard tree stands at 3085,3243');
+  return object;
 };
 
 function click(p, clickType) {
@@ -115,6 +116,25 @@ test('Chop down with an axe swings, then the guard complains; no logs, no stump,
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.LOGS), 0);
   assert.equal(p.getSkillManager().getExperience(core.Skill.WOODCUTTING), 0);
   assert.ok(tree(), 'the tree still stands');
+});
+
+test('a second click mid-swing queues no second complaint, and Talk to mid-swing wins', (t) => {
+  const p = player(t);
+  p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  click(p, 1);
+  ticks(1);
+  click(p, 1);
+  assert.equal(p.anims.length, 1, 'one swing');
+  ticks(1);
+  assert.match(current(p), /^Guard: /);
+  p.getDialogueManager().advance();
+  ticks(3);
+  assert.equal(current(p), null, 'no second complaint');
+
+  click(p, 1);
+  click(p, 2);
+  ticks(Plugin._test.CHOP_TICKS + 1);
+  assert.equal(current(p), 'Player: Hello?', 'the conversation is not replaced');
 });
 
 test('Chop down without an axe gives the no-axe message and no complaint', (t) => {

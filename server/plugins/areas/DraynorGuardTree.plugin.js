@@ -14,6 +14,8 @@
  * - Any other item used on the tree: the guard waves it away.
  */
 
+const Woodcutting = require("../skills/Woodcutting.plugin");
+
 const TREE_LOC = "wom_tree";
 const GUARD_NPC = "wom_bankguard";
 const GUARD_NAME = "Guard";
@@ -48,6 +50,8 @@ const BANK_JOB_VARBIT = "wom_bankjob";
 const BANK_GUARD_ROBBERY_LINE = "Someone smashed the wall when they were robbing the bank.";
 /** Non-saved: the guard is eating the player's stew until the bowl drops. */
 const EATING_ATTRIBUTE = "draynor-guard-tree:eating";
+/** Non-saved: the swing in progress, so a second click doesn't queue a second complaint. */
+const CHOPPING_ATTRIBUTE = "draynor-guard-tree:chopping";
 
 let api = null;
 let core = null;
@@ -192,6 +196,7 @@ function dropBowl(player) {
 }
 
 function talkTo({ player }) {
+  player.setAttribute(CHOPPING_ATTRIBUTE, null);
   if (isEating(player)) {
     say(player, [["player", "I think I should leave him in peace to finish his stew!", "chatneu1"]]);
     return true;
@@ -220,13 +225,19 @@ function chopDown({ player, object }) {
   const request = { player, itemId: null, axe: null };
   api.emitCustomEvent("woodcutting:axe", request);
   if (!request.axe) {
-    player.sendMessage("You need an axe to chop down this tree.<br>You do not have an axe which you have the woodcutting level to use.");
+    player.sendMessage(Woodcutting.NO_AXE_MESSAGE);
     return true;
   }
+  if (player.getAttribute(CHOPPING_ATTRIBUTE)) return true;
+  const swing = {};
+  player.setAttribute(CHOPPING_ATTRIBUTE, swing);
   const at = player.getLocation().clone();
   player.setPositionToFace(object.getLocation());
   player.performAnimation(new Animation(request.axe.animationId));
   later(player, CHOP_TICKS, () => {
+    // Talking to him or using an item on the tree mid-swing takes over from the complaint.
+    if (player.getAttribute(CHOPPING_ATTRIBUTE) !== swing) return;
+    player.setAttribute(CHOPPING_ATTRIBUTE, null);
     if (!player.isRegistered() || !player.getLocation().equals(at)) return;
     player.performAnimation(new Animation(-1));
     Sounds.sendSound(player, Sound.PLAYER_GETTING_HIT);
@@ -241,6 +252,7 @@ function useItemOnTree(event) {
   if (event.objectId !== treeId()) return;
   event.handled = true;
   const { player, itemId } = event;
+  player.setAttribute(CHOPPING_ATTRIBUTE, null);
   if (isEating(player)) {
     say(player, [["player", "I think I should leave him in peace to finish his stew!", "chatneu1"]]);
     return;

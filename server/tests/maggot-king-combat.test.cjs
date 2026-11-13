@@ -385,7 +385,11 @@ test('sticky contact follows native walking, consumes the pool, drains a combat 
   for (const skill of skills) p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
   const beforeStats = skills.map(skill => p.getSkillManager().getCurrentLevel(skill));
   p.getCombat().setAttackDelay(10);
-  input(p, () => p.getMovementQueue().addFirstStep(destination));
+  input(p, () => {
+    // The opening ranged impact is due during this bounded sticky observation.
+    core.PrayerHandler.activatePrayerPrayerId(p, core.PrayerHandler.PROTECT_FROM_MISSILES);
+    p.getMovementQueue().requestWalk(destination);
+  });
   assert.ok(p.getLocation().equals(destination), 'native movement actually stepped onto the pool');
   assert.equal(fight.floor.has(fight.key(destination)), false);
   ticks(1);
@@ -541,11 +545,47 @@ test('whole1500HP encounter traverses rotations and thresholds through real rang
   assert.equal(p.getCombat().getTarget(), boss, 'ordinary full-fight Attack holds the real boss');
   assert.equal(boss.getCombat().getHitQueue().hasPendingHitFrom(p), true, 'opening shot actually committed to the native target queue');
   assert.ok(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount() < ammoBefore);
-  for (let tick = 0; tick < 2400 && boss.getHitpoints() > 0; tick++) {
+  let allHealing = 0, controllerHealing = 0, walkInputs = 0, retargetInputs = 0;
+  const setHitpoints = boss.setHitpoints;
+  t.mock.method(boss, 'setHitpoints', function(value) {
+    const before = this.getHitpoints();
+    const result = setHitpoints.call(this, value);
+    allHealing += Math.max(0, this.getHitpoints() - before);
+    return result;
+  });
+  const heal = fight.heal;
+  t.mock.method(fight, 'heal', function(amount) {
+    const before = boss.getHitpoints();
+    const result = heal.call(this, amount);
+    controllerHealing += Math.max(0, boss.getHitpoints() - before);
+    return result;
+  });
+  // An actual sustained input sequence: leave a live larva before its deferred contact hit,
+  // then reselect Attack when the walk finishes. Healing and NPC/controller movement stay live.
+  const fullInput = () => {
+    if (boss.getHitpoints() <= 0 || Instance.sessionOf(p) !== session) return;
     phases.add(fight.phase);
-    lowest = Math.min(lowest, boss.getHitpoints());
-    core.World.process();
-  }
+    const larvae = [...fight.larvae].filter(larva => larva.npc.getHitpoints() > 0);
+    if (larvae.some(larva => larva.npc.getLocation().equals(p.getLocation()))) {
+      const next = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+        .map(([dx, dy]) => p.getLocation().transform(dx, dy, 0))
+        .find(at => fight.inFloor(at) && p.getMovementQueue().canWalkTo(at)
+          && !larvae.some(larva => larva.npc.getLocation().equals(at)));
+      if (next) { p.getMovementQueue().requestWalk(next); walkInputs++; return; }
+    }
+    if (p.getCombat().getTarget() !== boss && p.getMovementQueue().getDestination() === null) {
+      attack(p, boss);
+      retargetInputs++;
+    }
+  };
+  p.getSession().setTurnPacketProcessor(fullInput);
+  try {
+    for (let tick = 0; tick < 2400 && boss.getHitpoints() > 0; tick++) {
+      phases.add(fight.phase);
+      lowest = Math.min(lowest, boss.getHitpoints());
+      core.World.process();
+    }
+  } finally { p.getSession().setTurnPacketProcessor(() => {}); }
   const rows = finalDamage.slice(rowsBefore).filter(row => row.attacker === p);
   console.log(JSON.stringify({ event: 'maggot-native-full-damage-boundary', lowest, bossHitpoints: boss.getHitpoints(),
     phases: [...phases], ammoBefore, ammoAfter: p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),
@@ -553,7 +593,8 @@ test('whole1500HP encounter traverses rotations and thresholds through real rang
     rolled: rows.reduce((sum, row) => sum + row.before, 0), applied: rows.reduce((sum, row) => sum + (row.applied ?? 0), 0),
     appliedRows: rows.filter(row => row.applied !== null).length, targetHeld: p.getCombat().getTarget() === boss,
     ownerTile: session.worldTile(p.getLocation()), bossTile: session.worldTile(boss.getLocation()),
-    bossReplyTarget: boss.getCombat().getTarget() === p, bossSize: boss.getSize() }));
+    bossReplyTarget: boss.getCombat().getTarget() === p, bossSize: boss.getSize(),
+    allHealing, controllerHealing, walkInputs, retargetInputs }));
   assert.equal(boss.getHitpoints(), 0, 'unseeded boss health reaches death through ordinary player combat');
   for (const phase of ['ranged', 'magic', 'screech', 'melee']) assert.ok(phases.has(phase), `natural traversal saw${phase}`);
   until(() => session.boss === null, 20, 'native death dispatch ends the old controller');
@@ -802,12 +843,16 @@ test('real twin crush attacks boost only the first splat and first defence roll;
   const startDamage = finalDamage.length;
   const startDefence = defenceRolls.length;
   let clicked = false;
+  assert.equal(core.CombatFactory.validTarget(q, other.boss), true, 'other actor has a live valid own-session target');
+  assert.equal(core.CombatFactory.canAttackPermission(q, other.boss, false, core.CombatFactory.getMethod(q)),
+    core.CanAttackResponse.CAN_ATTACK);
+  assert.equal(session.area.canAttack(q, session.boss), false, 'owner area independently refuses another actor');
+  assert.equal(core.CombatFactory.canAttackPermission(q, session.boss, false, core.CombatFactory.getMethod(q)),
+    core.CanAttackResponse.INVALID_TARGET, 'native cross-private-scene validation refuses the foreign target before area policy');
   p.getCombat().setAttackDelay(30);
   p.getSession().setTurnPacketProcessor(() => {
     if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
     clicked = true;
-    assert.equal(core.CombatFactory.canAttackPermission(q, session.boss, false, core.CombatFactory.getMethod(q)),
-      core.CanAttackResponse.CANT_ATTACK_IN_AREA, 'other session never acquires the owner\'s punish');
     attack(p, session.boss);
     // A held native target is setup for the other actor, without manufacturing a fresh NPC click stamp.
     q.getCombat().setAttackDelay(0);

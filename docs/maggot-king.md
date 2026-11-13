@@ -27,17 +27,18 @@ No static escape Cave exists in the correct copied cache region. The instance th
 
 Unmeasured details are explicit tuning: uniform4–8 selection,6ticks before/5after the first screech, two-tick spit flight, three carrion piles with three-tick warnings and two adjacent fragments a tick later, a five-tick screech transition, three-tick larva airborne window, one-tile-per-tick horizontal traversal, and a minimum two-tick melee windup extended until the body arrives. Poisonous bile's unspecified minor damage uses2–4, matching the separately documented sticky range. These are not capture-derived exact retail RNG/cadences. Relevant corpus candidates were searched; the inspected historical name hit4276/rev239.1 is clan chatter, not a fight recording or proof of global absence.
 
-## Verification status
+## Verification
 
 Accepted native BEFORE source `6395abd2a685138e9c68f11742932e4acb80759a` preserved both causal failures: wrong production map after quest/solo/bystander controls, and generic melee animation422 instead of ranged13933 after ordinary NPC Attack, actual ammo consumption and eight native world turns. A separate native correct-map case passed. Three legacy hybrid cases passed; the new native file had one pass/two intended failures. This was formalERROR70, never whole-workload green. Later entry-arrival assertions were unreached. No baseline replay is required.
 
-Current candidate is awaiting independent source/fixture review and supported remote AFTER execution. Only syntax and patch checks have run locally. No local heavy build, gameplay, browser or rendered-client proof is claimed.
+Verification uses the existing remote Linux build/cache/test route. Local checks cover syntax and patch integrity. Exact tested revisions, observed outcomes and retained failures are reported in the PR evidence; source review alone does not establish a passing run. No local heavy build, browser or rendered-client proof is claimed.
 
 Intended supported commands, from `server` after the reviewed build/cache setup:
 
 ```
 node --test tests/maggot-king.test.cjs
+node --test tests/shared-poison-counter.test.cjs
 node --test tests/maggot-king-combat.test.cjs
 ```
 
-The native fixture uses real cache/Player/World/registered hooks and ordinary NPC Attack input. Quest completion, equipment and standing are supplied. Targeted HP/hazard checkpoints are marked. The complete boss-health traversal keeps1500HP unseeded and uses native attacks through death/retry, with player invulnerability supplied for survival; separate prayer/floor/larva cases use ordinary99HP actors. This does not claim a natural quest, unaided full-fight survival, sockets, rendering, exact retail timings, every gear variant or the queued corpse reward chain.
+The native fixture uses real cache/Player/World/registered hooks and ordinary NPC Attack input. Quest completion, equipment and standing are supplied. Targeted HP/hazard checkpoints are marked. The complete boss-health traversal keeps1500HP unseeded and drives native Attack and ordinary walking away from live larvae through death/retry, with player invulnerability supplied for survival; separate prayer/floor/larva cases use ordinary99HP actors. This does not claim a natural quest, unaided full-fight survival, sockets, rendering, exact retail timings, every gear variant or the queued corpse reward chain.

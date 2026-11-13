@@ -12,6 +12,9 @@ const SET = new Map([
   [Equipment.LEG_SLOT, ItemIdentifiers.JUSTICIAR_LEGGUARDS],
 ]);
 
+/** The set in the equipment effects panel (enum 3047). */
+const SET_TEXT = 15;
+
 function defenceBonusIndex(context) {
   if (context.type === CombatType.MAGIC) {
     return BonusManager.DEFENCE_MAGIC;
@@ -30,6 +33,11 @@ function wearingFullSet(player) {
     }
   }
   return true;
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && wearingFullSet(player)) request.setTexts?.push(SET_TEXT);
 }
 
 function applyJusticiarDamage(entity, hitDamage, context = {}) {
@@ -52,4 +60,7 @@ function applyJusticiarDamage(entity, hitDamage, context = {}) {
 
 module.exports = function registerJusticiarEffects(api) {
   api.registerIncomingDamageModifier(applyJusticiarDamage);
+  api.onCustomEvent?.("equipment:effects", addSetText);
 };
+
+module.exports._test = { addSetText };

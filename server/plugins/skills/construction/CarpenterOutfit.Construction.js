@@ -18,6 +18,8 @@ const OUTFIT_PIECES = [
   { slot: "FEET_SLOT", item: "construction_boots", bonus: 0.002 },
 ];
 const SET_BONUS = 0.005;
+/** The full outfit in the equipment effects panel (enum 3047). */
+const SET_TEXT = 23;
 const OUTFIT_MULTIPLIER_EVENT = "construction:outfit-multiplier";
 
 function wornPieces(player) {
@@ -41,8 +43,14 @@ function answerMultiplier(request) {
   request.multiplier *= xpMultiplier(request.player);
 }
 
-function attachCarpenterOutfit(api) {
-  api.onCustomEvent(OUTFIT_MULTIPLIER_EVENT, answerMultiplier);
+function addSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && wornPieces(player).length === OUTFIT_PIECES.length) request.setTexts?.push(SET_TEXT);
 }
 
-module.exports = { attachCarpenterOutfit, xpMultiplier, withBonus, OUTFIT_MULTIPLIER_EVENT };
+function attachCarpenterOutfit(api) {
+  api.onCustomEvent(OUTFIT_MULTIPLIER_EVENT, answerMultiplier);
+  api.onCustomEvent("equipment:effects", addSetText);
+}
+
+module.exports = { attachCarpenterOutfit, addSetText, xpMultiplier, withBonus, OUTFIT_MULTIPLIER_EVENT };

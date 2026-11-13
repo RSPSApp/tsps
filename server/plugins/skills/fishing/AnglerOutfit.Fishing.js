@@ -39,6 +39,8 @@ const BOX_STEPS = Object.freeze({
 });
 
 const SET_BONUS = 0.005;
+/** The full outfit in the equipment effects panel (enum 3047): the spirit text, with its Tempoross tether, only when every piece is spirit. */
+const SET_TEXT = { angler: 16, spirit: 28 };
 
 function wornPieces(player) {
   const equipment = player.getEquipment().getItems();
@@ -47,6 +49,14 @@ function wornPieces(player) {
 
 function wearsFullOutfit(player) {
   return wornPieces(player).length === pieces.length;
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (!player?.getEquipment || !Equipment || !wearsFullOutfit(player)) return;
+  const items = player.getEquipment().getItems();
+  const spirit = pieces.every((piece) => items[Equipment[piece.slot]]?.getId() === piece.ids[1]);
+  request.setTexts?.push(spirit ? SET_TEXT.spirit : SET_TEXT.angler);
 }
 
 function xpMultiplier(player) {
@@ -235,9 +245,10 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent("npc-dialogue:choice", onDialogueChoice);
   pluginApi.onCustomEvent("npc-dialogue:action", onDialogueAction);
   pluginApi.onCustomEvent("npc-dialogue:start", clearPending);
+  pluginApi.onCustomEvent("equipment:effects", addSetText);
 }
 
 module.exports = {
   attach, wearsFullOutfit, xpMultiplier,
-  _test: { answerGitaCondition, onConditionChosen, onDialogueChoice, onDialogueAction, onItemOnNpc, exchange, CONDITIONS, PAID_ATTRIBUTE },
+  _test: { addSetText, answerGitaCondition, onConditionChosen, onDialogueChoice, onDialogueAction, onItemOnNpc, exchange, CONDITIONS, PAID_ATTRIBUTE },
 };

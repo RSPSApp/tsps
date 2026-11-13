@@ -746,6 +746,19 @@ test("the amulet leaves unfinished potions and 4-dose potions alone, and extends
   });
 });
 
+// Wiki Amulet_of_chemistry: "Despite not being a potion, the amulet also affects Haemostatic dressing,
+// creating 4 'doses' instead of 3."
+test("the amulet gives a haemostatic dressing its fourth dose too", () => {
+  assert.equal(AmuletOfChemistry._test.withExtraDose(obj("3dosehaemostaticdressing")), obj("4dosehaemostaticdressing"));
+  rolling(true, () => {
+    const who = player([["haemostatic_poultice"], ["cotton_yarn"]], 56, { amulet: "amulet_of_chemistry" });
+    use(who, "cotton_yarn", "haemostatic_poultice");
+    assert.equal(who.inv.count("4dosehaemostaticdressing"), 1);
+    assert.equal(who.inv.count("3dosehaemostaticdressing"), 0);
+    assert.equal(who.getAttribute(CHARGES), 4);
+  });
+});
+
 test("the charges run 4, 3, 2, one (red) and then the amulet crumbles and the next starts from 5", () => {
   rolling(true, () => {
     const who = player([...Array(5).fill(["ranarrvial"]), ...Array(5).fill(["snape_grass"])], 38, { amulet: "amulet_of_chemistry" });

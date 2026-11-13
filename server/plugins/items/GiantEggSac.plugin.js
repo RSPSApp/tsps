@@ -17,7 +17,7 @@ const EGGS_META = "giant-egg-sac:eggs";
 const FULL_EGGS = 100;
 /** The bank panel's op the open sac labels "Empty" (rsprox captures: bankside op9). */
 const BANK_EMPTY_OP = 9;
-const KNIFE_NAMES = ["KNIFE", "KNIFE_2", "KNIFE_3", "KNIFE_4", "KNIFE_5"];
+const KNIFE = "Knife";
 
 const NOT_IN_BANK = "You can only do this whilst in a bank.";
 const NO_KNIFE = "You need to have a knife to cut the egg sac open.";
@@ -32,8 +32,12 @@ function nearBank(player) {
   return query.near === true;
 }
 
+/** An unnoted item named Knife (any of the cache's knife copies; a noted one isn't a knife to cut with). */
 function hasKnife(inventory) {
-  return KNIFE_NAMES.some((name) => Number.isInteger(core.ItemIds[name]) && inventory.contains(core.ItemIds[name]));
+  return inventory.getValidItems().some((item) => {
+    const definition = item.getDefinition();
+    return !definition.isNoted() && definition.getName() === KNIFE;
+  });
 }
 
 /** The eggs left in an open sac; one saved before its count was set holds none (a full sac is never one). */
@@ -93,21 +97,12 @@ function cutOpenOption(event) {
 
 /** A knife on the full sac, either way round. */
 function knifeOnSac(event) {
-  const I = core.ItemIdentifiers;
-  const knives = new Set(KNIFE_NAMES.map((name) => core.ItemIds[name]).filter(Number.isInteger));
-  let sac = null;
-  let slot = null;
-  if (event.usedWithItemId === I.GIANT_EGG_SAC_FULL_ && knives.has(event.usedItemId)) {
-    sac = event.usedWithItem;
-    slot = event.usedWithItemSlot;
-  } else if (event.usedItemId === I.GIANT_EGG_SAC_FULL_ && knives.has(event.usedWithItemId)) {
-    sac = event.usedItem;
-    slot = event.usedItemSlot;
-  } else {
-    return;
-  }
+  const usedIsSac = event.usedItemId === core.ItemIdentifiers.GIANT_EGG_SAC_FULL_;
+  const sac = usedIsSac ? event.usedItem : event.usedWithItem;
+  const slot = usedIsSac ? event.usedItemSlot : event.usedWithItemSlot;
   event.handled = true;
   cutOpen(event.player, sac, slot);
+  return true;
 }
 
 /** Check-eggs on the full sac. */
@@ -172,7 +167,7 @@ module.exports = {
     core = api.core;
     api.onItemAction("Giant egg sac(full)", { "Cut-open": cutOpenOption, "Check-eggs": checkFull });
     api.onItemAction("Giant egg sac", { "Remove-eggs": removeEggs, "Check-eggs": checkOpen });
-    api.onItemOnItem(knifeOnSac, { noted: false });
+    api.onItemOnItem(KNIFE, "Giant egg sac(full)", knifeOnSac, { noted: false });
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, bankEmpty);
   },
   _test: { cutOpen, knifeOnSac, checkFull, checkOpen, removeEggs, bankEmpty, eggsIn, EGGS_META, FULL_EGGS },

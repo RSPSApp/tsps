@@ -11,6 +11,7 @@ const { EGGS_META } = GiantEggSac._test;
 let core;
 let actions;
 let onItemOnItem;
+let onItemOnItemNames;
 let bankOp;
 let nearBank;
 
@@ -18,7 +19,7 @@ function pluginApi() {
   return new Proxy({
     core,
     onItemAction(name, handlers) { actions.set(name, handlers); },
-    onItemOnItem(handler) { onItemOnItem = handler; },
+    onItemOnItem(...args) { onItemOnItem = args.find((arg) => typeof arg === "function"); onItemOnItemNames = args.filter((arg) => typeof arg === "string"); },
     onCustomEvent(name, handler) { if (name === core.Bank.INVENTORY_OP_EVENT) bankOp = handler; },
     emitCustomEvent(name, query) { if (name === "league:near-bank") query.near = nearBank; },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
@@ -105,6 +106,20 @@ test("Cut-open with a knife and an empty backpack gives 26 eggs and keeps 74", (
   assert.equal(eggCount(f), 26);
   assert.equal(f.inventory.getItems()[0].getMetaValue(EGGS_META), 74);
   assert.deepEqual(f.messages, ["You cut open the egg sac and receive 26 red spiders' eggs."]);
+});
+
+test("the knife hook is by name, knife and full sac", () => {
+  assert.deepEqual(onItemOnItemNames, ["Knife", "Giant egg sac(full)"]);
+});
+
+test("a noted knife is no knife to cut with", (t) => {
+  const f = actor(t);
+  put(f, I().GIANT_EGG_SAC_FULL_, 0);
+  put(f, core.ItemDefinition.forId(I().KNIFE).getNoteId?.() ?? 947, 1);
+  assert.equal(f.inventory.getItems()[1].getDefinition().isNoted(), true);
+  option("Giant egg sac(full)", "Cut-open", f, 0);
+  assert.deepEqual(f.messages, ["You need to have a knife to cut the egg sac open."]);
+  assert.equal(f.inventory.getItems()[0].getId(), I().GIANT_EGG_SAC_FULL_);
 });
 
 test("a knife on the full sac outside a bank refuses", (t) => {

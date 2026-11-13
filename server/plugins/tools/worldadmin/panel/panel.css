@@ -676,25 +676,20 @@ label.host-setting.host-switch-field { cursor: pointer; }
   align-items: start;
   gap: 16px;
 }
-.local-bot-table {
-  display: block;
-  max-height: 460px;
+.local-bot-table-scroll {
+  max-height: 390px;
   overflow: auto;
 }
-.local-bot-table table {
+.local-bot-table {
   width: 100%;
 }
 .local-bot-table th,
 .local-bot-table td {
   white-space: nowrap;
 }
-.local-bot-table td:nth-child(6) {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.local-bot-table td:first-child strong {
-  display: block;
+.local-bot-table th:last-child,
+.local-bot-table td:last-child {
+  display: table-cell;
 }
 .local-bot-managed {
   display: block;
@@ -955,12 +950,6 @@ label.host-setting.host-switch-field { cursor: pointer; }
   .local-bot-columns {
     grid-template-columns: 1fr;
   }
-  .local-bot-table {
-    max-height: 360px;
-  }
-  .local-bot-detail {
-    grid-row: 1;
-  }
 }
 @media (max-width: 650px) {
   .local-bots-heading,
@@ -988,12 +977,6 @@ label.host-setting.host-switch-field { cursor: pointer; }
   .local-bot-table th,
   .local-bot-table td {
     padding: 7px 8px;
-  }
-  .local-bot-table th:nth-child(4),
-  .local-bot-table td:nth-child(4),
-  .local-bot-table th:nth-child(5),
-  .local-bot-table td:nth-child(5) {
-    display: none;
   }
   .local-bot-skill-grid {
     grid-template-columns: 1fr 1fr;
@@ -1098,28 +1081,6 @@ label.host-setting.host-switch-field { cursor: pointer; }
   color: #aaa59a;
   font-size: 11px;
 }
-.local-bot-aerial-roster {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  max-height: 130px;
-  overflow: auto;
-  padding: 8px 0;
-}
-.local-bot-aerial-legend-item {
-  min-height: 27px !important;
-  padding: 2px 7px !important;
-  font-size: 10px !important;
-}
-.local-bot-aerial-legend-item i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.local-bot-aerial-legend-item[aria-pressed="true"] {
-  color: #f6e4a9 !important;
-  border-color: #caa95e !important;
-}
 .local-bot-swarm .local-bot-note {
   font-size: 11px;
 }
@@ -1138,9 +1099,6 @@ label.host-setting.host-switch-field { cursor: pointer; }
   }
   .local-bot-cohort-filters label {
     width: 100%;
-  }
-  .local-bot-aerial-roster {
-    max-height: 160px;
   }
 }
 .local-bot-aggregate-controls {
@@ -1175,6 +1133,97 @@ label.host-setting.host-switch-field { cursor: pointer; }
 @media (max-width: 650px) {
   .local-bot-aggregate-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+
+.local-bot-map-card {
+  display: grid;
+  gap: 12px;
+}
+.local-bot-aerial-actions,
+.local-bot-aerial-zoom,
+.local-bot-aerial-follow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.local-bot-aerial-actions {
+  flex-wrap: wrap;
+}
+.local-bot-aerial-map {
+  position: relative;
+  height: clamp(260px, 46vh, 520px);
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid #39362e;
+  border-radius: 5px;
+  background: #101113;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.local-bot-aerial-map.is-panning {
+  cursor: grabbing;
+}
+.local-bot-aerial-tiles,
+.local-bot-aerial-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.local-bot-aerial-tile {
+  position: absolute;
+  max-width: none;
+  image-rendering: pixelated;
+}
+.local-bot-aerial-marker {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.local-bot-aerial-marker:focus-visible circle {
+  stroke: white;
+  stroke-width: 3;
+}
+.local-bot-aerial-label {
+  fill: white;
+  stroke: #101113;
+  stroke-width: 3px;
+  paint-order: stroke;
+  font-weight: 600;
+}
+.local-bot-aerial-status:empty {
+  display: none;
+}
+.local-bot-aerial-status.error {
+  color: #ff9b94;
+}
+.local-bot-card > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.local-bot-swarm[open] > summary,
+.local-bot-card[open] > .local-bot-watch-bar {
+  margin-bottom: 8px;
+}
+.local-bots .local-bot-name {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e6cc8d;
+  font-weight: 600;
+}
+.local-bots .local-bot-name:hover {
+  text-decoration: underline;
+}
+@media (max-width: 650px) {
+  .local-bot-map-card .local-bots-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  .local-bot-map-card .local-bots-heading-actions {
+    width: auto;
   }
 }
 

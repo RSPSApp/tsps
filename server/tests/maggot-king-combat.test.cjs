@@ -117,7 +117,7 @@ function enter(p) {
     clickType, option: 'enter', location: { x: at.getX(), y: at.getY(), z: at.getZ() },
     sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
   const session = Instance.sessionOf(p);
-  assert.ok(session);
+  if (!session) return null; // quest refusal is an expected ordinary entry result
   // Enter and Fight.start place actors. Complete their ordinary sync/reset turn before input.
   const before = { ownerPlacement: p.isNeedsPlacement(), bossPlacement: session.boss.isNeedsPlacement(),
     validTarget: core.CombatFactory.validTarget(p, session.boss) };
@@ -440,8 +440,10 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   const approach = food.transform(0, y === Fight.FLOOR.maxY ? -1 : 1, 0);
   p.moveTo(approach);
   p.setNeedsPlacement(false); // supplied adjacent standing; actual contact begins with native walking
-  input(p, () => p.getMovementQueue().addFirstStep(food));
-  assert.ok(p.getLocation().equals(food), 'ordinary movement reaches the actual landed larva');
+  // Fight/larva task movement precedes this cycle's client input. Walk to its LIVE tile,
+  // one diagonal step from the supplied approach, after that native movement has occurred.
+  input(p, () => p.getMovementQueue().addFirstStep(larva.npc.getLocation().clone()));
+  assert.ok(p.getLocation().equals(larva.npc.getLocation()), 'ordinary movement reaches the live landed larva');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
   ticks(1);

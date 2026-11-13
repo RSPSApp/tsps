@@ -342,6 +342,8 @@ for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellboo
         assert.equal(p.hasVengeanceReturn(), casts);
       } else {
         assert.equal(p.getDialogueManager().isActive(), casts, 'Spellbook Swap opens its existing book chooser');
+        // Wiki (Spellbook Swap): the runes are spent when a book is selected.
+        if (casts) p.getDialogueManager().handleOption(1);
       }
       if (casts) {
         assert.notEqual(p.getAnimation()?.getId() ?? -1, -1);

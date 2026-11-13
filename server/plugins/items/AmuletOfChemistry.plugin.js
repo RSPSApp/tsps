@@ -97,7 +97,10 @@ function onMix(request) {
   request.extraDose = true;
 }
 
-/** "herblore:made": a brew given its extra dose costs its charge. */
+/**
+ * "herblore:made": a brew given its extra dose costs its charge. A league relic or fragment that makes the
+ * potion with 4 doses anyway clears `extraDose` (Wiki: no benefit for potions that always come with 4 doses).
+ */
 function onMade(made) {
   if (made.mix?.extraDose === true) spendCharge(made);
 }

@@ -13,11 +13,22 @@ const CAVE_EXIT_POSITION = { x: 2479, y: 5176, z: 0 };
 const VOLCANO_DUNGEON_LANDING = [2862, 9572, 0];
 
 const ACCESS_ATTRIBUTE = "mor-ul-rek:access";
+/** The Inferno's completion count (Run.Inferno's ATTR_COMPLETIONS): TzKal-Zuk beaten at least once. */
+const INFERNO_COMPLETIONS_ATTRIBUTE = "inferno:completions";
+/**
+ * The Wiki transcripts' blank for the player's TzHaar name ("Can I help you [TzHaar caste]-[player
+ * name]?"), sometimes written after "JalYt-" or before "-Xo" too. Live fills it with the whole name
+ * ("You need help JalYt-Mej-Z-Kris?", rsprox_transcripts/227/00073.txt; "JalYt-Mej-Xo-..." once into
+ * the inner core, 227/01749.txt). A Fight Pit champion's caste is not the player's: left alone.
+ */
+const CASTE_PLACEHOLDER = /(?:JalYt-(?:Hur-)?)?\[TzHaar caste\](?:-Xo)?(?!-\[champion's name\])/g;
+const CASTE_CONDITION = /^if the player's caste is jalyt-(mej|ket|xil|hur):?$/;
 const CAPE_SHOWN_STEP = "2-PLAV";
 const CAPE_BRANCH_ID = "qovHJi";
 const GUARD_PAGE = "TzHaar-Ket";
 const GUARD_VARIANT = "standard-dialogue";
 const { startTranscript } = require("../quests/QuestRuntime");
+const Names = require("./moruirek/Names.MorUiRek");
 const SHOW_CAPE_MESSAGE = "You hold out your fire cape and show it to TzHaar-Ket.";
 
 // The side facing the outer city: north on the three horizontal crossings, west on the other two.
@@ -37,6 +48,27 @@ let pluginApi;
 
 function hasAccess(player) {
   return player.getAttribute(ACCESS_ATTRIBUTE) === true;
+}
+
+/** "JalYt-Mej", "JalYt-Mej-Xo" or "JalYt-Mej-Kal" (Names.MorUiRek). */
+function tzhaarTitle(player) {
+  return Names.title(player, core.Skill, {
+    innerCore: hasAccess(player),
+    beatenZuk: (Number(player.getAttribute(INFERNO_COMPLETIONS_ATTRIBUTE)) || 0) > 0,
+  });
+}
+
+function fillTzhaarTitle(request) {
+  if (typeof request.text !== "string" || !request.text.includes("[TzHaar caste]")) return;
+  const title = tzhaarTitle(request.player);
+  request.text = request.text.replace(CASTE_PLACEHOLDER, title);
+}
+
+/** "If the player's caste is JalYt-Ket:": the TzHaar dialogues' branch for each caste. */
+function casteCondition({ player, text }) {
+  const match = CASTE_CONDITION.exec(String(text).trim().toLowerCase());
+  if (!match) return null;
+  return Names.caste(player, core.Skill).toLowerCase() === match[1];
 }
 
 function grantAccess({ player }) {
@@ -165,11 +197,15 @@ module.exports = {
   description: "Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors.",
   members: true,
   passVentDoor,
+  fillTzhaarTitle,
+  casteCondition,
   register(api) {
     core = api.core;
     pluginApi = api;
     api.persistAttribute(ACCESS_ATTRIBUTE, false);
     api.onNpcDialogueCondition(guardCondition);
+    api.onNpcDialogueCondition(casteCondition);
+    api.onCustomEvent("npc-dialogue:line", fillTzhaarTitle);
     api.onItemOnNpc(useCapeOnGuard);
     api.onCustomEvent("npc-dialogue:action", showCapeInDialogue);
     api.onCustomEvent("mor-ul-rek:grant-access", grantAccess);

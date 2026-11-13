@@ -5,6 +5,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const Names = require("../../areas/moruirek/Names.MorUiRek");
 
 /** Completions of challenge n (1-6) are kept here and mirrored to its varp. */
 const completionsAttribute = (challenge) => `tzhaar-ket-rak:challenge-${challenge}-completions`;
@@ -115,26 +116,12 @@ function defeatedZuk(player) {
   return (Number(player.getAttribute?.("inferno:completions")) || 0) > 0;
 }
 
-const CASTE_PAIRS = [
-  ["Mej", "MAGIC", "PRAYER"],
-  ["Ket", "STRENGTH", "DEFENCE"],
-  ["Xil", "ATTACK", "AGILITY"],
-  ["Hur", "CRAFTING", "SMITHING"],
-];
-
 /**
  * The caste a TzHaar calls the player by (Wiki TzHaar): the skill pair with the highest total,
  * ties going Mej, Ket, Xil, Hur.
  */
 function caste(player) {
-  const { Skill } = core;
-  const skills = player.getSkillManager();
-  let best = null;
-  for (const [name, a, b] of CASTE_PAIRS) {
-    const total = skills.getMaxLevel(Skill[a]) + skills.getMaxLevel(Skill[b]);
-    if (!best || total > best.total) best = { name, total };
-  }
-  return best.name;
+  return Names.caste(player, core.Skill);
 }
 
 /** Xo once into the inner city, Kal once TzKal-Zuk is beaten (Wiki TzHaar, honorifics). */

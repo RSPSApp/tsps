@@ -913,8 +913,11 @@ test("Flow State: Fletching's knife on logs asks for its pace: shafts every 2 ti
   };
   assert.deepEqual(cut(who.relic, I.KNIFE), [2, 4, 6]);
   for (const player of others(who)) assert.deepEqual(cut(player, I.KNIFE), [2, 5, 8], "the logs group's own 3 ticks");
-  assert.deepEqual(cut(who.relic, I.FLETCHING_KNIFE), [2, 3, 4], "the knife's tick off the relic's 2");
-  for (const player of others(who)) assert.deepEqual(cut(player, I.FLETCHING_KNIFE), [2, 4, 6], "the knife's own 2 ticks");
+  // Wiki (Fletching knife): the knife's tick comes off every item but the first, and on arrow shafts "both the first
+  // and second logs are fletched at the normal speed" (82930572c, #3571). Wiki (Flow State): it stacks with the knife,
+  // "lowered to 1 tick". So the second log keeps the relic's 2 and the third takes 1.
+  assert.deepEqual(cut(who.relic, I.FLETCHING_KNIFE), [2, 4, 5], "the knife's tick off the relic's 2, from the third log");
+  for (const player of others(who)) assert.deepEqual(cut(player, I.FLETCHING_KNIFE), [2, 5, 7], "the knife's own 2 ticks, from the third log");
 });
 
 test("Flow State: bones offered on an altar repeat every 2 ticks (4 without)", () => {

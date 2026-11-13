@@ -26,6 +26,7 @@ function makeHarness(pluginFile, levels = {}, extraPlugins = []) {
   const tasks = [], spawned = [], removed = [], xp = [], transcripts = [], playedDialogues = [], groundSpawns = [], persisted = [];
   let tick = 0;
   const executed = new Set();
+  const boatAfterTick = [];
   const core = {
     ...PluginManager.getCoreApi(),
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
@@ -34,6 +35,7 @@ function makeHarness(pluginFile, levels = {}, extraPlugins = []) {
     BoatManager: {
       getBoatAboard: (actor) => actor?.boat,
       getDeck: (boat) => boat?.deck,
+      onAfterTick: (listener) => boatAfterTick.push(listener),
     },
   };
   const api = new Proxy({

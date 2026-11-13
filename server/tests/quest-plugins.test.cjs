@@ -10824,7 +10824,9 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
     location: { x: 2656, y: 6370, z: 0 }, getLocation() { return this.location; }, moveTo(location) { this.location = location; },
     sendMessage(message) { playerMessages.push(String(message)); },
+    getDialogueManager: () => ({ startDialogues: builder => startedDialogues.push(builder) }),
   };
+  const startedDialogues = [];
   quest.setStage(player, 10);
   attrs.set('desert-treasure-ii:lassar', {
     entered: true, cathedralTentacles: true, perfectTorch: true, sanity: 100,
@@ -11147,6 +11149,10 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
   assert.equal(remains.getOwner?.(), player, 'the remains are private to the player who earned the kill');
   objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 47578, definition: { id: 47578 }, option: 'Search', location: { x: 2400, y: 6370, z: 0 } });
   assert.equal(items.get(core.ItemIdentifiers.WHISPERERS_MEDALLION), 1, 'the remains yield the actual medallion');
+  const medallionBox = [...startedDialogues.at(-1).getDialogues().values()];
+  assert.equal(medallionBox.length, 1);
+  assert.equal(medallionBox[0].constructor.name, 'ItemStatementDialogue', 'the medallion shows in an item box');
+  assert.equal(medallionBox[0].itemId, core.ItemIdentifiers.WHISPERERS_MEDALLION);
   assert.equal(attrs.get('desert-treasure-ii:lassar').medallion, true);
   assert.ok(deregisteredObjects.includes(remains), 'searching the remains removes the one-time loot object');
   objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 48310, definition: { id: 48310 }, option: 'Climb', location: { x: 2400, y: 6370, z: 0 } });

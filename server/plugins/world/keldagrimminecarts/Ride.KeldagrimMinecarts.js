@@ -13,8 +13,8 @@
  *   minecart to Keldagrim? It's free."); "Yes please." or Travel ride it.
  * - Into Keldagrim the screen comes back on the station's track, the cart rolls in, and the player
  *   steps off beside it.
- * Riding, the player is held still, and the client shows no weapon, shield or boots (the worn
- * items are untouched). One ride at a time. Logging out mid-ride finishes it (the save is at the
+ * Riding, the player is held still, sits in a cart (the riding stance) and the client shows no
+ * weapon, shield or boots (the worn items are untouched). One ride at a time. Logging out mid-ride finishes it (the save is at the
  * destination); a death ends it where the player is, with nothing more taken.
  * Any ride needs The Giant Dwarf started (the Wiki).
  * The station's carts are not in the map: they are placed here.
@@ -63,9 +63,17 @@ function takeTicket(player, ticket) {
   return true;
 }
 
-/** The worn weapon, shield and boots shown empty (or back), on the model and in the worn view. */
+/**
+ * The worn weapon, shield and boots shown empty (or back), on the model and in the worn view, and the
+ * cart (the feet identity kit) with the riding stance (human_minecart_anim on every stance slot) while
+ * they are hidden.
+ */
 function hideWorn(player, hidden) {
   const equipment = player.getEquipment();
+  player.setRenderAnimations?.(hidden ? Array(7).fill(Common.ids.seqs.ridingStance) : null);
+  const { ridingKits } = Common.data;
+  const male = player.getAppearance?.()?.isMale?.() !== false;
+  player.setDisplayedKits?.(hidden ? { [Common.core.Appearance.FEET]: male ? ridingKits.male : ridingKits.female } : null);
   if (!hidden) {
     player.setDisplayedEquipment(null);
     equipment.sendWornInventory?.();

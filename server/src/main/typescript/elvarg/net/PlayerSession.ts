@@ -667,7 +667,7 @@ export class PlayerSession {
     const cached = this.appearanceCache.get(player.getIndex());
     let payload = cached?.player === player && !dirty ? cached.payload : undefined;
     if (!payload) {
-      const look = player.getAppearance().getLook();
+      const look = player.getAppearanceLook();
       const equipment = player.getEquipment().getItems();
       const skillAnimation = player.getSkillAnimation();
       const weapon = equipment[3]?.getDefinition?.();

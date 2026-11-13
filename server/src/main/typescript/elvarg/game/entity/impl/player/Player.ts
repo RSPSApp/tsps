@@ -189,6 +189,7 @@ export class Player extends Mobile {
     private renderAnimations: number[] | null = null;
     /** Equipment slot -> item id shown in the appearance instead of the worn item (-1 shows the slot empty). */
     private displayedEquipment: Map<number, number> | null = null;
+    private displayedKits: Map<number, number> | null = null;
     private drainingPrayer = false;
     private prayerPointDrain = 0;
     /**
@@ -1245,6 +1246,28 @@ export class Player extends Mobile {
             : null;
         this.getUpdateFlag().flag(Flag.APPEARANCE);
         return this;
+    }
+
+    /**
+     * Shows other identity kits in some look slots (Appearance.HEAD ... Appearance.FEET) without touching the
+     * player's saved look, as live shows a minecart (kit 82, female 83) in the feet slot for a Keldagrim cart
+     * ride; null shows the player's own again.
+     */
+    public setDisplayedKits(overrides: Record<number, number> | null): Player {
+        this.displayedKits = overrides
+            ? new Map(Object.entries(overrides).map(([slot, kit]) => [Number(slot), kit]))
+            : null;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
+        return this;
+    }
+
+    /** The look the appearance shows: the saved one with any displayed kits over it. */
+    public getAppearanceLook(): number[] {
+        const look = this.getAppearance().getLook();
+        if (!this.displayedKits) return look;
+        const shown = look.slice();
+        for (const [slot, kit] of this.displayedKits) shown[slot] = kit;
+        return shown;
     }
 
     /** The item id each equipment slot shows in the appearance. */

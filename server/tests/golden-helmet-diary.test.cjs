@@ -88,16 +88,27 @@ function actor(t, { stage = STAGE_GOLD, smithing = 50, current = smithing, at = 
   return { player, connection };
 }
 
-/** Gold bars on the anvil, as a real item_on_object packet. */
+/**
+ * Gold bars on the anvil, as a real item_on_object packet, then "Yes." to "Would you like to make a golden
+ * helmet?" when it is asked (the user's rsprox capture BetweenARock, ticks 2356-2362) and the four ticks it takes.
+ */
 async function useBarsOn(f, objectId = ANVIL, x = ANVIL_AT[0], y = ANVIL_AT[1]) {
   const slot = f.player.getInventory().getSlotForItemId(I.GOLD_BAR);
   await f.connection.dispatch([{ type: "item_on_object", widgetId: 149 << 16, objectId, itemId: I.GOLD_BAR, slot, x, y }]);
-  f.connection.processTurnPackets();
-  for (let i = 0; i < 12; i++) {
-    core.TaskManager.processWalkTo(f.player.getIndex());
-    f.player.getMovementQueue().process();
-    core.TaskManager.process();
-  }
+  const run = () => {
+    f.connection.processTurnPackets();
+    for (let i = 0; i < 12; i++) {
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      f.player.getMovementQueue().process();
+      core.TaskManager.process();
+    }
+  };
+  run();
+  const prompt = core.MultiChatboxPrompt.getPending(f.player);
+  if (!prompt) return;
+  assert.equal(prompt.title, "Would you like to make a golden helmet?");
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: prompt.options.indexOf("Yes.") + 1 }]);
+  run();
 }
 
 const helmets = (f) => f.player.getInventory().getAmount(I.GOLD_HELMET);

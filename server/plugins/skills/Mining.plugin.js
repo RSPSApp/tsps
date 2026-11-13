@@ -193,6 +193,10 @@ const ROCKS = [
   { objectName: "Silver rocks", objectIds: [7457], level: 20, xp: 40, oreId: ItemIds.SILVER_ORE, petBase: 741600, chance: [25, 200], gems: true, respawnTicks: 100 },
   { objectName: "Coal rocks", objectIds: [7456], level: 30, xp: 50, oreId: ItemIds.COAL, petBase: 290640, chance: [16, 100], gems: true, respawnTicks: 50 },
   { objectName: "Gold rocks", objectIds: [7491, 9720, 9721, 9722, 11951, 11183, 11184, 11185, 2099, ObjectIds.GOLD_ROCKS_2], level: 40, xp: 65, oreId: ItemIds.GOLD_ORE, petBase: 296640, chance: [7, 75], gems: true, respawnTicks: 100 },
+  // The Arzinian mine's gold veins (Between a Rock...): the user's rsprox capture BetweenARock (rev 242.1) mines
+  // them with the wall swing, 65 XP and a gold ore each, going to dwarf_gold_depleted for 9 ticks (3389-3398,
+  // 3415-3424, 3786-3795). Ours: gold rocks' chance chart and gem roll.
+  { objectName: "Gold vein", level: 40, xp: 65, oreId: ItemIds.GOLD_ORE, petBase: 296640, chance: [7, 75], gems: true, respawnTicks: 9, swing: "wall", depletedRock: "dwarf_gold_depleted" },
   { objectName: "Mithril rocks", objectIds: [7492, 7459], level: 55, xp: 80, oreId: ItemIds.MITHRIL_ORE, petBase: 148320, chance: [4, 50], gems: true, respawnTicks: 200 },
   { objectName: "Adamantite rocks", objectIds: [7460], level: 70, xp: 95, oreId: ItemIds.ADAMANTITE_ORE, petBase: 59328, chance: [2, 25], gems: true, respawnTicks: 400 },
   { objectName: "Runite rocks", objectIds: [14859, 4860, 2106, 2107, 7461], level: 85, xp: 125, oreId: ItemIds.RUNITE_ORE, petBase: 42377, chance: [1, 18], gems: true, respawnTicks: 1200 },

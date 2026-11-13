@@ -36,29 +36,25 @@
  * Rewards per the OSRS Wiki: 2 Quest points, 5,000 Defence, Mining and
  * Smithing XP, a rune pickaxe and a gold helmet.
  *
- * Sources: OSRS Wiki "Between a Rock..." and its Transcript page; RuneLite
- * Quest Helper and the gameval dump for ids (objects, items, varbits).
+ * Sources: the user's rsprox capture BetweenARock.bin (rev 242.1, start to finish; ticks are cited
+ * where each behaviour is built, facts in docs/quests/between-a-rock/README.md and
+ * plugins/quests/data/between-a-rock.json); the OSRS Wiki "Between a Rock..." and its Transcript
+ * page; the cache's gamevals for ids.
  *
- * Gaps / approximations:
- *  - The three book pages stay separate items; the combined "Pages" items
- *    (4572/4573) are never created. The page-3 rock drop and page-1 scorpion
- *    drop are guaranteed on the first success (the wiki says they may take
- *    several attempts); when the inventory is full the page is dropped on the
- *    ground as the transcript says.
- *  - The schematic-assembly puzzle interface is not simulated: "Assemble" on a
- *    schematic part consumes all four parts and grants the assembled schematic.
- *  - The gold helmet and golden cannonball are made with direct messages
- *    ("Assemble"/use gold bar on anvil/furnace); the cache's smithing/smelting
- *    interfaces have no Between a Rock recipes, so this is the documented
- *    fallback.
- *  - The cutscene has no scenes: choosing "Yes." on "Skip cutscene?" fires the
- *    player immediately; the "between-a-rock-golden-helmet-timer" and
- *    "between-a-rock-randomly-while-mining-gold" page variants are replayed as
- *    messages (an 8-minute area timer in Dondakan's mine) and the mining
- *    taunts are skipped. The Avatar's health regeneration without enough gold
- *    ore is not simulated (it only changes the spawned level).
- *  - The post-quest granite-boot haggling uses an input step the runtime cannot
- *    run, so only the wear/not-wear branches answer.
+ * Units (plugins/quests/betweenarock/): Scenes (the kick, the golden cannonball, the cannon, the
+ * landing and the first thoughts), Schematics (the 113/114 puzzle) and Mine (the helmet's time, the
+ * Being's voice, the walls of flame, leaving the rock).
+ *
+ * Gaps (Ours, or not covered):
+ *  - The page-3 rock drop and page-1 scorpion drop are guaranteed on the first success (the wiki
+ *    says they may take several attempts).
+ *  - The Being speaks up on one gold ore in two (the capture's rate varies); the Avatar's form follows
+ *    the Wiki's highest-stat rule (the capture's three fights do not), and its health regeneration
+ *    without enough gold ore is not simulated.
+ *  - A player who logs out inside the rock logs back in outside it; the post-quest visits have no
+ *    time limit.
+ *  - The post-quest granite-boot haggling uses an input step the runtime cannot run, so only the
+ *    wear/not-wear branches answer.
  */
 module.exports = function registerBetweenARockQuest(api) {
   const {
@@ -72,7 +68,13 @@ module.exports = function registerBetweenARockQuest(api) {
     ObjectIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, openBook, bookPagesFromSpreads, loadTranscripts } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
+  const { formatPlayerText } = require("../../npcs/NpcDialogues.plugin.js");
+  const DATA = require("../data/between-a-rock.json");
+  const Scenes = require("../betweenarock/Scenes.BetweenARock");
+  const Schematics = require("../betweenarock/Schematics.BetweenARock");
+  const Mine = require("../betweenarock/Mine.BetweenARock");
 
   const PAGE = "Between a Rock...";
   const START_HOOK = "quest:between-a-rock:start";
@@ -133,6 +135,10 @@ module.exports = function registerBetweenARockQuest(api) {
   const RUNE_PICKAXE_ITEM = ItemIdentifiers.RUNE_PICKAXE; // 1275
   const GRANITE_BOOTS_ITEM = ItemIdentifiers.GRANITE_BOOTS; // 21643
   const PAGE_ITEM_IDS = [BOOK_PAGE_1_ITEM, BOOK_PAGE_2_ITEM, BOOK_PAGE_3_ITEM];
+  /** The three pages put together (dwarf_rock_pagex3): they join as the third is found (tick 1159). */
+  const PAGES_ITEM = api.core.CacheDefinitions.getObjId("dwarf_rock_pagex3"); // 4573
+  const DIAGRAM_ITEM = api.core.CacheDefinitions.getObjId("dwarf_rock_diagram"); // 25128
+  const DONDAKAN_CANNON = api.core.CacheDefinitions.getLocId("dwarf_rock_multicannon1"); // 5975, Fire
   const SCHEMATIC_PART_IDS = new Set([
     BASE_SCHEMATICS_ITEM,
     SCHEMATIC_DONDAKAN_ITEM,
@@ -161,6 +167,7 @@ module.exports = function registerBetweenARockQuest(api) {
   // ==========================================================================
 
   const VARP_DWARFROCK = 433; // "dwarfrock_main"
+  const QUEST_SCROLL = 153; // questscroll
   const VARBIT_STAGE = 299; // dwarfrock_quest, bits 0-7
   const VARBIT_LOOKINGFORINFO = 300;
   const VARBIT_GOLD_CANNONBALL = 301; // the gold bar has been shown to Dondakan
@@ -186,30 +193,22 @@ module.exports = function registerBetweenARockQuest(api) {
   const AVATAR_KILLED_ATTRIBUTE = "quest.between_a_rock.avatar-killed";
   const MINE_TICKS_ATTRIBUTE = "quest.between_a_rock.mine-ticks";
 
-  // Tiles (RuneLite Quest Helper / the OSRS map).
-  const MINE_LANDING = new Location(2364, 4944, 0);
-  const DONDAKAN_TILE = new Location(2824, 10168, 0);
-  const AVATAR_TILE = new Location(2375, 4952, 0);
+  /** The Being's spawn (npc-spawns.json): the player faces it as they talk to the flames (tick 3563). */
+  const ARZINIAN_BEING_TILE = [2367, 4960];
+  const DONDAKAN_MULTI = api.core.CacheDefinitions.getNpcId("dwarfrock_multi_dondakan"); // 6262
+  const BUSY_VARBIT = 12393;
 
   // The Dwarven Mine (scorpions, book cart, tin/clay/copper/iron rocks).
   const DWARVEN_MINE_BOUNDS = new Boundary(2960, 3070, 9690, 9860, 0);
   // Dondakan's mine ends before map square 38: that square holds the Recruitment Drive rooms.
   const ARZINIAN_MINE_BOUNDS = new Boundary(2300, 2431, 4920, 5010, 0);
 
-  // The wiki golden-helmet warning messages, by tick spent inside the rock.
-  const HELMET_TIMER_MESSAGES = [
-    [100, "The helmet seems to become even heavier"],
-    [250, "You feel a headache coming on... oh wait, it's just your helmet."],
-    [400, "You feel like you're being pushed into the ground by the weight of the golden helmet."],
-    [500, "You stumble and nearly fall. You can only keep this  helmet on for a few more minutes!"],
-    [600, "You fight the urge to take off your helmet. It's getting harder and harder to resist!"],
-    [700, "You don't think you can keep on this helmet  for more than a minute. Whatever you want to accomplish here, do it fast!"],
-    [750, "Must... not... take... off... helmet!"],
-    [775, "The weight of the helmet is becoming unbearable. You can't keep it on for more than a few seconds now!"],
-  ];
-
   /** The Arzinian Avatar spawned for one player. */
   const activeAvatars = new WeakMap();
+  /** Players shown "Dondakan gives you a rune pickaxe." as the quest scroll closes (tick 5789). */
+  const pickaxeBox = new WeakSet();
+  /** Players watching one of the quest's scenes. */
+  const scenePlaying = new WeakSet();
   /** Players whose next mining success may yield Rolad's third page. */
   const pendingRockPage = new WeakSet();
 
@@ -261,9 +260,15 @@ module.exports = function registerBetweenARockQuest(api) {
   }
 
   function pageCount(player) {
+    if (hasItem(player, PAGES_ITEM)) return 3;
     let count = 0;
     for (const itemId of PAGE_ITEM_IDS) if (hasItem(player, itemId)) count++;
     return count;
+  }
+
+  /** Whether the page is carried, loose or among the three put together. */
+  function hasPage(player, itemId) {
+    return hasItem(player, itemId) || hasItem(player, PAGES_ITEM);
   }
 
   function hasAllSchematicParts(player) {
@@ -293,6 +298,17 @@ module.exports = function registerBetweenARockQuest(api) {
     player.getInventory().adds(itemId, amount);
   }
 
+  /** `itemId` into inventory slot `slot` when it is free (live hands items back in the slot the old ones had), else anywhere. */
+  function putInSlot(player, slot, itemId) {
+    const inventory = player.getInventory();
+    const there = slot >= 0 ? inventory.get(slot) : null;
+    if (slot >= 0 && (!there || (there.getId?.() ?? -1) < 0 || (there.getAmount?.() ?? 0) <= 0)) {
+      inventory.setItem(slot, new Item(itemId, 1)).refreshItems();
+      return;
+    }
+    addItem(player, itemId, 1);
+  }
+
   function syncVarbits(player) {
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_LOOKINGFORINFO, stageOf(player) >= STAGE_STARTED ? 1 : 0);
@@ -303,12 +319,16 @@ module.exports = function registerBetweenARockQuest(api) {
   }
 
   function handleLogin({ player }) {
-    // Logging out inside the rock exits the mine; drop the timer and the spawn.
-    if (!inArzinianMine(player)) {
-      player.setAttribute(INSIDE_ATTRIBUTE, false);
-      player.setAttribute(MINE_TICKS_ATTRIBUTE, 0);
-      removeAvatar(player);
+    // Ours: a player who logged out inside the rock (during the quest) is outside again, as taking the
+    // helmet off would leave them; the time and the Avatar do not carry over.
+    if (inArzinianMine(player) && stageOf(player) === STAGE_MINE && !quest.isComplete(player) && !avatarKilled(player)) {
+      const [x, y] = DATA.exits.helmetOff;
+      player.setLocation(new Location(x, y, 0));
     }
+    player.setAttribute(INSIDE_ATTRIBUTE, false);
+    player.setAttribute(MINE_TICKS_ATTRIBUTE, 0);
+    Mine.stopTimer(player);
+    removeAvatar(player);
     syncVarbits(player);
   }
 
@@ -344,11 +364,13 @@ module.exports = function registerBetweenARockQuest(api) {
         ? "between-a-rock-finishing-up"
         : "between-a-rock-talking-to-dondakan-after-being-shot-into-the-mine";
     }
-    if (stage >= STAGE_ASSEMBLE) return "between-a-rock-returning-to-dondakan";
-    if (stage >= STAGE_SCHEMATICS) {
-      if (stage === STAGE_SCHEMATICS) quest.setStage(player, STAGE_ASSEMBLE);
-      return "finding-the-schematics-talking-to-dondakan";
+    if (stage >= STAGE_ASSEMBLE) {
+      // Still looking, with no helmet and the parts not all found, he says what to look for (ticks 2140, 2174).
+      const looking = !hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && !hasAllSchematicParts(player) && !holdsHelmetOrWears(player);
+      return looking ? "finding-the-schematics-talking-to-dondakan" : "between-a-rock-returning-to-dondakan";
     }
+    // Stage 70 is played by talkDondakan: his question again.
+    if (stage >= STAGE_SCHEMATICS) return "finding-the-schematics-talking-to-dondakan";
     if (stage >= STAGE_BOOK) return "going-for-the-gold-returning-to-dondakan";
     if (stage >= STAGE_ENGINEER) {
       return "an-unbreakable-rock-or-stone-talking-to-dondakan-after-learning-about-the-book";
@@ -359,7 +381,37 @@ module.exports = function registerBetweenARockQuest(api) {
     return "an-unbreakable-rock-or-stone";
   }
 
+  function holdsHelmetOrWears(player) {
+    return hasItem(player, GOLD_HELMET_ITEM) || wearingHelmet(player);
+  }
+
+  /**
+   * Talk-to at stage 70 (after "My head's spinning, I have to go for a bit."): the player asks his
+   * question again, "So you want to... fire me into the rock?" (tick 2079). Named hooks count as handled
+   * unless they return false.
+   */
+  function talkDondakan(event) {
+    const { player, npcId } = event;
+    if (stageOf(player) !== STAGE_SCHEMATICS || !DONDAKAN_NPC_IDS.has(npcId)) return false;
+    const question = (raw) => {
+      const all = [];
+      const walk = (steps) => (steps ?? []).forEach((step) => {
+        for (const option of step?.options ?? []) {
+          if (option.text === "So you want to... fire me into the rock?") all.push(option.steps);
+          walk(option.steps);
+        }
+        walk(step?.steps);
+      });
+      walk(raw);
+      return all[0] ?? [];
+    };
+    event.handled = true;
+    startTranscript(api, player, npcId, PAGE, "going-for-the-gold-using-the-golden-cannonball-on-dondakan", question, event.npc ?? null);
+  }
+
   function selectEngineerVariant(player) {
+    // After the quest they say their own things (the Dwarven Engineer, tick 6113).
+    if (quest.isComplete(player)) return null;
     const stage = stageOf(player);
     if (stage === STAGE_STARTED) {
       quest.setStage(player, STAGE_ENGINEER);
@@ -375,6 +427,8 @@ module.exports = function registerBetweenARockQuest(api) {
   }
 
   function selectRoladVariant(player) {
+    // After the quest they say their own things (the Dwarven Engineer, tick 6113).
+    if (quest.isComplete(player)) return null;
     const stage = stageOf(player);
     if (stage === STAGE_ENGINEER) return "an-unbreakable-rock-or-stone-rolad-the-scholar";
     if (stage === STAGE_PAGES) return "an-unbreakable-rock-or-stone-talking-to-rolad-again";
@@ -398,6 +452,8 @@ module.exports = function registerBetweenARockQuest(api) {
   }
 
   function selectKhorvakVariant(player) {
+    // After the quest they say their own things (the Dwarven Engineer, tick 6113).
+    if (quest.isComplete(player)) return null;
     if (stageOf(player) < STAGE_ASSEMBLE) return null;
     if (hasItem(player, SCHEMATICS_KHORVAK_ITEM)) {
       return "finding-the-schematics-talking-to-khorvak-after-receiving-his-schematic";
@@ -456,7 +512,7 @@ module.exports = function registerBetweenARockQuest(api) {
       case "ehPlcC":
         return !hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && hasAllSchematicParts(player) && hasItem(player, GOLD_HELMET_ITEM);
       case "dM_N-J":
-        return false;
+        return holdsHelmetOrWears(player) && !hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && !hasAnySchematicPart(player);
       case "sCsZPB":
         return (
           hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) &&
@@ -471,7 +527,8 @@ module.exports = function registerBetweenARockQuest(api) {
           hasAnySchematicPart(player)
         );
       case "0qcHXZ":
-        return !hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && !hasAllSchematicParts(player);
+        return holdsHelmetOrWears(player) && hasItem(player, SCHEMATIC_DONDAKAN_ITEM)
+          && !hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && !hasAllSchematicParts(player);
       case "Obzvy6":
         return (
           hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) &&
@@ -597,34 +654,48 @@ module.exports = function registerBetweenARockQuest(api) {
       // Rolad receives the three pages and hands over the book.
       case "2Av3E2":
         if (npcId === ROLAD) {
+          // The book goes in the pages' slot (tick 1221).
+          const slot = player.getInventory().getSlotForItemId(PAGES_ITEM);
+          player.getInventory().deleteNumber(PAGES_ITEM, 1);
           for (const itemId of PAGE_ITEM_IDS) player.getInventory().deleteNumber(itemId, 1);
-          if (!hasItem(player, DWARVEN_LORE_ITEM)) addItem(player, DWARVEN_LORE_ITEM);
+          if (!hasItem(player, DWARVEN_LORE_ITEM)) putInSlot(player, slot, DWARVEN_LORE_ITEM);
           if (stageOf(player) === STAGE_PAGES) quest.setStage(player, STAGE_BOOK);
         }
         return;
-      // Finished reading the book: enough information for Dondakan.
+      // Finished reading the book: enough information for Dondakan, in a box with the book (tick 1257).
       case "e2X7B0":
-        if (npcId === ROLAD && stageOf(player) === STAGE_BOOK) quest.setStage(player, STAGE_DONDAKAN_BOOK);
+        if (stageOf(player) === STAGE_BOOK) quest.setStage(player, STAGE_DONDAKAN_BOOK);
+        event.box = { items: [DWARVEN_LORE_ITEM] };
         return;
-      // Dondakan's "kicks the rock" cutscene: he wants a stronger material.
+      // The last page's picture (tick 2166): a message box, then "Tear out the page?".
+      case "lbgg1b":
+        event.box = { statement: true };
+        return;
+      // Dondakan walks up the passage and kicks the rock (ticks 1567-1586); the talk carries on after it.
       case "-ian1p":
-        if (DONDAKAN_NPC_IDS.has(npcId) && stageOf(player) === STAGE_DONDAKAN_BOOK) {
-          quest.setStage(player, STAGE_GOLD);
-        }
+        if (!DONDAKAN_NPC_IDS.has(npcId)) return;
+        event.handled = true;
+        Scenes.kick(player, event.npc ?? nearbyDondakan(player), () =>
+          startTranscript(api, player, npcId, PAGE, "going-for-the-gold-returning-to-dondakan", (raw) => resumeAfterKick(raw), event.npc));
         return;
-      // The golden cannonball is fired through the rock.
+      // The golden cannonball is fired through the rock (ticks 2041-2050).
       case "3j4Hdi":
-        if (DONDAKAN_NPC_IDS.has(npcId) && hasItem(player, GOLDEN_CANNONBALL_ITEM)) {
-          player.getInventory().deleteNumber(GOLDEN_CANNONBALL_ITEM, 1);
-        }
+        if (!DONDAKAN_NPC_IDS.has(npcId)) return;
+        event.handled = true;
+        if (hasItem(player, GOLDEN_CANNONBALL_ITEM)) player.getInventory().deleteNumber(GOLDEN_CANNONBALL_ITEM, 1);
         player.setAttribute(FIRED_ATTRIBUTE, true);
         player.getPacketSender().sendVarbit(VARBIT_FIRED_GOLD_CANNONBALL, 1);
         if (stageOf(player) < STAGE_SCHEMATICS) quest.setStage(player, STAGE_SCHEMATICS);
+        Scenes.goldCannonball(player, () =>
+          startTranscript(api, player, npcId, PAGE, "going-for-the-gold-using-the-golden-cannonball-on-dondakan",
+            (raw) => stepsFrom(raw, "3j4Hdi", false) ?? [], event.npc));
         return;
       // Schematic hand-outs.
       case "On25m7":
       case "SFdap4":
         if (!hasItem(player, SCHEMATIC_DONDAKAN_ITEM)) addItem(player, SCHEMATIC_DONDAKAN_ITEM);
+        // Stage 80 as his schematic is handed over (tick 2138).
+        if (stageOf(player) === STAGE_SCHEMATICS) quest.setStage(player, STAGE_ASSEMBLE);
         return;
       case "73WGfD":
         if (!hasItem(player, SCHEMATICS_ENGINEER_ITEM)) addItem(player, SCHEMATICS_ENGINEER_ITEM);
@@ -633,22 +704,18 @@ module.exports = function registerBetweenARockQuest(api) {
       case "fAJORE":
         if (!hasItem(player, SCHEMATICS_KHORVAK_ITEM)) addItem(player, SCHEMATICS_KHORVAK_ITEM);
         return;
-      // Tearing the base schematic out of the book.
+      // Tearing the base schematic out of the book: it takes the book's slot, shown in a box (tick 2170).
       case "KjD1IE":
-        if (!hasItem(player, BASE_SCHEMATICS_ITEM)) addItem(player, BASE_SCHEMATICS_ITEM);
-        if (hasItem(player, DWARVEN_LORE_ITEM)) player.getInventory().deleteNumber(DWARVEN_LORE_ITEM, 1);
+        tearOutSchematic(player);
+        event.box = { items: [BASE_SCHEMATICS_ITEM] };
         return;
-      // The cannon fires the player into the rock.
-      case "jbZ7gu":
-      case "ucl68v":
-        if (DONDAKAN_NPC_IDS.has(npcId) && wearingHelmet(player)) fireIntoMine(player);
-        return;
-      // The furnace messages: the last one creates the cannonball.
+      // The furnace's messages come one after another as the cannonball is made (ticks 1767-1775).
+      case "i-Dp7-":
+      case "FuWG5m":
+      case "4zrI1F":
+      case "O6vmyg":
       case "ZQsP2t":
-        if (hasItem(player, GOLD_BAR_ITEM)) {
-          player.getInventory().deleteNumber(GOLD_BAR_ITEM, 1);
-          if (!hasItem(player, GOLDEN_CANNONBALL_ITEM)) addItem(player, GOLDEN_CANNONBALL_ITEM);
-        }
+        furnaceMessage(event);
         return;
       // Quest complete.
       case "5yAnic":
@@ -661,7 +728,10 @@ module.exports = function registerBetweenARockQuest(api) {
         return;
       // Post-quest: the cannon fires the player straight back in.
       case "BETNCt":
-        if (quest.isComplete(player) && wearingHelmet(player)) player.moveTo(MINE_LANDING);
+        if (!quest.isComplete(player) || !wearingHelmet(player)) return;
+        event.handled = true;
+        event.end = true;
+        Scenes.launch(player, null);
         return;
       default:
         return;
@@ -677,95 +747,177 @@ module.exports = function registerBetweenARockQuest(api) {
       }
       return;
     }
-    // The Arzinian Being's taunt ends with the gold-count line; the avatar attacks.
-    if (stepId === "ls9q3a" || stepId === "qss2L2" || stepId === "FUvWcx") {
-      spawnAvatar(player);
-    }
   }
 
-  function handleChoice(event) {
-    const { player, npcId, option } = event;
-    // "Skip cutscene? Yes." fires the player straight into the rock.
-    if (
-      option === "Yes." &&
-      DONDAKAN_NPC_IDS.has(npcId) &&
-      stageOf(player) === STAGE_ASSEMBLE &&
-      hasItem(player, SCHEMATIC_ASSEMBLED_ITEM)
-    ) {
-      fireIntoMine(player);
+  /** Dondakan's lines that start a scene as they are continued, and the Being's that shake the room. */
+  function handleLine(event) {
+    const { player, npcId, text } = event;
+    if (typeof text !== "string") return;
+    if (DONDAKAN_NPC_IDS.has(npcId)) {
+      // Stage 60 as this line is continued (tick 1542), whichever of his questions the player asks next.
+      if (text === "Well, we're not very much closer to a solution then, are we?" && stageOf(player) === STAGE_DONDAKAN_BOOK) {
+        event.after = () => { if (stageOf(player) === STAGE_DONDAKAN_BOOK) quest.setStage(player, STAGE_GOLD); };
+        return;
+      }
+      // "...let me have a look at those schematics and we'll get started.": the cannon scene (tick 3209).
+      if (text.endsWith("let me have a look at those schematics and we'll get started.")) {
+        if (stageOf(player) === STAGE_ASSEMBLE && hasItem(player, SCHEMATIC_ASSEMBLED_ITEM) && wearingHelmet(player)) {
+          event.after = () => Scenes.cannon(player, firstLanding);
+        }
+        return;
+      }
+      // "Okay, here we go, hold on to your helmet!": fired straight in (tick 3724).
+      if (text === "Okay, here we go, hold on to your helmet!" && stageOf(player) === STAGE_MINE && wearingHelmet(player)) {
+        event.after = () => Scenes.launch(player, landedAgain);
+      }
+      return;
     }
+    if (npcId !== ARZINIAN_BEING) return;
+    // Its first word shakes the room (tick 3563); the Avatar comes after its last (tick 3574).
+    if (text.startsWith("You did not heed my messages to stay away!")) Scenes.shake(player);
+    if (AVATAR_LINES.has(text)) event.after = () => avatarDescends(player);
   }
 
-  /** Plays the shake/fade stage direction and moves the player into Dondakan's mine. */
-  function fireIntoMine(player) {
-    if (stageOf(player) < STAGE_ASSEMBLE || quest.isComplete(player)) return;
+  /** The Being's last lines, by the gold the player carries. */
+  const AVATAR_LINES = new Set([
+    "I am invincible! You stand no chance against me!",
+    "You are no match for me!",
+    "And while your power is great, mortal, I will still resist you!",
+  ]);
+
+  function avatarDescends(player) {
+    player.getPacketSender().sendInterfaceRemoval().sendCameraReset();
+    spawnAvatar(player);
+  }
+
+  /** The first landing (tick 3295): stage 90, the assembled schematic used up, the player's thoughts. */
+  function firstLanding(player) {
+    if (stageOf(player) === STAGE_ASSEMBLE) {
+      player.getInventory().deleteNumber(SCHEMATIC_ASSEMBLED_ITEM, 1);
+      enterMine(player);
+    }
+    Scenes.firstThoughts(player, Mine.startTimer);
+  }
+
+  /** Every later landing: the helmet's warning (tick 3738), its continue starting the time. */
+  function landedAgain(player) {
+    enterMine(player);
+    const raw = loadTranscripts(api)?.[PAGE]?.variants?.["between-a-rock-talking-to-dondakan-after-being-shot-into-the-mine"] ?? [];
+    const box = stepsFrom(raw, "ucl68v") ?? [];
+    Scenes.warningBox(player, formatPlayerText(String(box[0]?.text ?? ""), player), Mine.startTimer);
+  }
+
+  function enterMine(player) {
     removeAvatar(player);
     player.setAttribute(AVATAR_KILLED_ATTRIBUTE, false);
     player.setAttribute(INSIDE_ATTRIBUTE, true);
-    player.setAttribute(MINE_TICKS_ATTRIBUTE, 0);
     player.getPacketSender().sendVarbit(VARBIT_INSIDE_VISITED, 1);
-    quest.setStage(player, STAGE_MINE);
-    player.moveTo(MINE_LANDING);
+    if (stageOf(player) < STAGE_MINE) quest.setStage(player, STAGE_MINE);
   }
 
-  /** Teleports a player out of the rock; the timer and the Avatar do not follow. */
-  function exitMine(player) {
+  /** Out of the rock (Mine.leave): the inside flags go. */
+  function leftMine(player, { killed }) {
     player.setAttribute(INSIDE_ATTRIBUTE, false);
-    player.setAttribute(MINE_TICKS_ATTRIBUTE, 0);
     player.getPacketSender().sendVarbit(VARBIT_INSIDE_VISITED, 0);
-    player.moveTo(DONDAKAN_TILE);
+    if (killed) player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(stageOf(player), player));
   }
 
-  function removeHelmetInMine(player) {
-    player.sendMessage("The world turns black and you feel as if you're being sucked out of the rock.");
-    if (goldOre(player) > 0) {
-      player.getInventory().deleteNumber(GOLD_ORE_ITEM, goldOre(player));
-      player.sendMessage("You suddenly notice all the gold in your inventory has disappeared! It must have been absorbed into the rock!");
+  function nearbyDondakan(player) {
+    return [...(player.getLocalNpcs?.() ?? [])].find((npc) => npc.getId?.() === DONDAKAN_MULTI) ?? null;
+  }
+
+  /** The steps after the step with `id`, wherever it sits (Lost Tribe's helper). */
+  function stepsFrom(steps, id, inclusive = true) {
+    for (let index = 0; index < (steps?.length ?? 0); index++) {
+      const step = steps[index];
+      if (step?.id === id) return steps.slice(inclusive ? index : index + 1);
+      for (const nested of [step?.steps, ...(step?.options ?? []).map((option) => option.steps)]) {
+        const found = stepsFrom(nested, id, inclusive);
+        if (found) return found;
+      }
     }
-    removeAvatar(player);
-    exitMine(player);
+    return null;
+  }
+
+  /** The transcript's steps of `variant` after the step `from` (all of them when null), up to `until`. */
+  function transcriptSteps(variant, from, until) {
+    const raw = loadTranscripts(api)?.[PAGE]?.variants?.[variant] ?? [];
+    let steps = from ? (stepsFrom(raw, from, false) ?? []) : raw;
+    if (until) {
+      const end = steps.findIndex((step) => step?.id === until);
+      if (end >= 0) steps = steps.slice(0, end);
+    }
+    return steps;
+  }
+
+  /**
+   * After the kick: the rest of "What else did you try?", then Dondakan's first menu again, as its
+   * "previous" jump does and as live shows it (the capture picks "Maybe we should..." there, tick 1659).
+   */
+  function resumeAfterKick(raw) {
+    const tail = stepsFrom(raw, "-ian1p", false) ?? [];
+    const menu = raw.find((step) => step?.type === "choice");
+    const lines = tail.filter((step) => step?.type !== "jump");
+    return menu ? [...lines, menu] : lines;
   }
 
   // ==========================================================================
   // Items
   // ==========================================================================
 
+  /**
+   * A page found: shown in a box with the page (ticks 1077, 1129, 1156), or dropped where the player
+   * stands when there is no room. With the third, the three go together into one item and a second box
+   * says so (tick 1159).
+   */
   function giveQuestPage(player, itemId, foundText, fullText) {
-    if (hasItem(player, itemId)) return;
+    if (hasPage(player, itemId)) return;
+    const boxes = [];
     if (hasSpace(player)) {
       addItem(player, itemId, 1);
-      player.sendMessage(foundText);
+      boxes.push([itemId, foundText]);
     } else {
       api.getItemOnGroundManager().registerLocation(player, new Item(itemId, 1), player.getLocation());
-      if (fullText) player.sendMessage(fullText);
+      if (fullText) boxes.push([itemId, fullText]);
     }
-    if (pageCount(player) === 3) {
-      player.sendMessage("You've found all three of Rolad's missing pages. Return them to him so he can put them back in his book.");
+    if (PAGE_ITEM_IDS.every((id) => hasItem(player, id))) {
+      const slot = player.getInventory().getSlotForItemId(BOOK_PAGE_2_ITEM) >= 0
+        ? Math.min(...PAGE_ITEM_IDS.map((id) => player.getInventory().getSlotForItemId(id)))
+        : -1;
+      for (const id of PAGE_ITEM_IDS) player.getInventory().deleteNumber(id, 1);
+      putInSlot(player, slot, PAGES_ITEM);
+      boxes.push([PAGES_ITEM, "You've found all three of Rolad's missing pages. Return them to him so he can put them back in his book."]);
     }
+    itemBoxes(player, boxes);
+  }
+
+  function itemBoxes(player, boxes) {
+    if (!boxes.length) return;
+    const { DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    const chain = new DialogueChainBuilder();
+    boxes.forEach(([itemId, text], index) => chain.add(new ItemStatementDialogue(index, itemId, text)));
+    player.getDialogueManager().startDialogues(chain);
   }
 
   function handleItemOnObject(event) {
     const { player, itemId } = event;
-    if (itemId === GOLD_BAR_ITEM && String(event.object?.getDefinition?.()?.getName?.() ?? "").includes("Furnace")) {
+    const name = String(event.object?.getDefinition?.()?.getName?.() ?? "");
+    if (itemId === GOLD_BAR_ITEM && name.includes("Furnace")) {
       if (stageOf(player) < STAGE_GOLD || stageOf(player) >= STAGE_MINE) return;
       event.handled = true;
       makeGoldenCannonball(player);
       return;
     }
-    if (itemId === GOLD_BAR_ITEM && event.object?.getDefinition?.()?.getName?.() === "Anvil") {
-      // Wiki (Gold helmet): "Partial completion of Between a Rock..." (no step named; the lower bound here, the
-      // golden cannonball, is inferred and sits right before the Quick guide's helmet step) and, after the quest,
-      // "smith it on any anvil". The Wilderness Diary row: not "while you already have a gold helmet in your
-      // inventory or bank"; that row is not limited to after the quest, so the rule holds at every stage.
-      if (stageOf(player) < STAGE_GOLD || holdsGoldHelmet(player)) return;
+    if (itemId === GOLD_BAR_ITEM && name === "Anvil") {
+      if (!canAskHelmet(player)) return;
       event.handled = true;
-      smithGoldHelmet(player);
-      return;
+      askGoldHelmet(player);
     }
   }
 
   function makeGoldenCannonball(player) {
     if (!hasItem(player, AMMO_MOULD_ITEM) && !hasItem(player, DOUBLE_AMMO_MOULD_ITEM)) {
+      // Ours: no capture or Wiki line for a furnace without a mould.
       player.sendMessage("You need an ammo mould to make a golden cannonball.");
       return;
     }
@@ -773,11 +925,73 @@ module.exports = function registerBetweenARockQuest(api) {
     startTranscript(api, player, DONDAKAN, PAGE, "going-for-the-gold-using-gold-bar-on-a-furnace-with-an-ammo-mould");
   }
 
+  /**
+   * The furnace's transcript messages, timed as live sends them (ticks 1767-1775): the first two as
+   * "Yes." is picked with human_furnace, one a tick for the next two, and the cannonball eight ticks
+   * on, made from the first gold bar in its slot (37.5 Smithing XP, Wiki Cannon ball (Between a Rock...)).
+   */
+  const FURNACE_TICKS = { "i-Dp7-": 0, FuWG5m: 0, "4zrI1F": 1, O6vmyg: 2, ZQsP2t: 8 };
+  const FURNACE_ANIMATION = 899;
+  const GOLDEN_CANNONBALL_XP = 37.5;
+
+  function furnaceMessage(event) {
+    const { player, stepId } = event;
+    const text = formatPlayerText(String(event.text ?? ""), player);
+    event.handled = true;
+    if (stepId === "i-Dp7-") {
+      player.getMovementQueue().reset();
+      player.performAnimation(new api.core.Animation(FURNACE_ANIMATION));
+      player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+    }
+    const ticks = FURNACE_TICKS[stepId] ?? 0;
+    const deliver = () => {
+      if (player.isRegistered?.() === false) return;
+      player.sendMessage(text);
+      if (stepId === "ZQsP2t") castGoldenCannonball(player);
+    };
+    if (ticks === 0) deliver();
+    else api.core.TaskManager.submit(new api.core.CountdownTask(player, ticks, deliver));
+  }
+
+  function castGoldenCannonball(player) {
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+    const inventory = player.getInventory();
+    const slot = inventory.getSlotForItemId(GOLD_BAR_ITEM);
+    if (slot < 0) return;
+    inventory.setItem(slot, new Item(GOLDEN_CANNONBALL_ITEM, 1)).refreshItems();
+    player.getSkillManager().addExperiences(Skill.SMITHING, GOLDEN_CANNONBALL_XP);
+  }
+
   function holdsGoldHelmet(player) {
     return hasItem(player, GOLD_HELMET_ITEM)
       || Array.from({ length: api.core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some((bank) => bank.getAmount(GOLD_HELMET_ITEM) > 0);
   }
 
+  // Wiki (Gold helmet): "Partial completion of Between a Rock..." (no step named; the lower bound here, the
+  // golden cannonball, is inferred and sits right before the Quick guide's helmet step) and, after the quest,
+  // "smith it on any anvil". The Wilderness Diary row: not "while you already have a gold helmet in your
+  // inventory or bank"; that row is not limited to after the quest, so the rule holds at every stage.
+  function canAskHelmet(player) {
+    return stageOf(player) >= STAGE_GOLD && !holdsGoldHelmet(player);
+  }
+
+  const HELMET_PROMPT = "Would you like to make a golden helmet?";
+  const SMITHING_ANIMATION = 898;
+  const HELMET_TICKS = 4;
+
+  /** Smith on an anvil with gold bars (tick 5114), or a gold bar used on it (2356): the golden helmet's question. */
+  function smithAtAnvil(request) {
+    const { player } = request;
+    if (!hasItem(player, GOLD_BAR_ITEM) || !canAskHelmet(player)) return;
+    request.handled = true;
+    askGoldHelmet(player);
+  }
+
+  function askGoldHelmet(player) {
+    api.sendMultiChatboxPrompt(player, HELMET_PROMPT, "Yes.", () => smithGoldHelmet(player), "No.", () => {});
+  }
+
+  /** "Yes.": human_smithing, then the helmet four ticks later from the first bar's slot (ticks 2358-2362). */
   function smithGoldHelmet(player) {
     // Wiki: the 50 Smithing is boostable, so the current level counts.
     if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 50) {
@@ -798,13 +1012,21 @@ module.exports = function registerBetweenARockQuest(api) {
       player.sendMessage(PRESET_TEXT);
       return;
     }
-    takePlain(player.getInventory(), GOLD_BAR_ITEM, 3);
-    addItem(player, GOLD_HELMET_ITEM, 1);
-    // Wiki (Gold helmet): 30 Smithing XP.
-    player.getSkillManager().addExperiences(Skill.SMITHING, 30);
-    player.sendMessage("You hammer the gold bars into a golden helmet.");
-    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.AchievementDiaries.js).
-    api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
+    player.getMovementQueue().reset();
+    player.performAnimation(new api.core.Animation(SMITHING_ANIMATION));
+    api.core.TaskManager.submit(new api.core.CountdownTask(player, HELMET_TICKS, () => {
+      if (player.isRegistered?.() === false || plainAmount(player.getInventory(), GOLD_BAR_ITEM) < 3) return;
+      const inventory = player.getInventory();
+      const slot = inventory.getSlotForItemId(GOLD_BAR_ITEM);
+      takePlain(inventory, GOLD_BAR_ITEM, 3);
+      putInSlot(player, slot, GOLD_HELMET_ITEM);
+      // Wiki (Gold helmet): 30 Smithing XP.
+      player.getSkillManager().addExperiences(Skill.SMITHING, 30);
+      player.sendMessage("You forge a beautiful and very heavy golden helmet out of solid gold.");
+      player.sendMessage("Who knows, this might become a new fashion rage?");
+      // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.AchievementDiaries.js).
+      api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
+    }));
   }
 
   function handleItemOnNpc(event) {
@@ -819,7 +1041,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (stage < STAGE_GOLD || stage >= STAGE_ASSEMBLE) return;
     event.handled = true;
     if (stage === STAGE_GOLD && itemId === GOLDEN_CANNONBALL_ITEM) {
-      startTranscript(api, player, npcId, PAGE, "going-for-the-gold-using-the-golden-cannonball-on-dondakan");
+      startTranscript(api, player, npcId, PAGE, "going-for-the-gold-using-the-golden-cannonball-on-dondakan", null, event.npc ?? null);
       return;
     }
     if (itemId === GOLD_BAR_ITEM || itemId === GOLD_ORE_ITEM) {
@@ -861,34 +1083,55 @@ module.exports = function registerBetweenARockQuest(api) {
     }
     if (SCHEMATIC_PART_IDS.has(itemId) && event.option === "Assemble") {
       event.handled = true;
-      assembleSchematics(player);
+      if (!Schematics.openPuzzle(player)) {
+        // Ours: no capture or Wiki line for assembling with parts missing.
+        player.sendMessage("You need all four parts of the schematics to assemble them.");
+      }
     }
   }
 
+  /** The book's three spreads (ticks 1247-1251), the diagram on the last. */
+  const BOOK_PAGES = bookPagesFromSpreads(DATA.book.spreads.map((sides) => sides.map((lines) =>
+    lines.map((line) => (typeof line === "string" ? line : { item: DIAGRAM_ITEM, zoom: line.zoom }))))) ;
+
+  /**
+   * Read: the book (392). Opened at stage 40 the reading is done at once (stage 50 as it opens, tick
+   * 1247); closing it then says so in a box with the book. From stage 80 closing it shows the last
+   * page's picture and asks to tear it out (2151-2170).
+   */
   function readDwarvenLore(player) {
-    if (stageOf(player) >= STAGE_ASSEMBLE) {
+    openBook(player, DATA.book.title, BOOK_PAGES, () => closedDwarvenLore(player));
+    if (stageOf(player) === STAGE_BOOK) quest.setStage(player, STAGE_DONDAKAN_BOOK);
+  }
+
+  function closedDwarvenLore(player) {
+    if (player.isRegistered?.() === false) return;
+    const stage = stageOf(player);
+    if (stage >= STAGE_ASSEMBLE && !quest.isComplete(player) && !hasItem(player, BASE_SCHEMATICS_ITEM)
+      && player.getAttribute(SOLVED_ATTRIBUTE) !== true) {
       startTranscript(api, player, ROLAD, PAGE, "finding-the-schematics-reading-the-dwarven-lore-book");
       return;
     }
-    if (stageOf(player) >= STAGE_BOOK) {
+    if (stage >= STAGE_DONDAKAN_BOOK && stage < STAGE_GOLD) {
       startTranscript(api, player, ROLAD, PAGE, "an-unbreakable-rock-or-stone-after-reading-the-book");
     }
   }
 
+  function tearOutSchematic(player) {
+    const inventory = player.getInventory();
+    const slot = inventory.getSlotForItemId(DWARVEN_LORE_ITEM);
+    if (slot >= 0) inventory.setItem(slot, new Item(BASE_SCHEMATICS_ITEM, 1)).refreshItems();
+    else if (!hasItem(player, BASE_SCHEMATICS_ITEM)) addItem(player, BASE_SCHEMATICS_ITEM);
+  }
+
+  /** Solved (Schematics.BetweenARock): the four parts become the assembled one, in Dondakan's part's slot (tick 2795). */
   function assembleSchematics(player) {
-    if (hasItem(player, SCHEMATIC_ASSEMBLED_ITEM)) {
-      player.sendMessage("The schematics are already assembled.");
-      return;
-    }
-    if (!hasAllSchematicParts(player)) {
-      player.sendMessage("You need all four parts of the schematics to assemble them.");
-      return;
-    }
-    for (const itemId of SCHEMATIC_PART_IDS) player.getInventory().deleteNumber(itemId, 1);
-    addItem(player, SCHEMATIC_ASSEMBLED_ITEM, 1);
+    const inventory = player.getInventory();
+    const slot = inventory.getSlotForItemId(SCHEMATIC_DONDAKAN_ITEM);
+    for (const itemId of SCHEMATIC_PART_IDS) inventory.deleteNumber(itemId, 1);
+    putInSlot(player, slot, SCHEMATIC_ASSEMBLED_ITEM);
     player.setAttribute(SOLVED_ATTRIBUTE, true);
     player.getPacketSender().sendVarbit(VARBIT_SCHEMATICS_SOLVED, 1);
-    player.sendMessage("That's it! It all makes sense now! If you were a dwarf, that is...");
   }
 
   // ==========================================================================
@@ -906,8 +1149,12 @@ module.exports = function registerBetweenARockQuest(api) {
     const { player, objectId } = event;
     const option = objectOption(event);
     if (objectId === BOOK_MINE_CART && option === "Search") {
-      if (stageOf(player) !== STAGE_PAGES || hasItem(player, BOOK_PAGE_2_ITEM)) return;
+      if (stageOf(player) !== STAGE_PAGES) return;
       event.handled = true;
+      if (hasPage(player, BOOK_PAGE_2_ITEM)) {
+        player.sendMessage("You've had enough of searching carts, there's nothing more inside them.");
+        return;
+      }
       giveQuestPage(
         player,
         BOOK_PAGE_2_ITEM,
@@ -919,7 +1166,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (DWARVEN_MINE_ROCK_IDS.has(objectId) && option === "Mine") {
       if (
         stageOf(player) === STAGE_PAGES &&
-        !hasItem(player, BOOK_PAGE_3_ITEM) &&
+        !hasPage(player, BOOK_PAGE_3_ITEM) &&
         inDwarvenMine(player)
       ) {
         pendingRockPage.add(player);
@@ -927,17 +1174,42 @@ module.exports = function registerBetweenARockQuest(api) {
       return;
     }
     if (TALKABLE_FLAME_IDS.has(objectId) && option === "Talk-to") {
-      if (stageOf(player) !== STAGE_MINE || avatarKilled(player)) return;
+      if (stageOf(player) !== STAGE_MINE || avatarKilled(player) || activeAvatars.has(player)) return;
       event.handled = true;
+      player.setPositionToFace?.(new Location(ARZINIAN_BEING_TILE[0], ARZINIAN_BEING_TILE[1], 0));
       startTranscript(api, player, ARZINIAN_BEING, PAGE, "between-a-rock-facing-the-arzinian-being");
+      return;
+    }
+    if (objectId === DONDAKAN_CANNON && option === "Fire") {
+      event.handled = true;
+      fireCannon(player);
     }
   }
 
-  function handleMiningSuccess({ player }) {
+  /**
+   * Fire on Dondakan's cannon: "This definitely isn't your cannon." before the quest is done (tick 268);
+   * after it, straight back into the rock with the helmet on (Wiki, the 14 August 2024 update).
+   */
+  function fireCannon(player) {
+    if (!quest.isComplete(player)) {
+      player.sendMessage("This definitely isn't your cannon.");
+      return;
+    }
+    if (!wearingHelmet(player)) {
+      // Ours: Dondakan's post-quest line for a player without the helmet on.
+      const steps = stepsFrom(loadTranscripts(api)?.[PAGE]?.variants?.["post-quest-dondakan"] ?? [], "bSJoCg") ?? [];
+      startTranscript(api, player, DONDAKAN, PAGE, "post-quest-dondakan", () => steps[0]?.steps ?? []);
+      return;
+    }
+    Scenes.launch(player, null);
+  }
+
+  function handleMiningSuccess(event) {
+    const { player } = event;
     if (!pendingRockPage.has(player)) return;
     pendingRockPage.delete(player);
     if (stageOf(player) !== STAGE_PAGES || !inDwarvenMine(player)) return;
-    if (hasItem(player, BOOK_PAGE_3_ITEM)) return;
+    if (hasPage(player, BOOK_PAGE_3_ITEM)) return;
     giveQuestPage(
       player,
       BOOK_PAGE_3_ITEM,
@@ -959,7 +1231,7 @@ module.exports = function registerBetweenARockQuest(api) {
     const killer = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!killer) return;
     if (event.npcId === DWARVEN_MINE_SCORPION) {
-      if (stageOf(killer) !== STAGE_PAGES || hasItem(killer, BOOK_PAGE_1_ITEM)) return;
+      if (stageOf(killer) !== STAGE_PAGES || hasPage(killer, BOOK_PAGE_1_ITEM)) return;
       if (!inDwarvenMine(killer)) return;
       giveQuestPage(
         killer,
@@ -972,12 +1244,14 @@ module.exports = function registerBetweenARockQuest(api) {
     if (!ARZINIAN_AVATAR_NPC_IDS.has(event.npcId)) return;
     if (activeAvatars.get(killer) === event.npc) activeAvatars.delete(killer);
     if (stageOf(killer) === STAGE_MINE && !avatarKilled(killer)) {
+      // The tick after the killing blow, the player is out (tick 5751).
       killer.setAttribute(AVATAR_KILLED_ATTRIBUTE, true);
-      killer.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(stageOf(killer), killer));
-      exitMine(killer);
+      killer.getPacketSender().sendEntityHintRemoval?.();
+      Mine.leave(killer, { killed: true });
     }
   }
 
+  /** The Avatar, by the player's best combat skill and the gold they carry, at 2375,4951 facing them (tick 3574). */
   function spawnAvatar(player) {
     if (stageOf(player) !== STAGE_MINE || avatarKilled(player)) return;
     const existing = activeAvatars.get(player);
@@ -988,26 +1262,24 @@ module.exports = function registerBetweenARockQuest(api) {
     if (form === "melee") id = level75 ? ARZINIAN_AVATAR_OF_MAGIC_3 : ARZINIAN_AVATAR_OF_MAGIC_2;
     else if (form === "ranged") id = level75 ? ARZINIAN_AVATAR_OF_STRENGTH_3 : ARZINIAN_AVATAR_OF_STRENGTH_2;
     else id = level75 ? ARZINIAN_AVATAR_OF_RANGING_3 : ARZINIAN_AVATAR_OF_RANGING_2;
-    const npc = api.spawnNpc({
-      id,
-      x: AVATAR_TILE.getX(),
-      y: AVATAR_TILE.getY(),
-      z: AVATAR_TILE.getZ(),
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) activeAvatars.set(player, npc);
+    const [x, y] = DATA.avatar.spawn;
+    const npc = api.spawnNpc({ id, x, y, z: 0, owner: player, ownerOnly: true });
+    if (!npc) return;
+    activeAvatars.set(player, npc);
+    npc.setPositionToFace?.(player.getLocation());
+    player.getPacketSender().sendEntityHint?.(npc);
   }
 
   function removeAvatar(player) {
     const npc = activeAvatars.get(player);
     if (!npc) return;
     activeAvatars.delete(player);
+    player.getPacketSender().sendEntityHintRemoval?.();
     api.removeNpc(npc);
   }
 
   // ==========================================================================
-  // Dondakan's mine (the helmet timer)
+  // Dondakan's mine (the helmet's time; Mine.BetweenARock)
   // ==========================================================================
 
   function createArzinianMineArea() {
@@ -1016,20 +1288,12 @@ module.exports = function registerBetweenARockQuest(api) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();
         if (stageOf(player) !== STAGE_MINE || quest.isComplete(player) || avatarKilled(player)) return;
+        if (!Mine.timing(player)) return;
         if (!wearingHelmet(player)) {
-          removeHelmetInMine(player);
+          Mine.leave(player, { helmetOff: true });
           return;
         }
-        const ticks = (Number(player.getAttribute(MINE_TICKS_ATTRIBUTE)) || 0) + 1;
-        player.setAttribute(MINE_TICKS_ATTRIBUTE, ticks);
-        for (const [at, message] of HELMET_TIMER_MESSAGES) {
-          if (ticks === at) player.sendMessage(message);
-        }
-        if (ticks >= 800) {
-          player.sendMessage("Just as you feel your neck is about to snap, you take off your helmet.");
-          removeAvatar(player);
-          exitMine(player);
-        }
+        Mine.tickTimer(player);
       }
     }
     return new DondakanMineArea([ARZINIAN_MINE_BOUNDS]);
@@ -1119,6 +1383,12 @@ module.exports = function registerBetweenARockQuest(api) {
     ];
   }
 
+  function showPickaxeBox({ player, interfaceId }) {
+    if (interfaceId !== QUEST_SCROLL || !pickaxeBox.has(player)) return;
+    pickaxeBox.delete(player);
+    itemBoxes(player, [[RUNE_PICKAXE_ITEM, "Dondakan gives you a rune pickaxe."]]);
+  }
+
   function grantReward(player) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.DEFENCE, 5000);
@@ -1126,6 +1396,7 @@ module.exports = function registerBetweenARockQuest(api) {
     skills.addExperiences(Skill.SMITHING, 5000);
     if (hasSpace(player)) {
       addItem(player, RUNE_PICKAXE_ITEM, 1);
+      pickaxeBox.add(player);
     } else {
       api.getItemOnGroundManager().registerLocation(player, new Item(RUNE_PICKAXE_ITEM, 1), player.getLocation());
       player.sendMessage("Dondakan tried to hand you a rune pickaxe, but you dropped it on the ground.");
@@ -1175,12 +1446,36 @@ module.exports = function registerBetweenARockQuest(api) {
     onReward: grantReward,
   });
 
+  const context = {
+    get quest() { return quest; },
+    stageOf,
+    stages: { MINE: STAGE_MINE, ASSEMBLE: STAGE_ASSEMBLE },
+    ids: { arzinianBeing: ARZINIAN_BEING, goldOre: GOLD_ORE_ITEM, goldHelmet: GOLD_HELMET_ITEM },
+    schematicParts: [...SCHEMATIC_PART_IDS],
+    hasItem,
+    wearingHelmet,
+    avatarKilled,
+    removeAvatar,
+    assembleSchematics,
+    left: leftMine,
+    transcriptSteps,
+    format: (player, text) => formatPlayerText(String(text ?? ""), player),
+    scenePlaying,
+    Scenes: createQuestScenes(api, {}),
+  };
+  Scenes.attach(api, context);
+  Schematics.attach(api, context);
+  Mine.attach(api, context);
+
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Dondakan the Dwarf", { "Talk-to": talkDondakan });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
-  api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("smithing:anvil-smith", smithAtAnvil);
+  api.onCustomEvent("interface:closed", showPickaxeBox);
   api.onItemAction(handleItemAction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnNpc(handleItemOnNpc);

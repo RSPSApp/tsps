@@ -1882,7 +1882,7 @@ export class ClientConnection {
   }
 
   private getPlayerAppearance(player: Player): PlayerAppearance {
-    const look = player.getAppearance().getLook();
+    const look = player.getAppearanceLook();
     const displayEquipment = player.getEquipment().getItems();
     return {
       gender: look[Appearance.GENDER] ?? 0,

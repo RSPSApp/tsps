@@ -288,9 +288,17 @@ function anvilAccess(event) {
 }
 
 /** Smith: godsword pieces or a visage and anti-dragon shield go first, then the interface. */
+/**
+ * Smith on an anvil. Content that makes something of its own there takes the click first through
+ * "smithing:anvil-smith" { player, object, handled } (Between a Rock's golden helmet, whose live
+ * Smith click with gold bars asks "Would you like to make a golden helmet?").
+ */
 function smith(event) {
   if (!anvilAccess(event)) return;
   const { player } = event;
+  const request = { player, object: event.object, handled: false };
+  Core.api.emitCustomEvent("smithing:anvil-smith", request);
+  if (request.handled) return;
   if (Godswords.smithAtAnvil(player) || DragonShields.smithAtAnvil(player)) return;
   openInterface(player, null, event.object);
 }

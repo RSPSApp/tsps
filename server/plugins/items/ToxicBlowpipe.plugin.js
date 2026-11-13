@@ -85,6 +85,15 @@ function pipeOf(itemId) {
   return pipeByItem.get(Number(itemId)) ?? null;
 }
 
+/** The kind of pipe a hit was fired from (its fired-shot snapshot), or null when unknown. */
+function firedKind(hit) {
+  const weapon = hit?.getFiredRangedShot?.()?.weapon ?? null;
+  return weapon ? pipeOf(weapon.getId())?.kind ?? null : null;
+}
+
+/** Player -> the pipe an attack's start has armed: its dart and scale are spent once its hit is rolled. */
+const pendingSpend = new WeakMap();
+
 function normalizeInt(value, fallback) {
   return Number.isFinite(value) ? Math.floor(Number(value)) : fallback;
 }
@@ -679,7 +688,11 @@ function combatMethod(special) {
     }
     hits(character, target) {
       const delay = core.RangedCombatMethod.landingDelays(character, target)[0];
-      return [new core.PendingHit(character, target, this, delay)];
+      const hit = new core.PendingHit(character, target, this, delay);
+      // The shot is rolled with the pipe as it was loaded: the last dart (which may empty a pipe
+      // without scales) is spent only after the roll.
+      spendArmedShot(character);
+      return [hit];
     }
     start(character, target) {
       const player = character.getAsPlayer();
@@ -719,11 +732,7 @@ function combatMethod(special) {
         const drainAmount = player.getCombatSpecial?.()?.getDrainAmount?.() ?? 50;
         core.CombatSpecial.drain(player, drainAmount);
       }
-      const dartsDepleted = maybeConsumeLoadedDart(player, blowpipeItem);
-      const scalesDepleted = maybeConsumeScale(player, blowpipeItem);
-      if (dartsDepleted || scalesDepleted) {
-        refreshBlowpipeState(player, blowpipeItem);
-      }
+      pendingSpend.set(player, blowpipeItem);
     }
     handleAfterHitEffects(hit) {
       const attacker = hit?.getAttacker?.();
@@ -736,7 +745,8 @@ function combatMethod(special) {
       if (totalDamage <= 0 || hit.isAccurate?.() !== true) {
         return;
       }
-      if (kindOf(BlowpipeState.equipped(player))?.venom !== false && core.Misc.getRandom(3) === 0) {
+      // The pipe that fired it, not the one worn when it lands; an unknown one gives no venom.
+      if (firedKind(hit)?.venom === true && core.Misc.getRandom(3) === 0) {
         core.CombatFactory.poisonEntity(target, VENOM_START_DAMAGE, 2);
       }
       if (!this.special) {
@@ -756,6 +766,19 @@ function combatMethod(special) {
   const method = new ToxicBlowpipeCombatMethod(special);
   methods.set(special, method);
   return method;
+}
+
+/** Spends the dart and scale of the attack `start` armed, once. */
+function spendArmedShot(character) {
+  const player = character?.isPlayer?.() ? character.getAsPlayer() : null;
+  const blowpipeItem = player ? pendingSpend.get(player) : null;
+  if (!blowpipeItem) return;
+  pendingSpend.delete(player);
+  const dartsDepleted = maybeConsumeLoadedDart(player, blowpipeItem);
+  const scalesDepleted = maybeConsumeScale(player, blowpipeItem);
+  if (dartsDepleted || scalesDepleted) {
+    refreshBlowpipeState(player, blowpipeItem);
+  }
 }
 
 function rangedAmmoResolverResolve(player) {
@@ -948,5 +971,5 @@ module.exports = {
     api.onInterfaceActionButton(CONFIRM_BUTTON, confirmPrompt);
     api.onCustomEvent("destroy-item:prompt", forgetPrompt);
   },
-  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, fillCharges, dismantleBlowpipe, pickupIntoBlowpipe, itemOnItem, unloadBlowpipe, combatMethod, CONFIRM_GROUP_ID },
+  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, fillCharges, dismantleBlowpipe, pickupIntoBlowpipe, itemOnItem, unloadBlowpipe, combatMethod, spendArmedShot, CONFIRM_GROUP_ID },
 };

@@ -566,6 +566,38 @@ test("Drygore blowpipe: a 25% burn on a landed hit, not on a miss nor from a pac
   assert.equal(burns(), 2, "another weapon's or an unknown shot does not burn");
 });
 
+test("Drygore blowpipe: the last dart is rolled with the loaded pipe, then spent", () => {
+  const player = character("drygore-last-dart");
+  const pipe = drygoreWielder(player, 1);
+  core.BonusManager.update(player);
+  stub(core.Misc, "getRandom", () => 99); // no Ava's device recovers it
+  const method = Blowpipe._test.combatMethod(false);
+  const target = npc();
+  method.start(player, target);
+  assert.equal(pipe.getId(), core.ItemIdentifiers.DRYGORE_BLOWPIPE, "still loaded when the shot is rolled");
+  const [hit] = method.hits(player, target);
+  assert.equal(hit.getFiredRangedShot().weapon.getId(), core.ItemIdentifiers.DRYGORE_BLOWPIPE, "fired from the loaded pipe");
+  assert.equal(pipe.getId(), core.ItemIdentifiers.DRYGORE_BLOWPIPE_EMPTY_, "the dart is spent after the roll");
+  assert.equal(Blowpipe._test.BlowpipeState.read(pipe).dartAmount, 0);
+  method.hits(player, target);
+  assert.equal(Blowpipe._test.BlowpipeState.read(pipe).dartAmount, 0, "only the attack start armed spends");
+});
+
+test("blowpipe venom comes from the pipe that fired the shot, never from an unknown one", () => {
+  const player = character("pipe-venom");
+  const target = npc();
+  const method = Blowpipe._test.combatMethod(false);
+  const poisoned = [];
+  stub(core.CombatFactory, "poisonEntity", (...args) => poisoned.push(args));
+  stub(core.Misc, "getRandom", () => 0); // the venom roll succeeds
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.MAGIC_SHORTBOW));
+  method.handleAfterHitEffects({ ...fakeHit({}, core.ItemIdentifiers.DRYGORE_BLOWPIPE), getAttacker: () => player, getTarget: () => target });
+  method.handleAfterHitEffects({ ...fakeHit({}, null), getAttacker: () => player, getTarget: () => target });
+  assert.equal(poisoned.length, 0, "a Drygore shot or an unknown one, after a swap: no venom");
+  method.handleAfterHitEffects({ ...fakeHit({}, core.ItemIdentifiers.TOXIC_BLOWPIPE), getAttacker: () => player, getTarget: () => target });
+  assert.equal(poisoned.length, 1, "a toxic blowpipe's shot keeps its venom after a swap");
+});
+
 // ------------------------------------------------------------------ Leagues VI only
 
 test("outside Leagues VI the items are plain weapons: one bolt, no heal, one roll, no burn, Corp halves", () => {

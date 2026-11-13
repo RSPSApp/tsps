@@ -191,6 +191,20 @@ test("Konar: her area on asking, and her own closing line", async () => {
   } finally { h.close(); }
 });
 
+test("speaking to Konar and Krystilia's first task set the varbits that unlock their NPC Contact entries", async () => {
+  const h = harness(8623);
+  try {
+    assert.equal(State.varbit(h.player, "konar_spoken"), 0);
+    await h.option("Assignment");
+    assert.equal(State.varbit(h.player, "konar_spoken"), 1);
+    const masters = [...require("../plugins/skills/slayer/Data.Slayer").get().masters.values()];
+    const krystilia = masters.find((master) => master.names.includes("Krystilia"));
+    assert.equal(State.varbit(h.player, "wilderness_master_warning"), 0);
+    Tasks.assignPicked(h.player, krystilia, krystilia.tasks[0], 0, 10);
+    assert.equal(State.varbit(h.player, "wilderness_master_warning"), 1);
+  } finally { h.close(); }
+});
+
 test("Aya's replacement of another master's task is followed by the same menu", async () => {
   const h = harness(13619);
   try {

@@ -801,7 +801,6 @@ module.exports = function registerWitchsHouseQuest(api) {
     event.handled = true;
     const { player } = event;
     if (quest.getStage(player) === STAGE_UNLOCKED_BACK_DOOR) quest.setStage(player, STAGE_READ_DIARY);
-    player.performAnimation(new Animation(READ_BOOK_ANIMATION));
     openBook(player, DIARY_TITLE, DIARY_PAGES);
   }
 

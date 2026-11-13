@@ -3,7 +3,7 @@
  * guide, the Glassblowing book (with its item pictures) and the Archaeologist's diary.
  * Reading changes nothing in the inventory.
  */
-const { openBook, bookPagesFromSpreads } = require("../quests/QuestRuntime");
+const { openBook, bookPagesFromSpreads, registerQuestWidgets } = require("../quests/QuestRuntime");
 const books = require("./data/reading-books.json");
 
 const READING_BOOKS = Object.entries(books)
@@ -16,6 +16,7 @@ module.exports = {
   members: true,
   READING_BOOKS,
   register(api) {
+    registerQuestWidgets(api);
     for (const book of READING_BOOKS) {
       api.onItemAction(book.name, { Read: ({ player }) => openBook(player, book.title, book.pages) });
     }

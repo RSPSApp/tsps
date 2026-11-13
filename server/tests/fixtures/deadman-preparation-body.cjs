@@ -7,10 +7,10 @@ const path = require("node:path");
 const os = require("node:os");
 const { before, after, test } = require("node:test");
 
-const SERVER = path.resolve(__dirname, "..");
+const SERVER = path.resolve(__dirname, "../..");
 const ORIGINAL_CWD = process.cwd();
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "deadman-preparation-"));
-const scenario = process.env.DMM_PREPARATION_FIXTURE_PROFILE ?? "main";
+const scenario = process.env.DMM_PREPARATION_FIXTURE_PROFILE;
 assert.ok(["main", "league", "hardcore", "deadman", "conflict"].includes(scenario), "valid fixture scenario, not a feature-absence assertion");
 const conflict = scenario === "conflict";
 const profile = conflict ? "deadman" : scenario;
@@ -41,21 +41,21 @@ fs.writeFileSync(path.join(directory, "data", "definitions", "world.json"), JSON
 // FIRST core import sees only the disposable deployment. Requiring Server imports
 // WorldDefinition/GameConstants transitively, before its resolver method can be called.
 process.chdir(directory);
-const { Server } = require("../dist/Server");
+const { Server } = require("../../dist/Server");
 // The existing resolver still captures the actual source/dist/plugin roots. No core import
 // is performed while changing CWD for this already-imported method call.
 process.chdir(SERVER);
 Server.installProductionPathResolver();
 process.chdir(directory);
-const { CachePipeline } = require("../dist/game/cache/CachePipeline");
-const { PluginManager: PM } = require("../dist/plugins/PluginManager");
-const { Player } = require("../dist/game/entity/impl/player/Player");
-const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
-const { GameConstants } = require("../dist/game/GameConstants");
-const { getWorldDefinition, WORLD_ZONE_BOUNDARIES } = require("../dist/game/definition/WorldDefinition");
-const { connectHeadlessClient, dispatchClientMessages } = require("../dist/net/NetworkBuilder");
-const { PasswordUtil } = require("../dist/util/PasswordUtil");
-const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+const { CachePipeline } = require("../../dist/game/cache/CachePipeline");
+const { PluginManager: PM } = require("../../dist/plugins/PluginManager");
+const { Player } = require("../../dist/game/entity/impl/player/Player");
+const { PlayerSave } = require("../../dist/game/entity/impl/player/persistence/PlayerSave");
+const { GameConstants } = require("../../dist/game/GameConstants");
+const { getWorldDefinition, WORLD_ZONE_BOUNDARIES } = require("../../dist/game/definition/WorldDefinition");
+const { connectHeadlessClient, dispatchClientMessages } = require("../../dist/net/NetworkBuilder");
+const { PasswordUtil } = require("../../dist/util/PasswordUtil");
+const { JsonPlayerPersistence } = require("../../plugins/persistence/JsonPlayerPersistence.plugin");
 let core;
 let backend;
 const initializationErrors = [];
@@ -191,7 +191,7 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
   t.mock.timers.enable({ apis: ["Date"], now: 2_000_000 });
   const player = await enter("DmmChoice");
   const other = await enter("DmmOther");
-  const { NpcSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
+  const { NpcSpawnDefinitionLoader } = require("../../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
   const loader = new NpcSpawnDefinitionLoader();
   assert.equal(loader.load(), true, "setup: canonical spawn data must load");
   core.RegionManager.loadMapFiles(3232, 3223);

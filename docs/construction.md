@@ -320,15 +320,20 @@ for a sink, range or bath), old (Remove), empty (Build: the Wiki's planks) or th
 The client pays the tier's experience and Carpenter points and restores run energy (the Carpenter's
 outfit adds to the experience, see below). Last-tier contract repeats the last tier; Rewards opens the shop
 (673) with the Wiki's prices; the supply crate rolls the Wiki's table. One Leagues capture
-(recording 1863, rev 227) gives the tier menu ("Select an option": "Beginner Contract", "Novice
-Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
+(recording 1863; decoded-snapshot identity below) gives the tier menu ("Select an option":
+"Beginner Contract", "Novice Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
 Build playing `human_poh_build` with synth 938, Remove playing `human_throw_away` with synth 2097
 or 2098 (delay 20), and the last job's `<col=229628>Jeff seems happy with your work. Talk to him
 for your reward.</col>` (him/her from the Wiki's client genders). The homeowner's unfinished work is now listed in hotspot order rather than as a count.
-Recording 1863, revision 227.1, transcript SHA-256
-`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`,
-lines 88589–88820, shows a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
-dresser, mirror repair and chair in successive dialogue pages. The request vocabulary comes from the
+References to recording 1863 here use the supplied decoded snapshot (`recordings/1863.txt`),
+header revision 227.1, transcript SHA-256
+`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`.
+In that snapshot, lines 88589–88820 show a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
+dresser, mirror repair and chair in successive dialogue pages. These offsets apply only to this
+snapshot's rendering; its decoder build and capture date are unknown. To locate the sequence in
+another render, search for `Hey, I'm your contractor from Mahogany Homes, what did you want done?`,
+then Jeff's `I'd like a Wooden shelf built.` through `I'd like a Wooden chair built.`.
+The request vocabulary comes from the
 [homeowner transcripts](https://oldschool.runescape.wiki/w/Transcript:Jeff_(Mahogany_Homes)),
 not the loc's generic display names (for example, "Shelves"). The other homeowner transcripts
 also group duplicate pieces, such as Bob's bookcases/cabinets and Leela's small tables; requests

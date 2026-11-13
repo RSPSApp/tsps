@@ -60,8 +60,8 @@ export type CacheDefinition = {
     note?: string;
 };
 
-/** One overlay row: a base definition from the cache plus the fields this project overrides. */
-export type OverlayRow = { kind: string; id: number; baseId: number; fields: Record<string, unknown> };
+/** One overlay row, optionally based on a cache definition, plus the fields this project overrides. */
+export type OverlayRow = { kind: string; id: number; baseId: number | null; fields: Record<string, unknown> };
 
 const query = (entries: Record<string, string | number | undefined>) => {
     const parts = new URLSearchParams();
@@ -187,7 +187,7 @@ export function authoringBase(contentBase: string | undefined): string | undefin
 }
 
 /** A new overlay row from an inspected base definition: only the fields this project owns. */
-export function draftRow(definition: CacheDefinition, baseId: number, id: number): OverlayRow {
+export function draftRow(definition: CacheDefinition, baseId: number | null, id: number): OverlayRow {
     return {
         kind: definition.kind,
         id,
@@ -208,10 +208,10 @@ export function withField(row: OverlayRow, field: string, value: unknown | undef
  * Problems the page can see before asking the server, so an obvious mistake never becomes a 400.
  * The authoritative checks (cache existence, transport budget) live in the server's document audit.
  */
-export function draftProblems(row: OverlayRow, base: CacheDefinition, overlayIdStart: number): string[] {
+export function draftProblems(row: OverlayRow, base: CacheDefinition | null, overlayIdStart: number): string[] {
     const problems: string[] = [];
     if (!Number.isInteger(row.id) || row.id < overlayIdStart) problems.push(`id must be ${overlayIdStart} or above (above the cache's own count)`);
-    if (!Number.isInteger(row.baseId) || !base.exists) problems.push("base must be a definition that exists in the cache");
+    if (row.baseId !== null && (!Number.isInteger(row.baseId) || !base?.exists)) problems.push("base must be a definition that exists in the cache");
     if (Object.keys(row.fields).length === 0) problems.push("nothing is overridden yet");
     return problems;
 }

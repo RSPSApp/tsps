@@ -23,6 +23,7 @@ assert.deepEqual(row, { kind: "loc", id: 63307, baseId: 1, fields: {} });
 assert.deepEqual(draftProblems(row, base, 63307), ["nothing is overridden yet"], "an empty overlay is not a save");
 assert.deepEqual(draftProblems({ ...row, id: 12 }, base, 63307), ["id must be 63307 or above (above the cache's own count)", "nothing is overridden yet"]);
 assert.deepEqual(draftProblems({ ...row, fields: { seqId: 1 } }, { ...base, exists: false }, 63307), ["base must be a definition that exists in the cache"]);
+assert.deepEqual(draftProblems({ ...row, baseId: null, fields: { name: "Blank loc" } }, null, 63307), [], "an unbased definition is valid");
 
 let edited = withField(row, "seqId", 3206);
 assert.deepEqual(edited.fields, { seqId: 3206 });
@@ -97,6 +98,7 @@ assert.equal(sequenceFrameCount(undefined as any, 3206), 1, "without a client a 
 console.log("cache-editor preview specs ok");
 
 import { CustomDefinitionLoader, replaceCustomDefinitions, getCustomDefinitions } from "../custom/definitions/CustomDefinitionStore";
+import { NpcType } from "../rs/config/npctype/NpcType";
 const canonical = { id: 1, name: "Goblin", modelIds: [3], params: new Map([[1, "base"]]), isInteractive: 1 };
 const loader = new CustomDefinitionLoader<any>({ load: () => canonical, getCount: () => 10, clearCache() {} }, "npc");
 replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: 1, fields: { name: "Demo goblin", actions: [null], params: { "2": "custom" } } }]);
@@ -111,11 +113,25 @@ assert.deepEqual(canonical.modelIds, [3]);
 const exported = getCustomDefinitions(); exported[0].fields.name = "mutated";
 assert.equal(getCustomDefinitions()[0].fields.name, "Demo goblin");
 assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 1, baseId: 1, fields: {} }]), /Invalid/);
+assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 50001, baseId: -1, fields: {} }]), /Invalid/);
+assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 50001, fields: {} }]), /Invalid/, "missing baseId is not confused with explicit null");
 assert.equal(loader.load(50000), custom);
 replaceCustomDefinitions([]);
 assert.equal(loader.getCount(), 10);
 assert.equal(loader.load(1), canonical);
-console.log("custom definition client identity, isolation and reset ok");
+const cacheInfo = { name: "test", game: "oldschool", environment: "live", revision: 1, timestamp: "", size: 0 } as any;
+const stockNpc = new NpcType(1, cacheInfo);
+stockNpc.name = "Stock npc";
+stockNpc.modelIds = [3];
+const blankLoader = new CustomDefinitionLoader<NpcType>({ load: () => stockNpc, getCount: () => 10, clearCache() {} }, "npc");
+replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: null, fields: { name: "Blank npc" } }]);
+const blankNpc = blankLoader.load(50000);
+assert.equal(blankNpc.id, 50000);
+assert.equal(blankNpc.name, "Blank npc");
+assert.equal(blankNpc.size, 1, "the type constructor supplies valid defaults");
+assert.equal(blankNpc.modelIds, undefined, "a blank definition does not inherit the stock model");
+replaceCustomDefinitions([]);
+console.log("custom definition client identity, blank defaults, isolation and reset ok");
 
 import { formatFieldValue, parseFieldValue, initialOverrides, supportsModelRecolor, packedHslToHex, hexToPackedHsl } from "../custom/cache-editor/CacheEditorModel";
 for (const [field, value] of [

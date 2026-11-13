@@ -1,9 +1,10 @@
+import type { CacheInfo } from "../../rs/cache/CacheInfo";
 import type { Type } from "../../rs/config/Type";
 import type { TypeLoader } from "../../rs/config/TypeLoader";
 import { crc32 } from "../../rs/util/Crc32";
 
 export type CustomDefinitionKind = "npc" | "loc" | "item";
-export type CustomDefinitionRow = { kind: CustomDefinitionKind; id: number; baseId: number; fields: Record<string, unknown> };
+export type CustomDefinitionRow = { kind: CustomDefinitionKind; id: number; baseId: number | null; fields: Record<string, unknown> };
 let rows: CustomDefinitionRow[] = [];
 let revision = 0;
 let key = "";
@@ -15,7 +16,7 @@ export function parseCustomDefinitions(input: unknown): CustomDefinitionRow[] {
     const seen = new Set<string>();
     for (const row of copy) {
         if (!row || !["npc", "loc", "item"].includes(row.kind) || !Number.isInteger(row.id) || row.id < 50000 || row.id >= 65535 ||
-            !Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= 65535 || row.id === row.baseId ||
+            (row.baseId !== null && (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= 65535 || row.id === row.baseId)) ||
             !row.fields || typeof row.fields !== "object" || Array.isArray(row.fields) || Object.keys(row.fields).some(name => forbidden.has(name))) {
             throw new Error("Invalid custom definition");
         }
@@ -48,6 +49,11 @@ export class CustomDefinitionLoader<T extends Type> implements TypeLoader<T> {
     private cache = new Map<number, T>();
     private count = 0;
     constructor(private readonly base: TypeLoader<T>, private readonly kind: CustomDefinitionKind) {}
+    private createBlank(id: number): T {
+        const template = this.base.load(0);
+        const Constructor = template.constructor as new (id: number, cacheInfo: CacheInfo) => T;
+        return new Constructor(id, template.cacheInfo);
+    }
     private sync(): void {
         if (this.seenRevision === revision) return;
         this.custom = new Map(rows.filter(row => row.kind === this.kind).map(row => [row.id, row]));
@@ -61,8 +67,8 @@ export class CustomDefinitionLoader<T extends Type> implements TypeLoader<T> {
         if (!row) return this.base.load(id);
         const cached = this.cache.get(id);
         if (cached) return cached;
-        if (row.baseId >= this.base.getCount()) throw new Error("Custom definition base is missing");
-        const base = this.base.load(row.baseId);
+        if (row.baseId !== null && row.baseId >= this.base.getCount()) throw new Error("Custom definition base is missing");
+        const base = row.baseId === null ? this.createBlank(id) : this.base.load(row.baseId);
         const clone = Object.assign(Object.create(Object.getPrototypeOf(base)), base) as T;
         for (const [field, value] of Object.entries(base)) {
             if (Array.isArray(value) || value instanceof Map) (clone as any)[field] = structuredClone(value);

@@ -88,8 +88,9 @@ reports `unverified` and says why, rather than inventing a kind.
 ## Authoring, partially built
 
 `Document.CacheEditor.cjs` is the canonical overlay document
-(`server/data/definitions/custom-definitions.json`): rows of `{ kind, id, baseId, fields }`, overlay
-ids starting above the cache's own count for the kind, validated for unknown fields, dangling links,
+(`server/data/definitions/custom-definitions.json`): rows of `{ kind, id, baseId, fields }`, where
+`baseId` is a cache id or `null` for a definition built from that type's defaults. Overlay ids start
+above the cache's own count for the kind; rows are validated for unknown fields, dangling links,
 self-references, duplicate ids and the real compressed transport budget.
 
 `Authoring.CacheEditor.plugin.js` is the only writable surface: loopback only, on
@@ -100,8 +101,8 @@ clients, and a restart notice after saving. `Catalog.CacheEditor.plugin.js` serv
 
 Saving writes overlay rows, and they are **applied at the next server start**: `Catalog` reads the
 document on startup and registers it with `CacheDefinitions.registerCustomDefinitions`, which clones
-the base definition and overrides the listed fields. That is the whole reason locs and npcs need no
-encoder and no repack — `getObject`/`getNpc`/`getItem` return the overlaid clone, so `ObjectDefinition`,
+either the chosen cache base or a fresh type-default definition, then overrides the listed fields.
+That is the whole reason locs and npcs need no encoder and no repack — `getObject`/`getNpc`/`getItem` return the overlaid clone, so `ObjectDefinition`,
 `NpcDefinition` and `ItemDefinition` (all of which route through them) see it too, while the base cache
 definition stays untouched.
 
@@ -164,11 +165,11 @@ non-`http:` world.
   Kinds without a builder fall back to merging `models`/`modelIds` directly. A sequence plays at 120 ms per frame while the tab is open: a loc's `seqId`,
   an npc's `idleSeqId`, a graphic's `animationId`. A definition with no models says so, and a model
   missing from the archive names the id rather than drawing an empty square.
-- **New element:** `+ New` asks for a **type**, an optional **starting definition** ("starts from" —
-  the base an overlay overrides; blank means a bare field list), a **name**, and an **id** that is
+- **New element:** `+ New` asks for a **type**, an optional **starting definition** (the base whose
+  fields are inherited; blank starts from the type's constructor defaults), a **name**, and an **id**
   pre-filled with the next free overlay id, computed from the authoring document so it never collides
-  with the cache or an earlier overlay. `+ New based on this` in the footer starts the same flow with
-  the selected entry already chosen.
+  with the cache or an earlier overlay. `+ New based on this` starts the same flow with the selected
+  entry already chosen.
 - **Editing:** after Create the ordinary tabs open on the new element, and **every value cell is
   editable in place** — click, type, Enter. Values are parsed by field type (booleans, integers,
   arrays as `a, b, c`, strings), overridden cells turn green, and with a base the table is pre-filled

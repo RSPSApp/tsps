@@ -25,7 +25,7 @@ type CacheSearchHit = { kind: string; id: number; name: string | null; custom?: 
 type Editing = {
     kind: string;
     id: number;
-    baseId: number;
+    baseId: number | null;
     base: CacheDefinition | null;
     name: string;
     /** Only what differs from the base; an empty map means "identical to the base". */
@@ -84,6 +84,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
 
     // New element flow, and the element being edited.
     const [creating, setCreating] = useState<{ kind: string; name: string; id: number; revision?: string; base: CacheDefinition | null } | null>(null);
+    const [createIdPending, setCreateIdPending] = useState(false);
     const [baseText, setBaseText] = useState("");
     const [baseHits, setBaseHits] = useState<CacheSearchHit[]>([]);
     const [baseError, setBaseError] = useState<string | null>(null);
@@ -253,47 +254,57 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         return { id: next, revision };
     }, [authoring, kinds]);
 
-    const changeCreatingKind = useCallback(async (nextKind: string) => {
+    const changeCreatingKind = useCallback((nextKind: string) => {
         if (!creating || creating.kind === nextKind) return;
         const generation = ++createKindGeneration.current;
+        const fallbackId = Math.max(50000, kinds.find((entry) => entry.kind === nextKind)?.count ?? 0);
         baseSearchGeneration.current++;
         setBaseText("");
         setBaseHits([]);
         setBaseError(null);
         setBaseSearching(false);
         setBaseSearchComplete(false);
-        const next = await nextId(nextKind);
-        if (generation !== createKindGeneration.current) return;
+        setCreateIdPending(true);
         setCreating((current) => {
             if (!current) return current;
             const generatedName = current.base ? `${current.base.name ?? "element"} (copy)` : "";
             return {
                 ...current,
-                ...next,
                 kind: nextKind,
+                id: fallbackId,
+                revision: undefined,
                 base: null,
                 name: current.name === generatedName ? "" : current.name,
             };
         });
-    }, [creating, nextId]);
+        void nextId(nextKind).then((next) => {
+            if (generation !== createKindGeneration.current) return;
+            setCreating((current) => current?.kind === nextKind ? { ...current, ...next, kind: nextKind } : current);
+            setCreateIdPending(false);
+        });
+    }, [creating, kinds, nextId]);
 
     const searchBase = useCallback(async (needle = baseText) => {
         if (!creating) return;
         if (!needle.trim()) {
+            baseSearchGeneration.current++;
+            setBaseSearching(false);
             setBaseError("Enter a gameval name or ID to search.");
             setBaseHits([]);
             setBaseSearchComplete(false);
             return;
         }
         const generation = ++baseSearchGeneration.current;
+        const searchKind = creating.kind;
         setBaseSearching(true);
         setBaseSearchComplete(false);
         setBaseError(null);
         try {
-            const body = await fetchContent(searchPath(needle, creating.kind));
+            const body = await fetchContent(searchPath(needle, searchKind));
             if (body?.error) throw new Error(body.error);
             if (generation !== baseSearchGeneration.current) return;
-            setBaseHits(Array.isArray(body?.hits) ? body.hits : []);
+            const matchingHits = Array.isArray(body?.hits) ? body.hits.filter((hit: CacheSearchHit) => hit.kind === searchKind) : [];
+            setBaseHits(matchingHits);
             setBaseSearchComplete(true);
         } catch (failure) {
             if (generation === baseSearchGeneration.current) {
@@ -306,16 +317,24 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     }, [baseText, creating]);
 
     const selectBase = useCallback(async (hit: CacheSearchHit) => {
+        const expectedKind = creating?.kind;
+        if (!expectedKind) return;
+        if (hit.kind !== expectedKind) {
+            setBaseError("Choose a base definition with the selected type.");
+            setBaseHits([]);
+            return;
+        }
         const generation = ++baseSearchGeneration.current;
         setBaseSearching(true);
         setBaseError(null);
         try {
-            const body = await fetchContent(inspectPath(hit.kind, hit.id));
+            const body = await fetchContent(inspectPath(expectedKind, hit.id));
             if (body?.error) throw new Error(body.error);
-            if (!body?.exists) throw new Error(`${hit.kind} ${hit.id} is not present in the cache`);
+            if (!body?.exists) throw new Error(`${expectedKind} ${hit.id} is not present in the cache`);
+            if (body?.kind !== expectedKind) throw new Error("The selected definition type changed; search again.");
             if (generation !== baseSearchGeneration.current) return;
             const base = body as CacheDefinition;
-            setCreating((current) => current ? {
+            setCreating((current) => current?.kind === expectedKind ? {
                 ...current,
                 base,
                 name: current.name || `${base.name ?? "element"} (copy)`,
@@ -327,12 +346,13 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         } finally {
             if (generation === baseSearchGeneration.current) setBaseSearching(false);
         }
-    }, []);
+    }, [creating]);
 
     const cancelCreate = useCallback(() => {
         createKindGeneration.current++;
         baseSearchGeneration.current++;
         setCreating(null);
+        setCreateIdPending(false);
         setBaseHits([]);
         setBaseError(null);
         setBaseSearching(false);
@@ -340,30 +360,42 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         setStatus("ready");
     }, []);
 
-    const openCreate = useCallback(async (withBase: CacheDefinition | null) => {
+    const openCreate = useCallback((withBase: CacheDefinition | null) => {
         const forKind = withBase?.kind ?? kind;
-        createKindGeneration.current++;
+        const generation = ++createKindGeneration.current;
+        const fallbackId = Math.max(50000, kinds.find((entry) => entry.kind === forKind)?.count ?? 0);
         baseSearchGeneration.current++;
         setBaseText("");
         setBaseHits([]);
         setBaseError(null);
         setBaseSearching(false);
         setBaseSearchComplete(false);
+        setCreateIdPending(true);
         setError(null);
         setStatus("ready");
-        setCreating({ kind: forKind, name: withBase ? `${withBase.name ?? "element"} (copy)` : "", ...(await nextId(forKind)), base: withBase });
-    }, [kind, nextId]);
+        setCreating({
+            kind: forKind,
+            name: withBase ? `${withBase.name ?? "element"} (copy)` : "",
+            id: fallbackId,
+            base: withBase,
+        });
+        void nextId(forKind).then((next) => {
+            if (generation !== createKindGeneration.current) return;
+            setCreating((current) => current ? { ...current, ...next, kind: forKind } : current);
+            setCreateIdPending(false);
+        });
+    }, [kind, kinds, nextId]);
 
     const create = useCallback(async () => {
         if (!creating) return;
-        if (!creating.base) { setBaseError("Choose a base definition before creating the overlay."); return; }
+        if (createIdPending || baseSearching) { setBaseError("Wait for the current lookup to finish."); return; }
         if (!Number.isInteger(creating.id) || creating.id < 0) { setError("Give a numeric id"); return; }
         const fields = await load(fieldsPath(creating.kind, true));
         setEditableFields((fields?.fields ?? []) as CacheField[]);
         setEditing({
             kind: creating.kind,
             id: creating.id,
-            baseId: creating.base?.id ?? -1,
+            baseId: creating.base?.id ?? null,
             revision: creating.revision,
             base: creating.base,
             name: creating.name,
@@ -372,8 +404,8 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         setDefinition(null);
         setCreating(null);
         setTab("values");
-        setStatus(`editing new ${creating.kind} ${creating.id}${creating.base ? ` based on ${creating.base.id}` : ""}`);
-    }, [creating, load]);
+        setStatus(`editing new ${creating.kind} ${creating.id}${creating.base ? ` based on ${creating.base.id}` : " from blank defaults"}`);
+    }, [baseSearching, createIdPending, creating, load]);
 
     const setValue = useCallback((field: string, value: unknown) => {
         setEditing((current) => {
@@ -388,9 +420,9 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const save = useCallback(async () => {
         if (!editing) return;
         if (!authoring) { setError("Saving needs the local authoring service; start the server with CACHE_EDITOR_ENABLED=1"); return; }
-        const row = { kind: editing.kind, id: editing.id, baseId: editing.baseId >= 0 ? editing.baseId : 0, fields: editing.overrides };
-        if (editing.baseId < 0) { setError("Pick a starting definition; an overlay row needs one to override"); return; }
-        const problems = draftProblems(row, editing.base ?? { kind: editing.kind, id: editing.id, exists: true, name: "", label: "" }, 0);
+        const row = { kind: editing.kind, id: editing.id, baseId: editing.baseId, fields: editing.overrides };
+        if (editing.baseId !== null && !Number.isInteger(editing.baseId)) { setError("The selected base definition is invalid"); return; }
+        const problems = draftProblems(row, editing.base, 0);
         if (problems.length) { setError(problems.join("; ")); return; }
         try {
             if (!editing.revision) throw new Error("Reopen this draft after connecting to the local authoring service");
@@ -652,7 +684,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                         <strong>{shown?.name ?? (shown ? "Unnamed definition" : "Choose a definition")}</strong>
                         <span className="cache-editor-definition-meta">{shown ? `${shown.kind} · ID ${shown.id}` : "Search the cache or select an entry from the browser."}</span>
                     </div>
-                    {editing ? <span className="cache-editor-editing-badge">{editing.baseId >= 0 ? `Draft · based on ${editing.baseId}` : "New draft"}</span> : null}
+                    {editing ? <span className="cache-editor-editing-badge">{editing.baseId !== null ? `Draft · based on ${editing.baseId}` : "New blank draft"}</span> : null}
                     {shown && !editing ? <button type="button" className="cache-editor-create-button" style={{ ...styles.input, color: "#caa95e" }} onClick={() => void openCreate(shown.exists ? shown : null)}>+ New based on this</button> : null}
                 </div>
                 {error ? <div className="cache-editor-alert" role="alert">{error}</div> : null}
@@ -673,7 +705,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 <div>
                                     <span className="cache-editor-eyebrow">NEW OVERLAY</span>
                                     <h2 id="cache-editor-create-title">Create a custom definition</h2>
-                                    <p>Choose a cache definition to start from, then assign a custom name and ID.</p>
+                                    <p>Choose a custom name and ID. Starting from an existing definition is optional.</p>
                                 </div>
                                 <button type="button" className="cache-editor-create-close" aria-label="Cancel new definition" onClick={cancelCreate}>×</button>
                             </header>
@@ -681,8 +713,8 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 <section className="cache-editor-base-section" aria-labelledby="cache-editor-base-title">
                                     <div className="cache-editor-base-heading">
                                         <div>
-                                            <h3 id="cache-editor-base-title">Based on <span>Required</span></h3>
-                                            <p>Select a definition type, then search by gameval name or ID. The chosen type will also be used for the new overlay.</p>
+                                            <h3 id="cache-editor-base-title">Based on <span>Optional</span></h3>
+                                            <p>Select a definition type, then search by gameval name or ID. The type will be used for the new overlay too; leave this blank to start from the type’s defaults.</p>
                                         </div>
                                     </div>
                                     <div className="cache-editor-base-search">
@@ -732,7 +764,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                         </div>
                                     ) : null}
                                     {!baseSearching && baseSearchComplete && baseHits.length === 0 ? <div className="cache-editor-empty-list">No definitions matched that gameval name or ID.</div> : null}
-                                    {!creating.base && !baseSearching && !baseSearchComplete && baseHits.length === 0 ? <p className="cache-editor-base-help">Search for an existing cache definition to use as the starting point. Its fields will be copied into your new overlay.</p> : null}
+                                    {!creating.base && !baseSearching && !baseSearchComplete && baseHits.length === 0 ? <p className="cache-editor-base-help">Search for an existing definition to inherit its fields, or leave this empty to create a blank definition.</p> : null}
                                 </section>
                                 <div className="cache-editor-create-fields">
                                     <div className="cache-editor-create-field">
@@ -742,13 +774,14 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                     <div className="cache-editor-create-field">
                                         <label htmlFor="cache-editor-new-id">Custom ID</label>
                                         <input id="cache-editor-new-id" style={styles.input} type="number" value={creating.id} onChange={(event) => setCreating((current) => current ? { ...current, id: Number(event.target.value) } : current)} />
+                                        {createIdPending ? <span className="cache-editor-help">Checking the next available ID…</span> : null}
                                     </div>
                                 </div>
                             </div>
                             <footer className="cache-editor-create-actions">
-                                <span className="cache-editor-create-footer-help">A base definition is required to save an overlay.</span>
+                                <span className="cache-editor-create-footer-help">A base is optional; without one, fields start from the definition type’s defaults.</span>
                                 <div>
-                                    <button type="button" className="cache-editor-create-button" style={styles.input} disabled={!creating.base || baseSearching} onClick={() => void create()}>Create definition</button>
+                                    <button type="button" className="cache-editor-create-button" style={styles.input} disabled={createIdPending || baseSearching} onClick={() => void create()}>Create definition</button>
                                     <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={cancelCreate}>Cancel</button>
                                 </div>
                             </footer>

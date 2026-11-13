@@ -5,7 +5,7 @@
  * docs/giant-egg-sac.md has the rsprox captures this follows.
  *
  * The full sac holds 100 red spiders' eggs. Cut-open, or a knife used on it, opens it only in a
- * bank ("You can only do this whilst in a bank.", checked before the knife): the eggs fill the
+ * bank (the knife is checked first, then "You can only do this whilst in a bank."): the eggs fill the
  * free inventory slots, unnoted, and the rest stay in the untradeable open sac. The open sac's
  * Remove-eggs takes out as many as there is room for, its Check-eggs says how many are left, and
  * its bank-side Empty puts them all in the bank, the sac going with them.

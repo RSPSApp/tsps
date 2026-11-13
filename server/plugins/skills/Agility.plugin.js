@@ -509,7 +509,7 @@ function giveCourseItem(player, course, gives) {
 
 /** No run energy comes back while an Agility obstacle is being crossed (Wiki: Energy). */
 function pauseEnergyRecoveryMidObstacle(entity, units) {
-  return ObstacleRunner.isCrossingAgilityObstacle(entity) ? 0 : units;
+  return ObstacleRunner.isCrossingAgilityObstacle(entity, core.World.getProcessCycle()) ? 0 : units;
 }
 
 function pauseMarksOnLogout({ player }) {

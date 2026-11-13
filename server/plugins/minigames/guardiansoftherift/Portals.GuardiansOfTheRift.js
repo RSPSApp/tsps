@@ -133,7 +133,7 @@ function climbRubble({ player, objectId }) {
     { sound: RUBBLE_SOUND, loops: 6, delay: 19 },
     { move: [target.x, target.y], speed: [0, 90], dir: "west", ticks: 3 },
     { sound: RUBBLE_LANDING_SOUND },
-  ]);
+  ], { agility: true });
   return true;
 }
 

@@ -99,7 +99,7 @@ function pillar(event) {
   }
   const swing = pillarSwing(run, tile, run.area.templateOf(player.getLocation()));
   if (!swing) return false;
-  if (!run.act(9)) return true;
+  if (!run.act(9, { agility: true })) return true;
   const { from, middle, to, side } = swing;
   const facing = Obstacles.facingOf(to[0] - from[0], to[1] - from[1]);
   player.getMovementQueue().reset();
@@ -155,7 +155,7 @@ function bridge(event) {
   if (state === 1) return repairBridge(run);
   const crossing = bridgeCrossing(run, tile);
   if (!crossing) return false;
-  if (!run.act(4)) return true;
+  if (!run.act(4, { agility: true })) return true;
   const { from, to } = crossing;
   player.getMovementQueue().reset();
   Common.animate(player, "logBalance", 5);
@@ -245,7 +245,7 @@ function portal(event) {
   const state = stateOf(run, "hallowed_magic_state");
   if (!state) return false;
   if (state === 1) return powerPortal(run);
-  if (!run.act(3)) return true;
+  if (!run.act(3, { agility: true })) return true;
   const { from, to } = portalPass(run, tile, event.object.getFace?.() ?? 0, run.area.templateOf(player.getLocation()));
   player.getMovementQueue().reset();
   Common.animate(player, "floatUp", 10);

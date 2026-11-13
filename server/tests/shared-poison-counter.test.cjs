@@ -156,7 +156,10 @@ test('snapshot restoration retains independent brief durations and rejects malfo
   timer.restore(state); f.advanceWall(2000);
   assert.equal(timer.isVenomImmune(), false); assert.equal(timer.finished(), false);
   assert.equal(timer.secondsRemaining(), 16);
-  for (const invalid of [{counter:-1,ticksUntilPulse:0}, {counter:5,ticksUntilPulse:31}, {counter:5,ticksUntilPulse:NaN}, {counter:5,ticksUntilPulse:1,briefVenomSeconds:20,briefPoisonSeconds:2}]) {
+  for (const invalid of [{counter:-1,ticksUntilPulse:0}, {counter:5,ticksUntilPulse:31}, {counter:5,ticksUntilPulse:NaN}, {counter:5,ticksUntilPulse:1,briefVenomSeconds:20,briefPoisonSeconds:2},
+    {counter:5,ticksUntilPulse:20,protectionTicksRemaining:0},
+    {counter:5,ticksUntilPulse:20,protectionTicksRemaining:Infinity},
+    {counter:5,ticksUntilPulse:20,protectionTicksRemaining:30}]) {
     timer.restore(invalid, 88);
     assert.equal(timer.getCounter(), 5); assert.equal(timer.snapshot().ticksUntilPulse, 27);
   }
@@ -238,4 +241,93 @@ test('duration reduction safely exhausts a dose, preserves no-dose phase and ind
   assert.equal(clock.isVenomImmune(), false);
   for (const seconds of [NaN, Infinity, -1, 0]) clock.reduceProtection(seconds);
   assert.equal(clock.snapshot().ticksUntilPulse, 20);
+});
+
+test('reduced protection emits warning and expiry through the actual Effect between status pulses', t => {
+  const f = fixture(t), lines = [];
+  const clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 10, ticksUntilPulse: 20 });
+  clock.reduceProtection(45);
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  f.step(184);
+  assert.equal(f.value(), -2);
+  assert.deepEqual(lines, []);
+  f.step();
+  assert.equal(f.value(), -1);
+  assert.equal(clock.snapshot().ticksUntilPulse, 15, 'warning transition is between native status pulses');
+  assert.deepEqual(lines, ['<col=7f007f>Your poison resistance is about to wear off.</col>']);
+  f.step(29);
+  assert.equal(f.value(), -1);
+  f.step();
+  assert.equal(f.value(), 0);
+  assert.deepEqual(lines, ['<col=7f007f>Your poison resistance is about to wear off.</col>',
+    '<col=7f007f>Your poison resistance has worn off.</col>']);
+  assert.ok(f.tasks.every(task => !task.isRunning()), 'protection-only task closes after delivering the end line');
+  f.step(60);
+  assert.equal(lines.length, 2, 'no duplicate end transition');
+  assert.equal(f.hits.length, 0);
+});
+
+test('a reduced final dose holds its due transition while modal and releases once on close', t => {
+  const f = fixture(t), lines = [];
+  const clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 10, ticksUntilPulse: 20 });
+  clock.reduceProtection(45);
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  f.step(200);
+  assert.equal(clock.snapshot().protectionTicksRemaining, 15, 'real reduced dose reaches the reviewed final checkpoint');
+  f.player.getPacketSender().sendChatboxInterface(231);
+  f.step(200);
+  assert.equal(f.value(), -1);
+  assert.equal(clock.finished(), false);
+  assert.equal(clock.snapshot().ticksUntilPulse, 0, 'the status pulse itself becomes due without being advanced');
+  assert.equal(lines.length, 1, 'only the prior warning was delivered');
+  CombatFactory.poisonEntity(f.player, 30, 1);
+  assert.equal(f.player.isPoisoned(), false, 'modal-held final protection still blocks poison');
+  f.player.getPacketSender().closeInterface(231);
+  f.step();
+  assert.equal(f.value(), 0);
+  assert.equal(clock.finished(), true);
+  assert.deepEqual(lines, ['<col=7f007f>Your poison resistance is about to wear off.</col>',
+    '<col=7f007f>Your poison resistance has worn off.</col>']);
+  assert.ok(f.tasks.every(task => !task.isRunning()));
+  f.step(60);
+  assert.equal(lines.length, 2);
+});
+
+test('reduced venom-tier transitions use the Effect feedback path between unchanged status pulses', t => {
+  const f = fixture(t), lines = [];
+  const clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 42, ticksUntilPulse: 20 });
+  clock.reduceProtection(45);
+  assert.equal(f.value(), -40);
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  f.step(4);
+  assert.deepEqual(lines, []);
+  f.step();
+  assert.equal(f.value(), -39);
+  assert.equal(clock.snapshot().ticksUntilPulse, 15);
+  assert.equal(clock.isVenomImmune(), true);
+  f.step(30);
+  assert.equal(f.value(), -38);
+  assert.equal(clock.snapshot().ticksUntilPulse, 15);
+  assert.equal(clock.isVenomImmune(), false);
+  assert.deepEqual(lines, ['<col=7f007f>Your venom resistance is about to wear off.</col>',
+    '<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>']);
+});
+
+test('duration reduction leaves the existing affliction on its native Effect pulse', t => {
+  const f = fixture(t, 20);
+  const clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 10, ticksUntilPulse: 20 });
+  clock.reduceProtection(45);
+  f.step(19);
+  assert.equal(f.hits.length, 0);
+  f.step();
+  assert.equal(f.hits.length, 1);
+  f.step(29);
+  assert.equal(f.hits.length, 1);
+  f.step();
+  assert.equal(f.hits.length, 2);
+  assert.equal(f.player.getPoisonDamage(), 18, 'dose reduction does not cure or reset the affliction');
 });

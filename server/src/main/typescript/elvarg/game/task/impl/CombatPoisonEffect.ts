@@ -69,12 +69,13 @@ export class CombatPoisonEffect extends Task {
     const modal = !!player && (player.getInterfaceId() > 0 || player.getPacketSender().hasInterruptibleInterface());
     if (clock) {
       const before = clock.getCounter();
-      if (!clock.tickPulse(modal)) return;
-      if (!afflicted) {
-        if (player && before > clock.getCounter()) CombatPoisonEffect.sendResistanceLine(player, clock.getCounter());
-        if (!clock.hasCounter()) this.stop();
-        return;
+      const pulse = clock.tickPulse(modal);
+      // Explicit duration reductions can put protection transitions between status pulses.
+      if (!afflicted && player && before > clock.getCounter()) {
+        CombatPoisonEffect.sendResistanceLine(player, clock.getCounter());
       }
+      if (!afflicted && !clock.hasCounter()) this.stop();
+      if (!pulse || !afflicted) return;
     }
 
     if (!clock && --this.ticksUntilHit > 0) {

@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets or Northleach Quell**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell or Ghastly Swamp**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -500,8 +500,8 @@ exact spawn/barrier coordinates are our choices, not recorded retail positions.
 ## Soggy Swamp
 
 The native arena scrollbox offers Soggy Swamp (6, row slot 18) alongside Plateau,
-Sylvan Glade and Forsaken Quarry. Ghastly Swamp (7) is a separate, unsupported
-arena. Existing melee modes, restrictions, Ignore 5, safe deaths and membership
+Sylvan Glade and Forsaken Quarry. Ghastly Swamp (7) is a separate arena with the
+shared fight-start hazard described below. Existing melee modes, restrictions, Ignore 5, safe deaths and membership
 rules use the same selected-layout consumers.
 
 The bounded revision-242 template is region 13645, source 3392..3455 / 4928..4991,
@@ -879,3 +879,143 @@ history accompany the PR. The XP control checks 25 base XP against the actual
 world rate with an allowed multiplier-one gate, unlocked and uncapped XP.
 Supplied setup/RNG, source graphs, decoded inputs and native handlers do not
 establish rendered geometry, login transport, retail timing or all of issue #153.
+
+
+## Ghastly Swamp
+
+Ghastly Swamp (arena 7, native slot 21) adds the fight-start ghast hazard to the
+existing safe melee modes and restrictions. Plateau (1) remains the default and
+explicit Wasteland (0) remains supported. The [Clan Wars Wiki](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+describes ghasts after fighting begins. The [pinned Ghast page](https://oldschool.runescape.wiki/w/Ghast?oldid=15368042)
+identifies the level-109 form as NPC 5626 and says it also appears in Clan Wars,
+where it awards no drops or Prayer XP. The canonical monster row is marked
+incomplete and dated 2025-10-18; this is not new capture or retail timing proof.
+
+The bounded copy deliberately reuses the inspected Soggy source: region 13645,
+origin (3392,4928), eight by eight chunks, mapped planes 0/1. All 844 retained raw
+locs are on raw plane 0. Plane 1 has blocked settings/clips throughout; planes 2/3
+remain unmapped. These are bounded choices, not a separate retail map-id, extent
+or floor-policy claim. Source geometry gives a 2,032-tile main component and two
+isolated 19-tile holdings. Landings (3409,4934)/(3439,4985), holdings
+(3396,4932)/(3451,4987), and row Y4959 X3395..3452 are TSPS placements. The row
+skips the existing blocked tree at X3397, creating 57 swamp barriers and a
+959/1,016 split. Thirteen nonblocking type-22 Soil copies coexist with the row;
+their exact identities and full source masks/settings must survive removal.
+
+Owned swamp orbs 26749 use model 9753; inactive 26750 copies remain distinct.
+Owned Exit portals 26740 are at (3393,4933)/(3454,4986). Forfeit portals 26735/26736
+at (3407,4931)/(3437,4987) retain faces 0/2, 4x2 footprints and native access masks.
+The source Trees and Roots have null actions. No climb, harvest or resource
+actions are manufactured from scenery names.
+
+Exactly two shared ghasts start at (3410,4936)/(3438,4983) after the canonical
+200-tick preparation; none exist in staging and killed ghasts are not replaced.
+Population, positions, initial-only lifetime and the impact/food rules below are
+explicit bounded TSPS choices. Both spawns and canonical definitions must be
+ready before combat starts; failure cancels the match and cleans partial spawns.
+These are shared NPCs, not personal owner-only actors. Shared definitions and
+world spawns are unchanged. Normal NPC turns/size-2 pursuit and melee own attack
+scheduling: the published base speed is eight ticks, Crush/max hit eight with
+normal accuracy and mitigation. No extra timer or manual damage scheduler is added.
+
+A positive, mitigated, marked ordinary melee impact from a current owned ghast
+rots one convertible inventory item instead of taking that impact's HP. Zero,
+missed, fully mitigated, reflected, origin-tagged, poison and unmarked/scripted
+hits do not convert food. With no convertible item, canonical HP damage proceeds.
+This does not assert the generic Mort Myre 30%/70% roll, 1..3 damage, quest pouch
+or diary defenses, the quest's unsourced 12..30 cadence, or retail rot parity.
+Known stale owned impacts after source retirement or victim ineligibility cause
+neither HP damage nor food changes; world and foreign sources remain unaffected.
+Ordinary walking within a match keeps canonical pursuit and pending-hit behavior.
+
+Conversion scans inventory slots in ascending order. Only positive real items
+whose canonical cache actions include Eat and exclude Drink are candidates;
+notes, placeholders and Rotten food itself are excluded. It does not ask whether
+the player may consume the food. NoFood prevents eating but does not prevent
+carried food spoiling; NoDrinks does not make potions eligible. Partial food is
+one current physical item. An amount-one candidate becomes one Rotten food in
+the same slot, retaining deep-cloned metadata and ownership/preset flags, even
+with a full inventory. A larger stack loses exactly one unit and places one
+metadata-preserving Rotten food in the lowest empty slot; if no slot exists,
+that stack is skipped for a later convertible item, otherwise HP damage proceeds.
+There is no whole-stack collapse, ground drop, storage fallback or protection
+without actual spoilage. Containers only qualify if the carried item itself has
+Eat; nested storage and containers or inedible produce without Eat are outside
+this slice. Pineapple follows its actual cache action even if eating it whole is
+refused. Complete generic-ghast container/produce parity is not claimed. Spoiled
+food is not restored on safe death, leave or match cleanup.
+
+Players can fight owned hazards under the same melee/NoSpecials restrictions.
+Killing a ghast does not score a team kill or remove a player fighter. A ghast
+killing a player uses canonical safe-death elimination, holding, deadline and
+mode-specific Ignore5 consequences, without guessed opposing-player kill credit.
+Exact current and retired NPC ownership suppresses default drops and per-instance
+respawn; no shared definition or global NPC-5626 reward rule is changed.
+
+The existing game and Rules fixtures include native size-2 approaches and eight-tick turns,
+exact hit provenance and mitigation/food branches, all inventory policies,
+NoFood/NoDrinks, both real player deaths/holdings/view/Exit/Forfeit paths,
+readiness failure, queued additions/hits/deaths/removals and actual freed-slot
+reuse with concurrent-match/world controls. All 4,096 native ground masks and
+mapped settings are compared before intentional resource mutations, with full
+upper-plane preservation, both ends and center staging crossings, current owned
+barrier identities and all Soil copies. These describe the written fixture assertions; runtime outcomes remain unobserved
+until the exact source runs. Source/decoded/native-handler proof
+is distinct from rendering, natural RNG, login, retail timing and full issue #153.
+
+Queued NPCs remain attached but unindexed until their actual world slot is assigned.
+The normal area process and match tick reconcile that initial registration once.
+If World consumes an admitted addition but refuses registration, the next owned
+match tick cancels the battle and removes both hazards without retrying or
+requeuing. The fixture separately supplies registration refusals to exercise this
+failure path; that control is distinct from the ordinary successful NPC turns.
+
+The fixture loads canonical NPC definitions and registers the actual NpcDrops,
+Prayer, Bonecrusher and Nature Spirit consumers. An owned ghast death is compared
+with world-5626 bones reaching the real charged Bonecrusher/Prayer route and a
+canonical pouch-revealed quest ghast advancing its own quest identity. The quest
+control supplies its stage and item-on-NPC event; it does not claim native quest
+traversal. Native cadence tests run NPC turns, player combat/movement and ordinary
+aggression without forced rolls. Supplied PendingHit/HitDamage and scoped force-roll
+controls cover exact inventory and stale/provenance edges, not natural timing.
+
+Source-derived suite counts are 259 game cases (228 inherited plus 31 Ghastly),
+21 Rules, six shake, one WASD and 53 Cooking including nested cases: 340 expected,
+not observed here. The inherited fixture helpers now also admit/remove real NPC
+queues, and Q's explicitly selected engine cases additionally process native NPC
+and player combat turns, local NPC visibility and update resets. Other cases keep
+their previous player tick path. Former native-slot-21 refusal samples use the
+unsupported child slot 22; their existing valid unsupported arena rows remain.
+Former numeric-arena-7 Rules refusals use malformed 7.5, and a new case positively
+covers all twelve layouts. The original paired baseline bound the identical two
+then-final fixture blobs to unchanged production. Its actual offer-absence failures
+and unreached assertions were independently classified before fixed selection.
+
+The original baseline on `8be20022` passed 228 inherited game cases and failed
+all 31 new cases at the ordinary arena-7 offer (expected 7, actual default 1);
+all Ghastly behavior and later suites were unreached. Its two fixture blobs match
+the original fixed `61c6df1d`, which ended OOMKilled during the game suite without
+literal case verdicts or a final source/dist/cache closure. Returned movement,
+barrier and readiness markers do not establish completed case passes.
+
+A fixture correction fixes the NPC Attack byte order and asserts the actual decoded
+NPC slot before dispatch. Exact entity-reference assertions now use boolean checks
+with bounded scalar diagnostics, preserving identity requirements without asking
+Node to inspect cyclic world/cache graphs on failure. The invalid original frame
+is source-confirmed; the OOM's precise allocation cause remains untraced. The
+original offer-absence evidence is upstream of these changes and is retained;
+it does not claim execution of the corrected fixture bytes. Any corrected fixed
+subject requires its own independent exact admission and original execution.
+
+The corrected `9eb8a02b` run completed the game suite with 256 passes and three
+fixture failures; later suites were unreached. Its source, compiled output and
+cache post-run content checks passed. The failures were an expectation that stopped
+hazard history was absent after the empty-roster start transition, and two literal
+`false` expectations where never-registered NPCs canonically return `undefined`.
+The next fixture correction keeps an explicit last-staging-tick no-spawn check,
+then verifies both stopped initial NPCs are absent from actual World slots, add and
+remove queues, the area index and attached entities after cleanup and 120 ticks.
+Never-registered checks use canonical falsey semantics with the same concrete
+absence checks. It changes no production behavior or hazard requirement. These
+failed runs and the upstream original baseline remain distinct evidence; no full
+340-test result is established by their partial results.

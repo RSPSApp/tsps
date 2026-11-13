@@ -24,11 +24,28 @@ const Negotiation = require('../plugins/minigames/clanwars/Negotiation.ClanWars'
 const core = PM.getCoreApi();
 const actors = [];
 let serial = 0;
+// Only Q's explicitly selected engine tests take real NPC/player combat turns.
+// Existing controls keep their original ordering and helper behavior.
+let ghastTurns = false, ghastObserve = null, ghastRollControl = null;
+const fixtureNpcs = new Set(), npcQueueFailures = [];
+function npcQueues() {
+  const add=core.World.getAddNPCQueue(), remove=core.World.getRemoveNPCQueue();
+  while(add.length){const npc=add.shift();if(!core.World.getNpcs().add(npc))npcQueueFailures.push(npc);}
+  while(remove.length){const npc=remove.shift();if(npc.isRegistered())core.World.getNpcs().remove(npc);}
+}
+function ghastPlayerTurn(p) {
+  const combat=p.getCombat(),movement=p.getMovementQueue();
+  combat.getHitQueue().process(core.World.getProcessCycle());if(p.getHitpoints()<=0||p.isDyingReturn())return;p.getTimers().process();
+  movement.beginCycle();if(combat.hasPendingWork())combat.preMovementProcess();
+  if(movement.hasPendingWork())movement.process();if(combat.hasPendingWork())combat.postMovementProcess();
+  require('../dist/game/entity/impl/npc/NpcAggression').NpcAggression.process(p);
+}
 const errors = [];
 const originalError = console.error;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3128, 3629);
   require('../plugins/interface/FriendsList.plugin').register(PM.createApi('ClanWarsSocialTest'));
@@ -48,16 +65,30 @@ before(async () => {
     ['objects/Ladders.plugin','Ladders'],['skills/Smithing.plugin','Smithing']]) {
     require(`../plugins/${file}`).register(PM.createApi(`ClanWars${name}Test`));
   }
+  for(const file of ['npcs/NpcDrops.plugin','skills/Prayer.plugin','items/Bonecrusher.plugin']) {
+    require(`../plugins/${file}`).register(PM.createApi(`ClanWarsGhast${file}Test`));
+  }
+  require('../plugins/quests/quests/NatureSpirit.Quest')(PM.createApi('ClanWarsGhastQuestTest'));
+  const proofApi=PM.createApi('ClanWarsGhastObserver');
+  proofApi.onCombatHitPrepare(event=>{if(ghastObserve)ghastObserve('prepare',event);});
+  proofApi.onCombatHitRoll(event=>{if(ghastRollControl)ghastRollControl(event);});
+  proofApi.onCombatHitResolved(event=>{if(ghastObserve)ghastObserve('resolved',event);});
+  proofApi.onCustomEvent('npc-drops:claim',event=>{if(ghastObserve)ghastObserve('claim',event);});
+  proofApi.onCustomEvent('npc-drops:generated',event=>{if(ghastObserve)ghastObserve('generated',event);});
+  proofApi.onNpcDeath(event=>{if(ghastObserve)ghastObserve('death',event);});
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
 });
 afterEach(() => {
   Negotiation.shutdown();
   Match.shutdown();
+  ghastTurns=false;ghastObserve=null;ghastRollControl=null;
+  for(const npc of fixtureNpcs){C.api.removeNpc(npc);if(npc.getArea())npc.getArea().leave(npc,false);}fixtureNpcs.clear();npcQueues();
   for (const p of actors.splice(0)) {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     if (p.getArea()) p.getArea().leave(p, true);
     core.World.getPlayers().remove(p);
   }
+  assert.equal(npcQueueFailures.splice(0).length,0,'only the explicit refused-add fixture may consume a failed queue registration');
   assert.deepEqual(errors.splice(0), [], 'production hooks must not swallow errors');
 });
 
@@ -92,18 +123,24 @@ function tick(count = 1) {
     if (actors.some(p => p.nativeProof)) {
       // The existing quest-scene-return-state fixture uses this production ordering.
       // Bind real sessions, update real visibility buckets and flush real native frames.
-      core.World.processCycle++; core.TaskManager.process();
+      core.World.processCycle++; core.TaskManager.process();npcQueues();
+      if(ghastTurns)for(const npc of [...core.World.getNpcs()])if(npc?.isRegistered())npc.process();
       for (const p of actors) {
         p.connection.processTurnPackets(); AreaManager.process(p);
-        core.TaskManager.processWalkTo(p.getIndex()); p.getMovementQueue().process();
+        core.TaskManager.processWalkTo(p.getIndex());
+        if(ghastTurns)ghastPlayerTurn(p);else p.getMovementQueue().process();
       }
       core.World.rebuildUpdateBuckets();
-      for (const p of actors) core.World.updateLocalPlayers(p);
+      for (const p of actors) {
+        core.World.updateLocalPlayers(p);
+        if(ghastTurns)core.World.updateLocalNpcs(p,core.World.getNpcsNear(p.getLocation(),p.getNpcViewDistance(),p.getPrivateArea()));
+      }
       for (const p of actors) p.getSession().flush(core.World.processCycle);
       for (const p of actors) p.resetUpdating();
+      if(ghastTurns)for(const npc of core.World.getNpcs())if(npc)npc.resetUpdating();
       continue;
     }
-    core.World.processCycle++;
+    core.World.processCycle++;npcQueues();
     for (const p of actors) {
       p.getMovementQueue().process();
       core.TaskManager.processWalkTo(p.getIndex());
@@ -2133,7 +2170,7 @@ test('native Soggy Swamp selection resets agreement across delivered arenas and 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [45,1,2,48,21,42,65535]) {
+  for(const slot of [45,1,2,48,22,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,6);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),6);
   }
@@ -2302,7 +2339,7 @@ test('native Clan Cup selection resets agreement across all five arenas and reje
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,48,21,42,65535]) {
+  for(const slot of [45,1,2,48,22,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,5);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),5);
   }
@@ -2500,7 +2537,7 @@ test('native Classic selection resets agreement across all six arenas and reject
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,48,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,22,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,11);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),11);
   }
@@ -2772,7 +2809,7 @@ test('native Lumbridge Castle selection resets agreement across all seven arenas
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,48,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,22,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,12);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),12);
   }
@@ -3090,7 +3127,7 @@ test('native Falador Park selection resets agreement across all eight arenas and
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,48,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,22,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,13);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),13);
   }
@@ -3369,7 +3406,7 @@ test('native Wasteland zero is deliberate while fresh negotiations keep Plateau 
   for(const [slot,arena]of [[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[39,13],[0,0]]){
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);
   }
-  for(const slot of [1,2,48,21,30,45,42,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);}
+  for(const slot of [1,2,48,22,30,45,42,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);}
   tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');assert.equal(session.rules.arena,0);tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,0);assert.equal(game.layout.name,'Wasteland');
 });
 for(const mode of [0,1,16]) test(`native Wasteland mode ${mode} retains restrictions and lifetime`,async()=>{
@@ -3565,7 +3602,7 @@ test('native Turrets slot12 is deliberate and all ten offers retain numeric0 and
   await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',12);assert.equal(session.rules.arena,4,'ordinary native12 reaches authoritative Turrets offer');assert.equal(session.accepted.size,0);
   for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),4);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Turrets/);
   for(const[slot,arena]of[[0,0],[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[39,13],[12,4]]){tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);}
-  for(const slot of[1,2,21,27,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,4);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),4);}
+  for(const slot of[1,2,22,27,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,4);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),4);}
   tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,4);assert.equal(game.layout.name,'Turrets');
 });
 for(const mode of [0,1,16]) test(`native Turrets mode ${mode} retains restrictions and lifetime`,async()=>{
@@ -3725,7 +3762,7 @@ test('native Northleach slot24 resets acceptance and all eleven offers retain ex
   await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',24);assert.equal(session.rules.arena,8,'ordinary native24 reaches authoritative Northleach offer');assert.equal(session.accepted.size,0);
   assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Northleach Quell/);
   for(const[slot,arena]of[[0,0],[3,1],[6,2],[9,3],[12,4],[15,5],[18,6],[33,11],[36,12],[39,13],[24,8]]){tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);}
-  for(const slot of[1,2,21,27,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,8);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),8);}
+  for(const slot of[1,2,22,27,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,8);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),8);}
   tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,8);assert.equal(game.layout.name,'Northleach Quell');
 });
 
@@ -3827,4 +3864,364 @@ test('native Northleach food drink prayer special vetoes preserve actual supplie
   await nativeButton(a,prayerWidget(core.PrayerHandler.THICK_SKIN));assert.equal(a.getPrayerActive().some(Boolean),false);assert.deepEqual(resources(a),before);await wield(a,I.DRAGON_DAGGER,'northleach-special');before=resources(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);assert.deepEqual(resources(a),before);
   const carried=carriedItems(a);await lethalMelee(b,a,game,true,[[3406,4880,0],[3407,4880,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),carried);assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'northleach-special'});
   game.finish(null);tick(2);a.setHitpoints(50);await nativeItem(a,I.SHRIMPS,'Eat');assert.equal(a.getInventory().contains(I.SHRIMPS),false,'same actual food is usable after match cleanup');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true);assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_).getMeta(),{qa:'northleach-potion'});
+});
+
+// Q: Ghastly Swamp reuses the bounded swamp source, with distinct shared hazards.
+
+// Retain exact reference assertions without handing cyclic world/cache graphs to Node's failure inspector.
+function ghastScalar(entity){if(entity==null)return String(entity);const at=entity.getLocation?.(),area=entity.getArea?.();return{kind:entity.isNpc?.()?'npc':entity.isPlayer?.()?'player':typeof entity,id:entity.getId?.()??null,index:entity.getIndex?.()??null,position:at?[at.getX(),at.getY(),at.getZ()]:null,areaBase:area?.getBaseX?[area.getBaseX(),area.getBaseY()]:null};}
+function ghastIdentity(actual,expected,label){assert.ok(actual===expected,`${label}; actual=${JSON.stringify(ghastScalar(actual))}; expected=${JSON.stringify(ghastScalar(expected))}`);}
+function ghastSameRefs(actual,expected,label){assert.equal(actual.length,expected.length,`${label} length`);for(let n=0;n<expected.length;n++)ghastIdentity(actual[n],expected[n],`${label}[${n}]`);}
+function ghastAbsent(npc,area,label){assert.equal(Boolean(npc.isRegistered()),false,`${label} unregistered`);assert.equal(core.World.getNpcs().get(npc.getIndex())===npc,false,`${label} World slot`);assert.equal(core.World.getAddNPCQueue().includes(npc),false,`${label} add queue`);assert.equal(core.World.getRemoveNPCQueue().includes(npc),false,`${label} remove queue`);ghastIdentity(npc.getArea(),null,`${label} area`);assert.equal(area.getNpcs().includes(npc),false,`${label} area index`);assert.equal(area.entities.includes(npc),false,`${label} attached entities`);}
+function ghastNativeCheckpoint(side,step,p,npc){console.log('GHASTLY_NATIVE_CHECKPOINT '+JSON.stringify({side,step,cycle:C.now(),player:ghastScalar(p),npc:ghastScalar(npc),playerTarget:ghastScalar(p.getCombat().getTarget()),npcTarget:ghastScalar(npc.getCombat().getTarget()),hp:[p.getHitpoints(),npc.getHitpoints()]}));}
+
+test('native Ghastly Swamp queued movement, full clip restoration and tree-root walk/LOS obstruction',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,0,null,7);
+  await join(a);await join(b);for(const p of [a,b]) assert.deepEqual(position(p),positionAt(game,SWAMP_LANDINGS[game.members.get(p)]));
+  const reference=new core.TemplatedInstanceArea(8,8);
+  try {
+    for(let plane=0;plane<2;plane++) for(let x=0;x<8;x++) for(let y=0;y<8;y++) {
+      reference.setChunk(plane,x,y,{sourceChunkX:424+x,sourceChunkY:616+y,sourcePlane:plane,rotation:0});
+      assert.deepEqual(game.area.getChunk(plane,x,y),reference.getChunk(plane,x,y));
+    }
+    const baseline=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) baseline.push(reference.getClip(reference.tile(x,y,0)));
+    const wallId=core.CacheDefinitions.getLocId('clanwars_barrier_swamp'),def=core.CacheDefinitions.getObject(wallId);
+    assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.equal(game.walls.length,57);
+    const walls=game.walls.slice(),{MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
+    for(const wall of walls) {
+      assert.equal(wall.getId(),wallId);ghastIdentity(wall.getPrivateArea(),game.area,'wall.getPrivateArea() identity');assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);
+      assert.notEqual(game.area.getClip(wall.getLocation())&0x100,0);
+      ghastIdentity(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),wall,'MapObjects.getPrivateArea(a,wallId,wall.getLocation()) identity');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getPrivateArea()===game.area&&o.getId()===wallId).length,1);
+    }
+    for(const [lo,hi] of [[3395,3452]]) for(let x=lo;x<=hi;x++) {
+      const old=reference.getClip(reference.tile(x-3392,4959-4928,0));
+      const count=walls.filter(o=>o.getLocation().equals(game.area.at([x,4959,0]))).length;
+      assert.equal(count,old&core.RegionManager.BLOCKED_MASK?0:1,'solid mapped tree needs no overlay');
+    }
+    assert.equal(swampReachable(game,SWAMP_LANDINGS[0],SWAMP_LANDINGS[1]),false,'cardinal+diagonal routes including both wall ends stay separated');
+    for(const side of [0,1]) assert.equal(swampReachable(game,SWAMP_JAILS[side],SWAMP_LANDINGS[side]),false);
+    assert.equal(core.RegionManager.canMovestart(game.area.at([3392,4934,0]),game.area.at([3391,4934,0]),1,1,game.area),false);
+    const walker=[a,b].find(p=>game.members.get(p)===0),open=game.area.at([3410,4934,0]),across=game.area.at(SWAMP_LANDINGS[1]);
+    await wire(walker,walkClickFrame(open));assert.deepEqual(position(walker),[open.getX(),open.getY(),0]);
+    await wire(walker,walkClickFrame(across));tick(60);assert.equal(game.phase,'staging');
+    assert.ok(walker.getLocation().getY()<game.area.at([3424,4959,0]).getY(),'ordinary movement cannot reach north during preparation');
+    const staging={position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()};
+    completePreparation(game);assert.equal(game.phase,'combat');assert.equal(game.walls.length,0);
+    for(const wall of walls) {
+      ghastIdentity(MapObjects.getPrivateArea(a,wallId,wall.getLocation()),null,'MapObjects.getPrivateArea(a,wallId,wall.getLocation()) identity');
+      assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);
+    }
+    const after=[];for(let y=0;y<64;y++) for(let x=0;x<64;x++) after.push(game.area.getClip(game.area.tile(x,y,0)));
+    assert.deepEqual(after,baseline,'all4096 masks preserve static trees, roots and directional/projectile edges');
+    assert.equal(after[(4959-4928)*64+3397-3392],0x20100,'the skipped solid tree keeps both walking and projectile bits');
+    assert.equal(swampReachable(game,SWAMP_LANDINGS[0],SWAMP_LANDINGS[1]),true);
+    await wire(walker,walkClickFrame(across));tick(200);assert.deepEqual(position(walker),[across.getX(),across.getY(),0]);
+    console.log('GHASTLY_MOVEMENT_QUALIFICATION '+JSON.stringify({staging,combat:{position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}}));
+    for(const specimen of [
+      {gameval:'deadtree4swamp',xy:[3398,4946],left:[3397,4946],right:[3399,4946],size:1,face:1},
+      {gameval:'swamp_root',xy:[3398,4977],left:[3397,4978],right:[3401,4978],size:3,face:2},
+    ]) {
+      const obstacle=game.area.at([...specimen.xy,0]),left=game.area.at([...specimen.left,0]),right=game.area.at([...specimen.right,0]);
+      const object=mappedLayoutObjects(game,specimen.gameval).find(o=>o.getLocation().equals(obstacle));assert.ok(object);
+      const definition=core.CacheDefinitions.getObject(object.getId());
+      assert.deepEqual([definition.sizeX,definition.sizeY,definition.blocksProjectile],[specimen.size,specimen.size,true]);
+      assert.equal(object.getType(),10);assert.equal(object.getFace(),specimen.face);ghastIdentity(object.getPrivateArea(),game.area,'object.getPrivateArea() identity');
+      assert.equal(game.area.getClip(obstacle)&0x20100,0x20100);assert.equal(game.area.getClip(left),0);assert.equal(game.area.getClip(right),0);
+      assert.equal(swampReachable(game,SWAMP_LANDINGS[1],specimen.left),true);
+      await wire(walker,walkClickFrame(left));tick(240);assert.deepEqual(position(walker),[left.getX(),left.getY(),0],'ordinary queued walk reaches open obstacle approach');
+      await wire(walker,walkClickFrame(obstacle));
+      for(let cycle=0;cycle<10;cycle++) {
+        tick();assert.equal(core.RegionManager.blocked(walker.getLocation(),game.area),false,'processed ordinary movement never enters a solid obstacle');
+      }
+      const at=walker.getLocation();assert.ok(!(at.getX()>=obstacle.getX()&&at.getX()<obstacle.getX()+specimen.size&&at.getY()>=obstacle.getY()&&at.getY()<obstacle.getY()+specimen.size),'blocked click remains outside the full object footprint');
+      console.log('GHASTLY_OBSTACLE_MOVEMENT_QUALIFICATION '+JSON.stringify({gameval:specimen.gameval,requested:[obstacle.getX(),obstacle.getY(),0],position:position(walker),pathX:walker.getMovementQueue().pathX,pathY:walker.getMovementQueue().pathY,hasRoute:walker.getMovementQueue().hasRoute()}));
+      const edge=game.area.at([specimen.xy[0],specimen.left[1],0]);
+      assert.equal(core.RegionManager.canMovestart(left,edge,1,1,game.area),false,'selected obstacle blocks the adjacent native step');
+      assert.equal(core.RegionManager.canProjectileAttackReturn(left,right,1,game.area),false,'native ray across selected tree or roots is blocked');
+    }
+    const o1=game.area.at([3409,4934,0]),o2=game.area.at([3410,4934,0]);
+    assert.equal(core.RegionManager.canMovestart(o1,o2,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(o1,o2,1,game.area),true,'open ray positive control');
+  } finally {reference.destroy();assert.equal(reference.isDestroyed(),true);}
+});
+
+for(const mode of [0,1,16]) test(`native Ghastly Swamp mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},7);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3409,4934,0]));b.moveTo(game.area.at([3410,4934,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,SWAMP_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+
+test('native Ghastly slot21 resets acceptance and all twelve offers retain explicit0 default1',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a),bit=core.CacheDefinitions.getVarbitId('clanwars_arena');assert.equal(session.rules.arena,1);
+  await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',21);assert.equal(session.rules.arena,7,'ordinary native21 reaches authoritative Ghastly offer');assert.equal(session.accepted.size,0);
+  assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Ghastly Swamp/);
+  for(const[slot,arena]of[[0,0],[3,1],[6,2],[9,3],[12,4],[15,5],[18,6],[33,11],[36,12],[39,13],[24,8],[21,7]]){tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);}
+  for(const slot of[1,2,22,27,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,7);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),7);}
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,7);assert.equal(game.layout.name,'Ghastly Swamp');
+});
+
+
+test('native Ghastly food drink prayer special vetoes preserve actual supplies and safe-death metadata',async()=>{
+  const a=actor(true),b=actor(true);ruleStats(a);ruleStats(b);channel(a);channel(b);const game=await negotiate(a,b,null,1,{food:1,drinks:1,prayer:2,specialattacks:2},7);await join(a);await join(b);completePreparation(game);
+  const I=core.ItemIdentifiers;give(a,I.SHRIMPS,'ghastly-food');give(a,I.ATTACK_POTION_4_,'ghastly-potion');let before=resources(a);await nativeItem(a,I.SHRIMPS,'Eat');assert.deepEqual(resources(a),before);await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.deepEqual(resources(a),before);
+  await nativeButton(a,prayerWidget(core.PrayerHandler.THICK_SKIN));assert.equal(a.getPrayerActive().some(Boolean),false);assert.deepEqual(resources(a),before);await wield(a,I.DRAGON_DAGGER,'ghastly-special');before=resources(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);assert.deepEqual(resources(a),before);
+  const carried=carriedItems(a);await lethalMelee(b,a,game,true,[[3409,4934,0],[3410,4934,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),carried);assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'ghastly-special'});
+  game.finish(null);tick(2);a.setHitpoints(50);await nativeItem(a,I.SHRIMPS,'Eat');assert.equal(a.getInventory().contains(I.SHRIMPS),false,'same actual food is usable after match cleanup');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true);assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_).getMeta(),{qa:'ghastly-potion'});
+});
+
+function ghastTemplate(){const area=new core.TemplatedInstanceArea(8,8);for(let p=0;p<2;p++)for(let x=0;x<8;x++)for(let y=0;y<8;y++)area.setChunk(p,x,y,{sourceChunkX:424+x,sourceChunkY:616+y,sourcePlane:p,rotation:0});area.at=tile=>area.tile(tile[0]-3392,tile[1]-4928,tile[2]);return area;}
+function ghastPlane(area,p,settings=false){if(!settings){const out=[];for(let y=0;y<64;y++)for(let x=0;x<64;x++)out.push(area.getClip(area.tile(x,y,p)));return out;}const out=new Uint8Array(4*4096);for(let x=0;x<8;x++)for(let y=0;y<8;y++)area.copyChunkSettings(out,p,x,y);return Array.from(out.subarray(p*4096,(p+1)*4096));}
+async function ghastWalk(p,game,xy){const at=game.area.at([...xy,0]);assert.ok(Math.abs(at.getX()-p.getLocation().getX())<64&&Math.abs(at.getY()-p.getLocation().getY())<64);await wire(p,walkClickFrame(at));for(let n=0;n<150&&!p.getLocation().equals(at);n++)tick();assert.deepEqual(position(p),[at.getX(),at.getY(),0],'bounded ordinary decoded walk');}
+const ghastSource=(p,game)=>[p.getLocation().getX()-game.area.getBaseX()+3392,p.getLocation().getY()-game.area.getBaseY()+4928,0];
+async function ghastGame(rules=null,mode=1){const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,mode,rules,7);await join(a);await join(b);return{a,b,game};}
+function ghastReady(game){assert.equal(game.phase,'combat');assert.equal(game.ghasts.ready,true);assert.equal(game.ghasts.npcs.length,2);assert.equal(new Set(game.ghasts.npcs).size,2);for(const[n,npc]of game.ghasts.npcs.entries()){assert.equal(npc.isRegistered(),true);ghastIdentity(npc.getArea(),game.area,'npc.getArea() identity');ghastIdentity(npc.getPrivateArea(),game.area,'npc.getPrivateArea() identity');assert.equal(npc.getId(),5626);assert.equal(npc.isOwnerOnly(),false);assert.equal(npc.__skipDefaultRespawn,true);assert.equal(game.area.getNpcs().includes(npc),true);const d=npc.getCurrentDefinition();assert.deepEqual([d.getSize(),d.getCombatLevel(),d.getHitpoints(),d.getAttackSpeed(),d.getMaxHit(),d.isAggressive(),d.getAttackStyle(),d.getAttackAnim(),d.getDefenceAnim(),d.getDeathAnim()],[2,109,135,8,8,true,'crush',1087,1088,1089]);assert.deepEqual(d.getStats().slice(0,5),[110,70,70,30,30]);assert.ok(d.getActions().includes('Attack'));assert.deepEqual([npc.getSpawnPosition().getX(),npc.getSpawnPosition().getY(),0],positionAt(game,n?[3438,4983,0]:[3410,4936,0]));}}
+
+test('native Ghastly full57 barrier fence preserves thirteen type22 identities and both mapped planes before resources',async()=>{
+  const{a,b,game}=await ghastGame(),reference=ghastTemplate();
+  try{
+    const base=[ghastPlane(reference,0),ghastPlane(reference,1)],settings=[ghastPlane(reference,0,true),ghastPlane(reference,1,true)],walls=game.walls.slice(),row=new Set(Array.from({length:58},(_,i)=>3395+i).filter(x=>x!==3397)),id=core.CacheDefinitions.getLocId('clanwars_barrier_swamp'),d=core.CacheDefinitions.getObject(id);
+    assert.equal(game.ghasts,undefined);assert.equal(walls.length,57);assert.equal(id,26792);assert.deepEqual([d.sizeX,d.sizeY,d.clipType,d.blocksProjectile],[1,1,1,true]);
+    for(let p=0;p<2;p++){assert.deepEqual(ghastPlane(game.area,p,true),settings[p]);for(let x=0;x<8;x++)for(let y=0;y<8;y++)assert.deepEqual(game.area.getChunk(p,x,y),reference.getChunk(p,x,y));}assert.ok(base[1].every(v=>v===0x200000));assert.ok(settings[1].every(v=>v===1));for(const p of[2,3])assert.equal(game.area.getChunk(p,0,0),null);
+    const soils=[];for(let x=0;x<8;x++)for(let y=0;y<8;y++)for(const obj of game.area.getChunkObjects(0,x,y)){const xy=ghastSource({getLocation:()=>obj.getLocation()},game);if(obj.getType()===22&&xy[1]===4959&&row.has(xy[0]))soils.push(obj);if(obj.getType()<9||obj.getType()>11||!obj.getDefinition().isSolid())continue;const def=obj.getDefinition(),rot=obj.getFace()%2,w=rot?def.sizeY:def.sizeX,h=rot?def.sizeX:def.sizeY;for(const x0 of row)assert.equal(x0>=xy[0]&&x0<xy[0]+w&&4959>=xy[1]&&4959<xy[1]+h,false,'full rotated nonzero solid footprint fence');}
+    assert.equal(soils.length,13);assert.deepEqual(soils.map(o=>[o.getId(),ghastSource({getLocation:()=>o.getLocation()},game)[0],o.getFace()]).sort((a,b)=>a[1]-b[1]),[[2382,3395,0],[2382,3407,0],[2381,3409,2],[2381,3413,3],[2381,3421,2],[2381,3426,2],[2382,3428,2],[2381,3430,3],[2381,3435,0],[2381,3438,1],[2382,3441,1],[2382,3445,1],[2382,3451,3]]);for(const o of soils){assert.equal(o.getDefinition().isClippedDecoration(),false);ghastIdentity(core.MapObjects.getPrivateArea(a,o.getId(),o.getLocation()),o,'core.MapObjects.getPrivateArea(a,o.getId(),o.getLocation()) identity');}
+    for(const wall of walls){assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);assert.equal(wall.getId(),id);ghastIdentity(wall.getPrivateArea(),game.area,'wall.getPrivateArea() identity');ghastIdentity(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall,'core.MapObjects.getPrivateArea(a,id,wall.getLocation()) identity');assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getType()===10&&o.getPrivateArea()===game.area).length,1);}
+    for(let y=0;y<64;y++)for(let x=0;x<64;x++)assert.equal(game.area.getClip(game.area.tile(x,y,0)),base[0][y*64+x]|(y===31&&row.has(x+3392)?0x20100:0));assert.deepEqual(ghastPlane(game.area,1),base[1]);
+    const walker=[a,b].find(p=>game.members.get(p)===0),markers=[];for(const x of[3395,3424,3452]){await ghastWalk(walker,game,[x,4958]);const target=game.area.at([x,4960,0]);assert.ok(C.now()+7<game.starts);await wire(walker,walkClickFrame(target));tick(3);assert.equal(game.phase,'staging');assert.ok(ghastSource(walker,game)[1]<4959);markers.push({x,requested:[target.getX(),target.getY(),0],staging:position(walker)});}
+    completePreparation(game);ghastReady(game);assert.deepEqual(ghastPlane(game.area,0),base[0],'all4096 ground masks restored BEFORE any resource changes');for(let p=0;p<2;p++){assert.deepEqual(ghastPlane(game.area,p),base[p]);assert.deepEqual(ghastPlane(game.area,p,true),settings[p]);}
+    for(const o of soils){ghastIdentity(core.MapObjects.getPrivateArea(a,o.getId(),o.getLocation()),o,'core.MapObjects.getPrivateArea(a,o.getId(),o.getLocation()) identity');assert.equal(game.area.getChunkObjects(0,(o.getLocation().getX()-game.area.getBaseX())>>3,(o.getLocation().getY()-game.area.getBaseY())>>3).includes(o),true);}
+    for(const wall of walls){ghastIdentity(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),null,'core.MapObjects.getPrivateArea(a,id,wall.getLocation()) identity');assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);}
+    for(const m of markers){await ghastWalk(walker,game,[m.x,4958]);await ghastWalk(walker,game,[m.x,4960]);m.combat=position(walker);assert.deepEqual(m.combat,m.requested);console.log('GHASTLY_CROSSING '+JSON.stringify(m));}
+  }finally{reference.destroy();}
+});
+
+async function ghastAttack(p,npc){
+  // Pinned Reader.shortAddLE reads HIGH, then LOW-128 despite its method name.
+  const frame=Buffer.alloc(4);frame[0]=12;frame[1]=(npc.getIndex()>>8)&255;frame[2]=(npc.getIndex()+128)&255;frame[3]=0;
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'npc_option');assert.equal(decoded[0].index,npc.getIndex(),'literal NPC Attack encodes the intended registered slot');assert.equal(decoded[0].clickType,2);
+  await wire(p,frame);
+}
+function ghastFighter(p){ruleStats(p,99);p.getSkillManager().setMaxLevels(core.Skill.DEFENCE,1,false);p.getSkillManager().setCurrentLevel(core.Skill.DEFENCE,1,false);p.setAutoRetaliate(false);}
+function ghastFood(p,count=28){p.getInventory().resetItems();for(let slot=0;slot<count;slot++)p.getInventory().setItem(slot,new core.Item(core.ItemIdentifiers.SHRIMPS,1,{qa:'ghast-native',slot}));}
+function ghastDirect(npc,p,damage=8,kind=null){const hit=new core.HitDamage(damage,kind==='poison'?core.HitMask.GREEN:core.HitMask.RED).setSource(npc);if(kind==='reflected')hit.markReflected();if(kind==='origin')hit.setOrigin('recoil');p.getCombat().getHitQueue().addPendingDamage([hit]);tick();p.getCombat().getHitQueue().process(C.now());return hit;}
+// Explicit supplied provenance/guard controls. These do not establish engine attack timing.
+function ghastControlled(npc,p,{zero=false,prepare=null}={}){
+  assert.equal(ghastTurns,false);const method=CombatFactory.getMethod(npc);
+  ghastRollControl=e=>{if(e.attacker===npc&&e.target===p){e.forceAccurate=true;e.forceMaxHit=true;}};
+  let hit;try{[hit]=method.hits(npc,p);}finally{ghastRollControl=null;}
+  if(zero)for(const damage of hit.getHits())damage.setDamage(0);
+  if(prepare)prepare(hit);
+  CombatFactory.addPendingHit(hit);
+  for(let n=0;n<4;n++){tick();p.getCombat().getHitQueue().process(C.now());}
+  return hit;
+}
+
+test('native Ghastly actual200 readiness registers exactly two shared hazards before ordinary engine turns',async()=>{
+  const{a,b,game}=await ghastGame();assert.equal(game.ghasts,undefined);assert.equal(core.World.getAddNPCQueue().filter(n=>n.getArea()===game.area).length,0);assert.equal(game.area.getNpcs().length,0);assert.ok(game.walls.length>0);
+  for(const p of[a,b])ghastFighter(p);completePreparation(game);ghastReady(game);const pair=game.ghasts.npcs.slice();game.tick();game.tick();ghastSameRefs(game.ghasts.npcs,pair,'ordinary repeated game tick never adds replacement hazards');
+  ghastTurns=true;tick();for(const p of[a,b]){const visible=p.getLocalNpcs().filter(n=>pair.includes(n));assert.ok(visible.length>=1,'native local NPC list contains shared nearby hazard');assert.ok(visible.every(n=>!n.isOwnerOnly()));}
+  for(const p of[a,b]){const npc=pair[game.members.get(p)];assert.equal(game.area.canAttack(npc,p,CombatFactory.MELEE_COMBAT),true);assert.equal(game.area.canAttack(p,npc,CombatFactory.MELEE_COMBAT),true);assert.equal(game.area.canAttack(p,npc,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(npc,p,{type:()=>core.CombatType.MAGIC}),false);}
+  console.log('GHASTLY_READY '+JSON.stringify({cycle:C.now(),ids:pair.map(n=>n.getId()),indices:pair.map(n=>n.getIndex()),shared:pair.map(n=>!n.isOwnerOnly()),registered:pair.map(n=>n.isRegistered())}));
+});
+
+for(const side of[0,1])test(`native Ghastly side${side} ordinary size2 approach from assigned landing and real eight-tick food then health attacks`,async()=>{
+  const{a,b,game}=await ghastGame();for(const p of[a,b]){ghastFighter(p);ghastFood(p);}completePreparation(game);ghastReady(game);
+  const p=[a,b].find(p=>game.members.get(p)===side),npc=game.ghasts.npcs[side],attempts=[],playerAttempts=[],resolved=[],other=game.ghasts.npcs[1-side];
+  // Start at the genuine assigned landing. Native walk and the size2 engine own all approach steps.
+  assert.deepEqual(position(p),positionAt(game,SWAMP_LANDINGS[side]));
+  ghastObserve=(kind,e)=>{if(kind==='prepare'&&e.attacker===p&&e.target===npc)playerAttempts.push(C.now());if(e.attacker!==npc||e.target!==p)return;if(kind==='prepare')attempts.push(C.now());if(kind==='resolved'){const raw=e.hit.getHits().map(h=>h.getDamage()),record={cycle:C.now(),raw,accurate:e.hit.isAccurate(),food:p.getInventory().getAmount(core.ItemIdentifiers.SHRIMPS),hp:p.getHitpoints()};resolved.push(record);for(const hit of e.hit.getHits())hit.onApplied(taken=>{record.taken=taken;record.rotten=p.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD);});}};
+  ghastNativeCheckpoint(side,'before-Attack',p,npc);await ghastAttack(p,npc);ghastNativeCheckpoint(side,'after-Attack-wire',p,npc);ghastIdentity(p.getCombat().getTarget(),npc,'p.getCombat().getTarget() identity');ghastTurns=true;for(let n=0;n<20&&!playerAttempts.length;n++)tick();ghastNativeCheckpoint(side,'after-player-engine-window',p,npc);ghastIdentity(p.getCombat().getTarget(),npc,'p.getCombat().getTarget() identity');assert.ok(playerAttempts.length>0,'real player engine melee reaches actual size2 target from assigned landing');const at=p.getLocation(),loc=npc.getLocation();assert.equal(at.getX()>=loc.getX()&&at.getX()<loc.getX()+2&&at.getY()>=loc.getY()&&at.getY()<loc.getY()+2,false,'ordinary actor remains outside size2 footprint');p.getCombat().reset();
+  for(let n=0;n<180&&resolved.filter(r=>r.raw.some(x=>x>0)).length<3;n++)tick();ghastNativeCheckpoint(side,'after-food-engine-window',p,npc);
+  ghastIdentity(npc.getCombat().getTarget(),p,'npc.getCombat().getTarget() identity');assert.ok(attempts.length>=3);for(let n=1;n<attempts.length;n++)assert.equal(attempts[n]-attempts[n-1],8,'actual stationary native attack attempts use canonical eight ticks');assert.ok(resolved.some(r=>r.raw.some(x=>x>0)&&r.taken===0&&r.rotten>0),'actual positive native damage consumes food instead of HP');assert.ok(resolved.every(r=>r.raw.every(x=>x>=0&&x<=8)));const foodBefore=contents(p.getInventory());assert.ok(foodBefore.some(i=>i?.id===core.ItemIdentifiers.ROTTEN_FOOD));
+  // No-food branch uses the same ordinary NPC turns without forcing accuracy/damage.
+  p.getInventory().resetItems();const hp=p.getHitpoints(),start=resolved.length;for(let n=0;n<120&&!resolved.slice(start).some(r=>r.taken>0);n++)tick();assert.ok(p.getHitpoints()<hp);assert.ok(resolved.slice(start).some(r=>r.raw.some(x=>x>0)&&r.taken>0&&r.taken<=8));assert.equal(p.getInventory().getValidItems().length,0);
+  // Real decoded player Attack also targets the shared size2 NPC, without supplying a hit.
+  await ghastAttack(p,npc);ghastIdentity(p.getCombat().getTarget(),npc,'p.getCombat().getTarget() identity');assert.equal(game.fighters.has(p),true);assert.deepEqual(game.kills,[0,0]);assert.equal(other.isRegistered(),true);
+  console.log('GHASTLY_NATIVE_CADENCE '+JSON.stringify({side,attempts,playerAttempts,resolved,position:position(p),npc:position(npc),nativePlayerTarget:true,naturalRolls:true}));
+});
+
+test('native Ghastly protection makes ordinary impacts zero without food loss; controlled zero and developer immunity preserve inventory',async()=>{
+  const{a,b,game}=await ghastGame();for(const p of[a,b]){ghastFighter(p);ghastFood(p);}completePreparation(game);ghastReady(game);const p=[a,b].find(p=>game.members.get(p)===0),npc=game.ghasts.npcs[0];
+  await nativeButton(p,prayerWidget(core.PrayerHandler.PROTECT_FROM_MELEE));assert.equal(p.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MELEE],true);const before=contents(p.getInventory()),hp=p.getHitpoints(),observed=[];
+  ghastObserve=(kind,e)=>{if(kind==='resolved'&&e.attacker===npc&&e.target===p)observed.push(e.hit.getHits().map(h=>h.getDamage()));};ghastTurns=true;tick(80);assert.ok(observed.length>=3);assert.ok(observed.every(row=>row.every(n=>n===0)));assert.deepEqual(contents(p.getInventory()),before);assert.equal(p.getHitpoints(),hp);
+  ghastTurns=false;ghastObserve=null;for(const n of game.ghasts.npcs)n.getCombat().reset();for(const q of[a,b])q.getCombat().getHitQueue().clear();await nativeButton(p,prayerWidget(core.PrayerHandler.PROTECT_FROM_MELEE));assert.equal(p.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MELEE],false);
+  ghastControlled(npc,p,{zero:true});assert.deepEqual(contents(p.getInventory()),before);assert.equal(p.getHitpoints(),hp);
+  const rights=p.getRights();try{p.setRights(core.PlayerRights.DEVELOPER);assert.notEqual(p.getAttribute('dev:mortal'),true);ghastControlled(npc,p);assert.deepEqual(contents(p.getInventory()),before);assert.equal(p.getHitpoints(),hp);p.setAttribute('dev:mortal',true);ghastControlled(npc,p);assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD),1);assert.equal(p.getHitpoints(),hp);}finally{p.setRights(rights);p.setAttribute('dev:mortal',false);}
+});
+
+test('native Ghastly supplied native-provenance inventory matrix conserves exact slots units metadata and NoFood versus carry policy',async()=>{
+  const{a,b,game}=await ghastGame({food:1,drinks:1});for(const p of[a,b])ghastFighter(p);completePreparation(game);ghastReady(game);const npc=game.ghasts.npcs[0],I=core.ItemIdentifiers,inv=a.getInventory(),rotten=I.ROTTEN_FOOD;
+  const ordinary=I.SHRIMPS,noted=I.SHRIMPS_2,placeholder=core.CacheDefinitions.getItem(ordinary).placeholder;
+  assert.ok(core.CacheDefinitions.getItem(noted).noteTemplate>=0);assert.ok(placeholder>0);assert.ok(core.CacheDefinitions.getItem(placeholder).placeholderTemplate>=0);
+  const meta={qa:'ghast-inventory',owner:'original',preset:{source:'supplies',nested:[1,{unit:true}]}};
+  function put(slot,id,n=1,tag=meta){const item=new core.Item(id,n,tag);inv.setItem(slot,item);return item;}
+  function fill(){inv.resetItems();for(let slot=0;slot<28;slot++)put(slot,I.COINS,slot+1,{slot});}
+  function impact(){a.setHitpoints(99);const hit=ghastControlled(npc,a);assert.ok(hit.isAccurate());return hit;}
+  for(const id of[ordinary,I.HALF_AN_APPLE_PIE,I.BANANA]){
+    inv.resetItems();const original=put(3,id),snapshot=structuredClone(original.getMeta()),hit=impact();assert.equal(hit.getHits()[0].getDamage(),0);assert.equal(a.getHitpoints(),99);assert.equal(inv.get(3).getId(),rotten);assert.equal(inv.get(3).getAmount(),1);assert.deepEqual(inv.get(3).getMeta(),snapshot);assert.notEqual(inv.get(3).getMeta(),original.getMeta());assert.notEqual(inv.get(3).getMeta().preset,original.getMeta().preset);assert.equal(inv.getValidItems().length,1,'one current physical food item, no pie leftovers or extra food');
+  }
+  inv.resetItems();put(0,ordinary,1,{slot:0});put(7,ordinary,1,{slot:7});let before=contents(inv);impact();assert.equal(inv.get(0).getId(),rotten);assert.deepEqual(contents(inv).slice(1),before.slice(1),'ascending first eligible slot only');
+  // Unsupported notes/placeholders/raw fish/drinks/container/inedible produce stay carried; later ordinary food supplies the conversion.
+  const excluded=[noted,placeholder,I.RAW_SHRIMPS,I.ATTACK_POTION_4_,I.COCONUT,I.BANANAS_1_,rotten];
+  for(const id of excluded){const d=core.CacheDefinitions.getItem(id);assert.ok(d.noteTemplate>=0||d.placeholderTemplate>=0||id===rotten||!(d.inventoryActions??[]).some(a=>a?.toLowerCase()==='eat')||(d.inventoryActions??[]).some(a=>a?.toLowerCase()==='drink'));}
+  inv.resetItems();excluded.forEach((id,s)=>put(s,id,1,{unsupported:s}));put(20,ordinary);before=contents(inv);impact();assert.deepEqual(contents(inv).slice(0,20),before.slice(0,20));assert.equal(inv.get(20).getId(),rotten);
+  inv.resetItems();excluded.forEach((id,s)=>put(s,id,1,{unsupported:s}));before=contents(inv);impact();assert.deepEqual(contents(inv),before);assert.equal(a.getHitpoints(),91,'no eligible food preserves canonical eight damage rather than invented1to3');
+  // Exact same-id metadata-distinct stack and lowest free slot, one physical unit only.
+  inv.resetItems();put(0,I.COINS);const stack=put(2,ordinary,3,{stack:'first',nested:{n:1}});put(4,ordinary,5,{stack:'second'});before=contents(inv);impact();ghastIdentity(inv.get(2),stack,'inv.get(2) identity');assert.equal(stack.getAmount(),2);assert.equal(inv.get(1).getId(),rotten);assert.deepEqual(inv.get(1).getMeta(),before[2].meta);assert.notEqual(inv.get(1).getMeta(),stack.getMeta());assert.deepEqual(contents(inv)[4],before[4]);assert.deepEqual(contents(inv)[0],before[0]);
+  fill();put(0,ordinary,2);inv.setItem(11,new core.Item(-1,0));before=contents(inv);impact();assert.equal(inv.get(0).getAmount(),1);assert.equal(inv.get(11).getId(),rotten);for(let s=1;s<28;s++)if(s!==11)assert.deepEqual(contents(inv)[s],before[s]);
+  fill();put(4,ordinary);before=contents(inv);impact();assert.equal(inv.get(4).getId(),rotten);assert.equal(inv.getValidItems().length,28);for(let s=0;s<28;s++)if(s!==4)assert.deepEqual(contents(inv)[s],before[s]);
+  fill();put(0,ordinary,3,{stack:'full'});put(5,I.HALF_AN_APPLE_PIE,1,{later:true});before=contents(inv);impact();assert.deepEqual(contents(inv)[0],before[0]);assert.equal(inv.get(5).getId(),rotten);assert.equal(inv.getValidItems().length,28);
+  fill();put(0,ordinary,3,{stack:'no-space'});before=contents(inv);impact();assert.deepEqual(contents(inv),before);assert.equal(a.getHitpoints(),91,'full stack consumes zero and cannot protect without conversion');
+  // The actual consumption veto and hazard eligibility ask different questions.
+  inv.resetItems();put(0,ordinary);put(1,I.ATTACK_POTION_4_,1,{dose:true});before=contents(inv);await nativeItem(a,ordinary,'Eat');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.deepEqual(contents(inv),before);impact();assert.equal(inv.get(0).getId(),rotten);assert.deepEqual(contents(inv)[1],before[1]);const carried=contents(inv);game.finish(null);tick(2);assert.deepEqual(contents(inv),carried,'safe exit does not restore rotted food');
+  console.log('GHASTLY_INVENTORY '+JSON.stringify({ordinary,noted,placeholder,partial:I.HALF_AN_APPLE_PIE,produce:I.BANANA,excluded,rotten,controlledNativeProvenance:true,naturalCadence:false}));
+});
+
+test('native Ghastly current source provenance exclusions keep food and canonical damage; world and foreign5626 remain untouched',async()=>{
+  const{a,b,game}=await ghastGame();for(const p of[a,b])ghastFighter(p);completePreparation(game);ghastReady(game);const npc=game.ghasts.npcs[0];
+  for(const kind of[null,'reflected','origin','poison']){ghastFood(a,1);a.setHitpoints(99);const before=contents(a.getInventory());const hit=ghastDirect(npc,a,8,kind);assert.equal(hit.getDamage(),8);assert.equal(a.getHitpoints(),91);assert.deepEqual(contents(a.getInventory()),before);}
+  // A hand-built replacement PendingHit has the same owned NPC/method but no native-returned identity.
+  ghastFood(a,1);a.setHitpoints(99);const before=contents(a.getInventory());const fake=new core.PendingHit(npc,a,CombatFactory.getMethod(npc),{damage:8,rollAccuracy:false,handleAfterHitEffects:false});CombatFactory.addPendingHit(fake);for(let n=0;n<4;n++){tick();a.getCombat().getHitQueue().process(C.now());}assert.equal(a.getHitpoints(),91);assert.deepEqual(contents(a.getInventory()),before);
+  for(const kind of['reflected','origin','poison']){ghastFood(a,1);a.setHitpoints(99);const before=contents(a.getInventory());ghastControlled(npc,a,{prepare:hit=>{for(const h of hit.getHits()){if(kind==='reflected')h.markReflected();if(kind==='origin')h.setOrigin('recoil');if(kind==='poison')h.setHitmask(core.HitMask.GREEN);}}});assert.equal(a.getHitpoints(),91);assert.deepEqual(contents(a.getInventory()),before);}
+  const worldAt=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(worldAt.getX(),worldAt.getY());const world=C.api.spawnNpc({id:5626,x:worldAt.getX(),y:worldAt.getY(),z:0,wanderRadius:0});fixtureNpcs.add(world);assert.ok(world.isRegistered());assert.equal(world.__skipDefaultRespawn===true,false);ghastIdentity(world.getArea(),null,'world.getArea() identity');assert.equal(CombatFactory.getMethod(world).attackSpeed(world),8);
+  ghastFood(a,1);a.setHitpoints(99);const inventory=contents(a.getInventory());ghastDirect(world,a);assert.equal(a.getHitpoints(),91);assert.deepEqual(contents(a.getInventory()),inventory,'unowned world outgoing impact not globally converted or suppressed');
+  const other=await ghastGame();completePreparation(other.game);ghastReady(other.game);const foreign=other.game.ghasts.npcs[0];assert.equal(game.area.canAttack(foreign,a,CombatFactory.MELEE_COMBAT),false);ghastFood(a,1);a.setHitpoints(99);const held=contents(a.getInventory());ghastDirect(foreign,a);assert.equal(a.getHitpoints(),99);assert.deepEqual(contents(a.getInventory()),held,'known-owned foreign target is stale to its original game');assert.equal(other.game.area.canAttack(foreign,other.a,CombatFactory.MELEE_COMBAT),true);
+});
+
+function ghastFlood(game,from){const queue=[from.slice(0,2)],seen=new Set([from.slice(0,2).join(',')]);for(let i=0;i<queue.length;i++){const[x,y]=queue[i];for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy,key=`${nx},${ny}`;if(nx<3392||nx>3455||ny<4928||ny>4991||seen.has(key))continue;if(core.RegionManager.canMovestart(game.area.at([x,y,0]),game.area.at([nx,ny,0]),1,1,game.area)){seen.add(key);queue.push([nx,ny]);}}}return seen;}
+for(const side of[0,1])test(`native Ghastly side${side} real ghast kill owns safe death nineteen-cell holding model9753 and delayed Exit without opponent score`,async()=>{
+  const other=await ghastGame();const{a,b,game}=await ghastGame({rejoiningdelay:side});for(const p of[a,b]){ghastFighter(p);ghastFood(p);}completePreparation(game);ghastReady(game);const victim=[a,b].find(p=>game.members.get(p)===side),npc=game.ghasts.npcs[side];victim.getInventory().resetItems();give(victim,core.ItemIdentifiers.COINS,'ghast-safe-death');const inventory=contents(victim.getInventory());victim.setHitpoints(1);
+  ghastTurns=true;for(let n=0;n<160&&!game.jailed.has(victim);n++)tick();assert.equal(game.jailed.has(victim),true,'ordinary native ghast impacts cause genuine player death');ghastIdentity(victim.getCombat().getHitQueue().getLastAppliedHit().getSource(),npc,'victim.getCombat().getHitQueue().getLastAppliedHit().getSource() identity');ghastTurns=false;assert.deepEqual(game.kills,[0,0],'NPC kill gives no invented opposing-team credit');assert.equal(game.fighters.has(victim),false);assert.deepEqual(contents(victim.getInventory()),inventory);assert.deepEqual(position(victim),positionAt(game,SWAMP_JAILS[side]));assert.ok(npc.getCombat().getTarget()!==victim,'npc.getCombat().getTarget() identity');
+  const holding=ghastFlood(game,SWAMP_JAILS[side]);assert.equal(holding.size,19);for(const landing of SWAMP_LANDINGS)assert.equal(holding.has(landing.slice(0,2).join(',')),false);assert.equal(holding.has(SWAMP_JAILS[1-side].slice(0,2).join(',')),false);
+  for(const destination of[SWAMP_LANDINGS[side],SWAMP_JAILS[1-side]]){await wire(victim,walkClickFrame(game.area.at(destination)));tick(10);assert.equal(holding.has(ghastSource(victim,game).slice(0,2).join(',')),true);}
+  for(const key of holding){const[x,y]=key.split(',').map(Number);for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]])if(!holding.has(`${x+dx},${y+dy}`))assert.equal(core.RegionManager.canMovestart(game.area.at([x,y,0]),game.area.at([x+dx,y+dy,0]),1,1,game.area),false);}
+  const foreign=mappedLayoutObjects(other.game,'clanwars_prisonportal_swamp')[0],foreignOrb=mappedLayoutObjects(other.game,'clanwars_viewing_start_swamp')[0];assert.equal(Match.exit({player:victim,object:foreign}),false);assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false);const inactive=mappedLayoutObjects(game,'clanwars_viewing_swamp')[0];assert.ok(inactive);assert.equal(viewingUnit().use({player:victim,object:inactive}),false);
+  const orbXY=side?[3450,4990]:[3397,4929],scripts=scriptCalls(victim);await layoutObjectInput(victim,game,'clanwars_viewing_start_swamp',orbXY,'Use');const view=viewingUnit().active.get(victim);assert.ok(view);assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9753));assert.equal(game.area.canAttack(npc,victim,CombatFactory.MELEE_COMBAT),false);const before=contents(victim.getInventory()),hp=victim.getHitpoints();ghastDirect(npc,victim);assert.equal(victim.getHitpoints(),hp);assert.deepEqual(contents(victim.getInventory()),before);
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const xy=side?[3454,4986]:[3393,4933],owned=lumbridgeObject(game,'clanwars_prisonportal_swamp',xy),fake=new core.GameObject(owned.getId(),owned.getLocation().clone(),owned.getType(),owned.getFace(),game.area);assert.equal(owned.getId(),26740);assert.equal(owned.getFace(),side?2:0);try{assert.equal(Match.exit({player:victim,object:fake}),false);}finally{game.area.detach(fake);}
+  const deadline=game.returnAt.get(victim.getLongUsername());if(side){assert.ok(deadline>C.now());await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',xy,'Exit');assert.equal(game.jailed.has(victim),true);assert.equal(game.returnAt.get(victim.getLongUsername()),deadline);assert.ok(deadline>C.now());tick(deadline-C.now());}await layoutObjectInput(victim,game,'clanwars_prisonportal_swamp',xy,'Exit');assert.equal(game.fighters.has(victim),true);assert.equal(game.jailed.has(victim),false);assert.deepEqual(position(victim),positionAt(game,SWAMP_LANDINGS[side]));assert.deepEqual(contents(victim.getInventory()),inventory);
+  console.log('GHASTLY_HOLDING '+JSON.stringify({side,killer:npc.getId(),cells:holding.size,orb:orbXY,model:9753,exit:xy,opponentKills:game.kills}));
+});
+
+test('native Ghastly twelfth arena preserves all eleven concurrent layouts and owned full-footprint Forfeits',async()=>{
+  const players=Array.from({length:24},()=>actor(true));for(const p of players)channel(p);const old=[];
+  for(const[offset,arena,axis,coordinate,face,count]of[[0,1,'y',4959,0,52],[2,2,'y',5023,0,null],[4,3,'y',5087,0,24],[6,6,'y',4959,0,57],[8,5,'x',3167,1,43],[10,11,'y',4735,0,51],[12,12,'y',4826,0,29],[14,13,'x',3496,1,23],[16,0,'y',5055,0,47],[18,4,'y',5055,0,48],[20,8,'y',4895,0,4]]){const team=players.slice(offset,offset+2),other=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team)await join(p);if(count!==null)assert.equal(other.walls.length,count);for(const wall of other.walls){assert.equal(wall.getFace(),face);assert.equal(axis==='x'?wall.getLocation().getX()-other.area.getBaseX()+other.layout.origin[0]:wall.getLocation().getY()-other.area.getBaseY()+other.layout.origin[1],coordinate);}old.push({other,team});}
+  const[a,b]=players.slice(22),game=await negotiate(a,b,null,1,null,7);await join(a);await join(b);assert.equal(new Set([...old.map(x=>x.other.area),game.area]).size,12);const foreign=mappedLayoutObjects(old.find(x=>x.other.rules.arena===6).other,'clanwars_exitportal_swamp_s')[0];assert.equal(Match.forfeit({player:a,object:foreign}),false);
+  for(const p of[a,b]){const side=game.members.get(p),xy=side?[3437,4987]:[3407,4931],name=side?'clanwars_exitportal_swamp_n':'clanwars_exitportal_swamp_s',object=lumbridgeObject(game,name,xy);assert.equal(object.getId(),side?26736:26735);assert.equal(object.getFace(),side?2:0);assert.deepEqual([object.getDefinition().sizeX,object.getDefinition().sizeY,object.getDefinition().getBlockingMask()],[4,2,30]);const fake=new core.GameObject(object.getId(),object.getLocation().clone(),object.getType(),object.getFace(),game.area);try{assert.equal(Match.forfeit({player:p,object:fake}),false);}finally{game.area.detach(fake);}await ghastWalk(p,game,side?[3439,4986]:[3409,4933]);await layoutObjectInput(p,game,name,xy,'Forfeit');assert.equal(C.matches.has(p),false);lobby(p);}
+  assert.equal(game.members.size,0);assert.equal(game.phase,'staging');const remaining=game.starts-C.now();assert.ok(remaining>0);assert.equal(game.ghasts===undefined,true,'no hazards before the canonical start');
+  tick(remaining-1);assert.equal(C.now(),game.starts-1);assert.equal(game.phase,'staging');assert.equal(game.ghasts===undefined,true,'last actual staging tick has no hazard history');assert.equal(game.area.getNpcs().length,0);assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);
+  tick();assert.equal(C.now(),game.starts);assert.equal(game.phase,'over');assert.equal(game.area.isDestroyed(),true);assert.equal(game.ghasts.ready,false);assert.equal(game.ghasts.npcs.length,2);for(const npc of game.ghasts.npcs){assert.equal(npc.getId(),5626);ghastAbsent(npc,game.area,'empty start cleanup');}
+  // Match.tick prepares at the actual200 boundary before the empty-roster finish.
+  // Retained stopped state/tombstones are valid history; live or queued hazards are not.
+  tick(120);for(const npc of game.ghasts.npcs)ghastAbsent(npc,game.area,'empty start delayed cleanup');for(const{other,team}of old){assert.notEqual(other.phase,'over');assert.equal(other.area.isDestroyed(),false);for(const p of team)assert.equal(C.matches.get(p)===other,true,'old-layout membership survives Q cancellation');}
+  console.log('GHASTLY_EMPTY_START_CLEANUP '+JSON.stringify({starts:game.starts,settled:C.now(),initial:game.ghasts.npcs.length,ready:game.ghasts.ready,registered:game.ghasts.npcs.map(n=>Boolean(n.isRegistered()))}));
+});
+
+test('native Ghastly Ignore5 six versus six actual ghast defeat removes a fighter without scoring a team kill',async()=>{
+  const{teams,players,game}=await stragglerGame(6,1,3,{},7);completePreparation(game);ghastReady(game);assert.equal(game.fighters.size,12);const victim=teams[0][1],npc=game.ghasts.npcs[game.members.get(victim)];
+  // Disclosed lethal guard hit; actual native size2 timing is tested separately.
+  victim.getInventory().resetItems();victim.setHitpoints(1);victim.setNeedsPlacement(false);const hit=new core.PendingHit(npc,victim,CombatFactory.getMethod(npc),{damage:8,rollAccuracy:false,handleAfterHitEffects:false});CombatFactory.addPendingHit(hit);core.World.processCycle++;require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());assert.equal(victim.getHitpoints(),0);tick(8);assert.equal(game.phase,'over');assert.deepEqual(game.kills,[0,0]);for(const p of players)lobby(p);assert.equal(game.area.isDestroyed(),true);for(const n of game.ghasts.npcs)assert.equal(n.isRegistered(),false);
+});
+
+async function ghastKill(killer,npc){
+  // A real decoded Attack establishes the NPC target; fixed damage only accelerates the death fixture.
+  const game=npc.getPrivateArea()?.game;if(game){const at=npc.getLocation();await ghastWalk(killer,game,[at.getX()-game.area.getBaseX()+3392,at.getY()-game.area.getBaseY()+4928-1]);}
+  await ghastAttack(killer,npc);ghastIdentity(killer.getCombat().getTarget(),npc,'killer.getCombat().getTarget() identity');
+  const hit=new core.PendingHit(killer,npc,CombatFactory.MELEE_COMBAT,{damage:npc.getHitpoints(),rollAccuracy:false,handleAfterHitEffects:false,experience:false});CombatFactory.addPendingHit(hit);
+  for(let n=0;n<4&&npc.getHitpoints()>0;n++){tick();npc.getCombat().getHitQueue().process(C.now());}
+  assert.equal(npc.getHitpoints(),0);const settle=npc.getCurrentDefinition().getDeathTicks()+5;assert.ok(settle>0&&settle<100);tick(settle);assert.equal(npc.isRegistered(),false,'genuine NPC death/removal queue completes');
+}
+
+test('native Ghastly genuine NPC death claims drops before Prayer consumers and never respawns; world5626 loot and quest-visible identity still work',async()=>{
+  const{a,b,game}=await ghastGame();for(const p of[a,b])ghastFighter(p);completePreparation(game);ghastReady(game);const npc=game.ghasts.npcs[0],survivor=game.ghasts.npcs[1],I=core.ItemIdentifiers,prayer=a.getSkillManager();
+  prayer.setExperience(core.Skill.PRAYER,0);a.setAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE,false);const gate=PM.emitCanGainExperience(a,core.Skill.PRAYER,4.5);assert.notEqual(gate.allow,false);assert.equal(gate.multiplier,1);assert.ok(core.GameConstants.EXPERIENCE_MULTIPLIER>0);assert.ok(prayer.getExperience(core.Skill.PRAYER)<core.SkillManager.MAX_EXPERIENCE-1000);give(a,I.BONECRUSHER,'ghast-bonecrusher');a.setAttribute('bonecrusher:charges',100);a.setAttribute('quest.nature_spirit.stage',90);
+  const before=contents(a.getInventory()),xp=prayer.getExperience(core.Skill.PRAYER),ground=core.World.getItems().slice(),events=[];ghastObserve=(kind,e)=>{if(e.npc===npc)events.push({kind,handled:e.handled,killer:e.killer});};
+  await ghastKill(a,npc);assert.ok(events.some(e=>e.kind==='death'&&e.killer===a));assert.ok(events.some(e=>e.kind==='claim'&&e.handled===true));assert.equal(events.some(e=>e.kind==='generated'),false);assert.equal(prayer.getExperience(core.Skill.PRAYER),xp);assert.equal(a.getAttribute('bonecrusher:charges'),100);assert.equal(a.getAttribute('quest.nature_spirit.stage'),90);assert.deepEqual(contents(a.getInventory()),before);ghastSameRefs(core.World.getItems(),ground,'core.World.getItems() identity');assert.equal(game.fighters.has(a),true);assert.equal(game.fighters.has(b),true);assert.deepEqual(game.kills,[0,0]);assert.equal(survivor.isRegistered(),true);assert.equal(game.ghasts.npcs.length,2);
+  const respawn=npc.getDefinition().getRespawn(),death=npc.getDefinition().getDeathTicks(),settle=Math.max(105,respawn+death+10);assert.ok(settle<=1000);tick(settle);assert.equal(npc.isRegistered(),false);assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);assert.equal(game.area.getNpcs().length,1);assert.equal(game.area.getNpcs()[0],survivor);
+  // Real world5626 death gets its canonical always-bones drop; the charged bonecrusher proves Prayer is capable.
+  const worldPlayer=actor(true);ghastFighter(worldPlayer);worldPlayer.setAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE,false);worldPlayer.getSkillManager().setExperience(core.Skill.PRAYER,0);give(worldPlayer,I.BONECRUSHER,'world-bonecrusher');worldPlayer.setAttribute('bonecrusher:charges',100);core.RegionManager.loadMapFiles(3222,3218);worldPlayer.moveTo(new core.Location(3222,3218,0));tick(2);
+  const world=C.api.spawnNpc({id:5626,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(world);const worldEvents=[];ghastObserve=(kind,e)=>{if(e.npc===world)worldEvents.push({kind,handled:e.handled});};await ghastKill(worldPlayer,world);assert.ok(worldEvents.some(e=>e.kind==='claim'&&e.handled===false));assert.ok(worldEvents.some(e=>e.kind==='generated'));assert.equal(worldPlayer.getAttribute('bonecrusher:charges'),99);assert.ok(worldPlayer.getSkillManager().getExperience(core.Skill.PRAYER)>0,'actual world bones reach actual Prayer consumer');
+  // Remove the later ordinary world respawn after observing it, without changing the shared definition.
+  tick(settle);const worldClones=[...core.World.getNpcs()].filter(n=>n?.getId()===5626&&n!==survivor&&n.getPrivateArea()==null&&n.getSpawnPosition().equals(world.getSpawnPosition()));assert.equal(worldClones.length,1,'world5626 default respawn remains canonical');for(const n of worldClones){fixtureNpcs.add(n);C.api.removeNpc(n);}
+  // Supplied quest checkpoint and canonical pouch producer, no fake visibleGhasts map.
+  worldPlayer.setAttribute('quest.nature_spirit.stage',90);const source=C.api.spawnNpc({id:945,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(source);const pouch=new core.Item(I.DRUID_POUCH_2,1);worldPlayer.getInventory().setItem(5,pouch);const existing=new Set([...core.World.getNpcs()]);const request={player:worldPlayer,target:source,npcId:945,targetIndex:source.getIndex(),item:pouch,itemId:I.DRUID_POUCH_2,slot:5,handled:false};assert.equal(PM.emitItemOnNpc(request),true);
+  const revealed=[...core.World.getNpcs()].find(n=>n&&!existing.has(n)&&n.getId()===946&&n.getOwner()===worldPlayer);assert.ok(revealed,'actual quest reveal owns visible identity');fixtureNpcs.add(revealed);assert.equal(revealed.isOwnerOnly(),true);await ghastKill(worldPlayer,revealed);assert.equal(worldPlayer.getAttribute('quest.nature_spirit.stage'),95,'canonical quest death advances its own visible identity');
+  for(const drop of core.World.getItems().slice())if(!ground.includes(drop))core.ItemOnGroundManager.deregister(drop);
+  console.log('GHASTLY_NPC_DEATH '+JSON.stringify({ownedClaim:true,noOwnedPrayer:true,noReplacement:true,settle,worldBonecrusher:true,worldRespawn:true,questVisiblePositive:true}));
+});
+
+for(const kind of['source-death','source-live-leave','target-leave','target-logout','expiry','cancel'])test(`native Ghastly queued owned impact after ${kind} cannot rot or damage`,async()=>{
+  const{a,b,game}=await ghastGame(null,kind==='expiry'?16:1);for(const p of[a,b]){ghastFighter(p);ghastFood(p,1);}completePreparation(game);ghastReady(game);const npc=game.ghasts.npcs[0],before=contents(a.getInventory()),hp=a.getHitpoints();
+  // Already resolved outgoing damage is a distinct supplied guard path, deliberately past PendingHit source checks.
+  const stale=new core.HitDamage(8,core.HitMask.RED).setSource(npc);a.getCombat().getHitQueue().addPendingDamage([stale]);
+  if(kind==='source-death')npc.setHitpoints(0);
+  if(kind==='source-live-leave')game.area.leave(npc,false);
+  if(kind==='target-leave')Match.leave({player:a});
+  if(kind==='target-logout')PM.emitPlayerLogout({player:a,username:a.getUsername()});
+  if(kind==='expiry'){core.World.processCycle=game.ends;game.tick();}
+  if(kind==='cancel')game.finish(null);
+  tick();a.getCombat().getHitQueue().process(C.now());assert.equal(a.getHitpoints(),hp);assert.deepEqual(contents(a.getInventory()),before);assert.equal(stale.getDamage(),0,'known-owned stale damage zeroes HP as well as skipping conversion');
+  for(const tag of[null,'reflected','origin','poison']){const hit=ghastDirect(npc,a,8,tag);assert.equal(hit.getDamage(),0);assert.equal(a.getHitpoints(),hp);assert.deepEqual(contents(a.getInventory()),before);}
+});
+
+test('native Ghastly admitted queued additions become actual indexed members exactly once after registration',async t=>{
+  const{a,b,game}=await ghastGame();for(const p of[a,b]){ghastFighter(p);ghastFood(p);}const list=core.World.getNpcs(),add=list.add.bind(list);let declined=0;
+  const inject=t.mock.method(list,'add',function(npc,...args){if(npc.getId()===5626&&declined<2){declined++;return false;}return add(npc,...args);});
+  tick(game.starts-C.now()-1);assert.equal(game.phase,'staging');core.World.processCycle++;game.tick();assert.equal(game.phase,'combat');assert.equal(declined,2);assert.equal(game.ghasts.ready,true);const npcs=game.ghasts.npcs.slice();assert.ok(npcs.every(n=>!n.isRegistered()&&core.World.getAddNPCQueue().includes(n)));assert.equal(game.area.getNpcs().length,0,'unregistered actors are not indexed in area membership');for(const npc of npcs){assert.equal(game.area.canAttack(npc,a,CombatFactory.MELEE_COMBAT),false);ghastIdentity(npc.getCombat().getTarget(),null,'npc.getCombat().getTarget() identity');}inject.mock.restore();ghastTurns=true;tick();ghastReady(game);ghastSameRefs(game.area.getNpcs().slice().sort((a,b)=>a.getIndex()-b.getIndex()),npcs.slice().sort((a,b)=>a.getIndex()-b.getIndex()),'game.area.getNpcs().slice().sort((a,b)=>a.getIndex()-b.getIndex()) identity');tick(5);assert.equal(game.ghasts.npcs.length,2);assert.ok(npcs.every(n=>!core.World.getAddNPCQueue().includes(n)));assert.notEqual(npcs[0].getIndex(),npcs[1].getIndex());
+});
+
+test('native Ghastly second-spawn failure after first queued admission cancels once without a hazard-free phase or late spawn',async t=>{
+  const{a,b,game}=await ghastGame(),list=core.World.getNpcs(),add=list.add.bind(list),spawn=C.api.spawnNpc;let spawned=0,first=null;
+  const reject=t.mock.method(list,'add',function(npc,...args){if(npc.getId()===5626)return false;return add(npc,...args);});
+  const fail=t.mock.method(C.api,'spawnNpc',function(def){if(def.id===5626&&++spawned===2)return null;const npc=spawn(def);if(def.id===5626)first=npc;return npc;});
+  tick(game.starts-C.now());assert.equal(spawned,2);assert.ok(first);assert.equal(game.phase,'over');assert.equal(game.area.isDestroyed(),true);assert.equal(Boolean(first.isRegistered()),false);assert.equal(core.World.getAddNPCQueue().includes(first),false);assert.equal(core.World.getRemoveNPCQueue().includes(first),false);assert.equal(game.ghasts.ready,false);assert.match(game.ghasts.failure,/spawn refused/);ghastAbsent(first,game.area,'partial spawn immediate cleanup');for(const p of[a,b]){assert.equal(C.matches.has(p),false);lobby(p);}reject.mock.restore();fail.mock.restore();tick(120);assert.equal(spawned,2);assert.equal(Boolean(first.isRegistered()),false);assert.equal(core.World.getAddNPCQueue().includes(first),false);assert.equal(Match.active.has(game),false);ghastAbsent(first,game.area,'partial spawn delayed cleanup');
+});
+
+test('native Ghastly pre-registration cancellation removes both queued owned hazards before ordinary queue drain',async t=>{
+  const{game}=await ghastGame(),list=core.World.getNpcs(),add=list.add.bind(list);let blocked=0;
+  const inject=t.mock.method(list,'add',function(npc,...args){if(npc.getId()===5626&&blocked++<2)return false;return add(npc,...args);});
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();const old=game.ghasts.npcs.slice();assert.equal(old.length,2);assert.ok(old.every(n=>!n.isRegistered()&&core.World.getAddNPCQueue().includes(n)));game.finish(null);inject.mock.restore();tick(120);assert.ok(old.every(n=>!n.isRegistered()&&!core.World.getAddNPCQueue().includes(n)&&!core.World.getRemoveNPCQueue().includes(n)));assert.equal(game.area.isDestroyed(),true);
+});
+
+test('native Ghastly queued hit and NPC death cannot cross destroyed actual8x8 slot reuse while live other hazards and world control continue',async()=>{
+  const dead=await ghastGame(),live=await ghastGame();for(const p of[dead.a,dead.b,live.a,live.b]){ghastFighter(p);ghastFood(p);}completePreparation(live.game); // The older dead game reaches start through the same ordinary tasks.
+  ghastReady(dead.game);ghastReady(live.game);const old=dead.game.ghasts.npcs.slice(),other=live.game.ghasts.npcs.slice(),base=[dead.game.area.getBaseX(),dead.game.area.getBaseY()],oldOrb=lumbridgeObject(dead.game,'clanwars_viewing_start_swamp',[3397,4929]),oldMasks=[ghastPlane(dead.game.area,0),ghastPlane(dead.game.area,1)],oldSettings=[ghastPlane(dead.game.area,0,true),ghastPlane(dead.game.area,1,true)],liveMasks=[ghastPlane(live.game.area,0),ghastPlane(live.game.area,1)],snap=contents(dead.a.getInventory()),hp=dead.a.getHitpoints();
+  const worldAt=new core.Location(3222,3218,0),worldClip=core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null),world=C.api.spawnNpc({id:5626,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(world);const worldDef=world.getCurrentDefinition();
+  const pending=CombatFactory.getMethod(old[0]).hits(old[0],dead.a)[0];CombatFactory.addPendingHit(pending);assert.equal(dead.a.getCombat().getHitQueue().hasPendingWork(),true);const raw=new core.HitDamage(8,core.HitMask.RED).setSource(old[1]);dead.a.getCombat().getHitQueue().addPendingDamage([raw]);
+  // Queue a genuine lethal NPC death but destroy before its delayed drop/leave/removal task completes.
+  old[0].getCombat().addDamage(dead.a,135);old[0].setHitpoints(0);assert.equal(old[0].isDyingFunction(),true);dead.game.finish(null);assert.equal(dead.game.area.isDestroyed(),true);for(const p of[dead.a,dead.b])lobby(p);const replacement=ghastTemplate();
+  try{
+    assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],base,'actual allocator reuses the freed8x8 slot');for(let p=0;p<2;p++){assert.deepEqual(ghastPlane(replacement,p),oldMasks[p]);assert.deepEqual(ghastPlane(replacement,p,true),oldSettings[p]);}
+    let nativeOther=0;ghastObserve=(kind,e)=>{if(kind==='prepare'&&other.includes(e.attacker))nativeOther++;};ghastTurns=true;const settle=Math.max(120,...old.map(n=>n.getDefinition().getRespawn()+n.getDefinition().getDeathTicks()+10));assert.ok(settle<=1000);tick(settle);ghastTurns=false;
+    assert.ok(nativeOther>=2,'other private hazards still run real engine attacks');assert.ok(other.every(n=>n.isRegistered()&&n.getArea()===live.game.area));assert.ok(old.every(n=>!n.isRegistered()&&!core.World.getAddNPCQueue().includes(n)&&!core.World.getRemoveNPCQueue().includes(n)));assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===dead.game.area),false);assert.equal([...core.World.getNpcs()].some(n=>n?.getArea()===dead.game.area),false);assert.equal(dead.a.getHitpoints(),hp);assert.deepEqual(contents(dead.a.getInventory()),snap);assert.equal(raw.getDamage(),0);assert.equal(world.isRegistered(),true);ghastIdentity(world.getCurrentDefinition(),worldDef,'world.getCurrentDefinition() identity');ghastIdentity(world.getArea(),null,'world.getArea() identity');assert.equal(core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null),worldClip);
+    for(let p=0;p<2;p++){assert.deepEqual(ghastPlane(replacement,p),oldMasks[p]);assert.deepEqual(ghastPlane(replacement,p,true),oldSettings[p]);assert.deepEqual(ghastPlane(live.game.area,p),liveMasks[p]);}const fresh=lumbridgeObject({area:replacement},'clanwars_viewing_start_swamp',[3397,4929]);ghastIdentity(fresh.getPrivateArea(),replacement,'fresh.getPrivateArea() identity');assert.ok(fresh!==oldOrb,'fresh identity');
+    console.log('GHASTLY_REUSE '+JSON.stringify({base,settle,oldRegistered:old.map(n=>n.isRegistered()),otherNativeAttacks:nativeOther,worldUnchanged:true}));
+  }finally{replacement.destroy();}
+});
+
+test('native Ghastly nullable-action Tree and Roots refuse invented resource actions while ordinary world Tree still yields and respawns',async t=>{
+  resourceRandom(t);const{a,b,game}=await ghastGame();completePreparation(game);ghastReady(game);const WC=require('../plugins/skills/Woodcutting.plugin'),I=core.ItemIdentifiers,skills=a.getSkillManager();skills.setCurrentLevel(core.Skill.WOODCUTTING,99);skills.setMaxLevel(core.Skill.WOODCUTTING,99);give(a,I.BRONZE_AXE,'ghast-axe');
+  const baseline=[ghastPlane(game.area,0),ghastPlane(game.area,1)],settings=[ghastPlane(game.area,0,true),ghastPlane(game.area,1,true)],all=[];for(let p=0;p<2;p++)for(let x=0;x<8;x++)for(let y=0;y<8;y++){const objects=game.area.getChunkObjects(p,x,y);if(p===1)assert.equal(objects.length,0);all.push(...objects);}assert.equal(all.length,844);const resources=all.filter(o=>[4051,1364].includes(o.getId()));assert.ok(resources.some(o=>o.getId()===4051));assert.ok(resources.some(o=>o.getId()===1364));for(const o of resources)assert.equal((o.getDefinition().getInteractions()??[]).some(Boolean),false,'whole bounded source nullable actions, not name-based harvestability');
+  const listener=new (require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)();for(const[name,xy,approach]of[['deadtree4swamp',[3398,4946],[3397,4946]],['swamp_root',[3398,4977],[3397,4978]]]){const object=lumbridgeObject(game,name,xy);await ghastWalk(a,game,approach);const inventory=contents(a.getInventory()),xp=skills.getExperience(core.Skill.WOODCUTTING),menu=a.getCreationMenu();assert.equal(WC.isWoodcuttingActive(a),false);for(const action of['Chop down','Climb-up'])listener.executeAction(a,object.getId(),object.getLocation().getX(),object.getLocation().getY(),0,action);listener.executeAction(a,object.getId(),object.getLocation().getX(),object.getLocation().getY(),1);tick(20);assert.equal(WC.isWoodcuttingActive(a),false);assert.equal(treeTask(object),undefined);assert.deepEqual(contents(a.getInventory()),inventory);assert.equal(skills.getExperience(core.Skill.WOODCUTTING),xp);ghastIdentity(a.getCreationMenu(),menu,'a.getCreationMenu() identity');ghastIdentity(core.MapObjects.getPrivateArea(a,object.getId(),object.getLocation()),object,'core.MapObjects.getPrivateArea(a,object.getId(),object.getLocation()) identity');}
+  for(let p=0;p<2;p++){assert.deepEqual(ghastPlane(game.area,p),baseline[p]);assert.deepEqual(ghastPlane(game.area,p,true),settings[p]);}
+  const world=actor(true);world.moveTo(new core.Location(3222,3218,0));core.RegionManager.loadMapFiles(3222,3218);const tree=new core.GameObject(core.CacheDefinitions.getLocId('tree2'),new core.Location(3223,3218,0),10,2,null);core.ObjectManager.register(tree,true);tick();try{const xp=world.getSkillManager().getExperience(core.Skill.WOODCUTTING),task=await chopTree(world,tree);assert.equal(world.getInventory().getAmount(I.LOGS),1);assert.ok(world.getSkillManager().getExperience(core.Skill.WOODCUTTING)>xp);const remaining=task.getRemainingTicks();assert.ok(remaining>0&&remaining<=98);tick(remaining+1);assert.equal(task.isStopped(),true);ghastIdentity(core.MapObjects.get(tree.getId(),tree.getLocation(),null),tree,'core.MapObjects.get(tree.getId(),tree.getLocation(),null) identity');for(let p=0;p<2;p++)assert.deepEqual(ghastPlane(game.area,p),baseline[p]);}finally{core.ObjectManager.deregister(tree,true);}
+});
+
+test('native Ghastly owned NPC targets enforce fighter area and NoSpecials without altering teammates or foreign layouts',async()=>{
+  const{a,b,game}=await ghastGame({specialattacks:2}),outsider=actor(true);completePreparation(game);ghastReady(game);const npc=game.ghasts.npcs[0],methods=[CombatFactory.MELEE_COMBAT,{type:()=>core.CombatType.RANGED},{type:()=>core.CombatType.MAGIC}];
+  for(const p of[a,b]){assert.equal(game.area.canAttack(p,npc,methods[0]),true);assert.equal(game.area.canAttack(npc,p,methods[0]),true);for(const method of methods.slice(1)){assert.equal(game.area.canAttack(p,npc,method),false);assert.equal(game.area.canAttack(npc,p,method),false);}}
+  a.setSpecialActivated(true);assert.equal(game.area.canAttack(a,npc,methods[0]),false);a.setSpecialActivated(false);assert.equal(game.area.canAttack(a,npc,methods[0]),true);assert.equal(game.area.canAttack(outsider,npc,methods[0]),false);assert.equal(game.area.canAttack(npc,outsider,methods[0]),false);
+  const foreign=C.api.spawnNpc({id:5626,x:npc.getLocation().getX(),y:npc.getLocation().getY(),z:0,wanderRadius:0});fixtureNpcs.add(foreign);game.area.add(foreign);assert.equal(game.area.canAttack(a,foreign,methods[0]),false);assert.equal(game.area.canAttack(foreign,a,methods[0]),false);assert.equal(game.area.npcAggression(a,foreign),false);ghastIdentity(npc.getDefinition(),foreign.getDefinition(),'shared definition object never replaced by owned hazard policy');
+});
+
+test('native Ghastly World consumed queued-add refusal cancels the match without retry or a late hazard',async t=>{
+  const{a,b,game}=await ghastGame(),list=core.World.getNpcs(),add=list.add.bind(list);let refused=0;
+  const inject=t.mock.method(list,'add',function(npc,...args){if(npc.getId()===5626&&refused<3){refused++;return false;}return add(npc,...args);});
+  tick(game.starts-C.now());assert.equal(refused,3);const old=game.ghasts.npcs.slice();assert.equal(old.length,2);ghastSameRefs(npcQueueFailures.splice(0),[old[0]],'World shifts a refused addition without requeue; the other registers');assert.equal(core.World.getAddNPCQueue().includes(old[0]),false);assert.equal(Boolean(old[0].isRegistered()),false);assert.equal(core.World.getNpcs().get(old[0].getIndex())===old[0],false,'refused actor never occupies a World slot');assert.equal(old[1].isRegistered(),true);inject.mock.restore();tick();assert.equal(game.phase,'over');assert.match(game.ghasts.failure,/queued registration failed/);assert.equal(game.ghasts.ready,false);assert.equal(game.area.isDestroyed(),true);for(const npc of old)ghastAbsent(npc,game.area,'consumed registration refusal immediate cleanup');assert.ok(old.every(n=>!n.isRegistered()&&!core.World.getAddNPCQueue().includes(n)));for(const p of[a,b]){assert.equal(C.matches.has(p),false);lobby(p);}tick(120);assert.ok(old.every(n=>!n.isRegistered()&&!core.World.getAddNPCQueue().includes(n)));assert.equal(refused,3,'no automatic registration retry');for(const npc of old)ghastAbsent(npc,game.area,'consumed registration refusal delayed cleanup');
 });

@@ -184,11 +184,11 @@ test('Quarry is a bounded third arena for existing modes while other arenas stay
 });
 
 
-test('Soggy Swamp is arena6 for supported melee modes while Ghastly and other arenas remain refused',()=>{
+test('Soggy Swamp is arena6 for supported melee modes while unsupported arenas remain refused',()=>{
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:6};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Soggy Swamp/);
   }
-  for(const arena of [0.5,4.5,5.5,7,8.5,9,10,11.5,12.5,13.5,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4.5,5.5,7.5,8.5,9,10,11.5,12.5,13.5,14,-1,6.5,'6',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -196,7 +196,7 @@ test('Clan Cup is arena5 for supported melee modes while unsupported and malform
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:5};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Clan Cup Arena/);
   }
-  for(const arena of [0.5,4.5,7,8.5,9,10,11.5,12.5,13.5,14,-1,5.5,'5',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4.5,7.5,8.5,9,10,11.5,12.5,13.5,14,-1,5.5,'5',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -204,7 +204,7 @@ test('Classic arena11 preserves supported melee modes and refuses unsupported or
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:11};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Classic/);
   }
-  for(const arena of [0.5,4.5,7,8.5,9,10,12.5,13.5,14,-1,11.5,'11',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4.5,7.5,8.5,9,10,12.5,13.5,14,-1,11.5,'11',NaN,Infinity]) assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -212,7 +212,7 @@ test('Lumbridge Castle arena12 preserves supported melee modes and rejects malfo
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:12};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Lumbridge Castle/);
   }
-  for(const arena of [0.5,4.5,7,8.5,9,10,13.5,14,-1,12.5,'12',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4.5,7.5,8.5,9,10,13.5,14,-1,12.5,'12',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
@@ -220,13 +220,13 @@ test('Falador Park arena13 preserves supported melee modes and rejects malformed
   for(const mode of [0,1,8,16,20]) {
     const rules={...Rules.create(3,mode),arena:13};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Falador Park/);
   }
-  for(const arena of [0.5,4.5,7,8.5,9,10,14,-1,13.5,'13',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [0.5,4.5,7.5,8.5,9,10,14,-1,13.5,'13',NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 test('Wasteland numeric zero preserves explicit Plateau default and supported mode summaries',()=>{
   assert.equal(Rules.create().arena,1);assert.equal(Rules.OFFERED_RULES.arena,1);
   for(const mode of [0,1,8,16,20]){const rules={...Rules.create(3,mode),arena:0};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),/Wasteland/);assert.equal(rules.arena,0);}
-  for(const arena of [null,undefined,false,'0',NaN,Infinity,-1,0.5,4.5,7,8.5,9,10,13.5,14])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [null,undefined,false,'0',NaN,Infinity,-1,0.5,4.5,7.5,8.5,9,10,13.5,14])assert.equal(Rules.validate({...Rules.create(),arena}),false);
   const missing={...Rules.create()};delete missing.arena;assert.equal(Rules.validate(missing),false);assert.equal(Rules.create().arena,1);
 });
 
@@ -236,12 +236,23 @@ test('Turrets arena4 retains existing melee modes, default Plateau and explicit 
   for(const arena of [0,4])for(const mode of [0,1,8,16,20]){
     const rules={...Rules.create(3,mode),arena};assert.equal(Rules.validate(rules),true);assert.match(Rules.summary(rules),new RegExp(arena===4?'Turrets':'Wasteland'));assert.equal(rules.ranged,1);assert.equal(rules.magic,4);assert.equal(rules.melee,0);
   }
-  for(const arena of [null,undefined,false,'4',4.5,-1,7,14,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of [null,undefined,false,'4',4.5,-1,7.5,14,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });
 
 
 test('Northleach arena8 preserves default Plateau explicit Wasteland and all existing melee families',()=>{
   assert.equal(Rules.create().arena,1);assert.equal(Rules.OFFERED_RULES.arena,1);
   for(const arena of[0,1,2,3,4,5,6,8,11,12,13])for(const mode of[0,1,8,16,20]){const rules={...Rules.create(3,mode),arena};assert.equal(Rules.validate(rules),true);assert.equal(rules.arena,arena);assert.equal(rules.melee,0);assert.equal(rules.ranged,1);assert.equal(rules.magic,4);if(arena===8)assert.match(Rules.summary(rules),/Northleach Quell/);}
-  for(const arena of[null,undefined,false,'8',8.5,7,9,10,14,-1,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+  for(const arena of[null,undefined,false,'8',8.5,7.5,9,10,14,-1,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+});
+
+
+test('Ghastly arena7 preserves all twelve layouts and existing melee restrictions',()=>{
+  assert.equal(Rules.create().arena,1);
+  for(const arena of[0,1,2,3,4,5,6,7,8,11,12,13])for(const mode of[0,1,8,16,20])for(const food of[0,1])for(const drinks of[0,1]){
+    const rules={...Rules.create(3,mode),arena,food,drinks,specialattacks:2};
+    assert.equal(Rules.validate(rules),true);assert.equal(rules.arena,arena);assert.equal(rules.melee,0);assert.equal(rules.ranged,1);assert.equal(rules.magic,4);
+    if(arena===7)assert.match(Rules.summary(rules),/Ghastly Swamp/);
+  }
+  for(const arena of[null,undefined,false,'7',7.5,9,10,14,-1,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
 });

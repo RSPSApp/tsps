@@ -85,8 +85,9 @@ test("a tinderbox below Firemaking 30 is refused with the Wiki's message", (t) =
   assert.equal(count(player, I.BURNT_JOGRE_BONES), 0);
 });
 
-function superheat(t, cooking) {
+function superheat(t, cooking, boostedTo = cooking) {
   const f = actor(t, { cooking, magic: 43 });
+  f.player.getSkillManager().setCurrentLevel(core.Skill.COOKING, boostedTo, false);
   f.player.getInventory().add(new core.Item(I.FIRE_RUNE, 4), false);
   f.player.getInventory().add(new core.Item(I.NATURE_RUNE, 1), false);
   f.player.getInventory().add(new core.Item(I.JOGRE_BONES, 1), false);
@@ -112,5 +113,13 @@ test("Superheat Item below Cooking 30 keeps the bones and the runes", (t) => {
   assert.equal(count(player, I.JOGRE_BONES), 1, messages.join(" | "));
   assert.equal(count(player, I.FIRE_RUNE), 4);
   assert.equal(count(player, I.NATURE_RUNE), 1);
+  assert.ok(messages.some((message) => /Cooking level of at least 30/.test(message)), messages.join(" | "));
+});
+
+test("Superheat Item is refused at base Cooking 20 boosted to 30: the level is not boostable", (t) => {
+  const { player, messages } = superheat(t, 20, 30);
+  assert.equal(count(player, I.JOGRE_BONES), 1, messages.join(" | "));
+  assert.equal(count(player, I.BURNT_JOGRE_BONES), 0);
+  assert.equal(count(player, I.NATURE_RUNE), 1, "no runes are used");
   assert.ok(messages.some((message) => /Cooking level of at least 30/.test(message)), messages.join(" | "));
 });

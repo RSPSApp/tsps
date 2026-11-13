@@ -113,7 +113,8 @@ function playCast(player) {
 
 function superheatJogreBones(player, slot) {
   const skills = player.getSkillManager();
-  if (skills.getCurrentLevel(core.Skill.COOKING) < JOGRE_COOKING_LEVEL) {
+  // Wiki (Burnt jogre bones): the Cooking level is not boostable; Magic is, through canCast.
+  if (skills.getMaxLevel(core.Skill.COOKING) < JOGRE_COOKING_LEVEL) {
     player.sendMessage(`You need a Cooking level of at least ${JOGRE_COOKING_LEVEL} to burn Jogre bones.`);
     return;
   }

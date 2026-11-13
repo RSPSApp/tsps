@@ -114,14 +114,20 @@ test('a miss on a west-facing net shows the failing then failed loc on the net t
   assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]), [['hunting_sapling_failed_swamp', 1478, 3099]]);
 });
 
-test('a catch plays 739 then 2652 at the net tile; a miss plays 2652 alone', t => {
+test('a catch plays 739 then 2652 at the net tile; a miss plays 2652 on the failing loc and the net tile', t => {
   const { trap } = setTrap(t, 3, 1479, 3099);
   spring(t, trap, true);
   assert.deepEqual(areaSounds.map(s => [s.soundId, s.x, s.y, s.radius]), [[739, 1478, 3099, 5], [2652, 1478, 3099, 5]]);
   H.traps.clear(); objects = [];
   const other = setTrap(t, 1, 3548, 3437, 29);
   spring(t, other.trap, false);
-  assert.deepEqual(areaSounds.map(s => [s.soundId, s.x, s.y]), [[2652, 3549, 3437]]);
+  // Net east of the tree: the failing loc stands on the tree's tile, so 2652 plays there and at the net.
+  assert.deepEqual(areaSounds.map(s => [s.soundId, s.x, s.y]), [[2652, 3548, 3437], [2652, 3549, 3437]]);
+  H.traps.clear(); objects = [];
+  const west = setTrap(t, 3, 1479, 3099, 29);
+  spring(t, west.trap, false);
+  // Net west of the tree: the failing loc is on the net tile, and 2652 plays once.
+  assert.deepEqual(areaSounds.map(s => [s.soundId, s.x, s.y]), [[2652, 1478, 3099]]);
 });
 
 test('Reset of a full net: setting loc 4 ticks after the dismantle, animation, sound and line a tick later, the trap a tick after', t => {

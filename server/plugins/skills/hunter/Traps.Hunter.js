@@ -187,9 +187,8 @@ function sendTimer(trap) {
     trap.expires - H.tick + 1, colour, 1);
 }
 
-function trapSound(trap, soundId) {
+function trapSound(trap, soundId, at = trapTile(trap)) {
   if (!soundId) return;
-  const at = trapTile(trap);
   H.core.Sounds.playAreaSound({ soundId, x: at.getX(), y: at.getY(), level: at.getZ(), radius: TRAP_SOUND_RADIUS, source: trap.player });
 }
 
@@ -437,9 +436,13 @@ function attempt(trap) {
   const closing = closingLoc(trap, creature, success);
   if (closing) {
     trap.closing = { due: H.tick + CLOSING_TICKS, success, creature };
+    const def = H.data.traps[trap.kind];
+    // A miss on a net trap also plays the trapping sound on the failing loc's tile when that isn't the net's.
     setState(trap, "closing", null, closing);
-    if (success) trapSound(trap, H.data.traps[trap.kind].catchSound);
-    trapSound(trap, H.data.traps[trap.kind].trappingSound);
+    const at = trap.objects.at(-1).getLocation();
+    if (!success && def.tree && !at.equals(trapTile(trap))) trapSound(trap, def.trappingSound, at);
+    if (success) trapSound(trap, def.catchSound);
+    trapSound(trap, def.trappingSound);
   } else setState(trap, success ? "caught" : "failed", success ? creature : null);
   if (success) {
     hide(npc);

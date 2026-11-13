@@ -115,6 +115,20 @@ test("captured Lunar cast graphics play at their recorded heights", () => {
   assert.deepEqual(player.heights, [72]);
 });
 
+test("Humidify fills an empty fishbowl with water, not water and seaweed", () => {
+  // Wiki, Humidify: Empty fishbowl -> Fishbowl. Cache objs 6667 fishbowl_empty, 6668 fishbowl_water, 6669 fishbowl_water_weed.
+  let id = 6667;
+  const bowl = { getId: () => id, setId(next) { id = next; } };
+  const player = caster({ getInventory: () => ({ getValidItems: () => [bowl], refreshItems() {} }) });
+  const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+  withStub(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "quest:is-complete" && event.key === "dream_mentor") { event.complete = true; return; }
+    return emit(name, event);
+  }, () => castable(() => LunarSpells.handleSelf(player, "Humidify")));
+  assert.equal(id, 6668, "a fishbowl of water");
+  assert.equal(CacheDefinitions.getItem(id).name, "Fishbowl");
+});
+
 test("String Jewellery casts from the spellbook with its own animation and graphic", () => {
   // Gold amulet (u) -> Gold amulet; the spell has no target (op 1, Cast).
   let id = 1673;

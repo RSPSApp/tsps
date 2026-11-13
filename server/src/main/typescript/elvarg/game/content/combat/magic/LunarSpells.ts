@@ -71,7 +71,7 @@ const PIES = new Map<number, [number, number, number]>([
 ]);
 /** Empty vessel -> filled (Wiki: Humidify). Farming adds seedlings and part-filled watering cans. */
 const WATER_CONTAINERS = new Map<number, number>([
-    [1925, 1929], [1923, 1921], [1935, 1937], [229, 227], [6667, 6669], [1980, 4458], [434, 1761],
+    [1925, 1929], [1923, 1921], [1935, 1937], [229, 227], [6667, 6668], [1980, 4458], [434, 1761],
     [1825, 1823], [1827, 1823], [1829, 1823], [1831, 1823], [5331, 5340],
 ]);
 /** Unstrung -> strung (Wiki: String Jewellery); 4 Crafting XP each. */

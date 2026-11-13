@@ -14,6 +14,7 @@ import { Sound } from "../../../../Sound";
 import { Sounds } from "../../../../Sounds";
 import { WeaponProfiles } from "../../WeaponProfile";
 import { Equipment } from "../../../../model/container/impl/Equipment";
+import { PluginManager } from "../../../../../plugins/PluginManager";
 import type { Player } from "../../../../entity/impl/player/Player";
 import type { ProjectileProfile } from "../../WeaponProfile";
 export class RangedCombatMethod extends CombatMethod {
@@ -85,10 +86,14 @@ export class RangedCombatMethod extends CombatMethod {
     /**
      * The arrows one attack fires: the profile's count (a dark bow's two), or what is left in the ammo slot when that
      * is fewer. Wiki (Dark bow): it "may also be fired with only one arrow equipped"; its special needs two.
+     * Ammo a plugin supplies (Dizana's quiver) is capped the same way: one arrow stored fires one, never two.
      */
     public static arrowsPerShot(player: Player): number {
         const wanted = WeaponProfiles.ranged(player)?.ammoRequired ?? 1;
-        if (wanted <= 1 || !Ammunition.firesFromAmmoSlot(player)) return wanted;
+        if (wanted <= 1) return wanted;
+        if (!Ammunition.firesFromAmmoSlot(player)) {
+            return PluginManager.checkRangedAmmo(player, wanted, true) === false ? 1 : wanted;
+        }
         const worn = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT]?.getAmount?.() ?? 0;
         return Math.max(1, Math.min(wanted, worn));
     }

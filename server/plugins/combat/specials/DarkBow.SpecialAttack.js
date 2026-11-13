@@ -12,13 +12,18 @@ const DRAGON_IMPACT = 1100;
 const SHADOW_IMPACT = 1103;
 const GRAPHIC_HEIGHT = 96;
 
-/** Raw2510: other listeners hear doublefire at the victim, not the private launch on the archer. */
+/**
+ * Raw2510: other listeners hear doublefire at the victim, not the private launch on the archer. A normal shot with only
+ * one arrow is a single arrow, darkbow_fire (Wiki sound list; rsprox 229/02760.txt:12022), not doublefire.
+ */
 function playTargetDoublefire({ attacker, target, method }) {
-  const { CombatType, RangedWeapon, Sound, Sounds } = core;
+  const { CombatType, RangedCombatMethod, RangedWeapon, Sound, Sounds } = core;
   if (!attacker?.isPlayer() || method?.type() !== CombatType.RANGED
     || attacker.getCombat().getRangedWeapon() !== RangedWeapon.DARK_BOW) return;
+  const special = attacker.isSpecialActivated?.() && attacker.getCombatSpecial?.()?.getId?.() === SPECIAL_ID;
+  const single = !special && RangedCombatMethod.arrowsPerShot(attacker) < 2;
   const at = target.getLocation();
-  Sounds.playAreaSound({ soundId: Sound.DARK_BOW_DOUBLEFIRE.getId(),
+  Sounds.playAreaSound({ soundId: (single ? Sound.DARK_BOW_FIRE : Sound.DARK_BOW_DOUBLEFIRE).getId(),
     x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10, source: target, exclude: attacker });
 }
 

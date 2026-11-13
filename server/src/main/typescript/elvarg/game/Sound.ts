@@ -149,6 +149,8 @@ export class Sound {
     public static readonly TOXIC_BLOWPIPE_SPECIAL = new Sound(800, 1, 32, 0)
     /** Dark bow: the double release, then the dragon or shadow arrow (rsprox recording 273). */
     public static readonly DARK_BOW_DOUBLEFIRE = new Sound(3731, 1, 0, 0)
+    /** darkbow_fire: a dark bow's single arrow (Wiki sound list; rsprox 229/02760.txt:12022). */
+    public static readonly DARK_BOW_FIRE = new Sound(3734, 1, 0, 0)
     public static readonly DARK_BOW_IMPACT = new Sound(3737, 1, 0, 0)
     public static readonly DARK_BOW_DRAGON_SPECIAL = new Sound(3733, 1, 0, 0)
     public static readonly DARK_BOW_SHADOW_SPECIAL = new Sound(3736, 1, 0, 0)

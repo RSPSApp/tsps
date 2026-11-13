@@ -540,3 +540,38 @@ test('Dark Bow target doublefire is emitted by the actual first attack after equ
   assert.deepEqual([sound.soundId,sound.x,sound.y,sound.radius],[3731,3220,3224,10]);
   assert.equal(sound.source,victim);assert.equal(sound.exclude,player,'the archer retains only the private launch');
 });
+
+// #4882 review: one arrow is a single shot, so the target hears darkbow_fire (Wiki sound list; rsprox 229/02760.txt:12022).
+test('a Dark Bow shot with one arrow plays darkbow_fire at the target, not doublefire', t => {
+  const { Player }=require('../dist/game/entity/impl/player/Player');
+  const { WeaponInterfaceManager }=require('../dist/game/content/combat/WeaponInterfaceManager');
+  const real=PluginManager.getCoreApi();
+  const api=PluginManager.createApi('DarkBowSingleArrowTest');
+  api.onCustomEvent('combat:attack-started',customHandlers.get('combat:attack-started'));
+  const player=new Player(null);player.setUsername('darkbow-single');player.setIndex(1806);
+  const sender=new Proxy({}, {get:()=>()=>sender});player.getPacketSender=()=>sender;player.getSession=()=>({sendClientPacket:()=>true});
+  player.setLocation(new real.Location(3220,3220));player.setRegistered(true);player.setNeedsPlacement(false);
+  for (const skill of real.Skill.values()) {player.getSkillManager().setCurrentLevel(skill,99);player.getSkillManager().setMaxLevel(skill,99);}
+  real.RegionManager.init();real.RegionManager.loadMapFiles(3220,3220);
+  player.getEquipment().set(Equipment.WEAPON_SLOT,new real.Item(I.DARK_BOW));
+  player.getEquipment().set(Equipment.AMMUNITION_SLOT,new real.Item(I.DRAGON_ARROW,1));
+  WeaponInterfaceManager.assign(player);
+  player.getCombat().setRangedWeapon(null);player.getCombat().setAmmunition(null);
+  const victim=PluginManager.spawnNpc({id:real.NpcIdentifiers.MUGGER_2,x:3220,y:3224});
+  victim.setHitpoints(500);victim.setNeedsPlacement(false);victim.getMovementQueue().setBlockMovement(true);
+  t.after(()=> {
+    player.getCombat().reset();player.setRegistered(false);PluginManager.removeNpc(victim);real.World.unregisterPlayerPosition(player);
+    const hooks=PluginManager.customEventHooks.get('combat:attack-started')??[];
+    PluginManager.customEventHooks.set('combat:attack-started',hooks.filter(h=>h.pluginName!=='DarkBowSingleArrowTest'));
+  });
+  areaSounds.length=0;player.getCombat().attack(victim);
+  for(let i=0;i<12&&areaSounds.length===0;i++) {
+    real.World.processCycle++;real.TaskManager.process();
+    player.getCombat().preMovementProcess();player.getMovementQueue().process();player.getCombat().postMovementProcess();
+  }
+  assert.equal(player.getCombat().getRangedWeapon(),RangedWeapon.DARK_BOW,'native method resolution populated ranged state');
+  assert.equal(areaSounds.length,1,'one target sound for the single arrow');
+  const sound=areaSounds[0];
+  assert.deepEqual([sound.soundId,sound.x,sound.y,sound.radius],[3734,3220,3224,10]);
+  assert.equal(sound.source,victim);assert.equal(sound.exclude,player,'the archer retains only the private launch');
+});

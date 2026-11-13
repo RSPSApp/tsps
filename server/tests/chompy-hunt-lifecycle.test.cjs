@@ -233,3 +233,19 @@ test("burst damage cannot kill the owner: skipped at 1 HP, clamped to leave 1 HP
     t.mock.restoreAll();
   }
 });
+
+test("another hunter sees placed bait and its chompy but cannot attack the bird", t => {
+  const f = setup(t), g = setup(t);
+  t.mock.method(Math, "random", () => 0);
+  f.hunt.place(f.player);
+  tick(25);
+  const [toad] = bait(f), [bird] = birds(f);
+  assert.ok(toad && bird);
+  for (const npc of [toad, bird]) npc.setNeedsPlacement?.(false);
+  core.World.updateLocalNpcs(g.player, [toad, bird]);
+  const seen = g.player.getLocalNpcs();
+  assert.ok(seen.includes(toad), "other players see a placed bloated toad (226/01694)");
+  assert.ok(seen.includes(bird), "other players see the attracted chompy bird (226/01694)");
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  assert.equal(CombatFactory.validTarget(g.player, bird), false, "only the bait owner can attack its chompy");
+});

@@ -47,6 +47,12 @@ function groupMate(player, other) {
   return query.same === true && query.ironman === true;
 }
 
+/** "As an Ironman", "As a Group Ironman", ...: the player's own mode, for the lines that name it. */
+function asMode(player) {
+  const label = data.modes[modeOf(player)]?.label ?? "Ironman";
+  return `As ${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`;
+}
+
 function message(key, values = {}) {
   return data.messages[key].text.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 }
@@ -71,7 +77,7 @@ function setMode(player, mode) {
 }
 
 module.exports = {
-  init, modeOf, isIron, isGroup, groupMate, message, sendVarbits, setMode, MODE_ATTRIBUTE, HARDCORE_DEAD_ATTRIBUTE,
+  init, modeOf, isIron, isGroup, groupMate, asMode, message, sendVarbits, setMode, MODE_ATTRIBUTE, HARDCORE_DEAD_ATTRIBUTE,
   get data() { return data; },
   get api() { return api; },
   get core() { return core; },

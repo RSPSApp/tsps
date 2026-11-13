@@ -8,7 +8,7 @@ const Common = require("./Common.Ironman");
 function canStake(request) {
   if (!Common.isIron(request.player)) return;
   request.allow = false;
-  request.message = Common.message("duelStake");
+  request.message = Common.message("duelStake", { asMode: Common.asMode(request.player) });
 }
 
 module.exports = function attach(api) {

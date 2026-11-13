@@ -112,12 +112,13 @@ test("onCanTrade refuses the window itself, whichever side is the Ironman", () =
 });
 
 test("an Ironman can't stake in the Duel Arena; a free duel is fine", () => {
+  const named = { ironman: "As an Ironman", ultimate: "As an Ultimate Ironman", hardcore: "As a Hardcore Ironman" };
   for (const mode of ["ironman", "ultimate", "hardcore"]) {
     const player = account(`staker-${mode}`, mode);
     const request = { player, allow: true, message: null };
     custom["duelarena:can-stake"](request);
     assert.deepEqual([request.allow, request.message],
-      [false, "As an Ironman, you cannot take part in a staked duel."]);
+      [false, `${named[mode]}, you cannot take part in a staked duel.`]);
     assert.deepEqual(player.messages, [], "the Duel Arena shows the request's message");
   }
   const main = { player: account("main"), allow: true, message: null };
@@ -226,6 +227,19 @@ test("attacking an npc someone else damaged warns once about kill credit", () =>
   assert.deepEqual(iron.messages, ["As an Ironman, you might not receive kill-credit for this monster."]);
 });
 
+test("our own refusals name the player's mode: a Group Ironman is told as a Group Ironman", () => {
+  const cases = [["group", "As a Group Ironman"], ["group-hardcore", "As a Hardcore Group Ironman"], ["group-unranked", "As an Unranked Group Ironman"], ["ultimate", "As an Ultimate Ironman"]];
+  for (const [mode, phrase] of cases) {
+    const player = account(`named-${mode}`, mode);
+    const shop = { player, available: 4, original: 0, limit: 4, message: null };
+    custom["shop:buy-limit"](shop);
+    assert.equal(shop.message, `${phrase}, you can only buy the shop's own stock.`);
+    const stake = { player, allow: true, message: null };
+    custom["duelarena:can-stake"](stake);
+    assert.equal(stake.message, `${phrase}, you cannot take part in a staked duel.`);
+  }
+});
+
 test("shops sell an Ironman only their own stock", () => {
   const iron = account("iron", "ironman");
   const stocked = { player: iron, available: 15, original: 10, limit: 15, message: null };
@@ -241,7 +255,8 @@ test("shops sell an Ironman only their own stock", () => {
 
 test("Ironmen may only place single-bond buy offers", () => {
   assert.equal(typeof custom["ge:offer-confirmed"], "function", "Ironman offer listener is registered");
-  for (const mode of ["ironman", "ultimate", "hardcore"]) {
+  const named = { ironman: "As an Ironman", ultimate: "As an Ultimate Ironman", hardcore: "As a Hardcore Ironman", group: "As a Group Ironman" };
+  for (const mode of ["ironman", "ultimate", "hardcore", "group"]) {
     const player = account(`ge-${mode}`, mode);
     for (const [itemId, sell, quantity, allowed] of [
       [core.ItemIdentifiers.OLD_SCHOOL_BOND, false, 1, true],
@@ -254,7 +269,7 @@ test("Ironmen may only place single-bond buy offers", () => {
       const request = { player, itemId, sell, quantity, accepted: true };
       custom["ge:offer-confirmed"](request);
       assert.equal(request.accepted, allowed, `${mode}: ${itemId}/${sell}/${quantity}`);
-      assert.deepEqual(player.messages, allowed ? [] : ["Ironmen can only buy one bond per Grand Exchange offer."]);
+      assert.deepEqual(player.messages, allowed ? [] : [`${named[mode]}, you can only buy one bond per Grand Exchange offer.`]);
     }
     const priorVeto = { player, itemId: core.ItemIdentifiers.OLD_SCHOOL_BOND, sell: false, quantity: 1, accepted: false };
     custom["ge:offer-confirmed"](priorVeto);

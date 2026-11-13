@@ -28,5 +28,5 @@ function ironmanCommand({ player, parts }) {
 }
 
 module.exports = function attach(api) {
-  api.registerCommand("ironman", ironmanCommand, api.core.PlayerRights.ADMINISTRATOR, "Show or set an account's Ironman mode: ::ironman [none|ironman|ultimate|hardcore|group] [player]");
+  api.registerCommand("ironman", ironmanCommand, api.core.PlayerRights.ADMINISTRATOR, "Show or set an account's Ironman mode: ::ironman [none|ironman|ultimate|hardcore|group|group-hardcore|group-unranked] [player]");
 };

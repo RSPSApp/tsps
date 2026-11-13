@@ -61,10 +61,10 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | Loot from a player an Ironman kills is the fallen player's (Wiki: Ironmen can't take PvP loot) | all | none |
 | No combat experience from fighting players (Wiki); a Group Ironman gets an eighth of it (Wiki, Group Ironman Mode: Combat) | all | none |
 | No entering another player's house (Wiki); own house remains available | all | Existing house-unavailable message *(ours)* |
-| Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." *(ours)* |
-| Grand Exchange: only single-bond buy offers (Wiki); no sales or other purchases | all | "Ironmen can only buy one bond per Grand Exchange offer." *(ours)* |
-| No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." *(ours)* |
-| No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." *(ours)* |
+| Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." (the player's own mode: "As a Group Ironman, ...") *(ours)* |
+| Grand Exchange: only single-bond buy offers (Wiki); no sales or other purchases | all | "As an Ironman, you can only buy one bond per Grand Exchange offer." (the player's own mode) *(ours)* |
+| No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." (the player's own mode) *(ours)* |
+| No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." (the player's own mode) *(ours)* |
 | No bank (the Ironman tutor, captured) | Ultimate | "As an Ultimate Ironman, you cannot use the bank." *(ours)* |
 | No Seed Vault access ([Jagex update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault)) | Ultimate | no Vault-specific line |
 | All items dropped on death, none kept (the Ironman tutor, captured) | Ultimate | none |

@@ -10,7 +10,7 @@ function buyLimit(request) {
   const own = Math.min(request.available, request.original);
   if (own < request.limit) {
     request.limit = own;
-    request.message = Common.message("shopStock");
+    request.message = Common.message("shopStock", { asMode: Common.asMode(request.player) });
   }
 }
 
@@ -18,7 +18,7 @@ function buyLimit(request) {
 function presets(request) {
   if (!Common.isIron(request.player)) return;
   request.barred = true;
-  request.message = Common.message("presets");
+  request.message = Common.message("presets", { asMode: Common.asMode(request.player) });
 }
 
 /** Ironmen may buy one tradeable bond per offer, but cannot sell or buy anything else. */
@@ -26,7 +26,7 @@ function grandExchangeOffer(request) {
   if (!Common.isIron(request.player)) return;
   if (request.sell || request.itemId !== Common.core.ItemIdentifiers.OLD_SCHOOL_BOND || request.quantity !== 1) {
     request.accepted = false;
-    request.player.sendMessage(Common.message("grandExchange"));
+    request.player.sendMessage(Common.message("grandExchange", { asMode: Common.asMode(request.player) }));
   }
 }
 

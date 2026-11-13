@@ -88,6 +88,14 @@ function ironmanMode(player) {
   return query.mode ?? "none";
 }
 
+/** "As an Ironman", "As a Group Ironman", ...: the player's mode as the Ironman plugin names it. */
+function asIronman(player) {
+  const query = { player, mode: "none", label: "" };
+  emit("ironman:mode", query);
+  const label = query.label || "Ironman";
+  return `As ${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`;
+}
+
 /** Who hears of a member joining or leaving: Broadcasts.Clans.js. */
 function setMembershipListeners(joined, left) {
   onJoined = joined;
@@ -582,7 +590,7 @@ module.exports = {
   SETTING_RECRUIT,
   SETTING_TITLES,
   accountOf,
-  ironmanMode,
+  ironmanMode, asIronman,
   addGuestViewer,
   addMember,
   addOfflineMember,

@@ -263,7 +263,7 @@ function deposit(player, clan, amount) {
     return;
   }
   if (Core.ironmanMode(player) !== "none") {
-    player.sendMessage("Ironmen can't deposit into the coffer.");
+    player.sendMessage(`${Core.asIronman(player)}, you can't deposit into the coffer.`);
     return;
   }
   const inventory = player.getInventory();
@@ -286,7 +286,7 @@ function withdraw(player, clan, amount) {
     return;
   }
   if (Core.ironmanMode(player) !== "none") {
-    player.sendMessage("Ironmen can't withdraw from the coffer.");
+    player.sendMessage(`${Core.asIronman(player)}, you can't withdraw from the coffer.`);
     return;
   }
   const inventory = player.getInventory();

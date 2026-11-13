@@ -48,6 +48,18 @@ is opened the same way, under the same varbit):
 | 1 | Sound 52, the key goes, `brimstone_opening_konar_chest` 0 -> 1 |
 | 2 | Sound 51, the loot, "You have opened Larran's big chest # times.", the varbit back to 0 |
 
+- **Counts:** "You have opened the Brimstone chest # times." ("once." for one), "You have opened
+  Larran's big chest # times.", "You have opened the crystal chest # times." (the Elven chest).
+  Check says the same line. The counts are saved attributes (`key-chests:*-opened`); the cache
+  has no varps for them. The Taverley chest keeps no count.
+- **Without a key:** the brimstone chest says "You need a special key that'll fit that keyhole
+  to unlock the chest." (captured); Larran's chests use the same line (not captured). The crystal
+  chest says "This chest is securely locked shut." with sound 2402 (Wiki); the Elven chest does
+  the same (Wiki: the sound plays with or without a key; the line is the crystal chest's).
+- **The Falador diary:** opening the Taverley chest completes "Unlock the Crystal chest in Taverley".
+- **Collection log:** every item goes through `collection-log:obtain` (the dusk mystic robes,
+  the hasta, the Dagon'hai robes, the dragonstone armour, the onyx and the shield left half).
+
 **Zombie Pirate's Locker** (recordings 441 and 442, rev 233; 1440, rev 224):
 
 | Tick | What |
@@ -63,17 +75,6 @@ is opened the same way, under the same varbit):
   (`key-chests:zombie-pirate-locker-opened`); no variable changes in the captures.
 - **Loot notifications:** the locker sends its loot on `drops:received` { player, source, drops },
   which the loot drop notification setting (`ValueWarnings.plugin.js`) answers like an NPC drop.
-- **Counts:** "You have opened the Brimstone chest # times." ("once." for one), "You have opened
-  Larran's big chest # times.", "You have opened the crystal chest # times." (the Elven chest).
-  Check says the same line. The counts are saved attributes (`key-chests:*-opened`); the cache
-  has no varps for them. The Taverley chest keeps no count.
-- **Without a key:** the brimstone chest says "You need a special key that'll fit that keyhole
-  to unlock the chest." (captured); Larran's chests use the same line (not captured). The crystal
-  chest says "This chest is securely locked shut." with sound 2402 (Wiki); the Elven chest does
-  the same (Wiki: the sound plays with or without a key; the line is the crystal chest's).
-- **The Falador diary:** opening the Taverley chest completes "Unlock the Crystal chest in Taverley".
-- **Collection log:** every item goes through `collection-log:obtain` (the dusk mystic robes,
-  the hasta, the Dagon'hai robes, the dragonstone armour, the onyx and the shield left half).
 
 ## Loot (OSRS Wiki)
 
@@ -90,7 +91,8 @@ robe or a Dagon'hai piece came alone); otherwise the always items and one main r
   the scroll replaces the main roll, which fits the two free slots the locker asks for (two
   unnoted weapons). Worn, the amulet of avarice notes everything but the scroll. The scroll's
   league boost (`drops:chance` with the chest's name, `league-boosted-drops.json`) raises the
-  pre-rolls' chances, Larran's big chest's Dagon'hai pre-roll included.
+  pre-rolls' chances, the brimstone chest's hasta and dusk mystic and Larran's big chest's
+  Dagon'hai pre-rolls included.
 - **Elven Crystal Chest:** 1/10,000 uncut onyx and 1/500 dragonstone armour pre-rolls;
   otherwise an uncut dragonstone and one of 13 rewards out of 256.
 - **Fish (the three Slayer chests, 3/60):** the Wiki's fish table (Module:Slayer chest fish

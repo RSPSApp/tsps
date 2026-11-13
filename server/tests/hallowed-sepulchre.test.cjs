@@ -299,6 +299,27 @@ test('run energy does not recover while a Sepulchre Agility obstacle plays, and 
   }
 });
 
+test('a run that ends mid-drop (a teleport) stops holding run energy at once', () => {
+  const ObstacleRunner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  const { World } = Common.core;
+  const cycle = World.processCycle;
+  try {
+    const p = fakePlayer();
+    const run = startRun(p, 0);
+    const crossing = () => ObstacleRunner.isCrossingAgilityObstacle(p, World.getProcessCycle());
+    click(p, 38462, 1, locOf(run, 38462, [2281, 5988, 2]));
+    assert.equal(crossing(), true, 'the drop is being crossed');
+    run.finish();
+    for (let i = 0; i < 4; i++) {
+      assert.equal(crossing(), false, `cycle ${i} after the run ended`);
+      World.processCycle++;
+      ticks(1);
+    }
+  } finally {
+    World.processCycle = cycle;
+  }
+});
+
 test('a platform: two hops two ticks apart, the line and the timer stopped; back is refused', () => {
   const p = fakePlayer();
   const run = startRun(p, 0);

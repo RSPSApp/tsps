@@ -375,6 +375,8 @@ class Run {
     const { player } = this;
     player.setAttribute(Common.data.attributes.return, null);
     Traps.clear(this);
+    // An obstacle cut short (a teleport mid-drop) is no longer being crossed: energy recovers again.
+    ObstacleRunner.holdAgilityCrossing(player, 0);
     player.getMovementQueue?.().setBlockMovement?.(false);
     for (const name of Common.data.runVarbits) Common.varbit(player, name, 0);
     Common.closeHud(player);

@@ -13,7 +13,8 @@ function fixture(complete = true, members = true) {
   const sender = new Proxy({}, {get: (_, name) => (...args) => sent.push([name, ...args])});
   const player = {getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => sender, sendMessage: message => sent.push(["message", message]),
-    getBank: tab => ({getItems: () => banks[tab]}), getUsername: () => "ClueCapacityTest"};
+    getBank: tab => ({getItems: () => banks[tab]}), getUsername: () => "ClueCapacityTest",
+    getDialogueManager: () => ({startDialogues: chain => sent.push(["dialogue", chain])})};
   const inventory = new Inventory(player);
   player.getInventory = () => inventory;
   const api = {core: {...core, WorldDefinition: {isMembersWorld: () => members}},
@@ -126,6 +127,25 @@ test("boxes refuse a second active clue in bank or grave and preserve full stack
   f.inventory.setItem(1, new core.Item(-1, 0)); click();
   assert.equal(item.getAmount(), 1); assert.equal(f.inventory.getItems()[1].getId(), scroll);
   click(); assert.equal(item.getAmount(), 1);
+});
+
+for (const tier of TIERS) test(`opening the ${tier} scroll box shows the clue in an item box with its chat copy`, () => {
+  const f = fixture(), upper = tier.toUpperCase();
+  const box = core.ItemIdentifiers[`SCROLL_BOX_${upper}_`], clue = core.ItemIdentifiers[`CLUE_SCROLL_${upper}_`];
+  const item = new core.Item(box, 2); f.inventory.setItem(0, item);
+  assert.equal(f.actions.get(`Scroll box (${tier})`).Open({player: f.player, slot: 0, item, itemId: box}), true);
+  assert.equal(item.getAmount(), 1); assert.equal(f.inventory.getAmount(clue), 1);
+  const line = "You open the clue box and find a clue scroll inside!";
+  assert.deepEqual(f.sent.find(entry => entry[0] === "sendTypedMessage"), ["sendTypedMessage", core.ChatType.MESBOX, line]);
+  const chain = f.sent.find(entry => entry[0] === "dialogue")?.[1];
+  assert.ok(chain, "an item box opens");
+  const first = chain.getDialogues().get(0);
+  assert.ok(first instanceof core.ItemStatementDialogue);
+  assert.equal(first.getItemId(), clue); assert.equal(first.getText(), line);
+  const before = f.sent.length;
+  f.actions.get(`Scroll box (${tier})`).Open({player: f.player, slot: 0, item, itemId: box});
+  assert.equal(item.getAmount(), 1, "a held clue keeps the box shut");
+  assert.ok(!f.sent.slice(before).some(entry => entry[0] === "dialogue" || entry[0] === "sendTypedMessage"));
 });
 
 test("Mimic case eligibility excludes held, banked and consumed copies; members cases cannot open on free worlds", () => {

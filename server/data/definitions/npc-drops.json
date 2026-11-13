@@ -50544,6 +50544,7 @@
       "table_name": "Chasm Crawler Drops",
       "wiki_page": "Chasm Crawler",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 4119,
@@ -114894,6 +114895,7 @@
       "table_name": "King kurask Drops",
       "wiki_page": "King kurask",
       "main_max_roll": 124,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -134515,6 +134517,7 @@
       "table_name": "Mutated Tortoise Drops",
       "wiki_page": "Mutated Tortoise",
       "main_max_roll": 64,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,

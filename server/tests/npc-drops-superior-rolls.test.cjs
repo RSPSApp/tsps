@@ -80,3 +80,31 @@ test("one kill gives three rolls of the herb, gem and rare-seed accesses, not on
     assert.ok(mean[key] > perRoll(key) * 2, `${key} is more than two rolls' worth`);
   }
 });
+
+// Superiors whose page states "will always roll 3 additional items" but whose export had no `rolls` because one row (or the
+// gem access) left `rolls=3` off: the producer now exports the count the page states. One kill makes three main rolls.
+const STATED = ["chasm_crawler", "king_kurask", "mutated_tortoise"];
+
+for (const key of STATED) {
+  test(`${key} is rolled three times per kill`, (t) => {
+    const stated = dump.tables[key];
+    assert.equal(stated.rolls, 3);
+    assert.ok(!stated.entries.some((entry) => entry.once_per_kill), "no pre-roll row to keep once");
+    t.mock.method(Math, "random", seeded(77));
+    const npcId = Number(Object.entries(dump.npcs).find(([, npc]) => npc.tables.includes(key))[0]);
+    const table = Drops.__internals.tablesByNpc.get(npcId).find((candidate) => candidate.table_id === key);
+    const npc = { getId: () => npcId, getLocation: () => new Location(3400, 3550, 2), getCurrentDefinition: () => ({ getName: () => key, getCombatLevel: () => 100 }) };
+    const rows = table.entries.filter((entry) => !entry.always && !entry.pre_roll && !entry.separate_roll && !entry.shared_table && Number.isInteger(entry.item_id) && entry.item_id > 0
+      && Number.isFinite(entry.weight) && entry.weight > 0);
+    const ids = new Set(rows.map((entry) => entry.item_id));
+    const perRoll = rows.reduce((sum, entry) => sum + entry.weight, 0) / table.main_max_roll;
+    const kills = 30000;
+    let hits = 0;
+    for (let kill = 0; kill < kills; kill++) {
+      for (const drop of Drops.__internals.rollTable(table, player, npc)) if (ids.has(drop.itemId)) hits++;
+    }
+    const mean = hits / kills;
+    assert.ok(Math.abs(mean - perRoll * 3) < Math.max(0.03, perRoll * 3 * 0.06), `${key} ${mean} vs ${perRoll * 3}`);
+    assert.ok(mean > perRoll * 2, `${key} is more than two rolls' worth`);
+  });
+}

@@ -127,6 +127,14 @@ function queryPlayTime(request) {
   request.milliseconds = playTime(request.player);
 }
 
+/** Attribute cloning precedes this event: update the save, never the live session baseline. */
+function snapshotPlayTime({ player, save }) {
+  const milliseconds = playTime(player);
+  save.attributes = { ...(save.attributes ?? {}) };
+  if (milliseconds === 0) delete save.attributes[PLAY_TIME_ATTRIBUTE];
+  else save.attributes[PLAY_TIME_ATTRIBUTE] = milliseconds;
+}
+
 /** Moves the session so far into the saved total, so a save always holds it. */
 function flushPlayTime(player) {
   if (!sessionStartByPlayer.has(player)) return;
@@ -236,6 +244,7 @@ module.exports = {
     api.onCustomEvent("gameframe:tab-mounted", gameframeTabMounted);
     api.onCustomEvent("player:bootstrap-complete", restoreSelectedJournal);
     api.onCustomEvent("account:play-time", queryPlayTime);
+    api.onCustomEvent("persistence:snapshot", snapshotPlayTime);
     api.persistAttribute(PLAY_TIME_ATTRIBUTE, 0);
     api.persistAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE, false);
     api.persistAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE, false);

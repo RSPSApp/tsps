@@ -145,8 +145,11 @@ function damageButKeepAlive(player, amount) {
  */
 const ANTI_VENOM_LINE = (wasVenomed) => (wasVenomed ? "It cures your venom." : "It grants you immunity from poison.");
 const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
+const ANTI_VENOM_DOSE_SOURCE = "potions:anti-venom";
+const ANTI_VENOM_PLUS_DOSE_SOURCE = "potions:anti-venom-plus";
+const EXTENDED_ANTI_VENOM_PLUS_DOSE_SOURCE = "potions:extended-anti-venom-plus";
 
-function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null) {
+function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null, source) {
   const wasVenomed = player.isVenomed();
   if (wasVenomed && !fullVenomCure) {
     // No line of its own: venomed antipoison drinks send only the drink line (rsprox 234/03280.txt:69820,
@@ -160,11 +163,20 @@ function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = fa
   const timer = player.getCombat().getPoisonImmunityTimer();
   const remaining = timer.secondsRemaining();
   if (remaining < seconds) {
-    timer.start(seconds);
+    timer.start(seconds, source);
   }
   if (message && line) {
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, line(wasVenomed));
   }
+}
+
+/** Read-only dose provenance/venom query; equipment's brief flag is deliberately separate. */
+function poisonProtection(request) {
+  request.antiVenomPlus = false;
+  const player = request.player;
+  if (!player?.isPlayer?.()) return;
+  const clock = player.getCombat().getPoisonClock();
+  request.antiVenomPlus = clock.getDoseSource() === ANTI_VENOM_PLUS_DOSE_SOURCE && clock.isDoseVenomImmune();
 }
 
 function applyAntifire(player, seconds, tier = DragonfireProtectionTier.ANTIFIRE, label = "antifire potion") {
@@ -1426,17 +1438,17 @@ registerPotion({
 registerPotion({
   name: "Anti-venom",
   chains: [doseChain("ANTI_VENOM_4_", "ANTI_VENOM_3_", "ANTI_VENOM_2_", "ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 738, true, true, ANTI_VENOM_LINE),
+  effect: (player) => applyPoisonImmunity(player, 738, true, true, ANTI_VENOM_LINE, ANTI_VENOM_DOSE_SOURCE),
 });
 registerPotion({
   name: "Anti-venom+",
   chains: [doseChain("ANTI_VENOM_4__3", "ANTI_VENOM_3__3", "ANTI_VENOM_2__3", "ANTI_VENOM_1__3")],
-  effect: (player) => applyPoisonImmunity(player, 900, true, true, ANTI_VENOM_PLUS_LINE),
+  effect: (player) => applyPoisonImmunity(player, 900, true, true, ANTI_VENOM_PLUS_LINE, ANTI_VENOM_PLUS_DOSE_SOURCE),
 });
 registerPotion({
   name: "Extended anti-venom+",
   chains: [doseChain("EXTENDED_ANTI_VENOM_4_", "EXTENDED_ANTI_VENOM_3_", "EXTENDED_ANTI_VENOM_2_", "EXTENDED_ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 1062, true, true, ANTI_VENOM_PLUS_LINE),
+  effect: (player) => applyPoisonImmunity(player, 1062, true, true, ANTI_VENOM_PLUS_LINE, EXTENDED_ANTI_VENOM_PLUS_DOSE_SOURCE),
 });
 
 registerPotion({
@@ -2391,6 +2403,7 @@ module.exports = {
     api.onCustomEvent("potions:dose-family", answerDoseFamily);
     api.onCustomEvent("potions:register-copy", registerCopy);
     api.onCustomEvent("potions:register", registerContentPotion);
+    api.onCustomEvent("potions:poison-protection", poisonProtection);
     api.onCustomEvent("potions:share", sharePotion);
     api.onCustomEvent("prayer:activated", notePreserveActivated);
     api.onCustomEvent("stats:restore-timer-sent", sendBoostDrainTimer);

@@ -65,11 +65,29 @@ function presetBusyRefusal(player) {
   if (pluginApi?.core?.CombatFactory?.inCombat?.(player)) return "You can't load a preset during combat.";
   const area = player.getArea?.();
   const areaPermission = area?.canLoadPreset?.(player);
-  if (areaPermission === false || (areaPermission !== true && area?.canTeleport?.(player, 20) === false)) {
+  // The area's canTeleport and the teleport hooks are asked only whether the player could leave: their own
+  // teleport refusals ("You can't leave just like that!") are kept out of the chat, so the preset refusal
+  // is the one line shown.
+  if (areaPermission === false || (areaPermission !== true && withoutMessages(player, () => area?.canTeleport?.(player, 20)) === false)) {
     return "You can't load a preset here.";
   }
-  if (PluginManager.emitCanTeleport(player, 20) === false) return "You can't load a preset here.";
+  if (withoutMessages(player, () => PluginManager.emitCanTeleport(player, 20)) === false) return "You can't load a preset here.";
   return null;
+}
+
+/** Runs probe with the player's chat messages dropped, then puts their packet sender back as it was. */
+function withoutMessages(player, probe) {
+  const sender = player.getPacketSender?.();
+  if (!sender) return probe();
+  const own = Object.prototype.hasOwnProperty.call(sender, "sendMessage");
+  const previous = sender.sendMessage;
+  sender.sendMessage = () => sender;
+  try {
+    return probe();
+  } finally {
+    if (own) sender.sendMessage = previous;
+    else delete sender.sendMessage;
+  }
 }
 
 /**

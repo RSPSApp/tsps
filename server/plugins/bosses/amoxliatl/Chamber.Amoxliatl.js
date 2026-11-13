@@ -150,7 +150,8 @@ function passThrough({ player, objectId }) {
 }
 
 function enterChamber(player) {
-  if (sessionOf(player)) return;
+  // The menu's No comes later: the door's own rule is asked again.
+  if (sessionOf(player) || !questComplete(player)) return;
   const session = new Session(player);
   sessions.set(player, session);
   player.getMovementQueue().reset();

@@ -1419,6 +1419,10 @@ outside with "Nothing interesting happens.".
 - The menu titles of the seven bosses with no capture follow the captured pattern
   (`titleOurs` in the data).
 - No continues the normal entry; Yes is the placeholder message and leaves the player outside.
+  No comes later than the click, so it goes in only while the player is still on the tile the menu
+  opened on, logged in and alive, and each entrance asks its own rules again (the winch's and the
+  Roof Entrance's task, the Kings' Slayer task, the Queen's rope still tied, Amoxliatl's quest and
+  open chamber), with the usual refusal and without asking about the orb a second time.
 - The drop line goes to the killer only (live's audience for it is not known).
 - The three Dagannoth Kings share one kill count toward the Fremennik orb, each king's kill
   rolling it.

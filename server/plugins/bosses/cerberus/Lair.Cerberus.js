@@ -134,14 +134,19 @@ function createArea(arena) {
 function turnWinch({ player, location }) {
   const arena = arenaOfWinch(location);
   if (!arena) return false;
-  if (!arena.cerberus || !Common.onTask(player, arena.cerberus)) {
-    player.sendMessage(Common.message("noTask"));
-    return true;
-  }
-  const entry = { player, boss: "cerberus", enter: () => player.moveTo(Common.toLocation(arena.def.entry)), handled: false };
+  if (!mayEnter(player, arena)) return true;
+  // The menu's No comes later, so it asks for the task again.
+  const entry = { player, boss: "cerberus", enter: () => mayEnter(player, arena) && player.moveTo(Common.toLocation(arena.def.entry)), handled: false };
   Common.api.emitCustomEvent("echo-boss:entry", entry);
   if (!entry.handled) entry.enter();
   return true;
+}
+
+/** Whether the arena lets this player in now: Cerberus there and the player on task, else the refusal. */
+function mayEnter(player, arena) {
+  if (arena.cerberus && Common.onTask(player, arena.cerberus)) return true;
+  player.sendMessage(Common.message("noTask"));
+  return false;
 }
 
 function peekWinch({ player, location }) {

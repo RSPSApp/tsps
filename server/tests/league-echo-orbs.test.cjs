@@ -228,3 +228,22 @@ test("the boss entrances ask through echo-boss:entry and enter on no answer", ()
   Entrance.through({ player: outside, location: crevice, objectId: Common.CREVICE_OUTSIDE_ID });
   assert.equal(moves.length, 2, "unanswered, the crevice lets the player through as before");
 });
+
+test("No goes in only while the player is still on the tile the menu opened on, logged in and alive", () => {
+  const player = character("origin");
+  player.getInventory().add(new Item(ORB().ASGARNIA_ECHO_ORB, 1));
+  let entered = 0;
+  emit("echo-boss:entry", { player, boss: "cerberus", enter: () => entered++, handled: false });
+  const no = prompts.at(-1).pairs[3];
+  player.setLocation(new Location(3201, 3200, 0));
+  no();
+  assert.equal(entered, 0, "moved away: not let in");
+  player.setLocation(new Location(3200, 3200, 0));
+  player.isRegistered = () => false;
+  no();
+  assert.equal(entered, 0, "logged out: not let in");
+  player.isRegistered = () => true;
+  no();
+  assert.equal(entered, 1, "still there: in");
+});
+

@@ -309,8 +309,11 @@ function climbRope({ player, object }) {
   else return false;
 }
 /** Down the Queen's roped tunnel; a league character carrying the echo orb is asked first ("echo-boss:entry"). */
-function enterChamber({ player }) {
-  const entry = { player, boss: "kalphite-queen", enter: () => player.moveTo(new core.Location(...CHAMBER_ENTRANCE)), handled: false };
+function enterChamber({ player, object }) {
+  const at = object?.getLocation?.();
+  // The menu's No comes later: the rope may have gone by then.
+  const roped = () => !at || core.ObjectManager.objectsAt(at).some((loc) => loc.getId() === CHAMBER_ROPE_TUNNEL);
+  const entry = { player, boss: "kalphite-queen", enter: () => roped() && player.moveTo(new core.Location(...CHAMBER_ENTRANCE)), handled: false };
   api.emitCustomEvent("echo-boss:entry", entry);
   if (!entry.handled) entry.enter();
 }

@@ -14,6 +14,7 @@ let Method, spectralDrain;
 const namedHooks = new Map();
 const itemOnObject = [];
 const firstClicks = new Map();
+let echoEntry = null;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core.RegionManager.init();
@@ -24,6 +25,7 @@ before(async () => {
     onObjectInteraction: (name, actions) => namedHooks.set(name, actions),
     onItemOnObject: (handler) => itemOnObject.push(handler),
     onObjectFirstClick: (id, handler) => firstClicks.set(id, handler),
+    emitCustomEvent: (name, payload) => echoEntry?.(name, payload),
   }, { get: (obj, key) => obj[key] ?? (() => {}) }));
 });
 function scene(t, { protect = true, roll = 31, prayer = 50, spectral = false, form = core.NpcIdentifiers.KALPHITE_QUEEN_2 } = {}) {
@@ -206,4 +208,27 @@ test('the lair is multi-combat on both levels (rsprox: the multi icon on climbin
     assert.equal(Wilderness.isMulti(x, y, z), true, `${x},${y},${z}`);
   }
   assert.equal(Wilderness.isMulti(3227, 3108, 0), false, 'the surface tunnel');
+});
+
+test("the echo orb menu's later No climbs down only while the rope is still tied", (t) => {
+  const moves = [];
+  const player = { moveTo: tile => moves.push([tile.getX(), tile.getY(), tile.getZ()]) };
+  const at = new core.Location(3510, 9498, 2);
+  let held = null;
+  echoEntry = (name, payload) => { if (name === 'echo-boss:entry') { payload.handled = true; held = payload; } };
+  let roped = true;
+  t.mock.method(core.ObjectManager, 'objectsAt', () => (roped ? [{ getId: () => 10230 }] : [{ getId: () => 23609 }]));
+  try {
+    firstClicks.get(10230)({ player, object: { getLocation: () => at } });
+    assert.equal(held?.boss, 'kalphite-queen');
+    assert.equal(moves.length, 0);
+    roped = false; // the rope comes undone while the menu waits
+    held.enter();
+    assert.equal(moves.length, 0, 'No: nothing to climb');
+    roped = true;
+    held.enter();
+    assert.deepEqual(moves, [[3508, 9493, 0]]);
+  } finally {
+    echoEntry = null;
+  }
 });

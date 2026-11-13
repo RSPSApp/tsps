@@ -112,6 +112,13 @@ function answerYes(player, boss) {
   player.sendMessage(load().messages.placeholder);
 }
 
+/** Logged in, alive and on the tile the menu opened on. */
+function stillAt(player, origin) {
+  if (player.isRegistered?.() === false || player.getHitpoints?.() <= 0) return false;
+  const at = player.getLocation();
+  return at.getX() === origin.getX() && at.getY() === origin.getY() && at.getZ() === origin.getZ();
+}
+
 /** echo-boss:entry { player, boss, enter, handled }: the boss's prompt while its orb is carried. */
 function entryPrompt(event) {
   const { player, boss, enter } = event ?? {};
@@ -119,8 +126,13 @@ function entryPrompt(event) {
   const orb = orbOf(boss);
   if (!orb || !inEchoLeague(player) || !player.getInventory().contains(orbItemId(orb))) return;
   const { yes, no } = load().messages;
-  // No: the usual entry, as without an orb (decided; live's answer is not recorded).
-  const shown = api.sendMultiChatboxPrompt(player, orb.title, yes, () => answerYes(player, boss), no, () => enter());
+  const origin = player.getLocation().clone();
+  // No: the usual entry, as without an orb (decided; live's answer is not recorded). The entrance's
+  // `enter` checks its own rules again; here, the player is still where the menu opened.
+  const answerNo = () => {
+    if (stillAt(player, origin)) enter();
+  };
+  const shown = api.sendMultiChatboxPrompt(player, orb.title, yes, () => answerYes(player, boss), no, answerNo);
   if (shown !== false) event.handled = true;
 }
 

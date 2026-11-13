@@ -279,6 +279,38 @@ test('sub-interface mount ownership survives same-ID replacement, relocation and
   assert.ok(delivered.length,'the actual session delivers the native mount/close packets');
 });
 
+test('tab and chatbox mounts close a group still mounted at another target, as mountSubInterface does', async () => {
+  require('../dist/Server').Server.installProductionPathResolver();
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(process.cwd());
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerSession}=require('../dist/net/PlayerSession');
+  const {encodeWidgetCloseSub}=require('../dist/net/protocol/ClientProtocol');
+  const session=new PlayerSession({isOpen:()=>true,send:()=>{}});
+  const player=new Player(session);session.setPlayer(player);player.setUsername('mountmover');
+  const sender=player.getPacketSender();
+  const sent=()=>session.pendingPackets.splice(0);
+  const closes=(packets,target)=>packets.filter(packet=>packet.equals(encodeWidgetCloseSub(target))).length;
+  const elsewhere=(161<<16)|50, tab=(161<<16)|75, chat=(162<<16)|568;
+  // Tab path: the group moves from the other target to the tab slot.
+  sender.sendSubInterface(elsewhere,320,1);sent();
+  sender.sendTabInterface(75,320);
+  assert.equal(closes(sent(),elsewhere),1,'the tab mount closes the old target');
+  assert.equal(sender.getSubInterfaceAt(elsewhere),undefined);
+  assert.equal(sender.getSubInterfaceAt(tab).groupId,320);
+  // Magic tab path.
+  sender.sendSubInterface(elsewhere,522,1);sent();
+  sender.sendMagicTabInterface(522);
+  assert.equal(closes(sent(),elsewhere),1,'the magic tab mount closes the old target');
+  // Chatbox path.
+  sender.sendSubInterface(elsewhere,270,0);sent();
+  sender.sendChatboxInterface(270);
+  assert.equal(closes(sent(),elsewhere),1,'the chatbox mount closes the old target');
+  assert.equal(sender.getSubInterfaceAt(chat).groupId,270);
+  // The same target again sends no close.
+  sender.sendTabInterface(75,320);sent();sender.sendTabInterface(75,320);
+  assert.equal(closes(sent(),tab),0,'remounting at the same tab sends no close');
+});
+
 test('a crater full of ground items goes as a snapshot and deltas, each inside one game message', () => {
   // A browser-host world drops the connection on a message over 64 KiB; Bounty Hunter bot loot
   // made one ground-items snapshot pass that, so dying there disconnected the player.

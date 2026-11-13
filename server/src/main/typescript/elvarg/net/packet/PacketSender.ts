@@ -1558,10 +1558,6 @@ export class PacketSender {
     type = 1,
     options: Parameters<typeof encodeWidgetOpenSub>[3] = {}
   ): SubInterfaceMount {
-    const existing = this.subInterfaceTargets.get(groupId);
-    if (existing && existing.targetUid !== targetUid) {
-      this.player.getSession().sendClientPacket(encodeWidgetCloseSub(existing.targetUid));
-    }
     const mount = this.rememberSubInterface(targetUid, groupId, type);
     // A (re)mounted group starts with its cache text, so resend everything written to it.
     this.player.getFrameUpdater().clearGroup(groupId);
@@ -1575,8 +1571,15 @@ export class PacketSender {
     return mount;
   }
 
-  /** Include legacy native mounts without changing their packet or event sequence. */
+  /**
+   * Track a mount (the tab and chatbox paths too). A group lives at one target, so one still
+   * mounted at another is closed there first.
+   */
   private rememberSubInterface(targetUid: number, groupId: number, type: number): SubInterfaceMount {
+    const existing = this.subInterfaceTargets.get(groupId);
+    if (existing && existing.targetUid !== targetUid) {
+      this.player.getSession().sendClientPacket(encodeWidgetCloseSub(existing.targetUid));
+    }
     for (const [mountedGroupId, mounted] of this.subInterfaceTargets) {
       if (mounted.targetUid === targetUid) {
         this.subInterfaceTargets.delete(mountedGroupId);

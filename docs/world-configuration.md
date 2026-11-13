@@ -615,6 +615,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GoblinMail` | GoblinMail | items | yes | Stops goblin mail being worn unless the player is in the Land of the Goblins goblin form, and unequips it if they stop being one. |
 | `GracefulOutfit` | GracefulOutfit | items | yes | Gives each graceful piece its run-energy restoration bonus, plus the full-set bonus, and counts an Agility or max cape as the graceful cape. (members only) |
 | `Greegrees` | Greegrees | items | yes | Wielding a monkey greegree on Ape Atoll turns the player into a monkey, calms the island's monsters and removes the greegree on leaving. (members only) |
+| `HarmonisedNightmareStaff` | HarmonisedNightmareStaff | items | yes | The Harmonised nightmare staff autocasts standard-spellbook combat spells in 4 ticks. (members only) |
 | `HolidayToys` | HolidayToys | items | yes | Plays the animations and chat lines of permanent holiday toys such as Santa's list, the Zombie head and other event reward items. |
 | `IbansStaff` | IbansStaff | items | yes | Charges Iban's staff (120, or 2,500 for the upgraded staff), spends charges on Iban Blast, and lets the Dark Mage recharge it for coins. (members only) |
 | `ImbuedHeart` | ImbuedHeart | items | yes | Adds the imbued and saturated hearts' Invigorate Magic boost with its seven-minute (five for saturated) shared cooldown, and the saturated upgrade. (members only) |

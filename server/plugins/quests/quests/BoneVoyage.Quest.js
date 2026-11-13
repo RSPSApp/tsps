@@ -1,11 +1,10 @@
 /**
  * Bone Voyage (members).
  *
- * The words come from the "Bone Voyage" transcript page (plus the Barge guard /
- * navigator pages for the post-quest travel). This plugin supplies the per-stage
- * variant selector for the curator, both sawmill operators, Berry, the barge
- * crew, the bar patrons, the apothecary and the Odd Old Man, the prose-condition
- * answers, the item hand-ins, the boarding spawns and the completion reward.
+ * The words come from the "Bone Voyage" transcript page (plus the Barge guard / Lead and Junior
+ * Navigator pages for the post-quest travel). This plugin supplies the per-stage variant selector
+ * for the curator, both sawmill operators, Berry, the barge crew, the bar patrons, the apothecary
+ * and the Odd Old Man, the prose-condition answers, the item hand-ins, the voyage and the reward.
  *
  * Durable stages stay 1..11 so existing saves keep their meaning:
  *   1 started (curator), 2 barge foreman briefed (go to the Varrock sawmill),
@@ -14,11 +13,28 @@
  *   supplies sent (barge foreman), 6 barge ready (board via the guard), 7 lead
  *   navigator met (ask at the Rusty Anchor), 8 bar patrons talked (return to
  *   the navigators), 9 plan agreed (potion of sealegs + lucky bone charm),
- *   10 sailing / arrived at Fossil Island, 11 complete.
- * Varbit 5795 "fossilquest_progress" (varp 1630 bits 0-8) carries Quest Helper's
- * loadSteps values 0/5/10/11/15/20/21/22/23/25/30/35. Native quest DB table 0
- * row 11 column 19 completes at 50 (script 4024 case 11 reads varbit 5795), so
- * durable completion maps to native 50 while the durable stage stays 11.
+ *   10 the crew has drunk the potion and set off at least once, 11 complete.
+ * Varbit 5795 "fossilquest_progress" (varp 1630 bits 0-8) carries Quest Helper's loadSteps values
+ * 0/5/10/11/15/20/21/22/23/25/30/35, and the quest DB completes at 50 (script 4024 case 11).
+ *
+ * The end of the quest follows the user's rsprox capture (rev 242,
+ * "BoneVoyage-CursedVoyage", docs/quests/bone-voyage/README.md has the facts and ticks):
+ * - Wire 30 once both the charm and the potion are given; 35 from the first set-off on, kept
+ *   through an aborted voyage (the crew still has to "take another dose").
+ * - The barge crew are the cache's static multinpcs (guard 7767/7768, navigators 7819/7820,
+ *   John 7821, David 7822, island navigators at 3723,3784,1); varbit 5795 picks their quest or
+ *   post-quest forms, so the plugin spawns no copies of its own.
+ * - Boarding and leaving the barge are fade ferries (plugins/world/data/ferries.json
+ *   fossil-barge-*), as are the post-quest navigator crossings and the row to the camp.
+ * - The voyage: the crew passes out (two message boxes), the Junior Navigator's briefing, then
+ *   fossilquest_sailing (604) in the side modal, its overlay 603 on the HUD, script 1993 with the
+ *   bearing/sails/rudder and the minimap off. Every 4 ticks the bearing moves and the progress bar
+ *   gains 10 when the bearing is within 6 steps (of 391) of north (33189), loses 5 when not.
+ *   Closing the controls points the hint arrow at them. Abort and arrival fade out and land on
+ *   the canal or Fossil Island barge deck with script 1996; arriving completes the quest at once
+ *   and the Junior Navigator's closing lines (with the journal) follow the scroll.
+ * - Ours (no capture or Wiki value): the wind, how far the rudder turns the bearing, how the
+ *   sails scale progress and drift, and when a voyage counts as lost; see VOYAGE below.
  *
  * Requirements (OSRS Wiki): The Dig Site and 100 Kudos. The Dig Site is asked
  * through the shared "quest:is-complete" event; Kudos is read synchronously from
@@ -26,24 +42,9 @@
  * prose branch both enforce the 100-Kudos threshold, so the canonical refusal
  * transcript remains reachable at 99.
  *
- * Rewards per the OSRS Wiki: 1 Quest Point, access to Fossil Island and the
- * Fossil island note book.
+ * Rewards per the OSRS Wiki and the capture's scroll: 1 Quest Point, access to Fossil Island
+ * (the bone charm is the scroll's model), and the Fossil island note book from the Junior Navigator.
  *
- * Source: https://oldschool.runescape.wiki/w/Bone_Voyage and
- * /w/Transcript:Bone_Voyage; ids from scripts/lookup-gameval.ts and the cache
- * npc/item/object identifier files.
- *
- * Boarding and sailing:
- * - The canal barge deck is the real cache level-1 deck (3355-3366,3451-3455);
- *   the bank guard (spawned 8013) embarks the player and the static/deck guard
- *   (7768, Disembark) takes them back off. The Lead/Junior Navigators are
- *   owner-only deck spawns at 3363,3453 / 3361,3452.
- * - The voyage copies the cache sailing template at 1808,4744 into a
- *   TemplatedInstanceArea and uses the real Barge controls (30569, Operate),
- *   interface 604, overlay 603 and varbits 5798 (progress 0-100) / 5799
- *   (direction graphic). Wind is deterministic and the numeric course/speed
- *   tuning is plugin-local because no capture publishes the live rates.
- * - Pandemonium is asked through quest:is-complete for the voyage branch.
  * - The transcript has no message step for receiving the sawmill proposal, so it
  *   is granted on the first "I'm here on behalf of the museum..." choice at the
  *   Varrock operator; the "I lost the ..." reclaim lines grant their replacement.
@@ -55,47 +56,82 @@
  *   to varbits 5796 "fossilquest_lucky_charm" (1 obtained, 2 given) and 5797
  *   "fossilquest_potion" (1 ingredients explained, 2 obtained, 3 given), matching
  *   Quest Helper's loadSteps requirements.
- * - Post-quest travel via the spawned guard's "Let's go to Fossil Island!"
- *   still teleports to the camp shore rather than replaying the voyage.
  */
 module.exports = function registerBoneVoyageQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, Skill } = api.core;
+  const { CacheDefinitions, CountdownTask, ItemIdentifiers, Location, NpcIdentifiers, Skill, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, loadTranscripts, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Bone Voyage";
-  /** Set by a failed or aborted voyage, cleared when the next one sets off: the navigators' "after failing" pages. */
-  const VOYAGE_FAILED_ATTRIBUTE = "bone-voyage:voyage-failed";
+  const JUNIOR_PAGE = "Junior Navigator";
   const VOYAGE_FAILED_VARIANT = "the-cursed-voyage-talking-to-lead-navigator-again-if-the-player-fails-the-voyage";
   const JUNIOR_AFTER_FAIL_VARIANT = "the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage";
   const LEAD_TRY_AGAIN_VARIANT = "the-cursed-voyage-aborting-the-voyage-talking-to-junior-navigator-after-failing-a-voyage-talking-to-the-lead-navigator-to-try-again";
+  const FINISHING_VARIANT = "the-cursed-voyage-finishing-up";
   const START_HOOK = "quest:bone-voyage:start";
 
   const VARP_FOSSILQUEST_MAIN = 1630; // "fossilquest_main"
   const VARBIT_FOSSILQUEST_PROGRESS = 5795; // "fossilquest_progress", varp 1630 bits 0-8
   const VARBIT_FOSSILQUEST_LUCKY_CHARM = 5796; // "fossilquest_lucky_charm", bits 9-10
   const VARBIT_FOSSILQUEST_POTION = 5797; // "fossilquest_potion", bits 11-12
-  const VARBIT_FOSSILQUEST_SAILING_PROGRESS = 5798; // bits 0-6, 0-100
-  const VARBIT_FOSSILQUEST_SAILING_ARROW = 5799; // bits 7-30, direction graphic
+  const VARBIT_FOSSILQUEST_SAILING_PROGRESS = 5798; // the progress bar, 0-100
+  const VARBIT_CURRENT_HINT_ARROW = 14192; // "current_hint_arrow"
+  const HINT_ARROW_CONTROLS = 7; // capture: set while the controls are closed at sea
+  const VARBIT_MINIMAP_STATE = 6719; // "minimap_state" (live's minimap_toggle 2 / 0)
+  const MINIMAP_OFF = 2;
   const STAGE_WIRE = Object.freeze({
-    0: 0, 1: 5, 2: 10, 3: 11, 4: 15, 5: 20, 6: 21, 7: 22, 8: 23, 9: 25, 10: 30, 11: 50,
+    0: 0, 1: 5, 2: 10, 3: 11, 4: 15, 5: 20, 6: 21, 7: 22, 8: 23, 9: 25, 10: 35, 11: 50,
   });
-  const ARRIVED_WIRE_STAGE = 35; // QH's last sailing key; native completion is 50.
+  const READY_TO_SAIL_WIRE = 30; // stage 9 with the charm and the potion both given
+
+  const component = (name, fallback) => CacheDefinitions?.getComponentId?.(name) ?? fallback;
+  const SIDEMODAL_UID = component("toplevel_osrs_stretch:sidemodal", (161 << 16) | 74);
+  const OVERLAY_HUD_UID = component("toplevel_osrs_stretch:overlay_hud", (161 << 16) | 8);
+  const OVERLAY_ATMOSPHERE_UID = component("toplevel_osrs_stretch:overlay_atmosphere", (161 << 16) | 1);
+  const FADE_INTERFACE = 174; // fade_overlay
+  const FADE_SCRIPT = 948;
+  const FADE_CYCLES = 50;
+  const SET_OFF_FADE_CYCLES = 15; // capture: the set-off fade is the only short one
+
   const SAILING_INTERFACE = 604; // fossilquest_sailing
   const SAILING_OVERLAY = 603; // fossilquest_sailing_overlay
-  const SAILING_HUD_UID = (161 << 16) | 8;
-  const SAILING_OVERLAY_UID = (161 << 16) | 1;
-  const SAIL_ABORT_BUTTON = (SAILING_INTERFACE << 16) | 2; // Abort
-  const SAIL_INCREASE_BUTTON = (SAILING_INTERFACE << 16) | 11; // Increase throttle
-  const SAIL_DECREASE_BUTTON = (SAILING_INTERFACE << 16) | 12; // Decrease throttle
-  const SAIL_RIGHT_BUTTON = (SAILING_INTERFACE << 16) | 38; // Steer right
-  const SAIL_LEFT_BUTTON = (SAILING_INTERFACE << 16) | 39; // Steer left
+  const VOYAGE_SCRIPT = 1993; // fossilquest_voyage
+  const VOYAGE_END_SCRIPT = 1996; // fossilquest_voyage_end
+  const sailing = (child) => (SAILING_INTERFACE << 16) | child;
+  const SAIL_ABORT_BUTTON = sailing(2);
+  const SAIL_BEARING = sailing(8);
+  const SAIL_INCREASE_BUTTON = sailing(11);
+  const SAIL_DECREASE_BUTTON = sailing(12);
+  const SAIL_THROTTLE_HIGH = sailing(14);
+  const SAIL_THROTTLE_MID = sailing(21);
+  const SAIL_THROTTLE_LOW = sailing(28);
+  const SAIL_DIRECTION_GRAPHIC = sailing(37);
+  const SAIL_RIGHT_BUTTON = sailing(38);
+  const SAIL_LEFT_BUTTON = sailing(39);
+
   const SAILING_SOURCE = Object.freeze({ x: 1808, y: 4744, widthChunks: 5, heightChunks: 4, planes: 3 });
-  const SAILING_START_TILE = Object.freeze({ x: 1818, y: 4761, z: 1 });
-  const SAILING_JUNIOR_TILE = Object.freeze({ x: 1815, y: 4760, z: 1 });
-  // ponytail: deterministic wind and gain table stand in for untranscribed live rates.
-  const SAILING_WIND = Object.freeze([-1, 0, 1, 0, 1, -1]);
-  const SAILING_WIND_TICKS = 6;
-  const SAILING_MAX_TICKS = 240;
+  const SAILING_START_TILE = Object.freeze({ x: 1819, y: 4761, z: 1 });
+  const SAILING_JUNIOR_TILE = Object.freeze({ x: 1820, y: 4762, z: 1 });
+  const SAILING_HINT_TILE = Object.freeze({ x: 1818, y: 4761, z: 1 }); // in front of the controls at 1818,4760
+  const HINT_ARROW_HEIGHT = 75;
+  const HINT_ARROW_CENTRE = 2;
+
+  /**
+   * The voyage. Captured: the 4-tick cadence from the set-off, the bearing in steps of 391 around
+   * north (33189, gauge 10120-49220), +10 within 6 steps and -5 outside, sails 0-2 starting at 1,
+   * the rudder's three states, and that the progress step follows the sails set at the previous
+   * update (3 points a step: lowered sails 1 point an update, full sails 3).
+   * Ours: the wind (a prevailing drift plus gusts, scaled by the sails as the Wiki says sail height
+   * changes how far the barge shifts), the rudder's 4 steps, and losing the way after 20 updates
+   * in a row off course (the Junior Navigator's "headed in the wrong direction for too long").
+   */
+  const VOYAGE = Object.freeze({
+    north: 33189, step: 391, minOffset: -59, maxOffset: 41, onCourse: 6, updateTicks: 4,
+    gain: 10, loss: 5, sailPoints: [1, 1, 3], pointsPerStep: 3, startThrottle: 1,
+    rudder: 4, prevailing: 4, gust: 3, sailScale: [1 / 3, 2 / 3, 1], lostAfter: 20,
+  });
+  const RUDDER_STRAIGHT = 0;
+  const RUDDER_LEFT = 1;
+  const RUDDER_RIGHT = 2;
 
   const STAGE_STARTED = 1;
   const STAGE_FOREMAN_BRIEFED = 2;
@@ -115,28 +151,19 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BERRY_NPC_ID = NpcIdentifiers.BERRY_3; // 7235, outside the Woodcutting Guild
   const APOTHECARY_NPC_ID = NpcIdentifiers.APOTHECARY; // 5036
   const ODD_OLD_MAN_NPC_ID = NpcIdentifiers.ODD_OLD_MAN; // 1259
-  const BARGE_GUARD_NPC_IDS = new Set([
-    NpcIdentifiers.BARGE_GUARD, // 7768
-    NpcIdentifiers.BARGE_GUARD_2, // 8012
-    NpcIdentifiers.BARGE_GUARD_3, // 8013
+  const DECK_GUARD_NPC_ID = NpcIdentifiers.BARGE_GUARD; // 7768, on the barge: Talk-to, Disembark
+  const CANAL_GUARD_NPC_IDS = new Set([
+    NpcIdentifiers.BARGE_GUARD_2, // 8012, post-quest: Talk-to, Embark, Quick-Travel
+    NpcIdentifiers.BARGE_GUARD_3, // 8013, before completion: Talk-to, Embark
   ]);
-  const BARGE_GUARD_SPAWN_ID = NpcIdentifiers.BARGE_GUARD_3; // 8013, Talk-to + Embark
   const LEAD_NAVIGATOR_NPC_IDS = new Set([
     NpcIdentifiers.LEAD_NAVIGATOR, // 7761
     NpcIdentifiers.LEAD_NAVIGATOR_2, // 7762
   ]);
-
-  /** Hands an ordinary crossing to the Ferries plugin's captured trip; without it, the plain move. */
-  function ferry(player, route, fallback) {
-    const request = { player, route, handled: false };
-    api.emitCustomEvent("ferries:travel", request);
-    if (!request.handled) player.moveTo(fallback);
-  }
   const JUNIOR_NAVIGATOR_NPC_IDS = new Set([
     NpcIdentifiers.JUNIOR_NAVIGATOR, // 7763
     NpcIdentifiers.JUNIOR_NAVIGATOR_2, // 7764
   ]);
-  const LEAD_NAVIGATOR_SPAWN_ID = NpcIdentifiers.LEAD_NAVIGATOR; // 7761
   const JUNIOR_NAVIGATOR_SPAWN_ID = NpcIdentifiers.JUNIOR_NAVIGATOR; // 7763
   const JACK_SEAGULL_NPC_ID = NpcIdentifiers.JACK_SEAGULL; // 1335
   const LONGBOW_BEN_NPC_ID = NpcIdentifiers.LONGBOW_BEN; // 1336
@@ -154,32 +181,47 @@ module.exports = function registerBoneVoyageQuest(api) {
   const PANDEMONIUM_KEY = "pandemonium";
   const WOODCUTTING_GUILD_LEVEL = 60;
 
-  // Cache-walkable tiles: bank guard, the real canal barge deck on plane 1, and
-  // the Fossil Island shore.
-  const GUARD_TILE = { x: 3364, y: 3446, z: 0 };
-  const BOAT_DECK_TILE = { x: 3360, y: 3454, z: 1 };
-  const LEAD_NAVIGATOR_TILE = { x: 3363, y: 3453, z: 1 };
-  const JUNIOR_NAVIGATOR_TILE = { x: 3361, y: 3452, z: 1 };
-  const ISLAND_ARRIVAL_TILE = { x: 3720, y: 3782, z: 0 };
-  const ISLAND_JUNIOR_TILE = { x: 3721, y: 3782, z: 0 };
+  /** The barge decks: where the abort and the Digsite crossing land, and where the voyage arrives. */
+  const CANAL_DECK_TILE = Object.freeze({ x: 3360, y: 3453, z: 1 });
+  const ISLAND_DECK_TILE = Object.freeze({ x: 3723, y: 3784, z: 1 });
+  /** Everything east of this is Fossil Island (the island barge, 3723,3784); the canal is at 3360. */
+  const FOSSIL_ISLAND_MIN_X = 3600;
+  const BOARD_ROUTE = "fossil-barge-board";
+  const DISEMBARK_ROUTE = "fossil-barge-disembark";
+  const CAMP_ROUTE = "fossil-island";
+  const BOARD_FALLBACK = Object.freeze({ x: 3362, y: 3452, z: 1 });
+  const DISEMBARK_FALLBACK = Object.freeze({ x: 3362, y: 3445, z: 0 });
+  const CAMP_FALLBACK = Object.freeze({ x: 3724, y: 3808, z: 0 });
 
   const CHARM_ATTRIBUTE = "quest.bone_voyage.charm"; // 0 none, 1 got, 2 given away
   const POTION_ATTRIBUTE = "quest.bone_voyage.potion"; // 0 none, 1 got, 2 given away
   const APOTHECARY_ATTRIBUTE = "quest.bone_voyage.apothecary"; // 1 ingredients explained
-  const VOYAGE_ATTRIBUTE = "quest.bone_voyage.voyage"; // { phase, progress, heading, throttle, ticks }
+  /** { phase, progress, points, bearing, throttle, steer, ticks, offCourse, prevailing }. */
+  const VOYAGE_ATTRIBUTE = "quest.bone_voyage.voyage";
+  /** Set on completion until the Junior Navigator hands over the journal (or the next login does). */
+  const JOURNAL_PENDING_ATTRIBUTE = "bone-voyage:journal-pending";
 
   const GIVING_POTION_VARIANT = "the-cursed-voyage-giving-lead-navigator-the-sealegs-potion";
   const POTION_HANDOVER_STEPS = 4; // slice from "Looks like we've got everything we need to set off!"
+  const CREW_SIP_STEP = "Bdvq4m";
+  const CREW_PASS_OUT_STEP = "fnCM3G";
+  const BRIEFING_FIRST_LINE = "You'll need to operate the barge controls, I'll let you know if we're headed in the right direction.";
+  const BRIEFING_LAST_LINE = "If we're headed in the wrong direction for too long I'll take us back to the digsite. Let me know if you want me to go back over these instructions at any point.";
+  const BOARDING_LINE = "Absolutely, the navigators are waiting for you on board!";
+  const JOURNAL_LINE = "Here, take this journal so you can keep track of your discoveries. Base camp is being set up on shore, let me know if you'd like to head there.";
+  /** Capture tick 428: live's line ends in an ellipsis (the transcript's has a full stop). */
+  const ABORT_MESSAGE = "With the aid of the junior navigator, you sail back to the digsite...";
+  const QUEST_SCROLL_INTERFACE = 153;
 
-  const GUARD_SPAWNS = new Map();
-  const CANAL_NAVIGATORS = new Map();
-  const ISLAND_JUNIORS = new Map();
   const SAILING_AREAS = new WeakMap();
+  /** Each player's timeline key, so a logout cancels the fades still to come. */
+  const TIMELINES = new WeakMap();
 
   let quest;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
+  const toLocation = (tile) => new Location(tile.x, tile.y, tile.z);
 
   function charmState(player) {
     return Number(player.getAttribute(CHARM_ATTRIBUTE)) || 0;
@@ -202,8 +244,12 @@ module.exports = function registerBoneVoyageQuest(api) {
     sender.sendVarbit(VARBIT_FOSSILQUEST_POTION, potion);
   }
 
+  function readyToSail(player) {
+    return charmState(player) >= 2 && potionState(player) >= 2;
+  }
+
   function stageWire(stage, player) {
-    if (stage === STAGE_SAILING && voyageState(player)?.phase === "arrived") return ARRIVED_WIRE_STAGE;
+    if (stage === STAGE_PLAN_AGREED && readyToSail(player)) return READY_TO_SAIL_WIRE;
     return STAGE_WIRE[stage] ?? stage;
   }
 
@@ -211,18 +257,78 @@ module.exports = function registerBoneVoyageQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_FOSSILQUEST_PROGRESS, stageWire(quest.getStage(player), player));
   }
 
+  function onFossilIsland(location) {
+    return typeof location?.getX?.() === "number" && location.getX() >= FOSSIL_ISLAND_MIN_X;
+  }
+
+  // ==========================================================================
+  // Timelines and screen effects
+  // ==========================================================================
+
+  function timelineKey(player) {
+    let key = TIMELINES.get(player);
+    if (!key) {
+      key = { player };
+      TIMELINES.set(player, key);
+    }
+    return key;
+  }
+
+  function later(player, ticks, action) {
+    TaskManager.submit(new CountdownTask(timelineKey(player), ticks, () => {
+      if (player.isRegistered?.() === false) return;
+      action();
+    }));
+  }
+
+  function fade(player, out, cycles = FADE_CYCLES) {
+    const args = out ? [0, 255, 0, 0, cycles] : [0, 0, 0, 255, cycles];
+    player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_INTERFACE, 1,
+      { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
+  }
+
+  function closeFade(player) {
+    player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+  }
+
+  function setMinimap(player, off) {
+    player.getPacketSender().sendVarbit(VARBIT_MINIMAP_STATE, off ? MINIMAP_OFF : 0);
+  }
+
+  /** The barge's fade crossings: the Ferries plugin's routes (plugins/world/data/ferries.json), or the plain move. */
+  function ferry(player, route, fallback) {
+    const request = { player, route, handled: false };
+    api.emitCustomEvent("ferries:travel", request);
+    if (!request.handled) player.moveTo(toLocation(fallback));
+    return true;
+  }
+
+  // ==========================================================================
+  // The voyage
+  // ==========================================================================
+
   function voyageState(player) {
     const raw = player.getAttribute(VOYAGE_ATTRIBUTE);
     return raw && typeof raw === "object" ? raw : null;
   }
 
   function setVoyageState(player, state) {
-    player.setAttribute(VOYAGE_ATTRIBUTE, state);
+    const { controlsOpen, ...saved } = state;
+    player.setAttribute(VOYAGE_ATTRIBUTE, saved);
     return state;
   }
 
-  function clearVoyageState(player) {
-    player.setAttribute(VOYAGE_ATTRIBUTE, 0);
+  function freshVoyage(phase) {
+    const prevailing = (Math.random() < 0.5 ? -1 : 1) * VOYAGE.prevailing;
+    return {
+      phase, progress: 0, points: 0, bearing: 0, throttle: VOYAGE.startThrottle, lastThrottle: VOYAGE.startThrottle,
+      steer: RUDDER_STRAIGHT, ticks: 0, offCourse: 0, prevailing, controlsOpen: false,
+    };
+  }
+
+  function atSea(player) {
+    const area = SAILING_AREAS.get(player);
+    return !!area && !area.isDestroyed?.() && player.getArea?.() === area;
   }
 
   class SailingArea extends api.core.TemplatedInstanceArea {
@@ -257,7 +363,10 @@ module.exports = function registerBoneVoyageQuest(api) {
     postLeave(member, logout) {
       if (member === this.player) {
         if (SAILING_AREAS.get(member) === this) SAILING_AREAS.delete(member);
-        if (logout) setVoyageState(member, this.state);
+        if (logout) {
+          TaskManager.cancelTasks?.(timelineKey(member));
+          setVoyageState(member, this.state);
+        }
       }
       super.postLeave(member, logout);
     }
@@ -279,13 +388,13 @@ module.exports = function registerBoneVoyageQuest(api) {
     return npc;
   }
 
+  /** The barge at sea: the cache template at 1808,4744 copied for the player, with the Junior Navigator. */
   function openSailingScene(player, state) {
     const existing = SAILING_AREAS.get(player);
     if (existing && !existing.isDestroyed()) {
       existing.state = state;
       return existing;
     }
-    removeIslandJunior(player);
     const area = new SailingArea(player, state);
     SAILING_AREAS.set(player, area);
     area.enter(player);
@@ -295,121 +404,222 @@ module.exports = function registerBoneVoyageQuest(api) {
     return area;
   }
 
-  function startVoyage(player) {
-    if (quest.getStage(player) !== STAGE_PLAN_AGREED) return false;
-    player.setAttribute(VOYAGE_FAILED_ATTRIBUTE, false);
-    removeCanalNavigators(player);
-    const state = setVoyageState(player, { phase: "sailing", progress: 0, heading: 0, throttle: 1, ticks: 0, wind: 0 });
-    quest.setStage(player, STAGE_SAILING);
-    openSailingScene(player, state);
-    return true;
+  function bearingAngle(state) {
+    return VOYAGE.north + VOYAGE.step * (state.bearing | 0);
   }
 
-  function sailingDirection(state) {
-    // The direction graphic is an angle in the cache script; keep it monotonic with the rudder.
-    return (state.heading + 2) * 45;
+  function sendVoyageScript(player, state) {
+    player.getPacketSender().sendInterfaceScript(VOYAGE_SCRIPT, [
+      SAIL_BEARING, bearingAngle(state), SAIL_THROTTLE_LOW, SAIL_THROTTLE_MID, SAIL_THROTTLE_HIGH,
+      state.throttle | 0, SAIL_DIRECTION_GRAPHIC, state.steer | 0,
+    ]);
   }
 
-  function sendSailingVarbits(player, state) {
+  function sendProgress(player, state) {
+    player.getPacketSender().sendVarbit(VARBIT_FOSSILQUEST_SAILING_PROGRESS, Math.max(0, Math.min(100, state.progress | 0)));
+  }
+
+  function controlsHint(player, area, on) {
     const sender = player.getPacketSender();
-    sender.sendVarbit(VARBIT_FOSSILQUEST_SAILING_PROGRESS, Math.max(0, Math.min(100, state.progress | 0)));
-    sender.sendVarbit(VARBIT_FOSSILQUEST_SAILING_ARROW, sailingDirection(state));
+    sender.sendVarbit(VARBIT_CURRENT_HINT_ARROW, on ? HINT_ARROW_CONTROLS : 0);
+    sender.clearHintArrow?.();
+    if (on && area) {
+      const tile = area.sourceTile(SAILING_HINT_TILE.x, SAILING_HINT_TILE.y, SAILING_HINT_TILE.z);
+      sender.sendPositionalHint?.(tile, HINT_ARROW_CENTRE, HINT_ARROW_HEIGHT, tile.getZ());
+    }
   }
 
   function openControls(player, area) {
     if (!area || area.state.phase !== "sailing") return false;
     const sender = player.getPacketSender();
-    sendSailingVarbits(player, area.state);
-    sender.sendSubInterface(SAILING_HUD_UID, SAILING_INTERFACE, 1);
-    sender.sendSubInterface(SAILING_OVERLAY_UID, SAILING_OVERLAY, 1);
+    controlsHint(player, area, false);
+    sender.sendSubInterface(SIDEMODAL_UID, SAILING_INTERFACE, 0);
+    sender.sendSubInterface(OVERLAY_HUD_UID, SAILING_OVERLAY, 1);
+    sendVoyageScript(player, area.state);
+    sendProgress(player, area.state);
+    setMinimap(player, true);
     area.state.controlsOpen = true;
     return true;
   }
 
+  /** The side-modal controls close (walking, talking, Abort); the overlay stays until the barge lands. */
   function closeControls(player) {
-    const sender = player.getPacketSender();
-    sender.closeSubInterface(SAILING_HUD_UID);
-    sender.closeSubInterface(SAILING_OVERLAY_UID);
+    const area = SAILING_AREAS.get(player);
+    if (!area?.state?.controlsOpen) return;
+    area.state.controlsOpen = false;
+    player.getPacketSender().closeSubInterface(SIDEMODAL_UID);
+    if (area.state.phase === "sailing") controlsHint(player, area, true);
+  }
+
+  function clearSailingScreen(player) {
     const area = SAILING_AREAS.get(player);
     if (area?.state) area.state.controlsOpen = false;
+    const sender = player.getPacketSender();
+    sender.closeSubInterface(SIDEMODAL_UID);
+    sender.closeSubInterface(OVERLAY_HUD_UID);
+    controlsHint(player, null, false);
   }
 
-  function sailingTick(area) {
-    const player = area.player;
-    const state = area.state;
-    if (!state.controlsOpen || state.phase !== "sailing") return;
-    state.ticks = (state.ticks | 0) + 1;
-    state.wind = SAILING_WIND[Math.floor(state.ticks / SAILING_WIND_TICKS) % SAILING_WIND.length];
-    const offCourse = state.heading - state.wind;
-    const speed = state.throttle + 1;
-    const gain = offCourse === 0 ? speed + 1 : Math.abs(offCourse) === 1 ? speed : -2;
-    state.progress = Math.max(0, Math.min(100, (state.progress | 0) + gain));
-    sendSailingVarbits(player, state);
-    if (state.progress >= 100) {
-      arriveVoyage(player, area);
-      return;
-    }
-    if (state.ticks > SAILING_MAX_TICKS) {
-      // Transcript:Bone_Voyage "If the player fails the voyage": the Junior Navigator's line.
-      if (abortVoyage(player, area)) startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, VOYAGE_FAILED_VARIANT);
-      return;
-    }
-    if (state.ticks % 5 === 0) setVoyageState(player, state);
-  }
-
-  function endSailingScene(player, area) {
-    closeControls(player);
-    if (SAILING_AREAS.get(player) === area) SAILING_AREAS.delete(player);
+  function leaveSailingScene(player) {
+    const area = SAILING_AREAS.get(player);
+    SAILING_AREAS.delete(player);
+    if (!area) return;
     if (player.getArea?.() === area) area.leave(player, false);
     else area.destroy();
   }
 
-  function arriveVoyage(player, area) {
+  function sailingTick(area) {
     const state = area.state;
-    state.phase = "arrived";
-    state.progress = 100;
-    state.controlsOpen = false;
-    setVoyageState(player, state);
-    endSailingScene(player, area);
-    player.moveTo(new Location(ISLAND_ARRIVAL_TILE.x, ISLAND_ARRIVAL_TILE.y, ISLAND_ARRIVAL_TILE.z));
-    ensureIslandJunior(player);
-    sendWireStage(player);
+    state.ticks = (state.ticks | 0) + 1;
+    if (state.ticks % VOYAGE.updateTicks !== 0 || !state.controlsOpen) return;
+    updateVoyage(area);
   }
 
-  function abortVoyage(player, area = SAILING_AREAS.get(player)) {
-    if (quest.getStage(player) !== STAGE_SAILING) return false;
-    if (area) {
-      area.state.phase = "aborted";
-      setVoyageState(player, area.state);
-      endSailingScene(player, area);
+  /** One 4-tick update: the progress step for the bearing it found, then the wind and rudder move it. */
+  function updateVoyage(area) {
+    const { player, state } = area;
+    const onCourse = Math.abs(state.bearing | 0) <= VOYAGE.onCourse;
+    const sails = Math.max(0, Math.min(2, state.lastThrottle ?? state.throttle));
+    state.lastThrottle = state.throttle;
+    state.points = (state.points | 0) + VOYAGE.sailPoints[sails];
+    const before = state.progress | 0;
+    while (state.points >= VOYAGE.pointsPerStep) {
+      state.points -= VOYAGE.pointsPerStep;
+      state.progress = Math.max(0, Math.min(100, (state.progress | 0) + (onCourse ? VOYAGE.gain : -VOYAGE.loss)));
     }
-    clearVoyageState(player);
-    player.setAttribute(VOYAGE_FAILED_ATTRIBUTE, true);
-    quest.setStage(player, STAGE_PLAN_AGREED);
-    player.moveTo(new Location(GUARD_TILE.x, GUARD_TILE.y, GUARD_TILE.z));
-    ensureGuard(player);
-    ensureCanalNavigators(player);
+    state.offCourse = onCourse ? 0 : (state.offCourse | 0) + 1;
+    const oldBearing = state.bearing | 0;
+    // Ours: the wind and the rudder (no capture separates them).
+    if (Math.random() < 0.1) state.prevailing = -(state.prevailing || VOYAGE.prevailing);
+    const gust = Math.round((Math.random() * 2 - 1) * VOYAGE.gust);
+    const wind = (state.prevailing | 0) + gust;
+    const rudder = state.steer === RUDDER_LEFT ? VOYAGE.rudder : state.steer === RUDDER_RIGHT ? -VOYAGE.rudder : 0;
+    const drift = Math.round(wind * VOYAGE.sailScale[Math.max(0, Math.min(2, state.throttle | 0))]) + rudder;
+    state.bearing = Math.max(VOYAGE.minOffset, Math.min(VOYAGE.maxOffset, oldBearing + drift));
+    if ((state.progress | 0) !== before) sendProgress(player, state);
+    if (state.bearing !== oldBearing) sendVoyageScript(player, state);
+    setVoyageState(player, state);
+    if ((state.progress | 0) >= 100) arriveVoyage(player, area);
+    else if (state.offCourse >= VOYAGE.lostAfter) returnToCanal(player, { failed: true });
+  }
+
+  /** "I'm ready, let's go.": the screen fades and, three ticks on, the player is on the barge at sea. */
+  function startVoyage(player) {
+    const stage = quest.getStage(player);
+    if (stage !== STAGE_PLAN_AGREED && !(stage === STAGE_SAILING && !atSea(player))) return false;
+    const state = setVoyageState(player, freshVoyage("briefing"));
+    quest.setStage(player, STAGE_SAILING);
+    fade(player, true, SET_OFF_FADE_CYCLES);
+    later(player, 3, () => boardSailingBarge(player, state));
     return true;
+  }
+
+  function boardSailingBarge(player, state) {
+    if (quest.getStage(player) !== STAGE_SAILING || atSea(player)) return;
+    if (voyageState(player)?.phase !== "briefing") return;
+    openSailingScene(player, state);
+  }
+
+  /**
+   * The Junior Navigator's last briefing line: the controls open over the faded-in barge (capture
+   * tick 346, on that continue). A tick on here: the conversation's own close would take the side
+   * modal straight back down.
+   */
+  function finishBriefing(player) {
+    const area = SAILING_AREAS.get(player);
+    if (!area || area.state.phase !== "briefing") return;
+    area.state.phase = "sailing";
+    setVoyageState(player, area.state);
+    closeFade(player);
+    later(player, 1, () => {
+      if (SAILING_AREAS.get(player) === area && !area.state.controlsOpen) openControls(player, area);
+    });
+  }
+
+  /** Abort (Yes.) or a lost voyage: fade, then the canal barge deck three ticks on; the stage stays at 35. */
+  function returnToCanal(player, { failed = false } = {}) {
+    const area = SAILING_AREAS.get(player);
+    if (!area || quest.getStage(player) !== STAGE_SAILING || area.state.phase !== "sailing") return false;
+    area.state.phase = "returning";
+    setVoyageState(player, area.state);
+    clearSailingScreen(player);
+    fade(player, true);
+    later(player, 3, () => {
+      if (!failed) player.sendMessage(ABORT_MESSAGE);
+      landOnDeck(player, CANAL_DECK_TILE, "returned");
+      // Transcript:Bone_Voyage "If the player fails the voyage": the Junior Navigator's line (ours: on landing).
+      if (failed) startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, VOYAGE_FAILED_VARIANT);
+    });
+    later(player, 6, () => closeFade(player));
+    return true;
+  }
+
+  function landOnDeck(player, tile, phase) {
+    const state = { ...(voyageState(player) ?? {}), phase };
+    leaveSailingScene(player);
+    player.moveTo(toLocation(tile));
+    setVoyageState(player, state);
+    player.getPacketSender().sendInterfaceScript(VOYAGE_END_SCRIPT, [SAIL_BEARING]);
+    fade(player, false);
+    setMinimap(player, false);
+  }
+
+  /** The bar is full: fade four ticks on, the Fossil Island barge at seven, the quest complete at ten. */
+  function arriveVoyage(player, area) {
+    area.state.phase = "arriving";
+    area.state.progress = 100;
+    setVoyageState(player, area.state);
+    later(player, 4, () => {
+      clearSailingScreen(player);
+      fade(player, true);
+    });
+    later(player, 7, () => landOnDeck(player, ISLAND_DECK_TILE, "arrived"));
+    later(player, 10, () => {
+      closeFade(player);
+      completeVoyage(player);
+    });
+  }
+
+  function completeVoyage(player) {
+    if (quest.isComplete(player)) return;
+    player.setAttribute(JOURNAL_PENDING_ATTRIBUTE, true);
+    player.setAttribute(VOYAGE_ATTRIBUTE, 0);
+    quest.complete(player);
+  }
+
+  /** After the completion scroll: the Junior Navigator's closing lines (the transcript's, after its MUBvQ9). */
+  function playFinishingLines(player) {
+    if (player.getAttribute(JOURNAL_PENDING_ATTRIBUTE) !== true) return;
+    startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, FINISHING_VARIANT,
+      (steps) => steps.filter((step) => step.id !== "MUBvQ9"));
+  }
+
+  function giveJournal(player) {
+    if (player.getAttribute(JOURNAL_PENDING_ATTRIBUTE) !== true) return;
+    player.setAttribute(JOURNAL_PENDING_ATTRIBUTE, false);
+    if (!held(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID)) give(player, FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID);
   }
 
   function pressSailingButton(event) {
     const { player, buttonId } = event;
     const area = SAILING_AREAS.get(player);
     if (!area || area.state.phase !== "sailing" || quest.getStage(player) !== STAGE_SAILING) return false;
+    const state = area.state;
     if (buttonId === SAIL_ABORT_BUTTON) {
-      // Transcript:Bone_Voyage "Aborting the voyage": "Abort the voyage?" Yes./Cancel., then the message on Yes.
-      api.sendMultiChatboxPrompt(player, "Abort the voyage?", "Yes.", () => {
-        if (abortVoyage(player)) player.sendMessage("With the aid of the junior navigator, you sail back to the digsite.");
-      }, "Cancel.", () => {});
+      // Capture tick 414: the controls close (hint arrow on them), then "Abort the voyage?" Yes./Cancel.
+      closeControls(player);
+      api.sendMultiChatboxPrompt(player, "Abort the voyage?", "Yes.", () => returnToCanal(player), "Cancel.", () => {});
       return true;
     }
-    if (buttonId === SAIL_INCREASE_BUTTON) area.state.throttle = Math.min(3, (area.state.throttle | 0) + 1);
-    else if (buttonId === SAIL_DECREASE_BUTTON) area.state.throttle = Math.max(0, (area.state.throttle | 0) - 1);
-    else if (buttonId === SAIL_RIGHT_BUTTON) area.state.heading = Math.min(2, (area.state.heading | 0) + 1);
-    else if (buttonId === SAIL_LEFT_BUTTON) area.state.heading = Math.max(-2, (area.state.heading | 0) - 1);
+    const before = [state.throttle, state.steer];
+    if (buttonId === SAIL_INCREASE_BUTTON) state.throttle = Math.min(2, (state.throttle | 0) + 1);
+    else if (buttonId === SAIL_DECREASE_BUTTON) state.throttle = Math.max(0, (state.throttle | 0) - 1);
+    // The rudder (capture): right from straight is 2, from left back to straight; left the mirror.
+    else if (buttonId === SAIL_RIGHT_BUTTON) state.steer = state.steer === RUDDER_LEFT ? RUDDER_STRAIGHT : RUDDER_RIGHT;
+    else if (buttonId === SAIL_LEFT_BUTTON) state.steer = state.steer === RUDDER_RIGHT ? RUDDER_STRAIGHT : RUDDER_LEFT;
     else return false;
-    setVoyageState(player, area.state);
-    sendSailingVarbits(player, area.state);
+    if (before[0] !== state.throttle || before[1] !== state.steer) sendVoyageScript(player, state);
+    setVoyageState(player, state);
     return true;
   }
 
@@ -423,9 +633,41 @@ module.exports = function registerBoneVoyageQuest(api) {
   }
 
   function handleInterfaceClosed({ player, interfaceId }) {
-    if (interfaceId !== SAILING_INTERFACE && interfaceId !== SAILING_OVERLAY) return;
+    if (interfaceId === QUEST_SCROLL_INTERFACE) {
+      playFinishingLines(player);
+      return;
+    }
+    if (interfaceId !== SAILING_INTERFACE) return;
     const area = SAILING_AREAS.get(player);
-    if (area?.state) area.state.controlsOpen = false;
+    if (!area?.state?.controlsOpen) return;
+    area.state.controlsOpen = false;
+    if (area.state.phase === "sailing") controlsHint(player, area, true);
+  }
+
+  /** The Junior Navigator at sea goes back over the briefing (capture ticks 348 and 360: no "Hello."). */
+  function briefingSteps(steps) {
+    const option = steps.find((step) => step.type === "choice")?.options?.[0]?.steps ?? [];
+    const first = option.findIndex((step) => step.text === BRIEFING_FIRST_LINE);
+    return first >= 0 ? option.slice(first) : [];
+  }
+
+  function talkToJuniorNavigator(event) {
+    const { player, npcId } = event;
+    if (!JUNIOR_NAVIGATOR_NPC_IDS.has(npcId) || quest.getStage(player) !== STAGE_SAILING || !atSea(player)) return false;
+    closeControls(player);
+    event.handled = true;
+    startTranscript(api, player, npcId, PAGE, GIVING_POTION_VARIANT, briefingSteps);
+    return true;
+  }
+
+  /** Junior Navigator's Travel: the row to the camp from Fossil Island; on the canal, his pointer to the lead. */
+  function juniorNavigatorTravel(event) {
+    const { player, npcId } = event;
+    if (!JUNIOR_NAVIGATOR_NPC_IDS.has(npcId) || !quest.isComplete(player)) return false;
+    event.handled = true;
+    if (onFossilIsland(event.npc?.getLocation?.() ?? player.getLocation())) return ferry(player, CAMP_ROUTE, CAMP_FALLBACK);
+    startTranscript(api, player, npcId, JUNIOR_PAGE, "standard-dialogue-digsite-right-click-travel-option");
+    return true;
   }
 
   function isQuestComplete(player, key) {
@@ -495,42 +737,33 @@ module.exports = function registerBoneVoyageQuest(api) {
     return null;
   }
 
-  function selectLeadNavigatorVariant(player, stage) {
+  /** The post-quest navigators' pages by which barge they stand on. */
+  function navigatorPage(npc, player) {
+    return onFossilIsland(npc?.getLocation?.() ?? player.getLocation())
+      ? "standard-dialogue-fossil-island"
+      : "standard-dialogue-digsite";
+  }
+
+  function selectLeadNavigatorVariant(player, stage, npc) {
+    if (stage >= STAGE_COMPLETE) return navigatorPage(npc, player);
     if (stage === STAGE_FOREMAN_READY) {
       return "the-cursed-voyage-talking-to-the-lead-navigator";
     }
     if (stage === STAGE_MET_NAVIGATOR) return "the-cursed-voyage-talking-to-the-lead-navigator-again";
     if (stage === STAGE_BAR_PATRONS) return "talking-to-bar-patrons-returning-to-the-navigators";
+    // Wire 35 (capture tick 290): once the crew has set off, "My head... What happened?".
+    if (stage === STAGE_SAILING) return LEAD_TRY_AGAIN_VARIANT;
     if (stage !== STAGE_PLAN_AGREED) return null;
     if (held(player, POTION_OF_SEALEGS_ITEM_ID)) return GIVING_POTION_VARIANT;
-    // After a failed or aborted voyage: "Talking to the Lead Navigator to try again".
-    if (potionState(player) >= 2 && player.getAttribute(VOYAGE_FAILED_ATTRIBUTE) === true) return LEAD_TRY_AGAIN_VARIANT;
     if (potionState(player) >= 2) return "the-cursed-voyage-talking-to-lead-navigator-again";
     return "talking-to-bar-patrons-talking-to-lead-navigator-before-getting-the-potion";
   }
 
-  /** Canonical island shore beside the docked barge deck at 3715,3784,1. */
-  function isAtIslandArrival(player) {
-    const location = player.getLocation?.();
-    if (!location || location.getZ() !== 0) return false;
-    return Math.max(
-      Math.abs(location.getX() - ISLAND_ARRIVAL_TILE.x),
-      Math.abs(location.getY() - ISLAND_ARRIVAL_TILE.y),
-    ) <= 4;
-  }
-
-  function selectJuniorNavigatorVariant(player, stage) {
-    if (stage === STAGE_SAILING) {
-      if (isAtIslandArrival(player)) return "the-cursed-voyage-finishing-up";
-      // Still at sea (QH sailing zone 1812,4750-1840,4774): never offer the
-      // completion branch. The on-board safe lines are the charm thanks or the
-      // pre-sail "talk to the lead navigator" line.
-      return charmState(player) >= 2
-        ? "the-cursed-voyage-talking-to-junior-navigator-again"
-        : "the-cursed-voyage-talking-to-the-junior-navigator";
-    }
+  function selectJuniorNavigatorVariant(player, stage, npc) {
+    if (stage >= STAGE_COMPLETE) return navigatorPage(npc, player);
+    // Wire 35 off the barge at sea (capture tick 135): "You should talk to the lead navigator when you're ready to set sail."
+    if (stage === STAGE_SAILING) return JUNIOR_AFTER_FAIL_VARIANT;
     if (stage === STAGE_PLAN_AGREED) {
-      if (charmState(player) >= 2 && player.getAttribute(VOYAGE_FAILED_ATTRIBUTE) === true) return JUNIOR_AFTER_FAIL_VARIANT;
       if (charmState(player) >= 2) return "the-cursed-voyage-talking-to-junior-navigator-again";
       if (held(player, BONE_CHARM_ITEM_ID)) return "the-cursed-voyage-giving-junior-navigator-the-bone-charm";
       return "talking-to-bar-patrons-talking-to-junior-navigator-before-getting-the-lucky-charm";
@@ -538,6 +771,15 @@ module.exports = function registerBoneVoyageQuest(api) {
     if (stage >= STAGE_SUPPLIES_SENT && stage <= STAGE_BAR_PATRONS) {
       return "the-cursed-voyage-talking-to-the-junior-navigator";
     }
+    return null;
+  }
+
+  function selectBargeGuardVariant(npcId, stage) {
+    // On the barge, every stage that can reach it (capture tick 147, wire 35): "Can I get off the barge?".
+    if (npcId === DECK_GUARD_NPC_ID) return stage >= STAGE_FOREMAN_READY ? "after-bone-voyage-on-the-barge" : null;
+    if (!CANAL_GUARD_NPC_IDS.has(npcId)) return null;
+    if (stage >= STAGE_COMPLETE) return "after-bone-voyage-on-the-canal";
+    if (stage >= STAGE_FOREMAN_READY) return "the-cursed-voyage-talking-to-the-barge-guard";
     return null;
   }
 
@@ -610,16 +852,10 @@ module.exports = function registerBoneVoyageQuest(api) {
       return null;
     }
 
-    if (BARGE_GUARD_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return "after-bone-voyage-on-the-canal";
-      if (stage >= STAGE_FOREMAN_READY && stage <= STAGE_PLAN_AGREED) {
-        return "the-cursed-voyage-talking-to-the-barge-guard";
-      }
-      return null;
-    }
+    if (npcId === DECK_GUARD_NPC_ID || CANAL_GUARD_NPC_IDS.has(npcId)) return selectBargeGuardVariant(npcId, stage);
 
-    if (LEAD_NAVIGATOR_NPC_IDS.has(npcId)) return selectLeadNavigatorVariant(player, stage);
-    if (JUNIOR_NAVIGATOR_NPC_IDS.has(npcId)) return selectJuniorNavigatorVariant(player, stage);
+    if (LEAD_NAVIGATOR_NPC_IDS.has(npcId)) return selectLeadNavigatorVariant(player, stage, npc);
+    if (JUNIOR_NAVIGATOR_NPC_IDS.has(npcId)) return selectJuniorNavigatorVariant(player, stage, npc);
 
     if (npcId === JACK_SEAGULL_NPC_ID || npcId === LONGBOW_BEN_NPC_ID || npcId === AHAB_NPC_ID) {
       if (stage !== STAGE_MET_NAVIGATOR) return null;
@@ -697,18 +933,13 @@ module.exports = function registerBoneVoyageQuest(api) {
   function handleChoice(event) {
     const { player, npcId, option } = event;
 
-    if (BARGE_GUARD_NPC_IDS.has(npcId) && option === "Can I go onto the barge?") {
-      boardBarge(player);
-      return;
-    }
-
     if (LEAD_NAVIGATOR_NPC_IDS.has(npcId)) {
       const stage = quest.getStage(player);
       if (stage === STAGE_FOREMAN_READY && option === "Yep, that would be me.") {
         quest.setStage(player, STAGE_MET_NAVIGATOR);
         return;
       }
-      if (stage === STAGE_PLAN_AGREED && option === "I'm ready, let's go.") startVoyage(player);
+      if ((stage === STAGE_PLAN_AGREED || stage === STAGE_SAILING) && option === "I'm ready, let's go.") startVoyage(player);
       return;
     }
 
@@ -719,6 +950,17 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   function handleLine(event) {
     const { player, npcId, text } = event;
+
+    // The Junior Navigator's briefing is spoken inside the Lead Navigator's conversation.
+    if (text === BRIEFING_LAST_LINE && (LEAD_NAVIGATOR_NPC_IDS.has(npcId) || JUNIOR_NAVIGATOR_NPC_IDS.has(npcId))
+      && voyageState(player)?.phase === "briefing") {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        finishBriefing(player);
+      };
+      return;
+    }
 
     if (npcId === BARGE_FOREMAN_NPC_ID) {
       const stage = quest.getStage(player);
@@ -731,8 +973,17 @@ module.exports = function registerBoneVoyageQuest(api) {
         text === "The barge guard will happily help you on board. Just give him a prod!"
       ) {
         quest.setStage(player, STAGE_FOREMAN_READY);
-        ensureGuard(player);
       }
+      return;
+    }
+
+    // Capture tick 116: the fade starts as "Absolutely, the navigators..." is continued.
+    if (CANAL_GUARD_NPC_IDS.has(npcId) && text === BOARDING_LINE && canBoard(player)) {
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        boardBarge(player);
+      };
       return;
     }
 
@@ -778,11 +1029,16 @@ module.exports = function registerBoneVoyageQuest(api) {
         player.getInventory().deleteNumber(POTION_OF_SEALEGS_ITEM_ID, 1);
         player.setAttribute(POTION_ATTRIBUTE, 2);
         syncProtectionVarbits(player);
+        sendWireStage(player);
       }
       return;
     }
 
     if (JUNIOR_NAVIGATOR_NPC_IDS.has(npcId)) {
+      if (text === JOURNAL_LINE) {
+        giveJournal(player);
+        return;
+      }
       if (
         quest.getStage(player) === STAGE_PLAN_AGREED &&
         text === "Yes, I have it here." &&
@@ -791,6 +1047,7 @@ module.exports = function registerBoneVoyageQuest(api) {
         player.getInventory().deleteNumber(BONE_CHARM_ITEM_ID, 1);
         player.setAttribute(CHARM_ATTRIBUTE, 2);
         syncProtectionVarbits(player);
+        sendWireStage(player);
       }
       return;
     }
@@ -804,9 +1061,29 @@ module.exports = function registerBoneVoyageQuest(api) {
     }
   }
 
+  /** The crew passing out (capture ticks 315 and 320): message boxes; the second fades the barge in. */
+  function crewMessageBox(event) {
+    if (quest.getStage(event.player) !== STAGE_SAILING) return;
+    event.handled = true;
+    event.box = { statement: true };
+    if (event.stepId !== CREW_PASS_OUT_STEP) return;
+    const { player } = event;
+    const previous = event.after;
+    event.after = () => {
+      previous?.();
+      const state = voyageState(player);
+      if (state?.phase === "briefing" && !atSea(player)) boardSailingBarge(player, state);
+      fade(player, false);
+    };
+  }
+
   function handleAction(event) {
     const { player, npcId, stepId } = event;
     switch (stepId) {
+      case CREW_SIP_STEP:
+      case CREW_PASS_OUT_STEP:
+        crewMessageBox(event);
+        return;
       case "qqTUFt": // Berry signs the trade proposal
         if (npcId !== BERRY_NPC_ID) return;
         if (!held(player, SAWMILL_PROPOSAL_ITEM_ID)) {
@@ -835,7 +1112,6 @@ module.exports = function registerBoneVoyageQuest(api) {
         }
         player.getInventory().deleteNumber(SAWMILL_AGREEMENT_ITEM_ID, 1);
         quest.setStage(player, STAGE_SUPPLIES_SENT);
-        ensureGuard(player);
         return;
       case "xD7_29": // the apothecary mixes the potion
         if (npcId !== APOTHECARY_NPC_ID) return;
@@ -862,25 +1138,14 @@ module.exports = function registerBoneVoyageQuest(api) {
         player.setAttribute(CHARM_ATTRIBUTE, 1);
         syncProtectionVarbits(player);
         return;
-      case "MUBvQ9": // quest complete
-        if (!JUNIOR_NAVIGATOR_NPC_IDS.has(npcId) || !isAtIslandArrival(player)) return;
-        event.handled = true;
-        removeIslandJunior(player);
-        quest.complete(player);
+      case "MUBvQ9": // the transcript's completion: the voyage's arrival completes it instead
+        if (JUNIOR_NAVIGATOR_NPC_IDS.has(npcId)) event.handled = true;
         return;
       case "sRnbFX": // lead navigator "same as above" once the potion is handed in
         if (!LEAD_NAVIGATOR_NPC_IDS.has(npcId)) return;
         if (quest.getStage(player) !== STAGE_PLAN_AGREED || potionState(player) < 2) return;
         event.handled = true;
         event.steps = variantSteps(GIVING_POTION_VARIANT).slice(POTION_HANDOVER_STEPS);
-        return;
-      case "OgUvos": // post-quest row to the expedition camp
-        if (!BARGE_GUARD_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_COMPLETE) return;
-        ferry(player, "fossil-island", new Location(ISLAND_ARRIVAL_TILE.x, ISLAND_ARRIVAL_TILE.y, ISLAND_ARRIVAL_TILE.z));
-        return;
-      case "R43aKV": // the navigator's "Yes, please." row to Fossil Island
-        if (!LEAD_NAVIGATOR_NPC_IDS.has(npcId)) return;
-        ferry(player, "fossil-island", new Location(ISLAND_ARRIVAL_TILE.x, ISLAND_ARRIVAL_TILE.y, ISLAND_ARRIVAL_TILE.z));
         return;
       default:
         return;
@@ -904,93 +1169,29 @@ module.exports = function registerBoneVoyageQuest(api) {
   }
 
   // ==========================================================================
-  // Spawns and the voyage
+  // The canal barge
   // ==========================================================================
 
-  /** The guard's Talk-to/Embark step: move onto the real level-1 barge deck. */
+  /** The guard lets the player on once the foreman says the barge is ready, and ever after. */
+  function canBoard(player) {
+    return quest.getStage(player) >= STAGE_FOREMAN_READY;
+  }
+
   function boardBarge(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_FOREMAN_READY || stage > STAGE_PLAN_AGREED) return false;
-    ensureGuard(player);
-    ensureCanalNavigators(player);
-    player.moveTo(new Location(BOAT_DECK_TILE.x, BOAT_DECK_TILE.y, BOAT_DECK_TILE.z));
-    return true;
+    if (!canBoard(player)) return false;
+    return ferry(player, BOARD_ROUTE, BOARD_FALLBACK);
   }
 
   function embarkBarge(event) {
-    if (!BARGE_GUARD_NPC_IDS.has(event.npcId)) return false;
+    if (!CANAL_GUARD_NPC_IDS.has(event.npcId) || !canBoard(event.player)) return false;
     event.handled = boardBarge(event.player);
     return event.handled;
   }
 
   function disembarkBarge(event) {
-    if (!BARGE_GUARD_NPC_IDS.has(event.npcId)) return false;
-    const stage = quest.getStage(event.player);
-    if (stage < STAGE_FOREMAN_READY || stage > STAGE_PLAN_AGREED) return false;
-    event.player.moveTo(new Location(GUARD_TILE.x, GUARD_TILE.y, GUARD_TILE.z));
-    event.handled = true;
+    if (event.npcId !== DECK_GUARD_NPC_ID) return false;
+    event.handled = ferry(event.player, DISEMBARK_ROUTE, DISEMBARK_FALLBACK);
     return true;
-  }
-
-  function ensureGuard(player) {
-    if (GUARD_SPAWNS.has(player)) return;
-    const npc = api.spawnNpc({
-      id: BARGE_GUARD_SPAWN_ID,
-      x: GUARD_TILE.x,
-      y: GUARD_TILE.y,
-      z: GUARD_TILE.z,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) GUARD_SPAWNS.set(player, npc);
-  }
-
-  function ensureCanalNavigators(player) {
-    if (CANAL_NAVIGATORS.has(player)) return;
-    const lead = api.spawnNpc({
-      id: LEAD_NAVIGATOR_SPAWN_ID,
-      x: LEAD_NAVIGATOR_TILE.x,
-      y: LEAD_NAVIGATOR_TILE.y,
-      z: LEAD_NAVIGATOR_TILE.z,
-      owner: player,
-      ownerOnly: true,
-    });
-    const junior = api.spawnNpc({
-      id: JUNIOR_NAVIGATOR_SPAWN_ID,
-      x: JUNIOR_NAVIGATOR_TILE.x,
-      y: JUNIOR_NAVIGATOR_TILE.y,
-      z: JUNIOR_NAVIGATOR_TILE.z,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (lead || junior) CANAL_NAVIGATORS.set(player, { lead, junior });
-  }
-
-  function removeCanalNavigators(player) {
-    const tracked = CANAL_NAVIGATORS.get(player);
-    if (!tracked) return;
-    if (tracked.lead) api.removeNpc(tracked.lead);
-    if (tracked.junior) api.removeNpc(tracked.junior);
-    CANAL_NAVIGATORS.delete(player);
-  }
-
-  function ensureIslandJunior(player) {
-    if (ISLAND_JUNIORS.has(player)) return;
-    const npc = api.spawnNpc({
-      id: JUNIOR_NAVIGATOR_SPAWN_ID,
-      x: ISLAND_JUNIOR_TILE.x,
-      y: ISLAND_JUNIOR_TILE.y,
-      z: ISLAND_JUNIOR_TILE.z,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) ISLAND_JUNIORS.set(player, npc);
-  }
-
-  function removeIslandJunior(player) {
-    const npc = ISLAND_JUNIORS.get(player);
-    if (npc) api.removeNpc(npc);
-    ISLAND_JUNIORS.delete(player);
   }
 
   // ==========================================================================
@@ -1067,51 +1268,59 @@ module.exports = function registerBoneVoyageQuest(api) {
         "<col=800000>bone charm</col> from the Odd Old Man near Paterdomus."
       );
     } else if (stage === STAGE_SAILING) {
-      if (voyageState(player)?.phase === "arrived") {
-        lines.push("I should speak to the <col=800000>Junior Navigator</col> on Fossil Island.");
-      } else {
+      if (voyageState(player)?.phase === "sailing") {
         lines.push(
           "I should operate the <col=800000>barge controls</col> and keep the",
           "bearing north until we reach Fossil Island."
         );
+      } else {
+        lines.push("I should talk to the <col=800000>Lead Navigator</col> on the barge to", "set sail again.");
       }
     }
     return lines;
   }
 
+  /** A save from inside the voyage: back on the barge at sea, ashore, or on the canal deck. */
+  function resumeVoyage(player) {
+    const voyage = voyageState(player);
+    const phase = voyage?.phase;
+    if ((phase === "sailing" || phase === "briefing") && (voyage.progress | 0) < 100) {
+      const state = { ...freshVoyage("sailing"), ...voyage, phase: "sailing", controlsOpen: false };
+      setVoyageState(player, state);
+      const area = openSailingScene(player, state);
+      controlsHint(player, area, true);
+      setMinimap(player, true);
+      return;
+    }
+    if (phase === "returning" || phase === "aborted") {
+      player.moveTo(toLocation(CANAL_DECK_TILE));
+      setVoyageState(player, { ...voyage, phase: "returned" });
+      return;
+    }
+    if (phase === "returned") return;
+    // "arriving", "arrived", or a stage-10 save from before the voyage was played (already ashore).
+    if (!onFossilIsland(player.getLocation())) player.moveTo(toLocation(ISLAND_DECK_TILE));
+    completeVoyage(player);
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
     if (player?.isPlayerBot?.() === true) return;
-    const stage = quest.getStage(player);
-    if ((stage >= STAGE_SUPPLIES_SENT && stage <= STAGE_PLAN_AGREED) || stage >= STAGE_COMPLETE) {
-      ensureGuard(player);
-    }
-    if (stage >= STAGE_FOREMAN_READY && stage <= STAGE_PLAN_AGREED) ensureCanalNavigators(player);
-    if (stage === STAGE_SAILING) {
-      const voyage = voyageState(player);
-      if (voyage?.phase === "sailing" && (voyage.progress | 0) < 100) {
-        removeCanalNavigators(player);
-        voyage.controlsOpen = false;
-        setVoyageState(player, voyage);
-        openSailingScene(player, voyage);
-      } else {
-        // Old stage-10 saves were already teleported ashore by the previous plugin;
-        // keep them there rather than sending them back through the voyage.
-        removeCanalNavigators(player);
-        setVoyageState(player, { ...(voyage ?? {}), phase: "arrived", progress: 100 });
-        player.moveTo(new Location(ISLAND_ARRIVAL_TILE.x, ISLAND_ARRIVAL_TILE.y, ISLAND_ARRIVAL_TILE.z));
-        ensureIslandJunior(player);
-        sendWireStage(player);
-      }
-    }
+    if (quest.getStage(player) === STAGE_SAILING) resumeVoyage(player);
+    else if (quest.isComplete(player)) giveJournal(player);
     syncProtectionVarbits(player);
+    sendWireStage(player);
+  }
+
+  function handleLogout({ player }) {
+    TaskManager.cancelTasks?.(timelineKey(player));
   }
 
   api.persistAttribute(CHARM_ATTRIBUTE);
   api.persistAttribute(POTION_ATTRIBUTE);
   api.persistAttribute(APOTHECARY_ATTRIBUTE);
-  api.persistAttribute(VOYAGE_FAILED_ATTRIBUTE);
   api.persistAttribute(VOYAGE_ATTRIBUTE);
+  api.persistAttribute(JOURNAL_PENDING_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "bone_voyage",
@@ -1123,8 +1332,9 @@ module.exports = function registerBoneVoyageQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [],
-    rewardItemId: FOSSIL_ISLAND_NOTE_BOOK_ITEM_ID,
-    rewardItemLabel: "Fossil island note book",
+    // Capture tick 708: the scroll shows the bone charm and lists the points and the island only;
+    // the note book comes from the Junior Navigator's "Here, take this journal..." (tick 722).
+    scrollItemId: BONE_CHARM_ITEM_ID,
     otherRewards: ["Access to Fossil Island"],
     buildJournal,
   });
@@ -1132,6 +1342,7 @@ module.exports = function registerBoneVoyageQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Barge guard", { Embark: embarkBarge, Disembark: disembarkBarge });
+  api.onNpcInteraction("Junior Navigator", { "Talk-to": talkToJuniorNavigator, Travel: juniorNavigatorTravel });
   api.onNpcInteraction("Apothecary", { "Talk-to": talkToApothecary });
   api.onObjectInteraction("Barge controls", { Operate: operateBargeControls });
   api.onInterfaceActionButton([
@@ -1143,4 +1354,5 @@ module.exports = function registerBoneVoyageQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

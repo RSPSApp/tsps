@@ -321,6 +321,7 @@ function advance(player, snapshot, random = Math.random, said = {}, show = true,
   }
   const { casket, item: received } = finalReward ?? nextItem(trail, random, player);
   // Live captures: "You've found a new clue!" and "You've obtained a casket!", in a message box.
+  // A dig passes its tier's own line (`digClueMessage`).
   const words = casket ? said.casket ?? "You've obtained a casket!" : said.clue ?? "You've found a new clue!";
   // The exact slot matters when scrolls of several tiers are carried.
   if (!mergeCasket) inventory.setItem(trail.slot, received);

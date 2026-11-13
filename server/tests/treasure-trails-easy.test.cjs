@@ -8,6 +8,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const core = PluginManager.getCoreApi();
 const plugin = require("../plugins/treasuretrails/TreasureTrails.plugin");
 const Runtime = require("../plugins/treasuretrails/trails/Runtime.TreasureTrails");
+const Dialogue = require("../plugins/treasuretrails/trails/Dialogue.TreasureTrails");
 const Caskets = require("../plugins/treasuretrails/trails/Caskets.TreasureTrails");
 const Stash = require("../plugins/treasuretrails/trails/Stash.TreasureTrails");
 const Catalogue = require("../plugins/treasuretrails/trails/Catalogue.TreasureTrails");
@@ -33,7 +34,7 @@ function fixture() {
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
   const player = { getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
-    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null,
+    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => player,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
@@ -390,4 +391,17 @@ test("\"Have nothing equipped at all\" steps accept only an empty outfit", () =>
     f.worn.push(new core.Item(I.GOLD_RING, 1));
     assert.equal(Runtime.emoteReady(f.player, step), false, step.key);
   }
+});
+
+test("a dig that gives the next easy clue plays the dig sound and says \"You've found another clue!\"", t => {
+  const boxes = [];
+  t.mock.method(Dialogue, "itemBox", (player, itemId, text) => boxes.push(text));
+  const f = fixture();
+  f.place(ofFamily("map", "coord")[0], 3);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  const event = { player: f.player, itemId: I.SPADE, option: "Dig", allow: true };
+  Runtime.dig(event);
+  assert.equal(event.allow, false);
+  assert.ok(f.sent.some(([kind, id]) => kind === "sendSoundEffect" && id === 1470), "dig sound 1470");
+  assert.deepEqual(boxes, ["You've found another clue!"]);
 });

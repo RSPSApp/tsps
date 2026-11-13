@@ -239,21 +239,74 @@ test("opening: the last category's items, the floater, its flags and the draw; t
   assert.equal(player.log.at(-1).startsWith("script 7797 [0,"), true);
   player.log.length = 0;
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
-  assert.deepEqual(player.log.slice(0, 3), ["close 621", "script 2158 []", "open 161:18 908 1"]);
+  assert.deepEqual(player.log.slice(0, 4), [`varbit 9535=${Progress.today()}`, "close 621", "script 2158 []", "open 161:18 908 1"]);
   player.log.length = 0;
   Interface.click({ player, buttonId: (908 << 16) | 22, slot: 4 });
   assert.deepEqual(player.log.slice(0, 3), ["varbit 6905=4", "close 908", "script 2158 []"]);
   assert.ok(player.log.includes("open 161:18 621 1"));
-  // The overview's own burger "View Log" (slot 12) and its close button (908:9).
+  // The overview's own burger "View Log" (slot 10; its slot 12 is "Overview") and its close button (908:9).
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
   player.log.length = 0;
-  Interface.click({ player, buttonId: (908 << 16) | 7, slot: 12 });
+  const unhandled = { player, buttonId: (908 << 16) | 7, slot: 12 };
+  Interface.click(unhandled);
+  assert.equal(unhandled.handled, undefined, "slot 12 is the overview itself");
+  Interface.click({ player, buttonId: (908 << 16) | 7, slot: 10 });
   assert.deepEqual(player.log.slice(0, 2), ["close 908", "script 2158 []"]);
   assert.ok(player.log.includes("open 161:18 621 1"));
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
   player.log.length = 0;
   Interface.click({ player, buttonId: (908 << 16) | 9 });
   assert.deepEqual(player.log, ["close 908", "script 2158 []"]);
+});
+
+test("as captured: a search result shows its category, switching tab when it is on another", () => {
+  const player = createPlayer();
+  Progress.obtain(player, CARPENTERS_BOOTS, 1, { silent: true });
+  const boots = Data.categoriesOf(CARPENTERS_BOOTS)[0];
+  Interface.open(player);
+  player.log.length = 0;
+  const event = { player, buttonId: (621 << 16) | 84, slot: Data.globalIndex(boots) };
+  Interface.click(event);
+  assert.equal(event.handled, true);
+  const parts = Interface.TAB_COMPONENTS[boots.tab.index];
+  assert.deepEqual(player.log.slice(0, 6), [
+    "varp 2048=0", "varp 2941=0", "varp 2942=0", `varbit 6906=${boots.key}`, `varbit 6905=${boots.tab.index}`, "flags 621:42 -1--1",
+  ]);
+  assert.ok(player.log.includes("flags 621:75 -1--1") && player.log.includes("flags 621:76 -1--1"));
+  assert.ok(player.log.includes(`flags 621:${parts.background} 0-${boots.tab.maxKey}`));
+  assert.ok(player.log.includes(`inv [[0,${CARPENTERS_BOOTS},1]] of ${Data.load().maxCategorySize}`), "its items packed from slot 0");
+  assert.equal(player.log.at(-1), `script 7797 [${boots.tab.index},${(621 << 16) | parts.container},${(621 << 16) | parts.background},${(621 << 16) | parts.text},${(621 << 16) | parts.scrollbar},${boots.tab.struct},${boots.key}]`);
+  assert.equal(player.getAttribute(Interface.TAB_ATTRIBUTE), boots.tab.index);
+  assert.equal(player.getAttribute(Interface.CATEGORY_ATTRIBUTE), boots.key);
+
+  // Same tab: no tab varbit and no row flags.
+  const sibling = boots.tab.categories.find((category) => category.key !== boots.key);
+  player.log.length = 0;
+  Interface.click({ player, buttonId: (621 << 16) | 84, slot: Data.globalIndex(sibling) });
+  assert.ok(player.log.includes(`varbit 6906=${sibling.key}`));
+  assert.ok(!player.log.some((line) => line.startsWith("varbit 6905") || line.startsWith(`flags 621:${parts.background} `)));
+  assert.ok(player.log.at(-1).endsWith(`,${sibling.key}]`));
+
+  // Every global number maps back to its own category.
+  for (const tab of Data.tabs()) for (const category of tab.categories) assert.equal(Data.categoryByGlobal(Data.globalIndex(category)), category);
+  player.log.length = 0;
+  Interface.click({ player, buttonId: (621 << 16) | 84, slot: Data.load().categoryTotal });
+  assert.deepEqual(player.log, [], "past the last category: nothing");
+});
+
+test("as captured: opening the overview sends today's day number once, for Check-obtained", () => {
+  const player = createPlayer();
+  Interface.open(player);
+  player.log.length = 0;
+  const before = Progress.today();
+  Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
+  const sent = player.log[0].match(/^varbit 9535=(\d+)$/);
+  assert.ok(sent && [before, Progress.today()].includes(Number(sent[1])), player.log[0]);
+  assert.equal(player.log[1], "close 621");
+  Interface.click({ player, buttonId: (908 << 16) | 7, slot: 10 });
+  player.log.length = 0;
+  Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
+  assert.ok(!player.log.some((line) => line.startsWith("varbit 9535")), "the client already has it");
 });
 
 test("loot counts once every roll handler is done, and kills tally their category", async () => {

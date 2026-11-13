@@ -906,7 +906,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MagicMushtrees` | MagicMushtrees | world | yes | Fossil Island's Magic Mushtrees: the four-tree travel menu, with each tree unlocked per player once used. (members only) |
 | `ManagingMiscellania` | ManagingMiscellania | world | yes | Managing Miscellania: pay the kingdom's coffers and Advisor Ghrim collects daily coal, logs, herbs, flax, fish, hardwood and seeds, scaled by approval. (members only) |
 | `MultiCombatApi` | MultiCombatApi | world | yes | Serves the bounds of multi-combat zones to the client over the content API, without exposing the full development world data. |
-| `Museum` | Museum | world | yes | Varrock Museum Kudos: the Dig Site cleaning activity, display cases and Historian Minas's quest timeline reports for the Bone Voyage requirement. (members only) |
+| `Museum` | Museum | world | yes | Varrock Museum Kudos: the Dig Site cleaning activity, display cases, Historian Minas's quest timeline reports and Curator Haig Halen's salvaging relics. (members only) |
 | `Music` | Music | world | yes | The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock. |
 | `PlayerOnlineTimer` | PlayerOnlineTimer | world | yes | Tracks each player's current session and lifetime online seconds, for other plugins to read through events. |
 | `ProceduralRegionStream` | ProceduralRegionStream | world | yes | Developer ::procregion command that generates and streams a procedural town of buildings and streets into a map region for the staff member. |

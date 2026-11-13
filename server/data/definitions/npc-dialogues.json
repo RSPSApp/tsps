@@ -280734,7 +280734,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "Certainly [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
+                  "text": "Certainly, [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
                 },
                 {
                   "type": "line",
@@ -954024,7 +954024,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-7d7869058c52de06"
+                      "branch": "jump-9c9e87e186024268"
                     }
                   ]
                 }
@@ -954115,7 +954115,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-7d7869058c52de06"
+                      "branch": "jump-9c9e87e186024268"
                     }
                   ]
                 }
@@ -954211,7 +954211,7 @@
           "id": "upb-U5"
         },
         {
-          "npc": "Good day Proselyte. Is there anything I can do for you?"
+          "npc": "Good day, Proselyte. Is there anything I can do for you?"
         },
         {
           "type": "choice",
@@ -954332,7 +954332,7 @@
                   "player": "I don't really understand this 'Gaze of Saradomin' thing... Do you think you could explain what it does for me?"
                 },
                 {
-                  "npc": "Certainly [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
+                  "npc": "Certainly, [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
                 },
                 {
                   "npc": "And when I say personally favoured, I don't mean that sometime off in the future he's going to buy us all a drink!"
@@ -954581,12 +954581,12 @@
       ]
     },
     "branches": {
-      "jump-7d7869058c52de06": [
+      "jump-9c9e87e186024268": [
         {
           "player": "I don't really understand this 'Gaze of Saradomin' thing... Do you think you could explain what it does for me?"
         },
         {
-          "npc": "Certainly [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
+          "npc": "Certainly, [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
         },
         {
           "npc": "And when I say personally favoured, I don't mean that sometime off in the future he's going to buy us all a drink!"
@@ -1141416,7 +1141416,7 @@
               "steps": [
                 {
                   "type": "call",
-                  "branch": "2SDCLV"
+                  "branch": "vy-A9O"
                 }
               ]
             },
@@ -1141522,7 +1141522,7 @@
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Now how can I help you young [fellow/mistress]?"
+          "text": "Now how can I help you [old boy/young mistress]?"
         },
         {
           "type": "choice",
@@ -1141552,7 +1141552,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "So then, dear gal; with that in mind, we have a mission for you."
+                  "text": "So then, [old bean/dear gal]; with that in mind, we have a mission for you."
                 },
                 {
                   "player": "Really? Great!   Am I to be flung to some far off and exotic land to defeat some evil genius?"
@@ -1141604,7 +1141604,7 @@
                         {
                           "type": "line",
                           "speaker": "Sir Tiffy Cashien",
-                          "text": "Nonsense, my [man/gal], we take our work very seriously. The fate of the world rests in our hands, don't you know."
+                          "text": "Nonsense, [old boy/my gal], we take our work very seriously. The fate of the world rests in our hands, don't you know."
                         },
                         {
                           "type": "condition",
@@ -1141636,9 +1141636,108 @@
                           "text": "Now, is there anything else I can do for you?"
                         },
                         {
-                          "type": "jump",
-                          "reference": "other",
-                          "id": "l6UoS7"
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Can you explain the Gaze of Saradomin to me?",
+                              "steps": [
+                                {
+                                  "type": "call",
+                                  "branch": "vy-A9O"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Can I buy some armour?"
+                            },
+                            {
+                              "text": "Can I switch respawns, please?",
+                              "steps": [
+                                {
+                                  "player": "Can I switch respawns, please?"
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player's respawn point is not Falador:",
+                                  "steps": [
+                                    {
+                                      "type": "line",
+                                      "speaker": "Sir Tiffy Cashien",
+                                      "text": "Ah, so you'd like to respawn in Falador, the good old homestead! Are you sure?"
+                                    },
+                                    {
+                                      "type": "choice",
+                                      "options": [
+                                        {
+                                          "text": "Yes, I want to respawn in Falador.",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "FAy1JW"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "text": "Actually, no thanks. I like my respawn point.",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "ipT1-t"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "id": "uTBwMK"
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player's respawn point is Falador:",
+                                  "steps": [
+                                    {
+                                      "type": "line",
+                                      "speaker": "Sir Tiffy Cashien",
+                                      "text": "What? You're saying you want to respawn in Lumbridge? Are you sure?"
+                                    },
+                                    {
+                                      "type": "choice",
+                                      "options": [
+                                        {
+                                          "text": "Yes, I want to respawn in Lumbridge.",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "12jyXH"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "text": "Actually, no thanks. I like my respawn point.",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "fQZhfB"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "id": "zTLHo1"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Goodbye.",
+                              "steps": [
+                                {
+                                  "type": "call",
+                                  "branch": "mz-8Ox"
+                                }
+                              ]
+                            }
+                          ]
                         }
                       ],
                       "hook": "quest:the-slug-menace:start",
@@ -1141666,7 +1141765,7 @@
               "steps": [
                 {
                   "type": "call",
-                  "branch": "2SDCLV"
+                  "branch": "vy-A9O"
                 }
               ]
             },
@@ -1141806,7 +1141905,7 @@
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Now how can I help you young [fellow/mistress]?"
+          "text": "Now how can I help you [old boy/young mistress]?"
         },
         {
           "type": "choice",
@@ -1141838,7 +1141937,7 @@
                       "steps": [
                         {
                           "type": "call",
-                          "branch": "2SDCLV"
+                          "branch": "vy-A9O"
                         }
                       ]
                     },
@@ -1141937,7 +1142036,116 @@
               ]
             },
             {
-              "text": "Something else."
+              "text": "Something else.",
+              "steps": [
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Do you have any jobs for me yet?"
+                    },
+                    {
+                      "text": "Can you explain the Gaze of Saradomin to me?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "vy-A9O"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Can I buy some armour?"
+                    },
+                    {
+                      "text": "Can I switch respawns please?",
+                      "steps": [
+                        {
+                          "player": "Can I switch respawns, please?"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player's respawn point is not Falador:",
+                          "steps": [
+                            {
+                              "type": "line",
+                              "speaker": "Sir Tiffy Cashien",
+                              "text": "Ah, so you'd like to respawn in Falador, the good old homestead! Are you sure?"
+                            },
+                            {
+                              "type": "choice",
+                              "options": [
+                                {
+                                  "text": "Yes, I want to respawn in Falador.",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "FAy1JW"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "text": "Actually, no thanks. I like my respawn point.",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "ipT1-t"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ],
+                          "id": "uTBwMK"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player's respawn point is Falador:",
+                          "steps": [
+                            {
+                              "type": "line",
+                              "speaker": "Sir Tiffy Cashien",
+                              "text": "What? You're saying you want to respawn in Lumbridge? Are you sure?"
+                            },
+                            {
+                              "type": "choice",
+                              "options": [
+                                {
+                                  "text": "Yes, I want to respawn in Lumbridge.",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "12jyXH"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "text": "Actually, no thanks. I like my respawn point.",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "fQZhfB"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ],
+                          "id": "zTLHo1"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Goodbye.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "mz-8Ox"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -1142602,7 +1142810,7 @@
         {
           "type": "line",
           "speaker": "Holgart",
-          "text": "'Fraid not [lad/lass]. I've been washed up and left to dry."
+          "text": "'Fraid not. I've been washed up and left to dry."
         },
         {
           "player": "Pardon?"
@@ -1142798,7 +1143006,7 @@
         {
           "type": "line",
           "speaker": "Brother Maledict",
-          "text": "And a good day to you my [son/daughter]."
+          "text": "And a good day to you, my child."
         },
         {
           "type": "line",
@@ -1143378,12 +1143586,8 @@
                       "text": "Nothing at the moment thanks.",
                       "steps": [
                         {
-                          "player": "Nothing at the moment thanks."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Then please feel free to stay in our village a while longer. Farewell."
+                          "type": "call",
+                          "branch": "UnfO4Z"
                         }
                       ]
                     }
@@ -1143404,8 +1143608,249 @@
               "text": "I'm here to fish.",
               "steps": [
                 {
-                  "type": "missing",
-                  "id": "dKL4jU"
+                  "player": "I'm here to fish."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "That's good, yes, that's good.  Witchaven is a nice quiet village - very relaxing, good fishing."
+                },
+                {
+                  "player": "Are you alright? You seem a little, hazy."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "It's nothing, I'm just a little tired at the moment. So much work, so much to do."
+                },
+                {
+                  "player": "Really, what are you working on?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "To the West, the shrine needs... work, yes work. Things must be made better."
+                },
+                {
+                  "player": "Well, um. Yes. Indeed. I'm sure Saradomin would be pleased."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Saradomin... Why are you really here?"
+                },
+                {
+                  "player": "Like I said, I'm here to..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Are you sure that's the only reason you are here, [player name]?"
+                },
+                {
+                  "player": "Well, I'm also here to visit a friend, Jake O'Niall."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Ahh, then this all makes sense. Yes, this is very good."
+                },
+                {
+                  "player": "Err, how did you know my name?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "You told me when you came in."
+                },
+                {
+                  "player": "No, no I didn't."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "It does not matter. One of my... villagers, must have mentioned that you are here."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Is there anything else you need to know?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can you tell me about Witchaven?",
+                      "steps": [
+                        {
+                          "player": "What can you tell me about Witchaven?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "The land has seen much sorrow, much loss."
+                        },
+                        {
+                          "player": "Are you talking about the Fishing Platform?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Fishing Platform? Oh yes, that. No.  The platform will do much for this place."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "The platform heralds a new beginning for Witchaven, undreamed of by those who built it."
+                        },
+                        {
+                          "player": "I thought it took away all the trade?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "This is true, but it has brought us so much more in return, so much more."
+                        },
+                        {
+                          "player": "Hmm, and I thought the village hated the Fishing Platform."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "It was... a necessary step."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Is there anything else you need to know?"
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "9pur0c"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "What improvements are you making to the shrine?",
+                      "steps": [
+                        {
+                          "player": "What improvements are you making to the shrine?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Ahh, the shrine - the future, our destiny, our heritage."
+                        },
+                        {
+                          "player": "How so?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "That which the shrine holds can unlock a new path for all the village of Witchaven. And in time the whole of Gielinor."
+                        },
+                        {
+                          "player": "Wow, the whole of Gielinor? I thought it was just some old shrine to Saradomin."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "The history of that shrine should not be overlooked.  It is ancient beyond your knowledge and much that shaped our history is contained within its walls."
+                        },
+                        {
+                          "player": "Sounds like a very interesting place. I may have to take a look."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "There is much to be done before it is opened."
+                        },
+                        {
+                          "player": "So it's not completed yet?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "When you are ready, it may be that you will be unable to keep yourself away."
+                        },
+                        {
+                          "player": "You know, you really are a strange person."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Is there anything else you need to know?"
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "fvaRIK"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Do you know you look very ill?",
+                      "steps": [
+                        {
+                          "player": "Do you know you look very ill?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Ill? No, merely tired."
+                        },
+                        {
+                          "player": "But you've turned a slightly sickly colour."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "A touch of food poisoning perhaps."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "This has been known to turn the face and give the impression of severe illness."
+                        },
+                        {
+                          "player": "I've seen food poisoning. People normally don't look like... that."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Time is all that is needed. Yes, time to... get better."
+                        },
+                        {
+                          "player": "Well, I hope you get better soon."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Soon, all will be well again. Have no fear."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Is there anything else you need to know?"
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "LHdyHD"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nothing at the moment thanks.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "UnfO4Z"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -1143435,7 +1143880,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-27d5ca0b6bff1544"
+                      "branch": "jump-8057f01f9684b91d"
                     }
                   ]
                 }
@@ -1143450,7 +1143895,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-aba350b8cec7359d"
+                      "branch": "jump-0064cde0e74422ef"
                     }
                   ]
                 }
@@ -1143465,7 +1143910,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-fe92c3a884ccfbad"
+                      "branch": "jump-7d1ec43dbc0516b4"
                     }
                   ]
                 }
@@ -1143480,7 +1143925,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-eeadea4977d40dd9"
+                      "branch": "jump-c417b1e42097f645"
                     }
                   ]
                 }
@@ -1143607,6 +1144052,108 @@
           ]
         }
       ],
+      "witchaven-talking-to-jeb-before-holgart-mentions-the-boat": [
+        {
+          "type": "line",
+          "speaker": "Jeb",
+          "text": "Hello there."
+        }
+      ],
+      "witchaven-savant-asking-to-scan-the-mayor": [
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "[player name], hang on a moment."
+        },
+        {
+          "player": "What's up Savant?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Something about the way the Mayor is acting is a bit fishy."
+        },
+        {
+          "player": "No, really? And there was me thinking he was a model citizen."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "There's no need to be sarcastic."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I need to take some readings. Can you scan the Mayor for me please?"
+        },
+        {
+          "player": "Sure thing, one moment."
+        }
+      ],
+      "witchaven-scanning-the-mayor": [
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Okay, [player name], I'm looking at the scan results now."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, that's odd. He doesn't seem possessed by any spirits and I can detect no residual magic around him."
+        },
+        {
+          "player": "But?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "The CommOrb must need calibrating, as I can register two life forms present at his location."
+        },
+        {
+          "player": "Are you sure you're not just reading me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I could have been but I doubt it. Hmm, I'll continue to analyse the results and see what I can come up with."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Savant Out."
+        }
+      ],
+      "witchaven-contacting-the-commorb-while-investigating-witchaven": [
+        {
+          "player": "So, Savant, what do you think?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, sounds like Witchaven has some problems at the moment."
+        },
+        {
+          "player": "Yes, it does look a little unloved. What do you think could be the problem?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I really don't know at this point, [player name]."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "You really need to investigate that area further."
+        },
+        {
+          "player": "Well, that's what Colonel O'Niall suggested. Best get on with it then."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Good luck, [player name].  Savant out."
+        }
+      ],
       "the-shrine-attempting-to-push-the-wall-before-talking-about-the-shrine": [
         {
           "type": "message",
@@ -1143714,12 +1144261,12 @@
           "text": "Hmm, I know a man who can translate them for us, just be careful as he's not a member of the Knights."
         },
         {
+          "player": "Um... So how am I supposed to show him the glyphs?"
+        },
+        {
           "type": "condition",
           "text": "If the player has no inventory space:",
           "steps": [
-            {
-              "player": "Um... So how am I supposed to show him the glyphs?"
-            },
             {
               "type": "line",
               "speaker": "Savant",
@@ -1143863,207 +1144410,226 @@
           ]
         }
       ],
+      "the-shrine-picking-up-the-dead-sea-slug": [
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "[player name], come in, this is Savant."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I've detected a sea slug on you. Is everything okay?"
+        },
+        {
+          "player": "It's okay Savant. It's dead."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Phew. I was very worried there for a moment."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, I'm going to take a quick scan of the slug and perform some analysis."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Don't worry, there's nothing you need to do. I'll get back to you when I have something."
+        },
+        {
+          "player": "Righty ho Savant. I look forward to your results."
+        }
+      ],
       "the-pages-talking-to-jorral": [
         {
-          "type": "choice",
-          "prompt": "What do you want to talk about?",
-          "options": [
+          "player": "Excuse me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Yes, can I help you?"
+        },
+        {
+          "player": "I understand that you are something of a historian?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Hah! I am the foremost historian in the world."
+        },
+        {
+          "player": "Great, I was wondering if you could translate something for me please?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Possibly, I am very busy you see and my services don't come cheap."
+        },
+        {
+          "player": "Hmm, how much are we talking?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Well, I am very busy, but I could fit you in sometime next month."
+        },
+        {
+          "player": "That was a bit longer than I was willing to wait.  Can't you fit me in anytime sooner?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "I'm afraid not. You see, I have this ongoing series of texts that need to be catalogued as soon as possible."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Psst, [player name]."
+        },
+        {
+          "player": "Savant?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "What?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Drat, I was hoping he wouldn't notice."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Excuse me, but are you talking to your backpack?"
+        },
+        {
+          "player": "Um, no. (whispers) Savant, help."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Uh. Tell him that you're working for a wizard who's sending you telepathic instructions."
+        },
+        {
+          "player": "I, err, am working for a wizard who is giving me telepathic instructions."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Riiiight. Okay. What does this err, voice, want you to do?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "We have a front company who's keeping Jorral on retainer."
+        },
+        {
+          "player": "We have a..."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "No! Hang on, I wasn't finished."
+        },
+        {
+          "player": "Sorry."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Pardon?"
+        },
+        {
+          "player": "Not you."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Can I finish now? Anyway, tell him you are working for Petmel Books."
+        },
+        {
+          "player": "Apparently, I'm working for Petmel Books and this document is from them."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Oh, right! That explains the mild insanity. No problem; hand over the document and I'll have a look"
+        },
+        {
+          "type": "condition",
+          "text": "If the player is not holding the door transcription:",
+          "steps": [
             {
-              "text": "History"
+              "player": "Um, I don't appear to have it on me."
             },
             {
-              "text": "Translations",
-              "steps": [
-                {
-                  "player": "Excuse me?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Yes, can I help you?"
-                },
-                {
-                  "player": "I understand that you are something of a historian?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Hah! I am the foremost historian in the world."
-                },
-                {
-                  "player": "Great, I was wondering if you could translate something for me please?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Possibly, I am very busy you see and my services don't come cheap."
-                },
-                {
-                  "player": "Hmm, how much are we talking?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Well, I am very busy, but I could fit you in sometime next month."
-                },
-                {
-                  "player": "That was a bit longer than I was willing to wait.  Can't you fit me in anytime sooner?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "I'm afraid not. You see, I have this ongoing series of texts that need to be catalogued as soon as possible."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "Psst, [player name]."
-                },
-                {
-                  "player": "Savant?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "What?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "Drat, I was hoping he wouldn't notice."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Excuse me, but are you talking to your backpack?"
-                },
-                {
-                  "player": "Um, no. (whispers) Savant, help."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "Uh. Tell him that you're working for a wizard who's sending you telepathic instructions."
-                },
-                {
-                  "player": "I, err, am working for a wizard who is giving me telepathic instructions."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Riiiight. Okay. What does this err, voice, want you to do?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "We have a front company who's keeping Jorral on retainer."
-                },
-                {
-                  "player": "We have a..."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "No! Hang on, I wasn't finished."
-                },
-                {
-                  "player": "Sorry."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Pardon?"
-                },
-                {
-                  "player": "Not you."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Savant",
-                  "text": "Can I finish now? Anyway, tell him you are working for Petmel Books."
-                },
-                {
-                  "player": "Apparently, I'm working for Petmel Books and this document is from them."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Oh, right! That explains the mild insanity. No problem; hand over the document and I'll have a look"
-                },
-                {
-                  "type": "condition",
-                  "text": "If the player is not holding the door transcription:",
-                  "steps": [
-                    {
-                      "player": "Um, I don't appear to have it on me."
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Jorral",
-                      "text": "Well, run along and fetch it then."
-                    },
-                    {
-                      "type": "end"
-                    }
-                  ],
-                  "id": "5dYBrz"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Hmm. Interesting, very interesting."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "It's an early variation on a script used by the priests of Saradomin a long time ago."
-                },
-                {
-                  "player": "What does it say?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Look, you can see how the sentence structure and grammar evolved from the..."
-                },
-                {
-                  "player": "Yes, yes I'm sure it's very interesting but what does it say?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Hmph. It seems this text pertains to a great battle between the temple of Saradomin and something called the Mahey'ish Medron."
-                },
-                {
-                  "player": "The Mavis Merton?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Mahey'sh Medron. I think it's a corruption of an even earlier language and actually refers to something called Mother Mallum."
-                },
-                {
-                  "player": "And?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Well, there isn't a whole lot more. They managed to trap the Mother Mallum behind a mystical prison where she was to wait for all time."
-                },
-                {
-                  "player": "Well, thanks for that. You have been a great help."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Jorral",
-                  "text": "Any time. I recommend a doctor for those voices, though."
-                },
-                {
-                  "player": "Uh, right. Goodbye."
-                }
-              ]
+              "type": "line",
+              "speaker": "Jorral",
+              "text": "Well, run along and fetch it then."
+            },
+            {
+              "type": "end"
             }
-          ]
+          ],
+          "id": "sEmc0h"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Hmm. Interesting, very interesting."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "It's an early variation on a script used by the priests of Saradomin a long time ago."
+        },
+        {
+          "player": "What does it say?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Look, you can see how the sentence structure and grammar evolved from the..."
+        },
+        {
+          "player": "Yes, yes I'm sure it's very interesting but what does it say?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Hmph. It seems this text pertains to a great battle between the temple of Saradomin and something called the Mahey'ish Medron."
+        },
+        {
+          "player": "The Mavis Merton?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Mahey'sh Medron. I think it's a corruption of an even earlier language and actually refers to something called Mother Mallum."
+        },
+        {
+          "player": "And?"
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Well, there isn't a whole lot more. They managed to trap the Mother Mallum behind a mystical prison where she was to wait for all time."
+        },
+        {
+          "player": "Well, thanks for that. You have been a great help."
+        },
+        {
+          "type": "line",
+          "speaker": "Jorral",
+          "text": "Any time. I recommend a doctor for those voices, though."
+        },
+        {
+          "player": "Uh, right. Goodbye."
         }
       ],
       "the-pages-after-talking-to-jorral": [
@@ -1144192,7 +1144758,17 @@
         {
           "type": "line",
           "speaker": "Savant",
+          "text": "Once freed, the Temple Knights pursued a great crusade to destroy the Mother Mallum.  Unfortunately she was too powerful and the best they could do was to trap her inside a mystical prison."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
           "text": "Now the best thing we could to is to repair or reinforce it before she escapes."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "The best thing you can do is take a look around Witchaven. Speak to some of the locals and see if there are any clues to be found."
         },
         {
           "player": "Thanks for the reminder Savant."
@@ -1144452,8 +1145028,8 @@
       "the-pages-opening-maledict-s-desk": [
         {
           "type": "message",
-          "text": "You open the locked  drawer and find a page of Maledict's holy book.",
-          "id": "4vSdlY"
+          "text": "You open the locked drawer and find a page of Maledict's holy book.",
+          "id": "L65b9G"
         },
         {
           "type": "condition",
@@ -1144925,6 +1145501,14 @@
           "text": "Good luck."
         }
       ],
+      "the-pages-mayor-hobb-leaving-the-church": [
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Welcome to the family, Brother Maledict.",
+          "presentation": "overhead"
+        }
+      ],
       "crafting-the-runes-shaping-a-rune": [
         {
           "type": "condition",
@@ -1144977,8 +1145561,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "You managed to shape the rune essence into the desired shape.",
-              "id": "0thYWr"
+              "text": "You manage to shape the rune essence into the desired shape.",
+              "id": "UADauT"
             }
           ],
           "id": "ypS1Qi"
@@ -1145010,6 +1145594,13 @@
           "type": "message",
           "text": "You manage to empower the required fire rune.",
           "id": "X5kzY5"
+        }
+      ],
+      "crafting-the-runes-enchanting-the-water-rune": [
+        {
+          "type": "message",
+          "text": "You manage to empower the required water rune.",
+          "id": "GZieiz"
         }
       ],
       "crafting-the-runes-enchanting-the-mind-rune": [
@@ -1145316,17 +1145907,12 @@
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Free up some inventory space first, what?"
-        },
-        {
-          "type": "line",
-          "speaker": "Sir Tiffy Cashien",
           "text": "Jolly good show on getting into the White Knights, what?"
         },
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Now how can I help you young [fellow/mistress]?"
+          "text": "Now how can I help you [old boy/young mistress]?"
         },
         {
           "type": "choice",
@@ -1145345,7 +1145931,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "Nonsense, dear gal, it can't be as bad as all that."
+                  "text": "Nonsense, [old bean/dear gal], it can't be as bad as all that."
                 },
                 {
                   "type": "line",
@@ -1145403,7 +1145989,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "Of course you are, my gal.  Now you will need access to some of the more restricted resources of the Temple Knights."
+                  "text": "Of course you are, [old boy/my gal].  Now you will need access to some of the more restricted resources of the Temple Knights."
                 },
                 {
                   "type": "line",
@@ -1145444,7 +1146030,7 @@
                 {
                   "type": "line",
                   "speaker": "Sir Tiffy Cashien",
-                  "text": "Good lass. Oh and Colonel O'Niall has been placed on our disavowed list. He should be considered extremely dangerous and is to be killed on sight."
+                  "text": "[Good stuff, old boy/Good lass]. Oh and Colonel O'Niall has been placed on our disavowed list. He should be considered extremely dangerous and is to be killed on sight."
                 },
                 {
                   "player": "Right, no problem. Well, I'll see you soon."
@@ -1145862,7 +1146448,7 @@
           "type": "end"
         }
       ],
-      "jump-27d5ca0b6bff1544": [
+      "jump-8057f01f9684b91d": [
         {
           "player": "What can you tell me about Witchaven?"
         },
@@ -1145908,10 +1146494,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "kY2QHS"
+          "id": "9pur0c"
         }
       ],
-      "jump-aba350b8cec7359d": [
+      "jump-0064cde0e74422ef": [
         {
           "player": "What improvements are you making to the shrine?"
         },
@@ -1145963,10 +1146549,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "xdGlvO"
+          "id": "fvaRIK"
         }
       ],
-      "jump-fe92c3a884ccfbad": [
+      "jump-7d1ec43dbc0516b4": [
         {
           "player": "Do you know you look very ill?"
         },
@@ -1146012,10 +1146598,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "oEBKna"
+          "id": "LHdyHD"
         }
       ],
-      "jump-eeadea4977d40dd9": [
+      "jump-c417b1e42097f645": [
         {
           "player": "Nothing at the moment thanks."
         },
@@ -1146028,14 +1146614,14 @@
           "type": "end"
         }
       ],
-      "2SDCLV": [
+      "vy-A9O": [
         {
           "player": "I don't really understand this 'Gaze of Saradomin' thing... Do you think you could explain what it does for me?"
         },
         {
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
-          "text": "Certainly [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
+          "text": "Certainly, [milady/sirrah]! As you know, we Temple Knights are personally favoured by Saradomin himself."
         },
         {
           "type": "line",
@@ -1146130,6 +1146716,16 @@
           "type": "line",
           "speaker": "Sir Tiffy Cashien",
           "text": "Ta-ta for now, old bean!"
+        }
+      ],
+      "UnfO4Z": [
+        {
+          "player": "Nothing at the moment thanks."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Then please feel free to stay in our village a while longer. Farewell."
         }
       ]
     }
@@ -1269701,7 +1270297,7 @@
                   "npc": "Hmm? Oh, hello there."
                 },
                 {
-                  "player": "Are you okay? You seem a bit preoccupied."
+                  "player": "Are you okay? You seem a bit pre-occupied."
                 },
                 {
                   "npc": "It's nothing stranger. No need to concern yourself."
@@ -1269797,6 +1270393,113 @@
                   "npc": "No need lad, it not be your fault."
                 }
               ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "npc": "We're going away to leave you now."
+                },
+                {
+                  "npc": "Goodbye, fare thee well, Goodbye, fare thee well,"
+                },
+                {
+                  "npc": "We're going away to leave you now,"
+                },
+                {
+                  "npc": "Hoorah, me boys, we're homeward bound."
+                },
+                {
+                  "player": "Wow, nice shanty."
+                },
+                {
+                  "npc": "Aye lad, it's not bad."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "npc": "Huh? Oh, hello."
+                },
+                {
+                  "player": "Are you alright?"
+                },
+                {
+                  "npc": "Uh? No... I, Uh, don't feel so good."
+                },
+                {
+                  "player": "What happened to you?"
+                },
+                {
+                  "npc": "Hmm? Oh... I, Uh, don't remember."
+                },
+                {
+                  "player": "I think you'd best go and lie down."
+                },
+                {
+                  "npc": "What? Oh. Right. Yes."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 8",
+              "steps": [
+                {
+                  "npc": "What is happening to the people in this town?"
+                },
+                {
+                  "player": "Wha..."
+                },
+                {
+                  "npc": "I mean, why are people acting so strange?"
+                },
+                {
+                  "player": "Who?"
+                },
+                {
+                  "npc": "People I've know for years are acting like they've never met me."
+                },
+                {
+                  "player": "How?"
+                },
+                {
+                  "npc": "I think something bad is about to happen."
+                },
+                {
+                  "player": "Excuse..."
+                },
+                {
+                  "npc": "I'm sorry, I'm too afraid to speak right now. Goodbye"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 9",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "npc": "Have you seen a group of lads around here?"
+                },
+                {
+                  "player": "Um, not recently."
+                },
+                {
+                  "npc": "That's strange; we are supposed to be helping the Mayor today."
+                },
+                {
+                  "npc": "Ah well, never mind. I'm sure I'll find them soon."
+                }
+              ]
             }
           ]
         }
@@ -1269887,6 +1270590,52 @@
                 },
                 {
                   "player": "For what?"
+                },
+                {
+                  "npc": ". . ."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "npc": "Can you see it?"
+                },
+                {
+                  "player": "Which 'it' are you referring to?"
+                },
+                {
+                  "npc": "The light, the hot bright light."
+                },
+                {
+                  "player": "What light?"
+                },
+                {
+                  "npc": "It is all around us. Scalding, burning, blinding light."
+                },
+                {
+                  "player": "Oh, you mean the sunlight."
+                },
+                {
+                  "npc": "Sunlight..."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "npc": "She is close now... so close"
+                },
+                {
+                  "player": "Who is?"
+                },
+                {
+                  "npc": "So close I can almost hear her."
+                },
+                {
+                  "player": "Hear who?"
                 },
                 {
                   "npc": ". . ."

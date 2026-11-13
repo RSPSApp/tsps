@@ -596,5 +596,7 @@ test("a slot filled between the two accepts refuses the trade instead of deletin
   assert.equal(count(bob, LOBSTER), 0, "nothing given into too little room");
   assert.equal(alice.getTrading().getContainer().getAmount(LOBSTER), 3, "the lobsters are still on offer, not deleted");
   assert.ok(bob.messages.includes("Trade cannot be accepted, you don't have enough free inventory space."));
+  assert.deepEqual(alice.messages.slice(-3), ["", "@or3@bob will not be able to hold that item.", "@or3@They have 2 free inventory slots."],
+    "the partner gets the first screen's three lines");
   assert.equal(count(alice, COINS), 0, "and Alice did not receive Bob's side either");
 });

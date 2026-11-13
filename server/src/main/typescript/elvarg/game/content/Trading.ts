@@ -274,14 +274,8 @@ export class Trading {
         let interact_: Player = this.interact;
         let t_state = interact_.getTrading().getState();
         if (this.state == TradeState.TRADE_SCREEN) {
-            let freeSlots = this.interact.getInventory().getFreeSlots();
             if (!Trading.receiverCanHold(this.interact, this.container.getValidItems())) {
-                this.player.sendMessage("");
-                this.player.sendMessage("@or3@" + this.interact.getDisplayName() + " will not be able to hold that item.");
-                this.player.sendMessage(
-                    "@or3@They have " + freeSlots + " free inventory slot" + (freeSlots == 1 ? "." : "s."));
-
-                this.interact.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
+                Trading.sendCannotHold(this.interact);
                 return;
             }
             this.state = (TradeState.ACCEPTED_TRADE_SCREEN);
@@ -311,8 +305,7 @@ export class Trading {
                     interact_.getTrading().setState(TradeState.CONFIRM_SCREEN);
                     this.sendState(false);
                     interact_.getTrading().sendState(false);
-                    short.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
-                    short.getTrading().getInteract().sendMessage("@or3@" + short.getDisplayName() + " will not be able to hold that item.");
+                    Trading.sendCannotHold(short);
                     return;
                 }
                 // Give items to both players...
@@ -519,6 +512,16 @@ export class Trading {
 
     getState(): TradeState {
         return this.state;
+    }
+
+    /** The refusal when `receiver` lacks room: the same lines at either accept, to both sides. */
+    static sendCannotHold(receiver: Player): void {
+        const freeSlots = receiver.getInventory().getFreeSlots();
+        const giver = receiver.getTrading().getInteract();
+        giver.sendMessage("");
+        giver.sendMessage("@or3@" + receiver.getDisplayName() + " will not be able to hold that item.");
+        giver.sendMessage("@or3@They have " + freeSlots + " free inventory slot" + (freeSlots == 1 ? "." : "s."));
+        receiver.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
     }
 
     /**
